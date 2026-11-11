@@ -551,3 +551,16 @@ func TestCertificateRecordingRecoveryCheckpointFollowsTheWatermarkRow(t *testing
 		t.Fatalf("snapshot format %d could restore a watermark row without its recovery state", SnapshotFormatVersion)
 	}
 }
+
+// TestWorkloadJWTKeysUseEventRecoveryAndSnapshotsN5L3: workload JWT key
+// rotations are erased with their tenant, rebuilt from events and carried by
+// snapshots from format 114.
+func TestWorkloadJWTKeysUseEventRecoveryAndSnapshotsN5L3(t *testing.T) {
+	const table = "workload_jwt_keys"
+	if !containsRecoveryTable(TenantScopedTables, table) || !containsRecoveryTable(ReadModelTables, table) || !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s must be erased with its tenant and survive rebuild and snapshot restore", table)
+	}
+	if SnapshotFormatVersion < 114 {
+		t.Fatalf("snapshot format %d could restore a payload without workload JWT key rotations", SnapshotFormatVersion)
+	}
+}

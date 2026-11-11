@@ -49,6 +49,32 @@ type CAIssuer struct {
 	CASigner  crypto.DigestSigner
 	JWTSigner crypto.DigestSigner
 	JWTKeyID  string
+	// JWTKeys, when set, replaces JWTSigner and JWTKeyID with a rotating set
+	// (N5-L3): JWT-SVIDs are signed with the active key, and the JWT bundle
+	// publishes every key a verifier may meet — the active one, the next one
+	// ahead of its activation, and the previous one until it retires.
+	JWTKeys func(ctx context.Context) (active JWTKey, published []JWTKey, err error)
+}
+
+// JWTKey is one JWT signing key and the key ID its tokens name.
+type JWTKey struct {
+	Signer crypto.DigestSigner
+	KeyID  string
+}
+
+// jwtSigningKey is the key a new JWT-SVID is signed with.
+func (c *CAIssuer) jwtSigningKey(ctx context.Context) (JWTKey, error) {
+	if c.JWTKeys == nil {
+		return JWTKey{Signer: c.JWTSigner, KeyID: c.JWTKeyID}, nil
+	}
+	active, _, err := c.JWTKeys(ctx)
+	if err != nil {
+		return JWTKey{}, fmt.Errorf("spiffe: JWT signing key: %w", err)
+	}
+	if active.Signer == nil || active.KeyID == "" {
+		return JWTKey{}, fmt.Errorf("spiffe: no active JWT signing key")
+	}
+	return active, nil
 }
 
 // SignX509SVID implements Issuer.
@@ -57,9 +83,13 @@ func (c *CAIssuer) SignX509SVID(_ context.Context, spiffeID string, pubDER []byt
 }
 
 // SignJWTSVID implements Issuer.
-func (c *CAIssuer) SignJWTSVID(_ context.Context, spiffeID string, audience []string, ttl time.Duration) (string, error) {
+func (c *CAIssuer) SignJWTSVID(ctx context.Context, spiffeID string, audience []string, ttl time.Duration) (string, error) {
 	if len(audience) == 0 {
 		return "", fmt.Errorf("spiffe: JWT-SVID requires at least one audience")
+	}
+	key, err := c.jwtSigningKey(ctx)
+	if err != nil {
+		return "", err
 	}
 	now := time.Now()
 	claims := map[string]any{
@@ -68,15 +98,19 @@ func (c *CAIssuer) SignJWTSVID(_ context.Context, spiffeID string, audience []st
 		"iat": now.Unix(),
 		"exp": now.Add(ttl).Unix(),
 	}
-	return crypto.SignJWT(c.JWTSigner, c.JWTKeyID, claims)
+	return crypto.SignJWT(key.Signer, key.KeyID, claims)
 }
 
 // SignJWTSVIDWithClaims signs a JWT-SVID carrying extra claims (M4's token
 // exchange adds scope, jti and act). The registered claims sub, aud, iat and
 // exp are the SVID's own and cannot be replaced.
-func (c *CAIssuer) SignJWTSVIDWithClaims(_ context.Context, spiffeID string, audience []string, ttl time.Duration, extra map[string]any) (string, error) {
+func (c *CAIssuer) SignJWTSVIDWithClaims(ctx context.Context, spiffeID string, audience []string, ttl time.Duration, extra map[string]any) (string, error) {
 	if len(audience) == 0 {
 		return "", fmt.Errorf("spiffe: JWT-SVID requires at least one audience")
+	}
+	key, err := c.jwtSigningKey(ctx)
+	if err != nil {
+		return "", err
 	}
 	now := time.Now()
 	claims := map[string]any{}
@@ -88,7 +122,7 @@ func (c *CAIssuer) SignJWTSVIDWithClaims(_ context.Context, spiffeID string, aud
 		claims[name] = value
 	}
 	claims["sub"], claims["aud"], claims["iat"], claims["exp"] = spiffeID, audience, now.Unix(), now.Add(ttl).Unix()
-	return crypto.SignJWT(c.JWTSigner, c.JWTKeyID, claims)
+	return crypto.SignJWT(key.Signer, key.KeyID, claims)
 }
 
 // X509Bundle implements Issuer.
@@ -97,12 +131,23 @@ func (c *CAIssuer) X509Bundle(context.Context) ([][]byte, error) {
 }
 
 // JWTBundle implements Issuer.
-func (c *CAIssuer) JWTBundle(context.Context) (crypto.JWKS, error) {
-	jwk, err := crypto.PublicJWK(c.JWTSigner.Public(), c.JWTKeyID)
-	if err != nil {
-		return crypto.JWKS{}, err
+func (c *CAIssuer) JWTBundle(ctx context.Context) (crypto.JWKS, error) {
+	published := []JWTKey{{Signer: c.JWTSigner, KeyID: c.JWTKeyID}}
+	if c.JWTKeys != nil {
+		var err error
+		if _, published, err = c.JWTKeys(ctx); err != nil {
+			return crypto.JWKS{}, fmt.Errorf("spiffe: JWT bundle: %w", err)
+		}
 	}
-	return crypto.JWKS{Keys: []crypto.JWK{jwk}}, nil
+	set := crypto.JWKS{Keys: make([]crypto.JWK, 0, len(published))}
+	for _, key := range published {
+		jwk, err := crypto.PublicJWK(key.Signer.Public(), key.KeyID)
+		if err != nil {
+			return crypto.JWKS{}, err
+		}
+		set.Keys = append(set.Keys, jwk)
+	}
+	return set, nil
 }
 
 // RegistrationEntry binds a SPIFFE ID to the workload selectors that authorize

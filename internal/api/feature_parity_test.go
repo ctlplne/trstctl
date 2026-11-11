@@ -389,9 +389,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// adds the recording search (791). A276 adds the account flags (795) and
 	// the signed review result (796). A278 adds the gateway pools (799).
 	// A162-L5 adds the revocations waiting on an AD CS relay (800). Q1-L2
-	// adds the retry of a failed review revocation (801).
-	if len(out) != 801 {
-		t.Fatalf("OpenAPI operationIds = %d, want 801", len(out))
+	// adds the retry of a failed review revocation (801). N5-L3 adds the
+	// workload JWT key list and rotation (803).
+	if len(out) != 803 {
+		t.Fatalf("OpenAPI operationIds = %d, want 803", len(out))
 	}
 	return out
 }

@@ -511,6 +511,27 @@ base URL. Status: served (proven against a stand-in cloud token exchange that
 fetches the discovery document and key set and checks issuer, audience, expiry,
 signature and subject).
 
+#### Rotating the signing key (N5-L3)
+
+A cloud caches the issuer's key set for its own interval, so a rotation must never
+leave it holding a set without the key a token names. `POST
+/api/v1/workloads/jwt-keys/rotate` (`trstctl-cli workloads jwt-keys rotate -f
+rotate.json`, `issuers:write`) creates the next key in the signer and publishes it at
+once beside the current one; it signs only after `publish_ahead_seconds` (0 to 30 days,
+default one day), so a cloud that refreshes its cached set in between already holds
+it. After the switch the replaced key stays published for `retain_seconds` (1 hour to
+30 days, default one day), so tokens it signed keep verifying until they expire and a
+set cached before the switch keeps working; then it leaves the set. A second rotation
+waits until the pending key signs. `GET /api/v1/workloads/jwt-keys` (`trstctl-cli
+workloads jwt-keys list`, `certs:read`) lists each generation's key ID (`spiffe-jwt`,
+then `spiffe-jwt-g2` and so on), its state (`active`, `next`, `retiring` or `retired`)
+and when it was published, starts signing and retires. The exchanged tokens, the
+Workload API's JWT-SVIDs, `/oauth2/jwks` and the issuer's `jwks.json` all follow the
+same keys, and the rotation is recorded as `workload.jwt_key.rotated`, so a rebuild
+or restore reaches the same keys. In the console, **Workloads → OpenID issuer and
+signing keys** shows the issuer and the keys and rotates them. Set the windows longer
+than the longest JWT-SVID lifetime you issue and than any cloud caches the key set.
+
 ### Ephemeral issuance (F25) — attestation in, short-lived cert out
 
 The ephemeral issuer ties it together: it verifies an attestation (refusing to sign on

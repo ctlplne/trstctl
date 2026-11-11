@@ -305,6 +305,8 @@ var TenantScopedTables = []string{
 	"pam_account_flags",
 	// A278: gateway pools; no foreign keys.
 	"pam_gateway_pools",
+	// N5-L3: workload JWT key rotations; no foreign keys.
+	"workload_jwt_keys",
 	// A278: recording chunks staged for the object store; no foreign keys.
 	"pam_recording_uploads",
 	// N2: Key Vault disables; no foreign keys.

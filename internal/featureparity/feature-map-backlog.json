@@ -9667,7 +9667,9 @@
                 "deleteWorkloadAttesterTrustSource",
                 "previewAttestedSVID",
                 "issueAttestedSVID",
-                "getOIDCIssuer"
+                "getOIDCIssuer",
+                "listWorkloadJWTKeys",
+                "rotateWorkloadJWTKey"
             ],
             "api_na": "",
             "cli_surface": [
@@ -9680,7 +9682,9 @@
                 "workloads attester-trust-sources delete",
                 "workloads attested-issuance preview",
                 "workloads attested-issuance",
-                "workloads oidc-issuer"
+                "workloads oidc-issuer",
+                "workloads jwt-keys list",
+                "workloads jwt-keys rotate"
             ],
             "cli_na": "",
             "facet_evidence": {

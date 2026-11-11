@@ -320,7 +320,10 @@ import (
 // Version 113 carries G1-L1's requested_by on dynamic-secret leases: without
 // it a restored store would forget who requested each lease while its covered
 // offset skipped the pending events.
-const SnapshotFormatVersion = 113
+// Version 114 carries N5-L3's workload JWT key rotations: without them a
+// restored store would sign with, and publish, the first key again while its
+// covered offset skipped the rotations.
+const SnapshotFormatVersion = 114
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -437,6 +440,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"pam_account_flags",
 	// Format 111: A278's gateway pools.
 	"pam_gateway_pools",
+	// Format 114: N5-L3's workload JWT key rotations.
+	"workload_jwt_keys",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -821,6 +826,7 @@ SELECT jsonb_build_object(
   'pam_signin_records', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_signin_records t),
   'pam_account_flags', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_account_flags t),
   'pam_gateway_pools', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_gateway_pools t),
+  'workload_jwt_keys', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM workload_jwt_keys t),
   'aws_honey_trail_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_trail_objects t),
   'slack_installs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_installs t),
   'slack_user_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_user_links t),

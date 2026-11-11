@@ -14,6 +14,7 @@ import { useApiQuery } from "@/lib/query";
 import { EphemeralCredentialWorkflow } from "@/pages/workloads/EphemeralCredentialWorkflow";
 import { AttestedSVIDWorkflow } from "@/pages/workloads/AttestedSVIDWorkflow";
 import { BrokerIdentityWorkflow } from "@/pages/workloads/BrokerIdentityWorkflow";
+import { OIDCIssuerPanel } from "@/pages/workloads/OIDCIssuerPanel";
 import { KubernetesControllerState, kubernetesControllerBadgeValue } from "@/pages/workloads/KubernetesControllerState";
 const KubernetesTrustRolloutsPanel = lazy(() => import("@/pages/workloads/KubernetesTrustRolloutsPanel"));
 import {
@@ -1371,6 +1372,7 @@ export function Workloads() {
       </section>
 
       <BrokerIdentityWorkflow />
+      <OIDCIssuerPanel />
     </section>
   );
 }

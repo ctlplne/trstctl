@@ -34,6 +34,7 @@ import (
 	"trstctl.com/trstctl/internal/enrollmentdiag"
 	mdmchallenge "trstctl.com/trstctl/internal/mdm/challenge"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/protocols/cmp"
 	"trstctl.com/trstctl/internal/protocols/est"
@@ -1125,7 +1126,13 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		CACertDER: s.caCertDER,
 		CASigner:  s.caSigner, // signer-backed (AN-4)
 		JWTSigner: jwtSigner,
-		JWTKeyID:  "spiffe-jwt",
+		JWTKeyID:  projections.WorkloadJWTKeyID(1),
+	}
+	// N5-L3: the JWT key rotates; generation 1 is the key above.
+	var jwtKeys *workloadJWTKeyRing
+	if s.store != nil {
+		jwtKeys = newWorkloadJWTKeyRing(s, c, tenant, jwtSigner)
+		issuer.JWTKeys = jwtKeys.keys
 	}
 	// A default registration entry so the served socket is immediately usable: a
 	// local UDS caller (selector "unix") receives an SVID for the trust domain's
@@ -1206,6 +1213,7 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		wl:             wl,
 		trustDomain:    td,
 		oidcIssuerBase: cfg.OIDCIssuerURL,
+		jwtKeys:        jwtKeys,
 	}, nil
 }
 

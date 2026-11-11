@@ -893,6 +893,8 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"pam_account_flags",
 	// A278: projected from pam.gateway_pool.saved and pam.gateway_pool.deleted.
 	"pam_gateway_pools",
+	// N5-L3: projected from workload.jwt_key.rotated.
+	"workload_jwt_keys",
 	// A260: projected from pam.discovery.source_saved,
 	// pam.discovery.source_deleted, pam.discovery.run_completed,
 	// pam.discovery.imported and pam.discovery.dismissed.

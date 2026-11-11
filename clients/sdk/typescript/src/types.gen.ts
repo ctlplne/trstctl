@@ -11780,6 +11780,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workloads/jwt-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the workload JWT signing key's generations: the one that signs, the next one published ahead of signing, and earlier ones still published until they retire */
+        get: operations["listWorkloadJWTKeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workloads/jwt-keys/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate the workload JWT signing key: publish the next key now, sign with it after publish_ahead_seconds, and keep the current key published for retain_seconds after that */
+        post: operations["rotateWorkloadJWTKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workloads/oidc-issuer": {
         parameters: {
             query?: never;
@@ -28242,6 +28276,41 @@ export interface components {
         };
         WorkloadAttesterTrustSourceRotated: {
             trust_source: components["schemas"]["WorkloadAttesterTrustSource"];
+        };
+        WorkloadJWTKey: {
+            /**
+             * Format: date-time
+             * @description when the key starts signing (absent for generation 1)
+             */
+            activates_at?: string;
+            /** @description 1 is the key provisioned with the SPIFFE protocol; each rotation adds one */
+            generation: number;
+            /** @description the kid tokens signed with this key carry */
+            key_id: string;
+            /**
+             * Format: date-time
+             * @description when the key was first published (absent for generation 1)
+             */
+            published_at?: string;
+            /**
+             * Format: date-time
+             * @description when the key leaves the published set, once a later key has replaced it
+             */
+            retires_at?: string;
+            /**
+             * @description active signs; next is published ahead of signing; retiring is published until retires_at; retired is no longer published
+             * @enum {string}
+             */
+            state: "active" | "next" | "retiring" | "retired";
+        };
+        WorkloadJWTKeyRotateRequest: {
+            /** @description how long the next key is published before it signs, 0 to 30 days (default 1 day): longer than the clouds cache the key set */
+            publish_ahead_seconds?: number;
+            /** @description how long the current key stays published after the switch, 1 hour to 30 days (default 1 day): longer than its tokens live and than the clouds cache the key set */
+            retain_seconds?: number;
+        };
+        WorkloadJWTKeys: {
+            keys: components["schemas"]["WorkloadJWTKey"][];
         };
     };
     responses: never;
@@ -62781,6 +62850,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkloadAttesterTrustSourceRotated"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listWorkloadJWTKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkloadJWTKeys"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rotateWorkloadJWTKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkloadJWTKeyRotateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkloadJWTKeys"];
                 };
             };
             /** @description client error */

@@ -632,6 +632,14 @@
 
 ### Fixed
 
+- The workload JWT signing key rotates without breaking a cloud's cached key set (N5-L3). The key
+  that signs exchanged tokens and JWT-SVIDs, published by the OpenID issuer, could not rotate at all.
+  `POST /api/v1/workloads/jwt-keys/rotate` (`workloads jwt-keys rotate`, `issuers:write`) creates the
+  next key in the signer and publishes it at once, signs with it after `publish_ahead_seconds`, and
+  keeps the replaced key published for `retain_seconds` after the switch; `GET
+  /api/v1/workloads/jwt-keys` (`workloads jwt-keys list`) shows each key's state and times, and the
+  console's Workloads page shows the issuer and its keys and rotates them. The rotation is an event
+  (`workload.jwt_key.rotated`, read model `workload_jwt_keys`, snapshot format 114).
 - A scoped sync's failed delivery raises a warning (A237-L4). When the write or the delete of a
   destination key a scoped secret sync manages failed for good, only `scoped-syncs show` said so, and
   nobody was told. Each such failure now raises one warning on the notification surface

@@ -1309,6 +1309,9 @@ public final class OpenApiSchemas {
       "WorkloadAttesterTrustSourceRevokeRequest",
       "WorkloadAttesterTrustSourceRevoked",
       "WorkloadAttesterTrustSourceRotateRequest",
-      "WorkloadAttesterTrustSourceRotated"
+      "WorkloadAttesterTrustSourceRotated",
+      "WorkloadJWTKey",
+      "WorkloadJWTKeyRotateRequest",
+      "WorkloadJWTKeys"
   );
 }

@@ -767,6 +767,9 @@ import type {
   WorkloadAttesterTrustSourceRevokeRequest,
   WorkloadAttesterTrustSourceRotated,
   WorkloadAttesterTrustSourceRotateRequest,
+  OIDCIssuer,
+  WorkloadJWTKeys,
+  WorkloadJWTKeyRotateRequest,
   EdgeSegmentPolicyList,
   EdgeSegmentPolicy,
   EdgeSegmentPolicyInput,
@@ -2799,6 +2802,11 @@ export interface Api {
   mintEdgeDelegation(input: EdgeDelegationMintInput, idempotencyKey?: string): Promise<EdgeDelegation>;
   revokeEdgeDelegation(id: string, input: EdgeDelegationRevokeInput, idempotencyKey?: string): Promise<EdgeDelegation>;
   reconcileEdgeDelegation(id: string, input: EdgeReconcileInput, idempotencyKey?: string): Promise<EdgeReconcileResult>;
+  /** N5: the tenant's published OpenID issuer that clouds register. */
+  oidcIssuer(): Promise<OIDCIssuer>;
+  /** N5-L3: the workload JWT signing key's generations, and rotating it. */
+  workloadJWTKeys(): Promise<WorkloadJWTKeys>;
+  rotateWorkloadJWTKey(input: WorkloadJWTKeyRotateRequest, idempotencyKey?: string): Promise<WorkloadJWTKeys>;
   /** P12-L3: device first-boot batches a factory station issues under an edge delegation. */
   factoryBatches(): Promise<FactoryBatchList>;
   factoryBatch(id: string): Promise<FactoryBatchDetail>;
@@ -3945,6 +3953,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   setEdgeSegmentPolicy: (id, input, idempotencyKey) =>
     mutate<EdgeSegmentPolicy>("PUT", `/api/v1/edge/segments/${encodeURIComponent(id)}`, input, idempotencyKey),
   edgeDelegations: () => req<EdgeDelegationList>("/api/v1/edge/delegations"),
+  oidcIssuer: () => req<OIDCIssuer>("/api/v1/workloads/oidc-issuer"),
+  workloadJWTKeys: () => req<WorkloadJWTKeys>("/api/v1/workloads/jwt-keys"),
+  rotateWorkloadJWTKey: (input, idempotencyKey) => mutate<WorkloadJWTKeys>("POST", "/api/v1/workloads/jwt-keys/rotate", input, idempotencyKey),
   factoryBatches: () => req<FactoryBatchList>("/api/v1/edge/factory-batches"),
   factoryBatch: (id) => req<FactoryBatchDetail>(`/api/v1/edge/factory-batches/${encodeURIComponent(id)}`),
   createFactoryBatch: (input, idempotencyKey) => mutate<FactoryBatch>("POST", "/api/v1/edge/factory-batches", input, idempotencyKey),

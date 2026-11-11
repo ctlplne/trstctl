@@ -469,6 +469,8 @@ type spiffeProtocol struct {
 	// oidcIssuerBase is protocols.spiffe.oidc_issuer_url: each tenant's
 	// published OpenID issuer is <base>/oidc/<tenant-id> (N5).
 	oidcIssuerBase string
+	// jwtKeys is the rotating JWT signing key behind issuer (N5-L3).
+	jwtKeys *workloadJWTKeyRing
 }
 
 // RunSPIFFE serves the SPIFFE Workload API gRPC server on its UDS until ctx is

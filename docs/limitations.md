@@ -8771,9 +8771,11 @@ What comes next:
   key (ES256 by default); a cloud that accepts only RS256 needs an RSA JWT key.
 - The token exchange serves one tenant (`protocols.spiffe.tenant_id`), so one
   tenant has an issuer; per-tenant exchange for every tenant is what comes next.
-- Key rotation publishes the new key in the same set; a cloud caches the set for
-  its own interval, so a rotation should keep the old key published until that
-  cache has refreshed.
+- Key rotation is served (N5-L3): the next key is published ahead of signing and
+  the replaced key stays published for a retain window after the switch (both
+  set per rotation, up to 30 days). The windows are the operator's to size
+  against each cloud's own key-set caching; trstctl does not learn a cloud's
+  cache interval.
 
 ## Native leak-scan collection: registries, Slack, Jira and CI logs (N6) — served
 

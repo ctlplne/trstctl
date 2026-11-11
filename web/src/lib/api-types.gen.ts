@@ -13122,3 +13122,21 @@ export interface WorkloadAttesterTrustSourceRotateRequest {
 export interface WorkloadAttesterTrustSourceRotated {
   trust_source: WorkloadAttesterTrustSource;
 }
+
+export interface WorkloadJWTKey {
+  activates_at?: string;
+  generation: number;
+  key_id: string;
+  published_at?: string;
+  retires_at?: string;
+  state: "active" | "next" | "retiring" | "retired";
+}
+
+export interface WorkloadJWTKeyRotateRequest {
+  publish_ahead_seconds?: number;
+  retain_seconds?: number;
+}
+
+export interface WorkloadJWTKeys {
+  keys: WorkloadJWTKey[];
+}

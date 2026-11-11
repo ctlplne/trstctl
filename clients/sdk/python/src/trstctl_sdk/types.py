@@ -18301,4 +18301,34 @@ WorkloadAttesterTrustSourceRotated = TypedDict(
     total=False,
 )
 
+WorkloadJWTKey = TypedDict(
+    'WorkloadJWTKey',
+    {
+        'activates_at': str,
+        'generation': int,
+        'key_id': str,
+        'published_at': str,
+        'retires_at': str,
+        'state': str,
+    },
+    total=False,
+)
+
+WorkloadJWTKeyRotateRequest = TypedDict(
+    'WorkloadJWTKeyRotateRequest',
+    {
+        'publish_ahead_seconds': int,
+        'retain_seconds': int,
+    },
+    total=False,
+)
+
+WorkloadJWTKeys = TypedDict(
+    'WorkloadJWTKeys',
+    {
+        'keys': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 Schema = dict[str, Any]

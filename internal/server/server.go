@@ -1868,6 +1868,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithMDMCheckIns(s),
 		api.WithKeyVaultDisable(s),
 		api.WithOIDCIssuer(s),
+		api.WithWorkloadJWTKeys(s),
 		api.WithPKISecretLeafRecovery(s),
 		api.WithManagedCALeafRecovery(s),
 		api.WithBroker(s),
