@@ -36364,6 +36364,14 @@ export const messages = {
     description: "Application view of one certificate in identity detail.",
   },
   "identities.application.lastDelivery": { defaultMessage: "Last delivery at {at}", description: "Application view of one certificate in identity detail." },
+  "identities.application.checkedAt": {
+    defaultMessage: "Its endpoint {address} is checked every interval for the delivered certificate.",
+    description: "Application view (A244-L1): the destination's target names its endpoint, which the scheduler verifies.",
+  },
+  "identities.application.unchecked": {
+    defaultMessage: "Nothing checks this destination's endpoint. Set verify_address on its deployment target to have it checked every interval.",
+    description: "Application view (A244-L1): the destination's target names no endpoint, so nothing observes it.",
+  },
   "identities.application.seen": { defaultMessage: "Seen at the endpoint", description: "Application view of one certificate in identity detail." },
   "identities.application.seenBy": { defaultMessage: "Seen by {vantage} at {at}.", description: "Application view of one certificate in identity detail." },
   "identities.application.vantage.connector": {

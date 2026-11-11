@@ -19318,6 +19318,8 @@ export interface components {
                 revision: string;
                 /** Format: uuid */
                 target_id: string;
+                /** @description The endpoint the destination serves, from its target's verify_address, verified every interval (A244-L1); empty when nothing observes the destination. */
+                verify_address?: string;
             };
             identity: components["schemas"]["Identity"];
             /** @enum {string} */

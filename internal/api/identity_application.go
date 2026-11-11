@@ -112,6 +112,12 @@ type applicationDestination struct {
 	Connector string `json:"connector"`
 	Revision  string `json:"revision"`
 	Enabled   bool   `json:"enabled"`
+	// VerifyAddress is the endpoint the destination serves, as its target
+	// names it (verify_address). The scheduler verifies it every interval,
+	// first against the certificate delivered there (A244-L1). Empty, nothing
+	// observes the destination: its inventory stays delivered until the
+	// target names one or something else sees the certificate served.
+	VerifyAddress string `json:"verify_address,omitempty"`
 	// LastDelivery is the latest completed delivery to it.
 	LastDeliveryStatus      string     `json:"last_delivery_status,omitempty"`
 	LastDeliveryFingerprint string     `json:"last_delivery_fingerprint,omitempty"`
@@ -287,7 +293,7 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 	if attrs.Target != "" {
 		if target, err := a.store.GetDeploymentTarget(ctx, tenantID, attrs.Target); err == nil {
 			view.Destination = &applicationDestination{TargetID: target.ID, Name: target.Name, Connector: target.Type,
-				Revision: target.RevisionID, Enabled: target.Enabled}
+				Revision: target.RevisionID, Enabled: target.Enabled, VerifyAddress: targetVerifyAddress(target.Config)}
 			view.Defaults.Connector = target.Type
 		} else if !store.IsNotFound(err) {
 			return identityApplicationView{}, err
@@ -491,6 +497,7 @@ func identityApplicationSchemas() map[string]*Schema {
 			}, "id", "fingerprint", "serial", "status"),
 			"destination": object(map[string]*Schema{
 				"target_id": uuid(), "name": str(), "connector": str(), "revision": str(), "enabled": {Type: "boolean"},
+				"verify_address":       {Type: "string", Description: "The endpoint the destination serves, from its target's verify_address, verified every interval (A244-L1); empty when nothing observes the destination."},
 				"last_delivery_status": str(), "last_delivery_fingerprint": str(), "last_delivery_at": timestamp(),
 			}, "target_id", "name", "connector", "revision", "enabled"),
 			"served": object(map[string]*Schema{
@@ -520,4 +527,16 @@ func identityApplicationSchemas() map[string]*Schema {
 			}, "action", "subject")},
 		}, "identity", "inventory_state", "issuer", "approvals", "renewal", "alerts", "actions", "defaults", "review_plan"),
 	}
+}
+
+// targetVerifyAddress is a deployment target's verify_address, the endpoint it
+// serves, or empty.
+func targetVerifyAddress(config json.RawMessage) string {
+	var fields struct {
+		VerifyAddress string `json:"verify_address"`
+	}
+	if len(config) == 0 || json.Unmarshal(config, &fields) != nil {
+		return ""
+	}
+	return strings.TrimSpace(fields.VerifyAddress)
 }

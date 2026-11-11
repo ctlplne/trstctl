@@ -151,6 +151,11 @@ function ApplicationDetails({ view, formatDateTime }: { view: IdentityApplicatio
             <>
               {t("identities.application.destinationDetail", { name: destination.name, connector: destination.connector })}
               {!destination.enabled && <span className="block text-xs text-muted-foreground">{t("identities.application.destinationDisabled")}</span>}
+              <span className="block text-xs text-muted-foreground">
+                {destination.verify_address
+                  ? t("identities.application.checkedAt", { address: destination.verify_address })
+                  : t("identities.application.unchecked")}
+              </span>
               {destination.last_delivery_status && (
                 <span className="block text-xs text-muted-foreground">
                   {t("identities.application.lastDelivery", { at: formatDateTime(destination.last_delivery_at) })}{" "}

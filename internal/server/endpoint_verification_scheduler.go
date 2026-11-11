@@ -47,11 +47,11 @@ const endpointVerificationBatch = 50
 
 // RunEndpointVerificationScheduler enqueues periodic re-verification sweeps.
 //
-// It is a no-op when nothing has ever been verified. That is deliberate: this
-// scheduler re-probes endpoints the estate already knows about, and inventing
-// endpoints to probe from deployment targets would mean guessing listener
-// addresses — which is exactly the guess that would produce confident, wrong
-// verification records.
+// It re-probes endpoints the estate already knows about, and probes, for the
+// first time, a destination whose deployment target names the endpoint it
+// serves (verify_address) once it has delivered an active certificate there
+// (A244-L1). It never guesses a listener address from a target: a target that
+// names none is left alone, and the application view says nothing observes it.
 func (s *Server) RunEndpointVerificationScheduler(ctx context.Context) {
 	if s.store == nil || s.outbox == nil {
 		return
@@ -147,6 +147,28 @@ func (s *Server) queueEndpointVerificationSweep(ctx context.Context, tenantID st
 		intent.Endpoints = append(intent.Endpoints, expectation)
 		if len(intent.Endpoints) >= endpointVerificationBatch {
 			break
+		}
+	}
+	// A244-L1: a destination nothing has observed yet. Its target names the
+	// endpoint it serves (verify_address); the first probe expects the
+	// certificate it delivered. Without this a destination whose connector
+	// reads nothing back (a cloud certificate store) stayed "delivered" for
+	// good, because the loop above only re-probes endpoints already observed.
+	if room := endpointVerificationBatch - len(intent.Endpoints); room > 0 {
+		destinations, err := s.store.DestinationsAwaitingVerification(ctx, tenantID, room)
+		if err != nil {
+			return 0, err
+		}
+		for _, d := range destinations {
+			if seen[d.TargetID] {
+				continue
+			}
+			seen[d.TargetID] = true
+			expectation := relay.EndpointExpectation{EndpointID: d.TargetID, Address: d.Address, Fingerprint: d.Fingerprint}
+			if err := s.addEndpointVerificationTargetContext(ctx, tenantID, &expectation); err != nil {
+				return 0, err
+			}
+			intent.Endpoints = append(intent.Endpoints, expectation)
 		}
 	}
 	if len(intent.Endpoints) == 0 {

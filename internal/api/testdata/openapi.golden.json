@@ -27572,6 +27572,10 @@
               "target_id": {
                 "format": "uuid",
                 "type": "string"
+              },
+              "verify_address": {
+                "description": "The endpoint the destination serves, from its target's verify_address, verified every interval (A244-L1); empty when nothing observes the destination.",
+                "type": "string"
               }
             },
             "required": [

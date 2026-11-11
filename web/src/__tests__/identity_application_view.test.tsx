@@ -139,6 +139,26 @@ describe("certificate application view (A244)", () => {
     expect(section.getByText("Nothing observes this destination yet, so the new certificate will read as delivered, not seen in use")).toBeInTheDocument();
   });
 
+  it("says whether anything checks the destination's endpoint (A244-L1)", async () => {
+    const checked = fixture();
+    checked.destination = { ...checked.destination!, verify_address: "orders.example.test:443" };
+    read.mockResolvedValue(checked);
+    show();
+    let section = within(await screen.findByRole("region", { name: "Application view" }));
+    expect(await section.findByText("Its endpoint orders.example.test:443 is checked every interval for the delivered certificate.")).toBeInTheDocument();
+    cleanup();
+
+    const unchecked = fixture();
+    unchecked.inventory_state = "delivered";
+    unchecked.served = undefined;
+    read.mockResolvedValue(unchecked);
+    show();
+    section = within(await screen.findByRole("region", { name: "Application view" }));
+    expect(
+      await section.findByText("Nothing checks this destination's endpoint. Set verify_address on its deployment target to have it checked every interval."),
+    ).toBeInTheDocument();
+  });
+
   it("names the identity's own certificate details when they changed under an approval (A245-L5)", async () => {
     const view = fixture();
     view.approvals = [

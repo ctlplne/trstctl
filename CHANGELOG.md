@@ -2,6 +2,12 @@
 
 ### Added
 
+- A destination is verified without an earlier observation (A244-L1): the endpoint verification scheduler
+  also probes, for the first time, a deployment target that names its listener (`verify_address`) once it
+  has delivered an identity's active certificate there, expecting that certificate, with the target's
+  connector and server name. A cloud or appliance destination whose connector reads nothing back no longer
+  stays `delivered` for good. The application view shows the endpoint a destination is checked at, or that
+  nothing checks it.
 - A TOTP provider's seed is replaced through the API (A239-L5): `POST
   /api/v1/secrets/leases/providers/{provider}/totp-seed` (`trstctl secrets leases totp-seed`) takes the
   newly enrolled seed and a current code from it, checks the code (one step of skew), then writes the seed

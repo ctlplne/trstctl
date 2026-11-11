@@ -298,9 +298,11 @@ func (s *Store) SummarizeEndpointVerifications(ctx context.Context, tenantID str
 func (s *Store) TenantsWithVerifiableEndpoints(ctx context.Context) ([]string, error) {
 	rows, err := s.SystemPool().Query(ctx,
 		//trstctl:system-query — cross-tenant scan for the verification scheduler; owner role, not under RLS (AN-1 exemption).
-		`SELECT DISTINCT tenant_id::text
-		   FROM endpoint_verifications
+		`SELECT tenant_id::text FROM endpoint_verifications
 		  WHERE expected_fingerprint <> '' AND address <> ''
+		 UNION
+		 SELECT tenant_id::text FROM deployment_targets
+		  WHERE enabled AND coalesce(config->>'verify_address', '') <> ''
 		  ORDER BY 1`)
 	if err != nil {
 		return nil, err
@@ -315,4 +317,58 @@ func (s *Store) TenantsWithVerifiableEndpoints(ctx context.Context) ([]string, e
 		out = append(out, id)
 	}
 	return out, rows.Err()
+}
+
+// DestinationToVerify is a deployment target that names the endpoint it
+// serves (verify_address) and has delivered an identity's active certificate
+// that no verification has looked for there yet (A244-L1).
+type DestinationToVerify struct {
+	TargetID    string
+	Address     string
+	Fingerprint string
+}
+
+// DestinationsAwaitingVerification lists, at most limit, the enabled
+// deployment targets with a verify_address whose latest completed delivery of
+// an identity carried a certificate that is still active, and whose endpoint
+// has no verification expecting it. They are what the scheduler's first probe
+// covers: once a probe records an observation, the endpoint is re-verified
+// every interval like any other.
+func (s *Store) DestinationsAwaitingVerification(ctx context.Context, tenantID string, limit int) ([]DestinationToVerify, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	var out []DestinationToVerify
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT DISTINCT ON (t.id) t.id::text, t.config->>'verify_address', r.fingerprint
+			  FROM identities i
+			  JOIN deployment_targets t ON t.tenant_id = i.tenant_id AND t.id::text = i.attributes->>'deployment_target_id'
+			  JOIN LATERAL (
+			        SELECT r.fingerprint, r.updated_at, r.id FROM connector_delivery_receipts r
+			         WHERE r.tenant_id = i.tenant_id AND r.identity_id = i.id AND r.fingerprint <> ''
+			           AND ((r.destination IN ('connector.deploy', 'endpoint.renew') AND r.status IN ('delivered', 'verified'))
+			             OR (r.destination = 'connector.rollback' AND r.status = 'rolled_back'))
+			         ORDER BY r.updated_at DESC, r.id DESC LIMIT 1) r ON true
+			  JOIN certificates c ON c.tenant_id = i.tenant_id AND c.fingerprint = r.fingerprint AND c.status = 'active'
+			 WHERE i.tenant_id = $1 AND t.enabled AND coalesce(t.config->>'verify_address', '') <> ''
+			   AND NOT EXISTS (SELECT 1 FROM endpoint_verifications ev
+			                    WHERE ev.tenant_id = i.tenant_id AND ev.endpoint_id = t.id::text
+			                      AND ev.expected_fingerprint = r.fingerprint)
+			 ORDER BY t.id, r.updated_at DESC, r.id DESC
+			 LIMIT $2`, tenantID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var d DestinationToVerify
+			if err := rows.Scan(&d.TargetID, &d.Address, &d.Fingerprint); err != nil {
+				return err
+			}
+			out = append(out, d)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
