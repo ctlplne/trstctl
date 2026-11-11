@@ -1755,9 +1755,16 @@ never live in the API process. What you can do end to end against the running bi
     per record (`attack_path`) and counts validated and open records. Nothing is
     sent to the endpoints and nothing in the account changes. Proven against an
     in-repository EC2 stand-in that verifies each request's signature; a live
-    account is Track B. GCP firewall rules and routes, Azure network security
-    groups, and paths through load balancers, NAT or transit gateways are what
-    comes next.
+    account is Track B. A Google Cloud project is served too (A167-L1,
+    `provider: gcp-compute`): `compute.instances.list`, `compute.firewalls.list`
+    and `compute.routes.list` on the project, nothing else, judged by the
+    network's routes to the default internet gateway and its ingress firewall
+    rules by priority (a deny wins a tie, the implied ingress deny last);
+    proven against an in-repository Compute Engine stand-in that pages its
+    lists and checks the bearer token, with a live project in Track B. Azure
+    network security groups, GCP hierarchical and network firewall policies,
+    and paths through load balancers, NAT or transit gateways are what comes
+    next.
 - Rogue and non-compliant certificate posture:
   `GET /api/v1/revocation/rogue-certificates` and
   `trstctl-cli revocation rogue-certificates` combine unexpected CT findings with

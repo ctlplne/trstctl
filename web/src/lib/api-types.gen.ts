@@ -7308,7 +7308,7 @@ export interface NHIExposureAttackPath {
 
 export interface NHIExposureAttackPathAddress {
   address: string;
-  blocked_by?: "route" | "network_acl" | "network_acl_return" | "security_group";
+  blocked_by?: "route" | "network_acl" | "network_acl_return" | "security_group" | "firewall";
   checked_at: string;
   path?: string[];
   reason?: string;

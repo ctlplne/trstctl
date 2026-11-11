@@ -142,12 +142,16 @@ The cloud's own answer is the second check (A167). `POST
 attack-paths`, discovery:write) takes a `source_id` naming a
 [cloud network paths](discovery-and-inventory.md#cloud-network-paths) source and asks
 that AWS account whether its route tables, network ACLs and security groups admit the
-internet to each exposed record's public addresses. The posture then carries an
-`attack_path` per record — open through a named security group, blocked by a named
-route table, network ACL or security group, not in the account, or unknown with the
-reason — and the exposure panel has a **Validate paths in the cloud** button and a
-**Cloud path** column. A probe says something answered; the attack path says which
-resource lets it, or which one to change to stop it.
+internet to each exposed record's public addresses, or that Google Cloud project
+whether its VPC routes and firewall rules do (A167-L1). The posture then carries an
+`attack_path` per record — open through a named security group or firewall rule,
+blocked at a named route table, route, network ACL, security group, firewall rule or
+network (`blocked_by` says which stage: `route`, `network_acl`, `network_acl_return`,
+`security_group` or `firewall`), not in the account, or unknown with the reason — and
+the exposure panel has a **Validate paths in the cloud** button and a **Cloud path**
+column that shows the verdict with the reason beneath it. A probe says something
+answered; the attack path says which resource lets it, or which one to change to stop
+it.
 
 A stale NHI can be handed to a new accountable owner with
 `POST /api/v1/nhi/posture/stale/handoff` (`trstctl-cli nhi posture stale handoff`):

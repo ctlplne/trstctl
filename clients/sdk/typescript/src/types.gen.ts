@@ -21046,7 +21046,7 @@ export interface components {
         NHIExposureAttackPathAddress: {
             address: string;
             /** @enum {string} */
-            blocked_by?: "route" | "network_acl" | "network_acl_return" | "security_group";
+            blocked_by?: "route" | "network_acl" | "network_acl_return" | "security_group" | "firewall";
             /** Format: date-time */
             checked_at: string;
             path?: string[];

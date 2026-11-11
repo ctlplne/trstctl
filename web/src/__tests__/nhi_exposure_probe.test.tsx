@@ -207,7 +207,8 @@ describe("NHI exposure live reachability", () => {
     const table = screen.getByRole("table", { name: "Exposed NHI deployment recommendations" });
     expect(within(table).getByRole("columnheader", { name: "Cloud path" })).toBeInTheDocument();
     const blocked = within(table).getByText("billing-export-key").closest("tr") as HTMLElement;
-    expect(within(blocked).getByText("Blocked by security group sg-admin")).toBeInTheDocument();
+    expect(within(blocked).getByText("Blocked at sg-admin (security group)")).toBeInTheDocument();
+    expect(within(blocked).getByText("no security group admits tcp/443")).toBeInTheDocument();
     const unvalidated = within(table).getByText("partner-webhook-token").closest("tr") as HTMLElement;
     expect(within(unvalidated).getByText("Not validated")).toBeInTheDocument();
 
@@ -220,6 +221,68 @@ describe("NHI exposure live reachability", () => {
     await user.click(screen.getByRole("button", { name: "Validate paths in the cloud" }));
     await waitFor(() => expect(apiMock.validateNHIAttackPaths).toHaveBeenCalledWith({ source_id: "src-ec2", inventory_ids: [] }));
     expect(await screen.findByText(/^Cloud path validation queued for 1 endpoints \(run 44444444-4444-4444-4444-444444444444\)/)).toBeInTheDocument();
+  });
+
+  // A167-L1: a Google Cloud project's verdicts name the firewall rule that
+  // admits the internet, and a blocked row says what about the network decided
+  // (its implied ingress deny, or no route to the default internet gateway),
+  // never presenting the network as a rule.
+  it("names a Google Cloud firewall rule and the network that blocked a path", async () => {
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ops-1", tenant_id: "t1", email: "ops@example.test" });
+    const posture = await apiMock.nhiExposurePosture();
+    const verdict = (address: string, fields: Record<string, unknown>) => ({
+      status: fields.status,
+      checked_at: "2026-11-11T03:00:00Z",
+      endpoints: [{ address, checked_at: "2026-11-11T03:00:00Z", ...fields }],
+    });
+    posture.findings = [
+      exposureFinding({
+        inventory_id: "finding/gcp-web",
+        display_name: "gcp-web-token",
+        attack_path: verdict("203.0.113.30:443", {
+          status: "open",
+          resource: "allow-https",
+          rule: "priority 1000",
+          path: ["web-1", "allow-https", "default-route-internet", "default-internet-gateway"],
+          reason: "firewall rule allow-https admits tcp/443 from 0.0.0.0/0",
+        }),
+      }),
+      exposureFinding({
+        inventory_id: "finding/gcp-db",
+        display_name: "gcp-db-token",
+        attack_path: verdict("203.0.113.31:443", {
+          status: "blocked",
+          blocked_by: "firewall",
+          resource: "prod",
+          rule: "implied deny ingress (priority 65535)",
+          reason: "no firewall rule on network prod admits tcp/443 from 0.0.0.0/0 to db-1",
+        }),
+      }),
+      exposureFinding({
+        inventory_id: "finding/gcp-lab",
+        display_name: "gcp-lab-token",
+        attack_path: verdict("203.0.113.32:443", {
+          status: "blocked",
+          blocked_by: "route",
+          resource: "isolated",
+          reason: "network isolated has no route from 0.0.0.0/0 that applies to lab-1",
+        }),
+      }),
+    ];
+    apiMock.nhiExposurePosture.mockResolvedValue(posture);
+    renderRisk();
+
+    const table = await screen.findByRole("table", { name: "Exposed NHI deployment recommendations" });
+    const open = (await within(table).findByText("gcp-web-token")).closest("tr") as HTMLElement;
+    expect(within(open).getByText("Open through allow-https")).toBeInTheDocument();
+    expect(within(open).getByText("firewall rule allow-https admits tcp/443 from 0.0.0.0/0")).toBeInTheDocument();
+    const firewall = within(table).getByText("gcp-db-token").closest("tr") as HTMLElement;
+    expect(within(firewall).getByText("Blocked at prod (firewall)")).toBeInTheDocument();
+    expect(within(firewall).getByText("no firewall rule on network prod admits tcp/443 from 0.0.0.0/0 to db-1")).toBeInTheDocument();
+    expect(within(table).queryByText(/firewall rule prod/)).not.toBeInTheDocument();
+    const route = within(table).getByText("gcp-lab-token").closest("tr") as HTMLElement;
+    expect(within(route).getByText("Blocked at isolated (routing)")).toBeInTheDocument();
+    expect(within(route).getByText("network isolated has no route from 0.0.0.0/0 that applies to lab-1")).toBeInTheDocument();
   });
 
   it("says where to add a cloud network path source when none exists", async () => {

@@ -2,6 +2,17 @@
 
 ### Added
 
+- Attack-path validation can read a Google Cloud project (A167-L1). A `cloud_network_path` source
+  with `provider: gcp-compute` names the project and a token reference, and validating exposed
+  endpoints through it lists the project's instances, VPC firewall rules and routes (read-only,
+  every page) and judges each external address the way the VPC does: the lowest-priority applicable
+  route for the internet must lead to the default internet gateway, and the lowest-priority ingress
+  firewall rule that applies to the instance and names the internet-wide range decides, a deny
+  winning a tie and the network's implied ingress deny standing behind them all. The verdict names
+  the firewall rule that admits the internet, or the denying rule, route or network that blocks it,
+  with a new `firewall` stage; the Risk page's Cloud path column now reads, for example, "Blocked at
+  prod (firewall)" with the evaluator's reason beneath, so a network whose implied deny decided is
+  never shown as a rule.
 - An AWS Certificate Manager target can name the Elastic Load Balancing listener it serves
   (`listener_arn`) and then roll back (A166-L2). ACM re-imports in place under one ARN and keeps no
   previous version, so such a target instead imports each deploy as a new certificate tagged with its

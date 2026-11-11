@@ -619,7 +619,7 @@
     {
       "kind": "cloud_network_path",
       "label": "Cloud network paths",
-      "purpose": "Validate, from the cloud account's own routes, network ACLs and security groups, whether the internet can reach the public endpoints the exposure posture names.",
+      "purpose": "Validate, from the cloud account's own routes, network ACLs, security groups and VPC firewall rules, whether the internet can reach the public endpoints the exposure posture names.",
       "data_handling": "Uses read-only provider calls and credential references. It stores each verdict with the identifiers of the resources that decided it, never credentials, traffic or other account contents.",
       "tool": "Discover",
       "route": "/discovery?tab=sources\u0026kind=cloud_network_path",
@@ -639,8 +639,15 @@
           "path": "providers[].region",
           "label": "Region",
           "type": "string",
-          "required": true,
-          "description": "The account region whose network configuration is read."
+          "required": false,
+          "description": "The AWS account region whose network configuration is read."
+        },
+        {
+          "path": "providers[].project",
+          "label": "Project",
+          "type": "string",
+          "required": false,
+          "description": "The Google Cloud project whose VPC firewall rules and routes are read."
         },
         {
           "path": "providers[].endpoint",
@@ -692,9 +699,29 @@
           "secret_ref": true,
           "advanced": true,
           "description": "Optional short-lived session-token reference."
+        },
+        {
+          "path": "providers[].token_ref",
+          "label": "Bearer token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Reference only; a short-lived OAuth token with read-only compute scope."
         }
       ],
       "providers": [
+        {
+          "id": "gcp-compute",
+          "label": "Google Compute Engine network configuration",
+          "least_privilege": "compute.instances.list, compute.firewalls.list and compute.routes.list on the project (roles/compute.networkViewer)",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "project",
+            "endpoint",
+            "token_ref"
+          ]
+        },
         {
           "id": "aws-ec2",
           "label": "Amazon EC2 network configuration",

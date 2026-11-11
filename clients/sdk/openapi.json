@@ -34255,7 +34255,8 @@
               "route",
               "network_acl",
               "network_acl_return",
-              "security_group"
+              "security_group",
+              "firewall"
             ],
             "type": "string"
           },

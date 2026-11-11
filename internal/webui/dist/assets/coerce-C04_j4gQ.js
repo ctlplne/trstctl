@@ -1,1 +1,0 @@
-import{m as s,t}from"./schemas-9bs4tv-C.js";function r(r){return s(t,r)}export{r as t};

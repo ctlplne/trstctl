@@ -19568,7 +19568,8 @@ export const messages = {
   },
   "risk.nhiExposure.validatePaths": {
     defaultMessage: "Validate paths in the cloud",
-    description: "Button that asks the cloud account whether its routes, network ACLs and security groups admit the internet to the exposed endpoints.",
+    description:
+      "Button that asks the cloud account whether its routes, network ACLs, security groups and firewall rules admit the internet to the exposed endpoints.",
   },
   "risk.nhiExposure.validating": {
     defaultMessage: "Validating…",
@@ -19596,11 +19597,11 @@ export const messages = {
   },
   "risk.nhiExposure.path.open": {
     defaultMessage: "Open through {resource}",
-    description: "Cloud path value: the internet reaches the endpoint; names the security group that admits it.",
+    description: "Cloud path value: the internet reaches the endpoint; names the security group or firewall rule that admits it.",
   },
   "risk.nhiExposure.path.blocked": {
-    defaultMessage: "Blocked by {stage} {resource}",
-    description: "Cloud path value: names the kind of resource and the resource that stops the internet.",
+    defaultMessage: "Blocked at {resource} ({stage})",
+    description: "Cloud path value: names the resource that stops the internet and the stage it belongs to (routing, firewall, network ACL or security group).",
   },
   "risk.nhiExposure.path.notInAccount": {
     defaultMessage: "Not in a configured account",
@@ -19610,7 +19611,14 @@ export const messages = {
     defaultMessage: "Unknown: {reason}",
     description: "Cloud path value: the account could not be read for this endpoint; gives the reason.",
   },
-  "risk.nhiExposure.pathStage.route": { defaultMessage: "route table", description: "Cloud path stage name: a route table." },
+  "risk.nhiExposure.pathStage.route": {
+    defaultMessage: "routing",
+    description: "Cloud path stage name: routing (an AWS route table, or a Google Cloud network's routes) that sends the traffic elsewhere.",
+  },
+  "risk.nhiExposure.pathStage.firewall": {
+    defaultMessage: "firewall",
+    description: "A167-L1: cloud path stage name: a Google Cloud VPC firewall rule, or the network's implied ingress deny.",
+  },
   "risk.nhiExposure.pathStage.network_acl": { defaultMessage: "network ACL", description: "Cloud path stage name: a network ACL's inbound rules." },
   "risk.nhiExposure.pathStage.network_acl_return": {
     defaultMessage: "network ACL (return traffic)",

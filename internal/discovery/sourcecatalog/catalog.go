@@ -293,20 +293,23 @@ func loadBalancerTLSCapability() Capability {
 func cloudNetworkPathCapability() Capability {
 	return Capability{
 		Kind: "cloud_network_path", Label: "Cloud network paths", Tool: "Discover", Route: "/discovery?tab=sources&kind=cloud_network_path", SetupSurface: SetupSourceWizard,
-		Purpose:      "Validate, from the cloud account's own routes, network ACLs and security groups, whether the internet can reach the public endpoints the exposure posture names.",
+		Purpose:      "Validate, from the cloud account's own routes, network ACLs, security groups and VPC firewall rules, whether the internet can reach the public endpoints the exposure posture names.",
 		DataHandling: "Uses read-only provider calls and credential references. It stores each verdict with the identifiers of the resources that decided it, never credentials, traffic or other account contents.",
 		Permission:   "discovery:write", Edition: "core", Execution: "control plane",
 		Configuration: []Field{
 			field("providers[].provider", "Provider", "provider", true, false, false, "The exact read-only provider adapter."),
-			field("providers[].region", "Region", "string", true, false, false, "The account region whose network configuration is read."),
+			field("providers[].region", "Region", "string", false, false, false, "The AWS account region whose network configuration is read."),
+			field("providers[].project", "Project", "string", false, false, false, "The Google Cloud project whose VPC firewall rules and routes are read."),
 			field("providers[].endpoint", "API endpoint", "url", false, false, true, "Optional compatible endpoint; public provider defaults are safer."),
 			field("providers[].allow_private_endpoint", "Allow approved private endpoint", "boolean", false, false, true, "Requires private-egress authorization and explicit CIDRs."),
 			field("providers[].private_egress_cidrs", "Approved private endpoint CIDRs", "cidr_list", false, false, true, "Private destinations allowed for this provider; metadata and loopback remain blocked."),
 			field("providers[].access_key_id_ref", "Access key ID reference", "credential_ref", false, true, true, "Reference only; use a short-lived least-privilege credential."),
 			field("providers[].secret_access_key_ref", "Secret access key reference", "credential_ref", false, true, true, "Reference only; the value never enters source configuration."),
 			field("providers[].session_token_ref", "Session token reference", "credential_ref", false, true, true, "Optional short-lived session-token reference."),
+			field("providers[].token_ref", "Bearer token reference", "credential_ref", false, true, true, "Reference only; a short-lived OAuth token with read-only compute scope."),
 		},
 		Providers: []Provider{
+			provider("gcp-compute", "Google Compute Engine network configuration", "compute.instances.list, compute.firewalls.list and compute.routes.list on the project (roles/compute.networkViewer)", "token_ref", "project", "endpoint", "token_ref"),
 			provider("aws-ec2", "Amazon EC2 network configuration", "ec2:DescribeNetworkInterfaces, ec2:DescribeSecurityGroups, ec2:DescribeRouteTables and ec2:DescribeNetworkAcls on the authorized account/region", "env: credential references", "region", "endpoint", "access_key_id_ref", "secret_access_key_ref", "session_token_ref"),
 		},
 		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-network-paths",

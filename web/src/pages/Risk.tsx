@@ -841,30 +841,44 @@ const nhiAttackPathStageKeys = {
   network_acl: "risk.nhiExposure.pathStage.network_acl",
   network_acl_return: "risk.nhiExposure.pathStage.network_acl_return",
   security_group: "risk.nhiExposure.pathStage.security_group",
+  firewall: "risk.nhiExposure.pathStage.firewall",
 } as const;
 
 // A167: the cloud account's verdict on the path from the internet, naming the
-// resource that decided it, from the record's first judged address.
+// resource that decided it, from the record's first judged address. A167-L1:
+// the decider's own sentence follows, because the resource alone can be a
+// container (a Google Cloud network whose implied ingress deny or missing
+// route decided) rather than a rule.
 function NHIAttackPathValue({ path }: { path: NHIExposureAttackPath }) {
   const { t } = useTranslation();
   const decided = path.endpoints.find((endpoint) => endpoint.status === path.status) ?? path.endpoints[0];
   switch (path.status) {
     case "open":
-      return <>{t("risk.nhiExposure.path.open", { resource: decided?.resource ?? "" })}</>;
+      return <NHIAttackPathVerdict verdict={t("risk.nhiExposure.path.open", { resource: decided?.resource ?? "" })} reason={decided?.reason} />;
     case "blocked":
       return (
-        <>
-          {t("risk.nhiExposure.path.blocked", {
+        <NHIAttackPathVerdict
+          verdict={t("risk.nhiExposure.path.blocked", {
             stage: decided?.blocked_by ? t(nhiAttackPathStageKeys[decided.blocked_by]) : "",
             resource: decided?.resource ?? "",
           })}
-        </>
+          reason={decided?.reason}
+        />
       );
     case "not_in_account":
       return <>{t("risk.nhiExposure.path.notInAccount")}</>;
     default:
       return <>{t("risk.nhiExposure.path.unknown", { reason: decided?.reason ?? "" })}</>;
   }
+}
+
+function NHIAttackPathVerdict({ verdict, reason }: { verdict: string; reason?: string }) {
+  return (
+    <>
+      <p>{verdict}</p>
+      {reason && <p className="text-caption text-muted-foreground">{reason}</p>}
+    </>
+  );
 }
 
 function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePosture | null; loading: boolean; error: string | null }) {

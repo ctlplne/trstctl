@@ -780,6 +780,25 @@ in and the reply out, and a security group on the interface must admit the port 
 internet. The verdict names the resource that decided it. An ordinary run of the source
 checks only that its providers can be built.
 
+The same source can read a Google Cloud project (A167-L1): `provider: gcp-compute` with
+`project`, `token_ref` (an OAuth 2.0 bearer token with Compute Engine read scope) and an
+optional `endpoint` (default `https://compute.googleapis.com`). It needs
+`compute.instances.list`, `compute.firewalls.list` and `compute.routes.list` on the
+project (the Compute Network Viewer role, `roles/compute.networkViewer`, grants them)
+and nothing else; every list is followed across its pages. The control plane finds the
+instance whose network interface holds the external address, then follows Google's
+documented VPC semantics: the network's applicable route for `0.0.0.0/0` (or `::/0`)
+with the lowest priority number must send the traffic to the default internet gateway,
+and the ingress firewall rule with the lowest priority number that applies to the
+instance (by network, target tag or service account) and names the internet-wide range
+for the port decides, a deny winning a tie; with none, the network's implied ingress
+deny blocks it. An open verdict names the firewall rule that admits the internet and the
+path through the route to the gateway; a blocked one names the denying rule or the route
+with another next hop, or the network itself when its implied deny or the absence of an
+applicable route decided, and its reason says which. Hierarchical and network firewall
+policies, Cloud NGFW rules and paths through load balancers or Cloud NAT are not read
+yet, so an instance they govern is judged by its VPC firewall rules and routes alone.
+
 ### Cloud access keys
 
 A `cloud_access_key` source (M3) finds the long-lived access keys an AWS account's IAM
