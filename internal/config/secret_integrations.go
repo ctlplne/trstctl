@@ -196,6 +196,11 @@ type DynamicSecretProviderConfig struct {
 	TLSCARef       string `json:"tls_ca_ref,omitempty"`
 	TLSServerName  string `json:"tls_server_name,omitempty"`
 	AllowPlaintext bool   `json:"allow_plaintext,omitempty"`
+	// StartTLS (ldap) connects to the directory's plain LDAP port and
+	// upgrades with StartTLS, verifying tls_server_name against tls_ca_ref
+	// (or system roots) before the administrator binds; it never falls back
+	// to plaintext (A239-L3). Without it addr is the LDAPS listener.
+	StartTLS bool `json:"start_tls,omitempty"`
 	// SeedRef is a TOTP provider's shared secret (base32, as an authenticator
 	// enrolls it); Digits (6, 7 or 8), Period (30s or 60s) and Algorithm
 	// (SHA1, SHA256 or SHA512) default to 6, 30s and SHA1 (A239).
@@ -1297,6 +1302,9 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 		errs = append(errs, fmt.Errorf("%s tls_ca_ref, tls_server_name and allow_plaintext are not valid for %s", where, c.Type))
 	}
 	errs = append(errs, validateADReconcile(where, c)...)
+	if c.StartTLS && c.Type != "ldap" {
+		errs = append(errs, fmt.Errorf("%s start_tls is only valid for ldap", where))
+	}
 	if c.Type != "ldap" && (c.BindDN != "" || c.UsersDN != "" || c.DirectoryMode != "" || len(c.ADLogonNames) != 0) {
 		errs = append(errs, fmt.Errorf("%s bind_dn, users_dn and directory_mode are only valid for ldap", where))
 	}
@@ -2360,6 +2368,12 @@ func validateTOTPProvider(where string, c DynamicSecretProviderConfig) []error {
 // role groups (A239).
 func validateLDAPProvider(where string, c DynamicSecretProviderConfig) []error {
 	var errs []error
+	if c.StartTLS && c.AllowPlaintext {
+		errs = append(errs, fmt.Errorf("%s start_tls and allow_plaintext are exclusive: StartTLS never falls back to plaintext", where))
+	}
+	if c.StartTLS && c.DirectoryMode == "active_directory" {
+		errs = append(errs, fmt.Errorf("%s active_directory uses verified LDAPS; start_tls is for generic LDAP", where))
+	}
 	if c.DirectoryMode != "" && c.DirectoryMode != "active_directory" {
 		errs = append(errs, fmt.Errorf("%s directory_mode is empty for generic LDAP or active_directory", where))
 	}

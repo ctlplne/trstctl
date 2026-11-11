@@ -2713,8 +2713,14 @@ deletes it, after which the directory refuses its bind. A `groupOfNames` can't
 be empty, so keep one permanent member in each role group. The connection is
 LDAPS verified against `tls_server_name` (required when `addr` is an IP address,
 else `addr`'s host) and, optionally, a private CA from `tls_ca_ref` (a mode-0600
-`file:` or tenant `secret://` reference). `allow_plaintext: true` permits plain
-LDAP only to a literal loopback or private IP and forbids the TLS settings. A
+`file:` or tenant `secret://` reference). With `start_tls: true` (A239-L3), `addr` is
+the directory's plain LDAP port (389) and the connection is upgraded with StartTLS,
+verified the same way, before the administrator binds. A refused or failed upgrade
+ends the connection: it never falls back to plaintext, and leases carry an `ldap://`
+URL with `start_tls` set, so a client upgrades as well. `start_tls` is for generic
+LDAP; `active_directory` keeps verified LDAPS. `allow_plaintext: true` permits plain
+LDAP only to a literal loopback or private IP and forbids the TLS settings and
+`start_tls`. A
 lease's entry name derives from its lease ID, so a retry after an uncertain issue
 replaces that one entry instead of leaving another.
 

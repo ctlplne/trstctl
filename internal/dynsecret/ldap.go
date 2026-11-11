@@ -26,9 +26,15 @@ type LDAPConfig struct {
 	ADReconcile *ADReconcileAuthority
 	// DirectoryMode is empty for generic LDAP, active_directory for existing AD accounts.
 	DirectoryMode string `json:"directory_mode"`
-	// Addr is the directory's host:port: its LDAPS listener, or, with
+	// Addr is the directory's host:port: its LDAPS listener; with StartTLS,
+	// its plain LDAP listener, upgraded before anything is sent; or, with
 	// AllowPlaintext, plain LDAP at a literal loopback or private IP.
 	Addr string
+	// StartTLS connects to the plain LDAP port and upgrades the connection
+	// with the StartTLS extended operation, verifying the directory's
+	// certificate before the administrator binds (A239-L3). A refused or
+	// failed upgrade ends the connection: it never falls back to plaintext.
+	StartTLS bool
 	// TLSServerName is the certificate name LDAPS verifies; Addr's host when
 	// that is a name. TLSCAPEM pins a private CA; system roots when empty.
 	TLSServerName  string
@@ -70,6 +76,7 @@ type LDAPBackend struct {
 	url              string
 	addr             string
 	tls              bool
+	startTLS         bool
 	serverName       string
 	caPEM            []byte
 	bindDN           string
@@ -94,8 +101,11 @@ func NewLDAPBackend(cfg LDAPConfig) (*LDAPBackend, error) {
 		return nil, errors.New("dynsecret ldap: unknown directory_mode")
 	}
 	b.activeDirectory = cfg.DirectoryMode == "active_directory"
-	if b.activeDirectory && cfg.AllowPlaintext {
+	if b.activeDirectory && (cfg.AllowPlaintext || cfg.StartTLS) {
 		return nil, errors.New("dynsecret AD: verified LDAPS is required")
+	}
+	if cfg.StartTLS && cfg.AllowPlaintext {
+		return nil, errors.New("dynsecret ldap: start_tls and allow_plaintext are exclusive")
 	}
 	address := net.ParseIP(host)
 	switch {
@@ -111,6 +121,10 @@ func NewLDAPBackend(cfg LDAPConfig) (*LDAPBackend, error) {
 			b.serverName = host
 		}
 		b.url = "ldaps://" + b.addr
+		if cfg.StartTLS {
+			b.startTLS = true
+			b.url = "ldap://" + b.addr
+		}
 	}
 	if _, err := ldap.ParseDN(b.bindDN); err != nil || b.bindDN == "" {
 		return nil, errors.New("dynsecret ldap: bind_dn must be a distinguished name")
@@ -187,6 +201,9 @@ func (b *LDAPBackend) isRotationAccount(dn string) bool {
 // dialDirectory connects (verified TLS through the crypto boundary, or the
 // allowed plaintext) and binds as the administrator.
 func (b *LDAPBackend) dialDirectory(ctx context.Context) (ldapConn, error) {
+	if b.startTLS {
+		return b.dialStartTLS(ctx)
+	}
 	var raw net.Conn
 	var err error
 	if b.tls {
@@ -199,6 +216,28 @@ func (b *LDAPBackend) dialDirectory(ctx context.Context) (ldapConn, error) {
 	}
 	conn := ldap.NewConn(raw, b.tls)
 	conn.Start()
+	return conn, nil
+}
+
+// dialStartTLS connects to the plain LDAP port and upgrades the connection
+// with StartTLS, verifying the directory's certificate through the crypto
+// boundary before anything else is sent (A239-L3). A refused or failed
+// upgrade closes the connection: there is no plaintext fallback.
+func (b *LDAPBackend) dialStartTLS(ctx context.Context) (ldapConn, error) {
+	config, err := mtls.VerifiedClientTLSConfig(b.serverName, b.caPEM)
+	if err != nil {
+		return nil, errors.New("dynsecret ldap: connect failed")
+	}
+	raw, err := (&net.Dialer{}).DialContext(ctx, "tcp", b.addr)
+	if err != nil {
+		return nil, errors.New("dynsecret ldap: connect failed")
+	}
+	conn := ldap.NewConn(raw, false)
+	conn.Start()
+	if err := conn.StartTLS(config); err != nil {
+		_ = conn.Close()
+		return nil, errors.New("dynsecret ldap: StartTLS failed, so nothing was sent to the directory")
+	}
 	return conn, nil
 }
 
@@ -289,10 +328,11 @@ func (b *LDAPBackend) CreateCredential(ctx context.Context, req GenerateRequest)
 	}
 	credential, err := json.Marshal(struct { // #nosec G117 -- the reveal-once LDAP lease credential; the caller seals it before storage (CWE-200)
 		URL      string           `json:"url"`
+		StartTLS bool             `json:"start_tls,omitempty"`
 		BindDN   string           `json:"bind_dn"`
 		Username string           `json:"username"`
 		Password secret.JSONBytes `json:"password"`
-	}{URL: b.url, BindDN: dn, Username: name, Password: password})
+	}{URL: b.url, StartTLS: b.startTLS, BindDN: dn, Username: name, Password: password})
 	if err != nil {
 		_ = b.remove(conn, dn)
 		return "", nil, err
@@ -318,10 +358,11 @@ func (b *LDAPBackend) stageTwoUser(ctx context.Context, dn string) (string, []by
 	}
 	credential, err := json.Marshal(struct { // #nosec G117 -- the staged two-user credential; the rotation seals it before storage (CWE-200)
 		URL      string           `json:"url"`
+		StartTLS bool             `json:"start_tls,omitempty"`
 		BindDN   string           `json:"bind_dn"`
 		Username string           `json:"username"`
 		Password secret.JSONBytes `json:"password"`
-	}{URL: b.url, BindDN: dn, Username: username, Password: password})
+	}{URL: b.url, StartTLS: b.startTLS, BindDN: dn, Username: username, Password: password})
 	if err != nil {
 		return "", nil, err
 	}

@@ -2,6 +2,10 @@
 
 ### Added
 
+- LDAP leases over StartTLS (A239-L3): a generic LDAP provider with `start_tls` connects to the directory's
+  plain port (389) and upgrades with StartTLS, verifying the directory's certificate before the
+  administrator binds. A refused or failed upgrade ends the connection, never falling back to plaintext.
+  Leases carry the `ldap://` URL with `start_tls` set.
 - SSH certificates as dynamic-secret leases (A239-L11): an `ssh-certificate` provider gives each lease a fresh
   Ed25519 key pair and a certificate from the control plane's own SSH CA for its role's principals
   (`ssh_roles`) and the lease's lifetime. The key pair is prepared and sealed before the CA signs, so a retry

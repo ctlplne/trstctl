@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2995 annotated sites across 33 rules. Each row is
+2996 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1385,8 +1385,8 @@ not this file.
 | `internal/dynsecret/ibm_api_connect.go:202` | the platform credentials go to the token endpoint over the guarded client and are not kept (CWE-200) |
 | `internal/dynsecret/idp_admin.go:172` | the rotated administrator credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/kafka.go:339` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/ldap.go:290` | the reveal-once LDAP lease credential; the caller seals it before storage (CWE-200) |
-| `internal/dynsecret/ldap.go:319` | the staged two-user credential; the rotation seals it before storage (CWE-200) |
+| `internal/dynsecret/ldap.go:329` | the reveal-once LDAP lease credential; the caller seals it before storage (CWE-200) |
+| `internal/dynsecret/ldap.go:359` | the staged two-user credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/litellm.go:40` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/milvus.go:126` | the new user's password goes to the Milvus API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/milvus.go:138` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
@@ -1538,7 +1538,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (397 sites)
+### G204 — CWE-78 OS command injection (398 sites)
 
 | Location | Reason |
 |---|---|
@@ -1766,13 +1766,14 @@ not this file.
 | `internal/server/java_sdk_served_test.go:56` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/java_sdk_served_test.go:60` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/java_sdk_served_test.go:91` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/lab_openldap_test.go:37` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/lab_openldap_test.go:74` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/lab_openldap_test.go:82` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/lab_openldap_test.go:88` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/lab_openldap_test.go:92` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/lab_openldap_test.go:95` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/lab_openldap_test.go:123` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:52` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:97` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:102` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:108` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:112` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:115` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:121` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:154` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/mcp_authorization_keycloak_test.go:111` | test executes the reference binary it built itself (CWE-78) |
 | `internal/server/mcp_authorization_keycloak_test.go:343` | test builds the in-repo reference module (CWE-78) |
 | `internal/server/mcp_authorization_keycloak_test.go:358` | test executes the reference binary it built itself (CWE-78) |
@@ -2588,7 +2589,7 @@ not this file.
 | `internal/server/host_keystore_credentials_served_test.go:166` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/idempotency_protection_wiring_test.go:61` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/kmip_client_registration_served_test.go:163` | test-generated TLS material in the test's temp dir (CWE-22) |
-| `internal/server/lab_openldap_test.go:55` | the test's own temp file (CWE-22) |
+| `internal/server/lab_openldap_test.go:70` | the test's own temp file (CWE-22) |
 | `internal/server/machine_session_self_end_served_test.go:207` | the test's own temp file (CWE-22) |
 | `internal/server/mcp_authorization_keycloak_test.go:141` | the test's own TempDir audit log (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:193` | what the launched agent wrote in the test's temp dir (CWE-22) |
@@ -2889,7 +2890,7 @@ not this file.
 | `internal/server/dod_connector_runtime_test.go:817` | public CA fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:390` | public CA certificate fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:616` | public CA fixture (CWE-276) |
-| `internal/server/lab_openldap_test.go:85` | the container's directory server reads it; the key is a throwaway lab key (CWE-276) |
+| `internal/server/lab_openldap_test.go:105` | the container's directory server reads it; the key is a throwaway lab key (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:248` | public realm configuration the container reads (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:252` | public cache configuration the container reads (CWE-276) |
 | `internal/server/pam_served_test.go:845` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

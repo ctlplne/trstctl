@@ -18,6 +18,20 @@ func DialVerifiedTCP(ctx context.Context, addr, serverName string, caPEM []byte)
 }
 
 func dialVerifiedTCP(ctx context.Context, addr, serverName string, caPEM []byte, netDialer *net.Dialer) (net.Conn, error) {
+	config, err := VerifiedClientTLSConfig(serverName, caPEM)
+	if err != nil {
+		return nil, err
+	}
+	dialer := tls.Dialer{NetDialer: netDialer, Config: config}
+	return dialer.DialContext(ctx, "tcp", addr)
+}
+
+// VerifiedClientTLSConfig is the client configuration DialVerifiedTCP uses,
+// for a protocol that upgrades its own connection in band (LDAP StartTLS,
+// A239-L3): the expected server name, the pinned CA (or system roots when
+// none), TLS 1.2 at least. Nothing authenticates before the handshake
+// verifies the server.
+func VerifiedClientTLSConfig(serverName string, caPEM []byte) (*tls.Config, error) {
 	if serverName == "" {
 		return nil, errors.New("mtls: expected TCP server name required")
 	}
@@ -28,13 +42,7 @@ func dialVerifiedTCP(ctx context.Context, addr, serverName string, caPEM []byte,
 			return nil, errors.New("mtls: no CA certificates found in PEM")
 		}
 	}
-	dialer := tls.Dialer{
-		NetDialer: netDialer,
-		Config: &tls.Config{
-			RootCAs: roots, ServerName: serverName, MinVersion: tls.VersionTLS12,
-		},
-	}
-	return dialer.DialContext(ctx, "tcp", addr)
+	return &tls.Config{RootCAs: roots, ServerName: serverName, MinVersion: tls.VersionTLS12}, nil
 }
 
 // VerifyClientConnection upgrades an already dialed connection without bypassing

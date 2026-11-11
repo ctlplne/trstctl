@@ -22,11 +22,26 @@ import (
 type labOpenLDAP struct {
 	id, addr, admin, adminPassword, base string
 	trustPEM                             []byte
+	// plainAddr is the published plain LDAP listener (389) of a directory
+	// started with startTLS, which refuses every operation that isn't over
+	// TLS (LDAP_TLS_ENFORCE), so a bind there succeeds only after StartTLS.
+	plainAddr string
+	enforced  bool
 }
+
+// labOpenLDAPOptions shapes the lab directory. startTLS also publishes the
+// plain LDAP port and makes the directory refuse anything not over TLS
+// (A239-L3).
+type labOpenLDAPOptions struct{ startTLS bool }
 
 // startLabOpenLDAP runs the pinned image for one test, or skips when docker or
 // the image is not available.
 func startLabOpenLDAP(t *testing.T) labOpenLDAP {
+	t.Helper()
+	return startLabOpenLDAPWith(t, labOpenLDAPOptions{})
+}
+
+func startLabOpenLDAPWith(t *testing.T, opts labOpenLDAPOptions) labOpenLDAP {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("container acceptance test")
@@ -71,10 +86,15 @@ func startLabOpenLDAP(t *testing.T) labOpenLDAP {
 	}
 	// The image demands client certificates by default; accounts bind with
 	// passwords over server-authenticated TLS.
-	created, err := exec.Command("docker", "create", "-p", "127.0.0.1::636", "--hostname", "ldap.lab.test", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
-		"-e", "LDAP_ORGANISATION=trstctl lab", "-e", "LDAP_DOMAIN=lab.test", "-e", "LDAP_ADMIN_PASSWORD="+lab.adminPassword,
+	args := []string{"create", "-p", "127.0.0.1::636", "--hostname", "ldap.lab.test",
+		"-e", "LDAP_ORGANISATION=trstctl lab", "-e", "LDAP_DOMAIN=lab.test", "-e", "LDAP_ADMIN_PASSWORD=" + lab.adminPassword,
 		"-e", "LDAP_TLS_VERIFY_CLIENT=never", "-e", "LDAP_TLS_CRT_FILENAME=ldap.crt", "-e", "LDAP_TLS_KEY_FILENAME=ldap.key",
-		"-e", "LDAP_TLS_CA_CRT_FILENAME=ca.crt", a239OpenLDAPImage).CombinedOutput()
+		"-e", "LDAP_TLS_CA_CRT_FILENAME=ca.crt"}
+	if opts.startTLS {
+		args = append(args, "-p", "127.0.0.1::389", "-e", "LDAP_TLS_ENFORCE=true")
+		lab.enforced = true
+	}
+	created, err := exec.Command("docker", append(args, a239OpenLDAPImage)...).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("docker create: %v %s", err, created)
 	}
@@ -97,6 +117,13 @@ func startLabOpenLDAP(t *testing.T) labOpenLDAP {
 		t.Fatalf("docker port: %v", err)
 	}
 	lab.addr = strings.TrimSpace(strings.Split(string(mapped), "\n")[0])
+	if opts.startTLS {
+		plain, err := exec.Command("docker", "port", lab.id, "389/tcp").Output() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+		if err != nil {
+			t.Fatalf("docker port 389: %v", err)
+		}
+		lab.plainAddr = strings.TrimSpace(strings.Split(string(plain), "\n")[0])
+	}
 	// The image runs a bootstrap server first; it serves LDAPS with the
 	// certificate it was given only once its final server is up.
 	a201Await(t, "OpenLDAP serving LDAPS", func() bool {
@@ -108,8 +135,12 @@ func startLabOpenLDAP(t *testing.T) labOpenLDAP {
 }
 
 // tool runs an OpenLDAP client inside the container against its own plain
-// listener.
+// listener; a directory that enforces TLS is reached with StartTLS (-ZZ).
 func (lab labOpenLDAP) tool(name string, args ...string) (string, error) {
+	if lab.enforced {
+		return a201Exec(lab.id, append([]string{"env", "LDAPTLS_CACERT=/container/service/slapd/assets/certs/ca.crt",
+			name, "-x", "-H", "ldap://ldap.lab.test", "-ZZ"}, args...)...)
+	}
 	return a201Exec(lab.id, append([]string{name, "-x", "-H", "ldap://localhost"}, args...)...)
 }
 

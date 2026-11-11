@@ -5545,7 +5545,10 @@ when off, requiring a KEK when on):
   LDAP (A239) is proven on OpenLDAP over verified LDAPS: the directory's own
   `ldapwhoami` accepts a leased entry in its role's group only, a replayed issue
   keeps one entry, renewal stays within the maximum TTL, and after revocation the
-  bind is refused (invalid credentials). TOTP (A239) is proven with stock
+  bind is refused (invalid credentials). It is also proven over StartTLS on the
+  plain port (A239-L3) against an OpenLDAP that refuses anything not over TLS:
+  the lease binds there, and a provider expecting another certificate name issues
+  nothing, with no plaintext fallback. TOTP (A239) is proven with stock
   oathtool: it computes the leased code for the lease's time step, accepts it
   there and rejects it one step later; a renewal is refused, and revocation only
   closes the lease (the code lapses at `valid_until`). OAuth 2.0 access tokens

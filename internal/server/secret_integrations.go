@@ -792,7 +792,7 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 		}
 		backend, err := dynsecret.NewLDAPBackend(dynsecret.LDAPConfig{
 			ADReconcile:   reconcile,
-			DirectoryMode: cfg.DirectoryMode, Addr: cfg.Addr, TLSServerName: cfg.TLSServerName, TLSCAPEM: caPEM, AllowPlaintext: cfg.AllowPlaintext,
+			DirectoryMode: cfg.DirectoryMode, Addr: cfg.Addr, TLSServerName: cfg.TLSServerName, TLSCAPEM: caPEM, AllowPlaintext: cfg.AllowPlaintext, StartTLS: cfg.StartTLS,
 			BindDN: cfg.BindDN, BindPassword: password, UsersDN: cfg.UsersDN, RoleGroups: cfg.RoleBindings,
 			UsernamePrefix: cfg.UsernamePrefix, RotationAccounts: o.provider.rotationAccountPairs(),
 		})
