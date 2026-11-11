@@ -417,7 +417,14 @@ the rollback method before the upgrade starts:
   file for, and its own preflight lists them under `schema_newer_than_binary`.
   Roll back by deploying the previous version.
 - **`restore_backup`** — a pending migration is destructive, so once it is
-  applied the previous binary may not find what it needs. Roll back from the
+  applied the previous binary may not find what it needs. A migration is
+  destructive when one of its statements drops, renames or retypes an object,
+  makes a column `NOT NULL`, or removes rows (A246-L2: read statement by
+  statement, with comments and quoted text left out). Removing rows only from
+  tables the event log rebuilds — the read models and their snapshots, not the
+  independently preserved attestations, and never with `CASCADE` — loses nothing
+  a rebuild does not bring back, so it is not destructive: 0160, which empties
+  the disposable read-model snapshots, needs no backup. Roll back from the
   pre-upgrade backup:
 
   1. Stop the control plane.

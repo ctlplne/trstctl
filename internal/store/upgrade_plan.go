@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strings"
 )
 
 // The upgrade plan (A246): what this binary would change in the database
@@ -64,12 +65,131 @@ func (p UpgradePlan) PendingNames() []string {
 // extensionMigrationBand is where WithExtraMigrations versions start.
 const extensionMigrationBand = 900000
 
-var destructiveMigration = regexp.MustCompile(`(?i)\b(drop\s+(table|column|type|schema|view|materialized\s+view)|rename\s+(to|column)|truncate|delete\s+from|alter\s+column\s+\S+\s+(set\s+data\s+)?type|set\s+not\s+null)\b`)
+// destructiveStatement matches a statement an older binary may not survive or
+// that loses data: dropping, renaming or retyping objects, tightening a
+// column, or removing rows.
+var destructiveStatement = regexp.MustCompile(`(?i)\b(drop\s+(table|column|type|schema|view|materialized\s+view)|rename\s+(to|column)|truncate|delete\s+from|alter\s+column\s+\S+\s+(set\s+data\s+)?type|set\s+not\s+null)\b`)
 
-// classifyMigration reads a migration's SQL, comments stripped, for
-// statements an older binary may not survive.
+var (
+	truncateStatement = regexp.MustCompile(`(?is)^truncate\s+(?:table\s+)?(.+?)(?:\s+(?:restart|continue)\s+identity)?(?:\s+(cascade|restrict))?$`)
+	deleteStatement   = regexp.MustCompile(`(?is)^delete\s+from\s+(?:only\s+)?("?[a-z_][a-z0-9_.]*"?)(?:\s|$)`)
+	dollarQuote       = regexp.MustCompile(`^\$[A-Za-z_]*\$`)
+)
+
+// classifyMigration reads a migration's SQL statement by statement, comments
+// and quoted text left out, for one an older binary may not survive or that
+// loses data (A246-L2). Removing rows only from tables rebuilt from the event
+// log (read models and their snapshots) loses nothing a rebuild does not bring
+// back, so a TRUNCATE or DELETE of those alone is not destructive; with
+// CASCADE it can reach other tables, so it is.
 func classifyMigration(body []byte) (destructive, transactional bool) {
-	return destructiveMigration.MatchString(stripSQLLineComments(string(body))), !migrationNoTransaction(body)
+	for _, statement := range sqlStatements(string(body)) {
+		if destructiveStatement.MatchString(statement) && !removesOnlyRebuildableRows(statement) {
+			destructive = true
+			break
+		}
+	}
+	return destructive, !migrationNoTransaction(body)
+}
+
+// sqlStatements splits migration SQL into statements without comments or the
+// text of string literals, so a keyword there is never read as a statement. A
+// dollar-quoted body (a function's) stays in its statement: what it would run
+// later still counts.
+func sqlStatements(body string) []string {
+	var out []string
+	var current strings.Builder
+	flush := func() {
+		if statement := strings.TrimSpace(current.String()); statement != "" {
+			out = append(out, statement)
+		}
+		current.Reset()
+	}
+	for i := 0; i < len(body); {
+		switch c := body[i]; {
+		case c == '-' && strings.HasPrefix(body[i:], "--"):
+			end := strings.IndexByte(body[i:], '\n')
+			if end < 0 {
+				end = len(body) - i
+			}
+			current.WriteByte(' ')
+			i += end
+		case c == '/' && strings.HasPrefix(body[i:], "/*"):
+			end := strings.Index(body[i+2:], "*/")
+			if end < 0 {
+				end = len(body) - i - 4
+			}
+			current.WriteByte(' ')
+			i += end + 4
+		case c == '\'':
+			j := i + 1
+			for j < len(body) && (body[j] != '\'' || (j+1 < len(body) && body[j+1] == '\'')) {
+				if body[j] == '\'' {
+					j++
+				}
+				j++
+			}
+			current.WriteString("''")
+			i = j + 1
+		case c == '$' && dollarQuote.MatchString(body[i:]):
+			tag := dollarQuote.FindString(body[i:])
+			end := strings.Index(body[i+len(tag):], tag)
+			if end < 0 {
+				end = len(body) - i - len(tag)
+			}
+			current.WriteByte(' ')
+			current.WriteString(body[i+len(tag) : i+len(tag)+end])
+			current.WriteByte(' ')
+			i += len(tag) + end + len(tag)
+		case c == ';':
+			flush()
+			i++
+		default:
+			current.WriteByte(c)
+			i++
+		}
+	}
+	flush()
+	return out
+}
+
+// removesOnlyRebuildableRows reports whether a statement only removes rows
+// from tables the event log rebuilds.
+func removesOnlyRebuildableRows(statement string) bool {
+	if m := truncateStatement.FindStringSubmatch(statement); m != nil {
+		if strings.EqualFold(m[2], "cascade") {
+			return false
+		}
+		for _, target := range strings.Split(m[1], ",") {
+			target = strings.TrimSpace(target)
+			if len(target) > 5 && strings.EqualFold(target[:5], "only ") {
+				target = strings.TrimSpace(target[5:])
+			}
+			if !rebuildableTable(target) {
+				return false
+			}
+		}
+		return true
+	}
+	if m := deleteStatement.FindStringSubmatch(statement); m != nil {
+		return rebuildableTable(m[1])
+	}
+	return false
+}
+
+// rebuildableTable reports whether a table holds only what the event log
+// rebuilds: a read model (not the independently preserved attestations) or the
+// read-model snapshots.
+func rebuildableTable(name string) bool {
+	name = strings.ToLower(strings.Trim(name, `"`))
+	name = strings.TrimPrefix(name, "public.")
+	if name == "read_model_snapshots" {
+		return true
+	}
+	if name == "attestations" {
+		return false
+	}
+	return slices.Contains(ReadModelTables, name)
 }
 
 // migrationPosition compares the ledger with every migration this binary

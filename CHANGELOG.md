@@ -632,6 +632,14 @@
 
 ### Fixed
 
+- The upgrade preflight counts a migration destructive by what its statements do (A246-L2). It
+  matched a word list anywhere in a migration's text, so 0160, which only empties the disposable
+  read-model snapshots, read as destructive and the preflight demanded a fresh backup before it,
+  and a keyword in a block comment or a string counted too. Statements are now read one by one with
+  comments and quoted text left out; removing rows only from tables the event log rebuilds (read
+  models and their snapshots, not the preserved attestations, never with `CASCADE`) is not
+  destructive, and dropping, renaming, retyping, `SET NOT NULL` or removing any other rows still is.
+  Of the shipped migrations only 0160 changes class.
 - A secret an environment promotion creates takes its source's owner (A236-L2). Promoting dev into
   stage created each missing stage secret with no owner, so the project view showed it as unknown and
   the owner's application view left it out. The plan now names the owner each created secret takes
