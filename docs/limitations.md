@@ -1834,16 +1834,21 @@ never live in the API process. What you can do end to end against the running bi
   until removed: the opt-in `audit.report_retention` removes each completed
   run's report once it is older than the window, unless a person placed a legal
   hold on the run, and records the run expired only after reading the archive
-  and finding the report gone. A removal the object store refuses, or
+  and finding the report gone. On a bucket that keeps versions (S3 Object Lock
+  turns versioning on) gone means no version is left: the removal deletes each
+  version of the report and the delete markers earlier deletes left, which needs
+  `s3:ListBucketVersions` and `s3:DeleteObjectVersion`; runs an earlier release
+  recorded expired there may still hold a noncurrent version, which a lifecycle
+  rule for noncurrent versions removes. A removal the object store refuses, or
   acknowledges without applying, retries in the outbox and the run stays
   unexpired. The run receipt and its SHA-256 remain after removal; a backup
   taken before it still holds the report. With the archive object store under
   S3 Object Lock (`object_store.object_lock_mode` and
   `object_lock_retention`), every audit archive segment, report and backup set
-  trstctl writes carries that retention, and the report retention reads an
-  object's lock before removing it: a report the lock protects stays, and its
-  run shows until when (a day at a time under a legal hold on the object). A
-  person places an S3 legal hold on one archive object under the tenant's prefix
+  trstctl writes carries that retention, and the report retention reads the lock
+  of every version of a report before removing it: a report the lock protects
+  stays, and its run shows until when (a day at a time under a legal hold on the
+  object). A person places an S3 legal hold on one archive object under the tenant's prefix
   (`POST /api/v1/archives/legal-holds`, `archives legal-holds place`) and
   releases it; the outbox sets or clears it in the bucket and the hold reads
   applied or released only after the bucket reads it back, or failed with the

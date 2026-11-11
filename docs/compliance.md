@@ -306,6 +306,18 @@ receipt and its SHA-256 remain and the download answers `410 Gone`. A removal th
 object store refuses, or acknowledges without applying, retries with backoff and
 the run stays unexpired.
 
+On a bucket that keeps versions (versioning is on whenever the bucket has S3 Object
+Lock), a plain delete only adds a delete marker and leaves the report's version in
+the bucket. The retention therefore lists the report's versions, deletes each one
+and then the delete markers earlier deletes left, and records the run expired only
+when the bucket lists no version of the report. The archive's credentials need
+`s3:ListBucketVersions` and `s3:DeleteObjectVersion` on the bucket for this; without
+them the removal fails, retries, and the run stays unexpired. A store that does not
+implement version listing keeps no versions, and the retention deletes the report as
+before. Runs an earlier release recorded expired on such a bucket may still have a
+noncurrent version there; a lifecycle rule that expires noncurrent versions removes
+it.
+
 A legal hold keeps one completed report past the window. Placing it needs
 `audit:write` and a reason (1 to 512 characters); the run shows who placed it,
 when and why. A hold also cancels a removal that was already queued. Releasing
@@ -327,7 +339,7 @@ reports the retention already removed.
 
 When the archive object store writes under S3 Object Lock
 (`object_store.object_lock_mode` and `object_lock_retention`), the retention reads
-each report object's lock before removing it. A plain delete on such a bucket would
+the lock of every version of a report before removing any. Deleting would fail or
 only hide the locked version, so a report the lock protects is left in place: the
 run records `artifact_removal_deferred_until` (the retention's end, or a day later
 under a legal hold on the object), the console says so, and the retention removes the

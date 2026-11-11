@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2896 annotated sites across 33 rules. Each row is
+2897 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1468,7 +1468,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (390 sites)
+### G204 — CWE-78 OS command injection (391 sites)
 
 | Location | Reason |
 |---|---|
@@ -1677,6 +1677,7 @@ not this file.
 | `internal/server/codesign_pkcs11_lab_p9_test.go:83` | the lab runner names the local tool images (CWE-78) |
 | `internal/server/codesign_stock_tools_served_test.go:245` | test builds the in-repo plugin (CWE-78) |
 | `internal/server/codesign_stock_tools_served_test.go:262` | test runs the plugin it just built (CWE-78) |
+| `internal/server/compliance_report_retention_versions_served_test.go:28` | fixed local Docker tool and approved fixture image (CWE-78) |
 | `internal/server/compose_e2e_tls_test.go:245` | exact shipped prefix plus fixed test invocation, only owned loopback listeners (CWE-78). |
 | `internal/server/docker_fixture_command_test.go:20` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/server/dod_signer_binary_test.go:105` | test executes a fixed local tool or fixture it built itself (CWE-78) |

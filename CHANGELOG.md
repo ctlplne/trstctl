@@ -632,6 +632,15 @@
 
 ### Fixed
 
+- The report retention removes every version of a report (A206-L2). On a bucket that keeps versions
+  (versioning is on whenever a bucket has S3 Object Lock), a plain delete only adds a delete marker:
+  HEAD then answers 404 while the report's version stays in the bucket, and the run was recorded
+  expired with the report still there. The retention now lists the report's versions, reads each
+  one's Object Lock (a locked version keeps them all, and the run says until when), deletes the data
+  and then the delete markers earlier deletes left, and records the run expired only when the bucket
+  lists no version of the report. This needs `s3:ListBucketVersions` and `s3:DeleteObjectVersion` on
+  the archive bucket; without them the removal retries and the run stays unexpired. A store that does
+  not implement version listing is removed from as before.
 - A decoy trail's older day folders are read (N4-L2). The organization trail reader read only today's
   and yesterday's day folders, so a log file delivered while the control plane was down for longer
   than a day was never read, and a decoy key used then was never found. It now reads every day folder

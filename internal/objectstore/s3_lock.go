@@ -128,13 +128,32 @@ func (s *S3) SetLegalHold(ctx context.Context, name string, on bool) error {
 // Lock reads an object's retention and legal hold. An object with neither
 // reads as unlocked.
 func (s *S3) Lock(ctx context.Context, name string) (LockState, error) {
+	return s.lockOf(ctx, name, "")
+}
+
+// LockVersion reads one version's retention and legal hold, as Lock reads
+// the current version's.
+func (s *S3) LockVersion(ctx context.Context, name, version string) (LockState, error) {
+	if version == "" {
+		return LockState{}, errNoVersionID
+	}
+	return s.lockOf(ctx, name, version)
+}
+
+// lockOf reads the lock of one version, or of the current version when
+// version is empty.
+func (s *S3) lockOf(ctx context.Context, name, version string) (LockState, error) {
 	key, err := s.key(name)
 	if err != nil {
 		return LockState{}, err
 	}
+	var versionID *string
+	if version != "" {
+		versionID = awssdk.String(version)
+	}
 	var out LockState
 	err = s.call(ctx, 0, func(ctx context.Context) error {
-		hold, err := s.client.GetObjectLegalHold(ctx, &s3.GetObjectLegalHoldInput{Bucket: awssdk.String(s.bucket), Key: awssdk.String(key)})
+		hold, err := s.client.GetObjectLegalHold(ctx, &s3.GetObjectLegalHoldInput{Bucket: awssdk.String(s.bucket), Key: awssdk.String(key), VersionId: versionID})
 		switch {
 		case noLockConfiguration(err):
 		case err != nil:
@@ -142,7 +161,7 @@ func (s *S3) Lock(ctx context.Context, name string) (LockState, error) {
 		case hold.LegalHold != nil:
 			out.LegalHold = hold.LegalHold.Status == types.ObjectLockLegalHoldStatusOn
 		}
-		retention, err := s.client.GetObjectRetention(ctx, &s3.GetObjectRetentionInput{Bucket: awssdk.String(s.bucket), Key: awssdk.String(key)})
+		retention, err := s.client.GetObjectRetention(ctx, &s3.GetObjectRetentionInput{Bucket: awssdk.String(s.bucket), Key: awssdk.String(key), VersionId: versionID})
 		switch {
 		case noLockConfiguration(err):
 		case err != nil:
