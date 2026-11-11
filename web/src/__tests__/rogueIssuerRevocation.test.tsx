@@ -146,3 +146,16 @@ describe("A163 revoke a rogue certificate at its issuer", () => {
     expect(await screen.findByText("Revocation: 1 queued, 0 revoked, 0 failed.")).toBeInTheDocument();
   });
 });
+
+// A184-L1: a posture that read a full page says the estate is not fully rated.
+describe("rogue certificate posture read limit", () => {
+  it("says a full page was rated, and only then", () => {
+    const { unmount } = render(<RogueCertificatePanel posture={{ ...posture, read_limited: true }} />);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "This posture rated the first 500 certificates and the first 500 discovery findings. A larger inventory is not fully rated here",
+    );
+    unmount();
+    render(<RogueCertificatePanel posture={posture} />);
+    expect(screen.queryByText(/is not fully rated here/)).not.toBeInTheDocument();
+  });
+});

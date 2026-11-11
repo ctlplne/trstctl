@@ -130,6 +130,11 @@ export function RogueCertificatePanel({ posture }: { posture: RogueCertificatePo
         <HealthStat label={t("certificates.rogue.metricCT")} value={posture.summary.ct_unexpected} />
         <HealthStat label={t("certificates.rogue.metricHigh")} value={highOrCritical} />
       </div>
+      {posture.read_limited && (
+        <p role="status" className="mt-3 rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm">
+          {t("certificates.rogue.readLimited", { limit: formatCount(500) })}
+        </p>
+      )}
       {findings.length > 0 && (
         <label className="mt-3 grid gap-1 text-sm">
           <span className="text-muted-foreground">{t("certificates.rogue.takedownReason")}</span>

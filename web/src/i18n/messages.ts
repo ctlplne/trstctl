@@ -11604,6 +11604,11 @@ export const messages = {
     defaultMessage: "No rogue or non-compliant certificates found in the current posture.",
     description: "Empty state for the rogue certificate posture panel.",
   },
+  "certificates.rogue.readLimited": {
+    defaultMessage:
+      "This posture rated the first {limit} certificates and the first {limit} discovery findings. A larger inventory is not fully rated here, so the counts and findings above are not the whole estate.",
+    description: "Shown when the rogue certificate posture read a full page and stopped (A184-L1).",
+  },
   "certificates.rogue.caption": {
     defaultMessage: "Rogue and non-compliant certificate findings",
     description: "Accessible table caption for rogue and non-compliant certificate findings.",
