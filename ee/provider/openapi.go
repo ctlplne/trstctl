@@ -189,6 +189,8 @@ func providerSchemaRef(name string) map[string]any {
 func providerOpenAPISchemas() map[string]any {
 	str := map[string]any{"type": "string"}
 	integer := map[string]any{"type": "integer"}
+	// MTR-D1: the certificate cap counts the customer's current certificates.
+	certificateCap := map[string]any{"type": "integer", "description": "caps the customer's current certificates (certificates_current: active and unexpired), so the predecessors renewals leave behind never use it up; the name is kept for the quotas recorded under it"}
 	boolean := map[string]any{"type": "boolean"}
 	time := map[string]any{"type": "string", "format": "date-time"}
 	object := func(properties map[string]any, required ...string) map[string]any {
@@ -267,8 +269,8 @@ func providerOpenAPISchemas() map[string]any {
 		"ProviderPermission":          object(map[string]any{"name": str, "description": str}, "name", "description"),
 		"ProviderRoleCatalog":         object(map[string]any{"roles": array(providerSchemaRef("ProviderRole")), "permissions": array(providerSchemaRef("ProviderPermission"))}, "roles", "permissions"),
 		"ProviderOffboardRequest":     object(map[string]any{"request_event_id": str}),
-		"ProviderQuota":               object(map[string]any{"tenant_id": str, "max_agents": integer, "max_certificates_stored": integer, "max_secrets_stored": integer, "updated_by": str}),
-		"ProviderQuotaRequest":        object(map[string]any{"max_agents": integer, "max_certificates_stored": integer, "max_secrets_stored": integer}),
+		"ProviderQuota":               object(map[string]any{"tenant_id": str, "max_agents": integer, "max_certificates_stored": certificateCap, "max_secrets_stored": integer, "updated_by": str}),
+		"ProviderQuotaRequest":        object(map[string]any{"max_agents": integer, "max_certificates_stored": certificateCap, "max_secrets_stored": integer}),
 		"ProviderBrand":               brand,
 		"ProviderBrandRequest":        brandRequest,
 		"ProviderIsolationDrill":      object(map[string]any{"passed": boolean, "ran_at": time, "checks": array(providerSchemaRef("ProviderIsolationCheck"))}, "passed", "checks", "ran_at"),

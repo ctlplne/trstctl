@@ -663,3 +663,14 @@ func (s *Store) SearchCertificatesPage(ctx context.Context, tenantID, afterID st
 	})
 	return out, err
 }
+
+// CountCurrentCertificatesTx counts a tenant's current certificates at at
+// (MTR-D1): active ones that have not expired. A renewal leaves its
+// predecessor superseded and a revocation leaves it revoked, so neither
+// counts, and neither does a certificate past its notAfter.
+func CountCurrentCertificatesTx(ctx context.Context, tx pgx.Tx, tenantID string, at time.Time) (int64, error) {
+	var n int64
+	err := tx.QueryRow(ctx, `SELECT count(*) FROM certificates
+		  WHERE tenant_id = $1 AND status = 'active' AND (not_after IS NULL OR not_after > $2)`, tenantID, at).Scan(&n)
+	return n, err
+}

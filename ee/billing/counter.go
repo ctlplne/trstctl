@@ -5,6 +5,7 @@ package billing
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -104,5 +105,14 @@ func countTenantResources(ctx context.Context, tx pgx.Tx, tenantID string) (Tena
 		}
 		out[resource] = n
 	}
+	// MTR-D1: the certificate quota and the evidence's certificate line read
+	// the current stock; certificates_stored above stays as telemetry and
+	// counts every renewal's superseded predecessor and every expired
+	// certificate too.
+	current, err := corestore.CountCurrentCertificatesTx(ctx, tx, tenantID, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	out[usage.MeterCertificatesCurrent] = current
 	return out, nil
 }

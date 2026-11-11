@@ -23,12 +23,14 @@ import (
 // the same route with the default allow-all is also asserted to keep working.
 
 type cappedQuota struct {
-	refuse   bool
-	consults int
+	refuse    bool
+	consults  int
+	resources []string
 }
 
 func (c *cappedQuota) AllowCreate(_ context.Context, tenantID, resource string) error {
 	c.consults++
+	c.resources = append(c.resources, resource)
 	if c.refuse {
 		return fmt.Errorf("quota exhausted: tenant %s has 2 of 2 %s: %w", tenantID, resource, usage.ErrQuotaExhausted)
 	}
@@ -84,6 +86,14 @@ func TestServedIssuanceConsultsTheQuotaGateAndRefuses429(t *testing.T) {
 	}
 	if checker.consults == 0 {
 		t.Fatal("the route refused without consulting the checker; whatever refused, it was not the quota")
+	}
+	// MTR-D1: a new certificate is admitted against the tenant's current
+	// certificates, not against every one ever stored: the predecessors
+	// renewals leave behind must never fill the cap.
+	for _, resource := range checker.resources {
+		if resource != usage.MeterCertificatesCurrent {
+			t.Fatalf("the issuance gate consulted %q, want %q", resource, usage.MeterCertificatesCurrent)
+		}
 	}
 	var problem struct {
 		Detail string `json:"detail"`

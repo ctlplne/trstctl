@@ -696,7 +696,15 @@ export function UsageEvidencePanel() {
               <tbody>
                 {doc.lines.map((line) => (
                   <tr key={`${line.meter}:${line.kind}`} className="border-t border-border">
-                    <td className="py-1">{line.meter}</td>
+                    <td className="py-1">
+                      {line.meter}
+                      {/* MTR-D1: the current stock is the certificate line; the other certificate meters are telemetry. */}
+                      {line.meter === "certificates_current" ? (
+                        <span className="block text-muted-foreground">{t("platform.usageEvidence.certificateLine")}</span>
+                      ) : line.meter === "certificates_stored" || line.meter === "certificates_issued" ? (
+                        <span className="block text-muted-foreground">{t("platform.usageEvidence.telemetry")}</span>
+                      ) : null}
+                    </td>
                     <td className="py-1">{line.kind}</td>
                     <td className="py-1 text-right tabular-nums">{line.value}</td>
                   </tr>

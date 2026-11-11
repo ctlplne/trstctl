@@ -92,7 +92,7 @@ func (c *Collector) Snapshot(ctx context.Context) error {
 			failures = append(failures, err)
 			continue
 		}
-		for _, meter := range []string{usage.MeterAgents, usage.MeterTenants, usage.MeterCertificatesStored, usage.MeterSecretsStored} {
+		for _, meter := range []string{usage.MeterAgents, usage.MeterTenants, usage.MeterCertificatesStored, usage.MeterCertificatesCurrent, usage.MeterSecretsStored} {
 			value, ok := counts[meter]
 			if !ok {
 				continue

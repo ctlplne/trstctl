@@ -129,7 +129,10 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 	// Validate every part of the operation before creating an approval request.
 	// An invalid transition/CSR/quota denial is not genuine work for a reviewer.
 	if state == orchestrator.StateIssued {
-		if err := usage.AllowCreate(ctx, tenantID, usage.MeterCertificatesStored); err != nil {
+		// MTR-D1: a new certificate counts against the tenant's current
+		// certificates, so the predecessors renewals leave behind never fill
+		// the cap; a renewal does not pass through here.
+		if err := usage.AllowCreate(ctx, tenantID, usage.MeterCertificatesCurrent); err != nil {
 			if errors.Is(err, usage.ErrQuotaExhausted) {
 				return 0, nil, errStatusFrom(http.StatusTooManyRequests, err)
 			}

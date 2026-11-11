@@ -51,6 +51,28 @@ describe("System health usage evidence preflight", () => {
     expect(await screen.findByText("Metering coverage is incomplete.")).toBeInTheDocument();
   });
 
+  it("labels the current certificates as the certificate line and the other certificate meters as telemetry (MTR-D1)", async () => {
+    usageEvidence.mockResolvedValue({
+      signable: false,
+      reason: "Metering coverage is incomplete.",
+      digest: "lines-digest",
+      lines: [
+        { meter: "certificates_current", kind: "gauge", value: 1 },
+        { meter: "certificates_issued", kind: "counter", value: 4 },
+        { meter: "certificates_stored", kind: "gauge", value: 4 },
+        { meter: "agents", kind: "gauge", value: 2 },
+      ],
+    });
+    render(
+      <CapabilityFixtureProvider view={runtime([{ operation_id: "getUsageEvidence", state: "allowed" }])}>
+        <UsageEvidencePanel />
+      </CapabilityFixtureProvider>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Pull evidence" }));
+    expect(await screen.findByText("the certificate line: active, unexpired certificates, the quota's basis")).toBeInTheDocument();
+    expect(screen.getAllByText("telemetry: superseded and expired certificates count too")).toHaveLength(2);
+  });
+
   it("pulls one exact UTC hour and refuses a reversed period before calling the API", async () => {
     usageEvidence.mockResolvedValue({ signable: true, reason: "Covered.", lines: [], digest: "hour-digest" });
     render(

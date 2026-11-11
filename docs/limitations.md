@@ -1996,13 +1996,18 @@ never live in the API process. What you can do end to end against the running bi
   core tenant registration projection; `secrets_stored` from application-secret
   mutation receipts, vouched for as independent only while the tenant holds no
   connector credentials, which have no event history and are then named in the
-  line's note. `certificates_stored` still has no independent record (receipts
-  carry mints but not revocation or expiry) and its line says so. A checked
+  line's note. `certificates_current` (MTR-D1: active, unexpired, neither superseded
+  by a renewal nor revoked) is the certificate line and the basis of the certificate
+  cap; `certificates_stored` (superseded and expired certificates included) and
+  `certificates_issued` stay as telemetry. Neither stored nor current has an
+  independent record (receipts carry mints and validity but not a renewal's
+  supersession or a revocation), and each line says so. A checked
   gauge that diverges blocks signing like a diverging issuance count. The
   Provider console labels unchecked meters separately from a checked meter that
   diverged; the document's signable verdict determines whether finance may
   invoice. The
-  certificates_stored cap is enforced at a served create path. The agents cap
+  certificate cap (`max_certificates_stored`, counting current certificates) is
+  enforced at a served create path; a renewal does not pass through it. The agents cap
   is enforced when a new agent first heartbeats over the mTLS channel: the
   server serializes the live quota/count check through event projection across
   replicas, returns ResourceExhausted before recording an over-cap agent, and

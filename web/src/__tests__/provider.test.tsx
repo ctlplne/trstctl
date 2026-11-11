@@ -501,7 +501,8 @@ describe("provider console (L3)", () => {
     await waitFor(() => expect(providerMock.getQuota).toHaveBeenCalledWith("t-1"));
     // max_agents is 50 in its field; the unset limits are blank (unlimited).
     expect(await screen.findByLabelText("Max agents")).toHaveValue(50);
-    expect(screen.getByLabelText("Max certificates")).toHaveValue(null);
+    // MTR-D1: the certificate cap counts current certificates, so renewals never fill it.
+    expect(screen.getByLabelText("Max current certificates")).toHaveValue(null);
   });
 
   it("edits a quota, sending a blank field as unlimited (never zero)", async () => {

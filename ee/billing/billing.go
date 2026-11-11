@@ -27,7 +27,7 @@ func PeriodStart(t time.Time) time.Time {
 
 func MeterKind(meter string) string {
 	switch meter {
-	case usage.MeterAgents, usage.MeterTenants, usage.MeterCertificatesStored, usage.MeterSecretsStored:
+	case usage.MeterAgents, usage.MeterTenants, usage.MeterCertificatesStored, usage.MeterCertificatesCurrent, usage.MeterSecretsStored:
 		return KindGauge
 	default:
 		return KindCounter
@@ -42,6 +42,7 @@ func Meters() []string {
 	return []string{
 		usage.MeterCertificatesIssued,
 		usage.MeterCertificatesStored,
+		usage.MeterCertificatesCurrent,
 		usage.MeterSecretsStored,
 		usage.MeterAgents,
 		usage.MeterTenants,
@@ -75,7 +76,10 @@ type Quota struct {
 	// Historical event/projection compatibility only. Each customer has one
 	// tenant; the licensed managed-customer band is checked by Provider
 	// provisioning, never by a customer resource quota.
-	MaxTenants            *int   `json:"max_tenants,omitempty"`
+	MaxTenants *int `json:"max_tenants,omitempty"`
+	// MaxCertificatesStored caps the tenant's current certificates (MTR-D1):
+	// active and unexpired, so a renewal never uses up the cap. The name is
+	// kept for the quota events and rows recorded under it.
 	MaxCertificatesStored *int   `json:"max_certificates_stored,omitempty"`
 	MaxSecretsStored      *int   `json:"max_secrets_stored,omitempty"`
 	UpdatedBy             string `json:"updated_by,omitempty"`
@@ -85,7 +89,7 @@ func (q Quota) LimitFor(resource string) *int {
 	switch resource {
 	case usage.MeterAgents:
 		return q.MaxAgents
-	case usage.MeterCertificatesStored:
+	case usage.MeterCertificatesCurrent:
 		return q.MaxCertificatesStored
 	case usage.MeterSecretsStored:
 		return q.MaxSecretsStored

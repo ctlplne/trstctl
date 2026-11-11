@@ -15,8 +15,11 @@ import (
 )
 
 const (
-	MeterCertificatesIssued        = "certificates_issued"
-	MeterCertificatesStored        = "certificates_stored"
+	MeterCertificatesIssued = "certificates_issued"
+	MeterCertificatesStored = "certificates_stored"
+	// MeterCertificatesCurrent is the current certificate stock (MTR-D1):
+	// active, unexpired, neither superseded by a renewal nor revoked.
+	MeterCertificatesCurrent       = "certificates_current"
 	MeterSecretsStored             = "secrets_stored"
 	MeterAgents                    = "agents"
 	MeterTenants                   = "tenants"
@@ -55,7 +58,12 @@ func MeterDefinitions() []MeterDefinition {
 		{
 			Name:           MeterCertificatesStored,
 			Classification: MeterOperationalTelemetry,
-			Notes:          "inventory size, storage planning, and renewal posture; never the primary billable unit",
+			Notes:          "inventory size, storage planning, and renewal posture: every certificate not revoked, superseded and expired ones included; never the primary billable unit, and neither the certificate quota nor the evidence's certificate line",
+		},
+		{
+			Name:           MeterCertificatesCurrent,
+			Classification: MeterOperationalTelemetry,
+			Notes:          "the current certificate stock: active, unexpired, neither superseded by a renewal nor revoked; the basis of the certificate quota and the certificate line in signed usage evidence; never the primary billable unit",
 		},
 		{
 			Name:           MeterSecretsStored,

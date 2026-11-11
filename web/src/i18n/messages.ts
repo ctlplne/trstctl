@@ -8057,6 +8057,14 @@ export const messages = {
   "platform.usageEvidence.billable": { defaultMessage: "Billable", description: "L2 evidence signable badge." },
   "platform.usageEvidence.notBillable": { defaultMessage: "Not billable", description: "L2 evidence unsignable badge." },
   "platform.usageEvidence.meter": { defaultMessage: "Meter", description: "L2 evidence table column." },
+  "platform.usageEvidence.certificateLine": {
+    defaultMessage: "the certificate line: active, unexpired certificates, the quota's basis",
+    description: "MTR-D1: the current-certificates meter in usage evidence.",
+  },
+  "platform.usageEvidence.telemetry": {
+    defaultMessage: "telemetry: superseded and expired certificates count too",
+    description: "MTR-D1: a certificate meter kept as telemetry in usage evidence.",
+  },
   "platform.usageEvidence.kind": { defaultMessage: "Kind", description: "L2 evidence table column." },
   "platform.usageEvidence.value": { defaultMessage: "Value", description: "L2 evidence table column." },
   "platform.usageEvidence.noLines": { defaultMessage: "No metered usage in this period.", description: "L2 evidence empty state." },
@@ -23061,7 +23069,7 @@ export const messages = {
     description: "L3: quota limit.",
   },
   "source.provider.quota.certs.l3prov0025": {
-    defaultMessage: "Max certificates",
+    defaultMessage: "Max current certificates",
     description: "L3: quota limit.",
   },
   "source.provider.quota.secrets.l3prov0026": {

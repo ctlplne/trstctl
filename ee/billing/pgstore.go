@@ -337,6 +337,8 @@ func (p *PGStore) GaugeAt(ctx context.Context, tenantID, meter string, at time.T
 			out.Checked, out.Source = true, "core tenant registration projection (tenant.registered without a later tenant.offboarded)"
 		case usage.MeterCertificatesStored:
 			out.Note = "certificate receipts record each mint but not revocation or expiry, so no independent record of the stored stock exists yet; the metered value stands alone"
+		case usage.MeterCertificatesCurrent:
+			out.Note = "certificate receipts record each mint and its validity but neither a renewal's supersession nor a revocation, so no independent record of the current stock exists yet; the metered value stands alone"
 		default:
 			out.Note = "no independent event source for this meter; the metered value stands alone"
 		}

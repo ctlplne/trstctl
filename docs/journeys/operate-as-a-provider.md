@@ -94,8 +94,10 @@ Offboarding needs attention, including requests whose customer has left the
 roster. Recent activity shows ten returned records at a time; use Older activity
 and Newer activity to move through them.
 
-Quota controls apply to resources inside one customer: agents, stored
-certificates, and stored secrets. A customer always has one tenant. The
+Quota controls apply to resources inside one customer: agents, current
+certificates (`max_certificates_stored` caps the active, unexpired ones, so a
+renewal, which leaves its predecessor superseded, never uses up the cap), and
+stored secrets. A customer always has one tenant. The
 licensed managed-customer band controls how many customers the Provider can
 provision; setting a customer quota cannot raise or lower that band. The
 Provider API refuses the historical `max_tenants` quota field because it never
@@ -247,7 +249,10 @@ Resource collection starts automatically with durable Provider metering and
 samples each customer once per minute, including customers with no new issuance.
 Each hourly gauge is the latest sampled level in that hour, not a sum or peak.
 The counts use the same definitions as quotas: agents excluding offboarded agents,
-certificates excluding revoked certificates, and stored credentials. A customer's
+current certificates (`certificates_current`: active, unexpired, neither superseded
+by a renewal nor revoked; this is the certificate line in usage evidence), and stored
+credentials. `certificates_stored` (every certificate not revoked, superseded and
+expired ones included) and `certificates_issued` stay as telemetry. A customer's
 tenant gauge is one; it never includes another customer's inventory.
 
 Counts and their observation interval are saved together. A failed sample,

@@ -632,6 +632,15 @@
 
 ### Fixed
 
+- The Provider certificate cap counts current certificates (MTR-D1). The certificate meter the cap and
+  the usage evidence read, `certificates_stored`, counted every certificate not revoked: a renewal
+  keeps its predecessor as superseded, so the count grew by one per renewal (about eight a year per
+  endpoint on 47-day certificates), and expired certificates counted too. A tenant whose renewals
+  filled its tier was refused a genuinely new certificate (429) while renewals kept passing. A new
+  `certificates_current` gauge counts active, unexpired certificates; it is the certificate line in
+  signed usage evidence (saying why it has no independent recount) and what `max_certificates_stored`
+  caps, and the issuance gate consults it. `certificates_stored` and `certificates_issued` stay as
+  telemetry, and the console's evidence table and quota form say so.
 - Every device provider's scan says why it could not sign in (DEV-D1). A privileged-account scan
   records a failure class (rejected, expired, locked, unreachable or error) so an operator knows
   whether to fix the stored administrator credential or the network; after the `esxi` fix (A271-D1),

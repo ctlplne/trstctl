@@ -84,8 +84,10 @@ func TestCollectorCoversAQuietHourOnlyAfterObservationStarts(t *testing.T) {
 		t.Fatalf("quiet hour observed by the collector remains unsignable: %+v; coverage=%+v", verdict, coverage)
 	}
 	rows, err := pg.Query(t.Context(), period.Start, period.End, quotaTenant)
-	if err != nil || len(rows) != 4 {
-		t.Fatalf("quiet customer's four resource gauges: rows=%+v error=%v", rows, err)
+	// Five gauges: agents, tenants, secrets and both certificate stocks
+	// (current, the quota's basis since MTR-D1, and stored, telemetry).
+	if err != nil || len(rows) != 5 {
+		t.Fatalf("quiet customer's five resource gauges: rows=%+v error=%v", rows, err)
 	}
 	key, err := jose.GenerateRSASigningKey("quiet-resource-proof")
 	if err != nil {

@@ -147,9 +147,10 @@ func TestQuotaSurvivesInPostgresAndNullMeansNoLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := q.LimitFor(usage.MeterCertificatesStored)
+	// MTR-D1: max_certificates_stored caps the current certificates.
+	got := q.LimitFor(usage.MeterCertificatesCurrent)
 	if got == nil || *got != 5 {
-		t.Fatalf("stored cap = %v, want 5. Before this table existed SetQuota silently DISCARDED "+
+		t.Fatalf("certificate cap = %v, want 5. Before this table existed SetQuota silently DISCARDED "+
 			"the limit, so a provider believed their customer was capped when nothing was", got)
 	}
 	if q.LimitFor(usage.MeterAgents) != nil {
@@ -177,16 +178,17 @@ func TestQuotaCheckerRefusesAtTheCapAgainstTheDurableStore(t *testing.T) {
 	seedQuota(t, st, billing.Quota{TenantID: quotaTenant, MaxCertificatesStored: &limit})
 	current := int64(0)
 	counter := func(context.Context, string) (billing.TenantCounts, error) {
-		return billing.TenantCounts{usage.MeterCertificatesStored: current}, nil
+		return billing.TenantCounts{usage.MeterCertificatesCurrent: current}, nil
 	}
 	checker := billing.NewQuotaChecker(pgStore, counter, time.Millisecond)
 
+	// MTR-D1: the certificate cap is checked against current certificates.
 	current = 1
-	if err := checker.AllowCreate(ctx, quotaTenant, usage.MeterCertificatesStored); err != nil {
+	if err := checker.AllowCreate(ctx, quotaTenant, usage.MeterCertificatesCurrent); err != nil {
 		t.Fatalf("under the cap: %v", err)
 	}
 	current = 2
-	err := checker.AllowCreate(ctx, quotaTenant, usage.MeterCertificatesStored)
+	err := checker.AllowCreate(ctx, quotaTenant, usage.MeterCertificatesCurrent)
 	if err == nil {
 		t.Fatal("at the cap the checker allowed another create; the durable limit decided nothing")
 	}

@@ -366,7 +366,10 @@ An already admitted first write can finish while a lower cap is being saved;
 the next admission reads the new projected limit.
 
 Customer quota writes support `max_agents`, `max_certificates_stored`, and
-`max_secrets_stored`; a blank cap means no customer resource limit and zero
+`max_secrets_stored`; `max_certificates_stored` caps the customer's current
+certificates (`certificates_current`: active and unexpired, so the predecessors
+renewals leave behind never fill it), and the name is kept for the quotas already
+recorded under it; a blank cap means no customer resource limit and zero
 refuses new objects. `max_tenants` is not a customer quota: each customer is
 one tenant, and the signed Provider license's managed-customer band limits
 new customer provisioning across the deployment. The API rejects
