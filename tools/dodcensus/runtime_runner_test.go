@@ -467,7 +467,7 @@ func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing
 		`expected_platform = os.environ["TRSTCTL_DOD_PREFLIGHT_PLATFORM"]`,
 		`"linux/amd64": "eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa"`,
 		`"linux/arm64": "8e1014e87c34901cc422a1445866835d1e666f2a61301c27e722bdeab5a1f7e4"`,
-		`if version != "go version go1.26.10 " + expected_platform:`,
+		`if version != "go version go1.26.11 " + expected_platform:`,
 		`kind_digest != kind_digests[expected_platform]`,
 		`"kind v0.31.0" not in kind_version`,
 		`openssl_version.startswith("OpenSSL 3.5.7 ")`,

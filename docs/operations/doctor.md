@@ -163,7 +163,7 @@ abridged to four probes. Values are as emitted; nothing here is illustrative.
   "schema": "trstctl.doctor.v1",
   "generated_at": "2026-10-25T10:47:04.71674Z",
   "deployment": {
-    "version": "trstctl dev (commit none, built unknown, darwin/arm64, go1.26.10)",
+    "version": "trstctl dev (commit none, built unknown, darwin/arm64, go1.26.11)",
     "write_probe": true
   },
   "probes": [

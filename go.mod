@@ -2,7 +2,7 @@ module trstctl.com/trstctl
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	github.com/SAP/go-hdb v1.20.2

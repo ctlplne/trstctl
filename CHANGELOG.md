@@ -2167,6 +2167,14 @@
 
 ### Security
 
+- trstctl builds on Go 1.26.11 for GO-2026-6859 (CVE-2026-97054). When a request body passes
+  `http.MaxBytesReader`'s limit, Go's net/http before 1.26.11 marks the connection to close
+  without synchronization, so an HTTP/1 handler that writes its response headers while another
+  goroutine reads the body can crash the server; trstctl bounds request bodies that way, and
+  govulncheck reported the flaw as reachable. go.mod's toolchain, the two nested test modules, the
+  digest-pinned `golang:1.26.11-bookworm` build images (control plane, NATS, node and PostgreSQL
+  trust stages, demo seed, ClusterFuzzLite with its version checks), the deployment census's
+  runtime runner and the docs that state the minimum all move to 1.26.11.
 - A tenant baseline's connector targets are checked against their module's setup inputs
   (A248-L1). An operator's create and a change set checked a relay module's target
   configuration (A242: required inputs present, typed, a secret input only as a

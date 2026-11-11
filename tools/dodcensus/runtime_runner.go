@@ -259,7 +259,7 @@ kind_digests = {
 }
 if expected_platform not in kind_digests:
     raise RuntimeError("runtime runner platform %r is not a reviewed profile platform" % expected_platform)
-if version != "go version go1.26.10 " + expected_platform:
+if version != "go version go1.26.11 " + expected_platform:
     raise RuntimeError("runtime runner toolchain identity is %r" % version)
 
 kind_path = pathlib.Path("/usr/local/bin/kind")

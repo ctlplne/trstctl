@@ -4211,10 +4211,10 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 	)
 	cflDockerfile := read(t, "../.clusterfuzzlite/Dockerfile")
 	check(".clusterfuzzlite/Dockerfile", cflDockerfile,
-		"golang:1.26.10-bookworm@sha256:5b1f78db1f54cc8cb46e652c51d3f854441c4310a449161b6fe9fb553edab505",
+		"golang:1.26.11-bookworm@sha256:dc40a13b61304647ed7e5d581d246b86413dfc29d63c6d018310feb93cd98fc0",
 		"COPY --from=trstctl-go-toolchain /usr/local/go /usr/local/go",
 		"GOTOOLCHAIN=local",
-		"go version go1.26.10 linux/amd64",
+		"go version go1.26.11 linux/amd64",
 		"TRSTCTL_GO_FUZZ_BUILD_VERSION=v0.0.0-20250911191804-fc5dc53b9db8",
 		"github.com/AdamKorcz/go-118-fuzz-build@${TRSTCTL_GO_FUZZ_BUILD_VERSION}",
 		"cp /root/go/bin/go-118-fuzz-build /root/go/bin/go-118-fuzz-build_v2",
