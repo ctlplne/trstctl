@@ -6667,8 +6667,11 @@ This is a deliberate, documented trust boundary, not an accident.
   updates on the open subscription, so SPIRE servers sharing a trust domain
   through trstctl verify each other's JWT-SVIDs (two SPIRE server containers,
   each verifying the other's JWT-SVID with its own bundle). trstctl keeps the
-  public keys only; its own SPIFFE JWT authority is not added to that set, and
-  SPIRE's optional `SubscribeToLocalBundle` is not implemented. Against a
+  public keys only, and adds its own SPIFFE JWT authority to that set (A205-L2:
+  every workload JWT key it publishes, the signing one, a next key published
+  ahead and a retiring one until it retires, as `published_by:
+  trstctl-spiffe-jwt-authority`), so SPIRE servers verify the JWT-SVIDs trstctl
+  issues. SPIRE's optional `SubscribeToLocalBundle` is not implemented. Against a
   trstctl that does not serve that route (an older trstctl's 404, or a 405 or
   501), the plugin reports JWT key publication as unsupported, so SPIRE keeps
   its JWT keys in its own bundle and still starts; the next JWT key rotation

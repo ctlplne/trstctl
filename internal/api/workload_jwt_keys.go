@@ -35,6 +35,24 @@ type WorkloadJWTKeySource interface {
 	RotateWorkloadJWTKey(ctx context.Context, tenantID string, publishAhead, retain time.Duration) ([]WorkloadJWTKey, error)
 }
 
+// WorkloadJWTPublicKey is the public half of a published workload JWT key
+// (A205-L2): what a SPIRE server sharing the trust domain needs to verify the
+// JWT-SVIDs trstctl issues. PublishedAt is nil for the first generation,
+// published since the SPIFFE protocol began serving the tenant.
+type WorkloadJWTPublicKey struct {
+	KeyID        string
+	PublicKeyDER []byte
+	PublishedAt  *time.Time
+	RetiresAt    *time.Time
+}
+
+// WorkloadJWTPublicKeySource is a WorkloadJWTKeySource that also hands out
+// the published keys' public halves; served is false when the SPIFFE protocol
+// does not serve the tenant.
+type WorkloadJWTPublicKeySource interface {
+	WorkloadJWTPublicKeysFor(ctx context.Context, tenantID string) (keys []WorkloadJWTPublicKey, served bool, err error)
+}
+
 // WithWorkloadJWTKeys serves GET /api/v1/workloads/jwt-keys and
 // POST /api/v1/workloads/jwt-keys/rotate.
 func WithWorkloadJWTKeys(source WorkloadJWTKeySource) Option {

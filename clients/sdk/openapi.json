@@ -50919,11 +50919,12 @@
             "type": "string"
           },
           "published_at": {
+            "description": "when the key was first published; absent for trstctl's first-generation key, published since the SPIFFE protocol began serving the tenant",
             "format": "date-time",
             "type": "string"
           },
           "published_by": {
-            "description": "the token subject that first published the key",
+            "description": "the token subject that first published the key, or trstctl-spiffe-jwt-authority for trstctl's own workload JWT keys (A205-L2)",
             "type": "string"
           },
           "tainted": {
@@ -50936,8 +50937,7 @@
           "public_key",
           "expires_at",
           "tainted",
-          "published_by",
-          "published_at"
+          "published_by"
         ],
         "type": "object"
       },

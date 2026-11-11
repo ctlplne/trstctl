@@ -25602,9 +25602,12 @@ export interface components {
              * @description PKIX (SubjectPublicKeyInfo) DER public key, base64
              */
             public_key: string;
-            /** Format: date-time */
-            published_at: string;
-            /** @description the token subject that first published the key */
+            /**
+             * Format: date-time
+             * @description when the key was first published; absent for trstctl's first-generation key, published since the SPIFFE protocol began serving the tenant
+             */
+            published_at?: string;
+            /** @description the token subject that first published the key, or trstctl-spiffe-jwt-authority for trstctl's own workload JWT keys (A205-L2) */
             published_by: string;
             /** @description the publishing server no longer considers the key safe to use */
             tainted: boolean;

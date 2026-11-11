@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,7 +18,13 @@ import (
 // A205: SPIRE servers publish their JWT signing keys through the trstctl
 // upstream authority plugin, and each receives every key the tenant's servers
 // have published, so servers that share a trust domain through trstctl verify
-// each other's JWT-SVIDs.
+// each other's JWT-SVIDs. A205-L2: the set also carries trstctl's own SPIFFE
+// JWT authority, every workload JWT key it publishes (the one that signs, a
+// next key published ahead, a retiring one until it retires), so SPIRE
+// servers verify the JWT-SVIDs trstctl issues too.
+
+// SPIFFEJWTAuthorityPublisher is the published_by of trstctl's own keys.
+const SPIFFEJWTAuthorityPublisher = "trstctl-spiffe-jwt-authority"
 
 type spiffeUpstreamJWTKeyRequest struct {
 	KeyID string `json:"key_id"`
@@ -33,7 +40,9 @@ type spiffeUpstreamJWTKeyResponse struct {
 	ExpiresAt   *time.Time `json:"expires_at"`
 	Tainted     bool       `json:"tainted"`
 	PublishedBy string     `json:"published_by"`
-	PublishedAt time.Time  `json:"published_at"`
+	// PublishedAt is absent for trstctl's first-generation key, published
+	// since the SPIFFE protocol began serving the tenant (A205-L2).
+	PublishedAt *time.Time `json:"published_at,omitempty"`
 }
 
 func (a *API) spiffeUpstreamJWTKeyRoutes() []route {
@@ -49,9 +58,9 @@ func spiffeUpstreamJWTKeySchemas() map[string]*Schema {
 		"public_key":   {Type: "string", Format: "byte", Description: "PKIX (SubjectPublicKeyInfo) DER public key, base64"},
 		"expires_at":   {Type: "string", Format: "date-time", Description: "when the key expires; null for a key without an expiry"},
 		"tainted":      {Type: "boolean", Description: "the publishing server no longer considers the key safe to use"},
-		"published_by": {Type: "string", Description: "the token subject that first published the key"},
-		"published_at": timestamp(),
-	}, "key_id", "public_key", "expires_at", "tainted", "published_by", "published_at")
+		"published_by": {Type: "string", Description: "the token subject that first published the key, or trstctl-spiffe-jwt-authority for trstctl's own workload JWT keys (A205-L2)"},
+		"published_at": {Type: "string", Format: "date-time", Description: "when the key was first published; absent for trstctl's first-generation key, published since the SPIFFE protocol began serving the tenant"},
+	}, "key_id", "public_key", "expires_at", "tainted", "published_by")
 	return map[string]*Schema{
 		"SPIFFEUpstreamJWTKeyRequest": object(map[string]*Schema{
 			"key_id":     {Type: "string", Description: "the key ID SPIRE signs JWT-SVIDs with (the JWT kid)"},
@@ -67,12 +76,38 @@ func spiffeUpstreamJWTKeySchemas() map[string]*Schema {
 func toSPIFFEUpstreamJWTKeyResponses(keys []store.SPIFFEUpstreamJWTKey) []spiffeUpstreamJWTKeyResponse {
 	out := make([]spiffeUpstreamJWTKeyResponse, 0, len(keys))
 	for _, k := range keys {
+		publishedAt := k.PublishedAt
 		out = append(out, spiffeUpstreamJWTKeyResponse{
 			KeyID: k.KeyID, PublicKey: k.PublicKeyDER, ExpiresAt: k.ExpiresAt, Tainted: k.Tainted,
-			PublishedBy: k.PublishedBy, PublishedAt: k.PublishedAt,
+			PublishedBy: k.PublishedBy, PublishedAt: &publishedAt,
 		})
 	}
 	return out
+}
+
+// withSPIFFEJWTAuthority adds trstctl's own published workload JWT keys to
+// the SPIRE servers' keys (A205-L2). A tenant the SPIFFE protocol does not
+// serve, or a control plane without one, adds nothing. A key ID a SPIRE
+// server already published under is left as that server published it.
+func (a *API) withSPIFFEJWTAuthority(ctx context.Context, tenantID string, items []spiffeUpstreamJWTKeyResponse) ([]spiffeUpstreamJWTKeyResponse, error) {
+	source, ok := a.workloadJWTKeys.(WorkloadJWTPublicKeySource)
+	if !ok {
+		return items, nil
+	}
+	keys, served, err := source.WorkloadJWTPublicKeysFor(ctx, tenantID)
+	if err != nil || !served {
+		return items, err
+	}
+	for _, key := range keys {
+		if slices.ContainsFunc(items, func(item spiffeUpstreamJWTKeyResponse) bool { return item.KeyID == key.KeyID }) {
+			continue
+		}
+		items = append(items, spiffeUpstreamJWTKeyResponse{
+			KeyID: key.KeyID, PublicKey: key.PublicKeyDER, ExpiresAt: key.RetiresAt,
+			PublishedBy: SPIFFEJWTAuthorityPublisher, PublishedAt: key.PublishedAt,
+		})
+	}
+	return items, nil
 }
 
 func mapSPIFFEUpstreamJWTKeyError(err error) error {
@@ -102,7 +137,11 @@ func (a *API) publishSPIFFEUpstreamJWTKey(w http.ResponseWriter, r *http.Request
 		if err != nil {
 			return 0, nil, mapSPIFFEUpstreamJWTKeyError(err)
 		}
-		return http.StatusOK, map[string]any{"items": toSPIFFEUpstreamJWTKeyResponses(keys)}, nil
+		items, err := a.withSPIFFEJWTAuthority(ctx, tenantID, toSPIFFEUpstreamJWTKeyResponses(keys))
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, map[string]any{"items": items}, nil
 	})
 }
 
@@ -121,5 +160,10 @@ func (a *API) listSPIFFEUpstreamJWTKeys(w http.ResponseWriter, r *http.Request) 
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, map[string]any{"items": toSPIFFEUpstreamJWTKeyResponses(keys)})
+	items, err := a.withSPIFFEJWTAuthority(r.Context(), tenantID, toSPIFFEUpstreamJWTKeyResponses(keys))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }

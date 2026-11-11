@@ -222,6 +222,36 @@ func (k *workloadJWTKeyRing) keys(ctx context.Context) (spiffe.JWTKey, []spiffe.
 	return active, published, nil
 }
 
+// WorkloadJWTPublicKeysFor hands out the public halves of the tenant's
+// published workload JWT keys (A205-L2), so the SPIRE upstream authority's
+// shared key set carries trstctl's own SPIFFE JWT authority. served is false
+// when the SPIFFE protocol does not serve the tenant.
+func (s *Server) WorkloadJWTPublicKeysFor(ctx context.Context, tenantID string) ([]api.WorkloadJWTPublicKey, bool, error) {
+	ring := s.workloadJWTKeyRingFor(tenantID)
+	if ring == nil {
+		return nil, false, nil
+	}
+	states, err := ring.schedule(ctx)
+	if err != nil {
+		return nil, true, err
+	}
+	out := make([]api.WorkloadJWTPublicKey, 0, len(states))
+	for _, state := range states {
+		if !state.published() {
+			continue
+		}
+		signer, err := ring.signer(ctx, state.Generation)
+		if err != nil {
+			return nil, true, err
+		}
+		out = append(out, api.WorkloadJWTPublicKey{
+			KeyID: state.KeyID, PublicKeyDER: append([]byte(nil), signer.Public().DER...),
+			PublishedAt: state.PublishedAt, RetiresAt: state.RetiresAt,
+		})
+	}
+	return out, true, nil
+}
+
 // WorkloadJWTKeysFor reports the tenant's workload JWT key generations for
 // the API; served is false when the SPIFFE protocol does not serve the tenant.
 func (s *Server) WorkloadJWTKeysFor(ctx context.Context, tenantID string) ([]api.WorkloadJWTKey, bool, error) {

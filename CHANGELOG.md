@@ -2,6 +2,12 @@
 
 ### Added
 
+- The SPIRE upstream JWT key set carries trstctl's own SPIFFE JWT authority (A205-L2).
+  `/api/v1/spiffe/upstream-jwt-keys` (and so every SPIRE server running the trstctl upstream authority
+  plugin) now lists the workload JWT keys trstctl publishes, the signing key, a next key published ahead
+  of a rotation and a retiring one until it retires, as `published_by: trstctl-spiffe-jwt-authority`, so
+  SPIRE servers sharing the trust domain verify the JWT-SVIDs trstctl issues. `published_at` is absent
+  for trstctl's first-generation key.
 - The Vault/OpenBao-compatible shim serves the dynamic engines' configuration paths read-only
   (A203-L2). `vault list database/roles`, `vault read database/roles/<role>`, the same for `aws/roles`
   and `kubernetes/roles`, and `vault list database/config` / `vault read database/config/<name>` answer
