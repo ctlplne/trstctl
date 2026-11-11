@@ -47,7 +47,58 @@ func (b *Backend) RotateKey(ctx context.Context, ref crypto.KeyRef) (crypto.Sign
 // the explicit GET is what lets a replay bind version 1 after a create response
 // was lost without treating AlreadyExists as an opaque failure.
 func (b *Backend) GenerateManagedKeyForOperation(ctx context.Context, operationID string, alg crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
-	return b.managedKeyForOperation(ctx, "generate", operationID, "", alg)
+	return b.managedKeyForOperation(ctx, "generate", operationID, "", alg, "")
+}
+
+// tenantLabelKey records, in the same create request, the tenant a key
+// belongs to, so tenants sharing one key ring tell their keys apart in a
+// reconciliation round (A168-L1, as A168-L2 did for AWS).
+const tenantLabelKey = "trstctl-tenant"
+
+// ForKeyTenant returns the backend's operation lifecycle that labels every
+// key it creates with tenantID. Revoke and zeroize act on an existing key and
+// are the backend's own.
+func (b *Backend) ForKeyTenant(tenantID string) crypto.OperationAwareRemoteKeyLifecycle {
+	return tenantKeyLifecycle{b: b, tenant: strings.TrimSpace(tenantID)}
+}
+
+type tenantKeyLifecycle struct {
+	b      *Backend
+	tenant string
+}
+
+func (l tenantKeyLifecycle) GenerateManagedKeyForOperation(ctx context.Context, operationID string, alg crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
+	return l.b.managedKeyForOperation(ctx, "generate", operationID, "", alg, l.tenant)
+}
+
+func (l tenantKeyLifecycle) RotateKeyForOperation(ctx context.Context, operationID string, ref crypto.KeyRef) (crypto.Signer, crypto.KeyRef, error) {
+	if ref.ID == "" {
+		return nil, crypto.KeyRef{}, fmt.Errorf("gcp-kms: rotate requires a key ref")
+	}
+	return l.b.managedKeyForOperation(ctx, "rotate", operationID, ref.ID, ref.Algorithm, l.tenant)
+}
+
+func (l tenantKeyLifecycle) RevokeKeyForOperation(ctx context.Context, operationID string, ref crypto.KeyRef) error {
+	return l.b.RevokeKeyForOperation(ctx, operationID, ref)
+}
+
+func (l tenantKeyLifecycle) ZeroizeKeyForOperation(ctx context.Context, operationID string, ref crypto.KeyRef) error {
+	return l.b.ZeroizeKeyForOperation(ctx, operationID, ref)
+}
+
+// gcpLabelValue reports whether v satisfies Cloud KMS's label grammar
+// (lowercase letters, digits, underscores and hyphens, at most 63); a tenant
+// id outside it is not recorded rather than make the create fail.
+func gcpLabelValue(v string) bool {
+	if v == "" || len(v) > 63 {
+		return false
+	}
+	for _, r := range v {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' && r != '_' {
+			return false
+		}
+	}
+	return true
 }
 
 // RotateKeyForOperation creates the successor under a separate deterministic
@@ -57,10 +108,10 @@ func (b *Backend) RotateKeyForOperation(ctx context.Context, operationID string,
 	if ref.ID == "" {
 		return nil, crypto.KeyRef{}, fmt.Errorf("gcp-kms: rotate requires a key ref")
 	}
-	return b.managedKeyForOperation(ctx, "rotate", operationID, ref.ID, ref.Algorithm)
+	return b.managedKeyForOperation(ctx, "rotate", operationID, ref.ID, ref.Algorithm, "")
 }
 
-func (b *Backend) managedKeyForOperation(ctx context.Context, kind, operationID, source string, alg crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
+func (b *Backend) managedKeyForOperation(ctx context.Context, kind, operationID, source string, alg crypto.Algorithm, tenant string) (crypto.Signer, crypto.KeyRef, error) {
 	if strings.TrimSpace(operationID) == "" {
 		return nil, crypto.KeyRef{}, fmt.Errorf("gcp-kms: durable operation id is required")
 	}
@@ -82,6 +133,9 @@ func (b *Backend) managedKeyForOperation(ctx context.Context, kind, operationID,
 	create := map[string]any{
 		"purpose":         "ASYMMETRIC_SIGN",
 		"versionTemplate": map[string]string{"algorithm": gcpAlg},
+	}
+	if gcpLabelValue(tenant) {
+		create["labels"] = map[string]string{tenantLabelKey: tenant}
 	}
 	var created struct {
 		Name string `json:"name"`

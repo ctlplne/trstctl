@@ -150,6 +150,7 @@ type lifecycleKey struct {
 	signer    *crypto.LockedSigner
 	disabled  bool
 	destroyed bool
+	labels    map[string]string
 }
 
 func newLifecycleDoer(t *testing.T, token string) *lifecycleDoer {
@@ -215,6 +216,7 @@ func (d *lifecycleDoer) create(req *http.Request, path string, body []byte) *htt
 		VersionTemplate struct {
 			Algorithm string `json:"algorithm"`
 		} `json:"versionTemplate"`
+		Labels map[string]string `json:"labels"`
 	}
 	_ = json.Unmarshal(body, &in)
 	if in.Purpose != "ASYMMETRIC_SIGN" || in.VersionTemplate.Algorithm != "RSA_SIGN_PKCS1_2048_SHA256" {
@@ -227,7 +229,7 @@ func (d *lifecycleDoer) create(req *http.Request, path string, body []byte) *htt
 	cryptoKey := path + "/" + keyID
 	versionName := cryptoKey + "/cryptoKeyVersions/1"
 	d.mu.Lock()
-	d.keys[versionName] = &lifecycleKey{signer: signer}
+	d.keys[versionName] = &lifecycleKey{signer: signer, labels: in.Labels}
 	d.lastVersion = versionName
 	d.createEffects++
 	d.mu.Unlock()
@@ -351,5 +353,56 @@ func jsonResponse(req *http.Request, code int, v any) *http.Response {
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
 		Body:       io.NopCloser(&buf),
 		Request:    req,
+	}
+}
+
+// A168-L1: a key created for a tenant carries that tenant as a label, in the
+// same create request, so tenants sharing one key ring tell their keys apart
+// in a reconciliation round. Without a tenant, or with one outside Cloud
+// KMS's label grammar, no label is added and the create still succeeds.
+func TestTenantScopedLifecycleLabelsTheKeysTenantA168L1(t *testing.T) {
+	doer := newLifecycleDoer(t, "gcp-token")
+	b := New("projects/p/locations/us/keyRings/trstctl", Credentials{BearerToken: []byte("gcp-token")},
+		WithEndpoint("https://cloudkms.test/v1"), WithHTTPClient(doer), WithOpTimeout(0))
+	var scoper crypto.KeyTenantScoper = b
+	ctx := context.Background()
+	const tenant = "11111111-2222-4333-8444-555555555555"
+	scoped := scoper.ForKeyTenant(tenant)
+	_, ref, err := scoped.GenerateManagedKeyForOperation(ctx, "a168l1-generate", crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, rotated, err := scoped.RotateKeyForOperation(ctx, "a168l1-rotate", ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, unscoped, err := b.GenerateManagedKeyForOperation(ctx, "a168l1-unscoped", crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, odd, err := b.ForKeyTenant("Tenant With Spaces").GenerateManagedKeyForOperation(ctx, "a168l1-odd", crypto.RSA2048)
+	if err != nil {
+		t.Fatalf("a tenant outside the label grammar failed the create: %v", err)
+	}
+	labelsOf := func(id string) map[string]string {
+		doer.mu.Lock()
+		defer doer.mu.Unlock()
+		return doer.keys[id].labels
+	}
+	for _, id := range []string{ref.ID, rotated.ID} {
+		if labels := labelsOf(id); labels["trstctl-tenant"] != tenant {
+			t.Fatalf("key %s labels = %v, want trstctl-tenant=%s", id, labels, tenant)
+		}
+	}
+	for _, id := range []string{unscoped.ID, odd.ID} {
+		if labels := labelsOf(id); labels["trstctl-tenant"] != "" {
+			t.Fatalf("key %s carries a tenant label: %v", id, labels)
+		}
+	}
+	if err := scoped.RevokeKeyForOperation(ctx, "a168l1-revoke", rotated); err != nil {
+		t.Fatal(err)
+	}
+	if doer.disableEffects != 1 {
+		t.Fatalf("disable effects = %d, want 1", doer.disableEffects)
 	}
 }

@@ -2171,8 +2171,14 @@ type ReconcileAuthoritySource struct {
 	SessionTokenFile    string `json:"session_token_file,omitempty"`
 	AllCustomerKeys     bool   `json:"all_customer_keys,omitempty"`
 	// Provider names the managed-key provider a managed_keys authority
-	// asserts (A168): aws-kms.
+	// asserts (A168): aws-kms, gcp-kms or azure-key-vault (A168-L1).
 	Provider string `json:"provider,omitempty"`
+	// KeyRing names the Cloud KMS key ring a gcpkms source observes
+	// (A168-L1): projects/{project}/locations/{location}/keyRings/{ring}. A
+	// gcpkms source reads its bearer token from TokenFile, and an azurekv
+	// source names its vault in Address (https://{vault}.vault.azure.net)
+	// and reads its token from TokenFile; both take AllCustomerKeys.
+	KeyRing string `json:"key_ring,omitempty"`
 }
 
 // The external authority source kinds served today. An awskms source observes
@@ -2187,6 +2193,10 @@ const (
 	ReconcileSourceKindAWSKMS    = "awskms"
 	// ReconcileSourceKindManagedKeys is the managed-key inventory authority.
 	ReconcileSourceKindManagedKeys = "managed_keys"
+	// ReconcileSourceKindGCPKMS observes a Cloud KMS key ring and
+	// ReconcileSourceKindAzureKV a Key Vault vault's keys (A168-L1).
+	ReconcileSourceKindGCPKMS  = "gcpkms"
+	ReconcileSourceKindAzureKV = "azurekv"
 )
 
 func validateReconcileAuthoritySource(label string, src *ReconcileAuthoritySource) []error {
@@ -2197,6 +2207,8 @@ func validateReconcileAuthoritySource(label string, src *ReconcileAuthoritySourc
 	switch strings.TrimSpace(src.Kind) {
 	case ReconcileSourceKindAWSKMS:
 		return append(errs, validateReconcileAWSKMSSource(label, src)...)
+	case ReconcileSourceKindGCPKMS, ReconcileSourceKindAzureKV:
+		return append(errs, validateReconcileTokenKMSSource(label, src)...)
 	case ReconcileSourceKindManagedKeys:
 		return append(errs, validateReconcileManagedKeysSource(label, src)...)
 	case ReconcileSourceKindVault:
@@ -2210,9 +2222,9 @@ func validateReconcileAuthoritySource(label string, src *ReconcileAuthoritySourc
 	case ReconcileSourceKindInventory:
 		return append(errs, validateReconcileInventorySource(label, src)...)
 	default:
-		return []error{fmt.Errorf("%s.kind %q is not served; use %q, %q, %q, %q, %q, %q or %q", label, src.Kind,
+		return []error{fmt.Errorf("%s.kind %q is not served; use %q, %q, %q, %q, %q, %q, %q, %q or %q", label, src.Kind,
 			ReconcileSourceKindVault, ReconcileSourceKindKMIP, ReconcileSourceKindEJBCA, ReconcileSourceKindStepCA, ReconcileSourceKindInventory,
-			ReconcileSourceKindAWSKMS, ReconcileSourceKindManagedKeys)}
+			ReconcileSourceKindAWSKMS, ReconcileSourceKindGCPKMS, ReconcileSourceKindAzureKV, ReconcileSourceKindManagedKeys)}
 	}
 }
 
@@ -2221,8 +2233,14 @@ func validateReconcileAuthoritySource(label string, src *ReconcileAuthoritySourc
 func refuseCloudKMSFields(label string, src *ReconcileAuthoritySource) []error {
 	kind := strings.TrimSpace(src.Kind)
 	var errs []error
-	if kind != ReconcileSourceKindAWSKMS && (strings.TrimSpace(src.Region+src.AccessKeyIDFile+src.SecretAccessKeyFile+src.SessionTokenFile) != "" || src.AllCustomerKeys) {
-		errs = append(errs, fmt.Errorf("%s: region, the access key files and all_customer_keys belong to an awskms source, not a %s one", label, kind))
+	if kind != ReconcileSourceKindAWSKMS && strings.TrimSpace(src.Region+src.AccessKeyIDFile+src.SecretAccessKeyFile+src.SessionTokenFile) != "" {
+		errs = append(errs, fmt.Errorf("%s: region and the access key files belong to an awskms source, not a %s one", label, kind))
+	}
+	if src.AllCustomerKeys && kind != ReconcileSourceKindAWSKMS && kind != ReconcileSourceKindGCPKMS && kind != ReconcileSourceKindAzureKV {
+		errs = append(errs, fmt.Errorf("%s.all_customer_keys belongs to an awskms, gcpkms or azurekv source, not a %s one", label, kind))
+	}
+	if kind != ReconcileSourceKindGCPKMS && strings.TrimSpace(src.KeyRing) != "" {
+		errs = append(errs, fmt.Errorf("%s.key_ring belongs to a gcpkms source, not a %s one", label, kind))
 	}
 	if kind != ReconcileSourceKindManagedKeys && strings.TrimSpace(src.Provider) != "" {
 		errs = append(errs, fmt.Errorf("%s.provider belongs to a managed_keys authority, not a %s one", label, kind))
@@ -2258,13 +2276,51 @@ func validateReconcileAWSKMSSource(label string, src *ReconcileAuthoritySource) 
 	return errs
 }
 
+// validateReconcileTokenKMSSource checks a kind "gcpkms" or "azurekv" source
+// (A168-L1): a Cloud KMS key ring or a Key Vault vault read with a bearer
+// token from a file.
+func validateReconcileTokenKMSSource(label string, src *ReconcileAuthoritySource) []error {
+	kind := strings.TrimSpace(src.Kind)
+	var errs []error
+	if strings.TrimSpace(src.TokenFile) == "" {
+		errs = append(errs, fmt.Errorf("%s.token_file is required for a %s source", label, kind))
+	}
+	address := strings.TrimSpace(src.Address)
+	switch kind {
+	case ReconcileSourceKindGCPKMS:
+		parts := strings.Split(strings.Trim(strings.TrimSpace(src.KeyRing), "/"), "/")
+		if len(parts) != 6 || parts[0] != "projects" || parts[2] != "locations" || parts[4] != "keyRings" || slices.Contains(parts, "") {
+			errs = append(errs, fmt.Errorf("%s.key_ring must be projects/{project}/locations/{location}/keyRings/{ring}", label))
+		}
+	case ReconcileSourceKindAzureKV:
+		if address == "" {
+			errs = append(errs, fmt.Errorf("%s.address (the vault URL) is required for an azurekv source", label))
+		}
+	}
+	if address != "" {
+		u, err := url.Parse(address)
+		if err != nil || u.Host == "" || (u.Path != "" && u.Path != "/") || (u.Scheme != "https" && (u.Scheme != "http" || !src.AllowInsecureLoopback)) {
+			errs = append(errs, fmt.Errorf("%s.address must be an https URL with no path (plain http needs allow_insecure_loopback)", label))
+		}
+	}
+	if src.MaxObjects < 0 {
+		errs = append(errs, fmt.Errorf("%s.max_objects cannot be negative", label))
+	}
+	if strings.TrimSpace(src.Namespace+src.ServerName+src.CAFile+src.ClientCertFile+src.ClientKeyFile+src.DSNFile+src.IssuerCertificatesFile) != "" ||
+		len(src.KVMounts)+len(src.PKIMounts)+len(src.TransitMounts)+len(src.CANames) > 0 || src.PageSize != 0 || src.AllowTLS12 {
+		errs = append(errs, fmt.Errorf("%s: a %s source takes address, token_file, key_ring (gcpkms), all_customer_keys, max_objects and the endpoint egress fields only", label, kind))
+	}
+	errs = append(errs, validateManagedKeyPrivateCIDRs(label+".private_endpoint_cidrs", src.PrivateEndpointCIDRs)...)
+	return errs
+}
+
 // validateReconcileManagedKeysSource checks a kind "managed_keys" authority
 // (A168): the managed-key inventory at one provider.
 func validateReconcileManagedKeysSource(label string, src *ReconcileAuthoritySource) []error {
 	switch strings.ToLower(strings.TrimSpace(src.Provider)) {
-	case "aws-kms", "aws":
+	case "aws-kms", "aws", "gcp-kms", "gcp", "azure-key-vault", "azure-kv", "azure":
 	default:
-		return []error{fmt.Errorf("%s.provider must be aws-kms for a managed_keys authority", label)}
+		return []error{fmt.Errorf("%s.provider must be aws-kms, gcp-kms or azure-key-vault for a managed_keys authority", label)}
 	}
 	if strings.TrimSpace(src.Address+src.TokenFile+src.Namespace+src.ServerName+src.CAFile+src.ClientCertFile+src.ClientKeyFile+src.DSNFile+src.IssuerCertificatesFile) != "" ||
 		len(src.KVMounts)+len(src.PKIMounts)+len(src.TransitMounts)+len(src.CANames)+len(src.PrivateEndpointCIDRs) > 0 ||

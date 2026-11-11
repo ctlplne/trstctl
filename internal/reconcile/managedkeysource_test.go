@@ -35,7 +35,8 @@ func TestManagedKeyProviderStatus(t *testing.T) {
 			t.Errorf("%s at %s = %q asserted=%v; want %q asserted=%v", tc.state, tc.age, got, asserted, tc.want, tc.asserted)
 		}
 	}
-	if _, err := newStoreManagedKeySource(nil, ManagedKeyAuthorityConfig{AuthorityID: "m", Provider: "gcp-kms"}); err == nil {
+	// gcp-kms and azure-key-vault are served since A168-L1.
+	if _, err := newStoreManagedKeySource(nil, ManagedKeyAuthorityConfig{AuthorityID: "m", Provider: "oci-vault"}); err == nil {
 		t.Fatal("a provider the authority cannot assert was accepted")
 	}
 }

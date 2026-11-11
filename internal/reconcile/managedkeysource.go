@@ -49,14 +49,18 @@ const managedKeySourcePageSize = 100
 type ManagedKeyAuthorityConfig struct {
 	AuthorityID string
 	// Provider is the managed-key provider whose keys the authority asserts:
-	// "aws-kms" (also accepted as "aws").
+	// "aws-kms" (also "aws"), "gcp-kms" (also "gcp") or "azure-key-vault"
+	// (also "azure", "azure-kv"; A168-L1).
 	Provider string
 }
 
 type storeManagedKeySource struct {
 	store     *corestore.Store
 	providers map[string]bool
-	now       func() time.Time
+	// keyID turns the record's key reference into the identity the provider's
+	// source asserts.
+	keyID func(string) string
+	now   func() time.Time
 }
 
 var _ reducers.CloudKMSInventorySource = (*storeManagedKeySource)(nil)
@@ -64,9 +68,16 @@ var _ reducers.CloudKMSInventorySource = (*storeManagedKeySource)(nil)
 func newStoreManagedKeySource(store *corestore.Store, cfg ManagedKeyAuthorityConfig) (*storeManagedKeySource, error) {
 	switch strings.ToLower(strings.TrimSpace(cfg.Provider)) {
 	case "aws", "aws-kms":
-		return &storeManagedKeySource{store: store, providers: map[string]bool{"aws": true, "aws-kms": true}, now: time.Now}, nil
+		return &storeManagedKeySource{store: store, providers: map[string]bool{"aws": true, "aws-kms": true}, keyID: awsManagedKeyID, now: time.Now}, nil
+	case "gcp", "gcp-kms":
+		// A168-L1: a Cloud KMS key version's resource name is its identity on
+		// both sides.
+		return &storeManagedKeySource{store: store, providers: map[string]bool{"gcp": true, "gcp-kms": true}, keyID: strings.TrimSpace, now: time.Now}, nil
+	case "azure", "azure-kv", "azure-key-vault":
+		return &storeManagedKeySource{store: store, providers: map[string]bool{"azure": true, "azure-kv": true, "azure-key-vault": true},
+			keyID: azureManagedKeyID, now: time.Now}, nil
 	default:
-		return nil, fmt.Errorf("xrec managed-key authority %q: provider %q is not served; use aws-kms", cfg.AuthorityID, cfg.Provider)
+		return nil, fmt.Errorf("xrec managed-key authority %q: provider %q is not served; use aws-kms, gcp-kms or azure-key-vault", cfg.AuthorityID, cfg.Provider)
 	}
 }
 
@@ -92,10 +103,7 @@ func (s *storeManagedKeySource) CloudKMSSnapshot(ctx context.Context, tenantID s
 			if !asserted {
 				continue
 			}
-			keyID := key.KeyID
-			if i := strings.LastIndex(keyID, "/"); i >= 0 {
-				keyID = keyID[i+1:] // an ARN names the same key as its KeyId
-			}
+			keyID := s.keyID(key.KeyID)
 			snap.Keys = append(snap.Keys, reducers.CloudKMSKey{
 				KeyID: keyID, AlgorithmSpec: key.Algorithm, Status: status,
 				NativeID: "managed-key:" + key.Provider + ":" + key.KeyID,
@@ -107,6 +115,23 @@ func (s *storeManagedKeySource) CloudKMSSnapshot(ctx context.Context, tenantID s
 		last := page[len(page)-1]
 		afterProvider, afterKeyID = last.Provider, last.KeyID
 	}
+}
+
+// awsManagedKeyID: an ARN names the same key as its KeyId.
+func awsManagedKeyID(keyID string) string {
+	if i := strings.LastIndex(keyID, "/"); i >= 0 {
+		return keyID[i+1:]
+	}
+	return keyID
+}
+
+// azureManagedKeyID: the record holds the version's URL in its vault; the
+// source asserts it relative to the vault, "keys/{name}/{version}".
+func azureManagedKeyID(keyID string) string {
+	if i := strings.Index(keyID, "/keys/"); i >= 0 {
+		return keyID[i+1:]
+	}
+	return keyID
 }
 
 // managedKeyProviderStatus is the provider state trstctl's record implies, and

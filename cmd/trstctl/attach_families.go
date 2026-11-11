@@ -220,6 +220,9 @@ func attachReconcile(cfg *config.Config, log *slog.Logger, deps *server.Deps) er
 		// compared with.
 		CloudKMSSources:       reconcileAWSKMSSourcesFromConfig(reconcileConfigOf(cfg)),
 		ManagedKeyAuthorities: reconcileManagedKeyAuthoritiesFromConfig(reconcileConfigOf(cfg)),
+		// A168-L1: Cloud KMS key rings and Key Vault vaults.
+		GCPKMSSources:     reconcileGCPKMSSourcesFromConfig(reconcileConfigOf(cfg)),
+		AzureKVKeySources: reconcileAzureKVKeySourcesFromConfig(reconcileConfigOf(cfg)),
 	})
 	if err != nil {
 		return err
@@ -393,6 +396,34 @@ func reconcileAWSKMSSourcesFromConfig(c config.Reconcile) []reconcile.AWSKMSSour
 			SessionTokenFile: strings.TrimSpace(src.SessionTokenFile), AllCustomerKeys: src.AllCustomerKeys,
 			MaxObjects: src.MaxObjects, AllowInsecureLoopback: src.AllowInsecureLoopback,
 			PrivateEndpointCIDRs: reconcilePrivateCIDRs(src.PrivateEndpointCIDRs),
+		})
+	})
+	return out
+}
+
+// reconcileGCPKMSSourcesFromConfig collects the gcpkms source blocks
+// (A168-L1).
+func reconcileGCPKMSSourcesFromConfig(c config.Reconcile) []reconcile.GCPKMSSourceConfig {
+	var out []reconcile.GCPKMSSourceConfig
+	reconcileSourcesOfKind(c, config.ReconcileSourceKindGCPKMS, func(id string, src *config.ReconcileAuthoritySource) {
+		out = append(out, reconcile.GCPKMSSourceConfig{
+			AuthorityID: id, KeyRing: strings.TrimSpace(src.KeyRing), Address: strings.TrimSpace(src.Address),
+			TokenFile: strings.TrimSpace(src.TokenFile), AllCustomerKeys: src.AllCustomerKeys, MaxObjects: src.MaxObjects,
+			AllowInsecureLoopback: src.AllowInsecureLoopback, PrivateEndpointCIDRs: reconcilePrivateCIDRs(src.PrivateEndpointCIDRs),
+		})
+	})
+	return out
+}
+
+// reconcileAzureKVKeySourcesFromConfig collects the azurekv source blocks
+// (A168-L1).
+func reconcileAzureKVKeySourcesFromConfig(c config.Reconcile) []reconcile.AzureKVKeySourceConfig {
+	var out []reconcile.AzureKVKeySourceConfig
+	reconcileSourcesOfKind(c, config.ReconcileSourceKindAzureKV, func(id string, src *config.ReconcileAuthoritySource) {
+		out = append(out, reconcile.AzureKVKeySourceConfig{
+			AuthorityID: id, VaultURL: strings.TrimSpace(src.Address), TokenFile: strings.TrimSpace(src.TokenFile),
+			AllCustomerKeys: src.AllCustomerKeys, MaxObjects: src.MaxObjects,
+			AllowInsecureLoopback: src.AllowInsecureLoopback, PrivateEndpointCIDRs: reconcilePrivateCIDRs(src.PrivateEndpointCIDRs),
 		})
 	})
 	return out

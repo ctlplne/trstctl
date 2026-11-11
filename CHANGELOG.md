@@ -2,6 +2,14 @@
 
 ### Added
 
+- Reconciliation rounds can compare a Google Cloud KMS key ring and an Azure Key Vault vault with
+  trstctl's managed-key record (A168-L1). New `gcpkms` and `azurekv` authority sources read a ring's
+  keys and versions, or a vault's keys, versions, version public keys and deleted keys (read-only, with
+  a bearer token from a file), and assert the keys trstctl created by the identity its record uses; the
+  `managed_keys` authority now serves `gcp-kms` and `azure-key-vault`. A round witnesses a key only the
+  provider holds, one only the record holds, and a key whose state drifted. trstctl also labels (Cloud
+  KMS) or tags (Key Vault) each key it creates there with its tenant, so tenants sharing a ring or vault
+  see only their own keys.
 - A scheduled Cloud network paths run re-validates the exposure posture (A167-L4). A full run of a
   `cloud_network_path` source, including every run its schedule queues, now validates the endpoints
   the exposure posture names — at most 50 a run, records never validated first and then the longest

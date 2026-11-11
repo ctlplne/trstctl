@@ -70,6 +70,11 @@ type RuntimeConfig struct {
 	// provider, the authority a KMS account is compared with.
 	CloudKMSSources       []AWSKMSSourceConfig
 	ManagedKeyAuthorities []ManagedKeyAuthorityConfig
+	// GCPKMSSources and AzureKVKeySources are the Cloud KMS key rings and
+	// Key Vault vaults operator config names (A168-L1), registered like the
+	// AWS accounts as cloud-kms reducers under their authority ids.
+	GCPKMSSources     []GCPKMSSourceConfig
+	AzureKVKeySources []AzureKVKeySourceConfig
 }
 
 // Runtime is the XREC object graph mounted by cmd/trstctl/ee_attach.go. The
@@ -219,6 +224,25 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 	// compared with.
 	for _, cs := range cfg.CloudKMSSources {
 		src, err := newAWSKMSSource(cs)
+		if err != nil {
+			return nil, err
+		}
+		if err := reducerRegistry.Register(src.cfg.AuthorityID, reducers.NewCloudKMSReducer(reducerConfig(src.cfg.AuthorityID, reducers.ModePoll), src)); err != nil {
+			return nil, err
+		}
+	}
+	// A168-L1: Cloud KMS key rings and Key Vault vaults.
+	for _, gs := range cfg.GCPKMSSources {
+		src, err := newGCPKMSSource(gs)
+		if err != nil {
+			return nil, err
+		}
+		if err := reducerRegistry.Register(src.cfg.AuthorityID, reducers.NewCloudKMSReducer(reducerConfig(src.cfg.AuthorityID, reducers.ModePoll), src)); err != nil {
+			return nil, err
+		}
+	}
+	for _, as := range cfg.AzureKVKeySources {
+		src, err := newAzureKVKeySource(as)
 		if err != nil {
 			return nil, err
 		}

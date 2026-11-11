@@ -47,7 +47,43 @@ func (b *Backend) RotateKey(ctx context.Context, ref crypto.KeyRef) (crypto.Sign
 // name is posted twice, so the GET-before-create is what turns an ambiguous first
 // response into one provider key/version rather than a duplicate version.
 func (b *Backend) GenerateManagedKeyForOperation(ctx context.Context, operationID string, alg crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
-	return b.managedKeyForOperation(ctx, "generate", operationID, "", alg)
+	return b.managedKeyForOperation(ctx, "generate", operationID, "", alg, "")
+}
+
+// tenantTagKey records, in the same create request, the tenant a key belongs
+// to, so tenants sharing one vault tell their keys apart in a reconciliation
+// round (A168-L1, as A168-L2 did for AWS).
+const tenantTagKey = "trstctl-tenant"
+
+// ForKeyTenant returns the backend's operation lifecycle that tags every key
+// it creates with tenantID. Revoke and zeroize act on an existing key and are
+// the backend's own.
+func (b *Backend) ForKeyTenant(tenantID string) crypto.OperationAwareRemoteKeyLifecycle {
+	return tenantKeyLifecycle{b: b, tenant: strings.TrimSpace(tenantID)}
+}
+
+type tenantKeyLifecycle struct {
+	b      *Backend
+	tenant string
+}
+
+func (l tenantKeyLifecycle) GenerateManagedKeyForOperation(ctx context.Context, operationID string, alg crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
+	return l.b.managedKeyForOperation(ctx, "generate", operationID, "", alg, l.tenant)
+}
+
+func (l tenantKeyLifecycle) RotateKeyForOperation(ctx context.Context, operationID string, ref crypto.KeyRef) (crypto.Signer, crypto.KeyRef, error) {
+	if ref.ID == "" {
+		return nil, crypto.KeyRef{}, fmt.Errorf("azure-key-vault: rotate requires a key ref")
+	}
+	return l.b.managedKeyForOperation(ctx, "rotate", operationID, ref.ID, ref.Algorithm, l.tenant)
+}
+
+func (l tenantKeyLifecycle) RevokeKeyForOperation(ctx context.Context, operationID string, ref crypto.KeyRef) error {
+	return l.b.RevokeKeyForOperation(ctx, operationID, ref)
+}
+
+func (l tenantKeyLifecycle) ZeroizeKeyForOperation(ctx context.Context, operationID string, ref crypto.KeyRef) error {
+	return l.b.ZeroizeKeyForOperation(ctx, operationID, ref)
 }
 
 // RotateKeyForOperation gives the successor its own deterministic name. The old
@@ -57,10 +93,10 @@ func (b *Backend) RotateKeyForOperation(ctx context.Context, operationID string,
 	if ref.ID == "" {
 		return nil, crypto.KeyRef{}, fmt.Errorf("azure-key-vault: rotate requires a key ref")
 	}
-	return b.managedKeyForOperation(ctx, "rotate", operationID, ref.ID, ref.Algorithm)
+	return b.managedKeyForOperation(ctx, "rotate", operationID, ref.ID, ref.Algorithm, "")
 }
 
-func (b *Backend) managedKeyForOperation(ctx context.Context, kind, operationID, source string, alg crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
+func (b *Backend) managedKeyForOperation(ctx context.Context, kind, operationID, source string, alg crypto.Algorithm, tenant string) (crypto.Signer, crypto.KeyRef, error) {
 	if strings.TrimSpace(operationID) == "" {
 		return nil, crypto.KeyRef{}, fmt.Errorf("azure-key-vault: durable operation id is required")
 	}
@@ -80,6 +116,16 @@ func (b *Backend) managedKeyForOperation(ctx context.Context, kind, operationID,
 	body, err := createBody(alg)
 	if err != nil {
 		return nil, crypto.KeyRef{}, err
+	}
+	if tenant != "" {
+		var withTags map[string]any
+		if err := json.Unmarshal(body, &withTags); err != nil {
+			return nil, crypto.KeyRef{}, err
+		}
+		withTags["tags"] = map[string]string{tenantTagKey: tenant}
+		if body, err = json.Marshal(withTags); err != nil {
+			return nil, crypto.KeyRef{}, err
+		}
 	}
 	var created keyResponse
 	if err := b.call(ctx, http.MethodPost, fmt.Sprintf("/keys/%s/create", name), body, &created); err != nil {

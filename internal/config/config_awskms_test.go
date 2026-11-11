@@ -40,7 +40,7 @@ func TestReconcileCloudKMSSourcesValidate(t *testing.T) {
 		"plain http":          {func(k, _ *ReconcileAuthoritySource) { k.Address = "http://kms.internal" }, "https URL"},
 		"vault fields on kms": {func(k, _ *ReconcileAuthoritySource) { k.TokenFile = "/run/token" }, "awskms source takes"},
 		"provider on kms":     {func(k, _ *ReconcileAuthoritySource) { k.Provider = "aws-kms" }, "provider belongs to a managed_keys"},
-		"unknown provider":    {func(_, m *ReconcileAuthoritySource) { m.Provider = "gcp" }, "provider must be aws-kms"},
+		"unknown provider":    {func(_, m *ReconcileAuthoritySource) { m.Provider = "oci-vault" }, "provider must be aws-kms, gcp-kms or azure-key-vault"},
 		"address on managed":  {func(_, m *ReconcileAuthoritySource) { m.Address = "https://kms.internal" }, "only provider belongs"},
 		"region on managed":   {func(_, m *ReconcileAuthoritySource) { m.Region = "us-east-1" }, "belong to an awskms source"},
 	} {

@@ -152,6 +152,7 @@ type lifecycleKey struct {
 	version  string
 	disabled bool
 	deleted  bool
+	tags     map[string]string
 }
 
 func newLifecycleDoer(t *testing.T, token string) *lifecycleDoer {
@@ -207,8 +208,9 @@ func (d *lifecycleDoer) Do(req *http.Request) (*http.Response, error) {
 
 func (d *lifecycleDoer) create(req *http.Request, body []byte) *http.Response {
 	var in struct {
-		Kty     string `json:"kty"`
-		KeySize int    `json:"key_size"`
+		Kty     string            `json:"kty"`
+		KeySize int               `json:"key_size"`
+		Tags    map[string]string `json:"tags"`
 	}
 	if err := json.Unmarshal(body, &in); err != nil || in.Kty != "RSA" || in.KeySize != 2048 {
 		return jsonResponse(req, http.StatusBadRequest, map[string]any{"error": map[string]string{"code": "BadParameter"}})
@@ -222,7 +224,7 @@ func (d *lifecycleDoer) create(req *http.Request, body []byte) *http.Response {
 	d.n++
 	d.createEffects++
 	version := fmt.Sprintf("v%d", d.n)
-	key := &lifecycleKey{signer: signer, name: name, version: version}
+	key := &lifecycleKey{signer: signer, name: name, version: version, tags: in.Tags}
 	d.keys[name+"/"+version] = key
 	d.keys[name] = key
 	d.mu.Unlock()
@@ -348,5 +350,53 @@ func jsonResponse(req *http.Request, code int, v any) *http.Response {
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
 		Body:       io.NopCloser(&buf),
 		Request:    req,
+	}
+}
+
+// A168-L1: a key created for a tenant carries that tenant as a tag, in the
+// same create request, so tenants sharing one vault tell their keys apart in a
+// reconciliation round. Without a tenant no tag is added.
+func TestTenantScopedLifecycleTagsTheKeysTenantA168L1(t *testing.T) {
+	doer := newLifecycleDoer(t, "azure-token")
+	b := New("https://trstctl-test.managedhsm.azure.net", Credentials{BearerToken: []byte("azure-token")},
+		WithEndpoint("https://azure.test"), WithHTTPClient(doer), WithOpTimeout(0))
+	var scoper crypto.KeyTenantScoper = b
+	ctx := context.Background()
+	const tenant = "11111111-2222-4333-8444-555555555555"
+	scoped := scoper.ForKeyTenant(tenant)
+	_, ref, err := scoped.GenerateManagedKeyForOperation(ctx, "a168l1-generate", crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, rotated, err := scoped.RotateKeyForOperation(ctx, "a168l1-rotate", ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, unscoped, err := b.GenerateManagedKeyForOperation(ctx, "a168l1-unscoped", crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tagsOf := func(id string) map[string]string {
+		name, _, err := parseRef(crypto.KeyRef{ID: id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		doer.mu.Lock()
+		defer doer.mu.Unlock()
+		return doer.keys[name].tags
+	}
+	for _, id := range []string{ref.ID, rotated.ID} {
+		if tags := tagsOf(id); tags["trstctl-tenant"] != tenant {
+			t.Fatalf("key %s tags = %v, want trstctl-tenant=%s", id, tags, tenant)
+		}
+	}
+	if tags := tagsOf(unscoped.ID); tags["trstctl-tenant"] != "" {
+		t.Fatalf("an unscoped key carries a tenant tag: %v", tags)
+	}
+	if err := scoped.RevokeKeyForOperation(ctx, "a168l1-revoke", rotated); err != nil {
+		t.Fatal(err)
+	}
+	if doer.disableEffects != 1 {
+		t.Fatalf("disable effects = %d, want 1", doer.disableEffects)
 	}
 }

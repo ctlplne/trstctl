@@ -4764,8 +4764,15 @@ than sending an operator looking for a credential that was never there.
   a key tagged as another tenant's out, so an account several tenants share no
   longer reads the other tenants' keys as drift (A168-L2; a round over a shared
   account proven against the stand-in); keys created before the tag existed carry
-  none and are still asserted by every tenant's round until they are tagged. GCP Cloud KMS and Azure Key Vault keys
-  are what comes next; a `cloud-kms` id with no source block still fails
+  none and are still asserted by every tenant's round until they are tagged. A
+  GCP Cloud KMS key ring (`gcpkms`) and an Azure Key Vault vault (`azurekv`)
+  are observed the same way (A168-L1) — the ring's keys and versions, or the
+  vault's keys, versions, version public keys and deleted keys, read-only with
+  a bearer token from a file — and pair with a `managed_keys` authority for
+  `gcp-kms` or `azure-key-vault`; trstctl now labels or tags the keys it
+  creates there with their tenant, and a round leaves another tenant's keys
+  out. Proven against in-repository stand-ins of both APIs (a live ring and
+  vault are Track B). A `cloud-kms` id with no source block still fails
   observation closed rather than fabricate an authority, and
   inventory rows with no captured DER cannot participate in the comparison
   (no issuer bytes to derive the shared identity from) until their bytes are

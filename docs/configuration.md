@@ -635,6 +635,54 @@ regional endpoint (a VPC endpoint); `allow_insecure_loopback` and
 one tenant's managed keys: a round is scoped to a tenant, so another tenant's
 keys in the same account read as keys only the account holds.
 
+A Google Cloud KMS key ring and an Azure Key Vault vault join rounds the same
+way (A168-L1): a `gcpkms` or `azurekv` source paired with a `managed_keys`
+authority whose `provider` is `gcp-kms` or `azure-key-vault`:
+
+```json
+{"tenant_id": "YOUR_TENANT_ID", "cadence": "1h", "authorities": [
+  {"authority_id": "managed-keys-gcp", "source": {"kind": "managed_keys", "provider": "gcp-kms"}},
+  {"authority_id": "gcp-kms-prod", "source": {
+    "kind": "gcpkms",
+    "key_ring": "projects/acme-prod/locations/us-east1/keyRings/trstctl",
+    "token_file": "/run/secrets/gcp/kms-observer-token"
+  }}
+]}
+```
+
+```json
+{"tenant_id": "YOUR_TENANT_ID", "cadence": "1h", "authorities": [
+  {"authority_id": "managed-keys-azure", "source": {"kind": "managed_keys", "provider": "azure-key-vault"}},
+  {"authority_id": "azure-kv-prod", "source": {
+    "kind": "azurekv",
+    "address": "https://acme-prod.vault.azure.net",
+    "token_file": "/run/secrets/azure/kv-observer-token"
+  }}
+]}
+```
+
+The `gcpkms` source lists the ring's crypto keys and each key's versions
+(`cloudkms.cryptoKeys.list` and `cloudkms.cryptoKeyVersions.list`; the Cloud KMS
+Viewer role grants them) and nothing else, following every page; `address`
+overrides `https://cloudkms.googleapis.com`. The `azurekv` source lists the
+vault's keys, each key's versions and its deleted keys, and reads each asserted
+version's public key for its type (Key Vault's key list, get and list-deleted
+permissions; nothing that signs, decrypts or changes a key), following
+`nextLink` only on the vault's own host. Both read their bearer token from
+`token_file` at each observation and wipe it afterwards. By default they assert
+only the keys trstctl created, which they know by name: Cloud KMS key IDs
+beginning `trstctl-g-` or `trstctl-r-`, Key Vault key names beginning
+`trstctl-generate-` or `trstctl-rotate-`; `"all_customer_keys": true` asserts every
+key. trstctl now labels (Cloud KMS) or tags (Key Vault) each key it creates with
+its tenant (`trstctl-tenant`), so a tenant's round never asserts another
+tenant's key, and keys created before the label carry none and are asserted as
+before. Each key version is asserted under the identity trstctl's record uses —
+the Cloud KMS version's resource name, or `keys/{name}/{version}` relative to
+the vault — with its algorithm, its state (enabled, disabled, or awaiting
+destruction or purge; a destroyed Cloud KMS version is gone) and, for Cloud KMS,
+whether its key rotates on a schedule. The `managed_keys` authority asserts what
+trstctl's record says each provider should show, as for AWS.
+
 ## Workload-held PCAS co-signers
 
 An identity whose predecessor key lives in a workload agent (not in the isolated
