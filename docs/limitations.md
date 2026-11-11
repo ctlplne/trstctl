@@ -1761,10 +1761,19 @@ never live in the API process. What you can do end to end against the running bi
     network's routes to the default internet gateway and its ingress firewall
     rules by priority (a deny wins a tie, the implied ingress deny last);
     proven against an in-repository Compute Engine stand-in that pages its
-    lists and checks the bearer token, with a live project in Track B. Azure
-    network security groups, GCP hierarchical and network firewall policies,
-    and paths through load balancers, NAT or transit gateways are what comes
-    next.
+    lists and checks the bearer token, with a live project in Track B. An
+    Azure subscription is served as well (A167-L1, `provider:
+    azure-network`): Resource Manager reads of public IPs, network
+    interfaces, subnets, network security groups and route tables, nothing
+    else, judged by the subnet's and then the interface's group (first match
+    by priority, default rules last), a Standard public IP closed until a
+    group opens it, and a subnet route that sends the internet-wide range
+    anywhere but `Internet`; proven against an in-repository Resource Manager
+    stand-in that pages the public IP list and checks the bearer token, with
+    a live subscription in Track B. GCP hierarchical and network firewall
+    policies, Azure Virtual Network Manager security admin rules and routes
+    learned over BGP, and paths through load balancers, application
+    gateways, NAT or transit gateways are what comes next.
 - Rogue and non-compliant certificate posture:
   `GET /api/v1/revocation/rogue-certificates` and
   `trstctl-cli revocation rogue-certificates` combine unexpected CT findings with

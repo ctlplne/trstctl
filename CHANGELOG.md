@@ -2,6 +2,16 @@
 
 ### Added
 
+- Attack-path validation can read an Azure subscription (A167-L1). A `cloud_network_path` source
+  with `provider: azure-network` names the subscription and a token reference, and validating
+  exposed endpoints through it reads, from Azure Resource Manager, the public IP holding each
+  address, its network interface, the subnet, both network security groups and the subnet's route
+  table (read-only; the public IP list is paged and a `nextLink` that leaves the endpoint is
+  refused). The subnet's group and then the interface's must each admit the internet with their
+  first matching rule by priority, a Standard public IP no group opens stays closed, and a route
+  that sends the internet-wide range to an appliance breaks the reply. The verdict names the group,
+  route table or public IP that decided, with new `network_security_group` and `public_ip` stages,
+  and the Risk page labels them.
 - Attack-path validation can read a Google Cloud project (A167-L1). A `cloud_network_path` source
   with `provider: gcp-compute` names the project and a token reference, and validating exposed
   endpoints through it lists the project's instances, VPC firewall rules and routes (read-only,

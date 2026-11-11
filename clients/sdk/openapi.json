@@ -34256,7 +34256,9 @@
               "network_acl",
               "network_acl_return",
               "security_group",
-              "firewall"
+              "firewall",
+              "network_security_group",
+              "public_ip"
             ],
             "type": "string"
           },

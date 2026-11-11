@@ -285,6 +285,65 @@ describe("NHI exposure live reachability", () => {
     expect(within(route).getByText("network isolated has no route from 0.0.0.0/0 that applies to lab-1")).toBeInTheDocument();
   });
 
+  // A167-L1, part 2: an Azure subscription's verdicts name the network
+  // security group that admits or denies the internet, and a Standard public
+  // IP no group opens reads as blocked at the public IP.
+  it("names an Azure network security group and a closed public IP", async () => {
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ops-1", tenant_id: "t1", email: "ops@example.test" });
+    const posture = await apiMock.nhiExposurePosture();
+    const verdict = (address: string, fields: Record<string, unknown>) => ({
+      status: fields.status,
+      checked_at: "2026-11-11T04:00:00Z",
+      endpoints: [{ address, checked_at: "2026-11-11T04:00:00Z", ...fields }],
+    });
+    posture.findings = [
+      exposureFinding({
+        inventory_id: "finding/az-web",
+        display_name: "az-web-token",
+        attack_path: verdict("203.0.113.40:443", {
+          status: "open",
+          resource: "nsg-web",
+          rule: "AllowHTTPS (priority 100)",
+          reason: "network security group nsg-web admits tcp/443 from the internet with rule AllowHTTPS",
+        }),
+      }),
+      exposureFinding({
+        inventory_id: "finding/az-db",
+        display_name: "az-db-token",
+        attack_path: verdict("203.0.113.41:443", {
+          status: "blocked",
+          blocked_by: "network_security_group",
+          resource: "nsg-data",
+          rule: "DenyAllInBound (priority 65500)",
+          reason: "network security group nsg-data on subnet data denies tcp/443 from the internet with rule DenyAllInBound",
+        }),
+      }),
+      exposureFinding({
+        inventory_id: "finding/az-spare",
+        display_name: "az-spare-token",
+        attack_path: verdict("203.0.113.43:443", {
+          status: "blocked",
+          blocked_by: "public_ip",
+          resource: "pip-spare",
+          reason: "public IP pip-spare is not associated with any resource, so nothing answers on it",
+        }),
+      }),
+    ];
+    apiMock.nhiExposurePosture.mockResolvedValue(posture);
+    renderRisk();
+
+    const table = await screen.findByRole("table", { name: "Exposed NHI deployment recommendations" });
+    const open = (await within(table).findByText("az-web-token")).closest("tr") as HTMLElement;
+    expect(within(open).getByText("Open through nsg-web")).toBeInTheDocument();
+    const nsg = within(table).getByText("az-db-token").closest("tr") as HTMLElement;
+    expect(within(nsg).getByText("Blocked at nsg-data (network security group)")).toBeInTheDocument();
+    expect(
+      within(nsg).getByText("network security group nsg-data on subnet data denies tcp/443 from the internet with rule DenyAllInBound"),
+    ).toBeInTheDocument();
+    const spare = within(table).getByText("az-spare-token").closest("tr") as HTMLElement;
+    expect(within(spare).getByText("Blocked at pip-spare (public IP)")).toBeInTheDocument();
+  });
+
   it("says where to add a cloud network path source when none exists", async () => {
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ops-1", tenant_id: "t1", email: "ops@example.test" });
     renderRisk();

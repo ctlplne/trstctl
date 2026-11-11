@@ -19569,7 +19569,7 @@ export const messages = {
   "risk.nhiExposure.validatePaths": {
     defaultMessage: "Validate paths in the cloud",
     description:
-      "Button that asks the cloud account whether its routes, network ACLs, security groups and firewall rules admit the internet to the exposed endpoints.",
+      "Button that asks the cloud account whether its routes, network ACLs, security groups, firewall rules and network security groups admit the internet to the exposed endpoints.",
   },
   "risk.nhiExposure.validating": {
     defaultMessage: "Validating…",
@@ -19625,6 +19625,15 @@ export const messages = {
     description: "Cloud path stage name: a network ACL's outbound rules for reply traffic.",
   },
   "risk.nhiExposure.pathStage.security_group": { defaultMessage: "security group", description: "Cloud path stage name: security groups." },
+  "risk.nhiExposure.pathStage.network_security_group": {
+    defaultMessage: "network security group",
+    description: "A167-L1: cloud path stage name: an Azure network security group on the subnet or the network interface.",
+  },
+  "risk.nhiExposure.pathStage.public_ip": {
+    defaultMessage: "public IP",
+    description:
+      "A167-L1: cloud path stage name: an Azure public IP that admits nothing (a Standard address no network security group opens, a NAT gateway's, or an unassociated one).",
+  },
   "risk.nhiExposure.probe": {
     defaultMessage: "Probe from a relay",
     description: "Button that queues a live reachability probe of the exposed NHIs' public endpoints on a network relay.",

@@ -799,6 +799,30 @@ applicable route decided, and its reason says which. Hierarchical and network fi
 policies, Cloud NGFW rules and paths through load balancers or Cloud NAT are not read
 yet, so an instance they govern is judged by its VPC firewall rules and routes alone.
 
+The same source can read an Azure subscription (A167-L1): `provider: azure-network` with
+`subscription_id`, `token_ref` (a Microsoft Entra access token for Azure Resource
+Manager) and an optional `endpoint` (default `https://management.azure.com`). It needs
+`Microsoft.Network/publicIPAddresses/read`, `networkInterfaces/read`,
+`virtualNetworks/subnets/read`, `networkSecurityGroups/read` and `routeTables/read` on
+the subscription (the built-in Reader role grants them) and nothing else; the public IP
+list is followed across its pages, and a `nextLink` that leaves the endpoint is refused.
+The control plane finds the public IP holding the address and the network interface it
+is attached to, then follows Azure's documented semantics: network security groups are
+processed after the public IP is translated to the interface's private address, the
+subnet's group first and then the interface's, each deciding with its first matching
+inbound rule by priority and Azure's default rules last (`DenyAllInBound` at 65500), and
+the traffic must be admitted by every group present. A rule applies when its source is
+`*`, the `Internet` tag or the internet-wide range, its protocol TCP or any, its ports
+cover the port, and its destination is any address, the virtual network, a range
+holding the interface's private address or an application security group the interface
+belongs to. A Standard public IP no group opens stays closed (Basic addresses with no
+group are open), and a subnet route that sends `0.0.0.0/0` (or `::/0`) to anything but
+`Internet` breaks the reply. The verdict names the group (`network_security_group`), the
+route table (`route`) or the public IP (`public_ip`, also for a NAT gateway's address
+or one associated with nothing). A public IP on a load balancer, application gateway or
+firewall is reported as unknown with that attachment; Virtual Network Manager security
+admin rules and routes learned over BGP are not read yet.
+
 ### Cloud access keys
 
 A `cloud_access_key` source (M3) finds the long-lived access keys an AWS account's IAM

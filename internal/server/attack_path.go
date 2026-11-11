@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/discovery/netpath"
 	"trstctl.com/trstctl/internal/discovery/netpath/awsnetpath"
+	"trstctl.com/trstctl/internal/discovery/netpath/azurenetpath"
 	"trstctl.com/trstctl/internal/discovery/netpath/gcpnetpath"
 	"trstctl.com/trstctl/internal/discovery/netscan"
 	"trstctl.com/trstctl/internal/netsec"
@@ -29,8 +30,10 @@ import (
 // endpoints the exposure posture chose. The control plane resolves the
 // source's read-only credentials, asks the cloud for the network configuration
 // on the path to each endpoint's public addresses, and records one verdict per
-// address: open, blocked by a named route table, network ACL or security
-// group, not in the account, or unknown with the reason. It sends nothing to
+// address: open, blocked at a named resource (an AWS route table, network ACL
+// or security group; a Google Cloud route, firewall rule or network; an Azure
+// network security group, route table or public IP), not in the account, or
+// unknown with the reason. It sends nothing to
 // the endpoints themselves: the only network contact is the provider's API and
 // the name lookup that turns an endpoint's host into its addresses.
 
@@ -128,6 +131,9 @@ func attackPathReaderFor(ctx context.Context, p cloudCertificateProviderConfig) 
 	case "gcp-compute":
 		// A167-L1: a project's firewall rules and routes.
 		return gcpAttackPathReader(ctx, p)
+	case "azure-network":
+		// A167-L1: a subscription's network security groups and routes.
+		return azureAttackPathReader(ctx, p)
 	default:
 		return nil, fmt.Errorf("unsupported cloud_network_path provider %q", p.Provider)
 	}
@@ -186,6 +192,28 @@ func gcpAttackPathReader(ctx context.Context, p cloudCertificateProviderConfig) 
 		return nil, fmt.Errorf("resolve token_ref: %w", err)
 	}
 	return gcpnetpath.New(gcpnetpath.Config{Project: project, Endpoint: endpoint, Token: []byte(token), HTTPClient: client})
+}
+
+// azureAttackPathReader builds a Resource Manager reader for one
+// subscription.
+func azureAttackPathReader(ctx context.Context, p cloudCertificateProviderConfig) (attackPathReader, error) {
+	subscription := strings.TrimSpace(p.SubscriptionID)
+	if subscription == "" {
+		return nil, errors.New("azure-network subscription_id is required")
+	}
+	endpoint := strings.TrimSpace(p.Endpoint)
+	if endpoint == "" {
+		endpoint = "https://management.azure.com"
+	}
+	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	if err != nil {
+		return nil, err
+	}
+	token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+	if err != nil {
+		return nil, fmt.Errorf("resolve token_ref: %w", err)
+	}
+	return azurenetpath.New(azurenetpath.Config{SubscriptionID: subscription, Endpoint: endpoint, Token: []byte(token), HTTPClient: client})
 }
 
 // validateAttackPathEndpoint judges every public address the endpoint's host

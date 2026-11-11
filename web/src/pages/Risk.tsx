@@ -842,6 +842,8 @@ const nhiAttackPathStageKeys = {
   network_acl_return: "risk.nhiExposure.pathStage.network_acl_return",
   security_group: "risk.nhiExposure.pathStage.security_group",
   firewall: "risk.nhiExposure.pathStage.firewall",
+  network_security_group: "risk.nhiExposure.pathStage.network_security_group",
+  public_ip: "risk.nhiExposure.pathStage.public_ip",
 } as const;
 
 // A167: the cloud account's verdict on the path from the internet, naming the
