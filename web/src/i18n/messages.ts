@@ -6077,6 +6077,10 @@ export const messages = {
   },
   "secrets.tasks.honeytokens.action": { defaultMessage: "Open decoy credentials", description: "Open honeytoken workflow." },
   "secrets.honeytokens.heading": { defaultMessage: "Decoy credentials", description: "Honeytoken workflow heading." },
+  "brand.poweredBy": {
+    defaultMessage: "Powered by trstctl",
+    description: "MSP-1: the attribution every white-labeled surface shows; trstctl stays as written.",
+  },
   "approvals.slack.heading": { defaultMessage: "Approve from Slack", description: "Slack approvals panel heading (N8)." },
   "approvals.slack.description": {
     defaultMessage:

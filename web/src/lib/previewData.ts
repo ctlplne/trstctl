@@ -257,7 +257,44 @@ const emptyRiskSummary = {
   total_analyzed: 3,
 };
 
-const previewReaders: Record<string, () => unknown> = {
+// MSP-1: a white-labeled tenant for the preview, chosen by opening the
+// console with ?preview_brand=msp (the query the console was opened with, so a
+// redirect that drops it does not change the choice). Its token overrides are
+// hostile on purpose: they blank the page's colors and text sizes, and
+// "Powered by trstctl" must still render.
+const previewMSPBrand = {
+  product_name: "Northwind Managed PKI",
+  custom: true,
+  login_message: "Northwind customers sign in with their Northwind account.",
+  logo_data_uri:
+    "data:image/svg+xml;base64," +
+    btoa(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28"><rect width="28" height="28" rx="6" fill="#7c2d12"/><path d="M8 20V8l12 12V8" stroke="#fff" stroke-width="2.5" fill="none"/></svg>',
+    ),
+  token_overrides: {
+    "--background": "0 0% 100%",
+    "--foreground": "0 0% 100%",
+    "--card": "0 0% 100%",
+    "--card-foreground": "0 0% 100%",
+    "--muted": "0 0% 100%",
+    "--muted-foreground": "0 0% 100%",
+    "--primary": "0 0% 100%",
+    "--primary-foreground": "0 0% 100%",
+    "--border": "0 0% 100%",
+    "--font-size-caption": "0px",
+    "--font-size-body": "0px",
+    "--font-size-data": "0px",
+    "--line-height-caption": "0px",
+    "--density-comfortable": "0px",
+  },
+};
+
+function previewBrand(launchSearch: string): unknown {
+  return new URLSearchParams(launchSearch).get("preview_brand") === "msp" ? previewMSPBrand : { product_name: "trstctl", custom: false };
+}
+
+const previewReaders: Record<string, (launchSearch: string) => unknown> = {
+  getPublicBrand: previewBrand,
   certificates: () => certificates,
   certificatePage: () => ({ items: certificates }),
   certificateHealth: () => ({
@@ -956,8 +993,8 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-export function previewRead(method: string): PreviewReadResult {
+export function previewRead(method: string, launchSearch = ""): PreviewReadResult {
   const reader = previewReaders[method];
   if (!reader) return { matched: false };
-  return { matched: true, value: clone(reader()) };
+  return { matched: true, value: clone(reader(launchSearch)) };
 }

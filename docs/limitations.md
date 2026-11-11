@@ -4436,7 +4436,13 @@ than sending an operator looking for a credential that was never there.
   authority event receiver and its white-label read projection, behind the same
   per-customer delegation gate (an
   operator can brand only a customer they are delegated, because a custom domain
-  is a claim on a host and branding another's customer could seize it). A
+  is a claim on a host and branding another's customer could seize it). The
+  console carries the resolved brand on the customer's host (sign-in page and
+  every page's header: logo, product name, login message, design-token colors)
+  and always shows "Powered by trstctl" beside it, on fixed trstctl styling no
+  brand field or token override can change (MSP-1; proven in a real browser on
+  every console route in both themes by `web/e2e/powered-by-trstctl.spec.ts`
+  against the preview bundle). A
   duplicate custom domain is refused before event append, and replay retains
   a rejected outcome for older conflicts. Customer lifecycle, quota, brand, delegation,
   and break-glass state now rebuild exactly from one immutable provider

@@ -30,6 +30,7 @@ import * as changeSets from "./changeSetsApi";
 import * as agentAccess from "./agentAccessApi";
 import * as decoy from "./decoyApi";
 import * as slack from "./slackApi";
+import * as brandApi from "./brandApi";
 import * as secretProjects from "./secretProjectsApi";
 import * as scopedSyncs from "./scopedSyncsApi";
 import * as secretMigrations from "./secretMigrationsApi";
@@ -378,6 +379,7 @@ import type {
   DecoySecret,
   DecoySecretList,
   DecoySecretRegisterRequest,
+  Brand,
   SlackApp,
   SlackApprovalChannel,
   SlackChannelList,
@@ -2998,6 +3000,7 @@ export interface Api {
   getHoneyToken(id: string): Promise<HoneyToken>;
   revokeHoneyToken(id: string): Promise<HoneyToken>;
   registerDecoySecret(input: DecoySecretRegisterRequest, idempotencyKey?: string): Promise<DecoySecret>;
+  getPublicBrand(): Promise<Brand>;
   getSlackApp(): Promise<SlackApp>;
   startSlackInstall(idempotencyKey?: string): Promise<SlackInstallStart>;
   listSlackChannels(): Promise<SlackChannelList>;
@@ -4187,6 +4190,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   getHoneyToken: (id) => req<HoneyToken>(`/api/v1/secrets/honeytokens/${encodeURIComponent(id)}`),
   revokeHoneyToken: (id) => mutate<HoneyToken>("POST", `/api/v1/secrets/honeytokens/${encodeURIComponent(id)}/revoke`),
   registerDecoySecret: decoy.registerDecoySecret,
+  getPublicBrand: brandApi.getPublicBrand,
   getSlackApp: slack.getSlackApp,
   startSlackInstall: slack.startSlackInstall,
   listSlackChannels: slack.listSlackChannels,

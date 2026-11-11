@@ -2,6 +2,13 @@
 
 ### Added
 
+- A white-labeled console shows "Powered by trstctl" beside the Provider customer's brand (MSP-1,
+  part 1). The console now carries the brand the control plane resolves for the customer's host:
+  the sign-in page shows the customer's logo, product name and login message, and every page's
+  header shows the logo and product name, with the brand's design-token colors applied (only
+  `--`-named tokens with plain values). Beside the brand, above the fold on the sign-in page and in
+  the header on every page, it shows "Powered by trstctl" on fixed trstctl styling that no brand
+  field or token override can change or hide, at well over 4.5:1 contrast in both themes.
 - The console sets PKCS#11 vendor attestation for an edge segment (A175-L1). A segment's PKCS#11
   token vendor roots and the requirement that a PKCS#11 request carry the token's attestation could be
   set only through the API or CLI. When PKCS#11 custody is allowed, the edge segment form takes the

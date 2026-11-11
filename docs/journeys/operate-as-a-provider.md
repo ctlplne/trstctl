@@ -193,6 +193,16 @@ cannot be read or edited without that customer's provision delegation. The
 console preserves advanced logo, email, and token-override fields when editing
 the three common fields. A custom domain must be unique across customers.
 
+On the customer's host the console carries that brand: the sign-in page shows the
+customer's logo, product name and login message, and the header on every page shows
+the logo and product name, with the brand's design-token colors applied (only
+`--`-named tokens with plain values). Beside the brand, on the sign-in page above
+the fold and in the header on every page, the console shows **Powered by trstctl**
+(MSP-1). No brand field turns it off and no token override reaches it: it renders
+with fixed trstctl styling (white on deep forest, 12px, at least 22px tall), so it
+stays legible at well over 4.5:1 contrast in the light and the dark theme whatever
+the brand's colors.
+
 The deployment administrator initializes customer access on the control-plane
 host, using the running service's configuration. The setup view supplies a command
 bound to the selected customer. The equivalent command below uses the customer ID

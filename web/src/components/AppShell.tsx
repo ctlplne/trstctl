@@ -52,6 +52,8 @@ import { meaningfulAttention } from "@/lib/notificationAttention";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 import { localeLabelKeys, productionLocales, supportedLocales, type Locale, type MessageKey } from "@/i18n/messages";
 import { CapabilityNavStatus, CapabilityRouteNotice, CapabilityToolSummary } from "@/components/CapabilityTruth";
+import { PoweredByTrstctl } from "@/components/PoweredByTrstctl";
+import { usePublicBrand } from "@/lib/usePublicBrand";
 
 // Fetch optional overlays only after the operator opens one. Mounting a lazy
 // component with open=false would still fetch it during initial navigation.
@@ -448,14 +450,14 @@ function routeLabel(pathname: string, t: (key: MessageKey) => string): string {
  * Browser full-page loads do this for free; client-side routing does not, so a
  * keyboard or screen-reader user would otherwise stay parked on the activated
  * nav link with no context change. */
-function useRouteFocus(mainRef: RefObject<HTMLElement | null>, t: I18nContextValue["t"]): string {
+function useRouteFocus(mainRef: RefObject<HTMLElement | null>, t: I18nContextValue["t"], productName?: string): string {
   const location = useLocation();
   const [announcement, setAnnouncement] = useState("");
   const isFirstRender = useRef(true);
 
   useEffect(() => {
     const label = routeLabel(location.pathname, t);
-    document.title = `${label} · ${t("app.brand.name")}`;
+    document.title = `${label} · ${productName || t("app.brand.name")}`;
     // Skip stealing focus on the very first mount: the user has not navigated
     // yet, and an initial focus jump would fight the browser's own restore.
     if (isFirstRender.current) {
@@ -491,7 +493,10 @@ export function AppShell() {
   const mobileNavButtonRef = useRef<HTMLButtonElement>(null);
   const shortcutsButtonRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
-  const routeAnnouncement = useRouteFocus(mainRef, t);
+  // MSP-1: a white-labeled tenant's brand in the header, always beside
+  // "Powered by trstctl".
+  const brand = usePublicBrand();
+  const routeAnnouncement = useRouteFocus(mainRef, t, brand.custom ? brand.product_name : undefined);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -578,10 +583,24 @@ export function AppShell() {
               <Menu aria-hidden="true" className="h-4 w-4" />
             </Button>
           )}
-          <BrandMark />
-          <span className="min-w-0 leading-tight">
-            <span className="block truncate font-display text-sm font-bold tracking-tight">{t("app.brand.name")}</span>
-          </span>
+          {brand.custom ? (
+            <>
+              {brand.logo_data_uri ? (
+                <img src={brand.logo_data_uri} alt="" data-testid="tenant-brand-logo" className="h-7 w-7 shrink-0 rounded-control object-contain" />
+              ) : null}
+              <span className="min-w-0 leading-tight">
+                <span className="block truncate font-display text-sm font-bold tracking-tight">{brand.product_name}</span>
+              </span>
+              <PoweredByTrstctl />
+            </>
+          ) : (
+            <>
+              <BrandMark />
+              <span className="min-w-0 leading-tight">
+                <span className="block truncate font-display text-sm font-bold tracking-tight">{t("app.brand.name")}</span>
+              </span>
+            </>
+          )}
         </div>
         <div className="flex min-w-0 items-center gap-2">
           {!isDesktop && (

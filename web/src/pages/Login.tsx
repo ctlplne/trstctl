@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { beginLogin, beginSAMLLogin, beginKerberosLogin, beginNTLMLogin, useAuth } from "@/auth/AuthProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BrandMark } from "@/components/BrandMark";
+import { PoweredByTrstctl } from "@/components/PoweredByTrstctl";
+import { usePublicBrand } from "@/lib/usePublicBrand";
 import { ErrorState } from "@/components/StatePrimitives";
 import { translateNow } from "@/i18n/I18nProvider";
 
@@ -15,6 +17,9 @@ export function Login() {
     useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  // MSP-1: a white-labeled tenant's sign-in carries its brand, with
+  // "Powered by trstctl" above the fold.
+  const brand = usePublicBrand();
   const needsTenantAccess = searchParams.get("error") === "tenant_access_not_configured";
   // A277: a fresh sign-in offers only the methods that can prove one — the
   // identity provider asked to sign the person in again, or the directory
@@ -34,13 +39,27 @@ export function Login() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
       <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <BrandMark size="md" />
-          <div>
-            <Eyebrow as="p">{translateNow("auth.login.eyebrow")}</Eyebrow>
-            <h1 className="text-heading font-semibold tracking-tight">{translateNow("source.trstctl.74de2c6ee4")}</h1>
+        {brand.custom ? (
+          <div className="flex flex-col items-center gap-3 text-center">
+            <PoweredByTrstctl />
+            {brand.logo_data_uri ? (
+              <img src={brand.logo_data_uri} alt="" data-testid="tenant-brand-logo" className="h-12 w-12 rounded-panel object-contain" />
+            ) : null}
+            <div>
+              <Eyebrow as="p">{translateNow("auth.login.eyebrow")}</Eyebrow>
+              <h1 className="text-heading font-semibold tracking-tight">{brand.product_name}</h1>
+              {brand.login_message ? <p className="mt-1 text-body text-muted-foreground">{brand.login_message}</p> : null}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3 text-center">
+            <BrandMark size="md" />
+            <div>
+              <Eyebrow as="p">{translateNow("auth.login.eyebrow")}</Eyebrow>
+              <h1 className="text-heading font-semibold tracking-tight">{translateNow("source.trstctl.74de2c6ee4")}</h1>
+            </div>
+          </div>
+        )}
 
         <Card className="border-border/90 shadow-elevation1">
           <CardHeader>

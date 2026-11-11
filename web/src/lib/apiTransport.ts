@@ -142,6 +142,12 @@ export function previewTransportIsIsolated(): boolean {
 
 const previewFixturesCompiled = import.meta.env.DEV || import.meta.env.VITE_TRSTCTL_DEMO === "1";
 
+// The query the console was opened with, kept for preview reads: a redirect
+// (a built bundle's /styleguide, say) can drop it before the first read, and a
+// preview read may choose its fixtures from it (MSP-1's white-labeled tenant,
+// ?preview_brand=msp). Always empty in the ordinary product build.
+const previewLaunchSearch = previewFixturesCompiled && typeof window !== "undefined" ? window.location.search : "";
+
 export function previewRefusal(): ApiError {
   const refusal = new ApiError(0, translateNow("preview.transportIsolated"));
   refusal.message = refusal.body;
@@ -154,7 +160,7 @@ async function previewResponse(method: string): Promise<unknown> {
   // demo build retain it.
   if (previewFixturesCompiled) {
     const { previewRead } = await import("./previewData");
-    const response = previewRead(method);
+    const response = previewRead(method, previewLaunchSearch);
     if (response.matched) return response.value;
   }
   throw previewRefusal();
