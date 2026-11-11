@@ -390,6 +390,7 @@ import type {
   SecretProjectEnvironmentRequest,
   SecretProjectList,
   SecretProjectMemberRequest,
+  SecretProjectRenameRequest,
   SecretPromotionPlan,
   SecretPromotionRequest,
   SecretRestorePlan,
@@ -947,6 +948,7 @@ export type {
   SecretProjectEnvironmentRequest,
   SecretProjectList,
   SecretProjectMemberRequest,
+  SecretProjectRenameRequest,
   SecretPromotionPlan,
   SecretPromotionRequest,
   SecretRestorePlan,
@@ -3017,6 +3019,8 @@ export interface Api {
   addSecretProjectEnvironment(project: string, input: SecretProjectEnvironmentRequest, idempotencyKey?: string): Promise<SecretProject>;
   putSecretProjectMember(project: string, subject: string, input: SecretProjectMemberRequest, idempotencyKey?: string): Promise<SecretProject>;
   deleteSecretProjectMember(project: string, subject: string): Promise<SecretProject>;
+  renameSecretProject(project: string, input: SecretProjectRenameRequest, idempotencyKey?: string): Promise<SecretProject>;
+  renameSecretProjectEnvironment(project: string, environment: string, input: SecretProjectRenameRequest, idempotencyKey?: string): Promise<SecretProject>;
   previewSecretPromotion(project: string, input: SecretPromotionRequest): Promise<SecretPromotionPlan>;
   applySecretPromotion(project: string, input: SecretPromotionRequest, idempotencyKey?: string): Promise<SecretVersionBatchReceipt>;
   previewSecretRestore(project: string, input: SecretRestoreRequest): Promise<SecretRestorePlan>;
@@ -4210,6 +4214,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   addSecretProjectEnvironment: secretProjects.addSecretProjectEnvironment,
   putSecretProjectMember: secretProjects.putSecretProjectMember,
   deleteSecretProjectMember: secretProjects.deleteSecretProjectMember,
+  renameSecretProject: secretProjects.renameSecretProject,
+  renameSecretProjectEnvironment: secretProjects.renameSecretProjectEnvironment,
   previewSecretPromotion: (project, input) =>
     postRead<SecretPromotionPlan>(`/api/v1/secrets/projects/${encodeURIComponent(project)}/promotions/preview`, input),
   applySecretPromotion: secretProjects.applySecretPromotion,

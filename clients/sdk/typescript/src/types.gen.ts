@@ -10213,6 +10213,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/projects/{project}/environments/{environment}/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rename an environment of a secrets project: its display name changes, its slug stays */
+        post: operations["renameSecretProjectEnvironment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/projects/{project}/members/{subject}": {
         parameters: {
             query?: never;
@@ -10259,6 +10276,23 @@ export interface paths {
         put?: never;
         /** Preview promoting an environment's secrets (or one folder of them) into another environment: a value-free plan and its digest */
         post: operations["previewSecretPromotion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/projects/{project}/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rename a secrets project: its display name changes, its slug (which every secret name in it begins with) stays */
+        post: operations["renameSecretProject"];
         delete?: never;
         options?: never;
         head?: never;
@@ -26522,6 +26556,10 @@ export interface components {
             environments?: string[];
             /** @enum {string} */
             role: "viewer" | "developer" | "admin";
+        };
+        SecretProjectRenameRequest: {
+            /** @description the new display name, 1-128 characters; the slug never changes (A235-L3) */
+            name: string;
         };
         SecretPromotionItem: {
             /** @enum {string} */
@@ -58129,6 +58167,56 @@ export interface operations {
             };
         };
     };
+    renameSecretProjectEnvironment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description secrets project slug */
+                project: string;
+                /** @description environment slug */
+                environment: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretProjectRenameRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretProject"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     putSecretProjectMember: {
         parameters: {
             query?: never;
@@ -58296,6 +58384,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretPromotionPlan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    renameSecretProject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description secrets project slug */
+                project: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretProjectRenameRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretProject"];
                 };
             };
             /** @description client error */

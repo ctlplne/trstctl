@@ -31,6 +31,17 @@ func (o *Orchestrator) RevokeSecretProjectMember(ctx context.Context, tenantID s
 	return o.emitSecretProjectEvent(ctx, tenantID, projections.EventSecretProjectMemberRevoked, revoked)
 }
 
+// RenameSecretProject records a project's new display name (A235-L3).
+func (o *Orchestrator) RenameSecretProject(ctx context.Context, tenantID string, renamed projections.SecretProjectRenamed) error {
+	return o.emitSecretProjectEvent(ctx, tenantID, projections.EventSecretProjectRenamed, renamed)
+}
+
+// RenameSecretProjectEnvironment records an environment's new display name
+// (A235-L3).
+func (o *Orchestrator) RenameSecretProjectEnvironment(ctx context.Context, tenantID string, renamed projections.SecretProjectEnvironmentRenamed) error {
+	return o.emitSecretProjectEvent(ctx, tenantID, projections.EventSecretProjectEnvironmentRenamed, renamed)
+}
+
 func (o *Orchestrator) emitSecretProjectEvent(ctx context.Context, tenantID, eventType string, payload any) error {
 	data, err := json.Marshal(payload)
 	if err != nil {

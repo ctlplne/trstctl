@@ -5,6 +5,7 @@ import type {
   SecretProjectEnvironmentRequest,
   SecretProjectList,
   SecretProjectMemberRequest,
+  SecretProjectRenameRequest,
   SecretPromotionRequest,
   SecretRestoreRequest,
   SecretVersionBatchReceipt,
@@ -28,6 +29,19 @@ export const addSecretProjectEnvironment = (project: string, input: SecretProjec
 
 export const putSecretProjectMember = (project: string, subject: string, input: SecretProjectMemberRequest, idempotencyKey?: string) =>
   mutate<SecretProject>("PUT", `/api/v1/secrets/projects/${encodeURIComponent(project)}/members/${encodeURIComponent(subject)}`, input, idempotencyKey);
+
+// A235-L3: renaming changes a display name; the slug, which every secret
+// name in the project begins with, stays.
+export const renameSecretProject = (project: string, input: SecretProjectRenameRequest, idempotencyKey?: string) =>
+  mutate<SecretProject>("POST", `/api/v1/secrets/projects/${encodeURIComponent(project)}/rename`, input, idempotencyKey);
+
+export const renameSecretProjectEnvironment = (project: string, environment: string, input: SecretProjectRenameRequest, idempotencyKey?: string) =>
+  mutate<SecretProject>(
+    "POST",
+    `/api/v1/secrets/projects/${encodeURIComponent(project)}/environments/${encodeURIComponent(environment)}/rename`,
+    input,
+    idempotencyKey,
+  );
 
 export const deleteSecretProjectMember = (project: string, subject: string) =>
   mutate<SecretProject>("DELETE", `/api/v1/secrets/projects/${encodeURIComponent(project)}/members/${encodeURIComponent(subject)}`);

@@ -10,6 +10,8 @@ const { apiMock, can } = vi.hoisted(() => ({
     createSecretProject: vi.fn(),
     putSecretProjectMember: vi.fn(),
     deleteSecretProjectMember: vi.fn(),
+    renameSecretProject: vi.fn(),
+    renameSecretProjectEnvironment: vi.fn(),
   },
   can: { value: true },
 }));
@@ -123,6 +125,33 @@ describe("A235 secrets projects", () => {
     expect(apiMock.putSecretProjectMember).toHaveBeenCalledWith("payments", "team-b-ci", { role: "developer", environments: ["stage"] });
   });
 
+  // A235-L3: access:write renames the project and an environment; the slug
+  // stays and the form says so.
+  it("renames the project and an environment, keeping their slugs", async () => {
+    apiMock.renameSecretProject.mockResolvedValue({ ...payments, name: "Payments Platform" });
+    apiMock.renameSecretProjectEnvironment.mockResolvedValue({ ...payments, name: "Payments Platform" });
+    const user = userEvent.setup();
+    render(<SecretProjectsWorkflow />);
+    await user.click(await screen.findByRole("button", { name: "Open" }));
+    await user.click(await screen.findByRole("button", { name: "Rename" }));
+    let form = within(screen.getByRole("form", { name: "Rename this project" }));
+    expect(form.getByText("The slug payments stays, so secret names do not change.")).toBeInTheDocument();
+    const projectName = form.getByRole("textbox", { name: "New name" });
+    await user.clear(projectName);
+    await user.type(projectName, "Payments Platform");
+    await user.click(form.getByRole("button", { name: "Save name" }));
+    expect(apiMock.renameSecretProject).toHaveBeenCalledWith("payments", { name: "Payments Platform" });
+    expect(await screen.findByRole("heading", { name: "Payments Platform" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Rename environment stage" }));
+    form = within(screen.getByRole("form", { name: "Rename environment stage" }));
+    const envName = form.getByRole("textbox", { name: "New name" });
+    await user.clear(envName);
+    await user.type(envName, "Staging");
+    await user.click(form.getByRole("button", { name: "Save name" }));
+    expect(apiMock.renameSecretProjectEnvironment).toHaveBeenCalledWith("payments", "stage", { name: "Staging" });
+  });
+
   it("offers no create, grant or revoke without access:write", async () => {
     can.value = false;
     const user = userEvent.setup();
@@ -132,5 +161,6 @@ describe("A235 secrets projects", () => {
     expect(screen.queryByRole("button", { name: "Create project" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Grant" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rename" })).not.toBeInTheDocument();
   });
 });

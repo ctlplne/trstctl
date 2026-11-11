@@ -16292,6 +16292,14 @@ SecretProjectMemberRequest = TypedDict(
     total=False,
 )
 
+SecretProjectRenameRequest = TypedDict(
+    'SecretProjectRenameRequest',
+    {
+        'name': str,
+    },
+    total=False,
+)
+
 SecretPromotionItem = TypedDict(
     'SecretPromotionItem',
     {

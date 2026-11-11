@@ -371,6 +371,103 @@ func (a *API) addSecretProjectEnvironment(w http.ResponseWriter, r *http.Request
 	})
 }
 
+// secretProjectRenameRequest renames a project or an environment (A235-L3).
+type secretProjectRenameRequest struct {
+	Name string `json:"name"`
+}
+
+// secretProjectNewName validates a new display name: the slug, which every
+// secret name in the project begins with, never changes.
+func secretProjectNewName(r *http.Request) (string, error) {
+	var req secretProjectRenameRequest
+	if err := decodeJSON(r, &req); err != nil {
+		return "", errWithStatus(http.StatusBadRequest, err)
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" || len(name) > 128 {
+		return "", errStatus(http.StatusBadRequest, "name is 1-128 characters; the slug stays as it is")
+	}
+	return name, nil
+}
+
+// renameSecretProject changes a project's display name (A235-L3).
+//
+//trstctl:mutation
+func (a *API) renameSecretProject(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		name, err := secretProjectNewName(r)
+		if err != nil {
+			return 0, nil, err
+		}
+		project := r.PathValue("project")
+		current, _, _, err := a.store.GetSecretProject(ctx, tenantID, project)
+		if err != nil {
+			return 0, nil, secretProjectError(err)
+		}
+		if current.Name != name {
+			subject, err := requestPrincipalSubject(ctx)
+			if err != nil {
+				return 0, nil, err
+			}
+			if err := a.orch.RenameSecretProject(ctx, tenantID, projections.SecretProjectRenamed{
+				Project: project, Name: name, RenamedBy: subject,
+			}); err != nil {
+				return 0, nil, err
+			}
+		}
+		resp, err := a.secretProjectView(ctx, tenantID, project)
+		return http.StatusOK, resp, err
+	})
+}
+
+// renameSecretProjectEnvironment changes an environment's display name
+// (A235-L3).
+//
+//trstctl:mutation
+func (a *API) renameSecretProjectEnvironment(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		name, err := secretProjectNewName(r)
+		if err != nil {
+			return 0, nil, err
+		}
+		project, environment := r.PathValue("project"), r.PathValue("environment")
+		_, envs, _, err := a.store.GetSecretProject(ctx, tenantID, project)
+		if err != nil {
+			return 0, nil, secretProjectError(err)
+		}
+		var current *store.SecretProjectEnvironment
+		for i := range envs {
+			if envs[i].Slug == environment {
+				current = &envs[i]
+			}
+		}
+		if current == nil {
+			return 0, nil, errStatus(http.StatusNotFound, "environment "+environment+" is not in project "+project)
+		}
+		if current.Name != name {
+			subject, err := requestPrincipalSubject(ctx)
+			if err != nil {
+				return 0, nil, err
+			}
+			if err := a.orch.RenameSecretProjectEnvironment(ctx, tenantID, projections.SecretProjectEnvironmentRenamed{
+				Project: project, Environment: environment, Name: name, RenamedBy: subject,
+			}); err != nil {
+				return 0, nil, err
+			}
+		}
+		resp, err := a.secretProjectView(ctx, tenantID, project)
+		return http.StatusOK, resp, err
+	})
+}
+
 //trstctl:mutation
 func (a *API) putSecretProjectMember(w http.ResponseWriter, r *http.Request) {
 	if a.secrets == nil {

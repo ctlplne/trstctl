@@ -164,7 +164,8 @@ reference outside every restricted environment stays governed by the route's own
 permission.
 
 Projects and environments change under
-`access:write`. Membership changes under `access:write`, or under `secrets:write` by a
+`access:write`, and either can be renamed there (A235-L3): the display name changes, and
+the slug, which every secret name in it begins with, stays. Membership changes under `access:write`, or under `secrets:write` by a
 member holding the project's `admin` role, within its own grant (A235-L1): an admin
 restricted to some environments grants only those, can't grant every environment, and
 can't change or revoke a member whose grant reaches past its own. So a `secrets:write`

@@ -18,6 +18,10 @@ const (
 	EventSecretProjectEnvironmentAdded = "secret.project.environment_added" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	EventSecretProjectMemberGranted    = "secret.project.member_granted"    // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	EventSecretProjectMemberRevoked    = "secret.project.member_revoked"    // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	// A235-L3: a project's or an environment's display name changes; the
+	// slug, which every secret name under it begins with, does not.
+	EventSecretProjectRenamed            = "secret.project.renamed"             // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	EventSecretProjectEnvironmentRenamed = "secret.project.environment_renamed" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 )
 
 // SecretProjectEnvironment is one environment in a workspace event.
@@ -60,8 +64,25 @@ type SecretProjectMemberRevoked struct {
 	RevokedBy string `json:"revoked_by"`
 }
 
+// SecretProjectRenamed is the payload of secret.project.renamed (A235-L3).
+type SecretProjectRenamed struct {
+	Project   string `json:"project"`
+	Name      string `json:"name"`
+	RenamedBy string `json:"renamed_by"`
+}
+
+// SecretProjectEnvironmentRenamed is the payload of
+// secret.project.environment_renamed (A235-L3).
+type SecretProjectEnvironmentRenamed struct {
+	Project     string `json:"project"`
+	Environment string `json:"environment"`
+	Name        string `json:"name"`
+	RenamedBy   string `json:"renamed_by"`
+}
+
 func init() {
-	for _, typ := range []string{EventSecretProjectCreated, EventSecretProjectEnvironmentAdded, EventSecretProjectMemberGranted, EventSecretProjectMemberRevoked} {
+	for _, typ := range []string{EventSecretProjectCreated, EventSecretProjectEnvironmentAdded, EventSecretProjectMemberGranted, EventSecretProjectMemberRevoked,
+		EventSecretProjectRenamed, EventSecretProjectEnvironmentRenamed} {
 		knownSchemaVersions[typ] = map[int]bool{1: true}
 	}
 }
@@ -119,6 +140,24 @@ func (p *Projector) applySecretProjectTx(ctx context.Context, tx pgx.Tx, e event
 			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
 		}
 		return true, p.store.ApplySecretProjectMemberRevokedTx(ctx, tx, e.TenantID, pl.Project, pl.Subject, e.Sequence)
+	case EventSecretProjectRenamed:
+		var pl SecretProjectRenamed
+		if err := decode(e, &pl); err != nil {
+			return true, err
+		}
+		if pl.Project == "" || pl.Name == "" {
+			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
+		}
+		return true, p.store.ApplySecretProjectRenamedTx(ctx, tx, e.TenantID, pl.Project, pl.Name, e.Sequence)
+	case EventSecretProjectEnvironmentRenamed:
+		var pl SecretProjectEnvironmentRenamed
+		if err := decode(e, &pl); err != nil {
+			return true, err
+		}
+		if pl.Project == "" || pl.Environment == "" || pl.Name == "" {
+			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
+		}
+		return true, p.store.ApplySecretProjectEnvironmentRenamedTx(ctx, tx, e.TenantID, pl.Project, pl.Environment, pl.Name, e.Sequence)
 	default:
 		// A237's scoped syncs are part of the same secrets workspace family.
 		return p.applySecretScopedSyncTx(ctx, tx, e)
@@ -150,6 +189,10 @@ func addSecretProjectPrivacyPolicies(policies map[privacyEventPolicyKey]events.P
 		privacyRule("/environments/*", opaque), privacyRule("/granted_by", exact))
 	policies[privacyEventPolicyKey{EventSecretProjectMemberRevoked, 1}] = privacyRules(
 		privacyRule("/project", opaque), privacyRule("/subject", exact), privacyRule("/revoked_by", exact))
+	policies[privacyEventPolicyKey{EventSecretProjectRenamed, 1}] = privacyRules(
+		privacyRule("/project", opaque), privacyRule("/name", opaque), privacyRule("/renamed_by", exact))
+	policies[privacyEventPolicyKey{EventSecretProjectEnvironmentRenamed, 1}] = privacyRules(
+		privacyRule("/project", opaque), privacyRule("/environment", opaque), privacyRule("/name", opaque), privacyRule("/renamed_by", exact))
 	addSecretScopedSyncPrivacyPolicies(policies)
 }
 
@@ -159,5 +202,7 @@ func addSecretProjectPrivacyShapes(shapes map[privacyEventPolicyKey]events.Priva
 	shapes[privacyEventPolicyKey{EventSecretProjectEnvironmentAdded, 1}] = privacyPayloadShape[SecretProjectEnvironmentAdded]()
 	shapes[privacyEventPolicyKey{EventSecretProjectMemberGranted, 1}] = privacyPayloadShape[SecretProjectMemberGranted]()
 	shapes[privacyEventPolicyKey{EventSecretProjectMemberRevoked, 1}] = privacyPayloadShape[SecretProjectMemberRevoked]()
+	shapes[privacyEventPolicyKey{EventSecretProjectRenamed, 1}] = privacyPayloadShape[SecretProjectRenamed]()
+	shapes[privacyEventPolicyKey{EventSecretProjectEnvironmentRenamed, 1}] = privacyPayloadShape[SecretProjectEnvironmentRenamed]()
 	addSecretScopedSyncPrivacyShapes(shapes)
 }

@@ -147,6 +147,34 @@ func (s *Store) ApplySecretProjectMemberRevokedTx(ctx context.Context, tx pgx.Tx
 	return err
 }
 
+// ApplySecretProjectRenamedTx projects a project's new display name
+// (A235-L3); a replay of an older rename changes nothing. The slug stays.
+func (s *Store) ApplySecretProjectRenamedTx(ctx context.Context, tx pgx.Tx, tenantID, slug, name string, sequence uint64) error {
+	seq, err := secretProjectSequence(sequence)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		UPDATE secret_projects SET name = $3, event_sequence = $4
+		 WHERE tenant_id = $1 AND slug = $2 AND event_sequence < $4`,
+		tenantID, slug, name, seq)
+	return err
+}
+
+// ApplySecretProjectEnvironmentRenamedTx projects an environment's new
+// display name (A235-L3); a replay of an older rename changes nothing.
+func (s *Store) ApplySecretProjectEnvironmentRenamedTx(ctx context.Context, tx pgx.Tx, tenantID, project, slug, name string, sequence uint64) error {
+	seq, err := secretProjectSequence(sequence)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		UPDATE secret_project_environments SET name = $4, event_sequence = $5
+		 WHERE tenant_id = $1 AND project = $2 AND slug = $3 AND event_sequence < $5`,
+		tenantID, project, slug, name, seq)
+	return err
+}
+
 // ErrSecretProjectNotFound means no such project in the tenant.
 var ErrSecretProjectNotFound = errors.New("store: no such secret project")
 

@@ -11702,6 +11702,10 @@ export interface SecretProjectMemberRequest {
   role: "viewer" | "developer" | "admin";
 }
 
+export interface SecretProjectRenameRequest {
+  name: string;
+}
+
 export interface SecretPromotionItem {
   action: "create" | "update" | "unchanged" | "blocked";
   key: string;

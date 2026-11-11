@@ -56,6 +56,9 @@ export function SecretProjectsWorkflow() {
   const [memberSubject, setMemberSubject] = useState("");
   const [memberRole, setMemberRole] = useState<Role>("developer");
   const [memberEnvironments, setMemberEnvironments] = useState("");
+  // A235-L3: renaming the project (environment "") or one environment.
+  const [renaming, setRenaming] = useState<{ environment: string } | null>(null);
+  const [newName, setNewName] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -117,6 +120,33 @@ export function SecretProjectsWorkflow() {
     }
   }
 
+  function startRename(environment: string, current: string) {
+    setRenaming({ environment });
+    setNewName(current);
+  }
+
+  async function rename(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected || !renaming) return;
+    setBusy(true);
+    try {
+      const input = { name: newName.trim() };
+      setSelected(
+        renaming.environment
+          ? await api.renameSecretProjectEnvironment(selected.slug, renaming.environment, input)
+          : await api.renameSecretProject(selected.slug, input),
+      );
+      setRenaming(null);
+      setNewName("");
+      setError(null);
+      await refresh();
+    } catch (cause) {
+      setError(apiProblemMessage(cause, t("secrets.projects.renameFailed")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function revoke(subject: string) {
     if (!selected) return;
     setBusy(true);
@@ -172,9 +202,40 @@ export function SecretProjectsWorkflow() {
 
       {selected ? (
         <article aria-labelledby="secret-project-detail" className="ui-panel grid gap-4 p-comfortable text-sm">
-          <h3 id="secret-project-detail" className="font-semibold">
-            {selected.name || selected.slug}
-          </h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 id="secret-project-detail" className="font-semibold">
+              {selected.name || selected.slug}
+            </h3>
+            {canManage ? (
+              <Button type="button" variant="outline" onClick={() => startRename("", selected.name || selected.slug)} disabled={busy}>
+                {t("secrets.projects.rename")}
+              </Button>
+            ) : null}
+          </div>
+          {renaming ? (
+            <form
+              onSubmit={(event) => void rename(event)}
+              className="grid max-w-xl gap-3"
+              aria-label={
+                renaming.environment
+                  ? t("secrets.projects.renameEnvironmentLabel", { environment: renaming.environment })
+                  : t("secrets.projects.renameProjectLabel")
+              }
+            >
+              <Field label={t("secrets.projects.newName")}>
+                {(control) => <Input {...control} value={newName} maxLength={128} onChange={(event) => setNewName(event.target.value)} />}
+              </Field>
+              <p className="text-muted-foreground">{t("secrets.projects.renameKeepsSlug", { slug: renaming.environment || selected.slug })}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" disabled={busy || !newName.trim()}>
+                  {t("secrets.projects.renameSave")}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setRenaming(null)} disabled={busy}>
+                  {t("secrets.projects.renameCancel")}
+                </Button>
+              </div>
+            </form>
+          ) : null}
           <p>
             {t("secrets.projects.owner")}:{" "}
             <span className={selected.owner === "unknown" ? "font-semibold text-risk-high" : ""}>{ownerLabel(selected.owner)}</span>
@@ -210,6 +271,17 @@ export function SecretProjectsWorkflow() {
               <p className="flex flex-wrap items-center gap-2">
                 <strong>{env.name || env.slug}</strong>
                 <span className="rounded-control border border-border px-2 py-0.5 text-xs">{accessLabel[env.access] ?? env.access}</span>
+                {canManage ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-label={t("secrets.projects.renameEnvironmentLabel", { environment: env.slug })}
+                    onClick={() => startRename(env.slug, env.name || env.slug)}
+                    disabled={busy}
+                  >
+                    {t("secrets.projects.rename")}
+                  </Button>
+                ) : null}
               </p>
               {env.access === "restricted" ? (
                 <p className="text-muted-foreground">{t("secrets.projects.restrictedHidden")}</p>

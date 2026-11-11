@@ -1163,6 +1163,7 @@ public final class OpenApiSchemas {
       "SecretProjectEnvironmentRequest",
       "SecretProjectList",
       "SecretProjectMemberRequest",
+      "SecretProjectRenameRequest",
       "SecretPromotionItem",
       "SecretPromotionPlan",
       "SecretPromotionRequest",

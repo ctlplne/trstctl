@@ -2,6 +2,12 @@
 
 ### Added
 
+- Secrets projects and their environments can be renamed (A235-L3): `POST
+  /api/v1/secrets/projects/{project}/rename` and `.../environments/{environment}/rename` (access:write),
+  `trstctl secrets projects rename` and `trstctl secrets projects environments rename`, and a Rename action
+  in the console's Projects view. The display name changes; the slug, which every secret name in the
+  project begins with, stays, so secrets, references, syncs and member grants are untouched. The same
+  name again records nothing.
 - A `secret://` reference into a restricted secrets environment is now a read (A235-L2). Only a
   member granted that environment can set one up on any API surface trstctl later redeems by name
   with no caller present. That covers connector targets and inline endpoint destinations,

@@ -54427,6 +54427,18 @@
         ],
         "type": "object"
       },
+      "SecretProjectRenameRequest": {
+        "properties": {
+          "name": {
+            "description": "the new display name, 1-128 characters; the slug never changes (A235-L3)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "SecretPromotionItem": {
         "properties": {
           "action": {
@@ -105293,6 +105305,92 @@
         "x-trstctl-permission": "access:write"
       }
     },
+    "/api/v1/secrets/projects/{project}/environments/{environment}/rename": {
+      "post": {
+        "operationId": "renameSecretProjectEnvironment",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "secrets project slug",
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "environment slug",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretProjectRenameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretProject"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Rename an environment of a secrets project: its display name changes, its slug stays",
+        "x-trstctl-permission": "access:write"
+      }
+    },
     "/api/v1/secrets/projects/{project}/members/{subject}": {
       "delete": {
         "operationId": "deleteSecretProjectMember",
@@ -105596,6 +105694,83 @@
         ],
         "summary": "Preview promoting an environment's secrets (or one folder of them) into another environment: a value-free plan and its digest",
         "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/projects/{project}/rename": {
+      "post": {
+        "operationId": "renameSecretProject",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "secrets project slug",
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretProjectRenameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretProject"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Rename a secrets project: its display name changes, its slug (which every secret name in it begins with) stays",
+        "x-trstctl-permission": "access:write"
       }
     },
     "/api/v1/secrets/projects/{project}/restores": {

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2984 annotated sites across 33 rules. Each row is
+2986 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (681 sites)
+### G101 — CWE-798 Use of hardcoded credentials (683 sites)
 
 | Location | Reason |
 |---|---|
@@ -414,6 +414,8 @@ not this file.
 | `internal/projections/secret_projects.go:18` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_projects.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_projects.go:20` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_projects.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_projects.go:24` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_scoped_sync.go:18` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_scoped_sync.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_scoped_sync.go:20` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |

@@ -7405,6 +7405,7 @@ func componentSchemas() map[string]*Schema {
 		"manageable_environments": {Type: "array", Items: str(), Description: "the environments a project admin restricted to some environments may grant and revoke; absent: every environment"},
 	}, "slug", "owner", "created_at")
 	secretProjectEnvironmentReq := object(map[string]*Schema{"slug": str(), "name": str(), "restricted": {Type: "boolean"}}, "slug")
+	secretProjectRenameReq := object(map[string]*Schema{"name": {Type: "string", Description: "the new display name, 1-128 characters; the slug never changes (A235-L3)"}}, "name")
 	secretProjectCreateReq := object(map[string]*Schema{
 		"slug": str(), "name": str(), "owner_id": str(), "environments": {Type: "array", Items: secretProjectEnvironmentReq},
 	}, "slug", "environments")
@@ -9542,6 +9543,7 @@ func componentSchemas() map[string]*Schema {
 		"SecretProjectList":               list("SecretProject"),
 		"SecretProjectCreateRequest":      secretProjectCreateReq,
 		"SecretProjectEnvironmentRequest": secretProjectEnvironmentReq,
+		"SecretProjectRenameRequest":      secretProjectRenameReq,
 		"SecretProjectMemberRequest":      secretProjectMemberReq,
 		"MachineAuthMethod": object(map[string]*Schema{
 			"name": str(), "type": str(), "source": str(),
