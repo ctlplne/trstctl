@@ -1013,6 +1013,11 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
       {canProbe && probeable && sourcesQuery.data && pathSources.length === 0 && (
         <p className="mt-2 text-sm text-muted-foreground">{t("risk.nhiExposure.pathNoSource")}</p>
       )}
+      {canProbe && probeable && pathSources.length > 0 && (
+        // A167-L4: a scheduled run of the source re-validates every exposed
+        // endpoint, so a firewall change reaches this column on its own.
+        <p className="mt-2 text-sm text-muted-foreground">{t("risk.nhiExposure.pathSchedule")}</p>
+      )}
       {pathResult && (
         <p role="status" className="mt-2 text-sm text-muted-foreground">
           {t("risk.nhiExposure.pathQueued", { endpoints: pathResult.endpoints.length, run: pathResult.run_id })}

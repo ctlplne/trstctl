@@ -131,9 +131,26 @@ func (a *API) nhiExposureAttackPathsByInventory(ctx context.Context, tenantID st
 	if err != nil {
 		return nil, nil, err
 	}
+	// A167-L4: each source's latest verdict per address arrives; an address
+	// lives in one account, so a verdict that found it outranks another
+	// source's "not in account", a decided one (open or blocked) outranks an
+	// unreadable one, and among equals the newest wins.
+	chosen := map[string]store.DiscoveryFinding{}
+	refs := []string{}
+	for _, finding := range findings {
+		current, ok := chosen[finding.Ref]
+		if !ok {
+			refs = append(refs, finding.Ref)
+		}
+		if !ok || nhiAttackPathVerdictOutranks(finding, current) {
+			chosen[finding.Ref] = finding
+		}
+	}
+	sort.Strings(refs)
 	out := map[string]*nhiExposureAttackPath{}
 	evidence := map[string][]string{}
-	for _, finding := range findings {
+	for _, ref := range refs {
+		finding := chosen[ref]
 		row := nhiExposureAttackPathRow(finding)
 		inventoryID := metadataString(decodeNHIInventoryMetadata(finding.Metadata), "inventory_id")
 		if inventoryID == "" {
@@ -173,6 +190,62 @@ func nhiExposureAttackPathRow(finding store.DiscoveryFinding) nhiExposureAttackP
 		}
 	}
 	return row
+}
+
+// nhiAttackPathVerdictOutranks reports whether verdict a, from one source,
+// should be shown for an address over verdict b from another.
+func nhiAttackPathVerdictOutranks(a, b store.DiscoveryFinding) bool {
+	rank := func(f store.DiscoveryFinding) int {
+		switch metadataString(decodeNHIInventoryMetadata(f.Metadata), "status") {
+		case "open", "blocked":
+			return 2
+		case "unknown":
+			return 1
+		default:
+			return 0
+		}
+	}
+	if ra, rb := rank(a), rank(b); ra != rb {
+		return ra > rb
+	}
+	if !a.LastSeenAt.Equal(b.LastSeenAt) {
+		return a.LastSeenAt.After(b.LastSeenAt)
+	}
+	return a.ID > b.ID
+}
+
+// AttackPathEndpoints names what a full or scheduled cloud_network_path run
+// re-validates (A167-L4): every public endpoint and callback the tenant's
+// exposure posture names, bounded as a manual validation is, and how many
+// more there were.
+func (a *API) AttackPathEndpoints(ctx context.Context, tenantID string) ([]orchestrator.AttackPathEndpoint, int, error) {
+	posture, err := a.nhiExposurePosture(ctx, tenantID)
+	if err != nil {
+		return nil, 0, err
+	}
+	// One run validates a bounded number of endpoints, so the records never
+	// validated go first and then the longest unchecked (in the posture's
+	// severity order among equals): successive scheduled runs work through
+	// the whole posture instead of re-checking its head.
+	findings := append([]nhiExposurePostureFinding(nil), posture.Findings...)
+	sort.SliceStable(findings, func(i, j int) bool {
+		return nhiAttackPathCheckedAt(findings[i]).Before(nhiAttackPathCheckedAt(findings[j]))
+	})
+	endpoints, omitted := nhiExposureProbeEndpoints(findings, orchestrator.MaxAttackPathEndpoints)
+	out := make([]orchestrator.AttackPathEndpoint, 0, len(endpoints))
+	for _, e := range endpoints {
+		out = append(out, orchestrator.AttackPathEndpoint{InventoryID: e.InventoryID, Endpoint: e.Endpoint, Address: e.Address})
+	}
+	return out, omitted, nil
+}
+
+// nhiAttackPathCheckedAt is when a record's cloud path was last validated;
+// the zero time when it never was.
+func nhiAttackPathCheckedAt(finding nhiExposurePostureFinding) time.Time {
+	if finding.AttackPath == nil {
+		return time.Time{}
+	}
+	return finding.AttackPath.CheckedAt
 }
 
 // nhiExposureAttackPathStatus: open when any address is open; unknown when

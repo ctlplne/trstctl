@@ -118,7 +118,11 @@ type issuanceDispatcher struct {
 	// each (A274); nil when privileged access is not served.
 	pamSignIns              func(ctx context.Context, tenantID, providerID, sourceID, runID string, since, now time.Time, record bool) (pamSignInCollection, error)
 	cloudReplacementPrepare func(context.Context, string, string) (api.CloudReplacementPreparation, error)
-	cmdbExports             *certificateCIExporter
+	// attackPathEndpoints names the exposure posture's endpoints a full or
+	// scheduled cloud_network_path run re-validates (A167-L4); nil when the
+	// API is not assembled.
+	attackPathEndpoints func(context.Context, string) ([]orchestrator.AttackPathEndpoint, int, error)
+	cmdbExports         *certificateCIExporter
 	// observerEvents posts rotation and rollback events to external observers
 	// (A180).
 	observerEvents *observerEventDelivery

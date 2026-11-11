@@ -218,6 +218,10 @@ describe("NHI exposure live reachability", () => {
         .getAllByRole("option")
         .map((option) => option.textContent),
     ).toEqual(["aws-ec2-east"]);
+    // A167-L4: the panel says a schedule re-validates the paths on its own.
+    expect(
+      screen.getByText("A schedule on a Cloud network paths source re-validates every exposed endpoint on its own; add one under Discover → Schedules."),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Validate paths in the cloud" }));
     await waitFor(() => expect(apiMock.validateNHIAttackPaths).toHaveBeenCalledWith({ source_id: "src-ec2", inventory_ids: [] }));
     expect(await screen.findByText(/^Cloud path validation queued for 1 endpoints \(run 44444444-4444-4444-4444-444444444444\)/)).toBeInTheDocument();
@@ -350,6 +354,7 @@ describe("NHI exposure live reachability", () => {
 
     expect(await screen.findByText("To validate cloud paths, add a Cloud network paths source under Discover → Sources.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Validate paths in the cloud" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/re-validates every exposed endpoint on its own/)).not.toBeInTheDocument();
   });
 
   it("offers no probe to an operator who cannot run discovery", async () => {

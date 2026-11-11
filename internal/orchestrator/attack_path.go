@@ -139,29 +139,41 @@ func (o *Orchestrator) RecordAttackPathValidation(ctx context.Context, tenantID,
 	}
 	open := 0
 	for _, obs := range observed {
-		risk := 10
 		if obs.Open {
 			open++
-			risk = 85
 		}
-		meta := map[string]any{"inventory_id": obs.Endpoint.InventoryID, "endpoint": obs.Endpoint.Endpoint, "address": obs.Endpoint.Address}
-		for k, v := range obs.Metadata {
-			meta[k] = v
-		}
-		raw, err := json.Marshal(meta)
+		finding, err := AttackPathFinding(intent.RunID, intent.SourceID, obs, at)
 		if err != nil {
 			return err
 		}
-		ref := obs.Endpoint.InventoryID + "@" + obs.Endpoint.Address
-		if _, err := o.RecordDiscoveryFindingWithEventID(ctx, tenantID, DiscoveryRelayEventID(tenantID, key, "attack-path-finding:"+ref), store.DiscoveryFinding{
-			RunID: intent.RunID, SourceID: intent.SourceID, Kind: AttackPathFindingKind, Ref: ref,
-			Provenance: "attack-path:" + obs.Endpoint.InventoryID, RiskScore: risk, Metadata: raw, DiscoveredAt: at,
-		}); err != nil {
+		if _, err := o.RecordDiscoveryFindingWithEventID(ctx, tenantID, DiscoveryRelayEventID(tenantID, key, "attack-path-finding:"+finding.Ref), finding); err != nil {
 			return err
 		}
 	}
 	return o.CompleteDiscoveryRunWithEventID(ctx, tenantID, DiscoveryRelayEventID(tenantID, key, "attack-path-run-completed"),
 		store.DiscoveryRun{ID: intent.RunID, Status: "succeeded", Targets: len(observed), Discovered: open})
+}
+
+// AttackPathFinding is the finding one address's verdict becomes under a
+// run: its ref names the record and the address, its metadata carries the
+// verdict, and an open path carries a high risk score.
+func AttackPathFinding(runID, sourceID string, obs AttackPathObservation, at time.Time) (store.DiscoveryFinding, error) {
+	risk := 10
+	if obs.Open {
+		risk = 85
+	}
+	meta := map[string]any{"inventory_id": obs.Endpoint.InventoryID, "endpoint": obs.Endpoint.Endpoint, "address": obs.Endpoint.Address}
+	for k, v := range obs.Metadata {
+		meta[k] = v
+	}
+	raw, err := json.Marshal(meta)
+	if err != nil {
+		return store.DiscoveryFinding{}, err
+	}
+	return store.DiscoveryFinding{
+		RunID: runID, SourceID: sourceID, Kind: AttackPathFindingKind, Ref: obs.Endpoint.InventoryID + "@" + obs.Endpoint.Address,
+		Provenance: "attack-path:" + obs.Endpoint.InventoryID, RiskScore: risk, Metadata: raw, DiscoveredAt: at,
+	}, nil
 }
 
 // FailAttackPathValidation completes a validation's run as failed with the

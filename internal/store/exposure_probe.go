@@ -17,10 +17,33 @@ func (s *Store) LatestExposureProbes(ctx context.Context, tenantID string, limit
 }
 
 // LatestAttackPathFindings returns the latest provider-native attack-path
-// verdict of each validated NHI endpoint (A167): per finding ref, the
-// nhi-attack-path finding seen last.
+// verdict of each validated NHI endpoint (A167): per finding ref and source
+// (A167-L4), the nhi-attack-path finding seen last.
 func (s *Store) LatestAttackPathFindings(ctx context.Context, tenantID string, limit int) ([]DiscoveryFinding, error) {
-	return s.latestFindingsByRef(ctx, tenantID, "nhi-attack-path", limit)
+	// A167-L4: the latest verdict per address from each source, so a source
+	// whose account does not hold the address cannot hide the verdict of the
+	// one that does; the reader chooses among them.
+	var out []DiscoveryFinding
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT DISTINCT ON (ref, source_id) id::text, ref, COALESCE(source_id::text, ''), provenance, fingerprint, metadata, last_seen_at
+		    FROM discovery_findings
+		   WHERE tenant_id = $1 AND kind = 'nhi-attack-path'
+		   ORDER BY ref, source_id, last_seen_at DESC, id DESC
+		   LIMIT $2`, tenantID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			f := DiscoveryFinding{TenantID: tenantID, Kind: "nhi-attack-path"}
+			if err := rows.Scan(&f.ID, &f.Ref, &f.SourceID, &f.Provenance, &f.Fingerprint, &f.Metadata, &f.LastSeenAt); err != nil {
+				return err
+			}
+			out = append(out, f)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 func (s *Store) latestFindingsByRef(ctx context.Context, tenantID, kind string, limit int) ([]DiscoveryFinding, error) {

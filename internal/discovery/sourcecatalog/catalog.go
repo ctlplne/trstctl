@@ -290,7 +290,8 @@ func loadBalancerTLSCapability() Capability {
 // reads (A167, A167-L1): which routes, network ACLs, security groups, VPC
 // firewall rules and network security groups stand between the internet and
 // an exposed NHI endpoint. It runs from the exposure posture,
-// against the endpoints the posture names, never as a sweep of the account.
+// against the endpoints the posture names, never as a sweep of the account; a
+// full or scheduled run re-validates them (A167-L4).
 func cloudNetworkPathCapability() Capability {
 	return Capability{
 		Kind: "cloud_network_path", Label: "Cloud network paths", Tool: "Discover", Route: "/discovery?tab=sources&kind=cloud_network_path", SetupSurface: SetupSourceWizard,

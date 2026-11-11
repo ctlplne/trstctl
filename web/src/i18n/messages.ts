@@ -19583,6 +19583,10 @@ export const messages = {
     defaultMessage: "Could not validate cloud paths: {error}",
     description: "Error shown when queuing a cloud path validation fails.",
   },
+  "risk.nhiExposure.pathSchedule": {
+    defaultMessage: "A schedule on a Cloud network paths source re-validates every exposed endpoint on its own; add one under Discover → Schedules.",
+    description: "A167-L4: hint on the exposure panel when a cloud_network_path source exists: scheduled runs of it re-validate the posture's endpoints.",
+  },
   "risk.nhiExposure.pathNoSource": {
     defaultMessage: "To validate cloud paths, add a Cloud network paths source under Discover → Sources.",
     description: "Hint on the exposure panel when no cloud_network_path source is configured.",

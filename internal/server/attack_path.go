@@ -310,10 +310,12 @@ func attackPathMetadata(result netpath.Result) map[string]any {
 }
 
 // executeCloudNetworkPathDiscoveryRun answers an ordinary run of a
-// cloud_network_path source: the source has no estate of its own to sweep, so
-// a dry run checks that its providers can be built and a full run points at
-// the exposure posture, where the endpoints to validate are chosen.
-func (d *issuanceDispatcher) executeCloudNetworkPathDiscoveryRun(ctx context.Context, _ string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
+// cloud_network_path source. The source has no estate of its own to sweep: a
+// dry run checks that its providers can be built, and a full run — an
+// operator's or the scheduler's (A167-L4) — re-validates every endpoint the
+// exposure posture names, bounded as a manual validation is, and records each
+// address's verdict under the run.
+func (d *issuanceDispatcher) executeCloudNetworkPathDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
 	readers, err := attackPathReaders(ctx, src.Config)
 	if err != nil {
 		return netscan.Report{}, "failed", err.Error(), nil
@@ -322,5 +324,33 @@ func (d *issuanceDispatcher) executeCloudNetworkPathDiscoveryRun(ctx context.Con
 	if run.DryRun {
 		return netscan.Report{Targets: len(readers)}, "succeeded", "", nil
 	}
-	return netscan.Report{}, "failed", "a cloud_network_path source validates the endpoints the exposure posture names: use Posture → Exposure → Validate paths in the cloud (POST /api/v1/nhi/posture/exposure/attack-paths)", nil
+	if d.attackPathEndpoints == nil {
+		return netscan.Report{}, "failed", "attack-path validation is not served by this control plane", nil
+	}
+	// Endpoints past the bound are left to the next run, which takes the
+	// longest unchecked first; the run counts what it judged.
+	endpoints, _, err := d.attackPathEndpoints(ctx, tenantID)
+	if err != nil {
+		return netscan.Report{}, "", "", err
+	}
+	report := netscan.Report{}
+	at := time.Now().UTC()
+	for _, endpoint := range endpoints {
+		for _, obs := range validateAttackPathEndpoint(ctx, readers, endpoint) {
+			finding, err := orchestrator.AttackPathFinding(run.ID, src.ID, obs, at)
+			if err != nil {
+				return netscan.Report{}, "", "", err
+			}
+			if _, err := d.orch.RecordDiscoveryFindingWithEventID(ctx, tenantID,
+				orchestrator.DiscoveryRelayEventID(tenantID, run.ID, "attack-path-finding:"+finding.Ref), finding); err != nil {
+				return netscan.Report{}, "", "", err
+			}
+			report.Targets++
+			if obs.Open {
+				report.Discovered++
+			}
+		}
+	}
+	// Each address's verdict is its finding; the run counts them.
+	return report, "succeeded", "", nil
 }

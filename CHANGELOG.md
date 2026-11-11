@@ -2,6 +2,13 @@
 
 ### Added
 
+- A scheduled Cloud network paths run re-validates the exposure posture (A167-L4). A full run of a
+  `cloud_network_path` source, including every run its schedule queues, now validates the endpoints
+  the exposure posture names — at most 50 a run, records never validated first and then the longest
+  unchecked — and records each address's verdict under the run, so a firewall change reaches the
+  posture without an operator asking. Before, every full run failed and pointed at the posture.
+  Each source now keeps its own latest verdict per address, and one whose account holds the address
+  outranks another account's "not in account". The exposure panel says a schedule does this.
 - An open cloud attack path raises the record's exposure finding (A167-L3). When a cloud account
   confirms the internet reaches an exposed endpoint, the finding becomes at least high, critical when
   the endpoint also authenticates weakly, uses insecure transport or admits wildcard reachability; it

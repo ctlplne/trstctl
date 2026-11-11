@@ -777,8 +777,14 @@ plane finds the network interface that holds it, then follows the path a packet 
 internet would take: the subnet's route table must send `0.0.0.0/0` (or `::/0`) to an
 internet gateway, the network ACL's first internet-wide rule for the port must allow it
 in and the reply out, and a security group on the interface must admit the port from the
-internet. The verdict names the resource that decided it. An ordinary run of the source
-checks only that its providers can be built.
+internet. The verdict names the resource that decided it. A dry run of the source
+checks only that its providers can be built; a full run, and every run a schedule on the
+source queues (A167-L4), re-validates the endpoints the exposure posture names — at most
+50 a run, records never validated first and then the longest unchecked, so successive
+scheduled runs cover the whole posture — and records each address's verdict under the
+run, with one run target per address. Each source keeps its own latest verdict per
+address: one whose account holds the address (open or blocked) outranks another
+account's "not in account", so adding a second account never hides the first's.
 
 The same source can read a Google Cloud project (A167-L1): `provider: gcp-compute` with
 `project`, `token_ref` (an OAuth 2.0 bearer token with Compute Engine read scope) and an

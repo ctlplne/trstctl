@@ -152,7 +152,8 @@ which stage: `route`, `network_acl`, `network_acl_return`, `security_group`,
 `firewall`, `network_security_group` or `public_ip`), not in the account, or unknown
 with the reason — and
 the exposure panel has a **Validate paths in the cloud** button and a **Cloud path**
-column that shows the verdict with the reason beneath it. A probe says something
+column that shows the verdict with the reason beneath it; a schedule on the source
+re-validates every exposed endpoint on its own (A167-L4). A probe says something
 answered; the attack path says which resource lets it, or which one to change to stop
 it. An open verdict is the account's own confirmation, so it also raises the record's
 exposure finding (A167-L3): to at least high, to critical when the endpoint also

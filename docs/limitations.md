@@ -1752,7 +1752,11 @@ never live in the API process. What you can do end to end against the running bi
     group, not in the account, or unknown with the reason. A rule that admits a
     partner range does not make an endpoint internet-reachable; only the
     internet-wide range decides. The exposure posture shows the latest verdict
-    per record (`attack_path`) and counts validated and open records; an open
+    per record (`attack_path`) and counts validated and open records; a
+    full or scheduled run of the source re-validates the posture's endpoints
+    (at most 50 a run, never-validated and longest-unchecked first), and a
+    source whose account holds an address outranks another's "not in
+    account" (A167-L4); an open
     verdict raises the record's exposure severity to at least high (critical
     with weak authentication, insecure transport or wildcard reachability),
     adds `cloud_path_open` and raises its risk score, in the posture and in
