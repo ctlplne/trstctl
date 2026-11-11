@@ -1352,6 +1352,9 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	current := agentHeartbeat
 	current.Rules = append(append([]events.PrivacyFieldRule{}, agentHeartbeat.Rules...), privacyRule("/executors/ssh_trust/enabled", opaque), privacyRule("/executors/ssh_trust/confirmed", opaque), privacyRule("/executors/ssh_trust/ca_fingerprint", opaque), privacyRule("/executors/ssh_trust/policy_digest", opaque), privacyRule("/executors/ssh_trust/issue_code", opaque))
 	policies[privacyEventPolicyKey{EventAgentHeartbeat, AgentHeartbeatSSHTrustSchemaVersion}] = current
+	relayEgress := current
+	relayEgress.Rules = append(append([]events.PrivacyFieldRule{}, current.Rules...), privacyRule("/executors/relay_egress/restricted", opaque), privacyRule("/executors/relay_egress/allow/*", opaque), privacyRule("/executors/relay_egress/truncated", opaque))
+	policies[privacyEventPolicyKey{EventAgentHeartbeat, AgentHeartbeatRelayEgressSchemaVersion}] = relayEgress
 	return policies
 }
 
@@ -1940,7 +1943,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 	addAccessBundlePrivacyShapes(shapes)
 	addSwitchingImportPrivacyShapes(shapes)
 	addSwitchingWavePrivacyShapes(shapes)
-	shapes[privacyEventPolicyKey{EventAgentHeartbeat, AgentHeartbeatSSHTrustSchemaVersion}] = privacyPayloadShape[AgentHeartbeat]()
+	shapes[privacyEventPolicyKey{EventAgentHeartbeat, AgentHeartbeatSSHTrustSchemaVersion}] = privacyPayloadShape[agentHeartbeatBeforeRelayEgress]()
+	shapes[privacyEventPolicyKey{EventAgentHeartbeat, AgentHeartbeatRelayEgressSchemaVersion}] = privacyPayloadShape[AgentHeartbeat]()
 	return shapes
 }
 

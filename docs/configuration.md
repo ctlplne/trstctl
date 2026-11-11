@@ -3939,8 +3939,11 @@ to. Each request's named destination is checked before it is sent, so a request
 carried by `HTTPS_PROXY` is checked too, and each dial's resolved address when it
 connects. A refusal is reported with the job, naming the address and the reason.
 With an allowlist, list the local listeners a host job reloads (`127.0.0.1`) as
-well. The agent prints the policy in force at startup, and Windows service
-installation retains it across restarts.
+well. The agent prints the policy in force at startup and reports it on its
+heartbeat: the Agents page shows what each relay's job connections may reach
+(`reported_relay_egress` on `GET /api/v1/agents`, with `restricted` false for a
+relay without an allowlist), and Windows service installation retains it across
+restarts.
 
 **Why a deploy failed.** The control plane receives a closed phrase for a failed
 deploy, because an appliance can echo the credential it received back in an

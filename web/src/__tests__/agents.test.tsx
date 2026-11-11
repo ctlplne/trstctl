@@ -379,6 +379,64 @@ describe("agent fleet surface", () => {
     expect(screen.getByText("Agent job capabilities")).toBeInTheDocument();
   });
 
+  // A190-L1: the relay's own account of what its job connections may reach.
+  it("says what a relay's job connections may reach from its reported egress allowlist", async () => {
+    apiMock.agents.mockResolvedValueOnce([
+      {
+        id: "relay-agent-2",
+        name: "dmz-relay",
+        status: "active",
+        version: "relay-1.0.0",
+        roles: ["network"],
+        role_source: "certificate",
+        presence: { state: "online", online: true, evaluated_at: "2026-11-11T07:00:00Z", detail: "Fresh heartbeat." },
+        relay_capabilities: [{ kind: "connector.deploy", connectors: ["f5"], enable_flags: ["--relay-claim"] }],
+        capability_source: "reported",
+        capabilities_reported_at: "2026-11-11T06:59:00Z",
+        reported_executor_version: "relay-1.0.0",
+        reported_capabilities: [{ kind: "connector.deploy", connectors: ["f5"], missing_flags: [], enabled: true }],
+        reported_relay_egress: { restricted: true, allow: ["10.20.0.0/16", "192.0.2.7", "198.51.100.9:8443"], truncated: true },
+      },
+    ]);
+    renderAgents();
+
+    await screen.findByRole("heading", { name: /1 of 1 active agents/i });
+    fireEvent.click(screen.getByText("Fleet status and safe actions"));
+    await screen.findByRole("heading", { name: "dmz-relay" });
+    expect(screen.getByText(/Relay job connections may reach only: 10\.20\.0\.0\/16, 192\.0\.2\.7, 198\.51\.100\.9:8443\./)).toBeInTheDocument();
+    expect(screen.getByText(/This list is cut short/)).toBeInTheDocument();
+    expect(screen.queryByText(/No relay egress allowlist/)).not.toBeInTheDocument();
+  });
+
+  it("warns when a relay reports no egress allowlist", async () => {
+    apiMock.agents.mockResolvedValueOnce([
+      {
+        id: "relay-agent-3",
+        name: "open-relay",
+        status: "active",
+        version: "relay-1.0.0",
+        roles: ["network"],
+        role_source: "certificate",
+        presence: { state: "online", online: true, evaluated_at: "2026-11-11T07:00:00Z", detail: "Fresh heartbeat." },
+        relay_capabilities: [{ kind: "connector.deploy", connectors: ["f5"], enable_flags: ["--relay-claim"] }],
+        capability_source: "reported",
+        capabilities_reported_at: "2026-11-11T06:59:00Z",
+        reported_executor_version: "relay-1.0.0",
+        reported_capabilities: [{ kind: "connector.deploy", connectors: ["f5"], missing_flags: [], enabled: true }],
+        reported_relay_egress: { restricted: false, allow: [] },
+      },
+    ]);
+    renderAgents();
+
+    await screen.findByRole("heading", { name: /1 of 1 active agents/i });
+    fireEvent.click(screen.getByText("Fleet status and safe actions"));
+    await screen.findByRole("heading", { name: "open-relay" });
+    const warning = screen.getByText(/No relay egress allowlist/);
+    expect(warning).toHaveTextContent("Set --relay-egress-allow to restrict them.");
+    expect(warning).toHaveClass("text-status-warning");
+    expect(screen.queryByText(/Relay job connections may reach only/)).not.toBeInTheDocument();
+  });
+
   it("says why an agent claims no work: paused claims or an unloadable host profile", async () => {
     apiMock.agents.mockResolvedValueOnce([
       {

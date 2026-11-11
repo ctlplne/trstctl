@@ -1762,6 +1762,13 @@ func executorCensus(o agentOptions, relayCAStatus func() *transport.RelayCABundl
 	if relayCAStatus != nil {
 		report.RelayCABundle = relayCAStatus()
 	}
+	if o.relayClaim {
+		// A190-L1: the egress policy the relay's job connections follow,
+		// validated when the agent started.
+		if egress, err := netsec.ParseRelayEgress(strings.Split(o.relayEgressAllow, ",")); err == nil {
+			report.RelayEgress = &transport.RelayEgressReport{Allow: egress.Entries()}
+		}
+	}
 	for _, kind := range relay.ShippedJobKinds() {
 		missing := []string{}
 		for _, flag := range kind.Flags {

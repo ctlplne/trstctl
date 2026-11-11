@@ -1176,6 +1176,16 @@ function AgentDetail({ agent }: { agent: Agent }) {
                         ) : null}
                       </span>
                     ) : null}
+                    {agent.reported_relay_egress ? (
+                      agent.reported_relay_egress.restricted ? (
+                        <span className="block text-xs text-muted-foreground">
+                          {t("agents.executors.relayEgressAllowlist", { allow: agent.reported_relay_egress.allow.join(", ") })}
+                          {agent.reported_relay_egress.truncated ? <span className="block">{t("agents.executors.relayEgressTruncated")}</span> : null}
+                        </span>
+                      ) : (
+                        <span className="block text-xs text-status-warning">{t("agents.executors.relayEgressOpen")}</span>
+                      )
+                    ) : null}
                     {agent.reported_capabilities.length === 0 ? (
                       <span className="text-xs text-muted-foreground">{t("agents.executors.reportedNone")}</span>
                     ) : (

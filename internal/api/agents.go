@@ -152,6 +152,10 @@ type agentResponse struct {
 	// (A86): the digest and load time of the bundle in force and the last
 	// reload error; absent until a relay with a bundle has reported.
 	ReportedRelayCABundle *AgentRelayCABundleReport `json:"reported_relay_ca_bundle,omitempty"`
+	// ReportedRelayEgress is a relay's own account of the egress policy its
+	// job connections follow (A190-L1); absent until a relay that claims jobs
+	// has reported.
+	ReportedRelayEgress *AgentRelayEgressReport `json:"reported_relay_egress,omitempty"`
 	// WorkloadAPI is this host's SPIFFE Workload API posture (epic B3).
 	// LiveClaims are the jobs this agent holds under an unexpired lease (A67):
 	// job id, kind, attempt and lease expiry from the ledger, never a payload.
@@ -570,6 +574,7 @@ func toAgentResponseAt(a store.Agent, now time.Time, heartbeatInterval time.Dura
 		out.ReportedHostProfileError = AgentReportedHostProfileError(a)
 		out.ReportedPendingReportError = AgentReportedPendingReportError(a)
 		out.ReportedRelayCABundle = agentReportedRelayCABundle(a)
+		out.ReportedRelayEgress = agentReportedRelayEgress(a)
 	}
 	if len(out.Roles) == 0 {
 		out.Roles = []string{}
@@ -1030,6 +1035,33 @@ func (a *API) canGrantRelayRole(r *http.Request) bool {
 		return false
 	}
 	return principal.Can(authz.AgentsGrantRelay, authz.Scope{TenantID: principal.TenantID})
+}
+
+// AgentRelayEgressReport is the served shape of a relay's self-reported
+// egress policy (A190-L1): Restricted when --relay-egress-allow lists
+// destinations, the list, and Truncated when the recorded list is shorter
+// than the relay's.
+type AgentRelayEgressReport struct {
+	Restricted bool     `json:"restricted"`
+	Allow      []string `json:"allow"`
+	Truncated  bool     `json:"truncated,omitempty"`
+}
+
+func agentReportedRelayEgress(a store.Agent) *AgentRelayEgressReport {
+	if len(a.Executors) == 0 {
+		return nil
+	}
+	var census struct {
+		RelayEgress *AgentRelayEgressReport `json:"relay_egress"`
+	}
+	if err := json.Unmarshal(a.Executors, &census); err != nil || census.RelayEgress == nil {
+		return nil
+	}
+	report := census.RelayEgress
+	if report.Allow == nil {
+		report.Allow = []string{}
+	}
+	return report
 }
 
 // AgentRelayCABundleReport is the served shape of a relay's self-reported

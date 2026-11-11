@@ -145,8 +145,8 @@ not this file.
 | `internal/agent/relay/takedown_test.go:80` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
 | `internal/agent/secretrender/secretrender_test.go:126` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/agent/transport/agentservice.go:928` | an RPC method name, not a credential. The material this |
-| `internal/agent/transport/agentservice.go:935` | an RPC method name. This call carries a CSR up and returns |
+| `internal/agent/transport/agentservice.go:940` | an RPC method name, not a credential. The material this |
+| `internal/agent/transport/agentservice.go:947` | an RPC method name. This call carries a CSR up and returns |
 | `internal/agent/transport/receipt.go:225` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt.go:270` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt_custody_test.go:15` | the credential fingerprint is public fixture metadata, not a credential (CWE-798). |
@@ -1021,10 +1021,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7295` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7312` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7325` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7359` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7302` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7319` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7332` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7366` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -2025,7 +2025,7 @@ not this file.
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
 | `cmd/trstctl-agent/inventory_hostcrypto.go:76` | operator-configured keystore password file (CWE-22) |
 | `cmd/trstctl-agent/main.go:1382` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:2045` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:2052` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:477` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:504` | operator-supplied public issuer certificate (CWE-22) |

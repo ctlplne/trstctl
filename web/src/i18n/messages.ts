@@ -18734,6 +18734,19 @@ export const messages = {
     defaultMessage: "Latest bundle replacement rejected; the previous bundle stays in force: {error}",
     description: "A86: the relay's last CA bundle reload error.",
   },
+  "agents.executors.relayEgressAllowlist": {
+    defaultMessage: "Relay job connections may reach only: {allow}. Link-local, cloud metadata, unspecified and multicast addresses are always refused.",
+    description: "A190-L1: the relay's self-reported --relay-egress-allow list, joined with commas.",
+  },
+  "agents.executors.relayEgressTruncated": {
+    defaultMessage: "This list is cut short; the relay prints its whole egress policy when it starts.",
+    description: "A190-L1: the recorded egress allowlist is shorter than the relay's own.",
+  },
+  "agents.executors.relayEgressOpen": {
+    defaultMessage:
+      "No relay egress allowlist: job connections may reach any address this relay's network reaches, except link-local, cloud metadata, unspecified and multicast addresses. Set --relay-egress-allow to restrict them.",
+    description: "A190-L1: the relay reported no --relay-egress-allow list.",
+  },
   "agents.executors.notReported": {
     defaultMessage: "This agent has not reported its own executors (an older agent build); the list below is this server build's census.",
     description: "A62: shown when an agent predates the executor census report.",

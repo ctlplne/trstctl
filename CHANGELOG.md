@@ -2,6 +2,13 @@
 
 ### Added
 
+- The Agents page says what a relay's job connections may reach (A190-L1). The egress policy a
+  relay follows (`--relay-egress-allow`) showed only in the line the relay prints when it starts.
+  A relay that claims jobs now reports it on its heartbeat (agent.heartbeat v8), and `GET
+  /api/v1/agents` serves it as `reported_relay_egress`: whether an allowlist is set and what it
+  lists, at most 64 entries, marked `truncated` when the recorded list is shorter than the
+  relay's, and never read as no allowlist when it was cut short. The Agents page shows the list,
+  or warns that a relay without one may reach any address its network reaches.
 - Command rules on network devices read the lines typed in an interactive shell (A270-L1). A
   ruled device session used to refuse a shell, since only exec commands were read. Now every key
   reaches the device as typed, and each line's submission (Enter, or Ctrl-Z) waits for the rules:

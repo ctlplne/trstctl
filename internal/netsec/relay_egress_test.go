@@ -7,9 +7,33 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"slices"
 	"strings"
 	"testing"
 )
+
+// A190-L1: Entries is the allowlist in the canonical, sorted form a relay
+// reports in its census; a policy without an allowlist, or none, has no
+// entries.
+func TestRelayEgressEntriesAreTheCanonicalAllowlist(t *testing.T) {
+	listed, err := ParseRelayEgress([]string{" 198.51.100.9:8443", "10.20.0.0/16", "::ffff:192.0.2.7", "[fd00::5]:443"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := listed.Entries(), []string{"10.20.0.0/16", "192.0.2.7", "198.51.100.9:8443", "[fd00::5]:443"}; !slices.Equal(got, want) {
+		t.Fatalf("Entries() = %q, want %q", got, want)
+	}
+	open, err := ParseRelayEgress(strings.Split("", ","))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var none *RelayEgress
+	for name, policy := range map[string]*RelayEgress{"open": open, "nil": none} {
+		if got := policy.Entries(); got == nil || len(got) != 0 {
+			t.Errorf("%s policy Entries() = %#v, want an empty list", name, got)
+		}
+	}
+}
 
 // A190: a relay's job connections always refuse link-local, cloud metadata,
 // unspecified and multicast addresses, even when an allowlist names them; an

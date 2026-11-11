@@ -6821,6 +6821,9 @@ func componentSchemas() map[string]*Schema {
 		"reported_relay_ca_bundle": {Type: "object", Description: "A86: the relay's own account of its --relay-ca-bundle: the digest and load time of the bundle in force and the last reload error when the operator's latest replacement was unusable; absent until a relay with a bundle has reported.", Properties: map[string]*Schema{
 			"sha256": str(), "loaded_at": timestamp(), "error": str(),
 		}, Required: []string{"sha256", "loaded_at"}},
+		"reported_relay_egress": {Type: "object", Description: "A190-L1: the relay's own account of the egress policy its job connections follow: restricted when --relay-egress-allow lists destinations, and that list (CIDRs, addresses and address:port pairs, at most 64); truncated when the recorded list is shorter than the relay's. Link-local, cloud metadata, unspecified and multicast addresses are refused either way. Absent until a relay that claims jobs has reported.", Properties: map[string]*Schema{
+			"restricted": {Type: "boolean"}, "allow": {Type: "array", Items: str()}, "truncated": {Type: "boolean"},
+		}, Required: []string{"restricted", "allow"}},
 		// A66/A67: the jobs this agent holds under an unexpired lease and the
 		// per-agent quota (0 = none) the channel enforces on new claims.
 		"live_claims":         {Type: "array", Items: ref("AgentLiveClaim")},

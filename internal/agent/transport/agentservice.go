@@ -153,6 +153,18 @@ type ExecutorReport struct {
 	// (A86): its digest, when it was loaded, and the last reload error if the
 	// operator's latest replacement was unusable. Nil when no bundle is set.
 	RelayCABundle *RelayCABundleReport `json:"relay_ca_bundle,omitempty"`
+	// RelayEgress is the --relay-egress-allow in force on a relay that claims
+	// jobs (A190-L1): the allowlist its job connections may reach, empty when
+	// none is set (then only the always-refused ranges are refused). Nil when
+	// the agent claims no relay jobs.
+	RelayEgress *RelayEgressReport `json:"relay_egress,omitempty"`
+}
+
+// RelayEgressReport is a relay's own account of its job-connection egress
+// policy (A190-L1). Link-local, cloud metadata, unspecified and multicast
+// addresses are always refused, whatever the allowlist says.
+type RelayEgressReport struct {
+	Allow []string `json:"allow"`
 }
 
 // RelayCABundleReport is the relay's own account of its appliance CA bundle.

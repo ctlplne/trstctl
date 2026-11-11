@@ -213,6 +213,16 @@ func (p *RelayEgress) String() string {
 	if !p.Allowlisted() {
 		return "link-local, cloud metadata, unspecified and multicast refused; no allowlist"
 	}
+	return "link-local, cloud metadata, unspecified and multicast refused; allowlist " + strings.Join(p.Entries(), ", ")
+}
+
+// Entries is the allowlist in canonical form, sorted: a single address as
+// itself, a prefix in CIDR notation, an address:port pair as host:port. Empty
+// when no allowlist is set (A190-L1: what a relay reports in its census).
+func (p *RelayEgress) Entries() []string {
+	if p == nil {
+		return []string{}
+	}
 	entries := make([]string, 0, len(p.prefixes)+len(p.exact))
 	for _, prefix := range p.prefixes {
 		if prefix.IsSingleIP() {
@@ -225,5 +235,5 @@ func (p *RelayEgress) String() string {
 		entries = append(entries, exact.String())
 	}
 	sort.Strings(entries)
-	return "link-local, cloud metadata, unspecified and multicast refused; allowlist " + strings.Join(entries, ", ")
+	return entries
 }

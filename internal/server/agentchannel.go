@@ -797,6 +797,26 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 			}
 			census.RelayCABundle = &reported
 		}
+		if egress := req.Executors.RelayEgress; egress != nil {
+			// A190-L1: bounded like every other self-reported field. Whether
+			// the relay has an allowlist comes from its whole report, so a
+			// list cut short never reads as no allowlist; Truncated says the
+			// recorded list is shorter than the relay's.
+			reported := projections.AgentRelayEgress{Allow: []string{}}
+			for _, entry := range egress.Allow {
+				entry = strings.TrimSpace(entry)
+				if entry == "" {
+					continue
+				}
+				reported.Restricted = true
+				if !projections.ValidRelayEgressEntry(entry) || len(reported.Allow) == projections.AgentRelayEgressMaxEntries {
+					reported.Truncated = true
+					continue
+				}
+				reported.Allow = append(reported.Allow, entry)
+			}
+			census.RelayEgress = &reported
+		}
 		for _, kind := range req.Executors.Kinds {
 			census.Kinds = append(census.Kinds, projections.AgentExecutorKind{
 				Kind: strings.TrimSpace(kind.Kind), Connectors: append([]string(nil), kind.Connectors...),
@@ -828,6 +848,9 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 	}
 	if beatPayload.Executors != nil && beatPayload.Executors.SSHTrust != nil {
 		eventSchemaVersion = projections.AgentHeartbeatSSHTrustSchemaVersion
+	}
+	if beatPayload.Executors != nil && beatPayload.Executors.RelayEgress != nil {
+		eventSchemaVersion = projections.AgentHeartbeatRelayEgressSchemaVersion
 	}
 	payload, err := json.Marshal(beatPayload)
 	if err != nil {

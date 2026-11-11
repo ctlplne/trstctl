@@ -1681,6 +1681,7 @@ Agent = TypedDict(
         'reported_host_tls_probe': bool,
         'reported_pending_report_error': str,
         'reported_relay_ca_bundle': dict[str, Any],
+        'reported_relay_egress': dict[str, Any],
         'reported_ssh_trust_readiness': dict[str, Any],
         'role_grant': dict[str, Any],
         'role_source': str,

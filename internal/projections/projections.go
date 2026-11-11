@@ -2357,7 +2357,7 @@ const AgentHeartbeatClockSchemaVersion = 6
 // validateAgentHeartbeatClock binds the clock reading to the schema version
 // that introduced it.
 func validateAgentHeartbeatClock(schemaVersion int, heartbeat AgentHeartbeat) error {
-	if schemaVersion == AgentHeartbeatSSHTrustSchemaVersion {
+	if schemaVersion == AgentHeartbeatSSHTrustSchemaVersion || schemaVersion == AgentHeartbeatRelayEgressSchemaVersion {
 		if heartbeat.AgentTimeUnixMilli < 0 {
 			return errors.New("agent clock reading cannot be negative")
 		}
@@ -2406,7 +2406,7 @@ func validateAgentHeartbeatSSHKRL(schemaVersion int, tenantID string, heartbeat 
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v5 requires an SSH KRL receipt")
 		}
-	case AgentHeartbeatClockSchemaVersion, AgentHeartbeatSSHTrustSchemaVersion:
+	case AgentHeartbeatClockSchemaVersion, AgentHeartbeatSSHTrustSchemaVersion, AgentHeartbeatRelayEgressSchemaVersion:
 		// A v6 heartbeat is introduced by the agent's clock reading; the KRL
 		// receipt stays independently optional.
 		if report == nil {
@@ -2451,6 +2451,9 @@ type AgentExecutorCensus struct {
 	PendingReportError string `json:"pending_report_error,omitempty"`
 	// RelayCABundle: the --relay-ca-bundle in force on the relay (A86).
 	RelayCABundle *AgentRelayCABundle `json:"relay_ca_bundle,omitempty"`
+	// RelayEgress: the egress policy a relay's job connections follow, on
+	// v8 events only (A190-L1).
+	RelayEgress *AgentRelayEgress `json:"relay_egress,omitempty"`
 }
 
 // AgentRelayCABundle is the relay's self-reported appliance CA bundle: the
@@ -2496,10 +2499,11 @@ func validateAgentHeartbeatExecutors(schemaVersion int, heartbeat AgentHeartbeat
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v4 requires an executor census")
 		}
-	case AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion, AgentHeartbeatSSHTrustSchemaVersion:
+	case AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion, AgentHeartbeatSSHTrustSchemaVersion, AgentHeartbeatRelayEgressSchemaVersion:
 		// A v5 heartbeat is introduced by an SSH KRL receipt and a v6 by the
 		// agent's clock reading; the executor census stays independently
-		// optional.
+		// optional (a v8 one carries it, which validateAgentHeartbeatRelayEgress
+		// requires).
 		if report == nil {
 			return nil
 		}
@@ -2567,7 +2571,7 @@ func validateAgentHeartbeatPluginCensus(schemaVersion int, tenantID string, hear
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v2 requires relay plugin census")
 		}
-	case AgentHeartbeatRevocationCacheSchemaVersion, AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion, AgentHeartbeatSSHTrustSchemaVersion:
+	case AgentHeartbeatRevocationCacheSchemaVersion, AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion, AgentHeartbeatSSHTrustSchemaVersion, AgentHeartbeatRelayEgressSchemaVersion:
 		// A v3 heartbeat is introduced by revocation-cache posture, a v4 by
 		// the executor census, a v5 by an SSH KRL receipt and a v6 by the
 		// agent's clock reading. Plugin census
@@ -2608,7 +2612,7 @@ func validateAgentHeartbeatRevocationCaches(schemaVersion int, tenantID string, 
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v3 requires revocation cache posture")
 		}
-	case AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion, AgentHeartbeatSSHTrustSchemaVersion:
+	case AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion, AgentHeartbeatSSHTrustSchemaVersion, AgentHeartbeatRelayEgressSchemaVersion:
 		// A v4 heartbeat is introduced by the executor census, a v5 by an SSH
 		// KRL receipt and a v6 by the agent's clock reading; cache posture stays
 		// independently optional.
@@ -5340,7 +5344,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventBreakglassCACrossSigned:                  {1: true},
 	EventCRLPublished:                             {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:                     {1: true},
-	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true, AgentHeartbeatSSHKRLSchemaVersion: true, AgentHeartbeatClockSchemaVersion: true, AgentHeartbeatSSHTrustSchemaVersion: true},
+	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true, AgentHeartbeatSSHKRLSchemaVersion: true, AgentHeartbeatClockSchemaVersion: true, AgentHeartbeatSSHTrustSchemaVersion: true, AgentHeartbeatRelayEgressSchemaVersion: true},
 	EventAgentCertRenewed:                         {1: true, AgentCertRenewedRolesSchemaVersion: true},
 	EventAgentRolesGranted:                        {1: true},
 	EventKMIPClientRegistered:                     {1: true},
@@ -7034,6 +7038,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		if err := validateAgentHeartbeatClock(schemaVersionOf(e), pl); err != nil {
+			return err
+		}
+		if err := validateAgentHeartbeatRelayEgress(schemaVersionOf(e), pl); err != nil {
 			return err
 		}
 		lastSeen := e.Time

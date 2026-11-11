@@ -1221,6 +1221,7 @@ export interface Agent {
   reported_host_tls_probe?: boolean;
   reported_pending_report_error?: string;
   reported_relay_ca_bundle?: { error?: string; loaded_at: string; sha256: string };
+  reported_relay_egress?: { allow: string[]; restricted: boolean; truncated?: boolean };
   reported_ssh_trust_readiness?: SSHTrustReadiness;
   role_grant?: AgentRoleGrant;
   role_source: "certificate" | "unreported";

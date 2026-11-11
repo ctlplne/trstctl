@@ -13515,6 +13515,12 @@ export interface components {
                 loaded_at: string;
                 sha256: string;
             };
+            /** @description A190-L1: the relay's own account of the egress policy its job connections follow: restricted when --relay-egress-allow lists destinations, and that list (CIDRs, addresses and address:port pairs, at most 64); truncated when the recorded list is shorter than the relay's. Link-local, cloud metadata, unspecified and multicast addresses are refused either way. Absent until a relay that claims jobs has reported. */
+            reported_relay_egress?: {
+                allow: string[];
+                restricted: boolean;
+                truncated?: boolean;
+            };
             reported_ssh_trust_readiness?: components["schemas"]["SSHTrustReadiness"];
             role_grant?: components["schemas"]["AgentRoleGrant"];
             /** @enum {string} */
