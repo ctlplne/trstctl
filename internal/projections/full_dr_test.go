@@ -877,6 +877,10 @@ func seedRecoveredFromPostgresTables(
 			{`INSERT INTO issuance_approvals (tenant_id, resource, action, approver, approved_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, approvalResource, "issue", "approver-1", now}},
 			{`INSERT INTO notification_routing_policies (id, tenant_id, name, channels_by_severity, default_channels, created_at, updated_at) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7)`, []any{"00000000-0000-0000-0000-00000000a012", tenantA, "expiry-default", `{"critical":["pagerduty","slack"],"low":["email"]}`, `["email"]`, now, now}},
 			{`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, status, attempts, next_attempt_at, receiver_pending_ids) VALUES ($1, $2, $3, $4, $5, $6, $7, ARRAY['26cedb75-2fce-4bc7-a134-a5db76e64f74'::uuid])`, []any{tenantA, "webhook", []byte(`{"event":"full-dr"}`), "full-dr-outbox", "pending", 1, now}},
+			// A278-D1 (754) put pam_recording_uploads, the staged recording
+			// chunks the outbox has not stored yet, in the backup set; full DR
+			// carries one beside its outbox entry.
+			{`INSERT INTO pam_recording_uploads (tenant_id, session_id, attempt, seq, ord, gateway_agent_id, sha256, sealed_sha256, chain, size, final, sealed, staged_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`, []any{tenantA, "00000000-0000-0000-0000-00000000a434", 1, 0, 0, "00000000-0000-0000-0000-00000000a435", strings.Repeat("d", 64), strings.Repeat("e", 64), strings.Repeat("f", 64), 4, true, []byte("dr-1"), now}},
 			{`INSERT INTO policy_bindings (id, tenant_id, name, policy, scope) VALUES ($1, $2, $3, $4, $5::jsonb)`, []any{"00000000-0000-0000-0000-00000000a009", tenantA, "default", "allow", `{"project":"prod"}`}},
 			{`INSERT INTO privacy_subject_erasure_operations
 			        (tenant_id, operation_id, request_binding, event_id, event_sequence,
