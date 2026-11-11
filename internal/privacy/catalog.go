@@ -280,6 +280,15 @@ func Catalog() []CatalogEntry {
 			Owner:          "privileged access",
 		},
 		{
+			ID:             "honey_tokens.readers",
+			Location:       "honey_tokens.trigger_subject; outbox notification.honeytoken alert detail",
+			Category:       "the principal that read a decoy secret's value",
+			Purpose:        "decoy alerting and the investigation of who read the bait",
+			RetentionClass: "audit",
+			Erasure:        "subject export includes the decoys the subject read first; privacy.subject.erased pseudonymizes the decoy's first reader and replaces the subject in the text of their alerts, delivered or still waiting, keeping other readers' alerts; an alert's key keeps a one-way digest of its reader",
+			Owner:          "incident response",
+		},
+		{
 			ID:             "pam_sessions.subjects",
 			Location:       "pam_sessions.subject/requested_by/ssh_principal/reason/audit/attestation",
 			Category:       "privileged-access requester, verified target subject, and free-form reason and attestation metadata",

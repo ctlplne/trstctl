@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-
-	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Secret decoys (Q6): an application secret registered as bait. trstctl is in
@@ -89,7 +87,7 @@ func (s *Store) ApplyDecoySecretReadTx(ctx context.Context, tx pgx.Tx, tenantID,
 	if err := lockUpsertArbiterTx(ctx, tx, "honey_token_reader_alerts", tenantID, id); err != nil {
 		return err
 	}
-	alertKey := "honeytoken.secret_read:" + id + ":" + crypto.SHA256Hex([]byte(reader))[:32]
+	alertKey := decoyAlertKey(id, reader)
 	alert, err := json.Marshal(map[string]any{
 		"kind": "honeytoken.triggered", "tenant_id": tenantID, "operation_id": alertKey,
 		"subject": name, "severity": "critical",

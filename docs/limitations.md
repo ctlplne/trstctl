@@ -5560,7 +5560,9 @@ when off, requiring a KEK when on):
   Vault-compatible KV); names, metadata, the access preview, inventory, the
   graph and internal reads never alert, and a rebuild adds no alert. One secret
   has one decoy: registrations of it that arrive together make one, and the rest
-  are refused (409). A reader
+  are refused (409). A decoy's readers are subjects: a subject export lists the
+  decoys they read first, and an erasure pseudonymizes the decoy's first reader and
+  replaces them in the text of their alerts in the outbox, delivered or waiting. A reader
   who repeats a read after the delivered alert has left the outbox (retention)
   alerts again. Decoy database logins: a tenant PostgreSQL dynamic-secret
   provider listing the role `decoy` mints a login reaching only its own empty

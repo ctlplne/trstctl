@@ -632,6 +632,12 @@
 
 ### Fixed
 
+- Erasing a subject clears them from decoy alerts (Q6-L3). A decoy secret keeps its first reader, and
+  each reader's alert in the outbox names them until the delivered row is swept a day later (and a
+  waiting one, never). Subject erasure did not reach either, and a subject export did not list the
+  decoys they read. The export now lists them, and an erasure pseudonymizes the decoy's first reader
+  and replaces the subject in the text of their alerts, delivered or waiting, keeping other readers'
+  alerts; the privacy data catalog lists decoy readers.
 - Registering one secret as a decoy twice at once makes one decoy (Q6-L2). The register route checked
   that no live decoy watched the secret, then appended the new decoy's event; two registrations that
   arrived together could both pass the check and both create a decoy. The check, the append and its

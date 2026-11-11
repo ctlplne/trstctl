@@ -16,6 +16,13 @@ func TestPrivacyCatalogCoversSchemaAndRuntimePII(t *testing.T) {
 		markers []string
 	}{
 		{
+			id:     "honey_tokens.readers",
+			source: "../store/migrations/0356_decoy_secrets.sql",
+			markers: []string{
+				"ADD COLUMN IF NOT EXISTS trigger_subject text",
+			},
+		},
+		{
 			id:     "pam_sessions.subjects",
 			source: "../store/migrations/0049_pam_sessions.sql",
 			markers: []string{

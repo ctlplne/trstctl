@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2895 annotated sites across 33 rules. Each row is
+2896 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (618 sites)
+### G101 — CWE-798 Use of hardcoded credentials (619 sites)
 
 | Location | Reason |
 |---|---|
@@ -657,6 +657,7 @@ not this file.
 | `internal/store/agent_bootstrap_token_test.go:67` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/store/api_token_revocation_commands.go:60` | SQL column names for an opaque command fence, not a credential. |
 | `internal/store/approved_target_fences.go:230` | SQL column identifiers only; this constant contains no credential material. |
+| `internal/store/decoy_secret_privacy_test.go:31` | a decoy names a fabricated test secret, no credential value (CWE-798) |
 | `internal/store/discovery_secret_move.go:53` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/discovery_secret_move.go:56` | SQL column list, no credential (CWE-798) */ `m.finding_id::text, m.secret_name, m.secret_version, m.moved_by, m.moved_at, m.residue, |
 | `internal/store/dynamic_secret_lease.go:671` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |

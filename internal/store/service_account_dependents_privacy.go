@@ -8,14 +8,16 @@ import (
 )
 
 func privacyReadModelExportQueries(tenantID, subject string) []privacyReadModelQuery {
-	return append(basePrivacyReadModelExportQueries(tenantID, subject),
+	queries := append(basePrivacyReadModelExportQueries(tenantID, subject), decoyPrivacyExportQueries(tenantID, subject)...)
+	return append(queries,
 		privacyReadModelQuery{table: "service_account_rotation_manifests", sql: `SELECT id::text,id::text,to_jsonb(r)::text,created_at FROM service_account_rotation_manifests r WHERE tenant_id=$1 AND actor=$2 ORDER BY id`, args: []any{tenantID, subject}},
 		privacyReadModelQuery{table: "service_account_rotations", sql: `SELECT id::text,command_id::text,to_jsonb(r)::text,created_at FROM service_account_rotations r WHERE tenant_id=$1 AND actor=$2 ORDER BY id`, args: []any{tenantID, subject}},
 		privacyReadModelQuery{table: "service_account_hosts", sql: `SELECT agent_id::text,account_id::text,to_jsonb(h)::text,updated_at FROM service_account_hosts h WHERE tenant_id=$1 AND saved_by=$2 ORDER BY account_id,agent_id`, args: []any{tenantID, subject}},
 		privacyReadModelQuery{table: "service_account_host_scans", sql: `SELECT id::text,account_id::text,to_jsonb(s)::text,queued_at FROM service_account_host_scans s WHERE tenant_id=$1 AND queued_by=$2 ORDER BY id`, args: []any{tenantID, subject}})
 }
 func privacyReadModelSelectorQueries(tenantID, subject string) []privacyReadModelQuery {
-	return append(basePrivacyReadModelSelectorQueries(tenantID, subject),
+	queries := append(basePrivacyReadModelSelectorQueries(tenantID, subject), decoyPrivacySelectorQueries(tenantID, subject)...)
+	return append(queries,
 		privacyReadModelQuery{table: "service_account_rotation_manifests", sql: `SELECT id::text,id::text,0 FROM service_account_rotation_manifests WHERE tenant_id=$1 AND actor=$2 ORDER BY id`, args: []any{tenantID, subject}},
 		privacyReadModelQuery{table: "service_account_rotations", sql: `SELECT id::text,command_id::text,0 FROM service_account_rotations WHERE tenant_id=$1 AND actor=$2 ORDER BY id`, args: []any{tenantID, subject}},
 		privacyReadModelQuery{table: "service_account_hosts", sql: `SELECT agent_id::text,account_id::text,0 FROM service_account_hosts WHERE tenant_id=$1 AND saved_by=$2 ORDER BY account_id,agent_id`, args: []any{tenantID, subject}},

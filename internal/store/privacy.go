@@ -71,6 +71,7 @@ var privacyReadModelSelectorTables = map[string]struct{}{
 	"access_change_requests": {}, "access_change_request_decisions": {},
 	"discovery_runs": {}, "notification_routing_policies": {},
 	"remediation_playbook_runs": {}, "compliance_report_schedules": {},
+	"honey_tokens":                   {},
 	"incident_fleet_reissuance_runs": {}, "ownership_readiness_exceptions": {},
 }
 
@@ -2657,6 +2658,7 @@ func erasePrivacyReadModelRows(ctx context.Context, tx pgx.Tx, tenantID, subject
 		eraseOwnershipReadinessExceptionPrivacyRows,
 		eraseAttesterTrustReceiptPrivacyRows,
 		eraseServiceDependentActorPrivacyRows,
+		eraseDecoySecretPrivacyRows,
 	} {
 		if err := fn(ctx, tx, tenantID, subjectRef, placeholder, selectors); err != nil {
 			return err
