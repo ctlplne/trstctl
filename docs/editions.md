@@ -475,7 +475,10 @@ exactly as previewed; if any customer changed since the preview it answers
 `409 template_rollout_stale` and applies nothing. Each customer's application is
 a `provider.tenant_template.applied` authority event naming the operator and
 each object's outcome, shown in the Provider activity view; template versions
-are `provider.template.recorded` events.
+are `provider.template.recorded` events. The Provider console's tenant templates
+panel lists each template's latest version and shows a template's baseline
+contents, its versions and the customers bound to it; it records and applies
+nothing.
 
 A report schedule in a template may carry `dispatch`, as the customer's own
 schedule does: `{"channels":["webhook"]}` names the customer's channel of that

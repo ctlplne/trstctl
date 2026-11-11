@@ -249,6 +249,36 @@ export interface ProviderEvidenceVerification {
  * refuses the credential. An anonymous probe quietly keeps the login gate;
  * a rejected sign-in or active session returns there with generic recovery
  * guidance while discarding credentials and the former session cache. */
+/** A186: one recorded version of a tenant template (its baseline as recorded). */
+export interface ProviderTemplate {
+  id: string;
+  version: number;
+  name: string;
+  baseline: Record<string, unknown>;
+  digest: string;
+  recorded_by?: string;
+  recorded_at?: string;
+}
+
+/** A186: a delegated customer's binding to a template version. */
+export interface ProviderTemplateApplication {
+  tenant_id: string;
+  template_id: string;
+  version: number;
+  digest?: string;
+  complete: boolean;
+  results: { kind: string; key: string; status: string; outcome: string }[];
+  applied_by?: string;
+  applied_at?: string;
+}
+
+/** A186: a template's versions and the customers bound to it. */
+export interface ProviderTemplateDetail {
+  latest: ProviderTemplate;
+  versions: ProviderTemplate[];
+  tenants: ProviderTemplateApplication[];
+}
+
 export class ProviderAuthError extends Error {}
 
 export class ProviderApiError extends Error {
@@ -451,6 +481,8 @@ export const providerApi = {
     const out = await providerReq<{ tenants: ProviderTenant[] | null }>("/provider/v1/tenants");
     return out.tenants ?? [];
   },
+  listTemplates: async (): Promise<ProviderTemplate[]> => (await providerReq<ProviderTemplate[] | null>("/provider/v1/templates")) ?? [],
+  getTemplate: (id: string): Promise<ProviderTemplateDetail> => providerReq<ProviderTemplateDetail>(`/provider/v1/templates/${encodeURIComponent(id)}`),
   listActivity: async (): Promise<ProviderActivity[]> => {
     const out = await providerReq<{ items: ProviderActivity[] | null }>("/provider/v1/activity?limit=100");
     return out.items ?? [];

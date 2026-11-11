@@ -78,6 +78,7 @@ describe("Provider authentication boundaries with the real transport client", ()
           return json({ code: "forbidden", detail: "Customer delegation is required" }, 403);
         if (url === "/provider/v1/tenants") return json({ tenants: admin ? [alpha, beta] : [alpha] });
         if (url.startsWith("/provider/v1/activity")) return json({ items: [] });
+        if (url === "/provider/v1/templates") return json([]);
         throw new Error("Unexpected Provider request " + url);
       }),
     );

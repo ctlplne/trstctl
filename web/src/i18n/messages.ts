@@ -11604,6 +11604,55 @@ export const messages = {
     defaultMessage: "No rogue or non-compliant certificates found in the current posture.",
     description: "Empty state for the rogue certificate posture panel.",
   },
+  "provider.templates.heading": { defaultMessage: "Tenant templates", description: "Provider console tenant templates panel heading (A186-L1)." },
+  "provider.templates.intro": {
+    defaultMessage:
+      "The baselines this provider records for its customers: every version, and the delegated customers bound to each. Record, apply and roll out templates through the provider API or CLI.",
+    description: "Provider console tenant templates panel introduction (A186-L1).",
+  },
+  "provider.templates.empty": { defaultMessage: "No tenant templates recorded yet.", description: "Provider console tenant templates empty state (A186-L1)." },
+  "provider.templates.columnName": { defaultMessage: "Template", description: "Provider tenant templates table column (A186-L1)." },
+  "provider.templates.columnVersion": { defaultMessage: "Latest version", description: "Provider tenant templates table column (A186-L1)." },
+  "provider.templates.columnDigest": { defaultMessage: "Digest", description: "Provider tenant templates table column (A186-L1)." },
+  "provider.templates.columnRecorded": { defaultMessage: "Recorded", description: "Provider tenant templates table column (A186-L1)." },
+  "provider.templates.columnActions": { defaultMessage: "Actions", description: "Provider tenant templates table column (A186-L1)." },
+  "provider.templates.recordedBy": { defaultMessage: "{who}, {at}", description: "Who recorded a template version and when (A186-L1)." },
+  "provider.templates.view": { defaultMessage: "View {name}", description: "Shows a tenant template's versions and customers (A186-L1)." },
+  "provider.templates.detailHeading": { defaultMessage: "{name}, version {version}", description: "Tenant template detail heading (A186-L1)." },
+  "provider.templates.section.profiles": { defaultMessage: "Profiles: {count}", description: "Objects of one kind in a template baseline (A186-L1)." },
+  "provider.templates.section.policy": { defaultMessage: "Lifecycle policy: {count}", description: "Objects of one kind in a template baseline (A186-L1)." },
+  "provider.templates.section.issuers": { defaultMessage: "CA bindings: {count}", description: "Objects of one kind in a template baseline (A186-L1)." },
+  "provider.templates.section.deployment_targets": {
+    defaultMessage: "Connector targets: {count}",
+    description: "Objects of one kind in a template baseline (A186-L1).",
+  },
+  "provider.templates.section.notification_channels": {
+    defaultMessage: "Notification channels: {count}",
+    description: "Objects of one kind in a template baseline (A186-L1).",
+  },
+  "provider.templates.section.members": { defaultMessage: "Member roles: {count}", description: "Objects of one kind in a template baseline (A186-L1)." },
+  "provider.templates.section.report_schedules": {
+    defaultMessage: "Report schedules: {count}",
+    description: "Objects of one kind in a template baseline (A186-L1).",
+  },
+  "provider.templates.versions": { defaultMessage: "Versions", description: "Tenant template versions list heading (A186-L1)." },
+  "provider.templates.versionLine": {
+    defaultMessage: "Version {version}: {digest}, recorded by {who}, {at}",
+    description: "One tenant template version (A186-L1).",
+  },
+  "provider.templates.customers": { defaultMessage: "Customers bound to this template", description: "Tenant template customers heading (A186-L1)." },
+  "provider.templates.noCustomers": {
+    defaultMessage: "No delegated customer is bound to this template.",
+    description: "Tenant template with no bound customers (A186-L1).",
+  },
+  "provider.templates.customerApplied": {
+    defaultMessage: "{customer}: version {version}, applied {at}",
+    description: "A customer bound to a template version, fully applied (A186-L1).",
+  },
+  "provider.templates.customerIncomplete": {
+    defaultMessage: "{customer}: version {version} not fully applied ({at})",
+    description: "A customer whose template application did not complete (A186-L1).",
+  },
   "certificates.rogue.readLimited": {
     defaultMessage:
       "This posture rated the first {limit} certificates and the first {limit} discovery findings. A larger inventory is not fully rated here, so the counts and findings above are not the whole estate.",

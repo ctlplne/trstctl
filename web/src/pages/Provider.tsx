@@ -19,6 +19,7 @@ import { ProviderBillingPanel } from "@/pages/provider/ProviderBillingPanel";
 import { ProviderSetupPanel } from "@/pages/provider/ProviderSetupPanel";
 import { ProviderActivityPanel, ProviderOffboardingAttention } from "@/pages/provider/ProviderActivityPanel";
 import { ProviderBreakGlassPanel } from "@/pages/provider/ProviderBreakGlassPanel";
+import { ProviderTemplatesPanel } from "@/pages/provider/ProviderTemplatesPanel";
 import {
   providerApi,
   providerToken,
@@ -764,6 +765,17 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
           onSignOut("authentication");
         }}
       />
+
+      {authority ? (
+        <ProviderTemplatesPanel
+          tenants={tenants ?? []}
+          authorityKey={[session.data?.id, authority]}
+          onAuthError={() => {
+            clearProviderToken();
+            onSignOut("authentication");
+          }}
+        />
+      ) : null}
 
       {authority?.provision || authority?.access_write ? (
         <section className="mt-5">

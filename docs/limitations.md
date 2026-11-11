@@ -4381,8 +4381,10 @@ than sending an operator looking for a credential that was never there.
   (a changed chain binds a new issuer and the old one stays for what it issued);
   connector defaults are deployment targets. A template's report schedule can
   carry `dispatch`, announcing each run on the customer's channel of that type.
-  The Provider console does not show templates yet; they are served on the
-  Provider API. A console view is what comes next.
+  The Provider console lists the templates with each one's latest version and,
+  on request, its baseline's contents, every version and the delegated customers
+  bound to it (A186-L1). Recording, applying and rolling out a template stay on
+  the Provider API and CLI; doing them from the console is what comes next.
 - Provider console (L3 + AUD-58): the web app has a `/provider` route — a
   console for the provider's own staff, separate from the tenant plane. It lists
   customer tenants with their lifecycle state and drives the `/provider/v1` API

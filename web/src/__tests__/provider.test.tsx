@@ -36,6 +36,8 @@ const { providerMock } = vi.hoisted(() => ({
     verifyUsageEvidence: vi.fn(),
     downloadUsageEvidence: vi.fn(),
     signOut: vi.fn(),
+    listTemplates: vi.fn(),
+    getTemplate: vi.fn(),
   },
 }));
 
@@ -95,6 +97,7 @@ describe("provider console (L3)", () => {
     providerMock.verifyUsageEvidence.mockResolvedValue({ verified: false });
     providerMock.downloadUsageEvidence.mockResolvedValue(undefined);
     providerMock.signOut.mockResolvedValue(undefined);
+    providerMock.listTemplates.mockResolvedValue([]);
   });
 
   it("offers OIDC sign-in instead of a token box and keeps nothing in browser storage", async () => {
@@ -279,6 +282,26 @@ describe("provider console (L3)", () => {
     expect(screen.getByText("Globex")).toBeInTheDocument();
     // The suspended customer shows its status; the active one offers suspend.
     expect(screen.getByText("suspended")).toBeInTheDocument();
+  });
+
+  // A186-L1: the console shows the tenant templates the provider records.
+  it("shows the tenant templates the provider records", async () => {
+    providerMock.listTenants.mockResolvedValue([]);
+    providerMock.listTemplates.mockResolvedValue([
+      {
+        id: "msp-standard",
+        version: 3,
+        name: "MSP standard",
+        baseline: {},
+        digest: "sha256:" + "a".repeat(64),
+        recorded_by: "op",
+        recorded_at: "2026-10-01T00:00:00Z",
+      },
+    ]);
+    setProviderToken("operator-bearer");
+    renderProvider();
+    const section = await screen.findByRole("region", { name: "Tenant templates" });
+    expect(await within(section).findByRole("row", { name: /MSP standard/ })).toHaveTextContent("3");
   });
 
   it("revokes the separate Provider session before returning to the login gate", async () => {
