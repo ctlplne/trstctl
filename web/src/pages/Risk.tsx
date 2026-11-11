@@ -27,6 +27,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { RiskPosture } from "@/components/risk/posture";
+import { MisuseFindingsPanel } from "@/components/risk/MisuseFindingsPanel";
 import { Meter, type ChartTone, type MeterSegment } from "@/components/charts";
 import { Num } from "@/components/typography";
 import { riskBand } from "@/lib/statusVocab";
@@ -398,6 +399,7 @@ export function Risk() {
           <NHIStalePanel posture={nhiStalePosture} loading={nhiStalePostureLoading} error={nhiStalePostureError} />
           <NHIStaticPanel posture={nhiStaticPosture} loading={nhiStaticPostureLoading} error={nhiStaticPostureError} />
           <NHIExposurePanel posture={nhiExposurePosture} loading={nhiExposurePostureLoading} error={nhiExposurePostureError} />
+          <MisuseFindingsPanel />
           <NHIAutomationPanel plan={nhiAutomation} loading={nhiAutomationLoading} error={nhiAutomationError} />
 
           <section aria-labelledby="certificate-risk-heading" className="min-w-0">

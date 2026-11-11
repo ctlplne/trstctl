@@ -18751,6 +18751,38 @@ export const messages = {
     defaultMessage: "Latest bundle replacement rejected; the previous bundle stays in force: {error}",
     description: "A86: the relay's last CA bundle reload error.",
   },
+  "risk.misuse.title": { defaultMessage: "Token misuse findings", description: "M2-L1: heading of the misuse findings panel." },
+  "risk.misuse.description": {
+    defaultMessage:
+      "API tokens that requested a temporary credential from a network they had not used before, or read secrets in a burst. Every finding is listed here, including one whose alert was held back because the hour's alert budget was spent.",
+    description: "M2-L1: what the misuse findings panel lists.",
+  },
+  "risk.misuse.loading": { defaultMessage: "Loading misuse findings…", description: "M2-L1: misuse findings loading." },
+  "risk.misuse.notInEdition": {
+    defaultMessage: "Misuse detection is not in this edition of the server.",
+    description: "M2-L1: the findings route is not mounted (404) or its license lapsed (402).",
+  },
+  "risk.misuse.unavailable": { defaultMessage: "Misuse findings are unavailable", description: "M2-L1: the findings could not be read." },
+  "risk.misuse.empty": { defaultMessage: "No misuse findings.", description: "M2-L1: no findings recorded." },
+  "risk.misuse.caption": { defaultMessage: "Misuse findings, newest first", description: "M2-L1: findings table caption." },
+  "risk.misuse.col.token": { defaultMessage: "API token", description: "M2-L1: findings column for the token and its principal." },
+  "risk.misuse.col.what": { defaultMessage: "What it did", description: "M2-L1: findings column for the deviation." },
+  "risk.misuse.col.hour": { defaultMessage: "Hour", description: "M2-L1: findings column for the hour the deviation was seen." },
+  "risk.misuse.col.alert": { defaultMessage: "Alert", description: "M2-L1: findings column for whether an alert was raised." },
+  "risk.misuse.newSourceLease": {
+    defaultMessage: "Requested a temporary credential from {source}, a network it had not used on three different days.",
+    description: "M2-L1: a new_source_lease finding.",
+  },
+  "risk.misuse.secretReadBurst": {
+    defaultMessage: "Read secrets {count} times from {source} in one hour; its largest earlier hour in 14 days was {baseline}.",
+    description: "M2-L1: a secret_read_burst finding.",
+  },
+  "risk.misuse.alerted": { defaultMessage: "Alert sent", description: "M2-L1: the finding raised an alert." },
+  "risk.misuse.notAlerted": {
+    defaultMessage: "No alert: the hour's alert budget was spent",
+    description: "M2-L1: the finding stands without an alert.",
+  },
+  "risk.misuse.older": { defaultMessage: "Show older findings", description: "M2-L1: loads the next page of findings." },
   "agents.executors.relayEgressAllowlist": {
     defaultMessage: "Relay job connections may reach only: {allow}. Link-local, cloud metadata, unspecified and multicast addresses are always refused.",
     description: "A190-L1: the relay's self-reported --relay-egress-allow list, joined with commas.",

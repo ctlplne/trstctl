@@ -840,6 +840,26 @@ export interface UsageEvidenceSignature {
   key_id?: string;
   jws?: string;
 }
+// M2-L1: Enterprise governance misuse findings, newest first (a licensed
+// route: a server without it answers 404, a lapsed license 402).
+export interface MisuseFinding {
+  id: string;
+  rule: "new_source_lease" | "secret_read_burst";
+  credential_id: string;
+  principal: string;
+  source: string;
+  window_start: string;
+  observed_count: number;
+  baseline: number;
+  alerted: boolean;
+  detected_at: string;
+}
+
+export interface MisuseFindingList {
+  items: MisuseFinding[];
+  next_cursor: string;
+}
+
 export interface UsageEvidence {
   customer_id: string;
   period_start: string;
@@ -2233,6 +2253,8 @@ export interface Api {
   /** C4: whether the configured authorities agree. Licensed; 402/403 when not entitled. */
   authorityAgreement(): Promise<AuthorityAgreementReport>;
   usageEvidence(periodStart: string, periodEnd: string): Promise<UsageEvidence>;
+  /** M2-L1: misuse findings of this tenant's API tokens, newest first; licensed. */
+  misuseFindings(options?: { rule?: MisuseFinding["rule"]; credentialId?: string; cursor?: string; limit?: number }): Promise<MisuseFindingList>;
   /** M2: crypto assets sequenced for migration by observed dependency, not severity alone. */
   cryptoReadiness(): Promise<CryptoReadiness>;
   cryptoReadinessExport(): Promise<CryptoReadinessExport>;
@@ -3095,6 +3117,15 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   // query naming anyone else, so sending one could only ever be a 403.
   usageEvidence: (periodStart, periodEnd) =>
     req<UsageEvidence>(`/api/v1/provider/usage-evidence?period_start=${encodeURIComponent(periodStart)}&period_end=${encodeURIComponent(periodEnd)}`),
+  misuseFindings: (options) => {
+    const qs = new URLSearchParams();
+    if (options?.rule) qs.set("rule", options.rule);
+    if (options?.credentialId) qs.set("credential_id", options.credentialId);
+    if (options?.cursor) qs.set("cursor", options.cursor);
+    if (options?.limit != null) qs.set("limit", String(options.limit));
+    const suffix = qs.toString();
+    return req<MisuseFindingList>(`/api/v1/misuse/findings${suffix ? `?${suffix}` : ""}`);
+  },
   cryptoReadiness: () => req<CryptoReadiness>("/api/v1/graph/crypto-readiness"),
   cryptoReadinessExport: () => req<CryptoReadinessExport>("/api/v1/graph/crypto-readiness/export"),
   ownershipConflicts: () => req<OwnershipConflictList>("/api/v1/owners/ownership-conflicts"),

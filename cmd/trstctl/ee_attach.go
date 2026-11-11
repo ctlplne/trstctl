@@ -169,6 +169,9 @@ func attachEEProviderGovernance(log *slog.Logger, lic *license.Manager, deps *se
 	detector, findings := eemisuse.NewDetector(eemisuse.Options{Store: deps.Store, Log: deps.Log, Logger: log})
 	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions, projections.WithEventProjection(findings))
 	deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, detector)
+	// M2-L1: the findings are listed, not only alerted within a budget.
+	deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory,
+		eemisuse.NewAPIOptionsFactory(eemisuse.StoreFindings{Store: deps.Store}))
 	if log != nil {
 		log.Info("Enterprise governance support attached", slog.String("feature", string(license.FeatureGovernance)))
 	}

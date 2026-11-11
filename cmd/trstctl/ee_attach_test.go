@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/license"
@@ -107,6 +108,35 @@ func TestAttachEEGovernanceRequiresEnterpriseLicense(t *testing.T) {
 	}
 	if !hasBackgroundWorker(deps, "misuse_detector") || len(deps.LicensedProjectionOptions) == 0 {
 		t.Fatal("enterprise governance feature did not mount misuse detection and its findings projection (M2)")
+	}
+}
+
+// M2-L1: an Enterprise license mounts GET /api/v1/misuse/findings; the
+// route reaches its authenticated handler (401 here, with no principal) rather
+// than 404. Community mounts no such route.
+func TestAttachEEGovernanceMountsTheMisuseFindingsRouteM2L1(t *testing.T) {
+	status := func(lic *license.Manager) int {
+		t.Helper()
+		deps := &server.Deps{}
+		if err := attachEE(context.Background(), &config.Config{}, nil, lic, deps); err != nil {
+			t.Fatalf("attachEE: %v", err)
+		}
+		var opts []api.Option
+		if deps.LicensedAPIOptionsFactory != nil {
+			var err error
+			if opts, err = deps.LicensedAPIOptionsFactory(server.LicensedAPIOptionsDeps{}); err != nil {
+				t.Fatalf("licensed API options: %v", err)
+			}
+		}
+		rec := httptest.NewRecorder()
+		api.New(nil, nil, nil, opts...).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/misuse/findings", nil))
+		return rec.Code
+	}
+	if got := status(enterpriseLicense(t)); got != http.StatusUnauthorized {
+		t.Fatalf("enterprise GET /api/v1/misuse/findings = %d, want 401 from the mounted, authenticated route", got)
+	}
+	if got := status(license.Community()); got != http.StatusNotFound {
+		t.Fatalf("community GET /api/v1/misuse/findings = %d, want 404", got)
 	}
 }
 

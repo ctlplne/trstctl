@@ -2,6 +2,12 @@
 
 ### Added
 
+- Misuse findings are listed, not only alerted (M2-L1). Enterprise governance raises an alert
+  for each misuse finding within a per-tenant hourly budget, and a finding past the budget was
+  recorded but could be read nowhere. `GET /api/v1/misuse/findings` (audit:read) lists the
+  caller's own tenant's findings, newest first and a page at a time, optionally by rule or
+  token, and the Risk page shows them as Token misuse findings, saying which ones raised no
+  alert. An index on the findings' event sequence keeps every page a short index scan.
 - The Agents page says what a relay's job connections may reach (A190-L1). The egress policy a
   relay follows (`--relay-egress-allow`) showed only in the line the relay prints when it starts.
   A relay that claims jobs now reports it on its heartbeat (agent.heartbeat v8), and `GET

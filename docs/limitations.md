@@ -1425,8 +1425,9 @@ never live in the API process. What you can do end to end against the running bi
   14 days. One finding per token, rule and day (repeats fold in), one alert each on
   `notification.risk` with the evidence, at most 20 alerts per tenant per hour (later
   findings recorded unalerted); findings rebuild from the event log without re-alerting.
-  Rules and thresholds are fixed today; findings are not yet listed in the API or console
-  (the alert carries them), and a finding does not open an incident on its own.
+  `GET /api/v1/misuse/findings` (audit:read) and the Risk page list every finding, newest
+  first. Rules and thresholds are fixed today, and a finding does not open an incident on
+  its own.
 - Access graph, step 2 (G2): what a dynamic-secret lease reaches is read from the
   target itself. The leader reads each active lease within a minute of issue and
   every six hours after, through the provider's own credentials, and changes

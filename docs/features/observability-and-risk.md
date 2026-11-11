@@ -120,7 +120,11 @@ and raises one alert on the `notification.risk` route with its evidence (the tok
 its subject, the network, the counts and the token's normal networks or baseline). A
 tenant gets at most 20 such alerts an hour; findings beyond that are still recorded,
 marked not alerted. The findings read model rebuilds from the event log, and a rebuild
-never alerts again.
+never alerts again. `GET /api/v1/misuse/findings` (audit:read) lists the tenant's findings,
+newest first and a page at a time (`limit` up to 200, `cursor` from the previous page),
+optionally one `rule` or one token (`credential_id`), each with its token and subject,
+network, hour, counts and whether it alerted; the Risk page's supporting details show
+them as Token misuse findings, including those an alert budget held back.
 
 What the exposure posture reads from metadata can be checked live:
 `POST /api/v1/nhi/posture/exposure/probe` (`trstctl-cli nhi posture exposure probe`,
