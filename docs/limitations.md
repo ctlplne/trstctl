@@ -4307,7 +4307,12 @@ than sending an operator looking for a credential that was never there.
   outbox delivery hands the serial to that domain-joined relay, which runs
   `certutil -revoke`, publishes a new CRL with `certutil -CRL`, and reads the CA
   database row back; trstctl records the certificate revoked only from that
-  checked report. While the relay has not answered, the delivery waits without
+  checked report. An ACME client's `revokeCert` of a certificate trstctl's ACME
+  issued through such a profile takes the same path (A162-L4): once RFC 8555
+  §7.6 authorizes it, trstctl queues that exact revocation at the upstream and
+  answers 200, and trstctl's own CRL never lists the upstream's serial; at an
+  upstream configured without a way to revoke, the client gets `unauthorized`
+  (403) naming why, not a server error. While the relay has not answered, the delivery waits without
   spending its retry budget; a failed relay attempt spends one and the next
   delivery queues a fresh attempt. The wait is visible (A162-L5):
   `GET /api/v1/revocation/relay-waits` and the Revocation center list each

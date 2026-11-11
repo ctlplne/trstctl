@@ -253,6 +253,7 @@ func (s *Server) newProtocolIssuer() *protocolIssuer {
 		defaultProfile:     s.defaultProfile,
 		leafProfile:        s.leafProfile,
 		upstream:           s.protocolUpstream,
+		revokeUpstream:     s.revokeProtocolLeafAtUpstream,
 		ensureCRL: func(ctx context.Context, tenantID string) error {
 			if s.revoc == nil {
 				return nil
@@ -359,7 +360,13 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 		return nil, fmt.Errorf("build served ACME state: %w", err)
 	}
 	return acmeSrv.WithRevocationHook(func(ctx context.Context, req acme.RevocationRequest) error {
-		return issuer.RevokeProtocolLeaf(ctx, acmeTenant, "acme", req.Fingerprint, req.Serial, req.Reason, req.CertDER)
+		err := issuer.RevokeProtocolLeaf(ctx, acmeTenant, "acme", req.Fingerprint, req.Serial, req.Reason, req.CertDER)
+		if errors.Is(err, orchestrator.ErrCertificateRevocationUnsupported) {
+			// The issuer cannot carry this revocation out; the client is told
+			// so, as unauthorized, not as a server failure.
+			return fmt.Errorf("%w: %v", acme.ErrRevocationRefused, err)
+		}
+		return err
 	}), nil
 }
 

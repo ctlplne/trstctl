@@ -2,6 +2,13 @@
 
 ### Added
 
+- An ACME client can revoke a certificate trstctl's ACME issued through a profile's upstream CA
+  (A162-L4). `revokeCert` of such a certificate used to fail as a server error ("issuer revocation is
+  not supported"). Once RFC 8555 §7.6 authorizes the request, trstctl now queues the same exact
+  revocation at the upstream that an operator's bulk revocation queues (for AD CS, through the
+  issuer's revocation relay), answers 200, records the certificate revoked only when the CA confirms,
+  and never lists the upstream's serial on its own CRL. At an upstream configured without a way to
+  revoke, the client gets `unauthorized` (403) saying why.
 - A Jamf poll schedule can name a Jamf Pro API client instead of a hand-rotated bearer (A156-L1).
   The schedule stores the API client's ID and a secret reference to its client secret; the network
   relay redeems the secret per attempt and exchanges it at the same Jamf Pro server's

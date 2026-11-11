@@ -92,6 +92,10 @@ type protocolIssuer struct {
 	// upstream is the external CA registry a profile's upstream_external_ca
 	// routes protocol issuance to (A159); nil or returning nil means none.
 	upstream func() externalCAIssuer
+	// revokeUpstream revokes a leaf an upstream CA issued at that CA, through
+	// the exact external revocation the bulk API queues (A162-L4). It reports
+	// false for a leaf trstctl's served CA issued; nil means none.
+	revokeUpstream func(ctx context.Context, tenantID, protocolName, fingerprint, reason string) (bool, error)
 }
 
 // attestDeviceCustody records the device-bound custody claim an attested
@@ -454,6 +458,14 @@ func (p *protocolIssuer) revokeProtocolLeaf(ctx context.Context, tenantID, proto
 	}
 	if serial == "" {
 		return errors.New("server: protocol revoke requires a certificate serial")
+	}
+	if p.revokeUpstream != nil {
+		// A162-L4: a leaf a profile's upstream CA issued (A159) is revoked at
+		// that CA, not refused, and trstctl's own CRL does not list it.
+		handled, err := p.revokeUpstream(ctx, tenantID, protocolName, fingerprint, reason)
+		if handled || err != nil {
+			return err
+		}
 	}
 	key := "protocol-revoke:" + protocolName + ":" + fingerprint
 	_, err := p.idem.Do(ctx, tenantID, key, func(ctx context.Context) ([]byte, error) {

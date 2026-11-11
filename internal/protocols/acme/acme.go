@@ -187,6 +187,12 @@ type RevocationRequest struct {
 // trustctl HTTP Idempotency-Key on revokeCert.
 type RevocationHook func(context.Context, RevocationRequest) error
 
+// ErrRevocationRefused is a hook's answer that the certificate's issuer does
+// not accept this revocation (an upstream CA configured without a way to
+// revoke, say). revokeCert answers it as unauthorized (403) with the reason,
+// not as a server error: nothing failed, the request cannot be carried out.
+var ErrRevocationRefused = errors.New("acme: the certificate's issuer does not accept this revocation")
+
 // DNS01Automation publishes the DNS-01 TXT record needed for a challenge and
 // returns a cleanup function that retracts it. Served deployments implement this
 // with tenant provider configs plus the outbox; library embeds can leave it nil
@@ -1832,6 +1838,10 @@ func (s *Server) revokeCert(w http.ResponseWriter, r *http.Request, msg *jose.AC
 
 	if hook != nil {
 		if err := hook(r.Context(), revReq); err != nil {
+			if errors.Is(err, ErrRevocationRefused) {
+				s.problem(w, r, http.StatusForbidden, "unauthorized", err.Error())
+				return
+			}
 			s.problem(w, r, http.StatusInternalServerError, "serverInternal", "revocation failed: "+err.Error())
 			return
 		}
