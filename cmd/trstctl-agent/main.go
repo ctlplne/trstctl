@@ -233,7 +233,7 @@ func main() {
 	edgePKCS11Token := flag.String("edge-pkcs11-token", "", "PKCS#11 token label for edge CA custody")
 	edgePKCS11PINFile := flag.String("edge-pkcs11-pin-file", "", "file holding the PKCS#11 user PIN; required for pkcs11 custody")
 	edgePKCS11KeyLabelPrefix := flag.String("edge-pkcs11-key-label-prefix", "trstctl-edge-ca", "PKCS#11 object-label prefix for edge CA keys")
-	edgePKCS11AttestationLabels := flag.String("edge-pkcs11-attestation-labels", "", "edge-csr with pkcs11: comma-separated labels of the token's certificate objects that attest the edge key, leaf first (a YubiKey's PIV module names them \"X.509 Certificate for PIV Attestation <slot>\" and \"X.509 Certificate for PIV Attestation\")")
+	edgePKCS11AttestationLabels := flag.String("edge-pkcs11-attestation-labels", "", "edge-csr or edge-attest with pkcs11: comma-separated labels of the token's certificate objects that attest the edge key, leaf first (a YubiKey's PIV module names them \"X.509 Certificate for PIV Attestation <slot>\" and \"X.509 Certificate for PIV Attestation\")")
 	edgeTokenAttestationOut := flag.String("edge-token-attestation-out", "edge-token-attestation.pem", "where edge-csr writes the token's attestation chain (PEM, leaf first)")
 	edgeIssueMode := flag.Bool("edge-issue", false, "one-shot: issue a leaf locally under the delegated edge CA and record it in the journal, then exit")
 	edgeCACert := flag.String("edge-ca-cert", "", "the delegated edge CA certificate (PEM) minted by the brain")

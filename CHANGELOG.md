@@ -2,6 +2,13 @@
 
 ### Added
 
+- `trstctl-agent --edge-attest` writes the PKCS#11 lane's mint body (A175-L2). With a PKCS#11 edge key
+  and `--edge-pkcs11-attestation-labels`, it reads the token's attestation chain of the key again,
+  checks the leaf certifies the CSR's key, and writes a mode-0600 body with `key_provider: pkcs11`,
+  the CSR and `pkcs11_attestation_chain_der` for `trstctl-cli edge delegations mint -f`; before, it
+  refused every key but a TPM's and the operator assembled the PKCS#11 body by hand. `--edge-csr`
+  with a PKCS#11 key now points at that step instead of the TPM one. Proven through the agent CLI
+  against SoftHSM holding a stand-in vendor chain.
 - Image annotations reach registries behind a token server and registries without the OCI referrers
   API (A174-L2). A registry's 401 Bearer challenge is answered with a token from its realm (the
   annotation connection's `username_ref` and token as basic credentials), reused for the repository;

@@ -666,8 +666,9 @@ never live in the API process. What you can do end to end against the running bi
   evidence therefore says `host_attested_operator_claim`, not hardware-key
   attested — unless the token attests the key itself (A175): with
   `--edge-pkcs11-attestation-labels` the agent reads the token's attestation
-  certificate objects for the key, the mint carries them as
-  `pkcs11_attestation_chain_der`, and a chain that reaches a vendor root the
+  certificate objects for the key, `--edge-attest` writes the PKCS#11 mint body
+  with them (A175-L2; proven through the agent CLI on SoftHSM), the mint carries
+  them as `pkcs11_attestation_chain_der`, and a chain that reaches a vendor root the
   segment pinned (`pkcs11_attestation_roots_pem`) and certifies the CSR's key
   records `hardware_key_attested` with the root, device serial and key
   policies; `require_pkcs11_attestation` refuses PKCS#11 requests without it.

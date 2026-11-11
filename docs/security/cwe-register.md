@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2953 annotated sites across 33 rules. Each row is
+2960 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1518,7 +1518,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (391 sites)
+### G204 — CWE-78 OS command injection (393 sites)
 
 | Location | Reason |
 |---|---|
@@ -1536,6 +1536,8 @@ not this file.
 | `clients/signing/pkcs11/module_test.go:88` | compiles the in-repo check program |
 | `clients/signing/pkcs11/module_test.go:91` | runs the program just built |
 | `clients/terraform/internal/terraformprovider/provider_tls_test.go:169` | fixed arguments to this test's own executable (CWE-78) |
+| `cmd/trstctl-agent/edgeca_pkcs11_softhsm_container_test.go:31` | fixed docker invocation for the acceptance test (CWE-78) |
+| `cmd/trstctl-agent/edgeca_pkcs11_softhsm_real_test.go:76` | fixed pkcs11-tool invocation inside the SoftHSM test container (CWE-78) |
 | `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78) |
 | `cmd/trstctl-agent/sshtrust.go:179` | operator-configured sshd reload command; running it is the feature (CWE-78) |
 | `cmd/trstctl-signer/fips_startup_test.go:53` | current local test executable and bounded QA flags |
@@ -2035,7 +2037,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (715 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (720 sites)
 
 | Location | Reason |
 |---|---|
@@ -2049,13 +2051,18 @@ not this file.
 | `cmd/trstctl-agent/csisecrets.go:30` | the operator's --csi-secrets-config (CWE-22) |
 | `cmd/trstctl-agent/csisecrets.go:45` | operator-configured CA bundle (CWE-22) |
 | `cmd/trstctl-agent/distrust.go:23` | operator-supplied agent flag naming a local distrust list (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:133` | explicit operator file path |
-| `cmd/trstctl-agent/edgeca.go:145` | explicit operator file path |
-| `cmd/trstctl-agent/edgeca.go:280` | operator-configured local path from the agent's own flags (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:358` | operator-configured journal path on the agent's own host (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:401` | directory of the operator-selected output, synced after an atomic rename |
-| `cmd/trstctl-agent/edgeca.go:424` | operator-configured local path from the agent's own flags (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:434` | operator-configured local handle path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/edgeca.go:137` | explicit operator file path |
+| `cmd/trstctl-agent/edgeca.go:149` | explicit operator file path |
+| `cmd/trstctl-agent/edgeca.go:211` | explicit operator file path |
+| `cmd/trstctl-agent/edgeca.go:333` | operator-configured local path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/edgeca.go:411` | operator-configured journal path on the agent's own host (CWE-22) |
+| `cmd/trstctl-agent/edgeca.go:454` | directory of the operator-selected output, synced after an atomic rename |
+| `cmd/trstctl-agent/edgeca.go:477` | operator-configured local path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/edgeca.go:487` | operator-configured local handle path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/edgeca_pkcs11_attest_test.go:43` | t.TempDir path (CWE-22) |
+| `cmd/trstctl-agent/edgeca_pkcs11_attest_test.go:77` | t.TempDir path (CWE-22) |
+| `cmd/trstctl-agent/edgeca_pkcs11_softhsm_real_test.go:53` | t.TempDir path (CWE-22) |
+| `cmd/trstctl-agent/edgeca_pkcs11_softhsm_real_test.go:91` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_provider.go:70` | explicit operator-owned device secret path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_test.go:61` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_test.go:122` | t.TempDir path (CWE-22) |

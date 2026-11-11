@@ -124,8 +124,12 @@ func boolCount(values ...bool) int {
 }
 
 func runEdgeAttest(opts edgeCAOptions) error {
-	if normalizedEdgeKeyProvider(opts.keyProvider) != "tpm2" {
-		return fmt.Errorf("edge-attest requires a TPM2 edge CA key")
+	switch normalizedEdgeKeyProvider(opts.keyProvider) {
+	case "pkcs11":
+		return runEdgeAttestPKCS11(opts)
+	case "tpm2":
+	default:
+		return fmt.Errorf("edge-attest requires a TPM2 or PKCS#11 edge CA key")
 	}
 	if strings.TrimSpace(opts.tenantID) == "" || strings.TrimSpace(opts.segmentID) == "" || opts.csrIn == "" || opts.caKeyHandle == "" || opts.aikKeyHandle == "" || opts.aikCertChain == "" || opts.attestationOut == "" {
 		return fmt.Errorf("edge-attest requires tenant, segment, CSR, edge key handle, AIK handle, AIK certificate chain and output path")
@@ -188,6 +192,49 @@ func runEdgeAttest(opts edgeCAOptions) error {
 		}
 		fmt.Printf("reviewed CLI mint body written to %s (0600); send with trstctl-cli edge delegations mint -f\n", opts.mintRequestOut)
 	}
+	return nil
+}
+
+// runEdgeAttestPKCS11 is --edge-attest for a PKCS#11 edge key (A175-L2):
+// the token attests its own key, so the evidence is the token's attestation
+// chain read from the certificate objects the operator names, its leaf
+// checked against the CSR's key before anything is written. The mint body
+// carries the CSR and that chain as pkcs11_attestation_chain_der.
+func runEdgeAttestPKCS11(opts edgeCAOptions) error {
+	if strings.TrimSpace(opts.tenantID) == "" || strings.TrimSpace(opts.segmentID) == "" || opts.csrIn == "" ||
+		strings.TrimSpace(opts.pkcs11AttestationLabels) == "" || opts.mintRequestOut == "" {
+		return fmt.Errorf("edge-attest with a PKCS#11 key requires tenant, segment, CSR, --edge-pkcs11-attestation-labels and --edge-mint-request-out")
+	}
+	if strings.TrimSpace(opts.mintParentCAID) == "" || strings.TrimSpace(opts.mintHost) == "" || opts.mintTTL < 0 || opts.mintTTL > 30*24*time.Hour || (opts.mintTTL > 0 && opts.mintTTL < time.Second) {
+		return fmt.Errorf("edge mint request needs parent CA id, host and a TTL within the 30-day ceiling")
+	}
+	csrDER, err := os.ReadFile(opts.csrIn) // #nosec G304 -- explicit operator file path
+	if err != nil {
+		return fmt.Errorf("read edge CA CSR: %w", err)
+	}
+	chain, err := readEdgeTokenAttestation(opts, csrDER)
+	if err != nil {
+		return fmt.Errorf("read the token's attestation of the edge key: %w", err)
+	}
+	if len(chain) == 0 {
+		return fmt.Errorf("the token holds no attestation under the labels named")
+	}
+	request := map[string]any{
+		"segment_id": opts.segmentID, "ca_id": opts.mintParentCAID, "host": opts.mintHost,
+		"csr_der": csrDER, "key_provider": "pkcs11", "pkcs11_attestation_chain_der": chain,
+	}
+	if opts.mintTTL > 0 {
+		request["ttl_seconds"] = int(opts.mintTTL.Seconds())
+	}
+	requestJSON, err := json.MarshalIndent(request, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode edge mint request: %w", err)
+	}
+	if err := writeEdgePrivateFile(opts.mintRequestOut, append(requestJSON, '\n')); err != nil {
+		return fmt.Errorf("write edge mint request: %w", err)
+	}
+	fmt.Printf("reviewed CLI mint body with the token's attestation (%d certificates, leaf first) written to %s (0600); send with trstctl-cli edge delegations mint -f\n",
+		len(chain), opts.mintRequestOut)
 	return nil
 }
 
@@ -265,6 +312,12 @@ func runEdgeCSR(opts edgeCAOptions) error {
 	fmt.Printf("mint custody: provider=%s storage=%s exportable=%t\n", providerName, edgeKeyStorage(providerName), providerName == "software")
 	fmt.Printf("csr_der (base64, for the mint request): %s\n", base64.StdEncoding.EncodeToString(csrDER))
 	fmt.Printf("attestation challenge (hex): %s\n", hex.EncodeToString(challenge))
+	if providerName == "pkcs11" {
+		// A175-L2: --edge-attest assembles the PKCS#11 lane's mint body too.
+		fmt.Println("run trstctl-agent --edge-attest with this CSR and --edge-pkcs11-attestation-labels to write the mint body")
+		fmt.Println("with the token's own attestation of the key (pkcs11_attestation_chain_der)")
+		return nil
+	}
 	fmt.Println("run trstctl-agent --edge-attest with this CSR, its TPM handle, and a certified TPM AIK;")
 	fmt.Println("the brain refuses the mint without that TPM2_Certify evidence")
 	return nil

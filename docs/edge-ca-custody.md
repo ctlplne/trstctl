@@ -199,8 +199,31 @@ attestation as certificate objects; name them, leaf first, with
 `"X.509 Certificate for PIV Attestation 9c,X.509 Certificate for PIV
 Attestation"`). The agent reads them, checks the leaf certifies exactly the CSR's
 key, and writes the chain to `--edge-token-attestation-out` (PEM, leaf first).
-Send it in the mint body as `pkcs11_attestation_chain_der` (base64 DER, leaf
-first).
+
+`--edge-attest` then writes the complete mint body for you (A175-L2): run it
+with the CSR, the same PKCS#11 module, token and PIN flags, and the same
+`--edge-pkcs11-attestation-labels`, plus `--edge-parent-ca-id`, `--edge-host`
+and `--edge-mint-request-out`. It reads the chain from the
+token again, checks the leaf certifies the CSR's key, and writes a mode-0600
+body with `key_provider: pkcs11`, the CSR and `pkcs11_attestation_chain_der`
+(base64 DER, leaf first) for `trstctl-cli edge delegations mint -f`:
+
+```sh
+trstctl-agent \
+  --edge-attest \
+  --edge-tenant 77777777-7777-7777-7777-777777777777 \
+  --edge-segment 88888888-8888-8888-8888-888888888888 \
+  --edge-key-provider pkcs11 \
+  --edge-pkcs11-module /usr/lib/ykcs11.so \
+  --edge-pkcs11-token "YubiKey PIV" \
+  --edge-pkcs11-pin-file /etc/trstctl/edge-pin \
+  --edge-pkcs11-attestation-labels "X.509 Certificate for PIV Attestation 9c,X.509 Certificate for PIV Attestation" \
+  --edge-csr-in /var/lib/trstctl/edge-ca.csr \
+  --edge-parent-ca-id 99999999-9999-9999-9999-999999999999 \
+  --edge-host bunker-01 \
+  --edge-mint-ttl 24h \
+  --edge-mint-request-out /var/lib/trstctl/edge-mint.json
+```
 
 The segment pins the vendor's attestation root in `pkcs11_attestation_roots_pem`.
 A chain that reaches a pinned root and certifies the CSR's key makes the custody
