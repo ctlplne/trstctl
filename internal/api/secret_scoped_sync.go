@@ -158,6 +158,10 @@ func (a *API) secretScopedSyncRoutes() []route {
 		{method: "GET", path: "/api/v1/secrets/scoped-syncs/{id}", opID: "getSecretScopedSync",
 			summary: "Show a scoped sync with the destination keys it manages and their delivery status",
 			handler: a.getSecretScopedSync, pathParams: id, resSchema: "SecretScopedSync", successCode: "200", perm: authz.SecretsRead},
+		{method: "PUT", path: "/api/v1/secrets/scoped-syncs/{id}", opID: "replaceSecretScopedSync",
+			summary: "Replace a scoped sync's definition in place; moving the destination releases the keys it managed there, which stay",
+			handler: a.replaceSecretScopedSync, pathParams: id, reqSchema: "SecretScopedSyncRequest", resSchema: "SecretScopedSync",
+			successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "DELETE", path: "/api/v1/secrets/scoped-syncs/{id}", opID: "removeSecretScopedSync",
 			summary: "Remove a scoped sync; the destination keys it wrote stay", handler: a.removeSecretScopedSync,
 			pathParams: id, successCode: "204", mutation: true, perm: authz.SecretsWrite},
@@ -254,47 +258,9 @@ func (a *API) defineSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		source := strings.TrimSuffix(strings.TrimSpace(req.SourcePrefix), "/")
-		dest := strings.Trim(strings.TrimSpace(req.DestinationPrefix), "/")
-		transform, scope := req.KeyTransform, req.DeleteScope
-		if transform == "" {
-			transform = "path"
-		}
-		if scope == "" {
-			scope = "none"
-		}
-		switch {
-		case !secretProjectSlug.MatchString(req.Name):
-			return 0, nil, errStatus(http.StatusBadRequest, "name is lowercase letters, digits and hyphens (1-63)")
-		case !validApplicationSecretImportPath(source) || len(source) > 512:
-			return 0, nil, errStatus(http.StatusBadRequest, "source_prefix is a relative secret path, for example payments/prod/")
-		case dest != "" && (!validApplicationSecretImportPath(dest) || len(dest) > 512):
-			return 0, nil, errStatus(http.StatusBadRequest, "destination_prefix is a relative path without empty or dot segments")
-		case transform != "path" && transform != "env":
-			return 0, nil, errStatus(http.StatusBadRequest, "key_transform is path or env")
-		case req.Mode != "" && !validScopedSyncMode(req.Mode):
-			return 0, nil, errStatus(http.StatusBadRequest, "mode is manual, auto or approved")
-		case scope != "none" && scope != "managed" && scope != "prefix":
-			return 0, nil, errStatus(http.StatusBadRequest, "delete_scope is none, managed (keys this sync wrote) or prefix (every key under the destination prefix)")
-		}
-		if _, err := a.scopedSyncTarget(tenantID, req.Target); err != nil {
-			return 0, nil, err
-		}
-		// A235: a definition reads its source; a restricted environment the
-		// caller isn't granted can't be synced out.
-		if ok, err := a.secretScopeAllows(ctx, tenantID, source+"/", false); err != nil {
-			return 0, nil, err
-		} else if !ok {
-			return 0, nil, errStatus(http.StatusForbidden, "the source is a restricted environment you are not a member of")
-		}
-		existing, err := a.store.ListSecretScopedSyncs(ctx, tenantID)
+		def, err := a.checkScopedSyncDefinition(ctx, tenantID, req, "")
 		if err != nil {
 			return 0, nil, err
-		}
-		for _, d := range existing {
-			if d.Name == req.Name {
-				return 0, nil, errStatus(http.StatusConflict, "a scoped sync named "+req.Name+" already exists")
-			}
 		}
 		subject, err := requestPrincipalSubject(ctx)
 		if err != nil {
@@ -302,8 +268,8 @@ func (a *API) defineSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 		}
 		id := googleuuid.NewString()
 		if err := a.orch.DefineSecretScopedSync(ctx, tenantID, projections.SecretScopedSyncDefined{
-			ID: id, Name: req.Name, SourcePrefix: source + "/", Target: req.Target, DestinationPrefix: dest,
-			KeyTransform: transform, DeleteScope: scope, AdoptExisting: req.AdoptExisting, DefinedBy: subject, Mode: req.Mode,
+			ID: id, Name: def.Name, SourcePrefix: def.SourcePrefix, Target: def.Target, DestinationPrefix: def.DestinationPrefix,
+			KeyTransform: def.KeyTransform, DeleteScope: def.DeleteScope, AdoptExisting: def.AdoptExisting, DefinedBy: subject, Mode: req.Mode,
 		}); err != nil {
 			return 0, nil, err
 		}
@@ -312,6 +278,123 @@ func (a *API) defineSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusCreated, scopedSyncView(d), nil
+	})
+}
+
+// checkScopedSyncDefinition validates a definition request, for a new
+// definition (self "") or a replacement of the one with ID self (A237-L3), and
+// returns the canonical definition: the source read by the caller (a
+// restricted environment it isn't granted can't be synced out, A235), a
+// configured target that lists its keys, and a name no other definition holds.
+func (a *API) checkScopedSyncDefinition(ctx context.Context, tenantID string, req secretScopedSyncRequest, self string) (store.SecretScopedSync, error) {
+	source := strings.TrimSuffix(strings.TrimSpace(req.SourcePrefix), "/")
+	dest := strings.Trim(strings.TrimSpace(req.DestinationPrefix), "/")
+	transform, scope := req.KeyTransform, req.DeleteScope
+	if transform == "" {
+		transform = "path"
+	}
+	if scope == "" {
+		scope = "none"
+	}
+	switch {
+	case !secretProjectSlug.MatchString(req.Name):
+		return store.SecretScopedSync{}, errStatus(http.StatusBadRequest, "name is lowercase letters, digits and hyphens (1-63)")
+	case !validApplicationSecretImportPath(source) || len(source) > 512:
+		return store.SecretScopedSync{}, errStatus(http.StatusBadRequest, "source_prefix is a relative secret path, for example payments/prod/")
+	case dest != "" && (!validApplicationSecretImportPath(dest) || len(dest) > 512):
+		return store.SecretScopedSync{}, errStatus(http.StatusBadRequest, "destination_prefix is a relative path without empty or dot segments")
+	case transform != "path" && transform != "env":
+		return store.SecretScopedSync{}, errStatus(http.StatusBadRequest, "key_transform is path or env")
+	case req.Mode != "" && !validScopedSyncMode(req.Mode):
+		return store.SecretScopedSync{}, errStatus(http.StatusBadRequest, "mode is manual, auto or approved")
+	case scope != "none" && scope != "managed" && scope != "prefix":
+		return store.SecretScopedSync{}, errStatus(http.StatusBadRequest, "delete_scope is none, managed (keys this sync wrote) or prefix (every key under the destination prefix)")
+	}
+	if _, err := a.scopedSyncTarget(tenantID, req.Target); err != nil {
+		return store.SecretScopedSync{}, err
+	}
+	// A235: a definition reads its source; a restricted environment the
+	// caller isn't granted can't be synced out.
+	if ok, err := a.secretScopeAllows(ctx, tenantID, source+"/", false); err != nil {
+		return store.SecretScopedSync{}, err
+	} else if !ok {
+		return store.SecretScopedSync{}, errStatus(http.StatusForbidden, "the source is a restricted environment you are not a member of")
+	}
+	existing, err := a.store.ListSecretScopedSyncs(ctx, tenantID)
+	if err != nil {
+		return store.SecretScopedSync{}, err
+	}
+	for _, d := range existing {
+		if d.Name == req.Name && d.ID != self {
+			return store.SecretScopedSync{}, errStatus(http.StatusConflict, "a scoped sync named "+req.Name+" already exists")
+		}
+	}
+	return store.SecretScopedSync{
+		Name: req.Name, SourcePrefix: source + "/", Target: req.Target, DestinationPrefix: dest,
+		KeyTransform: transform, DeleteScope: scope, AdoptExisting: req.AdoptExisting, Mode: req.Mode,
+	}, nil
+}
+
+// replaceSecretScopedSync replaces a definition in place (A237-L3): the same
+// checks as a new one, the same ID and history. A replacement that moves the
+// destination (another target, destination prefix or key transform) releases
+// the keys the definition managed there, which stay as on removal; one that
+// keeps it keeps them managed. A mode left out stays; leaving the approved
+// mode needs access:write, as switching does. The replacer becomes the
+// definition's author.
+//
+//trstctl:mutation
+func (a *API) replaceSecretScopedSync(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil || a.store == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		var req secretScopedSyncRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		current, err := a.loadScopedSync(ctx, tenantID, r.PathValue("id"))
+		if err != nil {
+			return 0, nil, err
+		}
+		next, err := a.checkScopedSyncDefinition(ctx, tenantID, req, current.ID)
+		if err != nil {
+			return 0, nil, err
+		}
+		if next.Mode == "" {
+			next.Mode = current.Mode
+		}
+		if current.Mode == scopedSyncModeApproved && next.Mode != scopedSyncModeApproved {
+			if err := requireScopedSyncGateAuthority(ctx, tenantID, "leaving approval-gated convergence"); err != nil {
+				return 0, nil, err
+			}
+		}
+		if next.Name == current.Name && next.SourcePrefix == current.SourcePrefix && next.Target == current.Target &&
+			next.DestinationPrefix == current.DestinationPrefix && next.KeyTransform == current.KeyTransform &&
+			next.DeleteScope == current.DeleteScope && next.AdoptExisting == current.AdoptExisting && next.Mode == current.Mode {
+			view, err := a.scopedSyncViewWithKeys(ctx, tenantID, current)
+			return http.StatusOK, view, err
+		}
+		subject, err := requestPrincipalSubject(ctx)
+		if err != nil {
+			return 0, nil, err
+		}
+		if err := a.orch.ReplaceSecretScopedSync(ctx, tenantID, projections.SecretScopedSyncReplaced{
+			ID: current.ID, Name: next.Name, SourcePrefix: next.SourcePrefix, Target: next.Target,
+			DestinationPrefix: next.DestinationPrefix, KeyTransform: next.KeyTransform, DeleteScope: next.DeleteScope,
+			AdoptExisting: next.AdoptExisting, Mode: next.Mode, ReplacedBy: subject,
+			ReleaseKeys: next.Target != current.Target || next.DestinationPrefix != current.DestinationPrefix ||
+				next.KeyTransform != current.KeyTransform,
+		}); err != nil {
+			return 0, nil, err
+		}
+		d, err := a.loadScopedSync(ctx, tenantID, current.ID)
+		if err != nil {
+			return 0, nil, err
+		}
+		view, err := a.scopedSyncViewWithKeys(ctx, tenantID, d)
+		return http.StatusOK, view, err
 	})
 }
 
@@ -360,16 +443,26 @@ func (a *API) getSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	keys, err := a.store.ListSecretScopedSyncKeys(r.Context(), tenantID, d.ID)
+	view, err := a.scopedSyncViewWithKeys(r.Context(), tenantID, d)
 	if err != nil {
 		a.writeError(w, err)
 		return
+	}
+	a.writeJSON(w, http.StatusOK, view)
+}
+
+// scopedSyncViewWithKeys is the definition with the destination keys it
+// manages and their delivery status.
+func (a *API) scopedSyncViewWithKeys(ctx context.Context, tenantID string, d store.SecretScopedSync) (secretScopedSyncResponse, error) {
+	keys, err := a.store.ListSecretScopedSyncKeys(ctx, tenantID, d.ID)
+	if err != nil {
+		return secretScopedSyncResponse{}, err
 	}
 	view := scopedSyncView(d)
 	for _, k := range keys {
 		item := secretScopedSyncKeyResponse{Key: k.RemoteKey, SourceName: k.SourceName, SourceVersion: k.SourceVersion, State: k.State, JobID: k.JobID}
 		if k.JobID != "" {
-			if job, err := a.secrets.be.Store.GetSecretSyncJob(r.Context(), tenantID, k.JobID); err == nil {
+			if job, err := a.secrets.be.Store.GetSecretSyncJob(ctx, tenantID, k.JobID); err == nil {
 				item.JobStatus = string(job.Status)
 			} else if store.IsNotFound(err) {
 				item.JobStatus = "not_queued"
@@ -377,7 +470,7 @@ func (a *API) getSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 		}
 		view.Keys = append(view.Keys, item)
 	}
-	a.writeJSON(w, http.StatusOK, view)
+	return view, nil
 }
 
 //trstctl:mutation

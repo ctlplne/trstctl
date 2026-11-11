@@ -5876,7 +5876,9 @@ console's Secrets → Sync page defines, previews, applies and switches scoped s
 Approval-gated convergence (A237-L1): an `approved` definition is planned like an auto one,
 and each plan with changes is applied only after the tenant's required number of distinct
 approvers who write in the source's environment approve that exact plan. Leaving the mode,
-or removing such a definition, needs `access:write`.
+or removing such a definition, needs `access:write`. A definition is replaced in place
+(A237-L3, `PUT .../scoped-syncs/{id}`); moving the destination releases the keys it managed
+there, which stay.
 Migration and coexistence kit (A243) — served. A migration run reads an export in
 common formats — dotenv, JSON and YAML, per environment and folder — into project
 names, translating its references into the store's `${secret.<name>}` so chains stay

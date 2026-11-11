@@ -108,7 +108,7 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 		"revokeMachineSession", "disableMachineAuthMethod", "enableMachineAuthMethod",
 		"createSecretProject", "listSecretProjects", "getSecretProject", "addSecretProjectEnvironment", "renameSecretProject", "renameSecretProjectEnvironment", "putSecretProjectMember", "deleteSecretProjectMember",
 		"previewSecretPromotion", "applySecretPromotion", "previewSecretRestore", "applySecretRestore",
-		"defineSecretScopedSync", "listSecretScopedSyncs", "getSecretScopedSync", "removeSecretScopedSync", "previewSecretScopedSync", "applySecretScopedSync", "setSecretScopedSyncMode",
+		"defineSecretScopedSync", "replaceSecretScopedSync", "listSecretScopedSyncs", "getSecretScopedSync", "removeSecretScopedSync", "previewSecretScopedSync", "applySecretScopedSync", "setSecretScopedSyncMode",
 		"reportSecretDelivery", "listSecretDeliveries",
 		"assessSecretMigration", "listSecretMigrations", "getSecretMigration", "stageSecretMigration",
 		"applySecretMigrationPermissions", "cutOverSecretMigration", "reissueSecretMigrationCredentials", "rollBackSecretMigration":

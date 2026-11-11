@@ -5644,6 +5644,15 @@ export const messages = {
   },
   "secrets.scopedSyncs.changeMode": { defaultMessage: "Change mode", description: "A237-L1: the mode picker on an existing sync." },
   "secrets.scopedSyncs.setMode": { defaultMessage: "Set mode", description: "A237-L1: apply the chosen mode." },
+  "secrets.scopedSyncs.edit": { defaultMessage: "Edit definition", description: "A237-L3: open the replacement form." },
+  "secrets.scopedSyncs.editLabel": { defaultMessage: "Replace this definition", description: "A237-L3: accessible name of the replacement form." },
+  "secrets.scopedSyncs.editHelp": {
+    defaultMessage: "Moving the destination releases the keys this sync manages there; they stay where they are.",
+    description: "A237-L3: what a replacement does to managed keys.",
+  },
+  "secrets.scopedSyncs.saveDefinition": { defaultMessage: "Save definition", description: "A237-L3: submit the replacement." },
+  "secrets.scopedSyncs.cancelEdit": { defaultMessage: "Cancel", description: "A237-L3: close the replacement form." },
+  "secrets.scopedSyncs.replaceFailed": { defaultMessage: "The definition couldn't be replaced.", description: "A237-L3: replacement failure." },
   "secrets.scopedSyncs.awaitingApproval": {
     defaultMessage: "This plan waits for its approvers: request {request}. It is applied once they approve it.",
     description: "A237-L1: an approval-gated plan waits for approval.",

@@ -1912,10 +1912,19 @@ approved sync waits for the same kind of approval, asked for by its caller. A ch
 asks again. Leaving the `approved` mode, or removing an approved sync, needs
 `access:write`, so the members it gates can't lift the gate themselves.
 
+A definition is replaced in place, under the same ID and history (A237-L3), with `PUT
+/api/v1/secrets/scoped-syncs/{id}` (`trstctl secrets scoped-syncs replace <id> -f def.json`).
+It takes the same body and checks as a new definition. A replacement that keeps the
+destination keeps the keys the sync manages there. One that moves it (another target,
+destination prefix or key transform) releases them: they stay where they are, as on
+removal, and the next plan writes the new place. A mode left out stays as it is. Taking a
+definition out of `approved` this way needs `access:write`, as switching does. The replacer
+becomes the definition's author, and a replacement that changes nothing records nothing.
+
 In the console, **Secrets → Sync** lists the scoped syncs. `secrets:write` holders can
-define new ones, preview and apply plans, and set a sync's mode: manual, auto or
-approval-gated. An approval-gated sync names the request its plan waits for and links
-Approvals.
+define new ones, preview and apply plans, edit a definition, and set a sync's mode:
+manual, auto or approval-gated. An approval-gated sync names the request its plan waits
+for and links Approvals.
 
 ### The auth-method framework (F58)
 

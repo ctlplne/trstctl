@@ -920,6 +920,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "scoped-syncs", "define"}, Method: "POST", Path: "/api/v1/secrets/scoped-syncs", Body: bodyFile, Summary: "Define a scoped sync: every secret under a source prefix to a KV v2 target under a destination prefix"},
 	{Name: []string{"secrets", "scoped-syncs", "list"}, Method: "GET", Path: "/api/v1/secrets/scoped-syncs", Summary: "List scoped syncs"},
 	{Name: []string{"secrets", "scoped-syncs", "show"}, Method: "GET", Path: "/api/v1/secrets/scoped-syncs/{id}", Summary: "Show a scoped sync with the destination keys it manages and their delivery status"},
+	{Name: []string{"secrets", "scoped-syncs", "replace"}, Method: "PUT", Path: "/api/v1/secrets/scoped-syncs/{id}", Body: bodyFile, Summary: "Replace a scoped sync's definition in place; moving the destination releases the keys it managed there, which stay"},
 	{Name: []string{"secrets", "scoped-syncs", "remove"}, Method: "DELETE", Path: "/api/v1/secrets/scoped-syncs/{id}", Summary: "Remove a scoped sync; the destination keys it wrote stay"},
 	{Name: []string{"secrets", "scoped-syncs", "mode"}, Method: "PUT", Path: "/api/v1/secrets/scoped-syncs/{id}/mode", Body: bodyFile, Summary: "Set a scoped sync's mode: manual, auto, or approved (planned like auto, each plan applied once approved)"},
 	{Name: []string{"secrets", "scoped-syncs", "preview"}, Method: "POST", Path: "/api/v1/secrets/scoped-syncs/{id}/preview", ReadOnly: true, Summary: "Preview a scoped sync: a value-free plan per destination key and its digest"},

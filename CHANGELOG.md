@@ -2,6 +2,12 @@
 
 ### Added
 
+- A scoped sync definition can be replaced in place (A237-L3): `PUT /api/v1/secrets/scoped-syncs/{id}`,
+  `trstctl secrets scoped-syncs replace`, and Edit definition in the console. Replacing used to mean
+  removing and defining it again. The replacement takes the same checks as a new definition and keeps
+  the same ID and history. Keeping the destination keeps the keys the sync manages there. Moving it
+  releases them, so they stay where they are, and the next plan writes the new place. A mode left out
+  stays, and leaving the approval-gated mode needs `access:write`.
 - Approval-gated convergence for scoped secret syncs (A237-L1): a third mode, `approved`. The control
   plane plans the sync when its sources change, as for `auto`, but applies a plan with changes only
   after the tenant's required number of distinct approvers (members who write in the source's

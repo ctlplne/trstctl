@@ -3037,6 +3037,7 @@ export interface Api {
   getSecretScopedSync(id: string): Promise<SecretScopedSync>;
   defineSecretScopedSync(input: SecretScopedSyncRequest, idempotencyKey?: string): Promise<SecretScopedSync>;
   setSecretScopedSyncMode(id: string, input: SecretScopedSyncModeRequest, idempotencyKey?: string): Promise<SecretScopedSync>;
+  replaceSecretScopedSync(id: string, input: SecretScopedSyncRequest, idempotencyKey?: string): Promise<SecretScopedSync>;
   previewSecretScopedSync(id: string): Promise<SecretScopedSyncPlan>;
   applySecretScopedSync(id: string, input: SecretScopedSyncApplyRequest, idempotencyKey?: string): Promise<SecretScopedSyncReceipt>;
   listDecoySecrets(cursor?: string): Promise<DecoySecretList>;
@@ -4233,6 +4234,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   getSecretScopedSync: scopedSyncs.getSecretScopedSync,
   defineSecretScopedSync: scopedSyncs.defineSecretScopedSync,
   setSecretScopedSyncMode: scopedSyncs.setSecretScopedSyncMode,
+  replaceSecretScopedSync: scopedSyncs.replaceSecretScopedSync,
   previewSecretScopedSync: (id) => postRead<SecretScopedSyncPlan>(`/api/v1/secrets/scoped-syncs/${encodeURIComponent(id)}/preview`),
   applySecretScopedSync: scopedSyncs.applySecretScopedSync,
   listDecoySecrets: decoy.listDecoySecrets,

@@ -126,6 +126,29 @@ func (s *Store) ApplySecretScopedSyncDefinedTx(ctx context.Context, tx pgx.Tx, t
 	return err
 }
 
+// ApplySecretScopedSyncReplacedTx replaces a definition's route, rules, mode
+// and author in place (A237-L3); a replay of an older replacement changes
+// nothing. With releaseKeys the destination moved, so the keys the definition
+// managed there are released: they stay at the destination, as on removal.
+func (s *Store) ApplySecretScopedSyncReplacedTx(ctx context.Context, tx pgx.Tx, tenantID string, d SecretScopedSync, releaseKeys bool, sequence uint64) error {
+	seq, err := secretProjectSequence(sequence)
+	if err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, `
+		UPDATE secret_scoped_syncs
+		   SET name = $3, source_prefix = $4, target = $5, destination_prefix = $6, key_transform = $7,
+		       delete_scope = $8, adopt_existing = $9, defined_by = $10, mode = $11, updated_at = $12, event_sequence = $13
+		 WHERE tenant_id = $1 AND id = $2 AND event_sequence < $13`,
+		tenantID, d.ID, d.Name, d.SourcePrefix, d.Target, d.DestinationPrefix, d.KeyTransform, d.DeleteScope,
+		d.AdoptExisting, d.DefinedBy, d.Mode, d.UpdatedAt.UTC(), seq)
+	if err != nil || tag.RowsAffected() != 1 || !releaseKeys {
+		return err
+	}
+	_, err = tx.Exec(ctx, `DELETE FROM secret_scoped_sync_keys WHERE tenant_id = $1 AND sync_id = $2`, tenantID, d.ID)
+	return err
+}
+
 // ApplySecretScopedSyncModeSetTx switches a definition between manual and auto.
 func (s *Store) ApplySecretScopedSyncModeSetTx(ctx context.Context, tx pgx.Tx, tenantID, id, mode string, at time.Time, sequence uint64) error {
 	seq, err := secretProjectSequence(sequence)

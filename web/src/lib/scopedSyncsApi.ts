@@ -19,6 +19,11 @@ export const getSecretScopedSync = (id: string) => req<SecretScopedSync>(`/api/v
 export const defineSecretScopedSync = (input: SecretScopedSyncRequest, idempotencyKey?: string) =>
   mutate<SecretScopedSync>("POST", "/api/v1/secrets/scoped-syncs", input, idempotencyKey);
 
+// A237-L3: replace a definition in place; moving the destination releases the
+// keys it managed there, which stay.
+export const replaceSecretScopedSync = (id: string, input: SecretScopedSyncRequest, idempotencyKey?: string) =>
+  mutate<SecretScopedSync>("PUT", `/api/v1/secrets/scoped-syncs/${encodeURIComponent(id)}`, input, idempotencyKey);
+
 export const setSecretScopedSyncMode = (id: string, input: SecretScopedSyncModeRequest, idempotencyKey?: string) =>
   mutate<SecretScopedSync>("PUT", `/api/v1/secrets/scoped-syncs/${encodeURIComponent(id)}/mode`, input, idempotencyKey);
 

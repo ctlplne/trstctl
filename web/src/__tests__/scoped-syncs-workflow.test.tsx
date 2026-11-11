@@ -10,6 +10,7 @@ const { apiMock, can } = vi.hoisted(() => ({
     getSecretScopedSync: vi.fn(),
     defineSecretScopedSync: vi.fn(),
     setSecretScopedSyncMode: vi.fn(),
+    replaceSecretScopedSync: vi.fn(),
     previewSecretScopedSync: vi.fn(),
     applySecretScopedSync: vi.fn(),
   },
@@ -146,6 +147,32 @@ describe("A237 scoped syncs", () => {
     expect(apiMock.previewSecretScopedSync).toHaveBeenCalledTimes(1);
   });
 
+  // A237-L3: a definition is replaced in place from the edit form, which
+  // says what moving the destination does to the keys it manages.
+  it("replaces a definition in place", async () => {
+    apiMock.replaceSecretScopedSync.mockResolvedValue({ ...sync, destination_prefix: "pay" });
+    const user = userEvent.setup();
+    render(<ScopedSyncsWorkflow targets={["vault"]} />);
+    await user.click(await screen.findByRole("button", { name: "Open" }));
+    await user.click(await screen.findByRole("button", { name: "Edit definition" }));
+    const form = within(screen.getByRole("form", { name: "Replace this definition" }));
+    expect(form.getByText("Moving the destination releases the keys this sync manages there; they stay where they are.")).toBeInTheDocument();
+    const destination = form.getByRole("textbox", { name: "Destination prefix (optional)" });
+    await user.clear(destination);
+    await user.type(destination, "pay");
+    await user.click(form.getByRole("button", { name: "Save definition" }));
+    expect(apiMock.replaceSecretScopedSync).toHaveBeenCalledWith("s1", {
+      name: "payments-prod",
+      source_prefix: "payments/prod/",
+      target: "vault",
+      destination_prefix: "pay",
+      key_transform: "path",
+      delete_scope: "managed",
+      adopt_existing: false,
+    });
+    expect(screen.queryByRole("form", { name: "Replace this definition" })).not.toBeInTheDocument();
+  });
+
   it("offers no define, apply or mode switch without secrets:write", async () => {
     can.value = false;
     apiMock.previewSecretScopedSync.mockResolvedValue(plan);
@@ -156,6 +183,7 @@ describe("A237 scoped syncs", () => {
     await screen.findByRole("list", { name: "Plan" });
     expect(screen.queryByRole("button", { name: "Apply this plan" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Set mode" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit definition" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Define scoped sync" })).not.toBeInTheDocument();
   });
 });

@@ -10634,7 +10634,8 @@ export interface paths {
         };
         /** Show a scoped sync with the destination keys it manages and their delivery status */
         get: operations["getSecretScopedSync"];
-        put?: never;
+        /** Replace a scoped sync's definition in place; moving the destination releases the keys it managed there, which stay */
+        put: operations["replaceSecretScopedSync"];
         post?: never;
         /** Remove a scoped sync; the destination keys it wrote stay */
         delete: operations["removeSecretScopedSync"];
@@ -59433,6 +59434,54 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretScopedSync"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    replaceSecretScopedSync: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description scoped sync ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretScopedSyncRequest"];
+            };
+        };
         responses: {
             /** @description success */
             200: {

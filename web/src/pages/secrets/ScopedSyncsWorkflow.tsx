@@ -46,6 +46,8 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
   const [mode, setMode] = useState<Mode>("manual");
   const [nextMode, setNextMode] = useState<Mode>("manual");
   const [awaiting, setAwaiting] = useState<string | null>(null);
+  // A237-L3: the replacement being edited for the selected definition.
+  const [editing, setEditing] = useState<{ name: string; source: string; target: string; destination: string; deleteScope: DeleteScope } | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -69,6 +71,7 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
       const opened = await api.getSecretScopedSync(id);
       setSelected(opened);
       setNextMode(opened.mode as Mode);
+      setEditing(null);
       setPlan(null);
       setMessage(null);
       setAwaiting(null);
@@ -155,6 +158,43 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
       await refresh();
     } catch (cause) {
       setError(apiProblemMessage(cause, t("secrets.scopedSyncs.modeFailed")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startEdit() {
+    if (!selected) return;
+    setEditing({
+      name: selected.name,
+      source: selected.source_prefix,
+      target: selected.target,
+      destination: selected.destination_prefix ?? "",
+      deleteScope: selected.delete_scope as DeleteScope,
+    });
+  }
+
+  async function replace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected || !editing) return;
+    setBusy(true);
+    try {
+      const replaced = await api.replaceSecretScopedSync(selected.id, {
+        name: editing.name.trim(),
+        source_prefix: editing.source.trim(),
+        target: editing.target,
+        destination_prefix: editing.destination.trim() || undefined,
+        key_transform: selected.key_transform as "path" | "env",
+        delete_scope: editing.deleteScope,
+        adopt_existing: selected.adopt_existing,
+      });
+      setSelected(replaced);
+      setEditing(null);
+      setPlan(null);
+      setError(null);
+      await refresh();
+    } catch (cause) {
+      setError(apiProblemMessage(cause, t("secrets.scopedSyncs.replaceFailed")));
     } finally {
       setBusy(false);
     }
@@ -271,9 +311,62 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
                 <Button type="button" variant="outline" onClick={() => void switchMode()} disabled={busy || nextMode === selected.mode}>
                   {t("secrets.scopedSyncs.setMode")}
                 </Button>
+                <Button type="button" variant="outline" onClick={startEdit} disabled={busy || editing !== null}>
+                  {t("secrets.scopedSyncs.edit")}
+                </Button>
               </>
             ) : null}
           </div>
+          {editing ? (
+            <form onSubmit={(event) => void replace(event)} className="grid max-w-xl gap-3" aria-label={t("secrets.scopedSyncs.editLabel")}>
+              <p className="text-muted-foreground">{t("secrets.scopedSyncs.editHelp")}</p>
+              <Field label={t("secrets.scopedSyncs.name")}>
+                {(control) => (
+                  <Input {...control} value={editing.name} maxLength={63} onChange={(event) => setEditing({ ...editing, name: event.target.value })} />
+                )}
+              </Field>
+              <Field label={t("secrets.scopedSyncs.source")}>
+                {(control) => <Input {...control} value={editing.source} onChange={(event) => setEditing({ ...editing, source: event.target.value })} />}
+              </Field>
+              <Field label={t("secrets.scopedSyncs.target")}>
+                {(control) => (
+                  <Select {...control} value={editing.target} onChange={(event) => setEditing({ ...editing, target: event.target.value })}>
+                    {targets.map((id) => (
+                      <option key={id} value={id}>
+                        {id}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label={t("secrets.scopedSyncs.destination")}>
+                {(control) => (
+                  <Input {...control} value={editing.destination} onChange={(event) => setEditing({ ...editing, destination: event.target.value })} />
+                )}
+              </Field>
+              <Field label={t("secrets.scopedSyncs.deleteScope")}>
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={editing.deleteScope}
+                    onChange={(event) => setEditing({ ...editing, deleteScope: event.target.value as DeleteScope })}
+                  >
+                    <option value="none">{t("secrets.scopedSyncs.scope.none")}</option>
+                    <option value="managed">{t("secrets.scopedSyncs.scope.managed")}</option>
+                    <option value="prefix">{t("secrets.scopedSyncs.scope.prefix")}</option>
+                  </Select>
+                )}
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" disabled={busy || !editing.name.trim() || !editing.source.trim() || !editing.target}>
+                  {t("secrets.scopedSyncs.saveDefinition")}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setEditing(null)} disabled={busy}>
+                  {t("secrets.scopedSyncs.cancelEdit")}
+                </Button>
+              </div>
+            </form>
+          ) : null}
           {plan ? (
             <div className="grid gap-2">
               <p>{t("secrets.scopedSyncs.summary", { changes: String(plan.changes), blocked: String(plan.blocked) })}</p>

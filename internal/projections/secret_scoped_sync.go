@@ -22,6 +22,8 @@ const (
 	EventSecretScopedSyncDeleteFailed = "secret.scoped_sync.delete_failed" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	EventSecretScopedSyncModeSet      = "secret.scoped_sync.mode_set"      // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	EventSecretScopedSyncReconciled   = "secret.scoped_sync.reconciled"    // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	// EventSecretScopedSyncReplaced replaces a definition in place (A237-L3).
+	EventSecretScopedSyncReplaced = "secret.scoped_sync.replaced" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 )
 
 // SecretScopedSyncDefined is the payload of secret.scoped_sync.defined.
@@ -38,6 +40,26 @@ type SecretScopedSyncDefined struct {
 	// Mode is manual, auto (A237 part b) or approved (A237-L1); absent reads
 	// as manual.
 	Mode string `json:"mode,omitempty"`
+}
+
+// SecretScopedSyncReplaced is the payload of secret.scoped_sync.replaced
+// (A237-L3): the definition's new route, rules and mode under the same ID.
+// ReleaseKeys says the destination moved (another target, destination prefix
+// or key transform), so the keys the definition managed there are released:
+// they stay at the destination, as on removal, and the definition no longer
+// manages them. The replacer becomes the definition's author.
+type SecretScopedSyncReplaced struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	SourcePrefix      string `json:"source_prefix"`
+	Target            string `json:"target"`
+	DestinationPrefix string `json:"destination_prefix,omitempty"`
+	KeyTransform      string `json:"key_transform"`
+	DeleteScope       string `json:"delete_scope"`
+	AdoptExisting     bool   `json:"adopt_existing,omitempty"`
+	Mode              string `json:"mode"`
+	ReplacedBy        string `json:"replaced_by"`
+	ReleaseKeys       bool   `json:"release_keys,omitempty"`
 }
 
 // SecretScopedSyncRemoved is the payload of secret.scoped_sync.removed.
@@ -105,7 +127,7 @@ type SecretScopedSyncDeleteFailed struct {
 func init() {
 	for _, typ := range []string{EventSecretScopedSyncDefined, EventSecretScopedSyncRemoved, EventSecretScopedSyncApplied,
 		EventSecretScopedSyncKeyDeleted, EventSecretScopedSyncDeleteFailed, EventSecretScopedSyncModeSet,
-		EventSecretScopedSyncReconciled} {
+		EventSecretScopedSyncReconciled, EventSecretScopedSyncReplaced} {
 		knownSchemaVersions[typ] = map[int]bool{1: true}
 	}
 }
@@ -126,6 +148,19 @@ func (p *Projector) applySecretScopedSyncTx(ctx context.Context, tx pgx.Tx, e ev
 			DestinationPrefix: pl.DestinationPrefix, KeyTransform: pl.KeyTransform, DeleteScope: pl.DeleteScope,
 			AdoptExisting: pl.AdoptExisting, DefinedBy: pl.DefinedBy, UpdatedAt: e.Time, Mode: pl.Mode,
 		}, e.Sequence)
+	case EventSecretScopedSyncReplaced:
+		var pl SecretScopedSyncReplaced
+		if err := decode(e, &pl); err != nil {
+			return true, err
+		}
+		if pl.ID == "" || pl.Name == "" || pl.SourcePrefix == "" || pl.Target == "" || pl.Mode == "" || pl.ReplacedBy == "" || e.Time.IsZero() {
+			return incomplete()
+		}
+		return true, p.store.ApplySecretScopedSyncReplacedTx(ctx, tx, e.TenantID, store.SecretScopedSync{
+			ID: pl.ID, Name: pl.Name, SourcePrefix: pl.SourcePrefix, Target: pl.Target,
+			DestinationPrefix: pl.DestinationPrefix, KeyTransform: pl.KeyTransform, DeleteScope: pl.DeleteScope,
+			AdoptExisting: pl.AdoptExisting, DefinedBy: pl.ReplacedBy, UpdatedAt: e.Time, Mode: pl.Mode,
+		}, pl.ReleaseKeys, e.Sequence)
 	case EventSecretScopedSyncModeSet:
 		var pl SecretScopedSyncModeSet
 		if err := decode(e, &pl); err != nil {
@@ -211,6 +246,11 @@ func addSecretScopedSyncPrivacyPolicies(policies map[privacyEventPolicyKey]event
 		privacyRule("/target", opaque), privacyRule("/destination_prefix", opaque), privacyRule("/key_transform", opaque),
 		privacyRule("/delete_scope", opaque), privacyRule("/adopt_existing", opaque), privacyRule("/defined_by", exact),
 		privacyRule("/mode", opaque))
+	policies[privacyEventPolicyKey{EventSecretScopedSyncReplaced, 1}] = privacyRules(
+		privacyRule("/id", opaque), privacyRule("/name", opaque), privacyRule("/source_prefix", opaque),
+		privacyRule("/target", opaque), privacyRule("/destination_prefix", opaque), privacyRule("/key_transform", opaque),
+		privacyRule("/delete_scope", opaque), privacyRule("/adopt_existing", opaque), privacyRule("/mode", opaque),
+		privacyRule("/replaced_by", exact), privacyRule("/release_keys", opaque))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncModeSet, 1}] = privacyRules(
 		privacyRule("/id", opaque), privacyRule("/mode", opaque), privacyRule("/set_by", exact))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncReconciled, 1}] = privacyRules(
@@ -243,6 +283,7 @@ func addSecretScopedSyncPrivacyPolicies(policies map[privacyEventPolicyKey]event
 // addSecretScopedSyncPrivacyShapes registers the scoped sync events' shapes.
 func addSecretScopedSyncPrivacyShapes(shapes map[privacyEventPolicyKey]events.PrivacyPayloadShape) {
 	shapes[privacyEventPolicyKey{EventSecretScopedSyncDefined, 1}] = privacyPayloadShape[SecretScopedSyncDefined]()
+	shapes[privacyEventPolicyKey{EventSecretScopedSyncReplaced, 1}] = privacyPayloadShape[SecretScopedSyncReplaced]()
 	shapes[privacyEventPolicyKey{EventSecretScopedSyncRemoved, 1}] = privacyPayloadShape[SecretScopedSyncRemoved]()
 	shapes[privacyEventPolicyKey{EventSecretScopedSyncApplied, 1}] = privacyPayloadShape[SecretScopedSyncApplied]()
 	shapes[privacyEventPolicyKey{EventSecretScopedSyncKeyDeleted, 1}] = privacyPayloadShape[SecretScopedSyncKeyDeleted]()

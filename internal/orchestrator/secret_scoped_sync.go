@@ -22,6 +22,11 @@ func (o *Orchestrator) DefineSecretScopedSync(ctx context.Context, tenantID stri
 
 // RemoveSecretScopedSync records that a definition is gone; the destination
 // keys it wrote stay where they are.
+// ReplaceSecretScopedSync records a definition replaced in place (A237-L3).
+func (o *Orchestrator) ReplaceSecretScopedSync(ctx context.Context, tenantID string, replaced projections.SecretScopedSyncReplaced) error {
+	return o.emitSecretProjectEvent(ctx, tenantID, projections.EventSecretScopedSyncReplaced, replaced)
+}
+
 func (o *Orchestrator) RemoveSecretScopedSync(ctx context.Context, tenantID string, removed projections.SecretScopedSyncRemoved) error {
 	return o.emitSecretProjectEvent(ctx, tenantID, projections.EventSecretScopedSyncRemoved, removed)
 }

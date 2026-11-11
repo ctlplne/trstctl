@@ -433,8 +433,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// retry-revocation`. N5-L3 adds `workloads jwt-keys list|rotate`.
 	// A171-L1 adds `discovery findings unblock-oauth-app`. A235-L3 adds
 	// `secrets projects rename` and `secrets projects environments rename`.
-	if len(out) != 873 {
-		t.Fatalf("CLI commands = %d, want 873", len(out))
+	// A237-L3 adds `secrets scoped-syncs replace`.
+	if len(out) != 874 {
+		t.Fatalf("CLI commands = %d, want 874", len(out))
 	}
 	return out
 }
