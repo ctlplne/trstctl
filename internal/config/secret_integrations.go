@@ -96,6 +96,17 @@ func (c AWSHoneyAccountConfig) PollIntervalDuration() (time.Duration, error) {
 // left empty; validation rejects incomplete entries before the server starts.
 var azureGatewayTenant = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$`)
 
+// SSHCertificateRole is what one role of an ssh-certificate provider
+// certifies (A239-L11). Each lease gets a fresh Ed25519 key pair and a
+// certificate from the control plane's SSH CA for exactly these principals.
+type SSHCertificateRole struct {
+	// CertificateType is user (the default) or host.
+	CertificateType string            `json:"certificate_type,omitempty"`
+	Principals      []string          `json:"principals"`
+	Extensions      map[string]string `json:"extensions,omitempty"`
+	CriticalOptions map[string]string `json:"critical_options,omitempty"`
+}
+
 // DynamicSecretGatewayConfig pins where a brokered cloud account can call.
 // These are public routing facts, covered by the provider's reviewed configuration identity.
 type DynamicSecretGatewayConfig struct {
@@ -258,11 +269,15 @@ type DynamicSecretProviderConfig struct {
 	RoleAccess map[string]string `json:"role_access,omitempty"`
 	// RedisACLRoles gives each allowed Redis role literal key namespaces and an
 	// explicit command allowlist. Raw ACL rules and categories are forbidden.
-	RedisACLRoles       map[string]redisacl.Role `json:"redis_acl_roles,omitempty"`
-	RedisTLSCARef       string                   `json:"redis_tls_ca_ref,omitempty"`
-	RedisTLSServerName  string                   `json:"redis_tls_server_name,omitempty"`
-	AllowPlaintextRedis bool                     `json:"allow_plaintext_redis,omitempty"`
-	MaxTTL              string                   `json:"max_ttl,omitempty"`
+	RedisACLRoles map[string]redisacl.Role `json:"redis_acl_roles,omitempty"`
+	// SSHRoles gives each allowed role of an ssh-certificate provider the
+	// certificate its leases carry (A239-L11): the principals it certifies,
+	// user or host, and its extensions and critical options.
+	SSHRoles            map[string]SSHCertificateRole `json:"ssh_roles,omitempty"`
+	RedisTLSCARef       string                        `json:"redis_tls_ca_ref,omitempty"`
+	RedisTLSServerName  string                        `json:"redis_tls_server_name,omitempty"`
+	AllowPlaintextRedis bool                          `json:"allow_plaintext_redis,omitempty"`
+	MaxTTL              string                        `json:"max_ttl,omitempty"`
 	// AllowStaticRotation lets the static-rotation worker mint long-lived
 	// credentials with no native expiry through this provider (postgresql,
 	// mysql, aws-iam) for roles in allowed_roles. Off by default: a dynamic
@@ -396,7 +411,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {}, "oracle": {}, "hana": {},
 	"openrouter": {}, "fireworks": {}, "litellm": {}, "supabase": {}, "convex": {}, "dbt": {}, "cloudflare": {}, "cloudflare-r2": {},
 	"okta": {}, "databricks": {}, "windows": {}, "iosxe": {}, "junos": {}, "eos": {}, "fortigate": {}, "bigip": {}, "redfish": {}, "esxi": {}, "vcenter-sso": {},
-	"okta-user": {}, "entra-user": {}, "google-workspace-user": {},
+	"okta-user": {}, "entra-user": {}, "google-workspace-user": {}, "ssh-certificate": {},
 }
 
 // clientIDProviderTypes take client_id, and clientSecretProviderTypes
@@ -658,7 +673,7 @@ func mapValues(values map[string]string) []string {
 
 // a239ProviderValidators check the A239 library's providers, one function each.
 var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig) []error{
-	"ldap": validateLDAPProvider, "totp": validateTOTPProvider,
+	"ldap": validateLDAPProvider, "totp": validateTOTPProvider, "ssh-certificate": validateSSHCertificateProvider,
 	"oauth-client-credentials": validateOAuthClientCredentialsProvider, "clickhouse": validateClickHouseProvider,
 	"elasticsearch": validateElasticsearchProvider, "rabbitmq": validateRabbitMQProvider,
 	"tailscale": validateTailscaleProvider, "mongodb-atlas": validateMongoDBAtlasProvider, "kafka": validateKafkaProvider,
@@ -1259,6 +1274,9 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	}
 	if len(c.RoleAccess) > 0 && c.Type != "postgresql" && c.Type != "mysql" && c.Type != "mongodb" {
 		errs = append(errs, fmt.Errorf("%s role_access is only valid for mongodb, mysql and postgresql", where))
+	}
+	if len(c.SSHRoles) > 0 && c.Type != "ssh-certificate" {
+		errs = append(errs, fmt.Errorf("%s ssh_roles is only valid for ssh-certificate", where))
 	}
 	if len(c.RedisACLRoles) > 0 && c.Type != "redis" && c.Type != "aws-elasticache" && c.Type != "aws-memorydb" {
 		errs = append(errs, fmt.Errorf("%s redis_acl_roles is only valid for redis, aws-elasticache and aws-memorydb", where))
@@ -2753,6 +2771,47 @@ func validateBreakGlassTOTP(providers []DynamicSecretProviderConfig) []error {
 			if !ok || !slices.Contains(normalizedStrings(target.AllowedRoles), role) {
 				errs = append(errs, fmt.Errorf("secret_integrations.dynamic_providers[%d] totp_providers[%q] must name a totp provider in the same tenant that allows role %q", i, role, role))
 			}
+		}
+	}
+	return errs
+}
+
+// validateSSHCertificateProvider checks an ssh-certificate provider (A239-L11):
+// it signs with the control plane's own SSH CA, so it takes no endpoint and
+// no credential, and every allowed role names the certificate its leases
+// carry. User principals must also be listed in protocols.ssh_user_principals,
+// which bounds every user certificate the CA signs; issuance refuses one that
+// isn't.
+func validateSSHCertificateProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Endpoint) != "" || c.AllowStaticRotation {
+		errs = append(errs, fmt.Errorf("%s ssh-certificate signs with the control plane's SSH CA: it takes no endpoint and no static rotation", where))
+	}
+	allowed := map[string]bool{}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		allowed[role] = true
+		r, ok := c.SSHRoles[role]
+		if !ok {
+			errs = append(errs, fmt.Errorf("%s role %q needs ssh_roles[%q]: the principals its certificates carry", where, role, role))
+			continue
+		}
+		switch strings.TrimSpace(r.CertificateType) {
+		case "", "user", "host":
+		default:
+			errs = append(errs, fmt.Errorf("%s ssh_roles[%q].certificate_type must be user or host", where, role))
+		}
+		if len(normalizedStrings(r.Principals)) == 0 {
+			errs = append(errs, fmt.Errorf("%s ssh_roles[%q].principals must name at least one principal", where, role))
+		}
+		for _, principal := range r.Principals {
+			if strings.TrimSpace(principal) == "" || strings.ContainsAny(principal, ", \t\r\n") {
+				errs = append(errs, fmt.Errorf("%s ssh_roles[%q] principal %q must be one name with no spaces or commas", where, role, principal))
+			}
+		}
+	}
+	for role := range c.SSHRoles {
+		if !allowed[role] {
+			errs = append(errs, fmt.Errorf("%s ssh_roles[%q] is not an allowed role", where, role))
 		}
 	}
 	return errs

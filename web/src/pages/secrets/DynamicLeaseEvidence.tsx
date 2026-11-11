@@ -4,6 +4,22 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import type { DynamicLease } from "@/lib/api";
 import { DynamicLeaseMetadata, RevealPanel } from "./SecretsPageParts";
 
+// sshLeaseCredential reads an SSH certificate lease's credential (A239-L11).
+// Its private key and its certificate are saved as two files beside each
+// other, so each gets a reveal of its own rather than one JSON blob.
+function sshLeaseCredential(value: string): { privateKey: string; certificate: string; principals: string[] } | null {
+  try {
+    const parsed = JSON.parse(value) as { private_key?: unknown; certificate?: unknown; principals?: unknown };
+    if (typeof parsed.private_key !== "string" || typeof parsed.certificate !== "string" || !parsed.certificate.includes("-cert-v01@openssh.com")) {
+      return null;
+    }
+    const principals = Array.isArray(parsed.principals) ? parsed.principals.filter((p): p is string => typeof p === "string") : [];
+    return { privateKey: parsed.private_key, certificate: parsed.certificate, principals };
+  } catch {
+    return null;
+  }
+}
+
 export function DynamicLeaseEvidence({
   lease,
   active,
@@ -20,6 +36,7 @@ export function DynamicLeaseEvidence({
   dismiss: () => void;
 }) {
   const { t } = useTranslation();
+  const ssh = credential ? sshLeaseCredential(credential.value) : null;
   const complete = lease.revocation_status === "completed" && !!lease.revocation_completed_at;
   const awsSession = !!lease.native_expires_at;
   const status = error
@@ -55,9 +72,20 @@ export function DynamicLeaseEvidence({
       {error ? <ErrorState title={t("secrets.dynamic.statusUnavailable")}>{error}</ErrorState> : null}
       <DynamicLeaseMetadata lease={lease} />
       {credential && active && credential.leaseID === lease.id ? (
-        <RevealPanel title={t("secrets.dynamic.credentialTitle", { id: credential.leaseID })} onDismiss={dismiss} value={credential.value}>
-          {t("secrets.dynamic.credentialHelp")}
-        </RevealPanel>
+        ssh ? (
+          <>
+            <RevealPanel title={t("secrets.dynamic.sshKeyTitle", { id: credential.leaseID })} onDismiss={dismiss} value={ssh.privateKey}>
+              {t("secrets.dynamic.sshKeyHelp")}
+            </RevealPanel>
+            <RevealPanel title={t("secrets.dynamic.sshCertificateTitle")} onDismiss={dismiss} value={ssh.certificate}>
+              {t("secrets.dynamic.sshCertificateHelp", { principals: ssh.principals.join(", ") })}
+            </RevealPanel>
+          </>
+        ) : (
+          <RevealPanel title={t("secrets.dynamic.credentialTitle", { id: credential.leaseID })} onDismiss={dismiss} value={credential.value}>
+            {t("secrets.dynamic.credentialHelp")}
+          </RevealPanel>
+        )
       ) : null}
     </div>
   );

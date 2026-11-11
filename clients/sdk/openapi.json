@@ -22497,7 +22497,8 @@
               "vcenter-sso",
               "okta-user",
               "entra-user",
-              "google-workspace-user"
+              "google-workspace-user",
+              "ssh-certificate"
             ],
             "type": "string"
           }

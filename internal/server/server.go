@@ -2328,6 +2328,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	s.awsHoneyAccounts = d.TenantAWSHoneyAccounts
 	secretIntegrations := &secretIntegrationOutboxDispatcher{
 		dynamicProviders:         d.TenantDynamicSecretProviders,
+		attachProviders:          s.attachSSHCertificateProviders,
 		awsHoneyAccounts:         d.TenantAWSHoneyAccounts,
 		fallbackDynamicProviders: d.DynamicSecretProviders,
 		syncTargets:              d.TenantSecretSyncTargets,

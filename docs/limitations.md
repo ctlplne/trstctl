@@ -5626,7 +5626,11 @@ when off, requiring a KEK when on):
   revocation deletes it and AUTH then fails); a live proof needs an AWS account.
   IBM API Connect app credentials (A239) are built against a stand-in of the
   platform API only (the gateway accepts a leased credential and refuses it once
-  revoked); a live proof needs an API Connect instance. What comes next in
+  revoked); a live proof needs an API Connect instance. SSH certificates (A239-L11,
+  `ssh-certificate`) are issued from the control plane's own SSH CA and proven with
+  the stock ssh-keygen: a lease's certificate names its principal, its key ID and
+  the CA, and once the lease is revoked the served KRL reports it revoked. A host
+  refuses it only once it loads that KRL, as for every certificate this CA revokes. What comes next in
   A239's library: Vertica (its freely available image runs Community Edition
   under an evaluation-only license, which doesn't cover continuous CI testing)
   and SAP ASE (no freely available image). The A240 hosted API key providers

@@ -2357,7 +2357,7 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `datadog`, `openai`, `unix`, `cassandra`, `oracle`, `hana`, `openrouter`, `fireworks`,
 `litellm`, `supabase`, `convex`, `dbt`, `cloudflare`, `cloudflare-r2`, `okta`,
 `databricks`, `windows`, `iosxe`, `junos`, `eos`, `fortigate`, `bigip`, `redfish`, `esxi`, `vcenter-sso`, `okta-user`,
-`entra-user` and `google-workspace-user`. Sync `type` values are
+`entra-user`, `google-workspace-user` and `ssh-certificate`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`,
@@ -2752,6 +2752,34 @@ at `valid_until`.
   "seed_ref": "file:/run/secrets/ops-totp-seed",
   "allowed_roles": ["operator"],
   "max_ttl": "30s"
+}
+```
+
+For SSH certificates (A239-L11, `ssh-certificate`), the provider signs with the control
+plane's own SSH CA, so it takes no endpoint and no credential, and the served SSH protocol
+(`protocols.ssh`) must be on for the same tenant. `ssh_roles` gives every allowed role the
+certificate its leases carry: `principals` (the login or host names, one per entry),
+`certificate_type` (`user`, the default, or `host`), and optional `extensions` and
+`critical_options`. A user principal must also be listed in `protocols.ssh_user_principals`,
+which bounds every user certificate the CA signs; a lease for one that isn't fails. Each
+lease gets a fresh Ed25519 key pair, prepared and sealed before the CA signs (a retry
+certifies the same key), and a certificate valid for the lease's lifetime, keyed
+`trstctl-<lease ID>`. Its credential is JSON with `private_key` (OpenSSH form),
+`certificate`, `key_id`, `serial`, `principals`, `valid_before` and
+`authority_fingerprint`. Revoking the lease revokes that key ID on the served KRL while
+its certificate is still valid; a lease that ends after its certificate expired adds nothing,
+so the KRL holds only early revocations. Renewal is refused.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "ssh-deploy",
+  "type": "ssh-certificate",
+  "allowed_roles": ["deploy-shell"],
+  "ssh_roles": {
+    "deploy-shell": {"principals": ["deploy"], "extensions": {"permit-pty": ""}}
+  },
+  "max_ttl": "1h"
 }
 ```
 

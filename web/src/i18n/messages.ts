@@ -8633,6 +8633,20 @@ export const messages = {
     defaultMessage: "Copy this directly to the workload. Do not put it in tickets, chat, logs, screenshots, or browser storage.",
     description: "Dynamic lease credential custody warning.",
   },
+  "secrets.dynamic.sshKeyTitle": {
+    defaultMessage: "Reveal-once SSH private key for {id}",
+    description: "SSH certificate lease (A239-L11): the private key's reveal title.",
+  },
+  "secrets.dynamic.sshKeyHelp": {
+    defaultMessage: "Save it as id_ed25519 with mode 0600 on the machine that signs in. Do not put it in tickets, chat, logs, screenshots, or browser storage.",
+    description: "SSH certificate lease: where the private key goes.",
+  },
+  "secrets.dynamic.sshCertificateTitle": { defaultMessage: "SSH certificate", description: "SSH certificate lease: the certificate's reveal title." },
+  "secrets.dynamic.sshCertificateHelp": {
+    defaultMessage:
+      "Save it beside the key as id_ed25519-cert.pub, and ssh presents it with the key. It signs in as {principals} until it expires or the lease is revoked.",
+    description: "SSH certificate lease: where the certificate goes and what it allows.",
+  },
   "secrets.dynamic.extend": { defaultMessage: "Extend by seconds", description: "Dynamic lease renewal duration label." },
   "secrets.dynamic.extendAvailable": {
     defaultMessage: "You can extend this lease by up to {seconds}s within its original renewal limit.",

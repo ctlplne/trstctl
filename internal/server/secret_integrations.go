@@ -280,6 +280,17 @@ func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowe
 	if cfg.Type == "gcp-iam" {
 		return &configuredPreparedDynamicProvider{configuredDynamicProvider: provider}
 	}
+	if cfg.Type == "ssh-certificate" {
+		roles := make(map[string]config.SSHCertificateRole, len(cfg.SSHRoles))
+		for name, role := range cfg.SSHRoles {
+			role.Principals = append([]string(nil), role.Principals...)
+			role.Extensions = cloneSSHStringMap(role.Extensions)
+			role.CriticalOptions = cloneSSHStringMap(role.CriticalOptions)
+			roles[name] = role
+		}
+		provider.cfg.SSHRoles = roles
+		return &configuredSSHCertificateProvider{configuredDynamicProvider: provider}
+	}
 	switch cfg.Type {
 	case "iosxe", "junos", "eos", "fortigate", "bigip", "redfish", "esxi", "vcenter-sso", "okta-user", "entra-user", "google-workspace-user":
 		return &configuredNetworkDeviceProvider{configuredDynamicProvider: provider}

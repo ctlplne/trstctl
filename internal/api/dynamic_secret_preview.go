@@ -244,6 +244,9 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_plaintext", "Local plaintext exception", "Explicitly permit ldap:// to a literal loopback or private IP only; use only in a protected lab.", false),
 			roles("Each allowed role maps to the DN of one groupOfNames group; keep one permanent member in it, since a groupOfNames can't be empty."),
 		)},
+		{Type: "ssh-certificate", Label: "SSH certificates", Purpose: "Issues each lease a fresh Ed25519 key pair and an OpenSSH certificate from this control plane's SSH CA, for the role's principals and the lease's lifetime. The key pair is prepared and sealed before the CA signs, so a retry certifies the same key. Revoking the lease revokes its key ID (trstctl-<lease ID>) on the served KRL, which hosts that load it enforce before the certificate expires. Needs the served SSH protocol; user principals must also be listed in protocols.ssh_user_principals.", Requirements: dynamicSecretProviderRequirements(
+			value("ssh_roles", "Role certificates", "For every allowed role: principals (the login or host names its certificates carry), certificate_type user (the default) or host, and optional extensions (for example permit-pty) and critical_options (for example source-address). A user principal must also be in protocols.ssh_user_principals, which bounds every user certificate this CA signs.", true),
+		)},
 		{Type: "totp", Label: "TOTP codes", Purpose: "Issues the current RFC 6238 one-time code of a configured seed with the instant it stops being valid; a code can't be withdrawn or renewed, so it lapses at the end of its time step.", Requirements: dynamicSecretProviderRequirements(
 			credential("seed_ref", "Seed reference", "The shared secret in base32, as an authenticator app enrolls it.", true),
 			value("digits", "Digits", "6 (the default), 7 or 8.", false),
@@ -628,6 +631,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's literal key prefixes and explicitly listed commands", "confirmed"
 	case "ldap":
 		return "generic LDAP leases get membership of the role's group; active_directory mode retains an existing vaulted account's memberships and resets its password only, without revoking existing sessions or Kerberos tickets", "confirmed"
+	case "ssh-certificate":
+		return "SSH sign-in as the role's principals on every host that trusts this control plane's SSH CA, through the lease's key and certificate, until the certificate expires or a host loads the KRL that revokes it", "confirmed"
 	case "totp":
 		return "the configured seed's current one-time code, accepted until the end of its time step (and through any skew window the verifier allows)", "ttl_only"
 	case "oauth-client-credentials":

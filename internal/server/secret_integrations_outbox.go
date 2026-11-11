@@ -40,9 +40,12 @@ type secretIntegrationOutboxDispatcher struct {
 	discoveryScanFailure func(context.Context, orchestrator.Message) error
 	// recordingUpload stores staged gateway recording chunks (A278);
 	// recordingUploadFailure keeps one whose attempts ran out.
-	recordingUpload          func(context.Context, orchestrator.Message) error
-	recordingUploadFailure   func(context.Context, orchestrator.Message) error
-	dynamicProviders         DynamicSecretProviderRegistry
+	recordingUpload        func(context.Context, orchestrator.Message) error
+	recordingUploadFailure func(context.Context, orchestrator.Message) error
+	dynamicProviders       DynamicSecretProviderRegistry
+	// attachProviders binds configuration-built providers to this server
+	// (the SSH CA of ssh-certificate providers, A239-L11).
+	attachProviders          func([]dynsecret.Provider) []dynsecret.Provider
 	awsHoneyAccounts         AWSHoneyAccountRegistry
 	fallbackDynamicProviders []dynsecret.Provider
 	syncTargets              SecretSyncTargetRegistry
@@ -235,10 +238,14 @@ func (d *secretIntegrationOutboxDispatcher) Deliver(ctx context.Context, m orche
 }
 
 func (d *secretIntegrationOutboxDispatcher) dynamicProvidersForTenant(tenantID string) []dynsecret.Provider {
+	providers := append([]dynsecret.Provider(nil), d.fallbackDynamicProviders...)
 	if d.dynamicProviders != nil {
-		return d.dynamicProviders.ForTenant(tenantID)
+		providers = d.dynamicProviders.ForTenant(tenantID)
 	}
-	return append([]dynsecret.Provider(nil), d.fallbackDynamicProviders...)
+	if d.attachProviders != nil {
+		providers = d.attachProviders(providers)
+	}
+	return providers
 }
 
 // DeliverTerminalFailure projects the terminal state for a secret integration

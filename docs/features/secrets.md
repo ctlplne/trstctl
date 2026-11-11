@@ -474,9 +474,13 @@ tokens, Snowflake service users, ElastiCache and MemoryDB RBAC users, IBM API Co
 credentials, SQL Server logins, Azure SQL contained database users, Cassandra login
 roles, Oracle Database users and SAP HANA users (A239), and Datadog and OpenAI keys,
 OpenRouter, Fireworks AI and LiteLLM proxy keys, Supabase secret API keys, Convex deploy
-keys, dbt platform service tokens, Cloudflare API tokens and R2 access keys (A240). SSH user
-certificates are issued natively by the SSH CA (`/api/v1/ssh/certificates`, revoked
-through the served KRL), not as dynamic-secret leases.
+keys, dbt platform service tokens, Cloudflare API tokens and R2 access keys (A240), and SSH
+certificates (A239-L11, `ssh-certificate`). An SSH certificate lease gets a fresh Ed25519
+key pair and a certificate from the control plane's own SSH CA for its role's principals and
+the lease's lifetime. Revoking the lease revokes its key ID (`trstctl-<lease ID>`) on the
+served KRL (`/ssh/krl`), which a host that loads it enforces before the certificate
+expires. A certificate can't be extended, so renewal is refused. The SSH CA also issues
+certificates natively, for a public key you bring (`/api/v1/ssh/certificates`).
 
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,

@@ -474,6 +474,8 @@ func dynamicLeaseError(err error) error {
 		return errStatus(http.StatusUnprocessableEntity, "AWS STS rotating renewal needs at least 900 seconds of remaining lifetime")
 	case errors.Is(err, dynsecret.ErrLeaseNotRenewable):
 		return errStatus(http.StatusUnprocessableEntity, "a one-time code can't be renewed; issue a new lease for the next code")
+	case errors.Is(err, dynsecret.ErrCertificateNotExtendable):
+		return errStatus(http.StatusUnprocessableEntity, "an SSH certificate can't be extended; issue a new lease for a new certificate")
 	case errors.Is(err, dynsecret.ErrLeaseNotExtendable):
 		return errStatus(http.StatusUnprocessableEntity, "an access token can't be extended; issue a new lease for a new token")
 	case errors.Is(err, store.ErrIdempotencyConflict):

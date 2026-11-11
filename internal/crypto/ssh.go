@@ -3,12 +3,16 @@
 package crypto
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"time"
 
 	"golang.org/x/crypto/ssh"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // SSH certificate signing lives inside the crypto boundary (AN-3): the SSH CA is
@@ -113,4 +117,40 @@ func sshSignerFromDigestSigner(ds DigestSigner) (ssh.Signer, error) {
 		return nil, fmt.Errorf("crypto: build SSH authority signer: %w", err)
 	}
 	return signer, nil
+}
+
+// GenerateSSHClientKey generates an Ed25519 key pair for an SSH certificate
+// lease (A239-L11): the private key in OpenSSH form for the lease's holder,
+// and the public key in authorized_keys form for the CA to certify. The caller
+// owns the private key bytes and MUST secret.Wipe them once sealed or handed
+// off; the generated key is wiped here.
+func GenerateSSHClientKey(comment string) (private, public []byte, err error) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, nil, fmt.Errorf("crypto: generate SSH key: %w", err)
+	}
+	defer wipeStdlibKey(priv)
+	block, err := ssh.MarshalPrivateKey(priv, comment)
+	if err != nil {
+		return nil, nil, fmt.Errorf("crypto: marshal SSH key: %w", err)
+	}
+	private = pem.EncodeToMemory(block)
+	secret.Wipe(block.Bytes)
+	sshPub, err := ssh.NewPublicKey(pub)
+	if err != nil {
+		secret.Wipe(private)
+		return nil, nil, fmt.Errorf("crypto: SSH public key: %w", err)
+	}
+	return private, ssh.MarshalAuthorizedKey(sshPub), nil
+}
+
+// SSHAuthorizedKeyOfPrivateKey returns the authorized_keys form of an OpenSSH
+// private key's public half (a prepared SSH lease key, A239-L11). It never
+// returns or keeps the private key.
+func SSHAuthorizedKeyOfPrivateKey(private []byte) ([]byte, error) {
+	signer, err := ssh.ParsePrivateKey(private)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse SSH private key: %w", err)
+	}
+	return ssh.MarshalAuthorizedKey(signer.PublicKey()), nil
 }

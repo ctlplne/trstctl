@@ -2,6 +2,11 @@
 
 ### Added
 
+- SSH certificates as dynamic-secret leases (A239-L11): an `ssh-certificate` provider gives each lease a fresh
+  Ed25519 key pair and a certificate from the control plane's own SSH CA for its role's principals
+  (`ssh_roles`) and the lease's lifetime. The key pair is prepared and sealed before the CA signs, so a retry
+  certifies the same key. Revoking the lease revokes its key ID on the served KRL; a certificate can't be
+  extended, so renewal is refused. The console reveals the lease's private key and certificate apart.
 - A machine session can end itself, and a CSI secret volume's session ends with the volume (A238-L7):
   `POST /api/v1/secrets/sessions/self/revoke` (`trstctl-cli secrets sessions end`) revokes the bearer it
   is called with, whatever the session's scopes, and names no session, so it can't end another one. The

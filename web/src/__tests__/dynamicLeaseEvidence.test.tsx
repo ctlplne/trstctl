@@ -68,6 +68,34 @@ describe("dynamic lease provider evidence", () => {
   });
   afterEach(cleanup);
 
+  it("reveals an SSH certificate lease's key and certificate apart (A239-L11)", () => {
+    const sshCredential = JSON.stringify({
+      private_key: "-----BEGIN OPENSSH PRIVATE KEY-----\nFIXTURE-KEY\n-----END OPENSSH PRIVATE KEY-----\n",
+      certificate: "ssh-ed25519-cert-v01@openssh.com AAAAFIXTURECERT trstctl-exact-lease\n",
+      key_id: "trstctl-exact-lease",
+      principals: ["deploy"],
+    });
+    render(
+      <AppQueryProvider>
+        <DynamicLeaseEvidence
+          lease={lease}
+          active={true}
+          error={null}
+          refresh={() => undefined}
+          credential={{ leaseID: lease.id, value: sshCredential }}
+          dismiss={() => undefined}
+        />
+      </AppQueryProvider>,
+    );
+    expect(screen.getByText("Reveal-once SSH private key for exact-lease")).toBeInTheDocument();
+    expect(screen.getByText(/FIXTURE-KEY/)).toBeInTheDocument();
+    expect(screen.getByText("SSH certificate")).toBeInTheDocument();
+    expect(screen.getByText(/AAAAFIXTURECERT/)).toBeInTheDocument();
+    expect(screen.getByText(/It signs in as deploy until it expires or the lease is revoked/)).toBeInTheDocument();
+    expect(screen.queryByText(/"private_key"/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Reveal-once credential for/)).not.toBeInTheDocument();
+  });
+
   it("refreshes provider completion on tab return and removes the reveal", async () => {
     renderReceipt(lease);
     expect(await screen.findByText("REVEAL-FIXTURE")).toBeInTheDocument();
