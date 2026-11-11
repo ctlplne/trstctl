@@ -2,6 +2,11 @@
 
 ### Added
 
+- The console shows device first-boot batches (P12-L3). Factory batches were reachable only through
+  the API and CLI. The CA hierarchy page's Device first-boot batches panel lists each batch's quota,
+  birth lifetime and reconciled births, shows a batch's devices with their birth certificates and
+  enrollment, and, for an issuer, creates a batch under an active edge delegation, saves the station
+  manifest and reconciles a station's journal pasted as PEM, each request with its own idempotency key.
 - A domain-validation policy can require dns-persist-01 (P1-L3). A tenant's DNS-01 provider config
   names the methods its zone's ACME orders may use, but only http-01, dns-01 and tls-alpn-01 could be
   saved, and the served policy dropped anything else, so persistent DNS validation was never offered

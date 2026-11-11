@@ -770,6 +770,13 @@ import type {
   EdgeSegmentPolicy,
   EdgeSegmentPolicyInput,
   EdgeDelegationList,
+  FactoryBatch,
+  FactoryBatchDetail,
+  FactoryBatchList,
+  FactoryBatchRequest,
+  FactoryManifest,
+  FactoryReconcileRequest,
+  FactoryReconcileResult,
   EdgeDelegation,
   EdgeDelegationDetail,
   EdgeDelegationMintInput,
@@ -2790,6 +2797,12 @@ export interface Api {
   mintEdgeDelegation(input: EdgeDelegationMintInput, idempotencyKey?: string): Promise<EdgeDelegation>;
   revokeEdgeDelegation(id: string, input: EdgeDelegationRevokeInput, idempotencyKey?: string): Promise<EdgeDelegation>;
   reconcileEdgeDelegation(id: string, input: EdgeReconcileInput, idempotencyKey?: string): Promise<EdgeReconcileResult>;
+  /** P12-L3: device first-boot batches a factory station issues under an edge delegation. */
+  factoryBatches(): Promise<FactoryBatchList>;
+  factoryBatch(id: string): Promise<FactoryBatchDetail>;
+  createFactoryBatch(input: FactoryBatchRequest, idempotencyKey?: string): Promise<FactoryBatch>;
+  factoryBatchManifest(id: string): Promise<FactoryManifest>;
+  reconcileFactoryBatch(id: string, input: FactoryReconcileRequest, idempotencyKey?: string): Promise<FactoryReconcileResult>;
   createRootCA(input: CACreateRootRequest): Promise<CAAuthority>;
   createIntermediateCA(input: CACreateIntermediateRequest): Promise<CAAuthority>;
   signIntermediateCSR(id: string, input: CAIssueIntermediateRequest): Promise<CAIssuedIntermediate>;
@@ -3928,6 +3941,12 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   setEdgeSegmentPolicy: (id, input, idempotencyKey) =>
     mutate<EdgeSegmentPolicy>("PUT", `/api/v1/edge/segments/${encodeURIComponent(id)}`, input, idempotencyKey),
   edgeDelegations: () => req<EdgeDelegationList>("/api/v1/edge/delegations"),
+  factoryBatches: () => req<FactoryBatchList>("/api/v1/edge/factory-batches"),
+  factoryBatch: (id) => req<FactoryBatchDetail>(`/api/v1/edge/factory-batches/${encodeURIComponent(id)}`),
+  createFactoryBatch: (input, idempotencyKey) => mutate<FactoryBatch>("POST", "/api/v1/edge/factory-batches", input, idempotencyKey),
+  factoryBatchManifest: (id) => req<FactoryManifest>(`/api/v1/edge/factory-batches/${encodeURIComponent(id)}/manifest`),
+  reconcileFactoryBatch: (id, input, idempotencyKey) =>
+    mutate<FactoryReconcileResult>("POST", `/api/v1/edge/factory-batches/${encodeURIComponent(id)}/reconcile`, input, idempotencyKey),
   edgeDelegation: (id) => req<EdgeDelegationDetail>(`/api/v1/edge/delegations/${encodeURIComponent(id)}`),
   mintEdgeDelegation: (input, idempotencyKey) => mutate<EdgeDelegation>("POST", "/api/v1/edge/delegations", input, idempotencyKey),
   revokeEdgeDelegation: (id, input, idempotencyKey) =>

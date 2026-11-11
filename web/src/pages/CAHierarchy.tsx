@@ -24,6 +24,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { CAOverview } from "@/components/ca";
 import { EdgeDelegationsPanel } from "@/components/EdgeDelegationsPanel";
+import { FactoryBatchesPanel } from "@/components/FactoryBatchesPanel";
 import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
@@ -858,6 +859,8 @@ export function CAHierarchy() {
             from — the one bounded exception to in-signer signing, shown with
             its bounds. */}
         <EdgeDelegationsPanel />
+        {/* P12-L3: the first-boot batches factory stations issue under those delegations. */}
+        <FactoryBatchesPanel />
       </div>
 
       <div className={tab === "authorities" ? undefined : "hidden"}>

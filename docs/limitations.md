@@ -8028,9 +8028,11 @@ EST at `/.well-known/est/factory` with a proof signed by its birth key, through 
 has no route, and renews in the field with a proof signed by its operational key. Proven with a TPM-attested station
 delegation (the TPM fixture the edge tests use) and the relay enrollment proxy in front of the control plane; the
 station's quota, journal and lock with a software key by explicit exception; and the station's key-handle path with
-a software TPM in the swtpm container harness. A real device's TPM or secure element is a Track B row. What comes
-next: device attestation of the device's own key at birth (the station certifies the CSR's key today), ACME as a
-first-boot path, and a console page for batches.
+a software TPM in the swtpm container harness. A real device's TPM or secure element is a Track B row. The CA
+hierarchy page's Device first-boot batches panel lists batches with their reconciled births, shows each device's
+enrollment, creates a batch under an active delegation, saves the station manifest and reconciles a journal pasted as
+PEM. What comes next: device attestation of the device's own key at birth (the station certifies the CSR's key today)
+and ACME as a first-boot path.
 
 ## ServiceNow two-way sync (P13) — served
 
