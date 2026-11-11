@@ -981,7 +981,9 @@ func readJSON2xx(doer HTTPDoer, req *http.Request, out any) error {
 	}
 	if resp.StatusCode/100 != 2 {
 		kind := responseStatusGeneric
-		if bytes.Contains(raw, []byte("ResourceNotFoundException")) {
+		// Secrets Manager answers ResourceNotFoundException; Systems Manager
+		// Parameter Store answers ParameterNotFound (A202-L1).
+		if bytes.Contains(raw, []byte("ResourceNotFoundException")) || bytes.Contains(raw, []byte("ParameterNotFound")) {
 			kind = responseStatusAWSMissing
 		} else if bytes.Contains(raw, []byte("ResourceExistsException")) {
 			kind = responseStatusAWSAlreadyExists

@@ -5986,7 +5986,12 @@ sync targets). A `webhook` target delivers templated JSON signed with HMAC-SHA25
 over a timestamp and the body, so a receiver can verify it and refuse a changed or
 replayed delivery; `generic-ci-json` stays the bearer-token-only push with no
 payload signature. `aws-parameter-store` writes SecureString parameters (proven
-against LocalStack, not a live AWS account), and `netlify` sets secret environment
+against LocalStack, not a live AWS account) and reads them back (A202-L1:
+`GetParameter` with decryption and `GetParametersByPath`), so it takes scoped syncs,
+a drift check re-pushes a parameter changed outside trstctl, and a lost delivery
+settles by reading the parameter; the readback is proven against a stand-in built
+from the SSM API reference, and a live AWS account proof is what comes next.
+`netlify` sets secret environment
 variables through Netlify's API, proven against a double built from Netlify's API
 reference; a live Netlify account proof is what comes next. Terraform/OpenTofu and
 Vault no longer depend on the generic JSON target. If a target is

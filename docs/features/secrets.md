@@ -1519,8 +1519,7 @@ delivers, or settles the delivered command with one retained
 `secret.sync.receiver_settled` receipt that releases the lane; a provable absence
 fails the command with reconciled authority so the next version proceeds. Targets
 with no readable state (GitHub, GitLab, Vercel, Netlify, the signed webhook and the
-generic CI JSON receiver), and Parameter Store, whose readback is what comes next,
-keep the lane closed after a multi-start delivery until an operator reconciles the
+generic CI JSON receiver) keep the lane closed after a multi-start delivery until an operator reconciles the
 job: `POST /api/v1/secrets/syncs/{id}/reconcile`, `trstctl-cli secrets syncs
 reconcile`, or the Secrets console, with `operator_verified` and what they saw at
 the destination (`value_present` or `value_absent`). The attestation is recorded with

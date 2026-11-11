@@ -1059,7 +1059,8 @@ func newConfiguredSyncPusher(cfg config.SecretSyncTargetConfig, credentials inte
 // receiver-reconcile capability and this answer come from the same list.
 func (p *configuredSyncPusher) ReconcilesReceiver() bool {
 	switch p.cfg.Type {
-	case "vault-kv-v2", "terraform-cloud-opentofu", "gcp-secret-manager", "azure-key-vault", "kubernetes-secrets":
+	case "vault-kv-v2", "terraform-cloud-opentofu", "gcp-secret-manager", "azure-key-vault", "kubernetes-secrets",
+		"aws-parameter-store":
 		return true
 	default:
 		readBack := secretsync.HostedReadBack(p.cfg.Type)
@@ -1094,7 +1095,7 @@ func (p *configuredSyncPusher) ReconcileOperation(ctx context.Context, key strin
 // deletes keys for a scoped sync (A237): KV v2 and the hosted targets (A241).
 func (p *configuredSyncPusher) ScopedKeys() bool {
 	_, hosted := synctarget.Lookup(p.cfg.Type)
-	return p.cfg.Type == "vault-kv-v2" || hosted
+	return p.cfg.Type == "vault-kv-v2" || p.cfg.Type == "aws-parameter-store" || hosted
 }
 
 // FlatKeys, ValidKey, ReadsBack and DigestOf answer a scoped sync's questions
@@ -1107,6 +1108,9 @@ func (p *configuredSyncPusher) FlatKeys() bool {
 func (p *configuredSyncPusher) ValidKey(key string) error {
 	if t, hosted := synctarget.Lookup(p.cfg.Type); hosted {
 		return t.ValidKey(key)
+	}
+	if p.cfg.Type == "aws-parameter-store" {
+		return secretsync.ParameterStoreValidKey(p.cfg.PathPrefix, key) // A202-L1
 	}
 	return nil
 }

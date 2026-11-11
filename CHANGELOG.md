@@ -2,6 +2,13 @@
 
 ### Added
 
+- AWS Systems Manager Parameter Store reads its state back (A202-L1). The `aws-parameter-store`
+  sync target lists parameters with `GetParametersByPath`, reads one with `GetParameter`
+  (`WithDecryption`, compared as a SHA-256 digest or in constant time, never returned) and deletes
+  with `DeleteParameter`, so it takes scoped syncs: a plan finds a parameter changed outside trstctl
+  (`update`) and the apply writes the source value back, and an auto scoped sync's drift check does
+  that with nobody applying. A delivery whose outcome was lost settles by reading the parameter instead
+  of keeping the lane closed for an operator. Parameter names are checked against SSM's rules.
 - Dynamic-lease rotation runs on a schedule (A201-L1). `POST /api/v1/secrets/rotation-schedules`
   accepts `dynamic-lease:<provider>` with `ttl_seconds`, checked like an on-demand dynamic-lease
   rotation before anything is stored (TTL required and within the provider's maximum, a provider that
