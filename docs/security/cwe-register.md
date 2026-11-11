@@ -1176,7 +1176,7 @@ not this file.
 | `internal/store/discovery_segments.go:107` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/discovery_segments.go:138` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/discovery_segments.go:199` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
-| `internal/store/dynamic_secret_lease_access.go:156` | bounded to int64 above (CWE-190) |
+| `internal/store/dynamic_secret_lease_access.go:171` | bounded to int64 above (CWE-190) |
 | `internal/store/endpoint_recovery_check.go:53` | event sequences fit int64 (CWE-190) |
 | `internal/store/endpoint_recovery_check.go:85` | event sequences fit int64 (CWE-190) |
 | `internal/store/endpoint_recovery_check.go:102` | positive by constraint (CWE-190) |

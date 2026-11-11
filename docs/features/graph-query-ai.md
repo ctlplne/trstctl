@@ -86,7 +86,7 @@ The sources, each read in tenant-scoped pages:
 | API tokens, machine sessions | A credential `HOLDS`'d by its subject that `GRANTS_ACCESS` to the trstctl API |
 | PAM sessions | A credential `GRANTS_ACCESS` to the database or host, `HOLDS`'d by the requester and the attested workload, `APPROVED` by each person who approved the activation |
 | PAM targets | The database or host (`res:pam:<type>:<id>`); a PostgreSQL target `CONNECTS_TO` its dynamic-secret backend |
-| Dynamic-secret leases | A credential `GRANTS_ACCESS` to its backend (`res:dynamic-secret:<provider>`) and, once the leader has read it (G2), to the database or IAM role its login reaches, with the login and its grants or policies |
+| Dynamic-secret leases | A credential `GRANTS_ACCESS` to its backend (`res:dynamic-secret:<provider>`) and, once the leader has read it (G2), to the database or IAM role its login reaches, with the login and its grants or policies; `access_checked_at` is the latest read and `access_recorded_at` when the observation was last recorded, on a change or the day's heartbeat (G2-L3) |
 | Issuance requests | `APPROVED` from the person who approved the request to the identity it issued |
 
 A subject that is neither a member nor an AI agent becomes a workload node

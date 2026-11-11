@@ -1,0 +1,12 @@
+-- SPDX-License-Identifier: BUSL-1.1
+-- G2-L3: when the access worker last read a lease's access and found it as
+-- recorded. An unchanged read no longer appends dynsecret.lease.access_observed
+-- (every lease read every six hours wrote one, 40,000 events a day at 10,000
+-- leases); it only stamps rechecked_at, and the observation is recorded again
+-- when it changes or once a day as a heartbeat. The stamp is the worker's own
+-- bookkeeping, not event-sourced: a rebuild clears it, and the next pass reads
+-- those leases once more.
+--
+-- online-safe: a nullable column with no default is added as catalog metadata
+-- only, without rewriting or scanning the table.
+ALTER TABLE dynamic_secret_lease_access ADD COLUMN IF NOT EXISTS rechecked_at timestamptz;

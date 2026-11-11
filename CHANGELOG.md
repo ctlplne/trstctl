@@ -632,6 +632,13 @@
 
 ### Fixed
 
+- Reading what a dynamic-secret lease reaches records an event only when it changes (G2-L3). The
+  leader reads each active lease's access every six hours, and every read appended a
+  `dynsecret.lease.access_observed` event even when nothing had changed: 40,000 events a day at
+  10,000 leases. A read that finds the access as recorded now only stamps it; the observation is
+  recorded when it changes and once a day as a heartbeat, and an unknown read that stays unknown is
+  not recorded again. The access graph's lease shows `access_checked_at` (the latest read) and
+  `access_recorded_at`.
 - A Slack approval request is posted once when the answer to its post is lost (N8-L1). Slack has
   no idempotent post, so when Slack kept a message but the connection dropped (or trstctl stopped)
   before trstctl recorded it, the outbox delivered the post again and the request appeared twice.

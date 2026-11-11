@@ -376,7 +376,11 @@ func addDynamicSecretLeases(ctx context.Context, st *store.Store, tenantID strin
 
 func addLeaseAccessAttrs(attrs map[string]string, a store.DynamicSecretLeaseAccess) {
 	attrs["access_status"] = a.Status
-	attrs["access_checked_at"] = a.CheckedAt.UTC().Format(time.RFC3339)
+	// access_checked_at is the latest read of the target; access_recorded_at
+	// is when the observation was last recorded, on a change or the day's
+	// heartbeat (G2-L3).
+	attrs["access_checked_at"] = a.LastRead().UTC().Format(time.RFC3339)
+	attrs["access_recorded_at"] = a.CheckedAt.UTC().Format(time.RFC3339)
 	if a.Login != "" {
 		attrs["login"] = a.Login
 	}

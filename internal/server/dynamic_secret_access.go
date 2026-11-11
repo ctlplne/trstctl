@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,9 +28,13 @@ import (
 const (
 	defaultDynamicSecretAccessInterval = time.Minute
 	dynamicSecretAccessRefresh         = 6 * time.Hour
-	dynamicSecretAccessRetry           = 5 * time.Minute
-	dynamicSecretAccessBatch           = 50
-	dynamicSecretAccessCallTimeout     = 30 * time.Second
+	// dynamicSecretAccessHeartbeat is how long an unchanged observation goes
+	// unrecorded (G2-L3): a read that finds the access as recorded only stamps
+	// it, and the observation is recorded again once this old.
+	dynamicSecretAccessHeartbeat   = 24 * time.Hour
+	dynamicSecretAccessRetry       = 5 * time.Minute
+	dynamicSecretAccessBatch       = 50
+	dynamicSecretAccessCallTimeout = 30 * time.Second
 )
 
 var dynamicSecretAccessNamespace = uuid.MustParse("a7720c22-ddf5-41bd-99ba-e8515c1c2ddc")
@@ -76,8 +81,10 @@ func (s *Server) RunDynamicSecretAccessWatch(ctx context.Context) {
 }
 
 // ResolveDynamicSecretAccessOnce reads, once, the access of every lease that
-// has none recorded, a stale one, or an unknown one due for a retry, and
-// records each observation.
+// has none recorded, a stale one, or an unknown one due for a retry. A read
+// that finds the access changed records the observation; one that finds it as
+// recorded only stamps the recorded one (G2-L3), unless that is a day old,
+// when it is recorded again as the heartbeat.
 func (s *Server) ResolveDynamicSecretAccessOnce(ctx context.Context) error {
 	if s.store == nil || s.orch == nil || s.secretIntegrations == nil {
 		return nil
@@ -112,10 +119,17 @@ func (s *Server) ResolveDynamicSecretAccessOnce(ctx context.Context) error {
 		providers := s.secretIntegrations.dynamicProvidersForTenant(tenantID)
 		for _, lease := range leases {
 			observed := observeDynamicSecretLeaseAccess(ctx, providers, lease)
+			prior, seen := previous[lease.ID]
+			if seen && sameDynamicSecretLeaseAccess(prior, observed) && now.Sub(prior.CheckedAt) < dynamicSecretAccessHeartbeat {
+				if _, err := s.store.RecheckDynamicSecretLeaseAccess(ctx, tenantID, lease.ID, prior.CheckedAt, now); err != nil {
+					note(fmt.Errorf("lease %s: %w", lease.ID, err))
+				}
+				continue
+			}
 			// The observation is named after the one it supersedes, so two
 			// leaders reading the same stale row record it once.
 			supersedes := "first"
-			if prior, ok := previous[lease.ID]; ok {
+			if seen {
 				supersedes = prior.CheckedAt.UTC().Format(time.RFC3339Nano)
 			}
 			eventID := uuid.NewSHA1(dynamicSecretAccessNamespace, []byte(tenantID+"\x00"+lease.ID+"\x00"+supersedes)).String()
@@ -157,4 +171,14 @@ func observeDynamicSecretLeaseAccess(ctx context.Context, providers []dynsecret.
 		observed.Status, observed.Reason = store.DynamicSecretAccessUnknown, dynsecret.AccessReason(err)
 	}
 	return observed
+}
+
+// sameDynamicSecretLeaseAccess reports whether a read found a lease's access
+// exactly as recorded: the same target, login, status and reason, and the
+// same grants in the same order.
+func sameDynamicSecretLeaseAccess(recorded store.DynamicSecretLeaseAccess, observed projections.DynamicSecretLeaseAccessObserved) bool {
+	return recorded.Provider == observed.Provider && recorded.Status == observed.Status &&
+		recorded.TargetKind == observed.TargetKind && recorded.TargetRef == observed.TargetRef &&
+		recorded.Login == observed.Login && recorded.Reason == observed.Reason &&
+		recorded.Truncated == observed.Truncated && slices.Equal(recorded.Grants, observed.Grants)
 }

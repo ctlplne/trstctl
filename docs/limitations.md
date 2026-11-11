@@ -1446,7 +1446,12 @@ never live in the API process. What you can do end to end against the running bi
   `iam:ListAttachedRolePolicies` and `iam:ListRolePolicies`). A target that
   cannot be read shows the grants as `unknown` with a reason
   (`target_unreachable`, `access_denied`, `login_missing`, `timeout`) and is read
-  again five minutes later; it never reads as "no grants". Policies are listed by
+  again five minutes later; it never reads as "no grants". A read is recorded (the
+  `dynsecret.lease.access_observed` event) only when it finds the access changed, and
+  once a day as a heartbeat; a read that finds it as recorded only stamps it (G2-L3),
+  and the lease shows both `access_checked_at` (its latest read) and
+  `access_recorded_at`. That stamp is the worker's own bookkeeping, so a rebuild clears
+  it and the next pass reads those leases once more. Policies are listed by
   name, not evaluated statement by statement. MySQL, MongoDB, Redis, Kubernetes,
   GCP and Azure leases are `unsupported` and keep only their backend link. Proven
   against PostgreSQL 16, an AWS stand-in and LocalStack's IAM.

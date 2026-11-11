@@ -25,8 +25,22 @@ type DynamicSecretLeaseAccess struct {
 	Grants     []string
 	Truncated  int
 	// Reason is the closed-set code for an unknown or unsupported status.
-	Reason    string
+	Reason string
+	// CheckedAt is when this observation was recorded: the read that found it
+	// changed, or the day's heartbeat (G2-L3).
 	CheckedAt time.Time
+	// RecheckedAt is when the worker last read the access and found it as
+	// recorded; nil when the recorded read is the latest. It is the worker's
+	// bookkeeping, not event-sourced, so a rebuild clears it.
+	RecheckedAt *time.Time
+}
+
+// LastRead is when the lease's access was last read from its target.
+func (a DynamicSecretLeaseAccess) LastRead() time.Time {
+	if a.RecheckedAt != nil && a.RecheckedAt.After(a.CheckedAt) {
+		return *a.RecheckedAt
+	}
+	return a.CheckedAt
 }
 
 // Lease access statuses. Unknown means the target could not be read; it never
@@ -76,7 +90,8 @@ func (s *Store) DynamicSecretLeasesNeedingAccess(ctx context.Context, tenantID s
 			    AND NOT EXISTS (
 			        SELECT 1 FROM dynamic_secret_lease_access a
 			         WHERE a.tenant_id = dynamic_secret_leases.tenant_id AND a.lease_id = dynamic_secret_leases.id
-			           AND ((a.status <> 'unknown' AND a.checked_at > $3) OR (a.status = 'unknown' AND a.checked_at > $4)))
+			           AND ((a.status <> 'unknown' AND GREATEST(a.checked_at, a.rechecked_at) > $3)
+			             OR (a.status = 'unknown' AND GREATEST(a.checked_at, a.rechecked_at) > $4)))
 			  ORDER BY id
 			  LIMIT $5`,
 			tenantID, now, now.Add(-refresh), now.Add(-retry), limit)
@@ -109,7 +124,7 @@ func (s *Store) DynamicSecretLeaseAccessFor(ctx context.Context, tenantID string
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			SELECT tenant_id::text, lease_id, provider, status, target_kind, target_ref, login,
-			       grants, truncated, reason, checked_at
+			       grants, truncated, reason, checked_at, rechecked_at
 			  FROM dynamic_secret_lease_access
 			 WHERE tenant_id = $1 AND lease_id = ANY($2)`, tenantID, leaseIDs)
 		if err != nil {
@@ -119,7 +134,7 @@ func (s *Store) DynamicSecretLeaseAccessFor(ctx context.Context, tenantID string
 		for rows.Next() {
 			var a DynamicSecretLeaseAccess
 			if err := rows.Scan(&a.TenantID, &a.LeaseID, &a.Provider, &a.Status, &a.TargetKind, &a.TargetRef,
-				&a.Login, &a.Grants, &a.Truncated, &a.Reason, &a.CheckedAt); err != nil {
+				&a.Login, &a.Grants, &a.Truncated, &a.Reason, &a.CheckedAt, &a.RecheckedAt); err != nil {
 				return err
 			}
 			out[a.LeaseID] = a
@@ -150,9 +165,29 @@ func (s *Store) ApplyDynamicSecretLeaseAccessTx(ctx context.Context, tx pgx.Tx, 
 		    provider = EXCLUDED.provider, status = EXCLUDED.status, target_kind = EXCLUDED.target_kind,
 		    target_ref = EXCLUDED.target_ref, login = EXCLUDED.login, grants = EXCLUDED.grants,
 		    truncated = EXCLUDED.truncated, reason = EXCLUDED.reason, checked_at = EXCLUDED.checked_at,
-		    event_sequence = EXCLUDED.event_sequence
+		    event_sequence = EXCLUDED.event_sequence, rechecked_at = NULL
 		 WHERE dynamic_secret_lease_access.event_sequence < EXCLUDED.event_sequence`,
 		a.TenantID, a.LeaseID, a.Provider, a.Status, a.TargetKind, a.TargetRef, a.Login, grants,
 		a.Truncated, a.Reason, a.CheckedAt, int64(sequence)) // #nosec G115 -- bounded to int64 above (CWE-190)
 	return err
+}
+
+// RecheckDynamicSecretLeaseAccess stamps a lease's recorded observation as
+// read again, unchanged, at at (G2-L3), without an event. It stamps only the
+// observation recorded at recordedAt, so a newer one recorded meanwhile is left
+// alone, and reports whether it stamped.
+func (s *Store) RecheckDynamicSecretLeaseAccess(ctx context.Context, tenantID, leaseID string, recordedAt, at time.Time) (bool, error) {
+	if tenantID == "" || leaseID == "" {
+		return false, fmt.Errorf("store: RecheckDynamicSecretLeaseAccess requires a tenant and a lease (AN-1)")
+	}
+	var stamped bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `
+			UPDATE dynamic_secret_lease_access SET rechecked_at = $4
+			 WHERE tenant_id = $1 AND lease_id = $2 AND checked_at = $3
+			   AND (rechecked_at IS NULL OR rechecked_at < $4)`, tenantID, leaseID, recordedAt, at)
+		stamped = err == nil && tag.RowsAffected() == 1
+		return err
+	})
+	return stamped, err
 }
