@@ -1060,7 +1060,9 @@ func (o *Orchestrator) RecordAgentInventory(ctx context.Context, tenantID, agent
 		status = "partial"
 		msg = "some agent inventory findings were rejected"
 	}
-	if recorded == 0 {
+	// An empty report (P7-L2: a host with no MCP client configuration left)
+	// is a complete inventory that lists nothing, not a failure.
+	if recorded == 0 && len(findings) > 0 {
 		status = "failed"
 		if msg == "" {
 			msg = "agent inventory report contained no valid findings"

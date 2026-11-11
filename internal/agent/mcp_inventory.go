@@ -15,21 +15,27 @@ import (
 // ReportMCPInventory reports the MCP servers configured under roots (P7) when
 // they differ from this agent's last report, whose digest it keeps at
 // statePath: a rescan with no changes sends nothing, so it writes no event.
-// It reports whether it sent a report. Credential values never leave the
-// host: findings carry where a static credential is, never what it is.
+// Each report is the host's whole inventory, so a server missing from it is
+// gone (P7-L2); when the last configuration is removed after an earlier
+// report, the agent sends an empty report once. It reports whether it sent a
+// report. Credential values never leave the host: findings carry where a
+// static credential is, never what it is.
 func (a *Agent) ReportMCPInventory(ctx context.Context, ch ChannelClient, roots []string, statePath string) (*InventoryResponse, bool, error) {
 	found, err := discovery.NewMCPClientConfigSource(roots...).Discover(ctx)
 	if err != nil {
 		return nil, false, err
 	}
 	digest := discovery.MCPInventoryDigest(found)
+	reportedBefore := false
 	if statePath != "" {
-		if prev, err := os.ReadFile(statePath); err == nil && strings.TrimSpace(string(prev)) == digest { // #nosec G304 -- the agent's own state file (CWE-22)
+		prev, err := os.ReadFile(statePath) // #nosec G304 -- the agent's own state file (CWE-22)
+		if err == nil && strings.TrimSpace(string(prev)) == digest {
 			return nil, false, nil
 		}
+		reportedBefore = err == nil && strings.TrimSpace(string(prev)) != ""
 	}
 	var resp *InventoryResponse
-	if len(found) > 0 {
+	if len(found) > 0 || reportedBefore {
 		records := discovery.MCPInventoryFindings(found)
 		findings := make([]InventoryFinding, 0, len(records))
 		for _, r := range records {

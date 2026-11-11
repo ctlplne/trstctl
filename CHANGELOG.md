@@ -632,6 +632,12 @@
 
 ### Fixed
 
+- An MCP client configuration removed from a host is reported gone (P7-L2). The inventory kept a removed
+  server's finding as if it were still configured, and a host whose last configuration was removed sent no
+  report at all. Each report is the host's whole MCP inventory, so a server the newest report no longer
+  lists now reads `removed_at` in the discovery findings, shows as removed from the host in the console,
+  and leaves the open shadow NHI posture (counted under `removed`); a host with no configuration left
+  sends one empty report, which only this source may send. A server configured again reads present.
 - The workload JWT signing key rotates without breaking a cloud's cached key set (N5-L3). The key
   that signs exchanged tokens and JWT-SVIDs, published by the OpenID issuer, could not rotate at all.
   `POST /api/v1/workloads/jwt-keys/rotate` (`workloads jwt-keys rotate`, `issuers:write`) creates the

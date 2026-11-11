@@ -553,6 +553,10 @@ type discoveryFindingResponse struct {
 	// SecretMove links a leaked-secret finding to the native secret its value
 	// moved into (P6).
 	SecretMove *discoveryFindingSecretMoveResponse `json:"secret_move,omitempty"`
+	// RemovedAt is when the finding's source, which reports its whole
+	// inventory each time, last reported without it (P7-L2: an MCP server
+	// whose configuration left the host).
+	RemovedAt *time.Time `json:"removed_at,omitempty"`
 }
 
 type discoveryFindingTriageRequest struct {
@@ -1412,6 +1416,10 @@ func (a *API) listDiscoveryFindings(w http.ResponseWriter, r *http.Request) {
 		items = append(items, toDiscoveryFindingResponse(row))
 	}
 	if err := a.withSecretMoves(r.Context(), tenantID, items); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if err := a.withRemovedFromSource(r.Context(), tenantID, rows, items); err != nil {
 		a.writeError(w, err)
 		return
 	}

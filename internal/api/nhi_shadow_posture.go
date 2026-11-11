@@ -40,8 +40,11 @@ type nhiShadowPostureSummary struct {
 	Investigating int `json:"investigating"`
 	// Remediated and AcceptedRisk count the findings a resolution keeps out
 	// of the open posture (A106): a fix that held, an unexpired acceptance.
-	Remediated    int            `json:"remediated"`
-	AcceptedRisk  int            `json:"accepted_risk"`
+	Remediated   int `json:"remediated"`
+	AcceptedRisk int `json:"accepted_risk"`
+	// Removed counts the findings their source no longer lists (P7-L2: an MCP
+	// server whose configuration left the host).
+	Removed       int            `json:"removed"`
 	Unregistered  int            `json:"unregistered"`
 	Ownerless     int            `json:"ownerless"`
 	Critical      int            `json:"critical"`
@@ -114,8 +117,16 @@ func (a *API) nhiShadowPosture(ctx context.Context, tenantID string) (nhiShadowP
 		if len(rows) == 0 {
 			break
 		}
+		removed, err := a.removedFromSource(ctx, tenantID, rows)
+		if err != nil {
+			return out, err
+		}
 		for _, row := range rows {
 			out.Summary.TotalAnalyzed++
+			if _, gone := removed[row.ID]; gone {
+				out.Summary.Removed++
+				continue
+			}
 			switch findingResolution(row, out.GeneratedAt) {
 			case discovery.TriageRemediated:
 				out.Summary.Remediated++

@@ -639,6 +639,26 @@ describe("discovery control-plane surface", () => {
     expect(await screen.findByText("Removal queued for web-01. Receipt receipt-1 shows the host's result.")).toBeInTheDocument();
   });
 
+  // P7-L2: an MCP server whose configuration left the host reads removed,
+  // with the time of the host's report that no longer listed it.
+  it("marks an MCP server the host's newest report no longer lists as removed", async () => {
+    const seeded = await apiMock.discoveryFindings();
+    const server = (id: string, name: string, removedAt?: string) => ({
+      ...seeded.items[0],
+      id,
+      kind: "mcp_server",
+      ref: `/home/dev/.config/assistant/config.json#${name}`,
+      metadata: { server_name: name, host: "dev-laptop-1", transport: "stdio" },
+      ...(removedAt ? { removed_at: removedAt } : {}),
+    });
+    apiMock.discoveryFindings.mockReset().mockResolvedValue({ items: [server("mcp-gone", "tracker", "2026-11-11T05:00:00Z"), server("mcp-here", "files")] });
+    renderDiscovery();
+    const gone = (await screen.findByText("/home/dev/.config/assistant/config.json#tracker")).closest("tr") as HTMLTableRowElement;
+    expect(within(gone).getByText(/Removed from the host: not in its report of/)).toBeInTheDocument();
+    const here = screen.getByText("/home/dev/.config/assistant/config.json#files").closest("tr") as HTMLTableRowElement;
+    expect(within(here).queryByText(/Removed from the host/)).not.toBeInTheDocument();
+  });
+
   it("keeps an unavailable source ID in exact evidence instead of leaking it into the default decision path", async () => {
     const seededSources = await apiMock.discoverySources();
     apiMock.discoverySources.mockResolvedValue({

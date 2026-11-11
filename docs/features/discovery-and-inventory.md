@@ -527,7 +527,12 @@ and the control plane refuses a report whose metadata could carry one. Findings
 appear in discovery and in the [shadow NHI posture](observability-and-risk.md)
 with their host, and an `mcp_server` with a static credential is rated high. The agent
 keeps a digest of what it last reported beside its key, so a rescan that finds no
-change sends nothing and writes no event. Finding MCP endpoints by probing approved
+change sends nothing and writes no event. Each report is the host's whole MCP
+inventory, so a server the newest report no longer lists is gone from the host: the
+finding reads `removed_at` (the time of that report), the console shows it as removed
+from the host, and it leaves the open shadow posture (counted under `removed`). Its
+triage is kept, and it reads present again if a later report lists it. When the last
+configuration is removed, the agent sends one empty report saying so. Finding MCP endpoints by probing approved
 network ranges is what comes next (P7's network probe, after P8's design). Status:
 served (host detectors).
 

@@ -17364,6 +17364,11 @@ export interface components {
             provenance: string;
             ref: string;
             regressed?: boolean;
+            /**
+             * Format: date-time
+             * @description when the finding's source, which reports its whole inventory each time, last reported without it (an MCP server whose configuration left the host)
+             */
+            removed_at?: string;
             /** Format: date-time */
             risk_accepted_until?: string;
             risk_score?: number;
@@ -21491,6 +21496,8 @@ export interface components {
             medium: number;
             ownerless: number;
             remediated: number;
+            /** @description findings their source no longer lists, such as an MCP server whose configuration left the host */
+            removed: number;
             surface_counts: Record<string, never>;
             total_analyzed: number;
             unmanaged: number;

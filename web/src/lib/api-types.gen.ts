@@ -4264,6 +4264,7 @@ export interface DiscoveryFinding {
   provenance: string;
   ref: string;
   regressed?: boolean;
+  removed_at?: string;
   risk_accepted_until?: string;
   risk_score?: number;
   run_id: string;
@@ -7712,6 +7713,7 @@ export interface NHIShadowSummary {
   medium: number;
   ownerless: number;
   remediated: number;
+  removed: number;
   surface_counts: Record<string, unknown>;
   total_analyzed: number;
   unmanaged: number;

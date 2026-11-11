@@ -1203,7 +1203,12 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 		}
 		return nil, status.Error(codes.Unavailable, "agent registration state is unavailable; retry later")
 	}
-	if req == nil || len(req.Findings) == 0 {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "inventory report requires at least one finding")
+	}
+	// P7-L2: an MCP client configuration report is the host's whole
+	// inventory, so an empty one says every configured server is gone.
+	if len(req.Findings) == 0 && strings.TrimSpace(req.SourceKind) != agentdiscovery.SourceMCPClientConfig {
 		return nil, status.Error(codes.InvalidArgument, "inventory report requires at least one finding")
 	}
 	if len(req.Findings) > agentMaxInventoryFindings {

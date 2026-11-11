@@ -7971,8 +7971,8 @@ The agent's `--inventory-mcp-config-roots` source finds MCP client configuration
 object, or `servers` at the top level or under `mcp`) in `.json` files, with comments and trailing commas
 tolerated, and reports each configured server with its transport, program or host, and the fields that hold a
 static credential — never a value. Formats other than JSON (TOML or YAML client configuration) are not read yet.
-A configuration removed from the host is not reported as removed: the inventory keeps its last finding until it is
-triaged. An unchanged rescan sends nothing because the agent keeps the last report's digest beside its key; an
+A server whose configuration is removed from the host reads removed (`removed_at`) once the host's next report no
+longer lists it, and leaves the open shadow NHI posture; its triage is kept. An unchanged rescan sends nothing because the agent keeps the last report's digest beside its key; an
 agent that loses that file reports the same servers again as a new run. Finding MCP endpoints on approved network
 ranges is P7's network probe, which follows P8's design (section 35); the proof is a served test over the real
 agent channel, and a live host with installed assistants is a replay item.

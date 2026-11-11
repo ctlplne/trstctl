@@ -2122,7 +2122,7 @@ function FindingTable({
   onFindingUpdated: (finding: DiscoveryFinding) => Promise<void>;
   onNotice: (notice: Notice | null) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, formatDateTime } = useTranslation();
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [action, setAction] = useState<"claim" | "dismiss" | null>(null);
   const [reason, setReason] = useState("");
@@ -2437,6 +2437,9 @@ function FindingTable({
           <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <TriagePill status={findingTriageStatus(finding)} />
             <span>{discoveryFindingKindLabel(t, finding.kind)}</span>
+            {finding.removed_at ? (
+              <span className="font-medium text-status-warning">{t("discovery.findings.removedFromSource", { date: formatDateTime(finding.removed_at) })}</span>
+            ) : null}
           </span>
         </span>
       ),

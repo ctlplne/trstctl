@@ -2404,6 +2404,7 @@ func componentSchemas() map[string]*Schema {
 		"first_seen_at": timestamp(), "last_seen_at": timestamp(), "seen_count": {Type: "integer"},
 		"triage_assignee": str(), "triage_due_at": timestamp(), "triage_evidence_ref": str(), "risk_accepted_until": timestamp(),
 		"overdue": {Type: "boolean"}, "regressed": {Type: "boolean"}, "secret_move": discoveryFindingSecretMove,
+		"removed_at": {Type: "string", Format: "date-time", Description: "when the finding's source, which reports its whole inventory each time, last reported without it (an MCP server whose configuration left the host)"},
 	}, "id", "tenant_id", "run_id", "source_id", "kind", "ref", "provenance", "fingerprint", "metadata", "discovered_at", "first_seen_at", "last_seen_at", "seen_count")
 	discoveryFindingSecretMoveReq := object(map[string]*Schema{
 		"secret_name": str(), "secret_version": {Type: "integer"},
@@ -2839,6 +2840,7 @@ func componentSchemas() map[string]*Schema {
 		"investigating":  {Type: "integer"},
 		"remediated":     {Type: "integer"},
 		"accepted_risk":  {Type: "integer"},
+		"removed":        {Type: "integer", Description: "findings their source no longer lists, such as an MCP server whose configuration left the host"},
 		"unregistered":   {Type: "integer"},
 		"ownerless":      {Type: "integer"},
 		"critical":       {Type: "integer"},
@@ -2847,7 +2849,7 @@ func componentSchemas() map[string]*Schema {
 		"low":            {Type: "integer"},
 		"kind_counts":    {Type: "object"},
 		"surface_counts": {Type: "object"},
-	}, "total_analyzed", "findings", "unmanaged", "investigating", "remediated", "accepted_risk", "unregistered", "ownerless", "critical", "high", "medium", "low", "kind_counts", "surface_counts")
+	}, "total_analyzed", "findings", "unmanaged", "investigating", "remediated", "accepted_risk", "removed", "unregistered", "ownerless", "critical", "high", "medium", "low", "kind_counts", "surface_counts")
 	nhiShadowFinding := object(map[string]*Schema{
 		"finding_id":          uuid(),
 		"source_id":           uuid(),

@@ -14036,6 +14036,10 @@ export const messages = {
     defaultMessage: "Risk",
     description: "Column header for discovery finding risk score.",
   },
+  "discovery.findings.removedFromSource": {
+    defaultMessage: "Removed from the host: not in its report of {date}",
+    description: "P7-L2: an MCP server the host's newest report no longer lists.",
+  },
   "discovery.findings.columnFingerprint": {
     defaultMessage: "Fingerprint",
     description: "Detail label for a discovery finding fingerprint.",

@@ -20523,6 +20523,11 @@
           "regressed": {
             "type": "boolean"
           },
+          "removed_at": {
+            "description": "when the finding's source, which reports its whole inventory each time, last reported without it (an MCP server whose configuration left the host)",
+            "format": "date-time",
+            "type": "string"
+          },
           "risk_accepted_until": {
             "format": "date-time",
             "type": "string"
@@ -35941,6 +35946,10 @@
           "remediated": {
             "type": "integer"
           },
+          "removed": {
+            "description": "findings their source no longer lists, such as an MCP server whose configuration left the host",
+            "type": "integer"
+          },
           "surface_counts": {
             "type": "object"
           },
@@ -35961,6 +35970,7 @@
           "investigating",
           "remediated",
           "accepted_risk",
+          "removed",
           "unregistered",
           "ownerless",
           "critical",

@@ -2170,7 +2170,7 @@ not this file.
 | `internal/agent/drift/drift_test.go:184` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/drift/drift_test.go:209` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/drift/drift_test.go:244` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/agent/mcp_inventory.go:27` | the agent's own state file (CWE-22) |
+| `internal/agent/mcp_inventory.go:31` | the agent's own state file (CWE-22) |
 | `internal/agent/relay/adcsdatabase_test.go:83` | test-owned temp file (CWE-22). |
 | `internal/agent/relay/adcsrevoke_test.go:67` | test-owned temp file (CWE-22). |
 | `internal/agent/relay/deploy_failure_log.go:84` | the operator's own flag (CWE-22) |
