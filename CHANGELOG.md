@@ -2,6 +2,12 @@
 
 ### Added
 
+- The Helm chart runs the HSM signer image (A200-L3). `signer.hsm.enabled` runs the signer from
+  `trstctl-signer-hsm` (by digest, by tag, or by the chart's own tag) and its cgo
+  `/usr/local/bin/trstctl-signer-hsm` in the sidecar and the isolated topology, mounting the vendor's
+  PKCS#11 module and client files from `signer.hsm.volumes`/`volumeMounts`; the control plane keeps
+  the main image. `externalKMS.provider=pkcs11` with the shipped adapter now fails at template time
+  without it, instead of a signer whose static adapter refuses PKCS#11 at startup.
 - `trstctl-signer --rewrap-keystore` moves a key store the local KEK sealed onto the external KMS/HSM
   adapter (A200-L2). With the signer stopped, it probes the adapter, copies the key store beside
   itself with every sealed file's data key moved from the KEK to the adapter (keys, journals, import

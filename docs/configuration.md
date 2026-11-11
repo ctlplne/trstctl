@@ -3680,7 +3680,34 @@ the role; in the sidecar topology the signer shares `serviceAccount`.
 
 `pkcs11` needs the adapter's cgo build, which ships in the HSM signer image
 (`trstctl-signer-hsm`) next to the signer; the standard image's static adapter
-refuses `pkcs11` with that pointer. Endpoints follow the managed-key rules: HTTPS,
+refuses `pkcs11` with that pointer. In the chart, `signer.hsm.enabled=true`
+runs the signer from that image and its `trstctl-signer-hsm` in either topology
+(A200-L3), and the chart refuses `externalKMS.provider=pkcs11` with the shipped
+adapter without it. The image carries SoftHSM only, so mount the vendor's
+PKCS#11 module and client files with `signer.hsm.volumes` and
+`signer.hsm.volumeMounts` and name the module in the adapter's `pkcs11` block:
+
+```yaml
+signer:
+  hsm:
+    enabled: true
+    image:
+      digest: sha256:<the release's trstctl-signer-hsm digest>
+    volumes:
+      - name: hsm-client
+        hostPath: {path: /opt/vendor/pkcs11, type: Directory}
+    volumeMounts:
+      - name: hsm-client
+        mountPath: /opt/vendor/pkcs11
+        readOnly: true
+externalKMS:
+  enabled: true
+  provider: pkcs11
+  keyRef: trstctl-signer-keystore
+  adapterConfigSecret: trstctl-kms-wrap   # its pkcs11.module_path names /opt/vendor/pkcs11/<module>.so
+```
+
+Endpoints follow the managed-key rules: HTTPS,
 or HTTP to loopback only with `allow_insecure_loopback`, and private addresses
 only inside `private_egress_cidrs`. You may still name your own adapter in
 `wrapCommand`; it must speak the same contract.

@@ -114,6 +114,20 @@ image.tag is otherwise honored verbatim for controlled non-production installs.
 {{- end -}}
 
 {{/*
+The HSM signer image (A200-L3): signer.hsm.image by digest, else by its tag,
+else by the chart's own image tag, which the release publishes for every image.
+*/}}
+{{- define "trstctl.signerHSMImage" -}}
+{{- with .Values.signer.hsm.image -}}
+{{- if .digest -}}
+{{- printf "%s@%s" .repository (.digest | trimPrefix "@") -}}
+{{- else -}}
+{{- printf "%s:%s" .repository (default (include "trstctl.imageTag" $) .tag) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Validate signer.mode (SIGNER-005 / S15.1).
 
 Two topologies are supported:
@@ -233,8 +247,13 @@ cannot open the signer keystore or, worse, appears to use KMS while falling back
 to a local KEK.
 */}}
 {{- define "trstctl.externalKMS.guard" -}}
+{{- $signerHSM := false -}}
+{{- with .Values.signer }}{{- with .hsm }}{{- if .enabled }}{{- $signerHSM = true }}{{- end }}{{- end }}{{- end }}
 {{- with .Values.externalKMS -}}
 {{- if .enabled -}}
+{{- if and (eq .provider "pkcs11") (eq .wrapCommand "/usr/local/bin/trstctl-kms-wrap") (not $signerHSM) -}}
+{{- fail "CRYPTO-002: externalKMS.provider=pkcs11 with the shipped adapter needs the HSM signer image: set signer.hsm.enabled=true (the standard image's static adapter cannot load a PKCS#11 module) and mount the module with signer.hsm.volumes/volumeMounts." -}}
+{{- end -}}
 {{- if not .provider -}}
 {{- fail "CRYPTO-002: externalKMS.provider is required when externalKMS.enabled=true (supported: awskms, gcpkms, azurekv, pkcs11)." -}}
 {{- else if not (or (eq .provider "awskms") (eq .provider "gcpkms") (eq .provider "azurekv") (eq .provider "pkcs11")) -}}

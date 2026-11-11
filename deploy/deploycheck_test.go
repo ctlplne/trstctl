@@ -566,15 +566,25 @@ func TestEveryDeployImageIsBuiltOrMarkedPlanned(t *testing.T) {
 	root := repoRoot(t)
 	deployDir := filepath.Join(root, "deploy")
 
-	// The set of images a workflow actually builds & pushes. Today release.yml
-	// builds exactly one multi-binary image: ghcr.io/<repo>/trstctl (+ a Docker
-	// Hub mirror of the same name). The agent and signer ride inside it; there is
-	// no -agent/-signer/-operator image.
-	builtSuffixes := []string{"/trstctl"} // matches ghcr.io/<owner>/trstctl and docker.io/<org>/trstctl
+	// The set of images a workflow actually builds & pushes: release.yml's
+	// multi-binary image ghcr.io/<repo>/trstctl (+ a Docker Hub mirror of the
+	// same name), which carries the agent and the signer, and every
+	// ${GHCR_IMAGE}-<name> variant it tags (the cgo HSM signer and PKCS#11
+	// agent images, A200-L3), read from the workflow itself so the check knows
+	// exactly what is published and nothing more.
+	// "/trstctl" matches ghcr.io/<owner>/trstctl and docker.io/<org>/trstctl.
+	builtSuffixes := []string{"/trstctl"}
+	releaseWorkflow, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml")) // #nosec G304 -- test reads the repo's own workflow (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range regexp.MustCompile(`\$\{GHCR_IMAGE\}(-[a-z0-9-]+):`).FindAllStringSubmatch(string(releaseWorkflow), -1) {
+		builtSuffixes = append(builtSuffixes, "/trstctl"+m[1])
+	}
 
 	// Walk every YAML/tpl under deploy/ and collect concrete image references.
 	var offenders []string
-	err := filepath.Walk(deployDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(deployDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			// A path that vanished between readdir and lstat holds no image
 			// reference, so it is not this check's business. This is a real race,

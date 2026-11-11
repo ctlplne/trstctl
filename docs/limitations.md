@@ -7090,8 +7090,10 @@ sealed moves onto the adapter with `trstctl-signer --rewrap-keystore` (A200-L2):
 staged, verified, then swapped, with the original kept as the rollback copy;
 proven with the real signer binary and a stand-in wrap command, while a run
 against a cloud KMS or HSM is a Track B proof.
-The chart runs the standard image, so a PKCS#11 HSM behind the adapter needs the
-HSM signer image outside the chart today. Online break-glass issue,
+The chart runs the HSM signer image for a PKCS#11 HSM behind the adapter with
+`signer.hsm.enabled` (A200-L3: the image by digest, its `trstctl-signer-hsm`, the
+vendor module from operator-supplied volumes; proven by `helm template` in both
+topologies), while a run against a vendor HSM is a Track B proof. Online break-glass issue,
 signer-backed CA rotation with bidirectional overlap cross-certificates,
 and target-CA cross-signing are production-assembled when the online
 block is configured. Approvals come from authenticated immutable ceremony

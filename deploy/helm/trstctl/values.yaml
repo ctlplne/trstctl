@@ -385,6 +385,24 @@ signer:
     create: false
     name: ""
     annotations: {}
+  # The HSM signer image (A200-L3): trstctl-signer-hsm, built with cgo so it
+  # loads PKCS#11 modules, with the cgo KMS wrap adapter beside it (the only
+  # shipped adapter that serves externalKMS.provider=pkcs11). With
+  # enabled=true the signer runs from this image and command in either
+  # topology. The image carries SoftHSM only: bring the vendor's PKCS#11
+  # module and its client files in through volumes/volumeMounts (a client
+  # package volume, a CSI driver, a host path) and name the module in the
+  # adapter's pkcs11 block.
+  hsm:
+    enabled: false
+    image:
+      repository: ghcr.io/ctlplne/trstctl-signer-hsm
+      # Empty => the chart's image tag (v<appVersion>), which the release
+      # publishes for the HSM signer image too. Production pins by digest.
+      tag: ""
+      digest: ""
+    volumes: []
+    volumeMounts: []
   resources:
     requests:
       cpu: 100m

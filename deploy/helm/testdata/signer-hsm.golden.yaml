@@ -1,0 +1,121 @@
+isolated:
+    hsmVolume:
+        hostPath:
+            path: /opt/vendor/pkcs11
+            type: Directory
+        name: hsm-client
+    signer:
+        args:
+            - --mtls-listen=:9443
+            - --mtls-cert=/etc/trstctl/signer-mtls/tls.crt
+            - --mtls-key=/etc/trstctl/signer-mtls/tls.key
+            - --mtls-peer-ca=/etc/trstctl/signer-mtls/peer-ca.pem
+            - --mtls-peer-pin=$(SIGNER_MTLS_PEER_PIN)
+            - --keystore=/data/signer/keys
+            - --kms-provider=pkcs11
+            - --kms-key-ref=trstctl-signer-keystore
+            - --kms-wrap-command=/usr/local/bin/trstctl-kms-wrap
+            - --kms-timeout=10s
+            - --auth-secret=/etc/trstctl/signer-auth/sign-auth.bin
+            - --legacy-audit-key=/data/audit/audit-signing.key
+        command:
+            - /usr/local/bin/trstctl-signer-hsm
+        env:
+            - name: TRSTCTL_KMS_WRAP_CONFIG
+              value: /etc/trstctl/kms-wrap/config.json
+            - name: SIGNER_MTLS_PEER_PIN
+              valueFrom:
+                secretKeyRef:
+                    key: peer-pin
+                    name: trstctl-signer-mtls
+        image: ghcr.io/ctlplne/trstctl-signer-hsm@sha256:5a1f0c7e3b9d2a4c6e8f0a1b3c5d7e9f1a2b4c6d8e0f2a4b6c8d0e2f4a6b8c0d
+        imagePullPolicy: IfNotPresent
+        name: signer
+        ports:
+            - containerPort: 9443
+              name: grpc-mtls
+        resources:
+            limits:
+                cpu: 500m
+                memory: 512Mi
+            requests:
+                cpu: 100m
+                memory: 128Mi
+        securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+                drop:
+                    - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+        volumeMounts:
+            - mountPath: /etc/trstctl/signer-mtls
+              name: signer-mtls
+              readOnly: true
+            - mountPath: /data/signer
+              name: signer-keys
+            - mountPath: /data
+              name: cp-data
+            - mountPath: /etc/trstctl/kms-wrap
+              name: kms-wrap
+              readOnly: true
+            - mountPath: /etc/trstctl/signer-auth
+              name: signer-auth
+              readOnly: true
+            - mountPath: /opt/vendor/pkcs11
+              name: hsm-client
+              readOnly: true
+sidecar:
+    hsmVolume:
+        hostPath:
+            path: /opt/vendor/pkcs11
+            type: Directory
+        name: hsm-client
+    signer:
+        args:
+            - --socket=/run/trstctl/signer.sock
+            - --keystore=/data/signer/keys
+            - --kms-provider=pkcs11
+            - --kms-key-ref=trstctl-signer-keystore
+            - --kms-wrap-command=/usr/local/bin/trstctl-kms-wrap
+            - --kms-timeout=10s
+            - --auth-secret=/etc/trstctl/signer-auth/sign-auth.bin
+            - --legacy-audit-key=/data/audit/audit-signing.key
+        command:
+            - /usr/local/bin/trstctl-signer-hsm
+        env:
+            - name: TRSTCTL_KMS_WRAP_CONFIG
+              value: /etc/trstctl/kms-wrap/config.json
+        image: ghcr.io/ctlplne/trstctl-signer-hsm@sha256:5a1f0c7e3b9d2a4c6e8f0a1b3c5d7e9f1a2b4c6d8e0f2a4b6c8d0e2f4a6b8c0d
+        imagePullPolicy: IfNotPresent
+        name: signer
+        resources:
+            limits:
+                cpu: 250m
+                memory: 128Mi
+            requests:
+                cpu: 50m
+                memory: 64Mi
+        securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+                drop:
+                    - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+        volumeMounts:
+            - mountPath: /run/trstctl
+              name: signer-sock
+            - mountPath: /data/signer
+              name: signer-keys
+            - mountPath: /data
+              name: cp-data
+            - mountPath: /etc/trstctl/kms-wrap
+              name: kms-wrap
+              readOnly: true
+            - mountPath: /etc/trstctl/signer-auth
+              name: signer-auth
+              readOnly: true
+            - mountPath: /opt/vendor/pkcs11
+              name: hsm-client
+              readOnly: true

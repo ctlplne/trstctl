@@ -118,6 +118,7 @@ turn off certificate verification to force a localhost port-forward to work.
 | `signer.mtls.serverName` | `""` | Required for `signer.mode=isolated`; must match the signer certificate SAN. |
 | `signer.mtls.signerSecret` | `""` | Secret for the signer pod: `tls.crt`, `tls.key`, `peer-ca.pem`, and `peer-pin`. |
 | `signer.mtls.controlPlaneSecret` | `""` | Secret for the control plane: `tls.crt`, `tls.key`, `peer-ca.pem`, and `peer-pin`. |
+| `signer.hsm.enabled` / `.image.repository` / `.image.tag` / `.image.digest` / `.volumes` / `.volumeMounts` | `false` / `ghcr.io/ctlplne/trstctl-signer-hsm` / chart tag / `""` / `[]` / `[]` | Run the signer from the cgo HSM signer image and its `trstctl-signer-hsm` (either topology), with the vendor's PKCS#11 module mounted from the volumes you name. Required for `externalKMS.provider=pkcs11` with the shipped adapter. |
 | `signer.serviceAccount.create` / `.name` / `.annotations` | `false` / `""` / `{}` | Isolated mode: the signer pod's own service account (created as `<fullname>-signer`, or an existing one by name), for a cloud identity only the signer holds, such as IRSA's `eks.amazonaws.com/role-arn` for the KMS wrap adapter. Its token is not mounted. |
 
 ## Operational notes

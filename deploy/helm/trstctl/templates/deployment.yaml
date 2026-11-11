@@ -13,6 +13,8 @@
 {{- with .existingSecretKey }}{{- $signerAuthKey = . }}{{- end }}
 {{- end }}
 {{- end }}
+{{- $signerHSM := false -}}
+{{- with .Values.signer }}{{- with .hsm }}{{- if .enabled }}{{- $signerHSM = true }}{{- end }}{{- end }}{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -69,9 +71,11 @@ spec:
         # nothing on the cluster network can reach it. Its CA key is sealed at
         # rest in a persistent key store, so a restart preserves the issuing CA.
         - name: signer
-          image: {{ include "trstctl.image" . }}
+          # A200-L3: signer.hsm.enabled runs the cgo HSM signer image and its
+          # trstctl-signer-hsm, which load PKCS#11 modules.
+          image: {{ if $signerHSM }}{{ include "trstctl.signerHSMImage" . }}{{ else }}{{ include "trstctl.image" . }}{{ end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["/usr/local/bin/trstctl-signer"]
+          command: [{{ if $signerHSM }}"/usr/local/bin/trstctl-signer-hsm"{{ else }}"/usr/local/bin/trstctl-signer"{{ end }}]
           {{- $signerFIPS := false }}
           {{- with .Values.fips }}{{- if .required }}{{- $signerFIPS = true }}{{- end }}{{- end }}
           {{- if or $signerFIPS $kmsWrapSecret }}
@@ -117,6 +121,9 @@ spec:
             - name: signer-auth
               mountPath: /etc/trstctl/signer-auth
               readOnly: true
+            {{- if $signerHSM }}{{- with .Values.signer.hsm.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}{{- end }}
           resources:
             {{- toYaml .Values.resources.signer | nindent 12 }}
         {{- end }}
@@ -224,6 +231,9 @@ spec:
         {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- if and (eq .Values.signer.mode "sidecar") $signerHSM }}{{- with .Values.signer.hsm.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}{{- end }}
         {{- if and (eq .Values.signer.mode "sidecar") $kmsWrapSecret }}
         - name: kms-wrap
           secret:

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2976 annotated sites across 33 rules. Each row is
+2979 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -69,9 +69,9 @@ not this file.
 | `cmd/trstctl/reconcile_gcp_azure_kms_mapping_test.go:18` | credential file paths only, no credential value (CWE-798) |
 | `deploy/demo/demo_test.go:241` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/demo/demo_test.go:367` | fixture paths name files; no credential value is embedded. |
-| `deploy/deploycheck_test.go:1577` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/deploycheck_test.go:1579` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/deploycheck_test.go:1599` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/deploycheck_test.go:1587` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/deploycheck_test.go:1589` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/deploycheck_test.go:1609` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/docker/dist_test.go:425` | names are non-secret evaluation OIDC configuration keys (CWE-798) |
 | `deploy/helm/helm_test.go:164` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:603` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1424,7 +1424,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `deploy/deploycheck_test.go:599` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `deploy/deploycheck_test.go:609` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `deploy/helm/airgap_bundle_test.go:278` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
@@ -1527,7 +1527,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (395 sites)
+### G204 — CWE-78 OS command injection (396 sites)
 
 | Location | Reason |
 |---|---|
@@ -1571,6 +1571,7 @@ not this file.
 | `deploy/helm/helm_docs_commands_test.go:48` | executes the repo's own documented helm command under test (CWE-78) |
 | `deploy/helm/helm_docs_commands_test.go:113` | executes the repo's own documented helm command under test (CWE-78) |
 | `deploy/helm/helm_test.go:1188` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/helm/signer_hsm_test.go:53` | the chart test's own helm template invocation (CWE-78) |
 | `deploy/helm/signer_serviceaccount_test.go:30` | the chart test's own helm template invocation (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:434` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:452` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2048,7 +2049,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (725 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (727 sites)
 
 | Location | Reason |
 |---|---|
@@ -2148,19 +2149,20 @@ not this file.
 | `deploy/deploycheck_test.go:294` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:364` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:462` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:599` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `deploy/deploycheck_test.go:690` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:759` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:850` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:879` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:917` | test reads its own repository source file. |
-| `deploy/deploycheck_test.go:1071` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1077` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1083` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1146` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1236` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1419` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1663` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:577` | test reads the repo's own workflow (CWE-22) |
+| `deploy/deploycheck_test.go:609` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `deploy/deploycheck_test.go:700` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:769` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:860` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:889` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:927` | test reads its own repository source file. |
+| `deploy/deploycheck_test.go:1081` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1087` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1093` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1156` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1246` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1429` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1673` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/context_size_test.go:28` | fixed filename below this test's private t.TempDir (CWE-22). |
 | `deploy/docker/dist_test.go:25` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/dist_test.go:1199` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2176,6 +2178,7 @@ not this file.
 | `deploy/helm/helm_docs_commands_test.go:130` | reads the repo's own docs pages from a walked list (CWE-22) |
 | `deploy/helm/helm_test.go:1150` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/helm_test.go:1211` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/helm/signer_hsm_test.go:152` | the test's own golden file (CWE-22) |
 | `deploy/iac/iac_test.go:279` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/kubernetes/manifests_test.go:495` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/kubernetes/manifests_test.go:512` | test reads its own fixture/tempdir path (CWE-22) |
