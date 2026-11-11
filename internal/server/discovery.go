@@ -1392,6 +1392,14 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 	if err != nil {
 		return netscan.Report{}, "", "", err
 	}
+	// Q6-L4: a finding that holds a live decoy's value is the decoy.
+	var known []secretscan.KnownValue
+	if d.decoyValues != nil {
+		if known, err = d.decoyValues(ctx, tenantID); err != nil {
+			return netscan.Report{}, "", "", err
+		}
+		defer secretscan.WipeKnownValues(known)
+	}
 	rep := netscan.Report{Targets: len(report.Findings)}
 	for _, f := range report.Findings {
 		f.RuleID = strings.TrimSpace(f.RuleID)
@@ -1421,6 +1429,11 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 		if checked := d.secretValidity(ctx, target.Path, f); checked != nil {
 			repoFields["validity"] = checked
 		}
+		risk := 95
+		if decoy, ok := secretscan.MatchKnownValue(target.Path, f.File, f.Line, known); ok {
+			repoFields["known_decoy"] = map[string]string{"id": decoy.ID, "name": decoy.Name}
+			risk = secretscan.KnownDecoyRiskScore
+		}
 		meta, err := json.Marshal(repoFields)
 		if err != nil {
 			return rep, "", "", err
@@ -1432,7 +1445,7 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 			Ref:         ref,
 			Provenance:  secretscan.RepositorySourceKind + ":" + cfg.Provider + ":" + cfg.Repository + ":" + f.File,
 			Fingerprint: firstNonEmpty(f.Fingerprint, ref),
-			RiskScore:   95,
+			RiskScore:   risk,
 			Metadata:    json.RawMessage(meta),
 		}); err != nil {
 			return rep, "", "", err
@@ -1500,6 +1513,14 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 	if err != nil {
 		return netscan.Report{}, "", "", err
 	}
+	// Q6-L4: a finding that holds a live decoy's value is the decoy.
+	var known []secretscan.KnownValue
+	if d.decoyValues != nil {
+		if known, err = d.decoyValues(ctx, tenantID); err != nil {
+			return netscan.Report{}, "", "", err
+		}
+		defer secretscan.WipeKnownValues(known)
+	}
 	rep := netscan.Report{Targets: len(report.Findings)}
 	for _, f := range report.Findings {
 		f.RuleID = strings.TrimSpace(f.RuleID)
@@ -1534,6 +1555,11 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 		if checked := d.secretValidity(ctx, target.Path, f); checked != nil {
 			fields["validity"] = checked
 		}
+		risk := 95
+		if decoy, ok := secretscan.MatchKnownValue(target.Path, f.File, f.Line, known); ok {
+			fields["known_decoy"] = map[string]string{"id": decoy.ID, "name": decoy.Name}
+			risk = secretscan.KnownDecoyRiskScore
+		}
 		object := thirdPartyFindingObject(cfg, target.Path, f)
 		if cfg.Collect != nil {
 			// A collected CI log's run or job, or a collected image, is the
@@ -1566,7 +1592,7 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 			Ref:         ref,
 			Provenance:  secretscan.ThirdPartySourceKind + ":" + cfg.Provider + ":" + cfg.Source + ":" + f.File,
 			Fingerprint: firstNonEmpty(f.Fingerprint, ref),
-			RiskScore:   95,
+			RiskScore:   risk,
 			Metadata:    json.RawMessage(meta),
 		})
 		if err != nil {

@@ -1,0 +1,1 @@
+import{m as s,t}from"./schemas-DaDoKtV2.js";function r(r){return s(t,r)}export{r as t};

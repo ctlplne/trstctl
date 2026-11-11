@@ -417,7 +417,13 @@ func (a *API) scanSecrets(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "gitleaks rule set is below the required 140-rule floor")
 		}
 
-		rows, findings, err := discoveryFindingsFromSecretScan(report)
+		// Q6-L4: a finding that holds a live decoy's value is the decoy.
+		known, err := a.DecoySecretValues(ctx, tenantID)
+		if err != nil {
+			return 0, nil, err
+		}
+		rows, findings, err := discoveryFindingsFromSecretScan(report, plan.TargetPath, known)
+		secretscan.WipeKnownValues(known)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -458,7 +464,7 @@ func runSecretScanner(ctx context.Context, scanner SecretScanner, path string, o
 	return scanner.Scan(ctx, path)
 }
 
-func discoveryFindingsFromSecretScan(report secretscan.Report) ([]store.DiscoveryFinding, []secretScanFindingResponse, error) {
+func discoveryFindingsFromSecretScan(report secretscan.Report, root string, known []secretscan.KnownValue) ([]store.DiscoveryFinding, []secretScanFindingResponse, error) {
 	rows := make([]store.DiscoveryFinding, 0, len(report.Findings))
 	out := make([]secretScanFindingResponse, 0, len(report.Findings))
 	for _, f := range report.Findings {
@@ -469,14 +475,20 @@ func discoveryFindingsFromSecretScan(report secretscan.Report) ([]store.Discover
 		if ref == "" {
 			ref = f.RuleID + "@" + f.File
 		}
-		meta, err := json.Marshal(map[string]any{
+		fields := map[string]any{
 			"scanner":        report.Scanner,
 			"engine_version": report.EngineVersion,
 			"rule_id":        f.RuleID,
 			"file":           f.File,
 			"line":           f.Line,
 			"rules_active":   report.RulesActive,
-		})
+		}
+		risk := 95
+		if decoy, ok := secretscan.MatchKnownValue(root, f.File, f.Line, known); ok {
+			fields["known_decoy"] = map[string]string{"id": decoy.ID, "name": decoy.Name}
+			risk = secretscan.KnownDecoyRiskScore
+		}
+		meta, err := json.Marshal(fields)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -485,7 +497,7 @@ func discoveryFindingsFromSecretScan(report secretscan.Report) ([]store.Discover
 			Ref:         ref,
 			Provenance:  report.Scanner + ":" + f.File,
 			Fingerprint: firstNonEmptyString(f.Fingerprint, ref),
-			RiskScore:   95,
+			RiskScore:   risk,
 			Metadata:    json.RawMessage(meta),
 		})
 		out = append(out, secretScanFindingResponse{RuleID: f.RuleID, File: f.File, Line: f.Line, CredentialRef: ref})

@@ -632,6 +632,13 @@
 
 ### Fixed
 
+- A decoy secret's value found by a secret scan is the known decoy, not a leak (Q6-L4). A decoy's value
+  planted as a lure in a repository raised a high-risk leaked-credential finding, because the scanners
+  report where a secret is, never what it is. Repository, third-party and on-demand scans now compare
+  the lines around each finding with the tenant's live decoy values in memory, wipe both and keep
+  nothing about the scanned value; a match carries `known_decoy` (the decoy's ID and label) at risk 10,
+  and the console's discovery findings name it. The comparison raises no read alert, and a retired
+  decoy's value is an ordinary leak again.
 - A sign-in collection no longer flags trstctl's own health check before its record lands (A274-L1).
   trstctl records a credential health check when it finishes, after the check has signed in, so a
   `pam_signin` run that read the sign-in in between raised a compromised-credential finding for

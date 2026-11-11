@@ -639,6 +639,29 @@ describe("discovery control-plane surface", () => {
     expect(await screen.findByText("Removal queued for web-01. Receipt receipt-1 shows the host's result.")).toBeInTheDocument();
   });
 
+  // Q6-L4: a scan finding that holds a live decoy's value names the decoy.
+  it("names the decoy a scan finding found planted", async () => {
+    const seeded = await apiMock.discoveryFindings();
+    apiMock.discoveryFindings.mockReset().mockResolvedValue({
+      items: [
+        {
+          ...seeded.items[0],
+          id: "scan-decoy",
+          kind: "leaked_secret",
+          ref: "generic-api-key@app.env",
+          risk_score: 10,
+          metadata: { rule_id: "generic-api-key", file: "app.env", line: 2, known_decoy: { id: "d-1", name: "payments-repo-lure" } },
+        },
+        { ...seeded.items[0], id: "scan-leak", kind: "leaked_secret", ref: "generic-api-key@ci.env", metadata: { rule_id: "generic-api-key" } },
+      ],
+    });
+    renderDiscovery();
+    const planted = (await screen.findByText("generic-api-key@app.env")).closest("tr") as HTMLTableRowElement;
+    expect(within(planted).getByText("Known decoy: payments-repo-lure (planted on purpose, not a leak)")).toBeInTheDocument();
+    const leak = screen.getByText("generic-api-key@ci.env").closest("tr") as HTMLTableRowElement;
+    expect(within(leak).queryByText(/Known decoy/)).not.toBeInTheDocument();
+  });
+
   // P7-L2: an MCP server whose configuration left the host reads removed,
   // with the time of the host's report that no longer listed it.
   it("marks an MCP server the host's newest report no longer lists as removed", async () => {

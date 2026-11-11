@@ -5566,7 +5566,9 @@ when off, requiring a KEK when on):
   raises one critical alert per distinct reader, naming the reader, on every
   value read served to a caller (native, history, resolved references,
   Vault-compatible KV); names, metadata, the access preview, inventory, the
-  graph and internal reads never alert, and a rebuild adds no alert. One secret
+  graph and internal reads never alert, and a rebuild adds no alert. A secret scan
+  finding whose line holds a live decoy's value is marked as that known decoy
+  (`known_decoy`, risk 10) rather than a leak (Q6-L4). One secret
   has one decoy: registrations of it that arrive together make one, and the rest
   are refused (409). A decoy's readers are subjects: a subject export lists the
   decoys they read first, and an erasure pseudonymizes the decoy's first reader and

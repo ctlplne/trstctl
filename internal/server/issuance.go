@@ -32,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/secretscan"
 	"trstctl.com/trstctl/internal/secretscan/validity"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
@@ -125,9 +126,12 @@ type issuanceDispatcher struct {
 	// cloudStorePropagationWindow bounds a cloud-store member's wait for its
 	// load balancer to serve the store's certificate (A166-L3).
 	cloudStorePropagationWindow time.Duration
-	archiveHolds                *archiveLegalHoldDelivery
-	parseSubjectCSR             LicensedCSRParser
-	inspectHybridSubjectCSR     LicensedCSRInspector
+	// decoyValues are a tenant's live decoy secrets, for a secret scan to
+	// recognize a planted decoy (Q6-L4).
+	decoyValues             func(ctx context.Context, tenantID string) ([]secretscan.KnownValue, error)
+	archiveHolds            *archiveLegalHoldDelivery
+	parseSubjectCSR         LicensedCSRParser
+	inspectHybridSubjectCSR LicensedCSRInspector
 	// relayPresence overrides the store for the E1 control-plane refusal; nil in
 	// production, where the store answers.
 	relayPresence  relayPresence

@@ -10,6 +10,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/secretscan"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -96,6 +97,48 @@ func (a *API) registerDecoySecret(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusCreated, h, nil
 	})
+}
+
+// DecoySecretValues are the tenant's live decoy secrets with their current
+// values, for trstctl's own scans to tell a planted decoy from a leak (Q6-L4).
+// It is not a read anyone made, so it raises no alert; the caller compares the
+// values in memory and wipes them (secretscan.WipeKnownValues).
+func (a *API) DecoySecretValues(ctx context.Context, tenantID string) ([]secretscan.KnownValue, error) {
+	if a == nil || a.secrets == nil || a.store == nil {
+		return nil, nil
+	}
+	var out []secretscan.KnownValue
+	after := ""
+	for {
+		page, err := a.store.ListDecoySecretsPage(ctx, tenantID, after, 100)
+		if err != nil {
+			secretscan.WipeKnownValues(out)
+			return nil, err
+		}
+		for _, h := range page {
+			if h.State == "revoked" || h.SecretName == "" {
+				continue
+			}
+			rec, err := a.secrets.be.Store.GetSecret(ctx, tenantID, h.SecretName)
+			if errors.Is(err, store.ErrSecretNotFound) {
+				continue
+			}
+			if err != nil {
+				secretscan.WipeKnownValues(out)
+				return nil, err
+			}
+			plain, err := a.secrets.open(ctx, tenantID, rec.Sealed, sealAAD(tenantID, h.SecretName))
+			if err != nil {
+				secretscan.WipeKnownValues(out)
+				return nil, err
+			}
+			out = append(out, secretscan.KnownValue{ID: h.ID, Name: h.Name, Value: plain})
+		}
+		if len(page) < 100 {
+			return out, nil
+		}
+		after = page[len(page)-1].ID
+	}
 }
 
 func (a *API) listDecoySecrets(w http.ResponseWriter, r *http.Request) {

@@ -2023,6 +2023,16 @@ internal reads never serve the value to a caller and never alert. A full read-mo
 rebuild keeps the decoy's state and adds no alert. `retire` stops watching; the
 secret stays in place until you delete it.
 
+A decoy's value planted on purpose, in a repository as a lure for example, is found
+by trstctl's secret scans like any other secret. A scan finding whose line (or a line
+beside it) holds a live decoy's value is the known decoy, not a leak: the finding
+carries `known_decoy` (the decoy's ID and label) and a risk of 10, and the console's
+discovery findings name it. The repository scans, third-party scans and on-demand
+scans compare the scanned lines with the tenant's live decoy values in memory, wipe
+both, and keep nothing about the scanned value; that comparison is trstctl's own
+work and raises no read alert. A decoy value shorter than 8 bytes is never matched,
+and a retired decoy's value found again is an ordinary leaked secret.
+
 #### Decoy database logins
 
 A decoy login is a PostgreSQL login that reaches only its own empty database.

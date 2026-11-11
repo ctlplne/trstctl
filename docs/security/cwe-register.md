@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2903 annotated sites across 33 rules. Each row is
+2908 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (624 sites)
+### G101 — CWE-798 Use of hardcoded credentials (629 sites)
 
 | Location | Reason |
 |---|---|
@@ -181,14 +181,15 @@ not this file.
 | `internal/api/notifications.go:1270` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications_helpers_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/openapi.go:285` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secret_scan_known_decoy_test.go:18` | fabricated decoy fixture; no value is real (CWE-798) |
 | `internal/api/secrets_posture.go:1103` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1251` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:40` | public MAC domain label, not a credential |
-| `internal/api/secrets_scanning.go:646` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:670` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:727` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:737` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:747` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:658` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:682` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:739` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:749` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:759` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/audit/audit_test.go:179` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
 | `internal/audit/audit_test.go:211` | deliberately toxic fixture proves retained-prefix redaction (CWE-798). |
 | `internal/auth/oidc_client_secret.go:15` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -408,6 +409,7 @@ not this file.
 | `internal/scanannotate/scanannotate_test.go:14` | fabricated fixture credential (CWE-798) |
 | `internal/schedulerhistory/history_test.go:12` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
 | `internal/schedulerhistory/history_test.go:81` | deliberately toxic fixture proves closed parsing without echo (CWE-798). |
+| `internal/secretscan/known_value_test.go:17` | fabricated decoy fixture; no value is real (CWE-798) |
 | `internal/server/acme_adcs_upstream_served_test.go:133` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/acme_dns01_live_txt_served_test.go:28` | fabricated fixture reference, no value is real (CWE-798) |
 | `internal/server/acme_dns01_qualification.go:23` | this is an operator-facing disclosure sentence, not credential material. |
@@ -455,6 +457,9 @@ not this file.
 | `internal/server/cmdb_served_test.go:44` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/compliance_report_dispatch_served_test.go:44` | fabricated fixture reference; no value is real (CWE-798) |
 | `internal/server/connector_rollback_control_plane_served_test.go:29` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/decoy_secret_scan_served_test.go:28` | fabricated decoy fixture; no value is real (CWE-798) |
+| `internal/server/decoy_secret_scan_served_test.go:29` | fabricated fixture; no value is real (CWE-798) |
+| `internal/server/decoy_secret_scan_served_test.go:57` | a decoy's path and label, no credential value (CWE-798) |
 | `internal/server/discovery_cloud_outcomes_served_test.go:51` | env credential references and fixture endpoints; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_cloud_outcomes_served_test.go:52` | env credential reference, not a value (CWE-798) |
 | `internal/server/discovery_cloud_outcomes_served_test.go:53` | env credential reference, not a value (CWE-798) |

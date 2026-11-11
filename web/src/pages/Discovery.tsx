@@ -54,6 +54,14 @@ import { invalidateAppQueryKeys } from "@/lib/query";
 type Notice = { kind: "permission" | "error" | "success"; message: string };
 type SourceKind = DiscoverySourceRequest["kind"];
 type FindingTriageStatus = NonNullable<DiscoveryFinding["triage_status"]>;
+
+// Q6-L4: a scan finding whose line holds a live decoy secret's value is that
+// decoy, planted on purpose: the finding names it.
+function knownDecoyName(finding: DiscoveryFinding): string {
+  const metadata = finding.metadata as Record<string, unknown> | undefined;
+  const decoy = metadata?.known_decoy as { name?: unknown } | undefined;
+  return typeof decoy?.name === "string" ? decoy.name : "";
+}
 type FindingTriageFilter = "all" | FindingTriageStatus;
 type FindingFacetFilter = string;
 type FindingFilters = { triage: FindingTriageFilter; owner: FindingFacetFilter; team: FindingFacetFilter; tag: FindingFacetFilter };
@@ -2437,6 +2445,9 @@ function FindingTable({
           <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <TriagePill status={findingTriageStatus(finding)} />
             <span>{discoveryFindingKindLabel(t, finding.kind)}</span>
+            {knownDecoyName(finding) ? (
+              <span className="font-medium text-muted-foreground">{t("discovery.findings.knownDecoy", { name: knownDecoyName(finding) })}</span>
+            ) : null}
             {finding.removed_at ? (
               <span className="font-medium text-status-warning">{t("discovery.findings.removedFromSource", { date: formatDateTime(finding.removed_at) })}</span>
             ) : null}
