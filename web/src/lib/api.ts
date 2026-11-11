@@ -213,6 +213,7 @@ import type {
   CAOfflineCrossSignImportRequest,
   CAKeyCeremony,
   CBOMAsset as GenCBOMAsset,
+  CBOMImport,
   CBOMInventory,
   CBOMCycloneDXExport,
   CBOMMigrationProgress,
@@ -1364,6 +1365,7 @@ export type {
   CAOfflineRootRekeyRequest,
   CAOfflineCrossSignImportRequest,
   CAKeyCeremony,
+  CBOMImport,
   CBOMInventory,
   CBOMCycloneDXExport,
   CBOMMigrationProgress,
@@ -2859,6 +2861,8 @@ export interface Api {
   mcpTools(): Promise<MCPToolList>;
   callMCPTool(tool: string, input: MCPToolCall): Promise<MCPToolResult>;
   listCBOMAssets(): Promise<CBOMInventory>;
+  /** X6-L4: import a CycloneDX CBOM file exactly as it is (its bytes are its identity). */
+  importCBOM(source: string, document: string, idempotencyKey?: string): Promise<CBOMImport>;
   exportCBOMCycloneDX(): Promise<CBOMCycloneDXExport>;
   previewCBOMScan(input: CBOMScanRequest): Promise<CBOMScanPreview>;
   startCBOMScan(input: CBOMScanRequest): Promise<CBOMScan>;
@@ -4017,6 +4021,12 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   mcpTools: () => req<MCPToolList>("/api/v1/mcp/tools"),
   callMCPTool: (tool, input) => postRead<MCPToolResult>(`/api/v1/mcp/tools/${encodeURIComponent(tool)}`, input),
   listCBOMAssets: () => req<CBOMInventory>("/api/v1/cbom/assets"),
+  importCBOM: (source, document, idempotencyKey = newIdempotencyKey()) =>
+    req<CBOMImport>(`/api/v1/cbom/imports?source=${encodeURIComponent(source)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: document,
+    }),
   exportCBOMCycloneDX: () => req<CBOMCycloneDXExport>("/api/v1/cbom/export/cyclonedx"),
   previewCBOMScan: (input) => postRead<CBOMScanPreview>("/api/v1/cbom/scans/preview", input),
   startCBOMScan: (input) => mutate<CBOMScan>("POST", "/api/v1/cbom/scans", input),

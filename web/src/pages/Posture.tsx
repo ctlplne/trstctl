@@ -33,6 +33,7 @@ import { PQCPilots } from "@/pages/posture/PQCPilots";
 import { DriftRecoveryWorkflow } from "@/pages/posture/DriftRecoveryWorkflow";
 import { loadLatestDriftRuns } from "@/pages/posture/DriftLatestRuns";
 import { CBOMScanWorkflow } from "@/pages/posture/CBOMScanWorkflow";
+import { CBOMImportPanel } from "@/pages/posture/CBOMImportPanel";
 import { CBOMCycloneDXExport } from "@/pages/posture/CBOMCycloneDXExport";
 import { PCASSuccessionWorkflow } from "@/pages/posture/PCASSuccessionWorkflow";
 import {
@@ -422,6 +423,12 @@ export function Posture() {
           <CBOMScanWorkflow
             onCompleted={(scan, inventory) => {
               setLastCBOMScan(scan);
+              setCBOMInventory(inventory);
+              setCBOMError(null);
+            }}
+          />
+          <CBOMImportPanel
+            onImported={(_result, inventory) => {
               setCBOMInventory(inventory);
               setCBOMError(null);
             }}

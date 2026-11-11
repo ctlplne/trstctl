@@ -32757,6 +32757,31 @@ export const messages = {
   },
   "posture.cbom.cyclonedx.saved": { defaultMessage: "Saved a CBOM with {components} components.", description: "Notice after the CBOM export is saved." },
   "posture.cbom.cyclonedx.failed": { defaultMessage: "The CBOM could not be exported.", description: "Notice when the CBOM export fails." },
+  "posture.cbom.import.title": { defaultMessage: "Import a CBOM", description: "X6-L4: CBOM import panel heading." },
+  "posture.cbom.import.description": {
+    defaultMessage:
+      "Bring a CycloneDX CBOM from a vendor, a source scan or an image scan into the crypto inventory. Its components join the inventory under its source; importing the same file again changes nothing, and a new file from the same source is its next version.",
+    description: "X6-L4: what a CBOM import does.",
+  },
+  "posture.cbom.import.kind": { defaultMessage: "Source kind", description: "X6-L4: source kind select." },
+  "posture.cbom.import.kind.vendor": { defaultMessage: "Vendor", description: "X6-L4: a vendor's CBOM." },
+  "posture.cbom.import.kind.source": { defaultMessage: "Source repository", description: "X6-L4: a source scan's CBOM." },
+  "posture.cbom.import.kind.image": { defaultMessage: "Container image", description: "X6-L4: an image scan's CBOM." },
+  "posture.cbom.import.name": { defaultMessage: "Source name", description: "X6-L4: the vendor, repository or image reference." },
+  "posture.cbom.import.nameHelp": {
+    defaultMessage: "The vendor's name, the repository, or the image reference the CBOM describes.",
+    description: "X6-L4: what to name the source.",
+  },
+  "posture.cbom.import.file": { defaultMessage: "CycloneDX CBOM (JSON)", description: "X6-L4: the file to import." },
+  "posture.cbom.import.submit": { defaultMessage: "Import CBOM", description: "X6-L4: import button." },
+  "posture.cbom.import.imported": {
+    defaultMessage: "Imported {source} version {version}: {components} components, {findings} findings (run {run}).",
+    description: "X6-L4: an import's result.",
+  },
+  "posture.cbom.import.replayed": {
+    defaultMessage: "{source} version {version} already holds this exact file; nothing changed.",
+    description: "X6-L4: the same BOM imported again.",
+  },
   "posture.cbom.inventoryLoadFailed": { defaultMessage: "The saved crypto inventory could not be loaded", description: "CBOM inventory read failure title." },
   "posture.cbom.workflow.scope": { defaultMessage: "Choose what to inspect", description: "First CBOM scan workflow step." },
   "posture.cbom.workflow.scopeBody": {

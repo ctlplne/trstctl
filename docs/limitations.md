@@ -1308,7 +1308,8 @@ never live in the API process. What you can do end to end against the running bi
   the encoder's output against the official CycloneDX 1.6 schema with an
   independent validator.
 - CBOM import and code and image scanning (X6): `POST /api/v1/cbom/imports`
-  (`trstctl-cli cbom import --source vendor:|source:|image:<name>`) merges a
+  (`trstctl-cli cbom import --source vendor:|source:|image:<name>`, or Import a CBOM
+  on the Posture page, which sends the chosen file's bytes as they are) merges a
   CycloneDX 1.4–1.6 CBOM into the inventory, each finding located under its
   source and classified like trstctl's own scans; importing the same BOM again
   replays and writes nothing. `trstctl-cli cbom scan-source` finds RSA (with key

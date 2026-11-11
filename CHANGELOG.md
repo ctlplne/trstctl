@@ -2,6 +2,11 @@
 
 ### Added
 
+- The Posture page imports a CBOM (X6-L4). A CycloneDX CBOM from a vendor, a source scan or an image
+  scan could be imported only through the API or CLI. Import a CBOM takes the source kind and name and
+  a JSON file, sends the file's bytes as they are (so the same file again changes nothing, as from the
+  CLI), keeps one idempotency key across a retry, says what the import recorded or that it changed
+  nothing, and refreshes the CBOM inventory.
 - The Migration page shows the observed-traffic gate (X3-L3). A run that requires observed traffic
   advances a wave only when an observer sees new connections at every member, but the console showed
   only the halt reason. Run history now says the run is gated and for how long a member may wait,
