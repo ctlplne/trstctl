@@ -3685,10 +3685,34 @@ or HTTP to loopback only with `allow_insecure_loopback`, and private addresses
 only inside `private_egress_cidrs`. You may still name your own adapter in
 `wrapCommand`; it must speak the same contract.
 
-Externally wrapped custody applies to a key store from its first key: moving a
-key store the local KEK already sealed onto a KMS or HSM key (re-wrapping each
-key's data key) is what comes next. Today, start the signer with `--kms-*` on an
-empty key store.
+A key store the local KEK already sealed moves onto the adapter with a one-shot
+re-wrap (A200-L2). Stop the signer (scale it to zero), then run it once with the
+key store, the KEK that sealed it, and the adapter it moves to:
+
+```sh
+trstctl-signer --rewrap-keystore \
+  --keystore /data/signer/keys \
+  --kek /etc/trstctl/kek/kek.bin \
+  --kms-provider awskms \
+  --kms-key-ref arn:aws:kms:us-east-1:111122223333:key/0b1c2d3e-4f5a-6b7c-8d9e-0f1a2b3c4d5e \
+  --kms-wrap-command /usr/local/bin/trstctl-kms-wrap
+```
+
+It probes the adapter first, then copies the key store beside itself with every
+sealed file's data key unwrapped by the KEK and wrapped by the adapter (keys,
+journals, import seeds and KEM custody alike; payloads are never opened and every
+other byte is kept). It checks that each moved data key comes back unchanged
+from the adapter, that every signer key opens under it, and that the key store
+did not change while it was copied. Only then does it rename the original to
+`<keystore>.pre-rewrap-<UTC time>`, the rollback copy the KEK still opens, and
+put the re-wrapped copy in its place. Any failure (a file the KEK did not seal,
+a link, a running signer writing, an adapter that answers with another key)
+leaves the key store as it was. The key store must be a directory below its
+volume's mount point, as the chart's `/data/signer/keys` is. Run it as the
+signer's user with the KEK Secret, the adapter configuration and the signer's
+data volume mounted, then start the signer with `externalKMS.enabled=true` (no
+`--kek`). Keep the rollback copy and the KEK until the signer has served from
+the re-wrapped store.
 
 Back up the sealed key store, the signer custody input, and the CA cert together
 (the CA-key recovery set) per the [disaster-recovery runbook](disaster-recovery.md).

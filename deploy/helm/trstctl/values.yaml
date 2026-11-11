@@ -433,8 +433,9 @@ signer:
 # DEK bytes move only on stdin/stdout; provider/keyRef are non-secret identifiers.
 # The image ships the adapter, /usr/local/bin/trstctl-kms-wrap; it reads config.json
 # (one block per provider, credentials as file paths) from adapterConfigSecret,
-# mounted read-only at /etc/trstctl/kms-wrap. Start with an empty signer key store:
-# keys the local KEK already sealed are not re-wrapped.
+# mounted read-only at /etc/trstctl/kms-wrap. A key store the local KEK already
+# sealed moves onto the adapter once with `trstctl-signer --rewrap-keystore`
+# while the signer is stopped (docs/configuration.md, A200-L2).
 externalKMS:
   enabled: false
   provider: ""      # awskms | gcpkms | azurekv | pkcs11 (pkcs11 needs the HSM signer image's cgo adapter)

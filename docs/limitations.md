@@ -7085,8 +7085,11 @@ mounting the local signer KEK. The AWS adapter takes a static key or the
 platform's identity (A200-L1: IRSA web identity, ECS or EKS Pod Identity
 container credentials, an EC2 instance role over IMDSv2, or the AWS SDKs'
 default chain), proven against stand-in STS and metadata endpoints; a run on
-EKS, ECS and EC2 themselves is a Track B proof. A key store the local KEK already sealed is not
-re-wrapped onto the adapter; external custody starts from an empty key store.
+EKS, ECS and EC2 themselves is a Track B proof. A key store the local KEK already
+sealed moves onto the adapter with `trstctl-signer --rewrap-keystore` (A200-L2):
+staged, verified, then swapped, with the original kept as the rollback copy;
+proven with the real signer binary and a stand-in wrap command, while a run
+against a cloud KMS or HSM is a Track B proof.
 The chart runs the standard image, so a PKCS#11 HSM behind the adapter needs the
 HSM signer image outside the chart today. Online break-glass issue,
 signer-backed CA rotation with bidirectional overlap cross-certificates,

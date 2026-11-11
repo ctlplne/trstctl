@@ -44,6 +44,7 @@ func main() {
 	kmsKeyRef := flag.String("kms-key-ref", "", "external KMS/HSM key identifier used by the signer keystore wrapper")
 	kmsWrapCommand := flag.String("kms-wrap-command", "", "absolute path to signer-local KMS/HSM wrapper command; receives wrap|unwrap provider keyRef and DEK bytes on stdin")
 	kmsTimeout := flag.Duration("kms-timeout", 10*time.Second, "deadline for each external KMS/HSM wrap/unwrap operation")
+	rewrapKeystore := flag.Bool("rewrap-keystore", false, "one-shot: move the --keystore directory from the --kek that sealed it onto the --kms-provider/--kms-key-ref/--kms-wrap-command adapter, keeping the original as a rollback copy, then exit (stop the signer first)")
 	managedKeysConfig := flag.String("managed-keys-config", "", "path to signer-local managed-key provider JSON (credentials must be file references, never argv/env)")
 	tenantKEKConfig := flag.String("tenant-kek-config", "", "path to signer-local tenant KEK custody JSON: the PKCS#11 token and the HSM AES keys that wrap tenant domain KEKs (credentials must be file references)")
 	authSecret := flag.String("auth-secret", "", "path to the signer content-authorization secret (required for dual-control CA handles)")
@@ -110,7 +111,11 @@ func main() {
 
 	offlineMode := *offlineInitPolicy != "" || *offlineIssueRequest != "" || *offlineApproveRequest != "" || *offlineGenerateCustodian != "" || *offlinePrepareKit != "" || *pcasRecoveryMode != ""
 	useMTLS := *mtlsListen != ""
-	if !offlineMode && !useMTLS && *socket == "" {
+	if *rewrapKeystore && (offlineMode || useMTLS || *socket != "") {
+		fmt.Fprintln(os.Stderr, "trstctl-signer: --rewrap-keystore is a one-shot mode: it serves no socket and runs no offline ceremony")
+		os.Exit(2)
+	}
+	if !offlineMode && !*rewrapKeystore && !useMTLS && *socket == "" {
 		fmt.Fprintln(os.Stderr, "trstctl-signer: one of --socket (UDS) or --mtls-listen (cross-node mTLS) is required")
 		os.Exit(2)
 	}
@@ -139,6 +144,13 @@ func main() {
 	if _, err := crypto.PowerOnSelfTest(*fipsRequired || signerFIPSEnvRequired(os.Getenv("TRSTCTL_FIPS"))); err != nil {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: crypto power-on self-test: %v\n", err)
 		os.Exit(1)
+	}
+	if *rewrapKeystore {
+		if err := runRewrapKeystore(*keystore, *kekFile, *kmsProvider, *kmsKeyRef, *kmsWrapCommand, *kmsTimeout, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "trstctl-signer: re-wrap the key store: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 	if offlineMode {
 		if *pcasRecoveryMode != "" {

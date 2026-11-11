@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2972 annotated sites across 33 rules. Each row is
+2976 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1527,7 +1527,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (394 sites)
+### G204 — CWE-78 OS command injection (395 sites)
 
 | Location | Reason |
 |---|---|
@@ -1892,6 +1892,7 @@ not this file.
 | `internal/server/vault_dynamic_credentials_cloud_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:84` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/helpers_test.go:29` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/signing/rewrap_binary_test.go:56` | the test's own freshly built signer binary (CWE-78) |
 | `internal/signing/static_test.go:41` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/supervisor.go:46` | spawns the repo's own signer binary; AN-4 child-process mode (CWE-78) |
 | `internal/signing/supervisor.go:235` | spawns the repo's own signer binary; AN-4 child-process mode (CWE-78) |
@@ -2047,7 +2048,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (722 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (725 sites)
 
 | Location | Reason |
 |---|---|
@@ -2652,6 +2653,9 @@ not this file.
 | `internal/signing/offline_breakglass.go:290` | path is the signer-owned offline vault journal or kit (CWE-22) |
 | `internal/signing/offline_lock_unix.go:14` | fixed lock name under dedicated operator-selected offline vault (CWE-22) |
 | `internal/signing/revocation.go:105` | path passed the explicit signer-keystore confinement check above (CWE-22) |
+| `internal/signing/rewrap.go:231` | the operator's own key store and its staging copy (CWE-22) |
+| `internal/signing/rewrap_binary_test.go:72` | the test's own temp key store (CWE-22) |
+| `internal/signing/rewrap_test.go:102` | the test's own temp key store (CWE-22) |
 | `internal/spireupstream/plugin.go:381` | operator-configured public CA bundle path (CWE-22) |
 | `internal/spireupstream/plugin.go:466` | operator-configured upstream-authority plugin config path (CWE-22) |
 | `internal/store/dynamic_secret_lock_order_test.go:124` | fixed sibling path inside this package's own directory (CWE-22) |

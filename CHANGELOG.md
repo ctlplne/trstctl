@@ -2,6 +2,13 @@
 
 ### Added
 
+- `trstctl-signer --rewrap-keystore` moves a key store the local KEK sealed onto the external KMS/HSM
+  adapter (A200-L2). With the signer stopped, it probes the adapter, copies the key store beside
+  itself with every sealed file's data key moved from the KEK to the adapter (keys, journals, import
+  seeds, KEM custody; payloads never opened), checks each data key comes back unchanged, every key
+  opens under the adapter and the store did not change meanwhile, then keeps the original as
+  `<keystore>.pre-rewrap-<UTC time>` and puts the re-wrapped copy in its place. Any failure leaves
+  the key store as it was. Before, external custody could only start from an empty key store.
 - The KMS wrap adapter reads AWS credentials from the platform (A200-L1). `trstctl-kms-wrap`'s
   `aws.credential_source` takes `web_identity` (IRSA: the projected token exchanged at STS),
   `container` (ECS task roles, EKS Pod Identity), `instance_metadata` (an EC2 instance role over

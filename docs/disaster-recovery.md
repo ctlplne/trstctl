@@ -683,6 +683,9 @@ is back. (The drilled step-by-step procedure is the
    --keystore <dir> --kms-provider <provider> --kms-key-ref <keyRef>
    --kms-wrap-command /usr/local/bin/trstctl-kms-wrap --auth-secret <sign-auth>`
    with `TRSTCTL_KMS_WRAP_CONFIG` naming the adapter's restored configuration.
+   A key-store backup taken before a `trstctl-signer --rewrap-keystore` run
+   (A200-L2) is still sealed by the local KEK: restore it with that KEK, then
+   re-wrap it again if the deployment now runs external custody.
 4. Restore `TRSTCTL_CA_CERT_FILE` so the control plane reuses the same CA
    certificate. The signer reloads the sealed CA key, enforces content
    authorization, and the CA identity is unchanged; already-issued certificates keep

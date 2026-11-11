@@ -29,3 +29,19 @@ func LoadOrCreate(path string) (*seal.LocalKEK, error) {
 	}
 	return k, nil
 }
+
+// Load loads an existing 32-byte KEK from path and refuses a missing file. A
+// caller that must open what this KEK already sealed (A200-L2's key-store
+// re-wrap) never wants a fresh key in its place.
+func Load(path string) (*seal.LocalKEK, error) {
+	raw, err := secretfile.Load(path)
+	if err != nil {
+		return nil, fmt.Errorf("kek: load %s: %w", path, err)
+	}
+	defer secret.Wipe(raw)
+	k, err := seal.NewLocalKEK(raw)
+	if err != nil {
+		return nil, fmt.Errorf("kek: load local KEK: %w", err)
+	}
+	return k, nil
+}
