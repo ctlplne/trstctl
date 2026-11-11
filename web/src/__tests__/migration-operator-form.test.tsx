@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppQueryProvider } from "@/lib/query";
 import { Migration } from "@/pages/Migration";
@@ -162,6 +162,48 @@ describe("migration operator plan", () => {
     renderRoute();
     await user.click(await screen.findByText("Run history, wave evidence, and rollback controls"));
     expect(await screen.findByText("Revoked once each successor is verified live")).toBeInTheDocument();
+  });
+
+  // X3-L3: a run that requires observed traffic says so, shows why it paused,
+  // and shows the traffic gate for each member.
+  it("shows the observed-traffic gate for each member of a gated run", async () => {
+    const user = userEvent.setup();
+    const member = (identity_id: string, extra: Record<string, unknown>) => ({ identity_id, binding: {}, trust_verdict: "verified", ...extra });
+    apiMock.migrationRuns.mockResolvedValue({
+      items: [
+        {
+          id: "run-gated",
+          plan_id: "gated-cutover",
+          status: "paused",
+          require_observed_traffic: true,
+          observed_traffic_window_seconds: 900,
+          pause_reason: "no new connections observed at member id-late within 15m0s",
+          waves: [
+            {
+              id: "canary",
+              ordinal: 1,
+              phase: "verifying_live",
+              started: true,
+              members: [
+                member("id-seen", { successor_verdict: "verified", live_verified_at: "2026-11-11T01:00:00Z", traffic_verdict: "verified" }),
+                member("id-waiting", { successor_verdict: "verified", live_verified_at: "2026-11-11T01:05:00Z" }),
+                member("id-late", { successor_verdict: "verified", live_verified_at: "2026-11-11T00:40:00Z", traffic_verdict: "failed" }),
+                member("id-pending", {}),
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    renderRoute();
+    await user.click(await screen.findByText("Run history, wave evidence, and rollback controls"));
+    expect(await screen.findByText(/Traffic gate: each wave waits until an observer sees new connections .* up to 15 min/)).toBeInTheDocument();
+    expect(screen.getByText("Paused: no new connections observed at member id-late within 15m0s")).toBeInTheDocument();
+    const evidence = (id: string) => screen.getByText(id).closest("li") as HTMLElement;
+    expect(within(evidence("id-seen")).getByText("New connections observed")).toBeInTheDocument();
+    expect(within(evidence("id-waiting")).getByText(/Waiting for new connections since/)).toBeInTheDocument();
+    expect(within(evidence("id-late")).getByText("No new connections observed in the window")).toBeInTheDocument();
+    expect(within(evidence("id-pending")).getByText("Not verified live yet")).toBeInTheDocument();
   });
 
   it("keeps JSON as an explicit advanced path and rejects incomplete input before the API", async () => {

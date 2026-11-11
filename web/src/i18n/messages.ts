@@ -16565,6 +16565,26 @@ export const messages = {
     defaultMessage: "Next fingerprint",
     description: "Migration successor certificate fingerprint label.",
   },
+  "migration.design.trafficGate": {
+    defaultMessage:
+      "Traffic gate: each wave waits until an observer sees new connections at every member's endpoint, for up to {minutes} min after it is verified live.",
+    description: "X3-L3: a run that requires observed traffic.",
+  },
+  "migration.design.pausedBecause": { defaultMessage: "Paused: {reason}", description: "X3-L3: why a run is paused." },
+  "migration.design.trafficEvidence": { defaultMessage: "Observed traffic", description: "X3-L3: the observed-traffic gate for one member." },
+  "migration.design.trafficObserved": {
+    defaultMessage: "New connections observed",
+    description: "X3-L3: an observer saw new connections at the member's endpoint.",
+  },
+  "migration.design.trafficNotObserved": {
+    defaultMessage: "No new connections observed in the window",
+    description: "X3-L3: the gate's window passed without wire evidence.",
+  },
+  "migration.design.trafficWaiting": {
+    defaultMessage: "Waiting for new connections since {at}",
+    description: "X3-L3: live verified, waiting for wire evidence.",
+  },
+  "migration.design.trafficNotLive": { defaultMessage: "Not verified live yet", description: "X3-L3: the member's successor is not verified live yet." },
   "migration.design.trustEvidence": {
     defaultMessage: "Trust / successor evidence",
     description: "Migration member forward verification label.",

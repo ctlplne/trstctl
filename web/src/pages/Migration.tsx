@@ -221,6 +221,14 @@ export function Migration() {
                   <code className="break-all">{run.id}</code> · {run.status}
                 </p>
                 {run.revoke_predecessors ? <p className="mt-1 text-caption">{t("migration.form.predecessorsRevoked")}</p> : null}
+                {run.require_observed_traffic ? (
+                  <p className="mt-1 text-caption">
+                    {t("migration.design.trafficGate", { minutes: String(Math.max(1, Math.round((run.observed_traffic_window_seconds ?? 0) / 60))) })}
+                  </p>
+                ) : null}
+                {run.pause_reason ? (
+                  <p className="mt-2 text-sm text-status-warning">{t("migration.design.pausedBecause", { reason: run.pause_reason })}</p>
+                ) : null}
                 {run.halt_reason ? <p className="mt-2 text-sm text-status-warning">{run.halt_reason}</p> : null}
                 <ol className="mt-4 grid gap-3">
                   {run.waves.map((wave) => {
@@ -240,7 +248,7 @@ export function Migration() {
                         </p>
                         <ul className="mt-3 grid gap-3">
                           {wave.members.map((member) => (
-                            <MigrationMemberEvidence key={member.identity_id} member={member} />
+                            <MigrationMemberEvidence key={member.identity_id} member={member} requireTraffic={Boolean(run.require_observed_traffic)} />
                           ))}
                         </ul>
                       </li>
@@ -338,8 +346,17 @@ function MigrationDisclosure({
   );
 }
 
-function MigrationMemberEvidence({ member }: { member: MigrationRun["waves"][number]["members"][number] }) {
-  const { t } = useTranslation();
+function MigrationMemberEvidence({ member, requireTraffic }: { member: MigrationRun["waves"][number]["members"][number]; requireTraffic: boolean }) {
+  const { t, formatDateTime } = useTranslation();
+  // X3-L3: the observed-traffic gate, member by member.
+  const traffic =
+    member.traffic_verdict === "verified"
+      ? t("migration.design.trafficObserved")
+      : member.traffic_verdict === "failed"
+        ? t("migration.design.trafficNotObserved")
+        : member.successor_verdict === "verified" && member.live_verified_at
+          ? t("migration.design.trafficWaiting", { at: formatDateTime(member.live_verified_at) })
+          : t("migration.design.trafficNotLive");
   const binding = member.binding as Partial<MigrationRun["waves"][number]["members"][number]["binding"]>;
   const mapping = [binding.connector, binding.target].filter(Boolean).join(" → ") || t("migration.design.notReturned");
   const trust = `${member.trust_verdict || t("migration.design.notObserved")} / ${member.successor_verdict || t("migration.design.notObserved")}`;
@@ -372,6 +389,12 @@ function MigrationMemberEvidence({ member }: { member: MigrationRun["waves"][num
         <dd>{trust}</dd>
         <dt className="text-muted-foreground">{t("migration.design.rollbackEvidence")}</dt>
         <dd>{rollback}</dd>
+        {requireTraffic ? (
+          <>
+            <dt className="text-muted-foreground">{t("migration.design.trafficEvidence")}</dt>
+            <dd className={member.traffic_verdict === "failed" ? "text-status-warning" : undefined}>{traffic}</dd>
+          </>
+        ) : null}
       </dl>
     </li>
   );

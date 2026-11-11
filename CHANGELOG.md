@@ -2,6 +2,11 @@
 
 ### Added
 
+- The Migration page shows the observed-traffic gate (X3-L3). A run that requires observed traffic
+  advances a wave only when an observer sees new connections at every member, but the console showed
+  only the halt reason. Run history now says the run is gated and for how long a member may wait,
+  shows why a run paused, and gives each member its observed-traffic state: observed, waiting since
+  it was verified live, or not seen in the window.
 - The console starts a planned CA switch (P3-L3). A migration run that revokes each predecessor once
   its successor is verified live could be started only through the API or CLI. The Migration page's
   plan now offers "Revoke each predecessor once its successor is verified live", shows the choice in
