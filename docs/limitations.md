@@ -5568,7 +5568,11 @@ when off, requiring a KEK when on):
   provider listing the role `decoy` mints a login reaching only its own empty
   database (`/api/v1/secrets/honeytokens/databases`); the leader reads that
   database's session counter (PostgreSQL 14+) and the first use raises one
-  critical alert; probes and administration never alert. A failed login with a
+  critical alert; probes and administration never alert. PUBLIC keeps CONNECT on
+  databases such as `postgres` and PostgreSQL cannot refuse it to one role, so the
+  bait can log in there: the watcher also reads the role's live sessions in every
+  other database and alerts on one, naming that database, but a session that opens
+  and closes between two checks (30 seconds apart) there is not seen. A failed login with a
   wrong password is not detected, a statistics reset hides earlier uses, and only
   PostgreSQL providers can mint decoys. Decoy SSH keys and Kubernetes tokens are
   not built.

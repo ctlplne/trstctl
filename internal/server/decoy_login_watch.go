@@ -25,6 +25,13 @@ const defaultDecoyLoginWatchInterval = 30 * time.Second
 
 type decoySessionReader interface {
 	DecoySessions(ctx context.Context, role string) (int64, bool, error)
+	// DecoyElsewhere names the other databases the decoy login has a live
+	// session in (Q6-L8).
+	DecoyElsewhere(ctx context.Context, role string) ([]string, error)
+}
+
+type decoyElsewhereReader interface {
+	DecoyElsewhere(ctx context.Context, role string) ([]string, error)
 }
 
 // DecoySessions reads a decoy login's database session counter through the
@@ -43,6 +50,24 @@ func (p *configuredDynamicProvider) DecoySessions(ctx context.Context, role stri
 		return 0, false, fmt.Errorf("dynamic-secret provider %q cannot report decoy logins", p.id)
 	}
 	return reader.DecoySessions(ctx, role)
+}
+
+// DecoyElsewhere reads the decoy login's live sessions in other databases
+// through the provider's admin connection, opened for this one read.
+func (p *configuredDynamicProvider) DecoyElsewhere(ctx context.Context, role string) ([]string, error) {
+	if p.cfg.Type != "postgresql" {
+		return nil, fmt.Errorf("dynamic-secret provider %q cannot hold decoy logins", p.id)
+	}
+	backend, closeBackend, err := p.openBackend(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer closeBackend()
+	reader, ok := backend.(decoyElsewhereReader)
+	if !ok {
+		return nil, fmt.Errorf("dynamic-secret provider %q cannot report decoy logins", p.id)
+	}
+	return reader.DecoyElsewhere(ctx, role)
 }
 
 // RunDecoyLoginWatch checks every active decoy database login on the leader.
@@ -105,11 +130,21 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 				note(fmt.Errorf("decoy %s: %w", decoy.ID, err))
 				continue
 			}
+			database := dynsecret.DecoyDatabaseName(decoy.DBRole)
 			if !exists || sessions == 0 {
-				continue
+				// Q6-L8: a session in another database open to PUBLIC does not
+				// count on the decoy's own; the live sessions name it.
+				elsewhere, err := reader.DecoyElsewhere(ctx, decoy.DBRole)
+				if err != nil {
+					note(fmt.Errorf("decoy %s: %w", decoy.ID, err))
+					continue
+				}
+				if len(elsewhere) == 0 {
+					continue
+				}
+				database = elsewhere[0]
 			}
-			if err := s.orch.RecordHoneyTokenTrigger(ctx, tenantID, decoy.ID, "LOGIN",
-				"postgres/"+dynsecret.DecoyDatabaseName(decoy.DBRole)); err != nil {
+			if err := s.orch.RecordHoneyTokenTrigger(ctx, tenantID, decoy.ID, "LOGIN", "postgres/"+database); err != nil {
 				note(fmt.Errorf("decoy %s: %w", decoy.ID, err))
 			}
 		}

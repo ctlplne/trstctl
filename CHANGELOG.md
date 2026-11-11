@@ -632,6 +632,11 @@
 
 ### Fixed
 
+- A decoy login used in another database alerts (Q6-L8). A decoy PostgreSQL login has CONNECT only
+  on its own empty database, but PUBLIC keeps CONNECT on databases such as `postgres`, and a session
+  the bait opened there counted nowhere the watcher looked. The watcher now also reads the role's live
+  sessions in every other database and raises the decoy's alert, naming that database; a session that
+  opens and closes between two checks there is still not seen.
 - Erasing a subject clears them from decoy alerts (Q6-L3). A decoy secret keeps its first reader, and
   each reader's alert in the outbox names them until the delivered row is swept a day later (and a
   waiting one, never). Subject erasure did not reach either, and a subject export did not list the

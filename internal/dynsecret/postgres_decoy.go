@@ -145,6 +145,40 @@ func (b *PostgresBackend) DecoySessions(ctx context.Context, role string) (int64
 	return sessions, true, nil
 }
 
+// DecoyElsewhere returns the other databases the decoy login has a session in
+// now (Q6-L8). The login has CONNECT only on its own database, but PUBLIC
+// keeps CONNECT on databases such as postgres, and PostgreSQL has no per-role
+// refusal of it; a session there does not count on the decoy's own database,
+// so the watcher reads the server's live sessions for the role as well. A
+// session that opens and closes between two checks is not seen.
+func (b *PostgresBackend) DecoyElsewhere(ctx context.Context, role string) ([]string, error) {
+	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	rows, err := conn.Query(ctx, `
+		SELECT DISTINCT datname FROM pg_stat_activity
+		 WHERE usename = $1 AND datname IS NOT NULL AND datname <> $2
+		 ORDER BY datname`, role, DecoyDatabaseName(role))
+	if err != nil {
+		return nil, fmt.Errorf("dynsecret postgres: read decoy sessions elsewhere: %w", err)
+	}
+	defer rows.Close()
+	var databases []string
+	for rows.Next() {
+		var database string
+		if err := rows.Scan(&database); err != nil {
+			return nil, fmt.Errorf("dynsecret postgres: read decoy sessions elsewhere: %w", err)
+		}
+		databases = append(databases, database)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("dynsecret postgres: read decoy sessions elsewhere: %w", err)
+	}
+	return databases, nil
+}
+
 // postgresDecoyDSN is the credential DSN with the decoy database in place of
 // the admin database: the URI path is replaced, a keyword DSN gets dbname.
 func postgresDecoyDSN(adminDSN []byte, user string, password []byte, database string) ([]byte, error) {
