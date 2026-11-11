@@ -1787,14 +1787,21 @@ never live in the API process. What you can do end to end against the running bi
   page). Authorities whose revocation addresses a serial take it (digicert,
   sectigo, awspca, gcpcas, smallstep, ejbca, vaultpki), and so does an ACME
   authority, from the certificate's bytes read back from its CT log once
-  trstctl's account is authorized for every name (N10, below); Venafi needs the
-  certificate's thumbprint and AD CS its relay, so those are refused. The request is an event plus a
+  trstctl's account is authorized for every name (N10, below), and so does an
+  AD CS issuer that names a `revocation_relay` (A163-L1): the relay runs
+  `certutil -revoke` with the serial, publishes a CRL and reads the row back, as
+  for an inventory certificate (A162), and the console offers only the reasons
+  certutil takes (unspecified through cessationOfOperation). Venafi needs the
+  certificate's thumbprint, and AD CS without a relay has no path, so those are
+  refused. The request is an event plus a
   `revocation.publish` delivery; the finding reads revoked at the issuer only
   after the authority confirms, a redelivery calls it no second time, and a
   serial the authority never issued stays unconfirmed with its reason. A rogue
   certificate already in inventory is revoked through the exact revocation,
   which reaches its recorded issuer. Proven against the DigiCert protocol
-  stand-in; live vendor accounts are Track B. Targets trstctl never delivered
+  stand-in and, for AD CS, the production relay loop driving a certutil stand-in
+  in front of a CA stand-in whose CRL lists the serial; live vendor accounts and
+  a live forest are Track B. Targets trstctl never delivered
   to and cloud or FortiGate/PAN-OS targets still have no executable takedown.
 - Compliance and inventory reporting: `GET /api/v1/compliance/inventory-report`
   and `trstctl-cli compliance inventory-report` return the CAP-OBS-02 reporting

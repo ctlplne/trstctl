@@ -2,6 +2,12 @@
 
 ### Added
 
+- A rogue certificate the tenant's own AD CS issued outside trstctl, seen only in Certificate
+  Transparency, can be revoked at that CA (A163-L1). An AD CS issuer that names a revocation relay is
+  now listed as revoking by serial: Revoke at issuer hands the serial to the relay, which runs
+  `certutil -revoke`, publishes a CRL and reads the row back, and the finding reads revoked at the
+  issuer only from that checked report. The API refuses, and the console does not offer, a reason
+  certutil cannot record.
 - An ACME client can revoke a certificate trstctl's ACME issued through a profile's upstream CA
   (A162-L4). `revokeCert` of such a certificate used to fail as a server error ("issuer revocation is
   not supported"). Once RFC 8555 §7.6 authorizes the request, trstctl now queues the same exact

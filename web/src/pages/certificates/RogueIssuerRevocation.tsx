@@ -34,6 +34,17 @@ export const ROGUE_REVOCATION_REASONS = [
 
 export type RogueRevocationReason = (typeof ROGUE_REVOCATION_REASONS)[number];
 
+/** A163-L1: an AD CS issuer revokes through its relay's certutil, which takes
+ * the reasons unspecified through cessationOfOperation. */
+const ADCS_REVOCATION_REASONS: ReadonlySet<string> = new Set([
+  "unspecified",
+  "keyCompromise",
+  "cACompromise",
+  "affiliationChanged",
+  "superseded",
+  "cessationOfOperation",
+]);
+
 function stateKey(state: string): MessageKey {
   switch (state) {
     case "revoked":
@@ -102,6 +113,8 @@ export function RogueIssuerRevocationCell({
     return <span className="text-xs text-muted-foreground">{t("certificates.rogue.issuerNone")}</span>;
   }
   const offered = authorities.filter(revokesFoundCertificates);
+  const chosen = offered.find((ca) => ca.id === authority);
+  const reasonRefused = chosen?.type === "adcs" && reason !== "" && !ADCS_REVOCATION_REASONS.has(reason);
   return (
     <span className="grid gap-1 text-xs">
       <label className="grid gap-1">
@@ -115,7 +128,8 @@ export function RogueIssuerRevocationCell({
           ))}
         </Select>
       </label>
-      <Button type="button" size="sm" variant="outline" disabled={busy || !reason || !authority} onClick={() => void revoke()}>
+      {reasonRefused ? <span className="text-destructive">{t("certificates.rogue.adcsReason")}</span> : null}
+      <Button type="button" size="sm" variant="outline" disabled={busy || !reason || !authority || reasonRefused} onClick={() => void revoke()}>
         {t("certificates.rogue.revokeAtIssuer")}
       </Button>
     </span>

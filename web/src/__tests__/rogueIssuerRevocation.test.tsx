@@ -135,6 +135,40 @@ describe("A163 revoke a rogue certificate at its issuer", () => {
     expect(await screen.findByText("Revocation queued at corp-digicert.")).toBeInTheDocument();
   });
 
+  // A163-L1: an AD CS issuer with a revocation relay revokes by serial; its
+  // certutil takes reasons only up to cessationOfOperation, so the console
+  // refuses another reason before sending anything.
+  it("revokes a CT finding at an AD CS issuer only with a reason certutil takes", async () => {
+    apiMock.externalCAs.mockResolvedValue([
+      { id: "corp-adcs-web", type: "adcs", name: "Corp AD CS", status: "available", revokes_by_serial: true, revokes_by_certificate: false },
+    ]);
+    apiMock.revokeRogueCertificateAtIssuer.mockResolvedValue({
+      discovery_id: discoveryID,
+      authority_id: "corp-adcs-web",
+      serial: "1a2b",
+      reason: "keyCompromise",
+      status: "queued",
+      attempts: 0,
+    });
+    render(<RogueCertificatePanel posture={posture} />);
+    const shadow = rowOf("shadow.corp.example");
+    await within(shadow).findByRole("option", { name: "Corp AD CS" });
+    fireEvent.change(screen.getByLabelText("Revocation reason"), { target: { value: "privilegeWithdrawn" } });
+    fireEvent.change(within(shadow).getByLabelText("Issuing CA"), { target: { value: "corp-adcs-web" } });
+    expect(
+      within(shadow).getByText("An AD CS issuer revokes through certutil, which takes reasons up to cessation of operation. Choose another reason."),
+    ).toBeInTheDocument();
+    expect(within(shadow).getByRole("button", { name: "Revoke at issuer" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Revocation reason"), { target: { value: "keyCompromise" } });
+    fireEvent.click(within(shadow).getByRole("button", { name: "Revoke at issuer" }));
+    await waitFor(() =>
+      expect(apiMock.revokeRogueCertificateAtIssuer).toHaveBeenCalledWith(
+        { discovery_id: discoveryID, authority_id: "corp-adcs-web", reason: "keyCompromise" },
+        expect.any(String),
+      ),
+    );
+  });
+
   it("revokes an inventory finding through the exact revocation", async () => {
     apiMock.bulkRevokeCertificates.mockResolvedValue({ total_matched: 1, total_queued: 1, total_revoked: 0, total_skipped: 0, total_failed: 0, items: [] });
     render(<RogueCertificatePanel posture={posture} />);

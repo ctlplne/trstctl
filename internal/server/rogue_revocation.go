@@ -72,6 +72,18 @@ func (d *issuanceDispatcher) handleRogueCertificateRevocation(ctx context.Contex
 		}
 		return d.orch.RecordRogueCertificateRevokedAtIssuer(ctx, m.TenantID, resultID, result)
 	}
+	if ok && (entry.tenantID == "" || entry.tenantID == m.TenantID) && entry.adcsRevocation.Relay != "" {
+		// A163-L1: an AD CS authority revokes the serial through its
+		// revocation relay, as an inventory certificate does (A162): certutil
+		// revokes, publishes a CRL and reads the row back, and only that
+		// checked report records the revocation. Until it reports, the delivery
+		// waits without spending its retry budget.
+		if err := d.revokeThroughADCSRelay(ctx, m.TenantID, entry.adcsRevocation, store.Certificate{Serial: requested.Serial},
+			requested.Reason, resultID); err != nil {
+			return err
+		}
+		return d.orch.RecordRogueCertificateRevokedAtIssuer(ctx, m.TenantID, resultID, result)
+	}
 	if !ok || entry.tenantID != "" && entry.tenantID != m.TenantID || !ca.RevokesBySerial(kind) || !entry.canRevoke() {
 		return errors.New("server: the named authority is not one this tenant can revoke a serial at")
 	}

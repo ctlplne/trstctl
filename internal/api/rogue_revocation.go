@@ -11,6 +11,7 @@ import (
 
 	googleuuid "github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
@@ -77,10 +78,10 @@ func (a *API) revokeRogueCertificateAtIssuer(w http.ResponseWriter, r *http.Requ
 		if err != nil {
 			return 0, nil, err
 		}
-		kind := ""
+		kind, revocationRelay := "", ""
 		for _, authority := range authorities {
 			if authority.ID == request.AuthorityID {
-				kind = strings.ToLower(authority.Type)
+				kind, revocationRelay = strings.ToLower(authority.Type), authority.RevocationRelay
 			}
 		}
 		if kind == "" {
@@ -88,10 +89,17 @@ func (a *API) revokeRogueCertificateAtIssuer(w http.ResponseWriter, r *http.Requ
 		}
 		// An ACME authority revokes from the certificate's bytes once trstctl's
 		// account is authorized for every name in it (N10): the delivery reads
-		// the bytes back from the CT log that recorded the finding.
-		if !ca.RevokesBySerial(kind) && !ca.RevokesByCertificate(kind) {
-			return 0, nil, errStatus(http.StatusConflict, "this authority ("+kind+") revokes a certificate by its thumbprint or through a relay, "+
-				"which a Certificate Transparency finding does not give trstctl; revoke it at the CA")
+		// the bytes back from the CT log that recorded the finding. An AD CS
+		// authority with a revocation relay revokes by serial (A163-L1): the
+		// relay runs certutil -revoke with it.
+		adcsRelay := kind == "adcs" && revocationRelay != ""
+		if !ca.RevokesBySerial(kind) && !ca.RevokesByCertificate(kind) && !adcsRelay {
+			return 0, nil, errStatus(http.StatusConflict, "this authority ("+kind+") revokes a certificate by its thumbprint, or is an AD CS "+
+				"issuer with no revocation_relay, and a Certificate Transparency finding gives trstctl neither; revoke it at the CA")
+		}
+		if adcsRelay && !relay.ADCSRevocationReason(crypto.CRLReasonCode(crypto.RevocationReason(request.Reason))) {
+			return 0, nil, errStatus(http.StatusBadRequest, "an AD CS authority revokes through certutil, which takes the reasons unspecified "+
+				"through cessationOfOperation")
 		}
 		requested, _, err := a.orch.RequestRogueCertificateRevocation(ctx, tenantID, orchestrator.RogueCertificateRevocationRequest{
 			DiscoveryID: request.DiscoveryID, AuthorityID: request.AuthorityID, Reason: request.Reason, IdempotencyKey: idempotencyKey,

@@ -11639,6 +11639,10 @@ export const messages = {
     defaultMessage: "Issuing CA",
     description: "A163: the external CA a CT finding is revoked at.",
   },
+  "certificates.rogue.adcsReason": {
+    defaultMessage: "An AD CS issuer revokes through certutil, which takes reasons up to cessation of operation. Choose another reason.",
+    description: "A163-L1: the chosen reason is one AD CS cannot record.",
+  },
   "certificates.rogue.issuerChoose": {
     defaultMessage: "Choose the CA that issued it",
     description: "A163: empty authority choice.",

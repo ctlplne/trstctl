@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2918 annotated sites across 33 rules. Each row is
+2919 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -794,7 +794,7 @@ not this file.
 | `internal/crypto/windependents/task_events_windows.go:248` | validated GUID/fixed schema structured query, local channel only, used and closed on this OS thread (CWE-242) |
 | `internal/crypto/windependents/task_events_windows.go:265` | fixed 16-handle output array, zero wait and sized count; every returned native event is closed (CWE-242) |
 
-### G107 — CWE-88 Argument injection (variable URL request) (13 sites)
+### G107 — CWE-88 Argument injection (variable URL request) (14 sites)
 
 | Location | Reason |
 |---|---|
@@ -805,6 +805,7 @@ not this file.
 | `internal/objectstore/minio_lock_test.go:56` | loopback URL of the container this test started (CWE-88) |
 | `internal/protocols/scep/profile_routes_test.go:106` | test drives its own local server URL (CWE-88) |
 | `internal/server/adcs_revoke_relay_served_test.go:305` | the test's own CA stand-in (CWE-918). |
+| `internal/server/adcs_rogue_revoke_served_test.go:117` | the test's own CA stand-in (CWE-918). |
 | `internal/server/archive_minio_served_test.go:58` | loopback URL of the container this test started (CWE-88) |
 | `internal/server/ca_hierarchy_pqc_served_test.go:53` | the served test harness URL |
 | `internal/server/ca_hierarchy_pqc_served_test.go:55` | the served test harness URL |

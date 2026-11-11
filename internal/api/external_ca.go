@@ -117,7 +117,10 @@ func (a *API) listExternalCAs(w http.ResponseWriter, r *http.Request) {
 	}
 	for i := range items {
 		available := items[i].Status == "available"
-		items[i].RevokesBySerial = available && ca.RevokesBySerial(items[i].Type)
+		// An AD CS authority with a revocation relay revokes by serial too:
+		// the relay runs certutil -revoke with it (A163-L1).
+		items[i].RevokesBySerial = available && (ca.RevokesBySerial(items[i].Type) ||
+			strings.EqualFold(items[i].Type, "adcs") && items[i].RevocationRelay != "")
 		items[i].RevokesByCertificate = available && ca.RevokesByCertificate(items[i].Type)
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
