@@ -4651,6 +4651,7 @@ export interface DynamicLeaseRequest {
 export interface DynamicSecretConfiguredProvider {
   allowed_roles: string[];
   configuration_revision: string;
+  environment?: string;
   id: string;
   label: string;
   maximum_ttl_seconds: number;

@@ -17897,6 +17897,8 @@ export interface components {
         DynamicSecretConfiguredProvider: {
             allowed_roles: string[];
             configuration_revision: string;
+            /** @description the secrets environment the provider is placed in, <project>/<environment> (A235-L2); absent when it is the tenant's. In a restricted environment only its members see and use the provider. */
+            environment?: string;
             id: string;
             label: string;
             maximum_ttl_seconds: number;

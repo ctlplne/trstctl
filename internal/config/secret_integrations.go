@@ -117,6 +117,12 @@ type DynamicSecretProviderConfig struct {
 	TenantID           string                      `json:"tenant_id"`
 	ID                 string                      `json:"id"`
 	Type               string                      `json:"type"`
+	// SecretEnvironment places the provider in a secrets project
+	// environment, "<project>/<environment>" (A235-L2). When that
+	// environment is restricted, only the members granted it see the
+	// provider and its leases (read) or issue, renew and revoke them
+	// (write); while the environment does not exist the provider is closed.
+	SecretEnvironment string `json:"secret_environment,omitempty"`
 
 	Endpoint    string `json:"endpoint,omitempty"`
 	AdminDSNRef string `json:"admin_dsn_ref,omitempty"`
@@ -425,6 +431,10 @@ var secretSyncTypes = map[string]struct{}{
 	"webhook": {}, "aws-parameter-store": {}, "netlify": {},
 }
 
+// secretEnvironmentPlacement is a provider's secret_environment: a secrets
+// project slug and one of its environment slugs (A235-L2).
+var secretEnvironmentPlacement = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}/[a-z0-9][a-z0-9-]{0,62}$`)
+
 // ValidateSecretIntegrations is exported for config-focused tests and embedders.
 // Config.Validate calls the package-local twin from config.go's validator list.
 func ValidateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled bool) error {
@@ -456,6 +466,9 @@ func validateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled boo
 		}
 		if len(normalizedStrings(item.AllowedRoles)) == 0 {
 			errs = append(errs, fmt.Errorf("%s allowed_roles must contain at least one role", where))
+		}
+		if env := strings.TrimSpace(item.SecretEnvironment); env != "" && !secretEnvironmentPlacement.MatchString(env) {
+			errs = append(errs, fmt.Errorf("%s secret_environment must be <project>/<environment>: two slugs of lowercase letters, digits and hyphens", where))
 		}
 		if item.AllowStaticRotation && !StaticRotationProviderTypes[strings.TrimSpace(item.Type)] {
 			errs = append(errs, fmt.Errorf("secret_integrations.dynamic_providers[%d]: allow_static_rotation is served for %s providers only", i, strings.Join(sortedTrueKeys(StaticRotationProviderTypes), ", ")))

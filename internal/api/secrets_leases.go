@@ -93,6 +93,11 @@ func (a *API) issueDynamicLease(w http.ResponseWriter, r *http.Request) {
 		if !found {
 			return 0, nil, errStatus(http.StatusUnprocessableEntity, "dynamic secret provider is not configured for this tenant")
 		}
+		// A235-L2: issuing from a provider in a restricted environment needs
+		// write there; to a caller not granted it the provider is missing.
+		if err := a.requireDynamicProviderWrite(ctx, tenantID, provider, errStatus(http.StatusUnprocessableEntity, "dynamic secret provider is not configured for this tenant")); err != nil {
+			return 0, nil, err
+		}
 		if err := validateDynamicLeaseProviderRequest(provider, req); err != nil {
 			return 0, nil, err
 		}
@@ -255,6 +260,12 @@ func (a *API) getDynamicLease(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusNotFound, "no such dynamic secret lease"))
 		return
 	}
+	// A235-L2: a lease of a provider in a restricted environment the caller
+	// is not granted answers as missing.
+	if err := a.requireDynamicLeaseProvider(r.Context(), tenantID, lease.Provider, false); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	a.writeJSON(w, http.StatusOK, toDynamicLeaseResponse(lease, nil))
 }
 
@@ -306,6 +317,11 @@ func (a *API) renewDynamicLease(w http.ResponseWriter, r *http.Request) {
 	}
 	if a.secrets.isHoneyOnlyProvider(tenantID, current.Provider) || current.Role == dynsecret.DecoyRole {
 		a.writeProblem(w, problem.New(http.StatusNotFound, "no such dynamic secret lease"))
+		return
+	}
+	// A235-L2: renewing needs write in the provider's restricted environment.
+	if err := a.requireDynamicLeaseProvider(r.Context(), tenantID, current.Provider, true); err != nil {
+		a.writeError(w, err)
 		return
 	}
 	configured, found := a.secrets.configuredDynamicSecretProvider(tenantID, current.Provider)
@@ -377,6 +393,10 @@ func (a *API) revokeDynamicLease(w http.ResponseWriter, r *http.Request) {
 		}
 		if a.secrets.isHoneyOnlyProvider(tenantID, current.Provider) || current.Role == dynsecret.DecoyRole {
 			return 0, nil, errStatus(http.StatusNotFound, "no such dynamic secret lease")
+		}
+		// A235-L2: revoking needs write in the provider's restricted environment.
+		if err := a.requireDynamicLeaseProvider(ctx, tenantID, current.Provider, true); err != nil {
+			return 0, nil, err
 		}
 		var lease dynsecret.Lease
 		if revoker, ok := engine.(boundDynamicLeaseRevoker); ok {

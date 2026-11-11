@@ -68,7 +68,7 @@ func TestVaultDynamicMountsResolveOneProviderPerRole(t *testing.T) {
 		{"app-postgres", "sts", "readonly", false, "", ""},
 		{"cubbyhole", "creds", "note", false, "", ""},
 	} {
-		target, found, err := s.resolveVaultDynamicTarget("tenant-a", c.mount, c.kind, c.role)
+		target, found, err := s.resolveVaultDynamicTarget(s.configuredDynamicSecretProviders("tenant-a"), c.mount, c.kind, c.role)
 		name := c.mount + "/" + c.kind + "/" + c.role
 		if found != c.found {
 			t.Fatalf("%s found = %v, want %v", name, found, c.found)
@@ -86,8 +86,8 @@ func TestVaultDynamicMountsResolveOneProviderPerRole(t *testing.T) {
 	}
 	// A tenant without any Kubernetes provider has no kubernetes/ engine: the
 	// path belongs to the shim's other mounts.
-	if _, found, _ := vaultShimSecrets(vaultShimProvider{id: "pg", providerType: "postgresql", roles: []string{"ro"}}).
-		resolveVaultDynamicTarget("tenant-a", "kubernetes", "creds", "reader"); found {
+	shim := vaultShimSecrets(vaultShimProvider{id: "pg", providerType: "postgresql", roles: []string{"ro"}})
+	if _, found, _ := shim.resolveVaultDynamicTarget(shim.configuredDynamicSecretProviders("tenant-a"), "kubernetes", "creds", "reader"); found {
 		t.Fatal("kubernetes/ resolved for a tenant with no Kubernetes provider")
 	}
 }

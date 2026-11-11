@@ -113,6 +113,18 @@ func (a *API) vaultEngineConfig(w http.ResponseWriter, r *http.Request) {
 	var providers []dynamicSecretConfiguredProvider
 	if a.secrets != nil {
 		engine, providers = a.secrets.vaultEngineConfigProviders(tenantID, mount)
+		// A235-L2: a provider in a restricted environment the caller is not
+		// granted is not listed; a mount that names only such a provider is
+		// no engine here.
+		visible, err := a.visibleDynamicSecretProviders(r.Context(), tenantID, providers)
+		if err != nil {
+			writeVaultError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if len(visible) == 0 && len(providers) == 1 && providers[0].ID == mount {
+			engine = ""
+		}
+		providers = visible
 	}
 	if engine == "" || (kind == "config" && engine != vaultDatabaseEngine) {
 		a.vaultEngineConfigCubbyhole(w, r, kind, name)

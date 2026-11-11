@@ -51,6 +51,9 @@ type dynamicSecretConfiguredProvider struct {
 	// is ttl_only, A239; an AWS STS provider with revoke_with_deny_policy is
 	// deny_policy, N3).
 	Revocation string `json:"revocation,omitempty"`
+	// Environment is the secrets environment the provider is placed in,
+	// "<project>/<environment>" (A235-L2); empty when it is the tenant's.
+	Environment string `json:"environment,omitempty"`
 }
 
 type dynamicSecretProviderCatalogResponse struct {
@@ -747,6 +750,9 @@ func dynamicSecretConfiguredProviderFrom(provider dynsecret.Provider) dynamicSec
 	if stated, ok := provider.(interface{ DynamicSecretRevocation() string }); ok && stated.DynamicSecretRevocation() != "" {
 		configured.Revocation = stated.DynamicSecretRevocation()
 	}
+	if placed, ok := provider.(interface{ DynamicSecretEnvironment() string }); ok {
+		configured.Environment = strings.TrimSpace(placed.DynamicSecretEnvironment())
+	}
 	return configured
 }
 
@@ -866,7 +872,13 @@ func (a *API) listDynamicSecretProviders(w http.ResponseWriter, r *http.Request)
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	configured := a.secrets.configuredDynamicSecretProviders(tenantID)
+	// A235-L2: a provider in a restricted environment the caller is not
+	// granted is left out, as its secrets are.
+	configured, err := a.visibleDynamicSecretProviders(r.Context(), tenantID, a.secrets.configuredDynamicSecretProviders(tenantID))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
 	blockers := []string{}
 	if len(configured) == 0 {
 		blockers = append(blockers, "No dynamic-secret provider is attached to this tenant. Add one startup configuration entry, then restart and review again.")
@@ -913,6 +925,12 @@ func (a *API) previewDynamicSecretLease(w http.ResponseWriter, r *http.Request) 
 	provider, found := a.secrets.configuredDynamicSecretProvider(tenantID, req.Provider)
 	if !found {
 		a.writeError(w, errStatus(http.StatusUnprocessableEntity, "dynamic secret provider is not configured for this tenant"))
+		return
+	}
+	// A235-L2: a provider in a restricted environment answers as missing to a
+	// caller not granted it and is read-only to a viewer there.
+	if err := a.requireDynamicProviderWrite(r.Context(), tenantID, provider, errStatus(http.StatusUnprocessableEntity, "dynamic secret provider is not configured for this tenant")); err != nil {
+		a.writeError(w, err)
 		return
 	}
 	if err := validateDynamicLeaseProviderRequest(provider, req); err != nil {

@@ -339,6 +339,12 @@ func (p *configuredDynamicProvider) DynamicSecretRevocation() string {
 	return ""
 }
 
+// DynamicSecretEnvironment is the secrets environment the operator placed
+// the provider in, "<project>/<environment>", or empty (A235-L2).
+func (p *configuredDynamicProvider) DynamicSecretEnvironment() string {
+	return strings.TrimSpace(p.cfg.SecretEnvironment)
+}
+
 // DynamicSecretAllowedRoles returns only operator-selectable role names.
 // Provider-native bindings remain startup-owned and do not cross the API seam.
 func (p *configuredDynamicProvider) DynamicSecretAllowedRoles() []string {

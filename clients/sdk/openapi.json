@@ -22278,6 +22278,10 @@
           "configuration_revision": {
             "type": "string"
           },
+          "environment": {
+            "description": "the secrets environment the provider is placed in, \u003cproject\u003e/\u003cenvironment\u003e (A235-L2); absent when it is the tenant's. In a restricted environment only its members see and use the provider.",
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },

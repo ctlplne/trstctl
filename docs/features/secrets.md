@@ -163,6 +163,13 @@ leaked-secret move naming a restricted secret answers as for a missing one. A
 reference outside every restricted environment stays governed by the route's own
 permission.
 
+Dynamic secrets follow the same rule. An operator can place a provider in an environment
+with `secret_environment` in its configuration. In a restricted environment only its
+members see the provider and its leases, and only its developers and admins issue, renew
+and revoke them, on the native, Vault-compatible and rotation paths alike. A machine
+session or the SDK agent therefore gets a prod credential only when its principal is
+granted prod.
+
 Projects and environments change under
 `access:write`, and either can be renamed there (A235-L3): the display name changes, and
 the slug, which every secret name in it begins with, stays. Membership changes under `access:write`, or under `secrets:write` by a

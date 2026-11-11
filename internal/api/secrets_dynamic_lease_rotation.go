@@ -182,7 +182,7 @@ func (a *API) queueDynamicLeaseRotationScheduled(ctx context.Context, tenantID, 
 }
 
 func (a *API) queueDynamicLeaseRotationCommand(ctx context.Context, tenantID, idempotencyKey, requestBinding string, req secretRotationRequest, expectedVersion int, cloudChangeID, scheduleID string) (store.SecretStaticRotationCommand, error) {
-	if _, err := a.dynamicLeaseRotationProvider(tenantID, req.Provider, req.Key, *req.TTLSeconds); err != nil {
+	if _, err := a.dynamicLeaseRotationProviderFor(ctx, tenantID, req.Provider, req.Key, *req.TTLSeconds); err != nil {
 		return store.SecretStaticRotationCommand{}, err
 	}
 	epoch, err := a.applicationSecretTenantEpoch(ctx, tenantID)
@@ -470,7 +470,7 @@ func (a *API) previewDynamicLeaseRotation(w http.ResponseWriter, r *http.Request
 	case ttl <= 0:
 		plan.Blockers = append(plan.Blockers, dynamicLeaseRotationTTLRequiredDetail)
 	default:
-		if _, err := a.dynamicLeaseRotationProvider(tenantID, req.Provider, req.Key, ttl); err != nil && !block(err) {
+		if _, err := a.dynamicLeaseRotationProviderFor(r.Context(), tenantID, req.Provider, req.Key, ttl); err != nil && !block(err) {
 			return
 		}
 	}

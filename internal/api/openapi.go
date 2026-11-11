@@ -7294,7 +7294,8 @@ func componentSchemas() map[string]*Schema {
 		"id": str(), "type": str(), "label": str(),
 		"allowed_roles": {Type: "array", Items: str()}, "maximum_ttl_seconds": {Type: "integer"},
 		"ready": {Type: "boolean"}, "configuration_revision": str(),
-		"revocation": {Type: "string", Enum: []string{"confirmed", "ttl_only", "deny_policy"}, Description: "Whether revoking a lease ends its credential before its native expiry (confirmed), it lapses only then (ttl_only), or a policy the provider enforces denies it before then (deny_policy: an AWS STS provider with revoke_with_deny_policy), for this provider as configured; an OAuth provider is confirmed only with a revocation endpoint."},
+		"environment": {Type: "string", Description: "the secrets environment the provider is placed in, <project>/<environment> (A235-L2); absent when it is the tenant's. In a restricted environment only its members see and use the provider."},
+		"revocation":  {Type: "string", Enum: []string{"confirmed", "ttl_only", "deny_policy"}, Description: "Whether revoking a lease ends its credential before its native expiry (confirmed), it lapses only then (ttl_only), or a policy the provider enforces denies it before then (deny_policy: an AWS STS provider with revoke_with_deny_policy), for this provider as configured; an OAuth provider is confirmed only with a revocation endpoint."},
 	}, "id", "type", "label", "allowed_roles", "maximum_ttl_seconds", "ready", "configuration_revision")
 	dynamicSecretProviderCatalog := object(map[string]*Schema{
 		"capability":                            {Type: "string", Enum: []string{"F65"}},

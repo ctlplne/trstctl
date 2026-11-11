@@ -2,6 +2,14 @@
 
 ### Added
 
+- A dynamic-secret provider can be placed in a secrets project environment (A235-L2):
+  `secret_environment: "<project>/<environment>"` in its configuration. In a restricted environment
+  only the members granted it see the provider and its leases. Only its developers and admins
+  issue, renew and revoke them, on the native lease routes, the Vault-compatible creds, sts and lease
+  paths and their role listings, and the dynamic-lease rotations. A machine session or the SDK
+  agent is held to its principal's grant like a person. To anyone else the provider answers as one
+  not configured. A placement naming a missing environment closes the provider. The catalog shows
+  each provider's `environment`.
 - Secrets projects and their environments can be renamed (A235-L3): `POST
   /api/v1/secrets/projects/{project}/rename` and `.../environments/{environment}/rename` (access:write),
   `trstctl secrets projects rename` and `trstctl secrets projects environments rename`, and a Rename action

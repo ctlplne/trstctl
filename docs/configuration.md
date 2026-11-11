@@ -2179,6 +2179,17 @@ nothing more. Any other role takes its class from `role_access`, for example
 is never read from part of a name, so `reporting`, `viewer` or `support-read` must say which
 they are. PostgreSQL's `decoy` role and a role with `rotation_accounts` carry their own grants.
 
+`secret_environment` places the provider in a secrets project environment,
+`"<project>/<environment>"`, for example `"payments/prod"` (A235-L2). When that environment is
+restricted, only the members granted it can see the provider. That covers the catalog and the
+Vault-compatible role and connection listings. Only its developers and admins issue, renew and
+revoke its leases; viewers can read them. The rule holds on the native lease routes, the
+Vault-compatible creds, sts and lease paths and the dynamic-lease rotations, for a person, a
+machine session or the agent alike. To anyone else the provider answers as one not configured.
+A placement naming an environment the tenant does not have closes the provider until that
+environment exists. A provider with no placement, or placed in an unrestricted environment,
+belongs to the tenant and follows the routes' own permissions.
+
 `rotation_accounts` (PostgreSQL, MongoDB, Oracle, SQL Server, Azure SQL, LDAP or unix, with
 `allow_static_rotation: true`) maps an allowed role to the two existing accounts its static
 rotation alternates between, for example `{"reader": ["orders_app_a", "orders_app_b"]}` (for

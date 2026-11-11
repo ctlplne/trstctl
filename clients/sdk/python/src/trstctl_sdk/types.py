@@ -6459,6 +6459,7 @@ DynamicSecretConfiguredProvider = TypedDict(
     {
         'allowed_roles': list[str],
         'configuration_revision': str,
+        'environment': str,
         'id': str,
         'label': str,
         'maximum_ttl_seconds': int,

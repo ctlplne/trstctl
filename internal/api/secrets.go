@@ -1235,7 +1235,7 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 			if dynamicLeaseRotationProviderName(provider) == "" {
 				return 0, nil, errStatus(http.StatusBadRequest, dynamicLeaseRotationProviderRequiredDetail)
 			}
-			if _, err := a.dynamicLeaseRotationProvider(tenantID, provider, key, ttlSeconds); err != nil {
+			if _, err := a.dynamicLeaseRotationProviderFor(ctx, tenantID, provider, key, ttlSeconds); err != nil {
 				return 0, nil, err
 			}
 			if err := a.checkDynamicLeaseRotationPredecessor(ctx, tenantID, dynamicLeaseRotationProviderName(provider), key, oldRef); err != nil {

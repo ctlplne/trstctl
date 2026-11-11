@@ -1396,7 +1396,10 @@ never live in the API process. What you can do end to end against the running bi
   are renamed by display name (A235-L3); renaming a slug, which every secret name begins
   with, is what comes next, because it moves every secret, reference and sync under it. A `secret://` reference
   into a restricted environment is set up only by a member granted it, on every API
-  surface trstctl later redeems by name (A235-L2). What comes next: a reference set up
+  surface trstctl later redeems by name (A235-L2), and a dynamic-secret provider placed in a
+  restricted environment (`secret_environment`) is used only by its members on the lease,
+  Vault-compatible and rotation paths; an access gateway session that mints from a placed
+  provider is governed by the access rules, not the placement. What comes next: a reference set up
   before its environment was restricted, or before its author's grant was revoked, keeps
   working until it is changed, because redemption runs with no caller to check; and
   references in the configuration file are the operator's.

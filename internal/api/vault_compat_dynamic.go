@@ -159,8 +159,7 @@ type vaultDynamicTarget struct {
 // false when the mount is no dynamic engine of this tenant, so the request
 // belongs to the shim's other mounts; err is the Vault-shaped refusal for an
 // engine that has no single provider for the role.
-func (s *secretsService) resolveVaultDynamicTarget(tenantID, mount, kind, role string) (vaultDynamicTarget, bool, error) {
-	providers := s.configuredDynamicSecretProviders(tenantID)
+func (s *secretsService) resolveVaultDynamicTarget(providers []dynamicSecretConfiguredProvider, mount, kind, role string) (vaultDynamicTarget, bool, error) {
 	target := vaultDynamicTarget{mount: mount, kind: kind, role: role}
 	for _, provider := range providers {
 		if provider.ID != mount {
@@ -251,7 +250,22 @@ func (a *API) vaultDynamicCredential(w http.ResponseWriter, r *http.Request, kin
 	found := false
 	var err error
 	if a.secrets != nil {
-		target, found, err = a.secrets.resolveVaultDynamicTarget(tenantID, mount, kind, role)
+		// A235-L2: only the providers the caller may see resolve; a
+		// provider in a restricted environment it is not granted is no
+		// engine here, so the path stays the caller's cubbyhole.
+		var visible []dynamicSecretConfiguredProvider
+		visible, err = a.visibleDynamicSecretProviders(r.Context(), tenantID, a.secrets.configuredDynamicSecretProviders(tenantID))
+		if err == nil {
+			target, found, err = a.secrets.resolveVaultDynamicTarget(visible, mount, kind, role)
+		}
+		if err == nil && found && target.provider.ID != "" {
+			if access, accessErr := a.dynamicProviderAccess(r.Context(), tenantID, target.provider); accessErr != nil {
+				err = accessErr
+			} else if access == dynamicProviderReadable {
+				writeVaultError(w, http.StatusForbidden, "permission denied")
+				return
+			}
+		}
 	}
 	if !found {
 		// Not a dynamic engine here: the path belongs to the shim's
@@ -603,7 +617,7 @@ func readVaultLeaseRequest(r *http.Request) (vaultLeaseRequest, error) {
 // resolveVaultLease reads the native lease a Vault lease ID names, checking
 // that the path part still names its provider and role. Any mismatch is
 // "invalid lease", as Vault answers for a lease it does not hold.
-func (a *API) resolveVaultLease(ctx context.Context, tenantID, leaseID string) (dynsecret.Lease, vaultDynamicTarget, error) {
+func (a *API) resolveVaultLease(ctx context.Context, tenantID, leaseID string, write bool) (dynsecret.Lease, vaultDynamicTarget, error) {
 	invalid := errStatus(http.StatusBadRequest, "invalid lease")
 	parts := strings.Split(leaseID, "/")
 	if len(parts) != 4 || (parts[1] != "creds" && parts[1] != "sts") || a.secrets == nil {
@@ -624,6 +638,16 @@ func (a *API) resolveVaultLease(ctx context.Context, tenantID, leaseID string) (
 	if !found || lease.Role != parts[2] {
 		return dynsecret.Lease{}, vaultDynamicTarget{}, invalid
 	}
+	// A235-L2: a lease of a provider in a restricted environment the caller
+	// is not granted is a lease Vault does not hold; renewing or revoking
+	// one needs write there.
+	if write {
+		if err := a.requireDynamicProviderWrite(ctx, tenantID, provider, invalid); err != nil {
+			return dynsecret.Lease{}, vaultDynamicTarget{}, err
+		}
+	} else if err := a.requireDynamicProviderRead(ctx, tenantID, provider, invalid); err != nil {
+		return dynsecret.Lease{}, vaultDynamicTarget{}, err
+	}
 	target := vaultDynamicTarget{mount: parts[0], kind: parts[1], role: parts[2], engine: vaultEngineForProviderType(provider.Type), provider: provider}
 	if target.engine == "" || (parts[0] != provider.ID && parts[0] != target.engine) || (parts[1] == "sts" && target.engine != vaultAWSEngine) {
 		return dynsecret.Lease{}, vaultDynamicTarget{}, invalid
@@ -642,7 +666,7 @@ func (a *API) vaultLeaseLookup(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	lease, target, err := a.resolveVaultLease(r.Context(), tenantID, req.LeaseID)
+	lease, target, err := a.resolveVaultLease(r.Context(), tenantID, req.LeaseID, false)
 	if err != nil {
 		writeVaultError(w, vaultHTTPStatus(err), err.Error())
 		return
@@ -685,7 +709,7 @@ func (a *API) vaultLeaseRenew(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	lease, target, err := a.resolveVaultLease(r.Context(), tenantID, req.LeaseID)
+	lease, target, err := a.resolveVaultLease(r.Context(), tenantID, req.LeaseID, true)
 	if err != nil {
 		writeVaultError(w, vaultHTTPStatus(err), err.Error())
 		return
@@ -814,7 +838,7 @@ func (a *API) vaultLeaseRevoke(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, "sync must be a boolean")
 		return
 	}
-	lease, target, err := a.resolveVaultLease(r.Context(), tenantID, req.LeaseID)
+	lease, target, err := a.resolveVaultLease(r.Context(), tenantID, req.LeaseID, true)
 	if err != nil {
 		writeVaultError(w, vaultHTTPStatus(err), err.Error())
 		return
