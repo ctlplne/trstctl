@@ -446,6 +446,16 @@ predecessor's exact identifiers, creates its fingerprint-named certificate and
 points the target's certificate map entry at it, then reads the entry back: the
 live gate passes only when the certificate the entry serves is the successor.
 Rollback re-points the entry at the predecessor and reads it back the same way.
+The store serving a certificate is not yet the load balancer serving it: the
+provider propagates a change on its own schedule. When the target's config names
+the endpoint its load balancer answers on (`verify_address`, with
+`verify_server_name` for SNI, and `verify_private_egress_cidrs` when that endpoint
+is on a private range), the gate also needs a TLS handshake there to present the
+certificate. Until it does, the member waits, checking every 30 seconds without
+spending its retries, for up to 30 minutes from when its row was queued; an endpoint
+still presenting another certificate after that fails the gate as a wrong answer
+would. Without `verify_address` the store's readback alone closes the gate, and the
+member's evidence in the console says so.
 A store that cannot be reached is retried. If it stays unreachable until the
 control plane stops retrying, the member fails its gate as though the store had
 answered with the wrong certificate: the run rolls the member back on its own,

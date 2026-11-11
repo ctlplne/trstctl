@@ -377,6 +377,14 @@ function MigrationMemberEvidence({ member, requireTraffic }: { member: Migration
               ? t("migration.design.executesOnControlPlane")
               : t("migration.design.executesOnHost")}
         </dd>
+        {binding.execution_model === "cloud_store" ? (
+          <>
+            <dt className="text-muted-foreground">{t("migration.design.cloudGate")}</dt>
+            <dd className="break-all">
+              {binding.verify_address ? t("migration.design.cloudGateEndpoint", { address: binding.verify_address }) : t("migration.design.cloudGateStoreOnly")}
+            </dd>
+          </>
+        ) : null}
         <dt className="text-muted-foreground">{t("migration.design.predecessorIssuer")}</dt>
         <dd className="break-all">
           {binding.predecessor_external_ca_id

@@ -632,6 +632,14 @@
 
 ### Fixed
 
+- A cloud-store migration member's gate waits for the load balancer (A166-L3). The gate closed as soon
+  as the certificate store served the successor, while the provider's load balancers could still be
+  serving the predecessor until the change propagated. When the target names the endpoint its load
+  balancer answers on (`verify_address`, `verify_server_name`, and `verify_private_egress_cidrs` for a
+  private range), the gate also needs a TLS handshake there to present the certificate: the member waits,
+  rechecking every 30 seconds without spending retries, for up to 30 minutes from when its row was
+  queued, and fails the gate after that. The same applies to a rollback's re-bind. The console's member
+  evidence says what closes the gate.
 - An MCP client configuration removed from a host is reported gone (P7-L2). The inventory kept a removed
   server's finding as if it were still configured, and a host whose last configuration was removed sent no
   report at all. Each report is the host's whole MCP inventory, so a server the newest report no longer

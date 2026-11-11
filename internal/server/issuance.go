@@ -120,11 +120,14 @@ type issuanceDispatcher struct {
 	cmdbExports             *certificateCIExporter
 	// observerEvents posts rotation and rollback events to external observers
 	// (A180).
-	observerEvents          *observerEventDelivery
-	reportExpiry            *complianceReportExpiry // removes reports under the report retention (A206)
-	archiveHolds            *archiveLegalHoldDelivery
-	parseSubjectCSR         LicensedCSRParser
-	inspectHybridSubjectCSR LicensedCSRInspector
+	observerEvents *observerEventDelivery
+	reportExpiry   *complianceReportExpiry // removes reports under the report retention (A206)
+	// cloudStorePropagationWindow bounds a cloud-store member's wait for its
+	// load balancer to serve the store's certificate (A166-L3).
+	cloudStorePropagationWindow time.Duration
+	archiveHolds                *archiveLegalHoldDelivery
+	parseSubjectCSR             LicensedCSRParser
+	inspectHybridSubjectCSR     LicensedCSRInspector
 	// relayPresence overrides the store for the E1 control-plane refusal; nil in
 	// production, where the store answers.
 	relayPresence  relayPresence

@@ -217,3 +217,44 @@ func NewServingTestServerChain(chainDER [][]byte, keyPEM []byte) (*ServingTestSe
 		Close:   func() { _ = ln.Close() },
 	}, nil
 }
+
+// NewSwitchingTestServer starts a loopback TLS listener that presents, at each
+// handshake, the certificate and key current returns (PEM), or fails the
+// handshake when it returns none. It stands in for a load balancer that serves
+// what its certificate store holds once a change has propagated, which the
+// test decides (A166-L3).
+func NewSwitchingTestServer(current func() (certPEM, keyPEM []byte, ok bool)) (*ServingTestServer, error) {
+	if current == nil {
+		return nil, errors.New("tlsprobe: a switching server needs a certificate source")
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, err
+	}
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+		certPEM, keyPEM, ok := current()
+		if !ok {
+			return nil, errors.New("tlsprobe: the switching server has no certificate to present")
+		}
+		pair, err := tls.X509KeyPair(certPEM, keyPEM)
+		if err != nil {
+			return nil, err
+		}
+		return &pair, nil
+	}}
+	go func() {
+		for {
+			conn, aerr := ln.Accept()
+			if aerr != nil {
+				return
+			}
+			go func(c net.Conn) {
+				_ = c.SetDeadline(time.Now().Add(5 * time.Second))
+				tc := tls.Server(c, cfg)
+				_ = tc.Handshake()
+				_ = tc.Close()
+			}(conn)
+		}
+	}()
+	return &ServingTestServer{Addr: ln.Addr().String(), Close: func() { _ = ln.Close() }}, nil
+}

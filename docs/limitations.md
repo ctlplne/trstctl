@@ -4917,9 +4917,11 @@ than sending an operator looking for a credential that was never there.
   the new authority with the predecessor's exact identifiers, creates its
   fingerprint-named certificate and points the target's certificate map entry
   at it; the live gate is the store's own answer, read back by the control
-  plane: the entry must serve a certificate whose content is the successor.
-  A store that answers otherwise fails the gate and the run rolls the member
-  back. Rollback re-points the entry at the predecessor through the same client
+  plane: the entry must serve a certificate whose content is the successor,
+  and, when the target names its load balancer endpoint (`verify_address`), a
+  handshake there must present it within 30 minutes of the change (A166-L3: the
+  provider's propagation). A store or endpoint that answers otherwise fails the
+  gate and the run rolls the member back. Rollback re-points the entry at the predecessor through the same client
   and reads it back the same way. A store that cannot be reached is retried; a
   deploy or rollback that spends its retries counts as the store's failed answer
   (A166-L4), so the run rolls the member back, or halts naming it when the

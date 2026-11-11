@@ -8,11 +8,15 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/migration"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 )
 
@@ -29,6 +33,26 @@ import (
 // else is a failed verdict, which starts the run's automatic rollback; a store
 // that cannot be asked at all leaves the row to retry rather than fail the
 // member on a transient error.
+
+// A166-L3: the store serving a certificate is not yet the load balancer
+// serving it; the provider propagates a change to its load balancers on its
+// own schedule. A member whose target names the endpoint its load balancer
+// answers on (verify_address, with verify_server_name) has its gate closed by
+// a handshake there as well: after the store serves the certificate, the
+// endpoint must present it. Until it does, the row waits, rechecking without
+// spending its retries, for up to the propagation window from when the row
+// was queued; an endpoint still presenting another certificate after that
+// fails the gate. The control plane dials the endpoint under its egress rules:
+// public addresses only, unless the target grants private ranges
+// (verify_private_egress_cidrs).
+
+// Propagation defaults: how long a load balancer may keep serving the old
+// certificate, and how often the gate looks again.
+const (
+	defaultCloudStorePropagationWindow = 30 * time.Minute
+	cloudStorePropagationRecheck       = 30 * time.Second
+	cloudStoreHandshakeTimeout         = 10 * time.Second
+)
 
 // cloudStoreClaim is what one control-plane row asserts about a member.
 type cloudStoreClaim struct {
@@ -66,7 +90,7 @@ func (d *issuanceDispatcher) closeCloudStoreGate(ctx context.Context, m orchestr
 	if deployErr != nil || !cloudStoreMigrationRow(m, p.MigrationRunID) {
 		return deployErr
 	}
-	return d.observeCloudStoreMigration(ctx, m.TenantID, m.IdempotencyKey, cloudStoreClaim{
+	return d.observeCloudStoreMigration(ctx, m, cloudStoreClaim{
 		runID: p.MigrationRunID, waveID: p.MigrationWaveID, identityID: p.IdentityID, stage: migration.StageSuccessor,
 		targetID: p.TargetID, revision: p.TargetRevision, connector: p.Connector, target: p.Target,
 		config: append(json.RawMessage(nil), p.TargetConfig...), want: p.Fingerprint,
@@ -81,7 +105,7 @@ func (d *issuanceDispatcher) closeCloudStoreRollbackGate(ctx context.Context, m 
 	if !ok {
 		return nil
 	}
-	return d.observeCloudStoreMigration(ctx, m.TenantID, m.IdempotencyKey, claim)
+	return d.observeCloudStoreMigration(ctx, m, claim)
 }
 
 // cloudStoreRollbackClaim reads a control-plane rollback command's member
@@ -200,9 +224,11 @@ func memberStageVerdict(member migration.RunMember, stage migration.ObservationS
 	return member.SuccessorVerdict
 }
 
-// observeCloudStoreMigration reads the store back and records the verdict
-// against the immutable member binding, idempotently per row.
-func (d *issuanceDispatcher) observeCloudStoreMigration(ctx context.Context, tenantID, idempotencyKey string, claim cloudStoreClaim) error {
+// observeCloudStoreMigration reads the store back, and the member's load
+// balancer when its target names one, and records the verdict against the
+// immutable member binding, idempotently per row.
+func (d *issuanceDispatcher) observeCloudStoreMigration(ctx context.Context, m orchestrator.Message, claim cloudStoreClaim) error {
+	tenantID, idempotencyKey := m.TenantID, m.IdempotencyKey
 	if d.store == nil || d.orch == nil || d.connectorRegistry == nil {
 		return errors.New("server: the cloud-store migration gate is not configured")
 	}
@@ -226,6 +252,29 @@ func (d *issuanceDispatcher) observeCloudStoreMigration(ctx context.Context, ten
 		return fmt.Errorf("server: read back the cloud store for the migration gate: %w", err)
 	}
 	obs := cloudStoreObservation(claim, installed, err)
+	if obs.Verdict == migration.VerdictVerified && strings.TrimSpace(b.VerifyAddress) != "" {
+		served, probeErr := cloudStoreServedFingerprint(ctx, b)
+		if probeErr != nil || served != cleanFingerprint(claim.want) {
+			queued, err := d.store.OutboxRowQueuedAt(ctx, tenantID, m.ID)
+			if err != nil {
+				return fmt.Errorf("server: read when the cloud-store migration row was queued: %w", err)
+			}
+			window := d.cloudStorePropagationWindow
+			if window <= 0 {
+				window = defaultCloudStorePropagationWindow
+			}
+			if time.Since(queued) < window {
+				why := "presents " + served
+				if probeErr != nil {
+					why = "did not answer: " + probeErr.Error()
+				}
+				return orchestrator.DeferDeliveryUntil(fmt.Errorf(
+					"server: the store serves the certificate, but %s %s; waiting for the provider to propagate it", b.VerifyAddress, why),
+					time.Now().Add(cloudStorePropagationRecheck))
+			}
+			obs.Verdict = migration.VerdictFailed
+		}
+	}
 	if obs.Verdict == migration.VerdictVerified && claim.stage == migration.StageSuccessor {
 		obs.SuccessorFingerprint = b.SuccessorFingerprint
 	}
@@ -250,6 +299,35 @@ func cloudStoreObservation(claim cloudStoreClaim, installed connector.Installed,
 		obs.Verdict = migration.VerdictVerified
 	}
 	return obs
+}
+
+// cloudStoreServedFingerprint is the SHA-256 of the leaf the member's load
+// balancer presents at its verify address, dialed under the egress rules and
+// any private ranges the target grants for it.
+func cloudStoreServedFingerprint(ctx context.Context, b migration.MemberBinding) (string, error) {
+	control := netsec.SafeDialControl
+	var cfg struct {
+		PrivateCIDRs []string `json:"verify_private_egress_cidrs"`
+	}
+	if json.Unmarshal(b.TargetConfig, &cfg) == nil && len(cfg.PrivateCIDRs) > 0 {
+		opts, err := privateEgressSafeClientOptions(cfg.PrivateCIDRs)
+		if err != nil {
+			return "", err
+		}
+		control = netsec.SafeDialControlWithOptions(opts)
+	}
+	options := []tlsprobe.Option{tlsprobe.WithDialControl(control), tlsprobe.WithTimeout(cloudStoreHandshakeTimeout)}
+	if name := strings.TrimSpace(b.VerifyServerName); name != "" {
+		options = append(options, tlsprobe.WithServerName(name))
+	}
+	res, err := tlsprobe.Probe(ctx, strings.TrimSpace(b.VerifyAddress), options...)
+	if err != nil {
+		return "", err
+	}
+	if len(res.PeerCertificates) == 0 {
+		return "", errors.New("the endpoint presented no certificate")
+	}
+	return crypto.SHA256Hex(res.PeerCertificates[0]), nil
 }
 
 // validateCloudStoreClaim binds a control-plane row to the member it names: the

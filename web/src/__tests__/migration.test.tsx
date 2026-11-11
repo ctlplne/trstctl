@@ -119,6 +119,37 @@ describe("executable CA migration console (AUD-40)", () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
+  // A166-L3: a cloud-store member says what closes its live gate: the store
+  // and the load balancer the target names, or the store alone.
+  it("shows what closes a cloud-store member's live gate", async () => {
+    const cloudMember = (id: string, verifyAddress: string) => ({
+      identity_id: id,
+      binding: {
+        connector: "gcp-certificate-manager",
+        target: `${id}-web`,
+        execution_model: "cloud_store",
+        predecessor_fingerprint: "SHA256:CURRENT",
+        verify_address: verifyAddress,
+      },
+      trust_verdict: "not_applicable",
+    });
+    apiMock.migrationRuns.mockResolvedValue({
+      items: [
+        {
+          ...existingRun,
+          waves: [{ ...existingRun.waves[0], members: [cloudMember("identity-lb", "lb.example.test:443"), cloudMember("identity-store", "")] }],
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderMigration();
+    await user.click(await screen.findByText("Run history, wave evidence, and rollback controls"));
+    const withLB = (await screen.findByText("identity-lb")).closest("li") as HTMLElement;
+    expect(withLB).toHaveTextContent("then the load balancer at lb.example.test:443 must present it");
+    const storeOnly = screen.getByText("identity-store").closest("li") as HTMLElement;
+    expect(storeOnly).toHaveTextContent("The store's readback only: the target names no load balancer endpoint");
+  });
+
   it("wires pause and rollback controls to the durable run", async () => {
     const user = userEvent.setup();
     renderMigration();
