@@ -73,6 +73,9 @@ const (
 	// EdgeHolds is person, workload or AI agent → credential it holds: the
 	// principal that received or was bound to the credential (G1).
 	EdgeHolds EdgeType = "HOLDS"
+	// EdgeKeyOf is stored private key → certificate whose public key it is
+	// (A172-L3): whoever has the stored key can act as the certificate.
+	EdgeKeyOf EdgeType = "KEY_OF"
 	// EdgeApproved is person → credential whose issuance or activation the
 	// person approved (G1). It is evidence, not impact: compromising an
 	// approver does not compromise access already granted, so default traversal

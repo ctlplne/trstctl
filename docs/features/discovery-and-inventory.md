@@ -754,9 +754,14 @@ to, holds it only in wipeable memory, and looks inside it (A172):
 A credential finding records the rule, the credential kind, the field, a masked display
 (the credential's public prefix and its length, a PEM block's BEGIN line, or a service
 account's email) and a fingerprint: a SHA-256 of the credential that is the same
-wherever it is stored, so two stores holding one key show one fingerprint. The value is
-wiped after inspection and never stored, logged or shown. There is no generic
-high-entropy rule: a string that matches no rule is not reported.
+wherever it is stored, so two stores holding one key show one fingerprint. A private
+key's finding also records `spki_sha256`, the SHA-256 of its public key: the same hash a
+certificate for that key has, read whatever the key's encoding (an encrypted key has
+none). The credential graph links the stored key to every certificate in the inventory
+with that public key (`KEY_OF`), so the certificate's blast radius starts at the secret
+store that holds its key. The value is wiped after inspection and never stored, logged
+or shown. There is no generic high-entropy rule: a string that matches no rule is not
+reported.
 
 ### Cloud network paths
 

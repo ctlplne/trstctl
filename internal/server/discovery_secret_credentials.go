@@ -41,6 +41,11 @@ func (s cloudSecretDiscoveryRunSink) recordCredential(ctx context.Context, locat
 	if c.Truncated {
 		metaMap["credential_scan_truncated"] = true
 	}
+	// A172-L3: a private key carries its public key's SHA-256, which links it
+	// to the certificate for that key.
+	if c.SPKISHA256 != "" {
+		metaMap["spki_sha256"] = c.SPKISHA256
+	}
 	meta, err := json.Marshal(metaMap)
 	if err != nil {
 		return err

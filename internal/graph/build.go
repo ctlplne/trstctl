@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/dependencyobs"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -231,6 +232,23 @@ func BuildWith(ctx context.Context, st *store.Store, tenantID string, opts Build
 		}
 	}
 
+	// A172-L3: a private key found in a secret store links to the
+	// certificate for its public key. The certificates' key hashes are read
+	// only when a stored key needs them.
+	var certsBySPKI map[string][]string
+	certificatesForKey := func(spki string) []string {
+		if certsBySPKI == nil {
+			certsBySPKI = map[string][]string{}
+			for _, c := range certs {
+				if info, err := certinfo.Inspect(c.CertificateDER); err == nil && info.SPKISHA256 != "" {
+					key := strings.ToLower(info.SPKISHA256)
+					certsBySPKI[key] = append(certsBySPKI[key], credentialID("cert", c.ID))
+				}
+			}
+		}
+		return certsBySPKI[strings.ToLower(spki)]
+	}
+
 	findings, err := allDiscoveryFindings(ctx, st, tenantID)
 	if err != nil {
 		return nil, err
@@ -299,6 +317,11 @@ func BuildWith(ctx context.Context, st *store.Store, tenantID string, opts Build
 				Source:     discoverySourceLabel(f),
 				Confidence: "observed",
 			})
+		}
+		if spki := storedPrivateKeySPKI(f); spki != "" {
+			for _, cert := range certificatesForKey(spki) {
+				g.AddEdge(Edge{From: nid, To: cert, Type: EdgeKeyOf, Source: "stored private key matches the certificate's public key", Confidence: "observed"})
+			}
 		}
 	}
 
@@ -401,6 +424,25 @@ func discoverySourceLabel(finding store.DiscoveryFinding) string {
 // certificateNode is the one certificate-to-graph mapping. Governance exports
 // consume these attributes, so dropping a custody column here would otherwise
 // make the interactive inventory truthful and the signed estate summary false.
+// storedCredentialFindingKind is a credential found inside a stored secret
+// (cloudsecret.FindingKindAPIKey).
+const storedCredentialFindingKind = "secret_store_api_key"
+
+// storedPrivateKeySPKI is the public key hash a stored private key's finding
+// carries (A172-L3), or "".
+func storedPrivateKeySPKI(f store.DiscoveryFinding) string {
+	if f.Kind != storedCredentialFindingKind {
+		return ""
+	}
+	var meta struct {
+		SPKISHA256 string `json:"spki_sha256"`
+	}
+	if json.Unmarshal(f.Metadata, &meta) != nil || len(meta.SPKISHA256) != 64 {
+		return ""
+	}
+	return meta.SPKISHA256
+}
+
 func certificateNode(c store.Certificate) Node {
 	return Node{
 		Kind: KindCredential,

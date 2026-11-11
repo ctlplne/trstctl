@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { graphNodeKindLabel } from "@/components/GraphView";
+import { canonicalGraphEdgeTypes, graphEdgeTypeLabel, graphNodeKindLabel } from "@/components/GraphView";
 import { PathFinder, WhoCanReach } from "@/pages/GraphAccess";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -30,6 +30,12 @@ describe("G1 who can reach", () => {
     expect(graphNodeKindLabel("person")).toBe("Person");
     expect(graphNodeKindLabel("role")).toBe("Role");
     expect(graphNodeKindLabel("ai-agent")).toBe("AI agent");
+  });
+
+  // A172-L3: a private key found in a secret store links to its certificate.
+  it("names the link from a stored private key to its certificate", () => {
+    expect(graphEdgeTypeLabel("KEY_OF")).toBe("Key of");
+    expect(canonicalGraphEdgeTypes).toContain("KEY_OF");
   });
 
   it("shows each credential with its holders and approvers and the record behind every link", async () => {

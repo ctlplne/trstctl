@@ -457,6 +457,8 @@ function edgeExplanation(type: string): string {
       return "The person holds this tenant role.";
     case "HOLDS":
       return "The person, workload or AI agent holds the target credential.";
+    case "KEY_OF":
+      return "The stored private key is the target certificate's key: whoever has it can act as the certificate.";
     case "APPROVED":
       return "The person approved issuing or activating the target credential.";
     case "DELEGATED":

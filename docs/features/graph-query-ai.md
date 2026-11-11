@@ -30,7 +30,8 @@ model invent facts or leak across tenants.
 
 The graph models your inventory as nodes (workloads, credentials, issuers, resources,
 crypto assets, attestations) and impact-oriented edges (`ISSUED`, `OWNS`, `DEPLOYED_TO`,
-`GRANTS_ACCESS`, `CONNECTS_TO`, `EXHIBITS`, `BOUND_TO_IDENTITY`), where edge `A→B` means "compromising A puts B
+`GRANTS_ACCESS`, `CONNECTS_TO`, `EXHIBITS`, `BOUND_TO_IDENTITY`, and `KEY_OF` from a private key
+found in a secret store to the certificate for its public key), where edge `A→B` means "compromising A puts B
 at risk." It's built on demand, and every read is isolated to the caller's tenant at the
 database layer, so a traversal can never escape the tenant boundary. On top: `Reachable`
 (breadth-first reach), `BlastRadius` (compromise impact by kind), and a minimal

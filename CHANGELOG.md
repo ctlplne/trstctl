@@ -632,6 +632,11 @@
 
 ### Fixed
 
+- A private key found in a secret store is linked to its certificate (A172-L3). A stored PEM private key
+  was fingerprinted by its text only, so nothing tied it to the certificate it belongs to. Its finding
+  now also records `spki_sha256`, the SHA-256 of its public key (read behind the crypto boundary; none
+  for an encrypted key), and the credential graph links the stored key to each inventory certificate
+  with that public key through a new `KEY_OF` edge, which the console's graph views name.
 - A decoy secret's value found by a secret scan is the known decoy, not a leak (Q6-L4). A decoy's value
   planted as a lure in a repository raised a high-risk leaked-credential finding, because the scanners
   report where a secret is, never what it is. Repository, third-party and on-demand scans now compare

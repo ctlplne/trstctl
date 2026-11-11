@@ -41,6 +41,11 @@ type Credential struct {
 	// Truncated reports that the value held more credentials than one
 	// inspection records.
 	Truncated bool
+	// SPKISHA256 is, for a private key, the SHA-256 of its public key
+	// (SubjectPublicKeyInfo DER), the hash a certificate for that key carries:
+	// it links the stored key to its certificate (A172-L3). Empty for other
+	// credentials and for an encrypted key.
+	SPKISHA256 string
 }
 
 // SecretField is one named field of a structured secret value. Providers
@@ -214,10 +219,25 @@ func serviceAccountKey(fields []SecretField) (Credential, bool) {
 }
 
 func newCredential(rule, kind string, risk int, prefixes []string, field string, match []byte) Credential {
-	return Credential{
+	c := Credential{
 		Rule: rule, Kind: kind, Risk: risk, Field: field,
 		Masked: maskCredential(rule, prefixes, match), Fingerprint: credentialFingerprint(match),
 	}
+	if rule == "private_key_pem" || rule == "gcp_service_account_key" {
+		c.SPKISHA256 = privateKeySPKISHA256(match)
+	}
+	return c
+}
+
+// privateKeySPKISHA256 is the SHA-256 of a PEM private key's public key, read
+// behind the crypto boundary (AN-3), or "" when the key is encrypted or not
+// one the boundary can read.
+func privateKeySPKISHA256(pemKey []byte) string {
+	info, err := crypto.InspectPrivateKey(pemKey)
+	if err != nil || info.Encrypted || info.FingerprintBasis != "public-spki-sha256" {
+		return ""
+	}
+	return info.FingerprintSHA256
 }
 
 // credentialFingerprint is the one-way identity of a credential: SHA-256 over
