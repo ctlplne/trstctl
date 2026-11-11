@@ -1796,7 +1796,11 @@ never live in the API process. What you can do end to end against the running bi
   refused. The request is an event plus a
   `revocation.publish` delivery; the finding reads revoked at the issuer only
   after the authority confirms, a redelivery calls it no second time, and a
-  serial the authority never issued stays unconfirmed with its reason. A rogue
+  serial the authority never issued stays unconfirmed with its reason. The
+  confirmation also resolves the finding (A163-L2): its triage becomes
+  `remediated`, by trstctl, with the confirmation's result event as the evidence,
+  unless an operator had already claimed it as managed or dismissed it, which
+  stays their decision. A rogue
   certificate already in inventory is revoked through the exact revocation,
   which reaches its recorded issuer. Proven against the DigiCert protocol
   stand-in and, for AD CS, the production relay loop driving a certutil stand-in

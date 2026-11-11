@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/discovery"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -151,6 +152,44 @@ func (o *Orchestrator) RecordRogueCertificateRevokedAtIssuer(ctx context.Context
 		if event.ID != eventID || event.Type != projections.EventRogueCertificateRevokedAtIssuer || event.TenantID != tenantID || !bytes.Equal(event.Data, raw) {
 			return fmt.Errorf("%w: rogue certificate revocation result differs from the retained one", store.ErrIdempotencyConflict)
 		}
-		return o.proj.ApplyTx(ctx, tx, event)
+		if err := o.proj.ApplyTx(ctx, tx, event); err != nil {
+			return err
+		}
+		return o.remediateRogueFindingTx(ctx, tx, tenantID, eventID, in)
 	})
+}
+
+// remediateRogueFindingTx resolves the CT finding an issuer's confirmed
+// revocation was requested for (A163-L2): its triage moves to remediated with
+// the confirmation's result event as the evidence of the fix, so nobody has to
+// resolve it by hand. The change has an identity of its own derived from the
+// result, so a redelivery appends nothing more. A finding whose triage cannot
+// move to remediated (an operator claimed it as managed or dismissed it) keeps
+// the operator's decision, and one already remediated is left as it is.
+func (o *Orchestrator) remediateRogueFindingTx(ctx context.Context, tx pgx.Tx, tenantID, resultEventID string, in projections.RogueCertificateRevokedAtIssuer) error {
+	finding, err := o.store.GetDiscoveryFinding(ctx, tenantID, in.DiscoveryID)
+	if err != nil {
+		return err
+	}
+	current := discovery.TriageStatus(finding.TriageStatus)
+	if current == discovery.TriageRemediated || discovery.ValidateTriageTransition(current, discovery.TriageRemediated) != nil {
+		return nil
+	}
+	raw, err := json.Marshal(projections.DiscoveryFindingTriageChanged{
+		ID: finding.ID, Status: string(discovery.TriageRemediated), Actor: "trstctl",
+		Reason:      "revoked at its issuer " + in.AuthorityID + ", which confirmed the revocation of serial " + in.Serial,
+		EvidenceRef: resultEventID,
+	})
+	if err != nil {
+		return err
+	}
+	eventID := "discovery.finding.remediated:" + crypto.SHA256Hex([]byte(tenantID+"\x00"+resultEventID))
+	event, err := o.log.Append(ctx, events.Event{ID: eventID, Type: projections.EventDiscoveryFindingTriageChanged, TenantID: tenantID, Data: raw})
+	if err != nil {
+		return err
+	}
+	if event.ID != eventID || event.Type != projections.EventDiscoveryFindingTriageChanged || event.TenantID != tenantID || !bytes.Equal(event.Data, raw) {
+		return fmt.Errorf("%w: the rogue finding's remediation differs from the retained one", store.ErrIdempotencyConflict)
+	}
+	return o.proj.ApplyTx(ctx, tx, event)
 }

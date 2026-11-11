@@ -2,6 +2,11 @@
 
 ### Added
 
+- A rogue certificate's confirmed revocation at its issuer resolves its Certificate Transparency
+  finding (A163-L2). The finding's triage becomes remediated, recorded by trstctl with the issuer's
+  confirmation as the evidence of the fix, so an operator no longer resolves it by hand; a redelivery
+  records nothing more, and a finding an operator had claimed as managed or dismissed keeps that
+  decision.
 - A rogue certificate the tenant's own AD CS issued outside trstctl, seen only in Certificate
   Transparency, can be revoked at that CA (A163-L1). An AD CS issuer that names a revocation relay is
   now listed as revoking by serial: Revoke at issuer hands the serial to the relay, which runs
