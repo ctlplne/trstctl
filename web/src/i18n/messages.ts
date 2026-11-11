@@ -31994,6 +31994,27 @@ export const messages = {
     defaultMessage: "App registration {client} in {directory}: the relay exchanges the client secret for a Graph token on each read.",
     description: "A156: review line for an app registration.",
   },
+  "mdm.poll.jamfClient": {
+    defaultMessage: "Jamf Pro API client ID (optional)",
+    description: "A156-L1: the client ID of a Jamf Pro API client.",
+  },
+  "mdm.poll.jamfClientHelp": {
+    defaultMessage:
+      "With an API client, the secret reference holds the client secret; the relay exchanges it at this Jamf Pro server for an access token on each read and check-in. Give the API client's role read access to computers.",
+    description: "A156-L1: how the Jamf Pro API client secret reference is used.",
+  },
+  "mdm.poll.jamfClientInvalid": {
+    defaultMessage: "A Jamf Pro API client ID is a GUID.",
+    description: "A156-L1: validation message for the client ID.",
+  },
+  "mdm.poll.jamfClientHTTPS": {
+    defaultMessage: "A Jamf Pro API client needs an https base URL: its secret goes to this server.",
+    description: "A156-L1: validation message for the base URL.",
+  },
+  "mdm.poll.reviewJamfClient": {
+    defaultMessage: "Jamf Pro API client {client}: the relay exchanges the client secret for an access token on each read and check-in.",
+    description: "A156-L1: review line for a Jamf Pro API client.",
+  },
   "mdm.poll.tokenRef": { defaultMessage: "Bearer token secret reference", description: "Reference to the bearer redeemed only by the network relay." },
   "mdm.poll.tokenRefExample": { defaultMessage: "secret://mdm/provider", description: "Reference example, never an inline bearer." },
   "mdm.poll.relay": { defaultMessage: "Network relay for this MDM", description: "Bind the MDM bearer to one enrolled network agent." },

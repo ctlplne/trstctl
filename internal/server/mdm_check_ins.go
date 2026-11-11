@@ -148,6 +148,11 @@ func (s *Server) QueueMDMCheckIn(ctx context.Context, tenantID, requester, provi
 		intent.ClientCredentials = &mdm.ClientCredentials{Authority: sched.EntraAuthority,
 			DirectoryTenantID: sched.EntraDirectoryTenantID, ClientID: sched.EntraClientID}
 	}
+	if sched.JamfClientID != "" {
+		// A156-L1: the relay exchanges the redeemed API client secret at the
+		// Jamf Pro server for an access token.
+		intent.JamfAPIClient = &mdm.JamfAPIClient{ClientID: sched.JamfClientID}
+	}
 	if err := s.orch.QueueMDMCheckIn(ctx, tenantID, queued, intent); err != nil {
 		return store.MDMCheckIn{}, err
 	}

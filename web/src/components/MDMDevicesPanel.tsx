@@ -7,6 +7,7 @@ import { useApiQuery, useQueryClient } from "@/lib/query";
 import { optionalApiCall } from "@/lib/optionalApi";
 import { translateNow } from "@/i18n/I18nProvider";
 import { useCan } from "@/components/rbac";
+import { Input } from "@/components/ui/input";
 
 function readMDMDevices(): Promise<MDMDeviceList> {
   return optionalApiCall<MDMDeviceList>("mdmDevices", { items: [], failed: 0, unobserved: 0, guidance: "" });
@@ -28,7 +29,14 @@ const scheduleSchema = z
       .trim()
       .url({ error: translateNow("mdm.poll.invalid") })
       .refine((value) => {
-        const url = new URL(value);
+        // A half-typed address is not a URL yet; re-validation runs on every
+        // keystroke after a failed review, so this must not throw.
+        let url: URL;
+        try {
+          url = new URL(value);
+        } catch {
+          return false;
+        }
         return ["http:", "https:"].includes(url.protocol) && !!url.hostname && !url.username && !url.password;
       }, translateNow("mdm.poll.invalid")),
     token_ref: z
@@ -38,6 +46,7 @@ const scheduleSchema = z
     required_agent_id: z.string().trim(),
     entra_directory_tenant_id: z.string().trim(),
     entra_client_id: z.string().trim(),
+    jamf_client_id: z.string().trim(),
     filter: z.string().trim(),
     interval_seconds: z
       .string()
@@ -64,6 +73,15 @@ const scheduleSchema = z
         ctx.addIssue({ code: "custom", path: ["entra_client_id"], message: translateNow("mdm.poll.appIncomplete") });
       }
     }
+    // A156-L1: a Jamf Pro API client's ID is a GUID, and its secret crosses
+    // the network to the server's token endpoint, so the base URL is https.
+    if (value.mdm === "jamf" && value.jamf_client_id) {
+      if (!guid.test(value.jamf_client_id)) {
+        ctx.addIssue({ code: "custom", path: ["jamf_client_id"], message: translateNow("mdm.poll.jamfClientInvalid") });
+      } else if (!/^https:\/\//i.test(value.base_url) && !/^http:\/\/(127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(value.base_url)) {
+        ctx.addIssue({ code: "custom", path: ["base_url"], message: translateNow("mdm.poll.jamfClientHTTPS") });
+      }
+    }
   });
 type ScheduleForm = z.infer<typeof scheduleSchema>;
 const emptySchedule: ScheduleForm = {
@@ -73,6 +91,7 @@ const emptySchedule: ScheduleForm = {
   required_agent_id: "",
   entra_directory_tenant_id: "",
   entra_client_id: "",
+  jamf_client_id: "",
   filter: "",
   interval_seconds: "3600",
   renewal_window_days: "0",
@@ -116,6 +135,7 @@ export function MDMDevicesPanel() {
       required_agent_id: schedule?.required_agent_id ?? "",
       entra_directory_tenant_id: schedule?.client_credentials?.directory_tenant_id ?? "",
       entra_client_id: schedule?.client_credentials?.client_id ?? "",
+      jamf_client_id: schedule?.jamf_api_client?.client_id ?? "",
       filter: schedule?.filter ?? "",
       interval_seconds: String(schedule?.interval_seconds ?? 3600),
       renewal_window_days: String(schedule?.renewal_window_days ?? 0),
@@ -148,6 +168,7 @@ export function MDMDevicesPanel() {
       ...(values.mdm === "intune" && values.entra_client_id
         ? { client_credentials: { directory_tenant_id: values.entra_directory_tenant_id, client_id: values.entra_client_id } }
         : {}),
+      ...(values.mdm === "jamf" && values.jamf_client_id ? { jamf_api_client: { client_id: values.jamf_client_id } } : {}),
     });
     setFormError("");
   });
@@ -169,6 +190,7 @@ export function MDMDevicesPanel() {
         result.interval_seconds !== reviewed.interval_seconds ||
         (result.renewal_window_days ?? 0) !== reviewed.renewal_window_days ||
         (result.client_credentials?.client_id ?? "") !== (reviewed.client_credentials?.client_id ?? "") ||
+        (result.jamf_api_client?.client_id ?? "") !== (reviewed.jamf_api_client?.client_id ?? "") ||
         result.enabled !== reviewed.enabled
       ) {
         throw new Error(translateNow("mdm.poll.unconfirmed"));
@@ -301,7 +323,18 @@ export function MDMDevicesPanel() {
                       </label>
                       <p className="text-caption text-muted-foreground sm:col-span-2">{translateNow("mdm.poll.appHelp")}</p>
                     </>
-                  ) : null}
+                  ) : (
+                    <>
+                      <label className="grid gap-1 text-sm">
+                        <span>{translateNow("mdm.poll.jamfClient")}</span>
+                        <Input autoComplete="off" {...form.register("jamf_client_id", { onChange: () => setReviewed(null) })} />
+                        {form.formState.errors.jamf_client_id ? (
+                          <span className="text-risk-critical">{form.formState.errors.jamf_client_id.message}</span>
+                        ) : null}
+                      </label>
+                      <p className="text-caption text-muted-foreground sm:col-span-2">{translateNow("mdm.poll.jamfClientHelp")}</p>
+                    </>
+                  )}
                   <label className="grid gap-1 text-sm">
                     <span>{translateNow("mdm.poll.relay")}</span>
                     <select
@@ -387,6 +420,7 @@ export function MDMDevicesPanel() {
                       })}
                     </p>
                   ) : null}
+                  {reviewed.jamf_api_client ? <p>{translateNow("mdm.poll.reviewJamfClient", { client: reviewed.jamf_api_client.client_id })}</p> : null}
                   <p>{translateNow("mdm.poll.reviewFilter", { filter: reviewed.filter || "—" })}</p>
                   <p>{translateNow("mdm.poll.reviewWindow", { days: reviewed.renewal_window_days ?? 0 })}</p>
                   <p>{translateNow("mdm.poll.reviewExecution")}</p>

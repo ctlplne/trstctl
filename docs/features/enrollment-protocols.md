@@ -374,7 +374,10 @@ check-in guidance instead of a made-up failure or success.
 For first use, open **How machines request credentials → Set up and operate methods → MDM device correlation**. The
 schedule form remains visible when no devices or schedules exist. Choose Intune
 or Jamf, enter the relay-reachable MDM API base URL and a `secret://` reference
-to an existing bearer, select the exact enrolled network relay that can reach
+to an existing bearer (or, with an Intune app registration or a Jamf Pro API
+client, to its client secret: the relay exchanges it for an access token on each
+read and check-in, and a Jamf API client's role needs read access to computers),
+select the exact enrolled network relay that can reach
 that MDM, choose an interval of at least 300 seconds, and review the provider,
 relay ID, and cadence before saving. An enabled schedule requires a fresh
 authenticated heartbeat from that relay. A disabled draft can name an offline

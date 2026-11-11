@@ -31275,6 +31275,19 @@
         ],
         "type": "object"
       },
+      "MDMJamfAPIClient": {
+        "properties": {
+          "client_id": {
+            "description": "the Jamf Pro API client's client ID; token_ref then holds its client secret",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id"
+        ],
+        "type": "object"
+      },
       "MDMPollSchedule": {
         "properties": {
           "base_url": {
@@ -31304,6 +31317,9 @@
           },
           "interval_seconds": {
             "type": "integer"
+          },
+          "jamf_api_client": {
+            "$ref": "#/components/schemas/MDMJamfAPIClient"
           },
           "last_error": {
             "type": "string"
@@ -31359,6 +31375,9 @@
           },
           "interval_seconds": {
             "type": "integer"
+          },
+          "jamf_api_client": {
+            "$ref": "#/components/schemas/MDMJamfAPIClient"
           },
           "mdm": {
             "enum": [

@@ -298,4 +298,8 @@ type SyncIntent struct {
 	// ClientCredentials (Intune, A156) makes TokenRef the app registration's
 	// client secret: the relay exchanges it per attempt for a Graph token.
 	ClientCredentials *ClientCredentials `json:"client_credentials,omitempty"`
+	// JamfAPIClient (Jamf, A156-L1) makes TokenRef the Jamf Pro API client's
+	// secret: the relay exchanges it per attempt at the same server for an
+	// access token.
+	JamfAPIClient *JamfAPIClient `json:"jamf_api_client,omitempty"`
 }

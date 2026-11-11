@@ -9150,6 +9150,14 @@ MDMEntraAppRegistration = TypedDict(
     total=False,
 )
 
+MDMJamfAPIClient = TypedDict(
+    'MDMJamfAPIClient',
+    {
+        'client_id': str,
+    },
+    total=False,
+)
+
 MDMPollSchedule = TypedDict(
     'MDMPollSchedule',
     {
@@ -9161,6 +9169,7 @@ MDMPollSchedule = TypedDict(
         'filter': str,
         'guidance': str,
         'interval_seconds': int,
+        'jamf_api_client': dict[str, Any],
         'last_error': str,
         'last_run_at': str,
         'mdm': str,
@@ -9180,6 +9189,7 @@ MDMPollScheduleInput = TypedDict(
         'execution': str,
         'filter': str,
         'interval_seconds': int,
+        'jamf_api_client': dict[str, Any],
         'mdm': str,
         'renewal_window_days': int,
         'required_agent_id': str,

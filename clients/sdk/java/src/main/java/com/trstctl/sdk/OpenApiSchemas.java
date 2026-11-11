@@ -652,6 +652,7 @@ public final class OpenApiSchemas {
       "MDMDeviceList",
       "MDMDeviceTrace",
       "MDMEntraAppRegistration",
+      "MDMJamfAPIClient",
       "MDMPollSchedule",
       "MDMPollScheduleInput",
       "MDMPollScheduleList",

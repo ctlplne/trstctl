@@ -37,6 +37,10 @@ type mdmPollScheduleBody struct {
 	// token_ref then holds its client secret, which the relay exchanges per
 	// attempt for a Microsoft Graph token.
 	ClientCredentials *mdm.ClientCredentials `json:"client_credentials,omitempty"`
+	// JamfAPIClient (Jamf only, A156-L1) names a Jamf Pro API client;
+	// token_ref then holds its client secret, which the relay exchanges per
+	// attempt at the same Jamf Pro server for an access token.
+	JamfAPIClient *mdm.JamfAPIClient `json:"jamf_api_client,omitempty"`
 	// Legacy control-plane egress fields remain only for clear rejection.
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
@@ -57,7 +61,9 @@ type mdmPollScheduleResponse struct {
 	RenewalWindowDays    int      `json:"renewal_window_days,omitempty"`
 	// ClientCredentials is the Intune app registration (identifiers only).
 	ClientCredentials *mdm.ClientCredentials `json:"client_credentials,omitempty"`
-	LastRunAt         string                 `json:"last_run_at,omitempty"`
+	// JamfAPIClient is the Jamf Pro API client (its client ID only).
+	JamfAPIClient *mdm.JamfAPIClient `json:"jamf_api_client,omitempty"`
+	LastRunAt     string             `json:"last_run_at,omitempty"`
 	// LastError is served, not just logged: a poll failing for a week
 	// otherwise looks identical to one with nothing to do.
 	LastError string `json:"last_error,omitempty"`
@@ -76,7 +82,10 @@ const mdmPollGuidance = "The poll re-reads the MDM on the tenant's own interval 
 	"one exact enrolled network relay, so another same-tenant relay cannot redeem its bearer. For " +
 	"Intune, client_credentials (directory_tenant_id and client_id of an Entra app registration with " +
 	"Graph application permissions) makes token_ref the app's client secret: the relay exchanges it " +
-	"per attempt for a Microsoft Graph token that lives only in memory for that read. Otherwise the " +
+	"per attempt for a Microsoft Graph token that lives only in memory for that read. For Jamf, " +
+	"jamf_api_client (client_id of a Jamf Pro API client whose API role can read computers) makes " +
+	"token_ref the API client's secret: the relay exchanges it per attempt at the same Jamf Pro " +
+	"server for an access token that lives only in memory for that read or check-in. Otherwise the " +
 	"reference must resolve to a bearer the MDM accepts, rotated by the operator's own pipeline."
 
 // minMDMPollInterval floors the poll, same reasoning as the CMDB's: device
@@ -155,6 +164,23 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 			}
 			app = &normalized
 		}
+		var jamfClient *mdm.JamfAPIClient
+		if body.JamfAPIClient != nil {
+			if which != mdm.MDMJamf {
+				return 0, nil, errStatus(http.StatusBadRequest, "jamf_api_client is only valid for a Jamf schedule")
+			}
+			normalized := body.JamfAPIClient.Normalize()
+			if err := normalized.Validate(); err != nil {
+				return 0, nil, errWithStatus(http.StatusBadRequest, err)
+			}
+			// The client secret crosses the network to this server's token
+			// endpoint, so the base URL must be https (a loopback stand-in
+			// aside).
+			if _, err := mdm.JamfTokenEndpoint(body.BaseURL); err != nil {
+				return 0, nil, errWithStatus(http.StatusBadRequest, err)
+			}
+			jamfClient = &normalized
+		}
 		saved := store.MDMPollSchedule{
 			TenantID: tenantID, MDM: which,
 			BaseURL:         strings.TrimSpace(body.BaseURL),
@@ -171,13 +197,18 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 			saved.EntraAuthority, saved.EntraDirectoryTenantID, saved.EntraClientID = app.Authority, app.DirectoryTenantID, app.ClientID
 			event = &projections.MDMPollClientCredentials{Authority: app.Authority, DirectoryTenantID: app.DirectoryTenantID, ClientID: app.ClientID}
 		}
+		var jamfEvent *projections.MDMPollJamfAPIClient
+		if jamfClient != nil {
+			saved.JamfClientID = jamfClient.ClientID
+			jamfEvent = &projections.MDMPollJamfAPIClient{ClientID: jamfClient.ClientID}
+		}
 		if err := a.orch.ConfigureMDMPollSchedule(ctx, tenantID, projections.MDMPollConfigured{
 			MDM: saved.MDM, BaseURL: saved.BaseURL, TokenRef: saved.TokenRef, Filter: saved.Filter,
 			RequiredAgentID: saved.RequiredAgentID,
 			IntervalSeconds: saved.IntervalSeconds, Enabled: saved.Enabled,
 			AllowPrivate: saved.AllowPrivateEndpoint, PrivateCIDRs: saved.PrivateEgressCIDRs,
 			Execution: saved.Execution, RenewalWindowDays: saved.RenewalWindowDays,
-			ClientCredentials: event,
+			ClientCredentials: event, JamfAPIClient: jamfEvent,
 		}); err != nil {
 			return 0, nil, err
 		}
@@ -213,6 +244,9 @@ func mdmPollScheduleFrom(s store.MDMPollSchedule, found bool) mdmPollScheduleRes
 	}
 	if s.EntraClientID != "" {
 		out.ClientCredentials = &mdm.ClientCredentials{Authority: s.EntraAuthority, DirectoryTenantID: s.EntraDirectoryTenantID, ClientID: s.EntraClientID}
+	}
+	if s.JamfClientID != "" {
+		out.JamfAPIClient = &mdm.JamfAPIClient{ClientID: s.JamfClientID}
 	}
 	if s.LastRunAt != nil {
 		out.LastRunAt = s.LastRunAt.UTC().Format(time.RFC3339)

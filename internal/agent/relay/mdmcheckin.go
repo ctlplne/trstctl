@@ -49,8 +49,10 @@ type MDMCheckInIntent struct {
 	BaseURL           string                 `json:"base_url"`
 	TokenRef          string                 `json:"token_ref"`
 	ClientCredentials *mdm.ClientCredentials `json:"client_credentials,omitempty"`
-	DeviceID          string                 `json:"device_id"`
-	RequiredAgentID   string                 `json:"required_agent_id"`
+	// JamfAPIClient (A156-L1) makes TokenRef a Jamf Pro API client's secret.
+	JamfAPIClient   *mdm.JamfAPIClient `json:"jamf_api_client,omitempty"`
+	DeviceID        string             `json:"device_id"`
+	RequiredAgentID string             `json:"required_agent_id"`
 }
 
 // MDMCheckInReport is what returns: the MDM's answer to the check-in.
@@ -82,6 +84,10 @@ func ValidateMDMCheckInIntent(intent MDMCheckInIntent) error {
 		return errors.New("relay: an MDM check-in names one Intune managed device or one Jamf computer")
 	case intent.ClientCredentials != nil && intent.MDM != mdm.MDMIntune:
 		return errors.New("relay: client credentials are only valid for Intune")
+	case intent.JamfAPIClient != nil && intent.MDM != mdm.MDMJamf:
+		return errors.New("relay: a Jamf Pro API client is only valid for Jamf")
+	case intent.JamfAPIClient != nil && intent.JamfAPIClient.Normalize().Validate() != nil:
+		return intent.JamfAPIClient.Normalize().Validate()
 	}
 	u, err := url.Parse(intent.BaseURL)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
@@ -139,6 +145,16 @@ func runMDMCheckIn(ctx context.Context, ch Channel, client *http.Client, job Job
 		access, err := mdm.ExchangeClientCredentials(ctx, client, *intent.ClientCredentials, token)
 		if err != nil {
 			report(ctx, ch, job, OutcomeFailed, clientCredentialsFailure(err))
+			return false
+		}
+		defer secret.Wipe(access)
+		token = access
+	}
+	if intent.JamfAPIClient != nil {
+		// A156-L1: the redeemed material is the Jamf Pro API client's secret.
+		access, err := mdm.ExchangeJamfClientCredentials(ctx, client, intent.BaseURL, *intent.JamfAPIClient, token)
+		if err != nil {
+			report(ctx, ch, job, OutcomeFailed, jamfClientFailure(err))
 			return false
 		}
 		defer secret.Wipe(access)

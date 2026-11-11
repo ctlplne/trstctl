@@ -171,6 +171,63 @@ describe("MDM device evidence trace", () => {
     );
   });
 
+  // A156-L1: a Jamf schedule can name a Jamf Pro API client; the secret
+  // reference then holds its client secret. The ID must be a GUID and the
+  // server https, and the readback must name the same client.
+  it("sends a Jamf Pro API client so the relay exchanges the client secret", async () => {
+    apiMock.mdmDevices.mockResolvedValue({ items: [], failed: 0, unobserved: 0, renewal_at_risk: 0, guidance: "" });
+    apiMock.mdmPollSchedules.mockResolvedValue({ items: [], guidance: "Relay-only read." });
+    const client = { client_id: "00000000-0000-4000-8000-00000000a15c" };
+    const savedSchedule = {
+      configured: true,
+      mdm: "jamf",
+      base_url: "https://jamf.example.test",
+      token_ref: "secret://mdm/jamf/client-secret",
+      required_agent_id: "44444444-4444-4444-8444-44444444a101",
+      interval_seconds: 3600,
+      enabled: true,
+      execution: "relay",
+      guidance: "",
+    };
+    apiMock.putMDMPollSchedule.mockResolvedValueOnce({ ...savedSchedule }).mockResolvedValueOnce({ ...savedSchedule, jamf_api_client: client });
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <MDMDevicesPanel />
+      </AppQueryProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "MDM device correlation" })).toBeInTheDocument();
+    await user.click(screen.getByText("Configure MDM read schedule"));
+    await user.selectOptions(screen.getByLabelText("MDM provider"), "jamf");
+    expect(screen.queryByLabelText("Application (client) ID")).not.toBeInTheDocument();
+    const base = screen.getByLabelText("MDM API base URL");
+    await user.type(base, "http://jamf.example.test");
+    await user.type(screen.getByLabelText("Bearer token secret reference"), "secret://mdm/jamf/client-secret");
+    await user.selectOptions(screen.getByLabelText("Network relay for this MDM"), "44444444-4444-4444-8444-44444444a101");
+    const clientID = screen.getByLabelText("Jamf Pro API client ID (optional)");
+    await user.type(clientID, "jamf-client");
+    await user.click(screen.getByRole("button", { name: "Review schedule" }));
+    expect(await screen.findByText("A Jamf Pro API client ID is a GUID.")).toBeInTheDocument();
+    await user.clear(clientID);
+    await user.type(clientID, client.client_id);
+    await user.click(screen.getByRole("button", { name: "Review schedule" }));
+    expect(await screen.findByText("A Jamf Pro API client needs an https base URL: its secret goes to this server.")).toBeInTheDocument();
+    await user.clear(base);
+    await user.type(base, "https://jamf.example.test");
+    await user.click(screen.getByRole("button", { name: "Review schedule" }));
+    expect(screen.getByText(/Jamf Pro API client 00000000-0000-4000-8000-00000000a15c: the relay exchanges the client secret/)).toBeInTheDocument();
+    // A readback that dropped the API client is not taken as saved.
+    await user.click(screen.getByRole("button", { name: "Save reviewed schedule" }));
+    expect(await screen.findByText("The server did not confirm the exact relay schedule. Check the saved schedule before retrying.")).toBeInTheDocument();
+    expect(apiMock.putMDMPollSchedule).toHaveBeenLastCalledWith(
+      expect.objectContaining({ mdm: "jamf", token_ref: "secret://mdm/jamf/client-secret", jamf_api_client: client }),
+    );
+    await user.click(screen.getByRole("button", { name: "Save reviewed schedule" }));
+    expect(apiMock.putMDMPollSchedule).toHaveBeenCalledTimes(2);
+    expect(apiMock.putMDMPollSchedule.mock.calls[1][0]).not.toHaveProperty("client_credentials");
+  });
+
   it("keeps read-only operators from configuring a relay schedule", async () => {
     apiMock.mdmDevices.mockResolvedValue({ items: [], failed: 0, unobserved: 0, renewal_at_risk: 0, guidance: "" });
     apiMock.mdmPollSchedules.mockResolvedValue({ items: [], guidance: "Relay-only read." });

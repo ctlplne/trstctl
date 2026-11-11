@@ -6592,6 +6592,10 @@ export interface MDMEntraAppRegistration {
   directory_tenant_id: string;
 }
 
+export interface MDMJamfAPIClient {
+  client_id: string;
+}
+
 export interface MDMPollSchedule {
   base_url?: string;
   client_credentials?: MDMEntraAppRegistration;
@@ -6601,6 +6605,7 @@ export interface MDMPollSchedule {
   filter?: string;
   guidance: string;
   interval_seconds?: number;
+  jamf_api_client?: MDMJamfAPIClient;
   last_error?: string;
   last_run_at?: string;
   mdm?: "intune" | "jamf";
@@ -6616,6 +6621,7 @@ export interface MDMPollScheduleInput {
   execution?: "relay" | "";
   filter?: string;
   interval_seconds: number;
+  jamf_api_client?: MDMJamfAPIClient;
   mdm: "intune" | "jamf";
   renewal_window_days?: number;
   required_agent_id?: string;

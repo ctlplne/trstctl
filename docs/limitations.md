@@ -4218,9 +4218,15 @@ than sending an operator looking for a credential that was never there.
   ID); `token_ref` then holds the app's client secret, and the relay exchanges
   it for a Microsoft Graph token on each read (OAuth client-credentials grant;
   the token lives only in memory for that read). Proven against stand-in token
-  and Graph endpoints; a live Entra tenant is not yet proven. Without an app
-  registration, and for Jamf, the token reference must resolve to a bearer the
-  MDM accepts, rotated by the operator's own pipeline; a device
+  and Graph endpoints; a live Entra tenant is not yet proven. A Jamf schedule
+  can name a Jamf Pro API client (`jamf_api_client`: its client ID); `token_ref`
+  then holds the client secret, and the relay exchanges it at the same Jamf Pro
+  server's `/api/oauth/token` for an access token on each read and each device
+  check-in (the base URL must be https). Proven against a stand-in Jamf Pro
+  server written from Jamf's documented API client grant; a live Jamf Pro server
+  is not yet proven. Without an app registration or an API client the token
+  reference must resolve to a bearer the MDM accepts, rotated by the operator's
+  own pipeline; a device
   with no certificate gets NO renewal verdict rather than a warning. The trace's
   `renewing` stage is now evidence-backed: a later distinct SCEP transaction
   supplies its request/result, while a certificate inside its renewal window

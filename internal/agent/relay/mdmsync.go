@@ -38,6 +38,15 @@ func clientCredentialsFailure(err error) string {
 	}
 }
 
+// jamfClientFailure is the operator-facing reason a Jamf Pro API client's
+// exchange failed (A156-L1).
+func jamfClientFailure(err error) string {
+	if errors.Is(err, mdm.ErrJamfClientRefused) {
+		return "Jamf Pro refused the API client ID or client secret"
+	}
+	return "the Jamf Pro API client token exchange failed from this relay's vantage"
+}
+
 // runMDMSync executes one mdm.sync job: redeem the token, GET the fixed
 // endpoint, parse, report devices.
 func runMDMSync(ctx context.Context, ch Channel, client *http.Client, job Job) bool {
@@ -95,6 +104,22 @@ func runMDMSync(ctx context.Context, ch Channel, client *http.Client, job Job) b
 		access, err := mdm.ExchangeClientCredentials(ctx, client, *intent.ClientCredentials, token)
 		if err != nil {
 			report(ctx, ch, job, OutcomeFailed, clientCredentialsFailure(err))
+			return false
+		}
+		defer secret.Wipe(access)
+		token = access
+	}
+	if intent.JamfAPIClient != nil {
+		// A156-L1: the redeemed material is the Jamf Pro API client's secret;
+		// exchange it at the same server for a token that lives only for this
+		// job.
+		if intent.MDM != mdm.MDMJamf {
+			report(ctx, ch, job, OutcomeFailed, "a Jamf Pro API client is only valid for a Jamf read")
+			return false
+		}
+		access, err := mdm.ExchangeJamfClientCredentials(ctx, client, intent.BaseURL, *intent.JamfAPIClient, token)
+		if err != nil {
+			report(ctx, ch, job, OutcomeFailed, jamfClientFailure(err))
 			return false
 		}
 		defer secret.Wipe(access)

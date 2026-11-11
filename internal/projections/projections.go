@@ -756,6 +756,14 @@ type MDMPollConfigured struct {
 	// ClientCredentials names the Intune app registration whose client secret
 	// TokenRef holds (A156): identifiers only, never the secret.
 	ClientCredentials *MDMPollClientCredentials `json:"client_credentials,omitempty"`
+	// JamfAPIClient names the Jamf Pro API client whose client secret
+	// TokenRef holds (A156-L1): the client ID only, never the secret.
+	JamfAPIClient *MDMPollJamfAPIClient `json:"jamf_api_client,omitempty"`
+}
+
+// MDMPollJamfAPIClient is a Jamf Pro API client's identifier (A156-L1).
+type MDMPollJamfAPIClient struct {
+	ClientID string `json:"client_id"`
 }
 
 // MDMPollClientCredentials is an Entra app registration's identifiers (A156).
@@ -6256,6 +6264,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		if cc := pl.ClientCredentials; cc != nil {
 			schedule.EntraAuthority, schedule.EntraDirectoryTenantID, schedule.EntraClientID = cc.Authority, cc.DirectoryTenantID, cc.ClientID
+		}
+		if jc := pl.JamfAPIClient; jc != nil {
+			schedule.JamfClientID = jc.ClientID
 		}
 		return p.store.ApplyMDMPollConfiguredTx(ctx, tx, e.TenantID, schedule)
 	case EventMDMDeviceCorrelated:

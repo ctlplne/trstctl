@@ -20255,6 +20255,13 @@ export interface components {
             /** @description the Entra directory's GUID or a verified domain */
             directory_tenant_id: string;
         };
+        MDMJamfAPIClient: {
+            /**
+             * Format: uuid
+             * @description the Jamf Pro API client's client ID; token_ref then holds its client secret
+             */
+            client_id: string;
+        };
         MDMPollSchedule: {
             base_url?: string;
             client_credentials?: components["schemas"]["MDMEntraAppRegistration"];
@@ -20265,6 +20272,7 @@ export interface components {
             filter?: string;
             guidance: string;
             interval_seconds?: number;
+            jamf_api_client?: components["schemas"]["MDMJamfAPIClient"];
             last_error?: string;
             last_run_at?: string;
             /** @enum {string} */
@@ -20282,6 +20290,7 @@ export interface components {
             execution?: "relay" | "";
             filter?: string;
             interval_seconds: number;
+            jamf_api_client?: components["schemas"]["MDMJamfAPIClient"];
             /** @enum {string} */
             mdm: "intune" | "jamf";
             renewal_window_days?: number;

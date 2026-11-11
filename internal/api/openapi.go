@@ -6357,6 +6357,7 @@ func componentSchemas() map[string]*Schema {
 		"execution":           {Type: "string", Enum: []string{"relay", ""}},
 		"renewal_window_days": {Type: "integer"},
 		"client_credentials":  ref("MDMEntraAppRegistration"),
+		"jamf_api_client":     ref("MDMJamfAPIClient"),
 		"last_run_at":         str(), "last_error": str(), "guidance": str(),
 	}, "configured", "enabled", "guidance")
 	mdmPollScheduleInput := object(map[string]*Schema{
@@ -6366,7 +6367,11 @@ func componentSchemas() map[string]*Schema {
 		"execution":           {Type: "string", Enum: []string{"relay", ""}},
 		"renewal_window_days": {Type: "integer"},
 		"client_credentials":  ref("MDMEntraAppRegistration"),
+		"jamf_api_client":     ref("MDMJamfAPIClient"),
 	}, "mdm", "base_url", "token_ref", "interval_seconds")
+	mdmJamfAPIClient := object(map[string]*Schema{
+		"client_id": {Type: "string", Format: "uuid", Description: "the Jamf Pro API client's client ID; token_ref then holds its client secret"},
+	}, "client_id")
 	mdmEntraAppRegistration := object(map[string]*Schema{
 		"authority":           {Type: "string", Description: "identity platform origin; defaults to https://login.microsoftonline.com"},
 		"directory_tenant_id": {Type: "string", Description: "the Entra directory's GUID or a verified domain"},
@@ -9281,6 +9286,7 @@ func componentSchemas() map[string]*Schema {
 		"MDMPollSchedule":                       mdmPollScheduleSchema,
 		"MDMPollScheduleInput":                  mdmPollScheduleInput,
 		"MDMEntraAppRegistration":               mdmEntraAppRegistration,
+		"MDMJamfAPIClient":                      mdmJamfAPIClient,
 		"MDMPollScheduleList":                   mdmPollScheduleList,
 		"ADCSDatabaseSummary":                   adcsDatabaseSummarySchema,
 		"ADCSDatabaseIngest":                    adcsDatabaseIngestSchema,

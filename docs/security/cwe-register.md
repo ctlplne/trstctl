@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2911 annotated sites across 33 rules. Each row is
+2918 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (632 sites)
+### G101 — CWE-798 Use of hardcoded credentials (639 sites)
 
 | Location | Reason |
 |---|---|
@@ -114,6 +114,8 @@ not this file.
 | `internal/agent/relay/deploy_failure_log_test.go:35` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/hostdryrun_internal_test.go:11` | KeystorePasswordRef is a secret-store locator, not credential material (CWE-798). |
 | `internal/agent/relay/legacy_rollback_test.go:36` | a secret:// reference name, not a credential (CWE-798) |
+| `internal/agent/relay/mdm_jamf_client_test.go:20` | credential reference, no credential value present (CWE-798) |
+| `internal/agent/relay/mdm_jamf_client_test.go:21` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/agent/relay/mdmcheckin_test.go:24` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:23` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:159` | credential reference, no credential value present (CWE-798) |
@@ -340,6 +342,10 @@ not this file.
 | `internal/mdm/entra_test.go:21` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/mdm/entra_test.go:22` | an unsigned stand-in token shape, not a credential (CWE-798) |
 | `internal/mdm/entra_test.go:99` | malformed stand-in token responses, no credential value (CWE-798) |
+| `internal/mdm/jamf_client.go:30` | an endpoint path, not a credential (CWE-798) |
+| `internal/mdm/jamf_client_test.go:20` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/mdm/jamf_client_test.go:21` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/mdm/jamf_client_test.go:110` | a stand-in response with no token in it (CWE-798) |
 | `internal/notify/notify.go:69` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/notify/notify.go:92` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/notify/notify.go:151` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -525,6 +531,7 @@ not this file.
 | `internal/server/load_balancer_tls_served_test.go:74` | credential references only; no credential value enters the config (CWE-798) |
 | `internal/server/load_balancer_tls_served_test.go:76` | credential references only; no credential value enters the config (CWE-798) |
 | `internal/server/managedkeys_cloudkms_served_test.go:30` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/mdm_jamf_api_client_served_test.go:30` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/mdm_poller_served_test.go:34` | credential reference (env: pointer), no credential value present (CWE-798) |
 | `internal/server/mdm_poller_served_test.go:37` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/server/mdm_scep_dynamic_served_test.go:120` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
@@ -1037,10 +1044,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7328` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7345` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7358` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7392` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7339` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7356` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7369` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7403` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1465,7 +1472,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4217` | closed test table list above |
+| `internal/store/migration_content_test.go:4218` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 

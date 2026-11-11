@@ -2,6 +2,14 @@
 
 ### Added
 
+- A Jamf poll schedule can name a Jamf Pro API client instead of a hand-rotated bearer (A156-L1).
+  The schedule stores the API client's ID and a secret reference to its client secret; the network
+  relay redeems the secret per attempt and exchanges it at the same Jamf Pro server's
+  `/api/oauth/token` for an access token that lives only in memory, for the inventory read and for
+  an approved device check-in alike. The API refuses an API client on an Intune schedule, a
+  malformed client ID, or a plain http server its secret would cross in clear. The console's MDM
+  schedule form takes the client ID for Jamf, shows it in the review and checks the readback; the
+  form no longer throws while a base URL is retyped after a failed review.
 - A white-labeled console shows "Powered by trstctl" beside the Provider customer's brand (MSP-1,
   part 1). The console now carries the brand the control plane resolves for the customer's host:
   the sign-in page shows the customer's logo, product name and login message, and every page's

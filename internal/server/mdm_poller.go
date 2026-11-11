@@ -189,6 +189,11 @@ func (s *Server) dispatchMDMSyncJob(ctx context.Context, tenantID string, sched 
 		// A156: the relay exchanges the redeemed client secret for a Graph token.
 		intent.ClientCredentials = &mdm.ClientCredentials{Authority: sched.EntraAuthority, DirectoryTenantID: sched.EntraDirectoryTenantID, ClientID: sched.EntraClientID}
 	}
+	if sched.JamfClientID != "" {
+		// A156-L1: the relay exchanges the redeemed API client secret at the
+		// Jamf Pro server for an access token.
+		intent.JamfAPIClient = &mdm.JamfAPIClient{ClientID: sched.JamfClientID}
+	}
 	payload, err := json.Marshal(intent)
 	if err != nil {
 		return
