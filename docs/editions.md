@@ -27,10 +27,11 @@ production SLA; see
 ### What each edition lets you do
 
 The ledger generated from the license table says it plainly; the
-[edition and qualification ledger](editions-ledger.md) has the full tables.
+[edition and qualification ledger](editions-ledger.md) has the full tables, and the
+[License FAQ](license-faq.md) answers common license questions in plain language.
 
 <!-- edition-ledger:begin editions-rights -->
-- **Free.** Run the core in production for yourself: the Business Source License's Additional Use Grant permits it, no signed license is needed, and deployments are unmetered. Each release becomes MPL-2.0 four years after it is published.
+- **Free.** Run the core in production for your organization, its affiliates, and its employees and staff contractors: the Business Source License's Additional Use Grant permits it, no signed license is needed, and deployments are unmetered. A provider may do one-off setup work in a customer's own deployment; running trstctl for others as a hosted or managed service needs a Provider license. Keep the trstctl name and attribution visible. Each release becomes MPL-2.0 four years after it is published.
 - **Enterprise.** Adds FIPS artifact posture, HA support, BYOK, governance, tenant SAML/LDAP/SCIM (Enterprise SSO) and audit anchoring, retention and compliance packaging, activated by an offline Ed25519-signed license. You self-host; the license covers 1 production + 3 signed non-production deployment slots.
 - **Provider / MSP.** Everything in Enterprise, plus Provider plane, metering, white label and siloed isolation, and the rights to operate as a managed service and resell for your customers. The license covers 1 production + 3 signed non-production deployment slots per Provider control plane.
 - **In every edition.** PCAS, AGID, XREC, VDEC and PQC attach in every build and take no license gate; multi-tenancy, the crypto boundary, audit and export, and the offline license verifier stay in the core. FIPS is artifact-gated (make fips-build), never a runtime license gate.

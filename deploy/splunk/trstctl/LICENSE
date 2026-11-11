@@ -50,6 +50,14 @@ Patents: certctl LLC has patent applications pending on parts of the core.
 Patent terms for the Licensed Work are not stated in this file; they will be
 published separately once settled.
 
+Trademarks: neither license grants any right in the trstctl name or logos,
+except to state truthfully where the software comes from and to display them
+as clause (d) of the Additional Use Grant requires.
+
+Versions: the Additional Use Grant below applies to each version of the core
+published with this text. A version published earlier keeps the grant it was
+published with.
+
 ----------------------------------------------------------------------------
 
 Business Source License 1.1
@@ -63,23 +71,88 @@ Licensed Work:        trstctl core — every file in this repository outside the
                       directories. The Licensed Work is (c) 2026 certctl LLC.
 
 Additional Use Grant: You may make production use of the Licensed Work,
-                      provided that (a) you do not offer the Licensed Work, or
-                      a product or service whose value derives substantially
-                      from it, to third parties as a hosted or managed service,
-                      except that operating the Licensed Work on a customer's
-                      own deployment as that customer's service provider is
-                      permitted; (b) you do not embed the Licensed Work in a
-                      product or service that competes with those offered by
-                      certctl LLC; and (c) you do not move, change, disable, or
-                      circumvent the license-key functionality in the Licensed
-                      Work.
+                      provided that you meet conditions (a) to (d) below. Your
+                      Affiliates may use the Licensed Work under this grant as
+                      you may. Use by your or their employees, and by
+                      individual contractors working under your or their
+                      direction as part of your or their staff, is use by you.
+                      A provider that operates the Licensed Work for you as a
+                      Managed Service is not using it on your behalf and needs
+                      its own commercial license.
+
+                      (a) You do not offer the Licensed Work, or a product or
+                      service whose value derives substantially from it, to
+                      third parties as a Hosted Service or a Managed Service.
+
+                      (b) You do not embed the Licensed Work in a Competing
+                      Product.
+
+                      (c) You do not move, change, disable, or circumvent the
+                      license-key functionality in the Licensed Work.
+
+                      (d) You do not remove, alter, or obscure the trstctl
+                      name, logos, or "Powered by trstctl" attribution that
+                      the Licensed Work displays in its user interfaces,
+                      emails, reports, or notifications, unless a commercial
+                      license from certctl LLC allows it. You may display your
+                      own name and logo alongside them.
+
+                      You may use the Licensed Work to secure your own
+                      products and services, including by issuing credentials
+                      to devices or software that you supply to your
+                      customers, as long as you do not offer certificate,
+                      secret, key, or identity management to them as a
+                      service. Doing so is not a Hosted Service.
+
+                      Performing Project Services for a customer is permitted
+                      and is not a Managed Service.
+
+                      Definitions:
+
+                      "Affiliate" means an entity that controls, is controlled
+                      by, or is under common control with you, where control
+                      means direct or indirect ownership of more than 50% of
+                      its voting interests.
+
+                      "Customer Infrastructure" means computing infrastructure
+                      that a customer owns, or leases or subscribes to in its
+                      own name, and that is used only for that customer and
+                      its Affiliates.
+
+                      "Hosted Service" means making the functionality of the
+                      Licensed Work available to third parties from
+                      infrastructure that is not their Customer
+                      Infrastructure.
+
+                      "Managed Service" means operating the Licensed Work for
+                      a third party on an ongoing basis, as a service that the
+                      provider directs, for a fee or as part of a paid
+                      service, whether on Customer Infrastructure or
+                      elsewhere. Operating includes administering the Licensed
+                      Work, acting on its alerts, upgrading it, and renewing
+                      or rotating credentials through it.
+
+                      "Project Services" means installing, configuring,
+                      upgrading, migrating, or troubleshooting a customer's
+                      deployment of the Licensed Work on its Customer
+                      Infrastructure as a discrete engagement, after which the
+                      customer keeps sole administrative control of the
+                      deployment.
+
+                      "Competing Product" means a product or service offered
+                      to third parties whose primary purpose is discovering,
+                      issuing, storing, rotating, or managing the lifecycle of
+                      certificates, secrets, cryptographic keys, SSH
+                      credentials, privileged accounts, or workload or machine
+                      identities.
 
 Change Date:          Four years from the date the Licensed Work is published.
 
 Change License:       Mozilla Public License 2.0
 
 For information about alternative licensing arrangements for the Licensed
-Work, please contact certctl LLC.
+Work, including a commercial license to offer it as a Hosted Service or a
+Managed Service, contact certctl LLC at licensing@trstctl.com.
 
 Notice
 

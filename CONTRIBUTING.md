@@ -32,9 +32,14 @@ queue nobody can service is worse for a would-be contributor than a clear no.
 - **Want a capability that does not exist?** Open an issue describing the
   problem rather than the solution. What an operator actually needs is more
   useful than an implementation of what they think would provide it.
-- **Want to use the core in your own work?** You already may, under the Business Source License
-  1.1's use grant (production included, short of offering it to third parties as a
-  hosted or managed service), without asking. The `ee/` tree is separate and needs a commercial agreement.
+- **Want to use the core in your own work?** You already may, without asking. Run the core in
+  production for your organization, its affiliates, and its employees and staff contractors:
+  the Business Source License's Additional Use Grant permits it, no signed license is needed,
+  and deployments are unmetered. A provider may do one-off setup work in a customer's own
+  deployment; running trstctl for others as a hosted or managed service needs a Provider
+  license. Keep the trstctl name and attribution visible. The
+  [License FAQ](docs/license-faq.md) answers common questions; the `ee/` tree is separate and
+  needs a commercial agreement.
 
 ## Unsolicited pull requests
 

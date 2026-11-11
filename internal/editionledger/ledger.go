@@ -170,8 +170,13 @@ func joinAnd(items []string) string {
 func (l Ledger) rights() string {
 	var b strings.Builder
 	free, ent, prov := l.edition(license.TierCommunity), l.edition(license.TierEnterprise), l.edition(license.TierProvider)
-	fmt.Fprintf(&b, "- **%s.** Run the core in production for yourself: the Business Source License's Additional Use Grant permits it, "+
-		"no signed license is needed, and deployments are %s. Each release becomes MPL-2.0 four years after it is published.\n", free.Name, free.Environments)
+	// LIC-1: the core license's Additional Use Grant, in the words the
+	// owner set for every summary of it (README, CONTRIBUTING.md).
+	fmt.Fprintf(&b, "- **%s.** Run the core in production for your organization, its affiliates, and its employees and staff contractors: "+
+		"the Business Source License's Additional Use Grant permits it, no signed license is needed, and deployments are %s. "+
+		"A provider may do one-off setup work in a customer's own deployment; running trstctl for others as a hosted or managed "+
+		"service needs a Provider license. Keep the trstctl name and attribution visible. "+
+		"Each release becomes MPL-2.0 four years after it is published.\n", free.Name, free.Environments)
 	fmt.Fprintf(&b, "- **%s.** Adds %s, activated by %s. You %s; the license covers %s.\n",
 		ent.Name, joinAnd(ent.Features), l.Product.Activation, joinAnd(ent.Rights), ent.Environments)
 	fmt.Fprintf(&b, "- **%s.** Everything in %s, plus %s, and the rights to %s for your customers. "+

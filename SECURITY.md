@@ -9,7 +9,7 @@ them. We take security reports seriously and appreciate responsible disclosure.
 
 - Use GitHub's **private vulnerability reporting** ("Report a vulnerability") on the
   repository's **Security** tab, or
-- email the maintainer at **skreddy040@gmail.com** with the details below.
+- email **security@trstctl.com** with the details below.
 
 Please include, as far as you can:
 

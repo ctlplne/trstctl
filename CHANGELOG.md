@@ -2312,6 +2312,11 @@
 
 ### Changed
 
+- License: the core's Additional Use Grant now defines hosted and managed services, lets a provider
+  do one-off project work in a customer's own deployment, counts affiliates and staff contractors as
+  the licensee, narrows the competing-product clause, and requires keeping the trstctl name and
+  attribution visible. Versions published earlier keep the grant they were published with. A
+  plain-language license FAQ is in the docs.
 - Kubernetes, GCP and Azure machine-login tokens are single-use, like OIDC and JWT tokens and like
   the token exchange (A238-L8). A projected service-account token used to log in again until it
   expired, so anyone who copied one could open sessions with it. Each token now logs in once on any

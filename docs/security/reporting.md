@@ -7,7 +7,7 @@ tenant data, or unpatched reproduction steps in a public issue.
 ## Private reporting path
 
 If your repository account has access, use **Security → Report a vulnerability**
-in the trstctl repository. Otherwise email **skreddy040@gmail.com**.
+in the trstctl repository. Otherwise email **security@trstctl.com**.
 
 Include the smallest useful evidence:
 

@@ -38,6 +38,7 @@ var requiredPages = []string{
 	"migrations.md",
 	"limitations.md",
 	"editions.md",
+	"license-faq.md",
 	"runbooks/key-ceremony.md",
 	"runbooks/incident-response.md",
 	"runbooks/fleet-rollout.md",

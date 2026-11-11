@@ -393,19 +393,23 @@ optional. Start with the authoring guides for
 [connectors](docs/guides/connector-authoring.md) and
 [plugins](docs/guides/plugin-authoring.md).
 
-[CONTRIBUTING.md](CONTRIBUTING.md) has the full contract. The short version:
-core is BUSL-1.1 and takes contributions under the **Developer Certificate of
-Origin** — sign off with `git commit -s`, no copyright assignment — while the
-proprietary `ee/` tree requires a signed CLA, so open an issue before writing
-code there.
+trstctl is **not accepting contributions or contributors at this time**, so pull
+requests are closed unread; [CONTRIBUTING.md](CONTRIBUTING.md) says why. Issues are
+welcome, and so are security reports, privately as [SECURITY.md](SECURITY.md)
+describes.
 
 ## License
 
 **Source-available core, commercial editions.** The core — everything outside
-`ee/` and `clients/` — is licensed under the [Business Source License 1.1](LICENSE):
-production use is permitted under its Additional Use Grant, the Free tier needs no
-signed license, and each release converts to the Mozilla Public License 2.0 four
-years after it is published. The client libraries under `clients/` are MPL-2.0. The
+`ee/` and `clients/` — is licensed under the [Business Source License 1.1](LICENSE).
+Run the core in production for your organization, its affiliates, and its employees
+and staff contractors: the Business Source License's Additional Use Grant permits it,
+no signed license is needed, and deployments are unmetered. A provider may do one-off
+setup work in a customer's own deployment; running trstctl for others as a hosted or
+managed service needs a Provider license. Keep the trstctl name and attribution
+visible. Each release converts to the Mozilla Public License 2.0 four years after it
+is published. The [License FAQ](docs/license-faq.md) answers common license questions
+in plain language. The client libraries under `clients/` are MPL-2.0. The
 patent-pending families (PCAS, AGID, XREC, VDEC) and post-quantum cryptography
 ship in the core. Commercial Enterprise and Provider features are proprietary
 material under `ee/`, governed by [ee/LICENSE](ee/LICENSE), and activated by an
