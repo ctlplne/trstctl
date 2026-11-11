@@ -81568,6 +81568,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "return only findings that name this certificate or key fingerprint, whatever their kind; colon-separated hex is accepted",
+            "in": "query",
+            "name": "fingerprint",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {

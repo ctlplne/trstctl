@@ -64,6 +64,11 @@ func discoveryFindingFilterFromQuery(r *http.Request) (store.DiscoveryFindingFil
 	if len(filter.DistrustEntry) > 256 {
 		return filter, errors.New("distrust_entry must be at most 256 characters")
 	}
+	fingerprint, err := discoveryFingerprintFilter(q.Get("fingerprint"))
+	if err != nil {
+		return filter, err
+	}
+	filter.Fingerprint = fingerprint
 	filter.KeyStrength = strings.TrimSpace(q.Get("key_strength"))
 	if filter.KeyStrength != "" && filter.KeyStrength != "weak" {
 		return filter, errors.New("key_strength must be weak")
@@ -71,6 +76,24 @@ func discoveryFindingFilterFromQuery(r *http.Request) (store.DiscoveryFindingFil
 	status, err := discoveryTriageFilter(q.Get("triage_status"))
 	filter.TriageStatus = status
 	return filter, err
+}
+
+// colonHex is a fingerprint written as colon-separated hex pairs, the way
+// certificate viewers display it.
+var colonHex = regexp.MustCompile(`^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2})+$`)
+
+// discoveryFingerprintFilter reads the fingerprint filter (A172-L2). A
+// colon-separated hex fingerprint is matched as the lowercase hex findings
+// record; anything else is matched exactly.
+func discoveryFingerprintFilter(raw string) (string, error) {
+	fingerprint := strings.TrimSpace(raw)
+	if len(fingerprint) > 256 {
+		return "", errors.New("fingerprint must be at most 256 characters")
+	}
+	if colonHex.MatchString(fingerprint) {
+		fingerprint = strings.ToLower(strings.ReplaceAll(fingerprint, ":", ""))
+	}
+	return fingerprint, nil
 }
 
 // discoveryDashboardPage is one page of a dashboard's findings.

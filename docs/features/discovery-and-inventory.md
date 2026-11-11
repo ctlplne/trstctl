@@ -411,7 +411,12 @@ paths on one machine remain several stores across one host.
 the findings whose reader matched a distrust-list entry, and `?key_strength=weak` those
 whose key was rated weak (CLI `trstctl-cli discovery findings list --distrust_entry "<entry name>"` or
 `--key_strength weak`). The MCP `distrust_exposure` and `weak_key_exposure` tools answer
-from these and the rated certificate inventory.
+from these and the rated certificate inventory. `?fingerprint=<SHA-256>` (A172-L2; CLI
+`--fingerprint`) lists every finding that names one certificate or key, whatever its
+kind, source or run — a certificate seen on a listener, its private key on a host, the
+root in a trust store — and accepts the colon-separated hex certificate viewers show.
+A finding's detail in Discover has **Show every finding with this fingerprint**, and
+the list says while it is narrowed.
 
 **Removing a distrusted root.** When the control plane's distrust list names a
 trust-store anchor itself (for example emSign ECC Root CA - G3, by key), the finding

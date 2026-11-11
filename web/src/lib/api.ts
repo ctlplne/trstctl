@@ -918,6 +918,8 @@ export interface DiscoveryFindingListOptions {
   sourceKind?: string;
   kind?: string;
   triageStatus?: DiscoveryTriageFilter;
+  /** A172-L2: every finding that names one certificate or key fingerprint. */
+  fingerprint?: string;
 }
 export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { ChangeApplication, ChangeApplyRequest, ChangeDraft, ChangeDraftRequest, ChangePlan, ChangeSet } from "./api-types.gen";
@@ -3471,6 +3473,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     if (options?.sourceKind) qs.set("source_kind", options.sourceKind);
     if (options?.kind) qs.set("kind", options.kind);
     if (options?.triageStatus) qs.set("triage_status", options.triageStatus);
+    if (options?.fingerprint) qs.set("fingerprint", options.fingerprint);
     const suffix = qs.toString();
     return req<DiscoveryFindingList>(`/api/v1/discovery/findings${suffix ? `?${suffix}` : ""}`);
   },

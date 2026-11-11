@@ -33,6 +33,9 @@ type DiscoveryFindingFilter struct {
 	KeyStrength   string
 	// KeyVerdict selects every finding a reader rated distrusted or weak.
 	KeyVerdict bool
+	// Fingerprint selects every finding that names one certificate or key,
+	// whatever its kind (A172-L2).
+	Fingerprint string
 }
 
 // MaxDiscoveryFindingTallyGroups bounds one count: the dashboards count one
@@ -76,6 +79,10 @@ func (f DiscoveryFindingFilter) where(args []any) (string, []any) {
 	if f.KeyStrength != "" {
 		args = append(args, f.KeyStrength)
 		fmt.Fprintf(&b, " AND f.metadata->>'key_strength' = $%d", len(args))
+	}
+	if f.Fingerprint != "" {
+		args = append(args, f.Fingerprint)
+		fmt.Fprintf(&b, " AND f.fingerprint = $%d", len(args))
 	}
 	if f.KeyVerdict {
 		b.WriteString(" AND (COALESCE(f.metadata->>'distrust_entry', '') <> '' OR f.metadata->>'key_strength' = 'weak')")

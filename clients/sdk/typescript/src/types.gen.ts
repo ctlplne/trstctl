@@ -41814,6 +41814,8 @@ export interface operations {
                 distrust_entry?: string;
                 /** @description weak: return only findings whose reader rated the key weak */
                 key_strength?: string;
+                /** @description return only findings that name this certificate or key fingerprint, whatever their kind; colon-separated hex is accepted */
+                fingerprint?: string;
             };
             header?: never;
             path?: never;

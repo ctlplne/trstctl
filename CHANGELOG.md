@@ -2,6 +2,11 @@
 
 ### Added
 
+- The discovery findings list filters by fingerprint (A172-L2). `GET /api/v1/discovery/findings?fingerprint=`
+  (CLI `trstctl-cli discovery findings list --fingerprint`) returns every finding that names one
+  certificate or key, whatever its kind, source or run, accepting the colon-separated hex certificate
+  viewers show; an index keeps it from scanning the tenant's findings. A finding's detail in Discover
+  links to every finding with its fingerprint, and the list says while it is narrowed.
 - An application blocked at the provider can be unblocked from the same finding (A171-L1). `POST
   /api/v1/discovery/findings/{id}/oauth-grant/unblock` (`trstctl-cli discovery findings
   unblock-oauth-app`) reactivates the Okta application or re-enables the Entra service principal through

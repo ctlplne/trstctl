@@ -598,6 +598,27 @@ describe("discovery control-plane surface", () => {
     expect(await screen.findByText("10.0.0.10:443")).toBeInTheDocument();
   });
 
+  // A172-L2: a finding's detail lists every finding naming its fingerprint;
+  // the list says it is narrowed and clears back to every finding.
+  it("narrows the findings to one fingerprint from a finding's detail and clears it", async () => {
+    const seeded = await apiMock.discoveryFindings();
+    const fingerprint = seeded.items[0].fingerprint as string;
+    apiMock.discoveryFindings.mockReset().mockImplementation(async (options?: { fingerprint?: string }) => ({
+      items: options?.fingerprint ? seeded.items.filter((finding: { fingerprint: string }) => finding.fingerprint === options.fingerprint) : seeded.items,
+    }));
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    const row = (await screen.findByText(seeded.items[0].ref)).closest("tr");
+    await user.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Review finding" }));
+    await user.click(screen.getByRole("button", { name: "Show every finding with this fingerprint" }));
+    expect(await screen.findByText("Showing every finding that names this fingerprint, whatever its kind.")).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.discoveryFindings).toHaveBeenLastCalledWith({ limit: 50, fingerprint }));
+
+    await user.click(screen.getByRole("button", { name: "Show all findings" }));
+    await waitFor(() => expect(apiMock.discoveryFindings).toHaveBeenLastCalledWith({ limit: 50 }));
+  });
+
   it("queues removal of a distrusted root from the host trust store it was found in", async () => {
     const seeded = await apiMock.discoveryFindings();
     const root = {

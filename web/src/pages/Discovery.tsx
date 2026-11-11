@@ -12,6 +12,7 @@ import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressC
 import { PAMSignInSourceFields } from "./discovery/PAMSignInSourceFields";
 import { KubernetesDeliveryFields, emptyKubernetesDelivery, kubernetesDeliveryConfig, type KubernetesDelivery } from "./discovery/KubernetesDeliveryFields";
 import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
+import { DiscoveryFingerprintScopeNotice } from "./discovery/DiscoveryFingerprintScopeNotice";
 import { OAuthGrantProviderActions, type OAuthProviderAction } from "./discovery/OAuthGrantProviderActions";
 import { GCPMachineFindingParts } from "./discovery/GCPMachineFindingParts";
 import { CloudMachineFindingParts } from "./discovery/CloudMachineFindingParts";
@@ -638,6 +639,8 @@ export function Discovery() {
   const { formatDateTime, t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedRunID = searchParams.get("run_id")?.trim() ?? "";
+  // A172-L2: a deep link (or a finding's detail) narrows the list to one fingerprint.
+  const requestedFingerprint = searchParams.get("fingerprint")?.trim() ?? "";
   const [tab, setTab] = useState<DiscoveryTab>(() => discoveryTabFromSearchParam(searchParams.get("tab")));
   const [pendingFocus, setPendingFocus] = useState<"source" | "schedule" | "run" | null>(null);
   const [sources, setSources] = useState<DiscoverySource[]>([]);
@@ -711,7 +714,11 @@ export function Discovery() {
       api.discoveryRuns({ limit: 50, order: "recent" }),
       api.discoveryMonitoring(),
       api.nhiShadowPosture(),
-      api.discoveryFindings({ limit: 50, ...(requestedRunID ? { runId: requestedRunID } : {}) }),
+      api.discoveryFindings({
+        limit: 50,
+        ...(requestedRunID ? { runId: requestedRunID } : {}),
+        ...(requestedFingerprint ? { fingerprint: requestedFingerprint } : {}),
+      }),
       api.discoveryCoverage(),
     ]);
     if (sourceResult.status === "fulfilled") setSources(sourceResult.value.items ?? []);
@@ -740,7 +747,7 @@ export function Discovery() {
     );
     if (rejected?.status === "rejected") setNotice(noticeForError(rejected.reason, "Could not load discovery records"));
     setLoading(false);
-  }, [requestedRunID]);
+  }, [requestedRunID, requestedFingerprint]);
 
   useEffect(() => {
     void load();
@@ -1076,6 +1083,21 @@ export function Discovery() {
                     (current) => {
                       const next = new URLSearchParams(current);
                       next.delete("run_id");
+                      return next;
+                    },
+                    { replace: true },
+                  );
+                }}
+              />
+            ) : null}
+            {requestedFingerprint ? (
+              <DiscoveryFingerprintScopeNotice
+                fingerprint={requestedFingerprint}
+                onClear={() => {
+                  setSearchParams(
+                    (current) => {
+                      const next = new URLSearchParams(current);
+                      next.delete("fingerprint");
                       return next;
                     },
                     { replace: true },
@@ -2131,6 +2153,7 @@ function FindingTable({
   onNotice: (notice: Notice | null) => void;
 }) {
   const { t, formatDateTime } = useTranslation();
+  const [, setFindingSearchParams] = useSearchParams();
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [action, setAction] = useState<"claim" | "dismiss" | null>(null);
   const [reason, setReason] = useState("");
@@ -2684,6 +2707,25 @@ function FindingTable({
               <FindingDetail label={t("discovery.findings.exactEvidenceRefs")} value={findingEvidenceRefs(selected).join(", ") || "-"} />
             </dl>
           </details>
+          {selected.fingerprint ? (
+            <div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setFindingSearchParams((current) => {
+                    const next = new URLSearchParams(current);
+                    next.set("tab", "findings");
+                    next.set("fingerprint", selected.fingerprint);
+                    return next;
+                  })
+                }
+              >
+                {t("discovery.findings.showFingerprintFindings")}
+              </Button>
+            </div>
+          ) : null}
 
           {action && (
             <form className="grid gap-3 border-t border-border pt-4 md:grid-cols-2" onSubmit={submitAction}>

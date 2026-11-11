@@ -14086,6 +14086,14 @@ export const messages = {
     defaultMessage: "Showing only findings from this discovery run.",
     description: "Visible notice when a discovery deep link is scoped to one exact run.",
   },
+  "discovery.findings.fingerprintScope": {
+    defaultMessage: "Showing every finding that names this fingerprint, whatever its kind.",
+    description: "A172-L2: visible notice when the findings list is narrowed to one certificate or key fingerprint.",
+  },
+  "discovery.findings.showFingerprintFindings": {
+    defaultMessage: "Show every finding with this fingerprint",
+    description: "A172-L2: action on a finding's detail that lists every finding naming the same fingerprint.",
+  },
   "discovery.findings.clearRunScope": {
     defaultMessage: "Show all findings",
     description: "Action that removes an exact discovery-run deep-link filter.",
