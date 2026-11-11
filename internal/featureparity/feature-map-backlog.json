@@ -18316,6 +18316,7 @@
                 "listMachineAuthMethods",
                 "listMachineSessions",
                 "revokeMachineSession",
+                "revokeOwnMachineSession",
                 "disableMachineAuthMethod",
                 "enableMachineAuthMethod"
             ],
@@ -18327,7 +18328,8 @@
                 "secrets auth-methods disable",
                 "secrets auth-methods enable",
                 "secrets sessions list",
-                "secrets sessions revoke"
+                "secrets sessions revoke",
+                "secrets sessions end"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -18377,7 +18379,7 @@
                     "evidence": [
                         "OpenAPI operationId: previewMachineLogin",
                         "OpenAPI operationId: machineLogin",
-                        "OpenAPI operations: listMachineAuthMethods, listMachineSessions, revokeMachineSession, disableMachineAuthMethod, enableMachineAuthMethod"
+                        "OpenAPI operations: listMachineAuthMethods, listMachineSessions, revokeMachineSession, revokeOwnMachineSession, disableMachineAuthMethod, enableMachineAuthMethod"
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -18574,6 +18576,7 @@
                             "OpenAPI operationId: listMachineAuthMethods",
                             "OpenAPI operationId: listMachineSessions",
                             "OpenAPI operationId: revokeMachineSession",
+                            "OpenAPI operationId: revokeOwnMachineSession",
                             "OpenAPI operationId: disableMachineAuthMethod",
                             "OpenAPI operationId: enableMachineAuthMethod",
                             "CLI command: secrets login preview",
@@ -18582,7 +18585,8 @@
                             "CLI command: secrets auth-methods disable",
                             "CLI command: secrets auth-methods enable",
                             "CLI command: secrets sessions list",
-                            "CLI command: secrets sessions revoke"
+                            "CLI command: secrets sessions revoke",
+                            "CLI command: secrets sessions end"
                         ]
                     }
                 },

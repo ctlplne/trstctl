@@ -5105,6 +5105,11 @@ export const messages = {
   "secrets.sessions.expires": { defaultMessage: "Expires", description: "Session ledger column: expiry time." },
   "secrets.sessions.actions": { defaultMessage: "Actions", description: "Session ledger column: actions." },
   "secrets.sessions.revoke": { defaultMessage: "Revoke", description: "Session ledger action: deny the linked bearer and mark the session revoked." },
+  "secrets.sessions.endedItself": {
+    defaultMessage: "Ended itself",
+    description: "Session ledger: a revoked session that ended itself (a CSI volume's session at unpublish, or `trstctl secrets sessions end`).",
+  },
+  "secrets.sessions.revokedBy": { defaultMessage: "Revoked by {subject}", description: "Session ledger: who revoked a session." },
   "secrets.sessions.empty": { defaultMessage: "No sessions issued yet.", description: "Session ledger empty state." },
   "secrets.sessions.unavailable": {
     defaultMessage: "Session ledger unavailable on this deployment.",

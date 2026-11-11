@@ -84,6 +84,7 @@ var minimalAuthzPermissions = map[string]bool{
 	"risk:read":              true,
 	"secrets:members.manage": true,
 	"secrets:read":           true,
+	"secrets:session.self":   true,
 	"secrets:write":          true,
 }
 

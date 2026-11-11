@@ -144,6 +144,14 @@ const (
 	// permission. Never grantable and never in a role.
 	SecretsMembersManage Permission = "secrets:members.manage"
 
+	// SecretsSessionSelf is a computed route-admission predicate (A238-L7):
+	// every principal holds it within its own tenant. Its one route ends the
+	// machine session that presents the request, and nothing else, so it
+	// gives no authority: any session can give up its own, whatever its scopes
+	// (a CSI volume's session holds only secrets:read and ends itself when the
+	// pod's volume goes). Never grantable and never in a role.
+	SecretsSessionSelf Permission = "secrets:session.self"
+
 	// AgentsGrantRelay authorizes minting an enrollment token that carries the
 	// NETWORK role (epic A2) — an agent that relays for devices which cannot host
 	// an agent themselves, and therefore holds the credentials that drive them —
@@ -339,6 +347,9 @@ func (p Principal) Can(perm Permission, target Scope) bool {
 	if perm == SecretsMembersManage {
 		return p.Can(AccessWrite, target) || p.Can(SecretsWrite, target)
 	}
+	if perm == SecretsSessionSelf {
+		return true
+	}
 	for _, g := range p.Grants {
 		if g.Scope.Covers(target) && g.Role.Allows(perm) {
 			return true
@@ -352,7 +363,7 @@ func (p Principal) Can(perm Permission, target Scope) bool {
 // route admission does not send it through ABAC, and its handlers evaluate
 // ABAC against the real permission the caller acts under.
 func IsComputed(perm Permission) bool {
-	return perm == ApprovalsReview || perm == SecretsMembersManage
+	return perm == ApprovalsReview || perm == SecretsMembersManage || perm == SecretsSessionSelf
 }
 
 // Registry is the catalog of role definitions — the built-in roles plus any

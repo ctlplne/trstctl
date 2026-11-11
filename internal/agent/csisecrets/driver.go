@@ -73,7 +73,10 @@ const (
 	tmpfsBytes = 8 << 20
 	// sessionMargin is how long before its expiry a session is replaced.
 	sessionMargin = 5 * time.Minute
-	stateVersion  = 1
+	// endSessionTimeout bounds ending a volume's session at unpublish; the
+	// kubelet never waits longer on the control plane.
+	endSessionTimeout = 5 * time.Second
+	stateVersion      = 1
 )
 
 var (
@@ -138,6 +141,8 @@ type Driver struct {
 
 	mu      sync.Mutex
 	volumes map[string]*volume
+	// sessionUsers counts the volumes using each control-plane session.
+	sessionUsers map[string]int
 }
 
 // volume is one published volume's in-memory session. Its lock serializes
@@ -150,6 +155,10 @@ type volume struct {
 type session struct {
 	client  *secretrender.HTTPClient
 	expires time.Time
+	// key names the control-plane session (a digest of its token). The
+	// volumes of one pod that log in within one window get the same session
+	// back, so it ends only when the last of them goes (A238-L7).
+	key string
 }
 
 // volumeState is a volume's value-free record, kept across plugin restarts so
@@ -187,7 +196,7 @@ func NewDriver(cfg Config, client *http.Client, mounter Mounter, log *slog.Logge
 	}
 	cfg.Server = strings.TrimRight(cfg.Server, "/")
 	return &Driver{cfg: cfg, client: client, mounter: mounter, log: log, nodeID: nodeID, version: version,
-		now: time.Now, volumes: map[string]*volume{}}, nil
+		now: time.Now, volumes: map[string]*volume{}, sessionUsers: map[string]int{}}, nil
 }
 
 // GetPluginInfo names the driver.
@@ -299,8 +308,9 @@ func (d *Driver) refresh(ctx context.Context, v *volume, st *volumeState, id str
 			d.stale(st, id, spec, target, now)
 			return status.Error(codes.Unavailable, err.Error())
 		}
-		v.drop()
+		d.forget(ctx, v, id, false)
 		v.session = s
+		d.adopt(s)
 	}
 	values := map[string][]byte{}
 	defer func() {
@@ -314,7 +324,7 @@ func (d *Driver) refresh(ctx context.Context, v *volume, st *volumeState, id str
 		if errors.Is(err, secretrender.ErrUnauthenticated) {
 			// The session ended (it expired or was revoked): log in again on the
 			// next publish; the last values serve within the freshness bound.
-			v.drop()
+			d.forget(ctx, v, id, false)
 			d.stale(st, id, spec, target, now)
 			return status.Error(codes.Unavailable, "the control plane ended the volume's session; it logs in again on the next publish")
 		}
@@ -373,8 +383,10 @@ func (d *Driver) stale(st *volumeState, id string, spec volumeSpec, target strin
 }
 
 // NodeUnpublishVolume unmounts the memory filesystem, which discards the
-// values, and forgets the volume. Unpublishing a volume that is gone succeeds.
-func (d *Driver) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
+// values, ends the volume's session unless another volume still uses it
+// (A238-L7), and forgets the volume. Unpublishing a volume that is gone
+// succeeds.
+func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	target := req.GetTargetPath()
 	if !cleanAbsolute(target) {
 		return nil, status.Error(codes.InvalidArgument, "target path must be a clean absolute path")
@@ -393,7 +405,7 @@ func (d *Driver) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnpublishVo
 		return nil, status.Errorf(codes.Internal, "remove the volume directory: %v", err)
 	}
 	_ = os.Remove(d.statePath(id))
-	v.drop()
+	d.forget(ctx, v, id, true)
 	v.mu.Unlock()
 	d.mu.Lock()
 	delete(d.volumes, id)
@@ -412,12 +424,43 @@ func (d *Driver) volume(id string) *volume {
 	return v
 }
 
-// drop forgets the volume's session and wipes its token.
-func (v *volume) drop() {
-	if v.session != nil {
-		v.session.client.Wipe()
-		v.session = nil
+// adopt counts one more volume using s's control-plane session.
+func (d *Driver) adopt(s *session) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.sessionUsers[s.key]++
+}
+
+// forget detaches the volume's session and wipes its token. When end is set
+// and no other volume uses the same control-plane session, it ends that
+// session first (A238-L7), so the token stops working when the pod's volume
+// goes rather than at its expiry. Ending is bounded and best effort: a volume
+// is unpublished even when the control plane can't be reached, and the
+// session then lapses at its expiry.
+func (d *Driver) forget(ctx context.Context, v *volume, id string, end bool) {
+	s := v.session
+	if s == nil {
+		return
 	}
+	v.session = nil
+	d.mu.Lock()
+	last := d.sessionUsers[s.key] <= 1
+	if last {
+		delete(d.sessionUsers, s.key)
+	} else {
+		d.sessionUsers[s.key]--
+	}
+	d.mu.Unlock()
+	if end && last {
+		endCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), endSessionTimeout)
+		if err := s.client.EndSession(endCtx, "csi-secrets-end-"+s.key); err != nil {
+			d.log.Warn("the volume's session could not be ended; it lapses at its expiry", "volume", id, "expires", s.expires, "error", err)
+		} else {
+			d.log.Info("ended the volume's session", "volume", id)
+		}
+		cancel()
+	}
+	s.client.Wipe()
 }
 
 // ensureMount mounts the memory filesystem at target unless it is already
@@ -492,7 +535,7 @@ func (d *Driver) login(ctx context.Context, podToken []byte, now time.Time) (*se
 		secret.Wipe(out.Token)
 		return nil, err
 	}
-	return &session{client: client, expires: out.ExpiresAt}, nil
+	return &session{client: client, expires: out.ExpiresAt, key: crypto.SHA256Hex(out.Token)[:32]}, nil
 }
 
 // podToken returns the pod's service-account token for the configured

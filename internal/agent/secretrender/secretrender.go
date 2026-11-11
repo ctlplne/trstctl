@@ -852,6 +852,28 @@ func (c *HTTPClient) do(req *http.Request) (*http.Response, error) {
 	return c.client.Do(req)
 }
 
+// EndSession ends the machine session this client presents (A238-L7), so its
+// token stops working now rather than at its expiry. A session that has
+// already ended (expired, revoked, or ended by an earlier try whose answer was
+// lost) is refused 401, which counts as ended.
+func (c *HTTPClient) EndSession(ctx context.Context, idempotencyKey string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.server+"/api/v1/secrets/sessions/self/revoke", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Idempotency-Key", idempotencyKey)
+	resp, err := c.do(req)
+	if err != nil {
+		return errors.New("the control plane could not be reached")
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusUnauthorized:
+		return nil
+	}
+	return fmt.Errorf("the control plane answered %d", resp.StatusCode)
+}
+
 // Fetch reads one secret, with references resolved.
 func (c *HTTPClient) Fetch(ctx context.Context, name string) ([]byte, int, error) {
 	parts := strings.Split(name, "/")

@@ -1849,7 +1849,11 @@ value-free state file, so the bound holds across a plugin restart.
 Trust boundary. The plugin holds no credential of its own and no Kubernetes API access:
 its service account mounts no token and has no RBAC. A pod's token is used only for the
 login, and the session it buys lives in the plugin's memory until it nears expiry or the
-volume goes. Mounting needs `CAP_SYS_ADMIN` and bidirectional mount propagation, so the
+volume goes. When the pod's last volume goes, the plugin ends that session (A238-L7), so its
+token stops working at once rather than at its expiry. Volumes of one pod published within
+one ten-minute login window share a session, which ends with the last of them. If the
+control plane can't be reached then, the unpublish still succeeds and the session lapses at
+its expiry, as does a session from before a plugin restart (the plugin keeps no tokens). Mounting needs `CAP_SYS_ADMIN` and bidirectional mount propagation, so the
 plugin's container is privileged. Whoever controls that container, or the node, can read
 the volumes of the pods on that node, as with any node-local secret delivery. The kubelet
 reaches the plugin over a node-local Unix socket, as with every CSI driver. The control
@@ -2031,6 +2035,17 @@ review-first journey:
    session ledger to confirm completion. Older ledger-only sessions have no
    linked bearer; they remain revocable as historical records.
 
+   A machine session can also end itself (A238-L7): `POST
+   /api/v1/secrets/sessions/self/revoke`, or `trstctl-cli secrets sessions end` run with
+   the session's token, revokes the bearer it is called with. Any machine session may,
+   whatever its scopes (the route takes the computed `secrets:session.self` predicate,
+   which every principal holds in its own tenant and no role or token grants), because
+   the route names no session and so can't end another one.
+   The ledger shows the session revoked by its own principal, and the console's session
+   list says it ended itself. Another credential, such as an operator's API token, isn't a
+   machine session and gets 404. Once ended, the token no longer authenticates, so a retry
+   after a lost answer is refused (401), which a caller can take as ended.
+
 Headless users get the same contract. Keep credential JSON in a permission-restricted
 file or provide it through a protected pipe; do not put credentials in shell history:
 
@@ -2039,6 +2054,7 @@ trstctl-cli secrets login preview -f machine-login.json
 trstctl-cli --idempotency-key workload-login-20260902 secrets login -f machine-login.json
 trstctl-cli secrets sessions list
 trstctl-cli --idempotency-key revoke-synthetic-session-1 secrets sessions revoke SESSION_ID
+TRSTCTL_TOKEN="$SESSION_TOKEN" trstctl-cli --idempotency-key end-ci-session-1 secrets sessions end
 ```
 
 Preview requires `secrets:read` because method configuration is operator metadata.

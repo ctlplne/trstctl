@@ -2226,7 +2226,16 @@ export function Secrets() {
                             <td className="font-medium">{row.principal}</td>
                             <td className="font-mono text-xs">{row.method}</td>
                             <td className="font-mono text-xs">{row.scopes?.join(", ") || "—"}</td>
-                            <td>{row.status}</td>
+                            <td>
+                              {row.status}
+                              {row.status === "revoked" && row.revoked_by && (
+                                <span className="block text-xs text-muted-foreground">
+                                  {row.revoked_by === row.principal
+                                    ? t("secrets.sessions.endedItself")
+                                    : t("secrets.sessions.revokedBy", { subject: row.revoked_by })}
+                                </span>
+                              )}
+                            </td>
                             <td>{formatDate(row.issued_at)}</td>
                             <td>{formatDate(row.expires_at)}</td>
                             {canAdminMethods && (

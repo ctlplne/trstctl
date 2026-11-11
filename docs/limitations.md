@@ -5936,7 +5936,10 @@ lease. Secret volumes for pods (`deploy/kubernetes/csi-secrets.yaml`, CSI driver
 the plugin mounts, with no Kubernetes Secret object, the pod's fsGroup on 0440 files, new
 versions on the kubelet's republish reported as `injected`, the freshness bound across
 plugin restarts, and a file removed once its pod may no longer read it; proven on kind
-against a restricted environment. The plugin is privileged (it mounts) and its node can
+against a restricted environment. A volume's session ends when the pod's last volume is unpublished
+(A238-L7, through `POST /api/v1/secrets/sessions/self/revoke`, which any machine session may
+call on itself); one the plugin can't end then (control plane out of reach, or a session from
+before a plugin restart) lapses at its expiry. The plugin is privileged (it mounts) and its node can
 read the volumes on it; a volume reports `injected` only; the kind proof is a lab run, not
 a CI job yet; on Windows the reload is a command (no signals), a rendered file's mode sets
 its read-only attribute and an explicit, protected DACL (A238-L10: the agent's user and SYSTEM;

@@ -467,6 +467,17 @@ function primeSecretsMocks() {
         revoked_at: "2026-07-01T00:30:00Z",
         revoked_by: "operator-1",
       },
+      {
+        id: "sess-ended-1",
+        principal: "system:serviceaccount:payments:api",
+        method: "kubernetes",
+        scopes: ["secrets:read"],
+        status: "revoked",
+        issued_at: "2026-07-02T00:00:00Z",
+        expires_at: "2026-07-02T01:00:00Z",
+        revoked_at: "2026-07-02T00:20:00Z",
+        revoked_by: "system:serviceaccount:payments:api",
+      },
     ],
   });
   apiMock.revokeMachineSession.mockResolvedValue({
@@ -3247,6 +3258,16 @@ describe("secrets auth-method console (C-S4 / DA-02)", () => {
     expect(within(revokedRow).getByText("revoked")).toBeInTheDocument();
     // Revoked rows carry no revoke action; active rows do.
     expect(within(revokedRow).queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
+  });
+
+  it("says who ended a revoked session, and when it ended itself (A238-L7)", async () => {
+    await openAccessTab();
+    const revokedRow = (await screen.findByText("retired-bot")).closest("tr") as HTMLTableRowElement;
+    expect(within(revokedRow).getByText("Revoked by operator-1")).toBeInTheDocument();
+    const endedRow = screen.getByText("system:serviceaccount:payments:api").closest("tr") as HTMLTableRowElement;
+    expect(within(endedRow).getByText("Ended itself")).toBeInTheDocument();
+    expect(within(endedRow).queryByText(/Revoked by/)).not.toBeInTheDocument();
+    expect(within(endedRow).queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
   });
 
   it("revokes an active session and refreshes the ledger", async () => {

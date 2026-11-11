@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2990 annotated sites across 33 rules. Each row is
+2991 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -108,7 +108,7 @@ not this file.
 | `internal/accessrules/risk.go:22` | a risk category's name matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/accessrules/risk.go:30` | a risk category's name matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/csisecrets/driver.go:64` | the kubelet's request key name, not a credential (CWE-798) |
-| `internal/agent/csisecrets/driver_test.go:423` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/agent/csisecrets/driver_test.go:443` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/discovery/keystore.go:40` | the published Java keystore default, tried as a default; not a credential of this deployment (CWE-798) |
 | `internal/agent/discovery/kubernetes.go:90` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
 | `internal/agent/k8s/client.go:31` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -2059,7 +2059,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (728 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (729 sites)
 
 | Location | Reason |
 |---|---|
@@ -2222,9 +2222,9 @@ not this file.
 | `ee/enterpriseauth/scim_config.go:70` | the operator's own configured CA file (CWE-22) |
 | `ee/managedkeys/signerwiring/tenantkek.go:37` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
 | `ee/managedkeys/signerwiring/wiring.go:141` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
-| `internal/agent/csisecrets/driver_test.go:224` | the test's own temp file (CWE-22) |
-| `internal/agent/csisecrets/driver_test.go:253` | the test's own temp file (CWE-22) |
-| `internal/agent/csisecrets/driver_test.go:390` | the test's own temp file (CWE-22) |
+| `internal/agent/csisecrets/driver_test.go:244` | the test's own temp file (CWE-22) |
+| `internal/agent/csisecrets/driver_test.go:273` | the test's own temp file (CWE-22) |
+| `internal/agent/csisecrets/driver_test.go:410` | the test's own temp file (CWE-22) |
 | `internal/agent/csitrust/driver.go:151` | path is the kubelet's target directory joined with a validated file name (CWE-22) |
 | `internal/agent/csitrust/driver_test.go:120` | the file the driver wrote under this test's temp dir (CWE-22) |
 | `internal/agent/desktop/stock_served_test.go:137` | owned unique task filename under the fixed lab account home (CWE-22) |
@@ -2587,6 +2587,7 @@ not this file.
 | `internal/server/idempotency_protection_wiring_test.go:61` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/kmip_client_registration_served_test.go:163` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/server/lab_openldap_test.go:55` | the test's own temp file (CWE-22) |
+| `internal/server/machine_session_self_end_served_test.go:207` | the test's own temp file (CWE-22) |
 | `internal/server/mcp_authorization_keycloak_test.go:141` | the test's own TempDir audit log (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:193` | what the launched agent wrote in the test's temp dir (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:197` | what the launched agent wrote in the test's temp dir (CWE-22) |

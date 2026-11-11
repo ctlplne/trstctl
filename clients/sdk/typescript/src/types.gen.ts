@@ -10712,6 +10712,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/sessions/self/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End the machine session that presents this request; any machine session may end itself, whatever its scopes */
+        post: operations["revokeOwnMachineSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/sessions/{id}/revoke": {
         parameters: {
             query?: never;
@@ -59710,6 +59727,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MachineSessionList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeOwnMachineSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineSession"];
                 };
             };
             /** @description client error */

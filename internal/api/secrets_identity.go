@@ -3,6 +3,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -941,45 +942,99 @@ func (a *API) revokeMachineSession(w http.ResponseWriter, r *http.Request) {
 		if id == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "session id is required")
 		}
-		session, err := a.secrets.be.Store.GetMachineSession(ctx, tenantID, id)
-		if store.IsNotFound(err) {
-			return 0, nil, errStatus(http.StatusNotFound, "machine session not found")
-		}
-		if err != nil {
-			return 0, nil, err
-		}
-		token, tokenErr := a.secrets.be.Store.GetAPIToken(ctx, tenantID, id)
-		if tokenErr != nil && !store.IsNotFound(tokenErr) {
-			return 0, nil, tokenErr
-		}
-		if tokenErr == nil && token.RevokedAt == nil {
-			// One shared first-writer command denies the bearer before NATS
-			// publication. Its projection also closes the machine-session ledger.
-			if err := a.orch.RevokeAPIToken(ctx, tenantID, id, "machine session revoked"); err != nil {
-				return 0, nil, err
-			}
-		} else if session.Status != store.MachineSessionStatusRevoked {
-			// Pre-bearer ledger rows, or a historically revoked token whose
-			// ledger was left active, have no usable authority to fence.
-			principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-			payload, err := json.Marshal(projections.MachineSessionRevoked{ID: id, RevokedBy: principal.Subject, RevokedAt: time.Now().UTC()})
-			if err != nil {
-				return 0, nil, err
-			}
-			ev, err := a.log.Append(ctx, events.Event{Type: projections.EventMachineSessionRevoked, TenantID: tenantID, Data: payload})
-			if err != nil {
-				return 0, nil, err
-			}
-			if err := projections.New(a.secrets.be.Store).Apply(ctx, ev); err != nil {
-				return 0, nil, err
-			}
-		}
-		updated, err := a.secrets.be.Store.GetMachineSession(ctx, tenantID, id)
-		if err != nil {
-			return 0, nil, err
-		}
-		return http.StatusOK, machineSessionDisplay(updated, time.Now().UTC()), nil
+		return a.endMachineSession(ctx, tenantID, id, "machine session revoked", "machine session not found")
 	})
+}
+
+// revokeOwnMachineSession serves POST /api/v1/secrets/sessions/self/revoke
+// (A238-L7): the machine session that presents the request ends itself. Any
+// session may, whatever its scopes (a CSI volume's session holds only
+// secrets:read and ends itself when the pod's volume goes), because the route
+// ends only the bearer it is called with: it names no session, so a caller
+// can't end another one, and giving up its own authority widens nothing.
+// Another credential (an operator's API token, a browser session) is not a
+// machine session: 404, and it is left as it was. Once ended, the bearer no
+// longer authenticates, so a retry after a lost answer is refused 401 rather
+// than replayed.
+func (a *API) revokeOwnMachineSession(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	if !a.machineSessionLedgerReady() {
+		a.writeProblem(w, machineSessionLedgerDisabledProblem())
+		return
+	}
+	id, ok := a.presentedAPITokenID(r)
+	if !ok {
+		a.writeProblem(w, problem.New(http.StatusNotFound, "no machine session presents this request"))
+		return
+	}
+	a.mutateDurable(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		return a.endMachineSession(ctx, tenantID, id, "machine session ended by itself", "the presented credential is not a machine session")
+	})
+}
+
+// presentedAPITokenID is the ID of the API token the request presents as its
+// bearer, when it presents a live one.
+func (a *API) presentedAPITokenID(r *http.Request) (string, bool) {
+	tok := bearerTokenBytes(r)
+	defer secret.Wipe(tok)
+	if a.store == nil || !bytes.HasPrefix(tok, []byte(apiauth.TokenPrefix)) {
+		return "", false
+	}
+	hash, err := apiauth.HashAPIToken(tok)
+	if err != nil {
+		return "", false
+	}
+	rec, err := a.store.LookupAPITokenByHash(r.Context(), hash)
+	if err != nil || rec.ID == "" {
+		return "", false
+	}
+	return rec.ID, true
+}
+
+// endMachineSession revokes machine session id and its bearer, and returns
+// the session as it now reads. A session already ended reads as it is.
+func (a *API) endMachineSession(ctx context.Context, tenantID, id, reason, notFound string) (int, any, error) {
+	session, err := a.secrets.be.Store.GetMachineSession(ctx, tenantID, id)
+	if store.IsNotFound(err) {
+		return 0, nil, errStatus(http.StatusNotFound, notFound)
+	}
+	if err != nil {
+		return 0, nil, err
+	}
+	token, tokenErr := a.secrets.be.Store.GetAPIToken(ctx, tenantID, id)
+	if tokenErr != nil && !store.IsNotFound(tokenErr) {
+		return 0, nil, tokenErr
+	}
+	if tokenErr == nil && token.RevokedAt == nil {
+		// One shared first-writer command denies the bearer before NATS
+		// publication. Its projection also closes the machine-session ledger.
+		if err := a.orch.RevokeAPIToken(ctx, tenantID, id, reason); err != nil {
+			return 0, nil, err
+		}
+	} else if session.Status != store.MachineSessionStatusRevoked {
+		// Pre-bearer ledger rows, or a historically revoked token whose
+		// ledger was left active, have no usable authority to fence.
+		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		payload, err := json.Marshal(projections.MachineSessionRevoked{ID: id, RevokedBy: principal.Subject, RevokedAt: time.Now().UTC()})
+		if err != nil {
+			return 0, nil, err
+		}
+		ev, err := a.log.Append(ctx, events.Event{Type: projections.EventMachineSessionRevoked, TenantID: tenantID, Data: payload})
+		if err != nil {
+			return 0, nil, err
+		}
+		if err := projections.New(a.secrets.be.Store).Apply(ctx, ev); err != nil {
+			return 0, nil, err
+		}
+	}
+	updated, err := a.secrets.be.Store.GetMachineSession(ctx, tenantID, id)
+	if err != nil {
+		return 0, nil, err
+	}
+	return http.StatusOK, machineSessionDisplay(updated, time.Now().UTC()), nil
 }
 
 // machineAuthMethodOverrideResponse acknowledges a disable/enable overlay

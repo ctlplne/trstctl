@@ -392,7 +392,7 @@ func TestCustomRoleVocabularyLeavesOutWildcardAndMachinePermissions(t *testing.T
 		}
 		vocabulary[p] = true
 	}
-	for _, refused := range []authz.Permission{authz.Wildcard, authz.ApprovalsReview, authz.SecretsMembersManage, authz.AgentsHeartbeat,
+	for _, refused := range []authz.Permission{authz.Wildcard, authz.ApprovalsReview, authz.SecretsMembersManage, authz.SecretsSessionSelf, authz.AgentsHeartbeat,
 		authz.AgentsJobPoll, authz.AgentsJobComplete, authz.AgentsJobReport} {
 		if vocabulary[refused] {
 			t.Fatalf("the custom role vocabulary grants %s", refused)

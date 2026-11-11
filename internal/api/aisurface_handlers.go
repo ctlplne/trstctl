@@ -740,6 +740,8 @@ func mcpExclusion(rt route) string {
 		return "approval decision: an agent never approves or denies a dual-control request"
 	case rt.mutation && rt.perm == authz.CertsIssue:
 		return "privileged certificate mutation outside the lifecycle gate: MCP certificate writes use issue_certificate and rotate_certificate"
+	case rt.perm == authz.SecretsSessionSelf:
+		return "ends the credential presenting the request: a tool call never ends the session it runs under"
 	}
 	return ""
 }

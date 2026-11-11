@@ -6350,6 +6350,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: listMachineAuthMethods",
             "OpenAPI operationId: listMachineSessions",
             "OpenAPI operationId: revokeMachineSession",
+            "OpenAPI operationId: revokeOwnMachineSession",
             "OpenAPI operationId: disableMachineAuthMethod",
             "OpenAPI operationId: enableMachineAuthMethod",
             "CLI command: secrets login preview",
@@ -6358,7 +6359,8 @@ export const canonicalCapabilities = [
             "CLI command: secrets auth-methods disable",
             "CLI command: secrets auth-methods enable",
             "CLI command: secrets sessions list",
-            "CLI command: secrets sessions revoke"
+            "CLI command: secrets sessions revoke",
+            "CLI command: secrets sessions end"
           ]
         }
       },

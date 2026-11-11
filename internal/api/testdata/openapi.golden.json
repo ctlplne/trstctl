@@ -107650,6 +107650,64 @@
         "x-trstctl-permission": "secrets:read"
       }
     },
+    "/api/v1/secrets/sessions/self/revoke": {
+      "post": {
+        "operationId": "revokeOwnMachineSession",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineSession"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "End the machine session that presents this request; any machine session may end itself, whatever its scopes",
+        "x-trstctl-permission": "secrets:session.self"
+      }
+    },
     "/api/v1/secrets/sessions/{id}/revoke": {
       "post": {
         "operationId": "revokeMachineSession",

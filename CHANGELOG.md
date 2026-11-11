@@ -2,6 +2,12 @@
 
 ### Added
 
+- A machine session can end itself, and a CSI secret volume's session ends with the volume (A238-L7):
+  `POST /api/v1/secrets/sessions/self/revoke` (`trstctl-cli secrets sessions end`) revokes the bearer it
+  is called with, whatever the session's scopes, and names no session, so it can't end another one. The
+  CSI node plugin calls it when a pod's last volume is unpublished, so the session's token stops working
+  at once rather than at its expiry; an unreachable control plane never holds up the unpublish. The
+  console's session list says when a session ended itself, and otherwise who revoked it.
 - Rendered secret files can belong to the application's user (A238-L2): a render template's `owner` and
   `group` (names or numeric IDs) make an agent running as root give the file to them before it is renamed
   into place, so the file never appears with another owner, and every new version keeps them. An agent

@@ -393,9 +393,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// workload JWT key list and rotation (803). A171-L1 adds the unblock of
 	// an OAuth app at the provider (804). A235-L3 adds the secrets project
 	// and environment renames (806). A237-L3 adds the scoped sync
-	// replacement (807).
-	if len(out) != 807 {
-		t.Fatalf("OpenAPI operationIds = %d, want 807", len(out))
+	// replacement (807). A238-L7 adds a machine session ending itself (808).
+	if len(out) != 808 {
+		t.Fatalf("OpenAPI operationIds = %d, want 808", len(out))
 	}
 	return out
 }

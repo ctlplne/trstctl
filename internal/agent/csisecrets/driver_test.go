@@ -78,11 +78,17 @@ type controlPlane struct {
 	logins   int
 	reports  []string
 	srv      *httptest.Server
+	// idempotent replays a login's session for the same Idempotency-Key, as
+	// the served login does (the volumes of one pod within one window).
+	idempotent bool
+	replays    map[string]string
+	// ended lists the sessions that ended themselves (A238-L7).
+	ended []string
 }
 
 func newControlPlane(t *testing.T) *controlPlane {
 	cp := &controlPlane{tokens: map[string]string{}, readable: map[string]map[string]bool{},
-		values: map[string]string{}, versions: map[string]int{}, sessions: map[string]string{},
+		values: map[string]string{}, versions: map[string]int{}, sessions: map[string]string{}, replays: map[string]string{},
 		expires: time.Date(2026, 11, 2, 1, 0, 0, 0, time.UTC)}
 	cp.srv = httptest.NewServer(http.HandlerFunc(cp.serve))
 	t.Cleanup(cp.srv.Close)
@@ -120,10 +126,24 @@ func (cp *controlPlane) serve(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		if session, ok := cp.replays[r.Header.Get("Idempotency-Key")]; ok && cp.idempotent {
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": session, "expires_at": cp.expires})
+			return
+		}
 		cp.logins++
 		session := "session-" + strconv.Itoa(cp.logins)
 		cp.sessions[session] = principal
+		cp.replays[r.Header.Get("Idempotency-Key")] = session
 		_ = json.NewEncoder(w).Encode(map[string]any{"token": session, "expires_at": cp.expires})
+	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/secrets/sessions/self/revoke":
+		session := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if _, ok := cp.sessions[session]; !ok || r.Header.Get("Idempotency-Key") == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		delete(cp.sessions, session)
+		cp.ended = append(cp.ended, session)
+		_, _ = w.Write([]byte(`{"status":"revoked"}`))
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/secrets/store/"):
 		principal, ok := cp.sessions[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]
 		if !ok {
@@ -503,4 +523,96 @@ func TestDriverServesTheKubeletSocketA238(t *testing.T) {
 		capabilities.GetCapabilities()[0].GetRpc().GetType() != csi.NodeServiceCapability_RPC_VOLUME_MOUNT_GROUP {
 		t.Fatalf("node capabilities %v err %v", capabilities, err)
 	}
+}
+
+// A238-L7: a volume's session ends when the volume is unpublished, unless
+// another volume still uses it. The volumes of one pod that log in within one
+// window share the session the login replays, so it ends with the last of
+// them; then its token no longer reads anything. A control plane out of reach
+// doesn't hold up the unpublish: the session lapses at its expiry.
+func TestDriverEndsAVolumesSessionWhenItsLastVolumeGoesA238L7(t *testing.T) {
+	cp := newControlPlane(t)
+	cp.idempotent = true
+	cp.tokens["pod-token-1"] = "system:serviceaccount:payments:api"
+	cp.tokens["pod-token-2"] = "system:serviceaccount:payments:worker"
+	for _, principal := range []string{"system:serviceaccount:payments:api", "system:serviceaccount:payments:worker"} {
+		cp.readable[principal] = map[string]bool{"payments/prod/db-password": true}
+	}
+	cp.set("payments/prod/db-password", "pw-one")
+	mounter := &fakeMounter{mounted: map[string]bool{}}
+	var logs bytes.Buffer
+	d := newTestDriver(t, cp, mounter, filepath.Join(t.TempDir(), "state"), &logs)
+	now := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
+	d.now = func() time.Time { return now }
+	ctx := t.Context()
+	volume := func(id, token string) (*csi.NodePublishVolumeRequest, *csi.NodeUnpublishVolumeRequest) {
+		target := filepath.Join(t.TempDir(), id, "mount")
+		req := publishRequest(target, token, "", map[string]string{"secrets": "password=payments/prod/db-password"})
+		req.VolumeId = id
+		return req, &csi.NodeUnpublishVolumeRequest{VolumeId: id, TargetPath: target}
+	}
+	ended := func() []string {
+		cp.mu.Lock()
+		defer cp.mu.Unlock()
+		return append([]string(nil), cp.ended...)
+	}
+
+	// Two volumes of one pod share the session its login replays.
+	publishA, unpublishA := volume("csi-a", "pod-token-1")
+	publishB, unpublishB := volume("csi-b", "pod-token-1")
+	for _, req := range []*csi.NodePublishVolumeRequest{publishA, publishB} {
+		if _, err := d.NodePublishVolume(ctx, req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if logins, _ := cp.take(); logins != 1 {
+		t.Fatalf("two volumes of one pod logged in %d times, want one shared session", logins)
+	}
+
+	// The first volume goes: the other still uses the session.
+	if _, err := d.NodeUnpublishVolume(ctx, unpublishA); err != nil {
+		t.Fatal(err)
+	}
+	if got := ended(); len(got) != 0 {
+		t.Fatalf("unpublishing one of two volumes ended %v", got)
+	}
+	now = now.Add(time.Minute)
+	cp.set("payments/prod/db-password", "pw-two")
+	if _, err := d.NodePublishVolume(ctx, publishB); err != nil {
+		t.Fatalf("the remaining volume lost its session: %v", err)
+	}
+
+	// The last volume goes: the session ends and its token reads nothing.
+	if _, err := d.NodeUnpublishVolume(ctx, unpublishB); err != nil {
+		t.Fatal(err)
+	}
+	if got := ended(); len(got) != 1 || got[0] != "session-1" {
+		t.Fatalf("the last volume's unpublish ended %v, want session-1", got)
+	}
+	cp.mu.Lock()
+	_, live := cp.sessions["session-1"]
+	cp.mu.Unlock()
+	if live {
+		t.Fatal("the ended session still reads")
+	}
+
+	// The control plane is out of reach: the unpublish still succeeds and
+	// says the session lapses at its expiry.
+	publishC, unpublishC := volume("csi-c", "pod-token-2")
+	if _, err := d.NodePublishVolume(ctx, publishC); err != nil {
+		t.Fatal(err)
+	}
+	cp.mu.Lock()
+	cp.down = true
+	cp.mu.Unlock()
+	if _, err := d.NodeUnpublishVolume(ctx, unpublishC); err != nil {
+		t.Fatalf("an unreachable control plane held up the unpublish: %v", err)
+	}
+	if !strings.Contains(logs.String(), "could not be ended; it lapses at its expiry") {
+		t.Fatalf("no warning that the session lapses at its expiry:\n%s", logs.String())
+	}
+	if got := ended(); len(got) != 1 {
+		t.Fatalf("sessions ended while the control plane was down: %v", got)
+	}
+	t.Log("A238L7_SESSION_ENDED_AT_UNPUBLISH_OK")
 }
