@@ -124,6 +124,7 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
                 <div className="flex flex-wrap items-baseline gap-2">
                   <span className="font-medium">{target.name || target.id}</span>
                   <span className="font-mono text-caption text-muted-foreground">{target.id}</span>
+                  <span className="text-caption text-muted-foreground">{targetTypeLabel(target.type)}</span>
                   <span className="text-caption text-muted-foreground">{translateNow("provider.billingSync.cadence", { cadence: target.cadence })}</span>
                 </div>
                 <p className="mt-1 text-sm">
@@ -133,7 +134,10 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
                 </p>
                 {writable ? (
                   <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(event) => void save(event, target.id)}>
-                    <Field label={translateNow("provider.billingSync.companyLabel", { target: target.name || target.id })}>
+                    <Field
+                      label={translateNow("provider.billingSync.companyLabel", { target: target.name || target.id })}
+                      description={target.type === "connectwise" ? translateNow("provider.billingSync.connectwiseCompanyHint") : undefined}
+                    >
                       {(control) => (
                         <Input
                           {...control}
@@ -204,4 +208,16 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
       ) : null}
     </div>
   );
+}
+
+// targetTypeLabel names how a target receives a customer's periods (MSP-3).
+function targetTypeLabel(type: string): string {
+  switch (type) {
+    case "connectwise":
+      return translateNow("provider.billingSync.type.connectwise");
+    case "json":
+      return translateNow("provider.billingSync.type.json");
+    default:
+      return type;
+  }
 }

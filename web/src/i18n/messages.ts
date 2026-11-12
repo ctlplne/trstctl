@@ -1729,6 +1729,18 @@ export const messages = {
     defaultMessage: "No billing system is configured on this deployment (provider.billing_sync.targets).",
     description: "MSP-2: no targets configured.",
   },
+  "provider.billingSync.type.json": {
+    defaultMessage: "Signed JSON push",
+    description: "MSP-3: a generic json billing target.",
+  },
+  "provider.billingSync.type.connectwise": {
+    defaultMessage: "ConnectWise PSA, agreement additions",
+    description: "MSP-3: a ConnectWise PSA billing target.",
+  },
+  "provider.billingSync.connectwiseCompanyHint": {
+    defaultMessage: "The ConnectWise company record ID or its identifier. Usage lands on that company's one active agreement of the configured type.",
+    description: "MSP-3: what to enter as the company in a ConnectWise target.",
+  },
   "provider.billingSync.cadence": {
     defaultMessage: "Pushes {cadence} periods",
     description: "MSP-2: a target's push cadence.",

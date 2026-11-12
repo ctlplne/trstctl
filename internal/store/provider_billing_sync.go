@@ -125,6 +125,28 @@ func (s *Store) BillingSyncPushFor(ctx context.Context, tenantID, targetID strin
 	return out, found, err
 }
 
+// BillingSyncNeighbors reads, for one customer's period in a target,
+// whether an earlier period is still queued and the latest later period
+// already delivered (zero when none): a target whose quantities are absolute
+// takes one customer's periods oldest first and never lets an older period
+// overwrite a newer one (MSP-3).
+func (s *Store) BillingSyncNeighbors(ctx context.Context, tenantID, targetID string, periodStart time.Time) (earlierQueued bool, laterDelivered time.Time, err error) {
+	err = s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var later *time.Time
+		if err := tx.QueryRow(ctx, `SELECT
+			EXISTS (SELECT 1 FROM provider_billing_sync_pushes WHERE tenant_id = $1 AND target_id = $2 AND period_start < $3 AND status = 'queued'),
+			(SELECT max(period_start) FROM provider_billing_sync_pushes WHERE tenant_id = $1 AND target_id = $2 AND period_start > $3 AND status = 'delivered')`,
+			tenantID, targetID, periodStart.UTC()).Scan(&earlierQueued, &later); err != nil {
+			return err
+		}
+		if later != nil {
+			laterDelivered = later.UTC()
+		}
+		return nil
+	})
+	return earlierQueued, laterDelivered, err
+}
+
 // BillingCompanyFor reads the company a customer is mapped to in a target
 // (MSP-2), under the customer's own tenant.
 func (s *Store) BillingCompanyFor(ctx context.Context, tenantID, targetID string) (string, bool, error) {

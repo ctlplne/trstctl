@@ -20,6 +20,8 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/psa"
+	"trstctl.com/trstctl/internal/psa/connectwise"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/secrettext"
 )
@@ -74,6 +76,14 @@ func (d *issuanceDispatcher) handleBillingSync(ctx context.Context, m orchestrat
 	if !mapped || company != push.ExternalCompanyID {
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: customer is no longer mapped to company %q in billing target %q", push.ExternalCompanyID, push.TargetID))
 	}
+	if target.Type == "connectwise" {
+		return d.pushBillingConnectWise(ctx, m, target, push)
+	}
+	return d.pushBillingJSON(ctx, m, target, push)
+}
+
+// pushBillingJSON is the generic signed JSON push (MSP-2).
+func (d *issuanceDispatcher) pushBillingJSON(ctx context.Context, m orchestrator.Message, target config.ProviderBillingTarget, push projections.BillingSyncPushEvent) error {
 	endpoint := strings.TrimSpace(target.Endpoint)
 	client, err := d.billingSyncHTTPClient(target)
 	if err != nil {
@@ -134,6 +144,68 @@ func (d *issuanceDispatcher) handleBillingSync(ctx context.Context, m orchestrat
 		return fmt.Errorf("server: billing target answered status %d", resp.StatusCode)
 	}
 }
+
+// pushBillingConnectWise sets one customer's period as additions of its
+// company's agreement (MSP-3). A quantity there is absolute, so one
+// customer's periods go to the target oldest first, and an older period
+// never overwrites the figures a newer one already set: it is recorded as
+// handled with that reason and nothing is written.
+func (d *issuanceDispatcher) pushBillingConnectWise(ctx context.Context, m orchestrator.Message, target config.ProviderBillingTarget, push projections.BillingSyncPushEvent) error {
+	cw := target.ConnectWise
+	if cw == nil {
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: billing target %q has no connectwise settings", target.ID))
+	}
+	earlierQueued, laterDelivered, err := d.store.BillingSyncNeighbors(ctx, m.TenantID, push.TargetID, push.PeriodStart)
+	if err != nil {
+		return err
+	}
+	if earlierQueued {
+		return orchestrator.DeferDeliveryUntil(errors.New("server: an earlier period of this customer is still being delivered to this target"),
+			time.Now().Add(billingSyncOrderWait))
+	}
+	if !laterDelivered.IsZero() {
+		push.Reason = "nothing written: the period starting " + laterDelivered.Format("2006-01-02") + " already set this customer's quantities"
+		return d.orch.RecordBillingSyncOutcome(ctx, m.TenantID, push, true)
+	}
+	client, err := d.billingSyncHTTPClient(target)
+	if err != nil {
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: billing target endpoint rejected: %w", err))
+	}
+	publicKey, err := resolveDeploymentCredentialRef(cw.PublicKeyRef)
+	if err != nil {
+		return orchestrator.DefiniteNoEffect(errors.New("server: resolve the connectwise target's public_key_ref"))
+	}
+	defer publicKey.Destroy()
+	privateKey, err := resolveDeploymentCredentialRef(cw.PrivateKeyRef)
+	if err != nil {
+		return orchestrator.DefiniteNoEffect(errors.New("server: resolve the connectwise target's private_key_ref"))
+	}
+	defer privateKey.Destroy()
+	psaClient, err := connectwise.New(connectwise.Config{BaseURL: target.Endpoint, CompanyID: cw.CompanyID, ClientID: cw.ClientID,
+		AgreementType: cw.AgreementType, Products: cw.Products}, client,
+		connectwise.Credentials{PublicKey: publicKey.Bytes(), PrivateKey: privateKey.Bytes()})
+	if err != nil {
+		return orchestrator.DefiniteNoEffect(err)
+	}
+	lines := make([]psa.UsageLine, 0, len(push.Lines))
+	for _, line := range push.Lines {
+		lines = append(lines, psa.UsageLine{Meter: line.Meter, Value: line.Value})
+	}
+	out, err := psaClient.PushUsage(ctx, psa.UsagePeriod{CustomerID: m.TenantID, ExternalCompanyID: push.ExternalCompanyID,
+		PeriodStart: push.PeriodStart, PeriodEnd: push.PeriodEnd, Lines: lines, EvidenceDigest: push.EvidenceDigest})
+	if err != nil {
+		if errors.Is(err, psa.ErrBeforeWrite) {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return err
+	}
+	push.ResponseStatus = out.Status
+	return d.orch.RecordBillingSyncOutcome(ctx, m.TenantID, push, true)
+}
+
+// billingSyncOrderWait is how long a period waits for an earlier period of
+// the same customer and target before it is tried again.
+const billingSyncOrderWait = 10 * time.Second
 
 // failBillingSyncTerminal records a period whose delivery failed for good,
 // with the last cause (never a credential), and raises its alert.

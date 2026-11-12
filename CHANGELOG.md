@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- ConnectWise PSA as a billing target (MSP-3, part 1): a `connectwise` target (`provider.billing_sync.targets[].type`,
+  with the site's REST root, the login company, the integration's clientId, the API member's key references, an
+  agreement type and a catalog product per meter) sets each customer's signed period as additions of its company's one
+  active agreement of that type. Everything is resolved before the first write (a missing company, no or two active
+  agreements, or two live additions of a product refuse the period with nothing written); quantities are set, never
+  added to, so a retry cannot double a line; one customer's periods go oldest first and an older period never
+  overwrites a newer one. The Provider console names each target's kind and what a ConnectWise company ID is.
 - Billing-sync pushes for the Provider plane (MSP-2, part 2): on the leader, each closed period of a billing
   target's cadence is signed (the existing usage evidence, reconciled and signed with the audit key) and pushed once
   per mapped customer to its company: one HMAC-signed JSON POST with the current certificates, agents and stored

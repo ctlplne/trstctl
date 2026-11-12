@@ -105,4 +105,31 @@ describe("Provider billing systems (MSP-2)", () => {
     renderPanel(true);
     expect(await screen.findByText(/No billing system is configured/)).toBeInTheDocument();
   });
+
+  it("names each target's kind and tells the operator what a ConnectWise company is (MSP-3)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/provider/v1/tenants/alpha/billing-companies")
+          return json({
+            targets: [
+              { id: "cw", name: "ConnectWise", type: "connectwise", cadence: "monthly" },
+              { id: "psa", name: "Main PSA", type: "json", cadence: "daily" },
+            ],
+            companies: [],
+          });
+        if (url === "/provider/v1/tenants/alpha/billing-sync") return json({ pushes: [] });
+        throw new Error("unexpected path " + url);
+      }),
+    );
+    renderPanel(true);
+    const list = await screen.findByRole("list", { name: "Configured billing systems" });
+    const [connectwise, generic] = within(list).getAllByRole("listitem");
+    expect(within(connectwise).getByText("ConnectWise PSA, agreement additions")).toBeInTheDocument();
+    expect(within(generic).getByText("Signed JSON push")).toBeInTheDocument();
+    expect(within(connectwise).getByRole("textbox", { name: "Company ID in ConnectWise" })).toHaveAccessibleDescription(
+      "The ConnectWise company record ID or its identifier. Usage lands on that company's one active agreement of the configured type.",
+    );
+    expect(within(generic).getByRole("textbox", { name: "Company ID in Main PSA" })).not.toHaveAccessibleDescription();
+  });
 });

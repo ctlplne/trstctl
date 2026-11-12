@@ -2169,8 +2169,11 @@ never live in the API process. What you can do end to end against the running bi
   each closed, signed usage period (current certificates, agents, secrets and
   the evidence JWS) once through the outbox, holds an unsignable one with an
   alert, and records every push. The core push is the generic signed JSON
-  target, proven against a verifying stand-in receiver; the PSA and RMM
-  connectors (MSP-3 to MSP-15) and live vendor runs are what comes next. The
+  target, proven against a verifying stand-in receiver. ConnectWise PSA
+  (MSP-3) sets the figures as agreement additions of the customer's company,
+  proven against a stand-in written from ConnectWise's public REST
+  descriptions; a live ConnectWise site, the alert tickets of MSP-3 and the
+  other PSA and RMM connectors (MSP-4 to MSP-15) are what comes next. The
   sweep looks back three periods, so a period older than that is not pushed
   automatically.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts

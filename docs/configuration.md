@@ -1523,6 +1523,49 @@ signable); a delivery that exhausts its retries is recorded failed with one
 `billing_sync.failed` alert (when a request was sent, its outcome is reported as
 unknown). `GET /provider/v1/tenants/{id}/billing-sync` lists a customer's pushes.
 
+A `connectwise` target (MSP-3) puts a customer's figures into ConnectWise PSA as
+additions of its company's agreement instead of a JSON push:
+
+```json
+{
+  "id": "cw",
+  "name": "ConnectWise",
+  "type": "connectwise",
+  "endpoint": "https://api-na.myconnectwise.net/v4_6_release/apis/3.0",
+  "connectwise": {
+    "company_id": "your_login_company",
+    "client_id": "6c1a3e1e-58e3-4d1b-9f0e-3b8f5a0c2d71",
+    "public_key_ref": "env:TRSTCTL_CW_PUBLIC_KEY",
+    "private_key_ref": "file:/run/secrets/cw-private-key",
+    "agreement_type": "Managed PKI",
+    "products": {"certificates_current": "TRST-CERT", "agents": "TRST-AGENT", "secrets_stored": "TRST-SECRET"}
+  }
+}
+```
+
+`endpoint` is the site's REST root (`https://{host}/{codebase}/apis/3.0`);
+`company_id` is the company you sign in to ConnectWise with; `client_id` is the
+integration's clientId GUID; `public_key_ref` and `private_key_ref` name an API
+member's keys (`file:` or `env:`, resolved for each delivery and wiped after it;
+`signing_key_ref` and `token_ref` apply to `json` targets only). The API member
+needs to read companies and agreements and to add and edit agreement additions.
+`agreement_type` and each product identifier may not contain quotes, because they
+are sent inside ConnectWise conditions queries. A customer's company in this target
+is its ConnectWise company record ID or its identifier.
+
+For each signable period, delivery resolves that company, its one active
+(uncancelled) agreement of `agreement_type`, and each configured product's one
+uncancelled addition, all before writing anything: a missing or deleted company,
+no active agreement or more than one, or two live additions of one product refuses
+the period with nothing written (retried, then recorded as not delivered). Then each
+product's addition is created (billable, effective from the period start) or its
+quantity is set to the period's figure. A meter with no reading in a signed period
+counts 0; a meter without a product is not pushed. A quantity is set, never added
+to, so a retry after a lost answer cannot double a line. One customer's periods go
+to a `connectwise` target oldest first, and an older period that arrives after a
+newer one was delivered writes nothing (its record says the newer period already
+set the quantities).
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

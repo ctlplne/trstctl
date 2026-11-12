@@ -5,9 +5,11 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -39,13 +41,51 @@ type ProviderBillingTarget struct {
 	AllowPrivateEndpoint  bool     `json:"allow_private_endpoint,omitempty"`
 	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
 	PrivateEgressCIDRs    []string `json:"private_egress_cidrs,omitempty"`
+	// ConnectWise configures a "connectwise" target (MSP-3): each customer's
+	// figures land as additions of its company's one active agreement of
+	// AgreementType. Endpoint is the site's REST root,
+	// https://{host}/{codebase}/apis/3.0.
+	ConnectWise *ConnectWiseBillingTarget `json:"connectwise,omitempty"`
 }
+
+// ConnectWiseBillingTarget is a ConnectWise PSA site the Provider pushes
+// usage to.
+type ConnectWiseBillingTarget struct {
+	// CompanyID is the PSA login company the API member belongs to (the
+	// first part of its Basic credentials), not a customer's company.
+	CompanyID string `json:"company_id"`
+	// ClientID is the integration's clientId: it identifies the
+	// integration to ConnectWise; it does not authenticate.
+	ClientID string `json:"client_id"`
+	// PublicKeyRef and PrivateKeyRef name the API member's keys (file: or
+	// env:), resolved for each delivery.
+	PublicKeyRef  string `json:"public_key_ref"`
+	PrivateKeyRef string `json:"private_key_ref"`
+	// AgreementType names the agreement type each mapped company has one
+	// active agreement of.
+	AgreementType string `json:"agreement_type"`
+	// Products maps a meter (certificates_current, agents, secrets_stored)
+	// to the catalog identifier of its addition. A meter without a product
+	// is not pushed.
+	Products map[string]string `json:"products"`
+}
+
+// BillingSyncMeters are the meters a period push carries.
+var BillingSyncMeters = []string{"agents", "certificates_current", "secrets_stored"}
+
+var (
+	connectWiseCompanyPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
+	connectWiseClientPattern  = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	// connectWiseConditionValue is what may sit inside a quoted conditions
+	// value: the published grammar shows no escaping.
+	connectWiseConditionValue = regexp.MustCompile(`^[A-Za-z0-9 _.,:;/()&@#+-]{1,100}$`)
+)
 
 // BillingTargetIDPattern is a target ID: lowercase, digits and dashes.
 var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
-var ProviderBillingTargetTypes = map[string]struct{}{"json": {}}
+var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -77,7 +117,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json, connectwise)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -91,15 +131,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		case u.User != nil:
 			errs = append(errs, fmt.Errorf("%s.endpoint must not carry credentials; use token_ref", where))
 		}
-		if strings.TrimSpace(t.SigningKeyRef) == "" {
-			errs = append(errs, fmt.Errorf("%s.signing_key_ref is required: every push is HMAC-signed so the receiver can refuse a changed or replayed period", where))
-		} else if err := validateDeploymentCredentialRef(t.SigningKeyRef); err != nil {
-			errs = append(errs, fmt.Errorf("%s.signing_key_ref: %w", where, err))
-		}
-		if strings.TrimSpace(t.TokenRef) != "" {
-			if err := validateDeploymentCredentialRef(t.TokenRef); err != nil {
-				errs = append(errs, fmt.Errorf("%s.token_ref: %w", where, err))
-			}
+		switch t.Type {
+		case "json":
+			errs = append(errs, validateJSONBillingTarget(where, t)...)
+		case "connectwise":
+			errs = append(errs, validateConnectWiseBillingTarget(where, t)...)
 		}
 		switch t.EffectiveCadence() {
 		case "monthly", "daily":
@@ -108,6 +144,63 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		if t.AllowPrivateEndpoint && len(t.PrivateEgressCIDRs) == 0 {
 			errs = append(errs, errors.New(where+".private_egress_cidrs must name the approved private destinations when allow_private_endpoint is set"))
+		}
+	}
+	return errs
+}
+
+func validateJSONBillingTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) == "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref is required: every push is HMAC-signed so the receiver can refuse a changed or replayed period", where))
+	} else if err := validateDeploymentCredentialRef(t.SigningKeyRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref: %w", where, err))
+	}
+	if strings.TrimSpace(t.TokenRef) != "" {
+		if err := validateDeploymentCredentialRef(t.TokenRef); err != nil {
+			errs = append(errs, fmt.Errorf("%s.token_ref: %w", where, err))
+		}
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	return errs
+}
+
+func validateConnectWiseBillingTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; a connectwise target authenticates with its API member's keys", where))
+	}
+	cw := t.ConnectWise
+	if cw == nil {
+		return append(errs, fmt.Errorf("%s.connectwise is required for a connectwise target", where))
+	}
+	where += ".connectwise"
+	if !connectWiseCompanyPattern.MatchString(cw.CompanyID) {
+		errs = append(errs, fmt.Errorf("%s.company_id must be the PSA login company (1-64 letters, digits, dots, dashes or underscores)", where))
+	}
+	if !connectWiseClientPattern.MatchString(cw.ClientID) {
+		errs = append(errs, fmt.Errorf("%s.client_id must be the integration's clientId GUID", where))
+	}
+	for _, ref := range []struct{ name, value string }{{"public_key_ref", cw.PublicKeyRef}, {"private_key_ref", cw.PrivateKeyRef}} {
+		if err := validateDeploymentCredentialRef(ref.value); err != nil {
+			errs = append(errs, fmt.Errorf("%s.%s: %w", where, ref.name, err))
+		}
+	}
+	if !connectWiseConditionValue.MatchString(cw.AgreementType) {
+		errs = append(errs, fmt.Errorf("%s.agreement_type must be 1-100 letters, digits, spaces or common punctuation without quotes", where))
+	}
+	if len(cw.Products) == 0 {
+		errs = append(errs, fmt.Errorf("%s.products must map at least one meter (%s) to a catalog product", where, strings.Join(BillingSyncMeters, ", ")))
+	}
+	for _, meter := range slices.Sorted(maps.Keys(cw.Products)) {
+		product := cw.Products[meter]
+		if !slices.Contains(BillingSyncMeters, meter) {
+			errs = append(errs, fmt.Errorf("%s.products names %q, which is not a pushed meter (%s)", where, meter, strings.Join(BillingSyncMeters, ", ")))
+		}
+		if !connectWiseConditionValue.MatchString(product) {
+			errs = append(errs, fmt.Errorf("%s.products.%s must be a catalog identifier of 1-100 letters, digits, spaces or common punctuation without quotes", where, meter))
 		}
 	}
 	return errs
