@@ -19301,6 +19301,8 @@ export interface components {
         EventProtectionStatus: {
             /** Format: date-time */
             activated_at?: string;
+            /** @description The operator's audit retention floor: an offboarded tenant's key is kept at least this long after the offboard (Go duration; 0s when off). */
+            audit_retention_floor: string;
             custody_configured: boolean;
             legacy_events_readable: boolean;
             next_step: string;

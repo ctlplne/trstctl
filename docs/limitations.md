@@ -2206,8 +2206,13 @@ a different retention for the same registration is refused before any write.
 From activation on, the tenant's sensitive event fields (the privacy catalog's
 classes) are sealed under its key in the event log, SQL backups, read-model
 snapshots and audit archives. Offboarding the tenant (the Provider plane's
-offboard) queues destruction; after the retention window a bounded worker
-removes the key and records a signed destruction record. Envelopes, hashes and
+offboard) queues destruction; after the retention window, and never before the
+operator's audit retention floor (`privacy.event_protection.audit_retention_floor`,
+a year by default, OD-11) has passed since the offboard, a bounded worker
+removes the key and records a signed destruction record; the floor is read at
+removal time, and the hold clearance written before the removal records it
+when it kept the key past the tenant's own window. A retained legal hold
+blocks the offboard itself until it is released. Envelopes, hashes and
 signatures stay. A served end-to-end test proves the result: after the
 destruction, an operator rebuild and a restore of a backup taken before it both
 show the tenant's sensitive fields as erased and its SQL rows absent, a signed

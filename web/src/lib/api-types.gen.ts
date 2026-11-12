@@ -5480,6 +5480,7 @@ export interface EventProtectionRequest {
 
 export interface EventProtectionStatus {
   activated_at?: string;
+  audit_retention_floor: string;
   custody_configured: boolean;
   legacy_events_readable: boolean;
   next_step: string;

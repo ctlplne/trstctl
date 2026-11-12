@@ -26098,6 +26098,10 @@
             "format": "date-time",
             "type": "string"
           },
+          "audit_retention_floor": {
+            "description": "The operator's audit retention floor: an offboarded tenant's key is kept at least this long after the offboard (Go duration; 0s when off).",
+            "type": "string"
+          },
           "custody_configured": {
             "type": "boolean"
           },
@@ -26134,6 +26138,7 @@
           "registration_identity",
           "custody_configured",
           "legacy_events_readable",
+          "audit_retention_floor",
           "next_step"
         ],
         "type": "object"

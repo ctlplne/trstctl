@@ -7584,6 +7584,7 @@ EventProtectionStatus = TypedDict(
     'EventProtectionStatus',
     {
         'activated_at': str,
+        'audit_retention_floor': str,
         'custody_configured': bool,
         'legacy_events_readable': bool,
         'next_step': str,

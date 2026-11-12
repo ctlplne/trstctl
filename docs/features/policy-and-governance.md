@@ -1098,11 +1098,16 @@ retention for the same registration is refused with 409 before anything is writt
 From activation on, sensitive fields in new events, SQL backups, read-model snapshots
 and audit archives are sealed under the tenant key. Offboarding the tenant queues
 destruction; after the retention window a bounded worker removes the key and records
-a signed destruction record. A rebuild or a restore of an older backup then shows the
-fields as erased, and audit exports taken earlier still verify offline. Events
-recorded before activation stay readable. The CLI exposes `privacy event-protection
-status`, `preview` and `enable`, and the console's `/privacy` screen has an
-**Event-field protection** panel. See the
+a signed destruction record. The operator's audit retention floor
+(`privacy.event_protection.audit_retention_floor`, a year by default) keeps the key,
+and so the tenant's audit archives, history and backups, at least that long after the
+offboard even when the tenant chose a shorter window, and the hold clearance written
+before the removal records the floor's end. A legal hold still wins: a tenant with a
+retained hold cannot be offboarded until it is released. A rebuild or a restore of an
+older backup then shows the fields as erased, and audit exports taken earlier still
+verify offline. Events recorded before activation stay readable. The CLI exposes
+`privacy event-protection status`, `preview` and `enable`, and the console's
+`/privacy` screen has an **Event-field protection** panel. See the
 [tenant offboarding boundary](../limitations.md#tenant-offboarding-boundary) for the
 exact proof and its limits.
 

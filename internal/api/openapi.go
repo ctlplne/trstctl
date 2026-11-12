@@ -5357,8 +5357,9 @@ func componentSchemas() map[string]*Schema {
 		"requested_at":           timestamp(),
 		"activated_at":           timestamp(),
 		"legacy_events_readable": {Type: "boolean"},
+		"audit_retention_floor":  {Type: "string", Description: "The operator's audit retention floor: an offboarded tenant's key is kept at least this long after the offboard (Go duration; 0s when off)."},
 		"next_step":              str(),
-	}, "state", "registration_identity", "custody_configured", "legacy_events_readable", "next_step")
+	}, "state", "registration_identity", "custody_configured", "legacy_events_readable", "audit_retention_floor", "next_step")
 	eventProtectionPlan := object(map[string]*Schema{
 		"capability":               str(),
 		"operation":                str(),

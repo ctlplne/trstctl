@@ -111,12 +111,24 @@ func newEventKeyDestructionHandler(runtime *eventProtectionRuntime, st *store.St
 	if runtime == nil || runtime.custody == nil || runtime.authority == nil || st == nil || record == nil {
 		return nil, errors.New("server: event key destruction receiver is incomplete")
 	}
-	destroy := eventprivacy.DestructionReceiver{Policy: runtime.policy, Claims: st, Guard: st, Custody: runtime.custody, Authority: runtime.authority, Record: record}
+	destroy := eventprivacy.DestructionReceiver{RetentionFloor: runtime.retentionFloor, Policy: runtime.policy, Claims: st, Guard: st, Custody: runtime.custody, Authority: runtime.authority, Record: record}
 	return orchestrator.HandlerFunc(func(ctx context.Context, message orchestrator.Message) error {
 		claim, err := parseEventKeyDestructionMessage(message)
 		if err != nil {
 			return orchestrator.DefiniteNoEffect(err)
 		}
-		return destroy.Destroy(ctx, claim)
+		err = destroy.Destroy(ctx, claim)
+		var floor *eventprivacy.RetentionFloorError
+		switch {
+		case errors.As(err, &floor):
+			// Nothing was removed: wait for the operator's audit retention
+			// floor (OD-11) without spending the retry budget.
+			return orchestrator.DeferDeliveryUntil(err, floor.Until)
+		case errors.Is(err, eventprivacy.ErrRetentionHold):
+			// A legal hold wins: nothing was removed, so wait for its release
+			// without spending the retry budget a long hold would exhaust.
+			return orchestrator.DeferDelivery(err)
+		}
+		return err
 	}), nil
 }

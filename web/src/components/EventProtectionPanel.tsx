@@ -104,6 +104,14 @@ export function EventProtectionPanel() {
                 <dd className="font-mono">{status.retention}</dd>
               </div>
             ) : null}
+            <div>
+              <dt className="text-caption text-muted-foreground">{t("privacy.eventProtection.floorLabel")}</dt>
+              <dd>
+                {status.audit_retention_floor && status.audit_retention_floor !== "0s"
+                  ? t("privacy.eventProtection.floorOn", { floor: status.audit_retention_floor })
+                  : t("privacy.eventProtection.floorOff")}
+              </dd>
+            </div>
             {status.activated_at ? (
               <div>
                 <dt className="text-caption text-muted-foreground">{t("privacy.eventProtection.activatedLabel")}</dt>

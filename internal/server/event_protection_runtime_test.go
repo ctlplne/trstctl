@@ -31,6 +31,9 @@ func eventProtectionRuntimeConfigFixture(t *testing.T) *config.Config {
 	cfg.Audit.ArchiveDir = filepath.Join(base, "archive")
 	cfg.Backup.Directory = filepath.Join(base, "backups")
 	cfg.Privacy.EventProtection.KeyDirectory = filepath.Join(base, "independent-keys")
+	// These proofs use second-scale tenant retention windows; the operator's
+	// audit retention floor (OD-11, a year by default) has its own proofs.
+	cfg.Privacy.EventProtection.AuditRetentionFloor = "0s"
 	return cfg
 }
 

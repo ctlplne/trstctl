@@ -63,7 +63,11 @@ type EventProtectionStatus struct {
 	RequestedAt          *time.Time `json:"requested_at,omitempty"`
 	ActivatedAt          *time.Time `json:"activated_at,omitempty"`
 	LegacyEventsReadable bool       `json:"legacy_events_readable"`
-	NextStep             string     `json:"next_step"`
+	// AuditRetentionFloor is the operator's audit retention floor (OD-11): an
+	// offboarded tenant's key is kept at least this long after the offboard,
+	// whatever shorter retention it chose. "0s" when the operator turned it off.
+	AuditRetentionFloor string `json:"audit_retention_floor"`
+	NextStep            string `json:"next_step"`
 }
 
 // EventProtectionPlan follows the shared effect-free preview contract.

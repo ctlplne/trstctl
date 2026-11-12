@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -26,6 +27,8 @@ type eventProtectionRuntime struct {
 	custody    *eventprotect.FileAuthority
 	authority  *eventprivacy.DestructionAuthority
 	probeSlots chan struct{}
+	// retentionFloor is the operator's audit retention floor (OD-11).
+	retentionFloor time.Duration
 }
 
 func newEventProtectionRuntime(cfg *config.Config, st *store.Store, key *jose.SigningKey, extraBackupRoots ...string) (*eventProtectionRuntime, error) {
@@ -47,7 +50,11 @@ func newEventProtectionRuntime(cfg *config.Config, st *store.Store, key *jose.Si
 			return nil, fmt.Errorf("server: load independently pinned event evidence verification keys: %w", err)
 		}
 	}
-	r := &eventProtectionRuntime{policy: eventprivacy.SourcePolicy{Trust: key.JWKS(), VerificationKeys: verification}, probeSlots: make(chan struct{}, 1)}
+	floor, err := cfg.Privacy.EventProtection.AuditRetentionFloorDuration()
+	if err != nil {
+		return nil, err
+	}
+	r := &eventProtectionRuntime{policy: eventprivacy.SourcePolicy{Trust: key.JWKS(), VerificationKeys: verification}, probeSlots: make(chan struct{}, 1), retentionFloor: floor}
 	r.admission = &eventprivacy.SourceAdmission{Guard: st, Policy: r.policy}
 	r.reader = &eventprivacy.SourceKeys{Policy: r.policy}
 	if cfg.Privacy.EventProtection.KeyDirectory != "" {

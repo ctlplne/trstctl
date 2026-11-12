@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- An audit retention floor for offboarded tenants' event keys (OD-11): `privacy.event_protection.audit_retention_floor`
+  (`TRSTCTL_PRIVACY_EVENT_PROTECTION_AUDIT_RETENTION_FLOOR`, a year by default, `0s` off, at most ten years) keeps an
+  offboarded tenant's key, and so its audit archives, event history and backups readable, at least that long after the
+  offboard even when the tenant chose a shorter retention window. Waiting for it spends none of the destruction's retry
+  budget, and the hold clearance written before the removal records `retention_floor_until` and
+  `retention_floor_seconds` when the floor kept the key. A legal hold still wins; a hold refusal at removal time now
+  also waits without spending the retry budget instead of exhausting it.
 - Tenant and deployment KEKs under a cloud KMS key (OD-10): a `kms` wrapper kind the isolated signer keeps as an
   AES-256 wrapper key that an AWS KMS, Google Cloud KMS or Azure Key Vault key wraps through the KMS wrap adapter
   (`kms_wrappers` and `kms_wrap_command` in the signer's tenant KEK file; the wrapped key file is created on first

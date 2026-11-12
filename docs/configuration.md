@@ -1224,6 +1224,21 @@ The directory must
 remain available until the source and its workers have stopped; changing custody
 requires a restart.
 
+`privacy.event_protection.audit_retention_floor`
+(`TRSTCTL_PRIVACY_EVENT_PROTECTION_AUDIT_RETENTION_FLOOR`) is the operator's audit
+retention floor (OD-11): an offboarded tenant's key is never destroyed sooner than
+this after the offboard, whatever shorter retention window the tenant chose, so its
+audit archives, event history and backups stay readable that long. It defaults to a
+year (`8760h`); `0s` turns it off; at most ten years. It is applied when the key
+would be destroyed (a change takes effect at the next restart), so raising it also
+delays destructions still waiting. Waiting for it
+spends none of the destruction's retry budget. When the floor kept a key past the
+tenant's own window, the public hold clearance written just before the removal
+(`tenant.event_protection.holds_cleared`) records `retention_floor_until` and
+`retention_floor_seconds`. A legal hold still wins: a protected tenant with a
+retained legal hold cannot be offboarded until the hold is released, and the
+destruction checks the holds again before the removal.
+
 For audit-signer rotation, `privacy.event_protection.verification_keys_file`
 (`TRSTCTL_PRIVACY_EVENT_PROTECTION_VERIFICATION_KEYS_FILE`) names an independently
 pinned public RSA JWKS file. It defaults to empty. Use an absolute path without

@@ -22,6 +22,7 @@ const notEnabled = {
   registration_identity: "registration-1",
   custody_configured: true,
   legacy_events_readable: true,
+  audit_retention_floor: "8760h0m0s",
   next_step: "Preview, then enable, with the retention window your policy requires.",
 };
 
@@ -93,6 +94,19 @@ describe("A233 event-field protection panel", () => {
     await waitFor(() => expect(apiMock.enableEventProtection).toHaveBeenCalledWith({ registration_identity: "registration-1", retention: "720h" }));
     expect(await screen.findByText("Preparing the tenant key")).toBeInTheDocument();
     expect(apiMock.eventProtectionStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the operator's audit retention floor, and says when it is off (OD-11)", async () => {
+    apiMock.eventProtectionStatus.mockResolvedValueOnce(notEnabled);
+    const user = userEvent.setup();
+    const view = renderPanel();
+    await user.click(screen.getByText("Event-field protection (crypto-shred)"));
+    expect(await screen.findByText("8760h0m0s after offboarding at least; the longer of this and your retention window applies")).toBeInTheDocument();
+    view.unmount();
+    apiMock.eventProtectionStatus.mockResolvedValueOnce({ ...notEnabled, audit_retention_floor: "0s" });
+    renderPanel();
+    await user.click(screen.getByText("Event-field protection (crypto-shred)"));
+    expect(await screen.findByText("Off: your retention window alone decides")).toBeInTheDocument();
   });
 
   it("keeps enable disabled while the preview names a blocker", async () => {

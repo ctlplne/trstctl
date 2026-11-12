@@ -5,6 +5,7 @@ package eventprivacy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"trstctl.com/trstctl/internal/eventprotect"
@@ -25,6 +26,13 @@ type DestructionCustody interface {
 }
 
 type DestructionReceiver struct {
+	// RetentionFloor is the operator's audit retention floor (OD-11): a key
+	// is not destroyed sooner than this after the offboard, whatever shorter
+	// window the tenant chose. Zero turns it off. The hold clearance records
+	// it when it kept the key past the tenant's window.
+	RetentionFloor time.Duration
+	// Now is the receiver's clock; nil means time.Now.
+	Now       func() time.Time
 	Policy    SourcePolicy
 	Claims    DestructionClaims
 	Guard     TenantGuard
@@ -35,6 +43,38 @@ type DestructionReceiver struct {
 	// assembled SQL/projection/backup order. It must verify the private current
 	// claim grant; no event-type-only deleted-tenant bypass is permitted.
 	Record func(context.Context, events.Event) (events.Event, error)
+}
+
+// ErrRetentionFloor means the operator's audit retention floor still keeps
+// the key (OD-11); RetentionFloorError says until when.
+var ErrRetentionFloor = errors.New("event privacy: the audit retention floor keeps the key")
+
+// RetentionFloorError is a key destruction the retention floor postpones
+// until Until.
+type RetentionFloorError struct{ Until time.Time }
+
+func (e *RetentionFloorError) Error() string {
+	return ErrRetentionFloor.Error() + " until " + e.Until.UTC().Format(time.RFC3339)
+}
+
+func (e *RetentionFloorError) Is(target error) bool { return target == ErrRetentionFloor }
+
+// retentionFloor is when the floor lets this key go and whether it keeps the
+// key past the tenant's own window at all. The floor counts whole seconds.
+func (receiver DestructionReceiver) retentionFloor(request eventprotect.DestructionRequest) (time.Time, int64, bool) {
+	seconds := int64(receiver.RetentionFloor / time.Second)
+	if seconds <= 0 {
+		return time.Time{}, 0, false
+	}
+	until := request.OffboardedAt.Add(time.Duration(seconds) * time.Second)
+	return until, seconds, until.After(request.NotBefore)
+}
+
+func (receiver DestructionReceiver) now() time.Time {
+	if receiver.Now != nil {
+		return receiver.Now()
+	}
+	return time.Now()
 }
 
 func DestructionEventID(request eventprotect.DestructionRequest) string {
@@ -72,7 +112,14 @@ func (receiver DestructionReceiver) Destroy(ctx context.Context, claim Destructi
 				if life.HoldClearance != nil {
 					return nil
 				}
-				wire, err := json.Marshal(HoldClearance{Request: claim.Command})
+				body := HoldClearance{Request: claim.Command}
+				if until, seconds, applies := receiver.retentionFloor(claim.Command); applies {
+					if receiver.now().Before(until) {
+						return &RetentionFloorError{Until: until}
+					}
+					body.RetentionFloorUntil, body.RetentionFloorSeconds = &until, seconds
+				}
+				wire, err := json.Marshal(body)
 				if err != nil {
 					return err
 				}

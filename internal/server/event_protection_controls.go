@@ -58,7 +58,8 @@ func (c *eventProtectionControls) Status(ctx context.Context, tenantID string) (
 	status := api.EventProtectionStatus{
 		State: api.EventProtectionNotEnabled, RegistrationIdentity: life.Registration.ID,
 		CustodyConfigured: c.runtime.custody != nil, LegacyEventsReadable: true,
-		NextStep: "Preview, then enable, with the retention window your policy requires.",
+		AuditRetentionFloor: c.runtime.retentionFloor.String(),
+		NextStep:            "Preview, then enable, with the retention window your policy requires.",
 	}
 	if !status.CustodyConfigured {
 		status.NextStep = "An operator sets privacy.event_protection.key_directory before a tenant can enable protection."
@@ -144,6 +145,11 @@ func (c *eventProtectionControls) plan(ctx context.Context, tenantID string, req
 		plan.Blockers = append(plan.Blockers, "requested_with_different_policy: this registration already has a protection request")
 	case life.Request != nil:
 		plan.Blockers = append(plan.Blockers, "already_requested: this registration already has this protection request")
+	}
+	if floor := c.runtime.retentionFloor; floor > retention {
+		// OD-11: the operator's floor keeps the key longer than this window.
+		plan.Warnings = append(plan.Warnings, "The operator's audit retention floor keeps an offboarded tenant's key "+floor.String()+
+			" after the offboard, longer than this retention window; the longer of the two applies.")
 	}
 	plan.Ready = len(plan.Blockers) == 0
 	return plan, request, nil

@@ -28911,6 +28911,18 @@ export const messages = {
     defaultMessage: "Not configured by the operator",
     description: "A233: no key directory is configured, so the tenant cannot enable protection.",
   },
+  "privacy.eventProtection.floorLabel": {
+    defaultMessage: "Operator's audit retention floor",
+    description: "OD-11: the operator's minimum time an offboarded tenant's key is kept.",
+  },
+  "privacy.eventProtection.floorOn": {
+    defaultMessage: "{floor} after offboarding at least; the longer of this and your retention window applies",
+    description: "OD-11: the operator's floor is set.",
+  },
+  "privacy.eventProtection.floorOff": {
+    defaultMessage: "Off: your retention window alone decides",
+    description: "OD-11: the operator turned the floor off.",
+  },
   "privacy.eventProtection.retentionLabel": {
     defaultMessage: "Retention window",
     description: "A233: how long after offboarding the tenant key is kept before destruction.",
