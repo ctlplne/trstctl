@@ -19,7 +19,7 @@ import { useApiQuery } from "@/lib/query";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 
 import { ADCSFields, parseADCSProbeSuffixes } from "./SourceSetupADCSFields";
-import { SecretStoreFields, isSecretStoreProvider, secretStoreScope, secretStoreScopeProblems } from "./SourceSetupSecretStoreFields";
+import { SecretStoreFields, isSecretStoreProvider, secretStoreScope, secretStoreScopeProblems, secretStoreTokenRef } from "./SourceSetupSecretStoreFields";
 
 import {
   MachineSourceFields,
@@ -92,6 +92,12 @@ const secretFieldPaths = [
   "providers[].user_codespaces",
   "providers[].group",
   "providers[].instance",
+  "providers[].client_id",
+  "providers[].client_secret_ref",
+  "providers[].account",
+  "providers[].login",
+  "providers[].api_key_ref",
+  "providers[].identity_endpoint",
 ] as const;
 
 /** This is the deliberate React adapter side of the server-owned source
@@ -210,6 +216,12 @@ const setupSchema = z
     githubUserCodespaces: z.boolean(),
     group: z.string().trim(),
     gitlabInstance: z.boolean(),
+    clientID: z.string().trim(),
+    clientSecretRef: z.string().trim(),
+    conjurAccount: z.string().trim(),
+    conjurLogin: z.string().trim(),
+    apiKeyRef: z.string().trim(),
+    identityEndpoint: z.string().trim(),
     allowPrivateEndpoint: z.boolean(),
     privateEgressCIDRs: z.string(),
     adcsURL: z.string().trim(),
@@ -340,7 +352,8 @@ const setupSchema = z
       requireField(ctx, value.tokenRef, "tokenRef", translateNow("discovery.setup.validation.tokenRef"));
     }
     if (isSecretStoreProvider(value.provider)) {
-      requireField(ctx, value.tokenRef, "tokenRef", translateNow("discovery.setup.validation.tokenRef"));
+      if (secretStoreTokenRef(value.provider) === "required")
+        requireField(ctx, value.tokenRef, "tokenRef", translateNow("discovery.setup.validation.tokenRef"));
       for (const problem of secretStoreScopeProblems(value)) {
         ctx.addIssue({ code: "custom", path: [problem.path], message: translateNow(problem.key) });
       }
@@ -396,6 +409,12 @@ const defaults: SetupValues = {
   githubUserCodespaces: false,
   group: "",
   gitlabInstance: false,
+  clientID: "",
+  clientSecretRef: "",
+  conjurAccount: "",
+  conjurLogin: "",
+  apiKeyRef: "",
+  identityEndpoint: "",
   allowPrivateEndpoint: false,
   privateEgressCIDRs: "",
   adcsURL: "ldaps://",
@@ -985,12 +1004,12 @@ function CloudFields({ form, providers }: { form: ReturnType<typeof useForm<Setu
           ) : null}
         </div>
       ) : null}
-      {!isAWS ? (
+      {!isAWS && secretStoreTokenRef(provider) !== "hidden" ? (
         <Field
           label={t("discovery.setup.tokenRef")}
-          description={t("discovery.setup.tokenRefDescription")}
+          description={provider === "infisical" ? t("discovery.setup.infisicalTokenRefDescription") : t("discovery.setup.tokenRefDescription")}
           error={form.formState.errors.tokenRef?.message}
-          required
+          required={secretStoreTokenRef(provider) === "required"}
         >
           {(control) => <Input {...control} {...form.register("tokenRef")} className="font-mono text-xs" placeholder={examples.discoveryTokenRef} />}
         </Field>

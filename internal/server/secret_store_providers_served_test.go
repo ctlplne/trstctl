@@ -174,7 +174,8 @@ func TestServedSecretStoreProvidersBeyondCloudSecretManagers(t *testing.T) {
 	if status != http.StatusBadRequest || !strings.Contains(string(body), `unsupported provider \"unlisted-store\"`) {
 		t.Fatalf("unserved provider = %d %s", status, body)
 	}
-	// The source catalog lists the six served secret-store providers.
+	// The source catalog lists the served secret-store providers: the six of
+	// A173 and the four of OD-13.
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/capabilities", tok, nil)
 	var catalog struct {
 		Items []struct {
@@ -195,7 +196,7 @@ func TestServedSecretStoreProvidersBeyondCloudSecretManagers(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(ids, ",") != "aws-secrets-manager,gcp-secret-manager,azure-key-vault,hashicorp-vault,github-actions,gitlab-ci" {
-		t.Fatalf("secret_store providers = %v, want the six served ones", ids)
+	if strings.Join(ids, ",") != od13SecretStoreProviders {
+		t.Fatalf("secret_store providers = %v, want the ten served ones", ids)
 	}
 }

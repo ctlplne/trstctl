@@ -3,7 +3,9 @@
 // Package secretstoretest provides in-repository stand-ins, written from the
 // providers' public API documentation, for the GitHub secret APIs (Actions,
 // Dependabot and Codespaces) and the GitLab CI/CD variable APIs (project,
-// group and instance) the A173 and OD-2 discovery providers read. Each answers only the read calls the providers
+// group and instance) the A173 and OD-2 discovery providers read, and for
+// the Infisical, Conjur, Akeyless and Bitwarden Secrets Manager reads of the
+// OD-13 providers (the first two checked against the official images). Each answers only the read calls the providers
 // make, enforces its provider's authentication header, paginates like the
 // provider, and records every request so a test can prove which calls a run
 // made (a metadata-only run must never reach a value-returning endpoint).

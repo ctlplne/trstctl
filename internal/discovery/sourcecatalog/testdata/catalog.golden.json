@@ -549,7 +549,7 @@
           "label": "Project",
           "type": "string",
           "required": false,
-          "description": "Authorized Google Cloud project."
+          "description": "Authorized Google Cloud project, GitLab project, or Infisical project ID."
         },
         {
           "path": "providers[].location",
@@ -1631,7 +1631,7 @@
           "label": "Project",
           "type": "string",
           "required": false,
-          "description": "Authorized Google Cloud project."
+          "description": "Authorized Google Cloud project, GitLab project, or Infisical project ID."
         },
         {
           "path": "providers[].location",
@@ -1657,10 +1657,10 @@
         },
         {
           "path": "providers[].path_prefix",
-          "label": "Vault path prefix",
+          "label": "Path prefix",
           "type": "string",
           "required": false,
-          "description": "The least-privilege metadata path to list."
+          "description": "The least-privilege path to list: a Vault metadata path, an Infisical secret path, a Conjur policy path or an Akeyless folder."
         },
         {
           "path": "providers[].tag_key",
@@ -1718,11 +1718,11 @@
         },
         {
           "path": "providers[].environments",
-          "label": "GitHub environments",
+          "label": "Environments",
           "type": "string_list",
           "required": false,
           "advanced": true,
-          "description": "Deployment environments whose secrets are listed too."
+          "description": "GitHub deployment environments whose secrets are listed too, or the Infisical environment slugs to list (empty: every environment of the project)."
         },
         {
           "path": "providers[].org",
@@ -1761,6 +1761,51 @@
           "required": false,
           "advanced": true,
           "description": "Also list the instance-level variables every project inherits (an administrator's token on a self-managed instance)."
+        },
+        {
+          "path": "providers[].client_id",
+          "label": "Client or access ID",
+          "type": "string",
+          "required": false,
+          "description": "An Infisical Universal Auth client ID or an Akeyless access ID; not a secret."
+        },
+        {
+          "path": "providers[].client_secret_ref",
+          "label": "Client secret or access key reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "description": "Reference to the Infisical client secret or the Akeyless access key; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].account",
+          "label": "Conjur account",
+          "type": "string",
+          "required": false,
+          "description": "The Conjur account the variables belong to."
+        },
+        {
+          "path": "providers[].login",
+          "label": "Conjur login",
+          "type": "string",
+          "required": false,
+          "description": "The host (host/\u003cid\u003e) or user that signs in."
+        },
+        {
+          "path": "providers[].api_key_ref",
+          "label": "Conjur API key reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "description": "Reference to the login's API key; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].identity_endpoint",
+          "label": "Bitwarden identity endpoint",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "The identity service a self-hosted Bitwarden serves under /identity; Bitwarden's cloud identity service by default."
         },
         {
           "path": "providers[].inspect_content",
@@ -1856,6 +1901,65 @@
             "project",
             "group",
             "instance",
+            "token_ref",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "infisical",
+          "label": "Infisical secrets",
+          "least_privilege": "Metadata: a machine identity with the Viewer role on each project to inventory, signing in with Universal Auth (client ID and client secret) or an access token. A metadata-only run asks Infisical to leave values out; content inspection asks for them.",
+          "preferred_credential": "client_secret_ref",
+          "fields": [
+            "endpoint",
+            "client_id",
+            "client_secret_ref",
+            "token_ref",
+            "project",
+            "environments",
+            "path_prefix",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "conjur",
+          "label": "CyberArk Conjur variables",
+          "least_privilege": "Metadata: a host (or user) with read on the variables to inventory, signing in with its API key; the resource listing returns only those and never a value. Content inspection also needs execute on them.",
+          "preferred_credential": "api_key_ref",
+          "fields": [
+            "endpoint",
+            "account",
+            "login",
+            "api_key_ref",
+            "path_prefix",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "akeyless",
+          "label": "Akeyless static secrets",
+          "least_privilege": "Metadata: an API-key auth method whose role may list the folder; the item listing carries no value. Content inspection also needs read on the items.",
+          "preferred_credential": "client_secret_ref",
+          "fields": [
+            "endpoint",
+            "client_id",
+            "client_secret_ref",
+            "path_prefix",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "bitwarden-secrets-manager",
+          "label": "Bitwarden Secrets Manager secrets",
+          "least_privilege": "Metadata: a machine account with read access to the projects or secrets to inventory. Its access token signs in and carries the key that decrypts names on this side; the listing carries no value. Content inspection reads the values the account can read.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "identity_endpoint",
             "token_ref",
             "name_prefix",
             "inspect_content"
@@ -1980,7 +2084,7 @@
           "label": "Project",
           "type": "string",
           "required": false,
-          "description": "Authorized Google Cloud project."
+          "description": "Authorized Google Cloud project, GitLab project, or Infisical project ID."
         },
         {
           "path": "providers[].location",
@@ -2006,10 +2110,10 @@
         },
         {
           "path": "providers[].path_prefix",
-          "label": "Vault path prefix",
+          "label": "Path prefix",
           "type": "string",
           "required": false,
-          "description": "The least-privilege metadata path to list."
+          "description": "The least-privilege path to list: a Vault metadata path, an Infisical secret path, a Conjur policy path or an Akeyless folder."
         },
         {
           "path": "providers[].tag_key",
@@ -2067,11 +2171,11 @@
         },
         {
           "path": "providers[].environments",
-          "label": "GitHub environments",
+          "label": "Environments",
           "type": "string_list",
           "required": false,
           "advanced": true,
-          "description": "Deployment environments whose secrets are listed too."
+          "description": "GitHub deployment environments whose secrets are listed too, or the Infisical environment slugs to list (empty: every environment of the project)."
         },
         {
           "path": "providers[].org",
@@ -2110,6 +2214,51 @@
           "required": false,
           "advanced": true,
           "description": "Also list the instance-level variables every project inherits (an administrator's token on a self-managed instance)."
+        },
+        {
+          "path": "providers[].client_id",
+          "label": "Client or access ID",
+          "type": "string",
+          "required": false,
+          "description": "An Infisical Universal Auth client ID or an Akeyless access ID; not a secret."
+        },
+        {
+          "path": "providers[].client_secret_ref",
+          "label": "Client secret or access key reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "description": "Reference to the Infisical client secret or the Akeyless access key; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].account",
+          "label": "Conjur account",
+          "type": "string",
+          "required": false,
+          "description": "The Conjur account the variables belong to."
+        },
+        {
+          "path": "providers[].login",
+          "label": "Conjur login",
+          "type": "string",
+          "required": false,
+          "description": "The host (host/\u003cid\u003e) or user that signs in."
+        },
+        {
+          "path": "providers[].api_key_ref",
+          "label": "Conjur API key reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "description": "Reference to the login's API key; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].identity_endpoint",
+          "label": "Bitwarden identity endpoint",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "The identity service a self-hosted Bitwarden serves under /identity; Bitwarden's cloud identity service by default."
         },
         {
           "path": "providers[].inspect_content",
@@ -2205,6 +2354,65 @@
             "project",
             "group",
             "instance",
+            "token_ref",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "infisical",
+          "label": "Infisical secrets",
+          "least_privilege": "Metadata: a machine identity with the Viewer role on each project to inventory, signing in with Universal Auth (client ID and client secret) or an access token. A metadata-only run asks Infisical to leave values out; content inspection asks for them.",
+          "preferred_credential": "client_secret_ref",
+          "fields": [
+            "endpoint",
+            "client_id",
+            "client_secret_ref",
+            "token_ref",
+            "project",
+            "environments",
+            "path_prefix",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "conjur",
+          "label": "CyberArk Conjur variables",
+          "least_privilege": "Metadata: a host (or user) with read on the variables to inventory, signing in with its API key; the resource listing returns only those and never a value. Content inspection also needs execute on them.",
+          "preferred_credential": "api_key_ref",
+          "fields": [
+            "endpoint",
+            "account",
+            "login",
+            "api_key_ref",
+            "path_prefix",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "akeyless",
+          "label": "Akeyless static secrets",
+          "least_privilege": "Metadata: an API-key auth method whose role may list the folder; the item listing carries no value. Content inspection also needs read on the items.",
+          "preferred_credential": "client_secret_ref",
+          "fields": [
+            "endpoint",
+            "client_id",
+            "client_secret_ref",
+            "path_prefix",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "bitwarden-secrets-manager",
+          "label": "Bitwarden Secrets Manager secrets",
+          "least_privilege": "Metadata: a machine account with read access to the projects or secrets to inventory. Its access token signs in and carries the key that decrypts names on this side; the listing carries no value. Content inspection reads the values the account can read.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "identity_endpoint",
             "token_ref",
             "name_prefix",
             "inspect_content"

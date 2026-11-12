@@ -125,6 +125,15 @@ type cloudSecretProviderConfig struct {
 	Stores         []string `json:"stores"`
 	UserCodespaces bool     `json:"user_codespaces"`
 	Instance       bool     `json:"instance"`
+	// Further secret stores (OD-13): an Infisical Universal Auth client or
+	// Akeyless access ID and its secret reference, a Conjur account, login
+	// and API key reference, and a self-hosted Bitwarden identity endpoint.
+	ClientID         string `json:"client_id"`
+	ClientSecretRef  string `json:"client_secret_ref"`
+	Account          string `json:"account"`
+	Login            string `json:"login"`
+	APIKeyRef        string `json:"api_key_ref"`
+	IdentityEndpoint string `json:"identity_endpoint"`
 }
 
 type ctLogDiscoveryConfig struct {

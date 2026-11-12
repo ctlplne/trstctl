@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3154 annotated sites across 34 rules. Each row is
+3161 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (728 sites)
+### G101 — CWE-798 Use of hardcoded credentials (735 sites)
 
 | Location | Reason |
 |---|---|
@@ -191,8 +191,8 @@ not this file.
 | `internal/api/openapi.go:288` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secret_scan_hooks_od3_test.go:26` | fabricated fixture signing token (CWE-798) |
 | `internal/api/secret_scan_known_decoy_test.go:18` | fabricated decoy fixture; no value is real (CWE-798) |
-| `internal/api/secrets_posture.go:1112` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_posture.go:1260` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_posture.go:1150` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_posture.go:1298` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:40` | public MAC domain label, not a credential |
 | `internal/api/secrets_scanning.go:673` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:697` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -331,6 +331,7 @@ not this file.
 | `internal/discovery/cloudkeys/awsiamkeys/awsiamkeys_test.go:80` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/discovery/cloudsecret/apikeys.go:26` | a hash domain-separation tag, not a credential (CWE-798) |
 | `internal/discovery/cloudsecret/outcomes_test.go:35` | fabricated fixture secret name; the test needs the shape, no value is real (CWE-798) |
+| `internal/discovery/cloudsecret/secretstoretest/conjur.go:33` | a stand-in's fixed fake access token, not a credential (CWE-798) |
 | `internal/discovery/lbtls/awselb/awselb_test.go:41` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/discovery/lbtls/awselb/awselb_test.go:75` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/discovery/lbtls/bigip/bigip_test.go:40` | fabricated fixture credential; no value is real (CWE-798) |
@@ -676,6 +677,12 @@ not this file.
 | `internal/server/secret_store_more_scopes_served_test.go:92` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_more_scopes_served_test.go:159` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_more_scopes_served_test.go:160` | credential references to fabricated fixture values (CWE-798) |
+| `internal/server/secret_store_od13_served_test.go:144` | credential references to fabricated fixture values (CWE-798) |
+| `internal/server/secret_store_od13_served_test.go:145` | credential references to fabricated fixture values (CWE-798) |
+| `internal/server/secret_store_od13_served_test.go:146` | credential references to fabricated fixture values (CWE-798) |
+| `internal/server/secret_store_od13_served_test.go:147` | credential references to fabricated fixture values (CWE-798) |
+| `internal/server/secret_store_od13_served_test.go:271` | credential references to lab fixture values (CWE-798) |
+| `internal/server/secret_store_od13_served_test.go:273` | credential references to lab fixture values (CWE-798) |
 | `internal/server/secret_store_private_key_link_served_test.go:83` | a credential reference to a fabricated fixture value (CWE-798) |
 | `internal/server/secret_store_providers_served_test.go:115` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_providers_served_test.go:117` | credential references to fabricated fixture values (CWE-798) |

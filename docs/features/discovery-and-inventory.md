@@ -832,6 +832,24 @@ Two more providers cover the code hosts' CI/CD secret stores (A173), each with a
 | `github-actions` | `owner` + `repo`, `environments`, `org`, `stores`, `user_codespaces` | Repository and organization secrets in each chosen store — `actions` (the default), `dependabot`, `codespaces` — plus environment Actions secrets and, with `user_codespaces`, the token owner's own Codespaces secrets. GitHub never returns a value, so this provider is metadata-only and refuses `inspect_content`. |
 | `gitlab-ci` | `project`, `group` (ID or full path), `instance` | CI/CD variables with type, protection, masking, environment scope; with `instance: true`, the instance-level variables every project inherits (GitLab lists them to an administrator's token only). A hidden variable's value is never returned and is reported as not inspectable. |
 
+Four more providers read the secret stores teams run beside the cloud managers (OD-13).
+Each signs in with its own credential reference and takes an optional `endpoint` (the
+server URL for a self-hosted Infisical, Conjur or Akeyless gateway, the API of a
+self-hosted Bitwarden), `path_prefix`, `name_prefix` and `inspect_content`:
+
+| Provider | Sign-in and scope fields | What it lists |
+|---|---|---|
+| `infisical` | `client_id` + `client_secret_ref` (Universal Auth) or `token_ref` (an access token); `project`, `environments`, `path_prefix` (the secret path) | Each project's environments and every folder below the path: key, folder, version, type, tags and dates. A metadata-only run asks Infisical to leave values out (`viewSecretValue=false`) and still wipes every response body. |
+| `conjur` | `account`, `login` (`host/<id>` or a user), `api_key_ref`; `path_prefix` (a policy path); `endpoint` required | The variables the login may read: ID, owner, policy, annotations and how many versions each holds. The resource listing never carries a value; inspection reads each variable that holds one. |
+| `akeyless` | `client_id` (the access ID) + `client_secret_ref` (the access key); `path_prefix` (a folder) | Static secrets in the folder and below: name, type, tags, version and dates, across every `list-items` page. Inspection reads values by name in small batches. |
+| `bitwarden-secrets-manager` | `token_ref` (the machine account's access token); `identity_endpoint` for a self-hosted server | The secrets the machine account can read, with their projects and dates. Secrets Manager encrypts names and values on the client: the access token signs in and also carries the key that opens the organization key, so trstctl decrypts names in memory (`internal/crypto/bwsm`) and never stores a value. |
+
+Infisical (v0.167.8) and Conjur Open Source (1.27.0) are proven against their official
+images, pinned by digest, in a served lab run; Akeyless and Bitwarden Secrets Manager
+against in-repository stand-ins written from their public API references and SDK. The
+Secrets page lists the four beside the cloud managers, and the source wizard asks for each
+one's own sign-in.
+
 Each GitHub finding names its store (`store`: `actions`, `dependabot` or `codespaces`) and
 scope (`repository`, `environment`, `organization` or `user`); a user's Codespaces secrets
 are keyed by their login, which the provider reads from `GET /user`. An unknown store, or

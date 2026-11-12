@@ -6,15 +6,31 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import type { SetupValues } from "./SourceSetup";
 
-/** The code-host secret stores beside the cloud secret managers (A173): GitHub's
- * Actions, Dependabot and Codespaces secrets and GitLab's project, group and
- * instance variables (OD-2). Their scope fields differ from the cloud
- * providers', so they live beside the wizard rather than inside its cloud
- * section. */
-export const secretStoreProviderIDs = ["github-actions", "gitlab-ci"] as const;
+/** The secret stores beside the cloud secret managers: the code hosts' GitHub
+ * Actions, Dependabot and Codespaces secrets and GitLab project, group and
+ * instance variables (A173, OD-2), and the Infisical, Conjur, Akeyless and
+ * Bitwarden Secrets Manager stores (OD-13). Their scope and sign-in fields
+ * differ from the cloud providers', so they live beside the wizard rather
+ * than inside its cloud section. */
+export const secretStoreProviderIDs = ["github-actions", "gitlab-ci", "infisical", "conjur", "akeyless", "bitwarden-secrets-manager"] as const;
 
 export function isSecretStoreProvider(provider: string): boolean {
   return (secretStoreProviderIDs as readonly string[]).includes(provider);
+}
+
+/** Whether a secret-store provider signs in with the shared token reference:
+ * Conjur and Akeyless use their own credentials, and Infisical takes a token
+ * or a Universal Auth client. */
+export function secretStoreTokenRef(provider: string): "required" | "optional" | "hidden" {
+  switch (provider) {
+    case "conjur":
+    case "akeyless":
+      return "hidden";
+    case "infisical":
+      return "optional";
+    default:
+      return "required";
+  }
 }
 
 function listOf(value: string): string[] {
@@ -47,6 +63,20 @@ export function secretStoreScope(values: SetupValues): Record<string, unknown> {
     }
     case "gitlab-ci":
       return { project: values.project, group: values.group, instance: values.gitlabInstance };
+    case "infisical":
+      return {
+        client_id: values.clientID,
+        client_secret_ref: values.clientSecretRef,
+        project: values.project,
+        environments: listOf(values.environments),
+        path_prefix: values.pathPrefix,
+      };
+    case "conjur":
+      return { token_ref: "", account: values.conjurAccount, login: values.conjurLogin, api_key_ref: values.apiKeyRef, path_prefix: values.pathPrefix };
+    case "akeyless":
+      return { token_ref: "", client_id: values.clientID, client_secret_ref: values.clientSecretRef, path_prefix: values.pathPrefix };
+    case "bitwarden-secrets-manager":
+      return { identity_endpoint: values.identityEndpoint };
     default:
       return {};
   }
@@ -69,6 +99,26 @@ export function secretStoreScopeProblems(values: SetupValues): Array<{ path: key
       break;
     case "gitlab-ci":
       if (!values.project && !values.group && !values.gitlabInstance) problems.push({ path: "project", key: "discovery.setup.validation.gitlabScope" });
+      break;
+    case "infisical": {
+      const client = Boolean(values.clientID) || Boolean(values.clientSecretRef);
+      if (client && values.tokenRef) problems.push({ path: "tokenRef", key: "discovery.setup.validation.infisicalOneSignIn" });
+      else if (!client && !values.tokenRef) problems.push({ path: "clientID", key: "discovery.setup.validation.infisicalSignIn" });
+      else if (client && !values.clientID) problems.push({ path: "clientID", key: "discovery.setup.validation.clientID" });
+      else if (client && !values.clientSecretRef) problems.push({ path: "clientSecretRef", key: "discovery.setup.validation.clientSecretRef" });
+      if (listOf(values.environments).length > 0 && !values.project)
+        problems.push({ path: "environments", key: "discovery.setup.validation.infisicalEnvironments" });
+      break;
+    }
+    case "conjur":
+      if (!values.endpoint) problems.push({ path: "endpoint", key: "discovery.setup.validation.conjurEndpoint" });
+      if (!values.conjurAccount) problems.push({ path: "conjurAccount", key: "discovery.setup.validation.conjurAccount" });
+      if (!values.conjurLogin) problems.push({ path: "conjurLogin", key: "discovery.setup.validation.conjurLogin" });
+      if (!values.apiKeyRef) problems.push({ path: "apiKeyRef", key: "discovery.setup.validation.apiKeyRef" });
+      break;
+    case "akeyless":
+      if (!values.clientID) problems.push({ path: "clientID", key: "discovery.setup.validation.accessID" });
+      if (!values.clientSecretRef) problems.push({ path: "clientSecretRef", key: "discovery.setup.validation.akeylessAccessKeyRef" });
       break;
   }
   return problems;
@@ -128,6 +178,88 @@ export function SecretStoreFields({ form, provider }: { form: UseFormReturn<Setu
           </span>
         </label>
         <p className="text-sm text-muted-foreground lg:col-span-2">{t("discovery.setup.githubMetadataOnly")}</p>
+      </div>
+    );
+  }
+  if (provider === "infisical") {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Field label={t("discovery.setup.infisicalClientID")} description={t("discovery.setup.infisicalClientIDDescription")} error={errors.clientID?.message}>
+          {(control) => <Input {...control} {...form.register("clientID")} className="font-mono text-xs" />}
+        </Field>
+        <Field
+          label={t("discovery.setup.infisicalClientSecretRef")}
+          description={t("discovery.setup.credentialRefDescription")}
+          error={errors.clientSecretRef?.message}
+        >
+          {(control) => <Input {...control} {...form.register("clientSecretRef")} className="font-mono text-xs" />}
+        </Field>
+        <Field label={t("discovery.setup.infisicalProject")} description={t("discovery.setup.infisicalProjectDescription")} error={errors.project?.message}>
+          {(control) => <Input {...control} {...form.register("project")} className="font-mono text-xs" />}
+        </Field>
+        <Field label={t("discovery.setup.infisicalEnvironments")} description={t("discovery.setup.listDescription")} error={errors.environments?.message}>
+          {(control) => <Input {...control} {...form.register("environments")} />}
+        </Field>
+        <Field label={t("discovery.setup.infisicalPath")} description={t("discovery.setup.infisicalPathDescription")} error={errors.pathPrefix?.message}>
+          {(control) => <Input {...control} {...form.register("pathPrefix")} className="font-mono text-xs" />}
+        </Field>
+      </div>
+    );
+  }
+  if (provider === "conjur") {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Field label={t("discovery.setup.conjurAccount")} error={errors.conjurAccount?.message} required>
+          {(control) => <Input {...control} {...form.register("conjurAccount")} />}
+        </Field>
+        <Field label={t("discovery.setup.conjurLogin")} description={t("discovery.setup.conjurLoginDescription")} error={errors.conjurLogin?.message} required>
+          {(control) => <Input {...control} {...form.register("conjurLogin")} className="font-mono text-xs" />}
+        </Field>
+        <Field
+          label={t("discovery.setup.conjurAPIKeyRef")}
+          description={t("discovery.setup.credentialRefDescription")}
+          error={errors.apiKeyRef?.message}
+          required
+        >
+          {(control) => <Input {...control} {...form.register("apiKeyRef")} className="font-mono text-xs" />}
+        </Field>
+        <Field label={t("discovery.setup.conjurPath")} description={t("discovery.setup.conjurPathDescription")} error={errors.pathPrefix?.message}>
+          {(control) => <Input {...control} {...form.register("pathPrefix")} className="font-mono text-xs" />}
+        </Field>
+      </div>
+    );
+  }
+  if (provider === "akeyless") {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Field label={t("discovery.setup.akeylessAccessID")} error={errors.clientID?.message} required>
+          {(control) => <Input {...control} {...form.register("clientID")} className="font-mono text-xs" />}
+        </Field>
+        <Field
+          label={t("discovery.setup.akeylessAccessKeyRef")}
+          description={t("discovery.setup.credentialRefDescription")}
+          error={errors.clientSecretRef?.message}
+          required
+        >
+          {(control) => <Input {...control} {...form.register("clientSecretRef")} className="font-mono text-xs" />}
+        </Field>
+        <Field label={t("discovery.setup.akeylessFolder")} description={t("discovery.setup.akeylessFolderDescription")} error={errors.pathPrefix?.message}>
+          {(control) => <Input {...control} {...form.register("pathPrefix")} className="font-mono text-xs" />}
+        </Field>
+      </div>
+    );
+  }
+  if (provider === "bitwarden-secrets-manager") {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Field
+          label={t("discovery.setup.bitwardenIdentity")}
+          description={t("discovery.setup.bitwardenIdentityDescription")}
+          error={errors.identityEndpoint?.message}
+        >
+          {(control) => <Input {...control} {...form.register("identityEndpoint")} className="font-mono text-xs" />}
+        </Field>
+        <p className="text-sm text-muted-foreground lg:col-span-2">{t("discovery.setup.bitwardenTokenNote")}</p>
       </div>
     );
   }

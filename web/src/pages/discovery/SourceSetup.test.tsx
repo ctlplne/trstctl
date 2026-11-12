@@ -75,6 +75,10 @@ const catalog: DiscoveryCapabilityCatalog = {
       { id: "hashicorp-vault", label: "HashiCorp Vault", least_privilege: "List metadata", preferred_credential: "token_ref", fields: [] },
       { id: "github-actions", label: "GitHub Actions secrets", least_privilege: "Secrets read", preferred_credential: "token_ref", fields: [] },
       { id: "gitlab-ci", label: "GitLab CI/CD variables", least_privilege: "read_api", preferred_credential: "token_ref", fields: [] },
+      { id: "infisical", label: "Infisical secrets", least_privilege: "Viewer", preferred_credential: "client_secret_ref", fields: [] },
+      { id: "conjur", label: "CyberArk Conjur variables", least_privilege: "read", preferred_credential: "api_key_ref", fields: [] },
+      { id: "akeyless", label: "Akeyless static secrets", least_privilege: "list", preferred_credential: "client_secret_ref", fields: [] },
+      { id: "bitwarden-secrets-manager", label: "Bitwarden Secrets Manager secrets", least_privilege: "read", preferred_credential: "token_ref", fields: [] },
     ]),
   ],
 };
@@ -539,6 +543,85 @@ describe("typed discovery source setup", () => {
         expect.objectContaining({
           kind: "secret_store",
           config: { providers: [{ provider: "gitlab-ci", instance: true, token_ref: "env:GITLAB_ADMIN_TOKEN" }] },
+        }),
+      ),
+    );
+  });
+
+  it("configures a Conjur store with its own sign-in instead of a token reference (OD-13)", async () => {
+    const user = userEvent.setup();
+    renderSetup();
+
+    await screen.findByText("What this source does");
+    await user.selectOptions(screen.getByRole("combobox", { name: "What should trstctl inspect?" }), "secret_store");
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "Conjur variables");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Provider" }), "conjur");
+    expect(screen.queryByRole("textbox", { name: /Token reference/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(await screen.findByText("Enter the Conjur server URL as the API endpoint.")).toBeInTheDocument();
+    expect(screen.getByText("Enter the Conjur account.")).toBeInTheDocument();
+    expect(screen.getByText("Enter the host or user that signs in.")).toBeInTheDocument();
+    expect(screen.getByText("Enter the API key reference.")).toBeInTheDocument();
+    expect(apiMock.createDiscoverySource).not.toHaveBeenCalled();
+
+    await user.type(screen.getByRole("textbox", { name: /API endpoint/ }), "https://conjur.example.test");
+    await user.type(screen.getByRole("textbox", { name: /Conjur account/ }), "prod");
+    await user.type(screen.getByRole("textbox", { name: /^Login/ }), "host/apps/discovery");
+    await user.type(screen.getByRole("textbox", { name: /API key reference/ }), "env:CONJUR_API_KEY");
+    await user.type(screen.getByRole("textbox", { name: /Policy path/ }), "apps");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(await screen.findByRole("button", { name: "Save source" }));
+    await waitFor(() =>
+      expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "secret_store",
+          config: {
+            providers: [
+              {
+                provider: "conjur",
+                endpoint: "https://conjur.example.test",
+                account: "prod",
+                login: "host/apps/discovery",
+                api_key_ref: "env:CONJUR_API_KEY",
+                path_prefix: "apps",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+  });
+
+  it("asks Infisical for one sign-in and Bitwarden for its access token (OD-13)", async () => {
+    const user = userEvent.setup();
+    renderSetup();
+
+    await screen.findByText("What this source does");
+    await user.selectOptions(screen.getByRole("combobox", { name: "What should trstctl inspect?" }), "secret_store");
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "Infisical secrets");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Provider" }), "bitwarden-secrets-manager");
+    expect(screen.getByRole("textbox", { name: /Token reference/ })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /Identity endpoint/ })).toBeInTheDocument();
+    expect(screen.getByText(/carries the key that decrypts secret names here/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Provider" }), "infisical");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(await screen.findByText("Enter the Universal Auth client ID and client secret reference, or a token reference.")).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: /Universal Auth client ID/ }), "ua-client");
+    await user.type(screen.getByRole("textbox", { name: /Client secret reference/ }), "env:INFISICAL_SECRET");
+    await user.type(screen.getByRole("textbox", { name: /Environment slugs/ }), "dev, prod");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(await screen.findByText("Environments belong to a project; enter the project ID.")).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: /Project ID/ }), "p-1");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(await screen.findByRole("button", { name: "Save source" }));
+    await waitFor(() =>
+      expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: {
+            providers: [
+              { provider: "infisical", client_id: "ua-client", client_secret_ref: "env:INFISICAL_SECRET", project: "p-1", environments: ["dev", "prod"] },
+            ],
+          },
         }),
       ),
     );

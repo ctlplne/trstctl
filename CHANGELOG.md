@@ -1,6 +1,14 @@
 ## [Unreleased]
 
 ### Added
+- Four more secret stores for `cloud_secret` and `secret_store` discovery (OD-13): `infisical` (Universal Auth or an
+  access token; projects, environments and folders), `conjur` (a host's or user's API key; variables under a policy
+  path), `akeyless` (an API-key access ID; static secrets under a folder) and `bitwarden-secrets-manager` (a machine
+  account's access token, whose key decrypts names on the client through the new `internal/crypto/bwsm`). Each lists
+  metadata without reading a value, and with `inspect_content` finds certificates and API keys while keeping no value.
+  Infisical and Conjur are proven against their official images pinned by digest; Akeyless and Bitwarden Secrets
+  Manager against stand-ins. The source wizard asks for each one's sign-in, the source catalog lists ten secret-store
+  providers, and the Secrets page shows the four beside the cloud managers (it now counts `secret_store` sources too).
 - A signed generic CI secret push (OD-12): a `generic-ci-json` sync target that names a `signing_key_ref` signs every
   push like the signed webhook (`X-Trstctl-Timestamp`, `X-Trstctl-Signature` = HMAC-SHA256 over the timestamp and the
   exact body, `X-Trstctl-Delivery`), so the receiver can refuse a changed or replayed push with

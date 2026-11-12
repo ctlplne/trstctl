@@ -690,7 +690,8 @@ func (a *API) cloudSecretDiscoveryProviderCounts(ctx context.Context, tenantID s
 			return nil, err
 		}
 		for _, src := range rows {
-			if src.Kind != "cloud_secret" {
+			// cloud_secret and secret_store sources run the same providers.
+			if src.Kind != "cloud_secret" && src.Kind != "secret_store" {
 				continue
 			}
 			var cfg struct {
@@ -731,7 +732,7 @@ func normalizeCloudSecretManagerProvider(provider string) string {
 		return "azure-key-vault"
 	case "hashicorp-vault", "vault":
 		return "hashicorp-vault"
-	case "github-actions", "gitlab-ci":
+	case "github-actions", "gitlab-ci", "infisical", "conjur", "akeyless", "bitwarden-secrets-manager":
 		return strings.TrimSpace(strings.ToLower(provider))
 	default:
 		return ""
@@ -915,6 +916,43 @@ func cloudSecretManagerProviderSpecs() []cloudSecretManagerProviderSpec {
 			SyncWriteOperation: "PUT /api/v4/projects/{id}/variables/{key}",
 			Capabilities:       []string{"code-host-secret-store", "metadata-only-discovery", "sealed-outbox-sync"},
 			EvidenceRefs:       []string{"internal/discovery/cloudsecret/gitlabci/gitlabci.go", "internal/secretsync/pushers.go"},
+		},
+		// OD-13: further secret stores, discovery only (no sync target).
+		{
+			ID:                 "infisical",
+			Name:               "Infisical secrets",
+			Platform:           "infisical",
+			DiscoverySupported: true,
+			DiscoveryReadOps:   []string{"POST /api/v1/auth/universal-auth/login", "GET /api/v1/projects", "GET /api/v4/secrets"},
+			Capabilities:       []string{"secret-store", "metadata-only-discovery"},
+			EvidenceRefs:       []string{"internal/discovery/cloudsecret/infisical/infisical.go"},
+		},
+		{
+			ID:                 "conjur",
+			Name:               "CyberArk Conjur variables",
+			Platform:           "conjur",
+			DiscoverySupported: true,
+			DiscoveryReadOps:   []string{"POST /authn/{account}/{login}/authenticate", "GET /resources/{account}?kind=variable", "GET /secrets/{account}/variable/{id}"},
+			Capabilities:       []string{"secret-store", "metadata-only-discovery"},
+			EvidenceRefs:       []string{"internal/discovery/cloudsecret/conjur/conjur.go"},
+		},
+		{
+			ID:                 "akeyless",
+			Name:               "Akeyless static secrets",
+			Platform:           "akeyless",
+			DiscoverySupported: true,
+			DiscoveryReadOps:   []string{"POST /auth", "POST /list-items", "POST /get-secret-value"},
+			Capabilities:       []string{"secret-store", "metadata-only-discovery"},
+			EvidenceRefs:       []string{"internal/discovery/cloudsecret/akeyless/akeyless.go"},
+		},
+		{
+			ID:                 "bitwarden-secrets-manager",
+			Name:               "Bitwarden Secrets Manager secrets",
+			Platform:           "bitwarden",
+			DiscoverySupported: true,
+			DiscoveryReadOps:   []string{"POST /connect/token", "GET /organizations/{id}/secrets", "POST /secrets/get-by-ids"},
+			Capabilities:       []string{"secret-store", "metadata-only-discovery", "client-side-decryption"},
+			EvidenceRefs:       []string{"internal/discovery/cloudsecret/bitwardensm/bitwardensm.go", "internal/crypto/bwsm/bwsm.go"},
 		},
 	}
 }

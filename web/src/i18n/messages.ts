@@ -14458,6 +14458,144 @@ export const messages = {
     defaultMessage: "Enter a GitLab project or group, or choose the instance variables.",
     description: "GitLab scope validation.",
   },
+  "discovery.setup.infisicalClientID": {
+    defaultMessage: "Universal Auth client ID",
+    description: "OD-13: Infisical machine identity client ID field.",
+  },
+  "discovery.setup.infisicalClientIDDescription": {
+    defaultMessage: "A machine identity's client ID; with the client secret below, the run signs in once. Or leave both empty and use a token reference.",
+    description: "OD-13: Infisical client ID help.",
+  },
+  "discovery.setup.infisicalClientSecretRef": {
+    defaultMessage: "Client secret reference",
+    description: "OD-13: Infisical client secret reference field.",
+  },
+  "discovery.setup.credentialRefDescription": {
+    defaultMessage: "A reference only (file:/absolute/path, secret://name or an allowed env: name); the value never enters the source.",
+    description: "OD-13: credential reference help.",
+  },
+  "discovery.setup.infisicalProject": {
+    defaultMessage: "Project ID",
+    description: "OD-13: Infisical project field.",
+  },
+  "discovery.setup.infisicalProjectDescription": {
+    defaultMessage: "Optional. Empty lists every project the identity can read.",
+    description: "OD-13: Infisical project help.",
+  },
+  "discovery.setup.infisicalEnvironments": {
+    defaultMessage: "Environment slugs",
+    description: "OD-13: Infisical environments field.",
+  },
+  "discovery.setup.infisicalPath": {
+    defaultMessage: "Secret path",
+    description: "OD-13: Infisical secret path field.",
+  },
+  "discovery.setup.infisicalPathDescription": {
+    defaultMessage: "Optional. The folder to start from, such as /payments; folders below it are included. Empty is /.",
+    description: "OD-13: Infisical secret path help.",
+  },
+  "discovery.setup.infisicalTokenRefDescription": {
+    defaultMessage: "Optional for Infisical: an access token reference instead of the Universal Auth client.",
+    description: "OD-13: Infisical token reference help.",
+  },
+  "discovery.setup.conjurAccount": {
+    defaultMessage: "Conjur account",
+    description: "OD-13: Conjur account field.",
+  },
+  "discovery.setup.conjurLogin": {
+    defaultMessage: "Login",
+    description: "OD-13: Conjur login field.",
+  },
+  "discovery.setup.conjurLoginDescription": {
+    defaultMessage: "The host (host/<id>) or user that signs in with its API key.",
+    description: "OD-13: Conjur login help.",
+  },
+  "discovery.setup.conjurAPIKeyRef": {
+    defaultMessage: "API key reference",
+    description: "OD-13: Conjur API key reference field.",
+  },
+  "discovery.setup.conjurPath": {
+    defaultMessage: "Policy path",
+    description: "OD-13: Conjur policy path field.",
+  },
+  "discovery.setup.conjurPathDescription": {
+    defaultMessage: "Optional. Lists only variables under this policy path, such as apps/payments.",
+    description: "OD-13: Conjur policy path help.",
+  },
+  "discovery.setup.akeylessAccessID": {
+    defaultMessage: "Access ID",
+    description: "OD-13: Akeyless access ID field.",
+  },
+  "discovery.setup.akeylessAccessKeyRef": {
+    defaultMessage: "Access key reference",
+    description: "OD-13: Akeyless access key reference field.",
+  },
+  "discovery.setup.akeylessFolder": {
+    defaultMessage: "Folder",
+    description: "OD-13: Akeyless folder field.",
+  },
+  "discovery.setup.akeylessFolderDescription": {
+    defaultMessage: "Optional. The folder to list, such as /apps; folders below it are included. Empty is /.",
+    description: "OD-13: Akeyless folder help.",
+  },
+  "discovery.setup.bitwardenIdentity": {
+    defaultMessage: "Identity endpoint",
+    description: "OD-13: Bitwarden identity endpoint field.",
+  },
+  "discovery.setup.bitwardenIdentityDescription": {
+    defaultMessage:
+      "Optional. A self-hosted server's identity service (https://<host>/identity); put its API (https://<host>/api) in the API endpoint. Empty uses Bitwarden's cloud.",
+    description: "OD-13: Bitwarden identity endpoint help.",
+  },
+  "discovery.setup.bitwardenTokenNote": {
+    defaultMessage:
+      "The token reference holds the machine account's access token. It signs in and also carries the key that decrypts secret names here; names and values are never stored.",
+    description: "OD-13: Bitwarden access token note.",
+  },
+  "discovery.setup.validation.infisicalSignIn": {
+    defaultMessage: "Enter the Universal Auth client ID and client secret reference, or a token reference.",
+    description: "OD-13: Infisical sign-in validation.",
+  },
+  "discovery.setup.validation.infisicalOneSignIn": {
+    defaultMessage: "Use either the Universal Auth client or a token reference, not both.",
+    description: "OD-13: Infisical one sign-in validation.",
+  },
+  "discovery.setup.validation.clientID": {
+    defaultMessage: "Enter the client ID.",
+    description: "OD-13: client ID validation.",
+  },
+  "discovery.setup.validation.clientSecretRef": {
+    defaultMessage: "Enter the client secret reference.",
+    description: "OD-13: client secret validation.",
+  },
+  "discovery.setup.validation.infisicalEnvironments": {
+    defaultMessage: "Environments belong to a project; enter the project ID.",
+    description: "OD-13: Infisical environments validation.",
+  },
+  "discovery.setup.validation.conjurEndpoint": {
+    defaultMessage: "Enter the Conjur server URL as the API endpoint.",
+    description: "OD-13: Conjur endpoint validation.",
+  },
+  "discovery.setup.validation.conjurAccount": {
+    defaultMessage: "Enter the Conjur account.",
+    description: "OD-13: Conjur account validation.",
+  },
+  "discovery.setup.validation.conjurLogin": {
+    defaultMessage: "Enter the host or user that signs in.",
+    description: "OD-13: Conjur login validation.",
+  },
+  "discovery.setup.validation.apiKeyRef": {
+    defaultMessage: "Enter the API key reference.",
+    description: "OD-13: Conjur API key validation.",
+  },
+  "discovery.setup.validation.accessID": {
+    defaultMessage: "Enter the access ID.",
+    description: "OD-13: Akeyless access ID validation.",
+  },
+  "discovery.setup.validation.akeylessAccessKeyRef": {
+    defaultMessage: "Enter the access key reference.",
+    description: "OD-13: Akeyless access key validation.",
+  },
   "discovery.setup.validation.gcpProject": { defaultMessage: "Enter the authorized Google Cloud project.", description: "Google Cloud project validation." },
   "discovery.setup.validation.gcpLocation": {
     defaultMessage: "Enter the Certificate Manager location.",
