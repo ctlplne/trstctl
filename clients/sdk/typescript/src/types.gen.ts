@@ -18222,19 +18222,24 @@ export interface components {
             issued_at: string;
             /**
              * Format: date-time
-             * @description AWS STS session expiration returned by the provider, or an hour after it when role_chaining is set (the longest a session chained from it can run). An early lease revoke remains pending until this time unless the provider has revoke_with_deny_policy, which denies the exact session through its role sooner.
+             * @description The credential's own expiry, which native_expiry_kind names: an AWS STS session expiration returned by the provider (or an hour after it when role_chaining is set, the longest a session chained from it can run), or an OAuth or GitHub App token's expiry. An early lease revoke of an AWS session remains pending until this time unless the provider has revoke_with_deny_policy, which denies the exact session through its role sooner; an OAuth token without a revocation endpoint, or a token whose credential is not at hand, lapses then.
              */
             native_expires_at?: string;
+            /**
+             * @description Whose native expiry native_expires_at is (OD-5).
+             * @enum {string}
+             */
+            native_expiry_kind?: "aws_session" | "oauth_token" | "github_app_token";
             provider: string;
             /** @description The subject whose request opened the lease; absent for a lease from before it was recorded. */
             requested_by?: string;
             /** Format: date-time */
             revocation_completed_at?: string;
             /**
-             * @description For an AWS STS lease whose revocation completed, how its session ended: deny_policy when an inline policy on the role, read back before completion, denies that one session (aws:userid) before its expiry — AWS enforces the denial; native_expiry when it lapsed at its expiry. Absent for other providers, which remove the credential themselves.
+             * @description For a lease whose revocation completed, how its credential ended: deny_policy when an inline policy on an AWS STS session's role, read back before completion, denies that one session (aws:userid) before its expiry — AWS enforces the denial; token_revoked when the provider confirmed a GitHub App or OAuth token ended when it was presented (GitHub's DELETE /installation/token, an RFC 7009 revocation endpoint); native_expiry when the session or token lapsed at its own expiry. Absent for other providers, which remove the credential themselves.
              * @enum {string}
              */
-            revocation_method?: "deny_policy" | "native_expiry";
+            revocation_method?: "deny_policy" | "native_expiry" | "token_revoked";
             /**
              * @description Provider revocation progress. Revoked lease state alone acknowledges queuing, not provider removal. After failed, POST revoke with a fresh Idempotency-Key queues a new audited provider-removal attempt; replaying the old key returns its original receipt.
              * @enum {string}

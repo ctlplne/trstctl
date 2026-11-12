@@ -724,7 +724,15 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   `none`, `pending`, `completed`, or `failed`; only `completed` with
   `revocation_completed_at` confirms the provider removal operation, or for AWS
   STS, that its session is denied through its role or its native session expiration
-  has passed — `revocation_method` (`deny_policy` or `native_expiry`) says which. `revoked_at`
+  has passed — `revocation_method` (`deny_policy` or `native_expiry`) says which. A
+  GitHub App or OAuth lease says how its token ended too (OD-5): `token_revoked` when
+  the provider confirmed the token ended when trstctl presented it (GitHub's
+  `DELETE /installation/token`, an OAuth provider's RFC 7009 revocation endpoint), or
+  `native_expiry` when it lapsed at its own expiry (an OAuth provider without a
+  revocation endpoint, whose revocation stays pending until then). `native_expires_at`
+  is that credential's own expiry and `native_expiry_kind` names whose it is
+  (`aws_session`, `oauth_token` or `github_app_token`); the console's lease view names
+  the token or session accordingly. `revoked_at`
   records when the control plane queued the request. Older immutable operation
   receipts may omit these additional fields; GET returns current durable evidence.
   If provider creation finishes after `expires_at`, `issued_at` records the real

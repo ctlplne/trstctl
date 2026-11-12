@@ -17,7 +17,8 @@ import (
 )
 
 // How a revocation ended a provider credential, for the providers that say
-// (N3). An empty method means the provider removed the credential itself.
+// (N3; GitHub App and OAuth tokens, OD-5). An empty method means the provider
+// removed the credential itself.
 const (
 	// RevocationMethodDenyPolicy: a policy the provider enforces denies every
 	// request the credential makes, before its native expiry (an AWS STS
@@ -26,6 +27,10 @@ const (
 	// RevocationMethodNativeExpiry: nothing ended the credential early; it
 	// lapsed at its own expiry.
 	RevocationMethodNativeExpiry = "native_expiry"
+	// RevocationMethodTokenRevoked: the provider confirmed the token ended
+	// when it was presented (GitHub's DELETE /installation/token, or an
+	// RFC 7009 revocation endpoint), before its native expiry (OD-5).
+	RevocationMethodTokenRevoked = "token_revoked"
 )
 
 // MethodRevoker revokes like Provider.Revoke and also names how the credential

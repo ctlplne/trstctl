@@ -209,7 +209,8 @@ type Lease struct {
 	RevokedAt             *time.Time
 	RevocationCompletedAt *time.Time
 	// RevocationMethod is how the credential ended, for a provider that says
-	// (RevocationMethodDenyPolicy or RevocationMethodNativeExpiry, N3).
+	// (RevocationMethodDenyPolicy or RevocationMethodNativeExpiry, N3;
+	// RevocationMethodTokenRevoked, OD-5).
 	RevocationMethod string
 	// RequestedBy is the subject whose request opened the lease (G1-L1);
 	// empty for a lease from before it was recorded.

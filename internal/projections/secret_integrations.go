@@ -424,7 +424,9 @@ type DynamicSecretLeaseRevocationCompleted struct {
 	AttemptID   string `json:"attempt_id,omitempty"`
 	// Method is how the credential ended, for a provider that says: an AWS
 	// STS session denied through its role ("deny_policy") or lapsed at its
-	// expiry ("native_expiry") (N3).
+	// expiry ("native_expiry") (N3); a GitHub App or OAuth token revoked by
+	// the provider when presented ("token_revoked") or lapsed at its expiry
+	// (OD-5).
 	Method string `json:"method,omitempty"`
 }
 

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3142 annotated sites across 34 rules. Each row is
+3144 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (726 sites)
+### G101 — CWE-798 Use of hardcoded credentials (728 sites)
 
 | Location | Reason |
 |---|---|
@@ -352,6 +352,8 @@ not this file.
 | `internal/dynsecret/ibm_api_connect_test.go:46` | fabricated stand-in token (CWE-798) |
 | `internal/dynsecret/milvus_test.go:38` | fabricated stand-in administrator (CWE-798) |
 | `internal/dynsecret/mongodb_atlas_test.go:34` | fabricated stand-in service account (CWE-798) |
+| `internal/dynsecret/native_expiry.go:36` | a credential kind's name, no credential value (CWE-798) |
+| `internal/dynsecret/native_expiry.go:37` | a credential kind's name, no credential value (CWE-798) |
 | `internal/dynsecret/oauth_client_credentials_test.go:29` | fabricated lab client secret, form-encoded (CWE-798) |
 | `internal/dynsecret/oauth_client_credentials_test.go:190` | fabricated fixture secret; the case fails on its scope (CWE-798) |
 | `internal/dynsecret/postgres_decoy_test.go:15` | placeholder test DSNs, not credentials (CWE-798) |
@@ -562,7 +564,7 @@ not this file.
 | `internal/server/dynamic_secret_couchbase_served_test.go:41` | fabricated stand-in administrator (CWE-798) |
 | `internal/server/dynamic_secret_elasticsearch_served_test.go:58` | fabricated lab administrator password (CWE-798) |
 | `internal/server/dynamic_secret_milvus_served_test.go:44` | fabricated stand-in administrator (CWE-798) |
-| `internal/server/dynamic_secret_oauth_served_test.go:50` | fabricated lab client secret (CWE-798) |
+| `internal/server/dynamic_secret_oauth_served_test.go:60` | fabricated lab client secret (CWE-798) |
 | `internal/server/dynamic_secret_rabbitmq_served_test.go:33` | fabricated lab administrator password (CWE-798) |
 | `internal/server/dynamic_secret_tailscale_served_test.go:48` | fabricated stand-in API token (CWE-798) |
 | `internal/server/dynamic_secret_totp_lab_test.go:38` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -649,7 +651,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:94` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1637` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1665` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:140` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:156` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
@@ -1219,8 +1221,8 @@ not this file.
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:446` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:255` | bounded small ints from config (CWE-190) |
-| `internal/server/secret_integrations_outbox.go:1143` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:1147` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:1149` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:1153` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_sync_source_sequence_test.go:56` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:67` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:72` | this fixture appends exactly two events. |

@@ -894,7 +894,8 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Cont
 // revokeDynamicSecretAtProvider presents the lease's retained credential to a
 // provider that revokes that way (an OAuth access token, RFC 7009, A239) and
 // otherwise revokes by the provider reference alone. method is how the
-// credential ended, for a provider that says (N3).
+// credential ended, for a provider that says (N3; GitHub App and OAuth
+// tokens, OD-5).
 func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecretAtProvider(ctx context.Context, tenantID string, provider dynsecret.Provider, record store.DynamicSecretLease, backendRef string) (method string, err error) {
 	revoker, ok := provider.(interface {
 		RevokeCredential(context.Context, string, []byte) error
@@ -911,6 +912,11 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecretAtProvider(ctx co
 		return "", fmt.Errorf("server: open the credential dynamic-secret lease %s is revoked with: %w", record.ID, err)
 	}
 	defer secret.Wipe(credential)
+	if methodRevoker, ok := provider.(interface {
+		RevokeCredentialMethod(context.Context, string, []byte) (string, error)
+	}); ok {
+		return methodRevoker.RevokeCredentialMethod(ctx, backendRef, credential)
+	}
 	return "", revoker.RevokeCredential(ctx, backendRef, credential)
 }
 

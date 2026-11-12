@@ -6469,6 +6469,7 @@ DynamicLease = TypedDict(
         'id': str,
         'issued_at': str,
         'native_expires_at': str,
+        'native_expiry_kind': str,
         'provider': str,
         'requested_by': str,
         'revocation_completed_at': str,

@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- A GitHub App or OAuth lease's completed revocation names how its token ended (OD-5), as an AWS STS lease's does:
+  `revocation_method` is `token_revoked` when the provider confirmed the presented token ended (GitHub's
+  `DELETE /installation/token`, an RFC 7009 revocation endpoint) and `native_expiry` when it lapsed at its own expiry
+  (OAuth without a revocation endpoint). Leases add `native_expiry_kind` (`aws_session`, `oauth_token`,
+  `github_app_token`), and the console's lease view names the token or session that way instead of calling every
+  expiring credential an AWS session. Migration 0461 admits the new method.
 - Leaked-secret scans read Microsoft Teams channel messages and Confluence content (OD-4): third-party scan providers
   `teams` (a team's channels and their replies from Microsoft Graph, Graph's next pages followed on its own origin only,
   posters' addresses for owner linking) and `confluence` (the pages, blog posts and comments a CQL query selects, the

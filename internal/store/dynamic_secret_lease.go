@@ -560,13 +560,13 @@ func (s *Store) ApplyDynamicSecretLeaseRevocationCompletedTx(ctx context.Context
 
 // ApplyDynamicSecretLeaseRevocationCompletedForEpochTx records a completed
 // revocation and, for a provider that names it, how the credential ended
-// (method: "", "deny_policy" or "native_expiry", N3).
+// (method: "", "deny_policy" or "native_expiry", N3; "token_revoked", OD-5).
 func (s *Store) ApplyDynamicSecretLeaseRevocationCompletedForEpochTx(ctx context.Context, tx pgx.Tx, tenantID, tenantEpoch, leaseID string, completedAt time.Time, method string) error {
 	if tenantID == "" || leaseID == "" || completedAt.IsZero() {
 		return errors.New("store: dynamic-secret revocation completion is incomplete")
 	}
-	if method != "" && method != "deny_policy" && method != "native_expiry" {
-		return fmt.Errorf("store: dynamic-secret revocation method %q is not deny_policy or native_expiry", method)
+	if method != "" && method != "deny_policy" && method != "native_expiry" && method != "token_revoked" {
+		return fmt.Errorf("store: dynamic-secret revocation method %q is not deny_policy, native_expiry or token_revoked", method)
 	}
 	if err := s.ValidateDynamicSecretTenantEpochTx(ctx, tx, tenantID, tenantEpoch); err != nil {
 		return err

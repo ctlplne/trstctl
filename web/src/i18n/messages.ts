@@ -8896,6 +8896,19 @@ export const messages = {
     description: "Native expiry of an AWS STS lease whose session could assume other roles: an hour past the session's own expiry (N3-L3).",
   },
   "secrets.dynamic.providerRevokedAt": { defaultMessage: "Provider removal confirmed at", description: "Dynamic lease revocation evidence." },
+  "secrets.dynamic.tokenExpiresAt": { defaultMessage: "Token expires at", description: "A GitHub App or OAuth token's own expiry." },
+  "secrets.dynamic.tokenRevokedAt": {
+    defaultMessage: "Token revocation confirmed at",
+    description: "When the provider confirmed a presented GitHub App or OAuth token ended.",
+  },
+  "secrets.dynamic.tokenExpiryConfirmedAt": {
+    defaultMessage: "Token expiry confirmed at",
+    description: "When a GitHub App or OAuth token's own expiry closed its revocation.",
+  },
+  "secrets.dynamic.awsDenialConfirmedAt": {
+    defaultMessage: "AWS session denial confirmed at",
+    description: "When the deny policy for an STS session was read back and its revocation completed.",
+  },
   "secrets.dynamic.awsExpiryConfirmedAt": {
     defaultMessage: "AWS session expiry confirmed at",
     description: "The native STS expiration passed; this is not an AWS delete operation.",
@@ -8906,6 +8919,22 @@ export const messages = {
   },
   "secrets.dynamic.statusUnavailable": { defaultMessage: "Current lease status unavailable", description: "Dynamic lease revocation evidence." },
   "secrets.dynamic.providerRemoved": { defaultMessage: "Provider confirmed credential removal", description: "Dynamic lease revocation evidence." },
+  "secrets.dynamic.awsDenied": {
+    defaultMessage: "AWS session denied before its expiry",
+    description: "An STS session's revocation completed through a deny policy on its role, read back before completion.",
+  },
+  "secrets.dynamic.tokenRevoked": {
+    defaultMessage: "Provider revoked the token",
+    description: "A GitHub App or OAuth token's revocation completed when the provider confirmed the presented token ended.",
+  },
+  "secrets.dynamic.tokenExpired": {
+    defaultMessage: "Token reached its native expiry",
+    description: "A GitHub App or OAuth token lapsed at its own expiry; nothing revoked it earlier.",
+  },
+  "secrets.dynamic.tokenPendingExpiry": {
+    defaultMessage: "Lease closed; the token may stay valid until its expiry",
+    description: "A token the provider can't revoke early stays valid until its native expiry.",
+  },
   "secrets.dynamic.awsExpired": {
     defaultMessage: "AWS session reached native expiry",
     description: "An STS session expired natively; no per-session delete was performed.",

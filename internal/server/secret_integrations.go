@@ -623,8 +623,16 @@ func (p *configuredDynamicProvider) Revoke(ctx context.Context, backendRef strin
 // RevokeMethod revokes like Revoke and, for an AWS STS lease, names how its
 // session ended: denied through its role by an inline policy before its expiry
 // when the provider has revoke_with_deny_policy (N3), else at its native
-// expiry. Other providers name no method.
+// expiry. A GitHub App or OAuth token revoked without its credential at hand
+// lapses at its native expiry, and says so (OD-5). Other providers name no
+// method.
 func (p *configuredDynamicProvider) RevokeMethod(ctx context.Context, backendRef string) (string, error) {
+	if p.cfg.Type == "github-app" || p.cfg.Type == "oauth-client-credentials" {
+		if err := dynsecret.CheckNativeExpiration(backendRef, time.Now()); err != nil {
+			return "", err
+		}
+		return dynsecret.RevocationMethodNativeExpiry, nil
+	}
 	if p.cfg.Type != "aws-sts" && p.cfg.Type != "aws-iam" {
 		return "", p.Revoke(ctx, backendRef)
 	}
@@ -646,12 +654,32 @@ func (p *configuredDynamicProvider) RevokeMethod(ctx context.Context, backendRef
 	return revoker.RevokeMethod(ctx, backendRef)
 }
 
+// RevokeCredentialMethod revokes like RevokeCredential and names how the
+// token ended (OD-5): token_revoked when the provider confirmed it when it
+// was presented (GitHub's DELETE /installation/token, an RFC 7009 revocation
+// endpoint), native_expiry once an OAuth token without a revocation endpoint
+// has lapsed.
+func (p *configuredDynamicProvider) RevokeCredentialMethod(ctx context.Context, backendRef string, credential []byte) (string, error) {
+	if !p.revocableByCredential() {
+		return p.RevokeMethod(ctx, backendRef)
+	}
+	if err := p.RevokeCredential(ctx, backendRef, credential); err != nil {
+		return "", err
+	}
+	return dynsecret.RevocationMethodTokenRevoked, nil
+}
+
+// revocableByCredential reports a provider whose token ends when presented:
+// a GitHub App, or OAuth with a revocation endpoint.
+func (p *configuredDynamicProvider) revocableByCredential() bool {
+	return p.cfg.Type == "github-app" || (p.cfg.Type == "oauth-client-credentials" && p.cfg.RevocationEndpoint != "")
+}
+
 // RevokeCredential revokes a lease by presenting its credential (an OAuth access
 // token at the RFC 7009 revocation endpoint). Without a revocation endpoint it
 // is Revoke: the token lapses at its native expiry.
 func (p *configuredDynamicProvider) RevokeCredential(ctx context.Context, backendRef string, credential []byte) error {
-	revocable := p.cfg.Type == "github-app" || (p.cfg.Type == "oauth-client-credentials" && p.cfg.RevocationEndpoint != "")
-	if !revocable {
+	if !p.revocableByCredential() {
 		return p.Revoke(ctx, backendRef)
 	}
 	backend, closeBackend, err := p.openBackend(ctx)

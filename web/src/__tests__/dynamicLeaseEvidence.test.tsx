@@ -162,6 +162,49 @@ describe("dynamic lease provider evidence", () => {
     expect(screen.getByText(/any session chained from them, may work in AWS until the time below/)).toBeInTheDocument();
   });
 
+  it("names how a GitHub App or OAuth token ended, not an AWS session (OD-5)", async () => {
+    const expiry = new Date(Date.now() + 15 * 60000).toISOString();
+    const tokenLease = {
+      ...lease,
+      provider: "qa-github",
+      state: "revoked",
+      revocation_status: "pending" as const,
+      native_expires_at: expiry,
+      native_expiry_kind: "github_app_token" as const,
+    };
+    read.mockResolvedValue(tokenLease);
+    renderReceipt(tokenLease);
+    expect(await screen.findByText("Lease closed; the token may stay valid until its expiry")).toBeInTheDocument();
+    expect(screen.getByText("Token expires at")).toBeInTheDocument();
+    expect(screen.queryByText(/AWS session/)).not.toBeInTheDocument();
+    read.mockResolvedValue({ ...tokenLease, revocation_status: "completed", revocation_completed_at: expiry, revocation_method: "token_revoked" as const });
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    expect(await screen.findByText("Provider revoked the token")).toBeInTheDocument();
+    expect(screen.getByText("Token revocation confirmed at")).toBeInTheDocument();
+    cleanup();
+
+    const oauthLease = { ...tokenLease, provider: "qa-oauth", native_expiry_kind: "oauth_token" as const };
+    const lapsed = { ...oauthLease, revocation_status: "completed" as const, revocation_completed_at: expiry, revocation_method: "native_expiry" as const };
+    read.mockResolvedValue(lapsed);
+    renderReceipt(lapsed);
+    expect(await screen.findByText("Token reached its native expiry")).toBeInTheDocument();
+    expect(screen.getByText("Token expiry confirmed at")).toBeInTheDocument();
+    cleanup();
+
+    const denied = {
+      ...tokenLease,
+      provider: "qa-aws-sts",
+      native_expiry_kind: "aws_session" as const,
+      revocation_status: "completed" as const,
+      revocation_completed_at: expiry,
+      revocation_method: "deny_policy" as const,
+    };
+    read.mockResolvedValue(denied);
+    renderReceipt(denied);
+    expect(await screen.findByText("AWS session denied before its expiry")).toBeInTheDocument();
+    expect(screen.getByText("AWS session denial confirmed at")).toBeInTheDocument();
+  });
+
   it("names who requested the lease (G1-L1)", async () => {
     const requested = { ...lease, requested_by: "oidc|dana-ops" };
     read.mockResolvedValue(requested);

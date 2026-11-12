@@ -24,6 +24,16 @@ type oauthLabServer struct {
 	mu      sync.Mutex
 	tokens  map[string]oauthLabToken
 	revoked map[string]bool
+	// lifetime is how long a token it issues is valid; five minutes when
+	// unset.
+	lifetime time.Duration
+}
+
+// setLifetime sets how long the tokens it issues from now on are valid.
+func (l *oauthLabServer) setLifetime(d time.Duration) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.lifetime = d
 }
 
 type oauthLabToken struct {
@@ -64,9 +74,13 @@ func newOAuthLabServer(t *testing.T) (*oauthLabServer, *httptest.Server) {
 				return
 			}
 			token := hex.EncodeToString(raw)
-			lab.tokens[token] = oauthLabToken{scope: r.PostForm.Get("scope"), expires: time.Now().Add(5 * time.Minute)}
+			lifetime := lab.lifetime
+			if lifetime == 0 {
+				lifetime = 5 * time.Minute
+			}
+			lab.tokens[token] = oauthLabToken{scope: r.PostForm.Get("scope"), expires: time.Now().Add(lifetime)}
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": token, "token_type": "Bearer", "expires_in": 300, "scope": r.PostForm.Get("scope")})
+			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": token, "token_type": "Bearer", "expires_in": int(lifetime.Seconds()), "scope": r.PostForm.Get("scope")})
 		case "/revoke":
 			lab.revoked[r.PostForm.Get("token")] = true
 			w.WriteHeader(http.StatusOK)

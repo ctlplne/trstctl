@@ -4657,10 +4657,11 @@ export interface DynamicLease {
   id: string;
   issued_at: string;
   native_expires_at?: string;
+  native_expiry_kind?: "aws_session" | "oauth_token" | "github_app_token";
   provider: string;
   requested_by?: string;
   revocation_completed_at?: string;
-  revocation_method?: "deny_policy" | "native_expiry";
+  revocation_method?: "deny_policy" | "native_expiry" | "token_revoked";
   revocation_status?: "none" | "pending" | "completed" | "failed";
   revoked_at?: string;
   role: string;

@@ -1,8 +1,9 @@
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
+import type { MessageKey } from "@/i18n/messages";
 import type { DynamicLease } from "@/lib/api";
-import { DynamicLeaseMetadata, RevealPanel } from "./SecretsPageParts";
+import { DynamicLeaseMetadata, RevealPanel, nativeExpiryKind } from "./SecretsPageParts";
 
 // sshLeaseCredential reads an SSH certificate lease's credential (A239-L11).
 // Its private key and its certificate are saved as two files beside each
@@ -38,15 +39,36 @@ export function DynamicLeaseEvidence({
   const { t } = useTranslation();
   const ssh = credential ? sshLeaseCredential(credential.value) : null;
   const complete = lease.revocation_status === "completed" && !!lease.revocation_completed_at;
-  const awsSession = !!lease.native_expires_at;
+  // Whose own expiry the lease can wait for (OD-5): an AWS session, or an
+  // OAuth or GitHub App token.
+  const kind = nativeExpiryKind(lease);
+  const awsSession = kind === "aws_session";
+  const token = kind === "oauth_token" || kind === "github_app_token";
+  const completed = (): MessageKey => {
+    switch (lease.revocation_method) {
+      case "deny_policy":
+        return "secrets.dynamic.awsDenied";
+      case "token_revoked":
+        return "secrets.dynamic.tokenRevoked";
+      case "native_expiry":
+        return awsSession ? "secrets.dynamic.awsExpired" : "secrets.dynamic.tokenExpired";
+      default:
+        return awsSession ? "secrets.dynamic.awsExpired" : "secrets.dynamic.providerRemoved";
+    }
+  };
+  const pending: MessageKey = awsSession
+    ? "secrets.dynamic.awsPendingExpiry"
+    : token
+      ? "secrets.dynamic.tokenPendingExpiry"
+      : "secrets.dynamic.providerRevokePending";
   const status = error
     ? t("secrets.dynamic.statusUnavailable")
     : complete
-      ? t(awsSession ? "secrets.dynamic.awsExpired" : "secrets.dynamic.providerRemoved")
+      ? t(completed())
       : lease.revocation_status === "failed"
         ? t("secrets.dynamic.providerRevokeFailed")
         : lease.revocation_status === "pending"
-          ? t(awsSession ? "secrets.dynamic.awsPendingExpiry" : "secrets.dynamic.providerRevokePending")
+          ? t(pending)
           : active
             ? t("secrets.dynamic.issuedTitle")
             : t("secrets.dynamic.providerRemovalUnconfirmed");

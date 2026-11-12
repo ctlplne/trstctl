@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { StepShell } from "@/components/wizard/StepShell";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
+import type { MessageKey } from "@/i18n/messages";
 import {
   ApiError,
   type DynamicLease,
@@ -668,7 +669,14 @@ export function MachineSession({ session }: { session: MachineLoginResponse }) {
   );
 }
 
+/** Whose native expiry a lease carries (OD-5); a lease read before the
+ * server named it, with an expiry, is an AWS session's. */
+export function nativeExpiryKind(lease: DynamicLease): DynamicLease["native_expiry_kind"] {
+  return lease.native_expiry_kind ?? (lease.native_expires_at ? "aws_session" : undefined);
+}
+
 export function DynamicLeaseMetadata({ lease }: { lease: DynamicLease }) {
+  const awsLease = nativeExpiryKind(lease) === "aws_session";
   return (
     <dl className="grid gap-2 md:grid-cols-2">
       <div>
@@ -708,15 +716,15 @@ export function DynamicLeaseMetadata({ lease }: { lease: DynamicLease }) {
       {lease.native_expires_at && (
         <div>
           <dt className="font-medium text-muted-foreground">
-            {translateNow(lease.role_chaining ? "secrets.dynamic.chainedSessionsEndBy" : "secrets.dynamic.nativeExpiresAt")}
+            {translateNow(
+              lease.role_chaining ? "secrets.dynamic.chainedSessionsEndBy" : awsLease ? "secrets.dynamic.nativeExpiresAt" : "secrets.dynamic.tokenExpiresAt",
+            )}
           </dt>
           <dd>{formatDate(lease.native_expires_at)}</dd>
         </div>
       )}
       <div>
-        <dt className="font-medium text-muted-foreground">
-          {translateNow(lease.native_expires_at ? "secrets.dynamic.awsExpiryConfirmedAt" : "secrets.dynamic.providerRevokedAt")}
-        </dt>
+        <dt className="font-medium text-muted-foreground">{translateNow(completedAtLabel(lease, awsLease))}</dt>
         <dd>{formatDate(lease.revocation_completed_at)}</dd>
       </div>
     </dl>
@@ -974,6 +982,21 @@ export function mergeMeta(current: SecretMeta[], incoming: SecretMeta[]): Secret
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** How a completed revocation's time is named (OD-5): by the way the
+ * credential ended when the server says, else by whose expiry it waited for. */
+function completedAtLabel(lease: DynamicLease, awsLease: boolean): MessageKey {
+  switch (lease.revocation_method) {
+    case "deny_policy":
+      return "secrets.dynamic.awsDenialConfirmedAt";
+    case "token_revoked":
+      return "secrets.dynamic.tokenRevokedAt";
+    case "native_expiry":
+      return awsLease ? "secrets.dynamic.awsExpiryConfirmedAt" : "secrets.dynamic.tokenExpiryConfirmedAt";
+    default:
+      return awsLease ? "secrets.dynamic.awsExpiryConfirmedAt" : "secrets.dynamic.providerRevokedAt";
+  }
+}
+
 export function leaseMetadataOnly(lease: DynamicLease): DynamicLease {
   return {
     id: lease.id,
@@ -984,11 +1007,13 @@ export function leaseMetadataOnly(lease: DynamicLease): DynamicLease {
     expires_at: lease.expires_at,
     hard_expires_at: lease.hard_expires_at,
     native_expires_at: lease.native_expires_at,
+    native_expiry_kind: lease.native_expiry_kind,
     role_chaining: lease.role_chaining,
     requested_by: lease.requested_by,
     revocation_status: lease.revocation_status,
     revoked_at: lease.revoked_at,
     revocation_completed_at: lease.revocation_completed_at,
+    revocation_method: lease.revocation_method,
   };
 }
 
