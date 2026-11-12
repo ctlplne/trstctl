@@ -27163,6 +27163,11 @@ export const messages = {
   "workloads.oidcIssuer.discovery": { defaultMessage: "Discovery document", description: "N5: the issuer's discovery URL." },
   "workloads.oidcIssuer.jwks": { defaultMessage: "Key set", description: "N5: the issuer's JWKS URL." },
   "workloads.oidcIssuer.algorithms": { defaultMessage: "Algorithms", description: "N5: the signing algorithms." },
+  "workloads.oidcIssuer.rs256Hint": {
+    defaultMessage:
+      "A cloud that accepts only RS256 needs protocols.spiffe.jwt_key_algorithm set to RS256. Keys created after that change are RSA; rotate the signing key to replace this one.",
+    description: "OD-6: how to get an RS256 issuer for a relying party that accepts only RS256.",
+  },
   "workloads.oidcIssuer.tokenEndpoint": { defaultMessage: "Token exchange", description: "N5: where workloads exchange a platform token." },
   "workloads.jwtKeys.heading": { defaultMessage: "Signing keys", description: "N5-L3: heading of the JWT signing key list." },
   "workloads.jwtKeys.caption": { defaultMessage: "Workload JWT signing keys", description: "N5-L3: table caption." },

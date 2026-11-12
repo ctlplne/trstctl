@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- An RS256 key option for the OpenID issuer (OD-6): `protocols.spiffe.jwt_key_algorithm: RS256`
+  (`TRSTCTL_PROTOCOLS_SPIFFE_JWT_KEY_ALGORITHM`) has the signer create the workload JWT keys as RSA-2048, so a cloud
+  that accepts only RS256 trusts exchanged workload tokens; the issuer advertises RS256 and publishes an RSA key, and
+  a rotation's next key is RSA too. The default stays ES256; a key already in the signer keeps its algorithm until a
+  rotation replaces it, and the console's issuer panel says how to get RS256 while none is published.
 - A GitHub App or OAuth lease's completed revocation names how its token ended (OD-5), as an AWS STS lease's does:
   `revocation_method` is `token_revoked` when the provider confirmed the presented token ended (GitHub's
   `DELETE /installation/token`, an RFC 7009 revocation endpoint) and `native_expiry` when it lapsed at its own expiry

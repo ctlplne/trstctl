@@ -9068,7 +9068,10 @@ What comes next:
 - A live exchange with each cloud (an AWS IAM OIDC provider, a Google workload
   identity pool, an Azure federated credential) is a Track B proof; their
   algorithm and thumbprint rules are theirs to enforce. The key is the SPIFFE JWT
-  key (ES256 by default); a cloud that accepts only RS256 needs an RSA JWT key.
+  key: ES256 by default, or RS256 (RSA-2048) with
+  `protocols.spiffe.jwt_key_algorithm: RS256` (OD-6) for a cloud that accepts only
+  RS256; a key already in the signer keeps its algorithm until a rotation replaces
+  it.
 - The token exchange serves one tenant (`protocols.spiffe.tenant_id`), so one
   tenant has an issuer; per-tenant exchange for every tenant is what comes next.
 - Key rotation is served (N5-L3): the next key is published ahead of signing and

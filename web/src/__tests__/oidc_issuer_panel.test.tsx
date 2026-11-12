@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { IntlProvider } from "@/i18n/I18nProvider";
 import { AppQueryProvider } from "@/lib/query";
@@ -86,6 +86,17 @@ describe("OpenID issuer and signing keys", () => {
     expect(await within(rows[2] ?? rows[1]).findByText("spiffe-jwt-g2")).toBeInTheDocument();
     expect(screen.getByText(/Key spiffe-jwt-g2 is published and signs from/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rotate signing key" })).not.toBeInTheDocument();
+  });
+
+  it("says how to get RS256 for a cloud that accepts only RS256, and stops once the issuer signs it (OD-6)", async () => {
+    renderPanel();
+    expect(await screen.findByText(issuer.issuer)).toBeInTheDocument();
+    expect(screen.getByText(/needs protocols\.spiffe\.jwt_key_algorithm set to RS256/)).toBeInTheDocument();
+    cleanup();
+    apiMock.oidcIssuer.mockResolvedValue({ ...issuer, algorithms: ["RS256"] });
+    renderPanel();
+    expect(await screen.findByText("RS256")).toBeInTheDocument();
+    expect(screen.queryByText(/needs protocols\.spiffe\.jwt_key_algorithm/)).not.toBeInTheDocument();
   });
 
   it("keeps the idempotency key when a rotation is retried after a failure", async () => {

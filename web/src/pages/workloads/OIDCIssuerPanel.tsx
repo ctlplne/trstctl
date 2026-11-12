@@ -96,6 +96,9 @@ export function OIDCIssuerPanel() {
           <dd className="break-all font-mono text-xs">{issuer.data.token_endpoint}</dd>
         </dl>
       ) : null}
+      {issuer.data && !issuer.data.algorithms.includes("RS256") ? (
+        <p className="max-w-3xl text-sm text-muted-foreground">{t("workloads.oidcIssuer.rs256Hint")}</p>
+      ) : null}
 
       <h3 className="font-medium">{t("workloads.jwtKeys.heading")}</h3>
       {keys.error ? <p className="text-sm text-muted-foreground">{keys.error}</p> : null}

@@ -109,7 +109,9 @@ type workloadJWTKeyRing struct {
 	client   *signing.Client
 	tenantID string
 	first    crypto.DigestSigner
-	now      func() time.Time
+	// algorithm is what a rotation's new key is created as (OD-6).
+	algorithm crypto.Algorithm
+	now       func() time.Time
 
 	mu        sync.Mutex
 	signers   map[int]crypto.DigestSigner
@@ -117,8 +119,8 @@ type workloadJWTKeyRing struct {
 	loadedAt  time.Time
 }
 
-func newWorkloadJWTKeyRing(s *Server, c *signing.Client, tenantID string, first crypto.DigestSigner) *workloadJWTKeyRing {
-	return &workloadJWTKeyRing{srv: s, client: c, tenantID: tenantID, first: first, now: time.Now,
+func newWorkloadJWTKeyRing(s *Server, c *signing.Client, tenantID string, first crypto.DigestSigner, algorithm crypto.Algorithm) *workloadJWTKeyRing {
+	return &workloadJWTKeyRing{srv: s, client: c, tenantID: tenantID, first: first, algorithm: algorithm, now: time.Now,
 		signers: map[int]crypto.DigestSigner{1: first}}
 }
 
@@ -185,7 +187,7 @@ func (k *workloadJWTKeyRing) ensureSigner(ctx context.Context, generation int) e
 	if _, err := k.signer(ctx, generation); err == nil {
 		return nil
 	}
-	remote, err := k.srv.generatePrivilegedKeyHandle(ctx, k.client, crypto.ECDSAP256, workloadJWTKeyHandle(generation),
+	remote, err := k.srv.generatePrivilegedKeyHandle(ctx, k.client, k.algorithm, workloadJWTKeyHandle(generation),
 		[]signing.KeyPurpose{signing.PurposeGeneric}, signing.PurposeGeneric)
 	if err != nil {
 		return fmt.Errorf("create workload JWT key generation %d in the signer: %w", generation, err)

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -32,12 +33,24 @@ type n5CloudSTS struct {
 	issuer, audience, subject string
 	client                    *http.Client
 	now                       func() time.Time
+	// algorithms, when set, are the only signing algorithms it accepts, as a
+	// relying party that takes only RS256 does (OD-6).
+	algorithms []string
 }
 
 func (c *n5CloudSTS) exchange(token string) (string, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return "", errors.New("InvalidIdentityToken: not a JWT")
+	}
+	if len(c.algorithms) > 0 {
+		header, err := base64.RawURLEncoding.DecodeString(parts[0])
+		var h struct {
+			Alg string `json:"alg"`
+		}
+		if err != nil || json.Unmarshal(header, &h) != nil || !slices.Contains(c.algorithms, h.Alg) {
+			return "", fmt.Errorf("InvalidIdentityToken: signing algorithm %q is not supported", h.Alg)
+		}
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {

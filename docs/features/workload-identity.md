@@ -495,7 +495,15 @@ published OpenID issuer, `<base>/oidc/<tenant-id>`, and every token `POST /oauth
 exchanges for it carries that issuer as `iss`. The issuer's discovery document,
 `GET <issuer>/.well-known/openid-configuration`, names the issuer, its `jwks_uri`
 (`GET <issuer>/jwks.json`, the same signer-held SPIFFE JWT key as `/oauth2/jwks`) and
-the signing algorithm (ES256 with the default key). A cloud registers that issuer and
+the signing algorithm (ES256 with the default key). A relying party that accepts only
+RS256 needs `protocols.spiffe.jwt_key_algorithm: RS256` (OD-6;
+`TRSTCTL_PROTOCOLS_SPIFFE_JWT_KEY_ALGORITHM`): the signer then creates the JWT key as
+RSA-2048, the key set publishes it as an `RSA` key with `alg: RS256`, and tokens are
+signed RS256. The setting applies to keys created from then on — the first key, and
+each key a rotation creates — so on a control plane that already has an ES256 key,
+set it and rotate the signing key (below); the ES256 key keeps verifying its tokens
+until its retain window ends. The console's issuer panel says so while no RS256 key is
+published. A cloud registers that issuer and
 trusts the tokens directly, with no long-lived cloud key on the workload: an AWS IAM
 OIDC identity provider for `AssumeRoleWithWebIdentity` (audience `sts.amazonaws.com`),
 a Google workload identity pool provider for its STS token exchange, or an Azure

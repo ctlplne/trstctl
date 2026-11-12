@@ -1285,6 +1285,12 @@ type SPIFFEProtocol struct {
 	// credentials) can trust the tokens POST /oauth2/token exchanges: they then
 	// carry that issuer as iss. Empty publishes no issuer.
 	OIDCIssuerURL string `json:"oidc_issuer_url,omitempty"`
+	// JWTKeyAlgorithm (OD-6) is the algorithm of the JWT-SVID and exchanged
+	// token signing keys the signer creates: ES256 (ECDSA P-256, the default)
+	// or RS256 (RSA-2048), for a relying party that accepts only RS256. It
+	// applies to keys created from then on: the first key, and each key a
+	// rotation creates; a key already in the signer keeps its algorithm.
+	JWTKeyAlgorithm string `json:"jwt_key_algorithm,omitempty"`
 	// Entries (B8-D1) register the workloads host agents deliver: each binds a
 	// SPIFFE ID to the selectors the agent must observe of the calling process
 	// and to the enrolled agent, by name, whose host Workload API
@@ -1414,6 +1420,11 @@ func (p Protocols) ValidateTenantBindings(defaultTenant string) []error {
 		if err := ValidateOIDCIssuerURL(p.SPIFFE.OIDCIssuerURL); err != nil {
 			errs = append(errs, err)
 		}
+	}
+	switch p.SPIFFE.JWTKeyAlgorithm {
+	case "", "ES256", "RS256":
+	default:
+		errs = append(errs, fmt.Errorf("protocols.spiffe.jwt_key_algorithm %q must be ES256 or RS256", p.SPIFFE.JWTKeyAlgorithm))
 	}
 	errs = append(errs, validateSPIFFEEntries(p.SPIFFE)...)
 	return errs
@@ -4133,6 +4144,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH", &p.SPIFFE.SocketPath)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN", &p.SPIFFE.TrustDomain)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_OIDC_ISSUER_URL", &p.SPIFFE.OIDCIssuerURL)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_JWT_KEY_ALGORITHM", &p.SPIFFE.JWTKeyAlgorithm)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_HYBRID_SVIDS_ENABLED", &p.SPIFFE.HybridSVIDs)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_SERVE_LOCAL_WORKLOADS", &p.SPIFFE.ServeLocalWorkloads)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SSH_ENABLED", &p.SSH.Enabled)

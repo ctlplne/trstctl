@@ -1123,7 +1123,8 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 	if c == nil {
 		return nil, fmt.Errorf("server: signer unavailable for SPIFFE")
 	}
-	jwtSigner, err := s.spiffeJWTSigner(ctx, c)
+	jwtAlgorithm := spiffeJWTKeyAlgorithm(cfg)
+	jwtSigner, err := s.spiffeJWTSigner(ctx, c, jwtAlgorithm)
 	if err != nil {
 		return nil, err
 	}
@@ -1138,7 +1139,7 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 	// N5-L3: the JWT key rotates; generation 1 is the key above.
 	var jwtKeys *workloadJWTKeyRing
 	if s.store != nil {
-		jwtKeys = newWorkloadJWTKeyRing(s, c, tenant, jwtSigner)
+		jwtKeys = newWorkloadJWTKeyRing(s, c, tenant, jwtSigner, jwtAlgorithm)
 		issuer.JWTKeys = jwtKeys.keys
 	}
 	// A default registration entry so the served socket is immediately usable: a
@@ -1226,12 +1227,24 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 
 // spiffeJWTSigner returns a signer-backed DigestSigner for the SPIFFE JWT-SVID
 // signing key (its own handle). The key never leaves the signer (AN-4).
-func (s *Server) spiffeJWTSigner(ctx context.Context, c *signing.Client) (crypto.DigestSigner, error) {
+// spiffeJWTSigner is the first JWT signing key: the one in the signer, or one
+// of the configured algorithm created there (OD-6).
+func (s *Server) spiffeJWTSigner(ctx context.Context, c *signing.Client, alg crypto.Algorithm) (crypto.DigestSigner, error) {
 	if remote, err := s.signerForPrivilegedHandle(ctx, c, spiffeJWTHandle, signing.PurposeGeneric); err == nil {
 		return remote, nil
 	}
-	return s.generatePrivilegedKeyHandle(ctx, c, crypto.ECDSAP256, spiffeJWTHandle,
+	return s.generatePrivilegedKeyHandle(ctx, c, alg, spiffeJWTHandle,
 		[]signing.KeyPurpose{signing.PurposeGeneric}, signing.PurposeGeneric)
+}
+
+// spiffeJWTKeyAlgorithm is the algorithm of the JWT signing keys the signer
+// creates (OD-6): ES256's ECDSA P-256 by default, or RSA-2048 for RS256, for
+// a relying party (a cloud's token exchange) that accepts only RS256.
+func spiffeJWTKeyAlgorithm(cfg config.SPIFFEProtocol) crypto.Algorithm {
+	if cfg.JWTKeyAlgorithm == "RS256" {
+		return crypto.RSA2048
+	}
+	return crypto.ECDSAP256
 }
 
 // acmeEABPosture reads the mounted ACME server's external account binding state
