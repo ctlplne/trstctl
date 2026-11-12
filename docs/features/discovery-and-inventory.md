@@ -460,8 +460,8 @@ negotiate. An agent granted the **observer** role (`agents:relay.grant`; it sees
 systems talk to which) and started with `--observe-interface <if>` watches a mirror or
 span port, or its own host's interface, on Linux (`CAP_NET_RAW`; other platforms report
 an error, never an empty observation set). A kernel filter keeps only the ports in
-`--observe-ports` (default 443, 8443, 636, 993, 995, 465, 22, 80, 389, 5432, 3306; at
-most 32), and the agent reads only the first bytes of each connection, in order, up to
+`--observe-ports` (default 443, 8443, 636, 993, 995, 465, 22, 80, 389, 5432, 3306, 25,
+587, 143, 110; at most 32), and the agent reads only the first bytes of each connection, in order, up to
 16 KiB a direction. The filter reads through up to two VLAN tags (802.1Q, and QinQ with
 an 802.1ad outer tag; X1-L2), so a trunk's mirror port works: the kernel carries a
 frame's outer tag out of band and a QinQ frame's inner tag stays in the frame. On its own
@@ -475,8 +475,19 @@ to see both directions of a host's own connections:
 - SSH: both banners and the key exchange, host key and cipher the two sides agree on
   (RFC 4253's choice), so `mlkem768x25519-sha256` and `sntrup761x25519` read as
   post-quantum.
-- Plaintext: an HTTP request line or an LDAP operation before StartTLS on a watched port
-  raises one `plaintext_protocol` finding per endpoint.
+- TLS reached inside another protocol (X1-L4): SMTP and IMAP STARTTLS, POP3 STLS, the
+  LDAP StartTLS extended operation, PostgreSQL's SSLRequest (after a refused GSSAPI
+  request too) and MySQL's SSL request packet. The observer reads the TLS handshake that
+  follows like a direct one and records how it was reached as `upgrade`
+  (`smtp-starttls`, `imap-starttls`, `pop3-stls`, `ldap-starttls`, `postgresql-ssl`,
+  `mysql-ssl`). A database's own TLS settings show here: PostgreSQL 17's default
+  `ssl_ecdh_curve` (prime256v1) keeps its sessions on secp256r1 even between OpenSSL 3.5
+  peers that offer X25519MLKEM768.
+- Plaintext: an HTTP request line or an LDAP operation before StartTLS on a watched port,
+  a PostgreSQL startup message or a MySQL login sent without TLS, or a mail login, AUTH
+  or MAIL command before any STARTTLS raises one `plaintext_protocol` finding per
+  endpoint (`postgresql-startup`, `mysql-login`, `smtp-plaintext`, `imap-plaintext`,
+  `pop3-plaintext`).
 
 No payload byte is stored or reported: the buffers are dropped once the handshake is
 read, and an HTTP path or LDAP bind never leaves the parser. Each endpoint and set of

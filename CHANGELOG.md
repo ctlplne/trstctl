@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- The passive network observer reads TLS reached inside another protocol (X1-L4): SMTP and IMAP STARTTLS, POP3
+  STLS, LDAP StartTLS, PostgreSQL's SSLRequest and MySQL's SSL request, each reported with its `upgrade`; a PostgreSQL
+  startup, a MySQL login or a mail login sent without TLS is a `plaintext_protocol` finding. Ports 25, 587, 143 and
+  110 join the observed defaults. Proven on real captures of PostgreSQL 17, MariaDB 11.8, OpenLDAP 2.6 and the mail
+  protocols.
 - The passive network observer reads a handshake whose segments arrive out of order (X1-L3): segments ahead of a gap
   are held (16 a direction, inside the 16 KiB it reads) and read once the gap fills, counted as `reordered`; before,
   any gap ended reading of that connection. `trstctl-agent --observe-pcap <file>` reads a saved classic pcap capture

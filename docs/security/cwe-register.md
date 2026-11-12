@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3058 annotated sites across 33 rules. Each row is
+3064 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -910,7 +910,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (466 sites)
+### G115 — CWE-190 Integer overflow or wraparound (472 sites)
 
 | Location | Reason |
 |---|---|
@@ -961,6 +961,12 @@ not this file.
 | `internal/agent/observe/pcap_test.go:80` | bounded test fixture length (CWE-190) |
 | `internal/agent/observe/portfilter.go:119` | a forward jump inside this fixed program, under 255 instructions at MaxWatchedPorts (CWE-190) |
 | `internal/agent/observe/portfilter.go:123` | a forward jump inside this fixed program (CWE-190) |
+| `internal/agent/observe/upgrade_test.go:18` | bounded test fixture lengths (CWE-190) |
+| `internal/agent/observe/upgrade_test.go:24` | bounded test fixture lengths (CWE-190) |
+| `internal/agent/observe/upgrade_test.go:36` | bounded test fixture length (CWE-190) |
+| `internal/agent/observe/upgrade_test.go:41` | bounded test fixture lengths (CWE-190) |
+| `internal/agent/observe/upgrade_test.go:43` | bounded test fixture lengths (CWE-190) |
+| `internal/agent/observe/upgrade_test.go:49` | bounded test fixture lengths (CWE-190) |
 | `internal/agent/observe/wire_test.go:14` | big-endian packing of bounded test lengths (CWE-190) |
 | `internal/agent/observe/wire_test.go:15` | big-endian packing of bounded test lengths (CWE-190) |
 | `internal/agent/observe/wire_test.go:18` | test vectors are under 256 bytes (CWE-190) |

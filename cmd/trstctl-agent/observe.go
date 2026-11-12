@@ -23,7 +23,7 @@ import (
 var (
 	observeInterface = flag.String("observe-interface", "",
 		"network interface (a mirror or span port, or this host's interface) whose connections' handshakes the agent observes passively; needs the observer role and, on Linux, CAP_NET_RAW. Only handshake metadata is kept, never payload")
-	observePorts = flag.String("observe-ports", "443,8443,636,993,995,465,22,80,389,5432,3306",
+	observePorts = flag.String("observe-ports", "443,8443,636,993,995,465,22,80,389,5432,3306,25,587,143,110",
 		"comma-separated server ports whose connections are observed (at most 32)")
 	observeMaxFlows = flag.Int("observe-max-flows", 2048,
 		"connections followed at once; more are counted and skipped, never buffered")
@@ -202,6 +202,9 @@ func observationFindings(iface string, items []observe.Item, stats observe.Stats
 			meta["tls_version"], meta["cipher_suite"], meta["group"] = obs.TLSVersion, obs.CipherSuite, obs.Group
 			meta["server_name"] = obs.ServerName
 			meta["certificate_visible"] = strconv.FormatBool(item.Certificate != nil)
+			if obs.Upgrade != "" {
+				meta["upgrade"] = obs.Upgrade // X1-L4: TLS reached by STARTTLS or a database's request
+			}
 			if c := item.Certificate; c != nil {
 				fingerprint = c.SHA256
 				meta["certificate_key_algorithm"] = c.KeyAlgorithm

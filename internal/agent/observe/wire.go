@@ -19,7 +19,7 @@ import (
 
 // Observation is what one connection's handshake reveals.
 type Observation struct {
-	Protocol string `json:"protocol"` // tls, ssh, http or ldap
+	Protocol string `json:"protocol"` // tls, ssh, http, ldap, smtp, imap, pop3, postgresql or mysql
 	// TLS
 	TLSVersion    string   `json:"tls_version,omitempty"`
 	CipherSuite   string   `json:"cipher_suite,omitempty"`
@@ -32,6 +32,10 @@ type Observation struct {
 	// CertificateHidden is true for TLS 1.3, which encrypts the certificate:
 	// the active probe reads the served chain instead.
 	CertificateHidden bool `json:"certificate_hidden,omitempty"`
+	// Upgrade says how a TLS handshake was reached inside another protocol
+	// (X1-L4): smtp-starttls, imap-starttls, pop3-stls, ldap-starttls,
+	// postgresql-ssl or mysql-ssl; empty for TLS from the first byte.
+	Upgrade string `json:"upgrade,omitempty"`
 	// SSH
 	SSHClient        string `json:"ssh_client,omitempty"`
 	SSHServer        string `json:"ssh_server,omitempty"`
@@ -61,8 +65,23 @@ func Parse(client, server []byte) (obs Observation, ok, done bool) {
 		return parseSSH(client, server)
 	case isHTTPRequest(client):
 		return Observation{Protocol: "http", Plaintext: true, PlaintextKind: "http-request"}, true, true
+	}
+	// Server-first protocols are known by their greeting, before any guess
+	// from the client's first byte: an IMAP tag or a MySQL packet can start
+	// with 0x30 like an LDAP message.
+	if greeting := mysqlGreeting(server); greeting > 0 {
+		return parseMySQL(client, server, greeting)
+	}
+	if p, ok := mailGreeting(server); ok {
+		return parseMail(p, client, server)
+	}
+	switch {
 	case client[0] == 0x30:
-		return parseLDAP(client)
+		return parseLDAP(client, server)
+	case isPostgreSQLStart(client):
+		return parsePostgreSQL(client, server)
+	case looksLikeMailClient(client) && len(server) == 0:
+		return Observation{}, false, false // the greeting has not been seen yet
 	}
 	return Observation{}, false, len(client) >= 8
 }
@@ -394,7 +413,7 @@ func firstCommon(client, server []string) string {
 
 // parseLDAP reads the first LDAP message's operation. A connection whose first
 // operation is not the StartTLS extended request runs in the clear.
-func parseLDAP(client []byte) (Observation, bool, bool) {
+func parseLDAP(client, server []byte) (Observation, bool, bool) {
 	r := reader{b: client}
 	if r.u8() != 0x30 {
 		return Observation{}, false, true
@@ -412,7 +431,7 @@ func parseLDAP(client []byte) (Observation, bool, bool) {
 	switch op {
 	case 0x77: // ExtendedRequest; StartTLS upgrades before anything else
 		if bytes.Contains(client, []byte("1.3.6.1.4.1.1466.20037")) {
-			return obs, true, true
+			return ldapStartTLS(client, server)
 		}
 		obs.Plaintext, obs.PlaintextKind = true, "ldap-extended-request"
 	case 0x60: // BindRequest

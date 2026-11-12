@@ -1527,8 +1527,10 @@ never live in the API process. What you can do end to end against the running bi
   connections in order, holding up to 16 segments a direction that arrive ahead
   of a gap until it fills (X1-L3; a gap that never fills ends reading of that
   connection), reads saved classic pcap captures (`--observe-pcap`; not pcapng),
-  does not read QUIC or TLS over UDP, and needs Linux AF_PACKET for live capture
-  (other platforms report an error).
+  reads TLS reached by SMTP/IMAP STARTTLS, POP3 STLS, LDAP StartTLS, PostgreSQL's
+  SSLRequest and MySQL's SSL request (X1-L4; proven on captures of PostgreSQL 17,
+  MariaDB 11.8 and OpenLDAP 2.6), does not read QUIC or TLS over UDP (DTLS), and
+  needs Linux AF_PACKET for live capture (other platforms report an error).
 - Host TLS session observer (X5): an agent with the session-observer role reports,
   from probes on the host's OpenSSL 3 libraries, each TLS handshake's version, suite,
   key-exchange group, HelloRetryRequest and the peer's certificate — the one TLS 1.3
