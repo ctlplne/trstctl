@@ -88,25 +88,26 @@ func inspectJKS(data []byte, passwords [][]byte) (KeystoreReport, error) {
 	return report, nil
 }
 
+// inspectPKCS12 lists every key bag of a PKCS#12 file (X2-L1: a Java PKCS12
+// keystore holds one per key alias) with its alias and chain, and counts the
+// certificates outside every key's chain as trusted.
 func inspectPKCS12(data []byte, passwords [][]byte) (KeystoreReport, error) {
 	for _, password := range append(append([][]byte(nil), passwords...), nil) {
-		chain, hasKey, err := pfx.ChainDER(data, string(password))
+		keys, trusted, err := pfx.KeyEntries(data, string(password))
 		if errors.Is(err, pfx.ErrIncorrectPassword) {
 			continue
 		}
 		if err != nil {
 			return KeystoreReport{}, fmt.Errorf("crypto: read PKCS#12: %w", err)
 		}
-		report := KeystoreReport{Format: "PKCS12", IntegrityVerified: true}
-		if !hasKey {
-			report.TrustedCerts = len(chain)
-			return report, nil
+		report := KeystoreReport{Format: "PKCS12", IntegrityVerified: true, TrustedCerts: len(trusted)}
+		for _, key := range keys {
+			info, err := keystoreKeyInfo(key.Alias, key.ChainDER)
+			if err != nil {
+				return KeystoreReport{}, err
+			}
+			report.Keys = append(report.Keys, info)
 		}
-		info, err := keystoreKeyInfo("", chain)
-		if err != nil {
-			return KeystoreReport{}, err
-		}
-		report.Keys = []KeystoreKeyInfo{info}
 		return report, nil
 	}
 	return KeystoreReport{Format: "PKCS12"}, ErrKeystoreLocked

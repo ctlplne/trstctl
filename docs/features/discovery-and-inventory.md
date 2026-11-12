@@ -594,9 +594,15 @@ so one key found in both places correlates) and the chain length, all read from 
 entry's certificate. A JKS key is never decrypted: JKS keeps certificate chains in the
 clear, so its entries are listed even without the store password and marked
 `integrity_verified=false` until a password from `--inventory-keystore-password-file`
-(one per line, tried before the published default `changeit`) matches. A PKCS#12 file
-decodes its key with its password on the way to the certificates; the agent wipes it at
-once, and a file no password opens is reported `locked`, with nothing listed.
+(one per line, tried before the published default `changeit`) matches. A PKCS#12 file is
+read for its certificates only: its MAC checks the password, the contents holding
+certificates are decrypted, and a key bag is never decrypted (X2-L3); a file no password
+opens is reported `locked`, with nothing listed. Every key of a PKCS#12 file is reported
+(X2-L1): a Java PKCS12 keystore, as keytool writes it, holds one key bag per alias, and
+each is listed at `<file>#<alias>` with the chain the file holds for it (its certificate
+by the key's `localKeyID`, then each issuer the file carries, checked by signature).
+Certificates outside every key's chain, such as the keystore's trusted entries, are
+counted as `keystore_trusted_certificates`.
 
 `--inventory-crypto-libraries` names TLS libraries (`libssl`, `libcrypto`, GnuTLS's
 `libgnutls`, NSS's `libsoftokn3`) and `--inventory-go-binaries` names Go programs. The

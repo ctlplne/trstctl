@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3066 annotated sites across 33 rules. Each row is
+3068 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (709 sites)
+### G101 — CWE-798 Use of hardcoded credentials (710 sites)
 
 | Location | Reason |
 |---|---|
@@ -314,6 +314,7 @@ not this file.
 | `internal/connector/gcpcm/gcpcm_test.go:18` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/kemp/kemp_test.go:65` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/paloalto/paloalto_test.go:29` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `internal/crypto/pfx/keyentries_test.go:20` | keytool's published default store password on a test fixture; not a credential (CWE-798) |
 | `internal/crypto/ssh_account_password.go:43` | a command path the profile runs, not a credential (CWE-798) |
 | `internal/crypto/ssh_account_password.go:44` | a command path the profile runs, not a credential (CWE-798) |
 | `internal/custody/custody.go:98` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -1031,10 +1032,10 @@ not this file.
 | `internal/crypto/mysqlsignin/mysqlsignin.go:485` | a two-byte length below 1<<16 (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:487` | the three bytes of a value under 1<<24 (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:489` | a length, never negative (CWE-190) |
-| `internal/crypto/pfx/certonly.go:157` | r is at most 0xFFFF here, so its two bytes are exact (CWE-190) |
-| `internal/crypto/pfx/certonly.go:169` | id is the KDF purpose, 1 to 3 (CWE-190) |
-| `internal/crypto/pfx/certonly.go:205` | RFC 7292 B.2 adds modulo 2^(8v): keeping the low byte and carrying is the algorithm (CWE-190) |
-| `internal/crypto/pfx/certonly.go:367` | pad is at most the block size (CWE-190) |
+| `internal/crypto/pfx/certonly.go:162` | r is at most 0xFFFF here, so its two bytes are exact (CWE-190) |
+| `internal/crypto/pfx/certonly.go:174` | id is the KDF purpose, 1 to 3 (CWE-190) |
+| `internal/crypto/pfx/certonly.go:210` | RFC 7292 B.2 adds modulo 2^(8v): keeping the low byte and carrying is the algorithm (CWE-190) |
+| `internal/crypto/pfx/certonly.go:372` | pad is at most the block size (CWE-190) |
 | `internal/crypto/pfx/rc2.go:55` | 255 modulo a power of two up to 256 fits a byte (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:149` | a startup message is a few hundred bytes (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:349` | a SCRAM client-first message is under 100 bytes (CWE-190) |
@@ -3086,7 +3087,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/crypto/pfx/certonly.go:303` | decrypting a legacy file's certificate contents only (CWE-327) |
+| `internal/crypto/pfx/certonly.go:308` | decrypting a legacy file's certificate contents only (CWE-327) |
 
 ### G501 — CWE-? (unmapped rule) (2 sites)
 
@@ -3181,7 +3182,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (157 sites)
+### G703 — CWE-22 Path traversal (taint) (158 sites)
 
 | Location | Reason |
 |---|---|
@@ -3197,6 +3198,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:222` | receiver is a private test directory and name ranges over two fixed archive basenames. |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `ee/auditcompliance/retention_download_test.go:87` | the test's own archive under its t.TempDir (CWE-22) |
+| `internal/agent/discovery/keystore_multikey_test.go:23` | the test writes its fixture into its own t.TempDir() (CWE-22) |
 | `internal/agent/observe/capture_linux_test.go:65` | the lab runner names the report path in the test environment, never a request (CWE-22) |
 | `internal/agent/observe/capture_linux_test.go:146` | the lab runner names the report path in the test environment, never a request (CWE-22) |
 | `internal/agent/relay/host_renew_pending.go:164` | both paths are agent-owned fixed state paths |

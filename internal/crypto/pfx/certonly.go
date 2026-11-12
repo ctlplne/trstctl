@@ -36,6 +36,7 @@ var (
 	oidCertBag               = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 12, 10, 1, 3}
 	oidX509Certificate       = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 22, 1}
 	oidLocalKeyID            = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 21}
+	oidFriendlyName          = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 20}
 	oidSHA1                  = asn1.ObjectIdentifier{1, 3, 14, 3, 2, 26}
 	oidSHA256                = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 1}
 	oidSHA512                = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 3}
@@ -52,6 +53,10 @@ var (
 	oidPBEWithSHA3KeyDESCBC  = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 12, 1, 3}
 	oidPBEWithSHA128BitRC2   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 12, 1, 5}
 	oidPBEWithSHA40BitRC2CBC = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 12, 1, 6}
+
+	// oidJavaTrustedKeyUsage marks a Java keystore's trusted certificate
+	// entry (keytool -importcert into a PKCS12 keystore).
+	oidJavaTrustedKeyUsage = asn1.ObjectIdentifier{2, 16, 840, 1, 113894, 746875, 1, 1}
 )
 
 // errNotCertificateOnly reports a PKCS#12 shape this reader does not handle
@@ -387,92 +392,24 @@ func localKeyID(attrs []pkcs12Attribute) []byte {
 // certificate first when the file says which it is — and whether it holds a
 // key, without decrypting any key.
 func certificatesOnly(pfxData []byte, password string) ([][]byte, bool, error) {
-	var pdu pfxPDU
-	if err := strictUnmarshal(pfxData, &pdu); err != nil {
-		return nil, false, err
-	}
-	if pdu.Version != 3 || !pdu.AuthSafe.ContentType.Equal(oidData) {
-		return nil, false, fmt.Errorf("%w: version %d, authSafe %s", errNotCertificateOnly, pdu.Version, pdu.AuthSafe.ContentType)
-	}
-	var authSafe []byte
-	if err := strictUnmarshal(pdu.AuthSafe.Content.Bytes, &authSafe); err != nil {
-		return nil, false, err
-	}
-	bmp, err := bmpPassword(password)
+	set, err := readBags(pfxData, password)
 	if err != nil {
 		return nil, false, err
 	}
-	if len(pdu.MacData.Mac.Algorithm.Algorithm) == 0 {
-		// Without a MAC nothing checks the password; only the empty password
-		// opens such a file, so any other is the wrong one (and a caller trying
-		// several reaches the empty password).
-		if password != "" {
-			return nil, false, ErrIncorrectPassword
-		}
-	} else if err := verifyMAC(pdu.MacData, authSafe, bmp, password); err != nil {
-		return nil, false, err
-	}
-	var contents []contentInfo
-	if err := strictUnmarshal(authSafe, &contents); err != nil {
-		return nil, false, err
-	}
-	var certs []bagCertificate
-	var keyIDs [][]byte
-	hasKey := false
-	for _, ci := range contents {
-		var safeContents []byte
-		switch {
-		case ci.ContentType.Equal(oidData):
-			if err := strictUnmarshal(ci.Content.Bytes, &safeContents); err != nil {
-				return nil, false, err
-			}
-		case ci.ContentType.Equal(oidEncryptedData):
-			var ed encryptedData
-			if err := strictUnmarshal(ci.Content.Bytes, &ed); err != nil {
-				return nil, false, err
-			}
-			plain, err := decryptContents(ed.EncryptedContentInfo.ContentEncryptionAlgorithm, ed.EncryptedContentInfo.EncryptedContent, bmp, password)
-			if err != nil {
-				return nil, false, err
-			}
-			safeContents = plain
-		default:
-			return nil, false, fmt.Errorf("%w: authSafe content %s", errNotCertificateOnly, ci.ContentType)
-		}
-		var bags []safeBag
-		if err := strictUnmarshal(safeContents, &bags); err != nil {
-			return nil, false, err
-		}
-		for _, bag := range bags {
-			switch {
-			case bag.ID.Equal(oidCertBag):
-				var cb certBag
-				if err := strictUnmarshal(bag.Value.Bytes, &cb); err != nil {
-					return nil, false, err
-				}
-				if !cb.ID.Equal(oidX509Certificate) {
-					continue
-				}
-				if _, err := x509.ParseCertificate(cb.Data); err != nil {
-					return nil, false, fmt.Errorf("pfx: certificate bag: %w", err)
-				}
-				certs = append(certs, bagCertificate{der: cb.Data, keyID: localKeyID(bag.Attributes)})
-			case bag.ID.Equal(oidShroudedKeyBag), bag.ID.Equal(oidKeyBag):
-				// Noted, never decrypted or parsed.
-				hasKey = true
-				if id := localKeyID(bag.Attributes); len(id) > 0 {
-					keyIDs = append(keyIDs, id)
-				}
-			}
-		}
-	}
-	if len(certs) == 0 {
+	hasKey := len(set.keys) > 0
+	if len(set.certs) == 0 {
 		return nil, hasKey, errors.New("pfx: the file holds no certificate")
 	}
-	out := make([][]byte, 0, len(certs))
-	first := keyCertificate(certs, keyIDs, hasKey)
-	out = append(out, certs[first].der)
-	for i, c := range certs {
+	var keyIDs [][]byte
+	for _, k := range set.keys {
+		if len(k.keyID) > 0 {
+			keyIDs = append(keyIDs, k.keyID)
+		}
+	}
+	out := make([][]byte, 0, len(set.certs))
+	first := keyCertificate(set.certs, keyIDs, hasKey)
+	out = append(out, set.certs[first].der)
+	for i, c := range set.certs {
 		if i != first {
 			out = append(out, c.der)
 		}
@@ -480,9 +417,227 @@ func certificatesOnly(pfxData []byte, password string) ([][]byte, bool, error) {
 	return out, hasKey, nil
 }
 
+// bagSet is what a PKCS#12 file's bags say, keys unread: its certificates
+// and, for each key bag, only the attributes that name and pair it.
+type bagSet struct {
+	certs []bagCertificate
+	keys  []bagKey
+}
+
 type bagCertificate struct {
-	der   []byte
+	der     []byte
+	keyID   []byte
+	name    string
+	trusted bool
+}
+
+type bagKey struct {
 	keyID []byte
+	name  string
+}
+
+// readBags verifies the file's MAC with password, decrypts the encrypted
+// contents that hold its certificates, and lists every certificate bag and
+// every key bag's attributes. A key bag is never decrypted, parsed or copied.
+func readBags(pfxData []byte, password string) (bagSet, error) {
+	var pdu pfxPDU
+	if err := strictUnmarshal(pfxData, &pdu); err != nil {
+		return bagSet{}, err
+	}
+	if pdu.Version != 3 || !pdu.AuthSafe.ContentType.Equal(oidData) {
+		return bagSet{}, fmt.Errorf("%w: version %d, authSafe %s", errNotCertificateOnly, pdu.Version, pdu.AuthSafe.ContentType)
+	}
+	var authSafe []byte
+	if err := strictUnmarshal(pdu.AuthSafe.Content.Bytes, &authSafe); err != nil {
+		return bagSet{}, err
+	}
+	bmp, err := bmpPassword(password)
+	if err != nil {
+		return bagSet{}, err
+	}
+	if len(pdu.MacData.Mac.Algorithm.Algorithm) == 0 {
+		// Without a MAC nothing checks the password; only the empty password
+		// opens such a file, so any other is the wrong one (and a caller trying
+		// several reaches the empty password).
+		if password != "" {
+			return bagSet{}, ErrIncorrectPassword
+		}
+	} else if err := verifyMAC(pdu.MacData, authSafe, bmp, password); err != nil {
+		return bagSet{}, err
+	}
+	var contents []contentInfo
+	if err := strictUnmarshal(authSafe, &contents); err != nil {
+		return bagSet{}, err
+	}
+	var set bagSet
+	for _, ci := range contents {
+		var safeContents []byte
+		switch {
+		case ci.ContentType.Equal(oidData):
+			if err := strictUnmarshal(ci.Content.Bytes, &safeContents); err != nil {
+				return bagSet{}, err
+			}
+		case ci.ContentType.Equal(oidEncryptedData):
+			var ed encryptedData
+			if err := strictUnmarshal(ci.Content.Bytes, &ed); err != nil {
+				return bagSet{}, err
+			}
+			plain, err := decryptContents(ed.EncryptedContentInfo.ContentEncryptionAlgorithm, ed.EncryptedContentInfo.EncryptedContent, bmp, password)
+			if err != nil {
+				return bagSet{}, err
+			}
+			safeContents = plain
+		default:
+			return bagSet{}, fmt.Errorf("%w: authSafe content %s", errNotCertificateOnly, ci.ContentType)
+		}
+		var bags []safeBag
+		if err := strictUnmarshal(safeContents, &bags); err != nil {
+			return bagSet{}, err
+		}
+		for _, bag := range bags {
+			switch {
+			case bag.ID.Equal(oidCertBag):
+				var cb certBag
+				if err := strictUnmarshal(bag.Value.Bytes, &cb); err != nil {
+					return bagSet{}, err
+				}
+				if !cb.ID.Equal(oidX509Certificate) {
+					continue
+				}
+				if _, err := x509.ParseCertificate(cb.Data); err != nil {
+					return bagSet{}, fmt.Errorf("pfx: certificate bag: %w", err)
+				}
+				set.certs = append(set.certs, bagCertificate{der: cb.Data, keyID: localKeyID(bag.Attributes),
+					name: friendlyName(bag.Attributes), trusted: hasAttribute(bag.Attributes, oidJavaTrustedKeyUsage)})
+			case bag.ID.Equal(oidShroudedKeyBag), bag.ID.Equal(oidKeyBag):
+				// Noted by its attributes, never decrypted or parsed.
+				set.keys = append(set.keys, bagKey{keyID: localKeyID(bag.Attributes), name: friendlyName(bag.Attributes)})
+			}
+		}
+	}
+	return set, nil
+}
+
+// KeyEntry is one key bag of a PKCS#12 file, described by its certificates:
+// its alias (friendlyName) and its chain as DER, the key's certificate first.
+// A key whose certificate the file does not identify has no chain.
+type KeyEntry struct {
+	Alias    string
+	ChainDER [][]byte
+}
+
+// maxKeyEntryChain bounds a chain built from a file's certificates.
+const maxKeyEntryChain = 10
+
+// KeyEntries opens a PKCS#12 file with password for inventory (X2-L1) and
+// lists every key bag — a Java PKCS12 keystore holds one per key alias — with
+// its certificate chain, plus the certificates that belong to no key's chain
+// (a keystore's trusted entries). Like ChainDER it never decrypts, parses or
+// copies a key. A key's certificate is the one sharing its localKeyId (as
+// Java, OpenSSL and Windows write them); with a single key and no shared ID,
+// the file's first certificate that is not a CA. Its chain follows issuers
+// among the file's certificates, each checked by signature.
+func KeyEntries(pfxData []byte, password string) (keys []KeyEntry, trusted [][]byte, err error) {
+	set, err := readBags(pfxData, password)
+	if err != nil {
+		return nil, nil, err
+	}
+	parsed := make([]*x509.Certificate, len(set.certs))
+	for i, c := range set.certs {
+		if parsed[i], err = x509.ParseCertificate(c.der); err != nil {
+			return nil, nil, fmt.Errorf("pfx: certificate bag: %w", err)
+		}
+	}
+	used := make([]bool, len(set.certs))
+	for _, k := range set.keys {
+		leaf := -1
+		for i, c := range set.certs {
+			if len(k.keyID) > 0 && bytes.Equal(c.keyID, k.keyID) {
+				leaf = i
+				break
+			}
+		}
+		if leaf < 0 && len(set.keys) == 1 && len(set.certs) > 0 {
+			leaf = keyCertificate(set.certs, nil, true)
+		}
+		entry := KeyEntry{Alias: k.name}
+		if leaf >= 0 {
+			if entry.Alias == "" {
+				entry.Alias = set.certs[leaf].name
+			}
+			for _, i := range chainFrom(leaf, parsed, set.certs) {
+				used[i] = true
+				entry.ChainDER = append(entry.ChainDER, set.certs[i].der)
+			}
+		}
+		keys = append(keys, entry)
+	}
+	for i, c := range set.certs {
+		if !used[i] || c.trusted {
+			trusted = append(trusted, c.der)
+		}
+	}
+	return keys, trusted, nil
+}
+
+// chainFrom lists the bag indexes of leaf's chain: leaf, then each issuer
+// found among the file's certificates that are not trusted entries, checked
+// by signature, until a self-issued certificate or the bound.
+func chainFrom(leaf int, parsed []*x509.Certificate, certs []bagCertificate) []int {
+	chain := []int{leaf}
+	seen := map[int]bool{leaf: true}
+	for current := leaf; len(chain) < maxKeyEntryChain; {
+		cert := parsed[current]
+		if bytes.Equal(cert.RawIssuer, cert.RawSubject) {
+			break
+		}
+		next := -1
+		for i, candidate := range parsed {
+			if seen[i] || certs[i].trusted || !bytes.Equal(candidate.RawSubject, cert.RawIssuer) {
+				continue
+			}
+			if cert.CheckSignatureFrom(candidate) == nil {
+				next = i
+				break
+			}
+		}
+		if next < 0 {
+			break
+		}
+		chain = append(chain, next)
+		seen[next] = true
+		current = next
+	}
+	return chain
+}
+
+func hasAttribute(attrs []pkcs12Attribute, id asn1.ObjectIdentifier) bool {
+	for _, attr := range attrs {
+		if attr.ID.Equal(id) {
+			return true
+		}
+	}
+	return false
+}
+
+// friendlyName decodes a bag's friendlyName (a BMPString, RFC 7292 §4.2);
+// an attribute that is not one is ignored.
+func friendlyName(attrs []pkcs12Attribute) string {
+	for _, attr := range attrs {
+		if !attr.ID.Equal(oidFriendlyName) {
+			continue
+		}
+		var value asn1.RawValue
+		if _, err := asn1.Unmarshal(attr.Value.Bytes, &value); err != nil || value.Tag != asn1.TagBMPString || len(value.Bytes)%2 != 0 {
+			return ""
+		}
+		runes := make([]rune, 0, len(value.Bytes)/2)
+		for i := 0; i < len(value.Bytes); i += 2 {
+			runes = append(runes, rune(value.Bytes[i])<<8|rune(value.Bytes[i+1]))
+		}
+		return string(runes)
+	}
+	return ""
 }
 
 // keyCertificate picks the certificate that belongs to the file's key without

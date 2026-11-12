@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The host agent reports every key of a PKCS#12 keystore (X2-L1): a Java PKCS12 keystore with several aliases, as
+  keytool writes it, lists each key at `<file>#<alias>` with its type, size and chain, and counts the trusted entries;
+  before, only one key of such a file was reported, without its alias and with every certificate as its chain. Keys are
+  still never decrypted.
 - A code-signing key's certificate chain is attached or rotated through the API (P9-L1):
   `PUT /api/v1/code-signing/keys/{key_id}/certificate` (`trstctl-cli code-signing keys attach-certificate`, or the Code
   signing page's Key certificates panel) checks the chain against the key and the `codeSigning` usage, records it, and
