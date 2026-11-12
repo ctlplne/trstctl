@@ -6320,6 +6320,16 @@ export interface KeyVaultDisableRequest {
   reason: string;
 }
 
+export interface KubernetesAuditEventList {
+  items: Record<string, unknown>[];
+}
+
+export interface KubernetesAuditReport {
+  events: number;
+  matched: number;
+  recorded: number;
+}
+
 export interface KubernetesCSRSupport {
   api_group: string;
   api_version: string;
@@ -6368,6 +6378,64 @@ export interface KubernetesCertificateProvenance {
   report_id: string;
   request_name: string;
   request_uid: string;
+}
+
+export interface KubernetesDecoy {
+  created_at: string;
+  id: string;
+  k8s_cluster: string;
+  k8s_namespace: string;
+  k8s_secret: string;
+  k8s_service_account: string;
+  kind: "kubernetes";
+  last_read_at?: string;
+  name: string;
+  placement: string;
+  readers?: number;
+  reads?: number;
+  revoked_at?: string;
+  state: "active" | "triggered" | "revoked";
+  trigger_method?: string;
+  trigger_path?: string;
+  trigger_subject?: string;
+  triggered_at?: string;
+}
+
+export interface KubernetesDecoyList {
+  items: KubernetesDecoy[];
+  next_cursor?: string;
+}
+
+export interface KubernetesDecoyRegisterRequest {
+  cluster: string;
+  name: string;
+  namespace: string;
+  placement: string;
+  secret_name?: string;
+  service_account: string;
+}
+
+export interface KubernetesDecoyRegistration {
+  audit_policy: string;
+  created_at: string;
+  id: string;
+  k8s_cluster: string;
+  k8s_namespace: string;
+  k8s_secret: string;
+  k8s_service_account: string;
+  kind: "kubernetes";
+  last_read_at?: string;
+  manifest: string;
+  name: string;
+  placement: string;
+  readers?: number;
+  reads?: number;
+  revoked_at?: string;
+  state: "active" | "triggered" | "revoked";
+  trigger_method?: string;
+  trigger_path?: string;
+  trigger_subject?: string;
+  triggered_at?: string;
 }
 
 export interface KubernetesPostureController {

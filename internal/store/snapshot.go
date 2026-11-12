@@ -356,7 +356,11 @@ import (
 // and file_key_fingerprint): a version-125 payload has no such columns, and a
 // restored file decoy would name no host or path, so its opens would alert
 // nobody.
-const SnapshotFormatVersion = 126
+// Version 127 carries Q6-O2's Kubernetes decoys (honey_tokens k8s_cluster,
+// k8s_namespace, k8s_service_account and k8s_secret): a version-126 payload
+// has no such columns, and a restored Kubernetes decoy would match no audit
+// event.
+const SnapshotFormatVersion = 127
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

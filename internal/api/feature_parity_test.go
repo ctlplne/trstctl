@@ -404,8 +404,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// P9-L1 adds attaching a code-signing key's certificate chain (820).
 	// P9-L2 adds a signing operation's Rekor bundle (821).
 	// Q6-O1 adds listing and retiring decoy files (823).
-	if len(out) != 823 {
-		t.Fatalf("OpenAPI operationIds = %d, want 823", len(out))
+	// Q6-O2 adds registering, listing and retiring Kubernetes token decoys
+	// and their clusters' audit events (827).
+	if len(out) != 827 {
+		t.Fatalf("OpenAPI operationIds = %d, want 827", len(out))
 	}
 	return out
 }

@@ -6342,6 +6342,40 @@ export const messages = {
   "secrets.decoyFiles.error": { defaultMessage: "Decoy files", description: "Decoy file error title." },
   "secrets.decoyFiles.readFailed": { defaultMessage: "Could not read decoy files", description: "Decoy file list failure." },
   "secrets.decoyFiles.retireFailed": { defaultMessage: "Could not retire the decoy file", description: "Decoy file retire failure." },
+  "secrets.decoyK8s.heading": { defaultMessage: "Kubernetes token decoys", description: "Kubernetes token decoy workflow heading." },
+  "secrets.decoyK8s.description": {
+    defaultMessage:
+      "Register a service account that is bound to nothing and apply the manifest: its token Secret sits where a thief looks. The cluster's API server sends its audit events here, so a read of the Secret alerts naming who read it, and any request made with the token alerts naming the client. Each reader alerts once.",
+    description: "Explains Kubernetes token decoys.",
+  },
+  "secrets.decoyK8s.cluster": { defaultMessage: "Cluster", description: "Kubernetes decoy cluster field." },
+  "secrets.decoyK8s.clusterHelp": {
+    defaultMessage: "A lowercase name for the cluster; its audit webhook's URL ends with it.",
+    description: "Help for the Kubernetes decoy cluster field.",
+  },
+  "secrets.decoyK8s.namespace": { defaultMessage: "Namespace", description: "Kubernetes decoy namespace field." },
+  "secrets.decoyK8s.serviceAccount": { defaultMessage: "Service account", description: "Kubernetes decoy service account field." },
+  "secrets.decoyK8s.serviceAccountHelp": {
+    defaultMessage: "A name a thief would want, such as ci-deployer. Its token Secret is named after it.",
+    description: "Help for the Kubernetes decoy service account field.",
+  },
+  "secrets.decoyK8s.register": { defaultMessage: "Register decoy", description: "Button that registers a Kubernetes token decoy." },
+  "secrets.decoyK8s.manifest": { defaultMessage: "Apply this manifest to the cluster", description: "Heading over a decoy's manifest." },
+  "secrets.decoyK8s.auditRules": { defaultMessage: "Add these rules to the cluster's audit policy", description: "Heading over a decoy's audit rules." },
+  "secrets.decoyK8s.webhook": {
+    defaultMessage: "Point the cluster's audit webhook at {url} with a token that holds only decoys:events.report.",
+    description: "How to connect a cluster's audit webhook.",
+  },
+  "secrets.decoyK8s.empty": { defaultMessage: "No Kubernetes token decoys registered.", description: "Empty Kubernetes decoy list." },
+  "secrets.decoyK8s.where": { defaultMessage: "{namespace}/{account} on {cluster}", description: "Where a Kubernetes decoy lives." },
+  "secrets.decoyK8s.first": {
+    defaultMessage: "First by {reader} at {at}: {method}",
+    description: "The first read or use of a Kubernetes decoy.",
+  },
+  "secrets.decoyK8s.error": { defaultMessage: "Kubernetes token decoys", description: "Kubernetes decoy error title." },
+  "secrets.decoyK8s.readFailed": { defaultMessage: "Could not read Kubernetes decoys", description: "Kubernetes decoy list failure." },
+  "secrets.decoyK8s.registerFailed": { defaultMessage: "Could not register the Kubernetes decoy", description: "Kubernetes decoy register failure." },
+  "secrets.decoyK8s.retireFailed": { defaultMessage: "Could not retire the Kubernetes decoy", description: "Kubernetes decoy retire failure." },
   "secrets.decoys.exists": {
     defaultMessage: "A secret with this path already exists. Choose a new path; a decoy never replaces a real secret.",
     description: "Shown when the decoy path is taken.",

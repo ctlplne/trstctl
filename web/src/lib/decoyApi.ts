@@ -6,6 +6,10 @@ import type {
   DatabaseDecoyList,
   DecoyFile,
   DecoyFileList,
+  KubernetesDecoy,
+  KubernetesDecoyList,
+  KubernetesDecoyRegisterRequest,
+  KubernetesDecoyRegistration,
   DecoySecret,
   DecoySecretList,
   DecoySecretRegisterRequest,
@@ -39,3 +43,13 @@ export const listDecoyFiles = (cursor?: string) =>
   req<DecoyFileList>(`/api/v1/secrets/honeytokens/files${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
 
 export const retireDecoyFile = (id: string) => mutate<DecoyFile>("POST", `/api/v1/secrets/honeytokens/files/${encodeURIComponent(id)}/retire`);
+
+// Kubernetes token decoys (Q6-O2): a service account bound to nothing and its
+// token Secret; the cluster's audit webhook reports reads and uses.
+export const registerKubernetesDecoy = (input: KubernetesDecoyRegisterRequest, idempotencyKey?: string) =>
+  mutate<KubernetesDecoyRegistration>("POST", "/api/v1/secrets/honeytokens/kubernetes", input, idempotencyKey);
+
+export const listKubernetesDecoys = (cursor?: string) =>
+  req<KubernetesDecoyList>(`/api/v1/secrets/honeytokens/kubernetes${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+
+export const retireKubernetesDecoy = (id: string) => mutate<KubernetesDecoy>("POST", `/api/v1/secrets/honeytokens/kubernetes/${encodeURIComponent(id)}/retire`);

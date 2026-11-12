@@ -443,8 +443,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// plan-cohorts`. P9-L1 adds `code-signing keys attach-certificate`.
 	// P9-L2 adds code-signing rekor-bundle (888). Q6-O1 adds `secrets
 	// honeytokens files list` and `secrets honeytokens files retire` (890).
-	if len(out) != 890 {
-		t.Fatalf("CLI commands = %d, want 890", len(out))
+	// Q6-O2 adds `secrets honeytokens kubernetes register`, `list`, `retire`
+	// and `report-audit-events` (894).
+	if len(out) != 894 {
+		t.Fatalf("CLI commands = %d, want 894", len(out))
 	}
 	return out
 }

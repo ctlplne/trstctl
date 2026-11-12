@@ -58,8 +58,10 @@ func (s *Store) ListDecoySecretsPage(ctx context.Context, tenantID, afterID stri
 }
 
 // ApplyDecoySecretReadTx projects one read of a decoy that names its reader: a
-// secret decoy's value read through the API (Q6), or a decoy file opened on its
-// host, the reader being the opening program on that host (Q6-O1). The first
+// secret decoy's value read through the API (Q6), a decoy file opened on its
+// host, the reader being the opening program on that host (Q6-O1), or a
+// Kubernetes decoy's token Secret read or token used, the reader being the
+// principal or the client its cluster's audit events name (Q6-O2). The first
 // read moves the decoy to triggered and keeps that reader; every distinct reader
 // enqueues exactly one critical alert naming them, so a second thief is not
 // hidden behind the first, and a reader repeating the read is not re-alerted,
@@ -70,15 +72,17 @@ func (s *Store) ApplyDecoySecretReadTx(ctx context.Context, tx pgx.Tx, tenantID,
 	if _, err := tx.Exec(ctx,
 		`UPDATE honey_tokens SET state = 'triggered', triggered_at = $3,
 		        trigger_method = $4, trigger_path = $5, trigger_subject = $6
-		  WHERE tenant_id = $1 AND id = $2 AND kind IN ('secret', 'file') AND state = 'active'`,
+		  WHERE tenant_id = $1 AND id = $2 AND kind IN ('secret', 'file', 'kubernetes') AND state = 'active'`,
 		tenantID, id, at, method, path, reader); err != nil {
 		return err
 	}
-	var name, placement, kind, secretName, fileHost, filePath, state string
+	var name, placement, kind, secretName, fileHost, filePath, k8sCluster, k8sNamespace, k8sAccount, state string
 	err := tx.QueryRow(ctx,
-		`SELECT name, placement, kind, COALESCE(secret_name, ''), COALESCE(file_host, ''), COALESCE(file_path, ''), state
+		`SELECT name, placement, kind, COALESCE(secret_name, ''), COALESCE(file_host, ''), COALESCE(file_path, ''),
+		        COALESCE(k8s_cluster, ''), COALESCE(k8s_namespace, ''), COALESCE(k8s_service_account, ''), state
 		   FROM honey_tokens
-		  WHERE tenant_id = $1 AND id = $2 AND kind IN ('secret', 'file')`, tenantID, id).Scan(&name, &placement, &kind, &secretName, &fileHost, &filePath, &state)
+		  WHERE tenant_id = $1 AND id = $2 AND kind IN ('secret', 'file', 'kubernetes')`, tenantID, id).Scan(
+		&name, &placement, &kind, &secretName, &fileHost, &filePath, &k8sCluster, &k8sNamespace, &k8sAccount, &state)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && state == "revoked") {
 		return nil
 	}
@@ -103,9 +107,13 @@ func (s *Store) ApplyDecoySecretReadTx(ctx context.Context, tx pgx.Tx, tenantID,
 	alertKey := decoyAlertKey(id, reader)
 	detail := "Decoy secret " + secretName + " was read by " + reader + " (" + method + " " + path +
 		"); inspect decoy " + id + " at placement " + placement
-	if kind == "file" {
+	switch kind {
+	case "file":
 		detail = "Decoy file " + filePath + " on " + fileHost + " was opened by " + reader + " (" + method +
 			"); inspect decoy " + id + " at placement " + placement
+	case "kubernetes":
+		detail = "Decoy Kubernetes service account " + k8sNamespace + "/" + k8sAccount + " on cluster " + k8sCluster +
+			": " + method + " " + path + " by " + reader + "; inspect decoy " + id + " at placement " + placement
 	}
 	alert, err := json.Marshal(map[string]any{
 		"kind": "honeytoken.triggered", "tenant_id": tenantID, "operation_id": alertKey,

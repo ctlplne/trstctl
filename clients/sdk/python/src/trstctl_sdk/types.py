@@ -8782,6 +8782,24 @@ KeyVaultDisableRequest = TypedDict(
     total=False,
 )
 
+KubernetesAuditEventList = TypedDict(
+    'KubernetesAuditEventList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+KubernetesAuditReport = TypedDict(
+    'KubernetesAuditReport',
+    {
+        'events': int,
+        'matched': int,
+        'recorded': int,
+    },
+    total=False,
+)
+
 KubernetesCSRSupport = TypedDict(
     'KubernetesCSRSupport',
     {
@@ -8844,6 +8862,80 @@ KubernetesCertificateProvenance = TypedDict(
         'report_id': str,
         'request_name': str,
         'request_uid': str,
+    },
+    total=False,
+)
+
+KubernetesDecoy = TypedDict(
+    'KubernetesDecoy',
+    {
+        'created_at': str,
+        'id': str,
+        'k8s_cluster': str,
+        'k8s_namespace': str,
+        'k8s_secret': str,
+        'k8s_service_account': str,
+        'kind': str,
+        'last_read_at': str,
+        'name': str,
+        'placement': str,
+        'readers': int,
+        'reads': int,
+        'revoked_at': str,
+        'state': str,
+        'trigger_method': str,
+        'trigger_path': str,
+        'trigger_subject': str,
+        'triggered_at': str,
+    },
+    total=False,
+)
+
+KubernetesDecoyList = TypedDict(
+    'KubernetesDecoyList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+KubernetesDecoyRegisterRequest = TypedDict(
+    'KubernetesDecoyRegisterRequest',
+    {
+        'cluster': str,
+        'name': str,
+        'namespace': str,
+        'placement': str,
+        'secret_name': str,
+        'service_account': str,
+    },
+    total=False,
+)
+
+KubernetesDecoyRegistration = TypedDict(
+    'KubernetesDecoyRegistration',
+    {
+        'audit_policy': str,
+        'created_at': str,
+        'id': str,
+        'k8s_cluster': str,
+        'k8s_namespace': str,
+        'k8s_secret': str,
+        'k8s_service_account': str,
+        'kind': str,
+        'last_read_at': str,
+        'manifest': str,
+        'name': str,
+        'placement': str,
+        'readers': int,
+        'reads': int,
+        'revoked_at': str,
+        'state': str,
+        'trigger_method': str,
+        'trigger_path': str,
+        'trigger_subject': str,
+        'triggered_at': str,
     },
     total=False,
 )

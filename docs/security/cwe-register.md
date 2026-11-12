@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3108 annotated sites across 33 rules. Each row is
+3113 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (712 sites)
+### G101 — CWE-798 Use of hardcoded credentials (713 sites)
 
 | Location | Reason |
 |---|---|
@@ -173,6 +173,7 @@ not this file.
 | `internal/api/agents.go:59` | source-kind label naming where key material was located; no credential value present (CWE-798) |
 | `internal/api/aisurface_contract_test.go:148` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/compliance_report_dispatch_test.go:17` | fabricated fixture reference; no value is real (CWE-798) |
+| `internal/api/decoy_kubernetes.go:42` | a Kubernetes user name, not a credential (CWE-798) |
 | `internal/api/discovery_secret_move.go:30` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/dynamic_secret_preview.go:19` | public MAC domain, not a credential |
 | `internal/api/idempotency_binding_test.go:21` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -753,7 +754,7 @@ not this file.
 | `internal/store/discovery_secret_move.go:53` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/discovery_secret_move.go:56` | SQL column list, no credential (CWE-798) */ `m.finding_id::text, m.secret_name, m.secret_version, m.moved_by, m.moved_at, m.residue, |
 | `internal/store/dynamic_secret_lease.go:671` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
-| `internal/store/honey_token.go:65` | SQL column names only; this string contains no credential material. |
+| `internal/store/honey_token.go:73` | SQL column names only; this string contains no credential material. |
 | `internal/store/migration_0359_content_test.go:50` | a query naming the hash column; no credential value (CWE-798) |
 | `internal/store/migration_0435_content_test.go:50` | a query naming the hash column; no credential value (CWE-798) |
 | `internal/store/privacy_erasure_preparation.go:28` | this is a bounded privacy evidence label, not a credential. |
@@ -1146,10 +1147,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7484` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7501` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7514` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7548` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7492` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7509` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7522` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7556` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1353,8 +1354,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:406` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:430` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:52` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:899` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:919` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:903` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:923` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1600,7 +1601,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (404 sites)
+### G204 — CWE-78 OS command injection (406 sites)
 
 | Location | Reason |
 |---|---|
@@ -1820,6 +1821,8 @@ not this file.
 | `internal/server/compose_e2e_tls_test.go:245` | exact shipped prefix plus fixed test invocation, only owned loopback listeners (CWE-78). |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:44` | docker with the lab's own arguments and the runner's image (CWE-78) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:116` | the lab's own container name (CWE-78) |
+| `internal/server/decoy_kubernetes_kind_lab_q6o2_test.go:148` | kind and kubectl with the lab's own arguments (CWE-78) |
+| `internal/server/decoy_kubernetes_kind_lab_q6o2_test.go:158` | the lab's own cluster (CWE-78) |
 | `internal/server/docker_fixture_command_test.go:20` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/server/dod_signer_binary_test.go:105` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_access_databases_container_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2009,7 +2012,7 @@ not this file.
 | `tools/trstctllint/repo_selftest_test.go:111` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:177` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 
-### G301 — CWE-276 Incorrect default permissions (directory) (58 sites)
+### G301 — CWE-276 Incorrect default permissions (directory) (59 sites)
 
 | Location | Reason |
 |---|---|
@@ -2045,6 +2048,7 @@ not this file.
 | `internal/server/acme_adcs_upstream_served_test.go:176` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/acme_adcs_upstream_served_test.go:207` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/agentchannel_served_test.go:1553` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/decoy_kubernetes_kind_lab_q6o2_test.go:65` | the kind node reads the lab's audit configuration |
 | `internal/server/java_sdk_served_test.go:45` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:245` | the container's keycloak user must read the import directory (CWE-276) |
 | `internal/server/pam_gateway_private_ca_served_test.go:64` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2894,7 +2898,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (134 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (135 sites)
 
 | Location | Reason |
 |---|---|
@@ -2989,6 +2993,7 @@ not this file.
 | `internal/server/codesign_cosign_rekor_lab_p9l2_test.go:88` | public payload, signature, bundle and keys the cosign container reads (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:40` | public lab inputs the tool containers read (CWE-22) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:39` | disposable lab inputs the container reads (CWE-22) |
+| `internal/server/decoy_kubernetes_kind_lab_q6o2_test.go:70` | disposable lab configuration the kind node reads (CWE-22) |
 | `internal/server/dod_connector_runtime_test.go:817` | public CA fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:390` | public CA certificate fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:616` | public CA fixture (CWE-276) |
@@ -3169,7 +3174,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (48 sites)
+### G702 — CWE-78 OS command injection (taint) (49 sites)
 
 | Location | Reason |
 |---|---|
@@ -3190,6 +3195,7 @@ not this file.
 | `internal/server/codesign_notation_lab_p9_test.go:73` | the lab runner names the verified Notation binary (CWE-78) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:83` | the lab runner names the local tool images (CWE-78) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:44` | docker with the lab's own arguments and the runner's image (CWE-78) |
+| `internal/server/decoy_kubernetes_kind_lab_q6o2_test.go:148` | kind and kubectl with the lab's own arguments (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_command_clickhouse_served_test.go:68` | stock curl against this test's owned tunnel (CWE-78) |
@@ -3222,7 +3228,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (163 sites)
+### G703 — CWE-22 Path traversal (taint) (164 sites)
 
 | Location | Reason |
 |---|---|
@@ -3320,6 +3326,7 @@ not this file.
 | `internal/server/compose_e2e_tls_test.go:398` | fixed invalid.pem filename below this test's private t.TempDir; deliberately invalid public fixture bytes are content only (CWE-22). |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:39` | disposable lab inputs the container reads (CWE-22) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:50` | the lab runner's build output (CWE-22) |
+| `internal/server/decoy_kubernetes_kind_lab_q6o2_test.go:70` | disposable lab configuration the kind node reads (CWE-22) |
 | `internal/server/enrollment_relay_served_test.go:54` | the parent test supplies a freshly created public-CA fixture path to this helper process (CWE-22). |
 | `internal/server/pam_agent_launcher_served_test.go:38` | the launched agent writes beside the path its own test named (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:47` | the launched agent writes beside the path its own test named (CWE-22) |

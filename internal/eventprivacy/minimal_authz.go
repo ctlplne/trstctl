@@ -53,6 +53,7 @@ var minimalAuthzPermissions = map[string]bool{
 	"changes:write":          true,
 	"connectors:read":        true,
 	"connectors:write":       true,
+	"decoys:events.report":   true,
 	"discovery:read":         true,
 	"discovery:write":        true,
 	"egress:private":         true,

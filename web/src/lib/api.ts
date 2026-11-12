@@ -393,6 +393,10 @@ import type {
   DecoySecret,
   DecoySecretList,
   DecoySecretRegisterRequest,
+  KubernetesDecoy,
+  KubernetesDecoyList,
+  KubernetesDecoyRegisterRequest,
+  KubernetesDecoyRegistration,
   Brand,
   SlackApp,
   SlackApprovalChannel,
@@ -993,6 +997,10 @@ export type {
   DecoyFile,
   DecoyFileList,
   DynamicSecretConfiguredProvider,
+  KubernetesDecoy,
+  KubernetesDecoyList,
+  KubernetesDecoyRegisterRequest,
+  KubernetesDecoyRegistration,
 } from "./api-types.gen";
 export type { BrokerAgentIdentityRevokeRequest } from "./api-types.gen";
 export type {
@@ -3095,6 +3103,9 @@ export interface Api {
   retireDatabaseDecoy(id: string): Promise<DatabaseDecoy>;
   listDecoyFiles(cursor?: string): Promise<DecoyFileList>;
   retireDecoyFile(id: string): Promise<DecoyFile>;
+  registerKubernetesDecoy(input: KubernetesDecoyRegisterRequest, idempotencyKey?: string): Promise<KubernetesDecoyRegistration>;
+  listKubernetesDecoys(cursor?: string): Promise<KubernetesDecoyList>;
+  retireKubernetesDecoy(id: string): Promise<KubernetesDecoy>;
   previewEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKeyPreview>;
   issueEphemeralAPIKey(input: EphemeralAPIKeyRequest, idempotencyKey?: string): Promise<EphemeralAPIKey>;
   /** Prove the reveal-once bearer works on one access:read route without using
@@ -4317,6 +4328,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   retireDatabaseDecoy: decoy.retireDatabaseDecoy,
   listDecoyFiles: decoy.listDecoyFiles,
   retireDecoyFile: decoy.retireDecoyFile,
+  registerKubernetesDecoy: decoy.registerKubernetesDecoy,
+  listKubernetesDecoys: decoy.listKubernetesDecoys,
+  retireKubernetesDecoy: decoy.retireKubernetesDecoy,
   listAWSHoneyAccounts: () => req<AWSHoneyAccountCatalog>("/api/v1/secrets/honeytokens/aws/accounts"),
   previewAWSHoneyToken: (input) => postRead<AWSHoneyTokenPreview>("/api/v1/secrets/honeytokens/aws/preview", input),
   createAWSHoneyToken: (input, idempotencyKey) => mutate<AWSHoneyTokenCreateResponse>("POST", "/api/v1/secrets/honeytokens/aws", input, idempotencyKey),

@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- Kubernetes token decoys (Q6-O2): `POST /api/v1/secrets/honeytokens/kubernetes` (`trstctl-cli secrets honeytokens
+  kubernetes register`, and the console's decoy credentials) registers a service account bound to nothing and returns
+  the manifest that plants it with its token Secret, and the audit rules its cluster needs; trstctl never holds the token.
+  The cluster's API server sends its audit events to `/api/v1/secrets/honeytokens/kubernetes/clusters/<cluster>/audit-events` with a token
+  holding only the new `decoys:events.report` permission. A read of the Secret alerts naming the principal, and any
+  request made with the token alerts naming the client; each reader alerts once.
 - Host agents plant decoy files (Q6-O1): `trstctl-agent --decoy-ssh-keys PATH[,PATH...]` (Linux, host role) writes a
   decoy SSH private key, generated on the host and authorized nowhere, at each path where no file is, registers it over
   the agent channel by its public half (`ReportDecoys`), and watches it; each program that opens it raises one critical

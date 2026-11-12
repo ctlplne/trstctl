@@ -16030,7 +16030,11 @@
                 "listDatabaseDecoys",
                 "retireDatabaseDecoy",
                 "listDecoyFiles",
-                "retireDecoyFile"
+                "retireDecoyFile",
+                "registerKubernetesDecoy",
+                "listKubernetesDecoys",
+                "retireKubernetesDecoy",
+                "reportKubernetesAuditEvents"
             ],
             "api_na": "",
             "cli_surface": [
@@ -16056,7 +16060,11 @@
                 "secrets honeytokens databases list",
                 "secrets honeytokens databases retire",
                 "secrets honeytokens files list",
-                "secrets honeytokens files retire"
+                "secrets honeytokens files retire",
+                "secrets honeytokens kubernetes register",
+                "secrets honeytokens kubernetes list",
+                "secrets honeytokens kubernetes retire",
+                "secrets honeytokens kubernetes report-audit-events"
             ],
             "cli_na": "",
             "facet_evidence": {

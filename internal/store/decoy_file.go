@@ -47,3 +47,38 @@ func (s *Store) LiveDecoyFileIDs(ctx context.Context, tenantID, host, path strin
 func (s *Store) ListDecoyFilesPage(ctx context.Context, tenantID, afterID string, limit int) ([]HoneyToken, error) {
 	return s.listHoneyTokensWhere(ctx, tenantID, `kind = 'file'`, afterID, limit)
 }
+
+// maxKubernetesDecoysPerCluster bounds the decoys one cluster's audit batch is
+// matched against.
+const maxKubernetesDecoysPerCluster = 1000
+
+// LiveKubernetesDecoys returns the decoys registered for cluster that are
+// active or already triggered (Q6-O2): the ones its audit events are matched
+// against. A retired decoy no longer alerts.
+func (s *Store) LiveKubernetesDecoys(ctx context.Context, tenantID, cluster string) ([]HoneyToken, error) {
+	out := make([]HoneyToken, 0)
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT `+honeyTokenColumns+` FROM honey_tokens
+			  WHERE tenant_id = $1 AND kind = 'kubernetes' AND k8s_cluster = $2 AND state <> 'revoked'
+			  ORDER BY id LIMIT $3`, tenantID, cluster, maxKubernetesDecoysPerCluster)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			h, err := scanHoneyToken(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, h)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// ListKubernetesDecoysPage pages the tenant's Kubernetes decoys in id order.
+func (s *Store) ListKubernetesDecoysPage(ctx context.Context, tenantID, afterID string, limit int) ([]HoneyToken, error) {
+	return s.listHoneyTokensWhere(ctx, tenantID, `kind = 'kubernetes'`, afterID, limit)
+}

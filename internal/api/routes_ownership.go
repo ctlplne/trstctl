@@ -119,6 +119,7 @@ func (a *API) extractedRouteGroups() []route {
 	out = append(out, a.decoySecretRoutes()...)         // see decoy_secrets.go
 	out = append(out, a.databaseDecoyRoutes()...)       // see decoy_databases.go
 	out = append(out, a.decoyFileRoutes()...)           // see decoy_files.go
+	out = append(out, a.kubernetesDecoyRoutes()...)     // see decoy_kubernetes.go
 	out = append(out, a.brokerRevokeRoutes()...)        // see broker_revoke.go
 	out = append(out, a.controlPlaneKeygenRoutes()...)  // see control_plane_keygen.go
 	out = append(out, a.revocationHealthRoutes()...)    // see revocation_health.go

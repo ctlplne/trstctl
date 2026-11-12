@@ -9958,6 +9958,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/honeytokens/kubernetes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Kubernetes token decoys and who first read or used each one */
+        get: operations["listKubernetesDecoys"];
+        put?: never;
+        /** Register a Kubernetes service account token decoy and get the manifest that plants it */
+        post: operations["registerKubernetesDecoy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/honeytokens/kubernetes/clusters/{cluster}/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take a cluster API server's audit webhook batch and alert on reads and uses of its decoys */
+        post: operations["reportKubernetesAuditEvents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/honeytokens/kubernetes/{id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop alerting on a Kubernetes token decoy; its service account and Secret stay in the cluster */
+        post: operations["retireKubernetesDecoy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/honeytokens/secrets": {
         parameters: {
             query?: never;
@@ -20238,6 +20290,18 @@ export interface components {
         KeyVaultDisableRequest: {
             reason: string;
         };
+        /** @description an audit.k8s.io/v1 EventList, as the API server's audit webhook sends it; only items' stage, verb, user, sourceIPs, userAgent, objectRef, requestURI and responseStatus are read */
+        KubernetesAuditEventList: {
+            items: Record<string, never>[];
+        };
+        KubernetesAuditReport: {
+            /** @description events in the batch */
+            events: number;
+            /** @description events that read a decoy's Secret or used its token */
+            matched: number;
+            /** @description matched events recorded against their decoy */
+            recorded: number;
+        };
         KubernetesCSRSupport: {
             api_group: string;
             api_version: string;
@@ -20292,6 +20356,101 @@ export interface components {
             report_id: string;
             request_name: string;
             request_uid: string;
+        };
+        KubernetesDecoy: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /** @description the cluster, as its audit webhook's URL names it */
+            k8s_cluster: string;
+            k8s_namespace: string;
+            /** @description the Secret holding the service account's token */
+            k8s_secret: string;
+            /** @description the decoy service account; bound to nothing */
+            k8s_service_account: string;
+            /** @enum {string} */
+            kind: "kubernetes";
+            /**
+             * Format: date-time
+             * @description when the decoy was last read or used
+             */
+            last_read_at?: string;
+            name: string;
+            placement: string;
+            /** @description how many distinct readers read the Secret or used the token; each alerts once */
+            readers?: number;
+            /** @description how many reads and uses they made in all */
+            reads?: number;
+            /** Format: date-time */
+            revoked_at?: string;
+            /** @enum {string} */
+            state: "active" | "triggered" | "revoked";
+            /** @description the first read or use: token Secret read or token used, the verb and the response code */
+            trigger_method?: string;
+            /** @description the first read or use's request URI */
+            trigger_path?: string;
+            /** @description the first reader: the principal that read the Secret, or the client that used the token, with its address */
+            trigger_subject?: string;
+            /** Format: date-time */
+            triggered_at?: string;
+        };
+        KubernetesDecoyList: {
+            items: components["schemas"]["KubernetesDecoy"][];
+            next_cursor?: string;
+        };
+        KubernetesDecoyRegisterRequest: {
+            /** @description a name for the cluster, used again at the end of its audit webhook's URL */
+            cluster: string;
+            name: string;
+            namespace: string;
+            placement: string;
+            /** @description the token Secret's name (default: the service account's name followed by -token) */
+            secret_name?: string;
+            /** @description the decoy service account's name; make it look like one a thief would want */
+            service_account: string;
+        };
+        KubernetesDecoyRegistration: {
+            /** @description the audit policy rules the cluster needs, ahead of any rule that drops these requests */
+            audit_policy: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /** @description the cluster, as its audit webhook's URL names it */
+            k8s_cluster: string;
+            k8s_namespace: string;
+            /** @description the Secret holding the service account's token */
+            k8s_secret: string;
+            /** @description the decoy service account; bound to nothing */
+            k8s_service_account: string;
+            /** @enum {string} */
+            kind: "kubernetes";
+            /**
+             * Format: date-time
+             * @description when the decoy was last read or used
+             */
+            last_read_at?: string;
+            /** @description the ServiceAccount and token Secret to apply (kubectl apply -f -); nothing in it says decoy */
+            manifest: string;
+            name: string;
+            placement: string;
+            /** @description how many distinct readers read the Secret or used the token; each alerts once */
+            readers?: number;
+            /** @description how many reads and uses they made in all */
+            reads?: number;
+            /** Format: date-time */
+            revoked_at?: string;
+            /** @enum {string} */
+            state: "active" | "triggered" | "revoked";
+            /** @description the first read or use: token Secret read or token used, the verb and the response code */
+            trigger_method?: string;
+            /** @description the first read or use's request URI */
+            trigger_path?: string;
+            /** @description the first reader: the principal that read the Secret, or the client that used the token, with its address */
+            trigger_subject?: string;
+            /** Format: date-time */
+            triggered_at?: string;
         };
         KubernetesPostureController: {
             cluster_id: string;
@@ -58098,6 +58257,182 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DecoyFile"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listKubernetesDecoys: {
+        parameters: {
+            query?: {
+                /** @description page size (1-100) */
+                limit?: number;
+                /** @description opaque pagination cursor */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesDecoyList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    registerKubernetesDecoy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KubernetesDecoyRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesDecoyRegistration"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    reportKubernetesAuditEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the cluster as its decoys were registered */
+                cluster: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KubernetesAuditEventList"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesAuditReport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    retireKubernetesDecoy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesDecoy"];
                 };
             };
             /** @description client error */

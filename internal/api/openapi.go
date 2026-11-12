@@ -4823,6 +4823,47 @@ func componentSchemas() map[string]*Schema {
 		"reads":           {Type: "integer", Description: "how many opens those programs made in all"},
 		"last_read_at":    {Type: "string", Format: "date-time", Description: "when the file was last opened"},
 	}, "id", "kind", "name", "placement", "file_host", "file_path", "file_key_fingerprint", "state", "created_at")
+	// Q6-O2: a Kubernetes service account token decoy; its cluster's audit
+	// events name each reader.
+	kubernetesDecoyFields := map[string]*Schema{
+		"id": uuid(), "kind": {Type: "string", Enum: []string{"kubernetes"}}, "name": str(), "placement": str(),
+		"k8s_cluster":         {Type: "string", Description: "the cluster, as its audit webhook's URL names it"},
+		"k8s_namespace":       str(),
+		"k8s_service_account": {Type: "string", Description: "the decoy service account; bound to nothing"},
+		"k8s_secret":          {Type: "string", Description: "the Secret holding the service account's token"},
+		"state":               {Type: "string", Enum: []string{"active", "triggered", "revoked"}},
+		"created_at":          timestamp(), "triggered_at": timestamp(),
+		"trigger_method":  {Type: "string", Description: "the first read or use: token Secret read or token used, the verb and the response code"},
+		"trigger_path":    {Type: "string", Description: "the first read or use's request URI"},
+		"trigger_subject": {Type: "string", Description: "the first reader: the principal that read the Secret, or the client that used the token, with its address"},
+		"revoked_at":      timestamp(),
+		"readers":         {Type: "integer", Description: "how many distinct readers read the Secret or used the token; each alerts once"},
+		"reads":           {Type: "integer", Description: "how many reads and uses they made in all"},
+		"last_read_at":    {Type: "string", Format: "date-time", Description: "when the decoy was last read or used"},
+	}
+	kubernetesDecoy := object(kubernetesDecoyFields, "id", "kind", "name", "placement", "k8s_cluster", "k8s_namespace", "k8s_service_account", "k8s_secret", "state", "created_at")
+	kubernetesDecoyRegistrationFields := map[string]*Schema{
+		"manifest":     {Type: "string", Description: "the ServiceAccount and token Secret to apply (kubectl apply -f -); nothing in it says decoy"},
+		"audit_policy": {Type: "string", Description: "the audit policy rules the cluster needs, ahead of any rule that drops these requests"},
+	}
+	for k, v := range kubernetesDecoyFields {
+		kubernetesDecoyRegistrationFields[k] = v
+	}
+	kubernetesDecoyRegistration := object(kubernetesDecoyRegistrationFields, "id", "kind", "name", "placement", "k8s_cluster", "k8s_namespace", "k8s_service_account", "k8s_secret", "state", "created_at", "manifest", "audit_policy")
+	kubernetesDecoyRegisterReq := object(map[string]*Schema{
+		"cluster":         {Type: "string", Description: "a name for the cluster, used again at the end of its audit webhook's URL"},
+		"namespace":       str(),
+		"service_account": {Type: "string", Description: "the decoy service account's name; make it look like one a thief would want"},
+		"secret_name":     {Type: "string", Description: "the token Secret's name (default: the service account's name followed by -token)"},
+		"name":            str(), "placement": str(),
+	}, "cluster", "namespace", "service_account", "name", "placement")
+	kubernetesAuditEventList := &Schema{Type: "object", Description: "an audit.k8s.io/v1 EventList, as the API server's audit webhook sends it; only items' stage, verb, user, sourceIPs, userAgent, objectRef, requestURI and responseStatus are read",
+		Properties: map[string]*Schema{"items": {Type: "array", Items: &Schema{Type: "object"}}}, Required: []string{"items"}}
+	kubernetesAuditReport := object(map[string]*Schema{
+		"events":   {Type: "integer", Description: "events in the batch"},
+		"matched":  {Type: "integer", Description: "events that read a decoy's Secret or used its token"},
+		"recorded": {Type: "integer", Description: "matched events recorded against their decoy"},
+	}, "events", "matched", "recorded")
 	databaseDecoyCreateRespFields := map[string]*Schema{
 		"database": str(),
 		"dsn":      {Type: "string", Description: "the decoy login's connection string, revealed once"},
@@ -8951,6 +8992,12 @@ func componentSchemas() map[string]*Schema {
 		"DatabaseDecoyList":                        list("DatabaseDecoy"),
 		"DecoyFile":                                decoyFile,
 		"DecoyFileList":                            list("DecoyFile"),
+		"KubernetesDecoy":                          kubernetesDecoy,
+		"KubernetesDecoyList":                      list("KubernetesDecoy"),
+		"KubernetesDecoyRegistration":              kubernetesDecoyRegistration,
+		"KubernetesDecoyRegisterRequest":           kubernetesDecoyRegisterReq,
+		"KubernetesAuditEventList":                 kubernetesAuditEventList,
+		"KubernetesAuditReport":                    kubernetesAuditReport,
 		"DatabaseDecoyCreateRequest":               databaseDecoyCreateReq,
 		"DatabaseDecoyCreateResponse":              databaseDecoyCreateResp,
 		"BrokerAgentIdentityRevokeRequest":         brokerAgentIdentityRevokeReq,

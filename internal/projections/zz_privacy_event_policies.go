@@ -674,6 +674,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/placement", clear), privacyRule("/token_hash", opaque), privacyRule("/secret_name", opaque),
 		privacyRule("/db_provider_id", opaque), privacyRule("/db_lease_id", opaque), privacyRule("/db_role", opaque),
 		privacyRule("/file_host", clear), privacyRule("/file_path", clear), privacyRule("/file_key_fingerprint", opaque),
+		privacyRule("/k8s_cluster", clear), privacyRule("/k8s_namespace", clear),
+		privacyRule("/k8s_service_account", clear), privacyRule("/k8s_secret", clear),
 	)
 	honeyTokenTriggered := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/method", opaque),

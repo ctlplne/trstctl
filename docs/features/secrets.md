@@ -2212,6 +2212,43 @@ when that open was seen, and how many programs opened it how often. `retire`
 the host until the agent is started without it and the file is removed. A new key planted
 at a path whose file was deleted retires the decoy of the old key.
 
+#### Kubernetes token decoys
+
+A Kubernetes token decoy is a service account bound to nothing whose long-lived token
+Secret sits where a thief looks: a CI namespace, a `kube-system`-looking name. Register
+it in the console (**Secrets → Automatic secret sources → Plant a decoy credential →
+Kubernetes token decoys**), with `trstctl-cli secrets honeytokens kubernetes register -f
+decoy.json` (`{"cluster": "prod-eu", "namespace": "ci", "service_account":
+"ci-deployer", "name": "ci deployer bait", "placement": "ci namespace"}`), or
+`POST /api/v1/secrets/honeytokens/kubernetes` (`secrets:write`). The response carries
+the manifest to apply — the service account, which mounts no token, and its
+`kubernetes.io/service-account-token` Secret (`<service account>-token` unless
+`secret_name` names it), with nothing in either that says decoy and no binding — and the
+audit policy rules the cluster needs, ahead of any rule that would drop these requests.
+trstctl never holds the token. One service account has one live decoy (409).
+
+The cluster's API server sends its audit events to trstctl through its audit webhook
+(`--audit-webhook-config-file`): a kubeconfig whose server is
+`https://<trstctl>/api/v1/secrets/honeytokens/kubernetes/clusters/<cluster>/audit-events`
+— https, because the API server's kubeconfig loader sends a token only over TLS (name
+trstctl's CA in `certificate-authority-data` when it is private), and the cluster in the
+path, because its webhook client drops a query string — and whose token holds
+only `decoys:events.report`, which reads nothing and configures
+nothing, so a leaked webhook token can only report events. Of each batch (at most 4,000
+events, 8 MiB), only finished requests count. A get of the decoy's Secret, or a list or
+watch of its namespace's Secrets, is a read naming the principal and its address, refused
+or not; a get that found no Secret (`kubectl apply` looks before it creates) and the token
+controller filling the Secret (the authenticated `system:kube-controller-manager`) are not. Any
+request authenticated as the decoy's service account is a use naming the client (its
+user agent) and its address. Each distinct reader raises one critical
+`notification.honeytoken` alert, for example `Decoy Kubernetes service account
+ci/ci-deployer on cluster prod-eu: token used: list pods (403) /api/v1/namespaces/ci/pods
+by kubectl/v1.35.0 (linux/amd64) from 203.0.113.9`; the decoy keeps its first reader and
+counts the readers and their reads. The token controller filling the Secret, cluster-wide
+informers and other namespaces never alert. `trstctl-cli secrets honeytokens kubernetes
+list` lists the decoys; `retire` stops alerting and leaves the service account and Secret
+in the cluster.
+
 #### AWS IAM decoy keys
 
 **Secrets → Automatic secret sources → Plant a decoy credential** also has an

@@ -30065,6 +30065,43 @@
         ],
         "type": "object"
       },
+      "KubernetesAuditEventList": {
+        "description": "an audit.k8s.io/v1 EventList, as the API server's audit webhook sends it; only items' stage, verb, user, sourceIPs, userAgent, objectRef, requestURI and responseStatus are read",
+        "properties": {
+          "items": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "KubernetesAuditReport": {
+        "properties": {
+          "events": {
+            "description": "events in the batch",
+            "type": "integer"
+          },
+          "matched": {
+            "description": "events that read a decoy's Secret or used its token",
+            "type": "integer"
+          },
+          "recorded": {
+            "description": "matched events recorded against their decoy",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "events",
+          "matched",
+          "recorded"
+        ],
+        "type": "object"
+      },
       "KubernetesCSRSupport": {
         "properties": {
           "api_group": {
@@ -30285,6 +30322,252 @@
           "controller_id",
           "report_id",
           "observed_at"
+        ],
+        "type": "object"
+      },
+      "KubernetesDecoy": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "k8s_cluster": {
+            "description": "the cluster, as its audit webhook's URL names it",
+            "type": "string"
+          },
+          "k8s_namespace": {
+            "type": "string"
+          },
+          "k8s_secret": {
+            "description": "the Secret holding the service account's token",
+            "type": "string"
+          },
+          "k8s_service_account": {
+            "description": "the decoy service account; bound to nothing",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "kubernetes"
+            ],
+            "type": "string"
+          },
+          "last_read_at": {
+            "description": "when the decoy was last read or used",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "readers": {
+            "description": "how many distinct readers read the Secret or used the token; each alerts once",
+            "type": "integer"
+          },
+          "reads": {
+            "description": "how many reads and uses they made in all",
+            "type": "integer"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "triggered",
+              "revoked"
+            ],
+            "type": "string"
+          },
+          "trigger_method": {
+            "description": "the first read or use: token Secret read or token used, the verb and the response code",
+            "type": "string"
+          },
+          "trigger_path": {
+            "description": "the first read or use's request URI",
+            "type": "string"
+          },
+          "trigger_subject": {
+            "description": "the first reader: the principal that read the Secret, or the client that used the token, with its address",
+            "type": "string"
+          },
+          "triggered_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "placement",
+          "k8s_cluster",
+          "k8s_namespace",
+          "k8s_service_account",
+          "k8s_secret",
+          "state",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "KubernetesDecoyList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/KubernetesDecoy"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "KubernetesDecoyRegisterRequest": {
+        "properties": {
+          "cluster": {
+            "description": "a name for the cluster, used again at the end of its audit webhook's URL",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "secret_name": {
+            "description": "the token Secret's name (default: the service account's name followed by -token)",
+            "type": "string"
+          },
+          "service_account": {
+            "description": "the decoy service account's name; make it look like one a thief would want",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cluster",
+          "namespace",
+          "service_account",
+          "name",
+          "placement"
+        ],
+        "type": "object"
+      },
+      "KubernetesDecoyRegistration": {
+        "properties": {
+          "audit_policy": {
+            "description": "the audit policy rules the cluster needs, ahead of any rule that drops these requests",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "k8s_cluster": {
+            "description": "the cluster, as its audit webhook's URL names it",
+            "type": "string"
+          },
+          "k8s_namespace": {
+            "type": "string"
+          },
+          "k8s_secret": {
+            "description": "the Secret holding the service account's token",
+            "type": "string"
+          },
+          "k8s_service_account": {
+            "description": "the decoy service account; bound to nothing",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "kubernetes"
+            ],
+            "type": "string"
+          },
+          "last_read_at": {
+            "description": "when the decoy was last read or used",
+            "format": "date-time",
+            "type": "string"
+          },
+          "manifest": {
+            "description": "the ServiceAccount and token Secret to apply (kubectl apply -f -); nothing in it says decoy",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "readers": {
+            "description": "how many distinct readers read the Secret or used the token; each alerts once",
+            "type": "integer"
+          },
+          "reads": {
+            "description": "how many reads and uses they made in all",
+            "type": "integer"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "triggered",
+              "revoked"
+            ],
+            "type": "string"
+          },
+          "trigger_method": {
+            "description": "the first read or use: token Secret read or token used, the verb and the response code",
+            "type": "string"
+          },
+          "trigger_path": {
+            "description": "the first read or use's request URI",
+            "type": "string"
+          },
+          "trigger_subject": {
+            "description": "the first reader: the principal that read the Secret, or the client that used the token, with its address",
+            "type": "string"
+          },
+          "triggered_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "placement",
+          "k8s_cluster",
+          "k8s_namespace",
+          "k8s_service_account",
+          "k8s_secret",
+          "state",
+          "created_at",
+          "manifest",
+          "audit_policy"
         ],
         "type": "object"
       },
@@ -105558,6 +105841,272 @@
           }
         ],
         "summary": "Stop alerting on a decoy file; the file stays on its host until the agent stops planting it",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/honeytokens/kubernetes": {
+      "get": {
+        "operationId": "listKubernetesDecoys",
+        "parameters": [
+          {
+            "description": "page size (1-100)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesDecoyList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List Kubernetes token decoys and who first read or used each one",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "post": {
+        "operationId": "registerKubernetesDecoy",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KubernetesDecoyRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesDecoyRegistration"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Register a Kubernetes service account token decoy and get the manifest that plants it",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/honeytokens/kubernetes/clusters/{cluster}/audit-events": {
+      "post": {
+        "operationId": "reportKubernetesAuditEvents",
+        "parameters": [
+          {
+            "description": "the cluster as its decoys were registered",
+            "in": "path",
+            "name": "cluster",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KubernetesAuditEventList"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesAuditReport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Take a cluster API server's audit webhook batch and alert on reads and uses of its decoys",
+        "x-trstctl-permission": "decoys:events.report"
+      }
+    },
+    "/api/v1/secrets/honeytokens/kubernetes/{id}/retire": {
+      "post": {
+        "operationId": "retireKubernetesDecoy",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesDecoy"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Stop alerting on a Kubernetes token decoy; its service account and Secret stay in the cluster",
         "x-trstctl-permission": "secrets:write"
       }
     },

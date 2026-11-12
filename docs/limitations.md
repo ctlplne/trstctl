@@ -5794,8 +5794,13 @@ when off, requiring a KEK when on):
   still holds the file (fanotify, with `CAP_SYS_ADMIN`, names every opener), an open
   while the agent is stopped is not seen, and a reader that copies the file without
   opening it through the path (a raw block-device read, a backup of the disk image) is
-  not seen. Decoys are SSH keys only. Kubernetes service-account-token decoys are not
-  built.
+  not seen. Decoys are SSH keys only. Kubernetes token decoys (Q6-O2): a registered
+  service account's token Secret read, or its token used, alerts once per reader through
+  the cluster's audit webhook; detection needs the cluster's audit policy to log those
+  requests (the registration gives the rules) and its webhook to reach trstctl, so a
+  managed cluster whose audit log cannot be sent to a webhook is not watched; events the
+  API server drops when its webhook queue is full are not seen; and a read through
+  etcd or a node's disk, outside the API server, is not seen.
 - Secret rotation (F37) backs `POST /api/v1/secrets/rotations` for worker-queued
   `connector:<target>` secret-sync handoffs and for durable static-provider
   commands: a configured dynamic-secret provider of a static-rotation type with

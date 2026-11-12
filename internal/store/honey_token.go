@@ -60,6 +60,14 @@ type HoneyToken struct {
 	FileHost           string `json:"file_host,omitempty"`
 	FilePath           string `json:"file_path,omitempty"`
 	FileKeyFingerprint string `json:"file_key_fingerprint,omitempty"`
+	// K8sCluster, K8sNamespace, K8sServiceAccount and K8sSecret identify a
+	// Kubernetes service account token decoy (Q6-O2): the cluster as the
+	// operator registered it, and the namespace, service account and token
+	// Secret its API server's audit events name.
+	K8sCluster        string `json:"k8s_cluster,omitempty"`
+	K8sNamespace      string `json:"k8s_namespace,omitempty"`
+	K8sServiceAccount string `json:"k8s_service_account,omitempty"`
+	K8sSecret         string `json:"k8s_secret,omitempty"`
 }
 
 // #nosec G101 -- SQL column names only; this string contains no credential material.
@@ -73,7 +81,8 @@ const honeyTokenColumns = `id::text, tenant_id::text, kind, name, placement, tok
     (SELECT count(*) FROM honey_token_readers r WHERE r.tenant_id = honey_tokens.tenant_id AND r.honey_token_id = honey_tokens.id),
     (SELECT COALESCE(sum(r.reads), 0) FROM honey_token_readers r WHERE r.tenant_id = honey_tokens.tenant_id AND r.honey_token_id = honey_tokens.id),
     (SELECT max(r.last_read_at) FROM honey_token_readers r WHERE r.tenant_id = honey_tokens.tenant_id AND r.honey_token_id = honey_tokens.id),
-    COALESCE(file_host, ''), COALESCE(file_path, ''), COALESCE(file_key_fingerprint, '')`
+    COALESCE(file_host, ''), COALESCE(file_path, ''), COALESCE(file_key_fingerprint, ''),
+    COALESCE(k8s_cluster, ''), COALESCE(k8s_namespace, ''), COALESCE(k8s_service_account, ''), COALESCE(k8s_secret, '')`
 
 func scanHoneyToken(row pgx.Row) (HoneyToken, error) {
 	var h HoneyToken
@@ -83,7 +92,8 @@ func scanHoneyToken(row pgx.Row) (HoneyToken, error) {
 		&h.State, &h.CreatedAt, &h.TriggeredAt, &h.TriggerMethod, &h.TriggerPath, &h.RevokedAt,
 		&h.SecretName, &h.TriggerSubject, &h.DBProviderID, &h.DBLeaseID, &h.DBRole,
 		&h.WatchGapSince, &h.WatchGapReason, &h.Readers, &h.Reads, &h.LastReadAt,
-		&h.FileHost, &h.FilePath, &h.FileKeyFingerprint)
+		&h.FileHost, &h.FilePath, &h.FileKeyFingerprint,
+		&h.K8sCluster, &h.K8sNamespace, &h.K8sServiceAccount, &h.K8sSecret)
 	return h, err
 }
 
@@ -133,7 +143,7 @@ func (s *Store) ApplyHoneyTokenCreatedTx(ctx context.Context, tx pgx.Tx, h Honey
 		return err
 	}
 	kind, secretName := "native", any(nil)
-	var dbProvider, dbLease, dbRole, fileHost, filePath, fileKey any
+	var dbProvider, dbLease, dbRole, fileHost, filePath, fileKey, k8sCluster, k8sNamespace, k8sAccount, k8sSecret any
 	switch {
 	case h.SecretName != "":
 		// A secret, database or file decoy has no bearer. Its lookup key can
@@ -145,14 +155,18 @@ func (s *Store) ApplyHoneyTokenCreatedTx(ctx context.Context, tx pgx.Tx, h Honey
 	case h.FilePath != "":
 		kind, h.TokenHash = "file", "file-decoy:"+h.ID
 		fileHost, filePath, fileKey = h.FileHost, h.FilePath, h.FileKeyFingerprint
+	case h.K8sServiceAccount != "":
+		kind, h.TokenHash = "kubernetes", "kubernetes-decoy:"+h.ID
+		k8sCluster, k8sNamespace, k8sAccount, k8sSecret = h.K8sCluster, h.K8sNamespace, h.K8sServiceAccount, h.K8sSecret
 	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO honey_tokens (id, tenant_id, kind, name, placement, token_hash, state, created_at, secret_name,
-		        db_provider_id, db_lease_id, db_role, file_host, file_path, file_key_fingerprint)
-		 VALUES ($1, $2, $7, $3, $4, $5, 'active', $6, $8, $9, $10, $11, $12, $13, $14)
+		        db_provider_id, db_lease_id, db_role, file_host, file_path, file_key_fingerprint,
+		        k8s_cluster, k8s_namespace, k8s_service_account, k8s_secret)
+		 VALUES ($1, $2, $7, $3, $4, $5, 'active', $6, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 		 ON CONFLICT (id) DO NOTHING`,
 		h.ID, h.TenantID, h.Name, h.Placement, h.TokenHash, h.CreatedAt, kind, secretName, dbProvider, dbLease, dbRole,
-		fileHost, filePath, fileKey)
+		fileHost, filePath, fileKey, k8sCluster, k8sNamespace, k8sAccount, k8sSecret)
 	return err
 }
 

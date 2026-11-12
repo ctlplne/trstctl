@@ -164,6 +164,11 @@ const (
 	// should be grantable to different people. Anyone holding only AgentsWrite can
 	// still enroll host agents all day.
 	AgentsGrantRelay Permission = "agents:relay.grant"
+	// DecoyEventsReport sends a Kubernetes cluster's audit events to the decoy
+	// registry (Q6-O2). It is what the API server's audit webhook token holds,
+	// and nothing else: it reads nothing and changes no configuration, so a
+	// leaked webhook token reports events and does no more.
+	DecoyEventsReport Permission = "decoys:events.report"
 )
 
 // Wildcard is a permission that allows every action; it is held by admin.
@@ -183,7 +188,7 @@ func allResourcePermissions() []Permission {
 		AccessRead, AccessWrite, AccessApprove, AccessTargetsWrite, AccessRoleAssign, AccessBundleRun,
 		AccessTerminate, AccessSessionsOpen, RecordingsRead, RecordingsExport,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
-		SecretsRead, SecretsWrite,
+		SecretsRead, SecretsWrite, DecoyEventsReport,
 		KeysRead, KeysWrite, KeysApprove,
 	}
 }
@@ -233,9 +238,10 @@ func BuiltinRoles() map[string]Role {
 	// principals' session recordings and ending their sessions (A255) are
 	// withheld the same way: they belong to an operator or auditor, not to a
 	// machine token. AccessSessionsOpen (A257) is not listed: the role's
-	// AccessWrite includes it.
+	// AccessWrite includes it. DecoyEventsReport (Q6-O2) belongs to a cluster's
+	// audit webhook token, not to a person's CLI.
 	cli := withPermissions(withoutPermissions(allResourcePermissions(), AccessRoleAssign, AccessTargetsWrite, AgentsGrantRelay,
-		AccessTerminate, AccessSessionsOpen, RecordingsRead, RecordingsExport), AuditRead)
+		AccessTerminate, AccessSessionsOpen, RecordingsRead, RecordingsExport, DecoyEventsReport), AuditRead)
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},

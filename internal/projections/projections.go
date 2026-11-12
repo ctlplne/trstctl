@@ -4420,6 +4420,13 @@ type HoneyTokenCreated struct {
 	FileHost           string `json:"file_host,omitempty"`
 	FilePath           string `json:"file_path,omitempty"`
 	FileKeyFingerprint string `json:"file_key_fingerprint,omitempty"`
+	// K8sCluster, K8sNamespace, K8sServiceAccount and K8sSecret make it a
+	// Kubernetes service account token decoy (Q6-O2): the registered cluster,
+	// and the namespace, service account and token Secret.
+	K8sCluster        string `json:"k8s_cluster,omitempty"`
+	K8sNamespace      string `json:"k8s_namespace,omitempty"`
+	K8sServiceAccount string `json:"k8s_service_account,omitempty"`
+	K8sSecret         string `json:"k8s_secret,omitempty"`
 }
 
 type HoneyTokenTriggered struct {
@@ -4427,8 +4434,9 @@ type HoneyTokenTriggered struct {
 	Method string `json:"method"`
 	Path   string `json:"path"`
 	// Reader is the authenticated principal that read a secret decoy's value
-	// (Q6), or the program that opened a decoy file, named with its host
-	// (Q6-O1); a bearer decoy's use has no authenticated reader.
+	// (Q6), the program that opened a decoy file, named with its host
+	// (Q6-O1), or the principal or client a Kubernetes decoy's audit event
+	// names (Q6-O2); a bearer decoy's use has no authenticated reader.
 	Reader string `json:"reader,omitempty"`
 }
 
@@ -8926,6 +8934,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			TokenHash: pl.TokenHash, CreatedAt: e.Time, SecretName: pl.SecretName,
 			DBProviderID: pl.DBProviderID, DBLeaseID: pl.DBLeaseID, DBRole: pl.DBRole,
 			FileHost: pl.FileHost, FilePath: pl.FilePath, FileKeyFingerprint: pl.FileKeyFingerprint,
+			K8sCluster: pl.K8sCluster, K8sNamespace: pl.K8sNamespace, K8sServiceAccount: pl.K8sServiceAccount, K8sSecret: pl.K8sSecret,
 		})
 	case EventHoneyTokenTriggered:
 		var pl HoneyTokenTriggered
