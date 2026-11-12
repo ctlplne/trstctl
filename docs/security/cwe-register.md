@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3049 annotated sites across 33 rules. Each row is
+3051 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -909,7 +909,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (462 sites)
+### G115 — CWE-190 Integer overflow or wraparound (463 sites)
 
 | Location | Reason |
 |---|---|
@@ -955,7 +955,8 @@ not this file.
 | `internal/agent/observe/flows.go:213` | one segment's payload is under 64 KiB, and sequence numbers wrap mod 2^32 by design (CWE-190) |
 | `internal/agent/observe/flows_test.go:23` | bounded test packet length (CWE-190) |
 | `internal/agent/observe/flows_test.go:62` | bounded test fixture length (CWE-190) |
-| `internal/agent/observe/portfilter.go:80` | a forward jump inside this fixed program of fewer than 32 instructions (CWE-190) |
+| `internal/agent/observe/portfilter.go:119` | a forward jump inside this fixed program, under 255 instructions at MaxWatchedPorts (CWE-190) |
+| `internal/agent/observe/portfilter.go:123` | a forward jump inside this fixed program (CWE-190) |
 | `internal/agent/observe/wire_test.go:14` | big-endian packing of bounded test lengths (CWE-190) |
 | `internal/agent/observe/wire_test.go:15` | big-endian packing of bounded test lengths (CWE-190) |
 | `internal/agent/observe/wire_test.go:18` | test vectors are under 256 bytes (CWE-190) |
@@ -3165,7 +3166,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (156 sites)
+### G703 — CWE-22 Path traversal (taint) (157 sites)
 
 | Location | Reason |
 |---|---|
@@ -3182,6 +3183,7 @@ not this file.
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `ee/auditcompliance/retention_download_test.go:87` | the test's own archive under its t.TempDir (CWE-22) |
 | `internal/agent/observe/capture_linux_test.go:65` | the lab runner names the report path in the test environment, never a request (CWE-22) |
+| `internal/agent/observe/capture_linux_test.go:146` | the lab runner names the report path in the test environment, never a request (CWE-22) |
 | `internal/agent/relay/host_renew_pending.go:164` | both paths are agent-owned fixed state paths |
 | `internal/agent/relay/host_renew_pending.go:224` | derived agent-owned state path |
 | `internal/agent/relay/host_renew_pending.go:255` | derived agent-owned state path |

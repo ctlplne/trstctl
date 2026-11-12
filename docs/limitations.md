@@ -1512,7 +1512,8 @@ never live in the API process. What you can do end to end against the running bi
   proven with stock OpenSSL 3.5, OpenSSH 10 and curl/ldapsearch in a Linux container
   (about 920 handshakes per second at 8% of one core and 4 MiB heap on the build
   Mac). Capture throughput on the x86 QA machine is a Track B qualification. It
-  reads untagged IPv4 without fragments and IPv6 without extension headers, follows
+  reads IPv4 without later fragments and IPv6 without extension headers, untagged or
+  behind up to two VLAN tags (X1-L2; a third tag is dropped), follows
   connections in order (a gap ends reading of that connection), does not read QUIC
   or TLS over UDP, and needs Linux AF_PACKET (other platforms report an error).
 - Host TLS session observer (X5): an agent with the session-observer role reports,

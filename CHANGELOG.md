@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- The passive network observer reads TLS, SSH and plaintext handshakes behind VLAN tags (X1-L2): its kernel filter now
+  follows up to two in-band tags (802.1Q, and QinQ with an 802.1ad outer tag) to the TCP ports, so a trunk's mirror
+  port is observed; before, a QinQ frame's inner tag made the kernel drop it.
 - SIEM content packs ship for the syslog and Elasticsearch audit feeds (P5-L5): the Elasticsearch/OpenSearch index
   template and ingest pipeline, and an rsyslog receiver configuration that keeps trstctl's audit messages and parses
   each record's JSON. `make siem-content` builds both into deterministic archives (`tools/siempack`); see

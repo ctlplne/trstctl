@@ -462,7 +462,11 @@ span port, or its own host's interface, on Linux (`CAP_NET_RAW`; other platforms
 an error, never an empty observation set). A kernel filter keeps only the ports in
 `--observe-ports` (default 443, 8443, 636, 993, 995, 465, 22, 80, 389, 5432, 3306; at
 most 32), and the agent reads only the first bytes of each connection, in order, up to
-16 KiB a direction:
+16 KiB a direction. The filter reads through up to two VLAN tags (802.1Q, and QinQ with
+an 802.1ad outer tag; X1-L2), so a trunk's mirror port works: the kernel carries a
+frame's outer tag out of band and a QinQ frame's inner tag stays in the frame. On its own
+host's interface the agent reads only frames the host receives, so watch a mirror port
+to see both directions of a host's own connections:
 
 - TLS: the negotiated version, cipher suite and key-exchange group (X25519MLKEM768 and the
   other ML-KEM hybrids by name), the server name, and for TLS 1.2 the server certificate

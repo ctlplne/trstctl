@@ -101,3 +101,64 @@ func TestCaptureStockTrafficOnLoopbackX1(t *testing.T) {
 		t.Fatalf("budget: %d handshakes in %s, CPU share %.3f, heap %d bytes, stats %+v", handshakes, wall, cpuShare, heap, stats)
 	}
 }
+
+// X1-L2 on Linux: TLS between two network namespaces over QinQ (an 802.1ad
+// outer tag, an 802.1Q inner tag) and over a single 802.1Q tag on a veth
+// pair, observed on a mirror port: tc mirrors both directions of the trunk
+// into a dummy device as received frames, as a switch's SPAN port does. The
+// kernel moves a frame's outer tag out of band, a QinQ frame's inner tag
+// stays in the frame, and the filter reads through it. It runs only in the
+// X1-L2 proof container (runners/x1l2-linux-proof.sh), which is privileged to
+// create the namespace, the VLAN devices and the mirror.
+func TestCaptureQinQTrafficX1L2(t *testing.T) {
+	out := os.Getenv("TRSTCTL_X1L2_PROOF_OUT")
+	if out == "" {
+		t.Skip("runs inside the X1-L2 proof container")
+	}
+	setup := exec.Command("/bin/sh", "/proof/vlan-setup.sh")
+	setup.Stdout, setup.Stderr = os.Stderr, os.Stderr
+	if err := setup.Run(); err != nil {
+		t.Fatalf("VLAN setup: %v", err)
+	}
+	ports := []uint16{4414, 4415}
+	agg := NewAggregate(64)
+	asm := NewAssembler(ports, 512, 30*time.Second, agg.Add)
+	ctx, cancel := context.WithCancel(context.Background())
+	captured := make(chan error, 1)
+	go func() { captured <- Capture(ctx, "span0", ports, 2048, asm) }()
+	time.Sleep(300 * time.Millisecond)
+	traffic := exec.Command("/bin/sh", "/proof/vlan-traffic.sh")
+	traffic.Stdout, traffic.Stderr = os.Stderr, os.Stderr
+	if err := traffic.Run(); err != nil {
+		t.Fatalf("VLAN traffic: %v", err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	items, _ := agg.Changed()
+	stats := asm.Stats()
+	cancel()
+	if err := <-captured; err != nil {
+		t.Fatal(err)
+	}
+	report, err := json.MarshalIndent(map[string]any{"items": items, "stats": stats}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(out, report, 0o600); err != nil { // #nosec G703 -- the lab runner names the report path in the test environment, never a request (CWE-22)
+		t.Fatal(err)
+	}
+	find := func(server string) *Item {
+		for i := range items {
+			if items[i].Server.String() == server && items[i].Kind == "tls_handshake" {
+				return &items[i]
+			}
+		}
+		return nil
+	}
+	// 4414 over QinQ, 4415 over a single 802.1Q tag.
+	if it := find("10.77.0.1:4414"); it == nil || it.Obs.TLSVersion != "TLSv1.3" || it.Obs.Group != "X25519MLKEM768" {
+		t.Fatalf("TLS 1.3 over QinQ: %+v (stats %+v)", it, stats)
+	}
+	if it := find("10.78.0.1:4415"); it == nil || it.Obs.TLSVersion != "TLSv1.3" {
+		t.Fatalf("TLS 1.3 over 802.1Q: %+v (stats %+v)", it, stats)
+	}
+}
