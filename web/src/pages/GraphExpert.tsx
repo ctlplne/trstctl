@@ -262,8 +262,16 @@ export function NodeDetail({ node, trustStores }: { node: GraphNode | null; trus
         ) : (
           <p className="mt-1 text-muted-foreground">{translateNow("source.no.attributes.returned.for.this.node.5b22b96afd")}</p>
         )}
+        {isHostAgentNode(node) ? <HostAgentRoles node={node} /> : null}
         <h3 className="mt-4 font-semibold">{translateNow("source.drilldown.links.66ec8eb823")}</h3>
         <ul className="mt-2 space-y-1">
+          {isHostAgentNode(node) && attrText(node, "agent_id") ? (
+            <li>
+              <Link className="text-brand-accent underline" to={`/agents?agent=${encodeURIComponent(attrText(node, "agent_id"))}`}>
+                {translateNow("graph.hostAgent.detailLink")}
+              </Link>
+            </li>
+          ) : null}
           {node.id.startsWith("cert:") ? (
             <li>
               <Link className="text-brand-accent underline" to={`/certificates?credential=${encodeURIComponent(node.id.slice(5))}`}>
@@ -466,4 +474,44 @@ function edgeExplanation(type: string): string {
     default:
       return "Served graph relationship from the backend.";
   }
+}
+
+// isHostAgentNode reports whether a node is an enrolled host agent (G1-L3).
+function isHostAgentNode(node: GraphNode): boolean {
+  return node.id.startsWith("agent:") && attrText(node, "workload_kind") === "host_agent";
+}
+
+function attrText(node: GraphNode, key: string): string {
+  const value = node.attrs?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+function roleList(value: string): string {
+  return value
+    .split(",")
+    .filter((role) => role !== "")
+    .join(", ");
+}
+
+// HostAgentRoles says what an enrolled host agent may do (G1-L3): the roles its
+// certificate carries are the ones the graph draws; a grant waits for the
+// agent's next renewal and grants nothing until then.
+function HostAgentRoles({ node }: { node: GraphNode }) {
+  const roles = roleList(attrText(node, "roles"));
+  const pending = roleList(attrText(node, "pending_roles"));
+  return (
+    <section aria-labelledby="graph-host-agent-heading" className="mt-4">
+      <h3 id="graph-host-agent-heading" className="font-semibold">
+        {translateNow("graph.hostAgent.heading")}
+      </h3>
+      {attrText(node, "offboarded_at") ? (
+        <p className="mt-1">{translateNow("graph.hostAgent.offboarded")}</p>
+      ) : (
+        <>
+          <p className="mt-1">{roles ? translateNow("graph.hostAgent.roles", { roles }) : translateNow("graph.hostAgent.noRoles")}</p>
+          {pending ? <p className="mt-1 text-muted-foreground">{translateNow("graph.hostAgent.pending", { roles: pending })}</p> : null}
+        </>
+      )}
+    </section>
+  );
 }

@@ -28,7 +28,9 @@ const (
 	// KindPerson is a tenant member: a human who holds credentials, holds roles
 	// and approves access (G1). Its ID is the member's subject.
 	KindPerson NodeKind = "person"
-	// KindRole is a tenant role a person holds (G1).
+	// KindRole is a tenant role a person holds (G1), or an agent capability
+	// role an enrolled host agent's certificate carries (G1-L3, role_scope
+	// "agent").
 	KindRole NodeKind = "role"
 	// KindAIAgent is an AI agent that trstctl's agent broker issued an
 	// identity to (G1).
@@ -68,7 +70,8 @@ const (
 	// trust store would float free of the machine that has it, and the answer to
 	// "where do I go to fix this" would be missing.
 	EdgeHosts EdgeType = "HOSTS"
-	// EdgeHasRole is person → role the person holds (G1).
+	// EdgeHasRole is person → tenant role the person holds (G1), or enrolled
+	// host agent → agent role its certificate carries (G1-L3).
 	EdgeHasRole EdgeType = "HAS_ROLE"
 	// EdgeHolds is person, workload or AI agent → credential it holds: the
 	// principal that received or was bound to the credential (G1).

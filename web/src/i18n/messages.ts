@@ -33184,6 +33184,30 @@ export const messages = {
     defaultMessage: "Start incident response",
     description: "S-C11: link from a certificate detail into the incident response form.",
   },
+  "graph.hostAgent.heading": {
+    defaultMessage: "Enrolled host agent",
+    description: "G1-L3: heading of a graph node's section for an enrolled host agent.",
+  },
+  "graph.hostAgent.roles": {
+    defaultMessage: "Roles its certificate carries: {roles}. These are the roles the graph draws.",
+    description: "G1-L3: the agent roles signed into a host agent's certificate; roles is a comma-separated list.",
+  },
+  "graph.hostAgent.noRoles": {
+    defaultMessage: "Its certificate carries no role.",
+    description: "G1-L3: a host agent whose certificate carries no agent role.",
+  },
+  "graph.hostAgent.pending": {
+    defaultMessage: "A role grant waits for the agent's next renewal: {roles}. It grants nothing until that renewal signs it.",
+    description: "G1-L3: a role grant no renewal has signed yet; roles is the complete role set the next certificate carries.",
+  },
+  "graph.hostAgent.offboarded": {
+    defaultMessage: "This agent was offboarded and holds no role.",
+    description: "G1-L3: an offboarded host agent in the graph.",
+  },
+  "graph.hostAgent.detailLink": {
+    defaultMessage: "Agent detail",
+    description: "G1-L3: link from a host agent's graph node to the agent on the Agents page.",
+  },
   "graph.respondToNode": {
     defaultMessage: "Start incident response for this node",
     description: "S-C11: link from the selected graph node into the incident response form.",

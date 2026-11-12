@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 ### Added
+- Enrolled host agents and their roles are in the access graph (G1-L3). Each agent is a workload
+  node (`agent:<agent id>`, `workload_kind: host_agent`) that `HAS_ROLE` each agent role its
+  certificate carries (`agent-role:<role>`), so which machines may run network probes or hold
+  sessions is a graph query, for example
+  `MATCH (a:workload)-[:HAS_ROLE]->(r:role) WHERE r.name = "network" RETURN a.name`. A role grant
+  the next renewal has not signed yet shows on the node as `pending_roles`, and an offboarded agent
+  holds no role. Like the rest of the access side, agents need `access:read` as well as
+  `graph:read`. In the console, a host agent's graph node says which roles it holds and links to
+  the agent, and the Agents page opens the agent a link names.
 - A certificate known only from a cloud listing can have its revocation checked (B13-L1). With
   `agent_channel.probe_scanned_certificates` on, a `cloud_certificate` run keeps the certificate the
   provider returned, only when it hashes to the certificate listed, and up to four issuers returned

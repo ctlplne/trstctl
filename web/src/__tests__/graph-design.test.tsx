@@ -183,6 +183,40 @@ describe("route 027 impact-first graph design", () => {
     });
   });
 
+  it("says which roles an enrolled host agent's certificate carries and links to the agent (G1-L3)", async () => {
+    const user = userEvent.setup();
+    apiMock.graph.mockResolvedValue({
+      nodes: [
+        { id: "cert:payments", kind: "credential", name: "payments-cert", attrs: {} },
+        {
+          id: "agent:a-1",
+          kind: "workload",
+          name: "plant7-relay",
+          attrs: { workload_kind: "host_agent", agent_id: "a-1", status: "active", roles: "host", pending_roles: "host,network" },
+        },
+        {
+          id: "agent:a-2",
+          kind: "workload",
+          name: "old-host",
+          attrs: { workload_kind: "host_agent", agent_id: "a-2", status: "offboarded", offboarded_at: "2026-11-12T03:00:00Z" },
+        },
+        { id: "agent-role:host", kind: "role", name: "host", attrs: { role_scope: "agent" } },
+      ],
+      edges: [{ from: "agent:a-1", to: "agent-role:host", type: "HAS_ROLE", source: "agent certificate", confidence: "authoritative" }],
+    });
+    renderGraph();
+    await screen.findByRole("combobox", { name: "Credential to explore" });
+    await user.click(screen.getByText("Node inventory, exact attributes, and advanced query", { exact: true }));
+    await user.click(screen.getByRole("button", { name: "Select plant7-relay" }));
+    const section = await screen.findByRole("region", { name: "Enrolled host agent" });
+    expect(section).toHaveTextContent("Roles its certificate carries: host. These are the roles the graph draws.");
+    expect(section).toHaveTextContent("A role grant waits for the agent's next renewal: host, network. It grants nothing until that renewal signs it.");
+    expect(screen.getByRole("link", { name: "Agent detail" })).toHaveAttribute("href", "/agents?agent=a-1");
+
+    await user.click(screen.getByRole("button", { name: "Select old-host" }));
+    expect(await screen.findByRole("region", { name: "Enrolled host agent" })).toHaveTextContent("This agent was offboarded and holds no role.");
+  });
+
   it("answers the impact question before revealing exact graph machinery", async () => {
     const user = userEvent.setup();
     renderGraph();

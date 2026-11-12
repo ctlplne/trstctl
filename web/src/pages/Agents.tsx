@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Copy, Loader2, RefreshCw, ShieldOff, UserCog, UserX, X } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { CredentialChip } from "@/components/CredentialChip";
 import { Dialog } from "@/components/Dialog";
 import { useToast } from "@/components/ToastProvider";
@@ -112,7 +112,9 @@ export function Agents() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedID, setSelectedID] = useState<string | null>(null);
+  // A link may name the agent to open (?agent=, from the graph: G1-L3).
+  const [searchParams] = useSearchParams();
+  const [selectedID, setSelectedID] = useState<string | null>(() => searchParams.get("agent"));
   const [token, setToken] = useState<EnrollmentToken | null>(null);
   const [tokenAllowedIdentity, setTokenAllowedIdentity] = useState("");
   // The capability grant this token will carry into the enrolled certificate
@@ -145,7 +147,7 @@ export function Agents() {
   const [revokeBusy, setRevokeBusy] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const [enrollmentOpen, setEnrollmentOpen] = useState(false);
-  const [open, setOpen] = useState<Record<AgentDisclosure, boolean>>({ fleet: false, trust: false, operations: false });
+  const [open, setOpen] = useState<Record<AgentDisclosure, boolean>>(() => ({ fleet: searchParams.has("agent"), trust: false, operations: false }));
   const [campaign, setCampaign] = useState<AgentUpgradeCampaign | null>(null);
   const [jobPosture, setJobPosture] = useState<AgentJobPosture | null>(null);
   const [operationsLoading, setOperationsLoading] = useState(false);

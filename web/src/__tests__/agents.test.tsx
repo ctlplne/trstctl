@@ -28,9 +28,9 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderAgents() {
+function renderAgents(path = "/agents") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <ToastProvider>
         <Agents />
       </ToastProvider>
@@ -292,6 +292,12 @@ describe("agent fleet surface", () => {
     expect(await screen.findByText(/role change recorded for edge-01/i)).toBeInTheDocument();
     const row = screen.getByRole("row", { name: /edge-01/ });
     expect(row).toHaveTextContent(/next renewal: host, session observer/i);
+  });
+
+  it("opens the agent a link names, as the graph's host agent node does (G1-L3)", async () => {
+    renderAgents("/agents?agent=ag-2");
+    expect(await screen.findByRole("heading", { level: 2, name: "branch-02" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Registered in-network agents" })).toBeInTheDocument();
   });
 
   it("names an agent whose clock is past the skew threshold in the table and its details", async () => {

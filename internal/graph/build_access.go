@@ -18,6 +18,8 @@ import (
 // pages. A link is "authoritative" when the record names both ends exactly.
 //
 //   - tenant members        → person nodes, HAS_ROLE → role nodes
+//   - enrolled host agents  → workload nodes, HAS_ROLE → the agent roles their
+//     certificates carry; a grant no renewal has signed is an attribute (G1-L3)
 //   - agent-broker issuance → ai-agent nodes, HOLDS → their certificates; the
 //     requester DELEGATED → the agent; a live certificate GRANTS_ACCESS → the
 //     tools its scopes name
@@ -62,7 +64,7 @@ func addAccessSources(ctx context.Context, st *store.Store, tenantID string, g *
 	}
 	addAIAgents(g, certs, principals, now)
 	for _, add := range []func(context.Context, *store.Store, string, *Graph, principalIndex, time.Time) error{
-		addAPITokens, addMachineSessions, addPAMAccess, addDynamicSecretLeases, addIssuanceApprovals,
+		addAPITokens, addMachineSessions, addPAMAccess, addDynamicSecretLeases, addIssuanceApprovals, addHostAgents,
 	} {
 		if err := add(ctx, st, tenantID, g, principals, now); err != nil {
 			return err
