@@ -107,7 +107,11 @@ source, and the flag clears once it has been. Missing telemetry never counts as 
 nothing is unused before the first recorded use in the tenant, an expired token is not
 idle, and a window in which uses could not be recorded (a full recorder queue or an
 unavailable event log, recorded as `credential.usage_gap`) suspends the verdict. The
-graph shows each token's `last_used_at` and `last_used_source`. Usage is recorded from
+graph shows each token's `last_used_at` and `last_used_source`. Each stale finding for a
+tracked credential carries its `usage`: when tracking began, its last use and where from,
+and each source it was used from (newest first, at most 20) with the days seen and whether
+it is still new; the console's Risk page shows it in the stale table's Usage column
+(M1-L3). Usage is recorded from
 the release that adds it; a full read-model rebuild also folds earlier machine logins.
 Each token's hourly counts per network and action are kept for 30 days.
 

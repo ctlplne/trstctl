@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"trstctl.com/trstctl/internal/store"
@@ -135,4 +136,74 @@ func nhiUsageNewSources(meta map[string]any) []string {
 		return nil
 	}
 	return fresh
+}
+
+// maxStaleUsageSources bounds the sources one stale finding lists.
+const maxStaleUsageSources = 20
+
+// nhiStaleUsage is a credential's recorded usage on its stale finding
+// (M1-L3): when tracking began, its last use and where from, and each source
+// it was used from, newest first, with the ones still new marked.
+type nhiStaleUsage struct {
+	TrackedSince   *time.Time            `json:"tracked_since,omitempty"`
+	LastUsedAt     *time.Time            `json:"last_used_at,omitempty"`
+	LastUsedSource string                `json:"last_used_source,omitempty"`
+	Sources        []nhiStaleUsageSource `json:"sources"`
+	SourcesOmitted int                   `json:"sources_omitted,omitempty"`
+}
+
+type nhiStaleUsageSource struct {
+	SourceKind  string    `json:"source_kind,omitempty"`
+	Source      string    `json:"source"`
+	DaysSeen    int       `json:"days_seen"`
+	FirstSeenAt time.Time `json:"first_seen_at"`
+	LastSeenAt  time.Time `json:"last_seen_at"`
+	New         bool      `json:"new"`
+}
+
+// nhiStaleUsageSummary reads the usage the inventory carries for a tracked
+// credential; nil when its usage is not tracked.
+func nhiStaleUsageSummary(meta map[string]any, newSources []string) *nhiStaleUsage {
+	if tracked, _ := meta["usage_tracked"].(bool); !tracked {
+		return nil
+	}
+	out := &nhiStaleUsage{
+		TrackedSince: firstNHIPostureTimestamp(meta, "usage_tracked_since"),
+		LastUsedAt:   firstNHIPostureTimestamp(meta, "last_used_at"),
+		Sources:      []nhiStaleUsageSource{},
+	}
+	out.LastUsedSource, _ = meta["last_used_source"].(string)
+	fresh := map[string]bool{}
+	for _, s := range newSources {
+		fresh[s] = true
+	}
+	raw, _ := meta["usage_sources"].([]any)
+	for _, item := range raw {
+		src, _ := item.(map[string]any)
+		name, _ := src["source"].(string)
+		if name == "" {
+			continue
+		}
+		days, _ := src["days_seen"].(float64)
+		kind, _ := src["source_kind"].(string)
+		entry := nhiStaleUsageSource{SourceKind: kind, Source: name, DaysSeen: int(days), New: fresh[name]}
+		if t := firstNHIPostureTimestamp(src, "first_seen_at"); t != nil {
+			entry.FirstSeenAt = *t
+		}
+		if t := firstNHIPostureTimestamp(src, "last_seen_at"); t != nil {
+			entry.LastSeenAt = *t
+		}
+		out.Sources = append(out.Sources, entry)
+	}
+	sort.SliceStable(out.Sources, func(i, j int) bool {
+		if !out.Sources[i].LastSeenAt.Equal(out.Sources[j].LastSeenAt) {
+			return out.Sources[i].LastSeenAt.After(out.Sources[j].LastSeenAt)
+		}
+		return out.Sources[i].Source < out.Sources[j].Source
+	})
+	if len(out.Sources) > maxStaleUsageSources {
+		out.SourcesOmitted = len(out.Sources) - maxStaleUsageSources
+		out.Sources = out.Sources[:maxStaleUsageSources]
+	}
+	return out
 }

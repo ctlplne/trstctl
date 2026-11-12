@@ -1171,6 +1171,33 @@ function NHIAutomationPanel({ plan, loading, error }: { plan: NHIPostureAutomati
   );
 }
 
+// NHIStaleUsageCell shows a tracked credential's recorded usage (M1-L3): its
+// last use and where from, and each source with the days it was used there;
+// a source still new is marked.
+function NHIStaleUsageCell({ usage }: { usage?: NHIStalePosture["findings"][number]["usage"] }) {
+  const { t, formatDateTime } = useTranslation();
+  if (!usage) return <span className="text-muted-foreground">{t("risk.nhiStale.usageNotTracked")}</span>;
+  return (
+    <div className="grid gap-1">
+      <p>
+        {usage.last_used_at
+          ? t("risk.nhiStale.lastUsed", { at: formatDateTime(usage.last_used_at), source: usage.last_used_source || "-" })
+          : usage.tracked_since
+            ? t("risk.nhiStale.noUseSince", { since: formatDateTime(usage.tracked_since) })
+            : t("risk.nhiStale.noUse")}
+      </p>
+      {usage.sources.length > 0 && (
+        <ul aria-label={t("risk.nhiStale.sources")} className="text-caption text-muted-foreground">
+          {usage.sources.map((source) => (
+            <li key={source.source}>{t(source.new ? "risk.nhiStale.sourceNew" : "risk.nhiStale.source", { source: source.source, days: source.days_seen })}</li>
+          ))}
+          {usage.sources_omitted ? <li>{t("risk.nhiStale.sourcesOmitted", { count: usage.sources_omitted })}</li> : null}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function NHIStalePanel({ posture, loading, error }: { posture: NHIStalePosture | null; loading: boolean; error: string | null }) {
   const { t } = useTranslation();
   const topFindings = posture?.findings?.slice(0, 5) ?? [];
@@ -1216,6 +1243,7 @@ function NHIStalePanel({ posture, loading, error }: { posture: NHIStalePosture |
                 <th scope="col">{t("risk.nhiStale.nhi")}</th>
                 <th scope="col">{t("risk.nhiStale.finding")}</th>
                 <th scope="col">{t("risk.nhiStale.age")}</th>
+                <th scope="col">{t("risk.nhiStale.usage")}</th>
                 <th scope="col">{t("risk.nhiStale.recommendation")}</th>
               </tr>
             </thead>
@@ -1239,6 +1267,9 @@ function NHIStalePanel({ posture, loading, error }: { posture: NHIStalePosture |
                       activity: finding.activity_age_days,
                       created: finding.created_age_days,
                     })}
+                  </td>
+                  <td>
+                    <NHIStaleUsageCell usage={finding.usage} />
                   </td>
                   <td>{finding.recommendation}</td>
                 </tr>

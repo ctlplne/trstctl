@@ -36106,6 +36106,9 @@
           },
           "status": {
             "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/NHIStaleUsage"
           }
         },
         "required": [
@@ -36323,6 +36326,70 @@
           "stale_activity_days",
           "dormant_activity_days",
           "unused_no_activity_days"
+        ],
+        "type": "object"
+      },
+      "NHIStaleUsage": {
+        "properties": {
+          "last_used_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_used_source": {
+            "type": "string"
+          },
+          "sources": {
+            "description": "Newest first, at most 20.",
+            "items": {
+              "$ref": "#/components/schemas/NHIStaleUsageSource"
+            },
+            "type": "array"
+          },
+          "sources_omitted": {
+            "description": "Sources past the 20 listed.",
+            "type": "integer"
+          },
+          "tracked_since": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sources"
+        ],
+        "type": "object"
+      },
+      "NHIStaleUsageSource": {
+        "properties": {
+          "days_seen": {
+            "type": "integer"
+          },
+          "first_seen_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "new": {
+            "description": "Used from here on fewer than three days while another source is established; flagged as new_source.",
+            "type": "boolean"
+          },
+          "source": {
+            "description": "Where the credential was used from: a client network (/24 or /64) or an attested workload.",
+            "type": "string"
+          },
+          "source_kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "days_seen",
+          "first_seen_at",
+          "last_seen_at",
+          "new"
         ],
         "type": "object"
       },

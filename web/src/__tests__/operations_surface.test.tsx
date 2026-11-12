@@ -1415,6 +1415,89 @@ describe("operational console surface", () => {
     );
   });
 
+  it("shows each stale credential's recorded usage beside its finding (M1-L3)", async () => {
+    apiMock.risk.mockResolvedValue([]);
+    apiMock.contextualRiskPriorities.mockResolvedValue(emptyContextualRiskPriorities());
+    apiMock.nhiStalePosture.mockResolvedValue({
+      ...emptyNHIStalePosture(),
+      summary: { total_analyzed: 2, findings: 2, stale: 0, dormant: 0, unused: 1, orphaned: 0, critical: 0, high: 0, medium: 2, low: 0, recommendations: 2 },
+      findings: [
+        {
+          inventory_id: "api-token/t1",
+          kind: "api_token",
+          source: "access_api_token",
+          display_name: "ci-deployer",
+          owner_status: "subject_bound",
+          status: "active",
+          severity: "medium",
+          risk_score: 40,
+          finding_types: ["new_source"],
+          activity_age_days: 1,
+          created_age_days: 60,
+          created_at: "2026-09-13T00:00:00Z",
+          recommendation: "Confirm the new source is expected.",
+          evidence_refs: ["usage:new_source:198.51.100.0/24"],
+          usage: {
+            tracked_since: "2026-10-03T00:00:00Z",
+            last_used_at: "2026-11-11T12:00:00Z",
+            last_used_source: "198.51.100.0/24",
+            sources: [
+              {
+                source_kind: "network",
+                source: "198.51.100.0/24",
+                days_seen: 1,
+                first_seen_at: "2026-11-11T12:00:00Z",
+                last_seen_at: "2026-11-11T12:00:00Z",
+                new: true,
+              },
+              {
+                source_kind: "network",
+                source: "203.0.113.0/24",
+                days_seen: 9,
+                first_seen_at: "2026-10-13T12:00:00Z",
+                last_seen_at: "2026-11-10T12:00:00Z",
+                new: false,
+              },
+            ],
+          },
+        },
+        {
+          inventory_id: "api-token/t2",
+          kind: "api_token",
+          source: "access_api_token",
+          display_name: "forgotten-token",
+          owner_status: "subject_bound",
+          status: "active",
+          severity: "medium",
+          risk_score: 35,
+          finding_types: ["unused_no_activity"],
+          activity_age_days: 0,
+          created_age_days: 45,
+          created_at: "2026-09-28T00:00:00Z",
+          recommendation: "Revoke the token unless its owner still needs it.",
+          evidence_refs: ["usage:no_recorded_use_since:2026-10-03"],
+          usage: { tracked_since: "2026-10-03T00:00:00Z", sources: [] },
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderAt("/risk");
+    await waitFor(() => expect(apiMock.nhiStalePosture).toHaveBeenCalledTimes(1));
+    await user.click(await screen.findByText("Score inputs and supporting projections"));
+    const table = await screen.findByRole("table", { name: /stale/i });
+    expect(within(table).getByRole("columnheader", { name: "Usage" })).toBeInTheDocument();
+    const active = within(table).getByText("ci-deployer").closest("tr") as HTMLElement;
+    expect(active).toHaveTextContent(/Last used .* from 198\.51\.100\.0\/24/);
+    const sources = within(active).getByRole("list", { name: "Sources it was used from" });
+    expect(
+      within(sources)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["198.51.100.0/24, on 1 days (new)", "203.0.113.0/24, on 9 days"]);
+    const idle = within(table).getByText("forgotten-token").closest("tr") as HTMLElement;
+    expect(idle).toHaveTextContent(/No recorded use since/);
+  });
+
   it("links a risk row to certificate detail, graph blast-radius, owner state, and audit evidence", async () => {
     apiMock.risk.mockResolvedValue([
       riskRow({

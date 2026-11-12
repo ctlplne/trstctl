@@ -19405,6 +19405,42 @@ export const messages = {
     defaultMessage: "Recommendation",
     description: "Stale NHI table column for remediation recommendation.",
   },
+  "risk.nhiStale.usage": {
+    defaultMessage: "Usage",
+    description: "M1-L3: stale NHI table column for a credential's recorded usage.",
+  },
+  "risk.nhiStale.usageNotTracked": {
+    defaultMessage: "Not tracked",
+    description: "M1-L3: a credential whose use trstctl does not record.",
+  },
+  "risk.nhiStale.lastUsed": {
+    defaultMessage: "Last used {at} from {source}",
+    description: "M1-L3: a credential's last recorded use and the source it came from.",
+  },
+  "risk.nhiStale.noUseSince": {
+    defaultMessage: "No recorded use since {since}",
+    description: "M1-L3: a tracked credential with no recorded use since tracking began.",
+  },
+  "risk.nhiStale.noUse": {
+    defaultMessage: "No recorded use",
+    description: "M1-L3: a tracked credential with no recorded use.",
+  },
+  "risk.nhiStale.sources": {
+    defaultMessage: "Sources it was used from",
+    description: "M1-L3: accessible name of the list of a credential's usage sources.",
+  },
+  "risk.nhiStale.source": {
+    defaultMessage: "{source}, on {days} days",
+    description: "M1-L3: one usage source and the number of days the credential was used from it.",
+  },
+  "risk.nhiStale.sourceNew": {
+    defaultMessage: "{source}, on {days} days (new)",
+    description: "M1-L3: a usage source still new, flagged as new_source.",
+  },
+  "risk.nhiStale.sourcesOmitted": {
+    defaultMessage: "and {count} more",
+    description: "M1-L3: usage sources past those listed.",
+  },
   "risk.contextual.heading": {
     defaultMessage: "Highest-risk credentials",
     description: "Decision-first heading for the highest contextual credential risks.",

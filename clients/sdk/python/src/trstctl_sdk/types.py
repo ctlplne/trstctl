@@ -10726,6 +10726,7 @@ NHIStaleFinding = TypedDict(
         'severity': str,
         'source': str,
         'status': str,
+        'usage': dict[str, Any],
     },
     total=False,
 )
@@ -10803,6 +10804,31 @@ NHIStaleThresholds = TypedDict(
         'dormant_activity_days': int,
         'stale_activity_days': int,
         'unused_no_activity_days': int,
+    },
+    total=False,
+)
+
+NHIStaleUsage = TypedDict(
+    'NHIStaleUsage',
+    {
+        'last_used_at': str,
+        'last_used_source': str,
+        'sources': list[dict[str, Any]],
+        'sources_omitted': int,
+        'tracked_since': str,
+    },
+    total=False,
+)
+
+NHIStaleUsageSource = TypedDict(
+    'NHIStaleUsageSource',
+    {
+        'days_seen': int,
+        'first_seen_at': str,
+        'last_seen_at': str,
+        'new': bool,
+        'source': str,
+        'source_kind': str,
     },
     total=False,
 )

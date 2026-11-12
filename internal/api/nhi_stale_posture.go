@@ -112,6 +112,9 @@ type nhiStalePostureFinding struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	Recommendation  string     `json:"recommendation"`
 	EvidenceRefs    []string   `json:"evidence_refs"`
+	// Usage is the credential's recorded usage, for a credential whose use
+	// trstctl tracks (API tokens and machine login methods, M1-L3).
+	Usage *nhiStaleUsage `json:"usage,omitempty"`
 }
 
 func (a *API) listNHIStalePosture(w http.ResponseWriter, r *http.Request) {
@@ -302,6 +305,7 @@ func nhiStaleFindingForItemWith(item nhiInventoryItem, now time.Time, opts nhiSt
 		CreatedAt:       createdAt,
 		Recommendation:  nhiStaleRecommendation(findingTypes, ownerStatus),
 		EvidenceRefs:    append(nhiStaleEvidence(item, meta, lastActivity != nil), usageEvidence...),
+		Usage:           nhiStaleUsageSummary(meta, newSources),
 	}, true
 }
 

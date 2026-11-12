@@ -763,6 +763,8 @@ public final class OpenApiSchemas {
       "NHIStalePosture",
       "NHIStaleSummary",
       "NHIStaleThresholds",
+      "NHIStaleUsage",
+      "NHIStaleUsageSource",
       "NHIStaticFinding",
       "NHIStaticPosture",
       "NHIStaticSummary",

@@ -1,1 +1,0 @@
-import{m as s,t}from"./schemas-C2aHgmFG.js";function r(r){return s(t,r)}export{r as t};

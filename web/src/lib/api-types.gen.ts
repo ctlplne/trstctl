@@ -7750,6 +7750,7 @@ export interface NHIStaleFinding {
   severity: "critical" | "high" | "medium" | "low";
   source: string;
   status: string;
+  usage?: NHIStaleUsage;
 }
 
 export interface NHIStaleHandoffItem {
@@ -7803,6 +7804,23 @@ export interface NHIStaleThresholds {
   dormant_activity_days: number;
   stale_activity_days: number;
   unused_no_activity_days: number;
+}
+
+export interface NHIStaleUsage {
+  last_used_at?: string;
+  last_used_source?: string;
+  sources: NHIStaleUsageSource[];
+  sources_omitted?: number;
+  tracked_since?: string;
+}
+
+export interface NHIStaleUsageSource {
+  days_seen: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  new: boolean;
+  source: string;
+  source_kind?: string;
 }
 
 export interface NHIStaticFinding {

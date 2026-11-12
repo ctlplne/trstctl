@@ -4,11 +4,13 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -161,5 +163,70 @@ func TestNHIUsageUnusedNeedsCompleteTelemetryM1(t *testing.T) {
 	meta["expires_at"] = now.Add(-time.Hour).Format(time.RFC3339)
 	if unused, _ := nhiUsageUnused(item, meta, created, nil, now, nhiStaleOptions{unusedDays: 30}); unused {
 		t.Fatal("an expired token was called idle")
+	}
+}
+
+// TestStaleFindingCarriesTheCredentialsUsageM1L3: a tracked credential's
+// stale finding carries its recorded usage — last use and where from, and
+// each source newest first with the days seen, the new one marked — so the
+// console can show it beside the finding; an untracked credential carries
+// none.
+func TestStaleFindingCarriesTheCredentialsUsageM1L3(t *testing.T) {
+	now := time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC)
+	at := func(d int) string { return now.AddDate(0, 0, d).Format(time.RFC3339) }
+	meta, err := json.Marshal(map[string]any{
+		"usage_tracked": true, "usage_tracked_since": at(-40),
+		"last_used_at": at(-1), "last_used_source": "198.51.100.0/24",
+		"usage_sources": []any{
+			map[string]any{"source_kind": "network", "source": "203.0.113.0/24", "days_seen": 9, "first_seen_at": at(-30), "last_seen_at": at(-2)},
+			map[string]any{"source_kind": "network", "source": "198.51.100.0/24", "days_seen": 1, "first_seen_at": at(-1), "last_seen_at": at(-1)},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := nhiInventoryItem{ID: "api-token/t1", Kind: "api_token", Source: "access_api_token", DisplayName: "ci-deployer",
+		Status: "active", Metadata: meta, CreatedAt: now.AddDate(0, 0, -60)}
+	finding, ok := nhiStaleFindingForItemWith(item, now, nhiStaleOptions{unusedDays: 30})
+	if !ok || !slices.Contains(finding.FindingTypes, "new_source") {
+		t.Fatalf("finding = %+v (ok %v)", finding, ok)
+	}
+	// What a client receives.
+	raw, err := json.Marshal(finding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire struct {
+		Usage *struct {
+			TrackedSince   string `json:"tracked_since"`
+			LastUsedAt     string `json:"last_used_at"`
+			LastUsedSource string `json:"last_used_source"`
+			Sources        []struct {
+				Source   string `json:"source"`
+				DaysSeen int    `json:"days_seen"`
+				New      bool   `json:"new"`
+			} `json:"sources"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(raw, &wire); err != nil || wire.Usage == nil {
+		t.Fatalf("the finding carries no usage: %s", raw)
+	}
+	u := wire.Usage
+	if u.LastUsedSource != "198.51.100.0/24" || u.LastUsedAt != at(-1) || u.TrackedSince != at(-40) || len(u.Sources) != 2 {
+		t.Fatalf("usage = %+v", u)
+	}
+	if u.Sources[0].Source != "198.51.100.0/24" || !u.Sources[0].New || u.Sources[0].DaysSeen != 1 ||
+		u.Sources[1].Source != "203.0.113.0/24" || u.Sources[1].New || u.Sources[1].DaysSeen != 9 {
+		t.Fatalf("sources = %+v; want the new network first and marked", u.Sources)
+	}
+	untracked, err := json.Marshal(map[string]any{"last_seen_at": at(-200)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item.Metadata = untracked
+	f, ok := nhiStaleFindingForItemWith(item, now, nhiStaleOptions{unusedDays: 30})
+	raw, _ = json.Marshal(f)
+	if !ok || strings.Contains(string(raw), `"usage"`) {
+		t.Fatalf("an untracked credential's finding = %s (ok %v); want no usage", raw, ok)
 	}
 }

@@ -3006,7 +3006,23 @@ func componentSchemas() map[string]*Schema {
 		"created_at":        timestamp(),
 		"recommendation":    str(),
 		"evidence_refs":     {Type: "array", Items: str()},
+		"usage":             ref("NHIStaleUsage"),
 	}, "inventory_id", "kind", "source", "display_name", "owner_status", "status", "severity", "risk_score", "finding_types", "activity_age_days", "created_age_days", "created_at", "recommendation", "evidence_refs")
+	nhiStaleUsageSource := object(map[string]*Schema{
+		"source_kind":   str(),
+		"source":        {Type: "string", Description: "Where the credential was used from: a client network (/24 or /64) or an attested workload."},
+		"days_seen":     {Type: "integer"},
+		"first_seen_at": timestamp(),
+		"last_seen_at":  timestamp(),
+		"new":           {Type: "boolean", Description: "Used from here on fewer than three days while another source is established; flagged as new_source."},
+	}, "source", "days_seen", "first_seen_at", "last_seen_at", "new")
+	nhiStaleUsage := object(map[string]*Schema{
+		"tracked_since":    timestamp(),
+		"last_used_at":     timestamp(),
+		"last_used_source": str(),
+		"sources":          {Type: "array", Items: ref("NHIStaleUsageSource"), Description: "Newest first, at most 20."},
+		"sources_omitted":  {Type: "integer", Description: "Sources past the 20 listed."},
+	}, "sources")
 	nhiStalePosture := object(map[string]*Schema{
 		"capability":   str(),
 		"generated_at": timestamp(),
@@ -8590,6 +8606,8 @@ func componentSchemas() map[string]*Schema {
 		"NHIStaleThresholds":                       nhiStaleThresholds,
 		"NHIStaleSummary":                          nhiStaleSummary,
 		"NHIStaleFinding":                          nhiStaleFinding,
+		"NHIStaleUsage":                            nhiStaleUsage,
+		"NHIStaleUsageSource":                      nhiStaleUsageSource,
 		"NHIStalePosture":                          nhiStalePosture,
 		"NHIStaticThresholds":                      nhiStaticThresholds,
 		"NHIStaticSummary":                         nhiStaticSummary,

@@ -21689,6 +21689,7 @@ export interface components {
             severity: "critical" | "high" | "medium" | "low";
             source: string;
             status: string;
+            usage?: components["schemas"]["NHIStaleUsage"];
         };
         NHIStaleHandoffItem: {
             display_name: string;
@@ -21740,6 +21741,29 @@ export interface components {
             dormant_activity_days: number;
             stale_activity_days: number;
             unused_no_activity_days: number;
+        };
+        NHIStaleUsage: {
+            /** Format: date-time */
+            last_used_at?: string;
+            last_used_source?: string;
+            /** @description Newest first, at most 20. */
+            sources: components["schemas"]["NHIStaleUsageSource"][];
+            /** @description Sources past the 20 listed. */
+            sources_omitted?: number;
+            /** Format: date-time */
+            tracked_since?: string;
+        };
+        NHIStaleUsageSource: {
+            days_seen: number;
+            /** Format: date-time */
+            first_seen_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** @description Used from here on fewer than three days while another source is established; flagged as new_source. */
+            new: boolean;
+            /** @description Where the credential was used from: a client network (/24 or /64) or an attested workload. */
+            source: string;
+            source_kind?: string;
         };
         NHIStaticFinding: {
             /** Format: date-time */

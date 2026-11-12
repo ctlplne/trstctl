@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- The Risk page's stale credentials show their recorded usage (M1-L3). Each stale finding for an API
+  token or machine login method carries `usage`: when tracking began, its last use and where from,
+  and each source it was used from, newest first, with the days seen and whether it is still new.
+  The stale table's Usage column says "Last used … from …", lists the sources with the new one
+  marked, or says "No recorded use since …".
 - The control plane can sit behind a load balancer and still see its clients (M1-L1).
   `server.trusted_proxies` (`TRSTCTL_SERVER_TRUSTED_PROXIES`) names the proxies' networks; from a
   peer inside one, the client is the right-most `X-Forwarded-For` address that is not itself a
