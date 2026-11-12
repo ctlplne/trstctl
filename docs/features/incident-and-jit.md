@@ -1778,6 +1778,18 @@ shows the password gets asterisks; the browser cannot post to the sign-in page; 
 sign-in is not tried again in the session. Each request and response is recorded with the
 credential and password-like fields masked, and terminating the session ends the browser's
 access. The account cannot be checked out: its credential is never shown.
+
+Many consoles write their own origin into what they send. The gateway rewrites it to the
+tunnel's origin, the one the browser is on, so a link followed as written stays on the
+tunnel, where the gateway signs in and records. This covers absolute links, form actions
+and `<base>`, scheme-relative and WebSocket (`wss://`) URLs, JSON with escaped slashes, the
+`Refresh`, `Link` and `Content-Location` headers, and the `Content-Security-Policy`'s
+sources. A look-alike origin, such as a longer host name, another port or user
+information, stays as written. The policy's `upgrade-insecure-requests` and
+`block-all-mixed-content` directives are dropped, as `Strict-Transport-Security` is,
+because the tunnel is plain http on loopback. A script that assembles the origin from parts
+at run time, and a body the console compresses although the gateway asks it not to, reach
+the browser as written.
 In the console, register one under the access targets (type **Web admin console**: account
 secret, console address, optional CA and certificate name, gateway) and set a template's
 web sign-in from the template table. Request the session from the privileged session dialog

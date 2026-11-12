@@ -1,6 +1,14 @@
 ## [Unreleased]
 
 ### Added
+- A web console session keeps the browser on its tunnel when the console writes its own origin
+  (A273-O2). The gateway rewrites the origin to the tunnel's in absolute links, form actions,
+  `<base>`, scheme-relative and WebSocket URLs, JSON with escaped slashes, the `Refresh`,
+  `Link` and `Content-Location` headers, and the `Content-Security-Policy`'s sources. It drops
+  the policy's `upgrade-insecure-requests` and `block-all-mixed-content` directives, as it
+  already dropped `Strict-Transport-Security`, because the tunnel is plain http on loopback.
+  Before this, such a link took the browser off the tunnel, where no gateway signs in or
+  records.
 - A Windows local-account rotation whose outcome the host lost is settled (A268-O1). The
   generation gets one recovery delivery, and the host settles it by sign-in alone, at most twice
   and within the account's lockout margin, without changing the password again. If the

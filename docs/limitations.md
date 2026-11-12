@@ -10065,9 +10065,11 @@ against a stand-in console built the way such consoles commonly are; no vendor c
 it.
 
 What comes next:
-- Consoles that sign in through a single sign-on provider, write their own absolute origin
-  into pages or scripts (or their Content-Security-Policy), or live under a path rather than at
-  an origin.
+- Consoles that sign in through a single sign-on provider, or live under a path rather than
+  at an origin.
+- A console origin that a script assembles from parts at run time, or that a body the console
+  compresses despite the gateway's request carries, reaches the browser as written; such a
+  link leaves the tunnel.
 - Rotating a web console account (today the account is vaulted, not rotated).
 
 ## Bypass detection (A274) — parts 1-3: collectors, recorded sign-ins and retention

@@ -341,6 +341,8 @@ it("registers a web admin console with its vaulted account, its https origin and
   const address = within(form).getByRole("textbox", { name: "Console address" });
   await user.type(address, "http://grafana.internal.example/admin");
   expect(within(form).getByText(/the browser never receives the password/)).toBeInTheDocument();
+  // A273-O2: the console's own absolute links stay on the tunnel.
+  expect(within(form).getByText(/keep the browser on the session's tunnel/)).toBeInTheDocument();
   await user.type(within(form).getByRole("textbox", { name: "Gateway agent ID" }), "gateway-agent");
   await user.type(within(form).getByRole("textbox", { name: "Gateway address (host:port)" }), "gateway.example:8443");
   await user.click(within(form).getByRole("button", { name: "Register target" }));

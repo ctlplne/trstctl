@@ -1072,7 +1072,7 @@ export const messages = {
   },
   "admin.access.webconsole.proof": {
     defaultMessage:
-      "The gateway signs in to the console for the operator, as the session's access template says, and keeps the console's cookies; the browser never receives the password. Proven against a stand-in console; no vendor console yet.",
+      "The gateway signs in to the console for the operator, as the session's access template says, and keeps the console's cookies; the browser never receives the password. Links the console writes with its own address keep the browser on the session's tunnel. Proven against a stand-in console; no vendor console yet.",
     description: "Web console target registration (A273).",
   },
   "admin.access.folders.webSignIn": {

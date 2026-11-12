@@ -108,6 +108,7 @@ func (c *a273Capture) seen() []byte {
 var (
 	a273OpenLine = regexp.MustCompile(`Open http://(127\.0\.0\.1:\d+)/ in your browser`)
 	a273CSRF     = regexp.MustCompile(`name="csrf" value="([0-9a-f]+)"`)
+	a273Absolute = regexp.MustCompile(`<a href="([^"]+)" id="absolute">`)
 )
 
 // TestServedWebConsoleSessionA273: an internal web admin console is reached
@@ -118,9 +119,10 @@ var (
 // console's password and its session cookies appear nowhere in the browser's
 // cookie jar, its network traffic, the CLI's output or the gateway's log;
 // the sealed recording has the task with the credential and a password field
-// masked; terminating the session stops the browser's access. A session
-// without a template that signs in, a misdeclared target or template, and a
-// check-out of the account are refused.
+// masked; links the console writes with its own origin keep the browser on
+// the tunnel (A273-O2); terminating the session stops the browser's access.
+// A session without a template that signs in, a misdeclared target or
+// template, and a check-out of the account are refused.
 func TestServedWebConsoleSessionA273(t *testing.T) {
 	if testing.Short() {
 		t.Skip("gateway session proof")
@@ -327,6 +329,33 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 	if _, page, err := get("/account"); err != nil || strings.Contains(page, a273ConsolePassword) || !strings.Contains(page, strings.Repeat("*", len(a273ConsolePassword))) {
 		t.Fatalf("the account page reached the browser with the password (%v): %s", err, page)
 	}
+	// A273-O2: pages, headers and API answers that name the console's own
+	// origin name the browser's tunnel instead, and a link followed as
+	// written stays on the tunnel.
+	if resp, err = browser.Get(base + "/links"); err != nil {
+		t.Fatal(err)
+	}
+	links, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	absolute := a273Absolute.FindSubmatch(links)
+	if absolute == nil || string(absolute[1]) != base+"/settings" || resp.Header.Get("Refresh") != "600; url=/settings" {
+		t.Fatalf("the links page left the tunnel: Refresh %q\n%s", resp.Header.Get("Refresh"), links)
+	}
+	if policy := resp.Header.Get("Content-Security-Policy"); !strings.Contains(policy, "connect-src 'self' ws://"+capture.ln.Addr().String()) || strings.Contains(policy, "upgrade-insecure-requests") {
+		t.Fatalf("the console's policy does not fit the tunnel: %q", policy)
+	}
+	if followed, err := browser.Get(string(absolute[1])); err != nil {
+		t.Fatal(err)
+	} else {
+		settings, _ := io.ReadAll(followed.Body)
+		_ = followed.Body.Close()
+		if followed.StatusCode != http.StatusOK || !a273CSRF.Match(settings) {
+			t.Fatalf("the absolute link followed: %d %s", followed.StatusCode, settings)
+		}
+	}
+	if status, body, err := get("/api/links"); err != nil || status != http.StatusOK || body != `{"self":"`+strings.ReplaceAll(base+"/api/whoami", "/", `\/`)+`"}` {
+		t.Fatalf("the JSON answer naming the console: %d %v %s", status, err, body)
+	}
 
 	local, _ := url.Parse(base)
 	for _, c := range jar.Cookies(local) {
@@ -344,6 +373,11 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 	}
 	if console.Failed("admin") != 0 || console.SignIns() != 1 {
 		t.Fatalf("the console saw %d failed and %d good sign-ins", console.Failed("admin"), console.SignIns())
+	}
+	// The console's origin reaches the browser only inside a look-alike.
+	if seen := capture.seen(); bytes.Contains(seen, []byte(strings.ReplaceAll(console.URL(), "/", `\/`))) ||
+		bytes.Count(seen, []byte(console.URL())) != bytes.Count(seen, []byte(console.URL()+".example")) {
+		t.Fatal("the console's own origin reached the browser's network traffic")
 	}
 	if browserDir != "" {
 		a273AwaitBrowser(t, browserDir, "url", base+"/", "done")

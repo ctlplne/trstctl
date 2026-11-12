@@ -860,10 +860,13 @@ func (c *webConsoleClient) rewrite(r *httputil.ProxyRequest, state *webConsoleSt
 	case accessweb.SignInHeader:
 		r.Out.Header.Set(c.in.Header, authorization)
 	}
+	// A273-O2: the response's links to the console name the browser's tunnel.
+	r.Out = withWebTunnel(r.Out, r.In.Host)
 }
 
-// response keeps the console's cookies, keeps the browser on the tunnel,
-// masks the credential out of the body and records the answer.
+// response keeps the console's cookies, keeps the browser on the tunnel
+// (redirects, header URLs and the console's origin in a text body), masks
+// the credential out of the body and records the answer.
 func (c *webConsoleClient) response(resp *http.Response, state *webConsoleState, masks [][]byte) error {
 	var browser []*http.Cookie
 	dropped := false
@@ -906,9 +909,10 @@ func (c *webConsoleClient) response(resp *http.Response, state *webConsoleState,
 				c.event("result", "response", status+": signed out by the console; the gateway signs in again")
 				return nil
 			}
-			resp.Header.Set("Location", next.RequestURI())
+			resp.Header.Set("Location", webTunnelURI(next))
 		}
 	}
+	c.rewriteHeaderURLs(resp)
 	if resp.StatusCode == http.StatusSwitchingProtocols {
 		c.event("result", "response", status+" stream "+strings.ToLower(resp.Header.Get("Upgrade")))
 		return nil
@@ -917,6 +921,7 @@ func (c *webConsoleClient) response(resp *http.Response, state *webConsoleState,
 	if len(masks) > 0 && !webBinaryMedia.MatchString(media) {
 		resp.Body = &webMaskBody{src: resp.Body, literals: masks}
 	}
+	c.rewriteBodyOrigin(resp, media)
 	resp.Body = &recordedBody{ReadCloser: resp.Body, done: func(head []byte, size int) {
 		c.event("result", "response", state.maskCookies(status+" "+media+": "+boundedHTTPText(head, size)))
 	}}

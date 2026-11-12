@@ -12,6 +12,7 @@ import (
 	"html"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 )
 
@@ -22,7 +23,8 @@ import (
 // same-origin checks on every POST, a settings form with its own CSRF token,
 // a JavaScript-readable XSRF-TOKEN cookie, and a careless account page that
 // echoes the account's password. Its API also takes HTTP basic
-// authentication or an API key header.
+// authentication or an API key header. A links page and a JSON answer name
+// the console's own origin, as many consoles' pages do (A273-O2).
 type WebConsole struct {
 	mu        sync.Mutex
 	srv       *httptest.Server
@@ -271,6 +273,22 @@ func (c *WebConsole) signedIn(w http.ResponseWriter, r *http.Request, s *webCons
 <label>Banner <input type="text" name="banner" value="%s"></label>
 <label>New service password <input type="password" name="new_password"></label>
 <button type="submit">Save</button></form></body></html>`, s.csrf, html.EscapeString(c.banner))
+	case "/links":
+		// Absolute links to its own origin: a <base>, a scheme-relative
+		// script, an anchor, a WebSocket URL, a Refresh and a Link header,
+		// a Content-Security-Policy naming it, and a look-alike origin
+		// that is not the console's.
+		authority := strings.TrimPrefix(c.srv.URL, "https://")
+		w.Header().Set("Refresh", "600; url="+c.srv.URL+"/settings")
+		w.Header().Set("Link", "<"+c.srv.URL+"/app.css>; rel=preload; as=style")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; connect-src 'self' wss://"+authority+"; img-src "+authority+" data:; upgrade-insecure-requests")
+		_, _ = fmt.Fprintf(w, `<!doctype html><html><head><base href="%[1]s/"><script src="//%[2]s/app.js"></script></head><body>
+<a href="%[1]s/settings" id="absolute">Settings</a> <a href="%[1]s.example/elsewhere" id="look-alike">Elsewhere</a>
+<script>var events = "wss://%[2]s/events";</script></body></html>`, c.srv.URL, authority)
+	case "/api/links":
+		// A JSON answer whose encoder escapes slashes.
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"self":"%s"}`, strings.ReplaceAll(c.srv.URL+"/api/whoami", "/", `\/`))
 	case "/account":
 		// A careless page: it shows the account's own password.
 		_, _ = fmt.Fprintf(w, `<!doctype html><html><body><h1>Account</h1><input type="password" name="current" value="%s"></body></html>`,
