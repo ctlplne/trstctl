@@ -8140,7 +8140,7 @@ export interface OffboardMemberResponse {
 }
 
 export interface OperationLedgerDetail {
-  actions: ({ action: "retry" | "rollback"; available: boolean; method?: string; path?: string; reason?: string; scope: string })[];
+  actions: ({ action: "retry" | "rollback"; available: boolean; body?: Record<string, unknown>; method?: string; path?: string; preview_path?: string; reason?: string; scope: string })[];
   chain: ({ at?: string; detail: string; path?: string; state: "done" | "pending" | "failed" | "uncertain" | "not_observed"; step: "request" | "authority" | "external_action" | "receipt" | "observation" | "revocation" })[];
   created_at: string;
   credential_type: string;

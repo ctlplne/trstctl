@@ -7886,7 +7886,8 @@ secret rotations and approvals from their projections in nine normalized states;
 verified needs a connector readback, a clean endpoint verification or every
 named consumer's confirmation, never an HTTP 200 or an outbox receipt alone, and
 a stranded or quarantined command reads uncertain. Each operation opens to its
-causal chain and the retry and rollback that apply to exactly it. The revocation
+causal chain and the retry and rollback that apply to exactly it, each runnable
+from there. The revocation
 report separates CA status, deployed material, new-connection rejection and
 existing-session termination. Issuance approvals bind the issuer (the platform
 CA when none is named), destination and profile version, and a digest of what
@@ -7909,9 +7910,13 @@ approval standing (A245-L5). What it reads from, and what comes next:
 - **External CAs are not read back.** The CA facet reads the platform and
   hierarchy CAs' records; an external CA's own status is reported as not
   observed.
-- **Actions link, they do not run.** Retry and rollback name the exact route and
-  scope; the console shows them, and running one goes through that route's own
-  preview and approval.
+- **Actions run in place (A245-L4).** Each available retry and rollback carries
+  the exact request it sends and, when its route has one, the preview that
+  reviews that request; the Operations page reviews and then runs it there,
+  through the route's own checks and approval. A failed delivery to an identity
+  that was deployed retries by renewing through its bound issuer (no private key
+  is kept to repeat a delivery); one that never deployed retries through its
+  target's deploy route.
 
 ## Application view for certificates (A244) — served
 

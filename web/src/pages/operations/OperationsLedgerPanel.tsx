@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/select";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type OperationLedgerItem } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
+import { OperationActionRunner } from "./OperationActionRunner";
 
 const stateCopy = {
   reviewed: "operations.state.reviewed",
@@ -138,6 +139,7 @@ function OperationDetail({ item }: { item: OperationLedgerItem }) {
                 {action.available
                   ? t("operations.ledger.actionAvailable", { scope: action.scope })
                   : t("operations.ledger.actionUnavailable", { scope: action.scope, reason: action.reason ?? "" })}
+                <OperationActionRunner action={action} label={t(actionCopy[action.action])} onDone={detail.refetch} />
               </li>
             ))}
           </ul>

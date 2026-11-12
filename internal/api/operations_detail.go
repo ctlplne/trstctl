@@ -48,6 +48,22 @@ type operationAction struct {
 	Reason string `json:"reason,omitempty"`
 	Method string `json:"method,omitempty"`
 	Path   string `json:"path,omitempty"`
+	// Body is the exact, value-free request an available action sends, and
+	// PreviewPath the route that reviews that same request without effects
+	// when one exists (A245-L4): the console runs the action in place,
+	// through that review and the route's own approval, rather than linking
+	// to another page.
+	Body        json.RawMessage `json:"body,omitempty"`
+	PreviewPath string          `json:"preview_path,omitempty"`
+}
+
+// operationActionBody is an action's request body.
+func operationActionBody(fields map[string]any) json.RawMessage {
+	raw, err := json.Marshal(fields)
+	if err != nil {
+		return nil
+	}
+	return raw
 }
 
 type operationDetail struct {
@@ -200,7 +216,7 @@ func (a *API) operationChain(r *http.Request, tenantID string, row store.Operati
 
 func (a *API) operationActions(r *http.Request, tenantID string, row store.OperationLedgerRow, item operationLedgerItem) ([]operationAction, error) {
 	actions := []operationAction{}
-	targetID := ""
+	targetID, identityStatus := "", ""
 	if row.SubjectID != "" && (row.Source == "connector_delivery" || row.Source == "certificate_rotation") {
 		identity, err := a.store.GetIdentity(r.Context(), tenantID, row.SubjectID)
 		if err != nil && !store.IsNotFound(err) {
@@ -213,6 +229,9 @@ func (a *API) operationActions(r *http.Request, tenantID string, row store.Opera
 			_ = json.Unmarshal(identity.Attributes, &attrs)
 		}
 		targetID = attrs.Target
+		if err == nil {
+			identityStatus = identity.Status
+		}
 	}
 	failed := item.State == opStateFailed || item.State == opStateUncertain
 	switch row.Source {
@@ -223,8 +242,20 @@ func (a *API) operationActions(r *http.Request, tenantID string, row store.Opera
 			retry.Reason = "the delivery did not fail"
 		case targetID == "":
 			retry.Reason = "the identity is no longer bound to a destination"
-		default:
+		case identityStatus == "issued":
+			// Never delivered: its first deployment can still be sent.
 			retry.Available, retry.Method, retry.Path = true, http.MethodPost, "/api/v1/connectors/targets/"+targetID+"/deploy"
+			retry.Body = operationActionBody(map[string]any{"identity_id": row.SubjectID, "reason": "retry of operation " + item.ID})
+		case identityStatus == "deployed" || identityStatus == "renewal_failed":
+			// A delivery can't be repeated: no private key is kept to deliver
+			// again. The retry renews through the bound issuer and delivers the
+			// new certificate (A245-L4).
+			retry.Scope = fmt.Sprintf("renew %s through its bound issuer and deliver the new certificate to %s (no private key is kept to repeat a delivery)", row.SubjectName, row.Target)
+			retry.Available, retry.Method, retry.Path = true, http.MethodPost, "/api/v1/identities/"+row.SubjectID+"/transitions"
+			retry.PreviewPath = "/api/v1/identities/" + row.SubjectID + "/transitions/preview"
+			retry.Body = operationActionBody(map[string]any{"to": "renewing", "reason": "retry of operation " + item.ID})
+		default:
+			retry.Reason = "the identity is " + firstNonEmpty(identityStatus, "gone") + "; only an issued, deployed or renewal-failed identity is retried"
 		}
 		rollback := operationAction{Action: "rollback", Scope: fmt.Sprintf("restore the certificate %s held before this delivery", row.Target)}
 		switch {
@@ -236,12 +267,15 @@ func (a *API) operationActions(r *http.Request, tenantID string, row store.Opera
 			rollback.Reason = "only a completed delivery can be rolled back"
 		default:
 			rollback.Available, rollback.Method, rollback.Path = true, http.MethodPost, "/api/v1/connectors/targets/"+targetID+"/rollback"
+			rollback.Body = operationActionBody(map[string]any{"identity_id": row.SubjectID, "reason": "rollback of operation " + item.ID})
 		}
 		actions = append(actions, retry, rollback)
 	case "certificate_rotation":
 		retry := operationAction{Action: "retry", Scope: fmt.Sprintf("renew %s once, through its bound issuer and destination", row.SubjectName)}
 		if failed {
 			retry.Available, retry.Method, retry.Path = true, http.MethodPost, "/api/v1/identities/"+row.SubjectID+"/transitions"
+			retry.PreviewPath = "/api/v1/identities/" + row.SubjectID + "/transitions/preview"
+			retry.Body = operationActionBody(map[string]any{"to": "renewing", "reason": "retry of operation " + item.ID})
 		} else {
 			retry.Reason = "the rotation did not fail"
 		}
@@ -253,12 +287,23 @@ func (a *API) operationActions(r *http.Request, tenantID string, row store.Opera
 			rollback.Reason = "the identity is no longer bound to a destination"
 		default:
 			rollback.Available, rollback.Method, rollback.Path = true, http.MethodPost, "/api/v1/connectors/targets/"+targetID+"/rollback"
+			rollback.Body = operationActionBody(map[string]any{"identity_id": row.SubjectID, "reason": "rollback of operation " + item.ID})
 		}
 		actions = append(actions, retry, rollback)
 	case "secret_rotation":
 		retry := operationAction{Action: "retry", Scope: fmt.Sprintf("rotate %s again at its provider", row.SubjectName)}
 		if failed || item.State == opStateRecovered {
-			retry.Available, retry.Method, retry.Path = true, http.MethodPost, "/api/v1/secrets/rotations"
+			command, err := a.store.GetSecretStaticRotationCommand(r.Context(), tenantID, row.ID)
+			if err != nil && !store.IsNotFound(err) {
+				return nil, err
+			}
+			if err != nil {
+				retry.Reason = "the rotation's command is no longer recorded"
+			} else {
+				retry.Available, retry.Method, retry.Path = true, http.MethodPost, "/api/v1/secrets/rotations"
+				retry.PreviewPath = "/api/v1/secrets/rotations/preview"
+				retry.Body = operationActionBody(secretRotationRetryBody(command))
+			}
 		} else {
 			retry.Reason = "the rotation did not fail"
 		}
@@ -266,4 +311,24 @@ func (a *API) operationActions(r *http.Request, tenantID string, row store.Opera
 			Reason: "a failed rotation rolls back by itself; a completed one is undone by rotating again"})
 	}
 	return actions, nil
+}
+
+// secretRotationRetryBody is the request that rotates a failed rotation's
+// secret again: the same provider, key and predecessor, lifetime, consumers
+// and retirement gate (A245-L4).
+func secretRotationRetryBody(c store.SecretStaticRotationCommand) map[string]any {
+	body := map[string]any{"provider": c.Provider, "key": c.Key, "old_ref": c.OldRef}
+	if c.TTLSeconds > 0 {
+		body["ttl_seconds"] = c.TTLSeconds
+	}
+	if len(c.Consumers) > 0 {
+		body["consumers"] = c.Consumers
+	}
+	if c.RetireAfterSeconds > 0 {
+		body["retire_after_seconds"] = c.RetireAfterSeconds
+	}
+	if c.SinglePhaseAcknowledged {
+		body["acknowledge_single_phase"] = true
+	}
+	return body
 }

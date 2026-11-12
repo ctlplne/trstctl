@@ -361,6 +361,8 @@ func operationLedgerSchemas() map[string]*Schema {
 	detail["actions"] = &Schema{Type: "array", Items: object(map[string]*Schema{
 		"action": {Type: "string", Enum: []string{"retry", "rollback"}}, "available": {Type: "boolean"}, "scope": str(),
 		"reason": str(), "method": str(), "path": str(),
+		"body":         {Type: "object", AdditionalProperties: &Schema{}, Description: "The exact, value-free request the action sends (A245-L4)."},
+		"preview_path": {Type: "string", Description: "The route that reviews the same request without effects, when one exists (A245-L4)."},
 	}, "action", "available", "scope")}
 	return map[string]*Schema{
 		"OperationLedgerItem":   object(operationLedgerItemProperties(), operationLedgerItemRequired...),

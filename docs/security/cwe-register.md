@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3002 annotated sites across 33 rules. Each row is
+3003 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (689 sites)
+### G101 — CWE-798 Use of hardcoded credentials (690 sites)
 
 | Location | Reason |
 |---|---|
@@ -594,6 +594,7 @@ not this file.
 | `internal/server/oauth_unblock_served_test.go:24` | fabricated fixture credential (CWE-798) |
 | `internal/server/oauth_unblock_served_test.go:36` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/oidc_issuer.go:112` | the token endpoint's path and the token lifetime, no credential (CWE-798) |
+| `internal/server/operations_action_run_served_test.go:26` | fabricated test-only credential (CWE-798) |
 | `internal/server/operations_ledger_served_test.go:46` | fabricated test-only credential (CWE-798) |
 | `internal/server/operations_ledger_served_test.go:247` | fabricated test-only credential (CWE-798) |
 | `internal/server/operations_ledger_served_test.go:366` | fabricated test-only credential (CWE-798) |

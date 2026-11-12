@@ -2,6 +2,11 @@
 
 ### Added
 
+- Operation actions run in place (A245-L4): each available retry and rollback in the operations ledger
+  carries the exact request it sends and, when its route has one, the preview that reviews it; the
+  Operations page reviews and then runs it there, through the route's own checks and approval. A failed
+  delivery to an identity that was deployed now retries by renewing through its bound issuer (the
+  advertised deploy retry was refused, since no private key is kept to repeat a delivery).
 - A destination is verified without an earlier observation (A244-L1): the endpoint verification scheduler
   also probes, for the first time, a deployment target that names its listener (`verify_address`) once it
   has delivered an identity's active certificate there, expecting that certificate, with the target's

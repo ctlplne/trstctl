@@ -37664,10 +37664,19 @@
                 "available": {
                   "type": "boolean"
                 },
+                "body": {
+                  "additionalProperties": {},
+                  "description": "The exact, value-free request the action sends (A245-L4).",
+                  "type": "object"
+                },
                 "method": {
                   "type": "string"
                 },
                 "path": {
+                  "type": "string"
+                },
+                "preview_path": {
+                  "description": "The route that reviews the same request without effects, when one exists (A245-L4).",
                   "type": "string"
                 },
                 "reason": {

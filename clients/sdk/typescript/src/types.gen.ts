@@ -22071,8 +22071,14 @@ export interface components {
                 /** @enum {string} */
                 action: "retry" | "rollback";
                 available: boolean;
+                /** @description The exact, value-free request the action sends (A245-L4). */
+                body?: {
+                    [key: string]: unknown;
+                };
                 method?: string;
                 path?: string;
+                /** @description The route that reviews the same request without effects, when one exists (A245-L4). */
+                preview_path?: string;
                 reason?: string;
                 scope: string;
             }[];
