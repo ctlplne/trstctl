@@ -45,7 +45,9 @@ func (s *upstreamACMEDNS01Solver) solvePersist(ctx context.Context, req acmekey.
 	if err := s.enforceUpstreamCAA(ctx, identifier); err != nil {
 		return nil, err
 	}
-	stands := acme.DNSPersistValidator{Resolver: s.persistResolver()}.
+	// Only the name's own record counts here (P1-L2): whether the authority
+	// honors a parent's policy=wildcard record is its choice.
+	stands := acme.DNSPersistValidator{Resolver: s.persistResolver(), ExactNameOnly: true}.
 		ValidatePersist(ctx, identifier, accountURI, req.IssuerDomainNames) == nil
 	if stands {
 		return nil, nil

@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/net/publicsuffix"
 )
 
 // dns-persist-01 (P1): persistent DNS validation, allowed by CA/Browser Forum
@@ -24,6 +26,12 @@ import (
 // (Pebble 2.10) implements it. Each order validates against the record again,
 // so deleting the record, or naming another account in it, makes the next
 // order fail.
+//
+// A record with policy=wildcard also authorizes every subdomain of its domain
+// (P1-L2, draft-ietf-acme-dns-persist-02 §5.1 and §6): the validator reads the
+// name's own record first, then its parent domains nearest first, never above
+// the registrable domain, and a parent's record counts only with
+// policy=wildcard. Without it a record authorizes its own name only.
 
 // ChallengeDNSPersist01 is the persistent DNS validation challenge type.
 const ChallengeDNSPersist01 = "dns-persist-01"
@@ -98,12 +106,44 @@ func normalizeIssuerDomainName(name string) string {
 	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
 }
 
+// MaxDNSPersistLookups bounds the TXT lookups one validation makes: the
+// name's own record, then at most this many names in all up its parents.
+const MaxDNSPersistLookups = 16
+
 // DNSPersistValidator checks the standing record. It fails closed: a lookup
-// error, no record for this CA, another account, a wildcard without
-// policy=wildcard or a passed persistUntil each refuse, naming why.
+// error, no record for this CA, another account, a wildcard or a subdomain
+// without policy=wildcard or a passed persistUntil each refuse, naming why.
 type DNSPersistValidator struct {
 	Resolver Resolver
 	Now      func() time.Time
+	// ExactNameOnly reads the name's own record only. The upstream client
+	// sets it: whether another CA honors a parent's policy=wildcard is that
+	// CA's choice (the draft makes it a MAY), so the record trstctl relies
+	// on there must stand at the name itself.
+	ExactNameOnly bool
+}
+
+// dnsPersistParents lists the parent domains whose policy=wildcard record
+// may authorize name (the record's domain is a proper suffix of the name,
+// draft-ietf-acme-dns-persist-02 §6.1), nearest first, down to the
+// registrable domain and never above it: a record at a public suffix
+// authorizes nothing.
+func dnsPersistParents(name string) []string {
+	name = strings.ToLower(strings.TrimSuffix(strings.TrimPrefix(name, "*."), "."))
+	apex, err := publicsuffix.EffectiveTLDPlusOne(name)
+	if err != nil || apex == name || !strings.HasSuffix(name, "."+apex) {
+		return nil
+	}
+	var parents []string
+	for rest := name; rest != apex; {
+		_, after, ok := strings.Cut(rest, ".")
+		if !ok {
+			break
+		}
+		rest = after
+		parents = append(parents, rest)
+	}
+	return parents
 }
 
 // ValidatePersist proves that the account at accountURI controls domain
@@ -129,42 +169,77 @@ func (v DNSPersistValidator) ValidatePersist(ctx context.Context, domain, accoun
 	if v.Now != nil {
 		now = v.Now
 	}
-	name := DNSPersistRecordName(domain)
-	records, err := resolver.LookupTXT(ctx, name)
-	if err != nil {
-		return fmt.Errorf("acme: dns-persist-01 lookup %s: %w", name, err)
+	exact := DNSPersistRecordName(domain)
+	names := []string{exact}
+	if !v.ExactNameOnly {
+		for _, parent := range dnsPersistParents(domain) {
+			if len(names) == MaxDNSPersistLookups {
+				break
+			}
+			names = append(names, "_validation-persist."+parent)
+		}
 	}
 	wildcard := strings.HasPrefix(domain, "*.")
-	var reasons []string
-	seen := map[string]bool{}
-	reason := func(r string) {
-		if !seen[r] {
-			seen[r] = true
-			reasons = append(reasons, r)
+	type refusal struct {
+		name    string
+		reasons []string
+	}
+	var refusals []refusal
+	reason := func(name, r string) {
+		if n := len(refusals); n == 0 || refusals[n-1].name != name {
+			refusals = append(refusals, refusal{name: name})
+		}
+		last := &refusals[len(refusals)-1]
+		for _, seen := range last.reasons {
+			if seen == r {
+				return
+			}
+		}
+		last.reasons = append(last.reasons, r)
+	}
+	for i, name := range names {
+		records, err := resolver.LookupTXT(ctx, name)
+		if err != nil {
+			var dnsErr *net.DNSError
+			if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+				continue // no record at this name
+			}
+			return fmt.Errorf("acme: dns-persist-01 lookup %s: %w", name, err)
+		}
+		subdomain := i > 0
+		for _, txt := range records {
+			rec, err := ParseDNSPersistRecord(txt)
+			if !ours[rec.IssuerDomainName] {
+				continue // a record for another CA
+			}
+			switch {
+			case err != nil:
+				reason(name, err.Error())
+			case rec.AccountURI != accountURI:
+				reason(name, "it names a different ACME account")
+			case subdomain && rec.Policy != "wildcard":
+				reason(name, "it does not allow subdomains (policy=wildcard)")
+			case wildcard && rec.Policy != "wildcard":
+				reason(name, "it does not allow wildcard issuance (policy=wildcard)")
+			case !rec.PersistUntil.IsZero() && now().After(rec.PersistUntil):
+				reason(name, "it ended at "+rec.PersistUntil.Format(time.RFC3339)+" (persistUntil)")
+			default:
+				return nil
+			}
 		}
 	}
-	for _, txt := range records {
-		rec, err := ParseDNSPersistRecord(txt)
-		if !ours[rec.IssuerDomainName] {
-			continue // a record for another CA
+	if len(refusals) == 0 {
+		if len(names) > 1 {
+			return fmt.Errorf("acme: dns-persist-01: no TXT record at %s names this CA, nor at a parent domain up to %s",
+				exact, names[len(names)-1])
 		}
-		switch {
-		case err != nil:
-			reason(err.Error())
-		case rec.AccountURI != accountURI:
-			reason("it names a different ACME account")
-		case wildcard && rec.Policy != "wildcard":
-			reason("it does not allow wildcard issuance (policy=wildcard)")
-		case !rec.PersistUntil.IsZero() && now().After(rec.PersistUntil):
-			reason("it ended at " + rec.PersistUntil.Format(time.RFC3339) + " (persistUntil)")
-		default:
-			return nil
-		}
+		return fmt.Errorf("acme: dns-persist-01: no TXT record at %s names this CA", exact)
 	}
-	if len(reasons) == 0 {
-		return fmt.Errorf("acme: dns-persist-01: no TXT record at %s names this CA", name)
+	parts := make([]string, 0, len(refusals))
+	for _, r := range refusals {
+		parts = append(parts, "the record at "+r.name+" names this CA, but "+strings.Join(r.reasons, "; "))
 	}
-	return fmt.Errorf("acme: dns-persist-01: the record at %s names this CA, but %s", name, strings.Join(reasons, "; "))
+	return errors.New("acme: dns-persist-01: " + strings.Join(parts, "; "))
 }
 
 // dnsPersistConfig is this server's dns-persist-01 offer.

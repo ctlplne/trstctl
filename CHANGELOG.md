@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A dns-persist-01 standing record with `policy=wildcard` also validates every subdomain of its domain (P1-L2,
+  draft-ietf-acme-dns-persist §5.1 and §6). The ACME server reads the name's own `_validation-persist` record,
+  then its parent domains nearest first up to the registrable domain (at most 16 lookups), so one record at
+  `example.com` covers `www.example.com`, `a.b.example.com` and `*.api.example.com`. A record without
+  `policy=wildcard` still covers its own name only. The upstream client still publishes a record at each name.
 - A Certificate Transparency finding at a precertificate entry can be revoked at an ACME CA (N10-L1). trstctl
   finds the issued certificate another watched log recorded under the same issuer and serial, reads it back from
   that log through its CT source's egress settings, checks it against that finding, and revokes it. Until a watched

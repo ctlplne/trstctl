@@ -6283,10 +6283,14 @@ This is a deliberate, documented trust boundary, not an accident.
   order with the reason. A tenant's DNS-01 provider config may require it
   (`allowed_methods`, in the API and on the Protocols page): the zone's names,
   wildcards included, are then offered only dns-persist-01, and a wildcard's
-  standing record must carry `policy=wildcard`. Upstream, an ACME authority configured with
+  standing record must carry `policy=wildcard`. A `policy=wildcard` record also covers
+  subdomains (P1-L2); the server reads at most 16 names, the name's own record and then
+  its parents up to the registrable domain, so a record further up than that is not read.
+  Upstream, an ACME authority configured with
   `upstream_dns_persist` (which needs `upstream_dns01`) answers the challenge by
   publishing that record once through the consenting DNS-01 provider configs and
-  never retracting it. Proven against trstctl's own server (two orders on one
+  never retracting it, at each name: whether an authority honors a parent's
+  `policy=wildcard` is its choice. Proven against trstctl's own server (two orders on one
   record; deletion and another account refused) and against Pebble 2.10.1, the
   reference test CA, through an RFC 2136 server. The draft can still change, and
   no public CA offers the challenge in production yet, so the console's issuer

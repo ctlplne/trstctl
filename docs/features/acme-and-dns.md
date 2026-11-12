@@ -475,6 +475,23 @@ fingerprint and rollback reference to the exact wildcard. A failed issue keeps t
 open, shows the server's exact safe error, links to DNS-01 setup, and explicitly says not
 to weaken validation before retrying.
 
+### One standing record: dns-persist-01 (P1)
+
+With `protocols.acme_dns_persist.issuer_domain_names` naming this CA, the ACME server
+offers `dns-persist-01` (IETF draft draft-ietf-acme-dns-persist). The applicant
+publishes one TXT record, `_validation-persist.<domain>`, naming one of those issuer
+domain names and its ACME account URL, and every later order validates against it
+again with no DNS change. A record that adds `policy=wildcard` also covers the
+domain's wildcard and every subdomain of the domain (P1-L2, draft §5.1 and §6): one
+record at `_validation-persist.example.com` validates `www.example.com`,
+`a.b.example.com` and `*.api.example.com`. The server reads the name's own record
+first, then its parent domains nearest first, up to the registrable domain and never
+above it, so a record at a public suffix such as `co.uk` covers nothing. Without
+`policy=wildcard` a record covers its own name only, and a subdomain under it is
+refused with that reason. Each record is its own authorization: a record at the name
+that names another account does not hide a parent's record that passes. A lookup
+that fails for any reason other than "no such name" refuses the order.
+
 ### S/MIME certificates for a mailbox: email-reply-00 (P15, RFC 8823)
 
 With `protocols.acme_email` set, the ACME server also issues signing-only S/MIME

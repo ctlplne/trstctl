@@ -96,6 +96,19 @@ func TestUpstreamDNSPersistPublishesTheStandingRecordOnce(t *testing.T) {
 		t.Fatalf("%d publishes after a reuse, want 1", got)
 	}
 
+	// P1-L2: a parent's policy=wildcard record does not stand for a name
+	// upstream (whether the authority honors it is its choice): the client
+	// still publishes the name's own record.
+	zone.txt["_validation-persist.persist.test"] = []string{acme.DNSPersistRecordValue("ca.example.test", account, true)}
+	sub := req
+	sub.Identifier = "api.persist.test"
+	attemptCtx, cancel = context.WithTimeout(ctx, 300*time.Millisecond)
+	_, _ = solver.Solve(attemptCtx, sub)
+	cancel()
+	if got := countUpstreamPresentRows(t, ctx, h); got != 2 {
+		t.Fatalf("%d publishes after a name under a parent's policy=wildcard record, want 2", got)
+	}
+
 	// A wildcard needs a config that allows wildcards.
 	wild := req
 	wild.Identifier = "*.persist.test"
