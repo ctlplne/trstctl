@@ -112,6 +112,13 @@ func buildSAMLAuthConfig(s config.SAML, secure bool, newSessionIssuer func([]byt
 			}
 			return redirect.URL, redirect.RequestID, nil
 		},
+		SAMLFreshLoginRedirect: func(relayState string) (string, string, error) {
+			redirect, err := verifier.FreshLoginRedirect(relayState)
+			if err != nil {
+				return "", "", err
+			}
+			return redirect.URL, redirect.RequestID, nil
+		},
 		VerifySAMLResponse:         verifier.Verify,
 		ResolveSAMLTenant:          mapper.ResolveTenant,
 		SAMLSingleLogout:           s.SingleLogout,

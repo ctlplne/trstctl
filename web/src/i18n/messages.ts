@@ -902,8 +902,8 @@ export const messages = {
     description: "Next steps when the provider did not re-authenticate (A277).",
   },
   "auth.login.reauthUnavailable": {
-    defaultMessage: "No sign-in method here can prove a fresh sign-in. Ask your administrator to enable OIDC or directory sign-in.",
-    description: "Fresh sign-in mode without OIDC or directory sign-in configured (A277).",
+    defaultMessage: "No sign-in method here can prove a fresh sign-in. Ask your administrator to enable OIDC, SAML or directory sign-in.",
+    description: "Fresh sign-in mode without OIDC, SAML or directory sign-in configured (A277, A277-O1).",
   },
   "admin.access.folders.freshSignIn": { defaultMessage: "Fresh sign-in", description: "Template column: high-risk fresh sign-in window (A277)." },
   "admin.access.folders.freshSignInFor": {

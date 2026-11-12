@@ -9638,12 +9638,12 @@ access dialog's and check-out panel's **Sign in again**, the login page's fresh 
 the template's **Fresh sign-in** column).
 
 What comes next:
-- SAML (ForceAuthn and AuthnInstant), Kerberos and NTLM sign-ins cannot prove a fresh sign-in
-  today, so a high-risk template needs OIDC or a directory password; SAML ForceAuthn is the
-  next step in the enterprise sign-in edition.
+- Kerberos and NTLM sign-ins cannot prove a fresh sign-in, so a high-risk template needs OIDC,
+  SAML (ForceAuthn, enterprise sign-in edition) or a directory password.
 - Microsoft Teams: a Teams bot receives its activities on an inbound HTTPS endpoint, so it is
   not built; it goes to the handoff for the owner's decision.
-- A live Slack workspace run and a live identity provider's `prompt=login` (Track B).
+- A live Slack workspace run, and a live identity provider's `prompt=login` and SAML
+  `ForceAuthn` (Track B).
 
 ## Owners, certification and orphans (A276) — parts 1–3: owners, flags and certification
 

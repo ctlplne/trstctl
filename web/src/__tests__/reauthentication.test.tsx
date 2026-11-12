@@ -170,9 +170,12 @@ describe("the login page's fresh sign-in mode", () => {
     expect(assign).toHaveBeenCalledWith(`/auth/login?${new URLSearchParams({ return_to: "/reauthenticated", reauth: "1" })}`);
     expect(screen.getByText("Sign in again")).toBeInTheDocument();
     expect(await screen.findByLabelText("Directory username")).toBeInTheDocument();
-    for (const name of ["Continue with SAML", "Continue with Kerberos", "Continue with Windows sign-in (NTLM)"]) {
+    for (const name of ["Continue with Kerberos", "Continue with Windows sign-in (NTLM)"]) {
       expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     }
+    // A277-O1: a SAML identity provider is asked to sign the person in again too.
+    await userEvent.click(screen.getByRole("button", { name: "Continue with SAML" }));
+    expect(assign).toHaveBeenLastCalledWith(`/auth/saml/login?${new URLSearchParams({ return_to: "/reauthenticated", reauth: "1" })}`);
   });
 
   it("says when the provider reused an earlier sign-in", async () => {
@@ -182,13 +185,13 @@ describe("the login page's fresh sign-in mode", () => {
   });
 
   it("says when nothing configured can prove a fresh sign-in", async () => {
-    bootstrapMock.authMethods.mockResolvedValue({ oidc: false, saml: true, ldap: false });
+    bootstrapMock.authMethods.mockResolvedValue({ oidc: false, saml: false, ldap: false, kerberos: true });
     renderLogin("/login?reauth=1");
     await waitFor(() =>
       expect(
-        screen.getByText("No sign-in method here can prove a fresh sign-in. Ask your administrator to enable OIDC or directory sign-in."),
+        screen.getByText("No sign-in method here can prove a fresh sign-in. Ask your administrator to enable OIDC, SAML or directory sign-in."),
       ).toBeInTheDocument(),
     );
-    expect(screen.queryByRole("button", { name: "Continue with SAML" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue with Kerberos" })).not.toBeInTheDocument();
   });
 });

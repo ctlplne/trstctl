@@ -870,10 +870,13 @@ challenge (`WWW-Authenticate: Bearer error="insufficient_user_authentication",
 max_age="300"`); an API token never satisfies it, so a high-risk template needs a person.
 The console answers the challenge with **Sign in again**, which opens the sign-in in its own
 window so the approved request survives, and the person retries. The sign-in time is what
-the sign-in proved: an OIDC id_token's `auth_time` (a fresh sign-in asks the provider for
-`prompt=login` and `max_age=0`, and is refused when the provider reused its session instead)
-or the moment a directory password was verified. SAML, Kerberos and NTLM sign-ins reuse an
-earlier authentication, so they do not count as fresh.
+the sign-in proved. For OIDC it is the id_token's `auth_time`: a fresh sign-in asks the
+provider for `prompt=login` and `max_age=0`, and is refused when the provider reused its
+session instead. For SAML (the enterprise sign-in edition) it is the assertion's
+`AuthnInstant`: a fresh sign-in sends `ForceAuthn="true"` and is refused the same way when
+the IdP answers from an earlier authentication. For a directory password it is the moment
+the password was verified. Kerberos and NTLM sign-ins reuse an earlier authentication, so
+they do not count as fresh. `GET /auth/me` returns the sign-in time as `signed_in_at`.
 
 With an object store (`audit.archive_object_store`), tenant sealing and the audit signing
 key, every gateway session is recorded (A255): SSH bytes and requests, SFTP operations

@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/crewjam/saml"
 	crewjamsamlsp "github.com/crewjam/saml/samlsp"
@@ -87,6 +88,10 @@ type Assertion struct {
 	// SessionIndex is the IdP session handle from the AuthnStatement (A78);
 	// empty when the IdP sent none.
 	SessionIndex string
+	// AuthnInstant (A277-O1) is when the IdP authenticated the subject, from
+	// the latest AuthnStatement; zero when the IdP sent none. A sign-in that
+	// reused an IdP session carries that session's original instant.
+	AuthnInstant time.Time
 }
 
 // LogoutRequest is a verified IdP-initiated LogoutRequest (A78).
@@ -213,6 +218,17 @@ func NewServiceProvider(cfg Config) (*ServiceProvider, error) {
 
 // LoginRedirect creates an HTTP-Redirect binding AuthnRequest to the IdP.
 func (p *ServiceProvider) LoginRedirect(relayState string) (Redirect, error) {
+	return p.loginRedirect(relayState, false)
+}
+
+// LoginRedirectFresh starts an SP-initiated login that asks the IdP to
+// authenticate the subject again, with ForceAuthn, instead of reusing its
+// session (A277-O1).
+func (p *ServiceProvider) LoginRedirectFresh(relayState string) (Redirect, error) {
+	return p.loginRedirect(relayState, true)
+}
+
+func (p *ServiceProvider) loginRedirect(relayState string, fresh bool) (Redirect, error) {
 	resultBinding := saml.HTTPPostBinding
 	if p.artifact {
 		resultBinding = saml.HTTPArtifactBinding
@@ -220,6 +236,10 @@ func (p *ServiceProvider) LoginRedirect(relayState string) (Redirect, error) {
 	req, err := p.sp.MakeAuthenticationRequest(p.sp.GetSSOBindingLocation(saml.HTTPRedirectBinding), saml.HTTPRedirectBinding, resultBinding)
 	if err != nil {
 		return Redirect{}, err
+	}
+	if fresh {
+		force := true
+		req.ForceAuthn = &force
 	}
 	u, err := req.Redirect(relayState, p.sp)
 	if err != nil {
@@ -296,9 +316,11 @@ func normalizeAssertion(a *saml.Assertion) Assertion {
 		out.Subject = a.Subject.NameID.Value
 	}
 	for _, stmt := range a.AuthnStatements {
-		if stmt.SessionIndex != "" {
+		if out.SessionIndex == "" && stmt.SessionIndex != "" {
 			out.SessionIndex = stmt.SessionIndex
-			break
+		}
+		if stmt.AuthnInstant.After(out.AuthnInstant) {
+			out.AuthnInstant = stmt.AuthnInstant.UTC()
 		}
 	}
 	for _, stmt := range a.AttributeStatements {

@@ -21,12 +21,13 @@ export function Login() {
   // "Powered by trstctl" above the fold.
   const brand = usePublicBrand();
   const needsTenantAccess = searchParams.get("error") === "tenant_access_not_configured";
-  // A277: a fresh sign-in offers only the methods that can prove one — the
-  // identity provider asked to sign the person in again, or the directory
-  // password typed now. SAML, Kerberos and NTLM reuse an earlier sign-in.
+  // A277: a fresh sign-in offers only the methods that can prove one — an
+  // OIDC or SAML identity provider asked to sign the person in again
+  // (A277-O1), or the directory password typed now. Kerberos and NTLM reuse
+  // an earlier sign-in.
   const reauth = searchParams.get("reauth") === "1";
   const reauthNotProven = reauth && searchParams.get("error") === "reauthentication_not_proven";
-  const showSAML = samlAvailable && !reauth;
+  const showSAML = samlAvailable;
   const showKerberos = kerberosAvailable && !reauth;
   const showNTLM = ntlmAvailable && !reauth;
   const browserLoginAvailable = oidcAvailable || showSAML || ldapAvailable || showKerberos || showNTLM;
@@ -98,7 +99,7 @@ export function Login() {
               <Button
                 className="mt-3 min-h-11 w-full"
                 variant={oidcAvailable ? "outline" : "default"}
-                onClick={() => beginSAMLLogin(searchParams.get("return_to") ?? undefined)}
+                onClick={() => beginSAMLLogin(searchParams.get("return_to") ?? undefined, { reauth })}
               >
                 {translateNow("auth.saml.action")}
               </Button>

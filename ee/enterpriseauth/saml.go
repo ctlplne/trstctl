@@ -31,6 +31,15 @@ func (v SAMLVerifier) LoginRedirect(relayState string) (samlsp.Redirect, error) 
 	return v.Provider.LoginRedirect(relayState)
 }
 
+// FreshLoginRedirect starts an SP-initiated login that asks the IdP to
+// authenticate the person again (ForceAuthn), for a fresh sign-in (A277-O1).
+func (v SAMLVerifier) FreshLoginRedirect(relayState string) (samlsp.Redirect, error) {
+	if v.Provider == nil {
+		return samlsp.Redirect{}, errors.New("auth: SAML provider is not configured")
+	}
+	return v.Provider.LoginRedirectFresh(relayState)
+}
+
 // MetadataXML returns this service provider's metadata document.
 func (v SAMLVerifier) MetadataXML() ([]byte, error) {
 	if v.Provider == nil {
@@ -56,7 +65,14 @@ func (v SAMLVerifier) Verify(r *http.Request, possibleRequestIDs []string) (auth
 		return auth.Claims{}, errors.New("auth: SAML assertion has no subject")
 	}
 	email := firstAttribute(assertion.Attributes, v.EmailAttribute, "email", "mail", "urn:oid:0.9.2342.19200300.100.1.3")
+	// A277-O1: the sign-in is as fresh as the IdP's authentication of the
+	// person, which a reused IdP session does not renew.
+	var authTime int64
+	if !assertion.AuthnInstant.IsZero() {
+		authTime = assertion.AuthnInstant.Unix()
+	}
 	return auth.Claims{
+		AuthTime:         authTime,
 		Subject:          subject,
 		Email:            email,
 		Issuer:           assertion.Issuer,

@@ -232,6 +232,11 @@ type mockSAMLIdP struct {
 	// (A78); lastLogoutNameID is the NameID the last one named.
 	logoutRequests   int
 	lastLogoutNameID string
+	// forceAuthnSeen counts AuthnRequests that asked for ForceAuthn
+	// (A277-O1); honorForceAuthn makes the IdP authenticate the user again
+	// for them, where an IdP that ignores it answers from its session.
+	forceAuthnSeen  int
+	honorForceAuthn bool
 }
 
 // serveSLO is the IdP's single logout service (A78): it consumes the SP's
@@ -471,11 +476,21 @@ func (m *mockSAMLIdP) metadataXML(t *testing.T) string {
 	return string(data)
 }
 
-func (m *mockSAMLIdP) GetSession(http.ResponseWriter, *http.Request, *saml.IdpAuthnRequest) *saml.Session {
+func (m *mockSAMLIdP) GetSession(_ http.ResponseWriter, _ *http.Request, req *saml.IdpAuthnRequest) *saml.Session {
 	if m.nextUser == "" {
 		return nil
 	}
-	return m.users[m.nextUser]
+	session := m.users[m.nextUser]
+	if session != nil && req != nil && req.Request.ForceAuthn != nil && *req.Request.ForceAuthn {
+		m.forceAuthnSeen++
+		if m.honorForceAuthn {
+			// The user signed in again: a new authentication instant.
+			fresh := *session
+			fresh.CreateTime = time.Now()
+			return &fresh
+		}
+	}
+	return session
 }
 
 func (m *mockSAMLIdP) GetServiceProvider(_ *http.Request, serviceProviderID string) (*saml.EntityDescriptor, error) {

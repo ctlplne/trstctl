@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- A SAML sign-in can prove a fresh sign-in for a high-risk template (A277-O1, enterprise sign-in
+  edition). Its sign-in time is the assertion's `AuthnInstant`, so a sign-in that reused an IdP
+  session two hours old counts as two hours old. A fresh sign-in (`/auth/saml/login?reauth=1`)
+  sends `ForceAuthn="true"` and is refused, with no session minted, when the IdP answers from
+  an earlier authentication. The login page's fresh sign-in mode offers SAML, and `GET /auth/me`
+  returns the session's `signed_in_at`.
 - A web console that signs its users in only through an identity provider can be reached through the
   gateway (A273-O1). Its target's route names the provider (`sign_in_url`, with an optional
   `sign_in_ca_pem` and `sign_in_server_name`), and a template's `sso` web sign-in names the console

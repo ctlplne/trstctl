@@ -33,6 +33,10 @@ const (
 	pkceCookieName          = "trstctl_oidc_pkce"
 	samlStateCookieName     = "trstctl_saml_state"
 	samlRequestIDCookieName = "trstctl_saml_request_id"
+	// samlReauthCookieName (A277-O1) marks an SP-initiated sign-in that must
+	// be fresh: the instant it began, which the assertion's AuthnInstant must
+	// not precede.
+	samlReauthCookieName = "trstctl_saml_reauth"
 	// csrfCookieName carries the double-submit CSRF token. Unlike the session
 	// cookie it is NOT HttpOnly: the SPA reads it and echoes it in the
 	// X-CSRF-Token header on every mutating request, which a cross-site attacker
@@ -122,6 +126,9 @@ type AuthConfig struct {
 	// SAMLLoginRedirect creates an SP-initiated AuthnRequest redirect URL and returns
 	// the generated request ID, so the ACS can correlate the signed response.
 	SAMLLoginRedirect func(relayState string) (redirectURL string, requestID string, err error)
+	// SAMLFreshLoginRedirect is SAMLLoginRedirect asking the IdP to
+	// authenticate the person again (ForceAuthn), for a fresh sign-in (A277-O1).
+	SAMLFreshLoginRedirect func(relayState string) (redirectURL string, requestID string, err error)
 	// VerifySAMLResponse validates the ACS POST's SAMLResponse and returns claims in
 	// the same shape as OIDC. Production wires enterpriseauth.SAMLVerifier.Verify.
 	VerifySAMLResponse func(r *http.Request, possibleRequestIDs []string) (auth.Claims, error)
@@ -180,6 +187,9 @@ type meResponse struct {
 	Permissions []string `json:"permissions,omitempty"`
 	Locale      string   `json:"locale,omitempty"`
 	TimeZone    string   `json:"time_zone,omitempty"`
+	// SignedInAt (A277-O1) is when the person last authenticated, as the
+	// sign-in proved it; absent when the sign-in path cannot say.
+	SignedInAt *time.Time `json:"signed_in_at,omitempty"`
 }
 
 type authMethodsResponse struct {
@@ -562,7 +572,18 @@ func (a *API) authSAMLLogin(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	redirectURL, requestID, err := a.auth.SAMLLoginRedirect(state)
+	// A277-O1: reauth=1 asks the IdP to authenticate the person again
+	// (ForceAuthn); the ACS proves it from the assertion's AuthnInstant.
+	reauth := r.URL.Query().Get("reauth") == "1"
+	redirect := a.auth.SAMLLoginRedirect
+	if reauth {
+		if a.auth.SAMLFreshLoginRedirect == nil {
+			a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "a fresh SAML sign-in is not configured"))
+			return
+		}
+		redirect = a.auth.SAMLFreshLoginRedirect
+	}
+	redirectURL, requestID, err := redirect(state)
 	if err != nil {
 		a.writeError(w, errStatus(http.StatusBadGateway, "SAML AuthnRequest failed"))
 		return
@@ -573,6 +594,11 @@ func (a *API) authSAMLLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	a.setTransientCookie(w, samlStateCookieName, state)
 	a.setTransientCookie(w, samlRequestIDCookieName, requestID)
+	if reauth {
+		a.setTransientCookie(w, samlReauthCookieName, strconv.FormatInt(time.Now().Unix(), 10))
+	} else {
+		a.clearCookie(w, samlReauthCookieName)
+	}
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
@@ -611,11 +637,34 @@ func (a *API) authSAMLACS(w http.ResponseWriter, r *http.Request) {
 			a.writeError(w, errStatus(http.StatusBadRequest, "invalid or expired SAML return context; restart sign-in"))
 			return
 		}
-		clearCookies = append(clearCookies, samlStateCookieName, samlRequestIDCookieName)
+		clearCookies = append(clearCookies, samlStateCookieName, samlRequestIDCookieName, samlReauthCookieName)
 	}
 	claims, err := a.auth.VerifySAMLResponse(r, possibleRequestIDs)
 	if err != nil {
 		a.writeError(w, errStatus(http.StatusUnauthorized, "SAML response verification failed"))
+		return
+	}
+	// A277-O1: a fresh sign-in must be one. An IdP that reused its session
+	// (an AuthnInstant before this sign-in began, or none) did not
+	// authenticate the person again, so no session is minted and the old one
+	// stays as it was. One minute allows for the IdP's clock.
+	if started, fresh := a.samlReauthStarted(r, possibleRequestIDs); fresh &&
+		(claims.AuthTime == 0 || claims.AuthTime < started.Add(-time.Minute).Unix()) {
+		for _, name := range clearCookies {
+			a.clearCookie(w, name)
+		}
+		if prefersLoginRecoveryPage(r) {
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			recovery := "/login?reauth=1&error=reauthentication_not_proven"
+			if returnTo != "" {
+				recovery += "&return_to=" + url.QueryEscape(returnTo)
+			}
+			http.Redirect(w, r, recovery, http.StatusSeeOther)
+			return
+		}
+		a.writeProblem(w, problem.New(http.StatusUnauthorized, "the identity provider did not sign you in again; a fresh sign-in is required").
+			WithExtension("error", "insufficient_user_authentication"))
 		return
 	}
 	resolve := a.auth.ResolveSAMLTenant
@@ -628,6 +677,24 @@ func (a *API) authSAMLACS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.issueLoginSessionWithBindings(w, r, claims, tenantID, roles, returnTo, nil, &auth.SAMLSessionBinding{NameID: claims.SAMLNameID, SessionIndex: claims.SAMLSessionIndex}, clearCookies...)
+}
+
+// samlReauthStarted is when an SP-initiated fresh sign-in began (A277-O1);
+// only a response correlated to that sign-in's own request carries it.
+func (a *API) samlReauthStarted(r *http.Request, possibleRequestIDs []string) (time.Time, bool) {
+	if len(possibleRequestIDs) == 0 {
+		return time.Time{}, false
+	}
+	cookie, err := r.Cookie(samlReauthCookieName)
+	if err != nil || cookie.Value == "" {
+		return time.Time{}, false
+	}
+	at, err := strconv.ParseInt(cookie.Value, 10, 64)
+	if err != nil || at <= 0 {
+		// A damaged marker still asked for a fresh sign-in: prove it from now.
+		return time.Now(), true
+	}
+	return time.Unix(at, 0), true
 }
 
 func (a *API) authSAMLMetadata(w http.ResponseWriter, _ *http.Request) {
@@ -835,14 +902,19 @@ func (a *API) authMe(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, meResponse{
+	me := meResponse{
 		Subject:     sess.Subject,
 		TenantID:    sess.TenantID,
 		Email:       sess.Email,
 		Roles:       roles,
 		Permissions: permissions,
 		Locale:      preferredWebLocale(r.Header.Get("Accept-Language")),
-	})
+	}
+	if sess.AuthTime > 0 {
+		at := time.Unix(sess.AuthTime, 0).UTC()
+		me.SignedInAt = &at
+	}
+	a.writeJSON(w, http.StatusOK, me)
 }
 
 func (a *API) sessionRoleSummary(ctx context.Context, sess auth.Session) ([]string, []string, error) {

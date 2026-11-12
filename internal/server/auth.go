@@ -267,6 +267,7 @@ func oidcClientSecretAAD(tenantID, ref string) []byte {
 func mergeSAMLAuthConfig(dst, src *api.AuthConfig) {
 	dst.SAMLEnabled = src.SAMLEnabled
 	dst.SAMLLoginRedirect = src.SAMLLoginRedirect
+	dst.SAMLFreshLoginRedirect = src.SAMLFreshLoginRedirect
 	dst.VerifySAMLResponse = src.VerifySAMLResponse
 	dst.ResolveSAMLTenant = src.ResolveSAMLTenant
 	dst.SAMLMetadata = src.SAMLMetadata

@@ -263,8 +263,12 @@ export function beginNTLMLogin(returnTo?: string) {
   window.location.assign(query ? `/auth/ntlm/login?${query}` : "/auth/ntlm/login");
 }
 
-/** beginSAMLLogin starts the configured SAML provider flow. */
-export function beginSAMLLogin(returnTo?: string) {
-  const query = returnTo ? new URLSearchParams({ return_to: returnTo }).toString() : "";
+/** beginSAMLLogin starts the configured SAML provider flow; reauth asks the
+ * identity provider to sign the person in again (ForceAuthn, A277-O1). */
+export function beginSAMLLogin(returnTo?: string, options?: { reauth?: boolean }) {
+  const params = new URLSearchParams();
+  if (returnTo) params.set("return_to", returnTo);
+  if (options?.reauth) params.set("reauth", "1");
+  const query = params.toString();
   window.location.assign(query ? `/auth/saml/login?${query}` : "/auth/saml/login");
 }
