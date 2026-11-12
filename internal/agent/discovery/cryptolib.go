@@ -59,9 +59,12 @@ var (
 // CryptoLibrarySource reads TLS libraries and Go binaries at the given files,
 // directories or globs.
 type CryptoLibrarySource struct {
-	libraries  []string
-	goBinaries []string
-	maxSize    int64
+	// cryptoPolicyRoot is where the system crypto policy is read (X2-L6);
+	// empty reads none.
+	cryptoPolicyRoot string
+	libraries        []string
+	goBinaries       []string
+	maxSize          int64
 }
 
 // NewCryptoLibrarySource inventories TLS libraries under libraries and the Go
@@ -99,7 +102,20 @@ func (s *CryptoLibrarySource) Discover(ctx context.Context) ([]LibraryFound, err
 			out = append(out, found)
 		}
 	})
+	// X2-L6: the host's system crypto policy, which decides what the
+	// libraries above offer by default.
+	if s.cryptoPolicyRoot != "" {
+		if found, ok := ReadCryptoPolicy(s.cryptoPolicyRoot); ok {
+			out = append(out, found)
+		}
+	}
 	return out, err
+}
+
+// WithCryptoPolicy also reads the system crypto policy under root (X2-L6).
+func (s *CryptoLibrarySource) WithCryptoPolicy(root string) *CryptoLibrarySource {
+	s.cryptoPolicyRoot = root
+	return s
 }
 
 func (s *CryptoLibrarySource) library(path string) (LibraryFound, bool) {

@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- The host agent reads the system crypto policy (X2-L6): `/etc/crypto-policies/config` and its OpenSSL back-end
+  become a `crypto_library` finding (library `crypto-policies`) that says whether the policy keeps the ML-KEM hybrid
+  groups in OpenSSL's TLS defaults; a LEGACY policy rates as the highest risk.
 - The passive network observer reads TLS, SSH and plaintext handshakes behind VLAN tags (X1-L2): its kernel filter now
   follows up to two in-band tags (802.1Q, and QinQ with an 802.1ad outer tag) to the TCP ports, so a trunk's mirror
   port is observed; before, a QinQ frame's inner tag made the kernel drop it.

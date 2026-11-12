@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3051 annotated sites across 33 rules. Each row is
+3052 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -2096,7 +2096,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (744 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (745 sites)
 
 | Location | Reason |
 |---|---|
@@ -2270,7 +2270,8 @@ not this file.
 | `internal/agent/destination/destination_test.go:53` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/destination/destination_test.go:81` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/destination/destination_test.go:88` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/agent/discovery/cryptolib.go:106` | the agent inventories operator-configured library paths; reading them is the product function (CWE-22) |
+| `internal/agent/discovery/cryptolib.go:122` | the agent inventories operator-configured library paths; reading them is the product function (CWE-22) |
+| `internal/agent/discovery/cryptopolicy.go:120` | the host's own crypto policy files under a fixed root (CWE-22) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/keystore.go:83` | the agent inventories operator-configured keystore paths; reading them is the product function (CWE-22) |
 | `internal/agent/discovery/mcpconfig.go:107` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |

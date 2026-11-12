@@ -36,4 +36,15 @@ func TestHostCryptoInventoryHelpers(t *testing.T) {
 		findings[0].Provenance != agentdiscovery.SourceCryptoLibrary+":/usr/lib/libcrypto.so.3" {
 		t.Fatalf("library findings = %+v", findings)
 	}
+
+	// X2-L6: the system crypto policy is one more finding; LEGACY rates
+	// above a library that cannot negotiate X25519MLKEM768.
+	policies := cryptoLibraryInventoryFindings([]agentdiscovery.LibraryFound{
+		{Location: "/etc/crypto-policies/config", Library: agentdiscovery.CryptoPolicyLibrary, Version: "DEFAULT:PQ", PQHybrid: agentdiscovery.PQHybridYes, Basis: "p1"},
+		{Location: "/etc/crypto-policies/config", Library: agentdiscovery.CryptoPolicyLibrary, Version: "LEGACY", PQHybrid: agentdiscovery.PQHybridNo, Basis: "p2"},
+	})
+	if len(policies) != 2 || policies[0].Metadata["library"] != "crypto-policies" || policies[0].Metadata["library_version"] != "DEFAULT:PQ" ||
+		policies[0].RiskScore != 10 || policies[1].RiskScore <= findings[1].RiskScore {
+		t.Fatalf("policy findings = %+v", policies)
+	}
 }

@@ -89,7 +89,8 @@ func readKeystorePasswords(path string) ([][]byte, error) {
 }
 
 func reportCryptoLibraryInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, libraries, programs []string) error {
-	found, err := agentdiscovery.NewCryptoLibrarySource(libraries, programs).Discover(ctx)
+	found, err := agentdiscovery.NewCryptoLibrarySource(libraries, programs).
+		WithCryptoPolicy(agentdiscovery.DefaultCryptoPolicyRoot).Discover(ctx)
 	if err != nil {
 		return err
 	}
@@ -117,6 +118,10 @@ func cryptoLibraryInventoryFindings(found []agentdiscovery.LibraryFound) []agent
 			risk = 10
 		case agentdiscovery.PQHybridNo:
 			risk = 50
+		}
+		// X2-L6: a LEGACY system policy weakens every library on the host.
+		if f.Library == agentdiscovery.CryptoPolicyLibrary && agentdiscovery.CryptoPolicyIsLegacy(f.Version) {
+			risk = 70
 		}
 		findings = append(findings, agent.InventoryFinding{
 			Kind:       "crypto_library",

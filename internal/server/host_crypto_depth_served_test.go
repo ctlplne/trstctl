@@ -139,7 +139,13 @@ func TestServedHostCryptoDiscoveryDepthX2(t *testing.T) {
 	libs := filepath.Join(root, "usr", "lib")
 	mustWriteFileMode(t, filepath.Join(libs, "libcrypto.so.3"), []byte("\x7fELF\x00OpenSSL 3.5.1 1 Jul 2025\x00"), 0o644)
 	mustWriteFileMode(t, filepath.Join(libs, "legacy", "libcrypto.so.3"), []byte("\x7fELF\x00OpenSSL 3.0.13 30 Jan 2024\x00"), 0o644)
-	libraries, err := agentdiscovery.NewCryptoLibrarySource([]string{libs}, nil).Discover(ctx)
+	// X2-L6: the system crypto policy leaves the ML-KEM groups out of
+	// OpenSSL's defaults, so OpenSSL 3.5 does not offer X25519MLKEM768 by
+	// default on this host.
+	policy := filepath.Join(root, "etc", "crypto-policies")
+	mustWriteFileMode(t, filepath.Join(policy, "config"), []byte("DEFAULT\n"), 0o644)
+	mustWriteFileMode(t, filepath.Join(policy, "back-ends", "opensslcnf.config"), []byte("[ssl_default]\nGroups = X25519:secp256r1:x448\n"), 0o644)
+	libraries, err := agentdiscovery.NewCryptoLibrarySource([]string{libs}, nil).WithCryptoPolicy(policy).Discover(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,15 +157,17 @@ func TestServedHostCryptoDiscoveryDepthX2(t *testing.T) {
 		})
 	}
 	inv, err = client.ReportInventory(ctx, &transport.InventoryRequest{SourceKind: agentdiscovery.SourceCryptoLibrary, Findings: libraryFindings})
-	if err != nil || inv.Recorded != 2 {
+	if err != nil || inv.Recorded != 3 {
 		t.Fatalf("crypto library inventory: %+v, %v", inv, err)
 	}
-	answers := map[string]string{}
+	answers, bases := map[string]string{}, map[string]string{}
 	for _, f := range findingsOf(inv.RunID) {
-		answers[f.Metadata["library"]+" "+f.Metadata["library_version"]] = f.Metadata["pq_hybrid_x25519mlkem768"]
+		key := f.Metadata["library"] + " " + f.Metadata["library_version"]
+		answers[key], bases[key] = f.Metadata["pq_hybrid_x25519mlkem768"], f.Metadata["pq_basis"]
 	}
-	if answers["openssl 3.5.1"] != "yes" || answers["openssl 3.0.13"] != "no" {
-		t.Fatalf("library answers = %v", answers)
+	if answers["openssl 3.5.1"] != "yes" || answers["openssl 3.0.13"] != "no" || answers["crypto-policies DEFAULT"] != "no" ||
+		!strings.Contains(bases["crypto-policies DEFAULT"], "leaves the ML-KEM hybrid groups out") {
+		t.Fatalf("library answers = %v (%v)", answers, bases)
 	}
 
 	// A HAProxy file that allows TLS 1.0 raises one weak finding.

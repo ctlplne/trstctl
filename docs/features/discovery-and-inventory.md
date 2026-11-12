@@ -585,6 +585,17 @@ hybrid key exchange: OpenSSL 3.5 and later and Go 1.24 and later can (unless bui
 read `unknown`, because their version does not settle it. A loaded OpenSSL provider that
 adds ML-KEM to an older OpenSSL is not checked.
 
+Beside them the agent reads the host's system crypto policy (X2-L6), on Fedora, RHEL and
+their relatives: `/etc/crypto-policies/config` names the policy every TLS library starts
+from (DEFAULT, LEGACY, FUTURE, FIPS, with sub-policies such as `DEFAULT:PQ`), and the
+OpenSSL back-end it generates sets the TLS groups OpenSSL offers. It is one more
+`crypto_library` finding, library `crypto-policies` and the policy as its version, with
+its own answer: `yes` when the policy keeps the ML-KEM hybrid groups in OpenSSL's
+defaults, `no` when it leaves them out (OpenSSL 3.5 then offers X25519MLKEM768 only to
+applications that set their own groups), `unknown` when its OpenSSL back-end sets no
+groups. A LEGACY policy rates as the highest risk of these findings: it also allows
+SHA-1 signatures, 1024-bit DH and DSA, and TLS 1.0. A host with no policy reports none.
+
 ### SSH credential discovery (F42) — keys and standing access
 
 SSH is where forgotten access hides. trstctl inventories SSH credentials two ways: a
