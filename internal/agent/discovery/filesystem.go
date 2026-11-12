@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"trstctl.com/trstctl/internal/agent/decoy"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
@@ -50,6 +51,9 @@ func (s *FilesystemSource) Discover(ctx context.Context) ([]Found, error) {
 			}
 			if d.IsDir() {
 				return nil
+			}
+			if decoy.Is(path) {
+				return nil // the agent's own decoy (Q6-O1): never opened
 			}
 			if fi, ierr := d.Info(); ierr != nil || fi.Size() > s.maxSize {
 				return nil

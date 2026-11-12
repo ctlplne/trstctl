@@ -6318,6 +6318,30 @@ export const messages = {
   "secrets.decoyLogins.readFailed": { defaultMessage: "Could not read decoy logins", description: "Decoy login list failure." },
   "secrets.decoyLogins.plantFailed": { defaultMessage: "Could not mint the decoy login", description: "Decoy login plant failure." },
   "secrets.decoyLogins.retireFailed": { defaultMessage: "Could not retire the decoy login", description: "Decoy login retire failure." },
+  "secrets.decoyFiles.heading": { defaultMessage: "Decoy files on hosts", description: "Decoy file list heading." },
+  "secrets.decoyFiles.description": {
+    defaultMessage:
+      "A host agent started with --decoy-ssh-keys writes a decoy SSH private key at each path you name where no file is. The key is authorized nowhere and nothing has a reason to open it, so each program that opens it raises one critical alert naming the program and the host. The agent's own scans skip its decoys.",
+    description: "Explains decoy files planted by host agents.",
+  },
+  "secrets.decoyFiles.empty": {
+    defaultMessage: "No decoy files planted. Start a host agent with --decoy-ssh-keys and the paths to plant.",
+    description: "Empty decoy file list.",
+  },
+  "secrets.decoyFiles.host": { defaultMessage: "Host {host}", description: "The host a decoy file is on." },
+  "secrets.decoyFiles.key": { defaultMessage: "Key {fingerprint}", description: "A decoy file's key fingerprint." },
+  "secrets.decoyFiles.opened": {
+    defaultMessage: "First opened by {reader} at {at} ({method})",
+    description: "Who first opened a decoy file, when and how it was seen.",
+  },
+  "secrets.decoyFiles.readers": {
+    defaultMessage: "{readers, plural, one {# program} other {# programs}} opened it {reads, plural, one {# time} other {# times}}; last at {at}",
+    description: "How many programs opened a decoy file and how often.",
+  },
+  "secrets.decoyFiles.retire": { defaultMessage: "Stop alerting", description: "Button that retires a decoy file." },
+  "secrets.decoyFiles.error": { defaultMessage: "Decoy files", description: "Decoy file error title." },
+  "secrets.decoyFiles.readFailed": { defaultMessage: "Could not read decoy files", description: "Decoy file list failure." },
+  "secrets.decoyFiles.retireFailed": { defaultMessage: "Could not retire the decoy file", description: "Decoy file retire failure." },
   "secrets.decoys.exists": {
     defaultMessage: "A secret with this path already exists. Choose a new path; a decoy never replaces a real secret.",
     description: "Shown when the decoy path is taken.",

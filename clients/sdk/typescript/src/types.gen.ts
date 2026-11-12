@@ -9924,6 +9924,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/honeytokens/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List decoy files host agents planted and which programs opened them */
+        get: operations["listDecoyFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/honeytokens/files/{id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop alerting on a decoy file; the file stays on its host until the agent stops planting it */
+        post: operations["retireDecoyFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/honeytokens/secrets": {
         parameters: {
             query?: never;
@@ -17465,6 +17499,46 @@ export interface components {
         };
         DatabaseDecoyList: {
             items: components["schemas"]["DatabaseDecoy"][];
+            next_cursor?: string;
+        };
+        DecoyFile: {
+            /** Format: date-time */
+            created_at: string;
+            /** @description the host: the planting agent's certificate name */
+            file_host: string;
+            /** @description the SHA-256 fingerprint of the decoy key's public half */
+            file_key_fingerprint: string;
+            /** @description the decoy file's absolute path on that host */
+            file_path: string;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "file";
+            /**
+             * Format: date-time
+             * @description when the file was last opened
+             */
+            last_read_at?: string;
+            name: string;
+            placement: string;
+            /** @description how many distinct programs opened the file; each alerts once */
+            readers?: number;
+            /** @description how many opens those programs made in all */
+            reads?: number;
+            /** Format: date-time */
+            revoked_at?: string;
+            /** @enum {string} */
+            state: "active" | "triggered" | "revoked";
+            /** @description how the first open was seen: its pid when known and the watcher (fanotify or inotify) */
+            trigger_method?: string;
+            trigger_path?: string;
+            /** @description the first program that opened the file, with its host */
+            trigger_subject?: string;
+            /** Format: date-time */
+            triggered_at?: string;
+        };
+        DecoyFileList: {
+            items: components["schemas"]["DecoyFile"][];
             next_cursor?: string;
         };
         DecoySecret: {
@@ -57938,6 +58012,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatabaseDecoy"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listDecoyFiles: {
+        parameters: {
+            query?: {
+                /** @description page size (1-100) */
+                limit?: number;
+                /** @description opaque pagination cursor */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecoyFileList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    retireDecoyFile: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecoyFile"];
                 };
             };
             /** @description client error */

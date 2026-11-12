@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"trstctl.com/trstctl/internal/agent/decoy"
 	"trstctl.com/trstctl/internal/crypto/sshkeys"
 	"trstctl.com/trstctl/internal/sshinv"
 )
@@ -160,7 +161,8 @@ func (s *Source) trustedCAPaths() []string {
 }
 
 // expandGlobs resolves glob patterns to file paths, skipping patterns that match
-// nothing or fail to parse.
+// nothing or fail to parse, and the agent's own decoys (Q6-O1), which it never
+// opens.
 func expandGlobs(globs []string) []string {
 	var out []string
 	for _, g := range globs {
@@ -168,7 +170,11 @@ func expandGlobs(globs []string) []string {
 		if err != nil {
 			continue
 		}
-		out = append(out, matches...)
+		for _, m := range matches {
+			if !decoy.Is(m) {
+				out = append(out, m)
+			}
+		}
 	}
 	return out
 }

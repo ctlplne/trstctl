@@ -1581,6 +1581,14 @@ handshake on the host negotiated, with the peer's certificate, never application
 `--observe-tls-libraries LIBSSL,LIBCRYPTO` names the libraries and
 `--observe-tls-report-interval` sets the report cadence. Removing the role detaches the
 probes.
+`--decoy-ssh-keys PATH[,PATH...]` (Linux, host role) plants a decoy SSH private key
+(Ed25519, authorized nowhere) at each absolute path where no file is, registers it by
+its public half and watches it: each program that opens it raises one critical decoy
+alert naming the program and the host (Q6-O1). With `CAP_SYS_ADMIN` the agent watches
+with fanotify, which names every opener; otherwise inotify sees each open and names the
+opener while it still holds the file. `--decoy-state-file` (default `decoys.json` beside
+`--key`) records the decoys the agent planted, so a restart keeps them; a path holding
+any other file is refused. The agent's own scans skip its decoys.
 `--access-gateway-listen ADDR` (gateway role) serves brokered access sessions (A254):
 it claims `access.gateway.session` jobs, holds each session's upstream credential in
 locked memory (a PostgreSQL login, or the certificate for an SSH key it generated) and

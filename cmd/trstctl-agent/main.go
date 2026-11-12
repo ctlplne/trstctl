@@ -960,6 +960,10 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 			fmt.Fprintln(os.Stderr, notice)
 		}
 	}
+	// Q6-O1: decoys are planted before any inventory scan, so the scans skip
+	// them.
+	stopDecoys := startDecoys(ctx, a.Roles(), ch.c, o.keyPath)
+	defer stopDecoys()
 	if len(o.inventoryCertRoots) > 0 {
 		if err := reportFilesystemInventory(ctx, a, ch, o.inventoryCertRoots); err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: inventory report failed:", err)

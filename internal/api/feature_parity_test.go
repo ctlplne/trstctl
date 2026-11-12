@@ -403,8 +403,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// P3-L1 adds planning canary-first migration cohorts (819).
 	// P9-L1 adds attaching a code-signing key's certificate chain (820).
 	// P9-L2 adds a signing operation's Rekor bundle (821).
-	if len(out) != 821 {
-		t.Fatalf("OpenAPI operationIds = %d, want 821", len(out))
+	// Q6-O1 adds listing and retiring decoy files (823).
+	if len(out) != 823 {
+		t.Fatalf("OpenAPI operationIds = %d, want 823", len(out))
 	}
 	return out
 }

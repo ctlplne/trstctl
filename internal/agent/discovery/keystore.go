@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"trstctl.com/trstctl/internal/agent/decoy"
 	cryptoboundary "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -76,6 +77,9 @@ func (s *KeystoreSource) Discover(ctx context.Context) ([]PrivateKeyFound, error
 }
 
 func (s *KeystoreSource) keystore(path string) []PrivateKeyFound {
+	if decoy.Is(path) {
+		return nil // the agent's own decoy (Q6-O1): never opened
+	}
 	fi, err := os.Stat(path)
 	if err != nil || !fi.Mode().IsRegular() || fi.Size() > s.maxSize {
 		return nil

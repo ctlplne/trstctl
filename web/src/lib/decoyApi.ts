@@ -4,6 +4,8 @@ import type {
   DatabaseDecoyCreateRequest,
   DatabaseDecoyCreateResponse,
   DatabaseDecoyList,
+  DecoyFile,
+  DecoyFileList,
   DecoySecret,
   DecoySecretList,
   DecoySecretRegisterRequest,
@@ -30,3 +32,10 @@ export const createDatabaseDecoy = (input: DatabaseDecoyCreateRequest, idempoten
 export const listDatabaseDecoys = () => req<DatabaseDecoyList>("/api/v1/secrets/honeytokens/databases");
 
 export const retireDatabaseDecoy = (id: string) => mutate<DatabaseDecoy>("POST", `/api/v1/secrets/honeytokens/databases/${encodeURIComponent(id)}/retire`);
+
+// Decoy files (Q6-O1): SSH private keys a host agent planted where no file was
+// (trstctl-agent --decoy-ssh-keys); each program that opens one alerts once.
+export const listDecoyFiles = (cursor?: string) =>
+  req<DecoyFileList>(`/api/v1/secrets/honeytokens/files${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+
+export const retireDecoyFile = (id: string) => mutate<DecoyFile>("POST", `/api/v1/secrets/honeytokens/files/${encodeURIComponent(id)}/retire`);

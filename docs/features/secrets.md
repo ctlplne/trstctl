@@ -2180,6 +2180,38 @@ next check; a statistics reset reads zero and alerts nothing. A failed login wit
 wrong password creates no session and is not detected. `retire` revokes the lease,
 which drops the login and its database, and stops watching.
 
+#### Decoy files on hosts
+
+A host agent plants decoy SSH private keys. Start it with `--decoy-ssh-keys
+/root/.ssh/id_ed25519_backup,/home/deploy/.ssh/id_rsa_old`: at each absolute path where no
+file is, the agent writes an Ed25519 private key it generated on the host (mode 0600),
+authorized nowhere, and records it in `--decoy-state-file` (default `decoys.json` beside
+`--key`), so a restarted agent keeps watching its own decoys. A path holding any other file
+is refused: a decoy never replaces a real file. The agent registers each decoy over its
+channel by the key's public half (the host is the channel certificate's name, and only a
+host agent's decoys are taken) and arms the watch before its first scan.
+
+Nothing has a reason to open the file, so each program that opens it raises one critical
+`notification.honeytoken` alert naming the program and the host, for example `Decoy file
+/root/.ssh/id_ed25519_backup on web-1 was opened by cat on web-1 (open, pid 31, seen by
+fanotify)`. The same program opening it again is not alerted again; another program is.
+On Linux the agent watches with fanotify when it holds `CAP_SYS_ADMIN`, which names every
+opener even after it exits, and otherwise with inotify, which sees every open but names
+the opener only while it still holds the file (`an unnamed process` otherwise). The agent
+never opens its decoys after planting them, and its inventory scans (certificates,
+private keys, trust stores, keystores, SSH material and MCP configuration) skip them, so
+it never sets one off and never reports one as host inventory.
+
+The registry lists the decoy files to those who may plant decoys (`secrets:write`):
+**Secrets → Automatic secret sources → Plant a decoy credential → Decoy files on hosts**,
+`trstctl-cli secrets honeytokens files list` or `GET /api/v1/secrets/honeytokens/files`,
+with each file's host, path and key fingerprint, the first program that opened it, how and
+when that open was seen, and how many programs opened it how often. `retire`
+(`trstctl-cli secrets honeytokens files retire <id>`, `POST
+/api/v1/secrets/honeytokens/files/{id}/retire`) stops alerting on it; the file stays on
+the host until the agent is started without it and the file is removed. A new key planted
+at a path whose file was deleted retires the decoy of the old key.
+
 #### AWS IAM decoy keys
 
 **Secrets → Automatic secret sources → Plant a decoy credential** also has an

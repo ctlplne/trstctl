@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"trstctl.com/trstctl/internal/agent/decoy"
 	cryptoboundary "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -62,6 +63,9 @@ func (s *PrivateKeySource) Discover(ctx context.Context) ([]PrivateKeyFound, err
 			}
 			if d.IsDir() {
 				return nil
+			}
+			if decoy.Is(path) {
+				return nil // the agent's own decoy (Q6-O1): never opened
 			}
 			fi, ierr := d.Info()
 			if ierr != nil || !fi.Mode().IsRegular() || fi.Size() > s.maxSize {

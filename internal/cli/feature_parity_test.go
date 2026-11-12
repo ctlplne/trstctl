@@ -441,9 +441,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `external-cas adcs-requests`. N9-L2 adds `mdm check-in-wave ask`, `mdm
 	// check-in-wave run` and `mdm check-in-waves`. P3-L1 adds `migrations
 	// plan-cohorts`. P9-L1 adds `code-signing keys attach-certificate`.
-	// P9-L2 adds code-signing rekor-bundle (888).
-	if len(out) != 888 {
-		t.Fatalf("CLI commands = %d, want 888", len(out))
+	// P9-L2 adds code-signing rekor-bundle (888). Q6-O1 adds `secrets
+	// honeytokens files list` and `secrets honeytokens files retire` (890).
+	if len(out) != 890 {
+		t.Fatalf("CLI commands = %d, want 890", len(out))
 	}
 	return out
 }

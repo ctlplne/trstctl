@@ -5730,6 +5730,39 @@ DatabaseDecoyList = TypedDict(
     total=False,
 )
 
+DecoyFile = TypedDict(
+    'DecoyFile',
+    {
+        'created_at': str,
+        'file_host': str,
+        'file_key_fingerprint': str,
+        'file_path': str,
+        'id': str,
+        'kind': str,
+        'last_read_at': str,
+        'name': str,
+        'placement': str,
+        'readers': int,
+        'reads': int,
+        'revoked_at': str,
+        'state': str,
+        'trigger_method': str,
+        'trigger_path': str,
+        'trigger_subject': str,
+        'triggered_at': str,
+    },
+    total=False,
+)
+
+DecoyFileList = TypedDict(
+    'DecoyFileList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 DecoySecret = TypedDict(
     'DecoySecret',
     {

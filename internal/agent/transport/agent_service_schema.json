@@ -107,6 +107,97 @@
         }
       ]
     },
+    "DecoyFile": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "path",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "public_key",
+          "presence": "required"
+        },
+        {
+          "go_type": "time.Time",
+          "name": "planted_at",
+          "presence": "required"
+        }
+      ]
+    },
+    "DecoyOpen": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "path",
+          "presence": "required"
+        },
+        {
+          "go_type": "time.Time",
+          "name": "at",
+          "presence": "required"
+        },
+        {
+          "go_type": "int",
+          "name": "pid",
+          "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "process",
+          "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "mechanism",
+          "presence": "optional"
+        }
+      ]
+    },
+    "DecoyReportRequest": {
+      "fields": [
+        {
+          "go_type": "[]transport.DecoyFile",
+          "name": "decoys",
+          "presence": "optional"
+        },
+        {
+          "go_type": "[]transport.DecoyOpen",
+          "name": "opens",
+          "presence": "optional"
+        }
+      ]
+    },
+    "DecoyReportResponse": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "tenant_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "int",
+          "name": "registered",
+          "presence": "required"
+        },
+        {
+          "go_type": "int",
+          "name": "known",
+          "presence": "required"
+        },
+        {
+          "go_type": "int",
+          "name": "recorded",
+          "presence": "required"
+        },
+        {
+          "go_type": "int",
+          "name": "rejected",
+          "presence": "required"
+        }
+      ]
+    },
     "EdgeJournalRequest": {
       "fields": [
         {
@@ -1045,6 +1136,12 @@
         "name": "RenewEdgeDelegation",
         "request": "EdgeRenewalRequest",
         "response": "EdgeRenewalResponse"
+      },
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/ReportDecoys",
+        "name": "ReportDecoys",
+        "request": "DecoyReportRequest",
+        "response": "DecoyReportResponse"
       }
     ],
     "name": "trstctl.agent.v1.AgentService"

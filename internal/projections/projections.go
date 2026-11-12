@@ -4414,6 +4414,12 @@ type HoneyTokenCreated struct {
 	DBProviderID string `json:"db_provider_id,omitempty"`
 	DBLeaseID    string `json:"db_lease_id,omitempty"`
 	DBRole       string `json:"db_role,omitempty"`
+	// FileHost, FilePath and FileKeyFingerprint make it a decoy file a host
+	// agent planted (Q6-O1): the agent's certificate name, the absolute path
+	// and the SHA-256 fingerprint of the decoy key's public half.
+	FileHost           string `json:"file_host,omitempty"`
+	FilePath           string `json:"file_path,omitempty"`
+	FileKeyFingerprint string `json:"file_key_fingerprint,omitempty"`
 }
 
 type HoneyTokenTriggered struct {
@@ -4421,7 +4427,8 @@ type HoneyTokenTriggered struct {
 	Method string `json:"method"`
 	Path   string `json:"path"`
 	// Reader is the authenticated principal that read a secret decoy's value
-	// (Q6); a bearer decoy's use has no authenticated reader.
+	// (Q6), or the program that opened a decoy file, named with its host
+	// (Q6-O1); a bearer decoy's use has no authenticated reader.
 	Reader string `json:"reader,omitempty"`
 }
 
@@ -8918,6 +8925,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Placement: pl.Placement,
 			TokenHash: pl.TokenHash, CreatedAt: e.Time, SecretName: pl.SecretName,
 			DBProviderID: pl.DBProviderID, DBLeaseID: pl.DBLeaseID, DBRole: pl.DBRole,
+			FileHost: pl.FileHost, FilePath: pl.FilePath, FileKeyFingerprint: pl.FileKeyFingerprint,
 		})
 	case EventHoneyTokenTriggered:
 		var pl HoneyTokenTriggered

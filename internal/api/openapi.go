@@ -4807,6 +4807,22 @@ func componentSchemas() map[string]*Schema {
 		"watch_gap_reason": {Type: "string", Description: "Q6-L10: why the watcher cannot read this decoy"},
 	}
 	databaseDecoy := object(databaseDecoyFields, "id", "kind", "name", "placement", "db_provider_id", "db_lease_id", "db_role", "state", "created_at")
+	// Q6-O1: a decoy SSH key a host agent planted; each opening program is a reader.
+	decoyFile := object(map[string]*Schema{
+		"id": uuid(), "kind": {Type: "string", Enum: []string{"file"}}, "name": str(), "placement": str(),
+		"file_host":            {Type: "string", Description: "the host: the planting agent's certificate name"},
+		"file_path":            {Type: "string", Description: "the decoy file's absolute path on that host"},
+		"file_key_fingerprint": {Type: "string", Description: "the SHA-256 fingerprint of the decoy key's public half"},
+		"state":                {Type: "string", Enum: []string{"active", "triggered", "revoked"}},
+		"created_at":           timestamp(), "triggered_at": timestamp(),
+		"trigger_method":  {Type: "string", Description: "how the first open was seen: its pid when known and the watcher (fanotify or inotify)"},
+		"trigger_path":    str(),
+		"trigger_subject": {Type: "string", Description: "the first program that opened the file, with its host"},
+		"revoked_at":      timestamp(),
+		"readers":         {Type: "integer", Description: "how many distinct programs opened the file; each alerts once"},
+		"reads":           {Type: "integer", Description: "how many opens those programs made in all"},
+		"last_read_at":    {Type: "string", Format: "date-time", Description: "when the file was last opened"},
+	}, "id", "kind", "name", "placement", "file_host", "file_path", "file_key_fingerprint", "state", "created_at")
 	databaseDecoyCreateRespFields := map[string]*Schema{
 		"database": str(),
 		"dsn":      {Type: "string", Description: "the decoy login's connection string, revealed once"},
@@ -8933,6 +8949,8 @@ func componentSchemas() map[string]*Schema {
 		"DecoySecretRegisterRequest":               decoySecretRegisterReq,
 		"DatabaseDecoy":                            databaseDecoy,
 		"DatabaseDecoyList":                        list("DatabaseDecoy"),
+		"DecoyFile":                                decoyFile,
+		"DecoyFileList":                            list("DecoyFile"),
 		"DatabaseDecoyCreateRequest":               databaseDecoyCreateReq,
 		"DatabaseDecoyCreateResponse":              databaseDecoyCreateResp,
 		"BrokerAgentIdentityRevokeRequest":         brokerAgentIdentityRevokeReq,

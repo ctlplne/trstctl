@@ -16028,7 +16028,9 @@
                 "retireDecoySecret",
                 "createDatabaseDecoy",
                 "listDatabaseDecoys",
-                "retireDatabaseDecoy"
+                "retireDatabaseDecoy",
+                "listDecoyFiles",
+                "retireDecoyFile"
             ],
             "api_na": "",
             "cli_surface": [
@@ -16052,7 +16054,9 @@
                 "secrets honeytokens secrets retire",
                 "secrets honeytokens databases plant",
                 "secrets honeytokens databases list",
-                "secrets honeytokens databases retire"
+                "secrets honeytokens databases retire",
+                "secrets honeytokens files list",
+                "secrets honeytokens files retire"
             ],
             "cli_na": "",
             "facet_evidence": {

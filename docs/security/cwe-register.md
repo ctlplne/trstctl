@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3093 annotated sites across 33 rules. Each row is
+3108 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -110,7 +110,7 @@ not this file.
 | `internal/accessrules/risk.go:30` | a risk category's name matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/csisecrets/driver.go:64` | the kubelet's request key name, not a credential (CWE-798) |
 | `internal/agent/csisecrets/driver_test.go:443` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/agent/discovery/keystore.go:40` | the published Java keystore default, tried as a default; not a credential of this deployment (CWE-798) |
+| `internal/agent/discovery/keystore.go:41` | the published Java keystore default, tried as a default; not a credential of this deployment (CWE-798) |
 | `internal/agent/discovery/keystore_jceks_test.go:18` | fixture file paths, not credentials (CWE-798) |
 | `internal/agent/discovery/kubernetes.go:90` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
 | `internal/agent/k8s/client.go:31` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -152,8 +152,8 @@ not this file.
 | `internal/agent/relay/takedown_test.go:80` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
 | `internal/agent/secretrender/secretrender_test.go:126` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/agent/transport/agentservice.go:940` | an RPC method name, not a credential. The material this |
-| `internal/agent/transport/agentservice.go:947` | an RPC method name. This call carries a CSR up and returns |
+| `internal/agent/transport/agentservice.go:941` | an RPC method name, not a credential. The material this |
+| `internal/agent/transport/agentservice.go:948` | an RPC method name. This call carries a CSR up and returns |
 | `internal/agent/transport/receipt.go:225` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt.go:270` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt_custody_test.go:15` | the credential fingerprint is public fixture metadata, not a credential (CWE-798). |
@@ -753,7 +753,7 @@ not this file.
 | `internal/store/discovery_secret_move.go:53` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/discovery_secret_move.go:56` | SQL column list, no credential (CWE-798) */ `m.finding_id::text, m.secret_name, m.secret_version, m.moved_by, m.moved_at, m.residue, |
 | `internal/store/dynamic_secret_lease.go:671` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
-| `internal/store/honey_token.go:58` | SQL column names only; this string contains no credential material. |
+| `internal/store/honey_token.go:65` | SQL column names only; this string contains no credential material. |
 | `internal/store/migration_0359_content_test.go:50` | a query naming the hash column; no credential value (CWE-798) |
 | `internal/store/migration_0435_content_test.go:50` | a query naming the hash column; no credential value (CWE-798) |
 | `internal/store/privacy_erasure_preparation.go:28` | this is a bounded privacy evidence label, not a credential. |
@@ -913,7 +913,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (485 sites)
+### G115 — CWE-190 Integer overflow or wraparound (490 sites)
 
 | Location | Reason |
 |---|---|
@@ -951,6 +951,11 @@ not this file.
 | `internal/agent/accessgateway/postgres.go:137` | gateway-built messages are small (CWE-190) |
 | `internal/agent/accessgateway/sftp_test.go:17` | test packets are small (CWE-190) |
 | `internal/agent/accessgateway/sftp_test.go:21` | test strings are small (CWE-190) |
+| `internal/agent/decoy/watch_linux.go:112` | the kernel's signed file descriptor field (CWE-190) |
+| `internal/agent/decoy/watch_linux.go:113` | the kernel's signed process ID field (CWE-190) |
+| `internal/agent/decoy/watch_linux.go:142` | a watch descriptor the kernel numbers from 1 (CWE-190) |
+| `internal/agent/decoy/watch_linux.go:162` | the kernel's signed watch descriptor field (CWE-190) |
+| `internal/agent/decoy/watch_linux.go:187` | a file descriptor this process opened (CWE-190) |
 | `internal/agent/desktop/server.go:553` | k is at most chunk (4096) (CWE-190) |
 | `internal/agent/desktop/server.go:591` | the target's text is bounded by rdp.MaxClipboard (CWE-190) |
 | `internal/agent/observe/capture_linux.go:34` | snaplen is a small configured frame size |
@@ -1141,10 +1146,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7477` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7494` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7507` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7541` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7484` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7501` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7514` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7548` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1348,8 +1353,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:406` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:430` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:52` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:895` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:915` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:899` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:919` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1504,10 +1509,10 @@ not this file.
 | `docs/protect_guards_test.go:992` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:4748` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
-| `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
-| `internal/agent/discovery/mcpconfig.go:107` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
-| `internal/agent/discovery/privatekey.go:70` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
-| `internal/agent/discovery/truststore.go:74` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/filesystem.go:61` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/mcpconfig.go:108` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/privatekey.go:74` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/truststore.go:78` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/auditsink/discard_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/notify/response_buffer_guard_test.go:37` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1595,7 +1600,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (401 sites)
+### G204 — CWE-78 OS command injection (404 sites)
 
 | Location | Reason |
 |---|---|
@@ -1674,6 +1679,7 @@ not this file.
 | `ee/provider/oidc_login_keycloak_test.go:85` | removes the container this test started (CWE-78) |
 | `ee/provider/oidc_login_keycloak_test.go:86` | reads this test's container port (CWE-78) |
 | `ee/provider/oidc_login_keycloak_test.go:103` | this test's container logs (CWE-78) |
+| `internal/agent/decoy/watch_linux_test.go:38` | the test's own decoy path (CWE-78) |
 | `internal/agent/desktop/stock_served_test.go:85` | fixed viewer binary and loopback port allocated by this owned listener, no shell or credential arguments (CWE-78) |
 | `internal/agent/desktop/stock_served_test.go:92` | test-built public keyboard/window arguments, fixed tool with no shell or upstream credential (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_container_test.go:189` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
@@ -1812,6 +1818,8 @@ not this file.
 | `internal/server/codesign_stock_tools_served_test.go:262` | test runs the plugin it just built (CWE-78) |
 | `internal/server/compliance_report_retention_versions_served_test.go:28` | fixed local Docker tool and approved fixture image (CWE-78) |
 | `internal/server/compose_e2e_tls_test.go:245` | exact shipped prefix plus fixed test invocation, only owned loopback listeners (CWE-78). |
+| `internal/server/decoy_files_container_lab_q6o1_test.go:44` | docker with the lab's own arguments and the runner's image (CWE-78) |
+| `internal/server/decoy_files_container_lab_q6o1_test.go:116` | the lab's own container name (CWE-78) |
 | `internal/server/docker_fixture_command_test.go:20` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/server/dod_signer_binary_test.go:105` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_access_databases_container_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2123,7 +2131,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (752 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (758 sites)
 
 | Location | Reason |
 |---|---|
@@ -2171,8 +2179,8 @@ not this file.
 | `cmd/trstctl-agent/factory_test.go:32` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
 | `cmd/trstctl-agent/inventory_hostcrypto.go:76` | operator-configured keystore password file (CWE-22) |
-| `cmd/trstctl-agent/main.go:1382` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:2052` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1386` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:2056` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/observe.go:92` | the operator names the capture file on the command line (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:477` | operator-supplied runtime configuration path (CWE-22) |
@@ -2292,6 +2300,11 @@ not this file.
 | `internal/agent/csisecrets/driver_test.go:410` | the test's own temp file (CWE-22) |
 | `internal/agent/csitrust/driver.go:151` | path is the kubelet's target directory joined with a validated file name (CWE-22) |
 | `internal/agent/csitrust/driver_test.go:120` | the file the driver wrote under this test's temp dir (CWE-22) |
+| `internal/agent/decoy/decoy.go:90` | the agent's own decoy state file (CWE-22) |
+| `internal/agent/decoy/decoy.go:137` | an operator-configured decoy path, created exclusively (CWE-22) |
+| `internal/agent/decoy/decoy_test.go:28` | the test's own decoy (CWE-22) |
+| `internal/agent/decoy/decoy_test.go:46` | the test's own file (CWE-22) |
+| `internal/agent/decoy/watch_linux.go:198` | the kernel's process table (CWE-22) |
 | `internal/agent/desktop/stock_served_test.go:137` | owned unique task filename under the fixed lab account home (CWE-22) |
 | `internal/agent/desktop/stock_served_test.go:154` | exact child PID and fixed metadata filenames created by this test (CWE-22) |
 | `internal/agent/destination/destination_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2301,14 +2314,14 @@ not this file.
 | `internal/agent/discovery/cryptolib.go:132` | the agent inventories operator-configured library paths; reading them is the product function (CWE-22) |
 | `internal/agent/discovery/cryptolib.go:336` | a file named by the library being inventoried (its OPENSSLDIR or a sibling library) (CWE-22) |
 | `internal/agent/discovery/cryptopolicy.go:120` | the host's own crypto policy files under a fixed root (CWE-22) |
-| `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
-| `internal/agent/discovery/keystore.go:83` | the agent inventories operator-configured keystore paths; reading them is the product function (CWE-22) |
+| `internal/agent/discovery/filesystem.go:61` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/keystore.go:87` | the agent inventories operator-configured keystore paths; reading them is the product function (CWE-22) |
 | `internal/agent/discovery/keystore_jceks_test.go:22` | the test reads its own fixtures (CWE-22) |
-| `internal/agent/discovery/mcpconfig.go:107` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/mcpconfig.go:108` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/pkcs11_softhsm_container_test.go:93` | the repository's own go.mod under the test's computed repo root (CWE-22) |
-| `internal/agent/discovery/privatekey.go:70` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
-| `internal/agent/discovery/truststore.go:74` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
-| `internal/agent/discovery/truststore.go:187` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
+| `internal/agent/discovery/privatekey.go:74` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/truststore.go:78` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/truststore.go:191` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/drift/drift.go:150` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/drift/drift_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/drift/drift_test.go:184` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2375,11 +2388,11 @@ not this file.
 | `internal/agent/sessionobserve/objects_test.go:46` | the committed probe objects beside the test (CWE-22) |
 | `internal/agent/sessionobserve/observer_linux_test.go:40` | the proof traffic's own output (CWE-22) |
 | `internal/agent/sessionobserve/observer_linux_test.go:175` | the proof traffic's own output (CWE-22) |
-| `internal/agent/sshdiscovery/sshdiscovery.go:60` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
-| `internal/agent/sshdiscovery/sshdiscovery.go:79` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
-| `internal/agent/sshdiscovery/sshdiscovery.go:96` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
-| `internal/agent/sshdiscovery/sshdiscovery.go:119` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
-| `internal/agent/sshdiscovery/sshdiscovery.go:143` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
+| `internal/agent/sshdiscovery/sshdiscovery.go:61` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
+| `internal/agent/sshdiscovery/sshdiscovery.go:80` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
+| `internal/agent/sshdiscovery/sshdiscovery.go:97` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
+| `internal/agent/sshdiscovery/sshdiscovery.go:120` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
+| `internal/agent/sshdiscovery/sshdiscovery.go:144` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdtrust.go:325` | the agent inventories operator-configured sshd configuration and the public files it names (CWE-22) |
 | `internal/agent/sshdiscovery/sshdtrust_test.go:21` | committed test fixture |
 | `internal/agent/sshkrl/install.go:304` | read only the derived predecessor in the checked private rollback directory |
@@ -2645,6 +2658,7 @@ not this file.
 | `internal/server/cmdb_readonly_test.go:126` | test reads repo source files it names itself (CWE-22) |
 | `internal/server/code_signing_config.go:96` | operator-configured certificate chain path (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:69` | the lab runner's build output (CWE-22) |
+| `internal/server/decoy_files_container_lab_q6o1_test.go:50` | the lab runner's build output (CWE-22) |
 | `internal/server/discovery_key_posture_test.go:18` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/server/distrust_removal_served_test.go:34` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/server/distrust_removal_served_test.go:38` | a fixed test fixture, named by the test itself (CWE-22) |
@@ -2880,7 +2894,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (133 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (134 sites)
 
 | Location | Reason |
 |---|---|
@@ -2974,6 +2988,7 @@ not this file.
 | `internal/server/codesign_cosign_lab_p9_test.go:58` | a public payload, signature and keys the cosign container reads (CWE-22) |
 | `internal/server/codesign_cosign_rekor_lab_p9l2_test.go:88` | public payload, signature, bundle and keys the cosign container reads (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:40` | public lab inputs the tool containers read (CWE-22) |
+| `internal/server/decoy_files_container_lab_q6o1_test.go:39` | disposable lab inputs the container reads (CWE-22) |
 | `internal/server/dod_connector_runtime_test.go:817` | public CA fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:390` | public CA certificate fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:616` | public CA fixture (CWE-276) |
@@ -3154,7 +3169,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (47 sites)
+### G702 — CWE-78 OS command injection (taint) (48 sites)
 
 | Location | Reason |
 |---|---|
@@ -3174,6 +3189,7 @@ not this file.
 | `internal/server/codesign_cosign_rekor_lab_p9l2_test.go:101` | the lab runner names the network and the local cosign image (CWE-78) |
 | `internal/server/codesign_notation_lab_p9_test.go:73` | the lab runner names the verified Notation binary (CWE-78) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:83` | the lab runner names the local tool images (CWE-78) |
+| `internal/server/decoy_files_container_lab_q6o1_test.go:44` | docker with the lab's own arguments and the runner's image (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_command_clickhouse_served_test.go:68` | stock curl against this test's owned tunnel (CWE-78) |
@@ -3206,7 +3222,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (161 sites)
+### G703 — CWE-22 Path traversal (taint) (163 sites)
 
 | Location | Reason |
 |---|---|
@@ -3302,6 +3318,8 @@ not this file.
 | `internal/server/compose_e2e_tls_test.go:160` | fixed helper filename below this test's private t.TempDir; source bytes are never a path (CWE-22). |
 | `internal/server/compose_e2e_tls_test.go:240` | fixed script filename below this test's private t.TempDir; test call text is file content, never a path (CWE-22). |
 | `internal/server/compose_e2e_tls_test.go:398` | fixed invalid.pem filename below this test's private t.TempDir; deliberately invalid public fixture bytes are content only (CWE-22). |
+| `internal/server/decoy_files_container_lab_q6o1_test.go:39` | disposable lab inputs the container reads (CWE-22) |
+| `internal/server/decoy_files_container_lab_q6o1_test.go:50` | the lab runner's build output (CWE-22) |
 | `internal/server/enrollment_relay_served_test.go:54` | the parent test supplies a freshly created public-CA fixture path to this helper process (CWE-22). |
 | `internal/server/pam_agent_launcher_served_test.go:38` | the launched agent writes beside the path its own test named (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:47` | the launched agent writes beside the path its own test named (CWE-22) |

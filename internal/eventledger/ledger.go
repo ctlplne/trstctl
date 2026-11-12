@@ -398,6 +398,9 @@ var ledger = []FeatureEvent{
 	{"F39", "Honeytoken exposure detection", "create_database_decoy", "createDatabaseDecoy", []string{EventHoneyTokenCreated}},
 	{"F39", "Honeytoken exposure detection", "retire_database_decoy", "retireDatabaseDecoy", []string{EventHoneyTokenRevoked}},
 	{"F39", "Honeytoken exposure detection", "observe_decoy_login", "watchDecoyLoginsOnce", []string{EventHoneyTokenTriggered}},
+	{"F39", "Honeytoken exposure detection", "register_decoy_file", "reportDecoys", []string{EventHoneyTokenCreated, EventHoneyTokenRevoked}},
+	{"F39", "Honeytoken exposure detection", "observe_decoy_file_open", "reportDecoys", []string{EventHoneyTokenTriggered}},
+	{"F39", "Honeytoken exposure detection", "retire_decoy_file", "retireDecoyFile", []string{EventHoneyTokenRevoked}},
 	{"F61", "AI-agent / NHI identity broker", "revoke_agent_identity", "revokeBrokerAgentIdentity", []string{EventCertificateRevocationBatchApplied}},
 
 	// F40 — per-tenant cryptographic custody. The migration operation reports

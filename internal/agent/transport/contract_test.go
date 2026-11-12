@@ -246,6 +246,12 @@ func currentAgentContract() agentContract {
 			// A220: a CSR and TPM credential up, the renewed chain down.
 			"EdgeRenewalRequest":  {Fields: jsonFieldsOf(EdgeRenewalRequest{})},
 			"EdgeRenewalResponse": {Fields: jsonFieldsOf(EdgeRenewalResponse{})},
+			// Q6-O1: decoys travel as their public half; no field can carry
+			// the decoy's private key.
+			"DecoyFile":           {Fields: jsonFieldsOf(DecoyFile{})},
+			"DecoyOpen":           {Fields: jsonFieldsOf(DecoyOpen{})},
+			"DecoyReportRequest":  {Fields: jsonFieldsOf(DecoyReportRequest{})},
+			"DecoyReportResponse": {Fields: jsonFieldsOf(DecoyReportResponse{})},
 		},
 	}
 }
@@ -272,6 +278,8 @@ func methodMessageTypes(method string) struct{ request, response string } {
 		return struct{ request, response string }{"EdgeJournalRequest", "EdgeJournalResponse"}
 	case methodRenewEdgeDelegation:
 		return struct{ request, response string }{"EdgeRenewalRequest", "EdgeRenewalResponse"}
+	case methodReportDecoys:
+		return struct{ request, response string }{"DecoyReportRequest", "DecoyReportResponse"}
 	default:
 		return struct{ request, response string }{"", ""}
 	}

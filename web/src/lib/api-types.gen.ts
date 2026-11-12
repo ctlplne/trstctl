@@ -4112,6 +4112,31 @@ export interface DatabaseDecoyList {
   next_cursor?: string;
 }
 
+export interface DecoyFile {
+  created_at: string;
+  file_host: string;
+  file_key_fingerprint: string;
+  file_path: string;
+  id: string;
+  kind: "file";
+  last_read_at?: string;
+  name: string;
+  placement: string;
+  readers?: number;
+  reads?: number;
+  revoked_at?: string;
+  state: "active" | "triggered" | "revoked";
+  trigger_method?: string;
+  trigger_path?: string;
+  trigger_subject?: string;
+  triggered_at?: string;
+}
+
+export interface DecoyFileList {
+  items: DecoyFile[];
+  next_cursor?: string;
+}
+
 export interface DecoySecret {
   created_at: string;
   id: string;

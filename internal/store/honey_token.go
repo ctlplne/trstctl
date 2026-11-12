@@ -53,6 +53,13 @@ type HoneyToken struct {
 	Readers    int64      `json:"readers,omitempty"`
 	Reads      int64      `json:"reads,omitempty"`
 	LastReadAt *time.Time `json:"last_read_at,omitempty"`
+	// FileHost, FilePath and FileKeyFingerprint identify a decoy file a host
+	// agent planted (Q6-O1): the agent's certificate name, the file's absolute
+	// path and the SHA-256 fingerprint of the decoy key's public half. Each
+	// process that opens the file is a reader.
+	FileHost           string `json:"file_host,omitempty"`
+	FilePath           string `json:"file_path,omitempty"`
+	FileKeyFingerprint string `json:"file_key_fingerprint,omitempty"`
 }
 
 // #nosec G101 -- SQL column names only; this string contains no credential material.
@@ -65,7 +72,8 @@ const honeyTokenColumns = `id::text, tenant_id::text, kind, name, placement, tok
     watch_gap_since, COALESCE(watch_gap_reason, ''),
     (SELECT count(*) FROM honey_token_readers r WHERE r.tenant_id = honey_tokens.tenant_id AND r.honey_token_id = honey_tokens.id),
     (SELECT COALESCE(sum(r.reads), 0) FROM honey_token_readers r WHERE r.tenant_id = honey_tokens.tenant_id AND r.honey_token_id = honey_tokens.id),
-    (SELECT max(r.last_read_at) FROM honey_token_readers r WHERE r.tenant_id = honey_tokens.tenant_id AND r.honey_token_id = honey_tokens.id)`
+    (SELECT max(r.last_read_at) FROM honey_token_readers r WHERE r.tenant_id = honey_tokens.tenant_id AND r.honey_token_id = honey_tokens.id),
+    COALESCE(file_host, ''), COALESCE(file_path, ''), COALESCE(file_key_fingerprint, '')`
 
 func scanHoneyToken(row pgx.Row) (HoneyToken, error) {
 	var h HoneyToken
@@ -74,7 +82,8 @@ func scanHoneyToken(row pgx.Row) (HoneyToken, error) {
 		&h.AWSRegions, &h.AWSPollIntervalSeconds, &h.AlarmGeneration,
 		&h.State, &h.CreatedAt, &h.TriggeredAt, &h.TriggerMethod, &h.TriggerPath, &h.RevokedAt,
 		&h.SecretName, &h.TriggerSubject, &h.DBProviderID, &h.DBLeaseID, &h.DBRole,
-		&h.WatchGapSince, &h.WatchGapReason, &h.Readers, &h.Reads, &h.LastReadAt)
+		&h.WatchGapSince, &h.WatchGapReason, &h.Readers, &h.Reads, &h.LastReadAt,
+		&h.FileHost, &h.FilePath, &h.FileKeyFingerprint)
 	return h, err
 }
 
@@ -124,22 +133,26 @@ func (s *Store) ApplyHoneyTokenCreatedTx(ctx context.Context, tx pgx.Tx, h Honey
 		return err
 	}
 	kind, secretName := "native", any(nil)
-	var dbProvider, dbLease, dbRole any
+	var dbProvider, dbLease, dbRole, fileHost, filePath, fileKey any
 	switch {
 	case h.SecretName != "":
-		// A secret or database decoy has no bearer. Its lookup key can never
-		// equal a bearer hash, which is hex.
+		// A secret, database or file decoy has no bearer. Its lookup key can
+		// never equal a bearer hash, which is hex.
 		kind, secretName, h.TokenHash = "secret", h.SecretName, "secret-decoy:"+h.ID
 	case h.DBProviderID != "":
 		kind, h.TokenHash = "database", "database-decoy:"+h.ID
 		dbProvider, dbLease, dbRole = h.DBProviderID, h.DBLeaseID, h.DBRole
+	case h.FilePath != "":
+		kind, h.TokenHash = "file", "file-decoy:"+h.ID
+		fileHost, filePath, fileKey = h.FileHost, h.FilePath, h.FileKeyFingerprint
 	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO honey_tokens (id, tenant_id, kind, name, placement, token_hash, state, created_at, secret_name,
-		        db_provider_id, db_lease_id, db_role)
-		 VALUES ($1, $2, $7, $3, $4, $5, 'active', $6, $8, $9, $10, $11)
+		        db_provider_id, db_lease_id, db_role, file_host, file_path, file_key_fingerprint)
+		 VALUES ($1, $2, $7, $3, $4, $5, 'active', $6, $8, $9, $10, $11, $12, $13, $14)
 		 ON CONFLICT (id) DO NOTHING`,
-		h.ID, h.TenantID, h.Name, h.Placement, h.TokenHash, h.CreatedAt, kind, secretName, dbProvider, dbLease, dbRole)
+		h.ID, h.TenantID, h.Name, h.Placement, h.TokenHash, h.CreatedAt, kind, secretName, dbProvider, dbLease, dbRole,
+		fileHost, filePath, fileKey)
 	return err
 }
 

@@ -57,7 +57,9 @@ func (s *Store) ListDecoySecretsPage(ctx context.Context, tenantID, afterID stri
 	return out, err
 }
 
-// ApplyDecoySecretReadTx projects one read of a secret decoy's value. The first
+// ApplyDecoySecretReadTx projects one read of a decoy that names its reader: a
+// secret decoy's value read through the API (Q6), or a decoy file opened on its
+// host, the reader being the opening program on that host (Q6-O1). The first
 // read moves the decoy to triggered and keeps that reader; every distinct reader
 // enqueues exactly one critical alert naming them, so a second thief is not
 // hidden behind the first, and a reader repeating the read is not re-alerted,
@@ -68,14 +70,15 @@ func (s *Store) ApplyDecoySecretReadTx(ctx context.Context, tx pgx.Tx, tenantID,
 	if _, err := tx.Exec(ctx,
 		`UPDATE honey_tokens SET state = 'triggered', triggered_at = $3,
 		        trigger_method = $4, trigger_path = $5, trigger_subject = $6
-		  WHERE tenant_id = $1 AND id = $2 AND kind = 'secret' AND state = 'active'`,
+		  WHERE tenant_id = $1 AND id = $2 AND kind IN ('secret', 'file') AND state = 'active'`,
 		tenantID, id, at, method, path, reader); err != nil {
 		return err
 	}
-	var name, placement, secretName, state string
+	var name, placement, kind, secretName, fileHost, filePath, state string
 	err := tx.QueryRow(ctx,
-		`SELECT name, placement, COALESCE(secret_name, ''), state FROM honey_tokens
-		  WHERE tenant_id = $1 AND id = $2 AND kind = 'secret'`, tenantID, id).Scan(&name, &placement, &secretName, &state)
+		`SELECT name, placement, kind, COALESCE(secret_name, ''), COALESCE(file_host, ''), COALESCE(file_path, ''), state
+		   FROM honey_tokens
+		  WHERE tenant_id = $1 AND id = $2 AND kind IN ('secret', 'file')`, tenantID, id).Scan(&name, &placement, &kind, &secretName, &fileHost, &filePath, &state)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && state == "revoked") {
 		return nil
 	}
@@ -98,11 +101,15 @@ func (s *Store) ApplyDecoySecretReadTx(ctx context.Context, tx pgx.Tx, tenantID,
 		return err
 	}
 	alertKey := decoyAlertKey(id, reader)
+	detail := "Decoy secret " + secretName + " was read by " + reader + " (" + method + " " + path +
+		"); inspect decoy " + id + " at placement " + placement
+	if kind == "file" {
+		detail = "Decoy file " + filePath + " on " + fileHost + " was opened by " + reader + " (" + method +
+			"); inspect decoy " + id + " at placement " + placement
+	}
 	alert, err := json.Marshal(map[string]any{
 		"kind": "honeytoken.triggered", "tenant_id": tenantID, "operation_id": alertKey,
-		"subject": name, "severity": "critical",
-		"detail": "Decoy secret " + secretName + " was read by " + reader + " (" + method + " " + path +
-			"); inspect decoy " + id + " at placement " + placement,
+		"subject": name, "severity": "critical", "detail": detail,
 	})
 	if err != nil {
 		return err

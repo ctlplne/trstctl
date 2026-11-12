@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- Host agents plant decoy files (Q6-O1): `trstctl-agent --decoy-ssh-keys PATH[,PATH...]` (Linux, host role) writes a
+  decoy SSH private key, generated on the host and authorized nowhere, at each path where no file is, registers it over
+  the agent channel by its public half (`ReportDecoys`), and watches it; each program that opens it raises one critical
+  decoy alert naming the program and the host. fanotify (with `CAP_SYS_ADMIN`) names every opener; inotify names one
+  that still holds the file. The agent's own scans skip its decoys. The registry lists them
+  (`GET /api/v1/secrets/honeytokens/files`, `trstctl-cli secrets honeytokens files list`, and the console's decoy
+  credentials) with the first opener and how many programs opened each, and `retire` stops alerting.
 - The passive network observer reads QUIC and DTLS over UDP (X1-L4 part 2): it removes the published protection of
   QUIC Initial packets (RFC 9001; versions 1 and 2) to read the ClientHello and ServerHello, however many packets they
   span, and reads DTLS hello messages, certificates and ECDHE groups in the clear through a cookie exchange. Findings

@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"trstctl.com/trstctl/internal/agent/decoy"
 	cryptoboundary "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -97,7 +98,7 @@ func (s *MCPClientConfigSource) Discover(ctx context.Context) ([]MCPServerFound,
 				}
 				return nil
 			}
-			if !strings.EqualFold(filepath.Ext(path), ".json") {
+			if !strings.EqualFold(filepath.Ext(path), ".json") || decoy.Is(path) {
 				return nil
 			}
 			fi, ierr := d.Info()

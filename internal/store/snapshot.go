@@ -352,7 +352,11 @@ import (
 // no source, so its next import would not retire what that BOM dropped.
 // Version 125 carries P9-L2's code-signing transparency entries: without them
 // a restored deployment could not serve a signature's Rekor bundle.
-const SnapshotFormatVersion = 125
+// Version 126 carries Q6-O1's decoy files (honey_tokens file_host, file_path
+// and file_key_fingerprint): a version-125 payload has no such columns, and a
+// restored file decoy would name no host or path, so its opens would alert
+// nobody.
+const SnapshotFormatVersion = 126
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

@@ -417,6 +417,8 @@ public final class OpenApiSchemas {
       "DatabaseDecoyCreateRequest",
       "DatabaseDecoyCreateResponse",
       "DatabaseDecoyList",
+      "DecoyFile",
+      "DecoyFileList",
       "DecoySecret",
       "DecoySecretList",
       "DecoySecretRegisterRequest",

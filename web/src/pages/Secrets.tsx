@@ -81,6 +81,7 @@ const AWSHoneyTokenWorkflow = lazy(() => import("./secrets/AWSHoneyTokenWorkflow
 const DecoySecretWorkflow = lazy(() => import("./secrets/DecoySecretWorkflow").then((module) => ({ default: module.DecoySecretWorkflow })));
 const SecretProjectsWorkflow = lazy(() => import("./secrets/SecretProjectsWorkflow").then((module) => ({ default: module.SecretProjectsWorkflow })));
 const DecoyDatabaseWorkflow = lazy(() => import("./secrets/DecoyDatabaseWorkflow").then((module) => ({ default: module.DecoyDatabaseWorkflow })));
+const DecoyFileWorkflow = lazy(() => import("./secrets/DecoyFileWorkflow").then((module) => ({ default: module.DecoyFileWorkflow })));
 const TransitOperations = lazy(() => import("./secrets/TransitOperations").then((module) => ({ default: module.TransitOperations })));
 const SecretSyncWorkflow = lazy(() => import("./secrets/SecretSyncWorkflow").then((module) => ({ default: module.SecretSyncWorkflow })));
 const ScopedSyncsWorkflow = lazy(() => import("./secrets/ScopedSyncsWorkflow").then((module) => ({ default: module.ScopedSyncsWorkflow })));
@@ -2687,6 +2688,7 @@ export function Secrets() {
               <HoneyTokenWorkflow />
               <DecoySecretWorkflow />
               <DecoyDatabaseWorkflow />
+              <DecoyFileWorkflow />
               <AWSHoneyTokenWorkflow />
             </Suspense>
           )}

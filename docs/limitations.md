@@ -5788,8 +5788,14 @@ when off, requiring a KEK when on):
   lease is active) records a monitoring gap on the decoy, since when and why, with one
   warning alert; reading it again closes the gap. A failed login with a
   wrong password is not detected, a statistics reset hides earlier uses, and only
-  PostgreSQL providers can mint decoys. Decoy SSH keys and Kubernetes tokens are
-  not built.
+  PostgreSQL providers can mint decoys. Decoy files on hosts (Q6-O1): a host agent
+  started with `--decoy-ssh-keys` plants decoy SSH private keys and each program that
+  opens one alerts once; the watch needs Linux, inotify names an opener only while it
+  still holds the file (fanotify, with `CAP_SYS_ADMIN`, names every opener), an open
+  while the agent is stopped is not seen, and a reader that copies the file without
+  opening it through the path (a raw block-device read, a backup of the disk image) is
+  not seen. Decoys are SSH keys only. Kubernetes service-account-token decoys are not
+  built.
 - Secret rotation (F37) backs `POST /api/v1/secrets/rotations` for worker-queued
   `connector:<target>` secret-sync handoffs and for durable static-provider
   commands: a configured dynamic-secret provider of a static-rotation type with

@@ -489,6 +489,18 @@ func (b *bulkheadedAgentService) ReportEdgeJournal(ctx context.Context, req *tra
 	})
 }
 
+// ReportDecoys (Q6-O1) shares the fire door: a fleet whose decoys are opened
+// together reports through the same bounded pool.
+func (b *bulkheadedAgentService) ReportDecoys(ctx context.Context, req *transport.DecoyReportRequest) (*transport.DecoyReportResponse, error) {
+	decoys, ok := b.next.(transport.AgentDecoyServiceServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not accept decoy reports over the agent channel")
+	}
+	return runAgentBulkhead(ctx, b.pool, "report_decoys", b.metrics, func(ctx context.Context) (*transport.DecoyReportResponse, error) {
+		return decoys.ReportDecoys(ctx, req)
+	})
+}
+
 // RenewEdgeDelegation (A220) shares the same fire door.
 func (b *bulkheadedAgentService) RenewEdgeDelegation(ctx context.Context, req *transport.EdgeRenewalRequest) (*transport.EdgeRenewalResponse, error) {
 	edge, ok := b.next.(transport.AgentEdgeRenewalServer)

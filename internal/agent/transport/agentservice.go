@@ -327,6 +327,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodFetchWorkloadSVID, Handler: fetchWorkloadSVIDHandler},
 		{MethodName: methodReportEdgeJournal, Handler: reportEdgeJournalHandler},
 		{MethodName: methodRenewEdgeDelegation, Handler: renewEdgeDelegationHandler},
+		{MethodName: methodReportDecoys, Handler: reportDecoysHandler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "trstctl.agent.v1",

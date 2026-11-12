@@ -19910,6 +19910,111 @@
         ],
         "type": "object"
       },
+      "DecoyFile": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "file_host": {
+            "description": "the host: the planting agent's certificate name",
+            "type": "string"
+          },
+          "file_key_fingerprint": {
+            "description": "the SHA-256 fingerprint of the decoy key's public half",
+            "type": "string"
+          },
+          "file_path": {
+            "description": "the decoy file's absolute path on that host",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "file"
+            ],
+            "type": "string"
+          },
+          "last_read_at": {
+            "description": "when the file was last opened",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "readers": {
+            "description": "how many distinct programs opened the file; each alerts once",
+            "type": "integer"
+          },
+          "reads": {
+            "description": "how many opens those programs made in all",
+            "type": "integer"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "triggered",
+              "revoked"
+            ],
+            "type": "string"
+          },
+          "trigger_method": {
+            "description": "how the first open was seen: its pid when known and the watcher (fanotify or inotify)",
+            "type": "string"
+          },
+          "trigger_path": {
+            "type": "string"
+          },
+          "trigger_subject": {
+            "description": "the first program that opened the file, with its host",
+            "type": "string"
+          },
+          "triggered_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "placement",
+          "file_host",
+          "file_path",
+          "file_key_fingerprint",
+          "state",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "DecoyFileList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DecoyFile"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "DecoySecret": {
         "properties": {
           "created_at": {
@@ -105321,6 +105426,138 @@
           }
         ],
         "summary": "Stop watching a decoy login and remove its role and database through the lease's revocation",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/honeytokens/files": {
+      "get": {
+        "operationId": "listDecoyFiles",
+        "parameters": [
+          {
+            "description": "page size (1-100)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecoyFileList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List decoy files host agents planted and which programs opened them",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/honeytokens/files/{id}/retire": {
+      "post": {
+        "operationId": "retireDecoyFile",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecoyFile"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Stop alerting on a decoy file; the file stays on its host until the agent stops planting it",
         "x-trstctl-permission": "secrets:write"
       }
     },
