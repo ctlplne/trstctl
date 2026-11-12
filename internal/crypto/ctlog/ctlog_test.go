@@ -3,6 +3,7 @@
 package ctlog_test
 
 import (
+	"net"
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto/ctlog"
@@ -54,6 +55,23 @@ func TestParseEntriesX509(t *testing.T) {
 	}
 	if e.NotAfter.IsZero() {
 		t.Error("NotAfter is zero")
+	}
+}
+
+// TestParseEntriesKeepsIPAddressNamesN10L2: a logged certificate's IP
+// address names are read with its DNS names, so a monitor can watch IP
+// addresses and ranges (N10-L2).
+func TestParseEntriesKeepsIPAddressNamesN10L2(t *testing.T) {
+	der, _, err := ctlogtest.IssueCertWithIPs("edge", []net.IP{net.ParseIP("203.0.113.9"), net.ParseIP("2001:db8::7")}, "edge.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := ctlog.ParseEntries(0, ctlogtest.GetEntriesBody(ctlogtest.X509Entry(der)))
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("ParseEntries = %d entries, %v", len(entries), err)
+	}
+	if e := entries[0]; !equalStr(e.IPAddresses, []string{"203.0.113.9", "2001:db8::7"}) || !equalStr(e.DNSNames, []string{"edge.example.com"}) {
+		t.Fatalf("names = DNS %v, IP %v", e.DNSNames, e.IPAddresses)
 	}
 }
 

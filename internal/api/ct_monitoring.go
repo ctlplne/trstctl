@@ -14,6 +14,7 @@ import (
 	googleuuid "github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/discovery"
+	"trstctl.com/trstctl/internal/discovery/ctmonitor"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -234,6 +235,18 @@ func cleanCTLogURLs(in []string) ([]string, error) {
 	return out, nil
 }
 
+// ctWatchedTarget names a watched entry in a plan preview: "ip:" for an IP
+// address, "range:" for a CIDR range (N10-L2), otherwise "domain:".
+func ctWatchedTarget(watched string) string {
+	if prefix, ok := ctmonitor.WatchedIPPrefix(watched); ok {
+		if prefix.IsSingleIP() {
+			return "ip:" + watched
+		}
+		return "range:" + watched
+	}
+	return "domain:" + watched
+}
+
 func cleanCTWatchedDomains(in []string) ([]string, error) {
 	out := make([]string, 0, len(in))
 	seen := map[string]struct{}{}
@@ -242,8 +255,24 @@ func cleanCTWatchedDomains(in []string) ([]string, error) {
 		if domain == "" {
 			continue
 		}
+		// An IP address or CIDR range watches certificates' IP address
+		// names (N10-L2); one matching every address is refused.
+		if prefix, ok := ctmonitor.WatchedIPPrefix(domain); ok {
+			if prefix.Bits() == 0 {
+				return nil, errStatus(http.StatusBadRequest, "watched_domains may not hold a range that matches every address")
+			}
+			domain = prefix.String()
+			if prefix.IsSingleIP() {
+				domain = prefix.Addr().String()
+			}
+			if _, dup := seen[domain]; !dup {
+				seen[domain] = struct{}{}
+				out = append(out, domain)
+			}
+			continue
+		}
 		if strings.ContainsAny(domain, "/:@ \t\r\n") || strings.HasPrefix(domain, "*.") {
-			return nil, errStatus(http.StatusBadRequest, "watched_domains must contain DNS domain names, not URLs or wildcards")
+			return nil, errStatus(http.StatusBadRequest, "watched_domains must contain DNS domain names, IP addresses or CIDR ranges, not URLs or wildcards")
 		}
 		if !strings.Contains(domain, ".") {
 			return nil, errStatus(http.StatusBadRequest, "watched_domains must include a registrable domain")

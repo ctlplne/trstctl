@@ -144,7 +144,7 @@ describe("C5 certificate transparency monitoring surface", () => {
 
   it("states what it does not cover, so an empty list is not read as an all-clear", async () => {
     renderPanel();
-    const honesty = await screen.findByText(/covers only the domains and logs configured/i);
+    const honesty = await screen.findByText(/covers only the domains, IP addresses and logs configured/i);
     expect(honesty).toBeInTheDocument();
     expect(honesty.textContent).toMatch(/not automatic estate-wide/i);
   });
@@ -153,7 +153,7 @@ describe("C5 certificate transparency monitoring surface", () => {
     const user = userEvent.setup();
     renderPanel();
 
-    const domains = await screen.findByRole("textbox", { name: "Watched domains" });
+    const domains = await screen.findByRole("textbox", { name: "Watched domains and IPs" });
     await user.clear(domains);
     await user.type(domains, "example.test\npayments.example.test");
     await user.click(screen.getByRole("button", { name: "Review exact CT plan" }));
@@ -182,6 +182,24 @@ describe("C5 certificate transparency monitoring surface", () => {
     // out whether their watchlist works.
     expect(sent.run_now).toBe(true);
     expect(await screen.findByText("run run-9 succeeded")).toBeInTheDocument();
+  });
+
+  // N10-L2: the watchlist takes IP addresses and CIDR ranges beside domains,
+  // and says so where it is typed.
+  it("watches IP addresses and CIDR ranges beside domains", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    const watched = await screen.findByRole("textbox", { name: "Watched domains and IPs" });
+    expect(watched).toHaveAccessibleDescription(/an IP address, or a CIDR range such as 203\.0\.113\.0\/24/);
+    await user.clear(watched);
+    await user.type(watched, "example.test\n203.0.113.0/24\n198.51.100.7");
+    await user.click(screen.getByRole("button", { name: "Review exact CT plan" }));
+    await user.click(await screen.findByRole("button", { name: "Save and run now" }));
+
+    await waitFor(() => expect(api.updateCTMonitoring).toHaveBeenCalled());
+    const sent = vi.mocked(api.updateCTMonitoring).mock.calls[0][0] as { watched_domains: string[] };
+    expect(sent.watched_domains).toEqual(["example.test", "203.0.113.0/24", "198.51.100.7"]);
   });
 
   it("preflights a failed run and retries it as a distinct replacement", async () => {

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -838,6 +839,95 @@ func createAndRunDiscoverySource(t *testing.T, h *servedHarness, tok, name, kind
 		t.Fatalf("%s discovery run = %+v, want one successful finding", kind, completed)
 	}
 	return queued.ID
+}
+
+// TestServedCTMonitoringWatchesIPAddressesN10L2 is N10-L2: a CIDR range on
+// the CT watchlist catches a logged certificate issued for an IP address in
+// it, and the finding names that address and the range; a certificate for an
+// address outside every watched entry is not caught, and a range matching
+// every address is refused.
+func TestServedCTMonitoringWatchesIPAddressesN10L2(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
+
+	inRange, _, err := ctlogtest.IssueCertWithIPs("edge", []net.IP{net.ParseIP("203.0.113.9")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside, _, err := ctlogtest.IssueCertWithIPs("elsewhere", []net.IP{net.ParseIP("192.0.2.10")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	logSrv := ctlogtest.NewServer(ctlogtest.X509Entry(inRange), ctlogtest.X509Entry(outside))
+	t.Cleanup(logSrv.Close)
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/plans/preview", tok, map[string]any{
+		"name": "edge-ct-watch", "kind": "ct_log",
+		"config": map[string]any{"watched_domains": []string{"example.com", "203.0.113.77/24", "198.51.100.7"}, "logs": []string{"https://ct.example.test/log"}},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("preview CT plan: status %d body %s", status, body)
+	}
+	var preview struct {
+		NormalizedTargets []string `json:"normalized_targets"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(preview.NormalizedTargets, "|"), "ip:198.51.100.7|range:203.0.113.0/24|domain:example.com|log:https://ct.example.test/log"; got != want {
+		t.Fatalf("preview targets = %s; want %s", got, want)
+	}
+
+	configure := func(key string, watched []string) (int, []byte) {
+		return secretsReqKey(t, h, http.MethodPut, "/api/v1/discovery/ct-monitoring", tok, key, map[string]any{
+			"name":                   "edge-ct-watch",
+			"logs":                   []string{logSrv.URL()},
+			"watched_domains":        watched,
+			"run_now":                true,
+			"allow_private_endpoint": true,
+			"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, logSrv.URL())},
+		})
+	}
+	if status, body := configure("n10l2-every-address", []string{"0.0.0.0/0"}); status != http.StatusBadRequest || !strings.Contains(string(body), "matches every address") {
+		t.Fatalf("a range matching every address: status %d body %s", status, body)
+	}
+	status, body = configure("n10l2-watch", []string{"example.com", "203.0.113.0/24"})
+	if status != http.StatusOK {
+		t.Fatalf("configure CT monitoring: status %d body %s", status, body)
+	}
+	var configured struct {
+		Source struct {
+			Config struct {
+				WatchedDomains []string `json:"watched_domains"`
+			} `json:"config"`
+		} `json:"source"`
+		Run struct {
+			ID string `json:"id"`
+		} `json:"run"`
+	}
+	if err := json.Unmarshal(body, &configured); err != nil {
+		t.Fatalf("decode configured CT monitoring: %v (%s)", err, body)
+	}
+	if !containsString(configured.Source.Config.WatchedDomains, "203.0.113.0/24") {
+		t.Fatalf("watchlist = %v", configured.Source.Config.WatchedDomains)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain CT monitoring run: %v", err)
+	}
+	found := discoveryFindingsForRun(t, h, tok, configured.Run.ID)
+	if len(found.Items) != 1 || found.Items[0].Kind != "ct_unexpected_issuance" || found.Items[0].Ref != "203.0.113.9" {
+		t.Fatalf("CT findings = %+v raw=%s, want one for 203.0.113.9", found.Items, found.Raw)
+	}
+	var meta struct {
+		IPAddresses   []string `json:"ip_addresses"`
+		MatchedDomain string   `json:"matched_domain"`
+	}
+	if err := json.Unmarshal(found.Items[0].Metadata, &meta); err != nil {
+		t.Fatal(err)
+	}
+	if len(meta.IPAddresses) != 1 || meta.IPAddresses[0] != "203.0.113.9" || meta.MatchedDomain != "203.0.113.0/24" {
+		t.Fatalf("finding metadata = %+v", meta)
+	}
 }
 
 type servedDiscoveryFindingList struct {

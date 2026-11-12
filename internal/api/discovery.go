@@ -295,7 +295,7 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		preview.Protocol = "RFC 6962"
 		preview.NormalizedTargets = make([]string, 0, len(normalized.WatchedDomains)+len(normalized.Logs))
 		for _, domain := range normalized.WatchedDomains {
-			preview.NormalizedTargets = append(preview.NormalizedTargets, "domain:"+domain)
+			preview.NormalizedTargets = append(preview.NormalizedTargets, ctWatchedTarget(domain))
 		}
 		for _, logURL := range normalized.Logs {
 			preview.NormalizedTargets = append(preview.NormalizedTargets, "log:"+logURL)

@@ -44,9 +44,11 @@ type Entry struct {
 	SerialHex         string
 	FingerprintSHA256 string
 	DNSNames          []string
-	NotBefore         time.Time
-	NotAfter          time.Time
-	Precert           bool
+	// IPAddresses are the certificate's IP address names (N10-L2).
+	IPAddresses []string
+	NotBefore   time.Time
+	NotAfter    time.Time
+	Precert     bool
 	// AuthorityKeyID names the issuer by key identifier, and DER is the logged
 	// certificate (or precertificate), kept so a monitor can rate a hit it
 	// keeps (Part 4); neither is stored.
@@ -107,6 +109,7 @@ func ParseEntries(start int64, body []byte) ([]Entry, error) {
 			SerialHex:         info.SerialNumber,
 			FingerprintSHA256: info.SHA256Fingerprint,
 			DNSNames:          info.DNSNames,
+			IPAddresses:       info.IPAddresses,
 			NotBefore:         info.NotBefore,
 			NotAfter:          info.NotAfter,
 			Precert:           precert,

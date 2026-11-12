@@ -6664,7 +6664,7 @@ export const messages = {
   },
   "discovery.ct.coverageHonesty": {
     defaultMessage:
-      "This covers only the domains and logs configured below. It is not automatic estate-wide coverage: a domain you have not listed, or a log you do not poll, produces no finding.",
+      "This covers only the domains, IP addresses and logs configured below. It is not automatic estate-wide coverage: a domain or address you have not listed, or a log you do not poll, produces no finding.",
     description: "C5 coverage honesty: states the boundary of CT monitoring so an empty finding list is not read as an all-clear.",
   },
   "discovery.ct.description": {
@@ -6935,8 +6935,12 @@ export const messages = {
     description: "C5: heading for findings where a certificate was issued for a watched domain that trstctl did not expect.",
   },
   "discovery.ct.watchedDomains": {
-    defaultMessage: "Watched domains",
-    description: "C5: label for the domains CT monitoring watches.",
+    defaultMessage: "Watched domains and IPs",
+    description: "C5: label for the domains, IP addresses and CIDR ranges CT monitoring watches (N10-L2).",
+  },
+  "discovery.ct.watchedHint": {
+    defaultMessage: "One per line: a domain (its subdomains match too), an IP address, or a CIDR range such as 203.0.113.0/24.",
+    description: "N10-L2: hint under the CT watchlist field; an IP address or range matches certificates issued for IP addresses.",
   },
   "discovery.page.title": {
     defaultMessage: "Discover",
@@ -14403,6 +14407,10 @@ export const messages = {
   "discovery.findings.observedSans": {
     defaultMessage: "Subject alternative names",
     description: "C2: discovery finding evidence — observed certificate facts.",
+  },
+  "discovery.findings.observedMatched": {
+    defaultMessage: "Matched watch entry",
+    description: "N10-L2: discovery finding evidence — the watched domain, IP address or CIDR range a CT finding matched.",
   },
   "discovery.findings.observedSerial": {
     defaultMessage: "Serial",

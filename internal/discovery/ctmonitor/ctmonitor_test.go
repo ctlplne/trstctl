@@ -187,3 +187,47 @@ func TestDomainMatch(t *testing.T) {
 		}
 	}
 }
+
+// ipEntry is a logged certificate whose only names are IP addresses.
+func ipEntry(ips ...string) ctlog.Entry {
+	return ctlog.Entry{
+		Subject: "CN=" + ips[0], Issuer: "CN=Some CA", SerialHex: "0d0e0f", FingerprintSHA256: "fp-" + ips[0],
+		IPAddresses: ips, NotAfter: time.Now().Add(24 * time.Hour),
+	}
+}
+
+// TestPollWatchesIPAddressNamesN10L2 is N10-L2: a watched IP address or CIDR
+// range catches a logged certificate for an IP in it, by the certificate's IP
+// address names; one outside every watched range, and a DNS name that only
+// spells an address, are not caught.
+func TestPollWatchesIPAddressNamesN10L2(t *testing.T) {
+	spelled := entry("203.0.113.9")
+	spelled.FingerprintSHA256 = "fp-spelled"
+	f := &fakeFetcher{tree: []ctlog.Entry{
+		ipEntry("203.0.113.9"),
+		ipEntry("198.51.100.8"),
+		ipEntry("198.51.100.7"),
+		ipEntry("2001:db8:5::1"),
+		spelled,
+	}}
+	m, alerter := newMonitor(t, f, false, "example.com", "203.0.113.0/24", "198.51.100.7", "2001:db8::/32")
+	if _, _, err := m.Poll(context.Background(), tenant, ctmonitor.LogState{URL: "log-a"}); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	got := map[string]string{}
+	for _, f := range alerter.Raised() {
+		if len(f.IPAddresses) == 0 {
+			t.Fatalf("a hit by DNS name: %+v", f)
+		}
+		got[f.IPAddresses[0]] = f.MatchedDomain
+	}
+	want := map[string]string{"203.0.113.9": "203.0.113.0/24", "198.51.100.7": "198.51.100.7", "2001:db8:5::1": "2001:db8::/32"}
+	if len(got) != len(want) {
+		t.Fatalf("hits = %v; want %v", got, want)
+	}
+	for ip, watched := range want {
+		if got[ip] != watched {
+			t.Fatalf("hit %s matched %q; want %q (all: %v)", ip, got[ip], watched, got)
+		}
+	}
+}

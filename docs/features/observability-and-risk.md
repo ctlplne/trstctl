@@ -196,6 +196,14 @@ Polling runs in its own bounded lane, RFC 6962 binary parsing stays inside the s
 crypto path, and checkpoints persist so monitoring resumes across restarts, tenant-isolated
 at the database layer.
 
+A watched entry can also be an IP address or a CIDR range, such as `203.0.113.0/24`. It
+catches a logged certificate whose IP address names fall inside it, because a certificate
+issued for an IP address carries no domain to match. An address is kept as itself, and a
+range is kept as its network. A range that matches every address (`0.0.0.0/0`, `::/0`) is
+refused. The finding's `ref` is the certificate's first DNS name, or its first IP address
+when it has none. Its metadata lists `ip_addresses` beside `sans`, and `matched_domain`
+names the entry it matched. The console's finding detail shows both.
+
 **Status: served.** Use `GET`/`PUT /api/v1/discovery/ct-monitoring`, `discovery
 ct-monitoring get|update`, or the console to configure watched domains/logs, inspect
 checkpoints, queue a poll, and review `ct_unexpected_issuance` findings. The worker polls,
@@ -205,7 +213,7 @@ posture, so a severity-based routing rule can page the configured incident chann
 
 Before the console exposes **Save and run now**, it sends the proposed `ct_log` source to
 `POST /api/v1/discovery/plans/preview`. The server uses the same CT validator as execution
-and returns the normalized `domain:` and `log:` targets, RFC 6962 protocol, child-job count,
+and returns the normalized `domain:`, `ip:`, `range:` and `log:` targets, RFC 6962 protocol, child-job count,
 concurrency, queue limit, permission, and public-metadata handling boundary. Preview is
 effect-free: it does not contact a CT log or create a source, run, event, checkpoint,
 finding, or alert. Editing any domain, log, or batch size invalidates the displayed review.
@@ -243,8 +251,9 @@ the read-only evidence view and links back to this one reviewed workflow; it can
 preview with a second direct-save form. It previously appeared on Discovery only as a single count shared
 with drift detection, which is why operators could not find the capability at all.
 
-**What it does not cover.** CT monitoring sees exactly the domains you list and the logs
-you poll — nothing else. A domain you have not added, or a log you do not configure,
+**What it does not cover.** CT monitoring sees exactly the domains and IP addresses you
+list and the logs you poll — nothing else. A domain or address you have not added, or a log
+you do not configure,
 produces no finding, so an empty findings list is not an all-clear for an estate. The
 Discovery surface states this next to the counts rather than leaving a zero to be
 misread. It also only sees certificates a CA chose to log, which in practice means
@@ -502,7 +511,7 @@ trstctl-cli discovery findings list --run_id "$RUN_ID"
 {
   "name": "public-ct-watch",
   "logs": ["https://ct.example.test/log"],
-  "watched_domains": ["example.com"],
+  "watched_domains": ["example.com", "203.0.113.0/24"],
   "max_batch": 25,
   "run_now": true
 }

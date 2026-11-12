@@ -869,6 +869,7 @@ func ctFindingMetadata(f ctmonitor.Finding) (map[string]any, int) {
 		"issuer":           f.Issuer,
 		"serial":           f.Serial,
 		"sans":             f.DNSNames,
+		"ip_addresses":     f.IPAddresses,
 		"not_after":        f.NotAfter,
 		"matched_domain":   f.MatchedDomain,
 		"authority_key_id": f.AuthorityKeyID,
@@ -894,6 +895,8 @@ func (d *issuanceDispatcher) recordCTLogFindings(ctx context.Context, tenantID, 
 		ref := f.MatchedDomain
 		if len(f.DNSNames) > 0 {
 			ref = f.DNSNames[0]
+		} else if len(f.IPAddresses) > 0 {
+			ref = f.IPAddresses[0]
 		}
 		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
 			RunID: runID, SourceID: sourceID, Kind: "ct_unexpected_issuance", Ref: ref,

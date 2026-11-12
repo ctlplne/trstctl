@@ -684,6 +684,37 @@ describe("discovery control-plane surface", () => {
     expect(within(leak).queryByText(/Known decoy/)).not.toBeInTheDocument();
   });
 
+  // N10-L2: a CT finding for a certificate issued to an IP address lists the
+  // address with its names and says which watch entry it matched.
+  it("shows a CT finding's IP address names and the watch entry it matched", async () => {
+    const seeded = await apiMock.discoveryFindings();
+    apiMock.discoveryFindings.mockReset().mockResolvedValue({
+      items: [
+        {
+          ...seeded.items[0],
+          id: "ct-ip",
+          kind: "ct_unexpected_issuance",
+          ref: "203.0.113.9",
+          metadata: {
+            subject: "CN=edge",
+            issuer: "CN=Unexpected CA",
+            sans: ["edge.example.com"],
+            ip_addresses: ["203.0.113.9"],
+            matched_domain: "203.0.113.0/24",
+          },
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderDiscovery();
+    const row = (await screen.findByText("203.0.113.9")).closest("tr") as HTMLTableRowElement;
+    await user.click(within(row).getByRole("button", { name: "Review finding" }));
+    const names = (await screen.findByText("Subject alternative names")).parentElement as HTMLElement;
+    expect(within(names).getByText("edge.example.com, 203.0.113.9")).toBeInTheDocument();
+    const matched = screen.getByText("Matched watch entry").parentElement as HTMLElement;
+    expect(within(matched).getByText("203.0.113.0/24")).toBeInTheDocument();
+  });
+
   // P7-L2: an MCP server whose configuration left the host reads removed,
   // with the time of the host's report that no longer listed it.
   it("marks an MCP server the host's newest report no longer lists as removed", async () => {

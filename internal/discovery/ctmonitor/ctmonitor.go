@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -56,13 +57,15 @@ type LogPollResult struct {
 
 // Finding is one unexpected certificate observed in a CT log.
 type Finding struct {
-	LogURL        string
-	Index         int64
-	Subject       string
-	Issuer        string
-	Serial        string
-	Fingerprint   string
-	DNSNames      []string
+	LogURL      string
+	Index       int64
+	Subject     string
+	Issuer      string
+	Serial      string
+	Fingerprint string
+	DNSNames    []string
+	// IPAddresses are the certificate's IP address names (N10-L2).
+	IPAddresses   []string
 	NotAfter      time.Time
 	MatchedDomain string
 	// AuthorityKeyID and Posture are the issuer's key identifier and the key
@@ -128,8 +131,11 @@ func (a *MemoryAlerter) Raised() []Finding {
 
 // Config configures a Monitor.
 type Config struct {
-	WatchedDomains []string // organization domains to watch; subdomains match
-	MaxBatch       int      // max entries per Poll (default 256)
+	// WatchedDomains are the organization's domains to watch (subdomains
+	// match) and IP addresses or CIDR ranges, matched against a certificate's
+	// IP address names (N10-L2).
+	WatchedDomains []string
+	MaxBatch       int // max entries per Poll (default 256)
 }
 
 // Option configures a Monitor.
@@ -216,7 +222,7 @@ func (m *Monitor) Poll(ctx context.Context, tenantID string, log LogState) (LogS
 
 	var findings []Finding
 	for _, e := range entries {
-		domain, ok := matchWatched(e.DNSNames, m.cfg.WatchedDomains)
+		domain, ok := matchWatched(e.DNSNames, e.IPAddresses, m.cfg.WatchedDomains)
 		if !ok {
 			continue
 		}
@@ -229,7 +235,7 @@ func (m *Monitor) Poll(ctx context.Context, tenantID string, log LogState) (LogS
 		}
 		f := Finding{
 			LogURL: log.URL, Index: e.Index, Subject: e.Subject, Issuer: e.Issuer,
-			Serial: e.SerialHex, Fingerprint: e.FingerprintSHA256, DNSNames: e.DNSNames,
+			Serial: e.SerialHex, Fingerprint: e.FingerprintSHA256, DNSNames: e.DNSNames, IPAddresses: e.IPAddresses,
 			NotAfter: e.NotAfter, MatchedDomain: domain, AuthorityKeyID: e.AuthorityKeyID,
 		}
 		// Rated only for the hits kept: a log batch can hold thousands of entries.
@@ -339,9 +345,19 @@ func (m *Monitor) submit(ctx context.Context, pool *bulkhead.Pool, task func()) 
 	}
 }
 
-// matchWatched returns the first watched domain a certificate's names cover.
-func matchWatched(dnsNames, watched []string) (string, bool) {
+// matchWatched returns the first watched entry a certificate's names cover:
+// a domain one of its DNS names falls under, or an IP address or CIDR range
+// one of its IP address names is in.
+func matchWatched(dnsNames, ipAddresses, watched []string) (string, bool) {
 	for _, d := range watched {
+		if prefix, ok := WatchedIPPrefix(d); ok {
+			for _, ip := range ipAddresses {
+				if addr, err := netip.ParseAddr(strings.TrimSpace(ip)); err == nil && prefix.Contains(addr.Unmap()) {
+					return d, true
+				}
+			}
+			continue
+		}
 		for _, name := range dnsNames {
 			if DomainMatch(name, d) {
 				return d, true
@@ -349,6 +365,25 @@ func matchWatched(dnsNames, watched []string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// WatchedIPPrefix reads a watched entry that is an IP address (its own /32
+// or /128) or a CIDR range; ok is false for a domain.
+func WatchedIPPrefix(watched string) (netip.Prefix, bool) {
+	w := strings.TrimSpace(watched)
+	if strings.Contains(w, "/") {
+		prefix, err := netip.ParsePrefix(w)
+		if err != nil {
+			return netip.Prefix{}, false
+		}
+		return prefix.Masked(), true
+	}
+	addr, err := netip.ParseAddr(w)
+	if err != nil {
+		return netip.Prefix{}, false
+	}
+	addr = addr.Unmap()
+	return netip.PrefixFrom(addr, addr.BitLen()), true
 }
 
 // DomainMatch reports whether a certificate DNS name falls under a watched

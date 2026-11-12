@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { SectionCard, DashboardGrid } from "@/components/dashboard";
 import { StatTile } from "@/components/charts";
@@ -73,6 +73,7 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
   const { formatDateTime, t } = useTranslation();
   const canRead = useCan("discovery:read");
   const canWrite = useCan("discovery:write");
+  const watchedHintId = useId();
   // Plain fetch-on-mount rather than the query cache, matching how the rest of
   // the Discovery page loads: the panel then renders anywhere the page does,
   // without every consumer having to provide a query client.
@@ -378,9 +379,13 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
             <textarea
               className="min-h-16 rounded-control border border-border bg-transparent p-2 font-mono text-xs"
               value={domainsValue}
+              aria-describedby={watchedHintId}
               onChange={(event) => setDomains(event.target.value)}
             />
           </label>
+          <p id={watchedHintId} className="text-xs text-muted-foreground">
+            {t("discovery.ct.watchedHint")}
+          </p>
           <label className="grid gap-1 text-sm">
             <span className="font-medium">{t("discovery.ct.logs")}</span>
             <textarea

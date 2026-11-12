@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -49,6 +50,11 @@ type Submission struct {
 // DNS SANs and returns its DER encoding together with the DER of its
 // TBSCertificate (used to frame precert entries).
 func IssueCert(cn string, dnsNames ...string) (der, tbs []byte, err error) {
+	return IssueCertWithIPs(cn, nil, dnsNames...)
+}
+
+// IssueCertWithIPs is IssueCert with IP address SANs as well (N10-L2).
+func IssueCertWithIPs(cn string, ips []net.IP, dnsNames ...string) (der, tbs []byte, err error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, nil, err
@@ -62,6 +68,7 @@ func IssueCert(cn string, dnsNames ...string) (der, tbs []byte, err error) {
 		Subject:      pkix.Name{CommonName: cn},
 		Issuer:       pkix.Name{CommonName: "ctlogtest Issuing CA"},
 		DNSNames:     dnsNames,
+		IPAddresses:  ips,
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(90 * 24 * time.Hour),
 	}

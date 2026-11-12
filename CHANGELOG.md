@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- Certificate Transparency monitoring watches IP addresses and CIDR ranges as well as domains
+  (N10-L2). A watched `203.0.113.0/24` or `198.51.100.7` catches a logged certificate issued for
+  an address in it, matched on the certificate's IP address names, which a domain watchlist never
+  saw. A range that matches every address is refused. The finding names the address, keeps the
+  certificate's `ip_addresses` and the entry it matched, and the plan preview names each entry
+  `domain:`, `ip:` or `range:`. The console's watchlist field says what it accepts, and a
+  finding's detail lists its IP addresses with its names and the entry it matched.
 - Cloud access-key discovery reads Microsoft Entra app-registration client secrets (M3-L2). A
   `cloud_access_key` source's `azure-entra` provider lists every application's client secrets with
   their creation and expiry, never a value or hint, and reads each secret's last sign-in from

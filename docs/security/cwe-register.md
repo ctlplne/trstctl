@@ -984,8 +984,8 @@ not this file.
 | `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:71` | ParseUint bounds authority to 48 bits and this loop emits one byte at a time (CWE-190). |
 | `internal/connector/wasm/host/host.go:159` | a wasm32 address, bounded by math.MaxUint32 just above (CWE-190). |
 | `internal/crypto/argon2id.go:69` | length of a stored KDF hash, far under the uint32 bound (CWE-190) |
-| `internal/crypto/ctlog/ctlogtest/ctlogtest.go:316` | test-support package compiled only into test binaries (CWE-190) |
-| `internal/crypto/ctlog/ctlogtest/ctlogtest.go:333` | test-support package compiled only into test binaries (CWE-190) |
+| `internal/crypto/ctlog/ctlogtest/ctlogtest.go:323` | test-support package compiled only into test binaries (CWE-190) |
+| `internal/crypto/ctlog/ctlogtest/ctlogtest.go:340` | test-support package compiled only into test binaries (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/signing.go:184` | a positive test clock offset (CWE-190) |
 | `internal/crypto/ctlog/merkle.go:58` | non-negative checked above (CWE-190) |
 | `internal/crypto/ctlog/merkle.go:95` | non-negative checked above (CWE-190) |
@@ -3087,7 +3087,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `internal/auth/tenantmap_test.go:118` | fixed-shape test data; the index is in range by construction (CWE-118) |
-| `internal/crypto/ctlog/ctlog_test.go:116` | fixed-shape test data; the index is in range by construction (CWE-118) |
+| `internal/crypto/ctlog/ctlog_test.go:134` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `internal/projections/graph_api_test.go:268` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |

@@ -2908,10 +2908,13 @@ function observedCertificateDetails(finding: DiscoveryFinding): Array<{ label: s
   if (notBefore || notAfter) {
     out.push({ label: translateNow("discovery.findings.observedValidity"), value: `${notBefore || "?"} → ${notAfter || "?"}` });
   }
-  const sans = metadata["sans"];
-  if (Array.isArray(sans) && sans.length > 0) {
-    out.push({ label: translateNow("discovery.findings.observedSans"), value: sans.map((san) => String(san)).join(", ") });
+  // DNS and IP address names together (a CT finding keeps its IP address
+  // names apart, N10-L2), each once.
+  const names = [metadata["sans"], metadata["ip_addresses"]].flatMap((list) => (Array.isArray(list) ? list.map((name) => String(name)) : []));
+  if (names.length > 0) {
+    out.push({ label: translateNow("discovery.findings.observedSans"), value: [...new Set(names)].join(", ") });
   }
+  push(translateNow("discovery.findings.observedMatched"), ["matched_domain"]);
   push(translateNow("discovery.findings.observedSerial"), ["serial", "serial_number"]);
   const keyAlg = metadataString(metadata, ["key_algorithm", "key_type"]);
   const keyBits = metadata["public_key_bits"];
