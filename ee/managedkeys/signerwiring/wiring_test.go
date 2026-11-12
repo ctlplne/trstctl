@@ -96,13 +96,13 @@ func TestTenantKEKOptionRefusesMalformedConfig(t *testing.T) {
 		"no wrappers":      `{` + token + `,"wrappers":[]}`,
 		"repeated wrapper": `{` + token + `,"wrappers":[{"id":"hsm-a","key_label":"a"},{"id":"hsm-a","key_label":"b"}]}`,
 	} {
-		if _, err := TenantKEKOption(write(body)); err == nil {
+		if _, _, err := TenantKEKOption(write(body)); err == nil {
 			t.Errorf("%s: the tenant KEK config was accepted", name)
 		} else if strings.Contains(err.Error(), "no-such-module") {
 			t.Errorf("%s: refused only at module load: %v", name, err)
 		}
 	}
-	_, err := TenantKEKOption(write(`{` + token + `,` + wrappers + `}`))
+	_, _, err := TenantKEKOption(write(`{` + token + `,` + wrappers + `}`))
 	if err == nil || !strings.Contains(err.Error(), "module") {
 		t.Fatalf("a well-formed config with a missing module = %v, want a module load failure", err)
 	}

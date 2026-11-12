@@ -201,8 +201,14 @@ func (r *DeploymentRotation) Begin(ctx context.Context, operatorTenantID string,
 }
 
 func validWrapperRef(ref WrapperRef) bool {
-	return (ref.Kind == WrapperKindLocalFile || ref.Kind == WrapperKindPKCS11) &&
-		ref.ID != "" && strings.TrimSpace(ref.ID) == ref.ID
+	return knownWrapperKind(ref.Kind) && ref.ID != "" && strings.TrimSpace(ref.ID) == ref.ID
+}
+
+// knownWrapperKind is a wrapper kind a tenant or deployment KEK may be under:
+// a local operator file, an HSM key the signer holds (A123), or a wrapper key
+// the signer keeps under a cloud KMS key (OD-10).
+func knownWrapperKind(kind string) bool {
+	return kind == WrapperKindLocalFile || kind == WrapperKindPKCS11 || kind == WrapperKindKMS
 }
 
 // Step advances a running rotation by one bounded unit of work. done reports

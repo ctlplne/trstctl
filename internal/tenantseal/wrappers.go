@@ -18,6 +18,10 @@ const (
 	// wrapped by an operator HSM key it reaches over PKCS#11 (A123). The
 	// control plane persists only the wrapped form and never sees the KEK.
 	WrapperKindPKCS11 = "pkcs11"
+	// WrapperKindKMS names a wrapper key the isolated signer keeps wrapped by
+	// a cloud KMS key through its KMS wrap adapter (OD-10, A200-L4). Like
+	// pkcs11, the domain KEK never reaches this process.
+	WrapperKindKMS = "kms"
 )
 
 var (
@@ -45,13 +49,16 @@ type TransientDomainKEK interface {
 	Destroy()
 }
 
-// DomainKEKRegistry opens a transient tenant-domain KEK through one exact,
-// non-egress operator-configured wrapper. Implementations return key memory
-// owned by the caller, which must Destroy it, or (for the pkcs11 kind) a
-// handle whose wraps and unwraps run in the deployment's own isolated signer,
-// the process issuance already signs through on the request path. A remote
-// custody integration (a cloud KMS) must not use this request-path seam; it
-// belongs in the bounded outbox workflow.
+// DomainKEKRegistry opens a transient tenant-domain KEK through one exact
+// operator-configured wrapper. Implementations return key memory owned by the
+// caller, which must Destroy it, or (for the pkcs11 and kms kinds) a handle
+// whose wraps and unwraps run in the deployment's own isolated signer, the
+// process issuance already signs through on the request path. A cloud KMS is
+// reached only by the signer's KMS wrap adapter (kind kms, OD-10), bounded by
+// the adapter's per-call deadline; the operator's cache time limit, off by
+// default, bounds how often (owner decision on A200-L4). No other remote
+// custody integration may use this request-path seam; it belongs in the
+// bounded outbox workflow.
 type DomainKEKRegistry interface {
 	OpenDomainKEK(
 		ctx context.Context,

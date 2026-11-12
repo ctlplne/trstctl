@@ -19,12 +19,16 @@ func TestManagedKeyProviderAttachmentRequiresBYOKLicense(t *testing.T) {
 // A123: HSM-backed tenant KEK custody attaches only under the BYOK license,
 // and no configuration attaches nothing.
 func TestTenantKEKCustodyAttachmentRequiresBYOKLicense(t *testing.T) {
-	if _, err := appendTenantKEKOptions(nil, nil, "tenant-kek.json"); err == nil {
+	if _, closeCustody, err := appendTenantKEKOptions(nil, nil, "tenant-kek.json"); err == nil {
 		t.Fatal("unlicensed/core tenant KEK custody attachment succeeded")
+	} else {
+		closeCustody()
 	}
-	if opts, err := appendTenantKEKOptions(nil, nil, ""); err != nil || len(opts) != 0 {
+	opts, closeCustody, err := appendTenantKEKOptions(nil, nil, "")
+	if err != nil || len(opts) != 0 {
 		t.Fatalf("no tenant KEK config attached %d options: %v", len(opts), err)
 	}
+	closeCustody()
 }
 
 func TestCoreSignerDependencyClosureExcludesEnterpriseManagedKeyProviders(t *testing.T) {

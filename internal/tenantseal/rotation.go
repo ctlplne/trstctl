@@ -136,8 +136,7 @@ func (l *Lifecycle) validateRotationPreconditions(tenantID string, ref WrapperRe
 		return errors.New("tenantseal: rotation requires tenant_id (AN-1)")
 	}
 	if ref != (WrapperRef{}) &&
-		((ref.Kind != WrapperKindLocalFile && ref.Kind != WrapperKindPKCS11) ||
-			strings.TrimSpace(ref.ID) == "" || strings.TrimSpace(ref.ID) != ref.ID) {
+		(!knownWrapperKind(ref.Kind) || strings.TrimSpace(ref.ID) == "" || strings.TrimSpace(ref.ID) != ref.ID) {
 		return ErrWrapperNotConfigured
 	}
 	if err := l.log.HistoryRewriteReady(); err != nil {

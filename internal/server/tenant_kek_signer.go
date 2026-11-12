@@ -12,20 +12,24 @@ import (
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
-// pkcs11WrapperRegistryFromConfig routes the operator's pkcs11 wrapper IDs to
-// the isolated signer (A123): tenant domain KEKs under those wrappers are held
-// by the signer under HSM keys and never reach this process. With no pkcs11
-// wrappers configured the kind stays unrouted and a migration to it is refused
+// signerWrapperRegistryFromConfig routes the operator's pkcs11 wrapper IDs
+// (A123) and kms wrapper IDs (OD-10) to the isolated signer: tenant domain
+// KEKs under those wrappers are held by the signer, under HSM keys or under
+// wrapper keys a cloud KMS key wraps, and never reach this process. A kind
+// with no wrappers configured stays unrouted and a migration to it is refused
 // as not configured.
-func pkcs11WrapperRegistryFromConfig(wrappers []config.TenantSealPKCS11Wrapper, signer SignerProvider) (*tenantseal.SignerWrapperRegistry, error) {
-	if len(wrappers) == 0 {
+func signerWrapperRegistryFromConfig(hsm []config.TenantSealPKCS11Wrapper, kms []config.TenantSealKMSWrapper, signer SignerProvider) (*tenantseal.SignerWrapperRegistry, error) {
+	if len(hsm) == 0 && len(kms) == 0 {
 		return nil, nil
 	}
-	ids := make([]string, 0, len(wrappers))
-	for _, w := range wrappers {
-		ids = append(ids, w.ID)
+	refs := make([]tenantseal.WrapperRef, 0, len(hsm)+len(kms))
+	for _, w := range hsm {
+		refs = append(refs, tenantseal.WrapperRef{Kind: tenantseal.WrapperKindPKCS11, ID: w.ID})
 	}
-	return tenantseal.NewSignerWrapperRegistry(ids, func() tenantseal.SignerTenantKEK {
+	for _, w := range kms {
+		refs = append(refs, tenantseal.WrapperRef{Kind: tenantseal.WrapperKindKMS, ID: w.ID})
+	}
+	return tenantseal.NewSignerWrapperRegistryRefs(refs, func() tenantseal.SignerTenantKEK {
 		if signer == nil {
 			return nil
 		}

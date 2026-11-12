@@ -405,8 +405,7 @@ func (l *Lifecycle) validateMigrationPreconditions(tenantID string, ref WrapperR
 	if strings.TrimSpace(tenantID) == "" {
 		return errors.New("tenantseal: migration requires tenant_id (AN-1)")
 	}
-	if (ref.Kind != WrapperKindLocalFile && ref.Kind != WrapperKindPKCS11) ||
-		strings.TrimSpace(ref.ID) == "" || strings.TrimSpace(ref.ID) != ref.ID {
+	if !knownWrapperKind(ref.Kind) || strings.TrimSpace(ref.ID) == "" || strings.TrimSpace(ref.ID) != ref.ID {
 		return ErrWrapperNotConfigured
 	}
 	if err := l.log.HistoryRewriteReady(); err != nil {

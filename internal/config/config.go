@@ -2925,6 +2925,14 @@ type Secrets struct {
 	// plane's exact allowlist. The environment overlay exposes one entry through
 	// TRSTCTL_TENANT_SEAL_PKCS11_WRAPPER_ID.
 	TenantSealPKCS11Wrappers []TenantSealPKCS11Wrapper `json:"tenant_seal_pkcs11_wrappers,omitempty"`
+	// TenantSealKMSWrappers name the wrappers the isolated signer keeps as
+	// wrapper keys under a cloud KMS key through its KMS wrap adapter
+	// (OD-10). As with pkcs11, a tenant domain KEK migrated to one never
+	// reaches the control plane. The signer's tenant KEK file maps each ID
+	// to its KMS key and sets the optional cache time limit; this list is
+	// the control plane's exact allowlist. The environment overlay exposes
+	// one entry through TRSTCTL_TENANT_SEAL_KMS_WRAPPER_ID.
+	TenantSealKMSWrappers []TenantSealKMSWrapper `json:"tenant_seal_kms_wrappers,omitempty"`
 	// IdempotencyResultFleetReady is the operator assertion that every writer
 	// sharing this PostgreSQL database understands sealed-row-v1 and durable
 	// indeterminate claims. Startup then installs the incompatible sealed-only
@@ -3059,6 +3067,12 @@ type TenantSealLocalWrapper struct {
 
 // TenantSealPKCS11Wrapper names one wrapper the signer holds under an HSM key.
 type TenantSealPKCS11Wrapper struct {
+	ID string `json:"id"`
+}
+
+// TenantSealKMSWrapper is one signer-held wrapper under a cloud KMS key
+// (OD-10).
+type TenantSealKMSWrapper struct {
 	ID string `json:"id"`
 }
 
@@ -3209,9 +3223,10 @@ type Signer struct {
 
 	// TenantKEKConfig is the signer-local tenant KEK custody file (A123) a
 	// child signer receives as --tenant-kek-config: the PKCS#11 token and the
-	// HSM keys that wrap tenant domain KEKs. It needs a cgo signer build (the
-	// signer-hsm image) and the BYOK license. An external signer takes the
-	// flag directly.
+	// HSM keys that wrap tenant domain KEKs (a cgo signer build, the
+	// signer-hsm image), and the wrapper keys a cloud KMS key wraps through
+	// the KMS wrap adapter, with the optional cache time limit (OD-10). It
+	// needs the BYOK license. An external signer takes the flag directly.
 	TenantKEKConfig string `json:"tenant_kek_config,omitempty"`
 }
 
@@ -3696,6 +3711,9 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY", &c.Secrets.SecretRotationHistoryFleetReady)
 	if id := getenv("TRSTCTL_TENANT_SEAL_PKCS11_WRAPPER_ID"); id != "" {
 		c.Secrets.TenantSealPKCS11Wrappers = []TenantSealPKCS11Wrapper{{ID: id}}
+	}
+	if id := getenv("TRSTCTL_TENANT_SEAL_KMS_WRAPPER_ID"); id != "" {
+		c.Secrets.TenantSealKMSWrappers = []TenantSealKMSWrapper{{ID: id}}
 	}
 	localWrapperID := getenv("TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID")
 	localWrapperFile := getenv("TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE")
@@ -5266,6 +5284,7 @@ func validateServedSurfaces(c *Config) []error {
 	}
 	errs = append(errs, validateTenantSealLocalWrappers(c.Secrets.TenantSealLocalWrappers)...)
 	errs = append(errs, validateTenantSealPKCS11Wrappers(c.Secrets.TenantSealPKCS11Wrappers)...)
+	errs = append(errs, validateTenantSealKMSWrappers(c.Secrets.TenantSealKMSWrappers, c.Secrets.TenantSealPKCS11Wrappers)...)
 	errs = append(errs, validateManagedKeys(c.ManagedKeys)...)
 	errs = append(errs, validateObjectStore(c.ObjectStore)...)
 	if c.Audit.ArchiveObjectStore && !c.ObjectStore.Configured() {
@@ -5533,6 +5552,31 @@ func validateTenantSealPKCS11Wrappers(wrappers []TenantSealPKCS11Wrapper) []erro
 		}
 		if _, duplicate := seen[wrapper.ID]; duplicate && wrapper.ID != "" {
 			errs = append(errs, fmt.Errorf("secrets.tenant_seal_pkcs11_wrappers contains duplicate id %q", wrapper.ID))
+		}
+		seen[wrapper.ID] = struct{}{}
+	}
+	return errs
+}
+
+// validateTenantSealKMSWrappers checks the KMS wrapper allowlist (OD-10). The
+// signer names its wrappers by ID alone, so an ID is a pkcs11 wrapper or a
+// kms wrapper, never both.
+func validateTenantSealKMSWrappers(wrappers []TenantSealKMSWrapper, pkcs11 []TenantSealPKCS11Wrapper) []error {
+	var errs []error
+	hsm := make(map[string]struct{}, len(pkcs11))
+	for _, w := range pkcs11 {
+		hsm[w.ID] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(wrappers))
+	for index, wrapper := range wrappers {
+		if wrapper.ID == "" || strings.TrimSpace(wrapper.ID) != wrapper.ID || len(wrapper.ID) > 128 {
+			errs = append(errs, fmt.Errorf("secrets.tenant_seal_kms_wrappers[%d].id must be 1 to 128 characters with no surrounding space", index))
+		}
+		if _, duplicate := seen[wrapper.ID]; duplicate && wrapper.ID != "" {
+			errs = append(errs, fmt.Errorf("secrets.tenant_seal_kms_wrappers contains duplicate id %q", wrapper.ID))
+		}
+		if _, both := hsm[wrapper.ID]; both && wrapper.ID != "" {
+			errs = append(errs, fmt.Errorf("secrets.tenant_seal_kms_wrappers id %q is also a pkcs11 wrapper; the signer names each wrapper once", wrapper.ID))
 		}
 		seen[wrapper.ID] = struct{}{}
 	}

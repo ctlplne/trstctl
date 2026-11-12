@@ -124,8 +124,8 @@ func (a *API) rotateDeploymentKEK(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		ref := tenantseal.WrapperRef{Kind: strings.TrimSpace(req.WrapperKind), ID: strings.TrimSpace(req.WrapperID)}
-		if (ref.Kind != tenantseal.WrapperKindLocalFile && ref.Kind != tenantseal.WrapperKindPKCS11) || ref.ID == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "wrapper_kind must be local_file or pkcs11, with the wrapper_id of a configured wrapper")
+		if !knownWrapperKind(ref.Kind) || ref.ID == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "wrapper_kind must be local_file, pkcs11 or kms, with the wrapper_id of a configured wrapper")
 		}
 		domain, err := a.deploymentKEK.Lifecycle.Begin(ctx, tenantID, ref)
 		if err != nil {

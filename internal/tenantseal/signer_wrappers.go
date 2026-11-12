@@ -26,43 +26,69 @@ type SignerTenantKEK interface {
 	UnwrapTenantDataKey(ctx context.Context, wrapperID string, wrapped, binding, wrappedDataKey []byte) ([]byte, error)
 }
 
-// SignerWrapperRegistry resolves only explicit pkcs11 kind/ID pairs the
-// operator configured on the control plane and routes them to the signer. It
-// holds no key: the TransientDomainKEK it returns wraps and unwraps through the
-// signer, which opens the domain KEK for each call. signer returns the current
-// client at call time, since a supervised signer restart replaces it.
+// SignerWrapperRegistry resolves only explicit pkcs11 and kms kind/ID pairs
+// the operator configured on the control plane and routes them to the signer.
+// It holds no key: the TransientDomainKEK it returns wraps and unwraps through
+// the signer, which opens the domain KEK for each call. signer returns the
+// current client at call time, since a supervised signer restart replaces it.
+// The signer names its wrappers by ID alone, so one ID has one kind.
 type SignerWrapperRegistry struct {
-	ids    map[string]struct{}
+	kinds  map[string]string
 	signer func() SignerTenantKEK
 }
 
 // NewSignerWrapperRegistry builds the exact pkcs11 wrapper registry. It does
 // not reach the signer; the first tenant operation does.
 func NewSignerWrapperRegistry(ids []string, signer func() SignerTenantKEK) (*SignerWrapperRegistry, error) {
-	if signer == nil {
-		return nil, fmt.Errorf("%w: the signer is required for pkcs11 wrappers", ErrInvalidWrapperConfig)
-	}
-	set := make(map[string]struct{}, len(ids))
+	refs := make([]WrapperRef, 0, len(ids))
 	for _, id := range ids {
-		if id == "" || strings.TrimSpace(id) != id {
+		refs = append(refs, WrapperRef{Kind: WrapperKindPKCS11, ID: id})
+	}
+	return NewSignerWrapperRegistryRefs(refs, signer)
+}
+
+// NewSignerWrapperRegistryRefs builds the exact registry of pkcs11 and kms
+// (OD-10) wrappers the signer holds.
+func NewSignerWrapperRegistryRefs(refs []WrapperRef, signer func() SignerTenantKEK) (*SignerWrapperRegistry, error) {
+	if signer == nil {
+		return nil, fmt.Errorf("%w: the signer is required for pkcs11 and kms wrappers", ErrInvalidWrapperConfig)
+	}
+	kinds := make(map[string]string, len(refs))
+	for _, ref := range refs {
+		if ref.ID == "" || strings.TrimSpace(ref.ID) != ref.ID {
 			return nil, ErrInvalidWrapperConfig
 		}
-		if _, dup := set[id]; dup {
+		if ref.Kind != WrapperKindPKCS11 && ref.Kind != WrapperKindKMS {
+			return nil, fmt.Errorf("%w: the signer holds pkcs11 and kms wrappers only", ErrInvalidWrapperConfig)
+		}
+		if _, dup := kinds[ref.ID]; dup {
 			return nil, fmt.Errorf("%w: duplicate wrapper id", ErrInvalidWrapperConfig)
 		}
-		set[id] = struct{}{}
+		kinds[ref.ID] = ref.Kind
 	}
-	return &SignerWrapperRegistry{ids: set, signer: signer}, nil
+	return &SignerWrapperRegistry{kinds: kinds, signer: signer}, nil
+}
+
+func (r *SignerWrapperRegistry) holds(kind string) bool {
+	if r == nil {
+		return false
+	}
+	for _, k := range r.kinds {
+		if k == kind {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *SignerWrapperRegistry) route(ctx context.Context, ref WrapperRef) (SignerTenantKEK, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if r == nil || ref.Kind != WrapperKindPKCS11 {
+	if r == nil {
 		return nil, fmt.Errorf("%w: wrapper kind/id has no exact match", ErrWrapperNotConfigured)
 	}
-	if _, ok := r.ids[ref.ID]; !ok {
+	if kind, ok := r.kinds[ref.ID]; !ok || kind != ref.Kind {
 		return nil, fmt.Errorf("%w: wrapper kind/id has no exact match", ErrWrapperNotConfigured)
 	}
 	signer := r.signer()
@@ -177,8 +203,11 @@ func NewRoutedWrapperRegistry(local *LocalWrapperRegistry, signer *SignerWrapper
 	if local != nil {
 		byKind[WrapperKindLocalFile] = local
 	}
-	if signer != nil {
+	if signer.holds(WrapperKindPKCS11) {
 		byKind[WrapperKindPKCS11] = signer
+	}
+	if signer.holds(WrapperKindKMS) {
+		byKind[WrapperKindKMS] = signer
 	}
 	return &RoutedWrapperRegistry{byKind: byKind}
 }

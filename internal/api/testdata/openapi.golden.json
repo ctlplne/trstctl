@@ -20667,7 +20667,8 @@
           "wrapper_kind": {
             "enum": [
               "local_file",
-              "pkcs11"
+              "pkcs11",
+              "kms"
             ],
             "type": "string"
           }
@@ -60602,7 +60603,8 @@
           "wrapper_kind": {
             "enum": [
               "local_file",
-              "pkcs11"
+              "pkcs11",
+              "kms"
             ],
             "type": "string"
           }
@@ -60621,7 +60623,8 @@
             "description": "Omit with wrapper_id to keep the current wrapper.",
             "enum": [
               "local_file",
-              "pkcs11"
+              "pkcs11",
+              "kms"
             ],
             "type": "string"
           }

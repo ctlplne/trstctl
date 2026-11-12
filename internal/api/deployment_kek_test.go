@@ -111,7 +111,7 @@ func TestDeploymentKEKRotateMapsRefusals(t *testing.T) {
 		err  error
 		want int
 	}{
-		{"unknown kind", `{"wrapper_kind":"kms","wrapper_id":"a"}`, nil, http.StatusBadRequest},
+		{"unknown kind", `{"wrapper_kind":"vault","wrapper_id":"a"}`, nil, http.StatusBadRequest},
 		{"missing id", `{"wrapper_kind":"local_file"}`, nil, http.StatusBadRequest},
 		{"another wrapper running", `{"wrapper_kind":"local_file","wrapper_id":"b"}`, tenantseal.ErrDeploymentRotationConflict, http.StatusConflict},
 		{"wrapper not configured", `{"wrapper_kind":"local_file","wrapper_id":"c"}`, tenantseal.ErrWrapperNotConfigured, http.StatusServiceUnavailable},

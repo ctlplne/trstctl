@@ -1958,6 +1958,7 @@ cryptography lives behind the platform's single crypto boundary.
 | `TRSTCTL_SECRETS_KEK_ROTATION_SETTLE` | `2m` | How long a deployment KEK rotation waits after recording its next generation before it re-wraps anything, so requests and deliveries that sealed under the previous generation finish first (`0s` to `24h`). |
 | `TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID` | unset | Stable non-secret ID for one operator-provisioned local tenant-domain wrapper. Both this variable and the file variable below are required together. The database stores this ID, never the path or wrapper key. |
 | `TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE` | unset | Existing local wrapper-key file for the ID above. trstctl does **not** create it or fall back to the deployment KEK when it is missing/wrong. Configure multiple wrappers with `secrets.tenant_seal_local_wrappers` in JSON/YAML. |
+| `TRSTCTL_TENANT_SEAL_KMS_WRAPPER_ID` | unset | Stable non-secret ID of one `kms` wrapper the signer keeps under a cloud KMS key (see [Tenant domain keys under a cloud KMS key](#tenant-domain-keys-under-a-cloud-kms-key)). The signer's tenant KEK file maps the same ID to its KMS key. Configure several with `secrets.tenant_seal_kms_wrappers`. An ID names a `pkcs11` wrapper or a `kms` wrapper, never both. |
 | `TRSTCTL_TENANT_SEAL_PKCS11_WRAPPER_ID` | unset | Stable non-secret ID of one `pkcs11` wrapper the signer holds under an HSM key (see [Tenant domain keys under an HSM](#tenant-domain-keys-under-an-hsm)). The signer's tenant KEK file maps the same ID to its HSM key. Configure several with `secrets.tenant_seal_pkcs11_wrappers`. |
 | `TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY` | `false` | Operator assertion that **every** process writing this PostgreSQL database understands `sealed-row-v1` and durable indeterminate claims. After the legacy drain, startup installs a sealed-only PostgreSQL default/constraint. Never enable it while an older writer is running; the ratchet is deliberately incompatible and is not inferred from one node seeing zero rows. |
 | `TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY` | `false` | Operator assertion that every older process able to read, export, or write schema-v1 `secret.rotation_schedule.ran` events is stopped. When retained unsafe error details exist, startup stays unready until this is true; it then performs the signed, deterministic live-generation sanitation and installs the v1 write floor. This is a one-way fleet compatibility decision, not a per-pod readiness guess. |
@@ -2078,13 +2079,77 @@ refuses ptrace). It is proven against SoftHSM; proof against a hardware HSM
 needs hardware. What comes next: one non-extractable HSM key per tenant, so the
 tenant's KEK is itself an HSM object and data-key wraps run inside the HSM.
 
+### Tenant domain keys under a cloud KMS key
+
+A tenant's domain key (and the deployment KEK, below) can instead be kept by the
+isolated signer under a wrapper key that a cloud KMS key wraps (OD-10): AWS KMS,
+Google Cloud KMS or Azure Key Vault, reached through the same KMS wrap adapter
+(`trstctl-kms-wrap`) that seals the signer key store. The signer stores only the
+wrapper key's KMS-wrapped form; the domain key never reaches the control plane.
+It needs the BYOK license and no cgo build.
+
+1. In the signer's tenant KEK file (`--tenant-kek-config`), name the adapter and
+   each KMS wrapper. The adapter's own credentials and provider settings come
+   from its configuration file (`TRSTCTL_KMS_WRAP_CONFIG`), as for the key store:
+
+   ```json
+   {
+     "kms_wrap_command": "/opt/trstctl/bin/trstctl-kms-wrap",
+     "kms_wrappers": [
+       {"id": "kms-a", "provider": "awskms",
+        "key_ref": "arn:aws:kms:us-east-1:111122223333:key/0b1c...",
+        "wrapped_key_file": "/var/lib/trstctl/tenant-kek/kms-a.wrapped"}
+     ],
+     "kms_cache_seconds": 0
+   }
+   ```
+
+   On first start the signer creates the wrapper key, wraps it through the KMS
+   and writes only the wrapped form to `wrapped_key_file` (mode `0600`); later
+   starts read it. Mount the same file into every signer replica and back it up:
+   without it, nothing the wrapper sealed opens. HSM `wrappers` and
+   `kms_wrappers` can share one file. At startup the signer seals and opens a
+   probe under every wrapper and refuses to start if one fails.
+2. Decide the cache. With `kms_cache_seconds` unset or `0` (the default), the
+   signer unwraps the wrapper key through the KMS for every use, one KMS call
+   per tenant data-key wrap or unwrap, and keeps nothing. With a time limit (at
+   most `86400`), the first use unwraps it and the signer keeps it in locked,
+   non-dumpable memory until the limit passes, when it is wiped; the next use
+   unwraps it again. Shutdown wipes it at once. While it is held, a disabled KMS
+   key or a revoked grant does not stop the custody until the limit passes or
+   the signer restarts, so choose the limit as the longest you accept that delay.
+   `kms_timeout_seconds` (default `10`, at most `300`) bounds each adapter call.
+3. List the same wrapper IDs on the control plane:
+
+   ```json
+   {"secrets": {"tenant_seal_kms_wrappers": [{"id": "kms-a"}]}}
+   ```
+
+4. Migrate the tenant from the console's tenant custody panel ("A key the signer
+   keeps under a cloud KMS key"), or with
+   `trstctl-cli platform tenant-key-domain migrate -f migrate.json` where
+   `migrate.json` is `{"wrapper_kind":"kms","wrapper_id":"kms-a"}`.
+
+As with an HSM wrapper, an ID the control plane does not list, or one the signer
+does not hold, is refused as not configured; a KMS that does not unwrap (a
+disabled key, a refused grant, an unreachable endpoint, an adapter failure)
+fails the tenant closed as `wrapper_unavailable`, with no deployment-key
+fallback. The status reports `remote_wrapper_state: "signer_kms"` and
+`local_wrapper_zero_egress: false`.
+
+Limits: as for an HSM wrapper, the data keys return to the control plane. With
+the cache off, every tenant-crypto callback waits on a KMS round trip through
+the adapter, bounded by its deadline. This custody path is proven with a
+stand-in KMS behind the real adapter command interface; runs against live AWS,
+Google Cloud and Azure keys are Track B proofs.
+
 ### Rotating a tenant domain key
 
 A migrated tenant rotates its domain key from the console's tenant custody
 panel, or with `trstctl-cli platform tenant-key-domain rotate` (no body keeps
 the current wrapper; `-f rotate.json` with
 `{"wrapper_kind":"pkcs11","wrapper_id":"hsm-b"}` moves the key onto another
-configured wrapper, local or HSM). The rotation makes a new domain key, the next
+configured wrapper, local, HSM or KMS). The rotation makes a new domain key, the next
 generation, then re-wraps every data key the tenant holds in PostgreSQL and in
 its event history from the old generation to the new one without decrypting a
 payload, and promotes the new generation. While it runs, new data is sealed
@@ -2104,18 +2169,21 @@ wrapper and then retire the old wrapper's key or file.
 The deployment KEK (`secrets.kek_file`) protects every stored credential of a
 tenant that has not moved to its own key domain, and the deployment's sealed
 files. A rotation moves it to a new generation: a key created under an operator
-wrapper, either a local wrapper file (`secrets.tenant_seal_local_wrappers`) or
-an HSM key the isolated signer holds (`secrets.tenant_seal_pkcs11_wrappers`,
-set up as in [Tenant domain keys under an HSM](#tenant-domain-keys-under-an-hsm)).
-Only the wrapped key is stored; for an HSM key the signer wraps and unwraps
-every data key, so stored credentials decrypt only through the signer and the
-HSM key.
+wrapper: a local wrapper file (`secrets.tenant_seal_local_wrappers`), an HSM
+key the isolated signer holds (`secrets.tenant_seal_pkcs11_wrappers`, set up as
+in [Tenant domain keys under an HSM](#tenant-domain-keys-under-an-hsm)), or a
+wrapper key the signer keeps under a cloud KMS key
+(`secrets.tenant_seal_kms_wrappers`, set up as in
+[Tenant domain keys under a cloud KMS key](#tenant-domain-keys-under-a-cloud-kms-key),
+with its optional cache time limit). Only the wrapped key is stored; for an HSM
+or KMS wrapper the signer wraps and unwraps every data key, so stored
+credentials decrypt only through the signer and that key.
 
 1. Name the operator tenant: `secrets.kek_operator_tenant_id`
    (`TRSTCTL_SECRETS_KEK_OPERATOR_TENANT_ID`). Only its `keys:write` principals
    may rotate.
-2. Configure the target wrapper on the control plane (and, for `pkcs11`, in the
-   signer's tenant KEK file).
+2. Configure the target wrapper on the control plane (and, for `pkcs11` or
+   `kms`, in the signer's tenant KEK file).
 3. Rotate from the console's deployment key panel (Admin, System), or with
    `trstctl-cli platform deployment-kek rotate -f rotate.json` where
    `rotate.json` is `{"wrapper_kind":"pkcs11","wrapper_id":"hsm-a"}`. The request

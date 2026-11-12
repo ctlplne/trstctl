@@ -132,8 +132,8 @@ func (a *API) migrateTenantKeyDomain(w http.ResponseWriter, r *http.Request) {
 		if req.WrapperKind == "" {
 			req.WrapperKind = tenantseal.WrapperKindLocalFile
 		}
-		if (req.WrapperKind != tenantseal.WrapperKindLocalFile && req.WrapperKind != tenantseal.WrapperKindPKCS11) || req.WrapperID == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "wrapper_kind must be local_file or pkcs11 and wrapper_id is required")
+		if !knownWrapperKind(req.WrapperKind) || req.WrapperID == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "wrapper_kind must be local_file, pkcs11 or kms and wrapper_id is required")
 		}
 		domain, err := a.tenantKeyDomains.Migrate(ctx, tenantID, tenantseal.WrapperRef{
 			Kind: req.WrapperKind, ID: req.WrapperID,
@@ -159,8 +159,8 @@ func (a *API) rotateTenantKeyDomain(w http.ResponseWriter, r *http.Request) {
 		if ref.Kind == "" && ref.ID != "" {
 			ref.Kind = tenantseal.WrapperKindLocalFile
 		}
-		if ref.Kind != "" && ((ref.Kind != tenantseal.WrapperKindLocalFile && ref.Kind != tenantseal.WrapperKindPKCS11) || ref.ID == "") {
-			return 0, nil, errStatus(http.StatusBadRequest, "wrapper_kind must be local_file or pkcs11 with a wrapper_id, or omit both to keep the current wrapper")
+		if ref.Kind != "" && (!knownWrapperKind(ref.Kind) || ref.ID == "") {
+			return 0, nil, errStatus(http.StatusBadRequest, "wrapper_kind must be local_file, pkcs11 or kms with a wrapper_id, or omit both to keep the current wrapper")
 		}
 		domain, err := a.tenantKeyDomains.Rotate(ctx, tenantID, ref)
 		if err != nil {
@@ -338,15 +338,24 @@ func tenantKeyDomainStatusFromStore(domain store.TenantKeyDomain) TenantKeyDomai
 // tenantWrapperPosture says where a tenant's domain KEK lives. A local_file
 // wrapper opens it in this process with zero egress; a pkcs11 wrapper keeps it
 // in the isolated signer under an HSM key, so this process never holds it but
-// does call the signer for every data-key wrap and unwrap.
+// does call the signer for every data-key wrap and unwrap. A kms wrapper
+// (OD-10) keeps it in the signer under a key a cloud KMS key wraps: the signer
+// reaches the KMS through its adapter for each use, or once per the
+// operator's cache time limit.
 func tenantWrapperPosture(kind string) (localZeroEgress bool, remoteState string) {
-	if kind == tenantseal.WrapperKindPKCS11 {
+	switch kind {
+	case tenantseal.WrapperKindPKCS11:
 		return false, tenantWrapperSignerHSM
+	case tenantseal.WrapperKindKMS:
+		return false, tenantWrapperSignerKMS
 	}
 	return true, "disabled_in_core_local_custody"
 }
 
-const tenantWrapperSignerHSM = "signer_hsm"
+const (
+	tenantWrapperSignerHSM = "signer_hsm"
+	tenantWrapperSignerKMS = "signer_kms"
+)
 
 func unavailableTenantKeyDomainStatus() TenantKeyDomainStatus {
 	return TenantKeyDomainStatus{
@@ -364,7 +373,7 @@ func legacyTenantKeyDomainStatus() TenantKeyDomainStatus {
 		LegacyHistoryExposure:     store.TenantKeyLegacyHotHistoryPending,
 		LastTransitionEvidenceRef: []string{}, LocalWrapperZeroEgress: true,
 		RemoteWrapperState: "disabled_in_core_local_custody",
-		Recovery:           "Provision an existing local tenant wrapper, or an HSM wrapper the signer holds, and start migration; trstctl will not create the wrapper or fall back to the deployment KEK after opt-in.",
+		Recovery:           "Provision an existing local tenant wrapper, an HSM wrapper the signer holds, or a KMS wrapper the signer keeps under a cloud KMS key, and start migration; trstctl will not create the wrapper or fall back to the deployment KEK after opt-in.",
 	}
 }
 
@@ -398,10 +407,16 @@ func tenantKeyDomainRecovery(domain store.TenantKeyDomain) string {
 		if domain.WrapperKind == tenantseal.WrapperKindPKCS11 {
 			return "Restore the signer's tenant KEK custody for this wrapper ID (the HSM key its tenant KEK file names, the token and its PIN file, and the BYOK license) and retry; no deployment-key fallback is attempted."
 		}
+		if domain.WrapperKind == tenantseal.WrapperKindKMS {
+			return "Restore the signer's tenant KEK custody for this wrapper ID (its KMS key, the adapter's credentials, the wrapped key file its tenant KEK file names, and the BYOK license) and retry; no deployment-key fallback is attempted."
+		}
 		return "Restore the exact configured local wrapper file and retry; no deployment-key fallback is attempted."
 	case store.TenantKeyDomainStateWrongWrapper:
 		if domain.WrapperKind == tenantseal.WrapperKindPKCS11 {
 			return "Restore the HSM key that originally wrapped this tenant domain under this wrapper ID; trstctl cannot distinguish a wrong key from authenticated unwrap failure."
+		}
+		if domain.WrapperKind == tenantseal.WrapperKindKMS {
+			return "Restore the wrapped key file (and the KMS key that wraps it) that originally protected this tenant domain under this wrapper ID; trstctl cannot distinguish a wrong key from authenticated unwrap failure."
 		}
 		return "Restore the wrapper key that originally protected this tenant domain; trstctl cannot distinguish a wrong key from authenticated unwrap failure."
 	case store.TenantKeyDomainStateCorrupt:
@@ -431,4 +446,15 @@ func mapTenantKeyDomainError(err error) error {
 		}
 	}
 	return errStatus(http.StatusInternalServerError, "tenant key-domain lifecycle operation failed")
+}
+
+// knownWrapperKind is a wrapper kind a tenant or deployment KEK may be
+// migrated to: a local operator file, an HSM key the signer holds (A123), or
+// a wrapper key the signer keeps under a cloud KMS key (OD-10).
+func knownWrapperKind(kind string) bool {
+	switch kind {
+	case tenantseal.WrapperKindLocalFile, tenantseal.WrapperKindPKCS11, tenantseal.WrapperKindKMS:
+		return true
+	}
+	return false
 }

@@ -46,7 +46,7 @@ func main() {
 	kmsTimeout := flag.Duration("kms-timeout", 10*time.Second, "deadline for each external KMS/HSM wrap/unwrap operation")
 	rewrapKeystore := flag.Bool("rewrap-keystore", false, "one-shot: move the --keystore directory from the --kek that sealed it onto the --kms-provider/--kms-key-ref/--kms-wrap-command adapter, keeping the original as a rollback copy, then exit (stop the signer first)")
 	managedKeysConfig := flag.String("managed-keys-config", "", "path to signer-local managed-key provider JSON (credentials must be file references, never argv/env)")
-	tenantKEKConfig := flag.String("tenant-kek-config", "", "path to signer-local tenant KEK custody JSON: the PKCS#11 token and the HSM AES keys that wrap tenant domain KEKs (credentials must be file references)")
+	tenantKEKConfig := flag.String("tenant-kek-config", "", "path to signer-local tenant KEK custody JSON: the PKCS#11 token and the HSM AES keys that wrap tenant domain KEKs, and the wrapper keys a cloud KMS key wraps through the KMS wrap adapter with an optional cache time limit (credentials must be file references)")
 	authSecret := flag.String("auth-secret", "", "path to the signer content-authorization secret (required for dual-control CA handles)")
 	legacyAuditKey := flag.String("legacy-audit-key", "", "signer-local path to a historical audit PKCS#8 PEM; migrated once into the sealed audit-export handle, then deleted")
 	offlineInitPolicy := flag.String("offline-init-policy", "", "initialize a separate sealed offline recovery authority from a public policy JSON file")
@@ -226,11 +226,13 @@ func main() {
 		os.Exit(1)
 	}
 	opts = managedOpts
-	opts, err = appendTenantKEKOptions(opts, lic, *tenantKEKConfig)
+	opts, closeTenantKEK, err := appendTenantKEKOptions(opts, lic, *tenantKEKConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: configure tenant KEK custody: %v\n", err)
 		os.Exit(1)
 	}
+	// Shutdown wipes cached KMS wrapper keys (OD-10) and ends the HSM session.
+	defer closeTenantKEK()
 	// With a key store, persist keys sealed at rest so a restart preserves the
 	// issuing CA instead of silently rotating it (R3.2). Without one, keys are
 	// in-memory only.
@@ -277,6 +279,7 @@ func main() {
 		serveErr = signing.ServeServerWithOptions(ctx, *socket, srv, serveOpts)
 	}
 	if serveErr != nil {
+		closeTenantKEK()
 		fmt.Fprintf(os.Stderr, "trstctl-signer: %v\n", serveErr)
 		os.Exit(1)
 	}

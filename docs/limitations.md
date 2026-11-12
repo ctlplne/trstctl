@@ -4756,6 +4756,16 @@ than sending an operator looking for a credential that was never there.
   signer's in-flight bound. What comes next: one non-extractable HSM key per
   tenant, so the tenant's KEK is itself an HSM object and data-key wraps run
   inside the HSM.
+  Per-tenant cloud KMS custody is served (OD-10) the same way through a `kms`
+  wrapper: an AES-256 wrapper key the signer keeps wrapped by a cloud KMS key
+  through its KMS wrap adapter. Stated limits: with the cache off (the
+  default) every tenant-crypto callback for such a tenant waits on a KMS round
+  trip through the adapter; with `kms_cache_seconds` set, the unwrapped
+  wrapper key stays in the signer's locked memory until that limit (at most a
+  day), so a disabled KMS key or a revoked grant stops the custody only when
+  the limit passes or the signer restarts. It is proven with a stand-in KMS
+  behind the real adapter interface; runs against live AWS, Google Cloud and
+  Azure keys are Track B proofs.
   The product ships an S3-compatible
   object-store client that keeps each tenant's objects under the object-key
   prefix the tenancy router resolves (`tenant/<id>/`, or `silo/<id>/` for an
@@ -7388,10 +7398,11 @@ once per tenant it re-wraps, so a deployment with many unmigrated tenants and a
 long history takes correspondingly long; it inherits the tenant rotation's
 refusal of a certificate-dependent history record, which stops the rotation for
 an explicit migration. The key file remains the evidence-MAC and backup-HMAC
-key and the signer key store's default seal. Wrapping the deployment KEK under
-a cloud KMS key is what comes next: the signer's KMS wrap adapter now seals the
-signer key store, but the deployment KEK's wrappers are still a local file or a
-PKCS#11 HSM key (proven against SoftHSM). Break-glass
+key and the signer key store's default seal. The deployment KEK can also be
+wrapped under a cloud KMS key: a `kms` wrapper the signer keeps through its KMS
+wrap adapter (OD-10), proven with a stand-in KMS behind the real adapter
+interface; runs against live AWS, Google Cloud and Azure keys are Track B
+proofs. Break-glass
 issue/rotation/cross-sign and offline-root public re-key/cross-sign import
 have served, ceremony-gated verbs; reconciliation remains served at
 `POST /api/v1/breakglass/reconcile`. The signer's at-rest CA key is still

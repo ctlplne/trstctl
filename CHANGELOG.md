@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 ### Added
+- Tenant and deployment KEKs under a cloud KMS key (OD-10): a `kms` wrapper kind the isolated signer keeps as an
+  AES-256 wrapper key that an AWS KMS, Google Cloud KMS or Azure Key Vault key wraps through the KMS wrap adapter
+  (`kms_wrappers` and `kms_wrap_command` in the signer's tenant KEK file; the wrapped key file is created on first
+  start; `secrets.tenant_seal_kms_wrappers` / `TRSTCTL_TENANT_SEAL_KMS_WRAPPER_ID` on the control plane). Tenants
+  migrate and rotate onto it, and the deployment KEK rotates onto it, from the console or `wrapper_kind: kms`; the
+  status reports `signer_kms`. The signer reaches the KMS for every use unless the operator sets `kms_cache_seconds`
+  (off by default, at most a day): the unwrapped key then stays in locked, non-dumpable memory until the limit, when
+  it is wiped, and shutdown wipes it at once. A KMS that does not unwrap fails the tenant closed as
+  `wrapper_unavailable`.
 - Standing approvals for an access bundle's delegated accounts (OD-9): never on by default; an administrator with
   `access:approve` as well as `access:write`, who the bundle is not granted to, grants one for one delegated account
   and role with a reason and an expiry at most 90 days away (`POST /api/v1/access/bundles/{id}/standing-approvals`,

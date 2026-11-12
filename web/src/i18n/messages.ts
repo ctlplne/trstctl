@@ -8409,8 +8409,9 @@ export const messages = {
     description: "A198: rotate form help.",
   },
   "platform.deploymentKEK.wrapperHelp": {
-    defaultMessage: "A wrapper configured for this deployment: a local wrapper file, or an HSM key the signer holds.",
-    description: "A198: wrapper field help.",
+    defaultMessage:
+      "A wrapper configured for this deployment: a local wrapper file, an HSM key the signer holds, or a key the signer keeps under a cloud KMS key.",
+    description: "A198 / OD-10: wrapper field help.",
   },
   "platform.deploymentKEK.rotate": { defaultMessage: "Rotate", description: "A198: rotate button." },
   "platform.deploymentKEK.resume": { defaultMessage: "Resume", description: "A198: resume button." },
@@ -8492,6 +8493,19 @@ export const messages = {
     defaultMessage: "An HSM key the signer holds (the key never reaches the control plane)",
     description: "Tenant migration choice: a pkcs11 wrapper the isolated signer holds.",
   },
+  "platform.tenantSeal.wrapperKindKMS": {
+    defaultMessage: "A key the signer keeps under a cloud KMS key (the key never reaches the control plane)",
+    description: "OD-10: tenant migration choice, a kms wrapper the isolated signer holds under a cloud KMS key.",
+  },
+  "platform.tenantSeal.wrapperIDKMS": {
+    defaultMessage: "Configured KMS wrapper ID",
+    description: "OD-10: tenant migration kms wrapper identifier input label.",
+  },
+  "platform.tenantSeal.wrapperHelpKMS": {
+    defaultMessage:
+      "Enter the exact kms wrapper ID listed in the control plane's configuration and in the signer's tenant KEK file. The signer keeps this tenant's domain key wrapped by a key that the cloud KMS key wraps, and reaches the KMS through its KMS wrap adapter; trstctl does not create the KMS key.",
+    description: "OD-10: tenant kms wrapper custody explanation.",
+  },
   "platform.tenantSeal.wrapperIDPKCS11": {
     defaultMessage: "Configured HSM wrapper ID",
     description: "Tenant migration pkcs11 wrapper identifier input label.",
@@ -8502,6 +8516,10 @@ export const messages = {
     description: "Tenant pkcs11 wrapper custody explanation.",
   },
   "platform.tenantSeal.keyHeldBy": { defaultMessage: "Domain key held by", description: "Tenant key-domain custody location label." },
+  "platform.tenantSeal.keyHeldBySignerKMS": {
+    defaultMessage: "The signer, under a cloud KMS key",
+    description: "OD-10: tenant domain key held in the isolated signer under a key a cloud KMS key wraps.",
+  },
   "platform.tenantSeal.keyHeldBySignerHSM": {
     defaultMessage: "The signer, under an HSM key",
     description: "Tenant domain key held in the isolated signer under an HSM key.",

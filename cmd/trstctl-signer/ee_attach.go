@@ -29,19 +29,21 @@ func appendManagedKeyOptions(opts []signing.ServerOption, lic *license.Manager, 
 	return append(opts, option), nil
 }
 
-// appendTenantKEKOptions attaches the HSM-backed tenant domain KEK custody
-// (A123): the signer keeps each tenant's domain KEK wrapped by an operator HSM
-// key and wraps and unwraps the tenant's data keys itself.
-func appendTenantKEKOptions(opts []signing.ServerOption, lic *license.Manager, configPath string) ([]signing.ServerOption, error) {
+// appendTenantKEKOptions attaches the tenant domain KEK custody (A123): the
+// signer keeps each tenant's domain KEK wrapped by an operator HSM key, or by
+// a wrapper key under a cloud KMS key (OD-10), and wraps and unwraps the
+// tenant's data keys itself. The closer wipes cached KMS wrapper keys and
+// ends the HSM session at shutdown.
+func appendTenantKEKOptions(opts []signing.ServerOption, lic *license.Manager, configPath string) ([]signing.ServerOption, func(), error) {
 	if configPath == "" {
-		return opts, nil
+		return opts, func() {}, nil
 	}
 	if lic == nil || !lic.Has(license.FeatureBYOK) {
-		return opts, fmt.Errorf("--tenant-kek-config requires an active license with feature %s", license.FeatureBYOK)
+		return opts, func() {}, fmt.Errorf("--tenant-kek-config requires an active license with feature %s", license.FeatureBYOK)
 	}
-	option, err := managedkeysigner.TenantKEKOption(configPath)
+	option, closer, err := managedkeysigner.TenantKEKOption(configPath)
 	if err != nil {
-		return opts, err
+		return opts, func() {}, err
 	}
-	return append(opts, option), nil
+	return append(opts, option), func() { _ = closer() }, nil
 }

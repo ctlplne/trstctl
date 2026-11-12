@@ -4239,15 +4239,15 @@ func componentSchemas() map[string]*Schema {
 		"certificate_pem": str(), "verify": str(),
 	}, "certificate_id", "fingerprint", "source", "format", "credential", "binding", "public_key_sha256", "attestation_certificate_sha256", "trusted_roots_sha256", "verified_at", "certificate_pem", "verify")
 	tenantKeyDomainMigrateRequest := object(map[string]*Schema{
-		"wrapper_kind": {Type: "string", Enum: []string{"local_file", "pkcs11"}},
+		"wrapper_kind": {Type: "string", Enum: []string{"local_file", "pkcs11", "kms"}},
 		"wrapper_id":   str(),
 	}, "wrapper_id")
 	tenantKeyDomainRotateRequest := object(map[string]*Schema{
-		"wrapper_kind": {Type: "string", Enum: []string{"local_file", "pkcs11"}, Description: "Omit with wrapper_id to keep the current wrapper."},
+		"wrapper_kind": {Type: "string", Enum: []string{"local_file", "pkcs11", "kms"}, Description: "Omit with wrapper_id to keep the current wrapper."},
 		"wrapper_id":   str(),
 	})
 	deploymentKEKRotateRequest := object(map[string]*Schema{
-		"wrapper_kind": {Type: "string", Enum: []string{"local_file", "pkcs11"}},
+		"wrapper_kind": {Type: "string", Enum: []string{"local_file", "pkcs11", "kms"}},
 		"wrapper_id":   str(),
 	}, "wrapper_kind", "wrapper_id")
 	deploymentKEKRotation := object(map[string]*Schema{

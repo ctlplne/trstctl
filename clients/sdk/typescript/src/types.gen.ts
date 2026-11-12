@@ -17849,7 +17849,7 @@ export interface components {
         DeploymentKEKRotateRequest: {
             wrapper_id: string;
             /** @enum {string} */
-            wrapper_kind: "local_file" | "pkcs11";
+            wrapper_kind: "local_file" | "pkcs11" | "kms";
         };
         DeploymentKEKRotation: {
             /** @description Stored data keys moved to the next generation. */
@@ -28714,7 +28714,7 @@ export interface components {
         TenantKeyDomainMigrateRequest: {
             wrapper_id: string;
             /** @enum {string} */
-            wrapper_kind?: "local_file" | "pkcs11";
+            wrapper_kind?: "local_file" | "pkcs11" | "kms";
         };
         TenantKeyDomainRotateRequest: {
             wrapper_id?: string;
@@ -28722,7 +28722,7 @@ export interface components {
              * @description Omit with wrapper_id to keep the current wrapper.
              * @enum {string}
              */
-            wrapper_kind?: "local_file" | "pkcs11";
+            wrapper_kind?: "local_file" | "pkcs11" | "kms";
         };
         TenantKeyDomainSealReceipt: {
             accepted: boolean;

@@ -136,6 +136,37 @@ func TestTenantSealLocalWrapperConfigFailsClosed(t *testing.T) {
 	}
 }
 
+// OD-10: the control plane's kms wrapper allowlist loads from the
+// environment, and a malformed one, or one naming a pkcs11 wrapper's ID,
+// fails closed.
+func TestTenantSealKMSWrapperConfigOD10(t *testing.T) {
+	env := map[string]string{"TRSTCTL_TENANT_SEAL_KMS_WRAPPER_ID": "kms-a"}
+	cfg, err := config.Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Secrets.TenantSealKMSWrappers) != 1 || cfg.Secrets.TenantSealKMSWrappers[0].ID != "kms-a" {
+		t.Fatalf("kms wrappers = %#v", cfg.Secrets.TenantSealKMSWrappers)
+	}
+	for name, tc := range map[string]struct {
+		kms    []config.TenantSealKMSWrapper
+		pkcs11 []config.TenantSealPKCS11Wrapper
+	}{
+		"missing id":            {kms: []config.TenantSealKMSWrapper{{}}},
+		"untrimmed id":          {kms: []config.TenantSealKMSWrapper{{ID: "kms-a "}}},
+		"long id":               {kms: []config.TenantSealKMSWrapper{{ID: strings.Repeat("k", 129)}}},
+		"duplicate id":          {kms: []config.TenantSealKMSWrapper{{ID: "kms-a"}, {ID: "kms-a"}}},
+		"a pkcs11 wrapper's id": {kms: []config.TenantSealKMSWrapper{{ID: "shared"}}, pkcs11: []config.TenantSealPKCS11Wrapper{{ID: "shared"}}},
+	} {
+		cfg := config.Default()
+		cfg.Secrets.TenantSealKMSWrappers = tc.kms
+		cfg.Secrets.TenantSealPKCS11Wrappers = tc.pkcs11
+		if err := cfg.Validate(); err == nil {
+			t.Errorf("%s: Validate accepted the kms wrapper allowlist", name)
+		}
+	}
+}
+
 // A123: the control plane's pkcs11 wrapper allowlist and the signer's tenant
 // KEK file load from the environment, and a malformed allowlist fails closed.
 func TestTenantSealPKCS11WrapperConfig(t *testing.T) {

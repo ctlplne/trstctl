@@ -51,7 +51,7 @@ func softHSMTenantKEKConfig(t *testing.T, label string) string {
 // fresh socket and returns a client; stop shuts it down.
 func serveTenantKEK(t *testing.T, config string) (client *signing.Client, stop func()) {
 	t.Helper()
-	option, err := signerwiring.TenantKEKOption(config)
+	option, closeCustody, err := signerwiring.TenantKEKOption(config)
 	if err != nil {
 		t.Fatalf("tenant KEK custody from the signer config: %v", err)
 	}
@@ -76,6 +76,9 @@ func serveTenantKEK(t *testing.T, config string) (client *signing.Client, stop f
 			}
 		case <-time.After(10 * time.Second):
 			t.Error("the signer did not stop")
+		}
+		if err := closeCustody(); err != nil {
+			t.Errorf("close the tenant KEK custody: %v", err)
 		}
 	}
 }
@@ -122,7 +125,7 @@ func TestSoftHSMSignerKeepsTenantDomainKEKs(t *testing.T) {
 	}
 
 	for _, label := range []string{softHSMExtractableLabel, "trstctl-no-such-key"} {
-		if _, err := signerwiring.TenantKEKOption(softHSMTenantKEKConfig(t, label)); err == nil {
+		if _, _, err := signerwiring.TenantKEKOption(softHSMTenantKEKConfig(t, label)); err == nil {
 			t.Fatalf("a tenant KEK config naming %s started", label)
 		}
 	}

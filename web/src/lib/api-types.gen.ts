@@ -4255,7 +4255,7 @@ export interface DeploymentEntitlementInfo {
 
 export interface DeploymentKEKRotateRequest {
   wrapper_id: string;
-  wrapper_kind: "local_file" | "pkcs11";
+  wrapper_kind: "local_file" | "pkcs11" | "kms";
 }
 
 export interface DeploymentKEKRotation {
@@ -12950,12 +12950,12 @@ export interface TenantCustomRoleRequest {
 
 export interface TenantKeyDomainMigrateRequest {
   wrapper_id: string;
-  wrapper_kind?: "local_file" | "pkcs11";
+  wrapper_kind?: "local_file" | "pkcs11" | "kms";
 }
 
 export interface TenantKeyDomainRotateRequest {
   wrapper_id?: string;
-  wrapper_kind?: "local_file" | "pkcs11";
+  wrapper_kind?: "local_file" | "pkcs11" | "kms";
 }
 
 export interface TenantKeyDomainSealReceipt {

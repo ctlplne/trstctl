@@ -146,7 +146,7 @@ func TestServedDeploymentKEKRotationRewrapsEveryDataKeyWhileServing(t *testing.T
 		t.Fatalf("a tenant that is not the operator rotated = %d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := servedTenantSealRequest(t, srv, operator, http.MethodPost, "/api/v1/platform/deployment-kek/rotate", "deployment-kek-bad-kind",
-		[]byte(`{"wrapper_kind":"kms","wrapper_id":"deploy-wrap-1"}`)); rec.Code != http.StatusBadRequest {
+		[]byte(`{"wrapper_kind":"vault","wrapper_id":"deploy-wrap-1"}`)); rec.Code != http.StatusBadRequest {
 		t.Fatalf("an unknown wrapper kind = %d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := servedTenantSealRequest(t, srv, operator, http.MethodPost, "/api/v1/platform/deployment-kek/rotate", "deployment-kek-unknown",

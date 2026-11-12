@@ -8,6 +8,12 @@
 // the wrapped form. Each call opens the KEK from its wrapped form inside the
 // signer, uses it, and destroys it.
 //
+// A wrapper may instead be an AES-256 key kept wrapped by a cloud KMS key
+// through the signer's KMS wrap adapter (OD-10, A200-L4): the custody seals
+// and opens with it exactly as with an HSM key, and it is unwrapped through
+// the KMS for each use unless the operator set a cache time limit, which
+// keeps it in locked memory until the limit passes and Close wipes it.
+//
 // It is reached only through cmd/trstctl-signer's tagged EE attach seam after
 // the BYOK license check. It starts no server and imports no SQL or event bus.
 package tenantkek
@@ -20,6 +26,7 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/kmswrap"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/tenantwrap"
 	"trstctl.com/trstctl/internal/kms/pkcs11"
@@ -28,12 +35,13 @@ import (
 
 var _ signing.TenantKEKCustody = (*Custody)(nil)
 
-// Custody is the PKCS#11-backed tenant KEK custody. Wrapper IDs map to the
-// labels of HSM AES keys on one token session.
+// Custody is the tenant KEK custody. Wrapper IDs map to the labels of HSM AES
+// keys on one token session, or to wrapper keys under a cloud KMS key (OD-10).
 type Custody struct {
 	session pkcs11.Session
 	keys    pkcs11.SecretKeySession
 	labels  map[string]string
+	kms     map[string]*kmswrap.WrapperKey
 }
 
 // New builds the custody over a logged-in session and the operator's wrapper
@@ -42,18 +50,31 @@ type Custody struct {
 // so a missing key, an extractable one, or a wrong label stops startup instead
 // of failing tenants later. On error the caller still owns the session.
 func New(session pkcs11.Session, wrappers map[string]string) (*Custody, error) {
-	keys, ok := session.(pkcs11.SecretKeySession)
-	if !ok {
-		return nil, errors.New("tenantkek: the PKCS#11 session cannot seal under an AES key")
-	}
-	if len(wrappers) == 0 {
+	return NewWithKMS(session, wrappers, nil)
+}
+
+// NewWithKMS builds the custody over HSM wrappers (on session, which may be
+// nil when there are none) and wrappers under a cloud KMS key (OD-10). A
+// wrapper ID names one of them, never both. Every wrapper is proven usable
+// before the signer serves, as New proves HSM keys. On error the caller still
+// owns the session and the KMS wrapper keys.
+func NewWithKMS(session pkcs11.Session, wrappers map[string]string, kms map[string]*kmswrap.WrapperKey) (*Custody, error) {
+	if len(wrappers) == 0 && len(kms) == 0 {
 		return nil, errors.New("tenantkek: no tenant KEK wrappers are configured")
 	}
+	var keys pkcs11.SecretKeySession
+	if len(wrappers) > 0 {
+		var ok bool
+		keys, ok = session.(pkcs11.SecretKeySession)
+		if !ok {
+			return nil, errors.New("tenantkek: the PKCS#11 session cannot seal under an AES key")
+		}
+	}
 	labels := make(map[string]string, len(wrappers))
-	ids := make([]string, 0, len(wrappers))
+	ids := make([]string, 0, len(wrappers)+len(kms))
 	for id, label := range wrappers {
-		if id == "" || strings.TrimSpace(id) != id || len(id) > 128 {
-			return nil, fmt.Errorf("tenantkek: wrapper ID %q must be 1 to 128 bytes with no surrounding space", id)
+		if err := validWrapperID(id); err != nil {
+			return nil, err
 		}
 		if label == "" || strings.TrimSpace(label) != label {
 			return nil, fmt.Errorf("tenantkek: wrapper %q needs the label of its HSM AES key", id)
@@ -61,14 +82,35 @@ func New(session pkcs11.Session, wrappers map[string]string) (*Custody, error) {
 		labels[id] = label
 		ids = append(ids, id)
 	}
+	kmsKeys := make(map[string]*kmswrap.WrapperKey, len(kms))
+	for id, key := range kms {
+		if err := validWrapperID(id); err != nil {
+			return nil, err
+		}
+		if _, dup := labels[id]; dup {
+			return nil, fmt.Errorf("tenantkek: wrapper %q is both an HSM key and a KMS wrapper key", id)
+		}
+		if key == nil {
+			return nil, fmt.Errorf("tenantkek: KMS wrapper %q has no key", id)
+		}
+		kmsKeys[id] = key
+		ids = append(ids, id)
+	}
 	sort.Strings(ids)
-	c := &Custody{session: session, keys: keys, labels: labels}
+	c := &Custody{session: session, keys: keys, labels: labels, kms: kmsKeys}
 	for _, id := range ids {
 		if err := c.probe(id); err != nil {
 			return nil, err
 		}
 	}
 	return c, nil
+}
+
+func validWrapperID(id string) error {
+	if id == "" || strings.TrimSpace(id) != id || len(id) > 128 {
+		return fmt.Errorf("tenantkek: wrapper ID %q must be 1 to 128 bytes with no surrounding space", id)
+	}
+	return nil
 }
 
 // probe seals and opens a random value under the wrapper's key.
@@ -78,6 +120,17 @@ func (c *Custody) probe(id string) error {
 		return fmt.Errorf("tenantkek: probe wrapper %q: %w", id, err)
 	}
 	aad := []byte("trstctl.tenantkek.startup-probe.v1")
+	if key, ok := c.kms[id]; ok {
+		sealed, err := key.Seal(value, aad)
+		if err != nil {
+			return fmt.Errorf("tenantkek: KMS wrapper %q: %w", id, err)
+		}
+		opened, err := key.Open(sealed, aad)
+		if err != nil || !crypto.ConstantTimeEqual(opened, value) {
+			return fmt.Errorf("tenantkek: KMS wrapper %q does not open what it seals: %v", id, err)
+		}
+		return nil
+	}
 	sealed, err := c.keys.SealWithKey(c.labels[id], value, aad)
 	if err != nil {
 		return fmt.Errorf("tenantkek: wrapper %q (HSM key %q): %w", id, c.labels[id], err)
@@ -91,8 +144,11 @@ func (c *Custody) probe(id string) error {
 
 // Wrappers lists the configured wrapper IDs, sorted.
 func (c *Custody) Wrappers() []string {
-	out := make([]string, 0, len(c.labels))
+	out := make([]string, 0, len(c.labels)+len(c.kms))
 	for id := range c.labels {
+		out = append(out, id)
+	}
+	for id := range c.kms {
 		out = append(out, id)
 	}
 	sort.Strings(out)
@@ -100,6 +156,9 @@ func (c *Custody) Wrappers() []string {
 }
 
 func (c *Custody) wrapper(id string) (tenantwrap.ExternalWrapper, error) {
+	if key, ok := c.kms[id]; ok {
+		return kmsWrapper{key: key}, nil
+	}
 	label, ok := c.labels[id]
 	if !ok {
 		return nil, signing.ErrTenantKEKWrapperUnknown
@@ -170,8 +229,45 @@ func (c *Custody) open(ctx context.Context, wrapperID string, wrapped, binding [
 	return tenantwrap.OpenDomainKEKExternal(w, wrapped, binding)
 }
 
-// Close ends the custody's HSM session.
-func (c *Custody) Close() error { return c.session.Close() }
+// Close wipes every cached KMS wrapper key and ends the HSM session.
+func (c *Custody) Close() error {
+	for _, key := range c.kms {
+		key.Close()
+	}
+	if c.session == nil {
+		return nil
+	}
+	return c.session.Close()
+}
+
+// kmsWrapper is one wrapper key under a cloud KMS key as a
+// tenantwrap.ExternalWrapper (OD-10).
+type kmsWrapper struct{ key *kmswrap.WrapperKey }
+
+func (w kmsWrapper) Seal(plaintext, aad []byte) ([]byte, error) {
+	out, err := w.key.Seal(plaintext, aad)
+	if err != nil {
+		return nil, kmsWrapperError(err)
+	}
+	return out, nil
+}
+
+func (w kmsWrapper) Open(sealed, aad []byte) ([]byte, error) {
+	out, err := w.key.Open(sealed, aad)
+	if err != nil {
+		return nil, kmsWrapperError(err)
+	}
+	return out, nil
+}
+
+// kmsWrapperError: a value that does not authenticate is an unwrap failure;
+// a KMS that does not unwrap the wrapper key makes the wrapper unavailable.
+func kmsWrapperError(err error) error {
+	if errors.Is(err, kmswrap.ErrWrapperKeySealedInvalid) {
+		return tenantwrap.ErrUnwrap
+	}
+	return errors.Join(tenantwrap.ErrUnavailable, err)
+}
 
 // hsmWrapper is one HSM AES key as a tenantwrap.ExternalWrapper.
 type hsmWrapper struct {

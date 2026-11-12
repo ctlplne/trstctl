@@ -9,7 +9,10 @@ import { asRFC3339UTCMinute, defaultBillingPeriod, validUTCPeriod } from "@/lib/
 import { useRuntimeOperationExecution } from "@/lib/capabilities";
 import type { StatusTone } from "@/lib/statusVocab";
 
-export type TenantWrapperKind = "local_file" | "pkcs11";
+export type TenantWrapperKind = "local_file" | "pkcs11" | "kms";
+
+const wrapperKinds: readonly TenantWrapperKind[] = ["local_file", "pkcs11", "kms"];
+const isWrapperKind = (kind: string | undefined): kind is TenantWrapperKind => wrapperKinds.some((known) => known === kind);
 
 // The wrapper kind and ID a migration or rotation targets. A migration that has
 // started resumes only with the kind it began with (lockedKind). The deployment
@@ -36,7 +39,7 @@ export function TenantWrapperFields({
     <>
       <fieldset className="grid gap-2 text-sm sm:col-span-2">
         <legend className="font-medium">{t("platform.tenantSeal.wrapperKind")}</legend>
-        {(["local_file", "pkcs11"] as const).map((option) => (
+        {wrapperKinds.map((option) => (
           <label key={option} className="flex items-start gap-2">
             <input
               type="radio"
@@ -47,12 +50,24 @@ export function TenantWrapperFields({
               onChange={() => onKind(option)}
               className="mt-1"
             />
-            <span>{option === "pkcs11" ? t("platform.tenantSeal.wrapperKindPKCS11") : t("platform.tenantSeal.wrapperKindLocal")}</span>
+            <span>
+              {option === "pkcs11"
+                ? t("platform.tenantSeal.wrapperKindPKCS11")
+                : option === "kms"
+                  ? t("platform.tenantSeal.wrapperKindKMS")
+                  : t("platform.tenantSeal.wrapperKindLocal")}
+            </span>
           </label>
         ))}
       </fieldset>
       <label className="grid gap-1 text-sm" htmlFor={`${idPrefix}-wrapper-id`}>
-        <span className="font-medium">{kind === "pkcs11" ? t("platform.tenantSeal.wrapperIDPKCS11") : t("platform.tenantSeal.wrapperID")}</span>
+        <span className="font-medium">
+          {kind === "pkcs11"
+            ? t("platform.tenantSeal.wrapperIDPKCS11")
+            : kind === "kms"
+              ? t("platform.tenantSeal.wrapperIDKMS")
+              : t("platform.tenantSeal.wrapperID")}
+        </span>
         <input
           id={`${idPrefix}-wrapper-id`}
           className="min-h-10 rounded-control border border-border bg-background px-3 py-2"
@@ -202,7 +217,7 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
       const next = await api.tenantKeyDomain();
       setStatus(next);
       if (!wrapperID && next.wrapper_id) setWrapperID(next.wrapper_id);
-      if (next.wrapper_kind === "pkcs11") setWrapperKind("pkcs11");
+      if (next.wrapper_kind === "pkcs11" || next.wrapper_kind === "kms") setWrapperKind(next.wrapper_kind);
     } catch {
       setRequestFailed(true);
     } finally {
@@ -219,7 +234,7 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
         setStatus(next);
         setWrapperID((current) => current || next.wrapper_id || "");
         // A started migration resumes only with the kind it began with.
-        if (next.wrapper_kind === "pkcs11") setWrapperKind("pkcs11");
+        if (next.wrapper_kind === "pkcs11" || next.wrapper_kind === "kms") setWrapperKind(next.wrapper_kind);
         setRequestFailed(false);
       })
       .catch(() => {
@@ -294,7 +309,7 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
       setStatus(next);
       // The next rotation starts from the wrapper the key is under now.
       setWrapperID(next.wrapper_id ?? "");
-      if (next.wrapper_kind === "local_file" || next.wrapper_kind === "pkcs11") setWrapperKind(next.wrapper_kind);
+      if (isWrapperKind(next.wrapper_kind)) setWrapperKind(next.wrapper_kind);
       setNotice(t("platform.tenantSeal.noticeRotated", { generation: next.generation ?? 0 }));
     } catch {
       setRequestFailed(true);
@@ -417,9 +432,11 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
               <dd>
                 {status.remote_wrapper_state === "signer_hsm"
                   ? t("platform.tenantSeal.keyHeldBySignerHSM")
-                  : status.wrapper_kind === "local_file"
-                    ? t("platform.tenantSeal.keyHeldByLocalFile")
-                    : t("platform.tenantSeal.keyHeldByDeployment")}
+                  : status.remote_wrapper_state === "signer_kms"
+                    ? t("platform.tenantSeal.keyHeldBySignerKMS")
+                    : status.wrapper_kind === "local_file"
+                      ? t("platform.tenantSeal.keyHeldByLocalFile")
+                      : t("platform.tenantSeal.keyHeldByDeployment")}
               </dd>
             </div>
             <div>
@@ -474,7 +491,13 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
                 wrapperID={wrapperID}
                 onWrapperID={setWrapperID}
                 lockedKind={status.wrapper_kind}
-                help={wrapperKind === "pkcs11" ? t("platform.tenantSeal.wrapperHelpPKCS11") : t("platform.tenantSeal.wrapperHelp")}
+                help={
+                  wrapperKind === "pkcs11"
+                    ? t("platform.tenantSeal.wrapperHelpPKCS11")
+                    : wrapperKind === "kms"
+                      ? t("platform.tenantSeal.wrapperHelpKMS")
+                      : t("platform.tenantSeal.wrapperHelp")
+                }
               />
               <Button type="submit" disabled={busy || !wrapperID.trim()}>
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}

@@ -1003,7 +1003,7 @@ func idempotencyResultProtectionFromConfig(
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
-	hsm, err := pkcs11WrapperRegistryFromConfig(cfg.TenantSealPKCS11Wrappers, signer)
+	hsm, err := signerWrapperRegistryFromConfig(cfg.TenantSealPKCS11Wrappers, cfg.TenantSealKMSWrappers, signer)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
