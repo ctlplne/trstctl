@@ -1571,7 +1571,9 @@ credential. Values never leave the host, and a rescan that finds nothing new sen
 nothing.
 `--observe-interface` (Linux, observer role) watches an interface's handshakes and
 reports what each connection negotiated, never payload; `--observe-ports`,
-`--observe-max-flows` and `--observe-report-interval` bound it.
+`--observe-max-flows` and `--observe-report-interval` bound it. `--observe-pcap <file>`
+(observer role) reads a saved classic pcap capture once at start and reports its
+handshakes the same way.
 `--observe-tls-sessions` (Linux 5.17+, session-observer role, BPF privileges and the host
 PID namespace) attaches probes to the host's OpenSSL 3 libraries and reports what each TLS
 handshake on the host negotiated, with the peer's certificate, never application data;

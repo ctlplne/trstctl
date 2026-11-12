@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,8 @@ var (
 		"connections followed at once; more are counted and skipped, never buffered")
 	observeReportInterval = flag.Duration("observe-report-interval", time.Minute,
 		"how often the observer reports what it saw")
+	observePcap = flag.String("observe-pcap", "",
+		"a saved capture (classic pcap, as tcpdump -w writes) whose connections' handshakes the agent reads once at start and reports like an interface's, under interface pcap:<file name>; needs the observer role. Only handshake metadata is kept")
 )
 
 // observerSourceKind is the inventory source kind observations are reported under.
@@ -36,6 +39,13 @@ const observerSourceKind = "network-observer"
 // startObserver begins passive observation when it is configured and the
 // agent holds the observer role; the returned function stops it.
 func startObserver(ctx context.Context, a *agent.Agent, ch agent.ChannelClient) func() {
+	if path := strings.TrimSpace(*observePcap); path != "" {
+		if !agentCarriesRole(a.Roles(), mtls.AgentRoleObserver) {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: --observe-pcap needs the observer role; this agent was not granted it, so the capture is not read")
+		} else if err := reportCapture(ctx, a, ch, path); err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: observer capture:", err)
+		}
+	}
 	iface := strings.TrimSpace(*observeInterface)
 	if iface == "" {
 		return func() {}
@@ -73,6 +83,49 @@ func startObserver(ctx context.Context, a *agent.Agent, ch agent.ChannelClient) 
 		}
 	}()
 	return cancel
+}
+
+// captureObservations reads a saved capture (X1-L3) for the watched ports
+// and returns what its connections' handshakes stated, aggregated as an
+// interface's would be, with the assembler's counters.
+func captureObservations(path string, ports []uint16, maxFlows int) ([]observe.Item, observe.Stats, uint64, error) {
+	f, err := os.Open(path) // #nosec G304 -- the operator names the capture file on the command line (CWE-22)
+	if err != nil {
+		return nil, observe.Stats{}, 0, err
+	}
+	defer func() { _ = f.Close() }()
+	agg := observe.NewAggregate(4096)
+	asm := observe.NewAssembler(ports, maxFlows, 30*time.Second, agg.Add)
+	if _, err := observe.ReplayPcap(f, asm); err != nil {
+		return nil, observe.Stats{}, 0, err
+	}
+	asm.Flush(time.Now())
+	items, dropped := agg.Changed()
+	return items, asm.Stats(), dropped, nil
+}
+
+// reportCapture reports a saved capture's observations once.
+func reportCapture(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, path string) error {
+	ports, err := parsePorts(*observePorts)
+	if err != nil {
+		return err
+	}
+	items, stats, dropped, err := captureObservations(path, ports, *observeMaxFlows)
+	if err != nil {
+		return err
+	}
+	if len(items) == 0 {
+		fmt.Printf("trstctl-agent: capture %s held no handshake on the watched ports\n", path)
+		return nil
+	}
+	cpu, heap := observe.Footprint()
+	findings := observationFindings("pcap:"+filepath.Base(path), items, stats, dropped, footprint{cpuSeconds: cpu, heapBytes: heap})
+	resp, err := a.ReportInventory(ctx, ch, observerSourceKind, findings)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("trstctl-agent: reported %d observations from capture %s (run %s, rejected %d)\n", resp.Recorded, path, resp.RunID, resp.Rejected)
+	return nil
 }
 
 func parsePorts(raw string) ([]uint16, error) {

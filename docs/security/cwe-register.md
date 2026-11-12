@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3054 annotated sites across 33 rules. Each row is
+3058 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -910,7 +910,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (463 sites)
+### G115 — CWE-190 Integer overflow or wraparound (466 sites)
 
 | Location | Reason |
 |---|---|
@@ -952,10 +952,13 @@ not this file.
 | `internal/agent/desktop/server.go:591` | the target's text is bounded by rdp.MaxClipboard (CWE-190) |
 | `internal/agent/observe/capture_linux.go:34` | snaplen is a small configured frame size |
 | `internal/agent/observe/capture_linux.go:39` | bounded by the check above; MaxWatchedPorts keeps it to tens (CWE-190) |
-| `internal/agent/observe/flows.go:202` | TCP sequence numbers wrap; the difference read as a signed 32-bit distance is RFC 1982 serial arithmetic (CWE-190) |
-| `internal/agent/observe/flows.go:213` | one segment's payload is under 64 KiB, and sequence numbers wrap mod 2^32 by design (CWE-190) |
+| `internal/agent/observe/flows.go:229` | TCP sequence numbers wrap; the difference read as a signed 32-bit distance is RFC 1982 serial arithmetic (CWE-190) |
+| `internal/agent/observe/flows.go:242` | one segment's payload is under 64 KiB, and sequence numbers wrap mod 2^32 by design (CWE-190) |
+| `internal/agent/observe/flows.go:277` | RFC 1982 serial arithmetic on wrapping sequence numbers (CWE-190) |
+| `internal/agent/observe/flows.go:283` | a held payload is under MaxDirectionBytes, and sequence numbers wrap by design (CWE-190) |
 | `internal/agent/observe/flows_test.go:23` | bounded test packet length (CWE-190) |
 | `internal/agent/observe/flows_test.go:62` | bounded test fixture length (CWE-190) |
+| `internal/agent/observe/pcap_test.go:80` | bounded test fixture length (CWE-190) |
 | `internal/agent/observe/portfilter.go:119` | a forward jump inside this fixed program, under 255 instructions at MaxWatchedPorts (CWE-190) |
 | `internal/agent/observe/portfilter.go:123` | a forward jump inside this fixed program (CWE-190) |
 | `internal/agent/observe/wire_test.go:14` | big-endian packing of bounded test lengths (CWE-190) |
@@ -2097,7 +2100,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (746 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (747 sites)
 
 | Location | Reason |
 |---|---|
@@ -2147,6 +2150,7 @@ not this file.
 | `cmd/trstctl-agent/inventory_hostcrypto.go:76` | operator-configured keystore password file (CWE-22) |
 | `cmd/trstctl-agent/main.go:1382` | operator-supplied PIN file path, read at their instruction (CWE-22) |
 | `cmd/trstctl-agent/main.go:2052` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/observe.go:92` | the operator names the capture file on the command line (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:477` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:504` | operator-supplied public issuer certificate (CWE-22) |

@@ -83,12 +83,21 @@ func TestAssemblerBoundsAndCountsWhatItDrops(t *testing.T) {
 	if st := a.Stats(); st.ActiveFlows != 2 || st.TableFull != 1 {
 		t.Fatalf("flow table = %+v, want 2 flows and 1 refused", st)
 	}
-	// A gap ends reading of that connection, and it is counted.
+	// A gap is waited for (X1-L3): segments ahead of it are held, up to
+	// MaxHeldSegments; one more ends reading that connection, counted, and
+	// what it held is dropped.
 	c := netip.MustParseAddrPort("10.0.0.9:40000")
-	s, _ := DecodeFrame(frame(c, server, 500, ack, []byte("late")))
+	for i := uint32(0); i < MaxHeldSegments; i++ {
+		s, _ := DecodeFrame(frame(c, server, 500+10*i, ack, []byte("late")))
+		a.Segment(s, now)
+	}
+	if st := a.Stats(); st.OutOfOrder != 0 || st.BufferedBytes != 4*MaxHeldSegments {
+		t.Fatalf("stats while holding = %+v, want %d held bytes and nothing dropped", st, 4*MaxHeldSegments)
+	}
+	s, _ := DecodeFrame(frame(c, server, 900, ack, []byte("late")))
 	a.Segment(s, now)
-	if st := a.Stats(); st.OutOfOrder != 1 {
-		t.Fatalf("stats = %+v, want one out-of-order connection", st)
+	if st := a.Stats(); st.OutOfOrder != 1 || st.BufferedBytes != 0 {
+		t.Fatalf("stats = %+v, want one out-of-order connection and its held bytes dropped", st)
 	}
 	// Idle connections are forgotten.
 	s, _ = DecodeFrame(frame(netip.MustParseAddrPort("10.0.0.9:40001"), server, 2, ack, []byte("x")))

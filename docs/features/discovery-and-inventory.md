@@ -484,9 +484,20 @@ handshake facts is one finding with connection and client counts, first and last
 reported every `--observe-report-interval` (default one minute) under the
 `network-observer` source; the server accepts that source only from a certificate that
 carries the observer role, and only observation kinds from it. The flow table is bounded
-(`--observe-max-flows`, default 2048); a connection that does not fit, arrives out of
-order or is not a handshake the observer reads is counted, never buffered, and every
-report carries the observer's own CPU time, heap and drops. Observations are discovery
+(`--observe-max-flows`, default 2048); a connection that does not fit or is not a
+handshake the observer reads is counted, never buffered, and every report carries the
+observer's own CPU time, heap and drops. Segments that arrive ahead of a gap — a
+reordered or retransmitted ClientHello or server flight — are held, at most 16 a
+direction and only inside the 16 KiB the observer reads, and read once the gap fills
+(X1-L3; counted as `reordered`); a gap that never fills ends reading of that
+connection, counted as out of order, and what it held is dropped.
+
+A saved capture reads the same way: `--observe-pcap <file>` (a classic pcap, as
+`tcpdump -w` writes it, of Ethernet, raw IP or Linux cooked frames; pcapng is refused
+with a hint to save it as pcap) makes an agent with the observer role read the file once
+at start, for the ports in `--observe-ports`, and report its handshakes like an
+interface's under interface `pcap:<file name>`. Use it for a capture taken where no agent
+runs, such as a network team's tap. Observations are discovery
 findings, kept across restarts, and they make `passive-wire-traffic` an observed class
 in [computed coverage](../design/cbom-coverage.md).
 

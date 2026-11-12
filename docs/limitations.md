@@ -1524,8 +1524,11 @@ never live in the API process. What you can do end to end against the running bi
   Mac). Capture throughput on the x86 QA machine is a Track B qualification. It
   reads IPv4 without later fragments and IPv6 without extension headers, untagged or
   behind up to two VLAN tags (X1-L2; a third tag is dropped), follows
-  connections in order (a gap ends reading of that connection), does not read QUIC
-  or TLS over UDP, and needs Linux AF_PACKET (other platforms report an error).
+  connections in order, holding up to 16 segments a direction that arrive ahead
+  of a gap until it fills (X1-L3; a gap that never fills ends reading of that
+  connection), reads saved classic pcap captures (`--observe-pcap`; not pcapng),
+  does not read QUIC or TLS over UDP, and needs Linux AF_PACKET for live capture
+  (other platforms report an error).
 - Host TLS session observer (X5): an agent with the session-observer role reports,
   from probes on the host's OpenSSL 3 libraries, each TLS handshake's version, suite,
   key-exchange group, HelloRetryRequest and the peer's certificate — the one TLS 1.3

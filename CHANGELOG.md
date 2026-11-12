@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The passive network observer reads a handshake whose segments arrive out of order (X1-L3): segments ahead of a gap
+  are held (16 a direction, inside the 16 KiB it reads) and read once the gap fills, counted as `reordered`; before,
+  any gap ended reading of that connection. `trstctl-agent --observe-pcap <file>` reads a saved classic pcap capture
+  once and reports its handshakes like an interface's.
 - `cbom scan-source` follows key sizes and curves through names (X6-L2): Go package constants and constant
   expressions, variables assigned once (across the package's files or in the function), a curve held in a variable,
   and one level of wrapper function in the same package, reported at the caller's line; Java and Python key sizes
