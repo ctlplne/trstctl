@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -68,8 +70,10 @@ func nhiReviewRevokeReason(campaignID string, item store.NHIReviewItem) string {
 }
 
 // RevokeReviewedCredential runs the reviewed credential's own revoke and says
-// what it did. trstctl revokes PAM sessions, API tokens, machine sessions and
-// dynamic-secret leases itself; any other kind is left to its own revocation
+// what it did. trstctl revokes PAM sessions, API tokens, machine sessions,
+// dynamic-secret leases and brokered accounts itself, and certificates and
+// identities as the reviewer through their own gate (Q1-L1); any other kind,
+// or one the gate refuses the reviewer, is left to its own revocation
 // (manual), and its item closes when trstctl sees the credential revoked.
 func (a *API) RevokeReviewedCredential(ctx context.Context, tenantID, campaignID string, item store.NHIReviewItem) (string, string) {
 	return a.revokeReviewedCredentialWithKey(ctx, tenantID, campaignID, item, NHIReviewIdempotencyKey(campaignID, item.ItemID))
@@ -104,6 +108,10 @@ func (a *API) revokeReviewedCredentialWithKey(ctx context.Context, tenantID, cam
 		return store.NHIReviewRevocationRequested, "API token revoked; the item closes when the token reads revoked"
 	case "lease":
 		return a.revokeReviewedLease(ctx, tenantID, id, item.DecisionBy, key)
+	case "cert":
+		return a.revokeReviewedCertificate(ctx, tenantID, id, key)
+	case "id":
+		return a.revokeReviewedIdentity(ctx, tenantID, id, reason, key)
 	case "pam-account":
 		// A276: a brokered account a reviewer did not certify is disabled;
 		// an operator-configured one is removed from configuration by hand.
@@ -121,6 +129,87 @@ func (a *API) revokeReviewedCredentialWithKey(ctx context.Context, tenantID, cam
 	}
 	return store.NHIReviewRevocationManual, "trstctl does not revoke a " + item.NHIKind +
 		" from a review: revoke it through its own revocation, and the item closes when trstctl sees it revoked"
+}
+
+// reviewRevocationPrincipal is the reviewer's own authority for a review's
+// revocation (Q1-L1): the principal of the decision request. The reconcile
+// and its retries act without one, so a certificate or identity they would
+// revoke is left to an operator with that authority.
+func reviewRevocationPrincipal(ctx context.Context) (authz.Principal, bool) {
+	p, ok := ctx.Value(principalCtxKey).(authz.Principal)
+	return p, ok && strings.TrimSpace(p.Subject) != ""
+}
+
+// reviewRevocationReason is the RFC 5280 reason a review's certificate
+// revocation records: the access is no longer needed.
+const reviewRevocationReason = "cessationOfOperation"
+
+// revokeReviewedCertificate revokes a reviewed certificate as the reviewer,
+// through the same revocation an operator's request runs: the certificate's
+// gate (certs:issue, ABAC, policy, dual control) and the trstctl CA that
+// issued it, which publishes the revocation (Q1-L1).
+func (a *API) revokeReviewedCertificate(ctx context.Context, tenantID, certificateID, key string) (string, string) {
+	principal, ok := reviewRevocationPrincipal(ctx)
+	if !ok {
+		return store.NHIReviewRevocationManual, "a certificate is revoked with its reviewer's authority, which this pass does not carry; revoke it through Certificates, and the item closes when it reads revoked"
+	}
+	if a.orch == nil || a.certRevocationAuthority == nil {
+		return store.NHIReviewRevocationManual, "certificate revocation is not served here; revoke it where it is served"
+	}
+	result, err := a.revokeCertificatesAs(ctx, tenantID, key, "access-review", principal,
+		bulkRevokeRequest{CertificateIDs: []string{certificateID}, Reason: reviewRevocationReason})
+	var denial *gateError
+	switch {
+	case errors.As(err, &denial):
+		return store.NHIReviewRevocationManual, "the certificate's revocation gate refused the reviewer: " + denial.detail +
+			"; revoke it through Certificates with that authority, and the item closes when it reads revoked"
+	case err != nil:
+		return store.NHIReviewRevocationFailed, "the certificate's revocation was refused: " + err.Error()
+	}
+	for _, item := range result.Items {
+		switch item.Status {
+		case "revoked":
+			return store.NHIReviewRevocationRequested, "certificate revoked (cessationOfOperation) by the trstctl CA that issued it; the item closes when it reads revoked"
+		case "queued":
+			return store.NHIReviewRevocationRequested, "certificate revocation queued at its issuing authority; the item closes when it reads revoked"
+		case "skipped":
+			return store.NHIReviewRevocationRequested, "the certificate was already revoked; the item closes when it reads revoked"
+		default:
+			return store.NHIReviewRevocationManual, "no authority trstctl serves can revoke the certificate (" + item.Error + "); revoke it at its issuer, and the item closes when it reads revoked"
+		}
+	}
+	return store.NHIReviewRevocationFailed, "the certificate's revocation reported nothing"
+}
+
+// revokeReviewedIdentity moves a reviewed identity to revoked as the
+// reviewer, through its lifecycle gate (Q1-L1): its certificate is revoked
+// at its CA and its deployments are told, exactly as an operator's
+// transition does.
+func (a *API) revokeReviewedIdentity(ctx context.Context, tenantID, identityID, reason, key string) (string, string) {
+	principal, ok := reviewRevocationPrincipal(ctx)
+	if !ok {
+		return store.NHIReviewRevocationManual, "an identity is revoked with its reviewer's authority, which this pass does not carry; revoke it through Identities, and the item closes when it reads revoked"
+	}
+	if a.orch == nil {
+		return store.NHIReviewRevocationManual, "identity transitions are not served here; revoke it where it is served"
+	}
+	if !principal.Can(authz.IdentitiesWrite, authz.Scope{TenantID: tenantID}) {
+		return store.NHIReviewRevocationManual, "the reviewer lacks identities:write; revoke it through Identities with that authority, and the item closes when it reads revoked"
+	}
+	_, _, err := a.executeIdentityTransition(ctx, tenantID, principal, identityID,
+		transitionRequest{To: string(orchestrator.StateRevoked), Reason: reason}, key)
+	var refused *apiError
+	var transition *orchestrator.TransitionError
+	switch {
+	case err == nil:
+		return store.NHIReviewRevocationRequested, "identity revoked through its lifecycle (its certificate revoked at its CA, its deployments told); the item closes when it reads revoked"
+	case errors.As(err, &transition) && transition.From == orchestrator.StateRevoked:
+		return store.NHIReviewRevocationRequested, "the identity was already revoked; the item closes when it reads revoked"
+	case errors.As(err, &refused) && (refused.status == http.StatusForbidden || refused.status == http.StatusConflict):
+		return store.NHIReviewRevocationManual, "the identity's lifecycle gate refused the reviewer: " + refused.detail +
+			"; revoke it through Identities with that authority or approval, and the item closes when it reads revoked"
+	}
+	return store.NHIReviewRevocationFailed, "the identity's revocation was refused: " + err.Error()
 }
 
 func (a *API) revokeReviewedLease(ctx context.Context, tenantID, leaseID, reviewer, key string) (string, string) {

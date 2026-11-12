@@ -1562,10 +1562,11 @@ never live in the API process. What you can do end to end against the running bi
   not. Keystore and library findings are discovery
   findings, not yet CBOM assets.
 - Access reviews that act (Q1): a revoke decision runs the credential's own
-  revoke once (PAM sessions, API tokens, machine sessions, dynamic-secret leases)
-  and the item closes only when the credential reads revoked; certificates and
-  identities are left to their own revocation and close when trstctl sees them
-  revoked. A keep decision renews the named owner's attestation and records a
+  revoke once (PAM sessions, API tokens, machine sessions, dynamic-secret leases,
+  and as the reviewer through their own gate certificates and identities: Q1-L1)
+  and the item closes only when the credential reads revoked; a certificate or
+  identity the gate refuses the reviewer (authority, policy, dual control) is left
+  to an operator and closes when trstctl sees it revoked. A keep decision renews the named owner's attestation and records a
   next review date without changing any upstream right; when that date passes,
   the leader's review reconcile opens a "Next review" campaign with the same
   reviewer, scope and time to decide, one pending item per due credential

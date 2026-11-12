@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An access review's revoke decision acts on certificates and identities (Q1-L1): a certificate is revoked by the
+  trstctl CA that issued it (`cessationOfOperation`) and an identity moves to `revoked` through its lifecycle, both as
+  the reviewer through the same gate an operator's request meets. A reviewer the gate refuses (authority, policy, dual
+  control) revokes nothing: the item is left `manual`, naming why.
 - The host agent rates more TLS libraries for X25519MLKEM768 (X2-L4): LibreSSL by its release notes (4.3.0 and
   later), GnuTLS by whether the build names the hybrid group, NSS by the groups its `libnss3` names, and an OpenSSL
   before 3.5 whose configuration activates oqsprovider (`yes` when its default Groups list names an ML-KEM hybrid).

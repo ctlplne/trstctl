@@ -27,42 +27,7 @@ func WithCertificateRevocationAuthority(resolver CertificateRevocationAuthorityR
 }
 
 func (a *API) revokeSelectedCertificates(w http.ResponseWriter, ctx context.Context, tenantID, commandKey, route string, principal authz.Principal, request bulkRevokeRequest) (int, any, error) {
-	// Require mutation authority even if every supplied ID is absent. Per-object
-	// policy and approval checks below still narrow this coarse permission.
-	if !principal.Can(authz.CertsIssue, authz.Scope{TenantID: tenantID}) {
-		return 0, nil, errStatus(http.StatusForbidden, "certificate revocation requires certs:issue authority")
-	}
-	if len(request.IDs) != 0 || len(request.IdentityIDs) != 0 || request.OwnerID != "" || request.IssuerID != "" || request.Kind != "" || request.Status != "" {
-		return 0, nil, errStatus(http.StatusBadRequest, "certificate_ids selects exact certificates; do not mix it with identity ids or identity criteria")
-	}
-	if a.certRevocationAuthority == nil {
-		return 0, nil, errStatus(http.StatusServiceUnavailable, "certificate revocation authority is not configured")
-	}
-	material, err := json.Marshal(struct {
-		Domain    string            `json:"domain"`
-		Route     string            `json:"route"`
-		Principal string            `json:"principal"`
-		Request   bulkRevokeRequest `json:"request"`
-	}{"trstctl.api.certificate-revocation.v1", route, principal.Subject, request})
-	if err != nil {
-		return 0, nil, err
-	}
-	result, err := a.orch.BulkRevokeCertificates(ctx, tenantID, commandKey, crypto.SHA256Hex(material),
-		request.CertificateIDs, request.Reason, orchestrator.CertificateRevocationChecks{
-			Authority: a.certRevocationAuthority,
-			Authorize: func(ctx context.Context, certificate store.Certificate) error {
-				ownerID := ""
-				if certificate.OwnerID != nil {
-					ownerID = *certificate.OwnerID
-				}
-				attrs := map[string]string{
-					"certificate.id": certificate.ID, "certificate.subject": certificate.Subject,
-					"certificate.status": certificate.Status, "certificate.fingerprint": certificate.Fingerprint,
-					"owner_id": ownerID, "transition.to": "revoked", "resource.kind": "certificate",
-				}
-				return a.gate.check(ctx, principal, tenantID, certificate.ID, orchestrator.StateRevoked, attrs)
-			},
-		})
+	result, err := a.revokeCertificatesAs(ctx, tenantID, commandKey, route, principal, request)
 	var denial *gateError
 	if errors.As(err, &denial) {
 		return 0, nil, errStatus(denial.status, denial.detail)
@@ -82,4 +47,48 @@ func (a *API) revokeSelectedCertificates(w http.ResponseWriter, ctx context.Cont
 		return 0, nil, err
 	}
 	return http.StatusOK, result, nil
+}
+
+// revokeCertificatesAs revokes exact certificates as principal, through the
+// certificate's own gate (certs:issue, ABAC, policy and dual control) and its
+// issuing authority. It writes no response, so an access review's decision
+// (Q1-L1) runs the same revocation an operator's request does. A gate denial
+// is a *gateError.
+func (a *API) revokeCertificatesAs(ctx context.Context, tenantID, commandKey, route string, principal authz.Principal, request bulkRevokeRequest) (orchestrator.BulkRevokeResult, error) {
+	// Require mutation authority even if every supplied ID is absent. Per-object
+	// policy and approval checks below still narrow this coarse permission.
+	if !principal.Can(authz.CertsIssue, authz.Scope{TenantID: tenantID}) {
+		return orchestrator.BulkRevokeResult{}, &gateError{status: http.StatusForbidden, detail: "certificate revocation requires certs:issue authority"}
+	}
+	if len(request.IDs) != 0 || len(request.IdentityIDs) != 0 || request.OwnerID != "" || request.IssuerID != "" || request.Kind != "" || request.Status != "" {
+		return orchestrator.BulkRevokeResult{}, errStatus(http.StatusBadRequest, "certificate_ids selects exact certificates; do not mix it with identity ids or identity criteria")
+	}
+	if a.certRevocationAuthority == nil {
+		return orchestrator.BulkRevokeResult{}, errStatus(http.StatusServiceUnavailable, "certificate revocation authority is not configured")
+	}
+	material, err := json.Marshal(struct {
+		Domain    string            `json:"domain"`
+		Route     string            `json:"route"`
+		Principal string            `json:"principal"`
+		Request   bulkRevokeRequest `json:"request"`
+	}{"trstctl.api.certificate-revocation.v1", route, principal.Subject, request})
+	if err != nil {
+		return orchestrator.BulkRevokeResult{}, err
+	}
+	return a.orch.BulkRevokeCertificates(ctx, tenantID, commandKey, crypto.SHA256Hex(material),
+		request.CertificateIDs, request.Reason, orchestrator.CertificateRevocationChecks{
+			Authority: a.certRevocationAuthority,
+			Authorize: func(ctx context.Context, certificate store.Certificate) error {
+				ownerID := ""
+				if certificate.OwnerID != nil {
+					ownerID = *certificate.OwnerID
+				}
+				attrs := map[string]string{
+					"certificate.id": certificate.ID, "certificate.subject": certificate.Subject,
+					"certificate.status": certificate.Status, "certificate.fingerprint": certificate.Fingerprint,
+					"owner_id": ownerID, "transition.to": "revoked", "resource.kind": "certificate",
+				}
+				return a.gate.check(ctx, principal, tenantID, certificate.ID, orchestrator.StateRevoked, attrs)
+			},
+		})
 }

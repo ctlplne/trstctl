@@ -932,9 +932,17 @@ Decisions act (Q1). A revoke decision runs the reviewed credential's own revoke,
 once: every attempt uses the idempotency key `nhi-review:<campaign>:<item>`, so an
 exact retry replays, a second decision is refused, and the leader's reconcile never
 revokes again. trstctl revokes PAM sessions (the database role or SSH certificate
-is withdrawn), API tokens, machine sessions and dynamic-secret leases itself; a
-certificate or identity is left to its own revocation and the item says so
-(`manual`). The item records what happened (`requested`, `manual`, `failed` with the
+is withdrawn), API tokens, machine sessions and dynamic-secret leases itself. A
+certificate (`cert:<id>`) or identity (`id:<id>`) is revoked as the reviewer, through
+the same gate an operator's request meets (Q1-L1): the certificate by the trstctl CA
+that issued it, with reason `cessationOfOperation`, and the identity by its lifecycle
+transition to `revoked` (its certificate revoked, its deployments told). The gate
+still decides: a reviewer without `certs:issue` (or, for an identity,
+`identities:write`), an ABAC or policy denial, or a dual-control approval the
+transition needs leaves the item `manual`, naming why, for an operator with that
+authority; a certificate no trstctl authority can revoke is `manual` too. The leader's
+reconcile carries no reviewer, so a certificate or identity it would revoke after an
+interrupted decision is `manual` as well. The item records what happened (`requested`, `manual`, `failed` with the
 reason) and closes only when the credential reads revoked, with that evidence
 (`closing_evidence`); a request alone never closes it. Each minute the leader
 re-checks open items and finishes a decision whose act was interrupted. A failed
