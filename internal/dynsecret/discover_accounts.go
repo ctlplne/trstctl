@@ -226,7 +226,7 @@ func (b *UnixAccountsBackend) DiscoverPrivilegedAccounts(ctx context.Context) ([
 	if err != nil {
 		return nil, err
 	}
-	host := pamdiscovery.HostInventory{Passwd: inv.Passwd, Group: inv.Group}
+	host := pamdiscovery.HostInventory{Passwd: inv.Passwd, Group: inv.Group, KeyFiles: inv.KeyFiles, KeysCommand: inv.KeysCommand}
 	for _, f := range inv.Sudoers {
 		host.Sudoers = append(host.Sudoers, pamdiscovery.SudoersFile{Path: f.Path, Readable: f.Readable, Lines: f.Lines})
 	}

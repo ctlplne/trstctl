@@ -299,6 +299,17 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
                           ? t("admin.access.discovery.kindDisabled", { kind: account.kind })
                           : t("admin.access.discovery.kind", { kind: account.kind })}
                     </span>
+                    {account.kind === "local_user" &&
+                    (typeof account.details?.authorized_keys_files === "string" || account.details?.authorized_keys_command === "configured") ? (
+                      <div className="text-xs text-muted-foreground">
+                        {typeof account.details?.authorized_keys_files === "string" ? (
+                          <div>
+                            {t("admin.access.discovery.keyFiles")} <code>{account.details.authorized_keys_files}</code>
+                          </div>
+                        ) : null}
+                        {account.details?.authorized_keys_command === "configured" ? <div>{t("admin.access.discovery.keysCommand")}</div> : null}
+                      </div>
+                    ) : null}
                     {account.kind === "directory_service_account" ? (
                       <div className="text-xs text-muted-foreground">
                         {typeof account.details?.native_sid === "string" ? (

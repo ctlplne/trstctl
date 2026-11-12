@@ -582,6 +582,16 @@ refused if an account changed since the review, and it grants nothing either. Di
 you will not manage, with the reason; it returns when a scan finds it changed. The console
 has the same flow under Access → Sessions and access keys → Privileged account discovery.
 
+On a Linux or Unix host the authorized keys are read from the files sshd reads: the
+`AuthorizedKeysFile` the host's `sshd_config` sets (its `Include` files read in place, outside
+any `Match` block, the first value winning as in sshd), or sshd's defaults,
+`.ssh/authorized_keys` and `.ssh/authorized_keys2`. `%u`, `%h`, `%U`, `%%` and a leading `~`
+expand per account, and a relative path is under the home directory; `none` reads no file. An
+account on a host that sets other files names them (`authorized_keys_files`, shown as "Keys read
+from:"). When sshd has an `AuthorizedKeysCommand`, each account says so
+(`authorized_keys_command: configured`): keys it returns are in no file the scan reads, and a
+`Match` block's own `AuthorizedKeysFile` is not applied.
+
 ```bash
 echo '{"interval_seconds": 86400}' | trstctl-cli access discovery sources save orders-pg -f -
 trstctl-cli access discovery scan orders-pg

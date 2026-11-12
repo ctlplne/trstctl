@@ -9522,8 +9522,9 @@ Remaining limits:
   rotation can be queued, and nothing retires its credential before then.
 - Vaulted accounts on the other database types the gateway serves.
 - A host's sudo rights when the administrator cannot read the sudoers files are reported
-  unknown (`sudoers: unreadable`), not guessed; keys outside `~/.ssh/authorized_keys` (an
-  `AuthorizedKeysFile` elsewhere) are not read; Windows hosts' local administrators.
+  unknown (`sudoers: unreadable`), not guessed; keys an `AuthorizedKeysCommand` returns, and
+  a `Match` block's own `AuthorizedKeysFile`, are not read (the account says when a command is
+  configured); Windows hosts' local administrators.
 
 
 ## PostgreSQL command guardrails (A262, partial protocol coverage)

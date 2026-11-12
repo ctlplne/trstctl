@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A host account scan reads the authorized keys files sshd reads (A260-L2): the
+  `AuthorizedKeysFile` the host's `sshd_config` sets, its `Include` files read in place, with
+  `%u`, `%h`, `%U` and `~` expanded per account, or sshd's defaults. An account on a host that
+  sets other files names them, and one whose sshd has an `AuthorizedKeysCommand` says so. Keys
+  outside `~/.ssh` were missed before, and keys in a file sshd no longer reads were counted.
 - MySQL, MongoDB and Redis sessions opened for the browser have a database console (A259-L5), as
   PostgreSQL sessions do: SQL on MySQL, a command on Redis as redis-cli takes it, and a JSON
   command document on MongoDB, each run through the session's gateway, which signs in as the

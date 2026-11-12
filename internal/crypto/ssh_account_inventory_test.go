@@ -61,3 +61,27 @@ func TestParseSSHAccountInventoryA260(t *testing.T) {
 		t.Fatal("an inventory with no end marker was accepted")
 	}
 }
+
+// TestParseSSHAccountInventoryKeyFilesA260L2: the inventory names the
+// AuthorizedKeysFile patterns sshd reads and whether an
+// AuthorizedKeysCommand is set; an older host's inventory without that
+// section still parses.
+func TestParseSSHAccountInventoryKeyFilesA260L2(t *testing.T) {
+	inv, err := parseSSHAccountInventory([]byte(strings.Join([]string{
+		"=== passwd", "alice:x:1000:1000::/home/alice:/bin/bash",
+		"=== sshd", "files /etc/ssh/keys.d/%u   %h/.ssh/authorized_keys", "command",
+		"=== keys", "--- alice",
+		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEONBEKOQaw/bt2mEQDmf9AQ68I5RY375vL/1Fe94Slh alice@central",
+		"=== end",
+	}, "\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(inv.KeyFiles, []string{"/etc/ssh/keys.d/%u", "%h/.ssh/authorized_keys"}) || !inv.KeysCommand || len(inv.Keys) != 1 || len(inv.Keys[0].Keys) != 1 {
+		t.Fatalf("inventory = %+v", inv)
+	}
+	older, err := parseSSHAccountInventory([]byte("=== passwd\nroot:x:0:0::/root:/bin/sh\n=== keys\n=== end\n"))
+	if err != nil || older.KeyFiles != nil || older.KeysCommand {
+		t.Fatalf("an inventory without the sshd section = %+v, %v", older, err)
+	}
+}

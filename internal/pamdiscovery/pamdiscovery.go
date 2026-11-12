@@ -138,7 +138,15 @@ type HostInventory struct {
 	Group   []string
 	Sudoers []SudoersFile
 	Keys    []AccountKeys
+	// KeyFiles are the AuthorizedKeysFile patterns the keys were read from
+	// (A260-L2); KeysCommand reports an AuthorizedKeysCommand, whose keys
+	// no file holds.
+	KeyFiles    []string
+	KeysCommand bool
 }
+
+// defaultKeyFiles are sshd's AuthorizedKeysFile when none is configured.
+var defaultKeyFiles = []string{".ssh/authorized_keys", ".ssh/authorized_keys2"}
 
 type localUser struct {
 	name, uid, gid, home, shell string
@@ -228,6 +236,14 @@ func HostAccounts(inv HostInventory) []Account {
 		details := map[string]string{"uid": u.uid, "shell": u.shell}
 		if unreadable {
 			details["sudoers"] = "unreadable"
+		}
+		// A260-L2: where the keys were read from, when it is not sshd's
+		// default, and that a command can add keys no file holds.
+		if len(inv.KeyFiles) > 0 && strings.Join(inv.KeyFiles, " ") != strings.Join(defaultKeyFiles, " ") {
+			details["authorized_keys_files"] = strings.Join(inv.KeyFiles, " ")
+		}
+		if inv.KeysCommand {
+			details["authorized_keys_command"] = "configured"
 		}
 		if keysUnreadable[u.name] {
 			details["authorized_keys"] = "unreadable"

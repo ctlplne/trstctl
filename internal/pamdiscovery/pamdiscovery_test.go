@@ -102,3 +102,24 @@ func TestDiffA260(t *testing.T) {
 		t.Fatalf("diff = %v, want %v", got, want)
 	}
 }
+
+// TestHostAccountsNameTheirKeyFilesA260L2: an account found on a host whose
+// sshd reads keys from somewhere other than its defaults says where, and a
+// configured AuthorizedKeysCommand is named: keys it returns are not in any
+// file the scan read. A host on sshd's defaults says neither.
+func TestHostAccountsNameTheirKeyFilesA260L2(t *testing.T) {
+	inv := HostInventory{
+		Passwd:      []string{"root:x:0:0:root:/root:/bin/bash"},
+		KeyFiles:    []string{"/etc/ssh/keys.d/%u", "%h/.ssh/authorized_keys"},
+		KeysCommand: true,
+	}
+	accounts := HostAccounts(inv)
+	if len(accounts) != 1 || accounts[0].Details["authorized_keys_files"] != "/etc/ssh/keys.d/%u %h/.ssh/authorized_keys" ||
+		accounts[0].Details["authorized_keys_command"] != "configured" {
+		t.Fatalf("accounts = %+v", accounts)
+	}
+	inv.KeyFiles, inv.KeysCommand = []string{".ssh/authorized_keys", ".ssh/authorized_keys2"}, false
+	if details := HostAccounts(inv)[0].Details; details["authorized_keys_files"] != "" || details["authorized_keys_command"] != "" {
+		t.Fatalf("a host on sshd's defaults = %+v", details)
+	}
+}

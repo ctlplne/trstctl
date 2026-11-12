@@ -7461,6 +7461,14 @@ export const messages = {
   },
   "admin.access.discovery.serviceKind": { defaultMessage: "AD service account", description: "Native directory service identity kind." },
   "admin.access.discovery.serviceSID": { defaultMessage: "Windows account ID:", description: "Native SID identifying the selected service account." },
+  "admin.access.discovery.keyFiles": {
+    defaultMessage: "Keys read from:",
+    description: "Before the AuthorizedKeysFile patterns a host's sshd reads, when they are not its defaults (A260-L2).",
+  },
+  "admin.access.discovery.keysCommand": {
+    defaultMessage: "This host's sshd also takes keys from an AuthorizedKeysCommand, which the scan cannot read.",
+    description: "Shown on a host account when sshd has an AuthorizedKeysCommand; the directive name stays literal (A260-L2).",
+  },
   "admin.access.discovery.serviceGUID": {
     defaultMessage: "Directory object ID:",
     description: "Opaque native GUID identifying the selected directory account.",

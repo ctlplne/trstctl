@@ -191,6 +191,30 @@ it("shows a native AD service identity without inventing administrator rights", 
   expect(screen.getByText("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeVisible();
 });
 
+it("says where a host account's keys were read from and that a command can add others (A260-L2)", async () => {
+  apiMock.pamDiscoveredAccounts.mockResolvedValue({
+    items: [
+      {
+        ...account("h-1", "orders-svc-a", ["authorized_keys:1", "group:sudo"]),
+        key: "user:orders-svc-a",
+        kind: "local_user",
+        provider_id: "orders-host",
+        details: {
+          authorized_keys: "ssh-ed25519 SHA256:ZUpKtGMGRETPHM0PB9T33QPyS819RJFBPoNlAV+BA3Q",
+          authorized_keys_files: ".ssh/authorized_keys /etc/ssh/keys.d/%u",
+          authorized_keys_command: "configured",
+        },
+      },
+      { ...account("h-2", "plain-admin", ["uid0"]), key: "user:plain-admin", kind: "local_user", provider_id: "orders-host", details: {} },
+    ],
+  });
+  const view = mount(false);
+  expect(await screen.findByText(".ssh/authorized_keys /etc/ssh/keys.d/%u")).toBeVisible();
+  expect(screen.getAllByText("Keys read from:")).toHaveLength(1);
+  expect(screen.getAllByText("This host's sshd also takes keys from an AuthorizedKeysCommand, which the scan cannot read.")).toHaveLength(1);
+  expect(await axe(view.container)).toHaveNoViolations();
+});
+
 it("keeps native host inventory reachable after an AD account is imported", async () => {
   const native = {
     ...account("native-imported", "svc-web", []),
