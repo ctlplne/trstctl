@@ -1830,6 +1830,7 @@ export interface AuditEventList {
 export interface AuditFeed {
   allow_private_endpoint: boolean;
   attempts: number;
+  auth_scheme?: "api_key" | "basic" | "bearer";
   batch_size: number;
   collector_request_id?: string;
   enabled: boolean;
@@ -1885,6 +1886,7 @@ export interface AuditFeedPreview {
 
 export interface AuditFeedRequest {
   allow_private_endpoint?: boolean;
+  auth_scheme?: "api_key" | "basic" | "bearer";
   batch_size: number;
   enabled: boolean;
   endpoint_url: string;

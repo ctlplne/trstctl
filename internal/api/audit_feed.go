@@ -34,6 +34,10 @@ type auditFeedRequest struct {
 	Enabled              bool     `json:"enabled"`
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
+	// AuthScheme is how an Elasticsearch feed presents token_ref's credential
+	// (P5-L4): api_key (the default), basic (the credential is
+	// user:password) or bearer.
+	AuthScheme string `json:"auth_scheme,omitempty"`
 }
 
 type auditFeedResponse struct {
@@ -43,6 +47,7 @@ type auditFeedResponse struct {
 	Provider               string   `json:"provider"`
 	EndpointURL            string   `json:"endpoint_url"`
 	TokenRef               string   `json:"token_ref"`
+	AuthScheme             string   `json:"auth_scheme,omitempty"`
 	IntervalSeconds        int      `json:"interval_seconds"`
 	BatchSize              int      `json:"batch_size"`
 	Enabled                bool     `json:"enabled"`
@@ -249,6 +254,10 @@ func (a *API) normalizeAuditFeedConfiguration(ctx context.Context, tenantID, raw
 			return normalizedAuditFeedConfiguration{}, err
 		}
 	}
+	scheme, err := normalizeAuditFeedAuthScheme(provider, body.AuthScheme)
+	if err != nil {
+		return normalizedAuditFeedConfiguration{}, err
+	}
 	if body.IntervalSeconds < minAuditFeedInterval {
 		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "interval_seconds must be at least 60")
 	}
@@ -273,6 +282,7 @@ func (a *API) normalizeAuditFeedConfiguration(ctx context.Context, tenantID, raw
 		Name: name, Provider: provider, EndpointURL: endpoint, TokenRef: tokenRef,
 		IntervalSeconds: body.IntervalSeconds, BatchSize: body.BatchSize, Enabled: body.Enabled,
 		AllowPrivateEndpoint: body.AllowPrivateEndpoint, PrivateEgressCIDRs: cidrs,
+		AuthScheme: auditFeedAuthSchemeName(provider, scheme),
 	}
 	return normalizedAuditFeedConfiguration{
 		ID: id, Request: normalized, EndpointHost: parsedEndpoint.Hostname(),
@@ -280,6 +290,7 @@ func (a *API) normalizeAuditFeedConfiguration(ctx context.Context, tenantID, raw
 			ID: id, Name: name, Provider: provider, EndpointURL: endpoint, TokenRef: tokenRef,
 			IntervalSeconds: body.IntervalSeconds, BatchSize: body.BatchSize, Enabled: body.Enabled,
 			AllowPrivateEndpoint: body.AllowPrivateEndpoint, PrivateEgressCIDRs: cidrs,
+			AuthScheme: scheme,
 		},
 	}, nil
 }
@@ -345,7 +356,7 @@ func auditFeedFromStore(feed store.AuditFeed) auditFeedResponse {
 	}
 	out := auditFeedResponse{
 		ID: feed.ID, TenantID: feed.TenantID, Name: feed.Name, Provider: feed.Provider,
-		EndpointURL: feed.EndpointURL, TokenRef: feed.TokenRef,
+		EndpointURL: feed.EndpointURL, TokenRef: feed.TokenRef, AuthScheme: auditFeedAuthSchemeName(feed.Provider, feed.AuthScheme),
 		IntervalSeconds: feed.IntervalSeconds, BatchSize: feed.BatchSize, Enabled: feed.Enabled,
 		AllowPrivateEndpoint: feed.AllowPrivateEndpoint,
 		PrivateEgressCIDRs:   append([]string(nil), feed.PrivateEgressCIDRs...),
@@ -368,4 +379,37 @@ func auditFeedFromStore(feed store.AuditFeed) auditFeedResponse {
 		out.LastDeliveredAt = feed.LastDeliveredAt.UTC().Format(time.RFC3339)
 	}
 	return out
+}
+
+// normalizeAuditFeedAuthScheme reads auth_scheme (P5-L4): an Elasticsearch
+// feed presents its credential as an API key (api_key, the default, stored
+// empty), with basic auth or as a bearer token; no other collector takes one.
+func normalizeAuditFeedAuthScheme(provider, raw string) (string, error) {
+	scheme := strings.ToLower(strings.TrimSpace(raw))
+	if scheme == "" {
+		return "", nil
+	}
+	if provider != auditsink.ProviderElastic {
+		return "", errStatus(http.StatusBadRequest, "auth_scheme applies only to elastic feeds")
+	}
+	switch scheme {
+	case "api_key":
+		return "", nil
+	case "basic", "bearer":
+		return scheme, nil
+	default:
+		return "", errStatus(http.StatusBadRequest, "auth_scheme must be api_key, basic or bearer")
+	}
+}
+
+// auditFeedAuthSchemeName is the scheme an Elasticsearch feed reports:
+// api_key when none was chosen. Other collectors report none.
+func auditFeedAuthSchemeName(provider, scheme string) string {
+	if provider != auditsink.ProviderElastic {
+		return ""
+	}
+	if scheme == "" {
+		return "api_key"
+	}
+	return scheme
 }

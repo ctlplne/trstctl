@@ -3762,6 +3762,18 @@ export const messages = {
     defaultMessage: "https://collector.example.test/events",
     description: "Non-production absolute HTTPS example for the collector endpoint field.",
   },
+  "audit.feeds.authScheme": {
+    defaultMessage: "Elasticsearch authentication",
+    description: "P5-L4: field choosing how an Elasticsearch audit feed presents its credential.",
+  },
+  "audit.feeds.authSchemeHelp": {
+    defaultMessage: "How the credential reference is sent: as an API key, with basic auth (the reference holds user:password), or as a bearer token.",
+    description: "P5-L4: help for the Elasticsearch authentication field.",
+  },
+  "audit.feeds.authScheme.apiKey": { defaultMessage: "API key", description: "P5-L4: Elasticsearch authentication option." },
+  "audit.feeds.authScheme.basic": { defaultMessage: "Basic (user:password)", description: "P5-L4: Elasticsearch authentication option." },
+  "audit.feeds.authScheme.bearer": { defaultMessage: "Bearer token", description: "P5-L4: Elasticsearch authentication option." },
+  "audit.feeds.reviewAuthScheme": { defaultMessage: "Authentication", description: "P5-L4: review label for the Elasticsearch authentication scheme." },
   "audit.feeds.tokenRef": {
     defaultMessage: "Credential reference",
     description: "Audit feed credential-reference field.",

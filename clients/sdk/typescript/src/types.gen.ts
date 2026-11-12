@@ -14486,6 +14486,8 @@ export interface components {
         AuditFeed: {
             allow_private_endpoint: boolean;
             attempts: number;
+            /** @enum {string} */
+            auth_scheme?: "api_key" | "basic" | "bearer";
             batch_size: number;
             collector_request_id?: string;
             enabled: boolean;
@@ -14550,6 +14552,11 @@ export interface components {
         };
         AuditFeedRequest: {
             allow_private_endpoint?: boolean;
+            /**
+             * @description elastic only (P5-L4): present token_ref's credential as an API key (default), with basic auth (the credential is user:password) or as a bearer token
+             * @enum {string}
+             */
+            auth_scheme?: "api_key" | "basic" | "bearer";
             batch_size: number;
             enabled: boolean;
             endpoint_url: string;

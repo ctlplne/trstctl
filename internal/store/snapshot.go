@@ -336,7 +336,10 @@ import (
 // store would list no pending request until the CA is read again.
 // Version 119 carries N9-L2's MDM check-in waves: without them a restored
 // store would show a wave's check-ins without the wave that queued them.
-const SnapshotFormatVersion = 119
+// Version 120 carries P5-L4's audit feed auth_scheme: a version-119 payload
+// has no such column, and a restored Elasticsearch feed would present its
+// credential the wrong way.
+const SnapshotFormatVersion = 120
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

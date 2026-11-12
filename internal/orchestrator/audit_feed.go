@@ -118,7 +118,7 @@ func (o *Orchestrator) QueueAuditFeedBatch(
 	outboxKey := "audit-feed:" + batchID
 	queued := projections.AuditFeedBatchQueued{
 		BatchID: batchID, DestinationID: feed.ID, Provider: feed.Provider,
-		EndpointURL: feed.EndpointURL, TokenRef: feed.TokenRef,
+		EndpointURL: feed.EndpointURL, TokenRef: feed.TokenRef, AuthScheme: feed.AuthScheme,
 		AllowPrivateEndpoint: feed.AllowPrivateEndpoint,
 		PrivateEgressCIDRs:   append([]string(nil), feed.PrivateEgressCIDRs...),
 		IntervalSeconds:      feed.IntervalSeconds, StartSequence: start, EndSequence: end,
@@ -168,7 +168,7 @@ func auditFeedOutboxEntry(tenantID string, queued projections.AuditFeedBatchQueu
 	}
 	payload, err := json.Marshal(auditsink.FeedBatch{
 		BatchID: queued.BatchID, DestinationID: queued.DestinationID, Provider: queued.Provider,
-		EndpointURL: queued.EndpointURL, TokenRef: queued.TokenRef,
+		EndpointURL: queued.EndpointURL, TokenRef: queued.TokenRef, AuthScheme: queued.AuthScheme,
 		AllowPrivateEndpoint: queued.AllowPrivateEndpoint,
 		PrivateEgressCIDRs:   append([]string(nil), queued.PrivateEgressCIDRs...),
 		StartSequence:        queued.StartSequence, EndSequence: queued.EndSequence,

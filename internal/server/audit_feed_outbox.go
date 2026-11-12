@@ -5,6 +5,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,7 +24,10 @@ import (
 // it does not name is refused before anything is sent: posting the batch
 // without credentials would fail at the collector, or reach one that accepts
 // anonymous writes.
-func authorizeAuditFeedRequest(req *http.Request, provider, batchID string, token []byte) error {
+func authorizeAuditFeedRequest(req *http.Request, provider, scheme, batchID string, token []byte) error {
+	if scheme != "" && provider != auditsink.ProviderElastic {
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: audit feed provider %q has no %q credential scheme", provider, scheme))
+	}
 	switch provider {
 	case auditsink.ProviderSplunkHEC:
 		req.Header.Set("Authorization", secrettext.Prefixed("Splunk ", token))
@@ -32,7 +36,25 @@ func authorizeAuditFeedRequest(req *http.Request, provider, batchID string, toke
 		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
 		req.Header.Set("x-ms-client-request-id", batchID)
 	case auditsink.ProviderElastic:
-		req.Header.Set("Authorization", secrettext.Prefixed("ApiKey ", token))
+		// P5-L4: an Elasticsearch feed presents its credential as an API key
+		// (the default), with basic auth (the reference holds user:password)
+		// or as a bearer token.
+		switch scheme {
+		case "":
+			req.Header.Set("Authorization", secrettext.Prefixed("ApiKey ", token))
+		case "basic":
+			if bytes.IndexByte(token, ':') < 1 {
+				return orchestrator.DefiniteNoEffect(fmt.Errorf("server: a basic-auth audit feed credential must be user:password"))
+			}
+			encoded := make([]byte, base64.StdEncoding.EncodedLen(len(token)))
+			base64.StdEncoding.Encode(encoded, token)
+			req.Header.Set("Authorization", secrettext.Prefixed("Basic ", encoded))
+			secret.Wipe(encoded)
+		case "bearer":
+			req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
+		default:
+			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: audit feed credential scheme %q is not api_key, basic or bearer", scheme))
+		}
 	default:
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: audit feed provider %q has no credential scheme", provider))
 	}
@@ -106,7 +128,7 @@ func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message o
 	}
 	req.Header.Set("X-Trstctl-Idempotency-Key", message.IdempotencyKey)
 	req.Header.Set("Idempotency-Key", message.IdempotencyKey)
-	if err := authorizeAuditFeedRequest(req, batch.Provider, batch.BatchID, tokenBytes); err != nil {
+	if err := authorizeAuditFeedRequest(req, batch.Provider, batch.AuthScheme, batch.BatchID, tokenBytes); err != nil {
 		return err
 	}
 	response, err := client.Do(req)

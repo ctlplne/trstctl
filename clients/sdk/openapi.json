@@ -9201,6 +9201,14 @@
           "attempts": {
             "type": "integer"
           },
+          "auth_scheme": {
+            "enum": [
+              "api_key",
+              "basic",
+              "bearer"
+            ],
+            "type": "string"
+          },
           "batch_size": {
             "type": "integer"
           },
@@ -9452,6 +9460,15 @@
         "properties": {
           "allow_private_endpoint": {
             "type": "boolean"
+          },
+          "auth_scheme": {
+            "description": "elastic only (P5-L4): present token_ref's credential as an API key (default), with basic auth (the credential is user:password) or as a bearer token",
+            "enum": [
+              "api_key",
+              "basic",
+              "bearer"
+            ],
+            "type": "string"
           },
           "batch_size": {
             "type": "integer"

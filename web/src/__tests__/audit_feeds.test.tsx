@@ -149,4 +149,44 @@ describe("AUD-52 scheduled audit collector feeds", () => {
     await waitFor(() => expect(apiMock.putAuditFeed).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333", exactRequest));
     expect(await screen.findByRole("status")).toHaveTextContent("Collector feed saved");
   });
+
+  // P5-L4: an Elasticsearch feed chooses how its credential is presented; no
+  // other collector offers the choice.
+  it("saves an Elasticsearch feed with basic authentication", async () => {
+    const user = userEvent.setup();
+    const elasticRequest = {
+      name: "Elastic SOC",
+      provider: "elastic",
+      endpoint_url: "https://elastic.example.test/trstctl-audit/_bulk",
+      token_ref: "env:ELASTIC_WRITER",
+      interval_seconds: 300,
+      batch_size: 100,
+      enabled: true,
+      allow_private_endpoint: false,
+      private_egress_cidrs: [],
+      auth_scheme: "basic",
+    };
+    apiMock.previewAuditFeed.mockResolvedValue({ ...preview, endpoint_host: "elastic.example.test", normalized_request: elasticRequest });
+    render(
+      <AppQueryProvider>
+        <AuditFeedPanel />
+      </AppQueryProvider>,
+    );
+    expect(await screen.findByText("Security Splunk")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Elasticsearch authentication")).not.toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Feed ID"));
+    await user.type(screen.getByLabelText("Feed ID"), "44444444-4444-4444-8444-444444444444");
+    await user.type(screen.getByLabelText("Name"), "Elastic SOC");
+    await user.selectOptions(screen.getByLabelText("Collector"), "elastic");
+    await user.type(screen.getByLabelText("Collector endpoint URL"), "https://elastic.example.test/trstctl-audit/_bulk");
+    await user.type(screen.getByLabelText("Credential reference"), "env:ELASTIC_WRITER");
+    const scheme = screen.getByLabelText("Elasticsearch authentication");
+    expect(scheme).toHaveValue("api_key");
+    await user.selectOptions(scheme, "basic");
+    await user.click(screen.getByRole("button", { name: "Review collector feed" }));
+    await waitFor(() => expect(apiMock.previewAuditFeed).toHaveBeenCalledWith("44444444-4444-4444-8444-444444444444", elasticRequest));
+    expect(await screen.findByText("Authentication")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save collector feed" }));
+    await waitFor(() => expect(apiMock.putAuditFeed).toHaveBeenCalledWith("44444444-4444-4444-8444-444444444444", elasticRequest));
+  });
 });

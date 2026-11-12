@@ -2566,6 +2566,7 @@ AuditFeed = TypedDict(
     {
         'allow_private_endpoint': bool,
         'attempts': int,
+        'auth_scheme': str,
         'batch_size': int,
         'collector_request_id': str,
         'enabled': bool,
@@ -2633,6 +2634,7 @@ AuditFeedRequest = TypedDict(
     'AuditFeedRequest',
     {
         'allow_private_endpoint': bool,
+        'auth_scheme': str,
         'batch_size': int,
         'enabled': bool,
         'endpoint_url': str,

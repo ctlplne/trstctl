@@ -196,8 +196,13 @@ egress guard as the HTTP collectors. Syslog acknowledges nothing per message, so
 a batch counts as delivered once every message is written and the TLS session
 closes cleanly; a retry resends the batch, and each message carries its audit
 sequence for the receiver to drop a repeat. An `elastic` feed posts an
-Elasticsearch `_bulk` body to `https://host[:port]/<index>/_bulk` with an API key
-reference (sent as `Authorization: ApiKey …`). Each record is created under its
+Elasticsearch `_bulk` body to `https://host[:port]/<index>/_bulk` with the
+credential its `token_ref` names, presented the way its `auth_scheme` says
+(P5-L4): `api_key` (the default, sent as `Authorization: ApiKey …`), `basic` (the
+reference holds `user:password`, sent as `Authorization: Basic …`) or `bearer`
+(`Authorization: Bearer …`). Only an `elastic` feed takes a scheme; a basic
+credential that is not `user:password` keeps the batch waiting with nothing sent,
+until the credential is fixed. Each record is created under its
 audit record ID with `@timestamp`, `event.action`, `event.sequence` and the
 collector record under `trstctl`; a create of an ID already indexed is a conflict,
 not a second copy, so a redelivered batch adds nothing, and any other failed item

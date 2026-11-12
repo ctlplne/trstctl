@@ -22,11 +22,14 @@ const (
 // the audit read service. Retrying this payload cannot silently pick up a newer
 // history generation.
 type FeedBatch struct {
-	BatchID              string              `json:"batch_id"`
-	DestinationID        string              `json:"destination_id"`
-	Provider             string              `json:"provider"`
-	EndpointURL          string              `json:"endpoint_url"`
-	TokenRef             string              `json:"token_ref"`
+	BatchID       string `json:"batch_id"`
+	DestinationID string `json:"destination_id"`
+	Provider      string `json:"provider"`
+	EndpointURL   string `json:"endpoint_url"`
+	TokenRef      string `json:"token_ref"`
+	// AuthScheme is how an Elasticsearch feed presents its credential
+	// (P5-L4): empty for an API key, basic or bearer.
+	AuthScheme           string              `json:"auth_scheme,omitempty"`
 	AllowPrivateEndpoint bool                `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string            `json:"private_egress_cidrs,omitempty"`
 	StartSequence        uint64              `json:"start_sequence"`

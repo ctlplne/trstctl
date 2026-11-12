@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An Elasticsearch audit feed can authenticate with basic auth or a bearer token as well as an API key (P5-L4).
+  `auth_scheme` (`api_key`, the default; `basic`, where the credential reference holds `user:password`; or
+  `bearer`) sets the `Authorization` header; only an `elastic` feed takes one. The Audit page's feed form offers
+  the choice for Elasticsearch, and the review shows it.
 - A read-only planner builds canary-first migration cohorts from a selector (P3-L1). `GET
   /api/v1/migrations/cohort-plan` (CLI `migrations plan-cohorts`) places the deployed X.509 identities of a profile,
   an issuing trstctl CA, an owner or a connector in a canary and then cohorts, each member with its target's host

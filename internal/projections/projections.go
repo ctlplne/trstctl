@@ -3942,6 +3942,9 @@ type AuditFeedDestinationConfigured struct {
 	Enabled              bool     `json:"enabled"`
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
+	// AuthScheme is how an Elasticsearch feed presents its credential
+	// (P5-L4): api_key (empty), basic or bearer.
+	AuthScheme string `json:"auth_scheme,omitempty"`
 }
 
 // AuditFeedScheduleChecked advances an empty schedule through the immutable
@@ -3963,6 +3966,7 @@ type AuditFeedBatchQueued struct {
 	Provider             string   `json:"provider"`
 	EndpointURL          string   `json:"endpoint_url"`
 	TokenRef             string   `json:"token_ref"`
+	AuthScheme           string   `json:"auth_scheme,omitempty"`
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
 	IntervalSeconds      int      `json:"interval_seconds"`
@@ -8599,12 +8603,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		if pl.ID == "" || pl.Name == "" || pl.EndpointURL == "" || (pl.TokenRef == "" && pl.Provider != "syslog") ||
 			(pl.Provider != "splunk-hec" && pl.Provider != "sentinel" && pl.Provider != "syslog" && pl.Provider != "elastic") ||
-			pl.IntervalSeconds < 60 || pl.BatchSize < 1 || pl.BatchSize > 500 {
+			pl.IntervalSeconds < 60 || pl.BatchSize < 1 || pl.BatchSize > 500 ||
+			!validAuditFeedAuthScheme(pl.Provider, pl.AuthScheme) {
 			return fmt.Errorf("projections: %s has invalid destination configuration", e.Type)
 		}
 		return p.store.ApplyAuditFeedConfiguredTx(ctx, tx, store.AuditFeed{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Provider: pl.Provider,
-			EndpointURL: pl.EndpointURL, TokenRef: pl.TokenRef,
+			EndpointURL: pl.EndpointURL, TokenRef: pl.TokenRef, AuthScheme: pl.AuthScheme,
 			IntervalSeconds: pl.IntervalSeconds, BatchSize: pl.BatchSize, Enabled: pl.Enabled,
 			AllowPrivateEndpoint: pl.AllowPrivateEndpoint, PrivateEgressCIDRs: pl.PrivateEgressCIDRs,
 			ConfigEventSequence: e.Sequence, NextRunAt: e.Time, CreatedAt: e.Time, UpdatedAt: e.Time,
@@ -11595,4 +11600,18 @@ func tokenAttestationField(t *EdgeTokenAttestation, field func(*EdgeTokenAttesta
 		return ""
 	}
 	return field(t)
+}
+
+// validAuditFeedAuthScheme is the closed set of credential schemes (P5-L4):
+// an Elasticsearch feed may present its credential as an API key (empty),
+// with basic auth or as a bearer token; every other provider has one scheme.
+func validAuditFeedAuthScheme(provider, scheme string) bool {
+	switch scheme {
+	case "":
+		return true
+	case "basic", "bearer":
+		return provider == "elastic"
+	default:
+		return false
+	}
 }

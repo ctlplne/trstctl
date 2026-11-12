@@ -4976,6 +4976,8 @@ func componentSchemas() map[string]*Schema {
 		"interval_seconds": {Type: "integer"}, "batch_size": {Type: "integer"},
 		"enabled": {Type: "boolean"}, "allow_private_endpoint": {Type: "boolean"},
 		"private_egress_cidrs": {Type: "array", Items: str()},
+		"auth_scheme": {Type: "string", Enum: []string{"api_key", "basic", "bearer"},
+			Description: "elastic only (P5-L4): present token_ref's credential as an API key (default), with basic auth (the credential is user:password) or as a bearer token"},
 	}, "name", "provider", "endpoint_url", "token_ref", "interval_seconds", "batch_size", "enabled")
 	auditFeed := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "name": str(),
@@ -4984,6 +4986,7 @@ func componentSchemas() map[string]*Schema {
 		"interval_seconds": {Type: "integer"}, "batch_size": {Type: "integer"},
 		"enabled": {Type: "boolean"}, "allow_private_endpoint": {Type: "boolean"},
 		"private_egress_cidrs": {Type: "array", Items: str()},
+		"auth_scheme":          {Type: "string", Enum: []string{"api_key", "basic", "bearer"}},
 		"status":               {Type: "string", Enum: []string{"not_started", "queued", "delivering", "retrying", "delivered", "failed"}},
 		"last_batch_id":        uuid(), "last_batch_start_sequence": {Type: "integer"},
 		"last_queued_sequence": {Type: "integer"}, "last_delivered_sequence": {Type: "integer"},

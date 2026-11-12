@@ -26,12 +26,15 @@ func (s *Store) EnsureAuditFeedNameAvailable(ctx context.Context, tenantID, id, 
 // durable delivery posture. TokenRef is a pointer only; credential bytes never
 // enter this read model.
 type AuditFeed struct {
-	ID                     string
-	TenantID               string
-	Name                   string
-	Provider               string
-	EndpointURL            string
-	TokenRef               string
+	ID          string
+	TenantID    string
+	Name        string
+	Provider    string
+	EndpointURL string
+	TokenRef    string
+	// AuthScheme is how an Elasticsearch feed presents its credential
+	// (P5-L4): empty for an API key, basic or bearer.
+	AuthScheme             string
 	IntervalSeconds        int
 	BatchSize              int
 	Enabled                bool
@@ -114,13 +117,14 @@ func (s *Store) ApplyAuditFeedConfiguredTx(ctx context.Context, tx pgx.Tx, feed 
 		`INSERT INTO audit_feed_destinations
 		        (id, tenant_id, name, provider, endpoint_url, token_ref, interval_seconds,
 		         batch_size, enabled, allow_private_endpoint, private_egress_cidrs,
-		         config_event_sequence, next_run_at, created_at, updated_at)
-		      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$14)
+		         config_event_sequence, next_run_at, created_at, updated_at, auth_scheme)
+		      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$14,$15)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		      SET name = EXCLUDED.name,
 		          provider = EXCLUDED.provider,
 		          endpoint_url = EXCLUDED.endpoint_url,
 		          token_ref = EXCLUDED.token_ref,
+		          auth_scheme = EXCLUDED.auth_scheme,
 		          interval_seconds = EXCLUDED.interval_seconds,
 		          batch_size = EXCLUDED.batch_size,
 		          enabled = EXCLUDED.enabled,
@@ -132,7 +136,7 @@ func (s *Store) ApplyAuditFeedConfiguredTx(ctx context.Context, tx pgx.Tx, feed 
 		    WHERE audit_feed_destinations.config_event_sequence < EXCLUDED.config_event_sequence`,
 		feed.ID, feed.TenantID, feed.Name, feed.Provider, feed.EndpointURL, feed.TokenRef,
 		feed.IntervalSeconds, feed.BatchSize, feed.Enabled, feed.AllowPrivateEndpoint,
-		cidrs, feed.ConfigEventSequence, feed.NextRunAt, feed.UpdatedAt)
+		cidrs, feed.ConfigEventSequence, feed.NextRunAt, feed.UpdatedAt, feed.AuthScheme)
 	return err
 }
 
@@ -385,7 +389,7 @@ func (s *Store) AuditFeedsDue(ctx context.Context, tenantID string, now time.Tim
 }
 
 const auditFeedSelectSQL = `SELECT f.id::text, f.tenant_id::text, f.name, f.provider,
-	       f.endpoint_url, f.token_ref, f.interval_seconds, f.batch_size, f.enabled,
+	       f.endpoint_url, f.token_ref, f.auth_scheme, f.interval_seconds, f.batch_size, f.enabled,
 	       f.allow_private_endpoint, f.private_egress_cidrs, f.config_event_sequence,
 	       f.next_run_at, f.last_queued_sequence, f.last_delivered_sequence,
 	       f.lag_records,
@@ -402,7 +406,7 @@ func scanAuditFeed(row rowScanner, out *AuditFeed) error {
 	var cidrs []byte
 	var configSeq, queuedSeq, deliveredSeq, batchStartSeq int64
 	if err := row.Scan(
-		&out.ID, &out.TenantID, &out.Name, &out.Provider, &out.EndpointURL, &out.TokenRef,
+		&out.ID, &out.TenantID, &out.Name, &out.Provider, &out.EndpointURL, &out.TokenRef, &out.AuthScheme,
 		&out.IntervalSeconds, &out.BatchSize, &out.Enabled, &out.AllowPrivateEndpoint,
 		&cidrs, &configSeq, &out.NextRunAt, &queuedSeq, &deliveredSeq, &out.LagRecords, &out.LastBatchID,
 		&out.LastOutboxKey, &out.LastStatus, &out.LastAttemptAt, &out.LastDeliveredAt,
