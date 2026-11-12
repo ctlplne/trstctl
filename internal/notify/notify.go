@@ -141,7 +141,11 @@ const (
 	// passed its deadline and the rotation that retires its revealed
 	// credential could not be queued, so that credential still signs in.
 	KindCheckoutRotationBlocked = "pam.checkout.rotation_blocked"
-	KindHoneyTokenTriggered     = "honeytoken.triggered"
+	// KindSessionAccountRotationBlocked (A273-O4): a web console session
+	// ended and the rotation of the account its gateway signed in as could
+	// not be queued, so that password still signs in.
+	KindSessionAccountRotationBlocked = "pam.session.account_rotation_blocked"
+	KindHoneyTokenTriggered           = "honeytoken.triggered"
 	// KindHoneyTokenWatchGap (Q6-L10): the watcher cannot read a decoy login,
 	// so a use of the bait is not seen until it can.
 	KindHoneyTokenWatchGap        = "honeytoken.watch_gap"

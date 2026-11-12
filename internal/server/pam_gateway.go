@@ -474,7 +474,10 @@ func (s *Server) pamGatewayCredential() func(ctx context.Context, tenantID, sess
 type gatewayStart struct {
 	backendRef, agentID, address string
 	sshKeyID, sshPrincipal       string
-	undo                         func()
+	// accountRotationProvider (A273-O4) rotates a web console's account
+	// once after the session ends.
+	accountRotationProvider string
+	undo                    func()
 }
 
 // startGatewaySession records a gateway-delivered session (A254) and queues
@@ -510,6 +513,7 @@ func (s *pamService) startGatewaySession(ctx context.Context, tenantID, idempote
 	session, payload := s.startedPayload(tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, start.backendRef, start.sshKeyID, 0)
 	payload.Delivery, payload.GatewayAgentID, payload.GatewayTicketDigest = "gateway", start.agentID, accessgateway.TicketDigest(ticket)
 	payload.SSHPrincipal = start.sshPrincipal
+	payload.AccountRotationProvider = start.accountRotationProvider
 	if req.TargetType == pamTargetSSH {
 		// The deterministic SSH started event completes the activation the
 		// open recorded, exactly as a direct SSH session's does, so the

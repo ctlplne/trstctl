@@ -55,6 +55,8 @@ func pamCommandSessionPrivacy(base events.PrivacyEventPolicy) events.PrivacyEven
 		privacyRule("/web_sign_in/header", events.PrivacyFieldOpaqueExact),
 		privacyRule("/web_sign_in/header_prefix", events.PrivacyFieldOpaqueExact),
 		privacyRule("/web_sign_in/browser_cookies/*", events.PrivacyFieldOpaqueExact),
+		// A273-O4: the provider the console's account rotates through.
+		privacyRule("/account_rotation_provider", events.PrivacyFieldOpaqueExact),
 	)
 	return base
 }

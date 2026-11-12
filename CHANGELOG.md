@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- A web console's account can rotate after each session (A273-O4). A `webconsole` target may name an
+  in-place account provider (ESXi, vCenter single sign-on, Redfish or a network device) that rotates
+  its account secret. Once a session to it ends, the expiry worker queues one rotation through that
+  provider and records it on the session, so the password the gateway signed in with no longer works.
+  A rotation that cannot be queued raises one critical `pam.session.account_rotation_blocked` alert
+  and is queued once it can be. The console's target form takes the optional rotation provider.
 - A web console target may name the path its console lives under (A273-O3), such as
   `https://apps.internal.example/grafana/`. The browser's tunnel leads there and reaches only
   that path. Another path on the console's host is refused at the gateway and recorded,

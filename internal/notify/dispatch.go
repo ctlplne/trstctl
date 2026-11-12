@@ -719,6 +719,8 @@ func FormatMessage(a Alert) string {
 		b.WriteString("Risky command in a privileged session")
 	case KindCheckoutRotationBlocked:
 		b.WriteString("A checked-out credential could not be retired")
+	case KindSessionAccountRotationBlocked:
+		b.WriteString("A web console account could not be rotated after its session")
 	case KindEndpointVerificationFailed:
 		// The wording is chosen to be unmistakable at 3am. "Verification
 		// failed" would read as a tooling problem; this says what is actually

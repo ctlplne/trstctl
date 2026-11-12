@@ -372,6 +372,41 @@ it("registers a web admin console with its vaulted account, its https origin and
   );
 });
 
+it("registers a web admin console whose account an in-place provider rotates after each session (A273-O4)", async () => {
+  const user = userEvent.setup();
+  apiMock.pamTargets.mockResolvedValue({ items: [] });
+  apiMock.registerPAMTarget.mockImplementation(async (input) => ({ ...input, source: "tenant", enabled: true }));
+  mount(true);
+  await user.click(await screen.findByRole("button", { name: "Register target" }));
+  const form = screen.getByRole("dialog", { name: "Register target" });
+  await user.type(within(form).getByRole("textbox", { name: "Target ID" }), "bmc-console");
+  await user.selectOptions(within(form).getByRole("combobox", { name: "Target type" }), "webconsole");
+  const secret = within(form).getByRole("textbox", { name: "Account secret" });
+  await user.clear(secret);
+  await user.type(secret, "bmc/ops");
+  await user.type(within(form).getByRole("textbox", { name: "Console address" }), "https://bmc.internal.example");
+  expect(within(form).getByText(/the account rotates after each session ends/)).toBeInTheDocument();
+  await user.type(within(form).getByRole("combobox", { name: "Rotation provider (optional)" }), "rack-bmc");
+  await user.type(within(form).getByRole("textbox", { name: "Gateway agent ID" }), "gateway-agent");
+  await user.type(within(form).getByRole("textbox", { name: "Gateway address (host:port)" }), "gateway.example:8443");
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
+  await waitFor(() =>
+    expect(apiMock.registerPAMTarget).toHaveBeenCalledWith(
+      {
+        id: "bmc-console",
+        target_type: "webconsole",
+        allowed_roles: ["bmc/ops"],
+        account_secret: "bmc/ops",
+        provider_id: "rack-bmc",
+        web: { url: "https://bmc.internal.example" },
+        gateway_agent_id: "gateway-agent",
+        gateway_address: "gateway.example:8443",
+      },
+      expect.any(String),
+    ),
+  );
+});
+
 it("registers a Windows local administrator account for check-out with its native provider and no gateway (A268)", async () => {
   const user = userEvent.setup();
   apiMock.pamTargets.mockResolvedValue({ items: [] });

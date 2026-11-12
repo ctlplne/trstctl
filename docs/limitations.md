@@ -10069,7 +10069,8 @@ What comes next:
 - A console origin that a script assembles from parts at run time, or that a body the console
   compresses despite the gateway's request carries, reaches the browser as written; such a
   link leaves the tunnel.
-- Rotating a web console account (today the account is vaulted, not rotated).
+- Rotating a web console account that none of the in-place account providers (ESXi, vCenter
+  single sign-on, Redfish, network devices) manages: such an account is vaulted, not rotated.
 
 ## Bypass detection (A274) — parts 1-3: collectors, recorded sign-ins and retention
 

@@ -1071,6 +1071,15 @@ export const messages = {
     defaultMessage: "Name the one application secret that holds the console's account.",
     description: "Web console target registration (A273).",
   },
+  "admin.access.webconsole.rotationProvider": {
+    defaultMessage: "Rotation provider (optional)",
+    description: "Web console target registration (A273-O4): the provider that rotates the console's account after each session.",
+  },
+  "admin.access.webconsole.rotationProviderHelp": {
+    defaultMessage:
+      "An ESXi, vCenter single sign-on, Redfish or network device provider that rotates this account in place. When set, the account rotates after each session ends, so the password the gateway signed in with no longer works.",
+    description: "Web console target registration (A273-O4).",
+  },
   "admin.access.webconsole.proof": {
     defaultMessage:
       "The gateway signs in to the console for the operator, as the session's access template says, and keeps the console's cookies; the browser never receives the password. Links the console writes with its own address keep the browser on the session's tunnel. Proven against a stand-in console; no vendor console yet.",

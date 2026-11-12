@@ -349,8 +349,11 @@ const (
 	EventPAMRecordingChunkStored        = "pam.session.recording_chunk_stored"
 	EventPAMRecordingSealed             = "pam.session.recording_sealed"
 	EventPAMSessionGatewayEnded         = "pam.session.gateway_ended"
-	EventPAMRecordingLegalHold          = "pam.session.recording_legal_hold"
-	EventPAMRecordingDeleted            = "pam.session.recording_deleted"
+	// A273-O4: the rotation a web console session's end queued for its
+	// console account.
+	EventPAMSessionAccountRotationQueued = "pam.session.account_rotation_queued"
+	EventPAMRecordingLegalHold           = "pam.session.recording_legal_hold"
+	EventPAMRecordingDeleted             = "pam.session.recording_deleted"
 	// A274: the sign-ins a bypass detection run read, and their purge.
 	EventPAMSignInsCollected = "pam.signin.collected"
 	EventPAMSignInsPurged    = "pam.signin.records_purged"
@@ -4368,24 +4371,28 @@ type PAMSessionStarted struct {
 	CommandPolicy *accessrules.Policy `json:"command_policy,omitempty"`
 	// WebSignIn is the web console sign-in the session's reviewers approved
 	// (A273).
-	WebSignIn      *accessweb.SignIn   `json:"web_sign_in,omitempty"`
-	ID             string              `json:"id"`
-	TargetType     string              `json:"target_type"`
-	TargetID       string              `json:"target_id"`
-	Role           string              `json:"role"`
-	Status         string              `json:"status"`
-	Subject        string              `json:"subject"`
-	RequestedBy    string              `json:"requested_by"`
-	Reason         string              `json:"reason,omitempty"`
-	AttestationID  string              `json:"attestation_id,omitempty"`
-	Attestation    *attest.Attestation `json:"attestation,omitempty"`
-	BackendRef     string              `json:"backend_ref,omitempty"`
-	SSHKeyID       string              `json:"ssh_key_id,omitempty"`
-	SSHSerial      uint64              `json:"ssh_serial,omitempty"`
-	IdempotencyKey string              `json:"idempotency_key,omitempty"`
-	Audit          json.RawMessage     `json:"audit,omitempty"`
-	StartedAt      time.Time           `json:"started_at"`
-	ExpiresAt      time.Time           `json:"expires_at"`
+	WebSignIn *accessweb.SignIn `json:"web_sign_in,omitempty"`
+	// AccountRotationProvider is the in-place account provider a web console
+	// session's target names: the console's account rotates through it once
+	// after the session ends (A273-O4).
+	AccountRotationProvider string              `json:"account_rotation_provider,omitempty"`
+	ID                      string              `json:"id"`
+	TargetType              string              `json:"target_type"`
+	TargetID                string              `json:"target_id"`
+	Role                    string              `json:"role"`
+	Status                  string              `json:"status"`
+	Subject                 string              `json:"subject"`
+	RequestedBy             string              `json:"requested_by"`
+	Reason                  string              `json:"reason,omitempty"`
+	AttestationID           string              `json:"attestation_id,omitempty"`
+	Attestation             *attest.Attestation `json:"attestation,omitempty"`
+	BackendRef              string              `json:"backend_ref,omitempty"`
+	SSHKeyID                string              `json:"ssh_key_id,omitempty"`
+	SSHSerial               uint64              `json:"ssh_serial,omitempty"`
+	IdempotencyKey          string              `json:"idempotency_key,omitempty"`
+	Audit                   json.RawMessage     `json:"audit,omitempty"`
+	StartedAt               time.Time           `json:"started_at"`
+	ExpiresAt               time.Time           `json:"expires_at"`
 	// ApprovalRequestID names the approval the activation consumed (G1); events
 	// recorded before it existed carry none.
 	ApprovalRequestID string `json:"approval_request_id,omitempty"`
@@ -4505,6 +4512,15 @@ type PAMSessionGatewayEnded struct {
 	Connections int       `json:"connections"`
 	Attempt     int       `json:"attempt"`
 	EndedAt     time.Time `json:"ended_at"`
+}
+
+// PAMSessionAccountRotationQueued records the rotation a web console
+// session's end queued for its console account (A273-O4).
+type PAMSessionAccountRotationQueued struct {
+	ID                string    `json:"id"`
+	Provider          string    `json:"provider"`
+	RotationCommandID string    `json:"rotation_command_id"`
+	At                time.Time `json:"at"`
 }
 
 // PAMAccountHealthChecked records one sign-in check of the credential a
@@ -5491,6 +5507,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMRecordingChunkStored:                  {1: true},
 	EventPAMRecordingSealed:                       {1: true},
 	EventPAMSessionGatewayEnded:                   {1: true},
+	EventPAMSessionAccountRotationQueued:          {1: true},
 	EventPAMRecordingLegalHold:                    {1: true},
 	EventPAMRecordingDeleted:                      {1: true},
 	EventPAMSignInsCollected:                      {1: true},
@@ -8934,6 +8951,15 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMSessionGatewayEndedTx(ctx, tx, e.TenantID, pl.ID, pl.Ended, pl.EndedAt)
+	case EventPAMSessionAccountRotationQueued:
+		var pl PAMSessionAccountRotationQueued
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Provider == "" || pl.RotationCommandID == "" || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMSessionAccountRotationQueuedTx(ctx, tx, e.TenantID, pl.ID, pl.RotationCommandID)
 	case EventPAMSignInsCollected:
 		var pl PAMSignInsCollected
 		if err := decode(e, &pl); err != nil {
@@ -9447,7 +9473,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			SSHKeyID: pl.SSHKeyID, SSHSerial: pl.SSHSerial, IdempotencyKey: pl.IdempotencyKey,
 			Audit: pl.Audit, StartedAt: startedAt, ExpiresAt: pl.ExpiresAt, ApprovalRequestID: pl.ApprovalRequestID,
 			Delivery: pl.Delivery, GatewayAgentID: pl.GatewayAgentID, GatewayTicketDigest: pl.GatewayTicketDigest,
-			SSHPrincipal: pl.SSHPrincipal, CommandPolicy: pl.CommandPolicy, WebSignIn: pl.WebSignIn,
+			SSHPrincipal: pl.SSHPrincipal, CommandPolicy: pl.CommandPolicy, WebSignIn: pl.WebSignIn, AccountRotationProvider: pl.AccountRotationProvider,
 		})
 	case EventPAMSessionExpired:
 		var pl PAMSessionExpired

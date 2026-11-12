@@ -470,7 +470,18 @@ func (s *pamService) inPlaceAccount(tenantID, providerID, accountSecret string, 
 	if s.secretReader == nil || s.rotation.check == nil || s.rotation.queue == nil {
 		return fmt.Errorf("%w: account targets need the secrets API", api.ErrPAMInvalid)
 	}
-	for _, provider := range s.providers.ForTenant(tenantID) {
+	return inPlaceAccountProvider(s.providers, tenantID, providerID, accountSecret)
+}
+
+// inPlaceAccountProvider checks that a provider in the tenant is one of
+// pamInPlaceAccountTypes and rotates the account secret in place as a static
+// credential: account targets (A271) and the web consoles whose account
+// rotates after each session (A273-O4).
+func inPlaceAccountProvider(providers DynamicSecretProviderRegistry, tenantID, providerID, accountSecret string) error {
+	if providers == nil {
+		return fmt.Errorf("%w: no dynamic-secret provider %s in this tenant", api.ErrPAMInvalid, providerID)
+	}
+	for _, provider := range providers.ForTenant(tenantID) {
 		if provider == nil || provider.Name() != providerID {
 			continue
 		}

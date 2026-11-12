@@ -897,10 +897,23 @@ func (a *API) CheckVaultedAccountRotation(ctx context.Context, tenantID, provide
 // check-in and retried at every deadline tick until it finishes.
 func (a *API) QueueVaultedAccountRotation(ctx context.Context, tenantID, providerID, key, currentAccount, requestID string,
 	revealedAt time.Time, revealedVersion int) (string, error) {
+	return a.queueVaultedAccountRotation(ctx, tenantID, providerID, key, currentAccount, vaultedAccountRotationKey(requestID),
+		"pam-checkout", "/api/v1/access/checkouts/"+requestID+"/checkin", revealedAt, revealedVersion)
+}
+
+// QueueSessionAccountRotation queues the one rotation that retires the
+// console account a web console session's gateway signed in as, after the
+// session ended (A273-O4). It is idempotent per session.
+func (a *API) QueueSessionAccountRotation(ctx context.Context, tenantID, providerID, key, sessionID string, startedAt time.Time) (string, error) {
+	return a.queueVaultedAccountRotation(ctx, tenantID, providerID, key, "", "pam-session:"+sessionID,
+		"pam-session", "/api/v1/access/sessions/"+sessionID+"/end", startedAt, 0)
+}
+
+func (a *API) queueVaultedAccountRotation(ctx context.Context, tenantID, providerID, key, currentAccount, idempotencyKey, principal, route string,
+	revealedAt time.Time, revealedVersion int) (string, error) {
 	if a.secrets == nil {
 		return "", errStatus(http.StatusServiceUnavailable, staticRotationProviderUnavailableDetail)
 	}
-	idempotencyKey := vaultedAccountRotationKey(requestID)
 	epoch, err := a.applicationSecretTenantEpoch(ctx, tenantID)
 	if err != nil {
 		return "", err
@@ -921,8 +934,8 @@ func (a *API) QueueVaultedAccountRotation(ctx context.Context, tenantID, provide
 		return "", err
 	}
 	req := secretRotationRequest{Provider: providerID, Key: key, OldRef: oldRef, AcknowledgeSinglePhase: true}
-	_, binding, err := a.applicationSecretRequestBinding(tenantID, idempotencyKey, "pam-checkout", "WORKER",
-		"/api/v1/access/checkouts/"+requestID+"/checkin", "static-rotate", staticRotationSurface, key, req)
+	_, binding, err := a.applicationSecretRequestBinding(tenantID, idempotencyKey, principal, "WORKER",
+		route, "static-rotate", staticRotationSurface, key, req)
 	if err != nil {
 		return "", err
 	}

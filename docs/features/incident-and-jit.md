@@ -1747,7 +1747,17 @@ or `{"token": ...}` for a header sign-in) and register it as a `webconsole` acce
 the account secret (its only role), the console's route — its origin over https, or the
 path it lives under on that origin (such as `https://apps.internal.example/grafana/`), with
 the CA and server name its certificate is checked against — and the gateway that serves it.
-No provider rotates it.
+
+A console whose account an in-place account provider manages (ESXi, vCenter single sign-on,
+Redfish or a network device) can name that provider in `provider_id`. The provider must
+rotate the account secret in place as a static credential, and the target is refused
+otherwise. After each session to such a console ends, by its deadline, a recall or a
+terminate, the account rotates once through the provider, so the password the gateway
+signed in with no longer works. The expiry worker queues the rotation and records it on
+the session. The rotation then runs like any static rotation of the secret, and the vault
+keeps the new password. If the rotation cannot be queued, the session raises one critical
+`pam.session.account_rotation_blocked` alert on the risk channel. The worker queues the
+rotation once it can. Without a provider the account is vaulted, not rotated.
 
 ```json
 {"id": "grafana-admin", "target_type": "webconsole",
@@ -1798,7 +1808,7 @@ because the tunnel is plain http on loopback. A script that assembles the origin
 at run time, and a body the console compresses although the gateway asks it not to, reach
 the browser as written.
 In the console, register one under the access targets (type **Web admin console**: account
-secret, console address, optional CA and certificate name, gateway) and set a template's
+secret, console address, optional CA and certificate name, optional rotation provider, gateway) and set a template's
 web sign-in from the template table. Request the session from the privileged session dialog
 (type **Web admin console**); once it is approved and activated, the dialog shows the
 `trstctl access sessions connect` command and, on request, the one-time gateway ticket to

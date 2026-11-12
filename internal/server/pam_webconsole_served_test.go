@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/infratest"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/objectstore/s3test"
@@ -123,13 +124,27 @@ var (
 // the tunnel (A273-O2); terminating the session stops the browser's access.
 // A session without a template that signs in, a misdeclared target or
 // template, and a check-out of the account are refused. A console under a
-// path is reached only under it (A273-O3).
+// path is reached only under it (A273-O3), and a console's account its
+// provider rotates rotates after each session (A273-O4).
 func TestServedWebConsoleSessionA273(t *testing.T) {
 	if testing.Short() {
 		t.Skip("gateway session proof")
 	}
 	console := infratest.StartWebConsole("admin", a273ConsolePassword)
 	t.Cleanup(console.Close)
+	// A273-O4: a server management controller whose console account its
+	// Redfish provider rotates in place.
+	bmc := infratest.StartRedfish("Administrator", "a273-bmc-admin-password")
+	t.Cleanup(bmc.Close)
+	bmc.AddAccount("ops", "a273-bmc-ops-password-1", "Operator")
+	bmcProviders, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{{TenantID: servedTestTenant,
+		ID: "a273-bmc", Type: "redfish", Endpoint: bmc.URL(), TLSCARef: writeServedCredentialFile(t, "a273-bmc-ca", string(bmc.CAPEM())),
+		AdminUser: "Administrator", PasswordRef: writeServedCredentialFile(t, "a273-bmc-admin", "a273-bmc-admin-password"),
+		AllowedRoles: []string{"bmc/a273-ops"}, RoleBindings: map[string]string{"bmc/a273-ops": "ops"}, MaxTTL: "1h", AllowStaticRotation: true,
+		AllowPrivate: true, PrivateEgressCIDRs: []string{"127.0.0.1/32"}}}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// TRSTCTL_A273_BROWSER_DIR (opt-in) holds the session open for a real
 	// browser: the test writes the tunnel's address to <dir>/url, waits for
 	// <dir>/done, checks the browser's traffic too, and after terminating
@@ -141,7 +156,6 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 	}
 
 	f := &gatewayFixture{t: t, objects: s3test.NewServer(t), gatewayLog: &lockedBuffer{}, dir: t.TempDir()}
-	var err error
 	if f.auditKey, err = jose.GenerateRSASigningKey("audit-export"); err != nil {
 		t.Fatal(err)
 	}
@@ -156,6 +170,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 			WebConsoleAllowLoopback: true, Attestors: []attest.Attestor{servedPAMAttestor{}}}
 		d.ArchiveObjectStore = f.objects.Open(t)
 		d.AuditSigningKey = f.auditKey
+		d.TenantDynamicSecretProviders = DynamicSecretProviderRegistry{servedTestTenant: bmcProviders.ForTenant(servedTestTenant)}
 	})
 	h := f.h
 	if _, err := h.client.Heartbeat(context.Background(), &transport.HeartbeatRequest{AgentID: h.agent, Version: "a273", Status: "active",
@@ -486,6 +501,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 		map[string]any{"reason": "A273-O3 proof complete"}); status != http.StatusAccepted {
 		t.Fatalf("terminate the path session = %d %s", status, body)
 	}
+	servedWebConsoleAccountRotatesAfterSession(t, f, bmc, gatewayID, custodian, account, request, template)
 }
 
 // a273AwaitBrowser writes note to <dir>/<write> and waits (up to half an
@@ -502,5 +518,109 @@ func a273AwaitBrowser(t *testing.T, dir, write, note, await string) {
 		if time.Now().After(deadline) {
 			t.Fatalf("no browser wrote %s", await)
 		}
+	}
+}
+
+// servedWebConsoleAccountRotatesAfterSession is A273-O4: a web console target
+// names the in-place provider that rotates its account. A server management
+// controller's console signs in by basic authentication as its vaulted
+// operator account; once the session ends, the account rotates once through
+// the controller's Redfish provider, so the password the session used no
+// longer signs in and the vault holds the one that does. A provider that does
+// not rotate the account is refused, and a session to a console without a
+// provider rotates nothing.
+func servedWebConsoleAccountRotatesAfterSession(t *testing.T, f *gatewayFixture, bmc *infratest.Redfish, gatewayID, custodian, unrotated string,
+	request func(string) map[string]any, template func(string, map[string]any) (int, api.PAMAccessTemplate)) {
+	t.Helper()
+	h, ctx := f.h, f.ctx
+	const bmcAccount, initial = "bmc/a273-ops", "a273-bmc-ops-password-1"
+	value, _ := json.Marshal(map[string]string{"username": "ops", "password": initial})
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/secrets/store", custodian, "a273-bmc-seed",
+		map[string]any{"name": bmcAccount, "value": string(value)}); status != http.StatusCreated && status != http.StatusOK {
+		t.Fatalf("vault the controller's account: %d %s", status, body)
+	}
+	target := func(id, accountSecret string) map[string]any {
+		return map[string]any{"id": id, "target_type": "webconsole", "account_secret": accountSecret, "allowed_roles": []string{accountSecret},
+			"provider_id": "a273-bmc", "gateway_agent_id": gatewayID, "gateway_address": f.gatewayAddr,
+			"web": map[string]any{"url": bmc.URL(), "ca_pem": string(bmc.CAPEM())}}
+	}
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/targets", f.operator, "a273-bmc-wrong",
+		target("a273-bmc-wrong", unrotated)); status == http.StatusCreated {
+		t.Fatalf("a console whose provider does not rotate its account was registered: %s", body)
+	}
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/targets", f.operator, "a273-bmc-register",
+		target("a273-bmc-console", bmcAccount)); status != http.StatusCreated || !strings.Contains(string(body), `"provider_id":"a273-bmc"`) {
+		t.Fatalf("register the controller's console = %d %s", status, body)
+	}
+	status, basic := template("basic", map[string]any{"mode": "basic"})
+	if status != http.StatusCreated {
+		t.Fatalf("save the basic sign-in template = %d", status)
+	}
+	req := request(basic.ID)
+	req["target_id"], req["role"] = "a273-bmc-console", bmcAccount
+	session := servedPAMReviewedOpen(t, h.servedHarness, f.requester, f.reviewerOne, f.reviewerTwo, "a273-open-bmc", req)
+	out, stop := f.connect(session.ID, session.Gateway.Ticket, a273OpenLine.MatchString)
+	defer stop()
+	base := "http://" + a273OpenLine.FindStringSubmatch(out)[1]
+	browser := &http.Client{Timeout: 30 * time.Second}
+	a201Await(t, "the controller's console through the gateway", func() bool {
+		resp, err := browser.Get(base + "/redfish/v1/AccountService/Accounts")
+		if err != nil {
+			return false
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		return resp.StatusCode == http.StatusOK && strings.Contains(string(body), "Members")
+	})
+	if !bmc.SignsIn("ops", initial) {
+		t.Fatal("the vaulted account did not sign in before the session ended")
+	}
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/sessions/"+session.ID+"/terminate", f.operator, "a273-terminate-bmc",
+		map[string]any{"reason": "A273-O4 proof complete"}); status != http.StatusAccepted {
+		t.Fatalf("terminate the controller session = %d %s", status, body)
+	}
+	// The expiry worker queues the rotation once the session has ended, and
+	// records it on the session.
+	var commandID string
+	a201Await(t, "the ended session queues its account's rotation", func() bool {
+		err := h.store.SystemPool().QueryRow(ctx, `SELECT account_rotation_command_id FROM pam_sessions WHERE tenant_id=$1 AND id=$2 AND account_rotation_provider='a273-bmc'`,
+			h.tenant, session.ID).Scan(&commandID)
+		return err == nil && commandID != ""
+	})
+	var view staticRotationCommandView
+	for deadline := time.Now().Add(90 * time.Second); ; {
+		staticRotationDueFor(t, h.servedHarness, h.tenant)
+		h.srv.dispatchOnce(ctx)
+		status, raw := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/secrets/rotations/"+commandID, custodian, nil)
+		if status != http.StatusOK || json.Unmarshal(raw, &view) != nil {
+			t.Fatalf("read the session's account rotation: %d %s", status, raw)
+		}
+		if view.Terminal {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the session's account rotation did not finish: %s", raw)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	status, raw := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/secrets/store/"+bmcAccount, custodian, nil)
+	var vault struct {
+		Value string `json:"value"`
+	}
+	var current struct {
+		Password string `json:"password"`
+	}
+	if view.Phase != "completed" || status != http.StatusOK || json.Unmarshal(raw, &vault) != nil || json.Unmarshal([]byte(vault.Value), &current) != nil ||
+		current.Password == initial || !bmc.SignsIn("ops", current.Password) || bmc.SignsIn("ops", initial) {
+		t.Fatalf("the session's password was not retired for the vault's new one (rotation %s)", view.Phase)
+	}
+	// One rotation per session; the console without a provider rotates nothing.
+	var rotations, unrotatedSessions int
+	if err := h.store.SystemPool().QueryRow(ctx, `SELECT count(*) FROM secret_static_rotation_commands WHERE tenant_id=$1 AND secret_key=$2`, h.tenant, bmcAccount).Scan(&rotations); err != nil || rotations != 1 {
+		t.Fatalf("the session's account rotated %d times: %v", rotations, err)
+	}
+	if err := h.store.SystemPool().QueryRow(ctx, `SELECT count(*) FROM pam_sessions WHERE tenant_id=$1 AND target_type='webconsole' AND target_id='a273-lab-console' AND account_rotation_provider=''`,
+		h.tenant).Scan(&unrotatedSessions); err != nil || unrotatedSessions != 1 {
+		t.Fatalf("the console without a provider: %d sessions without a rotation: %v", unrotatedSessions, err)
 	}
 }

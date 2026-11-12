@@ -2630,6 +2630,12 @@ func (s *Server) configurePAMSurface(d Deps) error {
 			native: func(tenantID, providerID, role string) bool {
 				return s.api != nil && s.api.NativeWindowsAccountBound(tenantID, providerID, role)
 			},
+			afterSession: func(ctx context.Context, tenantID, providerID, key, sessionID string, startedAt time.Time) (string, error) {
+				if s.api == nil {
+					return "", errors.New("server: the secrets API is not served")
+				}
+				return s.api.QueueSessionAccountRotation(ctx, tenantID, providerID, key, sessionID, startedAt)
+			},
 		},
 	})
 	if err != nil {

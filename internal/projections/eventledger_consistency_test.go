@@ -183,6 +183,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventPAMSignInsCollected:                      "EventPAMSignInsCollected",
 	projections.EventPAMSignInsPurged:                         "EventPAMSignInsPurged",
 	projections.EventPAMSessionGatewayEnded:                   "EventPAMSessionGatewayEnded",
+	projections.EventPAMSessionAccountRotationQueued:          "EventPAMSessionAccountRotationQueued",
 	projections.EventPAMRecordingLegalHold:                    "EventPAMRecordingLegalHold",
 	projections.EventPAMRecordingDeleted:                      "EventPAMRecordingDeleted",
 	projections.EventPAMRecordingRead:                         "EventPAMRecordingRead",

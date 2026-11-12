@@ -520,9 +520,15 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 		}
 		if target.TargetType == pamTargetWebConsole {
 			// A273: a web console's vaulted account and the console's own
-			// route; no provider rotates it, the gateway only signs in with it.
-			if target.AccountSecret == "" || target.ProviderID != "" || target.Web == nil {
-				return nil, fmt.Errorf("server: web console target %q names its vaulted account_secret and its route (web), and no provider", target.ID)
+			// route; the gateway signs in with it. A273-O4: a provider, when
+			// named, rotates the account in place after each session.
+			if target.AccountSecret == "" || target.Web == nil {
+				return nil, fmt.Errorf("server: web console target %q names its vaulted account_secret and its route (web)", target.ID)
+			}
+			if target.ProviderID != "" {
+				if err := inPlaceAccountProvider(d.Providers, target.TenantID, target.ProviderID, target.AccountSecret); err != nil {
+					return nil, fmt.Errorf("server: web console target %q: %v", target.ID, err)
+				}
 			}
 			if err := target.Web.Validate(cfg.WebConsoleAllowLoopback); err != nil {
 				return nil, fmt.Errorf("server: web console target %q: %v", target.ID, err)
@@ -1299,6 +1305,9 @@ func (s *pamService) expireOnce(ctx context.Context) error {
 			first = err
 		}
 	}
+	if err := s.rotateEndedWebConsoleAccounts(ctx); err != nil && first == nil {
+		first = err
+	}
 	return first
 }
 
@@ -1510,9 +1519,13 @@ func (s *pamService) openDatabaseProvider(ctx context.Context, tenantID, idempot
 		// A261: a vaulted account. The session mints nothing: the gateway
 		// signs in as the account with the secret's current value when it
 		// claims the session, and nobody else ever receives it.
-		return s.startGatewaySession(ctx, tenantID, idempotencyKey, requester, id, now, expiresAt, att, req,
-			gatewayStart{backendRef: pamVaultedRef + target.cfg.AccountSecret, agentID: target.cfg.GatewayAgentID,
-				address: target.cfg.GatewayAddress, undo: func() {}})
+		start := gatewayStart{backendRef: pamVaultedRef + target.cfg.AccountSecret, agentID: target.cfg.GatewayAgentID,
+			address: target.cfg.GatewayAddress, undo: func() {}}
+		if req.TargetType == pamTargetWebConsole {
+			// A273-O4: the console's account rotates after the session.
+			start.accountRotationProvider = target.cfg.ProviderID
+		}
+		return s.startGatewaySession(ctx, tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, start)
 	}
 	lifecycle, err := s.databaseLifecycle(tenantID)
 	if err != nil {

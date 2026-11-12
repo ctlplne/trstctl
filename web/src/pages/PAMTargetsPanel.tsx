@@ -168,6 +168,8 @@ export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canMana
             id: form.id,
             target_type: "webconsole",
             allowed_roles: splitList(form.allowed_roles),
+            // A273-O4: an in-place account provider rotates the account after each session.
+            ...(form.provider_id ? { provider_id: form.provider_id } : {}),
             web: {
               url: form.web_url,
               ...(form.web_ca_pem ? { ca_pem: form.web_ca_pem } : {}),
@@ -414,6 +416,20 @@ export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canMana
                 {t("admin.access.webconsole.serverName")}
                 <Input {...register("web_server_name")} />
               </label>
+              <label className="grid gap-1 text-sm">
+                {t("admin.access.webconsole.rotationProvider")}
+                <Input {...register("provider_id")} list="pam-webconsole-rotation-providers" />
+              </label>
+              <p className="text-caption text-muted-foreground">{t("admin.access.webconsole.rotationProviderHelp")}</p>
+              <datalist id="pam-webconsole-rotation-providers">
+                {providers.data?.configured_providers
+                  .filter((provider) => (CHECKOUT_PROVIDER_TYPES.account ?? []).includes(provider.type) && provider.ready)
+                  .map((provider) => (
+                    <option key={provider.id} value={provider.id}>
+                      {provider.label}
+                    </option>
+                  ))}
+              </datalist>
             </>
           ) : targetType !== "ssh" ? (
             <>

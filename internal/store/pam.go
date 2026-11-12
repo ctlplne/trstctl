@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 	"trstctl.com/trstctl/internal/accessrules"
@@ -70,6 +71,10 @@ type PAMSession struct {
 	// WebSignIn (A273) is the web console sign-in the session's reviewers
 	// approved.
 	WebSignIn *accessweb.SignIn
+	// AccountRotationProvider (A273-O4) is the in-place account provider a
+	// web console session's target names: the console's account rotates
+	// through it once after the session ends.
+	AccountRotationProvider string
 }
 
 // ApplyPAMSessionStartedTx projects a pam.session.started event. Replays are
@@ -91,11 +96,13 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		        (tenant_id, id, target_type, target_id, role, status, subject,
 		         requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 		         ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
-		         approval_request_id, delivery, gateway_agent_id, gateway_ticket_digest, ssh_principal, command_policy, web_sign_in)
+		         approval_request_id, delivery, gateway_agent_id, gateway_ticket_digest, ssh_principal, command_policy, web_sign_in,
+		         account_rotation_provider)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7,
 		         $8, $9, $10, $11, $12,
 		         $13, $14, $15::jsonb, $16::jsonb, $17, $18, $19,
-		         $20, $21, NULLIF($22,'')::uuid, $23, $24, $25::jsonb, $26::jsonb)
+		         $20, $21, NULLIF($22,'')::uuid, $23, $24, $25::jsonb, $26::jsonb,
+		         $27)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET target_type = EXCLUDED.target_type,
 		        target_id = EXCLUDED.target_id,
@@ -120,11 +127,62 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		        gateway_ticket_digest = EXCLUDED.gateway_ticket_digest,
 		        ssh_principal = EXCLUDED.ssh_principal,
  command_policy = EXCLUDED.command_policy,
-		        web_sign_in = EXCLUDED.web_sign_in`,
+		        web_sign_in = EXCLUDED.web_sign_in,
+		        account_rotation_provider = EXCLUDED.account_rotation_provider`,
 		p.TenantID, p.ID, p.TargetType, p.TargetID, p.Role, p.Status, p.Subject,
 		p.RequestedBy, p.Reason, p.AttestationID, p.BackendRef, p.SSHKeyID,
 		int64(p.SSHSerial), p.IdempotencyKey, jsonbOrEmpty(p.Audit), p.Attestation, p.StartedAt, p.ExpiresAt, p.EndedAt,
-		p.ApprovalRequestID, pamDelivery(p.Delivery), p.GatewayAgentID, p.GatewayTicketDigest, p.SSHPrincipal, policyJSON, webJSON) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		p.ApprovalRequestID, pamDelivery(p.Delivery), p.GatewayAgentID, p.GatewayTicketDigest, p.SSHPrincipal, policyJSON, webJSON,
+		p.AccountRotationProvider) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+	return err
+}
+
+// PAMSessionAccountRotation is an ended web console session whose console
+// account still rotates through its provider (A273-O4). The account secret is
+// the session's role.
+type PAMSessionAccountRotation struct {
+	TenantID, ID, TargetType, TargetID string
+	AccountSecret, Provider            string
+	StartedAt                          time.Time
+	EndedAt                            time.Time
+}
+
+// ListPAMSessionsAwaitingAccountRotation returns ended sessions whose
+// account rotation has not been queued, oldest end first (A273-O4).
+func (s *Store) ListPAMSessionsAwaitingAccountRotation(ctx context.Context, limit int) ([]PAMSessionAccountRotation, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — cross-tenant system expiry worker finds ended web console sessions whose account still rotates; it returns no credential material, and each follow-up mutation appends a tenant_id-scoped pam.session.account_rotation_queued event.
+		`SELECT tenant_id::text, id::text, target_type, target_id, role, account_rotation_provider, started_at, ended_at
+		   FROM pam_sessions
+		  WHERE account_rotation_provider <> '' AND account_rotation_command_id = '' AND ended_at IS NOT NULL
+		  ORDER BY ended_at ASC, tenant_id, id
+		  LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PAMSessionAccountRotation
+	for rows.Next() {
+		var r PAMSessionAccountRotation
+		if err := rows.Scan(&r.TenantID, &r.ID, &r.TargetType, &r.TargetID, &r.AccountSecret, &r.Provider, &r.StartedAt, &r.EndedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// ApplyPAMSessionAccountRotationQueuedTx records the rotation a session's end
+// queued for its console account (A273-O4). The first recorded command stays.
+func (s *Store) ApplyPAMSessionAccountRotationQueuedTx(ctx context.Context, tx pgx.Tx, tenantID, id, commandID string) error {
+	if commandID == "" {
+		return errors.New("store: an account rotation names its command")
+	}
+	_, err := tx.Exec(ctx, `UPDATE pam_sessions SET account_rotation_command_id = $3
+		WHERE tenant_id = $1 AND id = $2 AND account_rotation_command_id = ''`, tenantID, id, commandID)
 	return err
 }
 

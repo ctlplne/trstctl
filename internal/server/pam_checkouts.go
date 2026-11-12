@@ -58,6 +58,9 @@ type pamAccountRotation struct {
 	// native says whether a provider rotates a role as one exact Windows
 	// local account on its enrolled host (A268).
 	native func(tenantID, providerID, role string) bool
+	// afterSession queues the one rotation that retires a web console
+	// account after its session ended (A273-O4), idempotent per session.
+	afterSession func(ctx context.Context, tenantID, providerID, key, sessionID string, startedAt time.Time) (string, error)
 }
 
 func pamCheckoutRevealedEventID(tenantID, requestID string) string {

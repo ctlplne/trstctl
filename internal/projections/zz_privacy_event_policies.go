@@ -1028,6 +1028,10 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/id", opaque), privacyRule("/ended", opaque), privacyRule("/connections", opaque),
 			privacyRule("/attempt", opaque), privacyRule("/ended_at", opaque),
 		),
+		{EventPAMSessionAccountRotationQueued, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/provider", opaque), privacyRule("/rotation_command_id", opaque),
+			privacyRule("/at", opaque),
+		),
 		{EventPAMRecordingLegalHold, 1}: privacyRules(
 			privacyRule("/id", opaque), privacyRule("/hold", opaque), privacyRule("/reason", clear),
 			privacyRule("/actor", exact), privacyRule("/at", opaque),
@@ -1800,6 +1804,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMRecordingChunkStored, 1}:                                                    privacyPayloadShape[PAMRecordingChunkStored](),
 		{EventPAMRecordingSealed, 1}:                                                         privacyPayloadShape[PAMRecordingSealed](),
 		{EventPAMSessionGatewayEnded, 1}:                                                     privacyPayloadShape[PAMSessionGatewayEnded](),
+		{EventPAMSessionAccountRotationQueued, 1}:                                            privacyPayloadShape[PAMSessionAccountRotationQueued](),
 		{EventPAMRecordingLegalHold, 1}:                                                      privacyPayloadShape[PAMRecordingLegalHold](),
 		{EventPAMRecordingDeleted, 1}:                                                        privacyPayloadShape[PAMRecordingDeleted](),
 		{EventPAMRecordingRead, 1}:                                                           privacyPayloadShape[PAMRecordingRead](),
