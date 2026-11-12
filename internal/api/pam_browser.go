@@ -68,6 +68,24 @@ type PAMQueryError struct {
 	Message string `json:"message"`
 }
 
+// PAMSessionPods is what a terminal on a Kubernetes browser session may name
+// (A259-L4): the pods the session's own account can see in a namespace, each
+// with its containers, read through the session's gateway. Truncated says
+// the cluster had more than the first page.
+type PAMSessionPods struct {
+	Namespace string          `json:"namespace"`
+	Pods      []PAMSessionPod `json:"pods"`
+	Truncated bool            `json:"truncated,omitempty"`
+}
+
+// PAMSessionPod is one pod: its name, phase and containers, in the order its
+// spec names them.
+type PAMSessionPod struct {
+	Name       string   `json:"name"`
+	Phase      string   `json:"phase,omitempty"`
+	Containers []string `json:"containers"`
+}
+
 // PAMBrowserBridge serves browser sessions; the served broker implements it.
 type PAMBrowserBridge interface {
 	HoldBrowserTicket(tenantID, sessionID, opener string, delivery PAMGatewayDelivery, ticket []byte, expires time.Time) error
@@ -77,6 +95,7 @@ type PAMBrowserBridge interface {
 	ResizePAMTerminal(ctx context.Context, tenantID, sessionID, terminalID, principal string, cols, rows int) error
 	ClosePAMTerminal(ctx context.Context, tenantID, sessionID, terminalID, principal string) error
 	RunPAMQuery(ctx context.Context, tenantID, sessionID, principal, sql string) (PAMQueryResult, error)
+	ListPAMSessionPods(ctx context.Context, tenantID, sessionID, principal, namespace string) (PAMSessionPods, error)
 }
 
 func (a *API) pamBrowserRoutes() []route {
@@ -87,6 +106,7 @@ func (a *API) pamBrowserRoutes() []route {
 		{method: "GET", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/output", opID: "readPAMTerminalOutput", summary: "Read a terminal's output from an offset; wait long-polls for output still to come", handler: a.readPAMTerminal, pathParams: terminal, query: []param{{name: "from", typ: "integer", desc: "offset to read from (the previous read's next)"}, {name: "wait", typ: "integer", desc: "seconds to wait for output, at most 25"}}, resSchema: "PAMTerminalOutput", successCode: "200", sensitiveResponse: true, perm: authz.AccessSessionsOpen},
 		{method: "POST", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/input", opID: "writePAMTerminalInput", summary: "Type into a terminal; a retried request with the same Idempotency-Key types nothing twice", handler: a.writePAMTerminal, pathParams: terminal, reqSchema: "PAMTerminalInput", resSchema: "PAMTerminal", successCode: "200", mutation: true, perm: authz.AccessSessionsOpen},
 		{method: "POST", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/resize", opID: "resizePAMTerminal", summary: "Change a terminal's size", handler: a.resizePAMTerminal, pathParams: terminal, reqSchema: "PAMTerminalRequest", resSchema: "PAMTerminal", successCode: "200", mutation: true, perm: authz.AccessSessionsOpen},
+		{method: "GET", path: "/api/v1/access/sessions/{id}/pods", opID: "listPAMSessionPods", summary: "List the pods your Kubernetes session opened for the browser can see in a namespace, with their containers; the gateway reads them as the session's own account", handler: a.listPAMSessionPods, pathParams: session, query: []param{{name: "namespace", typ: "string", desc: "the namespace to list (default: the session provider's)"}}, resSchema: "PAMSessionPods", successCode: "200", perm: authz.AccessSessionsOpen},
 		{method: "POST", path: "/api/v1/access/sessions/{id}/queries", opID: "runPAMQuery", summary: "Run SQL on your PostgreSQL session opened for the browser; the gateway signs in, records and masks, and the reply holds the last result's rows", handler: a.runPAMQuery, pathParams: session, reqSchema: "PAMQueryRequest", resSchema: "PAMQueryResult", successCode: "200", mutation: true, sensitiveResponse: true, perm: authz.AccessSessionsOpen},
 		{method: "DELETE", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}", opID: "closePAMTerminal", summary: "End a terminal; the session stays open", handler: a.closePAMTerminal, pathParams: terminal, resSchema: "PAMTerminal", successCode: "200", mutation: true, perm: authz.AccessSessionsOpen},
 	}
@@ -171,6 +191,30 @@ func (a *API) readPAMTerminal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.writeJSON(w, http.StatusOK, out)
+}
+
+// listPAMSessionPods lists what a Kubernetes browser session's terminal may
+// name (A259-L4).
+func (a *API) listPAMSessionPods(w http.ResponseWriter, r *http.Request) {
+	bridge, err := a.browserBridge()
+	if err != nil {
+		a.writePAMError(w, err)
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	pods, err := bridge.ListPAMSessionPods(r.Context(), tenantID, r.PathValue("id"), principalSubject(r.Context()),
+		strings.TrimSpace(r.URL.Query().Get("namespace")))
+	if err != nil {
+		if !a.writePAMError(w, err) {
+			a.writeError(w, err)
+		}
+		return
+	}
+	a.writeJSON(w, http.StatusOK, pods)
 }
 
 //trstctl:mutation

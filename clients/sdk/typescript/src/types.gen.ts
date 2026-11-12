@@ -1399,6 +1399,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/sessions/{id}/pods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the pods your Kubernetes session opened for the browser can see in a namespace, with their containers; the gateway reads them as the session's own account */
+        get: operations["listPAMSessionPods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/sessions/{id}/queries": {
         parameters: {
             query?: never;
@@ -23864,6 +23881,19 @@ export interface components {
             items: components["schemas"]["PAMSession"][];
             next_cursor?: string;
         };
+        PAMSessionPods: {
+            namespace: string;
+            /** @description the pods the session's own account can see, by name; at most 500 */
+            pods: {
+                /** @description the containers a terminal may name, in the pod spec's order */
+                containers: string[];
+                name: string;
+                /** @description the pod's phase: Pending, Running, Succeeded, Failed or Unknown */
+                phase?: string;
+            }[];
+            /** @description the namespace has more pods than the first page */
+            truncated?: boolean;
+        };
         PAMSessionRequest: {
             method: string;
             payload_base64: string;
@@ -32865,6 +32895,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMCommandActionList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMSessionPods: {
+        parameters: {
+            query?: {
+                /** @description the namespace to list (default: the session provider's) */
+                namespace?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMSessionPods"];
                 };
             };
             /** @description client error */

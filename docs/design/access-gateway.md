@@ -343,8 +343,11 @@ job with gateway sessions to the accounts its task is delegated, and no credenti
   no key: the gateway makes its own); once the session is open, "Open terminal" shows an SSH
   session in xterm.js, loaded on demand, with screen-reader mode on, "Open database
   console" a PostgreSQL session's SQL console with its result table, and on a Kubernetes
-  session the pod form (namespace, pod, optional container) opens the same terminal in the
-  pod.
+  session the pod form lists the pods and containers the session's account can see and opens
+  the same terminal in the one chosen. The control plane asks for the list on an admitted
+  connection, as a plain `GET /api/v1/namespaces/{namespace}/pods?limit=500` that the gateway
+  signs in with the session's token and records; it reads at most 8 MiB of the answer and
+  offers only names a terminal may use.
 
 ## Failure modes
 

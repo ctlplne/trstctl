@@ -1137,12 +1137,12 @@ not this file.
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_breakglass_served_test.go:180` | a positive clock step in a test (CWE-190) |
 | `internal/server/pam_browser.go:337` | offsets within the ring, at most 1 MiB apart (CWE-190) |
-| `internal/server/pam_browser_kube.go:182` | a 7-bit length below 126 (CWE-190) |
-| `internal/server/pam_browser_kube.go:185` | a 16-bit length under 1<<16 (CWE-190) |
-| `internal/server/pam_browser_kube.go:188` | a payload length, never negative (CWE-190) |
-| `internal/server/pam_browser_kube_test.go:38` | test frame length below 126 (CWE-190) |
-| `internal/server/pam_browser_kube_test.go:41` | test frame length under 1<<16 (CWE-190) |
-| `internal/server/pam_browser_kube_test.go:44` | test frame length, never negative (CWE-190) |
+| `internal/server/pam_browser_kube.go:185` | a 7-bit length below 126 (CWE-190) |
+| `internal/server/pam_browser_kube.go:188` | a 16-bit length under 1<<16 (CWE-190) |
+| `internal/server/pam_browser_kube.go:191` | a payload length, never negative (CWE-190) |
+| `internal/server/pam_browser_kube_test.go:40` | test frame length below 126 (CWE-190) |
+| `internal/server/pam_browser_kube_test.go:43` | test frame length under 1<<16 (CWE-190) |
+| `internal/server/pam_browser_kube_test.go:46` | test frame length, never negative (CWE-190) |
 | `internal/server/pam_gateway_mongo_served_test.go:106` | a request id's two's-complement bits (CWE-190) |
 | `internal/server/pam_gateway_private_ca_served_test.go:71` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_health.go:94` | a positive interval in nanoseconds, never negative (CWE-190) |

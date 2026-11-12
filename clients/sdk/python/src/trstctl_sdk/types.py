@@ -13242,6 +13242,16 @@ PAMSessionList = TypedDict(
     total=False,
 )
 
+PAMSessionPods = TypedDict(
+    'PAMSessionPods',
+    {
+        'namespace': str,
+        'pods': list[dict[str, Any]],
+        'truncated': bool,
+    },
+    total=False,
+)
+
 PAMSessionRequest = TypedDict(
     'PAMSessionRequest',
     {

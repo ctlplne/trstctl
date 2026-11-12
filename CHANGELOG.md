@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A Kubernetes session opened for the browser lists its pods and containers (A259-L4): the
+  console's pod form picks from the pods the session's service account can see, in the
+  provider's namespace or one you name, instead of typed names. `GET
+  /api/v1/access/sessions/{id}/pods` and `trstctl-cli access sessions pods` read the same list
+  through the session's gateway, which signs in with the session's token and records it.
 - Database gateway sessions verify a private CA with no file on the gateway's host (A256-L1).
   The control plane carries the provider's CA with the session's job, in
   `database_ca_pem` and `database_server_name`: Redis's `redis_tls_ca_ref` and
@@ -8,7 +13,6 @@
   read on the control plane's host. The gateway's PostgreSQL, Redis and MongoDB sign-ins
   verify against it ahead of a root file the session's credential names. A gateway that
   predates the fields ignores them and verifies as before.
-
 - The upgrade preflight has a JSON form and a console panel (A246-L1): `trstctl --upgrade-preflight
   --upgrade-preflight-format json` writes the verdict for a pipeline (format `trstctl.upgrade-preflight.v1`,
   every list present, the same exit code), and the running control plane serves the same verdict for its

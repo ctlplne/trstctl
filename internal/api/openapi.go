@@ -9225,6 +9225,14 @@ func componentSchemas() map[string]*Schema {
 			"container": {Type: "string", Description: "Kubernetes sessions: the container (default: the pod's only one)"},
 			"command":   {Type: "array", Items: str(), Description: "Kubernetes sessions: the command to run (default sh), at most 16 arguments"},
 		}, "cols", "rows"),
+		"PAMSessionPods": object(map[string]*Schema{
+			"namespace": str(),
+			"pods": {Type: "array", Items: object(map[string]*Schema{
+				"name": str(), "phase": {Type: "string", Description: "the pod's phase: Pending, Running, Succeeded, Failed or Unknown"},
+				"containers": {Type: "array", Items: str(), Description: "the containers a terminal may name, in the pod spec's order"},
+			}, "name", "containers"), Description: "the pods the session's own account can see, by name; at most 500"},
+			"truncated": {Type: "boolean", Description: "the namespace has more pods than the first page"},
+		}, "namespace", "pods"),
 		"PAMTerminal":      object(map[string]*Schema{"id": uuid(), "session_id": uuid(), "cols": {Type: "integer"}, "rows": {Type: "integer"}}, "id", "session_id"),
 		"PAMTerminalInput": object(map[string]*Schema{"data": {Type: "string", Format: "byte", Description: "the keystrokes, standard base64"}}, "data"),
 		"PAMTerminalOutput": object(map[string]*Schema{

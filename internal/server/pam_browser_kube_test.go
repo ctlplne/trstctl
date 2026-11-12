@@ -17,6 +17,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/internal/api"
 )
 
 // kubeExecPeer plays the gateway's side of a browser terminal's exec: the
@@ -292,5 +294,54 @@ func TestKubeExitStatusA259(t *testing.T) {
 		if got := kubeExitStatus([]byte(payload)); got != want {
 			t.Fatalf("kubeExitStatus(%s) = %d, want %d", payload, got, want)
 		}
+	}
+}
+
+// TestListKubePodsReadsTheFirstPageA259L4: a pods list is the API server's
+// first page of a namespace's pods, asked as GET with limit=500. Each pod
+// comes with its phase and its containers in its spec's order, sorted by
+// name. A name a terminal could not name is left out, a further page marks
+// the list truncated, and a refusal or an answer that is not a PodList is the
+// session's refusal.
+func TestListKubePodsReadsTheFirstPageA259L4(t *testing.T) {
+	answer := func(status int, body string) net.Conn {
+		client, server := net.Pipe()
+		go func() {
+			defer func() { _ = server.Close() }()
+			req, err := http.ReadRequest(bufio.NewReader(server))
+			if err != nil {
+				return
+			}
+			if req.Method != http.MethodGet || req.URL.Path != "/api/v1/namespaces/team-a/pods" || req.URL.Query().Get("limit") != "500" {
+				status, body = http.StatusBadRequest, "{}"
+			}
+			_, _ = fmt.Fprintf(server, "HTTP/1.1 %d X\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n%s", status, len(body), body)
+		}()
+		return client
+	}
+	list := `{"metadata":{"continue":"next-page"},"items":[` +
+		`{"metadata":{"name":"web-2"},"spec":{"containers":[{"name":"app"},{"name":"proxy"}]},"status":{"phase":"Running"}},` +
+		`{"metadata":{"name":"Bad_Name"},"spec":{"containers":[{"name":"x"}]}},` +
+		`{"metadata":{"name":"batch-1"},"spec":{"containers":[{"name":"job"}]},"status":{"phase":"Succeeded"}}]}`
+	got, err := listKubePods(answer(http.StatusOK, list), "team-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Namespace != "team-a" || !got.Truncated || len(got.Pods) != 2 ||
+		got.Pods[0].Name != "batch-1" || got.Pods[0].Phase != "Succeeded" || strings.Join(got.Pods[0].Containers, ",") != "job" ||
+		got.Pods[1].Name != "web-2" || got.Pods[1].Phase != "Running" || strings.Join(got.Pods[1].Containers, ",") != "app,proxy" {
+		t.Fatalf("pods = %+v", got)
+	}
+	for status, want := range map[int]string{
+		http.StatusForbidden:           "may not list pods in team-a",
+		http.StatusUnauthorized:        "may not list pods in team-a",
+		http.StatusInternalServerError: "HTTP 500",
+	} {
+		if _, err := listKubePods(answer(status, `{"kind":"Status"}`), "team-a"); !errors.Is(err, api.ErrPAMRejected) || !strings.Contains(err.Error(), want) {
+			t.Fatalf("HTTP %d = %v, want %q", status, err, want)
+		}
+	}
+	if _, err := listKubePods(answer(http.StatusOK, "not json"), "team-a"); !errors.Is(err, api.ErrPAMRejected) || !strings.Contains(err.Error(), "not a PodList") {
+		t.Fatalf("a non-PodList answer = %v", err)
 	}
 }

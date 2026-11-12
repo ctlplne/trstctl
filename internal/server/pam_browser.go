@@ -467,6 +467,13 @@ func (s *Server) ClosePAMTerminal(ctx context.Context, tenantID, sessionID, term
 	return s.pam.ClosePAMTerminal(ctx, tenantID, sessionID, terminalID, principal)
 }
 
+func (s *Server) ListPAMSessionPods(ctx context.Context, tenantID, sessionID, principal, namespace string) (api.PAMSessionPods, error) {
+	if s.pam == nil {
+		return api.PAMSessionPods{}, api.ErrPAMUnavailable
+	}
+	return s.pam.ListPAMSessionPods(ctx, tenantID, sessionID, principal, namespace)
+}
+
 func (s *Server) RunPAMQuery(ctx context.Context, tenantID, sessionID, principal, sql string) (api.PAMQueryResult, error) {
 	if s.pam == nil {
 		return api.PAMQueryResult{}, api.ErrPAMUnavailable

@@ -549,11 +549,18 @@ A session can be worked in from the console instead (A259). Open it with `"brows
 ticket for the person who opened it, the reply carries none, and the gateway still signs in,
 records and masks. On an SSH session "Open terminal" opens a shell in the browser; on a
 PostgreSQL session "Open database console" runs SQL and shows the last result (at most 1,000
-rows) or the database's refusal; on a Kubernetes session the pod form (namespace, pod,
-optional container) opens a terminal in the pod as the session's service account. The API is
-`POST /api/v1/access/sessions/{id}/terminals` (output by long-poll, typed input, resize,
-close) and `POST /api/v1/access/sessions/{id}/queries`. The control plane must reach the
-gateway's address; only the opener can use a session's terminals.
+rows) or the database's refusal; on a Kubernetes session the pod form lists the pods the
+session's service account can see, with their containers, and opens a terminal in the one you
+choose as that account. The list starts in the provider's namespace; name another namespace
+and choose **List pods** to read that one, which the cluster refuses where the account may not
+list pods. The control plane reads the list through the session's gateway, as kubectl would,
+so the gateway records it; when the account may not list pods, type the pod and container
+instead. The API is `POST /api/v1/access/sessions/{id}/terminals` (output by long-poll, typed
+input, resize, close), `GET /api/v1/access/sessions/{id}/pods` (`namespace` optional; the
+first 500 pods, marked `truncated` when there are more) and
+`POST /api/v1/access/sessions/{id}/queries`; the CLI has `trstctl-cli access sessions pods`.
+The control plane must reach the gateway's address; only the opener can use a session's
+terminals and list its pods.
 
 Privileged accounts the gateway does not broker yet can be found first (A260). Make one of
 the tenant's dynamic-secret providers a discovery source and scan it: the scan reads the

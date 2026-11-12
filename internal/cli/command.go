@@ -613,6 +613,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"access", "sessions", "terminal-input"}, Method: "POST", Path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/input", Body: bodyFile, Summary: "Type into a browser terminal (base64 data)"},
 	{Name: []string{"access", "sessions", "terminal-resize"}, Method: "POST", Path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/resize", Body: bodyFile, Summary: "Resize a browser terminal"},
 	{Name: []string{"access", "sessions", "terminal-close"}, Method: "DELETE", Path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}", Summary: "Close a browser terminal; its session stays open"},
+	{Name: []string{"access", "sessions", "pods"}, Method: "GET", Path: "/api/v1/access/sessions/{id}/pods", Query: []string{"namespace"}, Summary: "List the pods your Kubernetes session opened for the browser can see in a namespace (the provider's by default), with their containers"},
 	{Name: []string{"access", "sessions", "query"}, Method: "POST", Path: "/api/v1/access/sessions/{id}/queries", Body: bodyFile, Summary: "Run SQL on your PostgreSQL session opened for the browser, through its gateway, and show the last result"},
 	{Name: []string{"access", "requests", "create"}, Method: "POST", Path: "/api/v1/access/requests", Body: bodyFile, Summary: "Create an NHI access-change request with PR/change evidence"},
 	{Name: []string{"access", "requests", "list"}, Method: "GET", Path: "/api/v1/access/requests", Query: []string{"limit", "cursor"}, Summary: "List NHI access-change requests"},

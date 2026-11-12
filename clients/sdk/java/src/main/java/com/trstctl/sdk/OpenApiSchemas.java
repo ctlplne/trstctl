@@ -946,6 +946,7 @@ public final class OpenApiSchemas {
       "PAMSession",
       "PAMSessionActivationRequest",
       "PAMSessionList",
+      "PAMSessionPods",
       "PAMSessionRequest",
       "PAMSessionRevocationRequest",
       "PAMSignIn",

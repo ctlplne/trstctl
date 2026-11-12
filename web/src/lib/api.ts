@@ -602,6 +602,7 @@ import type {
   PAMAccountActionReview,
   PAMTargetRequest,
   PAMQueryResult,
+  PAMSessionPods,
   PAMTerminal,
   PAMTerminalOutput,
   PAMTerminalRequest,
@@ -1671,6 +1672,7 @@ export type {
   PAMAccountActionReview,
   PAMTargetRequest,
   PAMQueryResult,
+  PAMSessionPods,
   PAMTerminal,
   PAMTerminalOutput,
   PAMTerminalRequest,
@@ -2796,6 +2798,7 @@ export interface Api {
   openPAMSession(input: PAMSessionActivationRequest, idempotencyKey?: string): Promise<PAMSession>;
   revokePAMSession(id: string, reason: string, idempotencyKey?: string): Promise<PAMSession>;
   openPAMTerminal(sessionID: string, request: PAMTerminalRequest, idempotencyKey?: string, signal?: AbortSignal): Promise<PAMTerminal>;
+  listPAMSessionPods(sessionID: string, namespace?: string): Promise<PAMSessionPods>;
   readPAMTerminal(sessionID: string, terminalID: string, from: number, waitSeconds: number): Promise<PAMTerminalOutput>;
   writePAMTerminal(sessionID: string, terminalID: string, data: string, idempotencyKey?: string): Promise<PAMTerminal>;
   resizePAMTerminal(sessionID: string, terminalID: string, size: { cols: number; rows: number }, idempotencyKey?: string): Promise<PAMTerminal>;
@@ -3936,6 +3939,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
       body: JSON.stringify(request),
       signal,
     }),
+  listPAMSessionPods: (sessionID, namespace) =>
+    req<PAMSessionPods>(`/api/v1/access/sessions/${encodeURIComponent(sessionID)}/pods${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ""}`),
   readPAMTerminal: (sessionID, terminalID, from, waitSeconds) =>
     req<PAMTerminalOutput>(
       `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/terminals/${encodeURIComponent(terminalID)}/output?from=${from}&wait=${waitSeconds}`,

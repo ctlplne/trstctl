@@ -435,9 +435,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `secrets projects rename` and `secrets projects environments rename`.
 	// A237-L3 adds `secrets scoped-syncs replace`. A238-L7 adds `secrets
 	// sessions end`. A239-L5 adds `secrets leases totp-seed`. A246-L1 adds
-	// `platform upgrade-preflight`.
-	if len(out) != 877 {
-		t.Fatalf("CLI commands = %d, want 877", len(out))
+	// `platform upgrade-preflight`. A259-L4 adds `access sessions pods`.
+	if len(out) != 878 {
+		t.Fatalf("CLI commands = %d, want 878", len(out))
 	}
 	return out
 }

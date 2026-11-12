@@ -22,6 +22,7 @@ const { apiMock } = vi.hoisted(() => ({
     requestPAMSession: vi.fn(),
     pamRequestProgress: vi.fn(),
     openPAMSession: vi.fn(),
+    listPAMSessionPods: vi.fn(),
   },
 }));
 
@@ -313,7 +314,7 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     expect(within(dialog).getByText("terminal on 77777777-7777-4777-8777-777777777777")).toBeInTheDocument();
   });
 
-  it("opens a Kubernetes session for the browser and its terminal in a named pod (A259)", async () => {
+  it("opens a Kubernetes session for the browser and its terminal in a listed pod (A259, A259-L4)", async () => {
     const user = userEvent.setup();
     const review = {
       request_id: "88888888-8888-4888-8888-888888888888",
@@ -322,6 +323,7 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
       approval_count: 2,
       required_approvals: 2,
     };
+    apiMock.listPAMSessionPods.mockResolvedValue({ namespace: "team-a", pods: [{ name: "web-0", phase: "Running", containers: ["app"] }] });
     apiMock.pamRequestProgress.mockResolvedValue({ ...review, status: "approved", expires_at: "2026-11-05T10:05:00Z" });
     apiMock.requestPAMSession.mockResolvedValue({
       ...review,
@@ -361,8 +363,8 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     await user.click(await within(dialog).findByRole("button", { name: "Activate approved session" }));
     expect(await within(dialog).findByText("Session opened")).toBeInTheDocument();
     expect(apiMock.openPAMSession.mock.calls[0][0].browser).toBe(true);
-    await user.type(within(dialog).getByRole("textbox", { name: "Namespace" }), "team-a");
-    await user.type(within(dialog).getByRole("textbox", { name: "Pod" }), "web-0");
+    expect(await within(dialog).findByRole("combobox", { name: "Pod" })).toHaveValue("web-0");
+    expect(within(dialog).getByRole("textbox", { name: "Namespace" })).toHaveValue("team-a");
     await user.click(within(dialog).getByRole("button", { name: "Open terminal" }));
     expect(within(dialog).getByText("terminal on aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")).toBeInTheDocument();
   });

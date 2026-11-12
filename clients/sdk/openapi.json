@@ -44283,6 +44283,49 @@
         ],
         "type": "object"
       },
+      "PAMSessionPods": {
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "pods": {
+            "description": "the pods the session's own account can see, by name; at most 500",
+            "items": {
+              "properties": {
+                "containers": {
+                  "description": "the containers a terminal may name, in the pod spec's order",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "phase": {
+                  "description": "the pod's phase: Pending, Running, Succeeded, Failed or Unknown",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "containers"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "description": "the namespace has more pods than the first page",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "namespace",
+          "pods"
+        ],
+        "type": "object"
+      },
       "PAMSessionRequest": {
         "properties": {
           "method": {
@@ -68067,6 +68110,72 @@
         ],
         "summary": "List bounded command-rule decisions for a session, without statement text, arguments or credentials",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/sessions/{id}/pods": {
+      "get": {
+        "operationId": "listPAMSessionPods",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "the namespace to list (default: the session provider's)",
+            "in": "query",
+            "name": "namespace",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMSessionPods"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the pods your Kubernetes session opened for the browser can see in a namespace, with their containers; the gateway reads them as the session's own account",
+        "x-trstctl-permission": "access:sessions.open"
       }
     },
     "/api/v1/access/sessions/{id}/queries": {

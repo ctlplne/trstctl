@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
 import { BrowserTerminal } from "@/components/access/BrowserTerminal";
@@ -40,6 +40,7 @@ const { apiMock } = vi.hoisted(() => ({
     readPAMTerminal: vi.fn(),
     writePAMTerminal: vi.fn(),
     closePAMTerminal: vi.fn(),
+    listPAMSessionPods: vi.fn(),
   },
 }));
 
@@ -98,13 +99,15 @@ describe("browser terminal", () => {
     expect(apiMock.readPAMTerminal).not.toHaveBeenCalled();
   });
 
-  it("opens a terminal in the pod named on a Kubernetes session", async () => {
+  it("opens a terminal in a typed pod when the session's account may not list pods", async () => {
     const user = userEvent.setup();
+    apiMock.listPAMSessionPods.mockRejectedValue(new Error("the session's account may not list pods in default"));
     apiMock.openPAMTerminal.mockResolvedValue({ id: "t-3", session_id: "s-3", cols: 100, rows: 30 });
     apiMock.readPAMTerminal.mockImplementation(() => new Promise(() => undefined));
     apiMock.closePAMTerminal.mockResolvedValue({ id: "t-3", session_id: "s-3" });
     const view = render(<PodTerminal sessionID="s-3" />);
     expect(screen.getByRole("button", { name: "Open terminal" })).toBeDisabled();
+    expect(await screen.findByText(/The pods could not be listed: .*Name the pod and container instead\./)).toBeInTheDocument();
     expect(await axe(view.container)).toHaveNoViolations();
 
     await user.type(screen.getByRole("textbox", { name: "Namespace" }), "team-a");
@@ -125,6 +128,65 @@ describe("browser terminal", () => {
     expect(apiMock.closePAMTerminal).toHaveBeenCalledWith("s-3", "t-3");
     expect(screen.getByRole("textbox", { name: "Namespace" })).toHaveValue("team-a");
   });
+});
+
+it("lists the pods the session's account can see and opens the chosen container (A259-L4)", async () => {
+  const user = userEvent.setup();
+  apiMock.listPAMSessionPods.mockImplementation(async (_sessionID: string, namespace?: string) =>
+    namespace === "team-b"
+      ? { namespace: "team-b", pods: [] }
+      : {
+          namespace: "team-a",
+          truncated: true,
+          pods: [
+            { name: "batch-1", phase: "Succeeded", containers: ["job"] },
+            { name: "web-2", phase: "Running", containers: ["app", "proxy"] },
+          ],
+        },
+  );
+  apiMock.openPAMTerminal.mockResolvedValue({ id: "t-4", session_id: "s-4", cols: 100, rows: 30 });
+  apiMock.readPAMTerminal.mockImplementation(() => new Promise(() => undefined));
+  const view = render(<PodTerminal sessionID="s-4" />);
+  const podPicker = await screen.findByRole("combobox", { name: "Pod" });
+  expect(apiMock.listPAMSessionPods).toHaveBeenCalledWith("s-4", undefined);
+  expect(screen.getByRole("textbox", { name: "Namespace" })).toHaveValue("team-a");
+  expect(podPicker).toHaveValue("batch-1");
+  expect(screen.getByRole("option", { name: "web-2 (Running)" })).toBeInTheDocument();
+  expect(screen.getByRole("combobox", { name: "Container" })).toHaveValue("job");
+  expect(screen.getByText("Showing the first 500 pods.")).toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: "Pod" })).not.toBeInTheDocument();
+  expect(await axe(view.container)).toHaveNoViolations();
+
+  await user.selectOptions(podPicker, "web-2");
+  const containerPicker = screen.getByRole("combobox", { name: "Container" });
+  expect(containerPicker).toHaveValue("app");
+  expect(
+    within(containerPicker)
+      .getAllByRole("option")
+      .map((option) => option.textContent),
+  ).toEqual(["app", "proxy"]);
+  await user.selectOptions(containerPicker, "proxy");
+  await user.click(screen.getByRole("button", { name: "Open terminal" }));
+  await waitFor(() =>
+    expect(apiMock.openPAMTerminal).toHaveBeenCalledWith(
+      "s-4",
+      { cols: 100, rows: 30, namespace: "team-a", pod: "web-2", container: "proxy" },
+      expect.stringMatching(/^pam-terminal:s-4:/),
+      expect.any(AbortSignal),
+    ),
+  );
+  view.unmount();
+
+  // Another namespace is listed on request; an empty one says so.
+  render(<PodTerminal sessionID="s-5" />);
+  await screen.findByRole("combobox", { name: "Pod" });
+  const namespace = screen.getByRole("textbox", { name: "Namespace" });
+  await user.clear(namespace);
+  await user.type(namespace, "team-b");
+  await user.click(screen.getByRole("button", { name: "List pods" }));
+  await waitFor(() => expect(apiMock.listPAMSessionPods).toHaveBeenLastCalledWith("s-5", "team-b"));
+  expect(await screen.findByText("This session's account can see no pods in team-b.")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Open terminal" })).toBeDisabled();
 });
 
 it("sends a complete SSH exec request and cancels it on unmount before startup", async () => {

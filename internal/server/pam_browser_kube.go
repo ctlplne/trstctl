@@ -4,6 +4,7 @@ package server
 
 import (
 	"bufio"
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -13,11 +14,13 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
 )
 
@@ -259,4 +262,144 @@ func kubeExitStatus(payload []byte) int {
 		}
 	}
 	return -1
+}
+
+// A pods list (A259-L4) is the API server's first page of up to 500 pods,
+// read from at most 8 MiB of its answer.
+const (
+	kubePodListLimit = 500
+	kubePodListBytes = 8 << 20
+)
+
+// ListPAMSessionPods lists the pods a Kubernetes session opened for the
+// browser can see in a namespace — its provider's when none is named — with
+// each pod's containers, for its opener to choose a terminal's pod and
+// container from (A259-L4). The control plane asks through the session's
+// gateway, as a stock kubectl get pods would: the gateway adds the session's
+// own token, forwards to the API server and records the exchange, so the
+// cluster answers only what the session's account may list, and the control
+// plane never holds the token.
+func (s *pamService) ListPAMSessionPods(ctx context.Context, tenantID, sessionID, principal, namespace string) (api.PAMSessionPods, error) {
+	rec, err := s.store.GetPAMSession(ctx, tenantID, sessionID)
+	if err != nil {
+		return api.PAMSessionPods{}, err
+	}
+	if rec.TargetType != pamTargetK8s || rec.Delivery != "gateway" || rec.Status != api.PAMSessionStatusActive || !s.clock().Before(rec.ExpiresAt) {
+		return api.PAMSessionPods{}, fmt.Errorf("%w: pods are listed on an active Kubernetes session through a gateway", api.ErrPAMRejected)
+	}
+	if namespace == "" {
+		namespace = s.kubernetesSessionNamespace(ctx, tenantID, rec.TargetID)
+	}
+	if !kubeName.MatchString(namespace) {
+		return api.PAMSessionPods{}, fmt.Errorf("%w: a namespace is a Kubernetes object name", api.ErrPAMInvalid)
+	}
+	s.browser.mu.Lock()
+	held := s.browser.tickets[pamBrowserKey{tenantID, sessionID}]
+	s.browser.mu.Unlock()
+	switch {
+	case held == nil:
+		return api.PAMSessionPods{}, fmt.Errorf("%w: the session was not opened for the browser", api.ErrPAMRejected)
+	case held.opener != principal:
+		return api.PAMSessionPods{}, fmt.Errorf("%w: only the person who opened the session can use it in the browser", api.ErrPAMRejected)
+	}
+	dctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	conn, err := s.browser.dial(dctx, held.address, held.caPEM, held.spiffeID)
+	if err != nil {
+		return api.PAMSessionPods{}, fmt.Errorf("%w: the session's gateway: %v", api.ErrPAMRejected, err)
+	}
+	defer func() { _ = conn.Close() }()
+	stop := context.AfterFunc(dctx, func() { _ = conn.Close() })
+	defer stop()
+	if _, err := admitAtGateway(conn, sessionID, held.ticket); err != nil {
+		return api.PAMSessionPods{}, fmt.Errorf("%w: %v", api.ErrPAMRejected, err)
+	}
+	return listKubePods(conn, namespace)
+}
+
+// kubernetesSessionNamespace is the namespace a Kubernetes target's provider
+// scopes its sessions to.
+func (s *pamService) kubernetesSessionNamespace(ctx context.Context, tenantID, targetID string) string {
+	target, err := s.databaseTarget(ctx, tenantID, pamTargetK8s, targetID)
+	if err != nil {
+		return "default"
+	}
+	for _, provider := range s.providers.ForTenant(tenantID) {
+		if provider == nil || provider.Name() != target.cfg.ProviderID {
+			continue
+		}
+		if scoped, ok := provider.(interface {
+			DynamicSecretKubernetesScope() (string, string)
+		}); ok {
+			namespace, _ := scoped.DynamicSecretKubernetesScope()
+			return namespace
+		}
+	}
+	return "default"
+}
+
+// listKubePods asks the API server, on a connection the gateway admitted, for
+// the first page of a namespace's pods.
+func listKubePods(conn net.Conn, namespace string) (api.PAMSessionPods, error) {
+	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		return api.PAMSessionPods{}, err
+	}
+	path := "/api/v1/namespaces/" + url.PathEscape(namespace) + "/pods?limit=" + strconv.Itoa(kubePodListLimit)
+	if _, err := io.WriteString(conn, "GET "+path+" HTTP/1.1\r\nHost: trstctl-gateway\r\nAccept: application/json\r\nConnection: close\r\n\r\n"); err != nil {
+		return api.PAMSessionPods{}, fmt.Errorf("%w: the pods list: %v", api.ErrPAMRejected, err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		return api.PAMSessionPods{}, fmt.Errorf("%w: the pods list: %v", api.ErrPAMRejected, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, kubePodListBytes+1))
+	if err != nil {
+		return api.PAMSessionPods{}, fmt.Errorf("%w: the pods list: %v", api.ErrPAMRejected, err)
+	}
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return api.PAMSessionPods{}, fmt.Errorf("%w: the session's account may not list pods in %s", api.ErrPAMRejected, namespace)
+	case resp.StatusCode != http.StatusOK:
+		return api.PAMSessionPods{}, fmt.Errorf("%w: the cluster refused the pods list: HTTP %d", api.ErrPAMRejected, resp.StatusCode)
+	case len(body) > kubePodListBytes:
+		return api.PAMSessionPods{}, fmt.Errorf("%w: the cluster's pods list is larger than 8 MiB", api.ErrPAMRejected)
+	}
+	var list struct {
+		Metadata struct {
+			Continue string `json:"continue"`
+		} `json:"metadata"`
+		Items []struct {
+			Metadata struct {
+				Name string `json:"name"`
+			} `json:"metadata"`
+			Spec struct {
+				Containers []struct {
+					Name string `json:"name"`
+				} `json:"containers"`
+			} `json:"spec"`
+			Status struct {
+				Phase string `json:"phase"`
+			} `json:"status"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &list); err != nil {
+		return api.PAMSessionPods{}, fmt.Errorf("%w: the cluster's pods list is not a PodList", api.ErrPAMRejected)
+	}
+	out := api.PAMSessionPods{Namespace: namespace, Pods: make([]api.PAMSessionPod, 0, len(list.Items)), Truncated: list.Metadata.Continue != ""}
+	for _, item := range list.Items {
+		// Only a name a terminal may name is offered.
+		if !kubeName.MatchString(item.Metadata.Name) {
+			continue
+		}
+		pod := api.PAMSessionPod{Name: item.Metadata.Name, Phase: item.Status.Phase, Containers: make([]string, 0, len(item.Spec.Containers))}
+		for _, container := range item.Spec.Containers {
+			if kubeName.MatchString(container.Name) {
+				pod.Containers = append(pod.Containers, container.Name)
+			}
+		}
+		out.Pods = append(out.Pods, pod)
+	}
+	sort.Slice(out.Pods, func(i, j int) bool { return out.Pods[i].Name < out.Pods[j].Name })
+	return out, nil
 }

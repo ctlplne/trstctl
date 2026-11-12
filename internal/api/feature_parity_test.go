@@ -395,9 +395,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// and environment renames (806). A237-L3 adds the scoped sync
 	// replacement (807). A238-L7 adds a machine session ending itself (808).
 	// A239-L5 adds a TOTP provider's seed replacement (809). A246-L1 adds the
-	// upgrade preflight (810).
-	if len(out) != 810 {
-		t.Fatalf("OpenAPI operationIds = %d, want 810", len(out))
+	// upgrade preflight (810). A259-L4 adds a browser Kubernetes session's
+	// pods list (811).
+	if len(out) != 811 {
+		t.Fatalf("OpenAPI operationIds = %d, want 811", len(out))
 	}
 	return out
 }

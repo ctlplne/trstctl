@@ -7678,8 +7678,40 @@ export const messages = {
     description: "Heading of the pod form on a Kubernetes session opened for the browser (A259).",
   },
   "admin.access.pod.hint": {
-    defaultMessage: "The terminal runs sh in the pod as the session's service account; the gateway records it.",
-    description: "Help under the pod form: what the Kubernetes browser terminal runs and as whom (A259).",
+    defaultMessage: "Choose a pod the session's service account can see. The terminal runs sh in it as that account, and the gateway records it.",
+    description: "Help under the pod form: where the pods come from, what the Kubernetes browser terminal runs and as whom (A259, A259-L4).",
+  },
+  "admin.access.pod.list": {
+    defaultMessage: "List pods",
+    description: "Button listing the pods in the typed namespace that the Kubernetes session's account can see (A259-L4).",
+  },
+  "admin.access.pod.listing": {
+    defaultMessage: "Listing the pods this session's account can see…",
+    description: "Status while the pods are listed through the session's gateway (A259-L4).",
+  },
+  "admin.access.pod.noAnswer": {
+    defaultMessage: "the session's gateway did not answer",
+    description: "Reason shown when listing pods failed without a reason from the server (A259-L4).",
+  },
+  "admin.access.pod.typeInstead": {
+    defaultMessage: "The pods could not be listed: {reason}. Name the pod and container instead.",
+    description: "Shown when the pods could not be listed; the pod and container fields become typed (A259-L4).",
+  },
+  "admin.access.pod.none": {
+    defaultMessage: "This session's account can see no pods in {namespace}.",
+    description: "Shown when the namespace lists no pods the session's account can see (A259-L4).",
+  },
+  "admin.access.pod.option": {
+    defaultMessage: "{name} ({phase})",
+    description: "A listed pod: its name and its Kubernetes phase, e.g. Running (A259-L4).",
+  },
+  "admin.access.pod.containerListed": {
+    defaultMessage: "Container",
+    description: "Label of the container picker listing the chosen pod's containers; Kubernetes noun (A259-L4).",
+  },
+  "admin.access.pod.truncated": {
+    defaultMessage: "Showing the first 500 pods.",
+    description: "Shown when the namespace has more pods than the list holds (A259-L4).",
   },
   "admin.access.pod.namespace": { defaultMessage: "Namespace", description: "Label of the pod's namespace field; Kubernetes noun (A259)." },
   "admin.access.pod.name": { defaultMessage: "Pod", description: "Label of the pod name field; Kubernetes noun stays literal (A259)." },

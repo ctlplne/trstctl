@@ -9512,6 +9512,12 @@ export interface PAMSessionList {
   next_cursor?: string;
 }
 
+export interface PAMSessionPods {
+  namespace: string;
+  pods: { containers: string[]; name: string; phase?: string }[];
+  truncated?: boolean;
+}
+
 export interface PAMSessionRequest {
   method: string;
   payload_base64: string;
