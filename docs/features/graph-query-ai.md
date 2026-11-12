@@ -135,7 +135,9 @@ Microsoft Graph. An AWS STS lease links to `res:aws_iam_role:<arn>`, the role it
 with the role's attached managed and inline policies from IAM in `grants`. `access_status`
 is `resolved`, `unknown` (the target could not be read; `access_reason` says why, and the
 lease is read again five minutes later), `unsupported` (other providers), or `not_read`
-before the first read. `unknown` never means "no grants".
+before the first read. `unknown` never means "no grants". In the console, a lease's node
+detail on the Graph page says what it reaches: its login, the target and each grant the
+target reported, with when it was read, or why the target could not say (G2-L4).
 
 What the graph does not see: permissions inside systems other than PostgreSQL, MySQL,
 MongoDB, Redis, Kubernetes RBAC, a GCP project's IAM policy, Microsoft Entra and AWS IAM;

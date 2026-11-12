@@ -33184,6 +33184,58 @@ export const messages = {
     defaultMessage: "Start incident response",
     description: "S-C11: link from a certificate detail into the incident response form.",
   },
+  "graph.leaseReach.heading": {
+    defaultMessage: "What this lease reaches",
+    description: "G2-L4: heading of a dynamic-secret lease node's section on what its login reaches.",
+  },
+  "graph.leaseReach.resolved": {
+    defaultMessage: "Its login {login} on {target}, with the grants the target reported for it at {checked}:",
+    description: "G2-L4: a lease whose access was read; login is the lease's account, target the system it reaches, checked the read time.",
+  },
+  "graph.leaseReach.grants": {
+    defaultMessage: "Grants the target reported",
+    description: "G2-L4: accessible name of the list of a lease login's grants.",
+  },
+  "graph.leaseReach.noGrants": {
+    defaultMessage: "The target reported no grants for this login.",
+    description: "G2-L4: a lease whose access was read and holds no grant.",
+  },
+  "graph.leaseReach.unknown": {
+    defaultMessage: "The target could not be read: {reason}. This does not mean the lease reaches nothing; it is read again within five minutes.",
+    description: "G2-L4: a lease whose target could not be read; reason says why.",
+  },
+  "graph.leaseReach.reason.unreachable": {
+    defaultMessage: "the target could not be reached",
+    description: "G2-L4: why a lease's access is unknown.",
+  },
+  "graph.leaseReach.reason.denied": {
+    defaultMessage: "the provider's credentials may not read the login's grants",
+    description: "G2-L4: why a lease's access is unknown.",
+  },
+  "graph.leaseReach.reason.loginMissing": {
+    defaultMessage: "the lease's login no longer exists on the target",
+    description: "G2-L4: why a lease's access is unknown.",
+  },
+  "graph.leaseReach.reason.timeout": {
+    defaultMessage: "the read timed out",
+    description: "G2-L4: why a lease's access is unknown.",
+  },
+  "graph.leaseReach.reason.unreadable": {
+    defaultMessage: "the target's answer could not be read",
+    description: "G2-L4: why a lease's access is unknown.",
+  },
+  "graph.leaseReach.reason.failed": {
+    defaultMessage: "the read failed",
+    description: "G2-L4: why a lease's access is unknown, when no closer reason was recorded.",
+  },
+  "graph.leaseReach.unsupported": {
+    defaultMessage: "This provider cannot report what a lease reaches, so only its provider is linked.",
+    description: "G2-L4: a lease whose provider cannot report what its login reaches.",
+  },
+  "graph.leaseReach.notRead": {
+    defaultMessage: "Not read yet. A new lease is read within a minute of issue.",
+    description: "G2-L4: a lease whose access has not been read yet.",
+  },
   "graph.hostAgent.heading": {
     defaultMessage: "Enrolled host agent",
     description: "G1-L3: heading of a graph node's section for an enrolled host agent.",

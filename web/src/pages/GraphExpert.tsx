@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { GraphImpact, GraphNode, GraphQueryResult, GraphReachable, GraphResponse, GraphTrustStores } from "@/lib/api";
 import { CredentialChip } from "@/components/CredentialChip";
@@ -6,7 +7,8 @@ import { graphEdgeTypeLabel, graphNodeKindLabel, graphNodeKindStyle } from "@/co
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { translateNow } from "@/i18n/I18nProvider";
+import { translateNow, useTranslation } from "@/i18n/I18nProvider";
+import type { MessageKey } from "@/i18n/messages";
 
 export function RelationshipPaths({ paths }: { paths: GraphImpact["paths"] }) {
   if (!paths?.length) return null;
@@ -263,6 +265,7 @@ export function NodeDetail({ node, trustStores }: { node: GraphNode | null; trus
           <p className="mt-1 text-muted-foreground">{translateNow("source.no.attributes.returned.for.this.node.5b22b96afd")}</p>
         )}
         {isHostAgentNode(node) ? <HostAgentRoles node={node} /> : null}
+        {attrText(node, "credential_kind") === "dynamic_secret_lease" ? <LeaseReach node={node} /> : null}
         <h3 className="mt-4 font-semibold">{translateNow("source.drilldown.links.66ec8eb823")}</h3>
         <ul className="mt-2 space-y-1">
           {isHostAgentNode(node) && attrText(node, "agent_id") ? (
@@ -512,6 +515,72 @@ function HostAgentRoles({ node }: { node: GraphNode }) {
           {pending ? <p className="mt-1 text-muted-foreground">{translateNow("graph.hostAgent.pending", { roles: pending })}</p> : null}
         </>
       )}
+    </section>
+  );
+}
+
+// Why a lease's access could not be read, in words (G2).
+const leaseReasonKeys: Record<string, MessageKey> = {
+  target_unreachable: "graph.leaseReach.reason.unreachable",
+  access_denied: "graph.leaseReach.reason.denied",
+  login_missing: "graph.leaseReach.reason.loginMissing",
+  timeout: "graph.leaseReach.reason.timeout",
+  unreadable_response: "graph.leaseReach.reason.unreadable",
+};
+
+// LeaseReach says what a dynamic-secret lease reaches (G2-L4): the login it
+// holds on its target and each grant the target reported for that login, or
+// why the target could not say. Unknown is never shown as no grants.
+function LeaseReach({ node }: { node: GraphNode }) {
+  const { formatDateTime } = useTranslation();
+  const status = attrText(node, "access_status");
+  const checked = attrText(node, "access_checked_at");
+  const grants = attrText(node, "grants")
+    .split("; ")
+    .filter((grant) => grant !== "");
+  let body: ReactNode;
+  switch (status) {
+    case "resolved":
+      body = (
+        <>
+          <p className="mt-1">
+            {translateNow("graph.leaseReach.resolved", {
+              login: attrText(node, "login"),
+              target: attrText(node, "target"),
+              checked: checked ? formatDateTime(checked) : "-",
+            })}
+          </p>
+          {grants.length > 0 ? (
+            <ul aria-label={translateNow("graph.leaseReach.grants")} className="mt-1 list-disc space-y-0.5 pl-5">
+              {grants.map((grant) => (
+                <li key={grant} className="break-all font-mono text-xs">
+                  {grant}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1">{translateNow("graph.leaseReach.noGrants")}</p>
+          )}
+        </>
+      );
+      break;
+    case "unknown": {
+      const reasonKey = leaseReasonKeys[attrText(node, "access_reason")] ?? "graph.leaseReach.reason.failed";
+      body = <p className="mt-1">{translateNow("graph.leaseReach.unknown", { reason: translateNow(reasonKey) })}</p>;
+      break;
+    }
+    case "unsupported":
+      body = <p className="mt-1">{translateNow("graph.leaseReach.unsupported")}</p>;
+      break;
+    default:
+      body = <p className="mt-1">{translateNow("graph.leaseReach.notRead")}</p>;
+  }
+  return (
+    <section aria-labelledby="graph-lease-reach-heading" className="mt-4">
+      <h3 id="graph-lease-reach-heading" className="font-semibold">
+        {translateNow("graph.leaseReach.heading")}
+      </h3>
+      {body}
     </section>
   );
 }

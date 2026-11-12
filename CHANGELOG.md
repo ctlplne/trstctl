@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- The Graph page says what a dynamic-secret lease reaches (G2-L4). A lease's node detail names its
+  login and the target it reaches and lists each grant the target reported, with when it was read.
+  A target that could not be read says why (for example, the login no longer exists) and that this
+  does not mean the lease reaches nothing; a provider that cannot report and a lease not read yet
+  each say so.
 - The access graph shows what Kubernetes, GCP and Azure leases reach (G2-L2, part 2). A Kubernetes
   lease links to its namespace with the rules of each role a RoleBinding or ClusterRoleBinding grants
   its service account; a GCP lease links to its service account with the roles the project's IAM

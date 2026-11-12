@@ -217,6 +217,62 @@ describe("route 027 impact-first graph design", () => {
     expect(await screen.findByRole("region", { name: "Enrolled host agent" })).toHaveTextContent("This agent was offboarded and holds no role.");
   });
 
+  it("says what each dynamic-secret lease reaches, and never reads unknown as no grants (G2-L4)", async () => {
+    const user = userEvent.setup();
+    const lease = (id: string, name: string, attrs: Record<string, string>) => ({
+      id,
+      kind: "credential",
+      name,
+      attrs: { credential_kind: "dynamic_secret_lease", provider: "warehouse", role: "readonly", ...attrs },
+    });
+    apiMock.graph.mockResolvedValue({
+      nodes: [
+        { id: "cert:payments", kind: "credential", name: "payments-cert", attrs: {} },
+        lease("lease:l-1", "readonly@warehouse-pg", {
+          access_status: "resolved",
+          login: "trstctl_r1",
+          target: "postgresql://db.internal:5432/postgres",
+          grants: "CONNECT on database postgres; SELECT on public.orders; and 3 more",
+          grant_count: "5",
+          access_checked_at: "2026-11-12T03:00:00Z",
+        }),
+        lease("lease:l-2", "readonly@cache", { access_status: "unknown", grants: "unknown", access_reason: "login_missing" }),
+        lease("lease:l-3", "deployer@cluster", { access_status: "unsupported", grants: "unknown", access_reason: "unsupported" }),
+        lease("lease:l-4", "readonly@fresh", { access_status: "not_read" }),
+      ],
+      edges: [],
+    });
+    renderGraph();
+    await screen.findByRole("combobox", { name: "Credential to explore" });
+    await user.click(screen.getByText("Node inventory, exact attributes, and advanced query", { exact: true }));
+
+    await user.click(screen.getByRole("button", { name: "Select readonly@warehouse-pg" }));
+    let reach = await screen.findByRole("region", { name: "What this lease reaches" });
+    expect(reach).toHaveTextContent("Its login trstctl_r1 on postgresql://db.internal:5432/postgres, with the grants the target reported for it at");
+    const grants = within(reach).getByRole("list", { name: "Grants the target reported" });
+    expect(
+      within(grants)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["CONNECT on database postgres", "SELECT on public.orders", "and 3 more"]);
+
+    await user.click(screen.getByRole("button", { name: "Select readonly@cache" }));
+    reach = await screen.findByRole("region", { name: "What this lease reaches" });
+    expect(reach).toHaveTextContent(
+      "The target could not be read: the lease's login no longer exists on the target. This does not mean the lease reaches nothing; it is read again within five minutes.",
+    );
+    expect(within(reach).queryByRole("list")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Select deployer@cluster" }));
+    expect(await screen.findByRole("region", { name: "What this lease reaches" })).toHaveTextContent(
+      "This provider cannot report what a lease reaches, so only its provider is linked.",
+    );
+    await user.click(screen.getByRole("button", { name: "Select readonly@fresh" }));
+    expect(await screen.findByRole("region", { name: "What this lease reaches" })).toHaveTextContent(
+      "Not read yet. A new lease is read within a minute of issue.",
+    );
+  });
+
   it("answers the impact question before revealing exact graph machinery", async () => {
     const user = userEvent.setup();
     renderGraph();
