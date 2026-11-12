@@ -28581,11 +28581,13 @@ export interface components {
             };
             artifact_kind?: string;
             artifact_path?: string;
-            /** @description N6: read the content from the provider instead of artifact_path, in the layout of its export — an image (registry: repository and a tag or sha256 digest, every platform, config and layer files, digests checked), Slack channel history (channels, a bot token reference), Jira issues (jql, a token reference), or CI logs (system github or gitlab, repo, a token reference). Credentials are operator-approved references; a private endpoint needs allow_private_endpoint, its CIDRs and the private-egress permission. */
+            /** @description N6: read the content from the provider instead of artifact_path, in the layout of its export — an image (registry: repository and a tag or sha256 digest, every platform, config and layer files, digests checked), Slack channel history (channels, a bot token reference), Jira issues (jql, a token reference), CI logs (system github or gitlab, repo, a token reference), and (OD-4) Microsoft Teams channel messages (team, channels, a Microsoft Graph token reference) or Confluence content (cql, a token reference; base_url includes the site's context path). Credentials are operator-approved references; a private endpoint needs allow_private_endpoint, its CIDRs and the private-egress permission. */
             collect?: {
                 allow_private_endpoint?: boolean;
                 base_url: string;
                 channels?: string[];
+                /** @description Confluence: the pages, blog posts and comments to read, as a CQL query */
+                cql?: string;
                 jql?: string;
                 max_bytes?: number;
                 max_items?: number;
@@ -28594,13 +28596,15 @@ export interface components {
                 /** @description CI logs: a GitHub owner/name, or a GitLab project's ID or path */
                 repo?: string;
                 repository?: string;
-                /** @description lookback for Slack history and Jira issues, such as 720h */
+                /** @description lookback for Slack history, Jira issues, CI runs, Teams messages and Confluence content, such as 720h */
                 since?: string;
                 /**
                  * @description CI logs: the system the runs or jobs are read from
                  * @enum {string}
                  */
                 system?: "github" | "gitlab";
+                /** @description Teams: the team's ID (a GUID); channels are its channel IDs (19:...@thread.tacv2) */
+                team?: string;
                 token_ref?: string;
                 username_ref?: string;
             };
@@ -60928,7 +60932,7 @@ export interface operations {
                 "Idempotency-Key": string;
             };
             path: {
-                /** @description cicd_log, container_registry, slack, or jira */
+                /** @description cicd_log, container_registry, slack, jira, teams or confluence */
                 provider: string;
             };
             cookie?: never;

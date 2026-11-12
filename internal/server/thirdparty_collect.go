@@ -45,7 +45,8 @@ func collectThirdParty(ctx context.Context, cfg secretscan.ThirdPartyScanConfig)
 	cleanup := func() { _ = os.RemoveAll(dir) }
 	result, err := scancollect.Collect(ctx, dir, scancollect.Request{
 		Provider: secretscan.NormalizeThirdPartyProvider(cfg.Provider), BaseURL: c.BaseURL, Token: token, Username: username,
-		Repository: c.Repository, Reference: c.Reference, Channels: c.Channels, JQL: c.JQL, System: c.System, Repo: c.Repo, Since: since,
+		Repository: c.Repository, Reference: c.Reference, Channels: c.Channels, Team: c.Team, JQL: c.JQL, CQL: c.CQL,
+		System: c.System, Repo: c.Repo, Since: since,
 		MaxItems: c.MaxItems, MaxBytes: c.MaxBytes, Doer: client,
 	})
 	if err != nil {

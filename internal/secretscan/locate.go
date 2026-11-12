@@ -20,7 +20,10 @@ const maxLocateBytes = 64 << 20
 // LocateThirdPartyObject maps a finding's file and line in a provider export
 // to the provider object it sat in (A174): for a Slack export, the channel
 // (and its ID from channels.json) and the message's ts and thread_ts; for a
-// Jira export, the issue key. It reads only that one export file, inside the
+// Jira export, the issue key; for a Teams export (OD-4), the team, channel
+// and message (and the message it replies to), with the poster's address
+// from users.json; for a Confluence export, the content's ID, type and
+// space. It reads only that one export file, inside the
 // artifact, and returns false when the object cannot be told. Nothing it
 // returns is content: identifiers only.
 func LocateThirdPartyObject(provider, artifactPath, file string, line int) (map[string]string, bool) {
@@ -89,9 +92,110 @@ func LocateThirdPartyObject(provider, artifactPath, file string, line int) (map[
 			return nil, false
 		}
 		return map[string]string{"kind": "jira_issue", "issue_key": i.Key}, true
+	case ThirdPartyProviderTeams:
+		return locateTeamsMessage(full, data, line)
+	case ThirdPartyProviderConfluence:
+		return locateConfluenceContent(data, line)
 	default:
 		return nil, false
 	}
+}
+
+var (
+	teamsGUIDPattern      = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	teamsChannelPattern   = regexp.MustCompile(`^19:[A-Za-z0-9_-]{1,200}@thread\.(?:tacv2|skype)$`)
+	teamsMessagePattern   = regexp.MustCompile(`^[0-9]{1,20}$`)
+	confluenceIDPattern   = regexp.MustCompile(`^[0-9]{1,20}$`)
+	confluenceTypePattern = regexp.MustCompile(`^[a-z_]{1,32}$`)
+	confluenceKeyPattern  = regexp.MustCompile(`^~?[A-Za-z0-9_-]{1,255}$`)
+)
+
+// locateTeamsMessage names the Microsoft Graph chatMessage at a line: its
+// team, channel and message IDs, the message it replies to, and the poster
+// with their address from the export's users.json.
+func locateTeamsMessage(full string, data []byte, line int) (map[string]string, bool) {
+	msg, ok := elementAtLine(data, line, "")
+	if !ok {
+		msg = lineAt(data, line)
+	}
+	var m struct {
+		ID              string `json:"id"`
+		ReplyToID       string `json:"replyToId"`
+		ChannelIdentity struct {
+			TeamID    string `json:"teamId"`
+			ChannelID string `json:"channelId"`
+		} `json:"channelIdentity"`
+		From struct {
+			User struct {
+				ID string `json:"id"`
+			} `json:"user"`
+		} `json:"from"`
+	}
+	if json.Unmarshal(msg, &m) != nil || !teamsMessagePattern.MatchString(m.ID) ||
+		!teamsGUIDPattern.MatchString(m.ChannelIdentity.TeamID) || !teamsChannelPattern.MatchString(m.ChannelIdentity.ChannelID) {
+		return nil, false
+	}
+	out := map[string]string{"kind": "teams_message", "team_id": m.ChannelIdentity.TeamID,
+		"channel_id": m.ChannelIdentity.ChannelID, "message_id": m.ID}
+	if teamsMessagePattern.MatchString(m.ReplyToID) && m.ReplyToID != m.ID {
+		out["reply_to_id"] = m.ReplyToID
+	}
+	if teamsGUIDPattern.MatchString(m.From.User.ID) {
+		out["user"] = m.From.User.ID
+		if email := teamsUserEmail(filepath.Dir(filepath.Dir(full)), m.From.User.ID); email != "" {
+			out["user_email"] = email
+		}
+	}
+	return out, true
+}
+
+// teamsUserEmail reads a member's address from the export's users.json
+// ([{"id", "mail"}], as Microsoft Graph's user resource names it).
+func teamsUserEmail(exportRoot, userID string) string {
+	data, err := readBounded(filepath.Join(exportRoot, "users.json"))
+	if err != nil {
+		return ""
+	}
+	var users []struct {
+		ID   string `json:"id"`
+		Mail string `json:"mail"`
+	}
+	if json.Unmarshal(data, &users) != nil {
+		return ""
+	}
+	for _, u := range users {
+		if strings.EqualFold(u.ID, userID) {
+			if addr, err := mail.ParseAddress(u.Mail); err == nil && addr.Address == u.Mail {
+				return u.Mail
+			}
+		}
+	}
+	return ""
+}
+
+// locateConfluenceContent names the Confluence content at a line of a
+// search export ({"results": [...]}, or JSON Lines): its ID, its type (page,
+// blogpost, comment) and its space's key. Never its title or body.
+func locateConfluenceContent(data []byte, line int) (map[string]string, bool) {
+	item, ok := elementAtLine(data, line, "results")
+	if !ok {
+		item = lineAt(data, line)
+	}
+	var c struct {
+		ID    string `json:"id"`
+		Type  string `json:"type"`
+		Space struct {
+			Key string `json:"key"`
+		} `json:"space"`
+	}
+	if json.Unmarshal(item, &c) != nil || !confluenceIDPattern.MatchString(c.ID) || !confluenceTypePattern.MatchString(c.Type) {
+		return nil, false
+	}
+	out := map[string]string{"kind": "confluence_content", "content_id": c.ID, "content_type": c.Type}
+	if confluenceKeyPattern.MatchString(c.Space.Key) {
+		out["space_key"] = c.Space.Key
+	}
+	return out, true
 }
 
 // exportFile resolves a finding's file against the artifact and refuses any

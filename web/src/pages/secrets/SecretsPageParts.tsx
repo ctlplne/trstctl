@@ -938,6 +938,8 @@ export function defaultThirdPartyProviders(): ThirdPartySecretScanPosture["provi
     },
     { id: "slack", name: "Slack exports", artifact_kinds: ["slack_export"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
     { id: "jira", name: "Jira exports", artifact_kinds: ["jira_export"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
+    { id: "teams", name: "Microsoft Teams channel messages", artifact_kinds: ["teams_export"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
+    { id: "confluence", name: "Confluence content", artifact_kinds: ["confluence_export"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
   ];
 }
 

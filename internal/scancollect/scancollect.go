@@ -3,12 +3,15 @@
 // Package scancollect fetches the content a leaked-secret scan reads from the
 // provider itself (N6), instead of from an export an operator downloaded: an
 // OCI image's config and layers from its registry, a Slack channel's history,
-// Jira issues, and GitHub Actions run logs or GitLab job logs. It writes them
+// Jira issues, GitHub Actions run logs or GitLab job logs, and (OD-4)
+// Microsoft Teams channel messages and Confluence content. It writes them
 // into a directory in the layout of the provider's own export (Slack: a folder
 // per channel holding a JSON array per day plus channels.json; Jira:
 // issues.json; CI logs: a folder per run or job named by its repository and
-// commit), so the scanner and the A174 locator read a collection exactly as
-// they read an export. The directory is
+// commit; Teams: a folder per channel holding messages.json, Microsoft
+// Graph's chatMessage objects, plus channels.json and users.json;
+// Confluence: content.json, the search results), so the scanner and the
+// A174 locator read a collection exactly as they read an export. The directory is
 // the caller's, private, and removed after the scan; what it holds is the
 // provider's content, secrets included, never an event or a log line.
 package scancollect
@@ -36,6 +39,8 @@ const (
 	ProviderSlack             = "slack"
 	ProviderJira              = "jira"
 	ProviderCICDLog           = "cicd_log"
+	ProviderTeams             = "teams"
+	ProviderConfluence        = "confluence"
 )
 
 const (
@@ -71,16 +76,21 @@ type Request struct {
 	// Registry: the repository and a tag or digest.
 	Repository string
 	Reference  string
-	// Slack: channel IDs.
+	// Slack: channel IDs. Teams: the team's channel IDs.
 	Channels []string
+	// Teams: the team whose channels are read.
+	Team string
 	// Jira: the issues to read.
 	JQL string
+	// Confluence: the content to read, by CQL.
+	CQL string
 	// CI logs: the system (github or gitlab) and the repository (owner/name,
 	// or a GitLab project's ID or path).
 	System string
 	Repo   string
-	// Since bounds Slack history (oldest), Jira issues (updated) and CI runs
-	// and jobs (created).
+	// Since bounds Slack history (oldest), Jira issues (updated), CI runs
+	// and jobs (created), Teams messages (last modified) and Confluence
+	// content (lastmodified).
 	Since    time.Time
 	MaxItems int
 	MaxBytes int64
@@ -124,6 +134,10 @@ func Collect(ctx context.Context, dir string, req Request) (Result, error) {
 		res, err = collectJira(ctx, w, req)
 	case ProviderCICDLog:
 		res, err = collectCILogs(ctx, w, req)
+	case ProviderTeams:
+		res, err = collectTeams(ctx, w, req)
+	case ProviderConfluence:
+		res, err = collectConfluence(ctx, w, req)
 	default:
 		return Result{}, fmt.Errorf("scancollect: provider %q is not collected natively", req.Provider)
 	}

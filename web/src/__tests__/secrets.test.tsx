@@ -3287,3 +3287,39 @@ describe("secrets auth-method console (C-S4 / DA-02)", () => {
     expect(screen.getByText(/Session ledger unavailable/)).toBeInTheDocument();
   });
 });
+
+describe("third-party secret scan providers (OD-4)", () => {
+  beforeEach(() => primeSecretsMocks());
+
+  it("offers Teams and Confluence and queues a Teams export scan", async () => {
+    const user = userEvent.setup();
+    apiMock.thirdPartySecretScanning.mockRejectedValue(new Error("posture unavailable"));
+    apiMock.ingestThirdPartySecretScan.mockResolvedValue({
+      capability: "CAP-SCAN-04",
+      provider: "teams",
+      source: "ops/teams",
+      source_id: "secret-third-party:teams:ops-teams",
+      run_id: "77777777-7777-7777-7777-777777777777",
+      queued: true,
+      status: "queued",
+      outbox_destination: "discovery.run",
+      scanner: "gitleaks v8.27.2",
+      discovery_run_path: "/api/v1/discovery/runs/77777777-7777-7777-7777-777777777777",
+    });
+    renderSecrets("/secrets/scanning");
+    const thirdPartyForm = within(await screen.findByRole("form", { name: "Queue third-party secret scan" }));
+    const source = thirdPartyForm.getByLabelText("External source");
+    expect(within(source).getByRole("option", { name: "Microsoft Teams channel messages" })).toBeInTheDocument();
+    expect(within(source).getByRole("option", { name: "Confluence content" })).toBeInTheDocument();
+    await user.selectOptions(source, "teams");
+    await user.type(thirdPartyForm.getByLabelText("Source ref"), "ops/teams");
+    await user.type(thirdPartyForm.getByLabelText("Artifact path"), "/var/lib/trstctl/exports/teams");
+    await user.click(thirdPartyForm.getByRole("button", { name: /queue scan/i }));
+    await waitFor(() =>
+      expect(apiMock.ingestThirdPartySecretScan).toHaveBeenCalledWith("teams", {
+        source: "ops/teams",
+        artifact_path: "/var/lib/trstctl/exports/teams",
+      }),
+    );
+  });
+});

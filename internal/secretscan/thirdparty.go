@@ -17,13 +17,17 @@ import (
 
 const (
 	// ThirdPartySourceKind is the discovery source kind used for CAP-SCAN-04
-	// CI/CD-log, container-registry, Slack, and Jira export scanning.
+	// CI/CD-log, container-registry, Slack, Jira, Teams and Confluence
+	// export scanning.
 	ThirdPartySourceKind = "secret_third_party"
 
 	ThirdPartyProviderCICDLog           = "cicd_log"
 	ThirdPartyProviderContainerRegistry = "container_registry"
 	ThirdPartyProviderSlack             = "slack"
 	ThirdPartyProviderJira              = "jira"
+	// Microsoft Teams channel messages and Confluence content (OD-4).
+	ThirdPartyProviderTeams      = "teams"
+	ThirdPartyProviderConfluence = "confluence"
 )
 
 var ErrThirdPartyTargetRequired = errors.New("secretscan: third-party scan requires artifact_path")
@@ -145,6 +149,10 @@ func NormalizeThirdPartyProvider(raw string) string {
 		return ThirdPartyProviderSlack
 	case ThirdPartyProviderJira:
 		return ThirdPartyProviderJira
+	case ThirdPartyProviderTeams, "microsoft_teams", "microsoft-teams", "ms_teams":
+		return ThirdPartyProviderTeams
+	case ThirdPartyProviderConfluence:
+		return ThirdPartyProviderConfluence
 	default:
 		return ""
 	}
@@ -160,13 +168,18 @@ func ThirdPartyArtifactKind(provider string) string {
 		return "slack_export"
 	case ThirdPartyProviderJira:
 		return "jira_export"
+	case ThirdPartyProviderTeams:
+		return "teams_export"
+	case ThirdPartyProviderConfluence:
+		return "confluence_export"
 	default:
 		return "third_party_export"
 	}
 }
 
 func ThirdPartyProviders() []string {
-	return []string{ThirdPartyProviderCICDLog, ThirdPartyProviderContainerRegistry, ThirdPartyProviderSlack, ThirdPartyProviderJira}
+	return []string{ThirdPartyProviderCICDLog, ThirdPartyProviderContainerRegistry, ThirdPartyProviderSlack, ThirdPartyProviderJira,
+		ThirdPartyProviderTeams, ThirdPartyProviderConfluence}
 }
 
 func PrepareThirdPartyTarget(cfg ThirdPartyScanConfig) (ThirdPartyTarget, error) {

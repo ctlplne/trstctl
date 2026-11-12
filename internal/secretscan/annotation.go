@@ -48,6 +48,11 @@ func ValidateCollectedAnnotation(provider string, a *AnnotationConfig, c *Collec
 	if a == nil {
 		return nil
 	}
+	if p := NormalizeThirdPartyProvider(provider); p == ThirdPartyProviderTeams || p == ThirdPartyProviderConfluence {
+		// Annotations (A174) write back to Slack, Jira, CI systems and
+		// registries; Teams and Confluence findings are not annotated.
+		return fmt.Errorf("third-party provider %q has no annotation", provider)
+	}
 	if a.Repo != "" || a.CommitSHA != "" || a.Repository != "" || a.Digest != "" {
 		return errors.New("a collected scan's annotation names only its connection: the object comes from the collection")
 	}

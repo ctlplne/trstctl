@@ -13,7 +13,8 @@ import (
 
 // CollectConfig (N6) has trstctl read a third-party scan's content from the
 // provider itself instead of an export an operator downloaded: an image from
-// its registry, Slack channel history, Jira issues. The connection's
+// its registry, Slack channel history, Jira issues, and (OD-4) Microsoft
+// Teams channel messages and Confluence content. The connection's
 // credentials are operator-approved references resolved by the worker; a
 // private endpoint needs allow_private_endpoint and its CIDRs, as for
 // annotation.
@@ -24,10 +25,14 @@ type CollectConfig struct {
 	// Registry: the repository and a tag or sha256 digest.
 	Repository string `json:"repository,omitempty"`
 	Reference  string `json:"reference,omitempty"`
-	// Slack: channel IDs.
+	// Slack: channel IDs. Teams: the team's channel IDs (19:...@thread...).
 	Channels []string `json:"channels,omitempty"`
+	// Teams: the team's ID (a GUID) whose channels are read.
+	Team string `json:"team,omitempty"`
 	// Jira: the issues to read.
 	JQL string `json:"jql,omitempty"`
+	// Confluence: the pages, blog posts and comments to read, by CQL.
+	CQL string `json:"cql,omitempty"`
 	// CI logs: github or gitlab, and the repository (owner/name, or a GitLab
 	// project's ID or path).
 	System string `json:"system,omitempty"`
@@ -46,6 +51,9 @@ var (
 	collectChannel    = regexp.MustCompile(`^[CGD][A-Z0-9]{2,20}$`)
 	collectGitHubRepo = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$`)
 	collectGitLabRepo = regexp.MustCompile(`^(?:[0-9]{1,12}|[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+){1,20})$`)
+	collectTeamsTeam  = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	// A Teams channel ID: 19:<id>@thread.tacv2 (or the older .skype).
+	collectTeamsChannel = regexp.MustCompile(`^19:[A-Za-z0-9_-]{1,200}@thread\.(?:tacv2|skype)$`)
 )
 
 // SinceDuration is the collection's lookback; zero reads everything.
@@ -80,7 +88,14 @@ func ValidateCollect(provider string, c *CollectConfig) error {
 	if c.UsernameRef != "" && c.TokenRef == "" {
 		return errors.New("collect.username_ref needs token_ref")
 	}
-	switch NormalizeThirdPartyProvider(provider) {
+	normalized := NormalizeThirdPartyProvider(provider)
+	if normalized != ThirdPartyProviderTeams && c.Team != "" {
+		return errors.New("collect.team is for a Teams collection")
+	}
+	if normalized != ThirdPartyProviderConfluence && c.CQL != "" {
+		return errors.New("collect.cql is for a Confluence collection")
+	}
+	switch normalized {
 	case ThirdPartyProviderContainerRegistry:
 		if !collectRepository.MatchString(c.Repository) || !collectReference.MatchString(c.Reference) {
 			return errors.New("collect.repository and collect.reference (a tag or sha256 digest) name the image")
@@ -103,6 +118,26 @@ func ValidateCollect(provider string, c *CollectConfig) error {
 	case ThirdPartyProviderJira:
 		if strings.TrimSpace(c.JQL) == "" || len(c.JQL) > 2000 || c.TokenRef == "" || c.Repository != "" || len(c.Channels) > 0 {
 			return errors.New("a Jira collection names its issues by JQL and a token reference")
+		}
+	case ThirdPartyProviderTeams:
+		if !collectTeamsTeam.MatchString(c.Team) {
+			return errors.New("collect.team is the team's ID (a GUID)")
+		}
+		if len(c.Channels) == 0 || len(c.Channels) > 100 {
+			return errors.New("collect.channels names 1 to 100 of the team's channel IDs")
+		}
+		for _, ch := range c.Channels {
+			if !collectTeamsChannel.MatchString(ch) {
+				return fmt.Errorf("collect.channels: %q is not a Teams channel ID (19:...@thread.tacv2)", ch)
+			}
+		}
+		if c.TokenRef == "" || c.Repository != "" || c.Reference != "" || c.JQL != "" || c.System != "" || c.Repo != "" {
+			return errors.New("a Teams collection names its team, channels and a Microsoft Graph token reference")
+		}
+	case ThirdPartyProviderConfluence:
+		if strings.TrimSpace(c.CQL) == "" || len(c.CQL) > 2000 || c.TokenRef == "" || c.Repository != "" || c.Reference != "" ||
+			len(c.Channels) > 0 || c.JQL != "" || c.System != "" || c.Repo != "" {
+			return errors.New("a Confluence collection names its content by CQL and a token reference")
 		}
 	case ThirdPartyProviderCICDLog:
 		switch {

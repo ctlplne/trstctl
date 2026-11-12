@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- Leaked-secret scans read Microsoft Teams channel messages and Confluence content (OD-4): third-party scan providers
+  `teams` (a team's channels and their replies from Microsoft Graph, Graph's next pages followed on its own origin only,
+  posters' addresses for owner linking) and `confluence` (the pages, blog posts and comments a CQL query selects, the
+  site's own next links followed), for an export's `artifact_path` or a native `collect` (`team` and `channels`, or
+  `cql`). Findings name the Teams message (team, channel, message, reply, poster) or the Confluence content (ID, type,
+  space), never the content. The console's third-party scan form offers both.
 - Native GitLab and Bitbucket push hooks for repository secret scans (OD-3): `secrets.scan_webhooks` takes
   `provider: gitlab` (the hook's signing token checks `webhook-signature` over `webhook-id`, `webhook-timestamp` and the
   body, refusing a stale timestamp; a hook with a secret token checks `X-Gitlab-Token`) and `provider: bitbucket`

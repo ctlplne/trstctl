@@ -2568,6 +2568,35 @@ repository and commit, so its findings name the system, repository, commit and r
 job; an annotation on a collected CI log or image names only its connection (and a CI
 log's `system`), because the object comes from the collection.
 
+Microsoft Teams and Confluence are two more sources (OD-4), for an export's
+`artifact_path` or a native `collect`:
+
+- `teams` reads a team's channels from Microsoft Graph: `team` (the team's ID) and
+  `channels` (its channel IDs, `19:…@thread.tacv2`), with a token reference for an
+  application token that holds `ChannelMessage.Read.All` (and `User.Read.All` for the
+  posters' addresses). Each channel's messages and their replies are read through
+  `GET /v1.0/teams/{team}/channels/{channel}/messages` with replies expanded, following
+  Graph's next pages only on Graph's own origin; deleted messages are skipped and
+  `since` keeps those changed in the lookback. The export layout is a folder per
+  channel holding `messages.json` (Graph's `chatMessage` objects, replies beside the
+  message they answer, each naming its team and channel), with `channels.json` and
+  `users.json`. A finding names the team, channel, message, the message it replies
+  to and its poster, and the tenant owner with the poster's address becomes its
+  `owner_id`, as for Slack.
+- `confluence` reads the pages, blog posts and comments a `cql` query selects through
+  `GET {base_url}/rest/api/content/search` (storage body, version and space expanded),
+  following Confluence's own site-relative next links. `base_url` is the site with its
+  context path (`https://example.atlassian.net/wiki` for Confluence Cloud); a
+  Confluence Cloud API token goes with `username_ref` (the account's email), and a
+  Data Center personal access token alone. `since` adds a `lastmodified` bound to the
+  query. The export layout is `content.json` with the search's `results`; a finding
+  names the content's ID, its type and its space, never its title or body.
+
+Neither takes an annotation (A174 annotates Slack, Jira, CI systems and registries).
+Their live runs against Microsoft 365 and Atlassian tenants are Track B proofs; the
+served test runs against stand-ins written from the Microsoft Graph and Confluence REST
+references.
+
 ```json
 {"source":"team-app","collect":{"base_url":"https://registry.example.com","repository":"team/app","reference":"v1",
  "username_ref":"env:REGISTRY_USER","token_ref":"env:REGISTRY_TOKEN"}}

@@ -529,7 +529,7 @@ func (a *API) thirdPartySecretScanPosture(w http.ResponseWriter, _ *http.Request
 }
 
 // ingestThirdPartySecretScan is the normalized CAP-SCAN-04 ingress for CI/CD logs,
-// container-registry exports, Slack exports, and Jira exports. It records only
+// container-registry exports, Slack, Jira, Teams and Confluence exports. It records only
 // metadata and an artifact path; the discovery.run worker performs the scan.
 //
 //trstctl:mutation
@@ -544,7 +544,7 @@ func (a *API) ingestThirdPartySecretScan(w http.ResponseWriter, r *http.Request)
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "third-party secret scan queue is not configured")
 		}
 		if provider == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "provider must be cicd_log, container_registry, slack, or jira")
+			return 0, nil, errStatus(http.StatusBadRequest, "provider must be "+strings.Join(secretscan.ThirdPartyProviders(), ", "))
 		}
 		var req thirdPartySecretScanIngestRequest
 		if err := decodeJSON(r, &req); err != nil {
@@ -702,13 +702,30 @@ func buildThirdPartySecretScanPosture(generatedAt string) thirdPartySecretScanPo
 			SecretHandling: "Jira issue text and attachments remain in the export artifact; trstctl stores metadata-only findings",
 			OutboxMode:     "artifact scan is discovery.run outbox work, never inline request handling",
 		},
+		{
+			ID:             secretscan.ThirdPartyProviderTeams,
+			Name:           "Microsoft Teams channel messages",
+			ArtifactKinds:  []string{"teams_export", "channel_message_export"},
+			IngestMode:     "POST a Teams channel-message export's artifact_path, or collect the team's channels' messages and replies from Microsoft Graph, to queue redacted scanning",
+			SecretHandling: "message text stays in the export or the private collection directory; trstctl stores metadata-only findings naming the team, channel, message and poster",
+			OutboxMode:     "collection and scan are discovery.run outbox work, never inline request handling",
+		},
+		{
+			ID:             secretscan.ThirdPartyProviderConfluence,
+			Name:           "Confluence content",
+			ArtifactKinds:  []string{"confluence_export", "page_export"},
+			IngestMode:     "POST a Confluence content export's artifact_path, or collect the pages, blog posts and comments a CQL query selects, to queue redacted scanning",
+			SecretHandling: "page and comment bodies stay in the export or the private collection directory; trstctl stores metadata-only findings naming the content and its space",
+			OutboxMode:     "collection and scan are discovery.run outbox work, never inline request handling",
+		},
 	}
 	return thirdPartySecretScanPostureResponse{
-		Capability:         "CAP-SCAN-04",
-		Served:             true,
-		GeneratedAt:        generatedAt,
-		Providers:          providers,
-		IngestPaths:        []string{"/api/v1/secrets/scans/third-party/cicd_log/ingest", "/api/v1/secrets/scans/third-party/container_registry/ingest", "/api/v1/secrets/scans/third-party/slack/ingest", "/api/v1/secrets/scans/third-party/jira/ingest"},
+		Capability:  "CAP-SCAN-04",
+		Served:      true,
+		GeneratedAt: generatedAt,
+		Providers:   providers,
+		IngestPaths: []string{"/api/v1/secrets/scans/third-party/cicd_log/ingest", "/api/v1/secrets/scans/third-party/container_registry/ingest", "/api/v1/secrets/scans/third-party/slack/ingest", "/api/v1/secrets/scans/third-party/jira/ingest",
+			"/api/v1/secrets/scans/third-party/teams/ingest", "/api/v1/secrets/scans/third-party/confluence/ingest"},
 		QueueModel:         "authenticated ingest records a tenant-scoped secret_third_party discovery source/run and the discovery.run outbox worker performs artifact scanning",
 		Scanner:            "gitleaks " + secretscan.GitleaksPinnedVersion,
 		MinimumRulesActive: secretscan.GitleaksMinRulesActive,

@@ -1613,8 +1613,9 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 		}
 		if object != nil {
 			fields["provider_object"], fields["annotation_provider"] = object, cfg.AnnotationProvider()
-			// P14: a secret posted in Slack is linked to the poster's owner.
-			if email := object["user_email"]; object["kind"] == "slack_message" && email != "" {
+			// P14: a secret posted in Slack, or (OD-4) Teams, is linked to
+			// the poster's owner.
+			if email := object["user_email"]; (object["kind"] == "slack_message" || object["kind"] == "teams_message") && email != "" {
 				if ownerID, err := d.ownerForEmail(ctx, tenantID, email); err != nil {
 					return rep, "", "", err
 				} else if ownerID != "" {

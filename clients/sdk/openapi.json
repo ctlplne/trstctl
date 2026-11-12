@@ -60338,7 +60338,7 @@
             "type": "string"
           },
           "collect": {
-            "description": "N6: read the content from the provider instead of artifact_path, in the layout of its export — an image (registry: repository and a tag or sha256 digest, every platform, config and layer files, digests checked), Slack channel history (channels, a bot token reference), Jira issues (jql, a token reference), or CI logs (system github or gitlab, repo, a token reference). Credentials are operator-approved references; a private endpoint needs allow_private_endpoint, its CIDRs and the private-egress permission.",
+            "description": "N6: read the content from the provider instead of artifact_path, in the layout of its export — an image (registry: repository and a tag or sha256 digest, every platform, config and layer files, digests checked), Slack channel history (channels, a bot token reference), Jira issues (jql, a token reference), CI logs (system github or gitlab, repo, a token reference), and (OD-4) Microsoft Teams channel messages (team, channels, a Microsoft Graph token reference) or Confluence content (cql, a token reference; base_url includes the site's context path). Credentials are operator-approved references; a private endpoint needs allow_private_endpoint, its CIDRs and the private-egress permission.",
             "properties": {
               "allow_private_endpoint": {
                 "type": "boolean"
@@ -60351,6 +60351,10 @@
                   "type": "string"
                 },
                 "type": "array"
+              },
+              "cql": {
+                "description": "Confluence: the pages, blog posts and comments to read, as a CQL query",
+                "type": "string"
               },
               "jql": {
                 "type": "string"
@@ -60378,7 +60382,7 @@
                 "type": "string"
               },
               "since": {
-                "description": "lookback for Slack history and Jira issues, such as 720h",
+                "description": "lookback for Slack history, Jira issues, CI runs, Teams messages and Confluence content, such as 720h",
                 "type": "string"
               },
               "system": {
@@ -60387,6 +60391,10 @@
                   "github",
                   "gitlab"
                 ],
+                "type": "string"
+              },
+              "team": {
+                "description": "Teams: the team's ID (a GUID); channels are its channel IDs (19:...@thread.tacv2)",
                 "type": "string"
               },
               "token_ref": {
@@ -109796,7 +109804,7 @@
             }
           },
           {
-            "description": "cicd_log, container_registry, slack, or jira",
+            "description": "cicd_log, container_registry, slack, jira, teams or confluence",
             "in": "path",
             "name": "provider",
             "required": true,

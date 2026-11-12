@@ -9093,8 +9093,9 @@ token-service challenge, an index, a tampered blob, paging, redirects, limits an
 refusals.
 
 What comes next:
-- Live Slack, Jira, GitHub, GitLab and hosted-registry runs are Track B proofs (the
-  GitLab container is a multi-GB image; the stand-in follows GitLab's API reference).
+- Live Slack, Jira, GitHub, GitLab, Microsoft Teams, Confluence (OD-4) and
+  hosted-registry runs are Track B proofs (the GitLab container is a multi-GB image;
+  the stand-ins follow each provider's API reference).
 - Slack thread replies (`conversations.replies`) are not read yet, and a layer
   compressed with zstd is skipped (its digest is still checked).
 
