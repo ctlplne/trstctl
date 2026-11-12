@@ -15,6 +15,7 @@ const { providerMock } = vi.hoisted(() => ({
     resumeTenant: vi.fn(),
     offboardTenant: vi.fn(),
     getQuota: vi.fn(),
+    billingCompanies: vi.fn(),
     setQuota: vi.fn(),
     getBrand: vi.fn(),
     setBrand: vi.fn(),
@@ -68,6 +69,7 @@ describe("provider console (L3)", () => {
     clearProviderToken();
     for (const fn of Object.values(providerMock)) fn.mockReset();
     providerMock.listActivity.mockResolvedValue([]);
+    providerMock.billingCompanies.mockResolvedValue({ targets: [], companies: [] });
     providerMock.availability.mockResolvedValue(true);
     providerMock.authMethods.mockResolvedValue([]);
     // Existing action tests exercise a fully authorized administrator. The new

@@ -1130,7 +1130,7 @@ func truncateProviderAuthority(t *testing.T, st *corestore.Store) {
 	t.Helper()
 	if _, err := st.SystemPool().Exec(context.Background(), `TRUNCATE
 		provider_operator_grant_episodes, provider_operator_delegations, provider_operators, provider_breakglass_grants, provider_tenant_quotas,
-		tenant_branding, provider_tenants RESTART IDENTITY CASCADE`); err != nil {
+		tenant_branding, provider_billing_companies, provider_tenants RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate provider authority: %v", err)
 	}
 }

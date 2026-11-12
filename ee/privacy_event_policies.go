@@ -82,6 +82,13 @@ type providerTemplateApplicationAuthorityPayload struct {
 	Audit               provider.AuditEvent           `json:"audit"`
 }
 
+type providerBillingCompanyAuthorityPayload struct {
+	BillingCompany *provider.BillingCompany `json:"billing_company,omitempty"`
+	EffectiveAt    time.Time                `json:"effective_at,omitempty"`
+	RequestBinding string                   `json:"request_binding,omitempty"`
+	Audit          provider.AuditEvent      `json:"audit"`
+}
+
 type providerQuotaAuthorityPayload struct {
 	Quota          *billing.Quota      `json:"quota,omitempty"`
 	EffectiveAt    time.Time           `json:"effective_at,omitempty"`
@@ -431,6 +438,16 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 			// the subject, which removes the identity and lets the token fall
 			// back to its default.
 			licensedPrivacyRule("/brand_token_overrides", events.PrivacyFieldFreeTextClear),
+		)),
+		// MSP-2: the operator who mapped a customer is an identity; the
+		// company identifier names the customer's account in the operator's
+		// own billing system and is kept exactly.
+		entry(provider.EventTenantBillingCompanySet, 1, providerPolicy[providerBillingCompanyAuthorityPayload](
+			licensedPrivacyRule("/billing_company/mapped_by", events.PrivacyFieldIdentityExact),
+			licensedPrivacyRule("/billing_company/external_company_id", events.PrivacyFieldOpaqueExact),
+		)),
+		entry(provider.EventTenantBillingCompanyCleared, 1, providerPolicy[providerBillingCompanyAuthorityPayload](
+			licensedPrivacyRule("/billing_company/mapped_by", events.PrivacyFieldIdentityExact),
 		)),
 		entry(provider.AuditBreakGlassRequested, 1, breakGlassPolicy),
 		entry(provider.AuditBreakGlassConsented, 1, breakGlassPolicy),

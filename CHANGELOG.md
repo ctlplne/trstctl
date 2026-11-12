@@ -1,6 +1,14 @@
 ## [Unreleased]
 
 ### Added
+- Billing systems for the Provider plane (MSP-2, part 1): `provider.billing_sync.targets` names the billing or PSA
+  systems a Provider pushes customers' signed usage periods to (signed JSON targets with an HMAC `signing_key_ref`,
+  an optional bearer `token_ref`, monthly or daily cadence), and a Provider operator with the new `billing:write`
+  permission maps each delegated customer to its company in each target
+  (`PUT`/`DELETE /provider/v1/tenants/{id}/billing-companies/{target}`, `GET .../billing-companies`). Mappings are
+  Provider authority events projected into `provider_billing_companies`; one company in one target belongs to one
+  customer (409 before anything is recorded). The Provider console's Billing section shows and edits them. The
+  period pushes themselves arrive with part 2.
 - 1Password Connect and Doppler as `cloud_secret` and `secret_store` discovery providers (OD-14, restored from A173):
   `1password-connect` lists the items of a Connect server's vaults (titles and categories; field values only with
   `inspect_content`), and `doppler` lists secret names per project config from the names-only endpoint (values only

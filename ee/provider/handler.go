@@ -235,6 +235,11 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.setQuota(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/quota"):
 		h.getQuota(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/billing-companies"):
+		h.listBillingCompanies(w, r)
+	case (r.Method == http.MethodPut || r.Method == http.MethodDelete) && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") &&
+		strings.Contains(r.URL.Path, "/billing-companies/"):
+		h.writeBillingCompany(w, r)
 	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/brand"):
 		h.setBrand(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/brand"):
@@ -901,6 +906,70 @@ func (h *handler) getQuota(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(q)
 }
 
+// listBillingCompanies reads a delegated customer's company in each
+// configured billing target (MSP-2).
+func (h *handler) listBillingCompanies(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	customerID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), "/billing-companies")
+	out, err := h.svc.ListTenantBillingCompanies(r.Context(), op, customerID)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// writeBillingCompany maps (PUT) or unmaps (DELETE) a delegated customer's
+// company in one billing target (MSP-2).
+func (h *handler) writeBillingCompany(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	rest := strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/")
+	customerID, targetID, found := strings.Cut(rest, "/billing-companies/")
+	if !found || customerID == "" || targetID == "" || strings.Contains(targetID, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	r, ok = h.withMutationKey(w, r)
+	if !ok {
+		return
+	}
+	if r.Method == http.MethodDelete {
+		if err := h.svc.ClearTenantBillingCompany(r.Context(), op, customerID, targetID); err != nil {
+			writeProviderError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	var body struct {
+		ExternalCompanyID string `json:"external_company_id"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		writeProviderError(w, errors.New("billing company request must contain exactly one JSON object"))
+		return
+	}
+	if err := h.svc.SetTenantBillingCompany(r.Context(), op, customerID, targetID, body.ExternalCompanyID); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // serveUsageEvidence bridges the Provider workforce boundary to L2's one
 // canonical invoice builder. The order is the security property: authenticate,
 // require a real MFA-backed operator, authorize this exact customer + read
@@ -1226,6 +1295,10 @@ func writeProviderError(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "idempotency_conflict"
 	case errors.Is(err, ErrBrandDomainConflict):
 		status, code = http.StatusConflict, "brand_domain_conflict"
+	case errors.Is(err, ErrBillingCompanyConflict):
+		status, code = http.StatusConflict, "billing_company_conflict"
+	case errors.Is(err, ErrBillingTargetUnknown):
+		status, code = http.StatusNotFound, "billing_target_unknown"
 	case errors.Is(err, ErrTemplateInvalid):
 		status, code = http.StatusBadRequest, "template_invalid"
 	case errors.Is(err, ErrTemplateRolloutStale):

@@ -31,6 +31,9 @@ type ConsoleCustomerAuthority struct {
 	Offboard        bool `json:"offboard"`
 	BreakGlass      bool `json:"break_glass"`
 	BreakGlassWrite bool `json:"break_glass_write"`
+	// WriteBilling (MSP-2): may map this customer to its company in a
+	// configured billing system.
+	WriteBilling bool `json:"write_billing"`
 }
 
 func (s *Service) consoleAuthority(ctx context.Context, actor Operator) ConsoleAuthority {
@@ -53,7 +56,7 @@ func (s *Service) consoleAuthority(ctx context.Context, actor Operator) ConsoleA
 	// A90: each control follows its own permission, not an admin bit.
 	can := func(perm Permission) bool { return s.requirePermission(ctx, actor, perm) == nil }
 	canProvision, canLifecycle := can(PermTenantsProvision), can(PermTenantsLifecycle)
-	canQuota, canBrand := can(PermQuotaWrite), can(PermBrandWrite)
+	canQuota, canBrand, canBilling := can(PermQuotaWrite), can(PermBrandWrite), can(PermBillingWrite)
 	canBreakGlassWrite := can(PermBreakGlassRequest) || can(PermBreakGlassConsent)
 	a.AccessRead = s.requireAdminAccessRead(ctx, actor) == nil && s.access != nil
 	a.AccessWrite = a.AccessRead && can(PermOperatorsAdmin)
@@ -72,6 +75,8 @@ func (s *Service) consoleAuthority(ctx context.Context, actor Operator) ConsoleA
 			Offboard:        canLifecycle && set.Authorize(actor, customer, OpOffboard) == nil,
 			BreakGlass:      s.store != nil && set.Authorize(actor, customer, OpBreakGlass) == nil,
 			BreakGlassWrite: canBreakGlassWrite && set.Authorize(actor, customer, OpBreakGlass) == nil,
+			WriteBilling: canBilling && set.Authorize(actor, customer, OpProvision) == nil && s.billingCompanies != nil &&
+				len(s.billingTargets) > 0,
 		}
 	}
 	return a

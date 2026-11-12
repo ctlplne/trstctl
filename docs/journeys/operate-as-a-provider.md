@@ -102,6 +102,15 @@ licensed managed-customer band controls how many customers the Provider can
 provision; setting a customer quota cannot raise or lower that band. The
 Provider API refuses the historical `max_tenants` quota field because it never
 enforced a per-customer capacity limit.
+
+Under Billing, **Billing systems** lists the billing or PSA systems the deployment
+pushes usage to (`provider.billing_sync.targets`) and the selected customer's
+company in each. An operator whose role holds `billing:write` saves or removes the
+company for a delegated customer; each change is a Provider authority event, so it
+appears in activity and rebuilds from history. A customer's usage periods go only
+to the company mapped here, and one company belongs to one customer: mapping a
+company another customer holds is refused and names the conflict, so one customer's
+counts can never reach another's company.
 Under Operator access, choose View delegations for an operator to inspect active,
 expired and revoked grants. Use Next delegations and Previous delegations to
 reach every returned grant. Closing the details returns to that operator's row;

@@ -1708,6 +1708,63 @@ export const messages = {
     description: "Distinguish service state from onboarding completion.",
   },
   "provider.setup.required": { defaultMessage: "Initialize customer workspace", description: "The customer workspace has not been initialized." },
+  "provider.billingSync.title": {
+    defaultMessage: "Billing systems",
+    description: "MSP-2: heading of the customer billing company mappings.",
+  },
+  "provider.billingSync.description": {
+    defaultMessage:
+      "Map each customer to its company in the billing systems this deployment pushes usage to. Its closed, signed usage periods go only to the company mapped here, and one company belongs to one customer.",
+    description: "MSP-2: billing systems panel help.",
+  },
+  "provider.billingSync.customer": {
+    defaultMessage: "Customer",
+    description: "MSP-2: customer selector label.",
+  },
+  "provider.billingSync.targetsLabel": {
+    defaultMessage: "Configured billing systems",
+    description: "MSP-2: accessible label of the target list.",
+  },
+  "provider.billingSync.noTargets": {
+    defaultMessage: "No billing system is configured on this deployment (provider.billing_sync.targets).",
+    description: "MSP-2: no targets configured.",
+  },
+  "provider.billingSync.cadence": {
+    defaultMessage: "Pushes {cadence} periods",
+    description: "MSP-2: a target's push cadence.",
+  },
+  "provider.billingSync.mapped": {
+    defaultMessage: "Mapped to company {company}",
+    description: "MSP-2: the customer's mapped company.",
+  },
+  "provider.billingSync.notMapped": {
+    defaultMessage: "Not mapped: nothing is pushed to this system for this customer.",
+    description: "MSP-2: no mapping in a target.",
+  },
+  "provider.billingSync.companyLabel": {
+    defaultMessage: "Company ID in {target}",
+    description: "MSP-2: company ID input label.",
+  },
+  "provider.billingSync.save": {
+    defaultMessage: "Save company",
+    description: "MSP-2: save mapping button.",
+  },
+  "provider.billingSync.remove": {
+    defaultMessage: "Remove mapping",
+    description: "MSP-2: remove mapping button.",
+  },
+  "provider.billingSync.saved": {
+    defaultMessage: "Saved the company for {target}.",
+    description: "MSP-2: mapping saved notice.",
+  },
+  "provider.billingSync.removed": {
+    defaultMessage: "Removed the mapping for {target}.",
+    description: "MSP-2: mapping removed notice.",
+  },
+  "provider.billingSync.conflict": {
+    defaultMessage: "That company is already mapped to another customer in this billing system. Remove it there first.",
+    description: "MSP-2: company already mapped to another customer.",
+  },
   "provider.setup.configured": { defaultMessage: "Customer workspace is initialized", description: "The server verified a customer registration." },
   "provider.setup.unknown": { defaultMessage: "Workspace setup could not be verified", description: "Missing or unavailable setup evidence." },
   "provider.setup.unknownHelp": {

@@ -809,6 +809,9 @@ func seedRecoveredFromPostgresTables(
 			// freely again — which is the pre-durability defect a restore must
 			// not reintroduce.
 			{`INSERT INTO provider_tenant_quotas (tenant_id, max_certificates_stored, updated_by) VALUES ($1, $2, $3)`, []any{tenantA, 25, "full-dr-admin"}},
+			// MSP-2: a customer's company in a billing target. Losing it stops
+			// that customer's usage pushes until an operator remaps it.
+			{`INSERT INTO provider_billing_companies (tenant_id, target_id, external_company_id, mapped_by, mapped_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "psa", "COMPANY-DR", "full-dr-admin", now}},
 			// M4: a machine login token's single use. A restore that lost it
 			// would re-admit the still-valid token once.
 			{`INSERT INTO machine_credential_replays (tenant_id, method, key_digest, expires_at, used_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "oidc", "jti:" + strings.Repeat("b", 64), now.Add(10 * time.Minute), now}},

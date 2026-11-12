@@ -473,6 +473,9 @@ var TenantScopedTables = []string{
 	"provider_usage_meters",
 	"provider_usage_coverage",
 	"provider_tenant_quotas",
+	// MSP-2: the customer's company in each billing target leaves with the
+	// customer; a mapping outliving it could route a later customer's counts.
+	"provider_billing_companies",
 	// The customer's template binding (which version it holds, and the last
 	// application's outcome) leaves with the customer.
 	"provider_tenant_template_bindings",

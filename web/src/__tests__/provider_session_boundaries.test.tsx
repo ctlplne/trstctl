@@ -79,6 +79,7 @@ describe("Provider authentication boundaries with the real transport client", ()
         if (url === "/provider/v1/tenants") return json({ tenants: admin ? [alpha, beta] : [alpha] });
         if (url.startsWith("/provider/v1/activity")) return json({ items: [] });
         if (url === "/provider/v1/templates") return json([]);
+        if (/^\/provider\/v1\/tenants\/[^/]+\/billing-companies$/.test(url)) return json({ targets: [], companies: [] });
         throw new Error("Unexpected Provider request " + url);
       }),
     );

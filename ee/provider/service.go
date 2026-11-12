@@ -127,6 +127,11 @@ type Config struct {
 	// Templates holds customers to versioned tenant templates. A nil store or
 	// baseline leaves the template routes refusing, never half-applying.
 	Templates TemplateDeps
+	// BillingTargets are the deployment's configured billing systems
+	// (provider.billing_sync.targets, MSP-2); BillingCompanies the durable
+	// customer-to-company mappings. Without the store, mapping refuses.
+	BillingTargets   []BillingTarget
+	BillingCompanies BillingCompanyStore
 	// Reports reads customers' signed assurance reports from core (A187). Nil
 	// leaves the report routes refusing.
 	Reports          api.TenantReportReader
@@ -224,6 +229,8 @@ type Service struct {
 	tenantConsent    TenantConsentReader
 	auditStreams     AuditStreamReader
 	templates        TemplateDeps
+	billingTargets   []BillingTarget
+	billingCompanies BillingCompanyStore
 	reports          api.TenantReportReader
 	clock            func() time.Time
 	maxBreakGlassTTL time.Duration
@@ -264,7 +271,8 @@ func NewService(cfg Config) *Service {
 	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
 		mutations: cfg.Mutations, activity: cfg.Activity, offboarding: cfg.Offboarding,
 		delegations: cfg.Delegations, access: cfg.Access, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
-		drills: cfg.Drills, tenantConsent: cfg.TenantConsent, auditStreams: cfg.AuditStreams, templates: cfg.Templates, reports: cfg.Reports, clock: clock, maxBreakGlassTTL: maxTTL}
+		drills: cfg.Drills, tenantConsent: cfg.TenantConsent, auditStreams: cfg.AuditStreams, templates: cfg.Templates, reports: cfg.Reports, clock: clock, maxBreakGlassTTL: maxTTL,
+		billingTargets: append([]BillingTarget(nil), cfg.BillingTargets...), billingCompanies: cfg.BillingCompanies}
 }
 
 // ListActivity returns newest-first immutable Provider authority evidence,

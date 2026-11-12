@@ -231,8 +231,8 @@ not this file.
 | `internal/config/audit_test.go:66` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config.go:3536` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:4341` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3539` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:4344` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:28` | credential file paths only, no credential value (CWE-798) |
@@ -2261,10 +2261,10 @@ not this file.
 | `cmd/trstctl/connector.go:155` | the operator names their reviewed public preview file (CWE-22) |
 | `cmd/trstctl/connector.go:250` | the operator names their reviewed public preview file (CWE-22) |
 | `cmd/trstctl/connector.go:382` | the operator explicitly names the public trust-bundle path (CWE-22) |
-| `cmd/trstctl/ee_attach.go:349` | operator-supplied path to their own IdP's JWKS (CWE-22) |
-| `cmd/trstctl/ee_attach.go:379` | operator-supplied path to their own IdP's JWKS (CWE-22) |
-| `cmd/trstctl/ee_attach.go:389` | operator-configured client secret file (CWE-22) |
-| `cmd/trstctl/ee_attach.go:455` | operator-pinned local IdP metadata, validated as configuration. |
+| `cmd/trstctl/ee_attach.go:351` | operator-supplied path to their own IdP's JWKS (CWE-22) |
+| `cmd/trstctl/ee_attach.go:381` | operator-supplied path to their own IdP's JWKS (CWE-22) |
+| `cmd/trstctl/ee_attach.go:391` | operator-configured client secret file (CWE-22) |
+| `cmd/trstctl/ee_attach.go:457` | operator-pinned local IdP metadata, validated as configuration. |
 | `cmd/trstctl/main.go:471` | the configured public certificate of this process's own listener (CWE-22) |
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
@@ -2527,9 +2527,9 @@ not this file.
 | `internal/cloudauth/azure_token_source.go:77` | operator-configured projected token path (CWE-22) |
 | `internal/cloudauth/gcp_token_source.go:109` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:3631` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:4988` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5007` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:3634` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:4991` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5010` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:310` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -3327,8 +3327,8 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
-| `internal/config/config.go:4988` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5007` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4991` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5010` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |

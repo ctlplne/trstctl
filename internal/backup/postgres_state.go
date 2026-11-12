@@ -1402,6 +1402,9 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// version has not arrived yet.
 		"provider_tenant_templates",
 		"provider_tenant_template_bindings",
+		// MSP-2: billing company mappings restore after the registry rows they
+		// name; no foreign keys.
+		"provider_billing_companies",
 		// L4: the break-glass grant ledger. Restores last among the provider
 		// tables: it is consent history, and like the delegations above the
 		// plane fails closed on whatever is missing — an absent grant reads as

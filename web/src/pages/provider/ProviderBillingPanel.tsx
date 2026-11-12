@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { translateNow } from "@/i18n/I18nProvider";
 import { asRFC3339UTCMinute, defaultBillingPeriod, validUTCPeriod } from "@/lib/billingPeriod";
+import { ProviderBillingCompanies } from "@/pages/provider/ProviderBillingCompaniesPanel";
 import {
   ProviderAuthError,
   providerApi,
@@ -35,7 +36,16 @@ function healthLabel(health: string): string {
   }
 }
 
-export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: ProviderTenant[]; onAuthError: () => void }) {
+export function ProviderBillingPanel({
+  tenants,
+  onAuthError,
+  canWriteBilling,
+}: {
+  tenants: ProviderTenant[];
+  onAuthError: () => void;
+  /** MSP-2: may the operator map this customer to its billing companies. */
+  canWriteBilling?: (customerId: string) => boolean;
+}) {
   const defaults = defaultBillingPeriod();
   const [customerId, setCustomerId] = useState("");
   const [periodStart, setPeriodStart] = useState(defaults.start);
@@ -282,6 +292,7 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
           </div>
         </div>
       ) : null}
+      {customerId ? <ProviderBillingCompanies customerId={customerId} canWrite={canWriteBilling?.(customerId) ?? false} onAuthError={onAuthError} /> : null}
     </section>
   );
 }

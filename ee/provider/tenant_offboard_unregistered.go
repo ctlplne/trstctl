@@ -27,7 +27,8 @@ func (o *TenantOffboarder) withUnregisteredCustomer(ctx context.Context, tenantI
 		return o.store.WithTenantRegistrationFence(ctx, tenantID, func(tx pgx.Tx) error {
 			for _, table := range corestore.TenantScopedTables {
 				switch table {
-				case "provider_tenants", "provider_breakglass_grants", "provider_tenant_quotas", "tenant_branding":
+				case "provider_tenants", "provider_breakglass_grants", "provider_tenant_quotas", "tenant_branding",
+					"provider_billing_companies":
 					continue
 				case "idempotency_keys":
 					// Served Provider mutations are receipt-wrapped before a

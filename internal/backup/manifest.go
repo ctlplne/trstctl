@@ -273,6 +273,13 @@ var RecoveredFromPostgresBackup = []string{
 	// customer was onboarded from, so drift could not be read back.
 	"provider_tenant_templates",
 	"provider_tenant_template_bindings",
+	// MSP-2: each customer's company in each billing target shares the same
+	// dual recovery posture: the EE projection rebuilds it from
+	// provider.tenant.billing_company.set/.cleared, and the full PostgreSQL
+	// artifact carries the rows for a restore that starts without the Provider
+	// edition attached. Losing it stops billing pushes until it is remapped;
+	// it never routes counts to another customer's company.
+	"provider_billing_companies",
 	// L4: the break-glass grant ledger with two-person consent state.
 	// RecoveredFromPostgresBackup — grants, consents, denials, revocations and
 	// use counts are written directly by the plane, never derived from the log.

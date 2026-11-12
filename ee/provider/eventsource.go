@@ -86,6 +86,7 @@ type AuthorityEvent struct {
 	Erasure               *TenantErasureRequest `json:"erasure,omitempty"`
 	Template              *TenantTemplate       `json:"template,omitempty"`
 	TemplateApplication   *TemplateApplication  `json:"template_application,omitempty"`
+	BillingCompany        *BillingCompany       `json:"billing_company,omitempty"`
 	Audit                 AuditEvent            `json:"audit"`
 }
 
@@ -445,6 +446,8 @@ func (p *AuthorityProjection) ResetTx(ctx context.Context, tx pgx.Tx) error {
 		`DELETE FROM provider_tenant_templates WHERE tenant_id = '` + providerAuthorityTenant + `'`,
 		//trstctl:system-query — same full-replay reset; the replay restores tenant_id on every binding.
 		`DELETE FROM provider_tenant_template_bindings`,
+		//trstctl:system-query — same full-replay reset; the replay restores each customer's billing company mapping (MSP-2).
+		`DELETE FROM provider_billing_companies`,
 		//trstctl:system-query — same full-replay reset of the provider-global registry.
 		`DELETE FROM provider_tenants`,
 	} {
@@ -635,7 +638,8 @@ func (p *AuthorityProjection) advance(sequence uint64) {
 
 func (p AuthorityEvent) hasState() bool {
 	return p.Tenant != nil || p.Operator != nil || p.Delegation != nil || len(p.Delegations) > 0 ||
-		p.Quota != nil || p.Brand != nil || p.Grant != nil || p.Template != nil || p.TemplateApplication != nil
+		p.Quota != nil || p.Brand != nil || p.Grant != nil || p.Template != nil || p.TemplateApplication != nil ||
+		p.BillingCompany != nil
 }
 
 func authorityEventTime(event eventspec.Event, payload AuthorityEvent) time.Time {
@@ -667,6 +671,7 @@ var providerAuthorityEventTypes = []string{
 	AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied,
 	AuditBreakGlassWithdrawn, AuditBreakGlassAccessed,
 	EventTemplateRecorded, EventTenantTemplateApplied,
+	EventTenantBillingCompanySet, EventTenantBillingCompanyCleared,
 }
 
 var providerAuthorityEventSet = func() map[string]struct{} {
@@ -752,6 +757,12 @@ func validateAuthorityEvent(event eventspec.Event, payload AuthorityEvent) error
 				return ""
 			}
 			return payload.Snapshot.TenantID
+		}(),
+		"billing company": func() string {
+			if payload.BillingCompany == nil {
+				return ""
+			}
+			return payload.BillingCompany.TenantID
 		}(),
 	} {
 		if tenantID != "" && tenantID != event.TenantID {
@@ -964,6 +975,8 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			updated_at = EXCLUDED.updated_at`, q.TenantID, q.MaxAgents, q.MaxTenants,
 			q.MaxCertificatesStored, q.MaxSecretsStored, q.UpdatedBy, effectiveAt)
 		return err
+	case EventTenantBillingCompanySet, EventTenantBillingCompanyCleared:
+		return applyBillingCompany(ctx, tx, event.Type, event.TenantID, payload, effectiveAt)
 	case EventTemplateRecorded:
 		t := payload.Template
 		if t == nil || t.ID == "" || t.Version < 1 || event.TenantID != providerAuthorityTenant {
@@ -1082,7 +1095,8 @@ func normalizeDelegationSource(source string) string {
 
 func delegationOperationForEvent(eventType string) (Operation, bool) {
 	switch eventType {
-	case AuditTenantProvisioned, EventTenantQuotaSet, EventTenantBrandSet:
+	case AuditTenantProvisioned, EventTenantQuotaSet, EventTenantBrandSet,
+		EventTenantBillingCompanySet, EventTenantBillingCompanyCleared:
 		return OpProvision, true
 	case AuditTenantSuspended:
 		return OpSuspend, true

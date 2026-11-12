@@ -1454,6 +1454,46 @@ The operator console lists SCIM lifecycle and every current/historical
 delegation. Grant/revoke/role mutations require a Provider admin, current MFA,
 and `Idempotency-Key`; exact retries return the same event result.
 
+`provider.billing_sync.targets` names the billing or PSA systems a Provider pushes
+each customer's closed, signed usage periods to (MSP-2):
+
+```json
+{
+  "provider": {
+    "billing_sync": {
+      "targets": [
+        {
+          "id": "psa",
+          "name": "Main PSA",
+          "type": "json",
+          "endpoint": "https://billing.example.test/usage",
+          "signing_key_ref": "file:/run/secrets/billing-hmac",
+          "token_ref": "secret://integrations/billing-token",
+          "cadence": "monthly"
+        }
+      ]
+    }
+  }
+}
+```
+
+`id` is 1-63 lowercase letters, digits or dashes and unique; `type` `json` is the
+signed JSON push of the billing-sync core (vendor PSA connectors add their own
+types); `endpoint` is an absolute https URL without credentials (http only with
+`allow_insecure_loopback` for a loopback test receiver; `allow_private_endpoint`
+with `private_egress_cidrs` for an approved private one); `signing_key_ref` is
+required, because every push is HMAC-signed so the receiver can refuse a changed or
+replayed period; `token_ref` is an optional bearer token; both are references
+(`file:/absolute/path` or `secret://name`), resolved per delivery. `cadence` is
+`monthly` (the default) or `daily`, in whole UTC calendar periods. Startup refuses
+an invalid target. A target receives nothing until a Provider operator with
+`billing:write` maps a delegated customer to its company there
+(`PUT /provider/v1/tenants/{id}/billing-companies/{target}` with
+`{"external_company_id": "…"}`; `DELETE` removes it; `GET
+/provider/v1/tenants/{id}/billing-companies` lists the targets and the customer's
+mappings). One company in one target belongs to one customer: mapping a company
+another customer holds is refused with 409 before anything is recorded.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

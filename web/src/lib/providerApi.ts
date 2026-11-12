@@ -52,6 +52,28 @@ export interface ProviderQuota {
   updated_by?: string;
 }
 
+/** MSP-2: a configured billing system the Provider pushes usage to. */
+export interface ProviderBillingTarget {
+  id: string;
+  name?: string;
+  type: string;
+  cadence: string;
+}
+
+/** MSP-2: one customer's company in one billing system. */
+export interface ProviderBillingCompany {
+  tenant_id: string;
+  target_id: string;
+  external_company_id: string;
+  mapped_by?: string;
+  mapped_at?: string;
+}
+
+export interface ProviderBillingCompanies {
+  targets: ProviderBillingTarget[];
+  companies: ProviderBillingCompany[];
+}
+
 export interface ProviderBrand {
   product_name?: string;
   logo_data_uri?: string;
@@ -179,6 +201,7 @@ export interface ProviderConsoleCustomerAuthority {
   offboard: boolean;
   break_glass: boolean;
   break_glass_write: boolean;
+  write_billing?: boolean;
 }
 
 export interface ProviderConsoleAuthority {
@@ -574,6 +597,15 @@ export const providerApi = {
   getQuota: (id: string): Promise<ProviderQuota> => providerReq<ProviderQuota>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`),
   setQuota: (id: string, quota: ProviderQuota): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`, { method: "PUT", body: JSON.stringify(quota) }),
+  billingCompanies: (id: string): Promise<ProviderBillingCompanies> =>
+    providerReq<ProviderBillingCompanies>(`/provider/v1/tenants/${encodeURIComponent(id)}/billing-companies`),
+  setBillingCompany: (id: string, target: string, externalCompanyId: string): Promise<void> =>
+    providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/billing-companies/${encodeURIComponent(target)}`, {
+      method: "PUT",
+      body: JSON.stringify({ external_company_id: externalCompanyId }),
+    }),
+  clearBillingCompany: (id: string, target: string): Promise<void> =>
+    providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/billing-companies/${encodeURIComponent(target)}`, { method: "DELETE" }),
   getBrand: async (id: string): Promise<ProviderBrandSnapshot> => {
     const brand = await providerReq<ProviderBrandSnapshot>(`/provider/v1/tenants/${encodeURIComponent(id)}/brand`);
     if (!brand || brand.tenant_id !== id || typeof brand.revision !== "string" || brand.revision.length === 0) {

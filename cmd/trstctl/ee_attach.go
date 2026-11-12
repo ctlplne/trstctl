@@ -302,6 +302,8 @@ func attachEEProviderAPI(
 		Brands:                   providerBrandStore(brandInstall),
 		Drills:                   isolationDrillerAdapter{store: deps.Store, lanes: laneDrillFor(siloInstall, deps.Log)},
 		Templates:                eeprovider.TemplateDeps{Store: eeprovider.NewPGStore(deps.Store)},
+		BillingTargets:           providerBillingTargets(cfg.Provider.BillingSync),
+		BillingCompanies:         eeprovider.NewPGBillingCompanyStore(deps.Store),
 	}
 	// Preserve the authenticated surface during assembly, but keep destructive
 	// commands unavailable until core supplies its fully assembled projector.
@@ -672,4 +674,15 @@ func (a isolationDrillerAdapter) RunIsolationDrill(ctx context.Context) (eeprovi
 		out.Checks = append(out.Checks, eeprovider.IsolationDrillCheck{Name: c.Name, Passed: c.Passed, Detail: c.Detail})
 	}
 	return out, nil
+}
+
+// providerBillingTargets describes the configured billing systems to the
+// Provider plane (MSP-2): their identity, type and cadence, never their
+// endpoints or credentials.
+func providerBillingTargets(sync config.ProviderBillingSync) []eeprovider.BillingTarget {
+	out := make([]eeprovider.BillingTarget, 0, len(sync.Targets))
+	for _, t := range sync.Targets {
+		out = append(out, eeprovider.BillingTarget{ID: t.ID, Name: t.Name, Type: t.Type, Cadence: t.EffectiveCadence()})
+	}
+	return out
 }

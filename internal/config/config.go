@@ -1792,6 +1792,9 @@ type Provider struct {
 	OIDC ProviderOIDC `json:"oidc"`
 	SAML ProviderSAML `json:"saml"`
 	SCIM ProviderSCIM `json:"scim"`
+	// BillingSync names the billing systems customers' signed usage periods
+	// are pushed to (MSP-2).
+	BillingSync ProviderBillingSync `json:"billing_sync,omitempty"`
 }
 
 // ProviderOIDC pins what a provider-operator bearer token must prove. The
@@ -4458,7 +4461,7 @@ func setInt(getenv func(string) string, key string, dst *int) {
 // setup must stop startup because an operator must never believe SAML or SCIM is
 // protecting the plane while the runtime silently fell back to bearer-only.
 func validateProviderConfig(c *Config) []error {
-	var errs []error
+	errs := validateProviderBillingSync(c.Provider.BillingSync)
 	oidc := c.Provider.OIDC
 	if oidc.Configured() {
 		if strings.TrimSpace(oidc.Issuer) == "" {
