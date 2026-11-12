@@ -160,8 +160,9 @@ type DynamicSecretProviderConfig struct {
 	UsernamePrefix string `json:"username_prefix,omitempty"`
 
 	// IAMEndpoint is where an aws-iam or aws-sts provider reads the policies
-	// of the roles its leases assume (G2). Empty means AWS IAM for the
-	// region's partition.
+	// of the roles its leases assume (G2), and where a gcp-iam provider reads
+	// its project's IAM policy (G2-L2). Empty means AWS IAM for the region's
+	// partition, or Google's Resource Manager.
 	IAMEndpoint string `json:"iam_endpoint,omitempty"`
 	// RevokeWithDenyPolicy (aws-sts) ends a revoked lease's session before its
 	// expiry with an inline deny policy on its role for that one session (N3).
@@ -977,8 +978,8 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		errs = append(errs, fmt.Errorf("%s allow_role_chaining can't be combined with revoke_with_deny_policy: a denial on the lease's role does not reach a session chained into another role", where))
 	}
 	if c.IAMEndpoint != "" {
-		if c.Type != "aws-iam" && c.Type != "aws-sts" {
-			errs = append(errs, fmt.Errorf("%s iam_endpoint is only valid for aws-iam and aws-sts", where))
+		if c.Type != "aws-iam" && c.Type != "aws-sts" && c.Type != "gcp-iam" {
+			errs = append(errs, fmt.Errorf("%s iam_endpoint is only valid for aws-iam, aws-sts and gcp-iam", where))
 		} else if err := validateSecretIntegrationEndpoint(c.IAMEndpoint, c.AllowInsecureLoopback); err != nil {
 			errs = append(errs, fmt.Errorf("%s iam_endpoint: %w", where, err))
 		}

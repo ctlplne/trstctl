@@ -40,11 +40,12 @@ const (
 var dynamicSecretAccessNamespace = uuid.MustParse("a7720c22-ddf5-41bd-99ba-e8515c1c2ddc")
 
 // ResolveAccess reads what a lease's login reaches on the target, through the
-// provider's own credentials opened for this one read. Only PostgreSQL and AWS
-// providers can say; the others are not opened at all.
+// provider's own credentials opened for this one read. Only PostgreSQL, MySQL,
+// MongoDB, Redis, AWS, Kubernetes, GCP and Azure providers can say (G2,
+// G2-L2); the others are not opened at all.
 func (p *configuredDynamicProvider) ResolveAccess(ctx context.Context, backendRef string) (dynsecret.Access, error) {
 	switch p.cfg.Type {
-	case "postgresql", "mysql", "mongodb", "redis", "aws-iam", "aws-sts":
+	case "postgresql", "mysql", "mongodb", "redis", "aws-iam", "aws-sts", "kubernetes", "gcp-iam", "azure-entra":
 	default:
 		return dynsecret.Access{}, dynsecret.ErrAccessUnsupported
 	}

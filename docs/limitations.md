@@ -1482,8 +1482,14 @@ never live in the API process. What you can do end to end against the running bi
   `access_recorded_at`. That stamp is the worker's own bookkeeping, so a rebuild clears
   it and the next pass reads those leases once more. Policies are listed by
   name, not evaluated statement by statement. Kubernetes, GCP and Azure leases
-  are `unsupported` and keep only their backend link. Proven against PostgreSQL
-  16, MySQL 8.4, MongoDB 7.0 and Redis 8.2, an AWS stand-in and LocalStack's IAM.
+  show the RBAC rules bound to their service account, the roles the provider's
+  project policy grants its service account, and their application's app roles,
+  directory roles and groups (G2-L2); GCP folder, organization and resource-level
+  grants, Azure resource (ARM) role assignments and Kubernetes bindings to groups
+  are not read. Proven against PostgreSQL 16, MySQL 8.4, MongoDB 7.0 and Redis 8.2,
+  stand-ins of the Kubernetes API, Google IAM and Resource Manager and Microsoft
+  Graph, an AWS stand-in and LocalStack's IAM; live Kubernetes, GCP and Azure reads
+  are Track B.
 - One-call revoke of an AI agent identity (Q4):
   `POST /api/v1/broker/agent-identities/{id}/revoke` (CLI and console) runs the
   exact certificate revocation for that broker certificate: CA ledger, signed CRL,

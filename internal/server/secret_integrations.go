@@ -963,9 +963,18 @@ func openConfiguredCloudBackend(o *configuredDynamicBackendOpener) (requestDynam
 		if err != nil {
 			return o.fail(err)
 		}
+		policyEndpoint := cfg.IAMEndpoint
+		if strings.TrimSpace(policyEndpoint) == "" {
+			policyEndpoint = dynsecret.GCPPolicyEndpoint
+		}
+		policyClient, err := secretIntegrationHTTPClient(policyEndpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+		if err != nil {
+			return o.fail(err)
+		}
 		backend, err := dynsecret.NewGCPIAMBackend(dynsecret.GCPIAMConfig{
 			Endpoint: cfg.Endpoint, HTTPClient: client, Project: cfg.Project,
 			ServiceAccountEmail: cfg.ServiceAccount, BearerToken: token, UsernamePrefix: cfg.UsernamePrefix,
+			PolicyEndpoint: policyEndpoint, PolicyHTTPClient: policyClient,
 		})
 		if err != nil {
 			return o.fail(err)
@@ -997,6 +1006,16 @@ func openConfiguredCloudBackend(o *configuredDynamicBackendOpener) (requestDynam
 // requestBackendAdapter supplies CreateCredential for legacy concrete backends
 // whose native service does not accept a requested lease duration.
 type requestBackendAdapter struct{ dynsecret.Backend }
+
+// ResolveAccess passes a lease access read to the backend when it can make
+// one (G2-L2).
+func (b *requestBackendAdapter) ResolveAccess(ctx context.Context, backendRef string) (dynsecret.Access, error) {
+	resolver, ok := b.Backend.(dynsecret.AccessResolver)
+	if !ok {
+		return dynsecret.Access{}, dynsecret.ErrAccessUnsupported
+	}
+	return resolver.ResolveAccess(ctx, backendRef)
+}
 
 func (b *requestBackendAdapter) CreateCredential(ctx context.Context, req dynsecret.GenerateRequest) (string, []byte, error) {
 	return b.Create(ctx, req.Role)

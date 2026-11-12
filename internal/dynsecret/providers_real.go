@@ -1306,6 +1306,11 @@ type GCPIAMConfig struct {
 	ServiceAccountEmail string
 	BearerToken         []byte
 	UsernamePrefix      string
+	// PolicyEndpoint is where the project's IAM policy is read for lease
+	// access (Resource Manager, GCPPolicyEndpoint by default; G2-L2), with
+	// PolicyHTTPClient (HTTPClient when nil).
+	PolicyEndpoint   string
+	PolicyHTTPClient HTTPDoer
 }
 
 // GCPIAMBackend creates and revokes service-account keys.
@@ -1315,6 +1320,8 @@ type GCPIAMBackend struct {
 	project             string
 	serviceAccountEmail string
 	bearerToken         *secret.Buffer
+	policyEndpoint      string
+	policyDoer          HTTPDoer
 }
 
 type gcpPreparedCredential struct {
@@ -1361,12 +1368,20 @@ func NewGCPIAMBackend(cfg GCPIAMConfig) (*GCPIAMBackend, error) {
 			return nil, fmt.Errorf("dynsecret gcp-iam: lock bearer token: %w", err)
 		}
 	}
+	if cfg.PolicyEndpoint == "" {
+		cfg.PolicyEndpoint = GCPPolicyEndpoint
+	}
+	if cfg.PolicyHTTPClient == nil {
+		cfg.PolicyHTTPClient = cfg.HTTPClient
+	}
 	return &GCPIAMBackend{
 		endpoint:            strings.TrimRight(cfg.Endpoint, "/"),
 		doer:                cfg.HTTPClient,
 		project:             cfg.Project,
 		serviceAccountEmail: cfg.ServiceAccountEmail,
 		bearerToken:         token,
+		policyEndpoint:      strings.TrimRight(cfg.PolicyEndpoint, "/"),
+		policyDoer:          cfg.PolicyHTTPClient,
 	}, nil
 }
 

@@ -1594,3 +1594,35 @@ func TestValidateDatabaseProviderRoleAccessA239L1(t *testing.T) {
 		t.Fatalf("a MySQL decoy role was accepted without a class: %v", err)
 	}
 }
+
+// TestValidateSecretIntegrationsIAMEndpointNamesWherePoliciesAreReadG2L2: a
+// gcp-iam provider may name where it reads its project's IAM policy
+// (iam_endpoint, G2-L2), as aws-iam and aws-sts name IAM; a provider that
+// reads no policy may not, and the endpoint is held to the endpoint rules.
+func TestValidateSecretIntegrationsIAMEndpointNamesWherePoliciesAreReadG2L2(t *testing.T) {
+	gcp := DynamicSecretProviderConfig{
+		TenantID: "11111111-1111-1111-1111-111111111111", ID: "gcp-leases", Type: "gcp-iam",
+		Endpoint: "https://iam.googleapis.com", IAMEndpoint: "https://cloudresourcemanager.googleapis.com",
+		Project: "p", ServiceAccount: "dyn@p.iam.gserviceaccount.com", BearerTokenRef: "file:/run/secrets/gcp-token",
+		AllowedRoles: []string{"reader"}, MaxTTL: "15m",
+	}
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{gcp}}, true); err != nil {
+		t.Fatalf("gcp-iam with iam_endpoint rejected: %v", err)
+	}
+	plain := gcp
+	plain.IAMEndpoint = "http://cloudresourcemanager.example"
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{plain}}, true); err == nil ||
+		!strings.Contains(err.Error(), "iam_endpoint") {
+		t.Fatalf("a plaintext iam_endpoint error = %v", err)
+	}
+	other := DynamicSecretProviderConfig{
+		TenantID: "11111111-1111-1111-1111-111111111111", ID: "cluster-leases", Type: "kubernetes",
+		Endpoint: "https://kubernetes.example", Namespace: "apps", KubernetesAudience: "https://kubernetes.default.svc",
+		BearerTokenRef: "file:/run/secrets/k8s-token", AllowedRoles: []string{"reader"}, MaxTTL: "15m",
+		IAMEndpoint: "https://cloudresourcemanager.googleapis.com",
+	}
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{other}}, true); err == nil ||
+		!strings.Contains(err.Error(), "iam_endpoint is only valid for aws-iam, aws-sts and gcp-iam") {
+		t.Fatalf("iam_endpoint on a kubernetes provider error = %v", err)
+	}
+}

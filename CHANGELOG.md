@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- The access graph shows what Kubernetes, GCP and Azure leases reach (G2-L2, part 2). A Kubernetes
+  lease links to its namespace with the rules of each role a RoleBinding or ClusterRoleBinding grants
+  its service account; a GCP lease links to its service account with the roles the project's IAM
+  policy grants it, read from Resource Manager at `iam_endpoint`; an Azure lease links to its
+  application with its app roles, directory roles and groups from Microsoft Graph. A deleted
+  service account, key or client secret reads as `unknown` (`login_missing`).
 - The access graph shows what MySQL, MongoDB and Redis leases reach (G2-L2, part 1). The leader
   reads each lease's login from the server itself, as it does for PostgreSQL: a MySQL lease links to
   its database with the grants `SHOW GRANTS` reports for the lease's user, a MongoDB lease with the

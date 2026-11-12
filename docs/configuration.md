@@ -2373,7 +2373,16 @@ from the database catalogs. An `aws-iam` provider reads the policies of the role
 `role_bindings` name from IAM at `iam_endpoint` (optional; default the region
 partition's IAM, `https://iam.amazonaws.com`, signed for `us-east-1`), so its
 credentials need `iam:ListAttachedRolePolicies` and `iam:ListRolePolicies` on those
-roles; without them a lease's policies read `unknown`.
+roles; without them a lease's policies read `unknown`. MySQL, MongoDB and Redis
+providers read the lease user's grants, roles or ACL rules with their admin login
+(`SHOW GRANTS`, `usersInfo`, `ACL GETUSER`). A `kubernetes` provider's token needs to
+get service accounts and list RoleBindings, ClusterRoleBindings, Roles and
+ClusterRoles. A `gcp-iam` provider reads its project's IAM policy from Resource Manager
+at `iam_endpoint` (optional; default `https://cloudresourcemanager.googleapis.com`), so
+its token needs `resourcemanager.projects.getIamPolicy`. An `azure-entra` provider's
+token needs to read the application, service principals and their role assignments and
+memberships in Microsoft Graph (for example `Application.Read.All` and
+`Directory.Read.All`) (G2-L2).
 
 An `aws-sts` (or `aws-iam`) provider with `revoke_with_deny_policy: true` ends a
 revoked lease's session before its expiry (N3): it writes an inline policy on the

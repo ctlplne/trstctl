@@ -404,8 +404,9 @@ func addLeaseAccessAttrs(attrs map[string]string, a store.DynamicSecretLeaseAcce
 }
 
 // ensureLeaseTarget adds the system a lease's login reaches — a PostgreSQL,
-// MySQL or MongoDB database, a Redis server (G2-L2) or an AWS IAM role — and
-// links the provider's backend to it.
+// MySQL or MongoDB database, a Redis server, a Kubernetes namespace, a GCP
+// service account, an Azure application (G2-L2) or an AWS IAM role — and links
+// the provider's backend to it.
 func ensureLeaseTarget(g *Graph, provider string, a store.DynamicSecretLeaseAccess) string {
 	id := resourceID(a.TargetKind + ":" + a.TargetRef)
 	if _, ok := g.Node(id); !ok {
@@ -413,6 +414,8 @@ func ensureLeaseTarget(g *Graph, provider string, a store.DynamicSecretLeaseAcce
 		switch a.TargetKind {
 		case "postgresql_database", "mysql_database", "mongodb_database", "redis_server":
 			kind = "database"
+		case "gcp_service_account", "azure_application":
+			kind = "cloud_identity"
 		}
 		g.AddNode(Node{ID: id, Kind: KindResource, Name: a.TargetRef, Attrs: map[string]string{
 			"resource_kind": kind, "target_kind": a.TargetKind, "target": a.TargetRef,
@@ -428,6 +431,12 @@ func leaseTargetSource(a store.DynamicSecretLeaseAccess) string {
 		return "assumed IAM role"
 	case a.TargetKind == "redis_server" && a.Status == store.DynamicSecretAccessResolved:
 		return "login ACL rules read from the server"
+	case a.TargetKind == "kubernetes_namespace" && a.Status == store.DynamicSecretAccessResolved:
+		return "service account RBAC read from the cluster"
+	case a.TargetKind == "gcp_service_account" && a.Status == store.DynamicSecretAccessResolved:
+		return "project IAM policy read from Google Cloud"
+	case a.TargetKind == "azure_application" && a.Status == store.DynamicSecretAccessResolved:
+		return "application roles read from Microsoft Entra"
 	case a.Status == store.DynamicSecretAccessResolved:
 		return "login grants read from the database"
 	default:

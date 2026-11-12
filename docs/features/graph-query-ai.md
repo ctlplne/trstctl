@@ -123,15 +123,25 @@ with the grants MySQL reports for the lease's user (`SHOW GRANTS`, without the
 `res:mongodb_database:mongodb://<host>:<port>/<database>` with the user's roles
 (`usersInfo`); a Redis lease links to `res:redis_server:redis://<host>:<port>` with the
 user's ACL flags, commands, key patterns and channels (`ACL GETUSER`; the password
-hashes Redis returns beside them are never kept) (G2-L2). An AWS STS lease links to
-`res:aws_iam_role:<arn>`, the role it assumed, with the role's attached managed and
-inline policies from IAM in `grants`. `access_status` is `resolved`, `unknown` (the
-target could not be read; `access_reason` says why, and the lease is read again five
-minutes later), `unsupported` (Kubernetes, GCP and Azure providers), or `not_read`
+hashes Redis returns beside them are never kept) (G2-L2). A Kubernetes lease links to
+`res:kubernetes_namespace:kubernetes://<host>:<port>/namespaces/<namespace>` with the
+rules of each Role or ClusterRole that a RoleBinding in the namespace or a
+ClusterRoleBinding grants its service account; a GCP lease links to
+`res:gcp_service_account:gcp://projects/<project>/serviceAccounts/<email>` with the roles
+the project's IAM policy grants the service account its key belongs to; an Azure lease
+links to `res:azure_application:azure://applications/<object id>` with its application's
+app roles (by value, on the API that defines them), directory roles and groups, read from
+Microsoft Graph. An AWS STS lease links to `res:aws_iam_role:<arn>`, the role it assumed,
+with the role's attached managed and inline policies from IAM in `grants`. `access_status`
+is `resolved`, `unknown` (the target could not be read; `access_reason` says why, and the
+lease is read again five minutes later), `unsupported` (other providers), or `not_read`
 before the first read. `unknown` never means "no grants".
 
 What the graph does not see: permissions inside systems other than PostgreSQL, MySQL,
-MongoDB, Redis and AWS IAM, what a policy's statements allow (policies are listed by name), who requested a
+MongoDB, Redis, Kubernetes RBAC, a GCP project's IAM policy, Microsoft Entra and AWS IAM;
+GCP grants on folders, the organization or single resources; Azure resource (ARM) role
+assignments; Kubernetes bindings to a group rather than the service account; what a
+policy's statements allow (policies are listed by name), who requested a
 dynamic-secret lease opened before G1-L1 (newer leases record their requester, who holds
 them in the graph), and access granted outside trstctl. An empty answer is therefore not proof that nobody has access. PAM sessions
 started before this release do not record their approval, so their approvers read as
