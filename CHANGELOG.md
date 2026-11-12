@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- The CycloneDX CBOM export carries more than the CBOM inventory (Q3-L2): the certificates the certificate inventory
+  holds for its certificate keys (subject, issuer, validity, linked to the key's component), the keys host agents found
+  in keystores and key files (as private-key or secret-key material with size and format, never key bytes), the crypto
+  libraries they identified (with whether each can negotiate X25519MLKEM768), and the TLS and SSH handshakes observers
+  saw (version, cipher suite, key exchange group). Agent classes take the newest finding of each location, at most
+  10,000 each, and the coverage metadata counts every class. The official CycloneDX 1.6 schema validates the result.
 - The host agent reads Bouncy Castle FIPS keystores (BCFKS, X2-L2 part 2): the store's integrity MAC checks the password,
   the store is decrypted (PBKDF2, AES-CCM) only to reach its certificates, and its key entries, trusted certificates and
   secret keys are reported like a JCEKS store's; private and secret keys stay sealed, and a store no password opens is

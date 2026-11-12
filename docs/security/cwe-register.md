@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3081 annotated sites across 33 rules. Each row is
+3082 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -2115,7 +2115,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (750 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (751 sites)
 
 | Location | Reason |
 |---|---|
@@ -2416,6 +2416,7 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:146` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca.go:104` | operator-configured shell-CA output path; the shell CA is an explicit operator integration (CWE-22) |
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/cbom/cyclonedx_supplement_test.go:108` | the package's own golden test fixture (CWE-22) |
 | `internal/cbom/cyclonedx_test.go:104` | the package's own golden test fixture (CWE-22) |
 | `internal/cbom/hostsource/hostsource.go:81` | an authorized, previewed discovery selector; the read is size-bounded below (CWE-22) |
 | `internal/cbom/sourcescan/sourcescan.go:148` | a repository the operator named; reading its files is the product function (CWE-22) |
@@ -2631,7 +2632,7 @@ not this file.
 | `internal/server/ca_custody_test.go:226` | test-owned path under t.TempDir verifies fail-closed preservation (CWE-22) |
 | `internal/server/ca_custody_test.go:261` | test-owned path under t.TempDir captures the planted mismatch (CWE-22) |
 | `internal/server/ca_custody_test.go:269` | same test-owned path proves the mismatch was not overwritten (CWE-22) |
-| `internal/server/cbom_cyclonedx_served_test.go:234` | the repository's own fixture path (CWE-22) |
+| `internal/server/cbom_cyclonedx_served_test.go:239` | the repository's own fixture path (CWE-22) |
 | `internal/server/cmdb_readonly_test.go:126` | test reads repo source files it names itself (CWE-22) |
 | `internal/server/code_signing_config.go:96` | operator-configured certificate chain path (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:69` | the lab runner's build output (CWE-22) |

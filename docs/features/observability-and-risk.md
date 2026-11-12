@@ -356,6 +356,19 @@ where it was observed (`evidence.occurrences`) and the inventory's classificatio
 composition `incomplete` (it lists what trstctl observed, never the whole estate), and
 claims no compliance: choosing an algorithm does not make a deployment compliant.
 
+Beside the inventory's assets the export carries what trstctl knows about them and what
+agents report (Q3-L2). Each certificate the certificate inventory holds for an inventory
+certificate key is a `certificate` component (subject, issuer, validity, format X.509)
+whose `subjectPublicKeyRef` is that key's component. Each key a host agent found in a
+keystore or key file is `related-crypto-material` — a `private-key` with its size and
+container format (PKCS12, JKS, PEM), or `secret-key` for a store of secret keys only —
+and never carries key bytes. Each crypto library a host agent identified is a `library`
+component with its version and whether it can negotiate X25519MLKEM768. Each TLS or SSH
+handshake an observer saw is a protocol with its version, cipher suite and key exchange
+group. Agent and observer classes take the newest finding of each location, at most
+10,000 a class; the metadata counts each class and names a class cut at that bound
+(`trstctl:coverage:cut_at`).
+
 The response carries the BOM, its SHA-256, a compact JWS over the exact BOM bytes from
 the audit evidence key, and the public keys. Verify a saved export offline against the
 keys you pinned from `trstctl-cli audit verification-keys`:

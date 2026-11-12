@@ -1316,8 +1316,11 @@ never live in the API process. What you can do end to end against the running bi
   `GET /api/v1/cbom/export/cyclonedx` (Q3) exports the same inventory as a
   CycloneDX 1.6 CBOM: one cryptographic-asset component per asset (algorithm,
   key size or curve, NIST quantum security level where known, protocol or
-  cipher suite, and where it was observed), a coverage statement, and an
-  "incomplete" composition; it claims no compliance. The audit evidence key
+  cipher suite, and where it was observed), beside them the certificates the
+  inventory holds for its keys, the keys, libraries and handshakes agents and
+  observers reported (Q3-L2; at most 10,000 of each agent class, newest per
+  location), a coverage statement, and an "incomplete" composition; it claims no
+  compliance. The audit evidence key
   signs the exact BOM bytes, and `trstctl-cli cbom verify-cyclonedx` checks it
   offline against the separately pinned keys. The console's test suite validates
   the encoder's output against the official CycloneDX 1.6 schema with an
@@ -1566,7 +1569,7 @@ never live in the API process. What you can do end to end against the running bi
   OpenSSL with oqsprovider in its configuration are rated (X2-L4); BoringSSL (no release
   versions), wolfSSL (no version string the agent can identify) and Java providers are
   not. Keystore and library findings are discovery
-  findings, not yet CBOM assets.
+  findings: the CycloneDX export carries them (Q3-L2), the CBOM inventory does not.
 - Access reviews that act (Q1): a revoke decision runs the credential's own
   revoke once (PAM sessions, API tokens, machine sessions, dynamic-secret leases,
   and as the reviewer through their own gate certificates and identities: Q1-L1)

@@ -2,26 +2,29 @@
   "bomFormat": "CycloneDX",
   "components": [
     {
-      "bom-ref": "1bded188-9e73-533a-9eb6-399c564f4d3c",
+      "bom-ref": "0e2aa9c1-db23-596f-8295-2e7645e4f556",
       "cryptoProperties": {
-        "assetType": "protocol",
-        "protocolProperties": {
-          "type": "tls",
-          "version": "1.2"
-        }
+        "algorithmProperties": {
+          "classicalSecurityLevel": 128,
+          "curve": "secp256r1",
+          "nistQuantumSecurityLevel": 0,
+          "primitive": "signature"
+        },
+        "assetType": "algorithm",
+        "oid": "1.2.840.10045.2.1"
       },
       "evidence": {
         "occurrences": [
           {
-            "location": "/etc/nginx/nginx.conf"
+            "location": "app.example.test:443"
           }
         ]
       },
-      "name": "TLS 1.2",
+      "name": "ECDSA-P256",
       "properties": [
         {
           "name": "trstctl:asset_kind",
-          "value": "host-config"
+          "value": "imported-algorithm"
         },
         {
           "name": "trstctl:strength",
@@ -29,176 +32,33 @@
         },
         {
           "name": "trstctl:quantum_vulnerable",
-          "value": "false"
-        },
-        {
-          "name": "trstctl:out_of_policy",
-          "value": "false"
-        },
-        {
-          "name": "trstctl:library",
-          "value": "tls-config"
-        },
-        {
-          "name": "trstctl:migration_target",
-          "value": "licensed-key-establishment-transition"
-        }
-      ],
-      "type": "cryptographic-asset"
-    },
-    {
-      "bom-ref": "34c89944-c629-5159-8019-4a4cb2da3491",
-      "cryptoProperties": {
-        "assetType": "protocol",
-        "protocolProperties": {
-          "type": "tls",
-          "version": "1.0"
-        }
-      },
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "/etc/nginx/nginx.conf"
-          }
-        ]
-      },
-      "name": "TLS 1.0",
-      "properties": [
-        {
-          "name": "trstctl:asset_kind",
-          "value": "host-config"
-        },
-        {
-          "name": "trstctl:strength",
-          "value": "weak"
-        },
-        {
-          "name": "trstctl:quantum_vulnerable",
-          "value": "false"
-        },
-        {
-          "name": "trstctl:out_of_policy",
           "value": "true"
         },
         {
-          "name": "trstctl:library",
-          "value": "tls-config"
-        },
-        {
-          "name": "trstctl:migration_target",
-          "value": "licensed-key-establishment-transition"
-        },
-        {
-          "name": "trstctl:reason",
-          "value": "TLSv1.0 is below the TLSv1.2 minimum"
-        }
-      ],
-      "type": "cryptographic-asset"
-    },
-    {
-      "bom-ref": "3bf50440-e6aa-5bb5-8946-5e0c0eebf369",
-      "cryptoProperties": {
-        "assetType": "protocol",
-        "protocolProperties": {
-          "cipherSuites": [
-            {
-              "name": "DES-CBC3-SHA"
-            }
-          ],
-          "type": "tls"
-        }
-      },
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "/etc/nginx/nginx.conf"
-          }
-        ]
-      },
-      "name": "DES-CBC3-SHA",
-      "properties": [
-        {
-          "name": "trstctl:asset_kind",
-          "value": "host-config"
-        },
-        {
-          "name": "trstctl:strength",
-          "value": "weak"
-        },
-        {
-          "name": "trstctl:quantum_vulnerable",
-          "value": "false"
-        },
-        {
-          "name": "trstctl:out_of_policy",
-          "value": "true"
-        },
-        {
-          "name": "trstctl:library",
-          "value": "tls-config"
-        },
-        {
-          "name": "trstctl:migration_target",
-          "value": "licensed-key-establishment-transition"
-        },
-        {
-          "name": "trstctl:reason",
-          "value": "cipher contains banned primitive DES"
-        }
-      ],
-      "type": "cryptographic-asset"
-    },
-    {
-      "bom-ref": "533387cc-f0e5-51c4-b99e-bd172faa6105",
-      "cryptoProperties": {
-        "assetType": "protocol",
-        "protocolProperties": {
-          "cipherSuites": [
-            {
-              "name": "ECDHE-RSA-AES128-GCM-SHA256"
-            }
-          ],
-          "type": "tls"
-        }
-      },
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "/etc/nginx/nginx.conf"
-          }
-        ]
-      },
-      "name": "ECDHE-RSA-AES128-GCM-SHA256",
-      "properties": [
-        {
-          "name": "trstctl:asset_kind",
-          "value": "host-config"
-        },
-        {
-          "name": "trstctl:strength",
-          "value": "acceptable"
-        },
-        {
-          "name": "trstctl:quantum_vulnerable",
-          "value": "false"
-        },
-        {
           "name": "trstctl:out_of_policy",
           "value": "false"
         },
         {
+          "name": "trstctl:key_bits",
+          "value": "256"
+        },
+        {
           "name": "trstctl:library",
-          "value": "tls-config"
+          "value": "vendor:q3l2-ec"
         },
         {
           "name": "trstctl:migration_target",
-          "value": "licensed-key-establishment-transition"
+          "value": "licensed-signature-transition"
+        },
+        {
+          "name": "trstctl:reason",
+          "value": "ECDSA is breakable by a cryptographically-relevant quantum computer"
         }
       ],
       "type": "cryptographic-asset"
     },
     {
-      "bom-ref": "7ab95ecf-11a3-5788-8c7f-6380e236582c",
+      "bom-ref": "17b376e1-4907-5e5b-891b-c735a6aa4099",
       "cryptoProperties": {
         "assetType": "protocol",
         "protocolProperties": {
@@ -239,7 +99,7 @@
       "type": "cryptographic-asset"
     },
     {
-      "bom-ref": "f4209645-9a7c-5e31-b217-7335d13a5936",
+      "bom-ref": "21b9aba0-76e3-5f20-b99e-cd0e05d583d4",
       "cryptoProperties": {
         "algorithmProperties": {
           "classicalSecurityLevel": 112,
@@ -295,7 +155,7 @@
       "type": "cryptographic-asset"
     },
     {
-      "bom-ref": "faf1a1d2-bc09-5e45-8d36-e831482bc9b5",
+      "bom-ref": "3ad9599d-c094-5de5-a709-616d33dbdd55",
       "cryptoProperties": {
         "assetType": "protocol",
         "protocolProperties": {
@@ -334,19 +194,164 @@
         }
       ],
       "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "certificate:468174fd18ae990a0a1e10568e30f9819a8acd23224c319f4ec3eb4f6f2980d9",
+      "cryptoProperties": {
+        "assetType": "certificate",
+        "certificateProperties": {
+          "certificateFormat": "X.509",
+          "issuerName": "O=Acme Co",
+          "notValidAfter": "2084-01-29T16:00:00Z",
+          "notValidBefore": "1970-01-01T00:00:00Z",
+          "subjectName": "O=Acme Co",
+          "subjectPublicKeyRef": "21b9aba0-76e3-5f20-b99e-cd0e05d583d4"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "app.example.test:443"
+          }
+        ]
+      },
+      "name": "O=Acme Co",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "certificate"
+        },
+        {
+          "name": "trstctl:certificate_fingerprint",
+          "value": "468174fd18ae990a0a1e10568e30f9819a8acd23224c319f4ec3eb4f6f2980d9"
+        },
+        {
+          "name": "trstctl:serial",
+          "value": "10ffe677def41f2b1d053a6ecc339fd0"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "crypto-material:b07037af-bb1a-5ca0-ba8d-fcdc18df23c2",
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "format": "PKCS12",
+          "size": 2048,
+          "type": "private-key"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "/etc/nginx/nginx.conf"
+          }
+        ]
+      },
+      "name": "RSA-2048 private key",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "host-key"
+        },
+        {
+          "name": "trstctl:algorithm",
+          "value": "RSA-2048"
+        },
+        {
+          "name": "trstctl:encrypted",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "unrated"
+        },
+        {
+          "name": "trstctl:public_key_fingerprint",
+          "value": "abababababababababababababababababababababababababababababababab"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "library:7fda4b26-3f5e-5a8e-ac3d-47793d9281c4",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "/etc/nginx/nginx.conf"
+          }
+        ]
+      },
+      "name": "openssl",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "crypto-library"
+        },
+        {
+          "name": "trstctl:pq_hybrid_x25519mlkem768",
+          "value": "no"
+        }
+      ],
+      "type": "library",
+      "version": "3.0.13"
+    },
+    {
+      "bom-ref": "observed:74c8b90e-845d-56ab-ad05-0054dd331a8e",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "cipherSuites": [
+            {
+              "name": "TLS_AES_128_GCM_SHA256"
+            }
+          ],
+          "type": "tls",
+          "version": "1.3"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "app.example.test:443"
+          }
+        ]
+      },
+      "name": "TLS 1.3",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "observed-handshake"
+        },
+        {
+          "name": "trstctl:observer",
+          "value": "network-observer"
+        },
+        {
+          "name": "trstctl:pq_hybrid",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:key_exchange_group",
+          "value": "X25519MLKEM768"
+        }
+      ],
+      "type": "cryptographic-asset"
     }
   ],
   "compositions": [
     {
       "aggregate": "incomplete",
       "assemblies": [
-        "1bded188-9e73-533a-9eb6-399c564f4d3c",
-        "34c89944-c629-5159-8019-4a4cb2da3491",
-        "3bf50440-e6aa-5bb5-8946-5e0c0eebf369",
-        "533387cc-f0e5-51c4-b99e-bd172faa6105",
-        "7ab95ecf-11a3-5788-8c7f-6380e236582c",
-        "f4209645-9a7c-5e31-b217-7335d13a5936",
-        "faf1a1d2-bc09-5e45-8d36-e831482bc9b5"
+        "0e2aa9c1-db23-596f-8295-2e7645e4f556",
+        "17b376e1-4907-5e5b-891b-c735a6aa4099",
+        "21b9aba0-76e3-5f20-b99e-cd0e05d583d4",
+        "3ad9599d-c094-5de5-a709-616d33dbdd55",
+        "certificate:468174fd18ae990a0a1e10568e30f9819a8acd23224c319f4ec3eb4f6f2980d9",
+        "crypto-material:b07037af-bb1a-5ca0-ba8d-fcdc18df23c2",
+        "library:7fda4b26-3f5e-5a8e-ac3d-47793d9281c4",
+        "observed:74c8b90e-845d-56ab-ad05-0054dd331a8e"
       ]
     }
   ],
@@ -354,19 +359,35 @@
     "properties": [
       {
         "name": "trstctl:coverage:scope",
-        "value": "assets trstctl observed: TLS endpoints and certificate keys at scanned addresses, and declared host crypto configuration"
+        "value": "assets trstctl observed: TLS endpoints and certificate keys at scanned addresses, declared host crypto configuration, imported CBOMs, the certificates the inventory holds for those keys, and what host agents and observers reported: keys in keystores and key files, crypto libraries, and observed TLS and SSH handshakes"
       },
       {
         "name": "trstctl:coverage:assets",
-        "value": "7"
+        "value": "4"
       },
       {
         "name": "trstctl:coverage:asset_kinds",
-        "value": "certificate-key=1,host-config=4,tls-endpoint=2"
+        "value": "certificate-key=1,imported-algorithm=1,tls-endpoint=2"
+      },
+      {
+        "name": "trstctl:coverage:certificates",
+        "value": "1"
+      },
+      {
+        "name": "trstctl:coverage:host_keys",
+        "value": "1"
+      },
+      {
+        "name": "trstctl:coverage:libraries",
+        "value": "1"
+      },
+      {
+        "name": "trstctl:coverage:observed_handshakes",
+        "value": "1"
       },
       {
         "name": "trstctl:coverage:locations",
-        "value": "2"
+        "value": "5"
       },
       {
         "name": "trstctl:coverage:not_covered",
@@ -377,7 +398,7 @@
         "value": "none claimed: an algorithm choice is not a compliance determination"
       }
     ],
-    "timestamp": "2026-11-10T21:27:20Z",
+    "timestamp": "2026-11-12T13:59:28Z",
     "tools": {
       "components": [
         {
@@ -388,7 +409,7 @@
       ]
     }
   },
-  "serialNumber": "urn:uuid:2e2cd2ef-cd59-46e6-a551-951022248fdb",
+  "serialNumber": "urn:uuid:8cf75211-67a6-45e4-8ba8-96d87488f921",
   "specVersion": "1.6",
   "version": 1
 }

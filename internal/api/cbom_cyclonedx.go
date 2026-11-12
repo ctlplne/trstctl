@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -18,7 +19,8 @@ import (
 
 // The crypto inventory as a CycloneDX 1.6 CBOM (Q3): one signed document
 // scanners and agencies can ingest, mapped from the same inventory
-// GET /api/v1/cbom/assets serves. The audit evidence key signs the exact
+// GET /api/v1/cbom/assets serves, with the certificates, host keys, crypto
+// libraries and observed handshakes beside it (Q3-L2). The audit evidence key signs the exact
 // document bytes, so the export verifies offline with the published keys.
 
 type cbomCycloneDXExportResponse struct {
@@ -28,6 +30,14 @@ type cbomCycloneDXExportResponse struct {
 	BOMSHA256   string          `json:"bom_sha256"`
 	SignedBOM   string          `json:"signed_bom"`
 	PublicJWKS  json.RawMessage `json:"public_jwks"`
+}
+
+// CBOMExportSupplementer adds to the CycloneDX export what the CBOM
+// inventory does not hold (Q3-L2): the certificates the certificate
+// inventory holds for its certificate keys, and the host keys, crypto
+// libraries and observed handshakes agents reported.
+type CBOMExportSupplementer interface {
+	CycloneDXSupplement(ctx context.Context, tenantID string, assets []cbom.CycloneDXAsset) (cbom.CycloneDXSupplement, error)
 }
 
 func (a *API) cbomCycloneDXRoutes() []route {
@@ -66,9 +76,17 @@ func (a *API) exportCBOMCycloneDX(w http.ResponseWriter, r *http.Request) {
 			Reasons: item.Reasons, MigrationTarget: item.MigrationTarget,
 		})
 	}
-	bom, err := json.Marshal(cbom.CycloneDX(assets, cbom.CycloneDXMeta{
+	var extra cbom.CycloneDXSupplement
+	if supplementer, ok := a.cbom.(CBOMExportSupplementer); ok {
+		if extra, err = supplementer.CycloneDXSupplement(r.Context(), tenantID, assets); err != nil {
+			a.writeError(w, err)
+			return
+		}
+	}
+	document := cbom.CycloneDXWith(assets, extra, cbom.CycloneDXMeta{
 		SerialUUID: gouuid.NewString(), GeneratedAt: time.Now().UTC(), ToolVersion: buildinfo.Version(),
-	}))
+	})
+	bom, err := json.Marshal(document)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -84,7 +102,7 @@ func (a *API) exportCBOMCycloneDX(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.writeJSON(w, http.StatusOK, cbomCycloneDXExportResponse{
-		SpecVersion: cbom.CycloneDXSpecVersion, Components: len(assets), BOM: bom,
+		SpecVersion: cbom.CycloneDXSpecVersion, Components: len(document.Components), BOM: bom,
 		BOMSHA256: "sha256:" + crypto.SHA256Hex(bom), SignedBOM: signed, PublicJWKS: json.RawMessage(jwks),
 	})
 }

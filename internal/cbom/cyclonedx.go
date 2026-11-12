@@ -40,6 +40,73 @@ type CycloneDXAsset struct {
 	MigrationTarget        string
 }
 
+// CycloneDXSupplement is what the export carries beside the inventory's
+// assets (Q3-L2): the certificates the certificate inventory holds for the
+// inventory's certificate keys, and what host agents and observers report —
+// private keys in keystores and key files, crypto libraries, and observed
+// handshakes. CutAt names a class that had more than its bound, and the
+// bound it was cut at.
+type CycloneDXSupplement struct {
+	Certificates []CycloneDXCertificate
+	Keys         []CycloneDXKeyMaterial
+	Libraries    []CycloneDXLibrary
+	Observations []CycloneDXObservation
+	CutAt        map[string]int
+}
+
+// CycloneDXCertificate is a certificate the inventory holds for a CBOM key:
+// KeyRefs are the bom-refs (asset IDs) of the inventory's certificate-key
+// assets with its fingerprint, and Locations where they were observed.
+type CycloneDXCertificate struct {
+	Fingerprint string
+	Subject     string
+	Issuer      string
+	Serial      string
+	NotBefore   time.Time
+	NotAfter    time.Time
+	KeyRefs     []string
+	Locations   []string
+}
+
+// CycloneDXKeyMaterial is a private key a host agent found in a keystore or a
+// key file: its algorithm and size, never key bytes. Secret marks a keystore
+// that holds secret keys only.
+type CycloneDXKeyMaterial struct {
+	ID          string
+	Secret      bool
+	Location    string
+	Format      string
+	Algorithm   string
+	KeyBits     int
+	Fingerprint string
+	Encrypted   bool
+	Weak        bool
+	Reasons     []string
+}
+
+// CycloneDXLibrary is a crypto library a host agent identified, with whether
+// its version can negotiate X25519MLKEM768 (yes, no, unknown).
+type CycloneDXLibrary struct {
+	ID       string
+	Name     string
+	Version  string
+	Location string
+	PQHybrid string
+}
+
+// CycloneDXObservation is a handshake a network or TLS session observer saw:
+// the protocol (tls or ssh), its version, cipher suite and key exchange group.
+type CycloneDXObservation struct {
+	ID          string
+	Observer    string
+	Location    string
+	Protocol    string
+	Version     string
+	CipherSuite string
+	Group       string
+	PQHybrid    bool
+}
+
 // CycloneDXMeta is the export's identity: its serial number (a UUID the
 // caller derives from the dataset), its time and the tool version.
 type CycloneDXMeta struct {
@@ -85,21 +152,40 @@ type cdxComposition struct {
 	Assemblies []string `json:"assemblies"`
 }
 
-// CycloneDXAssetJS is one cryptographic-asset component.
+// CycloneDXAssetJS is one component: a cryptographic asset, or a crypto
+// library (Q3-L2) with its version and no crypto properties.
 type CycloneDXAssetJS struct {
-	Type             string              `json:"type"`
-	BOMRef           string              `json:"bom-ref"`
-	Name             string              `json:"name"`
-	CryptoProperties cdxCryptoProperties `json:"cryptoProperties"`
-	Evidence         cdxEvidence         `json:"evidence"`
-	Properties       []cdxProperty       `json:"properties"`
+	Type             string               `json:"type"`
+	BOMRef           string               `json:"bom-ref"`
+	Name             string               `json:"name"`
+	Version          string               `json:"version,omitempty"`
+	CryptoProperties *cdxCryptoProperties `json:"cryptoProperties,omitempty"`
+	Evidence         cdxEvidence          `json:"evidence"`
+	Properties       []cdxProperty        `json:"properties"`
 }
 
 type cdxCryptoProperties struct {
-	AssetType           string                  `json:"assetType"`
-	AlgorithmProperties *cdxAlgorithmProperties `json:"algorithmProperties,omitempty"`
-	ProtocolProperties  *cdxProtocolProperties  `json:"protocolProperties,omitempty"`
-	OID                 string                  `json:"oid,omitempty"`
+	AssetType                       string                      `json:"assetType"`
+	AlgorithmProperties             *cdxAlgorithmProperties     `json:"algorithmProperties,omitempty"`
+	CertificateProperties           *cdxCertificateProperties   `json:"certificateProperties,omitempty"`
+	RelatedCryptoMaterialProperties *cdxRelatedCryptoProperties `json:"relatedCryptoMaterialProperties,omitempty"`
+	ProtocolProperties              *cdxProtocolProperties      `json:"protocolProperties,omitempty"`
+	OID                             string                      `json:"oid,omitempty"`
+}
+
+type cdxCertificateProperties struct {
+	SubjectName         string `json:"subjectName,omitempty"`
+	IssuerName          string `json:"issuerName,omitempty"`
+	NotValidBefore      string `json:"notValidBefore,omitempty"`
+	NotValidAfter       string `json:"notValidAfter,omitempty"`
+	SubjectPublicKeyRef string `json:"subjectPublicKeyRef,omitempty"`
+	CertificateFormat   string `json:"certificateFormat"`
+}
+
+type cdxRelatedCryptoProperties struct {
+	Type   string `json:"type"`
+	Size   int    `json:"size,omitempty"`
+	Format string `json:"format,omitempty"`
 }
 
 type cdxAlgorithmProperties struct {
@@ -130,36 +216,91 @@ type cdxOccurrence struct {
 
 // CycloneDX builds the BOM for the inventory, components ordered by asset ID.
 func CycloneDX(assets []CycloneDXAsset, meta CycloneDXMeta) CycloneDXBOM {
+	return CycloneDXWith(assets, CycloneDXSupplement{}, meta)
+}
+
+// CycloneDXWith builds the BOM for the inventory and what beside it the
+// export carries (Q3-L2): the inventory's assets ordered by ID, then the
+// certificates, the host keys, the crypto libraries and the observed
+// handshakes, each class in a stable order.
+func CycloneDXWith(assets []CycloneDXAsset, extra CycloneDXSupplement, meta CycloneDXMeta) CycloneDXBOM {
 	sorted := append([]CycloneDXAsset(nil), assets...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
-	components := make([]CycloneDXAssetJS, 0, len(sorted))
-	refs := make([]string, 0, len(sorted))
+	components := make([]CycloneDXAssetJS, 0, len(sorted)+len(extra.Certificates)+len(extra.Keys)+len(extra.Libraries)+len(extra.Observations))
 	kinds := map[string]int{}
 	locations := map[string]bool{}
 	for _, a := range sorted {
 		components = append(components, cycloneDXComponent(a))
-		refs = append(refs, a.ID)
 		kinds[a.Kind]++
 		locations[a.Location] = true
+	}
+	certificates := append([]CycloneDXCertificate(nil), extra.Certificates...)
+	sort.Slice(certificates, func(i, j int) bool { return certificates[i].Fingerprint < certificates[j].Fingerprint })
+	for _, c := range certificates {
+		components = append(components, cycloneDXCertificate(c))
+		for _, l := range c.Locations {
+			locations[l] = true
+		}
+	}
+	keys := append([]CycloneDXKeyMaterial(nil), extra.Keys...)
+	sort.Slice(keys, func(i, j int) bool { return keys[i].ID < keys[j].ID })
+	for _, k := range keys {
+		components = append(components, cycloneDXKeyMaterial(k))
+		locations[k.Location] = true
+	}
+	libraries := append([]CycloneDXLibrary(nil), extra.Libraries...)
+	sort.Slice(libraries, func(i, j int) bool { return libraries[i].ID < libraries[j].ID })
+	for _, l := range libraries {
+		components = append(components, cycloneDXLibrary(l))
+		locations[l.Location] = true
+	}
+	observations := append([]CycloneDXObservation(nil), extra.Observations...)
+	sort.Slice(observations, func(i, j int) bool { return observations[i].ID < observations[j].ID })
+	for _, o := range observations {
+		components = append(components, cycloneDXObservation(o))
+		locations[o.Location] = true
+	}
+	refs := make([]string, 0, len(components))
+	for _, c := range components {
+		refs = append(refs, c.BOMRef)
 	}
 	kindNames := make([]string, 0, len(kinds))
 	for k := range kinds {
 		kindNames = append(kindNames, k+"="+strconv.Itoa(kinds[k]))
 	}
 	sort.Strings(kindNames)
+	properties := []cdxProperty{
+		{Name: "trstctl:coverage:scope", Value: "assets trstctl observed: TLS endpoints and certificate keys at scanned addresses, declared host crypto configuration, " +
+			"imported CBOMs, the certificates the inventory holds for those keys, and what host agents and observers reported: keys in keystores and key files, " +
+			"crypto libraries, and observed TLS and SSH handshakes"},
+		{Name: "trstctl:coverage:assets", Value: strconv.Itoa(len(sorted))},
+		{Name: "trstctl:coverage:asset_kinds", Value: strings.Join(kindNames, ",")},
+		{Name: "trstctl:coverage:certificates", Value: strconv.Itoa(len(certificates))},
+		{Name: "trstctl:coverage:host_keys", Value: strconv.Itoa(len(keys))},
+		{Name: "trstctl:coverage:libraries", Value: strconv.Itoa(len(libraries))},
+		{Name: "trstctl:coverage:observed_handshakes", Value: strconv.Itoa(len(observations))},
+		{Name: "trstctl:coverage:locations", Value: strconv.Itoa(len(locations))},
+	}
+	var cut []string
+	for class, n := range extra.CutAt {
+		if n > 0 {
+			cut = append(cut, class+"="+strconv.Itoa(n))
+		}
+	}
+	sort.Strings(cut)
+	if len(cut) > 0 {
+		properties = append(properties, cdxProperty{Name: "trstctl:coverage:cut_at", Value: strings.Join(cut, ",")})
+	}
+	properties = append(properties,
+		cdxProperty{Name: "trstctl:coverage:not_covered", Value: "addresses and files no scan named; network traffic outside the interfaces observer agents watch; source code and container images only as far as imported CBOMs cover them"},
+		cdxProperty{Name: "trstctl:coverage:compliance", Value: "none claimed: an algorithm choice is not a compliance determination"},
+	)
 	return CycloneDXBOM{
 		BOMFormat: "CycloneDX", SpecVersion: CycloneDXSpecVersion, SerialNumber: "urn:uuid:" + meta.SerialUUID, Version: 1,
 		Metadata: cdxMetadata{
-			Timestamp: meta.GeneratedAt.UTC().Format(time.RFC3339),
-			Tools:     cdxTools{Components: []cdxTool{{Type: "application", Name: "trstctl", Version: meta.ToolVersion}}},
-			Properties: []cdxProperty{
-				{Name: "trstctl:coverage:scope", Value: "assets trstctl observed: TLS endpoints and certificate keys at scanned addresses, and declared host crypto configuration"},
-				{Name: "trstctl:coverage:assets", Value: strconv.Itoa(len(sorted))},
-				{Name: "trstctl:coverage:asset_kinds", Value: strings.Join(kindNames, ",")},
-				{Name: "trstctl:coverage:locations", Value: strconv.Itoa(len(locations))},
-				{Name: "trstctl:coverage:not_covered", Value: "addresses and files no scan named; network traffic outside the interfaces observer agents watch; source code and container images only as far as imported CBOMs cover them"},
-				{Name: "trstctl:coverage:compliance", Value: "none claimed: an algorithm choice is not a compliance determination"},
-			},
+			Timestamp:  meta.GeneratedAt.UTC().Format(time.RFC3339),
+			Tools:      cdxTools{Components: []cdxTool{{Type: "application", Name: "trstctl", Version: meta.ToolVersion}}},
+			Properties: properties,
 		},
 		Components: components,
 		// The inventory lists what was observed; it never claims to be the
@@ -168,23 +309,136 @@ func CycloneDX(assets []CycloneDXAsset, meta CycloneDXMeta) CycloneDXBOM {
 	}
 }
 
+// cycloneDXCertificate is a certificate component: subject, issuer and
+// validity, its key the inventory's certificate-key asset.
+func cycloneDXCertificate(c CycloneDXCertificate) CycloneDXAssetJS {
+	props := &cdxCertificateProperties{SubjectName: c.Subject, IssuerName: c.Issuer, CertificateFormat: "X.509"}
+	if !c.NotBefore.IsZero() {
+		props.NotValidBefore = c.NotBefore.UTC().Format(time.RFC3339)
+	}
+	if !c.NotAfter.IsZero() {
+		props.NotValidAfter = c.NotAfter.UTC().Format(time.RFC3339)
+	}
+	if len(c.KeyRefs) > 0 {
+		props.SubjectPublicKeyRef = c.KeyRefs[0]
+	}
+	name := c.Subject
+	if name == "" {
+		name = "certificate " + c.Fingerprint
+	}
+	out := CycloneDXAssetJS{
+		Type: "cryptographic-asset", BOMRef: "certificate:" + c.Fingerprint, Name: name,
+		CryptoProperties: &cdxCryptoProperties{AssetType: "certificate", CertificateProperties: props},
+		Properties: []cdxProperty{
+			{Name: "trstctl:asset_kind", Value: "certificate"},
+			{Name: "trstctl:certificate_fingerprint", Value: c.Fingerprint},
+		},
+	}
+	if c.Serial != "" {
+		out.Properties = append(out.Properties, cdxProperty{Name: "trstctl:serial", Value: c.Serial})
+	}
+	for _, l := range c.Locations {
+		out.Evidence.Occurrences = append(out.Evidence.Occurrences, cdxOccurrence{Location: l})
+	}
+	return out
+}
+
+// cycloneDXKeyMaterial is a private key a host agent found, as related
+// crypto material: its type, size and container format.
+func cycloneDXKeyMaterial(k CycloneDXKeyMaterial) CycloneDXAssetJS {
+	material, label := "private-key", "private key"
+	if k.Secret {
+		material, label = "secret-key", "secret keys"
+	}
+	name := strings.TrimSpace(k.Algorithm)
+	if name == "" || name == "unknown" {
+		name = label
+	} else {
+		name += " " + label
+	}
+	out := CycloneDXAssetJS{
+		Type: "cryptographic-asset", BOMRef: "crypto-material:" + k.ID, Name: name,
+		CryptoProperties: &cdxCryptoProperties{AssetType: "related-crypto-material",
+			RelatedCryptoMaterialProperties: &cdxRelatedCryptoProperties{Type: material, Size: k.KeyBits, Format: k.Format}},
+		Evidence: cdxEvidence{Occurrences: []cdxOccurrence{{Location: k.Location}}},
+		Properties: []cdxProperty{
+			{Name: "trstctl:asset_kind", Value: "host-key"},
+			{Name: "trstctl:algorithm", Value: k.Algorithm},
+			{Name: "trstctl:encrypted", Value: strconv.FormatBool(k.Encrypted)},
+			{Name: "trstctl:strength", Value: map[bool]string{true: "weak", false: "unrated"}[k.Weak]},
+		},
+	}
+	if k.Fingerprint != "" {
+		out.Properties = append(out.Properties, cdxProperty{Name: "trstctl:public_key_fingerprint", Value: k.Fingerprint})
+	}
+	for _, r := range k.Reasons {
+		out.Properties = append(out.Properties, cdxProperty{Name: "trstctl:reason", Value: r})
+	}
+	return out
+}
+
+// cycloneDXLibrary is a crypto library component with its version.
+func cycloneDXLibrary(l CycloneDXLibrary) CycloneDXAssetJS {
+	name := strings.TrimSpace(l.Name)
+	if name == "" {
+		name = "crypto library"
+	}
+	return CycloneDXAssetJS{
+		Type: "library", BOMRef: "library:" + l.ID, Name: name, Version: l.Version,
+		Evidence: cdxEvidence{Occurrences: []cdxOccurrence{{Location: l.Location}}},
+		Properties: []cdxProperty{
+			{Name: "trstctl:asset_kind", Value: "crypto-library"},
+			{Name: "trstctl:pq_hybrid_x25519mlkem768", Value: l.PQHybrid},
+		},
+	}
+}
+
+// cycloneDXObservation is an observed handshake as a protocol component.
+func cycloneDXObservation(o CycloneDXObservation) CycloneDXAssetJS {
+	protocol := &cdxProtocolProperties{Type: o.Protocol}
+	name := strings.ToUpper(o.Protocol)
+	if o.Protocol == "tls" {
+		protocol.Version = strings.TrimPrefix(strings.TrimPrefix(o.Version, "TLSv"), "TLS ")
+		name = "TLS " + protocol.Version
+	}
+	if o.CipherSuite != "" {
+		protocol.CipherSuites = []cdxCipherSuite{{Name: o.CipherSuite}}
+	}
+	out := CycloneDXAssetJS{
+		Type: "cryptographic-asset", BOMRef: "observed:" + o.ID, Name: name,
+		CryptoProperties: &cdxCryptoProperties{AssetType: "protocol", ProtocolProperties: protocol},
+		Evidence:         cdxEvidence{Occurrences: []cdxOccurrence{{Location: o.Location}}},
+		Properties: []cdxProperty{
+			{Name: "trstctl:asset_kind", Value: "observed-handshake"},
+			{Name: "trstctl:observer", Value: o.Observer},
+			{Name: "trstctl:pq_hybrid", Value: strconv.FormatBool(o.PQHybrid)},
+		},
+	}
+	if o.Group != "" {
+		out.Properties = append(out.Properties, cdxProperty{Name: "trstctl:key_exchange_group", Value: o.Group})
+	}
+	return out
+}
+
 func cycloneDXComponent(a CycloneDXAsset) CycloneDXAssetJS {
 	c := CycloneDXAssetJS{
 		Type: "cryptographic-asset", BOMRef: a.ID,
 		Evidence: cdxEvidence{Occurrences: []cdxOccurrence{{Location: a.Location}}},
 	}
+	var props cdxCryptoProperties
 	switch {
 	case a.Kind == string(AssetCertKey) || (a.Algorithm != "" && a.Protocol == "" && a.Cipher == ""):
-		c.Name, c.CryptoProperties = cycloneDXAlgorithm(a.Algorithm, a.KeyBits)
+		c.Name, props = cycloneDXAlgorithm(a.Algorithm, a.KeyBits)
 	case a.Cipher != "":
 		c.Name = a.Cipher
-		c.CryptoProperties = cdxCryptoProperties{AssetType: "protocol",
+		props = cdxCryptoProperties{AssetType: "protocol",
 			ProtocolProperties: &cdxProtocolProperties{Type: "tls", CipherSuites: []cdxCipherSuite{{Name: a.Cipher}}}}
 	default:
 		version := strings.TrimPrefix(strings.TrimPrefix(a.Protocol, "TLSv"), "TLS ")
 		c.Name = "TLS " + version
-		c.CryptoProperties = cdxCryptoProperties{AssetType: "protocol", ProtocolProperties: &cdxProtocolProperties{Type: "tls", Version: version}}
+		props = cdxCryptoProperties{AssetType: "protocol", ProtocolProperties: &cdxProtocolProperties{Type: "tls", Version: version}}
 	}
+	c.CryptoProperties = &props
 	c.Properties = []cdxProperty{
 		{Name: "trstctl:asset_kind", Value: a.Kind},
 		{Name: "trstctl:strength", Value: a.Strength},

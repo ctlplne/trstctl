@@ -17,7 +17,7 @@
     "properties": [
       {
         "name": "trstctl:coverage:scope",
-        "value": "assets trstctl observed: TLS endpoints and certificate keys at scanned addresses, and declared host crypto configuration"
+        "value": "assets trstctl observed: TLS endpoints and certificate keys at scanned addresses, declared host crypto configuration, imported CBOMs, the certificates the inventory holds for those keys, and what host agents and observers reported: keys in keystores and key files, crypto libraries, and observed TLS and SSH handshakes"
       },
       {
         "name": "trstctl:coverage:assets",
@@ -26,6 +26,22 @@
       {
         "name": "trstctl:coverage:asset_kinds",
         "value": "certificate-key=6,host-config=2,tls-endpoint=2"
+      },
+      {
+        "name": "trstctl:coverage:certificates",
+        "value": "0"
+      },
+      {
+        "name": "trstctl:coverage:host_keys",
+        "value": "0"
+      },
+      {
+        "name": "trstctl:coverage:libraries",
+        "value": "0"
+      },
+      {
+        "name": "trstctl:coverage:observed_handshakes",
+        "value": "0"
       },
       {
         "name": "trstctl:coverage:locations",

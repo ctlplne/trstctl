@@ -18,14 +18,19 @@ function validator() {
 }
 
 describe("CycloneDX 1.6 CBOM export", () => {
-  it.each(["cyclonedx-export.golden.json", "cyclonedx-served-export.json"])("%s validates against the official CycloneDX 1.6 schema", (name) => {
-    const validate = validator();
-    const bom = load(name);
-    const valid = validate(bom);
-    expect(validate.errors ?? []).toEqual([]);
-    expect(valid).toBe(true);
-    expect(bom.specVersion).toBe("1.6");
-  });
+  // Q3-L2: the supplement golden carries certificates, host keys, libraries
+  // and observed handshakes beside the inventory's assets.
+  it.each(["cyclonedx-export.golden.json", "cyclonedx-export-supplement.golden.json", "cyclonedx-served-export.json"])(
+    "%s validates against the official CycloneDX 1.6 schema",
+    (name) => {
+      const validate = validator();
+      const bom = load(name);
+      const valid = validate(bom);
+      expect(validate.errors ?? []).toEqual([]);
+      expect(valid).toBe(true);
+      expect(bom.specVersion).toBe("1.6");
+    },
+  );
 
   it("rejects a document the schema forbids, so the check is live", () => {
     const validate = validator();

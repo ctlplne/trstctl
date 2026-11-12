@@ -75,11 +75,13 @@ func TestServedCBOMCycloneDXExportMatchesTheInventoryAndVerifiesOffline(t *testi
 		BOMSHA256   string          `json:"bom_sha256"`
 		SignedBOM   string          `json:"signed_bom"`
 	}
+	// Every inventory asset is a component; certificates, host keys,
+	// libraries and observed handshakes beside them (Q3-L2) are counted too,
+	// and their served shape is checked where they are reported.
 	if status != http.StatusOK || json.Unmarshal(body, &export) != nil || export.SpecVersion != "1.6" ||
-		export.Components != len(inventory.Items) || !strings.HasPrefix(export.BOMSHA256, "sha256:") {
+		export.Components < len(inventory.Items) || !strings.HasPrefix(export.BOMSHA256, "sha256:") {
 		t.Fatalf("export = %d %s", status, body)
 	}
-	checkServedCycloneDXFixture(t, export.BOM)
 	type property struct {
 		Name  string `json:"name"`
 		Value string `json:"value"`
@@ -119,8 +121,9 @@ func TestServedCBOMCycloneDXExportMatchesTheInventoryAndVerifiesOffline(t *testi
 		} `json:"compositions"`
 	}
 	if err := json.Unmarshal(export.BOM, &bom); err != nil || bom.BOMFormat != "CycloneDX" || bom.SpecVersion != "1.6" ||
-		!strings.HasPrefix(bom.SerialNumber, "urn:uuid:") || len(bom.Compositions) != 1 || bom.Compositions[0].Aggregate != "incomplete" {
-		t.Fatalf("bom = %+v (%v)", bom, err)
+		!strings.HasPrefix(bom.SerialNumber, "urn:uuid:") || len(bom.Compositions) != 1 || bom.Compositions[0].Aggregate != "incomplete" ||
+		export.Components != len(bom.Components) {
+		t.Fatalf("bom = %+v (%v); the export counts %d components", bom, err, export.Components)
 	}
 	if strings.Contains(strings.ToLower(string(export.BOM)), "fips") {
 		t.Fatal("the CBOM must not claim FIPS")
@@ -203,9 +206,11 @@ var updateServedCycloneDX = flag.Bool("update-cyclonedx-served", false,
 	"rewrite internal/cbom/testdata/cyclonedx-served-export.json from the served export")
 
 // servedCycloneDXFixture is a CycloneDX export as the API serves it, captured
-// by this test. web/src/__tests__/cbom_cyclonedx_schema.test.ts validates it
-// against the official CycloneDX 1.6 schemas with an independent validator,
-// beside the encoder's golden.
+// by TestServedCBOMCycloneDXExportCarriesCertificatesHostKeysLibrariesAnd
+// ObservationsQ3L2, which reports every kind of component the export writes.
+// web/src/__tests__/cbom_cyclonedx_schema.test.ts validates it against the
+// official CycloneDX 1.6 schemas with an independent validator, beside the
+// encoder's goldens.
 var servedCycloneDXFixture = filepath.Join("..", "cbom", "testdata", "cyclonedx-served-export.json")
 
 // checkServedCycloneDXFixture keeps that fixture the shape of what the API
