@@ -1348,7 +1348,10 @@ never live in the API process. What you can do end to end against the running bi
   certificate the BOM names its SHA-256 fingerprint for also enters the
   certificate inventory with the BOM's validity (X6-L6); one without a
   fingerprint (an image scanner's CA bundle entries) stays a CBOM row, because
-  the inventory is keyed by fingerprint.
+  the inventory is keyed by fingerprint. The BOM's dependency graph attributes
+  each asset a library provides to that library and fills a key's or
+  certificate's algorithm and issuer from what it depends on (X6-L5);
+  references into other BOMs (BOM-Link) are not followed.
 - Access graph, step 1 (G1): the credential graph holds people (tenant
   members), their roles and AI agents (from agent-broker issuance), with the
   credentials they hold (API tokens, machine sessions, PAM sessions,

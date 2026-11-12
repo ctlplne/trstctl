@@ -59,11 +59,102 @@ type ImportedBOM struct {
 }
 
 type importBOM struct {
-	BOMFormat    string            `json:"bomFormat"`
-	SpecVersion  string            `json:"specVersion"`
-	SerialNumber string            `json:"serialNumber"`
-	Version      int               `json:"version"`
-	Components   []importComponent `json:"components"`
+	BOMFormat    string             `json:"bomFormat"`
+	SpecVersion  string             `json:"specVersion"`
+	SerialNumber string             `json:"serialNumber"`
+	Version      int                `json:"version"`
+	Components   []importComponent  `json:"components"`
+	Dependencies []importDependency `json:"dependencies"`
+}
+
+// importDependency is one node of the BOM's dependency graph (X6-L5): what a
+// component depends on, and — CycloneDX 1.6 — which crypto assets it provides.
+type importDependency struct {
+	Ref       string   `json:"ref"`
+	DependsOn []string `json:"dependsOn"`
+	Provides  []string `json:"provides"`
+}
+
+// dependencyGraph is what the import reads from dependencies[]: each asset's
+// provider, labelled as the provider's name and version, and each
+// component's direct dependencies. References to other BOMs (BOM-Link
+// urn:cdx:...) are not followed.
+type dependencyGraph struct {
+	providedBy map[string]string
+	dependsOn  map[string][]string
+}
+
+func readDependencyGraph(deps []importDependency, byRef map[string]importComponent) dependencyGraph {
+	g := dependencyGraph{providedBy: map[string]string{}, dependsOn: map[string][]string{}}
+	sorted := append([]importDependency(nil), deps...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Ref < sorted[j].Ref })
+	for _, d := range sorted {
+		provider, ok := byRef[d.Ref]
+		if !ok {
+			continue
+		}
+		g.dependsOn[d.Ref] = append(g.dependsOn[d.Ref], d.DependsOn...)
+		label := strings.ToLower(strings.TrimSpace(provider.Name)) + versionSuffix(provider.Version)
+		if strings.TrimSpace(provider.Name) == "" {
+			continue
+		}
+		for _, ref := range d.Provides {
+			if _, taken := g.providedBy[ref]; !taken {
+				g.providedBy[ref] = label
+			}
+		}
+	}
+	return g
+}
+
+// algorithmVia finds the algorithm a component depends on: an algorithm
+// component directly, or the algorithm of a key it depends on (one level).
+func (g dependencyGraph) algorithmVia(ref string, byRef map[string]importComponent) (string, int, bool) {
+	for depth, refs := 0, g.dependsOn[ref]; depth < 2; depth++ {
+		var next []string
+		for _, r := range refs {
+			dep, ok := byRef[r]
+			if !ok || dep.CryptoProperties == nil {
+				continue
+			}
+			switch dep.CryptoProperties.AssetType {
+			case "algorithm":
+				alg, bits := importedAlgorithm(dep.Name, dep.CryptoProperties.AlgorithmProperties)
+				return alg, bits, true
+			case "related-crypto-material":
+				next = append(next, r)
+				if m := dep.CryptoProperties.RelatedCryptoMaterial; m != nil {
+					if alg, ok := byRef[m.AlgorithmRef]; ok && alg.CryptoProperties != nil {
+						name, bits := importedAlgorithm(alg.Name, alg.CryptoProperties.AlgorithmProperties)
+						if m.Size > 0 {
+							bits = m.Size
+						}
+						return name, bits, true
+					}
+				}
+			}
+		}
+		refs = nil
+		for _, r := range next {
+			refs = append(refs, g.dependsOn[r]...)
+		}
+	}
+	return "", 0, false
+}
+
+// issuerVia names the certificate a certificate depends on, as its issuer.
+func (g dependencyGraph) issuerVia(ref string, byRef map[string]importComponent) string {
+	for _, r := range g.dependsOn[ref] {
+		dep, ok := byRef[r]
+		if !ok || dep.CryptoProperties == nil || dep.CryptoProperties.AssetType != "certificate" {
+			continue
+		}
+		if cert := dep.CryptoProperties.CertificateProperties; cert != nil && strings.TrimSpace(cert.SubjectName) != "" {
+			return strings.TrimSpace(cert.SubjectName)
+		}
+		return strings.TrimSpace(dep.Name)
+	}
+	return ""
 }
 
 type importComponent struct {
@@ -160,8 +251,9 @@ func ParseCycloneDXImport(data []byte, source string, p Policy) (ImportedBOM, er
 		}
 	}
 	out := ImportedBOM{SerialNumber: strings.TrimSpace(doc.SerialNumber), Version: doc.Version, SpecVersion: doc.SpecVersion, Components: len(flat)}
+	graph := readDependencyGraph(doc.Dependencies, byRef)
 	for _, c := range flat {
-		for _, f := range importFindings(c, byRef, source) {
+		for _, f := range importFindings(c, byRef, graph, source) {
 			out.Findings = append(out.Findings, f.Classified(p))
 		}
 	}
@@ -184,7 +276,7 @@ func flattenComponents(in []importComponent, out []importComponent) []importComp
 var cryptoLibraries = map[string]bool{"openssl": true, "libressl": true, "boringssl": true, "gnutls": true, "nss": true,
 	"bouncycastle": true, "bcprov-jdk18on": true, "libsodium": true, "wolfssl": true, "mbedtls": true, "cryptography": true}
 
-func importFindings(c importComponent, byRef map[string]importComponent, source string) []Finding {
+func importFindings(c importComponent, byRef map[string]importComponent, graph dependencyGraph, source string) []Finding {
 	locations := occurrenceLocations(c, source)
 	var base Finding
 	cp := c.CryptoProperties
@@ -207,6 +299,14 @@ func importFindings(c importComponent, byRef map[string]importComponent, source 
 			}
 		}
 		if base.Algorithm == "" {
+			if alg, bits, ok := graph.algorithmVia(c.BOMRef, byRef); ok {
+				base.Algorithm = alg
+				if base.KeyBits == 0 {
+					base.KeyBits = bits
+				}
+			}
+		}
+		if base.Algorithm == "" {
 			base.Algorithm, _ = importedAlgorithm(c.Name, nil)
 		}
 	case cp.AssetType == "certificate":
@@ -223,23 +323,38 @@ func importFindings(c importComponent, byRef map[string]importComponent, source 
 					}
 				}
 			}
+			if base.Certificate.Issuer == "" {
+				base.Certificate.Issuer = graph.issuerVia(c.BOMRef, byRef)
+			}
+		}
+		if base.Algorithm == "" {
+			if alg, bits, ok := graph.algorithmVia(c.BOMRef, byRef); ok {
+				base.Algorithm, base.KeyBits = alg, bits
+			}
 		}
 	case cp.AssetType == "protocol" && cp.ProtocolProperties != nil:
 		var out []Finding
 		pp := cp.ProtocolProperties
+		library := source
+		if provider := graph.providedBy[c.BOMRef]; provider != "" {
+			library = provider
+		}
 		if v := importedProtocol(pp.Type, pp.Version); v != "" {
 			for _, loc := range locations {
-				out = append(out, Finding{Kind: AssetImportedProtocol, Location: loc, Protocol: v, Library: source})
+				out = append(out, Finding{Kind: AssetImportedProtocol, Location: loc, Protocol: v, Library: library})
 			}
 		}
 		for _, suite := range pp.CipherSuites {
 			for _, loc := range locations {
-				out = append(out, Finding{Kind: AssetImportedProtocol, Location: loc, Cipher: suite.Name, Library: source})
+				out = append(out, Finding{Kind: AssetImportedProtocol, Location: loc, Cipher: suite.Name, Library: library})
 			}
 		}
 		return out
 	default:
 		return nil
+	}
+	if provider := graph.providedBy[c.BOMRef]; provider != "" && base.Kind != AssetImportedLibrary {
+		base.Library = provider
 	}
 	if base.Library == "" {
 		base.Library = source

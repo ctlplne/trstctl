@@ -376,7 +376,14 @@ cryptographic asset (algorithm, certificate, key or other crypto material, proto
 its cipher suites) and each crypto library component (OpenSSL, BoringSSL, Bouncy Castle and
 others) becomes one inventory finding located at `<source>:<occurrence>` (the file and line
 the BOM gives, or the component's reference), classified like trstctl's own scans: a
-1024-bit RSA key is weak, TLS 1.0 is weak, ECDH is quantum-vulnerable. A document that is
+1024-bit RSA key is weak, TLS 1.0 is weak, ECDH is quantum-vulnerable. The BOM's
+dependency graph is read too (X6-L5): an algorithm, protocol, key or certificate that a
+library component `provides` is listed under that library (`openssl 1.1.1w`) instead of
+the source, so a weak algorithm points at the library to upgrade; a key or certificate
+whose own properties name no algorithm takes it from what it `dependsOn` (an algorithm,
+or the algorithm of a key it depends on), and a certificate with no issuer name takes
+the subject of a certificate it depends on. A reference into another BOM (`urn:cdx:`
+BOM-Link) is not followed. A document that is
 not a CycloneDX BOM, or holds no crypto, is refused; one import takes at most 50,000
 components and 32 MiB.
 

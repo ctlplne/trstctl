@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- A CBOM import reads the BOM's dependency graph (X6-L5): what a library component `provides` is listed under that
+  library (`openssl 1.1.1w`), so a weak algorithm points at the library to upgrade, and a key or certificate takes the
+  algorithm, and a certificate the issuer, that its `dependsOn` names when its own properties leave them out.
 - The passive network observer reads TLS reached inside another protocol (X1-L4): SMTP and IMAP STARTTLS, POP3
   STLS, LDAP StartTLS, PostgreSQL's SSLRequest and MySQL's SSL request, each reported with its `upgrade`; a PostgreSQL
   startup, a MySQL login or a mail login sent without TLS is a `plaintext_protocol` finding. Ports 25, 587, 143 and
