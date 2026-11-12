@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- Cloud access-key discovery reads Microsoft Entra app-registration client secrets (M3-L2). A
+  `cloud_access_key` source's `azure-entra` provider lists every application's client secrets with
+  their creation and expiry, never a value or hint, and reads each secret's last sign-in from
+  Microsoft Graph's app credential sign-in activity; an active secret that has not signed in for 90
+  days is flagged stale. Without that activity the secrets are recorded with their last use unknown
+  and the run is partial.
 - Cloud access-key discovery reads Google Cloud service-account keys (M3-L1). A `cloud_access_key`
   source's `gcp-iam` provider lists a project's user-managed service-account keys with their status,
   creation and expiry, and reads each key's last authentication from Policy Analyzer; an active key

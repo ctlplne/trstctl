@@ -9069,8 +9069,9 @@ What comes next:
 
 ## Live discovery of cloud access keys (M3) — served
 
-Status: served for AWS IAM and Google Cloud service-account keys (M3-L1, proven against a
-stand-in of IAM and Policy Analyzer; a live project is Track B). A `cloud_access_key` source with an `aws-iam` provider
+Status: served for AWS IAM, Google Cloud service-account keys (M3-L1) and Microsoft Entra
+app-registration secrets (M3-L2), the latter two proven against stand-ins of IAM, Policy
+Analyzer and Microsoft Graph; a live project and tenant are Track B. A `cloud_access_key` source with an `aws-iam` provider
 lists every IAM user's access keys with status, creation date, age and last use (date,
 service, Region), flags an active key unused for 90 days as stale (risk 80), and feeds
 the NHI inventory as API keys. `TestServedCloudAccessKeyDiscoveryFlagsNinetyDaysUnusedM3`
@@ -9082,7 +9083,6 @@ it, and with the air-gap guard enforcing the run reaches nothing.
 What comes next:
 - Against a real AWS account (IAM's own last-used tracking, a production account's
   scale) — a live proof, Track B.
-- Azure app-registration secrets are not read yet.
 - The access graph does not yet link a key to its IAM user as a cloud principal, and
   remediation does not yet offer to replace a stale key with a dynamic AWS credential
   from the finding.

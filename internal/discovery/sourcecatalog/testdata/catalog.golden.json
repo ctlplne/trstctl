@@ -859,7 +859,7 @@
           "required": false,
           "secret_ref": true,
           "advanced": true,
-          "description": "Google Cloud: reference to a short-lived read-only OAuth token; the value never enters source configuration."
+          "description": "Google Cloud or Microsoft Entra: reference to a short-lived read-only token; the value never enters source configuration."
         },
         {
           "path": "providers[].activity_endpoint",
@@ -893,6 +893,16 @@
             "token_ref",
             "endpoint",
             "activity_endpoint"
+          ]
+        },
+        {
+          "id": "azure-entra",
+          "label": "Microsoft Entra app-registration client secrets",
+          "least_privilege": "Application.Read.All, and AuditLog.Read.All for each secret's last sign-in",
+          "preferred_credential": "a short-lived read-only Microsoft Graph token reference",
+          "fields": [
+            "token_ref",
+            "endpoint"
           ]
         }
       ],

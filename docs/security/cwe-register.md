@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3024 annotated sites across 33 rules. Each row is
+3025 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (698 sites)
+### G101 — CWE-798 Use of hardcoded credentials (699 sites)
 
 | Location | Reason |
 |---|---|
@@ -492,6 +492,7 @@ not this file.
 | `internal/server/aws_honeytoken_served_test.go:140` | the fixture's fake decoy secret, not a credential (CWE-798) |
 | `internal/server/azure_keyvault_rollback_served_test.go:32` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/azure_workload_identity_served_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/cloud_access_keys_azure_served_test.go:75` | a credential reference only; no credential value enters the config (CWE-798) |
 | `internal/server/cloud_access_keys_gcp_served_test.go:83` | a credential reference only; no credential value enters the config (CWE-798) |
 | `internal/server/cloud_access_keys_served_test.go:82` | credential references only; no credential value enters the config (CWE-798) |
 | `internal/server/cloud_access_keys_served_test.go:267` | the test's own stand-in signing value, not a credential (CWE-798) |

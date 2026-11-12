@@ -13,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/discovery/cloudkeys"
 	"trstctl.com/trstctl/internal/discovery/cloudkeys/awsiamkeys"
+	"trstctl.com/trstctl/internal/discovery/cloudkeys/azureappsecrets"
 	"trstctl.com/trstctl/internal/discovery/cloudkeys/gcpsakeys"
 	"trstctl.com/trstctl/internal/discovery/netscan"
 	"trstctl.com/trstctl/internal/egress"
@@ -138,6 +139,8 @@ func readCloudAccessKeys(ctx context.Context, p cloudCertificateProviderConfig, 
 		return cloudAccessKeyRead{keys: out, host: host}, err
 	case cloudkeys.ProviderGCPIAM:
 		return readGCPServiceAccountKeys(ctx, p, guard, now)
+	case cloudkeys.ProviderAzureEntra:
+		return readAzureAppSecrets(ctx, p, guard, now)
 	default:
 		return cloudAccessKeyRead{}, fmt.Errorf("unsupported %s provider %q", cloudkeys.SourceKind, p.Provider)
 	}
@@ -186,6 +189,43 @@ func readGCPServiceAccountKeys(ctx context.Context, p cloudCertificateProviderCo
 		out = append(out, cloudAccessKey{provider: cloudkeys.ProviderGCPIAM, owner: k.ServiceAccount, keyID: k.KeyID, status: k.Status(now),
 			created: k.Created, expires: k.Expires, lastUsed: k.LastAuthenticated, lastUseKnown: k.LastUseKnown,
 			stale: k.Stale(now), unused: k.Unused(now), extra: map[string]any{"project": p.Project}})
+	}
+	return cloudAccessKeyRead{keys: out, host: u.Host, lastUseErr: res.LastUseError}, nil
+}
+
+// readAzureAppSecrets reads one Microsoft Entra tenant's app-registration
+// client secrets and their last sign-in (M3-L2).
+func readAzureAppSecrets(ctx context.Context, p cloudCertificateProviderConfig, guard *egress.Guard, now time.Time) (cloudAccessKeyRead, error) {
+	endpoint := firstNonEmpty(strings.TrimSpace(p.Endpoint), "https://graph.microsoft.com")
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" {
+		return cloudAccessKeyRead{}, fmt.Errorf("azure-entra endpoint is not a URL")
+	}
+	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	if err != nil {
+		return cloudAccessKeyRead{}, err
+	}
+	if guard.Enabled() {
+		client.Transport = guard.WrapTransport(client.Transport)
+	}
+	token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+	if err != nil {
+		return cloudAccessKeyRead{}, fmt.Errorf("resolve token_ref: %w", err)
+	}
+	reader, err := azureappsecrets.New(azureappsecrets.Config{Endpoint: endpoint, Token: []byte(token), HTTPClient: client})
+	if err != nil {
+		return cloudAccessKeyRead{}, err
+	}
+	defer reader.Close()
+	res, err := reader.Secrets(ctx)
+	if err != nil {
+		return cloudAccessKeyRead{}, err
+	}
+	out := make([]cloudAccessKey, 0, len(res.Secrets))
+	for _, s := range res.Secrets {
+		out = append(out, cloudAccessKey{provider: cloudkeys.ProviderAzureEntra, owner: s.Application, keyID: s.KeyID, status: s.Status(now),
+			created: s.Created, expires: s.Expires, lastUsed: s.LastSignIn, lastUseKnown: s.LastUseKnown,
+			stale: s.Stale(now), unused: s.Unused(now), extra: map[string]any{"app_id": s.AppID, "secret_name": s.Name}})
 	}
 	return cloudAccessKeyRead{keys: out, host: u.Host, lastUseErr: res.LastUseError}, nil
 }

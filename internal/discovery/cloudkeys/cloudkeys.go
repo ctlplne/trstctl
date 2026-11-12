@@ -14,4 +14,6 @@ const (
 	ProviderAWSIAM = "aws-iam"
 	// ProviderGCPIAM reads user-managed service-account keys (M3-L1).
 	ProviderGCPIAM = "gcp-iam"
+	// ProviderAzureEntra reads app-registration client secrets (M3-L2).
+	ProviderAzureEntra = "azure-entra"
 )
