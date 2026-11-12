@@ -6,12 +6,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/pamdiscovery"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/servicedependents"
+	"trstctl.com/trstctl/internal/store"
 )
 
 var errPAMDiscoveryIntent = errors.New("server: PAM discovery source intent differs")
@@ -53,7 +60,73 @@ func (s *pamService) recoverDiscoveryCompletion(ctx context.Context, tenantID st
 	if event.TenantID != tenantID || event.Type != projections.EventPAMDiscoveryRunCompleted || event.SchemaVersion != 1 || json.Unmarshal(event.Data, &value) != nil || value.RunID != intent.RunID || value.ProviderID != intent.ProviderID || !value.StartedAt.Equal(intent.QueuedAt) || value.RequestedBy != intent.RequestedBy {
 		return true, errPAMDiscoveryIntent
 	}
-	return true, s.projector.Apply(ctx, event)
+	if err := s.projector.Apply(ctx, event); err != nil {
+		return true, err
+	}
+	// A267-O1: the delivery is done only once the run has fed the
+	// enrolled-host dependent inventory, so a retry finishes that too.
+	return true, s.queueDiscoveryDependents(ctx, tenantID, intent, value)
+}
+
+// queueDiscoveryDependents feeds a completed AD discovery run into the
+// enrolled-host dependent inventory (A267-O1). Each enabled host binding of
+// the source's current accounts whose saved native identity (SID, GUID, DN,
+// name) is still the one the run found gets that host's read-only inventory
+// queued, as the binding's own manual run queues it: a dependent scan event
+// whose projection writes the host's outbox row in the same transaction. The
+// scan's ID derives from the run's completion, the account and the host, so a
+// retried delivery queues nothing twice. A binding whose account changed
+// waits for review; a host that is offboarded or no longer a host is passed
+// over. The scan names the discovery run's requester.
+func (s *pamService) queueDiscoveryDependents(ctx context.Context, tenantID string, intent pamdiscovery.ScanIntent, completion projections.PAMDiscoveryRunCompleted) error {
+	if completion.Status != "completed" || !s.windowsDependentInventoryEnabled {
+		return nil
+	}
+	source, err := s.store.GetPAMDiscoverySource(ctx, tenantID, intent.ProviderID)
+	if err != nil || source.ProviderType != "ldap" {
+		return nil
+	}
+	queued := false
+	err = s.store.WithPAMCatalogLock(ctx, tenantID, func() error {
+		hosts, err := s.store.ListEnabledServiceDependentHostsForProvider(ctx, tenantID, intent.ProviderID, store.MaxDiscoveryDependentHosts)
+		if err != nil {
+			return err
+		}
+		for _, host := range hosts {
+			account, err := s.dependentAccountBinding(ctx, tenantID, host.Binding.Account.AccountID)
+			if err != nil || account != host.Binding.Account {
+				continue
+			}
+			agent, err := s.store.GetAgent(ctx, tenantID, host.Binding.AgentID)
+			if err != nil || agent.OffboardedAt != nil || !slices.Contains(agent.Roles, mtls.AgentRoleHost) {
+				continue
+			}
+			runID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("trstctl:pam-discovery-dependents:"+tenantID+"/"+intent.CompletionEventID+"/"+
+				host.Binding.Account.AccountID+"/"+host.Binding.AgentID)).String()
+			scan, err := servicedependents.NewInventoryIntent(runID, host.Binding)
+			if err != nil {
+				continue
+			}
+			if existing, found, err := s.log.EventByID(ctx, runID); err != nil {
+				return err
+			} else if found {
+				if err := s.projector.Apply(ctx, existing); err != nil {
+					return err
+				}
+				continue
+			}
+			value := projections.ServiceDependentScanQueued{Intent: scan, Actor: intent.RequestedBy, At: completion.FinishedAt.UTC()}
+			if err := s.appendServiceDependentEvent(ctx, tenantID, runID, projections.EventServiceDependentScanQueued, value); err != nil {
+				return err
+			}
+			queued = true
+		}
+		return nil
+	})
+	if queued && s.wakeOutbox != nil {
+		s.wakeOutbox()
+	}
+	return err
 }
 func (s *pamService) retainDiscoveryCompletion(ctx context.Context, tenantID string, intent pamdiscovery.ScanIntent, value projections.PAMDiscoveryRunCompleted) error {
 	if found, err := s.recoverDiscoveryCompletion(ctx, tenantID, intent); found || err != nil {

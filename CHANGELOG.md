@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An AD discovery scan refreshes the hosts bound to the accounts it finds (A267-O1): each
+  enabled enrolled-host binding whose account still has the identity it was saved with gets
+  its read-only service, task and IIS inventory queued, through the same-transaction outbox
+  the host's own **Scan host** uses, at most once per scan, host and account.
 - A host account scan reads the authorized keys files sshd reads (A260-L2): the
   `AuthorizedKeysFile` the host's `sshd_config` sets, its `Include` files read in place, with
   `%u`, `%h`, `%U` and `~` expanded per account, or sshd's defaults. An account on a host that

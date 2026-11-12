@@ -112,6 +112,7 @@ export function PAMServiceDependentsDialog({
       <p id={description} className="mt-2 text-sm text-muted-foreground">
         {t("admin.access.dependents.description")}
       </p>
+      <p className="mt-2 text-sm text-muted-foreground">{t("admin.access.dependents.discoveryRefresh")}</p>
       <p className="mt-2 break-all text-sm">
         <code>{String(account.details?.native_sid ?? "")}</code>
       </p>

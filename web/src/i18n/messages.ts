@@ -304,6 +304,11 @@ export const messages = {
   "admin.access.dependents.loading": { defaultMessage: "Loading host inventory…", description: "AD host inventory." },
   "admin.access.dependents.retry": { defaultMessage: "Retry read", description: "AD host inventory." },
   "admin.access.dependents.title": { defaultMessage: "Dependents for {name}", description: "AD service-account host inventory." },
+  "admin.access.dependents.discoveryRefresh": {
+    defaultMessage:
+      "Each AD discovery scan of this account's source also queues this read on every enabled host, while the account's identity still matches the host's binding.",
+    description: "How AD discovery keeps a service account's host inventory current (A267-O1).",
+  },
   "admin.access.dependents.description": {
     defaultMessage:
       "Select each enrolled Windows host that uses this AD account. A scan reads Windows services, scheduled tasks and IIS application pools. It does not change passwords or start workloads.",

@@ -104,6 +104,10 @@ it("reopens a retained scan and labels stale binding evidence without granting w
   expect(screen.queryByRole("button", { name: "Add host" })).not.toBeInTheDocument();
 });
 
+it("says each AD discovery scan also queues the read on enabled hosts (A267-O1)", async () => {
+  mount();
+  expect(await screen.findByText(/Each AD discovery scan of this account's source also queues this read on every enabled host/)).toBeInTheDocument();
+});
 it("shows stopped delivery with the retained failed attempt", async () => {
   mock.pamServiceDependentHosts.mockResolvedValue({
     items: [{ ...host, latest_scan: { id: scan.id, status: "retrying", current: true, service_count: 0, task_count: 0, pool_count: 0 } }],

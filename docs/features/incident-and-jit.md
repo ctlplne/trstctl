@@ -1418,6 +1418,11 @@ redemption, password write, task start, shell command or filesystem deployment.
 An existing host profile can add this property alongside its existing settings.
 
 Choose **Scan host**. The server queues an intent for the exact enrolled host.
+Each later scan of the AD source queues the same read on every enabled host of each
+account it finds, while the account's native SID, object GUID, DN and name still match
+the host's binding. A binding whose account changed waits for you to review and save it
+again. The read names the discovery scan's requester and goes out through the same
+outbox, at most once per scan, host and account.
 Its signed report retains separate coverage for Windows services, scheduled tasks
 and IIS application pools, with native object identifiers and configuration hashes.
 Saved passwords, task arguments and private configuration are not returned.

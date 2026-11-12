@@ -121,6 +121,47 @@ func (s *Store) GetServiceDependentHost(ctx context.Context, tenantID, accountID
 	})
 	return value, err
 }
+
+// MaxDiscoveryDependentHosts bounds the enabled host bindings one AD
+// discovery run refreshes (A267-O1).
+const MaxDiscoveryDependentHosts = 4096
+
+// ListEnabledServiceDependentHostsForProvider returns the enabled host
+// bindings of a discovery source's current accounts, by account and host, at
+// most limit (A267-O1).
+func (s *Store) ListEnabledServiceDependentHostsForProvider(ctx context.Context, tenantID, providerID string, limit int) ([]ServiceDependentHost, error) {
+	var values []ServiceDependentHost
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT h.binding,h.saved_by,h.updated_at FROM service_account_hosts h
+ JOIN pam_discovered_accounts a ON a.tenant_id=h.tenant_id AND a.id=h.account_id
+ WHERE h.tenant_id=$1 AND a.tenant_id=$1 AND a.provider_id=$2 AND a.removed_at IS NULL AND h.enabled
+ ORDER BY h.account_id, h.agent_id LIMIT $3`, tenantID, providerID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var value ServiceDependentHost
+			var raw []byte
+			if err := rows.Scan(&raw, &value.SavedBy, &value.UpdatedAt); err != nil {
+				return err
+			}
+			if err := json.Unmarshal(raw, &value.Binding); err != nil {
+				return err
+			}
+			if err := value.Binding.Validate(); err != nil {
+				return err
+			}
+			if value.BindingDigest, err = value.Binding.Digest(); err != nil {
+				return err
+			}
+			values = append(values, value)
+		}
+		return rows.Err()
+	})
+	return values, err
+}
+
 func (s *Store) ListServiceDependentHosts(ctx context.Context, tenantID, accountID, after string, limit int) ([]ServiceDependentHost, error) {
 	var values []ServiceDependentHost
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
