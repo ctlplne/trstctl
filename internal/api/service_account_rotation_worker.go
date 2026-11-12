@@ -282,7 +282,7 @@ func (a *API) beforeDependentDirectoryApply(ctx context.Context, cmd store.Secre
 	if e := a.dependentNativePreparation(ctx, parent, cmd); e != nil {
 		return e
 	}
-	if !time.Now().Before(parent.Intent.Plan.ExpiresAt) {
+	if !a.dependentNow().Before(parent.Intent.Plan.ExpiresAt) {
 		if parent.Intent.Mode == servicedependents.Reconcile {
 			return a.failUnstartedReconciliation(ctx, cmd, "review deadline expired")
 		}
@@ -313,6 +313,7 @@ func (a *API) beforeDependentDirectoryApply(ctx context.Context, cmd store.Secre
 	if e != nil {
 		return e
 	}
+	failure, detail := "", ""
 	if parent.Intent.Plan.Manifest != nil {
 		// The final preflight may have advanced the cursor during this call.
 		// Recheck the whole reviewed scope at this exact reset barrier.
@@ -323,23 +324,32 @@ func (a *API) beforeDependentDirectoryApply(ctx context.Context, cmd store.Secre
 		if parent.Direction == servicedependents.Inverse {
 			return a.rollbackStaticRotation(ctx, cmd, provider)
 		}
-		failure, detail := "", ""
-		if !time.Now().Before(parent.Intent.Plan.ExpiresAt) {
+		if !a.dependentNow().Before(parent.Intent.Plan.ExpiresAt) {
 			failure, detail = "deadline_expired", "review deadline expired"
 		} else if e = a.validateDependentIntentCurrent(ctx, cmd.TenantID, parent.Intent); e != nil {
 			failure, detail = "source_changed", "reviewed inventory changed"
 		}
-		if failure != "" {
-			if parent.Intent.Mode == servicedependents.Reconcile {
-				return a.failUnstartedReconciliation(ctx, cmd, detail)
-			}
-			if e := a.selectDependentInverse(ctx, parent, failure); e != nil {
-				return e
-			}
-			return a.rollbackStaticRotation(ctx, cmd, provider)
-		}
 	}
-	return a.appendAndProjectStaticRotation(ctx, parent.TenantID, servicedependents.DirectoryApplyStartedSourceID(parent.ID), projections.EventServiceDependentDirectoryApplyStarted, projections.ServiceDependentDirectoryApplyStarted{RotationID: parent.ID, IntentDigest: parent.IntentDigest, At: time.Now().UTC()})
+	// A267-O3: the reset starts at one instant, read after the whole
+	// reviewed scope and every preflight were. A read or preflight that
+	// outlasts the review deadline is the deadline's, and the start is never
+	// stamped later than it was checked: the projection refuses a start after
+	// the deadline, and a start the log kept but the read model refused would
+	// leave the account unavailable to every later recovery.
+	startedAt := a.dependentNow().UTC()
+	if failure == "" && !startedAt.Before(parent.Intent.Plan.ExpiresAt) {
+		failure, detail = "deadline_expired", "review deadline expired"
+	}
+	if failure != "" {
+		if parent.Intent.Mode == servicedependents.Reconcile {
+			return a.failUnstartedReconciliation(ctx, cmd, detail)
+		}
+		if e := a.selectDependentInverse(ctx, parent, failure); e != nil {
+			return e
+		}
+		return a.rollbackStaticRotation(ctx, cmd, provider)
+	}
+	return a.appendAndProjectStaticRotation(ctx, parent.TenantID, servicedependents.DirectoryApplyStartedSourceID(parent.ID), projections.EventServiceDependentDirectoryApplyStarted, projections.ServiceDependentDirectoryApplyStarted{RotationID: parent.ID, IntentDigest: parent.IntentDigest, At: startedAt})
 }
 func (a *API) beforeDependentVaultCutover(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider) error {
 	parent, e := a.dependentRotationParent(ctx, cmd)

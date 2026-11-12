@@ -948,6 +948,12 @@
 
 ### Fixed
 
+- A dependent AD rotation whose review expires during its final checks no longer strands the account
+  (A267-O3). The worker checked the deadline before the last preflights and the full read of the
+  reviewed scope, then stamped the reset's start later. A read that outlasted the deadline produced a
+  start the read model refused while the event log kept it, so later recovery could not proceed. The
+  start is now stamped once, after those checks, and that same instant must be inside the review;
+  otherwise the rotation takes the deadline's path without resetting the directory.
 - Privileged account discovery's actors are covered by privacy (A267-O2). Who saved a source,
   requested a scan, dismissed an account or imported one was kept in the discovery read models
   outside the subject export, erasure and retention, so an erased person still showed in the scan

@@ -13,9 +13,11 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -310,11 +312,15 @@ type dependentRotationOptions struct {
 	RecoverInverse          bool
 	ExpiredInverse          bool
 	ExpireBeforeApply       bool
-	InvalidRecovery         bool
-	EraseClaim              bool
-	LoseQueueProjection     bool
-	Reconcile               bool
-	RefusePublicationProof  bool
+	// LateResetBarrier makes the worker's clock pass the review deadline
+	// between a pass's first deadline check and its reset stamp, as a scope
+	// read or preflight that outlasts the deadline would (A267-O3).
+	LateResetBarrier       bool
+	InvalidRecovery        bool
+	EraseClaim             bool
+	LoseQueueProjection    bool
+	Reconcile              bool
+	RefusePublicationProof bool
 }
 
 func servedDependentRotationCaseWithMode(t *testing.T, native *dependentNativeDirectoryFixture, injectFailure, reconcile bool, moved ...bool) {
@@ -372,6 +378,24 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, Attestors: []attest.Attestor{servedPAMAttestor{}}}
 		d.DynamicSecretProviders = []dynsecret.Provider{directory}
 	}}
+	// A267-O3: the dependent rotation worker reads the host's clock, except
+	// that once armed it gives one real reading (a pass's first deadline
+	// check) and then readings past the review deadline.
+	var late struct {
+		armed   atomic.Bool
+		allowed atomic.Int32
+		expires atomic.Int64
+	}
+	if scenario.LateResetBarrier {
+		options = append(options, func(d *Deps) {
+			d.APIOptions = append(d.APIOptions, api.WithDependentRotationClock(func() time.Time {
+				if !late.armed.Load() || late.allowed.Add(-1) >= 0 {
+					return time.Now()
+				}
+				return time.Unix(0, late.expires.Load()).Add(time.Second)
+			}))
+		})
+	}
 	var ownedStore *store.Store
 	if native == nil {
 		options = append(options, withIsolatedTenant)
@@ -553,6 +577,7 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 			t.Fatal(e)
 		}
 	}
+	late.expires.Store(preview.Intent.Plan.ExpiresAt.UnixNano())
 	request := map[string]any{"intent": preview.Intent, "intent_digest": preview.Digest, "acknowledge_single_phase": true}
 	if reconcile {
 		var wire struct {
@@ -702,6 +727,7 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 		assertDependentNoEffectAdmission(t, h, directory, root, token, queued.Rotation.CommandID, preview.Intent.Plan.ExpiresAt, scenario.ExpireBeforeApply)
 		return
 	}
+	preflights := 0
 	recoveredInverse := false
 	checkedAuthority := false
 	checkedStepSource := false
@@ -728,6 +754,12 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 			return e
 		}); e != nil {
 			t.Fatal(e)
+		}
+		if scenario.LateResetBarrier && preflights == len(preview.Intent.Plan.Order) {
+			// Every preflight has reported: this pass reaches the reset
+			// barrier, and the deadline passes during it.
+			late.allowed.Store(1)
+			late.armed.Store(true)
 		}
 		if _, e := h.srv.outbox.DispatchOneScoped(ctx, h.srv.obHandler, orchestrator.DestinationScope{IncludeDestinations: []string{store.SecretStaticRotationDestination}}); e != nil {
 			t.Fatal(e)
@@ -939,6 +971,9 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 		if receipt, e := h.client.ReportJobResult(ctx, h.report(t, job.JobID, job.Attempt, outcome, string(raw), crypto.SHA256Hex(raw))); e != nil || !receipt.Accepted {
 			t.Fatalf("native step report rejected %s %s: %v", step.Direction, step.Action, e)
 		}
+		if step.Action == servicedependents.Preflight && step.Direction == servicedependents.Forward {
+			preflights++
+		}
 		if scenario.ManifestResetScopeFault && step.Action == servicedependents.Preflight && len(seen) == 3 {
 			proveDependentFinalPreflightScopeFence(t, h, token, root, queued.Rotation.CommandID, directory)
 			return
@@ -995,6 +1030,10 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 				t.Fatal("vault published before all native functional evidence")
 			}
 		}
+	}
+	if scenario.LateResetBarrier {
+		assertLateResetBarrierReleasesTheAccount(t, h, directory, old, root, token, queued.Rotation.ID, final, previewInput)
+		return
 	}
 	want := store.SecretStaticRotationCompleted
 	if injectFailure || proofFailure {
@@ -1164,5 +1203,49 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 		if e != nil || len(claims.Jobs) != 0 {
 			t.Fatal("privacy rebuild revived completed native effects", e)
 		}
+	}
+}
+
+// TestServedLateResetBarrierReleasesTheAccountA267O3 is A267-O3: when the
+// review deadline passes after a pass's first deadline check (a large scope
+// read or the last preflights outlast it), the worker never stamps a reset it
+// did not check: it takes the deadline's path, the directory and vault stay
+// as they were, no reset start is recorded, and the account is free for a
+// new review.
+func TestServedLateResetBarrierReleasesTheAccountA267O3(t *testing.T) {
+	servedDependentRotationScenario(t, nil, false, dependentRotationOptions{LateResetBarrier: true})
+}
+
+func assertLateResetBarrierReleasesTheAccount(t *testing.T, h *roleHarness, directory *dependentDirectoryBoundary, old []byte, root, token, rotationID string,
+	final store.SecretStaticRotationCommand, previewInput map[string]any) {
+	t.Helper()
+	ctx := t.Context()
+	directory.mu.Lock()
+	unchanged := bytes.Equal(directory.current.Bytes(), old)
+	applied, restored := directory.applied, directory.restored
+	directory.mu.Unlock()
+	if !final.Terminal() || !unchanged || applied != 0 || restored != 0 || final.ResultVersion != 0 {
+		t.Fatalf("a reset ran after its review deadline: phase=%s error=%s unchanged=%v applied=%d restored=%d version=%d",
+			final.Phase, final.Error, unchanged, applied, restored, final.ResultVersion)
+	}
+	parent, err := h.store.GetServiceDependentRotation(ctx, h.tenant, rotationID)
+	if err != nil || parent.DirectoryApplyStarted || parent.Direction != servicedependents.Inverse || parent.Failure != "deadline_expired" {
+		t.Fatalf("the rotation did not take the deadline's path: %+v, %v", parent, err)
+	}
+	if _, found, err := h.log.EventByID(ctx, servicedependents.DirectoryApplyStartedSourceID(rotationID)); err != nil || found {
+		t.Fatalf("the log kept a reset start after the review deadline: found=%v err=%v", found, err)
+	}
+	// The vault still holds the account's current password (a rollback may
+	// publish it again as a new version; its value is the predecessor's).
+	status, raw := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/secrets/store/app/dependent", token, nil)
+	var vault struct {
+		Value string `json:"value"`
+	}
+	if status != http.StatusOK || json.Unmarshal(raw, &vault) != nil || vault.Value != string(old) {
+		t.Fatalf("the vault no longer holds the account's current password after the review deadline: %d", status)
+	}
+	// The account is free: a new review of the same scope is accepted.
+	if code, body := secretsReqKey(t, h.servedHarness, http.MethodPost, root+"/rotations/preview", token, "a267o3-review-again", previewInput); code != http.StatusOK {
+		t.Fatalf("the account is not free for a new review: %d %s", code, body)
 	}
 }

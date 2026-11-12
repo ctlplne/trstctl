@@ -2872,7 +2872,11 @@ identity, complete host set, source scans, provider configuration, secret versio
 order and probe bindings are frozen together. Changed inventory or host membership
 requires another review; ordinary static rotation refuses this selected account.
 
-The worker completes all host preflights before changing the directory. It then
+The worker completes all host preflights before changing the directory, and checks
+the review's deadline at the reset itself, after the last preflight and the final read
+of the reviewed scope. A review that expires while those run takes the deadline's path:
+the directory is not reset, the vault keeps the current password and the account is free
+for a new review. It then
 stops previously running services and pools, updates password-bearing dependents,
 starts the objects that were running, and collects fresh process/account evidence
 plus useful-work proof. Previously stopped objects stay stopped. Task verification

@@ -114,34 +114,37 @@ type API struct {
 	abac                     ABACDenyEvaluator
 	abacEnvironment          map[string]string
 	abacNow                  func() time.Time
-	approvals                ApprovalRecorder
-	breakglass               BreakglassReconciler
-	breakglassIssuer         BreakglassIssuer
-	breakglassCeremonies     BreakglassCeremonyService
-	breakglassRotation       BreakglassRotationService
-	breakglassAdmin          *breakglass.AdminService
-	caHierarchy              CAHierarchyService
-	edgeDelegations          EdgeDelegationService
-	eventProtection          EventProtectionService
-	auditArchives            AuditArchiveService
-	externalCAs              ExternalCAService
-	certRevocationAuthority  CertificateRevocationAuthorityResolver
-	attestedIssuer           AttestedIssuerService
-	attestationPrincipals    AttestationPrincipalResolver
-	cmdbRunNow               CMDBRunNow
-	sshWorkflow              SSHWorkflowService
-	sshTrustFleet            SSHTrustFleetService
-	adcsDecisions            ADCSDecisionService
-	mdmCheckIns              MDMCheckInService
-	factoryBatches           FactoryBatchService
-	keyVaultDisable          KeyVaultDisableService
-	pkiSecretLeafRecovery    PKISecretLeafRecoveryService
-	oidcIssuer               OIDCIssuerSource
-	workloadJWTKeys          WorkloadJWTKeySource
-	slackApp                 SlackAppService
-	managedCALeafRecovery    ManagedCALeafRecoveryService
-	broker                   BrokerService
-	ephemeral                EphemeralIssuerService
+	// dependentRotationNow is the clock the dependent rotation worker reads
+	// at its deadline checks and reset barrier (A267-O3); nil is the host's.
+	dependentRotationNow    func() time.Time
+	approvals               ApprovalRecorder
+	breakglass              BreakglassReconciler
+	breakglassIssuer        BreakglassIssuer
+	breakglassCeremonies    BreakglassCeremonyService
+	breakglassRotation      BreakglassRotationService
+	breakglassAdmin         *breakglass.AdminService
+	caHierarchy             CAHierarchyService
+	edgeDelegations         EdgeDelegationService
+	eventProtection         EventProtectionService
+	auditArchives           AuditArchiveService
+	externalCAs             ExternalCAService
+	certRevocationAuthority CertificateRevocationAuthorityResolver
+	attestedIssuer          AttestedIssuerService
+	attestationPrincipals   AttestationPrincipalResolver
+	cmdbRunNow              CMDBRunNow
+	sshWorkflow             SSHWorkflowService
+	sshTrustFleet           SSHTrustFleetService
+	adcsDecisions           ADCSDecisionService
+	mdmCheckIns             MDMCheckInService
+	factoryBatches          FactoryBatchService
+	keyVaultDisable         KeyVaultDisableService
+	pkiSecretLeafRecovery   PKISecretLeafRecoveryService
+	oidcIssuer              OIDCIssuerSource
+	workloadJWTKeys         WorkloadJWTKeySource
+	slackApp                SlackAppService
+	managedCALeafRecovery   ManagedCALeafRecoveryService
+	broker                  BrokerService
+	ephemeral               EphemeralIssuerService
 	// commandMAC produces server-keyed, domain-separated review evidence for
 	// core workflows that do not depend on the optional native secret store.
 	// The key stays behind the crypto boundary; callers receive only its digest.
@@ -291,6 +294,7 @@ type config struct {
 	abac                        ABACDenyEvaluator
 	abacEnvironment             map[string]string
 	abacNow                     func() time.Time
+	dependentRotationNow        func() time.Time
 	approvals                   ApprovalRecorder
 	breakglass                  BreakglassReconciler
 	breakglassIssuer            BreakglassIssuer
@@ -570,6 +574,21 @@ func WithMutationGate(g MutationGate) Option {
 // route. RBAC must allow first; ABAC can only veto with request, actor, time, and
 // deployment environment attributes. Rich identity resource tags are added by the
 // lifecycle MutationGate for issue/deploy/revoke transitions.
+// WithDependentRotationClock sets the clock the dependent rotation worker
+// reads at its review-deadline checks and its reset barrier (A267-O3). The
+// default is the host's clock.
+func WithDependentRotationClock(now func() time.Time) Option {
+	return func(c *config) { c.dependentRotationNow = now }
+}
+
+// dependentNow is the dependent rotation worker's clock.
+func (a *API) dependentNow() time.Time {
+	if a.dependentRotationNow != nil {
+		return a.dependentRotationNow()
+	}
+	return time.Now()
+}
+
 func WithABACDenyOverlay(eval ABACDenyEvaluator, environment map[string]string, now func() time.Time) Option {
 	return func(c *config) {
 		c.abac = eval
@@ -630,6 +649,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		abac:                        cfg.abac,
 		abacEnvironment:             copyStringMap(cfg.abacEnvironment),
 		abacNow:                     cfg.abacNow,
+		dependentRotationNow:        cfg.dependentRotationNow,
 		approvals:                   cfg.approvals,
 		breakglass:                  cfg.breakglass,
 		breakglassIssuer:            cfg.breakglassIssuer,
