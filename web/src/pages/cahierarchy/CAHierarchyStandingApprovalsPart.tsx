@@ -4,6 +4,9 @@ import { Dialog } from "@/components/Dialog";
 import { useCan } from "@/components/rbac";
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 import { api, type CAAuthority, type CACeremonyPlanPreview, type CACeremonyStartRequest, type CAKeyCeremony, type CAUpstreamStandingApproval } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
@@ -272,15 +275,11 @@ export function StandingApprovalsDialog({ authority, onClose }: { authority: CAA
                     {item.status === "active" && canWrite ? (
                       revoking === item.id ? (
                         <div className="grid gap-2">
-                          <label className="grid gap-1 text-xs font-medium">
-                            {t("caHierarchy.standingApprovals.revokeReason")}
-                            <input
-                              value={revokeReason}
-                              maxLength={1024}
-                              onChange={(event) => setRevokeReason(event.target.value)}
-                              className="min-h-8 rounded-control border border-border bg-background px-2 py-1 text-body"
-                            />
-                          </label>
+                          <Field label={t("caHierarchy.standingApprovals.revokeReason")}>
+                            {(control) => (
+                              <Input {...control} value={revokeReason} maxLength={1024} onChange={(event) => setRevokeReason(event.target.value)} />
+                            )}
+                          </Field>
                           <div className="flex gap-2">
                             <Button type="button" size="sm" variant="destructive" disabled={busy} onClick={() => void revoke(item)}>
                               {t("caHierarchy.standingApprovals.confirmRevoke")}
@@ -332,47 +331,46 @@ export function StandingApprovalsDialog({ authority, onClose }: { authority: CAA
             </h3>
             {grantError && <ErrorState title={t("caHierarchy.standingApprovals.grantErrorTitle")}>{grantError}</ErrorState>}
             <div className="grid gap-3 sm:grid-cols-3">
-              <label className="grid gap-1 font-medium">
-                {t("caHierarchy.standingApprovals.principal")}
-                <input
-                  ref={principalRef}
-                  value={grant.principal}
-                  onChange={(event) => editGrant({ principal: event.target.value })}
-                  className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                />
-              </label>
-              <label className="grid gap-1 font-medium">
-                {t("caHierarchy.standingApprovals.trustDomain")}
-                <input
-                  value={grant.trustDomain}
-                  placeholder={t("caHierarchy.standingApprovals.trustDomainPlaceholder")}
-                  onChange={(event) => editGrant({ trustDomain: event.target.value })}
-                  className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                />
-              </label>
-              <label className="grid gap-1 font-medium">
-                {t("caHierarchy.standingApprovals.validDays")}
-                <input
-                  type="number"
-                  min={1}
-                  max={MAX_VALID_DAYS}
-                  value={grant.validDays}
-                  onChange={(event) => editGrant({ validDays: event.target.value })}
-                  className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                />
-              </label>
+              <Field label={t("caHierarchy.standingApprovals.principal")}>
+                {(control) => (
+                  <Input {...control} ref={principalRef} value={grant.principal} onChange={(event) => editGrant({ principal: event.target.value })} />
+                )}
+              </Field>
+              <Field label={t("caHierarchy.standingApprovals.trustDomain")}>
+                {(control) => (
+                  <Input
+                    {...control}
+                    value={grant.trustDomain}
+                    placeholder={t("caHierarchy.standingApprovals.trustDomainPlaceholder")}
+                    onChange={(event) => editGrant({ trustDomain: event.target.value })}
+                  />
+                )}
+              </Field>
+              <Field label={t("caHierarchy.standingApprovals.validDays")}>
+                {(control) => (
+                  <Input
+                    {...control}
+                    type="number"
+                    min={1}
+                    max={MAX_VALID_DAYS}
+                    value={grant.validDays}
+                    onChange={(event) => editGrant({ validDays: event.target.value })}
+                  />
+                )}
+              </Field>
             </div>
             <p className="text-caption text-muted-foreground">{t("caHierarchy.standingApprovals.principalHelp")}</p>
-            <label className="grid gap-1 font-medium">
-              {t("caHierarchy.standingApprovals.spec")}
-              <textarea
-                rows={5}
-                value={grant.specJSON}
-                onChange={(event) => editGrant({ specJSON: event.target.value })}
-                className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
-              />
-              <span className="text-caption font-normal text-muted-foreground">{t("caHierarchy.standingApprovals.specHelp")}</span>
-            </label>
+            <Field label={t("caHierarchy.standingApprovals.spec")} description={t("caHierarchy.standingApprovals.specHelp")}>
+              {(control) => (
+                <Textarea
+                  {...control}
+                  rows={5}
+                  value={grant.specJSON}
+                  onChange={(event) => editGrant({ specJSON: event.target.value })}
+                  className="font-mono text-xs"
+                />
+              )}
+            </Field>
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" disabled={busy} onClick={() => void reviewGrant()}>
                 {t("caHierarchy.standingApprovals.review")}
