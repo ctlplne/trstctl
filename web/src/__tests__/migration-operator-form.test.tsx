@@ -17,6 +17,7 @@ const { apiMock } = vi.hoisted(() => ({
     resumeMigrationRun: vi.fn(),
     rollbackMigrationRun: vi.fn(),
     caAuthorities: vi.fn(),
+    externalCAs: vi.fn(),
     identities: vi.fn(),
     agents: vi.fn(),
   },
@@ -40,6 +41,7 @@ describe("migration operator plan", () => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.migrationRuns.mockResolvedValue({ items: [] });
     apiMock.caAuthorities.mockResolvedValue({ items: [{ id: authorityID, common_name: "QA new CA", status: "active" }] });
+    apiMock.externalCAs.mockResolvedValue([]);
     apiMock.identities.mockResolvedValue([{ id: identityID, name: "payments TLS", kind: "x509_certificate", status: "deployed" }]);
     apiMock.agents.mockResolvedValue([{ id: agentID, name: "payments host", status: "active", presence: { state: "online" } }]);
   });
@@ -152,6 +154,48 @@ describe("migration operator plan", () => {
       plan_id: "ca-switch",
       new_authority_id: authorityID,
       revoke_predecessors: true,
+      waves: [{ id: "canary", ordinal: 1, members: [{ identity_id: identityID, agent_id: agentID, trust_anchor_path: "/etc/trstctl/next-root.pem" }] }],
+    });
+  });
+
+  // P3-L2 part 2: a vendor CA from the external registry can be the new
+  // issuer; its root is required, reviewed, and sent apart from the authority.
+  it("starts a switch to a vendor CA with the vendor's root", async () => {
+    const user = userEvent.setup();
+    const root = "-----BEGIN CERTIFICATE-----\nMIIBvendorroot\n-----END CERTIFICATE-----";
+    apiMock.externalCAs.mockResolvedValue([
+      { id: "dc-1", name: "DigiCert", type: "digicert", status: "available" },
+      { id: "down-1", name: "Offline vendor", type: "sectigo", status: "unavailable" },
+    ]);
+    apiMock.assessMigration.mockResolvedValue({
+      plan_id: "to-vendor",
+      members: 1,
+      migratable: 1,
+      guidance: "Any unknown blocks the start of a migration.",
+      unknowns: [],
+      waves: [{ id: "canary", ordinal: 1, members: [identityID] }],
+    });
+    apiMock.startMigrationRun.mockResolvedValue({ id: "run-vendor", plan_id: "to-vendor", status: "running", waves: [] });
+    renderRoute();
+    await user.click(await screen.findByRole("button", { name: "Start migration plan" }));
+    await user.type(screen.getByLabelText("Plan ID"), "to-vendor");
+    const issuer = await screen.findByLabelText("New CA authority");
+    expect(within(issuer).queryByRole("option", { name: /Offline vendor/ })).not.toBeInTheDocument();
+    await user.selectOptions(issuer, "external:dc-1");
+    await user.click(screen.getByRole("button", { name: "Map waves" }));
+    expect(await screen.findByText("Paste the vendor CA's root certificate.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Vendor root certificate/), { target: { value: root } });
+    await user.click(screen.getByRole("button", { name: "Map waves" }));
+    await user.selectOptions(await screen.findByLabelText("Identity"), identityID);
+    await user.selectOptions(screen.getByLabelText("Host agent"), agentID);
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(screen.getByText(/DigiCert \(vendor CA\)/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Check cutover readiness" }));
+    await user.click(await screen.findByRole("button", { name: "Start migration" }));
+    expect(apiMock.startMigrationRun).toHaveBeenCalledWith({
+      plan_id: "to-vendor",
+      new_external_ca_id: "dc-1",
+      new_trust_anchor_pem: root,
       waves: [{ id: "canary", ordinal: 1, members: [{ identity_id: identityID, agent_id: agentID, trust_anchor_path: "/etc/trstctl/next-root.pem" }] }],
     });
   });

@@ -6273,12 +6273,14 @@ func componentSchemas() map[string]*Schema {
 		"members": {Type: "array", Items: ref("MigrationRunStartMember")},
 	}, "id", "ordinal", "members")
 	migrationRunStartRequest := object(map[string]*Schema{
-		"plan_id": str(), "new_authority_id": uuid(),
+		"plan_id": str(), "new_authority_id": {Type: "string", Format: "uuid", Description: "the trstctl CA authority the members move to; omit with new_external_ca_id"},
+		"new_external_ca_id":              {Type: "string", Description: "P3-L2: a vendor CA from the external CA registry the host members move to instead; it signs each member's CSR"},
+		"new_trust_anchor_pem":            {Type: "string", Description: "P3-L2: the external CA's root certificate (PEM), distributed to and read back from every member before any successor is issued"},
 		"waves":                           {Type: "array", Items: ref("MigrationRunStartWave")},
 		"require_observed_traffic":        {Type: "boolean", Description: "hold each wave until an observer agent also saw new connections at every member's endpoint (X3)"},
 		"observed_traffic_window_seconds": {Type: "integer", Description: "pause the run when a live member has no observed traffic this long after going live (default 3600, at most 604800)"},
-		"revoke_predecessors":             {Type: "boolean", Description: "planned CA switch (P3): revoke each member's previous certificate (superseded) through the trstctl CA that issued it once the successor is verified live; a failed verification pauses the run and a resume retries the failed members"},
-	}, "plan_id", "new_authority_id", "waves")
+		"revoke_predecessors":             {Type: "boolean", Description: "planned CA switch (P3): revoke each member's previous certificate (superseded) through the trstctl CA, or the vendor CA, that issued it once the successor is verified live; a failed verification pauses the run and a resume retries the failed members"},
+	}, "plan_id", "waves")
 	migrationMemberBinding := object(map[string]*Schema{
 		"issuing_authority_source": {Type: "string", Enum: []string{endpointIssuerPlatform, endpointIssuerPrivate, endpointIssuerExternal}},
 		"issuing_authority_id":     str(), "target_id": uuid(), "target_revision": str(), "connector": str(), "target": str(),

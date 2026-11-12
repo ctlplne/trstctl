@@ -70,6 +70,10 @@ func NewServer() (*Server, error) {
 // URL is the base URL (host root); the plugin appends /services/v2/... paths.
 func (s *Server) URL() string { return s.ts.URL }
 
+// RootPEM is the stand-in's root certificate: what a host trusts to accept
+// the certificates it issues.
+func (s *Server) RootPEM() []byte { return s.authority.CertificatePEM() }
+
 // APIKey is the key the double accepts.
 func (s *Server) APIKey() string { return devKey }
 

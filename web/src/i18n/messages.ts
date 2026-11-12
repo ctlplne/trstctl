@@ -16890,6 +16890,17 @@ export const messages = {
     defaultMessage: "New CA authority",
     description: "Active replacement CA authority selector.",
   },
+  "migration.form.vendorIssuers": { defaultMessage: "Vendor CAs", description: "P3-L2: option group of external (vendor) CAs a switch can move to." },
+  "migration.form.vendorRoot": { defaultMessage: "Vendor root certificate (PEM)", description: "P3-L2: the vendor CA's root the hosts trust first." },
+  "migration.form.vendorRootHelp": {
+    defaultMessage: "Every host trusts this root, and reads it back, before the vendor signs any successor.",
+    description: "P3-L2: why the vendor root is needed.",
+  },
+  "migration.form.vendorRootRequired": {
+    defaultMessage: "Paste the vendor CA's root certificate.",
+    description: "P3-L2: a vendor issuer needs its root certificate.",
+  },
+  "migration.form.vendorIssuerReview": { defaultMessage: "{name} (vendor CA)", description: "P3-L2: the new issuer when it is a vendor CA." },
   "migration.form.chooseAuthority": {
     defaultMessage: "Choose an active authority",
     description: "Empty authority selection option.",

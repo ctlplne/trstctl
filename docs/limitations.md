@@ -6361,8 +6361,10 @@ This is a deliberate, documented trust boundary, not an accident.
   no tags, so there is no tag selector. A switch away from a vendor CA revokes its
   predecessors at the vendor (P3-L2), proven against a vendor stand-in; the revocation
   waits for the vendor to accept it, so a vendor approval queue holds the cohort until
-  someone approves there. Switching to an external (vendor) issuer is what comes next:
-  the target is a trstctl CA today.
+  someone approves there. A switch to a vendor CA (P3-L2) moves host members only
+  (appliance and cloud-store members have no host-made request for the vendor to sign),
+  with the vendor root the operator supplies as the anchor; proven against a vendor
+  stand-in.
 - ACME server with ARI: all three domain-validation challenges are validated
   for real, each failing closed — HTTP-01 (RFC 8555 §8.3), DNS-01 (§8.4, the
   `_acme-challenge` TXT digest), and TLS-ALPN-01 (RFC 8737, the `acme-tls/1`

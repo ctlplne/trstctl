@@ -52,9 +52,14 @@ type migrationAssessRequest struct {
 }
 
 type migrationStartRequest struct {
-	PlanID         string               `json:"plan_id"`
-	NewAuthorityID string               `json:"new_authority_id"`
-	Waves          []migrationStartWave `json:"waves"`
+	PlanID         string `json:"plan_id"`
+	NewAuthorityID string `json:"new_authority_id"`
+	// NewExternalCAID names a vendor CA from the external CA registry as the
+	// new issuer instead (P3-L2), with NewTrustAnchorPEM, the vendor root the
+	// hosts trust before any successor is issued.
+	NewExternalCAID   string               `json:"new_external_ca_id,omitempty"`
+	NewTrustAnchorPEM string               `json:"new_trust_anchor_pem,omitempty"`
+	Waves             []migrationStartWave `json:"waves"`
 	// X3: hold each wave until an observer also saw new connections at every
 	// member's endpoint; pause when that proof is late.
 	RequireObservedTraffic       bool `json:"require_observed_traffic,omitempty"`
@@ -314,7 +319,11 @@ func (a *API) startMigrationRun(w http.ResponseWriter, r *http.Request) {
 				if !ok {
 					return 0, nil, errStatus(http.StatusConflict, "migration member profile requires distinct issuance approval, and this deployment has no exact single-use approval authority")
 				}
-				intent := migrationStartApprovalIntent(tenantID, principal, req.PlanID, req.NewAuthorityID, binding, gated)
+				authorityRef := req.NewAuthorityID
+				if strings.TrimSpace(req.NewExternalCAID) != "" {
+					authorityRef = "external:" + strings.TrimSpace(req.NewExternalCAID)
+				}
+				intent := migrationStartApprovalIntent(tenantID, principal, req.PlanID, authorityRef, binding, gated)
 				authority, approved, reason := exact.AuthorizeApproval(ctx, intent)
 				if authority.RequestID == "" || authority.IntentDigest == "" || authority.Requester != principal ||
 					authority.ResourceKind != intent.ResourceKind || authority.ResourceID != intent.ResourceID || authority.Action != intent.Action {
@@ -353,6 +362,9 @@ func (a *API) startMigrationRun(w http.ResponseWriter, r *http.Request) {
 func (a *API) buildMigrationRun(ctx context.Context, tenantID, idempotencyKey string, req migrationStartRequest) (migration.Run, []migrationGatedMember, error) {
 	req.PlanID = strings.TrimSpace(req.PlanID)
 	req.NewAuthorityID = strings.TrimSpace(req.NewAuthorityID)
+	if req.NewExternalCAID = strings.TrimSpace(req.NewExternalCAID); req.NewExternalCAID != "" {
+		return a.buildExternalMigrationRun(ctx, tenantID, idempotencyKey, req)
+	}
 	if req.PlanID == "" || len(req.Waves) == 0 || guuid.Validate(req.NewAuthorityID) != nil {
 		return migration.Run{}, nil, errors.New("plan_id, new_authority_id, and at least one wave are required")
 	}
@@ -382,6 +394,47 @@ func (a *API) buildMigrationRun(ctx context.Context, tenantID, idempotencyKey st
 	if err != nil || !anchor.IsCA {
 		return migration.Run{}, nil, errors.New("new_authority_id has no parseable CA certificate")
 	}
+	return a.assembleMigrationRun(ctx, tenantID, idempotencyKey, req, issuer.ID, "", anchorPEM, anchor.SHA256Fingerprint)
+}
+
+// buildExternalMigrationRun builds a switch to a vendor CA (P3-L2): the
+// external CA registry's authority signs each host member's CSR, and the
+// vendor root the request supplies is distributed and read back first.
+func (a *API) buildExternalMigrationRun(ctx context.Context, tenantID, idempotencyKey string, req migrationStartRequest) (migration.Run, []migrationGatedMember, error) {
+	if req.PlanID == "" || len(req.Waves) == 0 || req.NewAuthorityID != "" {
+		return migration.Run{}, nil, errors.New("plan_id, new_external_ca_id (without new_authority_id), and at least one wave are required")
+	}
+	if a.externalCAs == nil {
+		return migration.Run{}, nil, errors.New("new_external_ca_id needs the external CA registry, which this deployment does not serve")
+	}
+	cas, err := a.externalCAs.ListExternalCAs(ctx, tenantID)
+	if err != nil {
+		return migration.Run{}, nil, err
+	}
+	known := false
+	for _, c := range cas {
+		if c.ID == req.NewExternalCAID {
+			known = c.Status == "available"
+		}
+	}
+	if !known {
+		return migration.Run{}, nil, errors.New("new_external_ca_id must name an available external CA in this tenant")
+	}
+	anchorPEM := []byte(strings.TrimSpace(req.NewTrustAnchorPEM))
+	if len(anchorPEM) == 0 || len(anchorPEM) > 64<<10 {
+		return migration.Run{}, nil, errors.New("new_trust_anchor_pem must be the external CA's root certificate (at most 64 KiB)")
+	}
+	anchor, err := certinfo.Inspect(anchorPEM)
+	if err != nil || !anchor.IsCA {
+		return migration.Run{}, nil, errors.New("new_trust_anchor_pem is not a parseable CA certificate")
+	}
+	return a.assembleMigrationRun(ctx, tenantID, idempotencyKey, req, req.NewExternalCAID, "external", anchorPEM, anchor.SHA256Fingerprint)
+}
+
+// assembleMigrationRun builds a run's waves and members under one issuer and
+// public anchor.
+func (a *API) assembleMigrationRun(ctx context.Context, tenantID, idempotencyKey string, req migrationStartRequest,
+	issuerID, issuerSource string, anchorPEM []byte, anchorFingerprint string) (migration.Run, []migrationGatedMember, error) {
 	run := migration.Run{ID: orchestrator.MigrationRunID(tenantID, idempotencyKey), PlanID: req.PlanID,
 		RequireObservedTraffic: req.RequireObservedTraffic, ObservedTrafficWindowSeconds: req.ObservedTrafficWindowSeconds,
 		RevokePredecessors: req.RevokePredecessors}
@@ -389,11 +442,12 @@ func (a *API) buildMigrationRun(ctx context.Context, tenantID, idempotencyKey st
 	for _, requestedWave := range req.Waves {
 		wave := migration.RunWave{ID: strings.TrimSpace(requestedWave.ID), Ordinal: requestedWave.Ordinal}
 		for _, requestedMember := range requestedWave.Members {
-			member, gatedMember, err := a.buildMigrationMember(ctx, tenantID, issuer.ID, anchorPEM, anchor.SHA256Fingerprint,
+			member, gatedMember, err := a.buildMigrationMember(ctx, tenantID, issuerID, anchorPEM, anchorFingerprint,
 				requestedMember.IdentityID, requestedMember.AgentID, requestedMember.TrustAnchorPath)
 			if err != nil {
 				return migration.Run{}, nil, err
 			}
+			member.Binding.IssuingAuthoritySource = issuerSource
 			if gatedMember != nil {
 				gated = append(gated, *gatedMember)
 			}

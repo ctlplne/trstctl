@@ -21604,14 +21604,21 @@ export interface components {
             status: "pending_approval";
         };
         MigrationRunStartRequest: {
-            /** Format: uuid */
-            new_authority_id: string;
+            /**
+             * Format: uuid
+             * @description the trstctl CA authority the members move to; omit with new_external_ca_id
+             */
+            new_authority_id?: string;
+            /** @description P3-L2: a vendor CA from the external CA registry the host members move to instead; it signs each member's CSR */
+            new_external_ca_id?: string;
+            /** @description P3-L2: the external CA's root certificate (PEM), distributed to and read back from every member before any successor is issued */
+            new_trust_anchor_pem?: string;
             /** @description pause the run when a live member has no observed traffic this long after going live (default 3600, at most 604800) */
             observed_traffic_window_seconds?: number;
             plan_id: string;
             /** @description hold each wave until an observer agent also saw new connections at every member's endpoint (X3) */
             require_observed_traffic?: boolean;
-            /** @description planned CA switch (P3): revoke each member's previous certificate (superseded) through the trstctl CA that issued it once the successor is verified live; a failed verification pauses the run and a resume retries the failed members */
+            /** @description planned CA switch (P3): revoke each member's previous certificate (superseded) through the trstctl CA, or the vendor CA, that issued it once the successor is verified live; a failed verification pauses the run and a resume retries the failed members */
             revoke_predecessors?: boolean;
             waves: components["schemas"]["MigrationRunStartWave"][];
         };

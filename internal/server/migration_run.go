@@ -235,7 +235,8 @@ func validateMigrationClaimBinding(binding migration.MemberBinding, agentID stri
 	case claim.renew != nil:
 		intent := claim.renew
 		switch {
-		case intent.IssuingAuthorityID != binding.IssuingAuthorityID:
+		case intent.IssuingAuthorityID != binding.IssuingAuthorityID ||
+			strings.TrimSpace(intent.IssuingAuthoritySource) != binding.IssuingAuthoritySource:
 			return errors.New("server: renewal claim drifted from the migration issuing authority")
 		case !sameMigrationIssuance(intent.Issuance, binding.Issuance):
 			return errors.New("server: renewal claim drifted from the migration issuance profile")

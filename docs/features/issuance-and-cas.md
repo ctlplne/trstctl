@@ -554,9 +554,16 @@ vendor accepted it. A vendor that holds the request for an approver leaves the m
 waiting and the request is sent again until it is accepted; a vendor whose integration
 cannot revoke pauses the run with the reason. The assessment names the vendor that
 would revoke each predecessor (`external_ca_id`, `ca_name`), and the cohort planner's
-`issuer_ca_id` selects by an external CA too. A member whose current certificate
-neither a trstctl CA nor a vendor integration can revoke is refused at start rather
-than left valid. The first cohort is the canary: a failed trust readback or live check in
+`issuer_ca_id` selects by an external CA too. A switch can also move to a vendor CA
+(P3-L2): start it with `new_external_ca_id` (an available CA from the external CA
+registry) and `new_trust_anchor_pem` (that vendor's root) instead of `new_authority_id`,
+or choose it under **Vendor CAs** on the Migration page with its root pasted. Every host
+member trusts and reads back the vendor root first; then the host generates its key and
+the vendor signs its certificate request, the endpoint is verified serving the vendor's
+chain, and the predecessor is revoked as for any switch. Only host members can move to
+a vendor, since the vendor signs a request the host makes. A member whose current
+certificate neither a trstctl CA nor a vendor integration can revoke is refused at start
+rather than left valid. The first cohort is the canary: a failed trust readback or live check in
 any cohort pauses the run, naming the member, with nothing revoked and no later cohort
 started. Resuming retries exactly the failed members as the same jobs (the host agent
 reuses the key and certificate it kept for that job, so no second successor is

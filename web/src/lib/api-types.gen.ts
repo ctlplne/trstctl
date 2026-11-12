@@ -7402,7 +7402,9 @@ export interface MigrationRunStartPending {
 }
 
 export interface MigrationRunStartRequest {
-  new_authority_id: string;
+  new_authority_id?: string;
+  new_external_ca_id?: string;
+  new_trust_anchor_pem?: string;
   observed_traffic_window_seconds?: number;
   plan_id: string;
   require_observed_traffic?: boolean;

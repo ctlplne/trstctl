@@ -25,9 +25,14 @@ type Member = { identity_id: string; agent_id: string; trust_anchor_path: string
 // agent (A166): the form records the choice explicitly, and the request names
 // neither an agent nor a trust path for it.
 const CONTROL_PLANE_EXECUTOR = "control-plane";
+// P3-L2: a vendor CA from the external CA registry can be the new issuer; the
+// selector carries it as "external:<id>" and the request names it apart.
+const EXTERNAL_ISSUER = "external:";
 type PlanForm = {
   plan_id: string;
   new_authority_id: string;
+  // The vendor root the hosts trust first, when the new issuer is a vendor.
+  new_trust_anchor_pem: string;
   // P3-L3: a planned CA switch revokes each predecessor once its successor is
   // verified live.
   revoke_predecessors: boolean;
@@ -38,6 +43,7 @@ const newMember = (): Member => ({ identity_id: "", agent_id: "", trust_anchor_p
 const initialPlan: PlanForm = {
   plan_id: "",
   new_authority_id: "",
+  new_trust_anchor_pem: "",
   revoke_predecessors: false,
   waves: [{ id: "canary", members: [newMember()] }],
 };
@@ -49,7 +55,9 @@ const advancedMemberSchema = z.strictObject({
 });
 const advancedSchema = z.strictObject({
   plan_id: z.string().trim().min(1),
-  new_authority_id: z.string().trim().min(1),
+  new_authority_id: z.string().trim().min(1).optional(),
+  new_external_ca_id: z.string().trim().min(1).optional(),
+  new_trust_anchor_pem: z.string().trim().min(1).optional(),
   revoke_predecessors: z.boolean().optional(),
   waves: z.array(z.strictObject({ id: z.string().trim().min(1), ordinal: z.number().int().positive(), members: z.array(advancedMemberSchema).min(1) })).min(1),
 });
@@ -59,6 +67,8 @@ function parseAdvanced(value: string): MigrationRunStartRequest | null {
     const parsed = advancedSchema.safeParse(JSON.parse(value));
     if (!parsed.success) return null;
     const plan = parsed.data;
+    if (Boolean(plan.new_authority_id) === Boolean(plan.new_external_ca_id)) return null;
+    if (plan.new_external_ca_id && !plan.new_trust_anchor_pem) return null;
     const waveIDs = plan.waves.map((wave) => wave.id);
     const ordinals = plan.waves.map((wave) => wave.ordinal);
     const identities = plan.waves.flatMap((wave) => wave.members.map((member) => member.identity_id));
@@ -70,9 +80,13 @@ function parseAdvanced(value: string): MigrationRunStartRequest | null {
 }
 
 function requestFromForm(form: PlanForm): MigrationRunStartRequest {
-  const { revoke_predecessors, ...plan } = form;
+  const { revoke_predecessors, new_authority_id, new_trust_anchor_pem, ...plan } = form;
+  const issuer = new_authority_id.startsWith(EXTERNAL_ISSUER)
+    ? { new_external_ca_id: new_authority_id.slice(EXTERNAL_ISSUER.length), new_trust_anchor_pem: new_trust_anchor_pem.trim() }
+    : { new_authority_id };
   return {
     ...plan,
+    ...issuer,
     ...(revoke_predecessors ? { revoke_predecessors: true } : {}),
     waves: form.waves.map((wave, index) => ({
       ...wave,
@@ -100,6 +114,8 @@ export function MigrationPlanEditor({
   const [jsonText, setJSONText] = useState("");
   const [editorError, setEditorError] = useState<string | null>(null);
   const authoritiesQuery = useApiQuery(["migration-plan", "authorities"], api.caAuthorities, { retry: false });
+  // Vendor issuers are optional: a registry that cannot be read offers none.
+  const vendorsQuery = useApiQuery(["migration-plan", "external-cas"], api.externalCAs, { retry: false });
   const identitiesQuery = useApiQuery(["migration-plan", "identities"], api.identities, { retry: false });
   const agentsQuery = useApiQuery(["migration-plan", "agents"], api.agents, { retry: false });
   const schema = useMemo(() => {
@@ -113,10 +129,13 @@ export function MigrationPlanEditor({
       .object({
         plan_id: z.string().trim().min(1, required),
         new_authority_id: z.string().trim().min(1, required),
+        new_trust_anchor_pem: z.string(),
         revoke_predecessors: z.boolean(),
         waves: z.array(z.object({ id: z.string().trim().min(1, required), members: z.array(member).min(1, required) })).min(1, required),
       })
       .superRefine((plan, context) => {
+        if (plan.new_authority_id.startsWith(EXTERNAL_ISSUER) && !plan.new_trust_anchor_pem.includes("BEGIN CERTIFICATE"))
+          context.addIssue({ code: "custom", path: ["new_trust_anchor_pem"], message: t("migration.form.vendorRootRequired") });
         const waveIDs = new Set<string>();
         const identities = new Set<string>();
         plan.waves.forEach((wave, waveIndex) => {
@@ -159,6 +178,7 @@ export function MigrationPlanEditor({
   }, [watched, onPlanChanged]);
 
   const authorities = (authoritiesQuery.data?.items ?? []).filter((authority) => authority.status === "active");
+  const vendors = (vendorsQuery.data ?? []).filter((vendor) => vendor.status === "available");
   const identities = (identitiesQuery.data ?? []).filter(
     (identity) => identity.kind === "x509_certificate" && ["issued", "deployed", "renewing"].includes(identity.status),
   );
@@ -176,7 +196,9 @@ export function MigrationPlanEditor({
   }, [setupReady, advanced, setFocus]);
   const normalizedReview = step === 2 ? schema.safeParse(getValues()) : null;
   const planForReview = normalizedReview?.success ? normalizedReview.data : watched;
+  const selectedVendor = vendors.find((vendor) => EXTERNAL_ISSUER + vendor.id === planForReview.new_authority_id);
   const selectedAuthority = authorities.find((authority) => authority.id === planForReview.new_authority_id);
+  const vendorSelected = (watched.new_authority_id ?? "").startsWith(EXTERNAL_ISSUER);
   const steps: CarouselStep[] = [
     { id: "authority", label: t("migration.form.scopeStep"), description: t("migration.form.scopeHelp") },
     { id: "waves", label: t("migration.form.mapStep"), description: t("migration.form.mapHelp") },
@@ -184,7 +206,7 @@ export function MigrationPlanEditor({
   ];
 
   async function advance() {
-    const valid = await trigger(step === 0 ? (["plan_id", "new_authority_id"] as const) : (["waves"] as const));
+    const valid = await trigger(step === 0 ? (["plan_id", "new_authority_id", "new_trust_anchor_pem"] as const) : (["waves"] as const));
     if (valid) setStep((current) => Math.min(2, current + 1));
   }
 
@@ -202,7 +224,8 @@ export function MigrationPlanEditor({
     }
     reset({
       plan_id: parsed.plan_id,
-      new_authority_id: parsed.new_authority_id,
+      new_authority_id: parsed.new_external_ca_id ? EXTERNAL_ISSUER + parsed.new_external_ca_id : (parsed.new_authority_id ?? ""),
+      new_trust_anchor_pem: parsed.new_trust_anchor_pem ?? "",
       waves: [...parsed.waves].sort((a, b) => a.ordinal - b.ordinal).map(({ id, members }) => ({ id, members })),
     });
     onPlanChanged();
@@ -314,9 +337,28 @@ export function MigrationPlanEditor({
                             {authority.common_name} — {authority.id}
                           </option>
                         ))}
+                        {vendors.length > 0 ? (
+                          <optgroup label={t("migration.form.vendorIssuers")}>
+                            {vendors.map((vendor) => (
+                              <option key={vendor.id} value={EXTERNAL_ISSUER + vendor.id}>
+                                {vendor.name || vendor.id} — {vendor.id}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ) : null}
                       </Select>
                     )}
                   </Field>
+                  {vendorSelected ? (
+                    <Field
+                      label={t("migration.form.vendorRoot")}
+                      description={t("migration.form.vendorRootHelp")}
+                      error={errors.new_trust_anchor_pem?.message}
+                      required
+                    >
+                      {(field) => <Textarea {...field} rows={6} className="font-mono text-xs" {...register("new_trust_anchor_pem")} />}
+                    </Field>
+                  ) : null}
                   <label className="flex items-start gap-2 text-body font-medium">
                     <Checkbox className="mt-1" {...register("revoke_predecessors")} />
                     <span>
@@ -465,7 +507,10 @@ export function MigrationPlanEditor({
                     <dd>{planForReview.plan_id}</dd>
                     <dt className="text-muted-foreground">{t("migration.form.authority")}</dt>
                     <dd>
-                      {selectedAuthority?.common_name ?? planForReview.new_authority_id} <code className="break-all">{planForReview.new_authority_id}</code>
+                      {selectedVendor
+                        ? t("migration.form.vendorIssuerReview", { name: selectedVendor.name || selectedVendor.id })
+                        : (selectedAuthority?.common_name ?? planForReview.new_authority_id)}{" "}
+                      <code className="break-all">{planForReview.new_authority_id}</code>
                     </dd>
                     <dt className="text-muted-foreground">{t("migration.form.predecessors")}</dt>
                     <dd>{planForReview.revoke_predecessors ? t("migration.form.predecessorsRevoked") : t("migration.form.predecessorsKept")}</dd>

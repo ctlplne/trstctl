@@ -10271,6 +10271,8 @@ MigrationRunStartRequest = TypedDict(
     'MigrationRunStartRequest',
     {
         'new_authority_id': str,
+        'new_external_ca_id': str,
+        'new_trust_anchor_pem': str,
         'observed_traffic_window_seconds': int,
         'plan_id': str,
         'require_observed_traffic': bool,

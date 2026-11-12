@@ -304,7 +304,10 @@ func (o *Orchestrator) applyMigrationEventTx(ctx context.Context, tx pgx.Tx, ev 
 }
 
 type migrationEndpointRenewIntent struct {
-	IssuingAuthorityID       string                     `json:"issuing_authority_id"`
+	IssuingAuthorityID string `json:"issuing_authority_id"`
+	// IssuingAuthoritySource is "external" when a vendor CA signs the
+	// successor (P3-L2); empty for a trstctl authority.
+	IssuingAuthoritySource   string                     `json:"issuing_authority_source,omitempty"`
 	Issuance                 *migration.IssuanceBinding `json:"issuance,omitempty"`
 	Connector                string                     `json:"connector"`
 	Target                   string                     `json:"target"`
@@ -383,9 +386,9 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 		}
 		destination = relay.KindEndpointRenew
 		payload, err = json.Marshal(migrationEndpointRenewIntent{
-			IssuingAuthorityID: b.IssuingAuthorityID,
-			Issuance:           b.Issuance,
-			Connector:          b.Connector, Target: b.Target, TargetID: b.TargetID,
+			IssuingAuthorityID: b.IssuingAuthorityID, IssuingAuthoritySource: b.IssuingAuthoritySource,
+			Issuance:  b.Issuance,
+			Connector: b.Connector, Target: b.Target, TargetID: b.TargetID,
 			Revision: b.TargetRevision, IdentityID: action.IdentityID, TargetConfig: b.TargetConfig,
 			VerifyAddress: b.VerifyAddress, VerifyServerName: b.VerifyServerName,
 			SubjectCommonName: b.SubjectCommonName, SubjectDNSNames: b.SubjectDNSNames,

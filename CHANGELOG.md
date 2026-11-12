@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A planned CA switch can move to a vendor CA (P3-L2): `new_external_ca_id` (an available CA from the external CA
+  registry) with `new_trust_anchor_pem` (its root), or **Vendor CAs** in the Migration page's issuer choice. Host
+  members trust the vendor root first, then the vendor signs the certificate request each host makes, and the endpoint
+  is verified serving the vendor's chain before the predecessor is revoked.
 - A planned CA switch can move away from a vendor CA (P3-L2): a member whose current certificate the external CA
   registry issued is admitted when that vendor's integration can revoke, and once its successor is verified live the
   predecessor is revoked (superseded) at the vendor; the revocation is recorded, and the member done, only when the

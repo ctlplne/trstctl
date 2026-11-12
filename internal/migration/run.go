@@ -169,13 +169,17 @@ func RecordSuccessorIssued(in Run, waveID, identityID, fingerprint string) (Run,
 // AnchorPEM and certificate metadata are public; private-key material has no
 // field in this contract.
 type MemberBinding struct {
-	IssuingAuthorityID string           `json:"issuing_authority_id"`
-	Issuance           *IssuanceBinding `json:"issuance,omitempty"`
-	TargetID           string           `json:"target_id"`
-	TargetRevision     string           `json:"target_revision"`
-	Connector          string           `json:"connector"`
-	Target             string           `json:"target"`
-	TargetConfig       json.RawMessage  `json:"target_config"`
+	IssuingAuthorityID string `json:"issuing_authority_id"`
+	// IssuingAuthoritySource is "external" when the successor's issuer is a
+	// vendor CA from the external CA registry (P3-L2), named by
+	// IssuingAuthorityID; empty for a trstctl authority.
+	IssuingAuthoritySource string           `json:"issuing_authority_source,omitempty"`
+	Issuance               *IssuanceBinding `json:"issuance,omitempty"`
+	TargetID               string           `json:"target_id"`
+	TargetRevision         string           `json:"target_revision"`
+	Connector              string           `json:"connector"`
+	Target                 string           `json:"target"`
+	TargetConfig           json.RawMessage  `json:"target_config"`
 	// RequiredAgentID is empty only for a cloud-store member (A166), which no
 	// agent executes.
 	RequiredAgentID        string   `json:"required_agent_id,omitempty"`
@@ -759,7 +763,7 @@ func ValidateExecutableRun(run Run) error {
 	type trustTarget struct{ agentID, path string }
 	trustWaves := map[trustTarget]string{}
 	started := 0
-	var authorityID, anchorFingerprint string
+	var authorityID, anchorFingerprint, authoritySource string
 	var anchorPEM []byte
 	for _, wave := range run.Waves {
 		if _, ok := phaseOrder[wave.Phase]; !ok {
@@ -783,11 +787,25 @@ func ValidateExecutableRun(run Run) error {
 			if err := validateMemberExecution(b, member.IdentityID); err != nil {
 				return err
 			}
+			switch b.IssuingAuthoritySource {
+			case "":
+			case "external":
+				// A vendor CA signs a CSR the host generated; a member the
+				// control plane or a relay issues for has no CSR it can send.
+				if b.ExecutionModel != "" && b.ExecutionModel != ExecutionHost {
+					return fmt.Errorf("migration: member %s: a switch to an external CA moves host members only", member.IdentityID)
+				}
+				if run.Incident != nil {
+					return fmt.Errorf("migration: incident member %s cannot move to an external CA", member.IdentityID)
+				}
+			default:
+				return fmt.Errorf("migration: member %s names an unknown issuing authority source", member.IdentityID)
+			}
 			if authorityID == "" {
 				authorityID, anchorFingerprint = b.IssuingAuthorityID, b.TrustAnchorFingerprint
-				anchorPEM = b.TrustAnchorPEM
-			} else if b.IssuingAuthorityID != authorityID || b.TrustAnchorFingerprint != anchorFingerprint ||
-				!bytes.Equal(b.TrustAnchorPEM, anchorPEM) {
+				anchorPEM, authoritySource = b.TrustAnchorPEM, b.IssuingAuthoritySource
+			} else if b.IssuingAuthorityID != authorityID || b.IssuingAuthoritySource != authoritySource ||
+				b.TrustAnchorFingerprint != anchorFingerprint || !bytes.Equal(b.TrustAnchorPEM, anchorPEM) {
 				return errors.New("migration: every member must retain the same reviewed CA authority and public anchor")
 			}
 			if run.RevokePredecessors && run.Incident == nil &&

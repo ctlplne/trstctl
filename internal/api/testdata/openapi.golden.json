@@ -34731,7 +34731,16 @@
       "MigrationRunStartRequest": {
         "properties": {
           "new_authority_id": {
+            "description": "the trstctl CA authority the members move to; omit with new_external_ca_id",
             "format": "uuid",
+            "type": "string"
+          },
+          "new_external_ca_id": {
+            "description": "P3-L2: a vendor CA from the external CA registry the host members move to instead; it signs each member's CSR",
+            "type": "string"
+          },
+          "new_trust_anchor_pem": {
+            "description": "P3-L2: the external CA's root certificate (PEM), distributed to and read back from every member before any successor is issued",
             "type": "string"
           },
           "observed_traffic_window_seconds": {
@@ -34746,7 +34755,7 @@
             "type": "boolean"
           },
           "revoke_predecessors": {
-            "description": "planned CA switch (P3): revoke each member's previous certificate (superseded) through the trstctl CA that issued it once the successor is verified live; a failed verification pauses the run and a resume retries the failed members",
+            "description": "planned CA switch (P3): revoke each member's previous certificate (superseded) through the trstctl CA, or the vendor CA, that issued it once the successor is verified live; a failed verification pauses the run and a resume retries the failed members",
             "type": "boolean"
           },
           "waves": {
@@ -34758,7 +34767,6 @@
         },
         "required": [
           "plan_id",
-          "new_authority_id",
           "waves"
         ],
         "type": "object"
