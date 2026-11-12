@@ -1356,7 +1356,7 @@ never live in the API process. What you can do end to end against the running bi
   `access_omitted` (G1-L2).
   Answers are identical after a restart and a full read-model rebuild. Step 1
   sees only trstctl's own records: permissions inside the target system come from
-  G2 for PostgreSQL and AWS STS leases (below), access granted outside trstctl is
+  G2 for PostgreSQL, MySQL, MongoDB, Redis and AWS STS leases (below), access granted outside trstctl is
   invisible, and PAM sessions started before this release do not record their
   approval. A dynamic-secret lease records the subject whose request opened it
   (G1-L1): the graph shows that person or principal holding it
@@ -1469,7 +1469,10 @@ never live in the API process. What you can do end to end against the running bi
   table privileges, role memberships). An AWS STS lease `GRANTS_ACCESS` to the
   IAM role it assumed (`res:aws_iam_role:<arn>`) and shows the role's attached and
   inline policies, read from IAM (`iam_endpoint`; the provider's credentials need
-  `iam:ListAttachedRolePolicies` and `iam:ListRolePolicies`). A target that
+  `iam:ListAttachedRolePolicies` and `iam:ListRolePolicies`). MySQL, MongoDB and
+  Redis leases show the grants, roles or ACL rules the server reports for the
+  lease's login (G2-L2; the admin needs to read grants, `usersInfo` or `ACL
+  GETUSER`). A target that
   cannot be read shows the grants as `unknown` with a reason
   (`target_unreachable`, `access_denied`, `login_missing`, `timeout`) and is read
   again five minutes later; it never reads as "no grants". A read is recorded (the
@@ -1478,9 +1481,9 @@ never live in the API process. What you can do end to end against the running bi
   and the lease shows both `access_checked_at` (its latest read) and
   `access_recorded_at`. That stamp is the worker's own bookkeeping, so a rebuild clears
   it and the next pass reads those leases once more. Policies are listed by
-  name, not evaluated statement by statement. MySQL, MongoDB, Redis, Kubernetes,
-  GCP and Azure leases are `unsupported` and keep only their backend link. Proven
-  against PostgreSQL 16, an AWS stand-in and LocalStack's IAM.
+  name, not evaluated statement by statement. Kubernetes, GCP and Azure leases
+  are `unsupported` and keep only their backend link. Proven against PostgreSQL
+  16, MySQL 8.4, MongoDB 7.0 and Redis 8.2, an AWS stand-in and LocalStack's IAM.
 - One-call revoke of an AI agent identity (Q4):
   `POST /api/v1/broker/agent-identities/{id}/revoke` (CLI and console) runs the
   exact certificate revocation for that broker certificate: CA ledger, signed CRL,

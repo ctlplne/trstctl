@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3012 annotated sites across 33 rules. Each row is
+3013 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1549,7 +1549,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (398 sites)
+### G204 — CWE-78 OS command injection (399 sites)
 
 | Location | Reason |
 |---|---|
@@ -1766,6 +1766,7 @@ not this file.
 | `internal/server/compose_e2e_tls_test.go:245` | exact shipped prefix plus fixed test invocation, only owned loopback listeners (CWE-78). |
 | `internal/server/docker_fixture_command_test.go:20` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/server/dod_signer_binary_test.go:105` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/dynamic_secret_access_databases_container_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_access_served_test.go:329` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_totp_lab_test.go:35` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_totp_lab_test.go:82` | fixed lab image, arguments built by the test (CWE-78) |

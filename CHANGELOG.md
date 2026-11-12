@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- The access graph shows what MySQL, MongoDB and Redis leases reach (G2-L2, part 1). The leader
+  reads each lease's login from the server itself, as it does for PostgreSQL: a MySQL lease links to
+  its database with the grants `SHOW GRANTS` reports for the lease's user, a MongoDB lease with the
+  user's roles from `usersInfo`, and a Redis lease to its server with the user's ACL flags, commands,
+  key patterns and channels from `ACL GETUSER` (never the password hashes Redis returns beside
+  them). A login the server no longer has reads as `unknown` (`login_missing`), never as no grants.
 - Enrolled host agents and their roles are in the access graph (G1-L3). Each agent is a workload
   node (`agent:<agent id>`, `workload_kind: host_agent`) that `HAS_ROLE` each agent role its
   certificate carries (`agent-role:<role>`), so which machines may run network probes or hold

@@ -44,7 +44,7 @@ var dynamicSecretAccessNamespace = uuid.MustParse("a7720c22-ddf5-41bd-99ba-e8515
 // providers can say; the others are not opened at all.
 func (p *configuredDynamicProvider) ResolveAccess(ctx context.Context, backendRef string) (dynsecret.Access, error) {
 	switch p.cfg.Type {
-	case "postgresql", "aws-iam", "aws-sts":
+	case "postgresql", "mysql", "mongodb", "redis", "aws-iam", "aws-sts":
 	default:
 		return dynsecret.Access{}, dynsecret.ErrAccessUnsupported
 	}

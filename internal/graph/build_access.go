@@ -403,14 +403,15 @@ func addLeaseAccessAttrs(attrs map[string]string, a store.DynamicSecretLeaseAcce
 	}
 }
 
-// ensureLeaseTarget adds the system a lease's login reaches — a PostgreSQL
-// database or an AWS IAM role — and links the provider's backend to it.
+// ensureLeaseTarget adds the system a lease's login reaches — a PostgreSQL,
+// MySQL or MongoDB database, a Redis server (G2-L2) or an AWS IAM role — and
+// links the provider's backend to it.
 func ensureLeaseTarget(g *Graph, provider string, a store.DynamicSecretLeaseAccess) string {
 	id := resourceID(a.TargetKind + ":" + a.TargetRef)
 	if _, ok := g.Node(id); !ok {
 		kind := a.TargetKind
 		switch a.TargetKind {
-		case "postgresql_database":
+		case "postgresql_database", "mysql_database", "mongodb_database", "redis_server":
 			kind = "database"
 		}
 		g.AddNode(Node{ID: id, Kind: KindResource, Name: a.TargetRef, Attrs: map[string]string{
@@ -425,6 +426,8 @@ func leaseTargetSource(a store.DynamicSecretLeaseAccess) string {
 	switch {
 	case a.TargetKind == "aws_iam_role":
 		return "assumed IAM role"
+	case a.TargetKind == "redis_server" && a.Status == store.DynamicSecretAccessResolved:
+		return "login ACL rules read from the server"
 	case a.Status == store.DynamicSecretAccessResolved:
 		return "login grants read from the database"
 	default:
