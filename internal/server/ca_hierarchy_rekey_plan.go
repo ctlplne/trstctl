@@ -46,6 +46,10 @@ func (h *caHierarchyService) ceremonyPurposeAndSpec(ctx context.Context, tenantI
 		purpose, err := revokeCAPurpose(authority, strings.TrimSpace(req.Reason))
 		return purpose, api.CASpec{}, err
 	}
+	if req.Operation == operationGrantUpstreamStandingApproval {
+		purpose, err := h.upstreamStandingApprovalCeremonyPurpose(ctx, tenantID, req)
+		return purpose, req.Spec, err
+	}
 	if req.Operation == "release_managed_ca_leaf" {
 		if req.Threshold < 2 {
 			return "", api.CASpec{}, fmt.Errorf("%w: release requires at least two distinct custodians", api.ErrCAHierarchyInvalid)

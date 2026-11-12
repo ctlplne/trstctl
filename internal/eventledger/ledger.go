@@ -55,6 +55,8 @@ const (
 	EventCAIntermediateCreated                    = "ca.intermediate.created"
 	EventCAIntermediateCSRIssued                  = "ca.intermediate_csr.issued"
 	EventCAEndEntityIssued                        = "ca.endentity.issued"
+	EventCAUpstreamStandingApprovalGranted        = "ca.upstream_standing_approval.granted"
+	EventCAUpstreamStandingApprovalRevoked        = "ca.upstream_standing_approval.revoked"
 	EventBreakglassIssued                         = "breakglass.issued"
 	EventBreakglassCARotated                      = "breakglass.ca.rotated"
 	EventBreakglassCACrossSigned                  = "breakglass.ca.cross_signed"
@@ -341,6 +343,8 @@ var ledger = []FeatureEvent{
 	{"F48", "Private/enterprise CA hierarchy management", "create_offline_intermediate_csr", "createOfflineIntermediateCSR", []string{EventCAIntermediateCSRIssued}},
 	{"F48", "Private/enterprise CA hierarchy management", "import_offline_intermediate", "importOfflineIntermediateCA", []string{EventCAIntermediateCreated}},
 	{"F48", "Private/enterprise CA hierarchy management", "issue_external_intermediate", "issueIntermediateCAFromCSR", []string{EventCAIntermediateCSRIssued}},
+	{"F48", "Private/enterprise CA hierarchy management", "grant_upstream_standing_approval", "grantCAUpstreamStandingApproval", []string{EventCAUpstreamStandingApprovalGranted}},
+	{"F48", "Private/enterprise CA hierarchy management", "revoke_upstream_standing_approval", "revokeCAUpstreamStandingApproval", []string{EventCAUpstreamStandingApprovalRevoked}},
 	{"F48", "Private/enterprise CA hierarchy management", "issue_leaf", "issueHierarchyLeaf", []string{EventCAEndEntityIssued}},
 	{"F48", "Private/enterprise CA hierarchy management", "rotate_authority", "rotateCAAuthority", []string{EventCAAuthorityRotated}},
 	{"F48", "Private/enterprise CA hierarchy management", "rekey_authority", "rekeyCAAuthority", []string{EventCAAuthorityRekeyed}},

@@ -889,7 +889,9 @@ func (h *caHierarchyService) ImportOfflineIntermediate(ctx context.Context, tena
 
 func (h *caHierarchyService) IssueIntermediateCSR(ctx context.Context, tenantID, caID string, req api.CAIssueIntermediateRequest) (api.CAIssuedIntermediate, error) {
 	if req.CeremonyID == "" {
-		return api.CAIssuedIntermediate{}, fmt.Errorf("%w: ceremony_id is required", api.ErrCAHierarchyInvalid)
+		// OD-8: without a ceremony, only the caller's standing approval at
+		// this authority can sign it.
+		return h.issueIntermediateCSRUnderStandingApproval(ctx, tenantID, caID, req)
 	}
 	if len(req.CSRDER) == 0 {
 		return api.CAIssuedIntermediate{}, fmt.Errorf("%w: CSR is required", api.ErrCAHierarchyInvalid)

@@ -34,6 +34,7 @@ import { IssuerSetupDialog } from "./cahierarchy/CAIssuerSetupParts";
 import { CAHorizonBadge, CAHorizonRenewBy, CALineageTree, isOfflineRoot } from "./cahierarchy/CAHierarchyPageParts";
 import { CARolloverDraft } from "./cahierarchy/CARolloverDraft";
 import { ExternalCAHeldIssuesPanel } from "./cahierarchy/CAHierarchyHeldIssuesPart";
+import { StandingApprovalsDialog } from "./cahierarchy/CAHierarchyStandingApprovalsPart";
 import {
   CACeremonyReviewDialog,
   CancelCeremonyDialog,
@@ -233,6 +234,7 @@ export function CAHierarchy() {
   const [createAuthorityKind, setCreateAuthorityKind] = useState<"root" | "intermediate" | null>(null);
   const [leafTarget, setLeafTarget] = useState<CAAuthority | null>(null);
   const [signTarget, setSignTarget] = useState<CAAuthority | null>(null);
+  const [standingTarget, setStandingTarget] = useState<CAAuthority | null>(null);
   const [ceremonyDetail, setCeremonyDetail] = useState<CAKeyCeremony | null>(null);
   const [cancelTarget, setCancelTarget] = useState<CAKeyCeremony | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
@@ -1125,6 +1127,7 @@ export function CAHierarchy() {
         />
       )}
       {signTarget && <SignIntermediateCSRDialog authority={signTarget} onClose={() => setSignTarget(null)} />}
+      {standingTarget && <StandingApprovalsDialog authority={standingTarget} onClose={() => setStandingTarget(null)} />}
       {authorityDetail && (
         <AuthorityDetailDialog
           authority={authorityDetail}
@@ -1141,6 +1144,10 @@ export function CAHierarchy() {
           onSignCSR={() => {
             setAuthorityDetail(null);
             setSignTarget(authorityDetail);
+          }}
+          onStandingApprovals={() => {
+            setAuthorityDetail(null);
+            setStandingTarget(authorityDetail);
           }}
         />
       )}
@@ -2331,12 +2338,14 @@ function AuthorityDetailDialog({
   onOpenImports,
   onIssueLeaf,
   onSignCSR,
+  onStandingApprovals,
 }: {
   authority: CAAuthority;
   onClose: () => void;
   onOpenImports: () => void;
   onIssueLeaf: () => void;
   onSignCSR: () => void;
+  onStandingApprovals: () => void;
 }) {
   const { t } = useTranslation();
   const titleId = "authority-detail-heading";
@@ -2384,6 +2393,9 @@ function AuthorityDetailDialog({
             <>
               <Button type="button" variant="outline" onClick={onSignCSR}>
                 {t("parity.signIntermediateCsr_cf1361")}
+              </Button>
+              <Button type="button" variant="outline" onClick={onStandingApprovals}>
+                {t("caHierarchy.standingApprovals.openButton")}
               </Button>
               <Button type="button" onClick={onIssueLeaf}>
                 {t("parity.issueLeaf_f1c3ee")}

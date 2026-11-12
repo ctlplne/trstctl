@@ -45,6 +45,7 @@ Purpose values are deliberately concrete:
 | `cross-sign:<ca-id>:<sha256-of-target-cert-der>` | One cross-signature from that CA over the target certificate. |
 | `offline-root-rekey:<sha256-of-authority/successor/both-cross-certs/reason/spec>` | Importing an offline-root successor plus both direction-specific cross-certificates; private keys stay on the disconnected systems. |
 | `offline-cross-sign:<sha256-of-authority/target/cross-cert>` | Importing an already-produced offline-root cross-certificate for a target. |
+| `upstream-standing:<sha256-of-authority/principal/trust-domain/validity/spec>` | Granting one SPIRE server a standing approval for its upstream CA CSRs (OD-8); at least two custodians. |
 
 For an externally held intermediate key, create its CSR on the external host and
 keep that private key there. In **Certificate authorities → Overview**, open

@@ -2004,7 +2004,13 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		// A205: a SPIRE server's JWT signing key: a key ID, a public key and
 		// an expiry, no personal data.
 		{EventSPIFFEUpstreamJWTKeyPublished, 1}: privacyPayloadShape[SPIFFEUpstreamJWTKeyPublished](),
-		{EventWorkloadJWTKeyRotated, 1}:         privacyPayloadShape[WorkloadJWTKeyRotated](),
+		// OD-8: a SPIRE server's standing approval: the authority, the
+		// plugin's token subject, a trust domain, a CA spec and identifiers;
+		// a revocation reason is the administrator's own words.
+		{EventCAUpstreamStandingApprovalGranted, 1}: privacyPayloadShape[CAUpstreamStandingApprovalGranted](),
+		{EventCAUpstreamStandingApprovalRevoked, 1}: privacyPayloadShape[CAUpstreamStandingApprovalRevoked](),
+		{EventCAUpstreamStandingApprovalSigned, 1}:  privacyPayloadShape[CAUpstreamStandingApprovalSigned](),
+		{EventWorkloadJWTKeyRotated, 1}:             privacyPayloadShape[WorkloadJWTKeyRotated](),
 		// A211: issuer certificates a scan saw served with a leaf: public PKI
 		// material and digests.
 		{EventScannedCertificateChainObserved, 1}: privacyPayloadShape[ScannedCertificateChainObserved](),

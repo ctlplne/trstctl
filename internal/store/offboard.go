@@ -147,6 +147,7 @@ var TenantScopedTables = []string{
 	"external_observers",
 	// A205: JWT signing keys SPIRE servers published.
 	"spiffe_upstream_jwt_keys",
+	"ca_upstream_standing_approvals",
 	// A207: tenant custom roles.
 	"tenant_custom_roles",
 	// A208: archive objects' legal holds.

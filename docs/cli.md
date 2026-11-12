@@ -334,7 +334,7 @@ exhaustive subcommand list:
 | `breakglass`                      | Effect-free emergency-request preview, ceremony-gated online issuance, rotation, cross-signing, and offline-bundle reconciliation (`issue-preview` · `issue-ceremony` · `issue` · `rotation-ceremony` · `rotate` · `cross-sign-ceremony` · `cross-sign` · `reconcile`)                                                                        |
 | `broker agent-identities`         | Issue a policy-gated AI/MCP agent identity and revoke one in one call (`issue` · `revoke`) |
 | `ca ceremonies`                   | Effect-free review, start, inspect, approve, and reasoned cancellation of m-of-n CA key ceremonies (`preview` · `start` · `get` · `approve` · `cancel`)                                                                                                                                                                                                  |
-| `ca authorities`                  | Private CA authority lifecycle — create/import roots and intermediates, preview/activate rotation, rekey, cross-sign, issue leaf certs (`list` · `create-root` · `import-offline-root` · `import-existing` · `create-intermediate` · `rotate-preview` · `rotate` · `rekey` · `cross-sign` · `issue`)                |
+| `ca authorities`                  | Private CA authority lifecycle — create/import roots and intermediates, preview/activate rotation, rekey, cross-sign, issue leaf certs (`list` · `create-root` · `import-offline-root` · `import-existing` · `create-intermediate` · `rotate-preview` · `rotate` · `rekey` · `cross-sign` · `issue` · `standing-approvals`)                |
 | `ca keys`                         | Read retirement dependencies, record a successor and host route for a certificate (`reprotect plan`), queue re-protection jobs (`reprotect`), and request irreversible signer-gated retirement (`retirement` · `retire`). A plan or enqueue receipt is not evidence that a credential was reissued or deployed. |
 | `ca discovery`                    | List public and private CA discovery inventory (`list`)                                                                                                                                                                                                                                                             |
 | `cbom`                            | Cryptographic bill of materials: effect-free plan review, bounded scan, inventory (`preview` · `scan` · `assets`)                                                                                                                                                                                                   |
@@ -1007,6 +1007,27 @@ JSON
 # The console can review/open/refresh this ceremony from the authority Details
 # → Sign intermediate CSR dialog; the ID in this request must be that ceremony.
 trstctl-cli --idempotency-key spire-upstream-root-1 ca authorities issue-intermediate-csr <ca-authority-id> -f spire-intermediate.json
+
+# A standing approval (OD-8) lets one SPIRE server's plugin skip that ceremony at
+# each CA rotation. Two custodians approve one grant ceremony naming the server's
+# token subject, its trust domain, the spec (ttl_seconds is the longest CA
+# lifetime) and how long the approval lasts (at most 90 days).
+cat > spire-standing-ceremony.json <<'JSON'
+{"operation":"grant_upstream_standing_approval","authority_id":"<ca-authority-id>","threshold":2,"principal":"<spire-token-subject>","trust_domain":"example.org","valid_for_seconds":2592000,"spec":{"common_name":"SPIRE Server CA","ttl_seconds":3600,"max_path_len":0,"permitted_dns_domains":["example.org"],"signature_algorithm":"ecdsa-p256"}}
+JSON
+trstctl-cli ca ceremonies preview -f spire-standing-ceremony.json
+trstctl-cli ca ceremonies start -f spire-standing-ceremony.json
+# Run each approval with a different custodian's own token.
+trstctl-cli ca ceremonies approve <standing-approval-ceremony-id>
+trstctl-cli ca ceremonies approve <standing-approval-ceremony-id>
+cat > spire-standing-grant.json <<'JSON'
+{"ceremony_id":"<standing-approval-ceremony-id>","principal":"<spire-token-subject>","trust_domain":"example.org","valid_for_seconds":2592000,"spec":{"common_name":"SPIRE Server CA","ttl_seconds":3600,"max_path_len":0,"permitted_dns_domains":["example.org"],"signature_algorithm":"ecdsa-p256"}}
+JSON
+trstctl-cli --idempotency-key spire-standing-1 ca authorities standing-approvals grant <ca-authority-id> -f spire-standing-grant.json
+trstctl-cli ca authorities standing-approvals list <ca-authority-id>
+# Revoking takes effect at once; the server's next CA needs a ceremony again.
+echo '{"reason":"SPIRE server retired"}' > spire-standing-revoke.json
+trstctl-cli --idempotency-key spire-standing-revoke-1 ca authorities standing-approvals revoke <ca-authority-id> <approval-id> -f spire-standing-revoke.json --force
 
 # Review a zero-downtime rotation first. The preview applies the same eligibility
 # rules but changes neither CA; use the exact same body for activation.

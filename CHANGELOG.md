@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 ### Added
+- Standing approval for a SPIRE server's upstream CA requests (OD-8): two custodians approve one
+  `grant_upstream_standing_approval` ceremony naming the SPIRE server's token subject, its trust domain, the CA spec
+  (its `ttl_seconds` the longest CA lifetime) and how long the approval lasts (at most 90 days), and an administrator
+  grants it (`POST /api/v1/ca/authorities/{id}/upstream-standing-approvals`, `trstctl-cli ca authorities
+  standing-approvals grant`, or Standing approvals in the authority's details). Until it expires or is revoked, the
+  SPIRE upstream authority plugin's CA CSRs are signed without a ceremony each when they name exactly
+  `spiffe://<trust domain>` within the approved spec and lifetime; anything else is refused. Each such CA carries a URI
+  name constraint for the trust domain, every signing is audited (`ca.upstream_standing_approval.signed`) and counted,
+  and revoking it (with a reason) makes the next CA need a ceremony again. Migration 0462 adds the approvals table.
 - Venafi revocation by certificate DN (OD-7): a `venafi` external CA with `revoke_by: certificate_dn` revokes by the DN
   of the certificate object whose current certificate has the certificate's thumbprint (found with Venafi's certificate
   search), for a policy that revokes only by DN; an object that has moved on to another certificate, or a thumbprint

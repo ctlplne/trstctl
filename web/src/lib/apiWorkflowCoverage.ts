@@ -176,6 +176,24 @@ export const apiWorkflowCoverage = [
     rationale: "Each served authority row offers a sign-intermediate-CSR dialog with ceremony id, CSR validation, and an in-dialog issued-certificate result.",
   },
   {
+    path: "/api/v1/ca/authorities/{id}/upstream-standing-approvals",
+    route: "/ca-hierarchy",
+    owner: "SURFACE/ca",
+    kind: "console-flow",
+    workflow: "SPIRE upstream CA standing approvals",
+    rationale:
+      "Each served authority's detail opens its standing approvals: the list with principal, trust domain, longest CA lifetime, expiry, CAs signed and state, and a grant form that reviews and opens the two-custodian ceremony and grants only once it is approved (OD-8).",
+  },
+  {
+    path: "/api/v1/ca/authorities/{id}/upstream-standing-approvals/{approval_id}/revoke",
+    route: "/ca-hierarchy",
+    owner: "SURFACE/ca",
+    kind: "console-flow",
+    workflow: "Revoke a SPIRE upstream CA standing approval",
+    rationale:
+      "Each active standing approval has a Revoke action that requires a reason and shows the revoked state; the server's next CA needs a ceremony again (OD-8).",
+  },
+  {
     path: "/api/v1/ca/authorities/{id}/issue",
     route: "/ca-hierarchy",
     owner: "SURFACE/ca",

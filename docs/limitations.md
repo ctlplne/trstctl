@@ -6770,12 +6770,15 @@ This is a deliberate, documented trust boundary, not an accident.
 - SPIRE upstream authority: the `trstctl-spire-upstream-authority` plugin puts
   the served CA hierarchy behind SPIRE as its X.509 upstream: SPIRE sends its
   local CA CSR to `/api/v1/ca/authorities/{id}/intermediates/csr`. The served
-  route signs only under an approved `issue_intermediate_csr` ceremony for that
+  route signs under an approved `issue_intermediate_csr` ceremony for that
   exact CSR and the plugin sends no ceremony ID, so every SPIRE CA rotation
-  needs custodians to approve a ceremony for its new CSR; there is no standing
-  approval for an upstream authority. CI's SPIRE container test signs with a
-  stand-in for trstctl; a served container test opens and approves each
-  ceremony through the API. The plugin binary is built
+  needs custodians to approve a ceremony for its new CSR unless custodians
+  granted that SPIRE server a standing approval (OD-8), which lasts at most 90
+  days and covers one principal, one trust domain and one spec. A long-running
+  SPIRE deployment rotating under a standing approval is a Track B
+  observation; the served test drives the real plugin in process. CI's SPIRE
+  container test signs with a stand-in for trstctl; a served container test
+  opens and approves each ceremony through the API. The plugin binary is built
   by `make build` and published from every release tag as
   `trstctl-spire-upstream-authority-linux-{amd64,arm64}` GitHub Release
   assets with a SHA-256 manifest and SLSA provenance. SPIRE loads it from its

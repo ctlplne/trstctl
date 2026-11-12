@@ -82,6 +82,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("CAAuthorityRotationIssuer", "status", eventProjectionPredicate, "internal/api/ca_hierarchy.go:API.rotateCAAuthority"),
 	evidence("CADiscoveryItem", "status", observationPredicate, "internal/api/ca_discovery.go:API.listCADiscoveryInventory"),
 	evidence("CAKeyCeremony", "status", eventProjectionPredicate, "internal/api/ca_hierarchy.go:API.createCACeremony"),
+	evidence("CAUpstreamStandingApproval", "status", predicate(evidenceEventProjection, "revoked requires ca.upstream_standing_approval.revoked; expired compares the expires_at that ca.upstream_standing_approval.granted projected with now; active otherwise"), "internal/server/ca_upstream_standing_approval.go:standingApprovalView"),
 	evidence("Certificate", "status", eventProjectionPredicate, "internal/projections/projections.go:Projector.Apply"),
 	evidence("CertificateDERRecovery", "outcome", predicate(evidenceObservation, "recovered requires certificate bytes read from a mint event of the tenant's own CA or from a TLS handshake with the row's recorded host:port whose SHA-256 equals the row's fingerprint, appended as an immutable certificate.der.recovered event that the projection checks again and applies only to a row holding no bytes; already_held, not_found, mismatch and unreachable attach nothing"), "internal/server/certificate_der_recovery.go:Server.RecoverCertificateDER"),
 	evidence("CertificateHealthItem", "status", observationPredicate, "internal/api/certificates.go:toCertificateHealthDashboard"),

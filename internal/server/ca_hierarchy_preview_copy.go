@@ -36,6 +36,8 @@ func ceremonyPreviewChanges(operation string) []string {
 		return []string{"Prepare an m-of-n ceremony to activate the supplied offline-root successor and its bidirectional public cross-signatures."}
 	case "release_managed_ca_leaf":
 		return []string{"Prepare a two-custodian disposition of the exact expired managed CA leaf, its original mint event and the operator's explicit external-use risk decision. The preview writes nothing."}
+	case "grant_upstream_standing_approval":
+		return []string{"Prepare an m-of-n ceremony to grant the reviewed SPIRE server (its token subject) a standing approval at the reviewed authority: once granted, its CA CSRs that name exactly the reviewed trust domain and match the reviewed spec, within its lifetime, are signed without a ceremony each until the approval expires or is revoked. The preview writes nothing."}
 	case "revoke_ca":
 		return []string{"Prepare an m-of-n ceremony to revoke the reviewed authority's key for the reviewed reason. Executing it makes the isolated signer refuse every signature with that key, stops the authority issuing, and revokes its certificate on a managed parent's CRL. The preview writes nothing and contacts no signer."}
 	default:
@@ -49,6 +51,12 @@ func ceremonyPreviewRisks(operation string) []string {
 			"Revocation is permanent: the key signs no certificate, CRL or OCSP response again, and its last published CRL stays until its next-update time.",
 			"Certificates this authority issued stop validating only where relying parties check its parent's CRL; a root has no issuer, so it must be removed from trust stores.",
 			"The server will require distinct custodian approvals and revalidate the exact authority, certificate, signer handle and reason before execution.",
+		}
+	}
+	if operation == "grant_upstream_standing_approval" {
+		return []string{
+			"Every CA the approval signs chains to this authority without a ceremony of its own: keep the trust domain, spec and lifetime as narrow as SPIRE needs.",
+			"Every signing is in the audit trail and counted on the approval; an issuers:write administrator can revoke it at once, after which the next CSR needs a ceremony again.",
 		}
 	}
 	if operation == "release_managed_ca_leaf" {

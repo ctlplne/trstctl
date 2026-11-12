@@ -11587,7 +11587,8 @@
               "rekey_offline_root",
               "release_managed_ca_leaf",
               "revoke_ca",
-              "import_ca_key"
+              "import_ca_key",
+              "grant_upstream_standing_approval"
             ],
             "type": "string"
           },
@@ -11691,12 +11692,17 @@
               "rekey_offline_root",
               "release_managed_ca_leaf",
               "revoke_ca",
-              "import_ca_key"
+              "import_ca_key",
+              "grant_upstream_standing_approval"
             ],
             "type": "string"
           },
           "parent_id": {
             "format": "uuid",
+            "type": "string"
+          },
+          "principal": {
+            "description": "grant_upstream_standing_approval (OD-8): the SPIRE server's token subject the approval is for",
             "type": "string"
           },
           "reason": {
@@ -11718,6 +11724,14 @@
             "type": "string"
           },
           "threshold": {
+            "type": "integer"
+          },
+          "trust_domain": {
+            "description": "grant_upstream_standing_approval: the SPIFFE trust domain every CA it signs must name (its URI SAN spiffe://\u003ctrust_domain\u003e)",
+            "type": "string"
+          },
+          "valid_for_seconds": {
+            "description": "grant_upstream_standing_approval: how long the approval lasts, at most 90 days",
             "type": "integer"
           }
         },
@@ -12555,6 +12569,138 @@
         },
         "required": [
           "common_name"
+        ],
+        "type": "object"
+      },
+      "CAUpstreamStandingApproval": {
+        "properties": {
+          "ca_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "granted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "granted_by": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_signed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "revoke_reason": {
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revoked_by": {
+            "type": "string"
+          },
+          "signings": {
+            "description": "How many CA CSRs were signed under the approval; each is in the audit trail.",
+            "type": "integer"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/CASpec"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "expired",
+              "revoked"
+            ],
+            "type": "string"
+          },
+          "trust_domain": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ca_id",
+          "principal",
+          "trust_domain",
+          "spec",
+          "ceremony_id",
+          "granted_by",
+          "granted_at",
+          "expires_at",
+          "status",
+          "signings"
+        ],
+        "type": "object"
+      },
+      "CAUpstreamStandingApprovalGrantRequest": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/CASpec"
+          },
+          "trust_domain": {
+            "type": "string"
+          },
+          "valid_for_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ceremony_id",
+          "principal",
+          "trust_domain",
+          "valid_for_seconds",
+          "spec"
+        ],
+        "type": "object"
+      },
+      "CAUpstreamStandingApprovalList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CAUpstreamStandingApproval"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "CAUpstreamStandingApprovalRevokeRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "type": "object"
       },
@@ -76917,7 +77063,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Sign an external intermediate CA CSR from a served CA authority after ceremony quorum",
+        "summary": "Sign an external intermediate CA CSR from a served CA authority after ceremony quorum, or under the caller's standing approval (OD-8)",
         "x-trstctl-permission": "issuers:write"
       }
     },
@@ -77671,6 +77817,225 @@
           }
         ],
         "summary": "Validate and explain a CA rotation without changing authority state",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/ca/authorities/{id}/upstream-standing-approvals": {
+      "get": {
+        "operationId": "listCAUpstreamStandingApprovals",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAUpstreamStandingApprovalList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List an authority's standing approvals for SPIRE upstream CA requests",
+        "x-trstctl-permission": "issuers:read"
+      },
+      "post": {
+        "operationId": "grantCAUpstreamStandingApproval",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CAUpstreamStandingApprovalGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAUpstreamStandingApproval"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Grant a SPIRE server's standing approval for its upstream CA requests after ceremony quorum",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/ca/authorities/{id}/upstream-standing-approvals/{approval_id}/revoke": {
+      "post": {
+        "operationId": "revokeCAUpstreamStandingApproval",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CAUpstreamStandingApprovalRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAUpstreamStandingApproval"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke a standing approval at once; the next CA CSR needs a ceremony again",
         "x-trstctl-permission": "issuers:write"
       }
     },

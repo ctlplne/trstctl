@@ -220,6 +220,8 @@ import type {
   CAOfflineRootRekeyRequest,
   CAOfflineCrossSignImportRequest,
   CAKeyCeremony,
+  CAUpstreamStandingApproval,
+  CAUpstreamStandingApprovalGrantRequest,
   CBOMAsset as GenCBOMAsset,
   CBOMImport,
   CBOMInventory,
@@ -1410,6 +1412,8 @@ export type {
   CAOfflineRootRekeyRequest,
   CAOfflineCrossSignImportRequest,
   CAKeyCeremony,
+  CAUpstreamStandingApproval,
+  CAUpstreamStandingApprovalGrantRequest,
   CBOMImport,
   CBOMInventory,
   CBOMCycloneDXExport,
@@ -2887,6 +2891,9 @@ export interface Api {
   createRootCA(input: CACreateRootRequest): Promise<CAAuthority>;
   createIntermediateCA(input: CACreateIntermediateRequest): Promise<CAAuthority>;
   signIntermediateCSR(id: string, input: CAIssueIntermediateRequest): Promise<CAIssuedIntermediate>;
+  listUpstreamStandingApprovals(id: string): Promise<CAUpstreamStandingApproval[]>;
+  grantUpstreamStandingApproval(id: string, input: CAUpstreamStandingApprovalGrantRequest): Promise<CAUpstreamStandingApproval>;
+  revokeUpstreamStandingApproval(id: string, approvalID: string, reason: string): Promise<CAUpstreamStandingApproval>;
   issueLeafFromCA(id: string, input: CAIssueLeafRequest): Promise<CAIssuedLeaf>;
   bulkRevokeCertificates(input: BulkRevokeRequest): Promise<BulkRevokeResult>;
   bulkRevokeIdentities(input: BulkRevokeRequest): Promise<BulkRevokeResult>;
@@ -4083,6 +4090,16 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   createRootCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/roots", input),
   createIntermediateCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/intermediates", input),
   signIntermediateCSR: (id, input) => mutate<CAIssuedIntermediate>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/intermediates/csr`, input),
+  listUpstreamStandingApprovals: async (id) =>
+    (await req<{ items: CAUpstreamStandingApproval[] }>(`/api/v1/ca/authorities/${encodeURIComponent(id)}/upstream-standing-approvals`)).items ?? [],
+  grantUpstreamStandingApproval: (id, input) =>
+    mutate<CAUpstreamStandingApproval>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/upstream-standing-approvals`, input),
+  revokeUpstreamStandingApproval: (id, approvalID, reason) =>
+    mutate<CAUpstreamStandingApproval>(
+      "POST",
+      `/api/v1/ca/authorities/${encodeURIComponent(id)}/upstream-standing-approvals/${encodeURIComponent(approvalID)}/revoke`,
+      { reason },
+    ),
   issueLeafFromCA: (id, input) => mutate<CAIssuedLeaf>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/issue`, input),
   bulkRevokeCertificates: (input) => mutate<BulkRevokeResult>("POST", "/api/v1/certificates/bulk-revoke", input),
   bulkRevokeIdentities: (input) => mutate<BulkRevokeResult>("POST", "/api/v1/identities/bulk-revoke", input),

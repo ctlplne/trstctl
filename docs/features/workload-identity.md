@@ -437,12 +437,55 @@ configured scheme and host. If a private trstctl name resolves to RFC 1918 space
 list only its expected address or smallest practical range in
 `allow_private_cidrs`; private destinations are refused by default.
 
-The served route signs a CSR only under an approved `issue_intermediate_csr`
-ceremony for that exact CSR, and the plugin sends no ceremony ID: each SPIRE CA
-rotation (every half of `ca_ttl`) needs custodians to open and approve a ceremony
-for the new CSR before SPIRE's retry succeeds. CI's SPIRE container test signs with
-a stand-in for trstctl; the served container test below opens and approves each
-ceremony through the API as custodians would.
+The served route signs a CSR under an approved `issue_intermediate_csr` ceremony
+for that exact CSR, and the plugin sends no ceremony ID: without a standing
+approval, each SPIRE CA rotation (every half of `ca_ttl`) needs custodians to open
+and approve a ceremony for the new CSR before SPIRE's retry succeeds. CI's SPIRE
+container test signs with a stand-in for trstctl; the served container test below
+opens and approves each ceremony through the API as custodians would.
+
+#### Standing approval for one SPIRE server (OD-8)
+
+A standing approval removes that per-rotation ceremony for one SPIRE server. It is
+off until custodians grant it, and it is bound to that server's identity and trust
+domain:
+
+- Two distinct custodians approve one `grant_upstream_standing_approval` ceremony
+  at the authority. It names the SPIRE server's principal (the subject of the API
+  token in the plugin's `token_file`), its SPIFFE trust domain, the CA spec its
+  `plugin_data` sends (`common_name`, `max_path_len`, DNS constraints, EKUs and
+  `ecdsa-p256`) with `ttl_seconds` as the longest lifetime a signed CA may have,
+  and how long the approval lasts (at most 90 days). A one-custodian ceremony is
+  refused. An administrator then grants it with that ceremony's ID:
+  `POST /api/v1/ca/authorities/{id}/upstream-standing-approvals`,
+  `trstctl-cli ca authorities standing-approvals grant`, or **Standing
+  approvals** in the authority's details on the CA hierarchy page, which reviews,
+  opens and refreshes the ceremony and grants once it shows 2 of 2. A grant that
+  differs from the approved one in any field is refused and uses nothing up.
+- Until it expires or is revoked, a CA CSR that server's token sends without a
+  ceremony ID is signed when the CSR names exactly `spiffe://<trust domain>` and
+  nothing else (no DNS names, IP addresses or email addresses), its spec matches
+  the approved one, and its lifetime is no longer than the approved one. Set the
+  approved `ttl_seconds` to at least SPIRE's `ca_ttl`. A CSR from another token,
+  for another trust domain, with another spec or with a longer lifetime is refused
+  with 422 and changes nothing.
+- Each CA signed under the approval carries a URI name constraint for its trust
+  domain, so an SVID that CA mints for another trust domain does not verify.
+- Every signing is audited: the CSR signing events carry the approval's ceremony
+  ID, and `ca.upstream_standing_approval.signed` records the CSR's SHA-256 and the
+  serial. The approval counts its signings (`signings`, `last_signed_at`).
+- `POST /api/v1/ca/authorities/{id}/upstream-standing-approvals/{approval_id}/revoke`
+  with a reason, `trstctl-cli ca authorities standing-approvals revoke`, or
+  **Revoke** in the dialog ends it at once; the server's next CA needs a ceremony
+  again. `GET` on the same collection, `trstctl-cli ca authorities
+  standing-approvals list` and the dialog list each approval with its state.
+
+A served test drives the real plugin through this: after the grant, the plugin
+gets a SPIRE CA with no ceremony; an SVID that CA signs for its trust domain
+verifies against the authority and one for another trust domain does not; CSRs
+for another trust domain, with a longer lifetime or from another token are
+refused and not counted; the audit trail names the approval and the serial; and
+after revocation the plugin's next CA is refused until a ceremony approves it.
 
 SPIRE's JWT signing keys go through trstctl too. The plugin publishes each SPIRE
 server's JWT key to `POST /api/v1/spiffe/upstream-jwt-keys` and answers SPIRE with
@@ -918,7 +961,7 @@ Replaying the same key returns the same response without minting twice.
 |---|---|
 | NHI lifecycle routes (F59) | Served — `/api/v1/identities`, `/transitions` |
 | SPIFFE Workload API (F24) | Served — gRPC over a UDS (`protocols.spiffe.enabled`); `FetchX509SVID`, `FetchJWTSVID`, bundle fetches, and `ValidateJWTSVID` wired to the signer-backed path |
-| SPIRE upstream authority | Served — SPIRE loads `trstctl-spire-upstream-authority`; trstctl signs its intermediate CA CSR via `/api/v1/ca/authorities/{id}/intermediates/csr` under an approved per-CSR ceremony, and SPIRE servers share JWT authorities through `/api/v1/spiffe/upstream-jwt-keys` (two SPIRE server containers verify each other's JWT-SVIDs) |
+| SPIRE upstream authority | Served — SPIRE loads `trstctl-spire-upstream-authority`; trstctl signs its intermediate CA CSR via `/api/v1/ca/authorities/{id}/intermediates/csr` under an approved per-CSR ceremony or a SPIRE server's standing approval (OD-8), and SPIRE servers share JWT authorities through `/api/v1/spiffe/upstream-jwt-keys` (two SPIRE server containers verify each other's JWT-SVIDs) |
 | Ephemeral issuance (F25) | Served — direct attested X.509-SVID mint at `POST /api/v1/workloads/attested-issuance`; effect-free exact JIT review at `POST /api/v1/ephemeral/preview`; approval-gated mint at `POST /api/v1/ephemeral` plus `/api/v1/ephemeral/{id}/approvals`; and a dedicated review/approval/recovery workflow on Workloads |
 | Attestation chain (F30) | Served — tenant trust-source lifecycle at `/api/v1/workloads/attester-trust-sources`; exact effect-free review at `/api/v1/workloads/attested-issuance/preview`; the six-attester verifier gates `POST /api/v1/workloads/attested-issuance`; the console separates request, review, and result with unchanged-key retries; conformance covers each attester |
 | AI-agent broker (F61) | Served when configured — `POST /api/v1/broker/agent-identities` verifies proof, gates policy, mints a short-lived credential, and projects the graph grant |

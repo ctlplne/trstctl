@@ -3367,6 +3367,7 @@ CACeremonyStartRequest = TypedDict(
         'expected_certificate_sha256': str,
         'operation': str,
         'parent_id': str,
+        'principal': str,
         'reason': str,
         'reverse_cross_certificate_pem': str,
         'risk_accepted': bool,
@@ -3374,6 +3375,8 @@ CACeremonyStartRequest = TypedDict(
         'spec': dict[str, Any],
         'target_certificate_pem': str,
         'threshold': int,
+        'trust_domain': str,
+        'valid_for_seconds': int,
     },
     total=False,
 )
@@ -3722,6 +3725,57 @@ CASpec = TypedDict(
         'permitted_dns_domains': list[str],
         'signature_algorithm': str,
         'ttl_seconds': int,
+    },
+    total=False,
+)
+
+CAUpstreamStandingApproval = TypedDict(
+    'CAUpstreamStandingApproval',
+    {
+        'ca_id': str,
+        'ceremony_id': str,
+        'expires_at': str,
+        'granted_at': str,
+        'granted_by': str,
+        'id': str,
+        'last_signed_at': str,
+        'principal': str,
+        'revoke_reason': str,
+        'revoked_at': str,
+        'revoked_by': str,
+        'signings': int,
+        'spec': dict[str, Any],
+        'status': str,
+        'trust_domain': str,
+    },
+    total=False,
+)
+
+CAUpstreamStandingApprovalGrantRequest = TypedDict(
+    'CAUpstreamStandingApprovalGrantRequest',
+    {
+        'ceremony_id': str,
+        'principal': str,
+        'spec': dict[str, Any],
+        'trust_domain': str,
+        'valid_for_seconds': int,
+    },
+    total=False,
+)
+
+CAUpstreamStandingApprovalList = TypedDict(
+    'CAUpstreamStandingApprovalList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+CAUpstreamStandingApprovalRevokeRequest = TypedDict(
+    'CAUpstreamStandingApprovalRevokeRequest',
+    {
+        'reason': str,
     },
     total=False,
 )

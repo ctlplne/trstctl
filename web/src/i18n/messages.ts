@@ -13819,6 +13819,232 @@ export const messages = {
     defaultMessage: "Held issuances unavailable",
     description: "N1-L1: error title for the held issuances section.",
   },
+  "caHierarchy.standingApprovals.openButton": {
+    defaultMessage: "Standing approvals",
+    description: "OD-8: the authority detail's button that opens its standing approvals.",
+  },
+  "caHierarchy.standingApprovals.title": {
+    defaultMessage: "Standing approvals at {authority}",
+    description: "OD-8: heading of an authority's standing approvals dialog.",
+  },
+  "caHierarchy.standingApprovals.description": {
+    defaultMessage:
+      "A standing approval lets one SPIRE server's upstream authority plugin have its CA signed here without a ceremony each time. Two custodians approve it once; each CA the server asks for must name only the approved trust domain and stay within the approved spec and lifetime. Every signing is counted and in the audit trail. Revoke an approval and the server's next CA needs a ceremony again.",
+    description: "OD-8: what a standing approval is.",
+  },
+  "caHierarchy.standingApprovals.close": {
+    defaultMessage: "Close standing approvals",
+    description: "OD-8: close button label for the dialog.",
+  },
+  "caHierarchy.standingApprovals.closeButton": {
+    defaultMessage: "Close",
+    description: "OD-8: footer close button.",
+  },
+  "caHierarchy.standingApprovals.loadFailed": {
+    defaultMessage: "Could not load the standing approvals.",
+    description: "OD-8: fallback when the approvals cannot be read.",
+  },
+  "caHierarchy.standingApprovals.errorTitle": {
+    defaultMessage: "Standing approvals unavailable",
+    description: "OD-8: error title when the approvals cannot be read.",
+  },
+  "caHierarchy.standingApprovals.none": {
+    defaultMessage: "This authority has no standing approval.",
+    description: "OD-8: empty state.",
+  },
+  "caHierarchy.standingApprovals.tableLabel": {
+    defaultMessage: "Standing approvals",
+    description: "OD-8: accessible name of the approvals table.",
+  },
+  "caHierarchy.standingApprovals.principal": {
+    defaultMessage: "SPIRE server principal",
+    description: "OD-8: column and field for the principal the approval is for.",
+  },
+  "caHierarchy.standingApprovals.trustDomain": {
+    defaultMessage: "Trust domain",
+    description: "OD-8: column and field for the approved SPIFFE trust domain.",
+  },
+  "caHierarchy.standingApprovals.trustDomainPlaceholder": {
+    defaultMessage: "example.org",
+    description: "OD-8: example SPIFFE trust domain shown in the empty trust domain field.",
+  },
+  "caHierarchy.standingApprovals.maxLifetime": {
+    defaultMessage: "Longest CA lifetime",
+    description: "OD-8: column for the longest lifetime a signed CA may have.",
+  },
+  "caHierarchy.standingApprovals.expires": {
+    defaultMessage: "Approval expires",
+    description: "OD-8: column for when the approval expires.",
+  },
+  "caHierarchy.standingApprovals.signings": {
+    defaultMessage: "CAs signed",
+    description: "OD-8: column for how many CAs were signed under the approval.",
+  },
+  "caHierarchy.standingApprovals.signingsLast": {
+    defaultMessage: "{count} (last {time})",
+    description: "OD-8: CAs signed, with the time of the latest signing.",
+  },
+  "caHierarchy.standingApprovals.state": {
+    defaultMessage: "State",
+    description: "OD-8: column for active, expired or revoked.",
+  },
+  "caHierarchy.standingApprovals.actions": {
+    defaultMessage: "Actions",
+    description: "OD-8: hidden column header for the revoke action.",
+  },
+  "caHierarchy.standingApprovals.status.active": {
+    defaultMessage: "Active",
+    description: "OD-8: an approval in force.",
+  },
+  "caHierarchy.standingApprovals.status.expired": {
+    defaultMessage: "Expired",
+    description: "OD-8: an approval past its expiry.",
+  },
+  "caHierarchy.standingApprovals.status.revoked": {
+    defaultMessage: "Revoked",
+    description: "OD-8: a revoked approval.",
+  },
+  "caHierarchy.standingApprovals.revoke": {
+    defaultMessage: "Revoke",
+    description: "OD-8: button that starts revoking an approval.",
+  },
+  "caHierarchy.standingApprovals.revokeLabel": {
+    defaultMessage: "Revoke the standing approval for {principal} in {trustDomain}",
+    description: "OD-8: accessible label of one approval's revoke button.",
+  },
+  "caHierarchy.standingApprovals.revokeReason": {
+    defaultMessage: "Reason for revoking",
+    description: "OD-8: field for the revocation reason.",
+  },
+  "caHierarchy.standingApprovals.confirmRevoke": {
+    defaultMessage: "Revoke now",
+    description: "OD-8: button that confirms the revocation.",
+  },
+  "caHierarchy.standingApprovals.cancelRevoke": {
+    defaultMessage: "Keep",
+    description: "OD-8: button that cancels the revocation.",
+  },
+  "caHierarchy.standingApprovals.reasonRequired": {
+    defaultMessage: "Give a reason for revoking the approval.",
+    description: "OD-8: a revocation needs a reason.",
+  },
+  "caHierarchy.standingApprovals.revokedNotice": {
+    defaultMessage: "Revoked the standing approval for {principal} in {trustDomain}. Its next CA needs a ceremony.",
+    description: "OD-8: notice after a revocation.",
+  },
+  "caHierarchy.standingApprovals.revokeFailed": {
+    defaultMessage: "Could not revoke the standing approval.",
+    description: "OD-8: fallback when a revocation fails.",
+  },
+  "caHierarchy.standingApprovals.grantHeading": {
+    defaultMessage: "Grant a standing approval",
+    description: "OD-8: heading of the grant form.",
+  },
+  "caHierarchy.standingApprovals.validDays": {
+    defaultMessage: "Approval lasts (days)",
+    description: "OD-8: field for how many days the approval lasts.",
+  },
+  "caHierarchy.standingApprovals.principalHelp": {
+    defaultMessage:
+      "The principal is the subject of the API token the SPIRE server's upstream authority plugin signs in with. An approval lasts at most 90 days.",
+    description: "OD-8: help for the principal and validity fields.",
+  },
+  "caHierarchy.standingApprovals.spec": {
+    defaultMessage: "CA spec JSON",
+    description: "OD-8: field for the CA spec the approval signs under.",
+  },
+  "caHierarchy.standingApprovals.specHelp": {
+    defaultMessage: "Every CA signed under the approval must match this spec; its ttl_seconds is the longest lifetime a signed CA may have.",
+    description: "OD-8: help for the spec field.",
+  },
+  "caHierarchy.standingApprovals.review": {
+    defaultMessage: "Review approval ceremony",
+    description: "OD-8: button that reviews the grant ceremony.",
+  },
+  "caHierarchy.standingApprovals.open": {
+    defaultMessage: "Open reviewed approval ceremony",
+    description: "OD-8: button that opens the reviewed ceremony.",
+  },
+  "caHierarchy.standingApprovals.refresh": {
+    defaultMessage: "Refresh approval ceremony",
+    description: "OD-8: button that reads the ceremony's approvals again.",
+  },
+  "caHierarchy.standingApprovals.ceremonyProgress": {
+    defaultMessage: "Ceremony {id}: {approvals} of {threshold} approvals",
+    description: "OD-8: the open ceremony's approvals so far.",
+  },
+  "caHierarchy.standingApprovals.reviewFingerprint": {
+    defaultMessage: "Reviewed request",
+    description: "OD-8: label for the reviewed request's fingerprint.",
+  },
+  "caHierarchy.standingApprovals.reviewStale": {
+    defaultMessage: "The grant changed since the review; review it again.",
+    description: "OD-8: the grant was edited after its review.",
+  },
+  "caHierarchy.standingApprovals.ceremonyHelp": {
+    defaultMessage: "Two distinct custodians approve the ceremony by its ID on the Lifecycle tab before the grant.",
+    description: "OD-8: where the ceremony is approved.",
+  },
+  "caHierarchy.standingApprovals.grant": {
+    defaultMessage: "Grant standing approval",
+    description: "OD-8: button that grants the approval.",
+  },
+  "caHierarchy.standingApprovals.grantErrorTitle": {
+    defaultMessage: "Standing approval not granted",
+    description: "OD-8: error title for the grant form.",
+  },
+  "caHierarchy.standingApprovals.principalRequired": {
+    defaultMessage: "Name the SPIRE server's principal.",
+    description: "OD-8: the grant needs a principal.",
+  },
+  "caHierarchy.standingApprovals.trustDomainRequired": {
+    defaultMessage: "Name the SPIRE trust domain.",
+    description: "OD-8: the grant needs a trust domain.",
+  },
+  "caHierarchy.standingApprovals.validDaysInvalid": {
+    defaultMessage: "An approval lasts from 1 to {max} days.",
+    description: "OD-8: the validity is out of range.",
+  },
+  "caHierarchy.standingApprovals.specInvalid": {
+    defaultMessage: "The CA spec must be a JSON object.",
+    description: "OD-8: the spec is not a JSON object.",
+  },
+  "caHierarchy.standingApprovals.previewBlocked": {
+    defaultMessage: "The review found a problem; fix it before opening the ceremony.",
+    description: "OD-8: the review is not ready.",
+  },
+  "caHierarchy.standingApprovals.previewFailed": {
+    defaultMessage: "Could not review the approval ceremony.",
+    description: "OD-8: fallback when the review fails.",
+  },
+  "caHierarchy.standingApprovals.openFailed": {
+    defaultMessage: "Could not open the approval ceremony.",
+    description: "OD-8: fallback when the ceremony cannot be opened.",
+  },
+  "caHierarchy.standingApprovals.refreshFailed": {
+    defaultMessage: "Could not refresh the approval ceremony.",
+    description: "OD-8: fallback when the ceremony cannot be read.",
+  },
+  "caHierarchy.standingApprovals.approvalRequired": {
+    defaultMessage: "Open the reviewed ceremony and have two custodians approve it first.",
+    description: "OD-8: the grant needs an approved ceremony.",
+  },
+  "caHierarchy.standingApprovals.grantedNotice": {
+    defaultMessage: "Granted a standing approval for {principal} in {trustDomain}.",
+    description: "OD-8: notice after a grant.",
+  },
+  "caHierarchy.standingApprovals.grantFailed": {
+    defaultMessage: "Could not grant the standing approval.",
+    description: "OD-8: fallback when the grant fails.",
+  },
+  "caHierarchy.standingApprovals.lifetimeHours": {
+    defaultMessage: "{hours, plural, one {# hour} other {# hours}}",
+    description: "OD-8: a lifetime in hours.",
+  },
+  "caHierarchy.standingApprovals.lifetimeMinutes": {
+    defaultMessage: "{minutes, plural, one {# minute} other {# minutes}}",
+    description: "OD-8: a lifetime in minutes.",
+  },
   "mdm.wave.heading": {
     defaultMessage: "Check in a renewal wave",
     description: "N9-L2: heading for checking in every device of a renewal wave under one approval.",

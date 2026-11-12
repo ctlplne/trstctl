@@ -3120,7 +3120,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sign an external intermediate CA CSR from a served CA authority after ceremony quorum */
+        /** Sign an external intermediate CA CSR from a served CA authority after ceremony quorum, or under the caller's standing approval (OD-8) */
         post: operations["issueIntermediateCAFromCSR"];
         delete?: never;
         options?: never;
@@ -3292,6 +3292,41 @@ export interface paths {
         put?: never;
         /** Validate and explain a CA rotation without changing authority state */
         post: operations["previewCAAuthorityRotation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/authorities/{id}/upstream-standing-approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List an authority's standing approvals for SPIRE upstream CA requests */
+        get: operations["listCAUpstreamStandingApprovals"];
+        put?: never;
+        /** Grant a SPIRE server's standing approval for its upstream CA requests after ceremony quorum */
+        post: operations["grantCAUpstreamStandingApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/authorities/{id}/upstream-standing-approvals/{approval_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a standing approval at once; the next CA CSR needs a ceremony again */
+        post: operations["revokeCAUpstreamStandingApproval"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15244,7 +15279,7 @@ export interface components {
             changes: string[];
             normalized_spec: components["schemas"]["CASpec"];
             /** @enum {string} */
-            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca" | "import_ca_key";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca" | "import_ca_key" | "grant_upstream_standing_approval";
             parent?: components["schemas"]["CACeremonyPlanAuthority"];
             preview_external_effects: string[];
             preview_writes: string[];
@@ -15266,9 +15301,11 @@ export interface components {
             dependent_id?: string;
             expected_certificate_sha256?: string;
             /** @enum {string} */
-            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca" | "import_ca_key";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca" | "import_ca_key" | "grant_upstream_standing_approval";
             /** Format: uuid */
             parent_id?: string;
+            /** @description grant_upstream_standing_approval (OD-8): the SPIRE server's token subject the approval is for */
+            principal?: string;
             reason?: string;
             reverse_cross_certificate_pem?: string;
             risk_accepted?: boolean;
@@ -15276,6 +15313,10 @@ export interface components {
             spec?: components["schemas"]["CASpec"];
             target_certificate_pem?: string;
             threshold: number;
+            /** @description grant_upstream_standing_approval: the SPIFFE trust domain every CA it signs must name (its URI SAN spiffe://<trust_domain>) */
+            trust_domain?: string;
+            /** @description grant_upstream_standing_approval: how long the approval lasts, at most 90 days */
+            valid_for_seconds?: number;
         };
         CACreateIntermediateRequest: {
             /** Format: uuid */
@@ -15546,6 +15587,47 @@ export interface components {
             permitted_dns_domains?: string[];
             signature_algorithm?: string;
             ttl_seconds?: number;
+        };
+        CAUpstreamStandingApproval: {
+            /** Format: uuid */
+            ca_id: string;
+            /** Format: uuid */
+            ceremony_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            granted_at: string;
+            granted_by: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_signed_at?: string;
+            principal: string;
+            revoke_reason?: string;
+            /** Format: date-time */
+            revoked_at?: string;
+            revoked_by?: string;
+            /** @description How many CA CSRs were signed under the approval; each is in the audit trail. */
+            signings: number;
+            spec: components["schemas"]["CASpec"];
+            /** @enum {string} */
+            status: "active" | "expired" | "revoked";
+            trust_domain: string;
+        };
+        CAUpstreamStandingApprovalGrantRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            principal: string;
+            spec: components["schemas"]["CASpec"];
+            trust_domain: string;
+            valid_for_seconds: number;
+        };
+        CAUpstreamStandingApprovalList: {
+            items: components["schemas"]["CAUpstreamStandingApproval"][];
+            next_cursor?: string;
+        };
+        CAUpstreamStandingApprovalRevokeRequest: {
+            reason: string;
         };
         CBOMAsset: {
             algorithm?: string;
@@ -38972,6 +39054,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CAAuthorityRotationPlanPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listCAUpstreamStandingApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAUpstreamStandingApprovalList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    grantCAUpstreamStandingApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAUpstreamStandingApprovalGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAUpstreamStandingApproval"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeCAUpstreamStandingApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAUpstreamStandingApprovalRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAUpstreamStandingApproval"];
                 };
             };
             /** @description client error */

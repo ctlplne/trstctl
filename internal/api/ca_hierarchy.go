@@ -89,6 +89,14 @@ type CACeremonyStartRequest struct {
 	SignerHandle               string `json:"signer_handle,omitempty"`
 	Threshold                  int    `json:"threshold"`
 	Spec                       CASpec `json:"spec,omitempty"`
+	// Principal, TrustDomain and ValidForSeconds name a
+	// grant_upstream_standing_approval (OD-8): the SPIRE server's token
+	// subject, the trust domain every signed CA must name, and how long the
+	// approval lasts; Spec is the CA spec it signs under, its ttl_seconds the
+	// longest lifetime.
+	Principal       string `json:"principal,omitempty"`
+	TrustDomain     string `json:"trust_domain,omitempty"`
+	ValidForSeconds int64  `json:"valid_for_seconds,omitempty"`
 }
 
 // CACeremonyPlanAuthority is the non-secret identity of one existing authority

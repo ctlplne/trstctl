@@ -2385,7 +2385,7 @@ export interface CACeremonyPlanPreview {
   capability: "F48";
   changes: string[];
   normalized_spec: CASpec;
-  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca" | "import_ca_key";
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca" | "import_ca_key" | "grant_upstream_standing_approval";
   parent?: CACeremonyPlanAuthority;
   preview_external_effects: string[];
   preview_writes: string[];
@@ -2405,8 +2405,9 @@ export interface CACeremonyStartRequest {
   csr_pem?: string;
   dependent_id?: string;
   expected_certificate_sha256?: string;
-  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca" | "import_ca_key";
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca" | "import_ca_key" | "grant_upstream_standing_approval";
   parent_id?: string;
+  principal?: string;
   reason?: string;
   reverse_cross_certificate_pem?: string;
   risk_accepted?: boolean;
@@ -2414,6 +2415,8 @@ export interface CACeremonyStartRequest {
   spec?: CASpec;
   target_certificate_pem?: string;
   threshold: number;
+  trust_domain?: string;
+  valid_for_seconds?: number;
 }
 
 export interface CACreateIntermediateRequest {
@@ -2646,6 +2649,41 @@ export interface CASpec {
   permitted_dns_domains?: string[];
   signature_algorithm?: string;
   ttl_seconds?: number;
+}
+
+export interface CAUpstreamStandingApproval {
+  ca_id: string;
+  ceremony_id: string;
+  expires_at: string;
+  granted_at: string;
+  granted_by: string;
+  id: string;
+  last_signed_at?: string;
+  principal: string;
+  revoke_reason?: string;
+  revoked_at?: string;
+  revoked_by?: string;
+  signings: number;
+  spec: CASpec;
+  status: "active" | "expired" | "revoked";
+  trust_domain: string;
+}
+
+export interface CAUpstreamStandingApprovalGrantRequest {
+  ceremony_id: string;
+  principal: string;
+  spec: CASpec;
+  trust_domain: string;
+  valid_for_seconds: number;
+}
+
+export interface CAUpstreamStandingApprovalList {
+  items: CAUpstreamStandingApproval[];
+  next_cursor?: string;
+}
+
+export interface CAUpstreamStandingApprovalRevokeRequest {
+  reason: string;
 }
 
 export interface CBOMAsset {

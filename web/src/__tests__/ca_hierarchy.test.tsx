@@ -59,6 +59,9 @@ const { apiMock } = vi.hoisted(() => ({
     createRootCA: vi.fn(),
     issueLeafFromCA: vi.fn(),
     signIntermediateCSR: vi.fn(),
+    listUpstreamStandingApprovals: vi.fn(),
+    grantUpstreamStandingApproval: vi.fn(),
+    revokeUpstreamStandingApproval: vi.fn(),
     edgeSegmentPolicies: vi.fn(),
     edgeDelegations: vi.fn(),
     caRetirementChecklist: vi.fn(),
@@ -986,6 +989,111 @@ describe("CA hierarchy and custody surface", () => {
       }),
     );
     expect(await within(dialog).findByText("external-44")).toBeInTheDocument();
+  });
+
+  it("grants a SPIRE server's standing approval through a two-custodian ceremony and revokes it with a reason (OD-8)", async () => {
+    const user = userEvent.setup();
+    const authority = {
+      id: "root-spire-1",
+      tenant_id: "tenant-1",
+      common_name: "QA SPIRE Root",
+      kind: "root",
+      status: "active",
+      certificate_pem: "public root",
+      signer_handle: "ca/root-spire-1",
+      serial: "88",
+      max_path_len: 1,
+      created_at: "2026-11-13T00:00:00Z",
+    };
+    const ceremonyID = "00000000-0000-4000-8000-000000000088";
+    const spec = { common_name: "SPIRE Server CA", max_path_len: 0, ttl_seconds: 86400, signature_algorithm: "ecdsa-p256" };
+    const approval = {
+      id: "00000000-0000-4000-8000-0000000000a8",
+      ca_id: authority.id,
+      principal: "spire-server-a",
+      trust_domain: "od8.test",
+      spec,
+      ceremony_id: ceremonyID,
+      granted_by: "eval-admin",
+      granted_at: "2026-11-13T00:00:00Z",
+      expires_at: "2026-12-13T00:00:00Z",
+      status: "active",
+      signings: 0,
+    };
+    let approvals: Array<Record<string, unknown>> = [];
+    apiMock.caAuthorities.mockResolvedValue({ items: [authority] });
+    apiMock.listUpstreamStandingApprovals.mockImplementation(async () => approvals);
+    apiMock.previewCACeremony.mockResolvedValue({ ready: true, request_fingerprint: "standing-review-88", changes: ["Grant a standing approval"] });
+    apiMock.createCACeremony.mockResolvedValue({ id: ceremonyID, purpose: "upstream-standing:abc", threshold: 2, approvals: 0, status: "pending" });
+    apiMock.caCeremony.mockResolvedValue({ id: ceremonyID, purpose: "upstream-standing:abc", threshold: 2, approvals: 2, status: "pending" });
+    apiMock.grantUpstreamStandingApproval.mockImplementation(async () => {
+      approvals = [{ ...approval, signings: 3, last_signed_at: "2026-11-13T01:00:00Z" }];
+      return approval;
+    });
+    apiMock.revokeUpstreamStandingApproval.mockImplementation(async () => {
+      approvals = [{ ...approval, status: "revoked", revoke_reason: "SPIRE server retired" }];
+      return approvals[0];
+    });
+    renderCAHierarchy();
+
+    await within(await screen.findByRole("table", { name: "Served CA authorities" })).findByText("QA SPIRE Root");
+    await user.click(screen.getByRole("button", { name: "Details" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "QA SPIRE Root" })).getByRole("button", { name: "Standing approvals" }));
+    const dialog = await screen.findByRole("dialog", { name: "Standing approvals at QA SPIRE Root" });
+    expect(await within(dialog).findByText("This authority has no standing approval.")).toBeInTheDocument();
+    expect(apiMock.listUpstreamStandingApprovals).toHaveBeenCalledWith(authority.id);
+
+    await paste(user, within(dialog).getByLabelText("SPIRE server principal"), "spire-server-a");
+    await paste(user, within(dialog).getByLabelText("Trust domain"), "od8.test");
+    const grantButton = within(dialog).getByRole("button", { name: "Grant standing approval" });
+    expect(grantButton).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: "Review approval ceremony" }));
+    const request = {
+      operation: "grant_upstream_standing_approval",
+      authority_id: authority.id,
+      principal: "spire-server-a",
+      trust_domain: "od8.test",
+      valid_for_seconds: 30 * 86400,
+      spec,
+      threshold: 2,
+    };
+    await waitFor(() => expect(apiMock.previewCACeremony).toHaveBeenCalledWith(request));
+    expect(within(dialog).getByText("standing-review-88")).toBeInTheDocument();
+    // A grant edited after its review is a different ceremony.
+    fireEvent.change(within(dialog).getByLabelText("Approval lasts (days)"), { target: { value: "91" } });
+    expect(within(dialog).getByRole("button", { name: "Open reviewed approval ceremony" })).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: "Review approval ceremony" }));
+    expect(await within(dialog).findByText("An approval lasts from 1 to 90 days.")).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("Approval lasts (days)"), { target: { value: "30" } });
+    await user.click(within(dialog).getByRole("button", { name: "Open reviewed approval ceremony" }));
+    await waitFor(() => expect(apiMock.createCACeremony).toHaveBeenCalledWith(request));
+    expect(grantButton).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: "Refresh approval ceremony" }));
+    expect(await within(dialog).findByText(/2 of 2 approvals/)).toBeInTheDocument();
+    await user.click(grantButton);
+    await waitFor(() =>
+      expect(apiMock.grantUpstreamStandingApproval).toHaveBeenCalledWith(authority.id, {
+        ceremony_id: ceremonyID,
+        principal: "spire-server-a",
+        trust_domain: "od8.test",
+        valid_for_seconds: 30 * 86400,
+        spec,
+      }),
+    );
+    expect(await within(dialog).findByText("Granted a standing approval for spire-server-a in od8.test.")).toBeInTheDocument();
+    const table = await within(dialog).findByRole("table", { name: "Standing approvals" });
+    expect(within(table).getByText("24 hours")).toBeInTheDocument();
+    expect(within(table).getByText(/^3 \(last /)).toBeInTheDocument();
+
+    await user.click(within(table).getByRole("button", { name: "Revoke the standing approval for spire-server-a in od8.test" }));
+    await user.click(within(table).getByRole("button", { name: "Revoke now" }));
+    expect(await within(dialog).findByText("Give a reason for revoking the approval.")).toBeInTheDocument();
+    expect(apiMock.revokeUpstreamStandingApproval).not.toHaveBeenCalled();
+    await paste(user, within(table).getByLabelText("Reason for revoking"), "SPIRE server retired");
+    await user.click(within(table).getByRole("button", { name: "Revoke now" }));
+    await waitFor(() => expect(apiMock.revokeUpstreamStandingApproval).toHaveBeenCalledWith(authority.id, approval.id, "SPIRE server retired"));
+    expect(await within(dialog).findByText("Revoked the standing approval for spire-server-a in od8.test. Its next CA needs a ceremony.")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Revoked")).toBeInTheDocument();
   });
 
   it("routes an imported offline root to a signer-held intermediate without offering signing", async () => {

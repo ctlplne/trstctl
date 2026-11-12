@@ -39,9 +39,14 @@ type HierarchyCAProfile struct {
 	// verifier enforces, not a note in our records (B6). Exclusion beats
 	// permission in X.509 semantics, which is exactly why it exists here.
 	ExcludedDNSDomains []string
-	MaxPathLen         int
-	EKUs               []string
-	TTL                time.Duration
+	// PermittedURIDomains restricts the URIs the CA may certify to these
+	// hosts, in the certificate's name constraints (OD-8: a SPIRE CA a
+	// standing approval signs vouches for its trust domain's SPIFFE IDs
+	// only).
+	PermittedURIDomains []string
+	MaxPathLen          int
+	EKUs                []string
+	TTL                 time.Duration
 }
 
 // IssuedHierarchyCA is the public result of CA certificate creation. It contains
@@ -702,7 +707,8 @@ func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.
 		SubjectKeyId:                ski,
 		PermittedDNSDomains:         profile.PermittedDNSDomains,
 		ExcludedDNSDomains:          profile.ExcludedDNSDomains,
-		PermittedDNSDomainsCritical: len(profile.PermittedDNSDomains) > 0 || len(profile.ExcludedDNSDomains) > 0,
+		PermittedURIDomains:         profile.PermittedURIDomains,
+		PermittedDNSDomainsCritical: len(profile.PermittedDNSDomains) > 0 || len(profile.ExcludedDNSDomains) > 0 || len(profile.PermittedURIDomains) > 0,
 		ExtKeyUsage:                 knownEKUs,
 		UnknownExtKeyUsage:          customEKUs,
 	}
