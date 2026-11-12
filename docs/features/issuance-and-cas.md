@@ -524,6 +524,21 @@ is there. Missing wire evidence is never recorded as a failed member. When a mem
 both proofs, the observer's findings for its predecessor certificate at that endpoint
 are marked remediated, naming the live receipt and the observed connections.
 
+**Wire evidence for every replacement (X3-L1).** A plain renewal's deployment, or any
+other replacement, waits for the same wire evidence without a migration run. When a
+verification of an endpoint (`GET /api/v1/endpoints/verifications`, Connectors →
+Health, retries, and rollback) finds it serving another certificate than it last
+observed there, the endpoint records which certificate was replaced and when, and its
+`traffic` reads `awaiting`. On the same 30-second leader pass, an observer agent's new
+connections at the endpoint's address after the replacement — presenting the
+replacement on TLS 1.2; on TLS 1.3 any new connection, since the verification already
+proved the certificate — move it to `observed`, naming the observer finding
+(`traffic_finding_id`), and mark the observer's findings for the replaced certificate at
+that address remediated, naming the endpoint, the replacement and the observed
+connections. Nothing closes on the probe alone. An endpoint still unobserved an hour
+after its replacement reads `unobserved` from then (`traffic_unobserved_since`); later
+evidence still closes it. The Connectors page shows each endpoint's wire evidence.
+
 **Planned CA switch (P3).** A run started with `"revoke_predecessors": true` (on the
 Migration page, "Revoke each predecessor once its successor is verified live") moves its
 members to the new issuer and retires what they served before. Each cohort runs the

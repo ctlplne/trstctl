@@ -1521,7 +1521,13 @@ never live in the API process. What you can do end to end against the running bi
   evidence is matched by the member's verify address or server name and port; the
   gate is opt-in per run and covers migration runs and PQC pilot waves (X3-L5: a
   wave waits after its probe until real clients are seen at every target, and a
-  target not seen within the window halts the pilot), not plain renewals. The Migration
+  target not seen within the window halts the pilot). Plain renewals and other
+  endpoint replacements (X3-L1) record their wire evidence on the endpoint and close
+  the replaced certificate's observer findings, but nothing holds them: the
+  replacement is already live, and an endpoint without evidence an hour later reads
+  unobserved. A replacement is known only from two verifications of the same endpoint
+  in a row that saw different certificates, and endpoint evidence is matched by
+  address alone. The Migration
   page's run history shows the gate and its window, why a run paused, and each
   member's observed traffic (observed, waiting since it was verified live, or not
   seen in the window); the Posture page's pilot waves show what real clients

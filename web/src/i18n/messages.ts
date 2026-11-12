@@ -24685,6 +24685,26 @@ export const messages = {
     defaultMessage: "Never verified",
     description: "D2: this endpoint has never once been observed serving what it should.",
   },
+  "source.wire.evidence.x3l100001": {
+    defaultMessage: "Wire evidence",
+    description: "X3-L1: column for whether real clients were seen connecting to an endpoint's replacement certificate.",
+  },
+  "source.wire.awaiting.x3l100002": {
+    defaultMessage: "Waiting for new connections since {value1}",
+    description: "X3-L1: the endpoint was replaced and no observer has seen new connections to it yet.",
+  },
+  "source.wire.observed.x3l100003": {
+    defaultMessage: "New connections seen {value1}",
+    description: "X3-L1: an observer saw new connections to the replacement.",
+  },
+  "source.wire.unobserved.x3l100004": {
+    defaultMessage: "No new connections seen since {value1}",
+    description: "X3-L1: the window after the replacement passed without any new connections observed.",
+  },
+  "source.wire.none.x3l100005": {
+    defaultMessage: "Not replaced",
+    description: "X3-L1: the endpoint has not been replaced, so there is nothing to wait for.",
+  },
   "protocols.dns01.upstreamUnavailableTitle": {
     defaultMessage: "Upstream authorization freshness unavailable",
     description: "B7: the freshness read failed; an absent answer is not a negative one.",

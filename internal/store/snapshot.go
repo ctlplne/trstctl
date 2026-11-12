@@ -360,7 +360,12 @@ import (
 // k8s_namespace, k8s_service_account and k8s_secret): a version-126 payload
 // has no such columns, and a restored Kubernetes decoy would match no audit
 // event.
-const SnapshotFormatVersion = 127
+// Version 128 carries X3-L1's wire evidence for replaced endpoints
+// (endpoint_verifications replaced_fingerprint, replaced_at,
+// traffic_observed_at, traffic_finding_id, traffic_unobserved_since): an
+// older payload has no such columns, and a restored endpoint would forget it
+// was replaced and wait for no evidence.
+const SnapshotFormatVersion = 128
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

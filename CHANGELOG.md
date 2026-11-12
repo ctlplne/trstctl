@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- Every replaced endpoint waits for wire evidence (X3-L1): when a verification finds an endpoint serving another
+  certificate than before — a plain renewal's deployment or any other replacement — the endpoint records the replaced
+  certificate and waits, without a migration run, until an observer agent sees new connections at it (presenting the
+  replacement on TLS 1.2). That evidence is kept on the endpoint (`traffic`: awaiting, observed or unobserved, in
+  `GET /api/v1/endpoints/verifications` and on the Connectors page) and closes the observer's findings for the replaced
+  certificate there; nothing closes on the probe alone.
 - Kubernetes token decoys (Q6-O2): `POST /api/v1/secrets/honeytokens/kubernetes` (`trstctl-cli secrets honeytokens
   kubernetes register`, and the console's decoy credentials) registers a service account bound to nothing and returns
   the manifest that plants it with its token Secret, and the audit rules its cluster needs; trstctl never holds the token.

@@ -24266,6 +24266,15 @@
           "observed_fingerprint": {
             "type": "string"
           },
+          "replaced_at": {
+            "description": "when a verification first saw the replacement",
+            "format": "date-time",
+            "type": "string"
+          },
+          "replaced_fingerprint": {
+            "description": "the certificate the endpoint served before its replacement",
+            "type": "string"
+          },
           "stale_for_seconds": {
             "type": "integer"
           },
@@ -24276,6 +24285,29 @@
               "unreachable",
               "not_checked"
             ],
+            "type": "string"
+          },
+          "traffic": {
+            "description": "X3-L1: wire evidence for a replaced endpoint — an observer agent seeing new connections at it after the replacement went live; absent until the endpoint is replaced",
+            "enum": [
+              "awaiting",
+              "observed",
+              "unobserved"
+            ],
+            "type": "string"
+          },
+          "traffic_finding_id": {
+            "description": "the observer finding that is the evidence",
+            "type": "string"
+          },
+          "traffic_observed_at": {
+            "description": "when the observer saw new connections presenting the replacement (on TLS 1.3, any new connection)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "traffic_unobserved_since": {
+            "description": "the window passed without wire evidence; later evidence still closes it",
+            "format": "date-time",
             "type": "string"
           },
           "vantage": {

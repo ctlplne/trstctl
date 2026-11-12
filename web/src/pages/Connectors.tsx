@@ -1356,6 +1356,7 @@ export function Connectors() {
                           <th scope="col">{translateNow("source.checked.d2ver00006")}</th>
                           <th scope="col">{translateNow("source.last.good.d2ver00007")}</th>
                           <th scope="col">{translateNow("source.last.checked.d2ver00008")}</th>
+                          <th scope="col">{translateNow("source.wire.evidence.x3l100001")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1402,6 +1403,27 @@ export function Connectors() {
                               )}
                             </td>
                             <td className="text-muted-foreground">{row.last_checked_at ? formatDateTime(row.last_checked_at, { locale, timeZone }) : "-"}</td>
+                            {/* X3-L1: a replaced endpoint waits for real clients
+                        on the wire, not only for the probe. */}
+                            <td>
+                              {row.traffic === "observed" && row.traffic_observed_at ? (
+                                <span className="text-status-success">
+                                  {translateNow("source.wire.observed.x3l100003", { value1: formatDateTime(row.traffic_observed_at, { locale, timeZone }) })}
+                                </span>
+                              ) : row.traffic === "unobserved" && row.traffic_unobserved_since ? (
+                                <span className="font-medium text-status-warning">
+                                  {translateNow("source.wire.unobserved.x3l100004", {
+                                    value1: formatDateTime(row.traffic_unobserved_since, { locale, timeZone }),
+                                  })}
+                                </span>
+                              ) : row.traffic === "awaiting" && row.replaced_at ? (
+                                <span className="text-muted-foreground">
+                                  {translateNow("source.wire.awaiting.x3l100002", { value1: formatDateTime(row.replaced_at, { locale, timeZone }) })}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">{translateNow("source.wire.none.x3l100005")}</span>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

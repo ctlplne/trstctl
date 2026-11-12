@@ -2575,6 +2575,13 @@ func componentSchemas() map[string]*Schema {
 		"evidence_digest": str(), "agent_common_name": str(),
 		"last_checked_at": timestamp(), "last_good_at": timestamp(),
 		"stale_for_seconds": {Type: "integer"},
+		"traffic": {Type: "string", Enum: []string{"awaiting", "observed", "unobserved"},
+			Description: "X3-L1: wire evidence for a replaced endpoint — an observer agent seeing new connections at it after the replacement went live; absent until the endpoint is replaced"},
+		"replaced_fingerprint":     {Type: "string", Description: "the certificate the endpoint served before its replacement"},
+		"replaced_at":              {Type: "string", Format: "date-time", Description: "when a verification first saw the replacement"},
+		"traffic_observed_at":      {Type: "string", Format: "date-time", Description: "when the observer saw new connections presenting the replacement (on TLS 1.3, any new connection)"},
+		"traffic_finding_id":       {Type: "string", Description: "the observer finding that is the evidence"},
+		"traffic_unobserved_since": {Type: "string", Format: "date-time", Description: "the window passed without wire evidence; later evidence still closes it"},
 	}, "endpoint_id", "address", "vantage", "status", "checked_sans", "checked_chain")
 	endpointVerificationSummary := object(map[string]*Schema{
 		"endpoints": {Type: "integer"}, "verified": {Type: "integer"},

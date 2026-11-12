@@ -63,6 +63,18 @@ type EndpointVerification struct {
 	// there has never been one, because "infinity" and "a long time" are
 	// different facts.
 	StaleForSeconds *int64 `json:"stale_for_seconds,omitempty"`
+	// Traffic is the wire evidence for a replaced endpoint (X3-L1): awaiting
+	// until an observer sees new connections at it after the replacement went
+	// live, then observed; unobserved once its window passed without any.
+	// Absent until the endpoint is replaced. ReplacedFingerprint is the
+	// certificate it served before, ReplacedAt when the replacement was first
+	// verified, TrafficFindingID the observer finding that is the evidence.
+	Traffic                string `json:"traffic,omitempty"`
+	ReplacedFingerprint    string `json:"replaced_fingerprint,omitempty"`
+	ReplacedAt             string `json:"replaced_at,omitempty"`
+	TrafficObservedAt      string `json:"traffic_observed_at,omitempty"`
+	TrafficFindingID       string `json:"traffic_finding_id,omitempty"`
+	TrafficUnobservedSince string `json:"traffic_unobserved_since,omitempty"`
 }
 
 // EndpointVerificationList is the served response.
@@ -212,6 +224,21 @@ func endpointVerificationDTO(rec store.EndpointVerification, now time.Time, supe
 			stale = 0
 		}
 		item.StaleForSeconds = &stale
+	}
+	if rec.ReplacedAt != nil {
+		item.ReplacedFingerprint = rec.ReplacedFingerprint
+		item.ReplacedAt = rec.ReplacedAt.UTC().Format(time.RFC3339)
+		switch {
+		case rec.TrafficObservedAt != nil:
+			item.Traffic = "observed"
+			item.TrafficObservedAt = rec.TrafficObservedAt.UTC().Format(time.RFC3339)
+			item.TrafficFindingID = rec.TrafficFindingID
+		case rec.TrafficUnobservedSince != nil:
+			item.Traffic = "unobserved"
+			item.TrafficUnobservedSince = rec.TrafficUnobservedSince.UTC().Format(time.RFC3339)
+		default:
+			item.Traffic = "awaiting"
+		}
 	}
 	return item
 }

@@ -335,6 +335,47 @@ describe("connector deployment disclosure surface", () => {
     });
   });
 
+  it("X3-L1 shows each replaced endpoint's wire evidence: waiting, seen or not seen", async () => {
+    const row = (endpoint: string, address: string, extra: Record<string, unknown>) => ({
+      endpoint_id: endpoint,
+      address,
+      vantage: "local",
+      status: "verified",
+      checked_sans: true,
+      checked_chain: true,
+      last_checked_at: "2026-11-12T10:00:00Z",
+      last_good_at: "2026-11-12T10:00:00Z",
+      ...extra,
+    });
+    apiMock.endpointVerifications.mockReset().mockResolvedValue({
+      guidance: "",
+      summary: { endpoints: 4, verified: 4, diverged: 0, unreachable: 0, not_checked: 0 },
+      items: [
+        row("t-seen", "seen.internal:443", {
+          traffic: "observed",
+          replaced_at: "2026-11-12T09:00:00Z",
+          replaced_fingerprint: "aa",
+          traffic_observed_at: "2026-11-12T09:05:00Z",
+          traffic_finding_id: "f-1",
+        }),
+        row("t-quiet", "quiet.internal:443", { traffic: "unobserved", replaced_at: "2026-11-12T08:00:00Z", traffic_unobserved_since: "2026-11-12T08:15:00Z" }),
+        row("t-wait", "wait.internal:443", { traffic: "awaiting", replaced_at: "2026-11-12T09:50:00Z" }),
+        row("t-same", "same.internal:443", {}),
+      ],
+    });
+    const user = userEvent.setup();
+    renderConnectors();
+    expect(await screen.findByRole("heading", { name: "Where credentials are installed" })).toBeInTheDocument();
+    await user.click(screen.getByText("Health, retries, and rollback", { exact: true }));
+    const table = await screen.findByRole("table", { name: "Observed endpoint identity by vantage" });
+    expect(within(table).getByRole("columnheader", { name: "Wire evidence" })).toBeInTheDocument();
+    const cells = (address: string) => (within(table).getByText(address).closest("tr") as HTMLTableRowElement).textContent ?? "";
+    expect(cells("seen.internal:443")).toMatch(/New connections seen/);
+    expect(cells("quiet.internal:443")).toMatch(/No new connections seen since/);
+    expect(cells("wait.internal:443")).toMatch(/Waiting for new connections since/);
+    expect(cells("same.internal:443")).toMatch(/Not replaced/);
+  });
+
   it("A122 names the appliance as the key generator for a target whose appliance makes its own key", async () => {
     apiMock.endpointKeyCustody.mockReset().mockResolvedValue({
       guidance: "",

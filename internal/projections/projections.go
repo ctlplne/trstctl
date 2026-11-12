@@ -248,21 +248,27 @@ const (
 	// EventDiscoveryFindingProviderAction records one step of an action taken at
 	// the provider on what a finding names: revoking an OAuth grant or blocking
 	// its application (A170, A171).
-	EventDiscoveryFindingProviderAction      = "discovery.finding.provider_action"
-	EventDiscoveryRunCompleted               = "discovery.run.completed"
-	EventADCSInventoryObserved               = "adcs.template.inventory.observed"
-	EventADCSTemplateDriftObserved           = "adcs.template.drift"
-	EventADCSTemplateDriftWorsened           = "adcs.template.drift.worsened"
-	EventRevocationProbeQueued               = "revocation.probe.queued"
-	EventRevocationHealthObserved            = "revocation.health.observed"
-	EventMigrationRunRecorded                = "migration.run.recorded"
-	EventACMEDNS01ProviderConfigUpserted     = "acme.dns01.provider_config.upserted"
-	EventACMEDNS01ProviderConfigDeleted      = "acme.dns01.provider_config.deleted"
-	EventACMEDNS01Preflighted                = "acme.dns01.preflighted"
-	EventACMEDNS01RecordPresented            = "acme.dns01.record.presented"
-	EventACMEDNS01RecordCleaned              = "acme.dns01.record.cleaned"
-	EventACMEUpstreamAuthorizationObserved   = "acme.dns01.upstream.authorization.observed"
-	EventEndpointVerified                    = "endpoint.verification.observed"
+	EventDiscoveryFindingProviderAction    = "discovery.finding.provider_action"
+	EventDiscoveryRunCompleted             = "discovery.run.completed"
+	EventADCSInventoryObserved             = "adcs.template.inventory.observed"
+	EventADCSTemplateDriftObserved         = "adcs.template.drift"
+	EventADCSTemplateDriftWorsened         = "adcs.template.drift.worsened"
+	EventRevocationProbeQueued             = "revocation.probe.queued"
+	EventRevocationHealthObserved          = "revocation.health.observed"
+	EventMigrationRunRecorded              = "migration.run.recorded"
+	EventACMEDNS01ProviderConfigUpserted   = "acme.dns01.provider_config.upserted"
+	EventACMEDNS01ProviderConfigDeleted    = "acme.dns01.provider_config.deleted"
+	EventACMEDNS01Preflighted              = "acme.dns01.preflighted"
+	EventACMEDNS01RecordPresented          = "acme.dns01.record.presented"
+	EventACMEDNS01RecordCleaned            = "acme.dns01.record.cleaned"
+	EventACMEUpstreamAuthorizationObserved = "acme.dns01.upstream.authorization.observed"
+	EventEndpointVerified                  = "endpoint.verification.observed"
+	// EventEndpointTrafficObserved and EventEndpointTrafficUnobserved record a
+	// replaced endpoint's wire evidence (X3-L1): an observer saw new
+	// connections at it after the replacement went live, or its window
+	// passed without any.
+	EventEndpointTrafficObserved             = "endpoint.traffic.observed"
+	EventEndpointTrafficUnobserved           = "endpoint.traffic.unobserved"
 	EventMDMSCEPPolicyUpserted               = "mdm.scep_policy.upserted"
 	EventMDMSCEPPolicyDeleted                = "mdm.scep_policy.deleted"
 	EventMDMSCEPChallengeRotated             = "mdm.scep_challenge.rotated"
@@ -3111,6 +3117,25 @@ type ACMEUpstreamAuthorizationObserved struct {
 // it is false nothing below it means anything, and the projector refuses a
 // payload that claims otherwise — an endpoint nobody could connect to must
 // never become a verified one.
+// EndpointTrafficObserved is the wire evidence for a replaced endpoint still
+// serving Fingerprint: the observer finding and when it saw new connections.
+type EndpointTrafficObserved struct {
+	EndpointID  string    `json:"endpoint_id"`
+	Vantage     string    `json:"vantage"`
+	Fingerprint string    `json:"fingerprint"`
+	FindingID   string    `json:"finding_id"`
+	ObservedAt  time.Time `json:"observed_at"`
+}
+
+// EndpointTrafficUnobserved says a replaced endpoint's window passed without
+// wire evidence for Fingerprint.
+type EndpointTrafficUnobserved struct {
+	EndpointID  string    `json:"endpoint_id"`
+	Vantage     string    `json:"vantage"`
+	Fingerprint string    `json:"fingerprint"`
+	Since       time.Time `json:"since"`
+}
+
 type EndpointVerificationObserved struct {
 	EndpointID string `json:"endpoint_id"`
 	Address    string `json:"address"`
@@ -5555,6 +5580,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventACMEUpstreamARIRequested:                 {1: true},
 	EventACMEUpstreamARIObserved:                  {1: true},
 	EventEndpointVerified:                         {1: true, endpointVerificationAlertEventSchemaVersionV2: true, EndpointVerificationAlertEventSchemaVersion: true},
+	EventEndpointTrafficObserved:                  {1: true},
+	EventEndpointTrafficUnobserved:                {1: true},
 	EventMDMSCEPPolicyUpserted:                    {1: true},
 	EventMDMSCEPPolicyDeleted:                     {1: true},
 	EventMDMSCEPChallengeRotated:                  {1: true},
@@ -7928,6 +7955,24 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			}
 		}
 		return nil
+	case EventEndpointTrafficObserved:
+		var pl EndpointTrafficObserved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.EndpointID == "" || pl.Vantage == "" || pl.Fingerprint == "" || pl.FindingID == "" || pl.ObservedAt.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyEndpointTrafficObservedTx(ctx, tx, e.TenantID, pl.EndpointID, pl.Vantage, pl.Fingerprint, pl.FindingID, pl.ObservedAt)
+	case EventEndpointTrafficUnobserved:
+		var pl EndpointTrafficUnobserved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.EndpointID == "" || pl.Vantage == "" || pl.Fingerprint == "" || pl.Since.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyEndpointTrafficUnobservedTx(ctx, tx, e.TenantID, pl.EndpointID, pl.Vantage, pl.Fingerprint, pl.Since)
 	case EventACMEUpstreamAuthorizationObserved:
 		var pl ACMEUpstreamAuthorizationObserved
 		if err := decode(e, &pl); err != nil {

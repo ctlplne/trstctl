@@ -18760,9 +18760,33 @@ export interface components {
             /** Format: date-time */
             not_after?: string;
             observed_fingerprint?: string;
+            /**
+             * Format: date-time
+             * @description when a verification first saw the replacement
+             */
+            replaced_at?: string;
+            /** @description the certificate the endpoint served before its replacement */
+            replaced_fingerprint?: string;
             stale_for_seconds?: number;
             /** @enum {string} */
             status: "verified" | "diverged" | "unreachable" | "not_checked";
+            /**
+             * @description X3-L1: wire evidence for a replaced endpoint — an observer agent seeing new connections at it after the replacement went live; absent until the endpoint is replaced
+             * @enum {string}
+             */
+            traffic?: "awaiting" | "observed" | "unobserved";
+            /** @description the observer finding that is the evidence */
+            traffic_finding_id?: string;
+            /**
+             * Format: date-time
+             * @description when the observer saw new connections presenting the replacement (on TLS 1.3, any new connection)
+             */
+            traffic_observed_at?: string;
+            /**
+             * Format: date-time
+             * @description the window passed without wire evidence; later evidence still closes it
+             */
+            traffic_unobserved_since?: string;
             /** @enum {string} */
             vantage: "local" | "relay";
         };

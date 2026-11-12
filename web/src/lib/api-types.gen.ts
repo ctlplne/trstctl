@@ -5096,8 +5096,14 @@ export interface EndpointVerification {
   mismatch?: "fingerprint" | "sans" | "chain" | "expired" | "not_yet_valid";
   not_after?: string;
   observed_fingerprint?: string;
+  replaced_at?: string;
+  replaced_fingerprint?: string;
   stale_for_seconds?: number;
   status: "verified" | "diverged" | "unreachable" | "not_checked";
+  traffic?: "awaiting" | "observed" | "unobserved";
+  traffic_finding_id?: string;
+  traffic_observed_at?: string;
+  traffic_unobserved_since?: string;
   vantage: "local" | "relay";
 }
 

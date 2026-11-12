@@ -81,7 +81,26 @@ type EndpointVerification struct {
 	// recently" and the console renders it as such.
 	LastGoodAt    time.Time
 	EventSequence uint64
+	// ReplacedFingerprint and ReplacedAt say which certificate this
+	// endpoint served before its current one and when a good observation
+	// first saw the replacement (X3-L1). TrafficObservedAt and
+	// TrafficFindingID are the wire evidence that real clients connect to
+	// the replacement: the observer finding and when; TrafficUnobservedSince
+	// says the window passed without any. Empty until the endpoint is
+	// replaced.
+	ReplacedFingerprint    string
+	ReplacedAt             *time.Time
+	TrafficObservedAt      *time.Time
+	TrafficFindingID       string
+	TrafficUnobservedSince *time.Time
 }
+
+// endpointReplacedSQL is true in ApplyEndpointVerificationTx's upsert when a
+// good observation finds the endpoint serving another certificate than the one
+// last observed there: a renewal's deployment or any other replacement.
+const endpointReplacedSQL = `(EXCLUDED.reached AND EXCLUDED.mismatch = '' AND EXCLUDED.observed_fingerprint <> ''
+		     AND endpoint_verifications.observed_fingerprint <> ''
+		     AND EXCLUDED.observed_fingerprint <> endpoint_verifications.observed_fingerprint)`
 
 // Verified reports whether the last observation from this vantage was clean.
 //
@@ -137,7 +156,15 @@ func (s *Store) ApplyEndpointVerificationTx(ctx context.Context, tx pgx.Tx, v En
 		     last_checked_at      = EXCLUDED.last_checked_at,
 		     -- Never lose the last-known-good date on a failure.
 		     last_good_at         = GREATEST(endpoint_verifications.last_good_at, EXCLUDED.last_good_at),
-		     event_sequence       = GREATEST(endpoint_verifications.event_sequence, EXCLUDED.event_sequence)
+		     event_sequence       = GREATEST(endpoint_verifications.event_sequence, EXCLUDED.event_sequence),
+		     -- X3-L1: a replacement starts a new wait for wire evidence.
+		     replaced_fingerprint = CASE WHEN `+endpointReplacedSQL+` THEN endpoint_verifications.observed_fingerprint
+		                                 ELSE endpoint_verifications.replaced_fingerprint END,
+		     replaced_at          = CASE WHEN `+endpointReplacedSQL+` THEN EXCLUDED.last_checked_at
+		                                 ELSE endpoint_verifications.replaced_at END,
+		     traffic_observed_at  = CASE WHEN `+endpointReplacedSQL+` THEN NULL ELSE endpoint_verifications.traffic_observed_at END,
+		     traffic_finding_id   = CASE WHEN `+endpointReplacedSQL+` THEN NULL ELSE endpoint_verifications.traffic_finding_id END,
+		     traffic_unobserved_since = CASE WHEN `+endpointReplacedSQL+` THEN NULL ELSE endpoint_verifications.traffic_unobserved_since END
 		 WHERE EXCLUDED.event_sequence > endpoint_verifications.event_sequence`,
 		v.TenantID, v.EndpointID, v.Address, v.Vantage, v.Reached, v.Mismatch,
 		v.ExpectedFingerprint, v.ObservedFingerprint, v.CheckedSANs, v.CheckedChain,
@@ -155,7 +182,9 @@ func (s *Store) ListEndpointVerifications(ctx context.Context, tenantID string) 
 			`SELECT tenant_id::text, endpoint_id, address, vantage, reached, mismatch,
 			        expected_fingerprint, observed_fingerprint, checked_sans, checked_chain,
 			        not_before, not_after, detail, evidence_digest, agent_common_name,
-			        last_checked_at, last_good_at, event_sequence
+			        last_checked_at, last_good_at, event_sequence,
+			        COALESCE(replaced_fingerprint, ''), replaced_at, traffic_observed_at, COALESCE(traffic_finding_id, ''),
+			        traffic_unobserved_since
 			   FROM endpoint_verifications
 			  WHERE tenant_id = $1
 			  ORDER BY (mismatch <> '') DESC, last_good_at ASC NULLS FIRST, endpoint_id, vantage`,
@@ -174,7 +203,8 @@ func (s *Store) ListEndpointVerifications(ctx context.Context, tenantID string) 
 				&rec.Reached, &rec.Mismatch, &rec.ExpectedFingerprint, &rec.ObservedFingerprint,
 				&rec.CheckedSANs, &rec.CheckedChain, &notBefore, &notAfter, &rec.Detail,
 				&rec.EvidenceDigest, &rec.AgentCommonName, &rec.LastCheckedAt, &lastGood,
-				&seq); err != nil {
+				&seq, &rec.ReplacedFingerprint, &rec.ReplacedAt, &rec.TrafficObservedAt, &rec.TrafficFindingID,
+				&rec.TrafficUnobservedSince); err != nil {
 				return err
 			}
 			if notBefore != nil {
@@ -206,7 +236,9 @@ func (s *Store) GetEndpointVerification(ctx context.Context, tenantID, endpointI
 			`SELECT tenant_id::text, endpoint_id, address, vantage, reached, mismatch,
 			        expected_fingerprint, observed_fingerprint, checked_sans, checked_chain,
 			        not_before, not_after, detail, evidence_digest, agent_common_name,
-			        last_checked_at, last_good_at, event_sequence
+			        last_checked_at, last_good_at, event_sequence,
+			        COALESCE(replaced_fingerprint, ''), replaced_at, traffic_observed_at, COALESCE(traffic_finding_id, ''),
+			        traffic_unobserved_since
 			   FROM endpoint_verifications
 			  WHERE tenant_id = $1 AND endpoint_id = $2 AND vantage = $3`,
 			tenantID, endpointID, vantage).Scan(
@@ -214,7 +246,8 @@ func (s *Store) GetEndpointVerification(ctx context.Context, tenantID, endpointI
 			&rec.Reached, &rec.Mismatch, &rec.ExpectedFingerprint, &rec.ObservedFingerprint,
 			&rec.CheckedSANs, &rec.CheckedChain, &notBefore, &notAfter, &rec.Detail,
 			&rec.EvidenceDigest, &rec.AgentCommonName, &rec.LastCheckedAt, &lastGood,
-			&sequence)
+			&sequence, &rec.ReplacedFingerprint, &rec.ReplacedAt, &rec.TrafficObservedAt, &rec.TrafficFindingID,
+			&rec.TrafficUnobservedSince)
 		if err != nil {
 			return err
 		}

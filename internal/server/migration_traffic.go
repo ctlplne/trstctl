@@ -32,6 +32,11 @@ import (
 // finding for its predecessor certificate at that endpoint is marked
 // remediated with the evidence that closed it, and not before.
 //
+// A replaced endpoint (X3-L1) rides the same pass: a plain renewal's
+// deployment or any other replacement that a good verification found waits
+// for the same wire evidence, and closes the observer's findings for the
+// certificate it replaced (checkEndpointTraffic).
+//
 // A PQC pilot that requires observed traffic (X3-L5) rides the same pass: a
 // wave whose relay probe passed waits until the observer has seen real
 // clients connect at every negotiated target after its probe (presenting the
@@ -76,7 +81,11 @@ func (s *Server) CheckMigrationTrafficOnce(ctx context.Context, now time.Time) e
 	if err != nil {
 		return err
 	}
-	tenants = unionSorted(tenants, pilotTenants)
+	endpointTenants, err := s.store.TenantsWithEndpointsAwaitingTraffic(ctx)
+	if err != nil {
+		return err
+	}
+	tenants = unionSorted(unionSorted(tenants, pilotTenants), endpointTenants)
 	ctx = events.ContextWithActor(ctx, events.Actor{Subject: migrationTrafficActor})
 	var firstErr error
 	note := func(err error) {
@@ -130,8 +139,95 @@ func (s *Server) CheckMigrationTrafficOnce(ctx context.Context, now time.Time) e
 				note(s.checkPilotTraffic(ctx, tenantID, pilot, wave, handshakes, now))
 			}
 		}
+		endpoints, err := s.store.EndpointsAwaitingTraffic(ctx, tenantID)
+		if err != nil {
+			note(err)
+			continue
+		}
+		for _, endpoint := range endpoints {
+			if !loaded {
+				if handshakes, err = s.observedHandshakes(ctx, tenantID); err != nil {
+					note(err)
+					break
+				}
+				loaded = true
+			}
+			note(s.checkEndpointTraffic(ctx, tenantID, endpoint, handshakes, now))
+		}
 	}
 	return firstErr
+}
+
+// checkEndpointTraffic looks for wire evidence at a replaced endpoint (X3-L1):
+// a plain renewal's deployment or any other replacement waits, like a
+// migration run's member, until an observer has seen new connections at the
+// endpoint after the replacement went live — presenting the replacement on
+// TLS 1.2; on TLS 1.3 the certificate is encrypted and the verification
+// already proved it. The evidence is recorded on the endpoint and the
+// observer's findings for the replaced certificate there are marked
+// remediated with it. An endpoint still unobserved when its window has
+// passed is recorded unobserved; later evidence still closes it.
+func (s *Server) checkEndpointTraffic(ctx context.Context, tenantID string, endpoint store.EndpointVerification, handshakes []observedHandshake, now time.Time) error {
+	if endpoint.ReplacedAt == nil {
+		return nil
+	}
+	replacement := normalizedFingerprint(endpoint.ObservedFingerprint)
+	for _, h := range handshakes {
+		if h.Server != endpoint.Address || h.LastSeen.Before(*endpoint.ReplacedAt) {
+			continue
+		}
+		if h.Visible && normalizedFingerprint(h.Fingerprint) != replacement {
+			continue
+		}
+		if err := s.orch.RecordEndpointTrafficObserved(ctx, tenantID, endpoint.EndpointID, endpoint.Vantage,
+			endpoint.ObservedFingerprint, h.FindingID, *endpoint.ReplacedAt, h.LastSeen); err != nil {
+			return err
+		}
+		return s.closeReplacedEndpointFindings(ctx, tenantID, endpoint, h, handshakes)
+	}
+	window := migration.ObservedTrafficWindow(migration.Run{})
+	if endpoint.TrafficUnobservedSince == nil && now.Sub(*endpoint.ReplacedAt) >= window {
+		return s.orch.RecordEndpointTrafficUnobserved(ctx, tenantID, endpoint.EndpointID, endpoint.Vantage,
+			endpoint.ObservedFingerprint, *endpoint.ReplacedAt, endpoint.ReplacedAt.Add(window))
+	}
+	return nil
+}
+
+// closeReplacedEndpointFindings marks the observer's findings for the replaced
+// certificate at the endpoint remediated, naming the evidence.
+func (s *Server) closeReplacedEndpointFindings(ctx context.Context, tenantID string, endpoint store.EndpointVerification, evidence observedHandshake, handshakes []observedHandshake) error {
+	replaced := normalizedFingerprint(endpoint.ReplacedFingerprint)
+	if replaced == "" {
+		return nil
+	}
+	for _, h := range handshakes {
+		if normalizedFingerprint(h.Fingerprint) != replaced || h.Server != endpoint.Address || h.TriageStatus == string(discovery.TriageRemediated) {
+			continue
+		}
+		// A migration run in the same pass may have closed it already.
+		if current, err := s.store.GetDiscoveryFinding(ctx, tenantID, h.FindingID); err != nil {
+			return err
+		} else if current.TriageStatus == string(discovery.TriageRemediated) {
+			continue
+		}
+		_, err := s.orch.ResolveDiscoveryFinding(ctx, tenantID, h.FindingID, orchestrator.DiscoveryFindingResolution{
+			Status: discovery.TriageRemediated,
+			Reason: "the endpoint serves its replacement: verified and new connections observed",
+			EvidenceRef: fmt.Sprintf("endpoint %s (%s): serving %s since %s; observed connections finding %s at %s",
+				endpoint.EndpointID, endpoint.Vantage, endpoint.ObservedFingerprint, endpoint.ReplacedAt.Format(time.RFC3339),
+				evidence.FindingID, evidence.LastSeen.Format(time.RFC3339)),
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// normalizedFingerprint compares certificate fingerprints written with or
+// without colons, in either case.
+func normalizedFingerprint(fp string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(fp), ":", ""))
 }
 
 // unionSorted merges two sorted tenant lists without duplicates.
