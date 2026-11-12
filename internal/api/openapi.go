@@ -244,6 +244,9 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 	for name, schema := range mdmCheckInSchemas() {
 		schemas[name] = schema
 	}
+	for name, schema := range mdmCheckInWaveSchemas() {
+		schemas[name] = schema
+	}
 	for name, schema := range factoryBatchSchemas() {
 		schemas[name] = schema
 	}

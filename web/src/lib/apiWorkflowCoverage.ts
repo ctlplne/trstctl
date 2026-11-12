@@ -11,6 +11,24 @@ export interface ApiWorkflowCoverage {
 
 export const apiWorkflowCoverage = [
   {
+    path: "/api/v1/mdm/{mdm}/check-in-waves/approval-requests",
+    route: "/protocols",
+    owner: "SURFACE/protocols",
+    kind: "console-flow",
+    workflow: "Ask to check in a renewal wave",
+    rationale:
+      "Protocols → Check in a renewal wave picks an MDM's devices (or those whose renewal is at risk) and asks once for another reviewer's approval of exactly that set (N9-L2).",
+  },
+  {
+    path: "/api/v1/mdm/{mdm}/check-in-waves",
+    route: "/protocols",
+    owner: "SURFACE/protocols",
+    kind: "console-flow",
+    workflow: "Run and follow check-in waves",
+    rationale:
+      "Protocols → Check in a renewal wave runs an approved wave (one check-in per device through the schedule's relay), says when it still waits for approval, and lists each wave with how many devices checked in, failed or wait (N9-L2).",
+  },
+  {
     path: "/api/v1/integrations/slack",
     route: "/approvals",
     owner: "SURFACE/approvals",

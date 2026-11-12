@@ -459,9 +459,9 @@ func approvalRecordPermission(resourceKind, action string) (authz.Permission, bo
 	case "adcs_request":
 		// N1: a decision on a pending AD CS request is reviewed by those who may issue.
 		return authz.CertsIssue, action == "approve" || action == "deny"
-	case "mdm_device":
+	case "mdm_device", "mdm_check_in_wave":
 		// N9: a device check-in at the MDM fetches certificate profiles; it is
-		// reviewed by those who may issue.
+		// reviewed by those who may issue. N9-L2: so is a wave of them.
 		return authz.CertsIssue, action == "check_in"
 	case "migration_run", "pqc_migration_run":
 		return authz.CertsIssue, action == "start"

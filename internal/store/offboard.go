@@ -280,6 +280,8 @@ var TenantScopedTables = []string{
 	"adcs_ca_pending_requests",
 	// N9: MDM device check-ins; no foreign keys.
 	"mdm_device_check_ins",
+	// N9-L2: MDM check-in waves; no foreign keys.
+	"mdm_check_in_waves",
 	// P12: factory birth certificates, then their batches; no foreign keys.
 	"factory_birth_certificates", "factory_batches",
 	// P13: incident closures; no foreign keys.

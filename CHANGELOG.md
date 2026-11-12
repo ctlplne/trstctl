@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- Every device of a renewal wave can check in with its MDM under one approval (N9-L2). A wave names 1 to 200 devices
+  trstctl has read from that MDM. A reviewer approves exactly that set, and running it queues one check-in and one
+  relay job per device, each recorded from the MDM's answer. `GET /api/v1/mdm/{mdm}/check-in-waves` counts how many
+  checked in, failed or wait. The Protocols page picks the devices, or those whose renewal is at risk, asks, and
+  runs the approved wave.
 - An MDM device check-in the MDM throttles or fails on its side is asked again under the same approval (N9-L3).
   On a 429 or 5xx the relay posts again in the same job with the same token, at most four times, waiting for the
   MDM's `Retry-After` (at most 30 seconds) or 2, 4 and 8 seconds, and no more than a minute in all. Any other

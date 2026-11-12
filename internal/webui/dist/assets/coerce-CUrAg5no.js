@@ -1,1 +1,0 @@
-import{m as s,t}from"./schemas-DgBx2V3K.js";function r(r){return s(t,r)}export{r as t};

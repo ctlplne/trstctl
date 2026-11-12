@@ -9150,6 +9150,66 @@ MDMCheckInStart = TypedDict(
     total=False,
 )
 
+MDMCheckInWave = TypedDict(
+    'MDMCheckInWave',
+    {
+        'approval_request_id': str,
+        'checked_in': int,
+        'device_count': int,
+        'failed': int,
+        'id': str,
+        'mdm': str,
+        'queued': int,
+        'queued_at': str,
+        'reason': str,
+        'requested_by': str,
+    },
+    total=False,
+)
+
+MDMCheckInWaveApproval = TypedDict(
+    'MDMCheckInWaveApproval',
+    {
+        'approval_count': int,
+        'approval_intent_digest': str,
+        'approval_request_id': str,
+        'devices': list[dict[str, Any]],
+        'expires_at': str,
+        'mdm': str,
+        'reason': str,
+        'required_approvals': int,
+        'status': str,
+    },
+    total=False,
+)
+
+MDMCheckInWaveList = TypedDict(
+    'MDMCheckInWaveList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+MDMCheckInWaveRequest = TypedDict(
+    'MDMCheckInWaveRequest',
+    {
+        'device_ids': list[str],
+        'reason': str,
+    },
+    total=False,
+)
+
+MDMCheckInWaveStart = TypedDict(
+    'MDMCheckInWaveStart',
+    {
+        'approval_intent_digest': str,
+        'approval_request_id': str,
+        'device_ids': list[str],
+    },
+    total=False,
+)
+
 MDMDevice = TypedDict(
     'MDMDevice',
     {

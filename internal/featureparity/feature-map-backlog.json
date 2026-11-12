@@ -8785,7 +8785,10 @@
                 "listMDMPollSchedules",
                 "requestMDMCheckInApproval",
                 "executeMDMCheckIn",
-                "listMDMCheckIns"
+                "listMDMCheckIns",
+                "requestMDMCheckInWaveApproval",
+                "executeMDMCheckInWave",
+                "listMDMCheckInWaves"
             ],
             "api_na": "",
             "cli_surface": [
@@ -8805,7 +8808,10 @@
                 "mdm poll-schedule show",
                 "mdm check-in ask",
                 "mdm check-in run",
-                "mdm check-ins"
+                "mdm check-ins",
+                "mdm check-in-wave ask",
+                "mdm check-in-wave run",
+                "mdm check-in-waves"
             ],
             "cli_na": "",
             "facet_evidence": {

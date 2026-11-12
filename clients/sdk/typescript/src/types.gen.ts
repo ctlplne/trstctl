@@ -7307,6 +7307,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mdm/{mdm}/check-in-waves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List an MDM's check-in waves, newest first, with how many devices checked in, failed or wait */
+        get: operations["listMDMCheckInWaves"];
+        put?: never;
+        /** Execute an approved check-in wave: one check-in, through the MDM schedule's relay, for each device the approval names */
+        post: operations["executeMDMCheckInWave"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mdm/{mdm}/check-in-waves/approval-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask for approval to have every device of a renewal wave check in with its MDM now; other reviewers approve exactly that set of devices before anything reaches the MDM */
+        post: operations["requestMDMCheckInWaveApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mdm/{mdm}/check-ins": {
         parameters: {
             query?: never;
@@ -20450,6 +20485,63 @@ export interface components {
         MDMCheckInStart: {
             approval_intent_digest: string;
             approval_request_id: string;
+        };
+        MDMCheckInWave: {
+            approval_request_id: string;
+            checked_in: number;
+            device_count: number;
+            failed: number;
+            id: string;
+            /** @enum {string} */
+            mdm: "intune" | "jamf";
+            queued: number;
+            /** Format: date-time */
+            queued_at: string;
+            reason: string;
+            requested_by: string;
+        };
+        MDMCheckInWaveApproval: {
+            approval_count: number;
+            approval_intent_digest: string;
+            approval_request_id: string;
+            devices: {
+                device_id: string;
+                device_name?: string;
+            }[];
+            /** Format: date-time */
+            expires_at: string;
+            /** @enum {string} */
+            mdm: "intune" | "jamf";
+            reason: string;
+            required_approvals: number;
+            status: string;
+        };
+        MDMCheckInWaveList: {
+            items: {
+                approval_request_id: string;
+                checked_in: number;
+                device_count: number;
+                failed: number;
+                id: string;
+                /** @enum {string} */
+                mdm: "intune" | "jamf";
+                queued: number;
+                /** Format: date-time */
+                queued_at: string;
+                reason: string;
+                requested_by: string;
+            }[];
+        };
+        MDMCheckInWaveRequest: {
+            /** @description The MDM's own device ids, 1 to 200; each must be a device trstctl has read from that MDM. */
+            device_ids: string[];
+            reason: string;
+        };
+        MDMCheckInWaveStart: {
+            approval_intent_digest: string;
+            approval_request_id: string;
+            /** @description The MDM's own device ids, 1 to 200; each must be a device trstctl has read from that MDM. */
+            device_ids: string[];
         };
         MDMDevice: {
             device_name?: string;
@@ -49854,6 +49946,143 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MDMSCEPStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listMDMCheckInWaves: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description intune or jamf */
+                mdm: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMCheckInWaveList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    executeMDMCheckInWave: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description intune or jamf */
+                mdm: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MDMCheckInWaveStart"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMCheckInWave"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    requestMDMCheckInWaveApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description intune or jamf */
+                mdm: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MDMCheckInWaveRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMCheckInWaveApproval"];
                 };
             };
             /** @description client error */

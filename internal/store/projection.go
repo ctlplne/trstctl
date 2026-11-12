@@ -881,6 +881,8 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"adcs_ca_pending_requests",
 	// N9: projected from mdm.device.check_in_queued and mdm.device.checked_in.
 	"mdm_device_check_ins",
+	// N9-L2: projected from mdm.device.check_in_wave_queued.
+	"mdm_check_in_waves",
 	// P12: projected from edge.factory_batch.created, edge.factory_birth.recorded
 	// and edge.factory_device.enrolled.
 	"factory_batches", "factory_birth_certificates",

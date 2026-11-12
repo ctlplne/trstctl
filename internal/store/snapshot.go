@@ -334,7 +334,9 @@ import (
 // and the issuance could not be resumed once approved.
 // Version 118 carries N1-L2's AD CS pending requests: without them a restored
 // store would list no pending request until the CA is read again.
-const SnapshotFormatVersion = 118
+// Version 119 carries N9-L2's MDM check-in waves: without them a restored
+// store would show a wave's check-ins without the wave that queued them.
+const SnapshotFormatVersion = 119
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -426,6 +428,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"certificate_key_vault_disables",
 	// Format 86: N9's MDM device check-ins.
 	"mdm_device_check_ins",
+	// Format 119: N9-L2's MDM check-in waves.
+	"mdm_check_in_waves",
 	// Format 87: P12's factory batches and their birth certificates.
 	"factory_batches", "factory_birth_certificates",
 	// Format 88: P13's incident closures.
@@ -863,7 +867,8 @@ SELECT jsonb_build_object(
 ) || jsonb_build_object(
   -- The fourth object is full (49 tables and the snapshot set, 100
   -- arguments): N1-L2 starts a fifth.
-  'adcs_ca_pending_requests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_ca_pending_requests t)
+  'adcs_ca_pending_requests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_ca_pending_requests t),
+  'mdm_check_in_waves', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM mdm_check_in_waves t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL,

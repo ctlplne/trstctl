@@ -415,8 +415,22 @@ reason (a device deleted at the MDM answers 404). An MDM that throttles the call
 or fails on its side (5xx) is asked again in the same job, under the same approval and
 token (N9-L3): at most four posts, each wait the MDM's `Retry-After` (at most 30
 seconds) or 2, 4 and 8 seconds, and no more than a minute of waiting in all. Any other
-refusal, or one that outlasts those bounds, fails the check-in; ask again. A check-in
-only tells the MDM to contact the device: whether
+refusal, or one that outlasts those bounds, fails the check-in; ask again.
+
+**A renewal wave under one approval (N9-L2).** Every device of a renewal wave can
+check in under one approval. `POST /api/v1/mdm/{mdm}/check-in-waves/approval-requests`
+(`trstctl-cli mdm check-in-wave ask`) names 1 to 200 devices, each one trstctl has read
+from that MDM, with a reason. The approval request lists every device, so a reviewer
+approves exactly that set. The requester then runs it with the same devices (`POST
+/api/v1/mdm/{mdm}/check-in-waves`, `trstctl-cli mdm check-in-wave run`), which spends the
+approval once and queues one check-in and one relay job per device. A different set of
+devices is refused, and running it again returns the same wave. Each device's check-in
+is recorded from the MDM's own answer, as a single check-in is, and `GET
+/api/v1/mdm/{mdm}/check-in-waves` (`trstctl-cli mdm check-in-waves`) counts how many
+checked in, failed or wait. On the Protocols page, **Check in a renewal wave** picks the
+devices, or those whose renewal is at risk, asks, and runs the wave once it is approved.
+
+A check-in only tells the MDM to contact the device: whether
 the device is online and installs the profile still shows in its trace.
 
 ## Use it

@@ -6592,6 +6592,46 @@ export interface MDMCheckInStart {
   approval_request_id: string;
 }
 
+export interface MDMCheckInWave {
+  approval_request_id: string;
+  checked_in: number;
+  device_count: number;
+  failed: number;
+  id: string;
+  mdm: "intune" | "jamf";
+  queued: number;
+  queued_at: string;
+  reason: string;
+  requested_by: string;
+}
+
+export interface MDMCheckInWaveApproval {
+  approval_count: number;
+  approval_intent_digest: string;
+  approval_request_id: string;
+  devices: { device_id: string; device_name?: string }[];
+  expires_at: string;
+  mdm: "intune" | "jamf";
+  reason: string;
+  required_approvals: number;
+  status: string;
+}
+
+export interface MDMCheckInWaveList {
+  items: ({ approval_request_id: string; checked_in: number; device_count: number; failed: number; id: string; mdm: "intune" | "jamf"; queued: number; queued_at: string; reason: string; requested_by: string })[];
+}
+
+export interface MDMCheckInWaveRequest {
+  device_ids: string[];
+  reason: string;
+}
+
+export interface MDMCheckInWaveStart {
+  approval_intent_digest: string;
+  approval_request_id: string;
+  device_ids: string[];
+}
+
 export interface MDMDevice {
   device_name?: string;
   identity_id?: string;

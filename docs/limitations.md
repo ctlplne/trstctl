@@ -8248,9 +8248,9 @@ on the MDM schedule's relay with the schedule's token redeemed for the one call,
 answer (`checked_in` with its status, or `failed` with the relay's reason). It is the only write to an MDM, and it
 sends no body. A check-in the MDM throttles (429) or fails on its side (5xx) is asked again in the same job under the
 same approval, within four posts and a minute of waits (N9-L3); any other failure is not retried on its own. Proven against Intune Graph and Jamf Pro stand-ins over
-TLS with the production relay; a live Intune tenant and Jamf Pro server are a Track B row. What comes next: Jamf
-mobile devices (the device read today covers computers only), and checking in every device of a renewal wave
-under one approval.
+TLS with the production relay; a live Intune tenant and Jamf Pro server are a Track B row. A renewal wave checks in
+at most 200 devices, each one trstctl has read from that MDM, under one approval (N9-L2). What comes next: Jamf
+mobile devices (the device read today covers computers only).
 
 ## ACME revocation of a certificate trstctl doesn't hold (N10) — served
 

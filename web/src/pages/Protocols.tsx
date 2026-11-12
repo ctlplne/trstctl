@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { MDMDevicesPanel } from "@/components/MDMDevicesPanel";
+import { MDMCheckInWavePanel } from "@/components/MDMCheckInWavePanel";
 import { Copy, X } from "lucide-react";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
@@ -719,6 +720,7 @@ export function Protocols() {
         </summary>
         <div className="mt-5 grid min-w-0 gap-6 *:min-w-0">
           <MDMDevicesPanel />
+          <MDMCheckInWavePanel />
 
           <details data-testid="protocol-network-evidence" className="group border-y border-border py-3">
             <summary className="cursor-pointer list-none marker:hidden">

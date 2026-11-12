@@ -31285,6 +31285,225 @@
         ],
         "type": "object"
       },
+      "MDMCheckInWave": {
+        "properties": {
+          "approval_request_id": {
+            "type": "string"
+          },
+          "checked_in": {
+            "type": "integer"
+          },
+          "device_count": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "mdm": {
+            "enum": [
+              "intune",
+              "jamf"
+            ],
+            "type": "string"
+          },
+          "queued": {
+            "type": "integer"
+          },
+          "queued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requested_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "mdm",
+          "reason",
+          "approval_request_id",
+          "requested_by",
+          "device_count",
+          "checked_in",
+          "failed",
+          "queued",
+          "queued_at"
+        ],
+        "type": "object"
+      },
+      "MDMCheckInWaveApproval": {
+        "properties": {
+          "approval_count": {
+            "type": "integer"
+          },
+          "approval_intent_digest": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "type": "string"
+          },
+          "devices": {
+            "items": {
+              "properties": {
+                "device_id": {
+                  "type": "string"
+                },
+                "device_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "device_id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "mdm": {
+            "enum": [
+              "intune",
+              "jamf"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mdm",
+          "devices",
+          "reason",
+          "approval_request_id",
+          "approval_intent_digest",
+          "status",
+          "required_approvals",
+          "approval_count",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "MDMCheckInWaveList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "approval_request_id": {
+                  "type": "string"
+                },
+                "checked_in": {
+                  "type": "integer"
+                },
+                "device_count": {
+                  "type": "integer"
+                },
+                "failed": {
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "mdm": {
+                  "enum": [
+                    "intune",
+                    "jamf"
+                  ],
+                  "type": "string"
+                },
+                "queued": {
+                  "type": "integer"
+                },
+                "queued_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "requested_by": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "mdm",
+                "reason",
+                "approval_request_id",
+                "requested_by",
+                "device_count",
+                "checked_in",
+                "failed",
+                "queued",
+                "queued_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "MDMCheckInWaveRequest": {
+        "properties": {
+          "device_ids": {
+            "description": "The MDM's own device ids, 1 to 200; each must be a device trstctl has read from that MDM.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_ids",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "MDMCheckInWaveStart": {
+        "properties": {
+          "approval_intent_digest": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "type": "string"
+          },
+          "device_ids": {
+            "description": "The MDM's own device ids, 1 to 200; each must be a device trstctl has read from that MDM.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "approval_request_id",
+          "approval_intent_digest",
+          "device_ids"
+        ],
+        "type": "object"
+      },
       "MDMDevice": {
         "properties": {
           "device_name": {
@@ -93429,6 +93648,216 @@
         ],
         "summary": "Get served MDM SCEP policy and challenge telemetry status",
         "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/mdm/{mdm}/check-in-waves": {
+      "get": {
+        "operationId": "listMDMCheckInWaves",
+        "parameters": [
+          {
+            "description": "intune or jamf",
+            "in": "path",
+            "name": "mdm",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMCheckInWaveList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List an MDM's check-in waves, newest first, with how many devices checked in, failed or wait",
+        "x-trstctl-permission": "certs:read"
+      },
+      "post": {
+        "operationId": "executeMDMCheckInWave",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "intune or jamf",
+            "in": "path",
+            "name": "mdm",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MDMCheckInWaveStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMCheckInWave"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Execute an approved check-in wave: one check-in, through the MDM schedule's relay, for each device the approval names",
+        "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/mdm/{mdm}/check-in-waves/approval-requests": {
+      "post": {
+        "operationId": "requestMDMCheckInWaveApproval",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "intune or jamf",
+            "in": "path",
+            "name": "mdm",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MDMCheckInWaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMCheckInWaveApproval"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Ask for approval to have every device of a renewal wave check in with its MDM now; other reviewers approve exactly that set of devices before anything reaches the MDM",
+        "x-trstctl-permission": "certs:write"
       }
     },
     "/api/v1/mdm/{mdm}/check-ins": {

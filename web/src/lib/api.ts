@@ -55,6 +55,11 @@ import type {
   IssuanceRequestPreparation,
   IssuanceRequestPreview,
   IssuanceRequestIssuerList,
+  MDMCheckInWave,
+  MDMCheckInWaveApproval,
+  MDMCheckInWaveList,
+  MDMCheckInWaveRequest,
+  MDMCheckInWaveStart,
   MDMDeviceList,
   MDMDeviceTrace,
   MDMPollSchedule,
@@ -931,6 +936,7 @@ export interface DiscoveryFindingListOptions {
 }
 export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { UpgradePreflight } from "./api-types.gen";
+export type { MDMCheckInWave, MDMCheckInWaveApproval, MDMCheckInWaveRequest, MDMCheckInWaveStart } from "./api-types.gen";
 export type { ChangeApplication, ChangeApplyRequest, ChangeDraft, ChangeDraftRequest, ChangePlan, ChangeSet } from "./api-types.gen";
 export type {
   AccessActivityExport,
@@ -2343,6 +2349,12 @@ export interface Api {
   putTicketIntakeSchedule(input: TicketIntakeInput, idempotencyKey: string): Promise<TicketIntakeSchedule>;
   /** I5: read-only MDM device correlation; unobserved is counted apart from failed. */
   mdmDevices(): Promise<MDMDeviceList>;
+  /** N9-L2: ask reviewers to approve checking in every device of a wave. */
+  requestMDMCheckInWaveApproval(mdm: string, input: MDMCheckInWaveRequest): Promise<MDMCheckInWaveApproval>;
+  /** N9-L2: run an approved wave: one check-in per device it names. */
+  executeMDMCheckInWave(mdm: string, input: MDMCheckInWaveStart): Promise<MDMCheckInWave>;
+  /** N9-L2: an MDM's check-in waves with their progress. */
+  mdmCheckInWaves(mdm: string): Promise<MDMCheckInWave[]>;
   /** I5/AUD-45: relay-only Intune/Jamf schedules, including waiting/failure state. */
   mdmPollSchedules(): Promise<MDMPollScheduleList>;
   /** I5: configure a tenant-scoped read-only relay poll; the bearer remains a secret reference. */
@@ -3257,6 +3269,10 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<void>("DELETE", `/api/v1/issuance-requests/intake-schedule?system=${encodeURIComponent(system)}&name=${encodeURIComponent(name)}`, undefined, key),
   putTicketIntakeSchedule: (input, idempotencyKey) => mutate<TicketIntakeSchedule>("PUT", "/api/v1/issuance-requests/intake-schedule", input, idempotencyKey),
   mdmDevices: () => req<MDMDeviceList>("/api/v1/mdm/devices"),
+  requestMDMCheckInWaveApproval: (mdm, input) =>
+    mutate<MDMCheckInWaveApproval>("POST", `/api/v1/mdm/${encodeURIComponent(mdm)}/check-in-waves/approval-requests`, input),
+  executeMDMCheckInWave: (mdm, input) => mutate<MDMCheckInWave>("POST", `/api/v1/mdm/${encodeURIComponent(mdm)}/check-in-waves`, input),
+  mdmCheckInWaves: (mdm) => req<MDMCheckInWaveList>(`/api/v1/mdm/${encodeURIComponent(mdm)}/check-in-waves`).then((r) => r.items ?? []),
   mdmPollSchedules: () => req<MDMPollScheduleList>("/api/v1/mdm/poll-schedule"),
   putMDMPollSchedule: (input) => mutate<MDMPollSchedule>("PUT", "/api/v1/mdm/poll-schedule", input),
   mdmDeviceTrace: (mdm, id) => req<MDMDeviceTrace>(`/api/v1/mdm/${encodeURIComponent(mdm)}/devices/${encodeURIComponent(id)}/trace`),
