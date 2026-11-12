@@ -85,6 +85,11 @@ func (r RotationReport) validShape() bool {
 		return r.Failure == "" && r.Proof != nil && r.Proof.Binding.Validate() == nil && r.Proof.GenerationID == r.RotationID && r.Proof.NewAuthenticated && r.Proof.OldRefused && r.Proof.ObservedAt.Equal(r.ObservedAt)
 	case "uncertain":
 		return r.Proof == nil && (r.Failure == "execution_uncertain" || r.Failure == "journal_unavailable" || r.Failure == "native_operation_failed")
+	case "not_applied":
+		// A268-O1: a begun generation the account never took. The host
+		// proved it by sign-in: the predecessor signs in, the prepared
+		// password is refused.
+		return r.Proof == nil && r.Failure == "predecessor_signs_in"
 	case "refused":
 		if r.Proof != nil {
 			return false

@@ -1,6 +1,14 @@
 ## [Unreleased]
 
 ### Added
+- A Windows local-account rotation whose outcome the host lost is settled (A268-O1). The
+  generation gets one recovery delivery, and the host settles it by sign-in alone, at most twice
+  and within the account's lockout margin, without changing the password again. If the
+  successor signs in and the predecessor is refused, the rotation completes with the host's
+  proof. If the predecessor still signs in, the generation was never applied: the rotation fails
+  with nothing to restore, the account and vault keep the current password, and the next
+  rotation starts from the same predecessor. Before this, the rotation stayed prepared for an
+  operator. It still does when recovery cannot tell, or the host's agent predates it.
 - An AD discovery scan refreshes the hosts bound to the accounts it finds (A267-O1): each
   enabled enrolled-host binding whose account still has the identity it was saved with gets
   its read-only service, task and IIS inventory queued, through the same-transaction outbox
@@ -948,6 +956,11 @@
 
 ### Fixed
 
+- A Windows host agent's rotation report is accepted with the outcome the agent sends
+  (A268-O1). The agent reports a proved local-account rotation as verified and any other result
+  as failed, but the control plane accepted only an executed outcome, so a rotation the host
+  proved never completed and a failed or uncertain result never reached the rotation. A
+  delivery the host reported uncertain or never applied is no longer re-sent by the queue.
 - A dependent AD rotation whose review expires during its final checks no longer strands the account
   (A267-O3). The worker checked the deadline before the last preflights and the full read of the
   reviewed scope, then stamped the reset's start later. A read that outlasted the deadline produced a

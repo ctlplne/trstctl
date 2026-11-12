@@ -91,6 +91,12 @@ func WindowsLocalRotationOutboxKey(epoch, id string) string {
 	return hostaccounts.RotationDestination + ":" + epoch + ":" + id
 }
 
+// WindowsLocalRotationRecoveryOutboxKey is the one re-delivery of a
+// generation whose outcome a host reported uncertain (A268-O1).
+func WindowsLocalRotationRecoveryOutboxKey(epoch, id string) string {
+	return hostaccounts.RotationDestination + ":recover:" + epoch + ":" + id
+}
+
 // ApplyWindowsLocalRotationPreparedTx is called in the prepared phase's exact
 // transaction. The sealed values remain on the static command; the host queue
 // contains only public authority and is pinned to its one host role/identity.
@@ -115,7 +121,11 @@ func (s *Store) ApplyWindowsLocalRotationPreparedTx(ctx context.Context, tx pgx.
 		if e = tx.QueryRow(ctx, `SELECT phase FROM secret_static_rotation_commands WHERE tenant_id=$1 AND id=$2`, tenantID, previous.Intent.RotationID).Scan(&phase); e != nil {
 			return e
 		}
-		if previous.Observation == nil || previous.Observation.Report.Status != "succeeded" || phase != SecretStaticRotationCompleted || i.PredecessorGenerationID != previous.Intent.RotationID {
+		applied := previous.Observation != nil && previous.Observation.Report.Status == "succeeded" && phase == SecretStaticRotationCompleted && i.PredecessorGenerationID == previous.Intent.RotationID
+		// A268-O1: a generation the host proved it never applied ended with its
+		// predecessor still current, so the next generation follows that one.
+		neverApplied := previous.Observation != nil && previous.Observation.Report.Status == "not_applied" && SecretStaticRotationPhaseTerminal(phase) && i.PredecessorGenerationID == previous.Intent.PredecessorGenerationID
+		if !applied && !neverApplied {
 			return errors.New("store: another native local generation is unresolved or its predecessor differs")
 		}
 	} else if errors.Is(e, ErrWindowsLocalRotationNotFound) {
@@ -140,8 +150,13 @@ func (s *Store) ApplyWindowsLocalRotationPreparedTx(ctx context.Context, tx pgx.
 	if saved.Intent != i || saved.PreparedEventID != eventID || !saved.PreparedAt.Equal(at) {
 		return ErrIdempotencyConflict
 	}
-	if saved.Observation != nil && saved.Observation.Report.Status == "succeeded" || cmd.Phase != SecretStaticRotationPrepared {
+	if saved.Observation != nil && (saved.Observation.Report.Status == "succeeded" || saved.Observation.Report.Status == "not_applied") || cmd.Phase != SecretStaticRotationPrepared {
 		return nil
+	}
+	// A268-O1: an uncertain generation's delivery is its one recovery
+	// delivery. Recreating deliveries recreates that one, never the original.
+	if saved.Observation != nil && saved.Observation.Report.Status == "uncertain" {
+		return s.queueWindowsLocalRotationRecoveryTx(ctx, tx, tenantID, saved)
 	}
 	id, e := ensureSecretIntegrationOutboxTx(ctx, tx, tenantID, hostaccounts.RotationDestination, "windows-local-host:"+i.AgentID, WindowsLocalRotationOutboxKey(cmd.TenantEpoch, i.RotationID), raw)
 	if e != nil {
@@ -157,6 +172,37 @@ func (s *Store) ApplyWindowsLocalRotationPreparedTx(ctx context.Context, tx pgx.
 	_, e = tx.Exec(ctx, `UPDATE windows_local_account_rotations SET outbox_id=$3 WHERE tenant_id=$1 AND id=$2`, tenantID, i.RotationID, id)
 	return e
 }
+
+// queueWindowsLocalRotationRecoveryTx queues the one re-delivery of a
+// generation whose outcome was uncertain and points the generation at it, so
+// its claim, credential redemption and report bind to that delivery.
+func (s *Store) queueWindowsLocalRotationRecoveryTx(ctx context.Context, tx pgx.Tx, tenantID string, v WindowsLocalRotation) error {
+	var epoch, phase string
+	if e := tx.QueryRow(ctx, `SELECT tenant_epoch, phase FROM secret_static_rotation_commands WHERE tenant_id=$1 AND id=$2`, tenantID, v.Intent.RotationID).Scan(&epoch, &phase); e != nil {
+		return e
+	}
+	if phase != SecretStaticRotationPrepared {
+		return nil
+	}
+	raw, e := json.Marshal(v.Intent)
+	if e != nil {
+		return e
+	}
+	id, e := ensureSecretIntegrationOutboxTx(ctx, tx, tenantID, hostaccounts.RotationDestination, "windows-local-host:"+v.Intent.AgentID, WindowsLocalRotationRecoveryOutboxKey(epoch, v.Intent.RotationID), raw)
+	if e != nil {
+		return e
+	}
+	tag, e := tx.Exec(ctx, `UPDATE outbox SET required_agent_role='host',required_agent_id=$3 WHERE tenant_id=$1 AND id=$2 AND (required_agent_role IS NULL OR required_agent_role='' OR required_agent_role='host') AND (required_agent_id IS NULL OR required_agent_id=$3)`, tenantID, id, v.Intent.AgentID)
+	if e != nil {
+		return e
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrIdempotencyConflict
+	}
+	_, e = tx.Exec(ctx, `UPDATE windows_local_account_rotations SET outbox_id=$3 WHERE tenant_id=$1 AND id=$2`, tenantID, v.Intent.RotationID, id)
+	return e
+}
+
 func (s *Store) ApplyWindowsLocalRotationObservedTx(ctx context.Context, tx pgx.Tx, tenantID, eventID string, o WindowsLocalRotationObservation) error {
 	v, e := scanWindowsLocalRotation(tx.QueryRow(ctx, "SELECT "+windowsLocalRotationColumns+" FROM windows_local_account_rotations WHERE tenant_id=$1 AND id=$2 FOR UPDATE", tenantID, o.Report.RotationID))
 	if e != nil {
@@ -191,12 +237,24 @@ func (s *Store) ApplyWindowsLocalRotationObservedTx(ctx context.Context, tx pgx.
 			return e
 		}
 	}
+	// A268-O1: the first uncertain outcome gets one re-delivery of the same
+	// generation. A current host settles it by sign-in alone (applied, with
+	// proof, or not applied); an earlier one reports uncertain again.
+	if o.Report.Status == "uncertain" && (v.Observation == nil || v.Observation.Report.Status != "uncertain") {
+		if e = s.queueWindowsLocalRotationRecoveryTx(ctx, tx, tenantID, v); e != nil {
+			return e
+		}
+	}
 	detail := ""
-	if o.Report.Status != "succeeded" {
+	switch o.Report.Status {
+	case "succeeded":
+	case "not_applied":
+		detail = "native host proved the generation was never applied: the predecessor still signs in; the account keeps its current password"
+	default:
 		detail = "native host " + o.Report.Status + ": " + o.Report.Failure + "; sealed generation retained; recovery required"
 	}
 	_, e = tx.Exec(ctx, `UPDATE secret_static_rotation_commands SET error=$3 WHERE tenant_id=$1 AND id=$2 AND phase='prepared'`, tenantID, o.Report.RotationID, detail)
-	if e != nil || o.Report.Status != "succeeded" {
+	if e != nil || o.Report.Status != "succeeded" && o.Report.Status != "not_applied" {
 		return e
 	}
 	// The existing static worker resumes promptly from its budget-neutral wait.

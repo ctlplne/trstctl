@@ -1324,7 +1324,9 @@ explicitly destroyed after use.
 
 The caller must durably record the generation's start before the first native
 write and retain the resulting public proof before publishing success. A started
-attempt is never blindly reset or authenticated again after an uncertain outcome.
+attempt is never reset again after an uncertain outcome. Its one recovery delivery
+signs in at most twice to settle it, each time only within the account's lockout
+margin.
 Native APIs address a local account by name: SID checks before and after each
 phase detect observed changes but do not provide an atomic SID compare-and-set.
 A trusted local administrator can still race a rename between those calls.
@@ -1340,11 +1342,15 @@ machine/account binding and start phase. The file is flushed before native work;
 a completed proof is flushed before the caller can publish success. A retry reads
 that exact proof without redeeming credentials or probing either password again.
 A started attempt without a retained proof remains uncertain after restart and
-after acknowledgment of a failed report.
+after acknowledgment of a failed report, until its recovery delivery settles it by
+sign-in: a proof completes the record as a rotation would, and a predecessor that
+still signs in records the generation not applied.
 
 Successful report acknowledgment preserves the latest public proof as a replay
 fence. Only a distinct generation explicitly naming the acknowledged generation as its
-predecessor can replace it. Recreated delivery IDs replay the original proof;
+predecessor can replace it. A generation recorded not applied is replaced by a
+distinct generation naming that generation's own predecessor, which the account
+never left. Recreated delivery IDs replay the original proof;
 older ancestry and changed authority cannot reset the account again. Delivery
 ordering never depends on a database-local outbox identity.
 Independent accounts have independent queue order. The private child directory

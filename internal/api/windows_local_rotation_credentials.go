@@ -22,7 +22,7 @@ func (a *API) OpenWindowsLocalRotationCredentials(ctx context.Context, tenantID 
 	if e != nil {
 		return nil, nil, e
 	}
-	if v.Intent != i || cmd.Phase != store.SecretStaticRotationPrepared || v.Observation != nil && v.Observation.Report.Status == "succeeded" {
+	if v.Intent != i || cmd.Phase != store.SecretStaticRotationPrepared || v.Observation != nil && (v.Observation.Report.Status == "succeeded" || v.Observation.Report.Status == "not_applied") {
 		return nil, nil, errors.New("native credential generation is no longer pending")
 	}
 	if v.OutboxID == nil || *v.OutboxID != jobID || attempt <= 0 {

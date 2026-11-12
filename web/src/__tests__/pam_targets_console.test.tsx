@@ -377,6 +377,8 @@ it("registers a Windows local administrator account for check-out with its nativ
   await user.selectOptions(within(form).getByRole("combobox", { name: "Target type" }), "windows_local");
   expect(within(form).queryByRole("textbox", { name: "Gateway agent ID" })).not.toBeInTheDocument();
   expect(within(form).getByText(/never opened as a session/)).toBeInTheDocument();
+  // A268-O1: a rotation whose outcome the host lost is settled by sign-in.
+  expect(within(form).getByText(/settles it by sign-in without changing the password again/)).toBeInTheDocument();
   await user.type(within(form).getByRole("combobox", { name: "Account provider ID" }), "host-sam");
   const secret = within(form).getByRole("combobox", { name: "Account secret" });
   await user.clear(secret);

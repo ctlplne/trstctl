@@ -116,6 +116,9 @@ func (a *API) stagePreparedStaticRotation(ctx context.Context, cmd store.SecretS
 	if err != nil {
 		return err
 	}
+	if done, err := a.endNotAppliedHostGeneration(ctx, cmd, provider); done || err != nil {
+		return err
+	}
 	raw, err := a.secrets.open(ctx, cmd.TenantID, cmd.SealedPreparation, staticRotationAAD(cmd.TenantID, cmd.ID, "prepared"))
 	if err != nil {
 		return err
@@ -172,6 +175,23 @@ func (a *API) cutoverPreparedStaticRotation(ctx context.Context, cmd store.Secre
 	valueHeld.Destroy()
 	return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationCutover, ResultVersion: version})
 }
+
+// endNotAppliedHostGeneration ends a prepared host generation the host
+// proved it never applied (A268-O1): nothing was published and nothing needs
+// restoring, so the rotation fails and the account keeps its password.
+func (a *API) endNotAppliedHostGeneration(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider) (bool, error) {
+	settled, ok := provider.(dynsecret.PreparedHostRotationSettlement)
+	if !ok || cmd.Phase != store.SecretStaticRotationPrepared || len(cmd.SealedPreparation) == 0 {
+		return false, nil
+	}
+	notApplied, err := settled.PreparedHostRotationNotApplied(ctx, staticPreparedRequest(cmd))
+	if err != nil || !notApplied {
+		return false, err
+	}
+	return true, a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationFailed,
+		Error: "the host proved the prepared password was never applied; the account keeps its current password"})
+}
+
 func (a *API) restorePreparedNativeRotation(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider, old []byte) error {
 	preparer, err := boundStaticPreparation(provider, cmd)
 	if err != nil {

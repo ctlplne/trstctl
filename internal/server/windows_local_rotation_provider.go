@@ -87,10 +87,16 @@ func (p *configuredWindowsLocalRotationProvider) PrepareStaticCredential(ctx con
 		if err != nil {
 			return nil, err
 		}
-		if last.Observation == nil || last.Observation.Report.Status != "succeeded" || cmd.Phase != store.SecretStaticRotationCompleted {
+		switch {
+		case last.Observation != nil && last.Observation.Report.Status == "succeeded" && cmd.Phase == store.SecretStaticRotationCompleted:
+			previous = last.Intent.RotationID
+		case last.Observation != nil && last.Observation.Report.Status == "not_applied" && cmd.Terminal():
+			// A268-O1: a generation the host proved it never applied left its
+			// predecessor current.
+			previous = last.Intent.PredecessorGenerationID
+		default:
 			return nil, orchestrator.DeferDelivery(errors.New("earlier local generation still requires completion or recovery"))
 		}
-		previous = last.Intent.RotationID
 	} else if !errors.Is(e, store.ErrWindowsLocalRotationNotFound) {
 		return nil, e
 	}
@@ -145,6 +151,16 @@ func (p *configuredWindowsLocalRotationProvider) GenerateStaticPrepared(ctx cont
 	}
 	value, e := hostaccounts.MarshalLocalCredential(v.Credential)
 	return dynsecret.Credential{BackendRef: req.LeaseID, Secret: value, Metadata: map[string]string{"provider_type": "windows", "role": req.Role}}, e
+}
+
+// PreparedHostRotationNotApplied reports the host's proof that this prepared
+// generation was never applied (A268-O1).
+func (p *configuredWindowsLocalRotationProvider) PreparedHostRotationNotApplied(ctx context.Context, req dynsecret.GenerateRequest) (bool, error) {
+	state, _, e := projections.CanonicalWindowsLocalRotation(ctx, p.store, p.log, p.tenantID, req.LeaseID)
+	if e != nil {
+		return false, e
+	}
+	return state.Observation != nil && state.Observation.Report.Status == "not_applied", nil
 }
 
 // Historical rotation evidence is not a fresh credential-health sign-in.

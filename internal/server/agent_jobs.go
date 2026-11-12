@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/hostaccounts"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/servedstatus"
@@ -1202,6 +1203,13 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 			return nil, status.Error(codes.Unavailable, "native dependent failure observation could not be retained")
 		}
 	}
+	// A268-O1: a host's uncertain, refused or not-applied rotation report is a
+	// failed outcome and carries the signed observation the generation needs.
+	if claim.Destination == relay.KindWindowsLocalAccountRotation {
+		if err := a.ingestWindowsLocalRotation(ctx, info, agentID, claim, req); err != nil {
+			return nil, status.Error(codes.Unavailable, "native local rotation observation could not be retained")
+		}
+	}
 	if claim.Destination == relay.KindWindowsLocalAccountsInventory {
 		if err := a.recordWindowsLocalInventoryFailure(ctx, info, agentID, claim, req, "agent_execution_failed"); err != nil {
 			return nil, status.Error(codes.Unavailable, "local inventory failure could not be retained")
@@ -1436,6 +1444,21 @@ func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerC
 	// check-in is another approval.
 	if claim.Destination == relay.KindMDMCheckIn {
 		permanent = true
+	}
+	// A268-O1: a local rotation the host reported uncertain or never applied is
+	// not re-delivered by the queue. The control plane queues an uncertain
+	// generation's one recovery delivery itself, and a generation that was
+	// never applied is settled. A refusal is released, so a busy or
+	// interrupted host tries again.
+	if claim.Destination == relay.KindWindowsLocalAccountRotation {
+		if report, err := hostaccounts.DecodeRotationReport([]byte(req.Detail)); err == nil {
+			switch report.Status {
+			case "uncertain":
+				permanent, terminalReason = true, "local_rotation_uncertain"
+			case "not_applied":
+				permanent, terminalReason = true, "local_rotation_not_applied"
+			}
+		}
 	}
 	// A254: a gateway session that could not be held (its credential was not
 	// redeemable, its deadline passed) is never retried: a new session is a

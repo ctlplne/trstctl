@@ -320,6 +320,8 @@ func TestServedPreparedWindowsLocalRotationA268(t *testing.T) {
 	}
 	// Recreate only this owned operational delivery, then receive a refusal.
 	// This call did no new effect; it cannot erase the earlier unknown effect.
+	// The generation's delivery is now its one recovery delivery (A268-O1),
+	// which recreating deliveries recreates, never the original.
 	if e = h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
 		_, e := tx.Exec(ctx, `DELETE FROM outbox WHERE tenant_id=$1 AND id=$2 AND destination=$3`, h.tenant, nextJob.JobID, hostaccounts.RotationDestination)
 		return e
@@ -336,6 +338,11 @@ func TestServedPreparedWindowsLocalRotationA268(t *testing.T) {
 	recreated, e := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{hostaccounts.RotationDestination}, Limit: 1, LeaseSeconds: 120})
 	if e != nil || len(recreated.Jobs) != 1 || recreated.Jobs[0].JobID == nextJob.JobID {
 		t.Fatal("owned delivery recreation failed", e)
+	}
+	var recreatedKey string
+	if e = h.store.SystemPool().QueryRow(ctx, `SELECT idempotency_key FROM outbox WHERE tenant_id=$1 AND id=$2`, h.tenant, recreated.Jobs[0].JobID).Scan(&recreatedKey); e != nil ||
+		recreatedKey != store.WindowsLocalRotationRecoveryOutboxKey(still.TenantEpoch, nextCommand.ID) {
+		t.Fatalf("the recreated delivery is %q, not the generation's recovery delivery: %v", recreatedKey, e)
 	}
 	refused := hostaccounts.RotationReport{RotationID: nextCommand.ID, BindingDigest: nextState.Intent.BindingDigest, ObservedAt: time.Now().UTC(), Status: "refused", Failure: "local_grant_absent"}
 	raw, e = json.Marshal(refused)

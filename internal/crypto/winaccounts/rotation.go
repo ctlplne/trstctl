@@ -17,6 +17,11 @@ var ErrRotationInvalid = errors.New("windows local accounts: rotation preconditi
 var ErrRotationUncertain = errors.New("windows local accounts: started rotation requires explicit recovery")
 var ErrCredentialRejected = errors.New("windows local accounts: credential rejected")
 
+// ErrRotationNotApplied reports a begun generation that was never applied:
+// the predecessor password still signs in as the account and the prepared
+// one does not (A268-O1).
+var ErrRotationNotApplied = errors.New("windows local accounts: begun rotation was not applied")
+
 // RotationBinding is public native identity, never a mutable name alone.
 type RotationBinding struct {
 	Machine Machine `json:"machine"`
@@ -175,6 +180,78 @@ func (r Rotator) Rotate(ctx context.Context, b RotationBinding, generation strin
 	}
 	return proof, nil
 }
+
+// Recover settles a begun generation whose outcome is unknown (A268-O1). It
+// changes no password and signs in at most twice, each only while one more
+// failure stays below the lockout threshold. The prepared password goes
+// first. If it signs in as the account's exact SID, the predecessor must
+// then be refused, and the fence completes the same proof Rotate would. If
+// the prepared password is refused and the predecessor signs in as the
+// account, the generation was never applied (ErrRotationNotApplied). Anything
+// else stays uncertain: a foreign SID, a native error, both refused, or no
+// lockout budget for the next sign-in.
+func (r Rotator) Recover(ctx context.Context, b RotationBinding, generation string, old, next []byte, fence RotationFence) (RotationProof, error) {
+	var none RotationProof
+	if err := ctx.Err(); err != nil {
+		return none, err
+	}
+	id, err := uuid.Parse(generation)
+	if err != nil || id == uuid.Nil || id.String() != generation || b.Validate() != nil || fence == nil || !validPrivatePassword(old) || !crypto.ValidAccountPassword(next, 24) || len(next) > 256 || subtle.ConstantTimeCompare(old, next) == 1 {
+		return none, ErrRotationInvalid
+	}
+	oldBuffer, err := secret.NewFrom(old)
+	if err != nil {
+		return none, err
+	}
+	defer oldBuffer.Destroy()
+	nextBuffer, err := secret.NewFrom(next)
+	if err != nil {
+		return none, err
+	}
+	defer nextBuffer.Destroy()
+	signIn := func(value *secret.Buffer) (string, error) {
+		state, err := r.inspect(ctx, b)
+		if err != nil || !rotationBudget(state) {
+			return "", ErrRotationUncertain
+		}
+		var sid string
+		err = value.Use(func(v []byte) error {
+			var e error
+			sid, e = r.driver.Authenticate(ctx, b, v)
+			return e
+		})
+		return sid, err
+	}
+	sid, err := signIn(nextBuffer)
+	switch {
+	case err == nil && sid == b.Account.SID:
+		// Applied: the predecessor must be refused, exactly as Rotate proves.
+		if sid, err := signIn(oldBuffer); sid != "" || !errors.Is(err, ErrCredentialRejected) {
+			return none, ErrRotationUncertain
+		}
+		oldBuffer.Destroy()
+		nextBuffer.Destroy()
+		state, err := r.inspect(ctx, b)
+		if err != nil || state.BadPasswordCount == ^uint32(0) {
+			return none, ErrRotationUncertain
+		}
+		proof := RotationProof{Binding: b, GenerationID: generation, NewAuthenticated: true, OldRefused: true, ObservedAt: time.Now().UTC()}
+		if err := ctx.Err(); err != nil {
+			return none, ErrRotationUncertain
+		}
+		if err := fence.Complete(ctx, proof); err != nil {
+			return none, ErrRotationUncertain
+		}
+		return proof, nil
+	case sid == "" && errors.Is(err, ErrCredentialRejected):
+		if sid, err := signIn(oldBuffer); err == nil && sid == b.Account.SID {
+			return none, ErrRotationNotApplied
+		}
+		return none, ErrRotationUncertain
+	}
+	return none, ErrRotationUncertain
+}
+
 func validPrivatePassword(value []byte) bool {
 	if len(value) == 0 || len(value) > 4096 || !utf8.Valid(value) {
 		return false

@@ -9873,8 +9873,10 @@ What comes next:
 - Reading the windows-latest job's native results at FINISH, and a native
   full-stack fleet run on windows-latest (control plane, NATS and enrolled agents on
   the runner, using its preinstalled PostgreSQL).
-- Explicit recovery of an unknown native effect (today it stays fenced and
-  prepared for an operator, never rolled back blindly).
+- Settling an unknown native effect that sign-in cannot settle. One recovery
+  delivery settles it by sign-in (the successor applied, or never applied); when
+  that still cannot tell, or the host runs an earlier agent, the generation stays
+  fenced and prepared for an operator, never rolled back blindly.
 - Real-image replay (replay-owed.md).
 
 ## Remote desktop, production grade (A269) — parts 1–2 of 3: redirection policy and the recording index

@@ -73,6 +73,13 @@ type PreparedHostStaticRotationProvider interface {
 	PreparedHostRotationIntent(GenerateRequest, []byte, []byte) (hostaccounts.RotationIntent, error)
 }
 
+// PreparedHostRotationSettlement reports a prepared host generation the host
+// proved it never applied (A268-O1): the account keeps its current password,
+// so the rotation ends with nothing to restore.
+type PreparedHostRotationSettlement interface {
+	PreparedHostRotationNotApplied(context.Context, GenerateRequest) (bool, error)
+}
+
 // StaticRecoveryCredentialValidator validates retained recovery material locally.
 // It never authenticates that value against an upstream account that may drift.
 type StaticRecoveryCredentialValidator interface {

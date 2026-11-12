@@ -28,7 +28,11 @@ func (a *agentService) boundWindowsLocalRotation(ctx context.Context, tenantID, 
 	if e != nil {
 		return i, e
 	}
-	if v.Intent != i || key != store.WindowsLocalRotationOutboxKey(cmd.TenantEpoch, i.RotationID) || cmd.Terminal() || cmd.Phase != store.SecretStaticRotationPrepared || v.Observation != nil && v.Observation.Report.Status == "succeeded" {
+	// A268-O1: the recovery delivery exists only while the outcome is
+	// uncertain; a settled generation (succeeded or not applied) takes no work.
+	recovery := key == store.WindowsLocalRotationRecoveryOutboxKey(cmd.TenantEpoch, i.RotationID) && v.Observation != nil && v.Observation.Report.Status == "uncertain"
+	if v.Intent != i || key != store.WindowsLocalRotationOutboxKey(cmd.TenantEpoch, i.RotationID) && !recovery || cmd.Terminal() || cmd.Phase != store.SecretStaticRotationPrepared ||
+		v.Observation != nil && (v.Observation.Report.Status == "succeeded" || v.Observation.Report.Status == "not_applied") {
 		return i, errors.New("native local rotation has no active exact generation")
 	}
 	return i, nil
@@ -68,8 +72,17 @@ func (a *agentService) ingestWindowsLocalRotation(ctx context.Context, info mtls
 		return e
 	}
 	report, e := hostaccounts.DecodeRotationReport([]byte(req.Detail))
-	if e != nil || report.Validate(i) != nil || req.Outcome != transport.JobOutcomeExecuted {
+	if e != nil || report.Validate(i) != nil {
 		return errors.New("native local report differs from exact generation")
+	}
+	// The agent reports a proved generation as verified and anything else as
+	// failed; an executed outcome may carry either.
+	switch {
+	case req.Outcome == transport.JobOutcomeExecuted:
+	case report.Status == "succeeded" && req.Outcome == transport.JobOutcomeVerified:
+	case report.Status != "succeeded" && req.Outcome == transport.JobOutcomeFailed:
+	default:
+		return errors.New("native local report outcome differs from its status")
 	}
 	raw, e := json.Marshal(report)
 	if e != nil || crypto.SHA256Hex(raw) != req.EvidenceDigest {

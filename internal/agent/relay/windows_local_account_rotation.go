@@ -16,6 +16,13 @@ const KindWindowsLocalAccountRotation = hostaccounts.RotationDestination
 var localAccountRotationSlots = make(chan struct{}, 1)
 var errLocalAccountMaterial = errors.New("relay: local account credential adoption refused")
 
+// LocalAccountRotationRecovery settles a begun generation whose outcome was
+// lost, by sign-in alone (A268-O1). A channel without it reports the
+// generation uncertain, as before.
+type LocalAccountRotationRecovery interface {
+	RecoverLocalAccountRotation(context.Context, int64, hostaccounts.RotationIntent, []byte, []byte) (winaccounts.RotationProof, error)
+}
+
 // LocalAccountRotationChannel binds the current enrollment, durable host fence
 // and terminal report. A generic channel cannot authorize native password work.
 type LocalAccountRotationChannel interface {
@@ -100,7 +107,11 @@ func runWindowsLocalAccountRotation(ctx context.Context, ch Channel, profile con
 	bounded, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 	proof, found, err := channel.ReplayLocalAccountRotation(bounded, job.JobID, intent)
-	if err != nil {
+	// A268-O1: a generation begun here without its proof is settled by
+	// sign-in when the channel can; it is never rotated again.
+	recovery, canRecover := channel.(LocalAccountRotationRecovery)
+	recovering := err != nil && errors.Is(err, winaccounts.ErrRotationUncertain) && canRecover
+	if err != nil && !recovering {
 		return emit("uncertain", "execution_uncertain", nil)
 	}
 	if found {
@@ -128,6 +139,22 @@ func runWindowsLocalAccountRotation(ctx context.Context, ch Channel, profile con
 		defer stop()
 		bounded = shorter
 	}
+	if recovering {
+		proof, err = recoverLocalAccountRotationMaterial(bounded, recovery, job.JobID, intent, raw)
+		switch {
+		case errors.Is(err, winaccounts.ErrRotationNotApplied):
+			return emit("not_applied", "predecessor_signs_in", nil)
+		case errors.Is(err, errLocalAccountMaterial):
+			return emit("refused", "credential_unavailable", nil)
+		case err != nil:
+			return emit("uncertain", "execution_uncertain", nil)
+		}
+		candidate := hostaccounts.RotationReport{RotationID: intent.RotationID, BindingDigest: intent.BindingDigest, Status: "succeeded", ObservedAt: proof.ObservedAt, Proof: &proof}
+		if candidate.Validate(intent) != nil {
+			return emit("uncertain", "native_operation_failed", nil)
+		}
+		return emit("succeeded", "", &proof)
+	}
 	proof, err = executeLocalAccountRotationMaterial(bounded, channel, job.JobID, intent, raw)
 	if err != nil {
 		if errors.Is(err, errLocalAccountMaterial) {
@@ -146,6 +173,22 @@ func runWindowsLocalAccountRotation(ctx context.Context, ch Channel, profile con
 		return emit("uncertain", "native_operation_failed", nil)
 	}
 	return emit("succeeded", "", &proof)
+}
+
+// recoverLocalAccountRotationMaterial settles a begun generation with the
+// redeemed material, which is gone on return (A268-O1).
+func recoverLocalAccountRotationMaterial(ctx context.Context, channel LocalAccountRotationRecovery, job int64, intent hostaccounts.RotationIntent, raw map[string][]byte) (winaccounts.RotationProof, error) {
+	defer func() {
+		for _, value := range raw {
+			secret.Wipe(value)
+		}
+	}()
+	material, destroy, e := AdoptMaterial(raw)
+	if e != nil {
+		return winaccounts.RotationProof{}, errors.Join(errLocalAccountMaterial, e)
+	}
+	defer destroy()
+	return channel.RecoverLocalAccountRotation(ctx, job, intent, material[hostaccounts.RotationOldCredentialName], material[hostaccounts.RotationNewCredentialName])
 }
 
 // The private phase ends before the caller can perform report-network I/O.

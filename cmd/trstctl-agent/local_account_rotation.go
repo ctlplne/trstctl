@@ -83,6 +83,16 @@ func (r relayChannel) ExecuteLocalAccountRotation(ctx context.Context, job int64
 	}
 	return r.pending.ExecuteLocalAccountRotationOnce(ctx, job, i.Native, i.RotationID, i.PredecessorGenerationID, old, next, winaccounts.NewRotator())
 }
+
+// RecoverLocalAccountRotation settles a begun generation whose outcome was
+// lost, by sign-in alone (A268-O1).
+func (r relayChannel) RecoverLocalAccountRotation(ctx context.Context, job int64, i hostaccounts.RotationIntent, old, next []byte) (winaccounts.RotationProof, error) {
+	if e := r.AuthorizeLocalAccountRotation(ctx, i); e != nil {
+		return winaccounts.RotationProof{}, e
+	}
+	return r.pending.RecoverLocalAccountRotationOnce(ctx, job, i.Native, i.RotationID, i.PredecessorGenerationID, old, next, winaccounts.NewRotator())
+}
+
 func (r relayChannel) ReportLocalAccountRotation(ctx context.Context, job int64, attempt int, i hostaccounts.RotationIntent, result hostaccounts.RotationReport) (bool, error) {
 	if e := r.localAccountRotationIdentity(ctx, i); e != nil {
 		return false, e
@@ -104,3 +114,4 @@ func (r relayChannel) ReportLocalAccountRotation(ctx context.Context, job int64,
 }
 
 var _ relay.LocalAccountRotationChannel = relayChannel{}
+var _ relay.LocalAccountRotationRecovery = relayChannel{}

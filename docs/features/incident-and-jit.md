@@ -1587,11 +1587,29 @@ redemption is limited to the current exact-host claim attempt and its live
 lease; the queue, receipts and host journal carry no plaintext password.
 A retained native success is rotation evidence, not a fresh health check.
 
-A refusal or uncertain result leaves the command prepared with an explicit
-recovery message and both sealed generations retained. A later refusal cannot
-prove that an earlier unknown attempt left the password unchanged. Generic
-rollback therefore cannot publish the predecessor without native recovery
-proof. Automatic inverse recovery is not yet served by this transport.
+A refusal leaves the command prepared with an explicit message and both sealed
+generations retained, and the queue delivers the same generation again, so a busy
+or interrupted host tries again. An uncertain result (the host began the change
+and lost its outcome) gets one recovery delivery of the same generation. The host
+settles it by sign-in alone and never changes the password again. It signs in at
+most twice, each time only while one more failed sign-in stays below the
+account's lockout threshold:
+
+- The successor signs in as the account's SID and the predecessor is refused:
+  the host reports its signed proof, and the rotation completes and publishes the
+  successor like any proved generation.
+- The successor is refused and the predecessor still signs in: the host reports
+  the generation not applied. The rotation fails with nothing to restore, the
+  vault and the account keep the current password, and the next rotation starts
+  from the same predecessor.
+- Anything else (both refused, another SID, no lockout margin, or a host agent
+  that predates this recovery): the command stays prepared with its recovery
+  message and both sealed generations retained, and nothing more is queued.
+
+A later refusal cannot prove that an earlier unknown attempt left the password
+unchanged, so generic rollback cannot publish the predecessor without that proof.
+Setting the predecessor back on the host (inverse recovery) is not yet available
+through this transport.
 
 #### Desktop clipboard policy
 

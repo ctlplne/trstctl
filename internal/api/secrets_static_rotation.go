@@ -516,6 +516,9 @@ func (a *API) verifyStaticRotation(ctx context.Context, cmd store.SecretStaticRo
 // recorded, not fatal.
 func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider) error {
 	if _, host := provider.(dynsecret.PreparedHostStaticRotationProvider); host && len(cmd.SealedPreparation) > 0 {
+		if done, err := a.endNotAppliedHostGeneration(ctx, cmd, provider); done || err != nil {
+			return err
+		}
 		return orchestrator.DeferDelivery(errors.New("native local rotation requires exact generation proof; sealed generations retained"))
 	}
 	if cmd.DependentChangeID != "" && cmd.Phase == store.SecretStaticRotationPrepared {

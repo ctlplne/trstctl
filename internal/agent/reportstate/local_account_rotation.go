@@ -29,6 +29,11 @@ const maxLocalAccountRotationRecord = 16 << 10
 type LocalAccountRotator interface {
 	Rotate(context.Context, winaccounts.RotationBinding, string, []byte, []byte, winaccounts.RotationFence) (winaccounts.RotationProof, error)
 }
+
+// LocalAccountRecoverer settles a begun generation by sign-in (A268-O1).
+type LocalAccountRecoverer interface {
+	Recover(context.Context, winaccounts.RotationBinding, string, []byte, []byte, winaccounts.RotationFence) (winaccounts.RotationProof, error)
+}
 type localAccountRotationRecord struct {
 	Version                 int                         `json:"version"`
 	JobID                   int64                       `json:"job_id"`
@@ -64,7 +69,7 @@ func (r localAccountRotationRecord) valid() bool {
 		return false
 	}
 	switch r.Phase {
-	case "fenced":
+	case "fenced", "not_applied":
 		return r.Proof == nil
 	case "completed", "acknowledged":
 		return r.Proof != nil && validLocalAccountProof(*r.Proof) && r.Proof.Binding == r.Binding && r.Proof.GenerationID == r.GenerationID
@@ -325,6 +330,11 @@ func (s *Store) localAccountPrior(job int64, b winaccounts.RotationBinding, gene
 	if record.GenerationID == generation && record.PredecessorGenerationID == predecessor && record.Binding == b {
 		return record, nil
 	}
+	// A268-O1: a generation the account never took leaves its predecessor
+	// current, so the next generation from that predecessor may begin.
+	if record.Phase == "not_applied" && predecessor == record.PredecessorGenerationID && record.GenerationID != generation && record.Binding.Machine.SID == b.Machine.SID {
+		return nil, nil
+	}
 	// Stable generation ancestry authorizes succession. Database-local delivery
 	// IDs can change during outbox reconciliation or disaster recovery.
 	if record.Phase != "acknowledged" || predecessor != record.GenerationID || record.GenerationID == generation || record.Binding.Machine.SID != b.Machine.SID {
@@ -445,6 +455,60 @@ func (s *Store) ExecuteLocalAccountRotationOnce(ctx context.Context, job int64, 
 	}
 	return retained, nil
 }
+
+// RecoverLocalAccountRotationOnce settles a begun generation whose outcome
+// is unknown (A268-O1). Only a fenced record of this exact generation is
+// recovered, and only by sign-in: a proof completes the record as Rotate's
+// would, and a generation the account never took is recorded not applied,
+// which lets the next generation from the same predecessor begin. A record
+// already settled answers as it was settled; nothing begun answers nothing.
+func (s *Store) RecoverLocalAccountRotationOnce(ctx context.Context, job int64, b winaccounts.RotationBinding, generation, predecessor string, old, next []byte, executor LocalAccountRecoverer) (winaccounts.RotationProof, error) {
+	var none winaccounts.RotationProof
+	if s == nil || executor == nil {
+		return none, ErrInvalidPending
+	}
+	if !s.accountMu.TryLock() {
+		return none, errors.New("reportstate: local account rotation worker is busy")
+	}
+	defer s.accountMu.Unlock()
+	if e := ctx.Err(); e != nil {
+		return none, e
+	}
+	s.mu.Lock()
+	record, e := s.localAccountPrior(job, b, generation, predecessor)
+	s.mu.Unlock()
+	switch {
+	case e != nil:
+		return none, e
+	case record == nil:
+		return none, ErrInvalidPending
+	case record.Proof != nil:
+		return *record.Proof, nil
+	case record.Phase == "not_applied":
+		return none, winaccounts.ErrRotationNotApplied
+	case record.Phase != "fenced":
+		return none, ErrInvalidPending
+	}
+	p, e := executor.Recover(ctx, b, generation, old, next, localAccountFence{store: s, job: job, binding: b, generation: generation, predecessor: predecessor})
+	if errors.Is(e, winaccounts.ErrRotationNotApplied) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		record.Phase = "not_applied"
+		if e := s.storeLocalAccountRotation(*record); e != nil {
+			return none, errors.Join(winaccounts.ErrRotationUncertain, e)
+		}
+		return none, winaccounts.ErrRotationNotApplied
+	}
+	if e != nil {
+		return none, e
+	}
+	retained, found, e := s.ReplayLocalAccountRotation(ctx, job, b, generation, predecessor)
+	if e != nil || !found || !sameAccountRotationProof(p, retained) {
+		return none, errors.Join(winaccounts.ErrRotationUncertain, e)
+	}
+	return retained, nil
+}
+
 func (s *Store) localAccountProofRecord(p winaccounts.RotationProof) (*localAccountRotationRecord, error) {
 	root, e := s.localAccountDirectory(false)
 	if e != nil {

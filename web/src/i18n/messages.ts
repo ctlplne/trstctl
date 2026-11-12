@@ -677,7 +677,7 @@ export const messages = {
   },
   "admin.access.windowsLocal.proof": {
     defaultMessage:
-      "A local administrator account a native Windows provider rotates on its enrolled host. It is checked out — reviewed, revealed once — never opened as a session, and checking it in rotates it on the host. It names no gateway. Native results on windows-latest are read at the build's final checks.",
+      "A local administrator account a native Windows provider rotates on its enrolled host. It is checked out — reviewed, revealed once — never opened as a session, and checking it in rotates it on the host. If the host loses a rotation's outcome, one more delivery settles it by sign-in without changing the password again. It names no gateway. Native results on windows-latest are read at the build's final checks.",
     description: "Windows local administrator target registration (A268).",
   },
   "admin.access.breakglass.heading": { defaultMessage: "Break-glass accounts", description: "Break-glass release (A272)." },
