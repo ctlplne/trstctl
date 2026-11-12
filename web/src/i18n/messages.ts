@@ -14590,6 +14590,15 @@ export const messages = {
     defaultMessage: "Trust-store root",
     description: "Human label for a CA certificate an agent found installed as trusted in a host trust store.",
   },
+  "discovery.weakKeyAudit.run": { defaultMessage: "Run the weak-key audit now", description: "Discovery runs (AUD-O1): run the weak-key audit now." },
+  "discovery.weakKeyAudit.help": {
+    defaultMessage:
+      "Checks this tenant's RSA keys for a shared prime: two keys that share one can both be factored. It also runs every six hours, and an audit already queued or running is not started twice.",
+    description: "Discovery runs (AUD-O1).",
+  },
+  "discovery.weakKeyAudit.queued": { defaultMessage: "The weak-key audit is queued as run {run}.", description: "Discovery runs (AUD-O1)." },
+  "discovery.weakKeyAudit.running": { defaultMessage: "The weak-key audit is already running as run {run}.", description: "Discovery runs (AUD-O1)." },
+  "discovery.weakKeyAudit.failed": { defaultMessage: "Could not run the weak-key audit", description: "Discovery runs (AUD-O1)." },
   "discovery.kind.weakKey": {
     defaultMessage: "Weak key",
     description: "Human label for a key the inventory weak-key audit found factorable, such as one sharing a prime with another key.",

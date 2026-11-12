@@ -14,8 +14,10 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/weakkey"
+	"trstctl.com/trstctl/internal/discovery/netscan"
 	"trstctl.com/trstctl/internal/keyposture"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -93,12 +95,54 @@ type weakKeyAuditKey struct {
 // place a key that shares a prime appears. A tenant with fewer than two RSA
 // keys records nothing.
 func (s *Server) AuditTenantSharedFactors(ctx context.Context, tenantID string) (weakkey.SharedFactorReport, error) {
-	keys, leftOut, err := s.collectTenantRSAKeys(ctx, tenantID)
+	rep, leftOut, findings, err := weakKeyAuditFindings(ctx, s.store, tenantID)
+	if err != nil || rep.Distinct < 2 {
+		return rep, err
+	}
+	if _, err := s.orch.RecordWeakKeyAudit(ctx, tenantID, rep, leftOut, findings); err != nil {
+		return rep, err
+	}
+	if s.logger != nil {
+		s.logger.Info("weak-key audit ran", slog.String("tenant", tenantID), slog.Int("distinct_rsa_keys", rep.Distinct),
+			slog.Int("shared_factor_keys", len(rep.Shared)), slog.Int("left_out", leftOut))
+	}
+	return rep, nil
+}
+
+// executeWeakKeyAuditRun runs the tenant's weak-key audit as a queued
+// discovery run on its source: an operator's "run the audit now" (AUD-O1),
+// within the audit's own bound and timeout, recording its findings on that
+// run. A tenant with fewer than two RSA keys completes with nothing to check.
+func (d *issuanceDispatcher) executeWeakKeyAuditRun(ctx context.Context, tenantID string, _ store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
+	auditCtx, cancel := context.WithTimeout(ctx, weakKeyAuditTenantTimeout)
+	defer cancel()
+	rep, leftOut, findings, err := weakKeyAuditFindings(auditCtx, d.store, tenantID)
 	if err != nil {
-		return weakkey.SharedFactorReport{}, err
+		return netscan.Report{}, "", "", err
+	}
+	sourceID := orchestrator.WeakKeyAuditSourceID(tenantID)
+	recorded := 0
+	for _, f := range findings {
+		f.RunID, f.SourceID = run.ID, sourceID
+		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, f); err != nil {
+			return netscan.Report{}, "", "", err
+		}
+		recorded++
+	}
+	status, msg := orchestrator.WeakKeyAuditOutcome(leftOut)
+	return netscan.Report{Targets: rep.Distinct, Discovered: recorded}, status, msg, nil
+}
+
+// weakKeyAuditFindings collects the tenant's distinct RSA keys, runs batch
+// GCD over them and returns a weak-key finding for every place a key that
+// shares a prime appears, with how many distinct keys the bound left out.
+func weakKeyAuditFindings(ctx context.Context, st *store.Store, tenantID string) (weakkey.SharedFactorReport, int, []store.DiscoveryFinding, error) {
+	keys, leftOut, err := collectTenantRSAKeys(ctx, st, tenantID)
+	if err != nil {
+		return weakkey.SharedFactorReport{}, 0, nil, err
 	}
 	if len(keys) < 2 {
-		return weakkey.SharedFactorReport{Keys: len(keys), RSA: len(keys), Distinct: len(keys)}, nil
+		return weakkey.SharedFactorReport{Keys: len(keys), RSA: len(keys), Distinct: len(keys)}, leftOut, nil, nil
 	}
 	ders := make([][]byte, len(keys))
 	for i, k := range keys {
@@ -106,7 +150,7 @@ func (s *Server) AuditTenantSharedFactors(ctx context.Context, tenantID string) 
 	}
 	rep, err := weakkey.SharedFactors(ctx, ders)
 	if err != nil {
-		return rep, err
+		return rep, leftOut, nil, err
 	}
 	var findings []store.DiscoveryFinding
 	for _, shared := range rep.Shared {
@@ -120,7 +164,7 @@ func (s *Server) AuditTenantSharedFactors(ctx context.Context, tenantID string) 
 			keyposture.Verdict{WeakReasons: []string{reason}}.AddTo(meta)
 			raw, err := json.Marshal(meta)
 			if err != nil {
-				return rep, err
+				return rep, leftOut, nil, err
 			}
 			findings = append(findings, store.DiscoveryFinding{
 				Kind: orchestrator.WeakKeyFindingKind, Ref: place.ref, Provenance: "weak-key-audit:batch-gcd",
@@ -128,20 +172,13 @@ func (s *Server) AuditTenantSharedFactors(ctx context.Context, tenantID string) 
 			})
 		}
 	}
-	if _, err := s.orch.RecordWeakKeyAudit(ctx, tenantID, rep, leftOut, findings); err != nil {
-		return rep, err
-	}
-	if s.logger != nil {
-		s.logger.Info("weak-key audit ran", slog.String("tenant", tenantID), slog.Int("distinct_rsa_keys", rep.Distinct),
-			slog.Int("shared_factor_keys", len(rep.Shared)), slog.Int("left_out", leftOut))
-	}
-	return rep, nil
+	return rep, leftOut, findings, nil
 }
 
 // collectTenantRSAKeys gathers distinct RSA public keys in a fixed order — CA
 // authorities, then inventory certificates, then reported keys — up to the
 // batch-GCD bound, and counts the distinct keys it had to leave out.
-func (s *Server) collectTenantRSAKeys(ctx context.Context, tenantID string) ([]weakKeyAuditKey, int, error) {
+func collectTenantRSAKeys(ctx context.Context, st *store.Store, tenantID string) ([]weakKeyAuditKey, int, error) {
 	var keys []weakKeyAuditKey
 	bySPKI := map[string]int{}
 	leftOut := 0
@@ -158,7 +195,7 @@ func (s *Server) collectTenantRSAKeys(ctx context.Context, tenantID string) ([]w
 		bySPKI[h] = len(keys)
 		keys = append(keys, weakKeyAuditKey{spki: spki, refs: []weakKeyAuditRef{place}})
 	}
-	cas, err := s.store.ListCAAuthorities(ctx, tenantID)
+	cas, err := st.ListCAAuthorities(ctx, tenantID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -172,7 +209,7 @@ func (s *Server) collectTenantRSAKeys(ctx context.Context, tenantID string) ([]w
 		if err := ctx.Err(); err != nil {
 			return nil, 0, err
 		}
-		page, err := s.store.ListCertificatesPage(ctx, tenantID, after, nil, weakKeyAuditPageSize, nil)
+		page, err := st.ListCertificatesPage(ctx, tenantID, after, nil, weakKeyAuditPageSize, nil)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -194,7 +231,7 @@ func (s *Server) collectTenantRSAKeys(ctx context.Context, tenantID string) ([]w
 		if err := ctx.Err(); err != nil {
 			return nil, 0, err
 		}
-		page, err := s.store.ListDiscoveryFindingsPage(ctx, tenantID, "", after, weakKeyAuditPageSize)
+		page, err := st.ListDiscoveryFindingsPage(ctx, tenantID, "", after, weakKeyAuditPageSize)
 		if err != nil {
 			return nil, 0, err
 		}

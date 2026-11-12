@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- An operator can run the weak-key audit now (AUD-O1) instead of waiting for its six-hourly
+  sweep. Use **Run the weak-key audit now** on the Discovery page's run history,
+  `trstctl-cli discovery weak-key-audit run`, or `POST /api/v1/discovery/weak-key-audit/runs`
+  (`discovery:write`). The request queues one discovery run under the operator's name on the
+  audit's own source. The control plane runs it within the audit's bound and records the
+  keys that share a prime as findings on that run. A request while an audit is queued or
+  running answers with that run.
 - A SAML sign-in can prove a fresh sign-in for a high-risk template (A277-O1, enterprise sign-in
   edition). Its sign-in time is the assertion's `AuthnInstant`, so a sign-in that reused an IdP
   session two hours old counts as two hours old. A fresh sign-in (`/auth/saml/login?reauth=1`)

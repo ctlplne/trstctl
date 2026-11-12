@@ -77,9 +77,14 @@ func Classify(now time.Time, sources []SourceState) Report {
 	}
 
 	// Unknown kinds resolve to the manual envelope, mirroring the server's
-	// record-manual-findings fallback.
+	// record-manual-findings fallback. An analysis kind observes nothing of
+	// the estate, so its runs count toward no class (AUD-O1).
+	analysis := AnalysisKinds()
 	byKind := map[string][]SourceState{}
 	for _, s := range sources {
+		if analysis[s.Kind] {
+			continue
+		}
 		kind := s.Kind
 		if _, ok := envs[kind]; !ok {
 			kind = ManualKind

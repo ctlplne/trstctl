@@ -369,6 +369,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"discovery", "runs", "list"}, Method: "GET", Path: "/api/v1/discovery/runs", Query: []string{"limit", "cursor", "order"}, Summary: "List discovery runs by legacy ID or newest-first order"},
 	{Name: []string{"discovery", "runs", "get"}, Method: "GET", Path: "/api/v1/discovery/runs/{id}", Summary: "Get a discovery run"},
 	{Name: []string{"discovery", "runs", "retry"}, Method: "POST", Path: "/api/v1/discovery/runs/{id}/retry", Body: bodyNone, Summary: "Retry one terminal unsuccessful discovery run as a separate replacement"},
+	{Name: []string{"discovery", "weak-key-audit", "run"}, Method: "POST", Path: "/api/v1/discovery/weak-key-audit/runs", Body: bodyNone, Summary: "Run the weak-key audit now, or show the one already queued or running"},
 	{Name: []string{"discovery", "ct-monitoring", "get"}, Method: "GET", Path: "/api/v1/discovery/ct-monitoring", Query: []string{"limit", "cursor", "triage_status"}, Summary: "Get Certificate Transparency monitoring watchlist and finding status"},
 	{Name: []string{"discovery", "ct-monitoring", "update"}, Method: "PUT", Path: "/api/v1/discovery/ct-monitoring", Body: bodyFile, Summary: "Create or replace Certificate Transparency monitoring watchlist"},
 	{Name: []string{"discovery", "drift-remediation"}, Method: "GET", Path: "/api/v1/discovery/drift-remediation", Query: []string{"limit", "cursor", "triage_status"}, Summary: "Get drift remediation dashboard and operator decision evidence"},

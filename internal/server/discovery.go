@@ -230,6 +230,8 @@ var discoveryRunExecutors = map[string]discoveryRunExecutor{
 	// X4: the TLS policy each AWS load-balancer listener or BIG-IP virtual
 	// server enforces, and one crypto-inventory finding at its oldest version.
 	lbtls.SourceKind: (*issuanceDispatcher).executeLoadBalancerTLSDiscoveryRun,
+	// AUD-O1: the product's weak-key audit, run now when an operator asks.
+	orchestrator.WeakKeyAuditSourceKind: (*issuanceDispatcher).executeWeakKeyAuditRun,
 	// secret_store routes through the same served secret-manager
 	// connectors as cloud_secret (aws-secrets-manager, gcp-secret-manager,
 	// azure-key-vault, hashicorp-vault): the kinds share the providers

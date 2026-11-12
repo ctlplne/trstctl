@@ -153,3 +153,23 @@ func TestEnvelopeRegistryShape(t *testing.T) {
 		t.Error("no manual fallback envelope")
 	}
 }
+
+// TestAnalysisRunsClaimNoCoverageAUDO1: a weak-key audit run reads the
+// inventory and discovers nothing, so a successful one leaves every class as
+// it was — in particular it is not taken for an operator's manual findings.
+func TestAnalysisRunsClaimNoCoverageAUDO1(t *testing.T) {
+	now := time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC)
+	ran := now.Add(-time.Hour)
+	rep := Classify(now, []SourceState{{SourceID: "audit", Kind: WeakKeyAuditKind, Name: "weak-key-audit", LastRunStatus: "succeeded", LastCompletedAt: &ran}})
+	if rep.Observed != 0 {
+		t.Fatalf("a weak-key audit run made %d classes observed", rep.Observed)
+	}
+	for _, c := range rep.Classes {
+		if c.Class == AssetOperatorDeclared && c.Status != StatusUnobserved {
+			t.Fatalf("operator-declared after a weak-key audit run = %s; want unobserved", c.Status)
+		}
+	}
+	if _, declared := Envelopes()[WeakKeyAuditKind]; declared {
+		t.Fatal("the weak-key audit declares an envelope")
+	}
+}

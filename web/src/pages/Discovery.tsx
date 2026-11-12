@@ -964,6 +964,24 @@ export function Discovery() {
     }
   }
 
+  // AUD-O1: run the weak-key audit now instead of waiting for its six-hourly sweep.
+  async function runWeakKeyAudit() {
+    setBusy("weak-key-audit");
+    setNotice(null);
+    try {
+      const run = await api.runWeakKeyAudit();
+      await load();
+      setNotice({
+        kind: "success",
+        message: t(run.status === "running" ? "discovery.weakKeyAudit.running" : "discovery.weakKeyAudit.queued", { run: shortID(run.id) }),
+      });
+    } catch (err) {
+      setNotice(noticeForError(err, t("discovery.weakKeyAudit.failed")));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function retryRun(run: DiscoveryRun) {
     setBusy(`retry:${run.id}`);
     setNotice(null);
@@ -1539,6 +1557,12 @@ export function Discovery() {
           <h2 id="runs-heading" className="text-title font-semibold">
             {translateNow("source.runs.848f54e896")}
           </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => void runWeakKeyAudit()}>
+              {t("discovery.weakKeyAudit.run")}
+            </Button>
+            <p className="text-caption text-muted-foreground">{t("discovery.weakKeyAudit.help")}</p>
+          </div>
           {!loading && runs.length === 0 ? (
             <EmptyState
               icon={<Play className="h-5 w-5" aria-hidden="true" />}

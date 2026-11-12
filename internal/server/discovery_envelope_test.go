@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/cbom/coverage"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 // TestEveryDiscoverySourceDeclaresEnvelope welds the served discovery-source
@@ -25,6 +26,14 @@ func TestEveryDiscoverySourceDeclaresEnvelope(t *testing.T) {
 
 	envs := coverage.Envelopes()
 	for _, kind := range kinds {
+		// An analysis kind runs over the inventory and discovers nothing of
+		// the estate: it must declare no envelope (AUD-O1).
+		if coverage.AnalysisKinds()[kind] {
+			if _, declared := envs[kind]; declared {
+				t.Errorf("analysis kind %q declares an observability envelope; it observes nothing of the estate", kind)
+			}
+			continue
+		}
 		if _, ok := envs[kind]; !ok {
 			t.Errorf("served discovery source kind %q declares no observability envelope; add it to coverage.Envelopes() so the system can say what this source can and cannot see", kind)
 		}
@@ -39,5 +48,13 @@ func TestEveryDiscoverySourceDeclaresEnvelope(t *testing.T) {
 		if _, served := discoveryRunExecutors[kind]; !served {
 			t.Errorf("coverage.Envelopes() declares an envelope for %q, but the server has no executor for that kind; a phantom envelope overstates coverage", kind)
 		}
+	}
+	for kind := range coverage.AnalysisKinds() {
+		if _, served := discoveryRunExecutors[kind]; !served {
+			t.Errorf("coverage.AnalysisKinds() names %q, but the server has no executor for that kind", kind)
+		}
+	}
+	if coverage.WeakKeyAuditKind != orchestrator.WeakKeyAuditSourceKind {
+		t.Errorf("coverage names the weak-key audit %q, the orchestrator %q", coverage.WeakKeyAuditKind, orchestrator.WeakKeyAuditSourceKind)
 	}
 }

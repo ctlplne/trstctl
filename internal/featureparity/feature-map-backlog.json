@@ -3264,7 +3264,8 @@
                 "closePQCMigrationCampaign",
                 "getPQCMigrationCampaignEvidence",
                 "getCryptoRiskReport",
-                "exportCryptoRiskReport"
+                "exportCryptoRiskReport",
+                "runWeakKeyAudit"
             ],
             "api_na": "",
             "cli_surface": [
@@ -3285,7 +3286,8 @@
                 "pqc campaigns close",
                 "pqc campaigns evidence",
                 "reports crypto-risk",
-                "reports crypto-risk export"
+                "reports crypto-risk export",
+                "discovery weak-key-audit run"
             ],
             "cli_na": "",
             "facet_evidence": {

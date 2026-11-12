@@ -111,6 +111,17 @@ func ReportedKinds() map[string]bool {
 	return map[string]bool{ObserverKind: true, SessionObserverKind: true, ImportVendorKind: true, ImportSourceKind: true, ImportImageKind: true}
 }
 
+// WeakKeyAuditKind is the inventory weak-key audit's source kind (AUD-O1):
+// it checks the RSA keys the inventory already holds for shared primes.
+const WeakKeyAuditKind = "weak_key_audit"
+
+// AnalysisKinds are the source kinds the server runs over what the inventory
+// already holds. They discover nothing of the estate, so they declare no
+// envelope and never count toward a class's coverage.
+func AnalysisKinds() map[string]bool {
+	return map[string]bool{WeakKeyAuditKind: true}
+}
+
 // importPrefix is the import source prefix that feeds each import kind.
 var importPrefix = map[string]string{ImportVendorKind: "vendor:", ImportSourceKind: "source:", ImportImageKind: "image:"}
 

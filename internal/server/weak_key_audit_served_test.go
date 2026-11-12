@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -123,5 +124,99 @@ func TestServedWeakKeyAuditFindsKeysThatShareAPrime(t *testing.T) {
 	}
 	if !audited {
 		t.Fatalf("no succeeded audit run over three keys with two findings: %+v", runs)
+	}
+}
+
+// TestServedWeakKeyAuditRunsNowWhenAnOperatorAsksAUDO1 is AUD-O1: an operator
+// runs the weak-key audit now instead of waiting for the six-hourly sweep.
+// The request queues one run on the audit's own source, a second request
+// while it is queued answers with that same run, and the control plane runs
+// the audit as that run: the keys that share a prime become findings on it,
+// under the operator's name. Once it has finished, another request queues a
+// new run.
+func TestServedWeakKeyAuditRunsNowWhenAnOperatorAsksAUDO1(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chCtx, chCancel := context.WithCancel(context.Background())
+	t.Cleanup(chCancel)
+	chDone := make(chan struct{})
+	go func() { defer close(chDone); h.srv.serveAgentChannel(chCtx, ln) }()
+	t.Cleanup(func() { chCancel(); <-chDone })
+	a, err := enrollAgent(t, h, "edge-agent-audit-now", "agent.trstctl.local").Credentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := transport.Dial(ln.Addr().String(), a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	client := transport.NewAgentClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	registerInventoryAgent(t, client)
+	shareA, shareB, err := weakkeytest.SharedPrimeRSASPKIs(1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finding := func(path string, spki []byte, fingerprint string) transport.InventoryFinding {
+		return transport.InventoryFinding{Kind: "x509_certificate", Ref: path, Provenance: "filesystem:" + path, Fingerprint: fingerprint, RiskScore: 10,
+			Metadata: map[string]string{"subject": "CN=" + path, "spki_sha256": crypto.SHA256Hex(spki), "rsa_spki": base64.StdEncoding.EncodeToString(spki)}}
+	}
+	if inv, err := client.ReportInventory(ctx, &transport.InventoryRequest{SourceKind: "filesystem", Findings: []transport.InventoryFinding{
+		finding("/etc/ssl/now-a.pem", shareA, strings.Repeat("e", 64)), finding("/etc/ssl/now-b.pem", shareB, strings.Repeat("f", 64)),
+	}}); err != nil || inv.Recorded != 2 {
+		t.Fatalf("report inventory: %+v %v", inv, err)
+	}
+	operator := seedScopedTokenSubject(t, h.store, h.tenant, "aud-o1-operator", "discovery:read", "discovery:write")
+	reader := seedScopedTokenSubject(t, h.store, h.tenant, "aud-o1-reader", "discovery:read")
+	runNow := func(token, key string) (int, map[string]any) {
+		t.Helper()
+		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/weak-key-audit/runs", token, key, nil)
+		var run map[string]any
+		_ = json.Unmarshal(body, &run)
+		return status, run
+	}
+	if status, _ := runNow(reader, "aud-o1-reader"); status != http.StatusForbidden {
+		t.Fatalf("a reader ran the audit: %d", status)
+	}
+	status, first := runNow(operator, "aud-o1-first")
+	if status != http.StatusAccepted || first["status"] != "queued" {
+		t.Fatalf("run the audit now = %d %v", status, first)
+	}
+	sourceID, _ := first["source_id"].(string)
+	if source, err := h.store.GetDiscoverySource(ctx, h.tenant, sourceID); err != nil || source.Kind != "weak_key_audit" || source.Name != "weak-key-audit:batch-gcd" {
+		t.Fatalf("the run's source = %+v, %v; want the weak-key audit's own", source, err)
+	}
+	if status, again := runNow(operator, "aud-o1-again"); status != http.StatusAccepted || again["id"] != first["id"] {
+		t.Fatalf("a second request while the audit is queued = %d %v, want the queued run %v", status, again, first["id"])
+	}
+	drainCtx, drainCancel := context.WithTimeout(ctx, time.Minute)
+	defer drainCancel()
+	if err := h.srv.Drain(drainCtx); err != nil {
+		t.Fatal(err)
+	}
+	run, err := h.store.GetDiscoveryRun(ctx, h.tenant, first["id"].(string))
+	if err != nil || run.Status != "succeeded" || run.Targets != 2 || run.Discovered != 2 || run.RequestedBy != "aud-o1-operator" {
+		t.Fatalf("the audit run = %+v, %v; want succeeded over two keys with two findings, requested by the operator", run, err)
+	}
+	findings, err := h.store.ListDiscoveryFindingsPage(ctx, h.tenant, "", store.ZeroUUID, 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	onRun := 0
+	for _, f := range findings {
+		if f.Kind == orchestrator.WeakKeyFindingKind && f.RunID == run.ID {
+			onRun++
+		}
+	}
+	if onRun != 2 {
+		t.Fatalf("%d weak-key findings on the operator's run, want 2", onRun)
+	}
+	if status, next := runNow(operator, "aud-o1-next"); status != http.StatusAccepted || next["id"] == first["id"] || next["status"] != "queued" {
+		t.Fatalf("a request after the audit finished = %d %v", status, next)
 	}
 }

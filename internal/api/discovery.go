@@ -1205,6 +1205,25 @@ func (a *API) startDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// runWeakKeyAudit queues the tenant's weak-key audit now (AUD-O1). The
+// control plane runs it as a discovery run on the product's own weak-key
+// audit source, within the audit's bound; an audit already queued or running
+// is the answer instead of a second one.
+//
+//trstctl:mutation
+func (a *API) runWeakKeyAudit(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		start := time.Now()
+		run, _, err := a.orch.QueueWeakKeyAudit(ctx, tenantID)
+		a.observeFeature("discovery", "weak_key_audit_run", start, err)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusAccepted, toDiscoveryRunResponse(run), nil
+	})
+}
+
 //trstctl:mutation
 func (a *API) retryDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")

@@ -2462,6 +2462,8 @@ export interface Api {
   getDiscoveryRun(id: string): Promise<DiscoveryRun>;
   startDiscoveryRun(input: DiscoveryRunRequest): Promise<DiscoveryRun>;
   retryDiscoveryRun(id: string): Promise<DiscoveryRun>;
+  /** AUD-O1: run the weak-key audit now, or the run already queued or running. */
+  runWeakKeyAudit(): Promise<DiscoveryRun>;
   discoveryMonitoring(): Promise<DiscoveryMonitoring>;
   /** F1: AD CS certificate template posture observed by an in-domain relay. */
   adcsPosture(): Promise<ADCSPosture>;
@@ -3463,6 +3465,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   getDiscoveryRun: (id) => req<DiscoveryRun>(`/api/v1/discovery/runs/${encodeURIComponent(id)}`),
   startDiscoveryRun: (input) => mutate<DiscoveryRun>("POST", "/api/v1/discovery/runs", input),
   retryDiscoveryRun: (id) => mutate<DiscoveryRun>("POST", `/api/v1/discovery/runs/${encodeURIComponent(id)}/retry`),
+  runWeakKeyAudit: () => mutate<DiscoveryRun>("POST", "/api/v1/discovery/weak-key-audit/runs"),
   discoveryMonitoring: () => req<DiscoveryMonitoring>("/api/v1/discovery/monitoring"),
   adcsPosture: () => req<ADCSPosture>("/api/v1/posture/adcs"),
   adcsDrift: () => req<ADCSDriftHistory>("/api/v1/posture/adcs/drift"),

@@ -155,8 +155,14 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   certificate whose bytes trstctl holds. One run checks at most 20,000 distinct
   keys, CA authorities first, then inventory certificates, then reported keys;
   a larger inventory's run is `partial` and says how many keys it left out.
-  Relay network scans report key hashes only, so their keys are not in the
-  audit yet: that is what comes next for it.
+  An operator with `discovery:write` can run the audit now instead of waiting
+  for the next sweep: **Run the weak-key audit now** on the Discovery page's run
+  history, `trstctl-cli discovery weak-key-audit run`, or
+  `POST /api/v1/discovery/weak-key-audit/runs`. The request queues one run under
+  the operator's name, and the control plane runs it within the same bound. A
+  request while an audit is queued or running answers with that run instead of
+  starting another. Relay network scans report key hashes only, so their keys
+  are not in the audit yet: that is what comes next for it.
 - **Operator blocklists apply to what agents find.** A reported RSA key is
   rated again on the control plane, which holds the operator's blocklists
   (`trust.weak_key_blocklist_files`); agents do not.

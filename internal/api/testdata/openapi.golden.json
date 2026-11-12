@@ -83680,6 +83680,64 @@
         "x-trstctl-permission": "discovery:read"
       }
     },
+    "/api/v1/discovery/weak-key-audit/runs": {
+      "post": {
+        "operationId": "runWeakKeyAudit",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Run the weak-key audit now: queue a batch-GCD audit of the tenant's RSA keys, or answer with the audit already queued or running",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
     "/api/v1/edge/delegations": {
       "get": {
         "operationId": "listEdgeDelegations",

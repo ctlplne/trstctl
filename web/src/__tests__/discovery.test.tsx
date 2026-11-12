@@ -33,6 +33,7 @@ const { apiMock } = vi.hoisted(() => ({
     createDiscoverySchedule: vi.fn(),
     startDiscoveryRun: vi.fn(),
     retryDiscoveryRun: vi.fn(),
+    runWeakKeyAudit: vi.fn(),
     ctMonitoring: vi.fn(),
     updateCTMonitoring: vi.fn(),
     getDiscoveryRun: vi.fn(),
@@ -1152,6 +1153,15 @@ describe("discovery control-plane surface", () => {
     expect(await screen.findByRole("columnheader", { name: "Executor" })).toBeInTheDocument();
     expect(screen.getByText(/Relay · production-dmz · relay-agent-/)).toBeInTheDocument();
     expect(screen.getByText("Control plane")).toBeInTheDocument();
+  });
+
+  it("runs the weak-key audit now from run history (AUD-O1)", async () => {
+    const user = userEvent.setup();
+    apiMock.runWeakKeyAudit.mockResolvedValue({ id: "7f3c2a10-0000-4000-8000-000000000001", source_id: "weak-key-source", status: "queued" });
+    renderDiscovery(["/discovery?tab=runs"]);
+    await user.click(await screen.findByRole("button", { name: "Run the weak-key audit now" }));
+    expect(apiMock.runWeakKeyAudit).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/The weak-key audit is queued as run 7f3c2a10/)).toBeInTheDocument();
   });
 
   it("uses structured templates instead of primary JSON textareas for complex source creation", async () => {

@@ -23,6 +23,57 @@ const WeakKeyFindingKind = "weak-key"
 
 var weakKeyAuditSourceNamespace = uuid.MustParse("07310acd-a320-50c4-9601-0d8f6e0c9e39")
 
+// WeakKeyAuditSourceKind is the discovery source kind of the product's own
+// weak-key audit; a run on it runs the audit (AUD-O1).
+const WeakKeyAuditSourceKind = "weak_key_audit"
+
+// WeakKeyAuditSourceID is the tenant's one weak-key audit source.
+func WeakKeyAuditSourceID(tenantID string) string {
+	return uuid.NewSHA1(weakKeyAuditSourceNamespace, []byte(tenantID+"\x00batch-gcd")).String()
+}
+
+// EnsureWeakKeyAuditSource records the tenant's weak-key audit source and
+// returns its ID.
+func (o *Orchestrator) EnsureWeakKeyAuditSource(ctx context.Context, tenantID string) (string, error) {
+	sourceID := WeakKeyAuditSourceID(tenantID)
+	cfg, err := json.Marshal(map[string]any{"check": weakkey.CheckRSASharedFactor, "max_distinct_keys": weakkey.MaxSharedFactorModuli})
+	if err != nil {
+		return "", err
+	}
+	if _, err := o.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
+		ID: sourceID, Kind: WeakKeyAuditSourceKind, Name: sourcecatalog.WeakKeyAuditSourcePrefix + "batch-gcd", Config: cfg,
+	}); err != nil {
+		return "", err
+	}
+	return sourceID, nil
+}
+
+// WeakKeyAuditOutcome is an audit run's status and message: partial, naming
+// how many distinct keys the bound left out, when it left any out.
+func WeakKeyAuditOutcome(leftOut int) (string, string) {
+	if leftOut > 0 {
+		return "partial", fmt.Sprintf("%d distinct RSA keys were left out: one run checks at most %d", leftOut, weakkey.MaxSharedFactorModuli)
+	}
+	return "succeeded", ""
+}
+
+// QueueWeakKeyAudit queues the tenant's weak-key audit now, as a run on its
+// source that the control plane executes (AUD-O1). A run already queued or
+// running is answered instead of queueing another: one audit at a time.
+func (o *Orchestrator) QueueWeakKeyAudit(ctx context.Context, tenantID string) (store.DiscoveryRun, bool, error) {
+	sourceID, err := o.EnsureWeakKeyAuditSource(ctx, tenantID)
+	if err != nil {
+		return store.DiscoveryRun{}, false, err
+	}
+	if latest, err := o.store.GetLatestDiscoveryRunForSource(ctx, tenantID, sourceID); err == nil && (latest.Status == "queued" || latest.Status == "running") {
+		return latest, false, nil
+	} else if err != nil && !store.IsNotFound(err) {
+		return store.DiscoveryRun{}, false, err
+	}
+	run, err := o.QueueDiscoveryRun(ctx, tenantID, store.DiscoveryRun{SourceID: sourceID})
+	return run, err == nil, err
+}
+
 // RecordWeakKeyAudit records one batch-GCD audit of a tenant's RSA keys as a
 // discovery run under the product's own weak-key-audit source: the distinct
 // keys checked, the keys left out by the bound, and one finding per place a
@@ -30,14 +81,8 @@ var weakKeyAuditSourceNamespace = uuid.MustParse("07310acd-a320-50c4-9601-0d8f6e
 // the audit ran and found none.
 func (o *Orchestrator) RecordWeakKeyAudit(ctx context.Context, tenantID string, rep weakkey.SharedFactorReport,
 	leftOut int, findings []store.DiscoveryFinding) (store.DiscoveryRun, error) {
-	sourceID := uuid.NewSHA1(weakKeyAuditSourceNamespace, []byte(tenantID+"\x00batch-gcd")).String()
-	cfg, err := json.Marshal(map[string]any{"check": weakkey.CheckRSASharedFactor, "max_distinct_keys": weakkey.MaxSharedFactorModuli})
+	sourceID, err := o.EnsureWeakKeyAuditSource(ctx, tenantID)
 	if err != nil {
-		return store.DiscoveryRun{}, err
-	}
-	if _, err := o.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
-		ID: sourceID, Kind: "weak_key_audit", Name: sourcecatalog.WeakKeyAuditSourcePrefix + "batch-gcd", Config: cfg,
-	}); err != nil {
 		return store.DiscoveryRun{}, err
 	}
 	runID := uuid.NewString()
@@ -66,11 +111,7 @@ func (o *Orchestrator) RecordWeakKeyAudit(ctx context.Context, tenantID string, 
 		}
 		recorded++
 	}
-	status, msg := "succeeded", ""
-	if leftOut > 0 {
-		status = "partial"
-		msg = fmt.Sprintf("%d distinct RSA keys were left out: one run checks at most %d", leftOut, weakkey.MaxSharedFactorModuli)
-	}
+	status, msg := WeakKeyAuditOutcome(leftOut)
 	if err := o.CompleteDiscoveryRun(ctx, tenantID, store.DiscoveryRun{
 		ID: runID, Status: status, Targets: rep.Distinct, Discovered: recorded, Error: msg,
 	}); err != nil {
