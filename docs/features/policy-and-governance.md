@@ -424,7 +424,13 @@ minutes, which they type into Slack as `/trstctl link <code>`. A button press de
 the request through the API's own approval route as the linked member, with the roles
 their membership holds at that moment: the requester's own press is refused like any
 self-approval, an unlinked Slack user is told to link first, a press is never matched
-by name or email, and the intent digest the message carries must still match. Each
+by name or email, and the intent digest the message carries must still match.
+**Deny** asks for the reason first (N8-L2): the press opens a Slack dialog and decides
+nothing, and its submission denies the request with the reason the member typed (3 to
+500 characters). trstctl records that reason with the decision, and the updated message
+shows it as plain text. A blank reason keeps the dialog open with the error on the field,
+and the decision's single use is spent only when the dialog is submitted. Over Socket Mode
+the dialog's answer travels in its acknowledgement. Each
 button carries its decision signed by trstctl — the approval request, the intent digest
 it binds to, the action, a nonce and an expiry, under the deployment key — so an altered
 or expired decision is refused, and a linked member's use of a message's decision is

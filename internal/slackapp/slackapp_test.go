@@ -174,3 +174,33 @@ func TestFindTaggedFindsOnlyThisAppsTaggedMessageN8L1(t *testing.T) {
 		t.Fatal("CanFindTagged does not follow the granted history scopes")
 	}
 }
+
+// N8-L2: OpenView opens a modal with the interaction's trigger id, and a
+// refusal (for example an expired trigger) is an error.
+func TestOpenViewSendsTheTriggerAndTheViewN8L2(t *testing.T) {
+	var opened map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/views.open" || r.Header.Get("Authorization") != "Bearer xoxb-bot-token" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewDecoder(r.Body).Decode(&opened)
+		if opened["trigger_id"] == "expired" {
+			_, _ = fmt.Fprint(w, `{"ok":false,"error":"expired_trigger_id"}`)
+			return
+		}
+		_, _ = fmt.Fprint(w, `{"ok":true,"view":{"id":"V1"}}`)
+	}))
+	defer srv.Close()
+	c := Client{BaseURL: srv.URL, Doer: srv.Client()}
+	view := map[string]any{"type": "modal", "callback_id": "deny"}
+	if err := c.OpenView(context.Background(), []byte("xoxb-bot-token"), "123.456", view); err != nil {
+		t.Fatalf("OpenView: %v", err)
+	}
+	if opened["trigger_id"] != "123.456" || opened["view"].(map[string]any)["callback_id"] != "deny" {
+		t.Fatalf("views.open received %v", opened)
+	}
+	if err := c.OpenView(context.Background(), []byte("xoxb-bot-token"), "expired", view); !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "expired_trigger_id") {
+		t.Fatalf("an expired trigger = %v; want a refusal", err)
+	}
+}

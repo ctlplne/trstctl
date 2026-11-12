@@ -309,4 +309,14 @@ func TestServedSlackSocketModeApprovalStartsTheSessionA277(t *testing.T) {
 	if connections < 1 {
 		t.Fatal("trstctl never opened its Socket Mode connection")
 	}
+
+	// N8-L2: a deny-reason form submitted over the connection is answered in
+	// its acknowledgement; one trstctl cannot read keeps the modal open with
+	// the error on the reason field.
+	ack := stand.deliver(t, "interactive", map[string]any{"type": "view_submission", "team": map[string]any{"id": "T0N8TEAM"},
+		"user": map[string]any{"id": "U0REVTWO"}, "view": map[string]any{"callback_id": "trstctl_deny_reason", "private_metadata": "{}",
+			"state": map[string]any{"values": map[string]any{"reason": map[string]any{"reason": map[string]any{"value": "too risky tonight"}}}}}})
+	if !strings.Contains(string(ack), `"response_action":"errors"`) || !strings.Contains(string(ack), `"reason"`) {
+		t.Fatalf("a form trstctl cannot read was acknowledged with %s", ack)
+	}
 }

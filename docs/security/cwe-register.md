@@ -710,7 +710,7 @@ not this file.
 | `internal/server/servicenow_two_way_served_test.go:221` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:235` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/slack_app_lost_answer_served_test.go:31` | env: references to test-only values, no credential (CWE-798) |
-| `internal/server/slack_app_served_test.go:127` | env: references to test-only values, no credential (CWE-798) |
+| `internal/server/slack_app_served_test.go:144` | env: references to test-only values, no credential (CWE-798) |
 | `internal/server/slack_socket_served_test.go:128` | env: references to test-only values, no credential (CWE-798) |
 | `internal/server/ssh_agentless_collection_served_test.go:27` | public host pin, restricted account and vault-reference fixtures contain no credential value (CWE-798). |
 | `internal/server/thirdparty_collect_served_test.go:194` | env: references to test-only stand-in tokens, no credential values (CWE-798) |

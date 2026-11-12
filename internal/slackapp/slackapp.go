@@ -313,6 +313,23 @@ func (c Client) Update(ctx context.Context, token []byte, msg Message, text stri
 	return nil
 }
 
+// OpenView opens a modal for the user whose interaction carried triggerID
+// (views.open). A trigger is single-use and expires three seconds after the
+// interaction, so the modal is opened while answering it.
+func (c Client) OpenView(ctx context.Context, token []byte, triggerID string, view map[string]any) error {
+	var answer struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+	}
+	if err := c.call(ctx, token, http.MethodPost, "views.open", map[string]any{"trigger_id": triggerID, "view": view}, &answer); err != nil {
+		return err
+	}
+	if !answer.OK {
+		return fmt.Errorf("%w: views.open answered %q", ErrRefused, answer.Error)
+	}
+	return nil
+}
+
 func (c Client) call(ctx context.Context, token []byte, method, endpoint string, body any, into any) error {
 	var reader io.Reader
 	if body != nil {

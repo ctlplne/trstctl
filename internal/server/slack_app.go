@@ -415,6 +415,18 @@ type slackInteraction struct {
 		ActionTS string `json:"action_ts"`
 	} `json:"actions"`
 	ResponseURL string `json:"response_url"`
+	// TriggerID opens a modal while answering a button press (N8-L2).
+	TriggerID string `json:"trigger_id"`
+	// View is the submitted deny-reason modal (view_submission, N8-L2).
+	View struct {
+		CallbackID      string `json:"callback_id"`
+		PrivateMetadata string `json:"private_metadata"`
+		State           struct {
+			Values map[string]map[string]struct {
+				Value string `json:"value"`
+			} `json:"values"`
+		} `json:"state"`
+	} `json:"view"`
 }
 
 // interactions serves POST /integrations/slack/interactions: an Approve or
@@ -427,12 +439,23 @@ func (a *slackAppServer) interactions(w http.ResponseWriter, r *http.Request) {
 	}
 	form, err := url.ParseQuery(string(body))
 	var in slackInteraction
-	if err != nil || json.Unmarshal([]byte(form.Get("payload")), &in) != nil || in.Type != "block_actions" || len(in.Actions) != 1 {
+	if err != nil || json.Unmarshal([]byte(form.Get("payload")), &in) != nil || (in.Type != "view_submission" && (in.Type != "block_actions" || len(in.Actions) != 1)) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	if a.s.api == nil {
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if in.Type == "view_submission" {
+		// Slack closes the modal on an empty 200, and shows the errors on the
+		// reason field otherwise (N8-L2).
+		if errs := a.handleViewSubmission(r.Context(), in); errs != nil {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"response_action": "errors", "errors": errs})
+			return
+		}
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	if reply := a.handleInteraction(r.Context(), in); reply != "" {
@@ -444,7 +467,9 @@ func (a *slackAppServer) interactions(w http.ResponseWriter, r *http.Request) {
 
 // handleInteraction decides an approval from a pressed button, from either
 // transport, as the linked member; it returns a reply for the presser, or
-// nothing when the decision was taken and the message updated.
+// nothing when the decision was taken and the message updated. Deny asks for
+// the reason first (N8-L2): the press opens a modal, and its submission
+// decides.
 func (a *slackAppServer) handleInteraction(ctx context.Context, in slackInteraction) string {
 	if in.Type != "block_actions" || len(in.Actions) != 1 || a.s.api == nil {
 		return "trstctl could not read that action."
@@ -454,29 +479,132 @@ func (a *slackAppServer) handleInteraction(ctx context.Context, in slackInteract
 	if !approve && action.ActionID != "deny" {
 		return "trstctl could not read that action."
 	}
-	d, err := a.openDecision(action.Value, action.ActionID)
-	if err != nil {
-		return "trstctl refused the decision: " + err.Error()
+	d, tenantID, subject, reply := a.decisionFor(ctx, action.Value, action.ActionID, in.Team.ID, in.User.ID)
+	if reply != "" {
+		return reply
 	}
-	tenantID, err := a.s.store.TenantForSlackTeam(ctx, in.Team.ID)
+	if !approve {
+		return a.openDenyReason(ctx, tenantID, in, action.Value)
+	}
+	return a.decide(ctx, d, tenantID, subject, in.User.ID, true, "", in.Container.ChannelID, in.Container.MessageTS)
+}
+
+// decisionFor opens a signed decision for a member of the workspace it was
+// sent to, or says why it cannot be taken.
+func (a *slackAppServer) decisionFor(ctx context.Context, value, action, teamID, userID string) (slackDecision, string, string, string) {
+	d, err := a.openDecision(value, action)
+	if err != nil {
+		return slackDecision{}, "", "", "trstctl refused the decision: " + err.Error()
+	}
+	tenantID, err := a.s.store.TenantForSlackTeam(ctx, teamID)
 	if err != nil || tenantID != d.Tenant {
+		return slackDecision{}, "", "", "This workspace has no trstctl install."
+	}
+	subject, err := a.s.store.SlackLinkedSubject(ctx, tenantID, userID)
+	if err != nil {
+		return slackDecision{}, "", "", "Your Slack user is not linked to a trstctl member: get a code from trstctl (integrations slack link-code) and type /trstctl link <code>."
+	}
+	return d, tenantID, subject, ""
+}
+
+// slackDenyCallback names the deny-reason modal.
+const slackDenyCallback = "trstctl_deny_reason"
+
+// slackDenyReasonMax bounds the reason a member types.
+const slackDenyReasonMax = 500
+
+// slackDenyContext is what the deny-reason modal carries to its submission:
+// the signed decision and the message to update.
+type slackDenyContext struct {
+	Value   string `json:"v"`
+	Channel string `json:"c"`
+	TS      string `json:"t"`
+}
+
+// openDenyReason opens the modal that asks the member why they deny the
+// request (N8-L2). Nothing is decided until it is submitted.
+func (a *slackAppServer) openDenyReason(ctx context.Context, tenantID string, in slackInteraction, value string) string {
+	if in.TriggerID == "" {
+		return "trstctl could not ask for a reason; deny the request in trstctl instead."
+	}
+	meta, err := json.Marshal(slackDenyContext{Value: value, Channel: in.Container.ChannelID, TS: in.Container.MessageTS})
+	if err != nil || len(meta) > 3000 {
+		return "trstctl could not ask for a reason; deny the request in trstctl instead."
+	}
+	inst, err := a.install(ctx, tenantID)
+	if err != nil {
 		return "This workspace has no trstctl install."
 	}
-	subject, err := a.s.store.SlackLinkedSubject(ctx, tenantID, in.User.ID)
+	token, err := a.botToken(ctx, inst)
 	if err != nil {
-		return "Your Slack user is not linked to a trstctl member: get a code from trstctl (integrations slack link-code) and type /trstctl link <code>."
+		return "trstctl could not ask for a reason; deny the request in trstctl instead."
+	}
+	defer secret.Wipe(token)
+	view := map[string]any{
+		"type": "modal", "callback_id": slackDenyCallback, "private_metadata": string(meta),
+		"title":  map[string]any{"type": "plain_text", "text": "Deny the request"},
+		"submit": map[string]any{"type": "plain_text", "text": "Deny"},
+		"close":  map[string]any{"type": "plain_text", "text": "Cancel"},
+		"blocks": []any{map[string]any{
+			"type": "input", "block_id": "reason",
+			"label": map[string]any{"type": "plain_text", "text": "Why do you deny it?"},
+			"hint":  map[string]any{"type": "plain_text", "text": "The requester sees this reason in trstctl."},
+			"element": map[string]any{"type": "plain_text_input", "action_id": "reason", "multiline": true,
+				"min_length": 3, "max_length": slackDenyReasonMax},
+		}},
+	}
+	if err := a.client.OpenView(ctx, token, in.TriggerID, view); err != nil {
+		return "trstctl could not ask for a reason; deny the request in trstctl instead."
+	}
+	return ""
+}
+
+// handleViewSubmission decides a deny from its reason modal (N8-L2). It
+// returns nil to close the modal, or an error to show on the reason field.
+func (a *slackAppServer) handleViewSubmission(ctx context.Context, in slackInteraction) map[string]string {
+	fail := func(msg string) map[string]string { return map[string]string{"reason": msg} }
+	if in.Type != "view_submission" || in.View.CallbackID != slackDenyCallback || a.s.api == nil {
+		return fail("trstctl could not read that form.")
+	}
+	var meta slackDenyContext
+	if err := json.Unmarshal([]byte(in.View.PrivateMetadata), &meta); err != nil || meta.Value == "" {
+		return fail("trstctl could not read that form.")
+	}
+	reason := strings.TrimSpace(in.View.State.Values["reason"]["reason"].Value)
+	if len([]rune(reason)) < 3 || len([]rune(reason)) > slackDenyReasonMax {
+		return fail(fmt.Sprintf("Give a reason of 3 to %d characters.", slackDenyReasonMax))
+	}
+	d, tenantID, subject, reply := a.decisionFor(ctx, meta.Value, "deny", in.Team.ID, in.User.ID)
+	if reply != "" {
+		return fail(reply)
+	}
+	if reply := a.decide(ctx, d, tenantID, subject, in.User.ID, false, reason, meta.Channel, meta.TS); reply != "" {
+		return fail(reply)
+	}
+	return nil
+}
+
+// decide takes a member's decision through the API's own approval route, once
+// per member and message, records it and updates the message.
+func (a *slackAppServer) decide(ctx context.Context, d slackDecision, tenantID, subject, slackUserID string, approve bool, reason, channel, ts string) string {
+	action := "deny"
+	if approve {
+		action = "approve"
 	}
 	// Single use: each linked member's use of this message's nonce is
 	// recorded once; a second press, or a replayed delivery, is refused.
-	use := crypto.SHA256Hex([]byte("slack-decision\x00" + d.Nonce + "\x00" + in.User.ID))
+	use := crypto.SHA256Hex([]byte("slack-decision\x00" + d.Nonce + "\x00" + slackUserID))
 	if err := a.s.store.UseSlackDecision(ctx, tenantID, use, subject, time.Unix(d.Expires, 0).UTC()); err != nil {
 		if errors.Is(err, store.ErrSlackDecisionUsed) {
 			return "trstctl refused the decision: it was already used"
 		}
 		return "trstctl could not record the decision; try again."
 	}
-	status, answer := a.s.api.DecideApprovalAs(ctx, tenantID, subject, d.Request, d.Digest, approve, "denied in Slack by "+subject,
-		"slack:"+in.User.ID+":"+d.Request+":"+action.ActionID)
+	if reason == "" {
+		reason = "denied in Slack by " + subject
+	}
+	status, answer := a.s.api.DecideApprovalAs(ctx, tenantID, subject, d.Request, d.Digest, approve, reason,
+		"slack:"+slackUserID+":"+d.Request+":"+action)
 	if status/100 != 2 {
 		var problem struct {
 			Detail string `json:"detail"`
@@ -484,20 +612,19 @@ func (a *slackAppServer) handleInteraction(ctx context.Context, in slackInteract
 		_ = json.Unmarshal(answer, &problem)
 		return "trstctl refused the decision: " + problem.Detail
 	}
-	decision := "deny"
-	if approve {
-		decision = "approve"
-	}
 	if err := a.s.orch.RecordSlackEvent(ctx, tenantID, projections.EventSlackApprovalDecided, projections.SlackApprovalDecided{
-		ApprovalRequestID: d.Request, Decision: decision, Subject: subject, SlackUserID: in.User.ID}); err != nil {
+		ApprovalRequestID: d.Request, Decision: action, Subject: subject, SlackUserID: slackUserID}); err != nil {
 		return "trstctl recorded the decision; the message could not be updated."
 	}
 	if inst, err := a.install(ctx, tenantID); err == nil {
 		if token, err := a.botToken(ctx, inst); err == nil {
 			verb := map[bool]string{true: "approved", false: "denied"}[approve]
 			text := fmt.Sprintf("Approval request %s was %s by %s.", d.Request, verb, subject)
-			_ = a.client.Update(ctx, token, slackapp.Message{Channel: in.Container.ChannelID, TS: in.Container.MessageTS}, text,
-				append([]any{map[string]any{"type": "section", "text": map[string]any{"type": "mrkdwn", "text": text}}}, slackPoweredBy(ctx, tenantID)...))
+			if !approve {
+				text = fmt.Sprintf("Approval request %s was denied by %s: %s", d.Request, subject, reason)
+			}
+			_ = a.client.Update(ctx, token, slackapp.Message{Channel: channel, TS: ts}, text,
+				append([]any{map[string]any{"type": "section", "text": map[string]any{"type": "plain_text", "text": text}}}, slackPoweredBy(ctx, tenantID)...))
 			secret.Wipe(token)
 		}
 	}
@@ -670,10 +797,21 @@ func (a *slackAppServer) socketSession(ctx context.Context) error {
 				return err
 			}
 		case "interactive":
+			var in slackInteraction
+			if json.Unmarshal(env.Payload, &in) == nil && in.Type == "view_submission" {
+				// The ack carries the modal's answer (N8-L2).
+				var answer any
+				if errs := a.handleViewSubmission(ctx, in); errs != nil {
+					answer = map[string]any{"response_action": "errors", "errors": errs}
+				}
+				if err := conn.Ack(env.EnvelopeID, answer); err != nil {
+					return err
+				}
+				continue
+			}
 			if err := conn.Ack(env.EnvelopeID, nil); err != nil {
 				return err
 			}
-			var in slackInteraction
 			if json.Unmarshal(env.Payload, &in) != nil {
 				continue
 			}

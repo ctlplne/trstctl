@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/branding"
 	"trstctl.com/trstctl/internal/config"
@@ -30,6 +32,8 @@ type n8SlackStandIn struct {
 	mu      sync.Mutex
 	posts   []map[string]any
 	updates []map[string]any
+	// views are the modals opened (views.open, N8-L2).
+	views []map[string]any
 	// scope is what the code exchange says the workspace granted.
 	scope string
 	// dropPostAnswers keeps that many posts while dropping the connection
@@ -79,6 +83,19 @@ func newN8SlackStandIn(t *testing.T) *n8SlackStandIn {
 				return
 			}
 			_, _ = fmt.Fprintf(w, `{"ok":true,"channel":"%v","ts":"%v"}`, body["channel"], body["ts"])
+		case "/api/views.open":
+			if r.Header.Get("Authorization") != "Bearer xoxb-n8-bot-token" {
+				_, _ = fmt.Fprint(w, `{"ok":false,"error":"invalid_auth"}`)
+				return
+			}
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if body["trigger_id"] == "" || body["trigger_id"] == nil {
+				_, _ = fmt.Fprint(w, `{"ok":false,"error":"invalid_trigger"}`)
+				return
+			}
+			s.views = append(s.views, body)
+			_, _ = fmt.Fprint(w, `{"ok":true,"view":{"id":"V0N8L2"}}`)
 		case "/api/conversations.history":
 			if r.Header.Get("Authorization") != "Bearer xoxb-n8-bot-token" {
 				_, _ = fmt.Fprint(w, `{"ok":false,"error":"invalid_auth"}`)
@@ -309,6 +326,97 @@ func TestServedSlackAppApprovesFromButtonsN8(t *testing.T) {
 	stand.mu.Unlock()
 	if !updated {
 		t.Fatalf("the message was not updated with the outcome: %v", stand.updates)
+	}
+
+	// N8-L2: Deny asks for a reason. The press opens a modal and decides
+	// nothing; its submission denies the request with the reason the member
+	// typed, which the requester reads in trstctl and the message shows.
+	_ = json.Unmarshal(call(requester, http.MethodPost, "/api/v1/identities", "n8l2-identity", map[string]any{"kind": "x509_certificate", "name": "n8l2-api.example.test", "owner_id": owner.ID}, http.StatusCreated), &identity)
+	call(requester, http.MethodPost, "/api/v1/identities/"+identity.ID+"/transitions", "n8l2-issue", map[string]any{"to": "issued", "reason": "n8l2"}, http.StatusForbidden)
+	var denyValue string
+	for deadline := time.Now().Add(15 * time.Second); denyValue == ""; {
+		h.srv.dispatchOnce(context.Background())
+		stand.mu.Lock()
+		if len(stand.posts) >= 2 {
+			raw, _ := json.Marshal(stand.posts[len(stand.posts)-1])
+			var second struct {
+				Blocks []struct {
+					Elements []struct {
+						ActionID string `json:"action_id"`
+						Value    string `json:"value"`
+					} `json:"elements"`
+				} `json:"blocks"`
+			}
+			if json.Unmarshal(raw, &second) == nil && len(second.Blocks) > 1 && len(second.Blocks[1].Elements) == 2 && second.Blocks[1].Elements[1].ActionID == "deny" {
+				denyValue = second.Blocks[1].Elements[1].Value
+			}
+		}
+		stand.mu.Unlock()
+		if time.Now().After(deadline) {
+			t.Fatal("the second approval request was not posted to Slack")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	var denied struct {
+		Request string `json:"r"`
+	}
+	if parts := strings.Split(denyValue, "."); len(parts) != 3 {
+		t.Fatalf("the deny button's value is not a signed decision: %s", denyValue)
+	} else if raw, err := base64.RawURLEncoding.DecodeString(parts[1]); err != nil || json.Unmarshal(raw, &denied) != nil {
+		t.Fatalf("the signed deny decision's payload: %v", err)
+	}
+	pressDeny, _ := json.Marshal(map[string]any{"type": "block_actions", "team": map[string]any{"id": "T0N8TEAM"}, "user": map[string]any{"id": "U0REVIEWER"},
+		"trigger_id": "13345224609.n8l2", "container": map[string]any{"channel_id": "C0SECURITY", "message_ts": "1762246800.000002"},
+		"actions": []any{map[string]any{"action_id": "deny", "value": denyValue, "action_ts": "1762246802.000001"}}})
+	if status, answer := signed("/integrations/slack/interactions", url.Values{"payload": {string(pressDeny)}}); status != http.StatusOK || answer != "" {
+		t.Fatalf("pressing Deny = %d %q; want the reason modal and no reply", status, answer)
+	}
+	stand.mu.Lock()
+	opened := len(stand.views) == 1 && stand.views[0]["trigger_id"] == "13345224609.n8l2"
+	var meta string
+	if opened {
+		view, _ := stand.views[0]["view"].(map[string]any)
+		meta, _ = view["private_metadata"].(string)
+		opened = view["callback_id"] == "trstctl_deny_reason" && strings.Contains(meta, denyValue)
+	}
+	stand.mu.Unlock()
+	if !opened {
+		t.Fatalf("pressing Deny opened %v; want the reason modal carrying the signed decision", stand.views)
+	}
+	if listed := string(call(reviewer, http.MethodGet, "/api/v1/approval-requests", "", nil, http.StatusOK)); !strings.Contains(listed, denied.Request) || strings.Contains(listed, `"status":"denied"`) {
+		t.Fatalf("the press decided the request before its reason: %s", listed)
+	}
+	submit := func(reason string) (int, string) {
+		payload, _ := json.Marshal(map[string]any{"type": "view_submission", "team": map[string]any{"id": "T0N8TEAM"}, "user": map[string]any{"id": "U0REVIEWER"},
+			"view": map[string]any{"callback_id": "trstctl_deny_reason", "private_metadata": meta,
+				"state": map[string]any{"values": map[string]any{"reason": map[string]any{"reason": map[string]any{"type": "plain_text_input", "value": reason}}}}}})
+		return signed("/integrations/slack/interactions", url.Values{"payload": {string(payload)}})
+	}
+	if status, answer := submit("  "); status != http.StatusOK || !strings.Contains(answer, `"response_action":"errors"`) || !strings.Contains(answer, `"reason"`) {
+		t.Fatalf("a blank reason = %d %s; want the error on the reason field", status, answer)
+	}
+	if status, answer := submit("the change window is closed"); status != http.StatusOK || answer != "" {
+		t.Fatalf("submitting the reason = %d %q; want the modal closed", status, answer)
+	}
+	listed = string(call(reviewer, http.MethodGet, "/api/v1/approval-requests", "", nil, http.StatusOK))
+	if !strings.Contains(listed, `"status":"denied"`) {
+		t.Fatalf("approval requests after the denial = %s", listed)
+	}
+	var decidedBy, recordedDecision, recordedReason string
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `SELECT approver, decision, reason FROM operation_approval_decisions WHERE tenant_id = $1 AND request_id = $2`,
+			h.tenant, denied.Request).Scan(&decidedBy, &recordedDecision, &recordedReason)
+	}); err != nil || decidedBy != "slack-reviewer@example.test" || recordedDecision != "deny" || recordedReason != "the change window is closed" {
+		t.Fatalf("recorded denial = %s %s %q %v; want the reviewer's deny with the typed reason", decidedBy, recordedDecision, recordedReason, err)
+	}
+	if status, answer := submit("the change window is closed"); status != http.StatusOK || !strings.Contains(answer, "already used") {
+		t.Fatalf("a second submission = %d %s; want already used", status, answer)
+	}
+	stand.mu.Lock()
+	deniedText := fmt.Sprint(stand.updates[len(stand.updates)-1]["text"])
+	stand.mu.Unlock()
+	if !strings.Contains(deniedText, "denied by slack-reviewer@example.test: the change window is closed") {
+		t.Fatalf("the denied message reads %q", deniedText)
 	}
 
 	call(admin, http.MethodDelete, "/api/v1/integrations/slack", "n8-uninstall", nil, http.StatusNoContent)

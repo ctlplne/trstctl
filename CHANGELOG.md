@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- Denying an approval from Slack asks for the reason (N8-L2). The Deny button opens a Slack dialog and decides
+  nothing; submitting it denies the request with the reason the member typed (3 to 500 characters), recorded with
+  the decision and shown in the updated message as plain text. A blank reason keeps the dialog open with the
+  error on the field, and Socket Mode answers the dialog in its acknowledgement.
 - An AD CS issuance held for approval finishes on its own once the issuer's relay approves its request (N1-L1).
   Recording the relay's approval queues the issuance's resume in the same transaction, and the resume reads the
   request back by its CA request id. The CA Hierarchy page lists each AD CS authority's held issuances with their

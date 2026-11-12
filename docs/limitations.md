@@ -9065,8 +9065,6 @@ What comes next:
   still post twice until it is installed again; the console's Approvals page and
   `duplicate_post_check` say which. A first post lost past a day, or behind 1,000 newer
   messages, is posted again; both messages decide the same request.
-- Deny from Slack records the reason "denied in Slack by <member>"; asking the
-  reviewer for a reason in a Slack dialog is what comes next.
 
 ## Live discovery of cloud access keys (M3) — served
 
