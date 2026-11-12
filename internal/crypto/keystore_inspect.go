@@ -15,10 +15,11 @@ import (
 	"trstctl.com/trstctl/internal/crypto/pfx"
 )
 
-// Keystore inspection (X2). A Java keystore or PKCS#12 file found on a host is
-// described by its entries' certificates: alias, key algorithm and size, the
-// public-key fingerprint and the chain length. A JKS key entry is never
-// decrypted, because JKS stores certificate chains in the clear. A PKCS#12
+// Keystore inspection (X2). A Java keystore (JKS, JCEKS) or PKCS#12 file found
+// on a host is described by its entries' certificates: alias, key algorithm
+// and size, the public-key fingerprint and the chain length. A JKS or JCEKS key
+// entry is never decrypted, because both store certificate chains in the
+// clear, and a JCEKS secret key is counted, never unsealed. A PKCS#12
 // file decodes its key on the way to its certificates; the key is wiped at
 // once. Only this metadata leaves the crypto boundary.
 
@@ -42,9 +43,11 @@ type KeystoreKeyInfo struct {
 
 // KeystoreReport is what a keystore yields.
 type KeystoreReport struct {
-	Format       string // "JKS" or "PKCS12"
+	Format       string // "JKS", "JCEKS" or "PKCS12"
 	Keys         []KeystoreKeyInfo
 	TrustedCerts int
+	// SecretKeys counts a JCEKS store's secret key entries (X2-L2).
+	SecretKeys int
 	// IntegrityVerified is true when a supplied password matched the store's
 	// integrity check. A JKS lists its entries without one; a PKCS#12 file
 	// cannot be read at all without its password.
@@ -55,17 +58,42 @@ type KeystoreReport struct {
 // opens: nothing in it can be listed.
 var ErrKeystoreLocked = errors.New("crypto: no supplied password opens this PKCS#12 file")
 
-// InspectKeystore reads a JKS or PKCS#12 keystore's metadata, trying each
-// password in order (and an empty one last). JCEKS and other formats are
-// refused.
+// InspectKeystore reads a JKS, JCEKS or PKCS#12 keystore's metadata, trying
+// each password in order (and an empty one last). Other formats are refused.
 func InspectKeystore(data []byte, passwords [][]byte) (KeystoreReport, error) {
 	if jks.IsJKS(data) {
 		return inspectJKS(data, passwords)
 	}
-	if len(data) >= 4 && data[0] == 0xCE && data[1] == 0xCE && data[2] == 0xCE && data[3] == 0xCE {
-		return KeystoreReport{}, errors.New("crypto: JCEKS keystores are not read")
+	if jks.IsJCEKS(data) {
+		return inspectJCEKS(data, passwords)
 	}
 	return inspectPKCS12(data, passwords)
+}
+
+// inspectJCEKS reads a JCEKS keystore (X2-L2) like a JKS one: certificates
+// are in the clear, so its entries are listed even when no password matches
+// its integrity digest; secret key entries are counted.
+func inspectJCEKS(data []byte, passwords [][]byte) (KeystoreReport, error) {
+	entries, verified, err := jks.JCEKSEntries(data, passwords)
+	if err != nil {
+		return KeystoreReport{}, err
+	}
+	report := KeystoreReport{Format: "JCEKS", IntegrityVerified: verified}
+	for _, entry := range entries {
+		switch {
+		case entry.SecretKey:
+			report.SecretKeys++
+		case entry.KeyEntry:
+			info, err := keystoreKeyInfo(entry.Alias, entry.ChainDER)
+			if err != nil {
+				return KeystoreReport{}, err
+			}
+			report.Keys = append(report.Keys, info)
+		default:
+			report.TrustedCerts++
+		}
+	}
+	return report, nil
 }
 
 func inspectJKS(data []byte, passwords [][]byte) (KeystoreReport, error) {

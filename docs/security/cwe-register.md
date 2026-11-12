@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3068 annotated sites across 33 rules. Each row is
+3075 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (710 sites)
+### G101 — CWE-798 Use of hardcoded credentials (712 sites)
 
 | Location | Reason |
 |---|---|
@@ -111,6 +111,7 @@ not this file.
 | `internal/agent/csisecrets/driver.go:64` | the kubelet's request key name, not a credential (CWE-798) |
 | `internal/agent/csisecrets/driver_test.go:443` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/discovery/keystore.go:40` | the published Java keystore default, tried as a default; not a credential of this deployment (CWE-798) |
+| `internal/agent/discovery/keystore_jceks_test.go:18` | fixture file paths, not credentials (CWE-798) |
 | `internal/agent/discovery/kubernetes.go:90` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
 | `internal/agent/k8s/client.go:31` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/relay/deploy_failure_log_keep_test.go:34` | a canary the log must not keep, not a credential (CWE-798) |
@@ -314,6 +315,7 @@ not this file.
 | `internal/connector/gcpcm/gcpcm_test.go:18` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/kemp/kemp_test.go:65` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/paloalto/paloalto_test.go:29` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `internal/crypto/jks/jceks_test.go:22` | a fixture file path, not a credential (CWE-798) |
 | `internal/crypto/pfx/keyentries_test.go:20` | keytool's published default store password on a test fixture; not a credential (CWE-798) |
 | `internal/crypto/ssh_account_password.go:43` | a command path the profile runs, not a credential (CWE-798) |
 | `internal/crypto/ssh_account_password.go:44` | a command path the profile runs, not a credential (CWE-798) |
@@ -2108,7 +2110,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (748 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (750 sites)
 
 | Location | Reason |
 |---|---|
@@ -2288,6 +2290,7 @@ not this file.
 | `internal/agent/discovery/cryptopolicy.go:120` | the host's own crypto policy files under a fixed root (CWE-22) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/keystore.go:83` | the agent inventories operator-configured keystore paths; reading them is the product function (CWE-22) |
+| `internal/agent/discovery/keystore_jceks_test.go:22` | the test reads its own fixtures (CWE-22) |
 | `internal/agent/discovery/mcpconfig.go:107` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/pkcs11_softhsm_container_test.go:93` | the repository's own go.mod under the test's computed repo root (CWE-22) |
 | `internal/agent/discovery/privatekey.go:70` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
@@ -2465,6 +2468,7 @@ not this file.
 | `internal/connector/wasm/host/host_test.go:293` | this repository's own connector sources (CWE-22). |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/crypto/fsatomic/syncdir_other.go:10` | the caller's own state directory (CWE-22) |
+| `internal/crypto/jks/jceks_test.go:27` | the test reads its own fixture (CWE-22) |
 | `internal/crypto/kerberos/client_test.go:87` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/mongosignin/mongosignin.go:251` | the session's URI names the CA file on the gateway's host, as a driver's tlsCAFile does (CWE-22) |
@@ -2998,11 +3002,12 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:101` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G401 — CWE-328 Use of weak hash (18 sites)
+### G401 — CWE-328 Use of weak hash (19 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:421` | display/lookup fingerprint in the industry-standard form; not a security control (CWE-328) |
+| `internal/crypto/jks/jceks.go:68` | the JCEKS integrity digest is SHA-1 by definition; verification only (CWE-328) |
 | `internal/crypto/leafca.go:743` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:379` | mysql_native_password, when the server demands it (CWE-327) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:380` | mysql_native_password (CWE-327) |
@@ -3102,11 +3107,12 @@ not this file.
 |---|---|
 | `internal/crypto/pfx/certonly.go:9` | legacy PKCS#12 files encrypt their certificate contents with 3DES; reading them needs it, and nothing here encrypts (CWE-327) |
 
-### G505 — CWE-328 Weak hash import (SHA-1) (14 sites)
+### G505 — CWE-328 Weak hash import (SHA-1) (15 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:15` | SHA-1 only for the conventional certificate fingerprint identifier, never integrity (CWE-328) |
+| `internal/crypto/jks/jceks.go:7` | a JCEKS keystore's integrity digest is defined over SHA-1; this only verifies existing files (CWE-328) |
 | `internal/crypto/leafca.go:7` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:17` | MySQL's mysql_native_password and the RSA-OAEP padding its servers use (CWE-327) |
 | `internal/crypto/opaque_x509.go:14` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
@@ -3182,7 +3188,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (158 sites)
+### G703 — CWE-22 Path traversal (taint) (159 sites)
 
 | Location | Reason |
 |---|---|
@@ -3198,6 +3204,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:222` | receiver is a private test directory and name ranges over two fixed archive basenames. |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `ee/auditcompliance/retention_download_test.go:87` | the test's own archive under its t.TempDir (CWE-22) |
+| `internal/agent/discovery/keystore_jceks_test.go:30` | the test writes its fixture into its own t.TempDir() (CWE-22) |
 | `internal/agent/discovery/keystore_multikey_test.go:23` | the test writes its fixture into its own t.TempDir() (CWE-22) |
 | `internal/agent/observe/capture_linux_test.go:65` | the lab runner names the report path in the test environment, never a request (CWE-22) |
 | `internal/agent/observe/capture_linux_test.go:146` | the lab runner names the report path in the test environment, never a request (CWE-22) |

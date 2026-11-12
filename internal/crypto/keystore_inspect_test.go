@@ -83,7 +83,7 @@ func TestInspectKeystoreReportsKeyTypeAndSizeWithoutKeyMaterial(t *testing.T) {
 		t.Fatalf("PKCS#12 with a wrong password: %v, want ErrKeystoreLocked", err)
 	}
 	if _, err := InspectKeystore([]byte{0xCE, 0xCE, 0xCE, 0xCE, 0, 0, 0, 2}, nil); err == nil {
-		t.Fatal("a JCEKS keystore was read")
+		t.Fatal("a truncated JCEKS keystore was read")
 	}
 }
 

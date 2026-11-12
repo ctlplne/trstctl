@@ -587,14 +587,18 @@ expires or its CA revokes it; the inventory row keeps its status. `GET
 /api/v1/certificates/{id}/key-vault-disables` lists them. Status: served.
 
 Keystores get the same treatment (X2). `--inventory-keystores` names Java keystores
-(JKS) and PKCS#12 files, directories or globs; a directory walk reads `.jks`, `.keystore`,
-`.ks`, `.p12` and `.pfx` files. Each key entry is reported as private-key metadata: the
-alias, the key type and size, the public-key fingerprint (the same basis as a key file,
-so one key found in both places correlates) and the chain length, all read from the
-entry's certificate. A JKS key is never decrypted: JKS keeps certificate chains in the
-clear, so its entries are listed even without the store password and marked
-`integrity_verified=false` until a password from `--inventory-keystore-password-file`
-(one per line, tried before the published default `changeit`) matches. A PKCS#12 file is
+(JKS, JCEKS) and PKCS#12 files, directories or globs; a directory walk reads `.jks`,
+`.jceks`, `.keystore`, `.ks`, `.p12` and `.pfx` files. Each key entry is reported as
+private-key metadata: the alias, the key type and size, the public-key fingerprint (the
+same basis as a key file, so one key found in both places correlates) and the chain length,
+all read from the entry's certificate. A JKS or JCEKS key is never decrypted: both keep
+certificate chains in the clear, so their entries are listed even without the store
+password and marked `integrity_verified=false` until a password from
+`--inventory-keystore-password-file` (one per line, tried before the published default
+`changeit`) matches the store's integrity digest. A JCEKS store's secret keys (X2-L2) are
+stepped over sealed, never opened, and counted as `keystore_secret_keys` on its key
+findings; a store of secret keys only, such as a Hadoop credential store, is reported once
+as the keystore with that count. A PKCS#12 file is
 read for its certificates only: its MAC checks the password, the contents holding
 certificates are decrypted, and a key bag is never decrypted (X2-L3); a file no password
 opens is reported `locked`, with nothing listed. Every key of a PKCS#12 file is reported

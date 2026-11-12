@@ -48,3 +48,29 @@ func FuzzDecodeTrustedCertificates(f *testing.F) {
 		}
 	})
 }
+
+// FuzzJCEKSEntries drives arbitrary bytes through the JCEKS reader (X2-L2):
+// a keystore found on a host is untrusted input, so the reader, including its
+// walk over Java-serialized secret keys, must fail closed and never pair an
+// error with entries or a verified store.
+func FuzzJCEKSEntries(f *testing.F) {
+	f.Add(append([]byte{0xCE, 0xCE, 0xCE, 0xCE, 0, 0, 0, 2, 0, 0, 0, 0}, make([]byte, 20)...), "changeit")
+	f.Add(append([]byte{0xCE, 0xCE, 0xCE, 0xCE, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 3, 0, 1, 'k', 0, 0, 0, 0, 0, 0, 0, 0,
+		0xAC, 0xED, 0x00, 0x05, 0x70}, make([]byte, 20)...), "")
+	f.Add([]byte{0xCE, 0xCE, 0xCE, 0xCE}, "password")
+
+	f.Fuzz(func(t *testing.T, data []byte, password string) {
+		entries, verified, err := jks.JCEKSEntries(data, [][]byte{[]byte(password)})
+		if err != nil {
+			if entries != nil || verified {
+				t.Fatalf("JCEKSEntries returned an error with %d entries (verified %v)", len(entries), verified)
+			}
+			return
+		}
+		for _, e := range entries {
+			if e.SecretKey && (e.KeyEntry || len(e.ChainDER) != 0) {
+				t.Fatalf("secret key %q carries certificates or a key entry", e.Alias)
+			}
+		}
+	})
+}

@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The host agent reads JCEKS keystores (X2-L2, part 1): key entries are reported like a JKS store's (alias, type, size,
+  fingerprint, chain; certificates are in the clear, keys never decrypted), and secret key entries are stepped over
+  sealed and counted; a store of secret keys only, such as a Hadoop credential store, is reported once as the keystore.
+  Directory walks read `.jceks` files. Before, a JCEKS store was refused.
 - A CBOM import retires what a newer BOM of its source no longer lists (X6-L3): once the BOM is in, the source's
   earlier rows that it does not list are marked inactive (`cbom.import.reconciled`; rows and events kept), named in the
   response's `retired_asset_ids` and counted on the Posture page. Another source is never touched, even one whose name

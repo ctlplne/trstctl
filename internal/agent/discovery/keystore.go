@@ -14,11 +14,11 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
-// SourceKeystore is the agent inventory source for Java keystores and PKCS#12
-// files (X2). Each key entry is reported as private-key metadata: its alias,
-// the key type and size read from the entry's certificate, and the public-key
-// fingerprint. No key material leaves the host, and a JKS key is never
-// decrypted.
+// SourceKeystore is the agent inventory source for Java keystores (JKS, JCEKS)
+// and PKCS#12 files (X2). Each key entry is reported as private-key metadata:
+// its alias, the key type and size read from the entry's certificate, and the
+// public-key fingerprint. No key material leaves the host, and no key is ever
+// decrypted; a JCEKS store's secret keys are counted (X2-L2).
 const SourceKeystore = "keystore"
 
 // SourceNetworkObserver is the source passive observers report under (X1);
@@ -33,7 +33,7 @@ const maxKeystoreFileSize = 8 << 20
 
 // keystoreExtensions name the files a directory walk reads as keystores; a
 // path named directly is always read.
-var keystoreExtensions = map[string]bool{".jks": true, ".keystore": true, ".ks": true, ".p12": true, ".pfx": true}
+var keystoreExtensions = map[string]bool{".jks": true, ".jceks": true, ".keystore": true, ".ks": true, ".p12": true, ".pfx": true}
 
 // defaultKeystorePasswords are the published defaults tried after the
 // operator's passwords: Java's "changeit" and the empty password.
@@ -99,13 +99,28 @@ func (s *KeystoreSource) keystore(path string) []PrivateKeyFound {
 	if err != nil {
 		return nil
 	}
-	var out []PrivateKeyFound
-	for _, key := range report.Keys {
+	storeMetadata := func() map[string]string {
 		meta := keystoreMetadata(metadata)
 		meta["keystore_format"] = report.Format
 		meta["keystore_state"] = "read"
 		meta["integrity_verified"] = strconv.FormatBool(report.IntegrityVerified)
 		meta["keystore_trusted_certificates"] = strconv.Itoa(report.TrustedCerts)
+		if report.SecretKeys > 0 {
+			meta["keystore_secret_keys"] = strconv.Itoa(report.SecretKeys)
+		}
+		return meta
+	}
+	if len(report.Keys) == 0 && report.SecretKeys > 0 {
+		// A store of secret keys only (X2-L2) is reported once, as the
+		// keystore, with what it holds: the keys are sealed and never read.
+		return []PrivateKeyFound{{
+			Source: SourceKeystore, Location: path, Format: report.Format, Algorithm: "unknown",
+			Encrypted: true, Restricted: restricted, Metadata: storeMetadata(),
+		}}
+	}
+	var out []PrivateKeyFound
+	for _, key := range report.Keys {
+		meta := storeMetadata()
 		meta["key_type"] = key.KeyType
 		meta["key_size_bits"] = strconv.Itoa(key.KeyBits)
 		meta["certificate_sha256"] = key.CertificateSHA256

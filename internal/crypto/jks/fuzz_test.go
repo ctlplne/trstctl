@@ -11,3 +11,6 @@ package jks_test
 
 // FuzzDecodeTrustedCertificates fuzzes the trust-store decode path (no private
 // keys) with the same fail-closed contract.
+
+// FuzzJCEKSEntries fuzzes the JCEKS reader (X2-L2), including its walk over
+// Java-serialized secret keys, with the same fail-closed contract.

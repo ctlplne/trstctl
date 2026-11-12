@@ -22,6 +22,9 @@ type Entry struct {
 	Alias    string
 	KeyEntry bool
 	ChainDER [][]byte
+	// SecretKey marks a JCEKS secret key entry (X2-L2): listed by alias,
+	// never unsealed, with no certificates.
+	SecretKey bool
 }
 
 // errInvalidDigest is the library's answer when a password does not match the

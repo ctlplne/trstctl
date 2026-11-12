@@ -1558,7 +1558,8 @@ never live in the API process. What you can do end to end against the running bi
   and the versions of TLS libraries and Go programs with whether each can negotiate
   X25519MLKEM768; the CBOM host-config scan reads HAProxy, Envoy, the OpenSSL
   configuration file and `java.security`. Every key of a PKCS#12 file is listed
-  under its alias (X2-L1); JCEKS is not read, a PKCS#12 key is never decrypted
+  under its alias (X2-L1); JCEKS stores are read and their secret keys counted,
+  never unsealed (X2-L2), BCFKS is not read yet, a PKCS#12 key is never decrypted
   (X2-L3: the file's MAC checks the password, only the contents holding certificates
   are decrypted, and a key bag is noted, never opened). LibreSSL, GnuTLS, NSS and an older
   OpenSSL with oqsprovider in its configuration are rated (X2-L4); BoringSSL (no release
