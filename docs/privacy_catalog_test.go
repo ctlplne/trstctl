@@ -37,6 +37,7 @@ func TestPrivacyCatalogCoversSubjectErasurePIIFields(t *testing.T) {
 		"nhi_access_reviews.actors",
 		"access_change_requests.actors",
 		"discovery_runs.requester",
+		"pam_discovery.actors",
 		"notification_routing_policies.owner-contact",
 		"remediation_playbook_runs.operator-evidence",
 		"compliance_report_schedules.recipient",

@@ -65,7 +65,8 @@ var privacyReadModelSelectorTables = map[string]struct{}{
 	"operation_approval_requests": {}, "operation_approval_decisions": {},
 	"workload_attester_trust_receipts": {},
 	"pam_sessions":                     {}, "discovery_sources": {}, "discovery_findings": {},
-	"dynamic_secret_leases":             {},
+	"dynamic_secret_leases": {},
+	"pam_discovery_sources": {}, "pam_discovery_runs": {}, "pam_discovered_accounts": {}, "pam_imported_accounts": {},
 	"notification_threshold_deliveries": {}, "incident_executions": {},
 	"nhi_access_review_campaigns": {}, "nhi_access_review_items": {},
 	"access_change_requests": {}, "access_change_request_decisions": {},
@@ -1615,6 +1616,17 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 		r.TenantID, r.Cutoffs.AccessTerminalBefore); err != nil {
 		return err
 	}
+	// A267-O2: a privileged account scan's requester is kept as a digest
+	// under the same access-terminal cutoff once the scan has finished.
+	if _, err := tx.Exec(ctx,
+		`UPDATE pam_discovery_runs
+		    SET requested_by = 'retained:' || left(md5($1::text || ':' || requested_by), 12)
+		  WHERE tenant_id = $1
+		    AND finished_at IS NOT NULL AND finished_at < $2
+		    AND requested_by <> '' AND requested_by NOT LIKE 'retained:%' AND requested_by NOT LIKE 'erased:%'`,
+		r.TenantID, r.Cutoffs.AccessTerminalBefore); err != nil {
+		return err
+	}
 	// G1-L1: a lease's requester is kept under the same access-terminal
 	// cutoff as a PAM session's.
 	if _, err := tx.Exec(ctx,
@@ -2165,6 +2177,46 @@ func basePrivacyReadModelExportQueries(tenantID, subject string) []privacyReadMo
 			args: []any{tenantID, subject},
 		},
 		{
+			table: "pam_discovery_sources",
+			sql: `SELECT provider_id, ''::text,
+			             jsonb_build_object('provider_id', provider_id, 'provider_type', provider_type, 'interval_seconds', interval_seconds, 'saved_by', saved_by, 'saved_at', saved_at)::text,
+			             saved_at
+			        FROM pam_discovery_sources
+			       WHERE tenant_id = $1 AND saved_by = $2
+			       ORDER BY provider_id`,
+			args: []any{tenantID, subject},
+		},
+		{
+			table: "pam_discovery_runs",
+			sql: `SELECT id::text, ''::text,
+			             jsonb_build_object('provider_id', provider_id, 'status', status, 'requested_by', requested_by, 'started_at', started_at, 'finished_at', finished_at)::text,
+			             started_at
+			        FROM pam_discovery_runs
+			       WHERE tenant_id = $1 AND requested_by = $2
+			       ORDER BY id`,
+			args: []any{tenantID, subject},
+		},
+		{
+			table: "pam_discovered_accounts",
+			sql: `SELECT id::text, ''::text,
+			             jsonb_build_object('provider_id', provider_id, 'name', name, 'status', status, 'dismissed_by', dismissed_by, 'dismissed_reason', dismissed_reason)::text,
+			             last_seen_at
+			        FROM pam_discovered_accounts
+			       WHERE tenant_id = $1 AND (dismissed_by = $2 OR position($2 in dismissed_reason) > 0)
+			       ORDER BY id`,
+			args: []any{tenantID, subject},
+		},
+		{
+			table: "pam_imported_accounts",
+			sql: `SELECT discovered_account_id::text, ''::text,
+			             jsonb_build_object('provider_id', provider_id, 'name', name, 'folder', folder, 'imported_by', imported_by, 'reason', reason, 'imported_at', imported_at)::text,
+			             imported_at
+			        FROM pam_imported_accounts
+			       WHERE tenant_id = $1 AND (imported_by = $2 OR position($2 in reason) > 0)
+			       ORDER BY discovered_account_id`,
+			args: []any{tenantID, subject},
+		},
+		{
 			table: "dynamic_secret_leases",
 			sql: `SELECT id::text, ''::text,
 			             jsonb_build_object('provider', provider, 'role', role, 'state', state, 'requested_by', requested_by, 'issued_at', issued_at, 'expires_at', expires_at, 'revoked_at', revoked_at)::text,
@@ -2361,6 +2413,10 @@ func basePrivacyReadModelSelectorQueries(tenantID, subject string) []privacyRead
 		},
 		{table: "pam_sessions", sql: `SELECT id::text, ''::text, 0 FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR ssh_principal = $2 OR revocation_requested_by = $2 OR position($2 in reason) > 0 OR position($2 in revocation_reason) > 0 OR position($2 in audit::text) > 0 OR position($2 in coalesce(attestation::text, '')) > 0) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "dynamic_secret_leases", sql: `SELECT id::text, ''::text, 0 FROM dynamic_secret_leases WHERE tenant_id = $1 AND requested_by = $2 ORDER BY id`, args: []any{tenantID, subject}},
+		{table: "pam_discovery_sources", sql: `SELECT provider_id, ''::text, 0 FROM pam_discovery_sources WHERE tenant_id = $1 AND saved_by = $2 ORDER BY provider_id`, args: []any{tenantID, subject}},
+		{table: "pam_discovery_runs", sql: `SELECT id::text, ''::text, 0 FROM pam_discovery_runs WHERE tenant_id = $1 AND requested_by = $2 ORDER BY id`, args: []any{tenantID, subject}},
+		{table: "pam_discovered_accounts", sql: `SELECT id::text, ''::text, 0 FROM pam_discovered_accounts WHERE tenant_id = $1 AND (dismissed_by = $2 OR position($2 in dismissed_reason) > 0) ORDER BY id`, args: []any{tenantID, subject}},
+		{table: "pam_imported_accounts", sql: `SELECT discovered_account_id::text, ''::text, 0 FROM pam_imported_accounts WHERE tenant_id = $1 AND (imported_by = $2 OR position($2 in reason) > 0) ORDER BY discovered_account_id`, args: []any{tenantID, subject}},
 		{table: "discovery_sources", sql: `SELECT id::text, ''::text, 0 FROM discovery_sources WHERE tenant_id = $1 AND ` + discoveryPrivacyJSONStringMatch("config", "$2") + ` ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "discovery_findings", sql: `SELECT id::text, ''::text, 0 FROM discovery_findings WHERE tenant_id = $1 AND (triage_actor = $2 OR position($2 in triage_reason) > 0 OR ` + discoveryPrivacyJSONStringMatch("metadata", "$2") + `) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "notification_threshold_deliveries", sql: `SELECT ''::text, ''::text, threshold_days FROM notification_threshold_deliveries WHERE tenant_id = $1 AND (subject = $2 OR channel = $2) GROUP BY threshold_days ORDER BY threshold_days`, args: []any{tenantID, subject}},
@@ -2642,6 +2698,7 @@ func erasePrivacyReadModelRows(ctx context.Context, tx pgx.Tx, tenantID, subject
 		eraseOperationApprovalRequestPrivacyRows,
 		erasePAMSessionPrivacyRows,
 		eraseDynamicSecretLeasePrivacyRows,
+		erasePAMDiscoveryPrivacyRows,
 		eraseDiscoverySourcePrivacyRows,
 		eraseDiscoveryFindingPrivacyRows,
 		eraseNotificationThresholdPrivacyRows,
@@ -2886,6 +2943,61 @@ func eraseDynamicSecretLeasePrivacyRows(ctx context.Context, tx pgx.Tx, tenantID
 			`UPDATE dynamic_secret_leases SET requested_by = $3 WHERE tenant_id = $1 AND id::text = $2`,
 			tenantID, r.id, redactSubjectValue(tenantID, subjectRef, placeholder, r.requestedBy)); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// erasePAMDiscoveryPrivacyRows rewrites who saved a discovery source,
+// requested a scan, dismissed an account or imported one (A267-O2). A
+// dismissal's or import's reason is free text that may name the subject in
+// any form, so an erased row's reason is cleared, as a PAM session's is.
+func erasePAMDiscoveryPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyReadModelSelector) error {
+	redact := func(value string) string { return redactSubjectValue(tenantID, subjectRef, placeholder, value) }
+	for _, table := range []struct {
+		name, read, write string
+		columns           int
+	}{
+		{"pam_discovery_sources", `SELECT provider_id, saved_by, '' FROM pam_discovery_sources WHERE tenant_id = $1 AND provider_id = ANY($2)`,
+			`UPDATE pam_discovery_sources SET saved_by = $3 WHERE tenant_id = $1 AND provider_id = $2`, 1},
+		{"pam_discovery_runs", `SELECT id::text, requested_by, '' FROM pam_discovery_runs WHERE tenant_id = $1 AND id::text = ANY($2)`,
+			`UPDATE pam_discovery_runs SET requested_by = $3 WHERE tenant_id = $1 AND id::text = $2`, 1},
+		{"pam_discovered_accounts", `SELECT id::text, dismissed_by, dismissed_reason FROM pam_discovered_accounts WHERE tenant_id = $1 AND id::text = ANY($2)`,
+			`UPDATE pam_discovered_accounts SET dismissed_by = $3, dismissed_reason = $4 WHERE tenant_id = $1 AND id::text = $2`, 2},
+		{"pam_imported_accounts", `SELECT discovered_account_id::text, imported_by, reason FROM pam_imported_accounts WHERE tenant_id = $1 AND discovered_account_id::text = ANY($2)`,
+			`UPDATE pam_imported_accounts SET imported_by = $3, reason = $4 WHERE tenant_id = $1 AND discovered_account_id::text = $2`, 2},
+	} {
+		ids := readModelIDs(selectors, table.name)
+		if len(ids) == 0 {
+			continue
+		}
+		type row struct{ id, actor, text string }
+		var found []row
+		rows, err := tx.Query(ctx, table.read, tenantID, ids)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var r row
+			if err := rows.Scan(&r.id, &r.actor, &r.text); err != nil {
+				rows.Close()
+				return err
+			}
+			found = append(found, r)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return err
+		}
+		rows.Close()
+		for _, r := range found {
+			args := []any{tenantID, r.id, redact(r.actor)}
+			if table.columns == 2 {
+				args = append(args, "")
+			}
+			if _, err := tx.Exec(ctx, table.write, args...); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -3818,6 +3930,13 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 			            OR audit <> '{}'::jsonb
 			            OR attestation IS NOT NULL
 				)`,
+			args: []any{tenantID, c.AccessTerminalBefore},
+		},
+		"pam_discovery_runs": {
+			sql: `SELECT count(*) FROM pam_discovery_runs
+				       WHERE tenant_id = $1
+				         AND finished_at IS NOT NULL AND finished_at < $2
+				         AND requested_by <> '' AND requested_by NOT LIKE 'retained:%' AND requested_by NOT LIKE 'erased:%'`,
 			args: []any{tenantID, c.AccessTerminalBefore},
 		},
 		"dynamic_secret_leases": {

@@ -944,6 +944,12 @@
 
 ### Fixed
 
+- Privileged account discovery's actors are covered by privacy (A267-O2). Who saved a source,
+  requested a scan, dismissed an account or imported one was kept in the discovery read models
+  outside the subject export, erasure and retention, so an erased person still showed in the scan
+  readback. They are now exported, an erasure replaces them with the placeholder and clears the
+  free-form dismissal and import reasons, and retention keeps a finished scan's requester as a
+  digest.
 - A managed-key mutation whose short synchronous wait ran out during a read returns its `202`
   receipt (A261-O1). The command was already durable, but a read that failed because the wait's
   own time ran out (a driver reporting it as cancellation, or the completed key's read crossing it)

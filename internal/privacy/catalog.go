@@ -361,6 +361,15 @@ func Catalog() []CatalogEntry {
 			Owner:          "access governance",
 		},
 		{
+			ID:             "pam_discovery.actors",
+			Location:       "pam_discovery_sources.saved_by/pam_discovery_runs.requested_by/pam_discovered_accounts.dismissed_by/dismissed_reason/pam_imported_accounts.imported_by/reason",
+			Category:       "privileged account discovery source author, scan requester, dismisser and importer subjects, and free-form dismissal and import reasons",
+			Purpose:        "operator accountability for privileged account discovery, its dismissals and its reviewed imports",
+			RetentionClass: "operational:access-terminal-after-90d",
+			Erasure:        "subject export includes matching rows; privacy.subject.erased pseudonymizes matching source authors, scan requesters, dismissers and importers and clears free-form dismissal and import reasons; privacy.retention.enforced covers a finished scan's requester after the access window",
+			Owner:          "privileged access",
+		},
+		{
 			ID:             "discovery_runs.requester",
 			Location:       "discovery_runs.requested_by",
 			Category:       "discovery run requester subject",

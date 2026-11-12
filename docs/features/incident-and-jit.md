@@ -581,6 +581,10 @@ import is reviewed by people other than you, then you apply it with the approval
 refused if an account changed since the review, and it grants nothing either. Dismiss one
 you will not manage, with the reason; it returns when a scan finds it changed. The console
 has the same flow under Access → Sessions and access keys → Privileged account discovery.
+Who saved a source, requested a scan, or dismissed or imported an account is personal data
+the privacy controls cover: a subject export lists it, an erasure replaces the person with a
+placeholder and clears the dismissal and import reasons, and retention keeps a finished
+scan's requester as a digest after the access window.
 
 On a Linux or Unix host the authorized keys are read from the files sshd reads: the
 `AuthorizedKeysFile` the host's `sshd_config` sets (its `Include` files read in place, outside
