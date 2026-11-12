@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-func testCert(t *testing.T) (pemBytes, derBytes []byte) {
+func testCert(t testing.TB) (pemBytes, derBytes []byte) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

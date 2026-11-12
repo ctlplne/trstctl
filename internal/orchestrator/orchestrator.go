@@ -209,6 +209,12 @@ func WithOwnershipAttestationCadence(cadence time.Duration) OrchestratorOption {
 	}
 }
 
+// KeepsScannedCertificateChains reports whether discovery keeps the public
+// bytes of the certificates it finds (A211, and cloud listings: B13-L1).
+func (o *Orchestrator) KeepsScannedCertificateChains() bool {
+	return o != nil && o.keepScannedChains
+}
+
 // WithScannedCertificateChains has TLS discovery sweeps keep the public bytes
 // of the certificates they find, so revocation can be probed for certificates
 // known only from scans (A211).

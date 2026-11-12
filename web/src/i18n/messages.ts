@@ -12601,8 +12601,8 @@ export const messages = {
   },
   "certificateCockpit.detail.revocationObservationsNote": {
     defaultMessage:
-      "Signed relay probes of this certificate's CRL and OCSP endpoints. A certificate known only from a network scan is checked for its own serial when the deployment keeps scanned certificates for revocation checks.",
-    description: "A211: explains the revocation answers and when scanned certificates are checked.",
+      "Signed relay probes of this certificate's CRL and OCSP endpoints. A certificate known only from a network scan or a cloud listing is checked for its own serial when the deployment keeps scanned certificates for revocation checks.",
+    description: "A211, B13-L1: explains the revocation answers and when scanned or cloud-listed certificates are checked.",
   },
   "connectors.verificationSuggestions.heading": {
     defaultMessage: "Verification address",

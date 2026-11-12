@@ -2894,16 +2894,17 @@ them from the certificates whose signed bytes trstctl holds: those issued
 through trstctl or its external CAs, adopted from a host, or imported with
 `trstctl-cli certificates ingest`, which keeps the certificate it is given (an
 import never replaces the public chain of a certificate trstctl issued). A
-certificate known only from a network scan carries its metadata, not its bytes,
-unless `agent_channel.probe_scanned_certificates` is on: then a relay's TLS sweep
-keeps the leaf and the first issuers served after it (each checked against the
-hash the relay reported), and the scheduler also checks that certificate's own
-serial at its CRL distribution points and OCSP responders, verified against the
-served issuer that signed it; its certificate detail shows those signed answers,
-including whether the CRL lists its serial. A leaf no served or known issuer
-verifies is not probed, scans by relays older than this setting keep no bytes,
-and a certificate known only from a cloud scan is not probed; import it to have
-it watched. It queues
+certificate known only from a network scan or a cloud listing carries its
+metadata, not its bytes, unless `agent_channel.probe_scanned_certificates` is on:
+then a relay's TLS sweep keeps the leaf and the first issuers served after it
+(each checked against the hash the relay reported), a cloud listing keeps the
+certificate the provider returned and the issuers returned after it (the
+certificate checked against the one listed), and the scheduler also checks that
+certificate's own serial at its CRL distribution points and OCSP responders,
+verified against the served or returned issuer that signed it; its certificate
+detail shows those signed answers, including whether the CRL lists its serial. A
+leaf no served, returned or known issuer verifies is not probed, and scans by
+relays older than this setting keep no bytes. It queues
 at most 32 endpoints per bounded network-role command through the event/outbox
 transaction. Concurrent leaders converge on the same command ID; if the
 representative leaf changes, its OCSP serial changes the ID and creates new work
@@ -4798,8 +4799,9 @@ than sending an operator looking for a credential that was never there.
   only when they hash to the row's fingerprint, only to a row that holds none,
   and with where they came from (`certificate.der.recovered`); the row then
   joins the comparison. An address only a relay reaches gets its bytes from a
-  sweep with `agent_channel.probe_scanned_certificates` on, and fetching by
-  serial from external CAs is what comes next.
+  sweep with `agent_channel.probe_scanned_certificates` on, a cloud listing from
+  its next run with that setting on, and fetching by serial from external CAs is
+  what comes next.
 - CA-key retirement (H4): `GET /api/v1/ca/keys/{id}/retirement` and
   `trstctl ca keys retirement` list the dependents standing between a CA key and
   destruction. An operator with `keys:write` can submit the exact final dependency

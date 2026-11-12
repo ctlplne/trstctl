@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3011 annotated sites across 33 rules. Each row is
+3012 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (690 sites)
+### G101 — CWE-798 Use of hardcoded credentials (691 sites)
 
 | Location | Reason |
 |---|---|
@@ -490,6 +490,7 @@ not this file.
 | `internal/server/azure_keyvault_rollback_served_test.go:32` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/azure_workload_identity_served_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/cloud_access_keys_served_test.go:78` | credential references only; no credential value enters the config (CWE-798) |
+| `internal/server/cloud_certificate_revocation_served_test.go:55` | fabricated fixture credential references; no value is real (CWE-798) |
 | `internal/server/cloud_kms_keys_served_test.go:57` | credential references only; no credential value enters the config (CWE-798) |
 | `internal/server/cloud_relay_execution_served_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/cloud_relay_execution_served_test.go:32` | a secret-store NAME the target references, not a credential value (CWE-798) |
@@ -2441,7 +2442,7 @@ not this file.
 | `internal/crypto/mtls/signer.go:109` | operator-configured peer CA trust anchor path from the signer's own config (CWE-22) |
 | `internal/crypto/mtls/signer_test.go:47` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/mtls/syncdir_other.go:10` | parent of a validated internal TLS state path (CWE-22) |
-| `internal/crypto/parserfuzz_audit_test.go:268` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/crypto/parserfuzz_audit_test.go:269` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/alias_test.go:139` | reads the stock JDK output inside this test's private temporary directory (CWE-22). |
 | `internal/crypto/pfx/certonly_test.go:259` | the test's own file (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:43` | test reads its own fixture/tempdir path (CWE-22) |

@@ -131,13 +131,19 @@ func (e *Enumerator) getCertificate(ctx context.Context, arn string) ([]byte, er
 		return nil, err
 	}
 	var resp struct {
-		Certificate string `json:"Certificate"`
+		Certificate      string `json:"Certificate"`
+		CertificateChain string `json:"CertificateChain"`
 	}
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil, fmt.Errorf("acmdisc: parse get: %w", err)
 	}
 	if resp.Certificate == "" {
 		return nil, fmt.Errorf("acmdisc: empty certificate for %s", arn)
+	}
+	// B13-L1: the issuers ACM returns follow the leaf, so the sink can keep
+	// them for revocation probing.
+	if chain := strings.TrimSpace(resp.CertificateChain); chain != "" {
+		return []byte(strings.TrimSpace(resp.Certificate) + "\n" + chain + "\n"), nil
 	}
 	return []byte(resp.Certificate), nil
 }

@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudentitlements/azureiam"
 	"trstctl.com/trstctl/internal/cloudentitlements/gcpiam"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/discovery/apikey"
 	"trstctl.com/trstctl/internal/discovery/cloudcert"
@@ -1680,6 +1681,24 @@ func cloudFindingMetadata(f cloudcert.Found) (map[string]any, int) {
 	return meta, risk
 }
 
+// keptCloudCertificateBytes returns the leaf a cloud provider returned, when
+// its bytes hash to the certificate it listed, and the issuers it returned
+// after it, bounded as a sweep's are (B13-L1). Anything else keeps nothing.
+func keptCloudCertificateBytes(f cloudcert.Found) ([]byte, projections.ScannedCertificateChainObserved) {
+	chain := projections.ScannedCertificateChainObserved{LeafFingerprint: strings.ToLower(f.Cert.SHA256Fingerprint)}
+	ders, err := certinfo.CertificateChainDER(f.Raw)
+	if err != nil || len(ders) == 0 || len(ders[0]) > netscan.MaxKeptCertificateBytes || crypto.SHA256Hex(ders[0]) != chain.LeafFingerprint {
+		return nil, chain
+	}
+	for _, der := range ders[1:] {
+		if len(chain.Issuers) == netscan.MaxKeptIssuers || len(der) > netscan.MaxKeptCertificateBytes {
+			break
+		}
+		chain.Issuers = append(chain.Issuers, projections.ScannedChainIssuerDER{SHA256: crypto.SHA256Hex(der), CertificateDER: der})
+	}
+	return ders[0], chain
+}
+
 func (s cloudDiscoveryRunSink) Record(ctx context.Context, f cloudcert.Found) error {
 	metaMap, risk := cloudFindingMetadata(f)
 	meta, err := json.Marshal(metaMap)
@@ -1691,13 +1710,27 @@ func (s cloudDiscoveryRunSink) Record(ctx context.Context, f cloudcert.Found) er
 	if location == "" {
 		location = f.Location
 	}
+	// B13-L1: with probe_scanned_certificates on, a cloud listing keeps the
+	// certificate it returned, and the issuers returned after it, as a TLS
+	// sweep does (A211), so revocation health can probe it.
+	var leafDER []byte
+	var chain projections.ScannedCertificateChainObserved
+	if s.orch.KeepsScannedCertificateChains() {
+		leafDER, chain = keptCloudCertificateBytes(f)
+	}
 	if _, err := s.orch.RecordCertificate(ctx, s.tenantID, store.Certificate{
 		Subject: f.Cert.Subject, SANs: sansOf(f.Cert), Issuer: f.Cert.Issuer,
 		Serial: f.Cert.SerialNumber, Fingerprint: f.Cert.SHA256Fingerprint,
 		KeyAlgorithm: f.Cert.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
-		DeploymentLocation: location, Source: "discovery:cloud:" + f.Provider,
+		DeploymentLocation: location, Source: "discovery:cloud:" + f.Provider, CertificateDER: leafDER,
 	}); err != nil {
 		return err
+	}
+	if len(chain.Issuers) > 0 {
+		if err := s.orch.RecordScannedCertificateChainWithEventID(ctx, s.tenantID,
+			orchestrator.DiscoveryRelayEventID(s.tenantID, s.runID, "cloud-chain\x00"+f.Provider+"\x00"+location+"\x00"+chain.LeafFingerprint), chain); err != nil {
+			return err
+		}
 	}
 	_, err = s.orch.RecordDiscoveryFinding(ctx, s.tenantID, store.DiscoveryFinding{
 		RunID: s.runID, SourceID: s.sourceID, Kind: "x509_certificate", Ref: location,

@@ -4076,8 +4076,13 @@ relay's TLS discovery sweep returns the public bytes of each leaf it finds and o
 four issuers served after it, the control plane keeps only bytes that hash to what the
 relay reported, and the revocation health scheduler checks each such certificate's own
 serial at its CRL distribution points and OCSP responders against the served issuer that
-signed it (up to 256 scanned certificates per tenant per sweep). The answers appear on
-the certificate's detail. Relays older than the setting return no bytes.
+signed it (up to 256 scanned certificates per tenant per sweep). A `cloud_certificate`
+discovery run keeps the same public bytes under the same rule: the certificate the
+provider returned, only when it hashes to the certificate it listed, and up to four
+issuers returned after it. AWS ACM and GCP Certificate Manager return the chain; Azure
+Key Vault returns the certificate alone, so its issuer must be one the tenant knows. The
+answers appear on the certificate's detail. Relays older than the setting return no
+bytes.
 
 **How much one agent may hold.** `agent_channel.max_live_claims_per_agent`, or
 `TRSTCTL_AGENT_CHANNEL_MAX_LIVE_CLAIMS_PER_AGENT`, caps the unexpired leases a

@@ -103,6 +103,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	requireFuzzFuncByName(t, "certinfo", map[string]string{
 		"FuzzMLDSASubjectInventory": "bounded RFC 9881 subject key identification without trust inference",
 		"FuzzParsePublicPEMChain":   "exact public certificate result envelope and retained leaf binding",
+		"FuzzCertificateChainDER":   "a cloud provider's returned certificate and chain, kept for revocation probing (B13-L1)",
 	})
 	requireFuzzFuncByName(t, "deviceattest", map[string]string{
 		"FuzzParseAndVerifyTPMDeviceAttestation": "ACME device-attest-01 WebAuthn/CBOR/COSE/TPM envelope (deviceattest/tpm.go)",

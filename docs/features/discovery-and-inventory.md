@@ -99,8 +99,12 @@ to search historical revoked and superseded rows as well.
 ### Recover the certificate behind a scanned row
 
 Some paths record what a certificate says without the certificate itself: a network
-scan without `agent_channel.probe_scanned_certificates`, a cloud listing, an older
-import. The certificate detail says so (`certificate_bytes_held: false`), and such a
+scan or a cloud listing without `agent_channel.probe_scanned_certificates`, an older
+import. With that setting on, a `cloud_certificate` run keeps the certificate the
+provider returned when it hashes to the certificate listed, with the issuers returned
+after it (AWS ACM and GCP Certificate Manager return the chain; Azure Key Vault returns
+the certificate alone), and a row an earlier listing recorded without bytes gets them
+from the next run. The certificate detail says so (`certificate_bytes_held: false`), and such a
 row cannot take part in [authority agreement](../configuration.md#authority-agreement) checks, which
 identify a certificate by the issuer and serial inside its bytes. **Certificate
 bytes → Look up in this tenant's CA records** (`certificates recover-der <id>` with

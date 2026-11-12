@@ -916,6 +916,54 @@ describe("Certificate Lifecycle cockpit", () => {
     expect(within(detail).getAllByText(/by relay-edge$/)).toHaveLength(2);
   });
 
+  it("shows the relays' revocation answers for a certificate known only from a cloud listing (B13-L1)", async () => {
+    const certificate = {
+      id: "cloud-cert",
+      tenant_id: "tenant-1",
+      subject: "CN=edge.b13l1.example",
+      sans: ["edge.b13l1.example"],
+      issuer: "CN=B13 Issuing CA",
+      status: "active",
+      fingerprint: "fp-cloud",
+      source: "discovery:cloud:aws-acm",
+      deployment_location: "us-east-1",
+      not_before: "2026-10-24T00:00:00Z",
+      not_after: "2027-10-24T00:00:00Z",
+      revocation_observations: [
+        {
+          issuer_subject: "CN=B13 Issuing CA",
+          certificate_id: "cloud-cert",
+          certificate_subject: "CN=edge.b13l1.example",
+          certificate_fingerprint: "fp-cloud",
+          certificate_serial: "b13",
+          status: "fresh",
+          detail_code: "",
+          latency_ms: 3,
+          signature_verified: true,
+          scope: "certificate",
+          probe_id: "probe-2",
+          observed_by_agent_id: "relay-1",
+          observed_by_agent_name: "relay-edge",
+          evidence_digest: "digest",
+          observed_at: "2026-11-12T03:00:00Z",
+          target_key: "k-ocsp-cloud",
+          protocol: "ocsp",
+          endpoint: "http://ocsp.example/b13",
+          response_status: "good",
+        },
+      ],
+    };
+    apiMock.certificatePage.mockResolvedValue({ items: [certificate] });
+    apiMock.getCertificate.mockResolvedValue(certificate);
+    renderPage();
+    const inventory = await screen.findByRole("table", { name: "Inventoried certificates" });
+    const row = within(inventory).getByRole("row", { name: /edge\.b13l1\.example/ });
+    fireEvent.click(within(row).getByRole("button", { name: "Review" }));
+    const detail = await screen.findByRole("dialog", { name: "Certificate details" });
+    expect(within(detail).getByText(/known only from a network scan or a cloud listing is checked for its own serial/)).toBeInTheDocument();
+    expect(within(detail).getByText(/OCSP http:\/\/ocsp\.example\/b13: OCSP answered good \(its own serial, signature verified\)/)).toBeInTheDocument();
+  });
+
   it("recovers a scanned certificate's bytes from the endpoint it names and says where they came from", async () => {
     const scanned = {
       id: "scanned-bytes",

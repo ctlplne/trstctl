@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- A certificate known only from a cloud listing can have its revocation checked (B13-L1). With
+  `agent_channel.probe_scanned_certificates` on, a `cloud_certificate` run keeps the certificate the
+  provider returned, only when it hashes to the certificate listed, and up to four issuers returned
+  after it. AWS ACM's listing now reads the chain ACM returns with each certificate. Revocation health
+  then checks that certificate's own serial at its CRL distribution points and OCSP responders,
+  verified against the returned issuer or a known one that signed it, as it does for a network
+  sweep's. A row an earlier listing recorded without bytes gets them from the next run.
 - An operator can run the weak-key audit now (AUD-O1) instead of waiting for its six-hourly
   sweep. Use **Run the weak-key audit now** on the Discovery page's run history,
   `trstctl-cli discovery weak-key-audit run`, or `POST /api/v1/discovery/weak-key-audit/runs`
