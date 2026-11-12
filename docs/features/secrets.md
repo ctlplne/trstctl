@@ -1520,7 +1520,8 @@ Parameter Store, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI,
 Vercel, Netlify, Kubernetes, Terraform Cloud/OpenTofu, HashiCorp Vault/OpenBao KV v2,
 a signed webhook (templated JSON with an HMAC-SHA256 signature over a timestamp and
 the body; see [configuration](../configuration.md#signed-webhook-parameter-store-and-netlify-targets)),
-a generic CI/JSON endpoint with no payload signature, and the hosted targets of
+a generic CI/JSON endpoint (signed the same way when it names a signing key, OD-12),
+and the hosted targets of
 A241 (Heroku, Render, Railway, Fly.io, DigitalOcean App Platform, Northflank, Qovery,
 Cloud 66, Laravel Forge, CircleCI, Travis CI, Bitbucket Pipelines, TeamCity, Spacelift,
 Humanitec, Rundeck, Checkly, Windmill, Zabbix, Portainer, Devin, Daytona, Ona,

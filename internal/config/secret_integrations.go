@@ -372,7 +372,9 @@ type SecretSyncTargetConfig struct {
 
 	// Signed webhook (type webhook): the HMAC key reference the receiver
 	// shares, and an optional JSON body template with ${key}, ${value},
-	// ${value_base64}, ${delivery_id} and ${timestamp} placeholders.
+	// ${value_base64}, ${delivery_id} and ${timestamp} placeholders. A
+	// generic CI push (type generic-ci-json) may name a signing key too
+	// (OD-12); its pushes then carry the same signature headers.
 	SigningKeyRef string `json:"signing_key_ref,omitempty"`
 	BodyTemplate  string `json:"body_template,omitempty"`
 	// Netlify (type netlify): the account (team) and optional site that own
@@ -1102,6 +1104,7 @@ func validateSyncTarget(where string, c SecretSyncTargetConfig) []error {
 	case "generic-ci-json":
 		require(c.Provider, "provider")
 		ref(c.TokenRef, "token_ref", true)
+		ref(c.SigningKeyRef, "signing_key_ref", true)
 	case "kubernetes-secrets":
 		require(c.Namespace, "namespace")
 		ref(c.TokenRef, "token_ref", false)

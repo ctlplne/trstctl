@@ -1150,7 +1150,7 @@ func secretSyncTargetsFromConfig(
 			entry.ID, entry.Type,
 			entry.AWSWorkloadIdentity || entry.GCPWorkloadIdentity || entry.AzureWorkloadIdentity,
 			pusher,
-		)
+		).WithSignedPayload(entry.Type == "generic-ci-json" && strings.TrimSpace(entry.SigningKeyRef) != "")
 	}
 	return registry, minter, nil
 }
@@ -1408,8 +1408,18 @@ func withConfiguredSecretSyncPusher(ctx context.Context, p *configuredSyncPusher
 		if resolveErr != nil {
 			return resolveErr
 		}
+		var signingKey []byte
+		if strings.TrimSpace(cfg.SigningKeyRef) != "" {
+			// OD-12: sign the push like the signed webhook.
+			if signingKey, resolveErr = resolve(cfg.SigningKeyRef); resolveErr != nil {
+				return resolveErr
+			}
+			if len(signingKey) == 0 {
+				return errors.New("server: generic CI signing key is empty")
+			}
+		}
 		concrete, err = secretsync.NewCIPusher(secretsync.CIPusherConfig{
-			Endpoint: cfg.Endpoint, HTTPClient: client, BearerToken: token, Provider: cfg.Provider,
+			Endpoint: cfg.Endpoint, HTTPClient: client, BearerToken: token, Provider: cfg.Provider, SigningKey: signingKey,
 		})
 	case "kubernetes-secrets":
 		token, resolveErr := resolve(cfg.TokenRef)

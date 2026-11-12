@@ -64,6 +64,7 @@ type Target struct {
 	name                    string
 	providerID              string
 	workloadIdentityEnabled bool
+	payloadSigned           bool
 	pusher                  Pusher
 }
 
@@ -99,6 +100,21 @@ func CatalogProviderID(providerType string) string {
 
 // ProviderID identifies the configured wire protocol, not the target's name.
 func (t *Target) ProviderID() string { return t.providerID }
+
+// WithSignedPayload records that the operator gave this target an HMAC
+// signing key (OD-12: a generic CI push with signing_key_ref), so the
+// catalog reports its pushes as signed.
+func (t *Target) WithSignedPayload(signed bool) *Target {
+	t.payloadSigned = signed
+	return t
+}
+
+// PayloadSigned reports whether every push to this target carries the HMAC
+// signature: always for the signed webhook, and for a generic CI push the
+// operator gave a signing key.
+func (t *Target) PayloadSigned() bool {
+	return t != nil && (t.payloadSigned || t.providerID == "webhook")
+}
 
 // WorkloadIdentityEnabled reports the operator's explicit per-target opt-in.
 func (t *Target) WorkloadIdentityEnabled() bool { return t.workloadIdentityEnabled }
@@ -403,8 +419,8 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			ID:           "ci",
 			Name:         "Generic CI secret endpoint",
 			Platform:     "ci",
-			DeliveryMode: "JSON secret push over HTTPS (bearer token only, no payload signature)",
-			AuthMode:     "Bearer token supplied by operator config",
+			DeliveryMode: "JSON secret push over HTTPS; with a signing key, timestamped and HMAC-SHA256-signed like the signed webhook",
+			AuthMode:     "Bearer token supplied by operator config, optional HMAC signing key reference",
 			WireFormat:   "provider/key/encoded_value JSON envelope",
 			Capabilities: []string{"ci-secret", "generic-json", "outbox-delivery"},
 			Proof:        ProofLocal,

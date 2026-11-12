@@ -172,7 +172,9 @@ func TestNativeResidualTargetsAreNotCatalogedAsGenericPushers(t *testing.T) {
 func TestProviderCatalogClaimsNoSignatureThePushersDoNotMake(t *testing.T) {
 	// webhook: WebhookPusher signs every delivery (A202), proven by
 	// TestWebhookDeliveryVerifiesAtTheReceiverAndATamperedBodyFails.
-	signsPayload := map[string]bool{"webhook": true}
+	// ci: the generic CI push signs when the operator gives it a key
+	// (OD-12), proven by TestGenericCIPushIsHMACSignedLikeTheWebhookOD12.
+	signsPayload := map[string]bool{"webhook": true, "ci": true}
 	for _, entry := range ProviderCatalog() {
 		text := strings.ToLower(entry.DeliveryMode + " " + entry.WireFormat)
 		if strings.Contains(text, "signed") && !signsPayload[entry.ID] {

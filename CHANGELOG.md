@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- A signed generic CI secret push (OD-12): a `generic-ci-json` sync target that names a `signing_key_ref` signs every
+  push like the signed webhook (`X-Trstctl-Timestamp`, `X-Trstctl-Signature` = HMAC-SHA256 over the timestamp and the
+  exact body, `X-Trstctl-Delivery`), so the receiver can refuse a changed or replayed push with
+  `secretsync.VerifyWebhookSignature`; the envelope and the bearer token are unchanged, and a target without a key
+  stays the bearer-only push. The target catalog and the console's target table mark a signed target
+  `signed-payload`.
 - An audit retention floor for offboarded tenants' event keys (OD-11): `privacy.event_protection.audit_retention_floor`
   (`TRSTCTL_PRIVACY_EVENT_PROTECTION_AUDIT_RETENTION_FLOOR`, a year by default, `0s` off, at most ten years) keeps an
   offboarded tenant's key, and so its audit archives, event history and backups readable, at least that long after the

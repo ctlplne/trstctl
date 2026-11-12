@@ -6107,8 +6107,9 @@ configured repository/third-party scan sources, redacted `leaked_secret`
 findings, AWS/GCP/Azure/Vault discovery visibility, and vault-augmentation
 sync targets). A `webhook` target delivers templated JSON signed with HMAC-SHA256
 over a timestamp and the body, so a receiver can verify it and refuse a changed or
-replayed delivery; `generic-ci-json` stays the bearer-token-only push with no
-payload signature. `aws-parameter-store` writes SecureString parameters (proven
+replayed delivery; a `generic-ci-json` target signs its pushes the same way when
+it names a `signing_key_ref` (OD-12) and otherwise stays the bearer-token-only
+push. `aws-parameter-store` writes SecureString parameters (proven
 against LocalStack, not a live AWS account) and reads them back (A202-L1:
 `GetParameter` with decryption and `GetParametersByPath`), so it takes scoped syncs,
 a drift check re-pushes a parameter changed outside trstctl, and a lost delivery

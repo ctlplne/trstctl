@@ -2519,8 +2519,15 @@ key), `${value}` (the secret, which must then be UTF-8), `${value_base64}`,
 `${delivery_id}` and `${timestamp}` placeholders; string placeholders go inside
 quotes, and startup refuses a template that does not render valid JSON or carries no
 value. Without one the body is
-`{"key":"…","value_base64":"…","delivery_id":"…","timestamp":…}`. `generic-ci-json`
-stays the bearer-token-only JSON push with no payload signature.
+`{"key":"…","value_base64":"…","delivery_id":"…","timestamp":…}`.
+
+A `generic-ci-json` target that names a `signing_key_ref` signs its pushes the same
+way (OD-12): its `{"provider":…,"key":…,"encoded_value":…}` envelope to
+`<endpoint>/secrets` is unchanged, the bearer token from `token_ref` still rides
+along, and the three headers above are added, so the receiver verifies it with the
+same check. Without a signing key it stays the bearer-token-only push, and the target
+catalog (`GET /api/v1/secrets/syncs/targets`) marks only a signed CI target
+`signed-payload`.
 
 An `aws-parameter-store` target writes each secret as a SecureString parameter at
 `/<path_prefix>/<remote key>` with `PutParameter` (`Overwrite`, so every delivery is

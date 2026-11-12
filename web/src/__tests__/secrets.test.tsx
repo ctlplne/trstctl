@@ -1456,6 +1456,25 @@ describe("secrets surface", () => {
     expect(within(setup).getByText(/Restart the control plane/)).toBeInTheDocument();
   });
 
+  it("marks the sync targets whose pushes are signed (OD-12)", async () => {
+    const catalog = syncTargetCatalogFixture();
+    apiMock.secretSyncTargets.mockResolvedValueOnce({
+      ...catalog,
+      targets: catalog.targets.map((target) =>
+        target.id === "ci" ? { ...target, capabilities: ["ci-secret", "generic-json", "signed-payload", "outbox-delivery"] } : target,
+      ),
+    });
+
+    renderSecrets("/secrets/sync");
+
+    const table = await screen.findByRole("table", { name: "Secret sync provider catalog" });
+    const signed = within(table).getAllByText("Signed: the receiver verifies X-Trstctl-Signature with the shared key");
+    expect(signed).toHaveLength(1);
+    const row = signed[0].closest("tr");
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByText("Generic CI secret endpoint")).toBeInTheDocument();
+  });
+
   it("lists metadata, creates, reveals, rotates, and deletes native secrets without storage writes", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();

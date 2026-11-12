@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -671,6 +672,11 @@ type CIPusherConfig struct {
 	HTTPClient  HTTPDoer
 	BearerToken []byte
 	Provider    string
+	// SigningKey, when set, signs every push like the signed webhook (OD-12):
+	// X-Trstctl-Timestamp, X-Trstctl-Signature over the timestamp and the
+	// exact body, and X-Trstctl-Delivery. Empty keeps the bearer-only push.
+	SigningKey []byte
+	Now        func() time.Time
 }
 
 type CIPusher struct {
@@ -684,6 +690,7 @@ func NewCIPusher(cfg CIPusherConfig) (*CIPusher, error) {
 	}
 	inner, err := NewJSONPusher(JSONPusherConfig{
 		Endpoint: cfg.Endpoint, HTTPClient: cfg.HTTPClient, BearerToken: cfg.BearerToken, Provider: provider,
+		SigningKey: cfg.SigningKey, Now: cfg.Now,
 	})
 	if err != nil {
 		return nil, err
@@ -694,6 +701,9 @@ func NewCIPusher(cfg CIPusherConfig) (*CIPusher, error) {
 func (p *CIPusher) Push(ctx context.Context, key string, value []byte) error {
 	return p.inner.Push(ctx, key, value)
 }
+
+// Signed reports whether the push carries the HMAC signature (OD-12).
+func (p *CIPusher) Signed() bool { return p.inner.Signed() }
 
 func (p *CIPusher) Close() { p.inner.Close() }
 
@@ -792,12 +802,18 @@ type JSONPusherConfig struct {
 	HTTPClient  HTTPDoer
 	BearerToken []byte
 	Provider    string
+	// SigningKey optionally signs each push with the signed webhook's
+	// handshake (OD-12); Now is its clock (nil = time.Now).
+	SigningKey []byte
+	Now        func() time.Time
 }
 
 type JSONPusher struct {
 	endpoint string
 	doer     HTTPDoer
 	token    *secret.Buffer
+	key      *secret.Buffer
+	now      func() time.Time
 	provider string
 }
 
@@ -813,8 +829,20 @@ func NewJSONPusher(cfg JSONPusherConfig) (*JSONPusher, error) {
 	if err != nil {
 		return nil, fmt.Errorf("secretsync: lock generic CI bearer token: %w", err)
 	}
-	return &JSONPusher{endpoint: strings.TrimRight(cfg.Endpoint, "/"), doer: doer, token: token, provider: cfg.Provider}, nil
+	key, err := lockOptionalSecret(cfg.SigningKey)
+	if err != nil {
+		destroySecretBuffer(&token)
+		return nil, fmt.Errorf("secretsync: lock generic CI signing key: %w", err)
+	}
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
+	return &JSONPusher{endpoint: strings.TrimRight(cfg.Endpoint, "/"), doer: doer, token: token, key: key, now: now, provider: cfg.Provider}, nil
 }
+
+// Signed reports whether the pusher signs its pushes (OD-12).
+func (p *JSONPusher) Signed() bool { return len(secretBufferBytes(p.key)) > 0 }
 
 func (p *JSONPusher) Push(ctx context.Context, key string, value []byte) error {
 	body, err := json.Marshal(struct {
@@ -831,13 +859,26 @@ func (p *JSONPusher) Push(ctx context.Context, key string, value []byte) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if key := secretBufferBytes(p.key); len(key) > 0 {
+		// OD-12: the signed webhook's handshake over the exact body bytes,
+		// so a receiver refuses a changed body and a replayed delivery.
+		timestamp := p.now().Unix()
+		req.Header.Set(WebhookTimestampHeader, strconv.FormatInt(timestamp, 10))
+		req.Header.Set(WebhookSignatureHeader, WebhookSignature(key, timestamp, body))
+		if deliveryID := operationIDFromContext(ctx); deliveryID != "" {
+			req.Header.Set(WebhookDeliveryHeader, deliveryID)
+		}
+	}
 	if token := secretBufferBytes(p.token); len(token) > 0 {
 		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
 	}
 	return expect2xx(p.doer, req)
 }
 
-func (p *JSONPusher) Close() { destroySecretBuffer(&p.token) }
+func (p *JSONPusher) Close() {
+	destroySecretBuffer(&p.token)
+	destroySecretBuffer(&p.key)
+}
 
 func marshalGitLabVariable(key string, value []byte, scope string) []byte {
 	var out []byte

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -808,13 +809,19 @@ func buildSecretSyncTargetCatalog(generatedAt string, configured map[string]*sec
 func secretSyncTargetCatalogRow(id string, entry secretsync.ProviderCatalogEntry, target *secretsync.Target) secretSyncTargetResponse {
 	capabilities := append([]string(nil), entry.Capabilities...)
 	authMode := entry.AuthMode
+	deliveryMode := entry.DeliveryMode
 	if target != nil && target.WorkloadIdentityEnabled() {
 		capabilities = append(capabilities, "workload-identity")
 		authMode = "short-lived workload identity exchange"
 	}
+	if target != nil && target.PayloadSigned() && !slices.Contains(capabilities, "signed-payload") {
+		// OD-12: a generic CI push the operator gave a signing key.
+		capabilities = append(capabilities, "signed-payload")
+		deliveryMode = "timestamped, HMAC-SHA256-signed JSON secret push over HTTPS; the receiver verifies X-Trstctl-Signature with the shared key"
+	}
 	return secretSyncTargetResponse{
 		ID: id, Name: entry.Name, Platform: entry.Platform,
-		Configured: target != nil, DeliveryMode: entry.DeliveryMode,
+		Configured: target != nil, DeliveryMode: deliveryMode,
 		AuthMode: authMode, WireFormat: entry.WireFormat,
 		SecretHandling: secretSyncTargetSecretHandling, Capabilities: capabilities,
 		ScopedSync: entry.ScopedSync, ReadBack: string(entry.ReadBack), Proof: entry.Proof,

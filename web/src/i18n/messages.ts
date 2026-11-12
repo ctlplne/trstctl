@@ -26435,6 +26435,10 @@ export const messages = {
     defaultMessage: "Generic delivery, not a native integration",
     description: "Marks the signed webhook and generic CI JSON targets, which any receiver of the format can take.",
   },
+  "secrets.sync.signedPayload": {
+    defaultMessage: "Signed: the receiver verifies X-Trstctl-Signature with the shared key",
+    description: "OD-12: this sync target signs every push (the webhook, or a generic CI push with a signing key).",
+  },
   "secrets.sync.scopedColumn": {
     defaultMessage: "Scoped sync",
     description: "Secret-sync provider catalog column: whether a scoped sync can target it and what it reads back.",

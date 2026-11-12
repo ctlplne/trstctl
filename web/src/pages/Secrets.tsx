@@ -2825,7 +2825,12 @@ export function Secrets() {
                               </td>
                               <td>{target.platform}</td>
                               <td>{target.configured ? t("secrets.sync.configured") : t("secrets.sync.available")}</td>
-                              <td>{target.delivery_mode}</td>
+                              <td>
+                                <span>{target.delivery_mode}</span>
+                                {target.capabilities?.includes("signed-payload") && (
+                                  <span className="mt-1 block text-xs text-muted-foreground">{t("secrets.sync.signedPayload")}</span>
+                                )}
+                              </td>
                               <td>
                                 {!target.scoped_sync
                                   ? t("secrets.sync.noScopedSync")
