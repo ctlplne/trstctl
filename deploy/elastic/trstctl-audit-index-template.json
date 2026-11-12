@@ -1,0 +1,57 @@
+{
+  "index_patterns": ["trstctl-audit*"],
+  "priority": 200,
+  "_meta": {
+    "description": "trstctl audit feed (P5-L6): maps every field the elastic feed writes; the chain trailer's batch_id, prev_hash and chain_head as their own keyword fields under trstctl_trailer (set by the trstctl-audit ingest pipeline). Each event type's own data stays in _source unindexed, so two event types can never conflict over a field.",
+    "managed_by": "trstctl"
+  },
+  "template": {
+    "settings": {
+      "index.default_pipeline": "trstctl-audit"
+    },
+    "mappings": {
+      "dynamic": false,
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "event": {
+          "properties": {
+            "id": { "type": "keyword" },
+            "action": { "type": "keyword" },
+            "sequence": { "type": "long" },
+            "dataset": { "type": "keyword" },
+            "kind": { "type": "keyword" }
+          }
+        },
+        "labels": {
+          "properties": {
+            "trstctl_batch_id": { "type": "keyword" }
+          }
+        },
+        "trstctl": {
+          "properties": {
+            "sequence": { "type": "long" },
+            "id": { "type": "keyword" },
+            "type": { "type": "keyword" },
+            "tenant_id": { "type": "keyword" },
+            "time": { "type": "date" },
+            "actor_subject": { "type": "keyword" },
+            "actor_roles": { "type": "keyword" },
+            "chain_hash": { "type": "keyword" },
+            "hash_scope": { "type": "keyword" },
+            "sensitive_erased": { "type": "boolean" },
+            "data": { "type": "object", "enabled": false },
+            "signed_record": { "type": "object", "enabled": false }
+          }
+        },
+        "trstctl_trailer": {
+          "properties": {
+            "batch_id": { "type": "keyword" },
+            "prev_hash": { "type": "keyword" },
+            "chain_head": { "type": "keyword" },
+            "count": { "type": "long" }
+          }
+        }
+      }
+    }
+  }
+}

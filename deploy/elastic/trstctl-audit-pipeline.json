@@ -1,0 +1,47 @@
+{
+  "description": "trstctl audit feed (P5-L6): a chain trailer's proof is copied from trstctl.data, which the index does not index, into trstctl_trailer, which it maps; every document says whether it is an audit record or a trailer.",
+  "processors": [
+    {
+      "set": {
+        "field": "event.kind",
+        "value": "trstctl_record",
+        "override": false
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.trstctl != null && ctx.trstctl.type == 'trstctl.audit.chain_trailer'",
+        "field": "event.kind",
+        "value": "chain_trailer"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.trstctl != null && ctx.trstctl.type == 'trstctl.audit.chain_trailer' && ctx.trstctl.data != null",
+        "field": "trstctl_trailer.batch_id",
+        "value": "{{{trstctl.data.batch_id}}}"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.trstctl != null && ctx.trstctl.type == 'trstctl.audit.chain_trailer' && ctx.trstctl.data != null",
+        "field": "trstctl_trailer.prev_hash",
+        "value": "{{{trstctl.data.prev_hash}}}"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.trstctl != null && ctx.trstctl.type == 'trstctl.audit.chain_trailer' && ctx.trstctl.data != null",
+        "field": "trstctl_trailer.chain_head",
+        "value": "{{{trstctl.data.chain_head}}}"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.trstctl != null && ctx.trstctl.type == 'trstctl.audit.chain_trailer' && ctx.trstctl.data != null",
+        "field": "trstctl_trailer.count",
+        "value": "{{{trstctl.data.count}}}"
+      }
+    }
+  ]
+}

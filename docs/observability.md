@@ -214,7 +214,13 @@ until the credential is fixed. Each record is created under its
 audit record ID with `@timestamp`, `event.action`, `event.sequence` and the
 collector record under `trstctl`; a create of an ID already indexed is a conflict,
 not a second copy, so a redelivered batch adds nothing, and any other failed item
-keeps the batch retrying. A stalled receiver holds only its own batch: the API and
+keeps the batch retrying. Install the shipped index template and ingest pipeline
+first (`deploy/elastic`, P5-L6): the template maps every field the feed writes and
+keeps each event type's own `trstctl.data` unindexed, so two event types can never
+conflict over a field and fail a batch; the pipeline marks each document
+`event.kind: trstctl_record` or `chain_trailer` and copies a trailer's proof into
+`trstctl_trailer` (`batch_id`, `prev_hash`, `chain_head`, `count`), so a chain head
+is one term query away. A stalled receiver holds only its own batch: the API and
 the other feeds keep moving, and its `lag_records` shows what it owes.
 
 The Audit page's **Hash coverage** panel reports only whether listed events carry

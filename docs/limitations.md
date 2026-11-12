@@ -1954,7 +1954,9 @@ never live in the API process. What you can do end to end against the running bi
   own queue). Proven against stand-ins, a stock rsyslog receiver over TLS, a local
   search engine that speaks the Elasticsearch bulk API, and Elasticsearch 9.5.5
   itself with security on (the feed's API key scoped to the audit index), each
-  receiving the same records in order with no gap across a receiver restart. It persists exact record lag, cursor,
+  receiving the same records in order with no gap across a receiver restart. An index created before the shipped
+  template (`deploy/elastic`, P5-L6) is installed maps fields dynamically, and two event types that disagree on a
+  field's type then fail a batch, which retries until the index is recreated with the template. It persists exact record lag, cursor,
   retries, safe terminal error codes, and collector request IDs; it does not store
   credential values or remote response bodies. This native feed is separate from
   the metadata-only OTLP log exporter and from incident-response SIEM dispatch.

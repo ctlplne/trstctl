@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An Elasticsearch/OpenSearch index template and ingest pipeline ship for the elastic audit feed (P5-L6,
+  `deploy/elastic`). The template maps every field the feed writes and keeps each event type's own data unindexed,
+  so event types cannot conflict over a field; the pipeline maps each batch's chain trailer as its own
+  `trstctl_trailer` fields, so a chain head is one term query away. Proven against OpenSearch 3.9.0.
 - A syslog audit feed can present a client certificate to a receiver that requires RFC 5425 mutual TLS (P5-L2).
   `client_cert_ref` names an operator-approved `env:` reference holding the certificate chain and key; the Audit
   page's feed form offers it for syslog. Every syslog dial now waits for a TLS 1.3 receiver's verdict on the client,
