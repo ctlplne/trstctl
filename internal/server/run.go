@@ -713,6 +713,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
+	trustedProxies, err := netsec.ParseTrustedProxies(cfg.Server.TrustedProxies)
+	if err != nil {
+		return Deps{}, fmt.Errorf("server.trusted_proxies: %w", err)
+	}
 	resultProtector, resultMigrator, tenantKeyDomains, tenantCrypto, deploymentKEK, err := runTenantCustodyFromConfig(
 		cfg, st, log, sec.kek, signer.signer, securityGuards.auditKey,
 	)
@@ -815,6 +819,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		OTLPExporter:    outbound.otlpExporter,
 		Bulkhead:        bulkhead.NewSet(cfg.Bulkheads.Configs()...),
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
+		TrustedProxies:  trustedProxies,
 		Protocols:       protocols, Plugins: pluginCfg,
 		OIDC: cfg.Auth.OIDC, SAML: cfg.Auth.SAML, LDAP: cfg.Auth.LDAP, Kerberos: cfg.Auth.Kerberos, NTLM: cfg.Auth.NTLM, SCIM: cfg.Auth.SCIM,
 		EnableSecretsAPI: vaultCompatRuntimeFromConfig(cfg), KEK: sec.kek, DeploymentKEK: deploymentKEK.rotation, DeploymentKEKOperatorTenantID: cfg.Secrets.KEKOperatorTenantID,

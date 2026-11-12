@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
@@ -256,4 +257,84 @@ func evidenceWith(refs []string, prefix string) string {
 		}
 	}
 	return ""
+}
+
+// TestServedUsageNetworksBehindATrustedProxyM1L1 is M1-L1: behind a load
+// balancer in server.trusted_proxies, a token's use is recorded from the
+// client network the balancer forwarded, not the balancer's own, so a new
+// client network is still noticed. A peer outside the trusted networks is
+// recorded as itself whatever X-Forwarded-For it sends.
+func TestServedUsageNetworksBehindATrustedProxyM1L1(t *testing.T) {
+	clock := &m1Clock{}
+	proxies, err := netsec.ParseTrustedProxies([]string{"10.0.0.0/8"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.APIOptions = append(d.APIOptions, api.WithCredentialUsageClock(clock.now))
+		d.TrustedProxies = proxies
+	})
+	ctx := t.Context()
+	now := time.Now().UTC()
+	reader, _ := seedM1Token(t, h, "m1l1-posture-reader", "nhi:read", "graph:read", "access:read")
+	active, activeID := seedM1Token(t, h, "m1l1-ci-deployer", "nhi:read")
+	use := func(remote, forwardedFor string, at time.Time) {
+		t.Helper()
+		clock.set(at)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/nhi/inventory", nil)
+		req.RemoteAddr = remote
+		if forwardedFor != "" {
+			req.Header.Set("X-Forwarded-For", forwardedFor)
+		}
+		req.Header.Set("Authorization", "Bearer "+active)
+		rec := httptest.NewRecorder()
+		h.ts.Config.Handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("token use: HTTP %d %s", rec.Code, rec.Body.String())
+		}
+		if err := h.srv.DrainCredentialUsage(ctx); err != nil {
+			t.Fatalf("drain usage: %v", err)
+		}
+	}
+	newSources := func() []string {
+		t.Helper()
+		clock.set(now)
+		status, body := secretsReq(t, h, http.MethodGet, "/api/v1/nhi/posture/stale?unused_days=30", reader, nil)
+		if status != http.StatusOK {
+			t.Fatalf("stale posture: HTTP %d %s", status, body)
+		}
+		var out struct {
+			Findings []m1Finding `json:"findings"`
+		}
+		if err := json.Unmarshal(body, &out); err != nil {
+			t.Fatal(err)
+		}
+		var refs []string
+		for _, f := range out.Findings {
+			if f.InventoryID == "api-token/"+activeID {
+				for _, ref := range f.EvidenceRefs {
+					if strings.HasPrefix(ref, "usage:new_source:") {
+						refs = append(refs, strings.TrimPrefix(ref, "usage:new_source:"))
+					}
+				}
+			}
+		}
+		slices.Sort(refs)
+		return refs
+	}
+	base := now.AddDate(0, 0, -10)
+	// Three days through the balancer from one client network make it normal.
+	for day := 0; day < 3; day++ {
+		use("10.0.0.5:443", "203.0.113.7", base.AddDate(0, 0, day))
+	}
+	if got := newSources(); len(got) != 0 {
+		t.Fatalf("normal use through the balancer flagged %v", got)
+	}
+	// A new client network behind the same balancer is noticed …
+	use("10.0.0.5:443", "198.51.100.44", base.AddDate(0, 0, 3))
+	// … and a peer outside the trusted networks is itself, whatever it forwards.
+	use("192.0.2.50:5000", "203.0.113.7", base.AddDate(0, 0, 4))
+	if got := newSources(); !slices.Equal(got, []string{"192.0.2.0/24", "198.51.100.0/24"}) {
+		t.Fatalf("new client networks = %v; want the forwarded 198.51.100.0/24 and the untrusted peer's own 192.0.2.0/24", got)
+	}
 }

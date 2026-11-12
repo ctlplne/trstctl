@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- The control plane can sit behind a load balancer and still see its clients (M1-L1).
+  `server.trusted_proxies` (`TRSTCTL_SERVER_TRUSTED_PROXIES`) names the proxies' networks; from a
+  peer inside one, the client is the right-most `X-Forwarded-For` address that is not itself a
+  trusted proxy, and from any other peer the header is ignored. API-token usage networks, EST's and
+  ACME's per-client limits and OIDC sign-in limits all count that client, so a new client network
+  is noticed behind a balancer instead of every request showing the balancer. A prefix matching
+  every address is refused.
 - The Kubernetes operator covers what the Helm chart did alone (HELM-O1). It creates the signer's
   authorization secret, and with `spec.signer.generateKek` the deployment KEK, at their default names
   when missing, with 32 random bytes; both are kept when the control plane is deleted and never
@@ -2657,6 +2664,11 @@
   `appliance_key_generation`).
 
 ### Security
+
+- EST no longer lets a client choose the address its failed authentication attempts are counted
+  against (M1-L1). It read the first `X-Forwarded-For` entry from any peer, so a client could send a
+  new address with each attempt; it now counts the connection's peer, or the client a trusted proxy
+  forwarded.
 
 - trstctl builds on Go 1.26.11 for GO-2026-6859 (CVE-2026-97054). When a request body passes
   `http.MaxBytesReader`'s limit, Go's net/http before 1.26.11 marks the connection to close

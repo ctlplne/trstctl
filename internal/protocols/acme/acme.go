@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -35,6 +34,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/enrollmentdiag"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
@@ -1951,13 +1951,12 @@ func (s *Server) MarkEarlyRenewalContext(ctx context.Context, certID string) err
 	return nil
 }
 
+// sourceKey is the client a request is counted against: the connection's
+// peer, or behind a load balancer in server.trusted_proxies the address it
+// forwarded (M1-L1).
 func sourceKey(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil && host != "" {
-		return host
-	}
-	if r.RemoteAddr != "" {
-		return r.RemoteAddr
+	if ip := netsec.ClientIP(r); ip != "" {
+		return ip
 	}
 	return "unknown"
 }

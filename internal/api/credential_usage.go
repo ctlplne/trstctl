@@ -16,6 +16,7 @@ import (
 	googleuuid "github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -191,12 +192,13 @@ func (a *API) noteAPITokenUse(r *http.Request, rec store.APITokenRecord) {
 	if a.usage == nil {
 		return
 	}
-	a.usage.note(rec.TenantID, rec.ID, rec.Subject, credentialUseNetwork(r.RemoteAddr), credentialUseAction(r))
+	a.usage.note(rec.TenantID, rec.ID, rec.Subject, credentialUseNetwork(netsec.ClientIP(r)), credentialUseAction(r))
 }
 
 // credentialUseNetwork is the client network a request came from: its /24 for
-// IPv4, its /64 for IPv6. The peer address is used as the connection reports
-// it; forwarded-for headers are not trusted.
+// IPv4, its /64 for IPv6. The client is the connection's peer, or behind a
+// load balancer in server.trusted_proxies the address it forwarded (M1-L1); a
+// forwarded-for header from any other peer is not trusted.
 func credentialUseNetwork(remoteAddr string) string {
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {

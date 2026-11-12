@@ -58,6 +58,7 @@ import (
 	"trstctl.com/trstctl/internal/idemgc"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/lifecycle"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/observ"
@@ -439,6 +440,10 @@ type Deps struct {
 	// safe (headers on, HSTS off, same-origin-only CORS); Run sets TLS from the
 	// server's TLS mode and AllowedOrigins from config.
 	SecurityHeaders SecurityHeaders
+	// TrustedProxies are the load balancers whose X-Forwarded-For names a
+	// request's client (server.trusted_proxies, M1-L1). The zero value trusts
+	// none.
+	TrustedProxies netsec.TrustedProxies
 
 	// Protocols enables/configures the served issuance-protocol endpoints
 	// (EXC-WIRE-02): ACME, EST, SCEP, CMP (mounted on the TLS mux) and the SPIFFE
@@ -2976,8 +2981,10 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	mux.Handle("/ssh", consoleHandler)
 	mux.Handle("/", consoleHandler)
 	mw := observ.NewMiddleware(observ.Options{Logger: s.logger, Tracer: s.tracer, Registry: s.registry})
-	s.agentHTTPRenewalHandler = securityHeadersMiddleware(d.SecurityHeaders, mw.Handler(bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, a.AgentRenewalHandler())))
-	s.handler = securityHeadersMiddleware(d.SecurityHeaders, mw.Handler(mux))
+	// The client behind each request is resolved once, before anything keys a
+	// limit or a usage record on it (M1-L1).
+	s.agentHTTPRenewalHandler = securityHeadersMiddleware(d.SecurityHeaders, mw.Handler(d.TrustedProxies.Middleware(bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, a.AgentRenewalHandler()))))
+	s.handler = securityHeadersMiddleware(d.SecurityHeaders, mw.Handler(d.TrustedProxies.Middleware(mux)))
 }
 
 // issuingCAHandle is the stable signer handle for the issuing CA key. Using a

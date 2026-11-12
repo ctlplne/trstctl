@@ -1366,7 +1366,8 @@ never live in the API process. What you can do end to end against the running bi
   its scopes name; issuances recorded before Q4 name no requester.
 - Usage-based posture (M1): trstctl records API-token use from its own activity —
   each authenticated request's client network (/24 or /64 of the connection's peer
-  address; forwarded-for headers are not trusted) and action (`api_call`,
+  address, or behind a load balancer in `server.trusted_proxies` of the client it
+  forwarded (M1-L1); another peer's forwarded-for header is not trusted) and action (`api_call`,
   `secret_read`, `lease_request`), at most one event per token, network, action and
   hour plus doubling counts — and folds each machine login in as a use of its login
   method by the attested workload. `GET /api/v1/nhi/posture/stale?unused_days=N` flags

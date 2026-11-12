@@ -3,13 +3,12 @@
 package est
 
 import (
-	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // BasicAuthConfig configures the EST HTTP Basic enrollment gate. Password is
@@ -145,19 +144,13 @@ func (w *windowCounter) Allow(key string, max int, window time.Duration) bool {
 	return true
 }
 
+// requestIP is the client an attempt is counted against: the connection's
+// peer, or behind a load balancer in server.trusted_proxies the address it
+// forwarded. A client's own X-Forwarded-For is never read, so it cannot name
+// a fresh address for each attempt (M1-L1).
 func requestIP(r *http.Request) string {
 	if r == nil {
 		return ""
 	}
-	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
-		if i := strings.IndexByte(xff, ','); i >= 0 {
-			xff = xff[:i]
-		}
-		return strings.TrimSpace(xff)
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil {
-		return host
-	}
-	return r.RemoteAddr
+	return netsec.ClientIP(r)
 }

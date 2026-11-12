@@ -1431,6 +1431,13 @@ type Server struct {
 	// "https://console.example.com") to allow a separately-hosted UI; "*" is
 	// deliberately NOT honored for a credentialed API.
 	CORSAllowedOrigins []string `json:"cors_allowed_origins,omitempty"`
+	// TrustedProxies are the networks of the load balancers or reverse
+	// proxies in front of the control plane (M1-L1). From a peer inside one,
+	// X-Forwarded-For names the client, read from its right end; from any
+	// other peer it is ignored. Empty (the default) trusts no proxy: each
+	// request's client is its connection's peer. A prefix matching every
+	// address is refused.
+	TrustedProxies []string `json:"trusted_proxies,omitempty"`
 }
 
 // TLS configures the control plane's transport encryption (B4). Mode is one of
@@ -3862,6 +3869,7 @@ func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 	setBool(getenv, "TRSTCTL_DEV_ALLOW_PLAINTEXT", &c.Server.TLS.AllowPlaintextDev)
 	setString(getenv, "TRSTCTL_SERVER_TLS_MIN_VERSION", &c.Server.TLS.MinVersion)
 	setCSV(getenv, "TRSTCTL_CORS_ALLOWED_ORIGINS", &c.Server.CORSAllowedOrigins)
+	setCSV(getenv, "TRSTCTL_SERVER_TRUSTED_PROXIES", &c.Server.TrustedProxies)
 	setString(getenv, "TRSTCTL_POSTGRES_MODE", &c.Postgres.Mode)
 	setString(getenv, "TRSTCTL_POSTGRES_DSN", &c.Postgres.DSN)
 	setString(getenv, "TRSTCTL_POSTGRES_STATEMENT_TIMEOUT", &c.Postgres.StatementTimeout)
@@ -4598,6 +4606,9 @@ func validateServerConfig(c *Config) []error {
 	var errs []error
 	if c.Server.Addr == "" {
 		errs = append(errs, errors.New("server.addr must not be empty"))
+	}
+	if _, err := netsec.ParseTrustedProxies(c.Server.TrustedProxies); err != nil {
+		errs = append(errs, fmt.Errorf("server.trusted_proxies: %w", err))
 	}
 	switch strings.TrimSpace(c.Server.TLS.MinVersion) {
 	case "", "1.3", "1.2":

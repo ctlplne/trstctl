@@ -4,13 +4,13 @@ package api
 
 import (
 	"errors"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const defaultOIDCPreLoginTTL = 10 * time.Minute
@@ -185,10 +185,9 @@ func maxDuration(a, b time.Duration) time.Duration {
 	return a
 }
 
+// requestClientIP is the client behind a request (M1-L1): the connection's
+// peer, or behind a load balancer in server.trusted_proxies the address it
+// forwarded.
 func requestClientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil {
-		return host
-	}
-	return r.RemoteAddr
+	return netsec.ClientIP(r)
 }

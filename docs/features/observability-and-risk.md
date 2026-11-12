@@ -94,7 +94,9 @@ status, severity, and remediation.
 **Usage from trstctl's own activity (M1).** API tokens and machine login methods carry
 their recorded usage, so the stale posture needs no operator input for them. Every
 authenticated API-token request is recorded with the client network it came from (the
-connection's peer address as a /24 or /64; forwarded-for headers are not trusted) and
+connection's peer address as a /24 or /64; behind a load balancer listed in
+`server.trusted_proxies`, the client it forwarded in `X-Forwarded-For`, read from the right;
+a forwarded-for header from any other peer is not trusted) and
 what it did (`api_call`, `secret_read`, `lease_request`): one `credential.used` event
 per token, network, action and hour, plus one each time that hour's count doubles, up
 to 1,024. Each machine login counts as a use of its login method by the workload it
