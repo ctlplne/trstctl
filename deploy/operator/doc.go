@@ -52,10 +52,13 @@
 // TrstctlSecretSync projection path: CRD -> Kubernetes Secret -> workload reload
 // annotation, and TrstctlSecretInjection: CRD -> workload pod-template injection
 // -> app mount/env. It is not a full informer/work-queue controller (it polls).
-// The Helm chart (deploy/helm/trstctl) remains the path for what the CRD does not
-// model yet, for example generated KEK and authorization Secrets, the
-// PodDisruptionBudget, the ServiceMonitor and external KMS custody arguments; see
-// docs/limitations.md ("Kubernetes deployment").
+// As the Helm chart (deploy/helm/trstctl) does, it creates the deployment KEK
+// (opt-in, generateKek) and the signer's authorization secret at their default
+// names when missing, keeps them when the control plane is deleted and never
+// rewrites them; renders a PodDisruptionBudget for a multi-replica control plane
+// and, when asked, a Prometheus Operator ServiceMonitor; and with externalKMS
+// runs the signer with the KMS adapter's custody arguments instead of the KEK
+// (HELM-O1). See docs/limitations.md ("Kubernetes deployment").
 //
 // Coverage: internal/operator's reconcile_test.go and networking_test.go drive
 // the controller against an in-memory Kubernetes API and assert it

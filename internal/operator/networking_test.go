@@ -127,7 +127,10 @@ func TestReconcileManagesTheControlPlaneNetworkSurface(t *testing.T) {
 	if err != nil || actions["prod"] != ActionNone || len(f.objectPatches) != 0 {
 		t.Fatalf("second pass = %v, %v; patches %v", actions, err, f.objectPatches)
 	}
-	if status := f.statusSet["prod"]; status["phase"] != "Ready" || status["readySurfaces"] != float64(4) {
+	// Deployment, Service, NetworkPolicy and Ingress, plus the two-replica
+	// control plane's disruption budget and generated authorization Secret
+	// (HELM-O1).
+	if status := f.statusSet["prod"]; status["phase"] != "Ready" || status["readySurfaces"] != float64(6) {
 		t.Fatalf("converged status = %v", status)
 	}
 

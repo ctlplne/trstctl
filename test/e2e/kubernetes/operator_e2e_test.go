@@ -500,10 +500,12 @@ func TestOperatorManagesTheControlPlaneNetworkSurface(t *testing.T) {
 			t.Fatalf("a converged pass rewrote %s (%s %v -> %v)", path, field, before, after)
 		}
 	}
-	if status := at(k.get(base), "status"); at(status, "phase") != "Ready" || at(status, "readySurfaces") != float64(8) {
+	// The eight network and signer surfaces, plus the signer's authorization
+	// Secret the operator generated (HELM-O1).
+	if status := at(k.get(base), "status"); at(status, "phase") != "Ready" || at(status, "readySurfaces") != float64(9) {
 		t.Fatalf("converged status = %v", status)
 	}
-	t.Logf("converged pass rewrote none of %d objects; phase Ready with 8 ready surfaces", len(versions))
+	t.Logf("converged pass rewrote none of %d objects; phase Ready with 9 ready surfaces", len(versions))
 
 	// Back to the sidecar signer on a new port, with one annotation swapped.
 	k.must(http.MethodPatch, base, "application/merge-patch+json", map[string]any{"spec": map[string]any{
@@ -564,4 +566,104 @@ func TestOperatorManagesTheControlPlaneNetworkSurface(t *testing.T) {
 		t.Fatalf("the operator changed someone else's ingress: %v", foreign)
 	}
 	t.Logf("foreign ingress at the managed name: left alone, then refused (phase Blocked) and unchanged")
+}
+
+// TestOperatorRendersKeysBudgetAndKMSCustodyHELMO1 is HELM-O1 on a real API
+// server, as the operator's service account with only operator.yaml's rules:
+// the CRD keeps the new fields (createControlPlane fails on a pruned spec);
+// the operator creates the deployment KEK and the signer's authorization
+// secret, 32 bytes each, with no owner reference; the PodDisruptionBudget is
+// accepted with minAvailable 1 over the control plane's pods; the signer runs
+// with the KMS adapter's custody arguments and no KEK; a ServiceMonitor on a
+// cluster without the Prometheus Operator's API is refused with the reason;
+// and once the control plane is deleted the KEK is still there.
+func TestOperatorRendersKeysBudgetAndKMSCustodyHELMO1(t *testing.T) {
+	k := newKubeAPI(t)
+	applyOperatorCRDs(k)
+	ns := fmt.Sprintf("trstctl-operator-helmo1-%d", time.Now().UnixNano())
+	k.must(http.MethodPost, "/api/v1/namespaces", "", map[string]any{
+		"apiVersion": "v1", "kind": "Namespace", "metadata": map[string]any{"name": ns},
+	})
+	t.Cleanup(func() { k.do(http.MethodDelete, "/api/v1/namespaces/"+ns, "", nil) })
+	reconciler := operator.NewReconciler(operator.NewClient(k.server, operatorToken(k, ns), k.httpClient))
+	base := "/apis/trstctl.com/v1alpha1/namespaces/" + ns + "/trstctlcontrolplanes/core"
+	secrets := "/api/v1/namespaces/" + ns + "/secrets/"
+	createControlPlane(k, ns, map[string]any{
+		"apiVersion": "trstctl.com/v1alpha1", "kind": "TrstctlControlPlane",
+		"metadata": map[string]any{"name": "core"},
+		"spec": map[string]any{
+			"replicas": 2, "image": "registry.invalid/trstctl:e2e", "signerMode": "sidecar",
+			"nats":   map[string]any{"url": "nats://nats.invalid:4222", "allowSingleReplica": false},
+			"signer": map[string]any{"authTokenCommand": "/usr/local/bin/trstctl-sign-approve", "generateKek": true}, // #nosec G101 -- fabricated fixture identifier; no value is real (CWE-798)
+			"externalKMS": map[string]any{"enabled": true, "provider": "awskms", "keyRef": "arn:aws:kms:us-east-1:111111111111:key/e2e",
+				"adapterConfigSecret": "core-kms-wrap", "timeout": "15s"},
+			"podDisruptionBudget": map[string]any{"minAvailable": 1},
+		},
+	})
+	actions, err := reconcileAsOperator(t, reconciler, ns)
+	if err != nil || actions["core"] != operator.ActionCreate {
+		t.Fatalf("first reconcile = %v, %v", actions, err)
+	}
+	status := at(k.get(base), "status")
+	for _, surface := range []string{"kek", "signerAuth", "podDisruptionBudget", "deployment"} {
+		if at(status, "surfaces", surface) != "create" {
+			t.Fatalf("status after the first pass = %v", status)
+		}
+	}
+	for name, key := range map[string]string{"core-kek": "kek.bin", "core-signer-auth": "sign-auth.bin"} {
+		s := k.get(secrets + name)
+		value, _ := at(s, "data", key).(string)
+		if len(value) != 44 || at(s, "metadata", "ownerReferences") != nil || at(s, "metadata", "labels", "trstctl.com/owner") == nil {
+			t.Fatalf("generated Secret %s = %v", name, at(s, "metadata"))
+		}
+	}
+	pdb := k.get("/apis/policy/v1/namespaces/" + ns + "/poddisruptionbudgets/core-control-plane")
+	if at(pdb, "spec", "minAvailable") != float64(1) || at(pdb, "spec", "selector", "matchLabels", "trstctl.com/control-plane") != "core" {
+		t.Fatalf("PodDisruptionBudget = %v", at(pdb, "spec"))
+	}
+	deployment := k.get("/apis/apps/v1/namespaces/" + ns + "/deployments/core-control-plane")
+	containers, _ := at(deployment, "spec", "template", "spec", "containers").([]any)
+	var signerArgs []string
+	for _, c := range containers {
+		if at(c, "name") == "signer" {
+			args, _ := at(c, "args").([]any)
+			for _, a := range args {
+				signerArgs = append(signerArgs, a.(string))
+			}
+		}
+	}
+	joined := strings.Join(signerArgs, " ")
+	if !strings.Contains(joined, "--kms-provider=awskms") || !strings.Contains(joined, "--kms-timeout=15s") || strings.Contains(joined, "--kek=") {
+		t.Fatalf("signer args = %v", signerArgs)
+	}
+	t.Logf("HELM-O1: generated core-kek and core-signer-auth with no owner reference; PDB minAvailable 1; signer %s", joined)
+	if actions, err := reconcileAsOperator(t, reconciler, ns); err != nil || actions["core"] != operator.ActionNone {
+		t.Fatalf("a converged pass = %v, %v; want nothing written", actions, err)
+	}
+
+	// This cluster has no Prometheus Operator: a ServiceMonitor is refused with the reason.
+	k.must(http.MethodPatch, base, "application/merge-patch+json", map[string]any{"spec": map[string]any{"serviceMonitor": map[string]any{"enabled": true}}})
+	if _, err := reconcileAsOperator(t, reconciler, ns); err == nil || !strings.Contains(err.Error(), "monitoring.coreos.com/v1") {
+		t.Fatalf("a ServiceMonitor without the Prometheus Operator API = %v", err)
+	}
+	if message, _ := at(k.get(base), "status", "message").(string); !strings.Contains(message, "monitoring.coreos.com/v1") {
+		t.Fatalf("status message = %q", message)
+	}
+
+	// Deleting the control plane keeps the KEK: a new one would orphan what it sealed.
+	k.must(http.MethodDelete, base, "", nil)
+	k.waitGone(base)
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		if st, _ := k.do(http.MethodGet, "/apis/apps/v1/namespaces/"+ns+"/deployments/core-control-plane", "", nil); st == http.StatusNotFound {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the control plane's Deployment was not garbage-collected after its resource was deleted")
+		}
+		time.Sleep(time.Second)
+	}
+	if st, _ := k.do(http.MethodGet, secrets+"core-kek", "", nil); st != http.StatusOK {
+		t.Fatalf("the KEK Secret after the control plane was deleted = %d; want it kept", st)
+	}
 }

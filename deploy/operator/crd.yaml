@@ -55,6 +55,20 @@ spec:
                       description: >-
                         Evaluation only, sidecar signer only: the control plane
                         mounts the signer's verifier secret and mints its own tokens.
+                    generateKek:
+                      type: boolean
+                      description: >-
+                        With no kekSecret named, the operator creates the deployment
+                        KEK at <name>-kek once, with 32 random bytes, when it is
+                        missing. Off by default: production supplies its own KEK. The
+                        generated Secret is kept when the control plane is deleted and
+                        is never rewritten.
+                    generateAuthSecret:
+                      type: boolean
+                      description: >-
+                        With no authSecret named, the operator creates the signer's
+                        authorization secret at <name>-signer-auth once when it is
+                        missing. On unless false; kept and never rewritten.
                     mtls:
                       type: object
                       description: >-
@@ -99,6 +113,39 @@ spec:
                       type: object
                       additionalProperties:
                         type: string
+                podDisruptionBudget:
+                  type: object
+                  description: >-
+                    A PodDisruptionBudget over the control plane's pods, on by default
+                    with more than one replica. minAvailable (1 by default) must stay
+                    below the replica count, or no drain could ever proceed.
+                  properties:
+                    enabled:
+                      type: boolean
+                    minAvailable:
+                      type: integer
+                      minimum: 1
+                serviceMonitor:
+                  type: object
+                  description: >-
+                    A Prometheus Operator ServiceMonitor scraping /metrics over HTTPS
+                    through the control plane's Service; needs monitoring.coreos.com/v1.
+                  properties:
+                    enabled:
+                      type: boolean
+                    interval:
+                      type: string
+                    scrapeTimeout:
+                      type: string
+                    path:
+                      type: string
+                    labels:
+                      type: object
+                      additionalProperties:
+                        type: string
+                    tlsConfig:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
                 networkPolicy:
                   type: object
                   properties:
@@ -159,13 +206,30 @@ spec:
                       minimum: 1
                 externalKMS:
                   type: object
+                  description: >-
+                    The signer seals its key store through a KMS adapter instead of
+                    the deployment KEK, which the control plane keeps for secrets.
                   properties:
                     enabled:
                       type: boolean
                     provider:
                       type: string
+                      enum: ["", "awskms", "gcpkms", "azurekv", "pkcs11"]
                     keyRef:
                       type: string
+                    wrapCommand:
+                      type: string
+                      description: >-
+                        The adapter the signer runs, an absolute path; the shipped
+                        /usr/local/bin/trstctl-kms-wrap by default.
+                    adapterConfigSecret:
+                      type: string
+                      description: >-
+                        The Secret holding the adapter's config.json and the credential
+                        files it names, mounted read-only at /etc/trstctl/kms-wrap.
+                    timeout:
+                      type: string
+                      description: Each adapter call's limit, as a duration; 10s by default.
             status:
               type: object
               properties:

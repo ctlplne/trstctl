@@ -42,6 +42,9 @@ type ControlPlaneSpec struct {
 	Service       ServiceSpec       `json:"service"`
 	Ingress       IngressSpec       `json:"ingress"`
 	NetworkPolicy NetworkPolicySpec `json:"networkPolicy"`
+	// Availability and metrics (HELM-O1): see availability.go.
+	PodDisruptionBudget PodDisruptionBudgetSpec `json:"podDisruptionBudget"`
+	ServiceMonitor      ServiceMonitorSpec      `json:"serviceMonitor"`
 
 	// signerMTLSFingerprint is set during a reconcile from the isolated
 	// signer's mTLS Secrets (signer_mtls.go), never read from the resource.
@@ -65,6 +68,15 @@ type ExternalKMSSpec struct {
 	Enabled  bool   `json:"enabled"`
 	Provider string `json:"provider"`
 	KeyRef   string `json:"keyRef"`
+	// WrapCommand, AdapterConfigSecret and Timeout are the signer's KMS
+	// custody (HELM-O1, generated_keys.go): the adapter it runs (the shipped
+	// trstctl-kms-wrap by default), the Secret holding the adapter's
+	// config.json and the credential files it names, and each call's limit.
+	// Unset fields stay out of the config hash, so a control plane that names
+	// none of them does not roll.
+	WrapCommand         string `json:"wrapCommand,omitempty"`
+	AdapterConfigSecret string `json:"adapterConfigSecret,omitempty"`
+	Timeout             string `json:"timeout,omitempty"`
 }
 
 type SignerSpec struct {
@@ -80,6 +92,12 @@ type SignerSpec struct {
 	// plane mounts the signer's verifier secret and mints tokens itself.
 	AuthTokenCommand          string `json:"authTokenCommand"`
 	AllowCoResidentAuthorizer bool   `json:"allowCoResidentAuthorizer"`
+	// GenerateKek has the operator create the deployment KEK Secret at its
+	// default name when the spec names none and it is missing; production
+	// supplies its own (HELM-O1). GenerateAuthSecret false stops it creating
+	// the signer's authorization Secret the same way, which it does by default.
+	GenerateKek        bool  `json:"generateKek,omitempty"`
+	GenerateAuthSecret *bool `json:"generateAuthSecret,omitempty"`
 }
 
 // desiredReplicas returns the spec's replica count, defaulting to 1 (the CRD's
@@ -307,6 +325,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, namespace string, cr control
 		_ = r.updateStatus(ctx, namespace, cr.Metadata.Name, surfaces, err)
 		return ActionNone, err
 	}
+	if err := errors.Join(cr.Spec.externalKMSError(), cr.Spec.availabilityError()); err != nil {
+		_ = r.updateStatus(ctx, namespace, cr.Metadata.Name, surfaces, err)
+		return ActionNone, err
+	}
+	keys, err := r.ensureGeneratedKeys(ctx, namespace, cr)
+	for surface, keyAction := range keys {
+		surfaces[surface] = keyAction
+	}
+	if err != nil {
+		_ = r.updateStatus(ctx, namespace, cr.Metadata.Name, surfaces, err)
+		return ActionNone, err
+	}
 	if cr.Spec.desiredSignerMode() == "isolated" {
 		fingerprint, mtlsAction, err := r.ensureSignerMTLS(ctx, namespace, cr)
 		surfaces["signerMTLS"] = mtlsAction
@@ -340,6 +370,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, namespace string, cr control
 	network, networkErr := r.reconcileNetwork(ctx, namespace, cr)
 	for surface, surfaceAction := range network {
 		surfaces[surface] = surfaceAction
+	}
+	if networkErr == nil {
+		var availability map[string]Action
+		availability, networkErr = r.reconcileAvailability(ctx, namespace, cr)
+		for surface, surfaceAction := range availability {
+			surfaces[surface] = surfaceAction
+		}
 	}
 	surfaces["deployment"] = action
 	if networkErr != nil {
@@ -458,7 +495,8 @@ func (r *Reconciler) patchDeployment(ctx context.Context, namespace, name string
 
 // managedSurfaces is every object kind the operator converges for one control
 // plane, in status order.
-var managedSurfaces = []string{"deployment", "service", "networkPolicy", "ingress", "signer", "signerService", "signerNetworkPolicy", "signerMTLS"}
+var managedSurfaces = []string{"deployment", "service", "networkPolicy", "ingress", "signer", "signerService", "signerNetworkPolicy", "signerMTLS",
+	"kek", "signerAuth", "podDisruptionBudget", "serviceMonitor"}
 
 // updateStatus writes the observed phase and what happened to each managed
 // surface to the CR's status subresource via a JSON-merge-patch, so the
@@ -577,6 +615,7 @@ func (r *Reconciler) podSpec(namespace string, cr controlPlaneObject) map[string
 			map[string]any{"name": "signer-auth", "secret": map[string]any{"secretName": signerAuthSecret(cr), "defaultMode": 288}},
 			map[string]any{"name": "kek", "secret": map[string]any{"secretName": signerKekSecret(cr), "defaultMode": 288}},
 		)
+		volumes = append(volumes, kmsWrapVolume(cr)...)
 	}
 	if cr.Spec.desiredSignerMode() == "isolated" {
 		// The signer runs as its own pod (networking.go); the control plane holds
@@ -658,29 +697,32 @@ func (r *Reconciler) controlPlaneContainer(namespace string, cr controlPlaneObje
 }
 
 func (r *Reconciler) signerContainer(cr controlPlaneObject) map[string]any {
-	return map[string]any{
+	args := []string{"--socket=/run/trstctl/signer.sock", "--keystore=/data/signer/keys"}
+	args = append(args, signerCustodyArgs(cr)...)
+	args = append(args, "--auth-secret=/etc/trstctl/signer-auth/"+signerAuthSecretKey(cr))
+	mounts := []map[string]any{
+		{"name": "signer-sock", "mountPath": "/run/trstctl"},
+		{"name": "signer-keys", "mountPath": "/data/signer"},
+	}
+	mounts = append(mounts, signerCustodyMounts(cr)...)
+	mounts = append(mounts, map[string]any{"name": "signer-auth", "mountPath": "/etc/trstctl/signer-auth", "readOnly": true})
+	container := map[string]any{
 		"name":    "signer",
 		"image":   cr.Spec.desiredImage(),
 		"command": []string{"/usr/local/bin/trstctl-signer"},
-		"args": []string{
-			"--socket=/run/trstctl/signer.sock",
-			"--keystore=/data/signer/keys",
-			"--kek=/etc/trstctl/kek/" + signerKekSecretKey(cr),
-			"--auth-secret=/etc/trstctl/signer-auth/" + signerAuthSecretKey(cr),
-		},
+		"args":    args,
 		"securityContext": map[string]any{
 			"allowPrivilegeEscalation": false,
 			"readOnlyRootFilesystem":   true,
 			"runAsNonRoot":             true,
 			"capabilities":             map[string]any{"drop": []string{"ALL"}},
 		},
-		"volumeMounts": []map[string]any{
-			{"name": "signer-sock", "mountPath": "/run/trstctl"},
-			{"name": "signer-keys", "mountPath": "/data/signer"},
-			{"name": "kek", "mountPath": "/etc/trstctl/kek", "readOnly": true},
-			{"name": "signer-auth", "mountPath": "/etc/trstctl/signer-auth", "readOnly": true},
-		},
+		"volumeMounts": mounts,
 	}
+	if env := signerCustodyEnv(cr); len(env) > 0 {
+		container["env"] = env
+	}
+	return container
 }
 
 func (r *Reconciler) controlPlaneEnv(namespace string, cr controlPlaneObject) []map[string]any {

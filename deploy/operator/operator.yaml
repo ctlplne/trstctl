@@ -81,6 +81,14 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies", "ingresses"]
     verbs: ["get", "create", "update", "patch", "delete"]
+  # The control plane's disruption budget and, when asked for, its
+  # ServiceMonitor (HELM-O1); deleted only when they carry its labels.
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["servicemonitors"]
+    verbs: ["get", "create", "update", "patch", "delete"]
   # delete: the isolated signer's mTLS pair the operator generated, once the
   # signer returns to the sidecar. It deletes only Secrets carrying its
   # managed-by and owner labels; Secrets someone else provided stay.

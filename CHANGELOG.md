@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 ### Added
+- The Kubernetes operator covers what the Helm chart did alone (HELM-O1). It creates the signer's
+  authorization secret, and with `spec.signer.generateKek` the deployment KEK, at their default names
+  when missing, with 32 random bytes; both are kept when the control plane is deleted and never
+  rewritten. A multi-replica control plane gets a PodDisruptionBudget (`spec.podDisruptionBudget`,
+  minAvailable 1 by default; a budget that would block every drain is refused).
+  `spec.serviceMonitor.enabled` renders a Prometheus Operator ServiceMonitor scraping `/metrics` over
+  HTTPS, or says the cluster lacks its API. `spec.externalKMS` runs the signer through the KMS adapter
+  (`--kms-provider`, `--kms-key-ref`, `--kms-wrap-command`, `--kms-timeout`, the adapter's
+  configuration Secret) instead of the KEK, in both signer topologies; an unusable KMS spec is refused.
 - The Graph page says what a dynamic-secret lease reaches (G2-L4). A lease's node detail names its
   login and the target it reaches and lists each grant the target reported, with when it was read.
   A target that could not be read says why (for example, the login no longer exists) and that this

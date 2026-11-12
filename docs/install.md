@@ -152,11 +152,18 @@ URL/replica knobs, sidecar-signer socket/volumes, signer authorization,
 managed-key provider enablement, and the network surface the chart renders — a
 Service, a default-deny NetworkPolicy, an optional Ingress, and with
 `signerMode: isolated` the signer's own pod, Service and NetworkPolicy over an
-mTLS pair the operator generates and renews. Its manifest runs two replicas with
-real leader election through a Kubernetes Lease, so one replica reconciles and
-the other stays hot. Helm remains the supported full control-plane install for
-generated KEK and signer-authorization secrets, the disruption budget, metrics
-scraping and external-KMS custody — see [limitations](limitations.md).
+mTLS pair the operator generates and renews. Like the chart, it creates the
+signer's authorization secret, and with `spec.signer.generateKek` the deployment
+KEK, when they are missing (kept when the control plane is deleted, never
+rewritten); renders a PodDisruptionBudget for a multi-replica control plane
+(`spec.podDisruptionBudget`) and, with `spec.serviceMonitor.enabled`, a
+Prometheus Operator ServiceMonitor; and with `spec.externalKMS` runs the signer
+through the KMS adapter (`provider`, `keyRef`, `wrapCommand`,
+`adapterConfigSecret`, `timeout`) instead of the KEK. Its manifest runs two
+replicas with real leader election through a Kubernetes Lease, so one replica
+reconciles and the other stays hot. Helm remains the full install path for the
+settings the resource does not model yet, such as FIPS mode and the HSM-backed
+signer image — see [limitations](limitations.md).
 
 ## Install the exact API client
 

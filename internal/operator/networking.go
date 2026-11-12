@@ -504,34 +504,45 @@ func (r *Reconciler) signerDeploymentObject(namespace string, cr controlPlaneObj
 		"app.kubernetes.io/name": "trstctl", "app.kubernetes.io/component": "signer",
 		managedByLabel: managedByOperator, signerPodLabel: cr.Metadata.Name,
 	}
+	args := []string{
+		fmt.Sprintf("--mtls-listen=:%d", signerMTLSPort),
+		"--mtls-cert=/etc/trstctl/signer-mtls/tls.crt",
+		"--mtls-key=/etc/trstctl/signer-mtls/tls.key",
+		"--mtls-peer-ca=/etc/trstctl/signer-mtls/peer-ca.pem",
+		"--mtls-peer-pin=$(SIGNER_MTLS_PEER_PIN)",
+		"--keystore=/data/signer/keys",
+	}
+	args = append(args, signerCustodyArgs(cr)...)
+	args = append(args, "--auth-secret=/etc/trstctl/signer-auth/"+signerAuthSecretKey(cr))
+	mounts := []map[string]any{
+		{"name": "signer-mtls", "mountPath": "/etc/trstctl/signer-mtls", "readOnly": true},
+		{"name": "signer-keys", "mountPath": "/data/signer"},
+	}
+	mounts = append(mounts, signerCustodyMounts(cr)...)
+	mounts = append(mounts, map[string]any{"name": "signer-auth", "mountPath": "/etc/trstctl/signer-auth", "readOnly": true})
+	volumes := []map[string]any{
+		{"name": "signer-mtls", "secret": map[string]any{"secretName": signerMTLSSecret(cr), "defaultMode": 288}},
+		r.signerKeysVolume(cr),
+	}
+	if !cr.Spec.ExternalKMS.Enabled {
+		volumes = append(volumes, map[string]any{"name": "kek", "secret": map[string]any{"secretName": signerKekSecret(cr), "defaultMode": 288}})
+	}
+	volumes = append(volumes, kmsWrapVolume(cr)...)
+	volumes = append(volumes, map[string]any{"name": "signer-auth", "secret": map[string]any{"secretName": signerAuthSecret(cr), "defaultMode": 288}})
 	container := map[string]any{
 		"name":    "signer",
 		"image":   cr.Spec.desiredImage(),
 		"command": []string{"/usr/local/bin/trstctl-signer"},
-		"args": []string{
-			fmt.Sprintf("--mtls-listen=:%d", signerMTLSPort),
-			"--mtls-cert=/etc/trstctl/signer-mtls/tls.crt",
-			"--mtls-key=/etc/trstctl/signer-mtls/tls.key",
-			"--mtls-peer-ca=/etc/trstctl/signer-mtls/peer-ca.pem",
-			"--mtls-peer-pin=$(SIGNER_MTLS_PEER_PIN)",
-			"--keystore=/data/signer/keys",
-			"--kek=/etc/trstctl/kek/" + signerKekSecretKey(cr),
-			"--auth-secret=/etc/trstctl/signer-auth/" + signerAuthSecretKey(cr),
-		},
-		"env":   []map[string]any{envSecret("SIGNER_MTLS_PEER_PIN", signerMTLSSecret(cr), "peer-pin")},
-		"ports": []map[string]any{{"containerPort": signerMTLSPort, "name": "grpc-mtls"}},
+		"args":    args,
+		"env":     append([]map[string]any{envSecret("SIGNER_MTLS_PEER_PIN", signerMTLSSecret(cr), "peer-pin")}, signerCustodyEnv(cr)...),
+		"ports":   []map[string]any{{"containerPort": signerMTLSPort, "name": "grpc-mtls"}},
 		"securityContext": map[string]any{
 			"allowPrivilegeEscalation": false,
 			"readOnlyRootFilesystem":   true,
 			"runAsNonRoot":             true,
 			"capabilities":             map[string]any{"drop": []string{"ALL"}},
 		},
-		"volumeMounts": []map[string]any{
-			{"name": "signer-mtls", "mountPath": "/etc/trstctl/signer-mtls", "readOnly": true},
-			{"name": "signer-keys", "mountPath": "/data/signer"},
-			{"name": "kek", "mountPath": "/etc/trstctl/kek", "readOnly": true},
-			{"name": "signer-auth", "mountPath": "/etc/trstctl/signer-auth", "readOnly": true},
-		},
+		"volumeMounts": mounts,
 	}
 	return managedObject{
 		kind: "Deployment", name: name, namespace: namespace, controlPlaneCR: cr.Metadata.Name,
@@ -553,12 +564,7 @@ func (r *Reconciler) signerDeploymentObject(namespace string, cr controlPlaneObj
 						"automountServiceAccountToken": false,
 						"securityContext":              podSecurityContext(),
 						"containers":                   []map[string]any{container},
-						"volumes": []map[string]any{
-							{"name": "signer-mtls", "secret": map[string]any{"secretName": signerMTLSSecret(cr), "defaultMode": 288}},
-							r.signerKeysVolume(cr),
-							{"name": "kek", "secret": map[string]any{"secretName": signerKekSecret(cr), "defaultMode": 288}},
-							{"name": "signer-auth", "secret": map[string]any{"secretName": signerAuthSecret(cr), "defaultMode": 288}},
-						},
+						"volumes":                      volumes,
 					},
 				},
 			},

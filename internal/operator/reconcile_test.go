@@ -79,6 +79,10 @@ type fakeCluster struct {
 	objects        map[string]map[string]any
 	objectPatches  map[string][]byte
 	deletedObjects []string
+
+	// serviceMonitorAPI is whether the cluster serves monitoring.coreos.com/v1
+	// (the Prometheus Operator's ServiceMonitor).
+	serviceMonitorAPI bool
 }
 
 func newFakeCluster() *fakeCluster {
@@ -101,7 +105,7 @@ func newFakeCluster() *fakeCluster {
 func networkObjectKey(path string) (key string, collection bool) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	for i, part := range parts {
-		if part != "services" && part != "networkpolicies" && part != "ingresses" {
+		if part != "services" && part != "networkpolicies" && part != "ingresses" && part != "poddisruptionbudgets" && part != "servicemonitors" {
 			continue
 		}
 		if i == len(parts)-1 {
@@ -304,7 +308,15 @@ func (f *fakeCluster) handler() http.Handler {
 			}
 			_ = json.NewEncoder(w).Encode(lease)
 
-		// Services, NetworkPolicies and Ingresses.
+		// API discovery for the Prometheus Operator's group.
+		case r.Method == http.MethodGet && path == "/apis/monitoring.coreos.com/v1":
+			if !f.serviceMonitorAPI {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"kind": "APIResourceList", "groupVersion": "monitoring.coreos.com/v1"})
+
+		// Services, NetworkPolicies, Ingresses, PodDisruptionBudgets and ServiceMonitors.
 		case func() bool { key, _ := networkObjectKey(path); return key != "" }():
 			key, collection := networkObjectKey(path)
 			switch {

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3014 annotated sites across 33 rules. Each row is
+3017 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (692 sites)
+### G101 — CWE-798 Use of hardcoded credentials (695 sites)
 
 | Location | Reason |
 |---|---|
@@ -371,10 +371,13 @@ not this file.
 | `internal/notify/webhook/webhook_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/oauthrevoke/oauthrevoke_test.go:14` | fabricated fixture credential (CWE-798) |
 | `internal/operator/client.go:39` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/operator/generated_keys_test.go:29` | fabricated fixture identifiers; the test needs the shape, no value is real (CWE-798) |
+| `internal/operator/generated_keys_test.go:89` | fabricated fixture identifiers; the test needs the shape, no value is real (CWE-798) |
+| `internal/operator/generated_keys_test.go:117` | fabricated fixture identifiers; the test needs the shape, no value is real (CWE-798) |
 | `internal/operator/networking_test.go:61` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/operator/networking_test.go:189` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/operator/reconcile_test.go:422` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/operator/reconcile_test.go:436` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/operator/networking_test.go:192` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/operator/reconcile_test.go:434` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/operator/reconcile_test.go:448` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/operator/secretinjection.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretinjection.go:24` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretinjection.go:25` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -3350,7 +3353,7 @@ not this file.
 | `internal/connector/fortigate/fortigatetest/fortigatetest.go:241` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/dns/akamai/akamai_test.go:131` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/dynsecret/aws_sts_deny_test.go:69` | test writes fixture bytes to its own recorder/local server (CWE-79) |
-| `internal/operator/reconcile_test.go:259` | test writes fixture bytes to its own recorder/local server (CWE-79) |
+| `internal/operator/reconcile_test.go:263` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/secretstore/access.go:86` | the secret read API returns the secret by contract; served as octet-stream with nosniff, never an HTML context (CWE-79) |
 | `internal/secretstore/access.go:97` | fixed-shape JSON carrying only an integer version, served as application/json with nosniff (CWE-79) |
 | `internal/secretstore/access.go:113` | fixed-shape JSON carrying only an integer version, served as application/json with nosniff (CWE-79) |

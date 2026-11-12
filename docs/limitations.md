@@ -264,7 +264,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | CA key custody / HSM / BYOK | Sealed local key store by default; six of six HSM/KMS backends served | [CA key custody](#ca-key-custody) |
 | Post-quantum cryptography | ML-DSA/ML-KEM/SLH-DSA available; compatibility-bounded proofs | [Post-quantum cryptography](#post-quantum-cryptography-issuance-algorithms) |
 | PCAS KEM data re-wrap | Not built; the served route prepares successor keys but cannot migrate ciphertext | [PCAS KEM data re-wrap](#pcas-kem-data-re-wrap-not-built) |
-| Kubernetes deployment | Helm chart plus an Operator that converges the control plane's Deployment, Service, default-deny NetworkPolicy, optional Ingress and isolated signer with a generated mTLS pair; it polls rather than watches | [Kubernetes deployment](#kubernetes-deployment) |
+| Kubernetes deployment | Helm chart plus an Operator that converges the control plane's Deployment, Service, default-deny NetworkPolicy, optional Ingress, PodDisruptionBudget and ServiceMonitor, its generated KEK and authorization Secrets, external-KMS custody, and the isolated signer with a generated mTLS pair; it polls rather than watches | [Kubernetes deployment](#kubernetes-deployment) |
 | Performance & usability NFRs | Perf/scale measured in CI; usability evidence-gated, no NPS claim yet | [Non-functional targets](#non-functional-targets-what-is-measured-vs-aspirational) |
 
 ## Served by the running binary today
@@ -8749,12 +8749,14 @@ as the default, a default-deny `NetworkPolicy`, and TLS.
   the manifest grants: the API server accepts every object it renders, the
   generated pair completes the pinned handshake, a converged pass writes
   nothing, a spec change patches in place and removes what the spec
-  dropped, and an object it does not own is refused. What comes next: the
-  operator does not yet generate the KEK and signer-authorization Secrets
-  or render the chart's PodDisruptionBudget, ServiceMonitor and
-  external-KMS custody arguments (the chart covers those today), it polls
-  rather than watches, and a control plane serving through an
-  operator-managed isolated signer has been proven at the object and
+  dropped, and an object it does not own is refused. Like the chart, the
+  operator creates the signer's authorization secret and, with
+  `generateKek`, the deployment KEK when missing (kept on deletion, never
+  rewritten), renders the PodDisruptionBudget and an optional
+  ServiceMonitor, and runs the signer with external-KMS custody arguments
+  (HELM-O1; proven on kind with only operator.yaml's rules). What comes
+  next: it polls rather than watches, and a control plane serving through
+  an operator-managed isolated signer has been proven at the object and
   channel level, not yet as a running pair on a cluster.
 - Kubernetes certificate CRDs: the Kubernetes agent ships a real trstctl
   `Issuer`/`ClusterIssuer`/`Certificate` controller. It marks trstctl
