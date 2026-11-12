@@ -12944,6 +12944,23 @@ export interface UpgradeArtifact {
   url: string;
 }
 
+export interface UpgradePreflight {
+  backup: { configured: boolean; detail?: string; fresh: boolean; taken_at?: string; verified: boolean };
+  binary_version: number;
+  blockers: { code: string; detail: string }[];
+  checksum_mismatches: string[];
+  format: "trstctl.upgrade-preflight.v1";
+  generated_at: string;
+  invalid_indexes: string[];
+  lock_held: boolean;
+  newer_than_binary: number[];
+  pending: { destructive: boolean; name: string; transactional: boolean; version: number }[];
+  ready: boolean;
+  rollback: { detail: string; method: "none" | "rerun" | "redeploy_previous_binary" | "restore_backup" };
+  schema_version: number;
+  warnings: { code: string; detail: string }[];
+}
+
 export interface UrgentRiskProjectionSummary {
   analyzed: number;
   critical: number;

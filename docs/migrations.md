@@ -383,6 +383,19 @@ custody and retention policy; do not claim that this cutover erased them.
    build's leftover) and `schema_newer_than_binary` (this binary is older than
    the database). `trstctl --migrate-status` still lists the pending names alone.
 
+   A pipeline reads the same verdict as JSON (A246-L1):
+   `trstctl --upgrade-preflight --upgrade-preflight-format json` writes one
+   document, format `trstctl.upgrade-preflight.v1`, with the same exit code: `ready`,
+   `schema_version` and `binary_version`, every `pending` migration (`name`,
+   `destructive`, `transactional`), `blockers` and `warnings` (`code`, `detail`), the
+   `backup` state and the `rollback` method, every list present even when empty. A
+   pipeline gates on `ready` and reads `blockers` without parsing the text; a field
+   it reads will not change meaning under that format name. The running control plane
+   serves the same verdict for its own database at `GET
+   /api/v1/platform/upgrade-preflight` (`access:read`; `trstctl-cli platform
+   upgrade-preflight`) and in **Upgrade readiness** on the console's Platform page,
+   beside the backup posture.
+
 3. **Back up** before applying anything (the gate). Use the full DR artifact so
    the event log, independent PostgreSQL state, signer key store (including the
    sealed audit-evidence key),

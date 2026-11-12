@@ -67,6 +67,7 @@ import type {
   OwnershipConflictList,
   OwnershipImportResult,
   DRPosture,
+  UpgradePreflight,
   SecretRotationScheduleRun,
   MDMSCEPPolicyRequest,
   MDMSCEPPolicy,
@@ -923,6 +924,7 @@ export interface DiscoveryFindingListOptions {
   fingerprint?: string;
 }
 export type { DRPosture, DRDrill } from "./api-types.gen";
+export type { UpgradePreflight } from "./api-types.gen";
 export type { ChangeApplication, ChangeApplyRequest, ChangeDraft, ChangeDraftRequest, ChangePlan, ChangeSet } from "./api-types.gen";
 export type {
   AccessActivityExport,
@@ -2246,6 +2248,7 @@ export interface Api {
   platformSystem(): Promise<SystemReadout>;
   /** J2: when the backup last VERIFIED, and what the last restore drill found. */
   drPosture(): Promise<DRPosture>;
+  upgradePreflight(): Promise<UpgradePreflight>;
   tenantKeyDomain(): Promise<TenantKeyDomainStatus>;
   migrateTenantKeyDomain(input: TenantKeyDomainMigrateRequest): Promise<TenantKeyDomainStatus>;
   sealTenantKeyDomain(): Promise<TenantKeyDomainSealReceipt>;
@@ -3163,6 +3166,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   // questions: verification says the bytes still match, a drill says they
   // reproduce state.
   drPosture: () => req<DRPosture>("/api/v1/platform/dr-posture"),
+  // A246-L1: the upgrade preflight against this deployment's database.
+  upgradePreflight: () => req<UpgradePreflight>("/api/v1/platform/upgrade-preflight"),
   authorityAgreement: () => req<AuthorityAgreementReport>("/api/v1/reconcile/agreement"),
   // No customer_id: the route serves the caller's own tenancy and refuses a
   // query naming anyone else, so sending one could only ever be a 403.

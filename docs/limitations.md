@@ -7958,7 +7958,11 @@ read to check it against ([Deployment health](operations.md#deployment-health-a2
 `trstctl --upgrade-preflight` reads what a binary would apply to the database, what
 blocks it (an edited applied migration, another run holding the lock, a destructive
 migration with no verified backup from the last 26 hours) and how the upgrade is
-rolled back, changing nothing; it exits 1 when blocked. With
+rolled back, changing nothing; it exits 1 when blocked, and
+`--upgrade-preflight-format json` gives a pipeline the same verdict as a versioned
+JSON document; the running control plane serves it for its own database
+(`GET /api/v1/platform/upgrade-preflight`, the Platform page's **Upgrade
+readiness**) (A246-L1). With
 `TRSTCTL_MIGRATE_AUTO=false` the boot gate counts every migration source, the
 extension families' included. A failed migration leaves the ones before it applied
 and itself rolled back, and a failed concurrent index build drops its invalid
@@ -7970,8 +7974,6 @@ application-secret value opened under the restored keys; the signed attestation
 carries the counts. Install, upgrade and rollback, disaster recovery drill and
 failover have runbooks under `docs/runbooks/`. What comes next:
 
-- **A machine-readable preflight.** The report is text plus an exit status; a JSON
-  form for pipelines and a console panel come next.
 - **Destructive is a statement pattern.** A migration counts as destructive when
   its SQL drops, renames, truncates or deletes data, changes a column's type or adds
   NOT NULL; 0160's TRUNCATE of disposable snapshots counts. Reading the effect

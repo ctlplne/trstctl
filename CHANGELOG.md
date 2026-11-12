@@ -2,6 +2,11 @@
 
 ### Added
 
+- The upgrade preflight has a JSON form and a console panel (A246-L1): `trstctl --upgrade-preflight
+  --upgrade-preflight-format json` writes the verdict for a pipeline (format `trstctl.upgrade-preflight.v1`,
+  every list present, the same exit code), and the running control plane serves the same verdict for its
+  own database at `GET /api/v1/platform/upgrade-preflight` (`trstctl-cli platform upgrade-preflight`) and in
+  Upgrade readiness on the Platform page.
 - Operation actions run in place (A245-L4): each available retry and rollback in the operations ledger
   carries the exact request it sends and, when its route has one, the preview that reviews it; the
   Operations page reviews and then runs it there, through the route's own checks and approval. A failed

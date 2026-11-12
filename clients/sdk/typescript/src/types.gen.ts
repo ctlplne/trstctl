@@ -8306,6 +8306,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/upgrade-preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check an upgrade of this deployment's database to the running binary without changing anything: what it applies, what blocks it, how it is rolled back */
+        get: operations["getUpgradePreflight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/policy/dry-run": {
         parameters: {
             query?: never;
@@ -28200,6 +28217,48 @@ export interface components {
             sha256: string;
             signature?: string;
             url: string;
+        };
+        UpgradePreflight: {
+            backup: {
+                configured: boolean;
+                detail?: string;
+                fresh: boolean;
+                taken_at?: string;
+                verified: boolean;
+            };
+            /** Format: int64 */
+            binary_version: number;
+            blockers: {
+                code: string;
+                detail: string;
+            }[];
+            checksum_mismatches: string[];
+            /** @enum {string} */
+            format: "trstctl.upgrade-preflight.v1";
+            /** Format: date-time */
+            generated_at: string;
+            invalid_indexes: string[];
+            lock_held: boolean;
+            newer_than_binary: number[];
+            pending: {
+                destructive: boolean;
+                name: string;
+                transactional: boolean;
+                /** Format: int64 */
+                version: number;
+            }[];
+            ready: boolean;
+            rollback: {
+                detail: string;
+                /** @enum {string} */
+                method: "none" | "rerun" | "redeploy_previous_binary" | "restore_backup";
+            };
+            /** Format: int64 */
+            schema_version: number;
+            warnings: {
+                code: string;
+                detail: string;
+            }[];
         };
         UrgentRiskProjectionSummary: {
             analyzed: number;
@@ -52619,6 +52678,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantKeyDomainStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getUpgradePreflight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpgradePreflight"];
                 };
             };
             /** @description client error */

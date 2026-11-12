@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { AdminHeaderActions } from "@/components/AdminHeaderActions";
 import { PageHeader } from "@/components/PageHeader";
 import { DRPosturePanel } from "@/components/DRPosturePanel";
+import { UpgradePreflightPanel } from "@/components/UpgradePreflightPanel";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { DeploymentKEKPanel } from "@/components/DeploymentKEKPanel";
 import { IdempotencyResultProtectionPanel, TenantKeyDomainPanel, UsageEvidencePanel } from "@/components/TenantCustodyPanels";
@@ -380,6 +381,7 @@ export function AdminSystem() {
         >
           <div className="grid gap-6">
             <DRPosturePanel posture={drPosture} error={drError} formatPolicy={formatPolicy} />
+            {open.dependencies ? <UpgradePreflightPanel /> : null}
 
             {/* D3: issued / delivered / verified.
             Delivered is this pipeline's account of what it did; verified is

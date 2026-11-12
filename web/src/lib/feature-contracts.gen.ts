@@ -4447,6 +4447,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: getEnrollmentDiagnosticsSupportAddendum",
             "OpenAPI operationId: proveEnrollmentDiagnosticFixed",
             "OpenAPI operationId: getDRPosture",
+            "OpenAPI operationId: getUpgradePreflight",
             "CLI command: connectors catalog",
             "CLI command: connector target list",
             "CLI command: connector target get",
@@ -4466,7 +4467,8 @@ export const canonicalCapabilities = [
             "CLI command: enrollment diagnostics",
             "CLI command: enrollment diagnostics support-addendum",
             "CLI command: enrollment diagnostics prove-fixed",
-            "CLI command: platform dr-posture"
+            "CLI command: platform dr-posture",
+            "CLI command: platform upgrade-preflight"
           ]
         }
       },

@@ -60234,6 +60234,179 @@
         ],
         "type": "object"
       },
+      "UpgradePreflight": {
+        "properties": {
+          "backup": {
+            "properties": {
+              "configured": {
+                "type": "boolean"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "fresh": {
+                "type": "boolean"
+              },
+              "taken_at": {
+                "type": "string"
+              },
+              "verified": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "configured",
+              "verified",
+              "fresh"
+            ],
+            "type": "object"
+          },
+          "binary_version": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "blockers": {
+            "items": {
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "detail"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "checksum_mismatches": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "format": {
+            "enum": [
+              "trstctl.upgrade-preflight.v1"
+            ],
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "invalid_indexes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "lock_held": {
+            "type": "boolean"
+          },
+          "newer_than_binary": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "pending": {
+            "items": {
+              "properties": {
+                "destructive": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "transactional": {
+                  "type": "boolean"
+                },
+                "version": {
+                  "format": "int64",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "version",
+                "name",
+                "destructive",
+                "transactional"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "rollback": {
+            "properties": {
+              "detail": {
+                "type": "string"
+              },
+              "method": {
+                "enum": [
+                  "none",
+                  "rerun",
+                  "redeploy_previous_binary",
+                  "restore_backup"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "method",
+              "detail"
+            ],
+            "type": "object"
+          },
+          "schema_version": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "detail"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "format",
+          "generated_at",
+          "ready",
+          "schema_version",
+          "binary_version",
+          "pending",
+          "checksum_mismatches",
+          "newer_than_binary",
+          "invalid_indexes",
+          "lock_held",
+          "backup",
+          "blockers",
+          "warnings",
+          "rollback"
+        ],
+        "type": "object"
+      },
       "UrgentRiskProjectionSummary": {
         "properties": {
           "analyzed": {
@@ -97292,6 +97465,53 @@
         ],
         "summary": "Unseal this tenant through its configured operator wrapper",
         "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/platform/upgrade-preflight": {
+      "get": {
+        "operationId": "getUpgradePreflight",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradePreflight"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Check an upgrade of this deployment's database to the running binary without changing anything: what it applies, what blocks it, how it is rolled back",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/policy/dry-run": {

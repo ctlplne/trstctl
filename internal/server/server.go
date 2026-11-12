@@ -1851,6 +1851,19 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		// is meaningful — the API then serves "not configured" rather than
 		// reporting a path nobody chose as a missing backup.
 		api.WithBackupDirectory(d.BackupDirectory),
+		// A246-L1: the upgrade preflight, read against this deployment's own
+		// database with the running binary's migrations.
+		api.WithUpgradePreflight(func(ctx context.Context) (any, error) {
+			if s.store == nil {
+				return nil, errors.New("server: no datastore to check")
+			}
+			plan, err := s.store.UpgradePlan(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("read the upgrade plan: %w", err)
+			}
+			now := time.Now()
+			return EvaluateUpgradePreflight(plan, upgradeBackupState(d.BackupDirectory, now), now), nil
+		}),
 		// J2: the last drill's attestation, or nil when none has run. The API
 		// distinguishes the two; a zero attestation would read as a perfect one.
 		api.WithRestoreDrill(s.LastRestoreDrill),

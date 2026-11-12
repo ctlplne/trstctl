@@ -1,0 +1,73 @@
+{
+  "format": "trstctl.upgrade-preflight.v1",
+  "generated_at": "2026-11-12T06:00:00Z",
+  "ready": false,
+  "schema_version": 446,
+  "binary_version": 448,
+  "pending": [
+    {
+      "version": 447,
+      "name": "0447_secret_scoped_sync_approved_mode.sql",
+      "destructive": false,
+      "transactional": true
+    },
+    {
+      "version": 448,
+      "name": "0448_drop_retired_snapshots.sql",
+      "destructive": true,
+      "transactional": true
+    }
+  ],
+  "checksum_mismatches": [],
+  "newer_than_binary": [],
+  "invalid_indexes": [
+    "secret_scoped_syncs_mode_idx"
+  ],
+  "lock_held": false,
+  "backup": {
+    "configured": true,
+    "verified": true,
+    "taken_at": "2026-11-10T06:00:00Z",
+    "fresh": false
+  },
+  "blockers": [
+    {
+      "code": "backup_required",
+      "detail": "a pending migration cannot be undone by running the previous binary, and no verified backup from the last 26 hours is visible to restore: take one first (trstctl --full-backup-dir)"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "invalid_index",
+      "detail": "secret_scoped_syncs_mode_idx was left invalid by a failed concurrent build; the migration that builds it drops and rebuilds it, and any other must be dropped by hand"
+    }
+  ],
+  "rollback": {
+    "method": "restore_backup",
+    "detail": "destructive: 0448_drop_retired_snapshots.sql. Once applied, the previous binary may not find data it needs: rolling back is restoring the pre-upgrade backup (trstctl --full-restore-dir) and running the previous binary"
+  }
+}
+{
+  "format": "trstctl.upgrade-preflight.v1",
+  "generated_at": "2026-11-12T06:00:00Z",
+  "ready": true,
+  "schema_version": 448,
+  "binary_version": 448,
+  "pending": [],
+  "checksum_mismatches": [],
+  "newer_than_binary": [],
+  "invalid_indexes": [],
+  "lock_held": false,
+  "backup": {
+    "configured": false,
+    "verified": false,
+    "fresh": false,
+    "detail": "no backup directory is configured (TRSTCTL_BACKUP_DIRECTORY), so a backup taken elsewhere is not visible here"
+  },
+  "blockers": [],
+  "warnings": [],
+  "rollback": {
+    "method": "none",
+    "detail": "this binary applies no migrations: rolling back is running the previous binary"
+  }
+}

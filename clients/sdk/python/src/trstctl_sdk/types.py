@@ -18042,6 +18042,27 @@ UpgradeArtifact = TypedDict(
     total=False,
 )
 
+UpgradePreflight = TypedDict(
+    'UpgradePreflight',
+    {
+        'backup': dict[str, Any],
+        'binary_version': int,
+        'blockers': list[dict[str, Any]],
+        'checksum_mismatches': list[str],
+        'format': str,
+        'generated_at': str,
+        'invalid_indexes': list[str],
+        'lock_held': bool,
+        'newer_than_binary': list[int],
+        'pending': list[dict[str, Any]],
+        'ready': bool,
+        'rollback': dict[str, Any],
+        'schema_version': int,
+        'warnings': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 UrgentRiskProjectionSummary = TypedDict(
     'UrgentRiskProjectionSummary',
     {

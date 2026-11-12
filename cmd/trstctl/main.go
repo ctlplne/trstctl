@@ -136,6 +136,7 @@ type rootFlags struct {
 	rebuild              bool
 	migrateStatus        bool
 	upgradePreflight     bool
+	upgradePreflightFmt  string
 	migrate              bool
 	fipsRequired         bool
 	demo                 bool
@@ -165,6 +166,7 @@ func parseRootFlags(args []string, stderr io.Writer) (rootFlags, bool, error) {
 	fs.BoolVar(&flags.rebuild, "rebuild", false, "atomically rebuild the read model from the existing event log, then exit (DR recovery)")
 	fs.BoolVar(&flags.migrateStatus, "migrate-status", false, "list pending database migrations (the dry-run plan), then exit")
 	fs.BoolVar(&flags.upgradePreflight, "upgrade-preflight", false, "check an upgrade of the database to this binary without changing anything: what it applies, what blocks it, how to roll it back; exit 1 when not ready")
+	fs.StringVar(&flags.upgradePreflightFmt, "upgrade-preflight-format", "text", "text, or json: the verdict for a pipeline (format "+server.UpgradePreflightFormat+"), with the same exit code")
 	fs.BoolVar(&flags.migrate, "migrate", false, "apply pending database migrations under an advisory lock, then exit")
 	// --fips asserts the FIPS 140-3 cryptographic module must be active for this
 	// process (PKIGOV-007 / EXC-CRYPTO-01). When set (or TRSTCTL_FIPS=1), the
@@ -252,11 +254,20 @@ func runOneShotCommand(ctx context.Context, cfg *config.Config, flags rootFlags,
 		return true, nil
 	}
 	if flags.upgradePreflight {
+		if flags.upgradePreflightFmt != "text" && flags.upgradePreflightFmt != "json" {
+			return true, fmt.Errorf("upgrade-preflight: --upgrade-preflight-format is text or json, not %q", flags.upgradePreflightFmt)
+		}
 		verdict, err := server.RunUpgradePreflight(ctx, cfg, extraMigrationSources(), time.Now())
 		if err != nil {
 			return true, fmt.Errorf("upgrade-preflight: %w", err)
 		}
-		verdict.WriteText(stdout)
+		if flags.upgradePreflightFmt == "json" {
+			if err := verdict.WriteJSON(stdout); err != nil {
+				return true, fmt.Errorf("upgrade-preflight: %w", err)
+			}
+		} else {
+			verdict.WriteText(stdout)
+		}
 		if !verdict.Ready {
 			return true, fmt.Errorf("upgrade-preflight: not ready: %d blocker(s)", len(verdict.Blockers))
 		}

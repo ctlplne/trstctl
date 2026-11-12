@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3003 annotated sites across 33 rules. Each row is
+3004 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1995,7 +1995,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2582` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:3060` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:3073` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -2069,7 +2069,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (729 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (730 sites)
 
 | Location | Reason |
 |---|---|
@@ -2160,7 +2160,7 @@ not this file.
 | `cmd/trstctl/ee_attach.go:379` | operator-supplied path to their own IdP's JWKS (CWE-22) |
 | `cmd/trstctl/ee_attach.go:389` | operator-configured client secret file (CWE-22) |
 | `cmd/trstctl/ee_attach.go:455` | operator-pinned local IdP metadata, validated as configuration. |
-| `cmd/trstctl/main.go:460` | the configured public certificate of this process's own listener (CWE-22) |
+| `cmd/trstctl/main.go:471` | the configured public certificate of this process's own listener (CWE-22) |
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
 | `deploy/demo/demo_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2653,12 +2653,13 @@ not this file.
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/server.go:1603` | operator-configured key file path (CWE-22) |
-| `internal/server/server.go:2987` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:3064` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:3000` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:3077` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/server/soar_playbooks_served_test.go:62` | the repository's own SOAR pack (CWE-22) |
 | `internal/server/soar_playbooks_served_test.go:72` | a playbook the repository's own pack names (CWE-22) |
 | `internal/server/ssh_krl_adoption_served_test.go:36` | test-owned KRL path under t.TempDir |
 | `internal/server/tsa_certificates_served_test.go:87` | the test's own temp file (CWE-22) |
+| `internal/server/upgrade_preflight_json_test.go:48` | the package's own golden file (CWE-22) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:156` | test reads the cluster CA its runner wrote (CWE-22) |
 | `internal/signing/ceremony_test.go:129` | the test's own temporary journal directory (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2908,7 +2909,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:3070` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:3083` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_certificate_lease_served_test.go:76` | public CA/KRL fixture in a test tempdir (CWE-276) |

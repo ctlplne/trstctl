@@ -7271,6 +7271,30 @@ func componentSchemas() map[string]*Schema {
 		"seed": {Type: "string", Description: "The new base32 seed, as the identity provider's enrollment shows it; stored, never returned."},
 		"code": {Type: "string", Description: "A code an authenticator made from the new seed now; it proves the seed and the clock before the seed is stored."},
 	}, "seed", "code")
+	upgradeFinding := object(map[string]*Schema{"code": str(), "detail": str()}, "code", "detail")
+	upgradePreflight := object(map[string]*Schema{
+		"format":         {Type: "string", Enum: []string{"trstctl.upgrade-preflight.v1"}},
+		"generated_at":   timestamp(),
+		"ready":          {Type: "boolean"},
+		"schema_version": {Type: "integer", Format: "int64"},
+		"binary_version": {Type: "integer", Format: "int64"},
+		"pending": {Type: "array", Items: object(map[string]*Schema{
+			"version": {Type: "integer", Format: "int64"}, "name": str(), "destructive": {Type: "boolean"}, "transactional": {Type: "boolean"},
+		}, "version", "name", "destructive", "transactional")},
+		"checksum_mismatches": {Type: "array", Items: str()},
+		"newer_than_binary":   {Type: "array", Items: &Schema{Type: "integer", Format: "int64"}},
+		"invalid_indexes":     {Type: "array", Items: str()},
+		"lock_held":           {Type: "boolean"},
+		"backup": object(map[string]*Schema{
+			"configured": {Type: "boolean"}, "verified": {Type: "boolean"}, "taken_at": str(), "fresh": {Type: "boolean"}, "detail": str(),
+		}, "configured", "verified", "fresh"),
+		"blockers": {Type: "array", Items: upgradeFinding},
+		"warnings": {Type: "array", Items: upgradeFinding},
+		"rollback": object(map[string]*Schema{
+			"method": {Type: "string", Enum: []string{"none", "rerun", "redeploy_previous_binary", "restore_backup"}}, "detail": str(),
+		}, "method", "detail"),
+	}, "format", "generated_at", "ready", "schema_version", "binary_version", "pending", "checksum_mismatches", "newer_than_binary",
+		"invalid_indexes", "lock_held", "backup", "blockers", "warnings", "rollback")
 	secretImportReq := object(map[string]*Schema{
 		"prefix": str(), "values": {Type: "object", AdditionalProperties: str()},
 	}, "values")
@@ -9540,6 +9564,7 @@ func componentSchemas() map[string]*Schema {
 		"SecretAccessPreviewRequest":      secretAccessPreviewReq,
 		"SecretAccessPreview":             secretAccessPreview,
 		"SecretRotateRequest":             secretRotateReq,
+		"UpgradePreflight":                upgradePreflight,
 		"TOTPSeedReplaceRequest":          totpSeedReplaceReq,
 		"SecretImportRequest":             secretImportReq,
 		"SecretImportResponse":            secretImportResp,

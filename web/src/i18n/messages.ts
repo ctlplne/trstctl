@@ -22930,6 +22930,43 @@ export const messages = {
     defaultMessage: "Restore drill",
     description: "J2: sub-heading \u2014 what the last actual restore into a throwaway target established.",
   },
+  "platform.upgrade.title": { defaultMessage: "Upgrade readiness", description: "Platform (A246-L1): upgrade preflight panel title." },
+  "platform.upgrade.description": {
+    defaultMessage:
+      "What upgrading this database to the running build would apply, what would stop it, and how it is rolled back. It changes nothing. A pipeline reads the same verdict with trstctl --upgrade-preflight --upgrade-preflight-format json.",
+    description: "Platform (A246-L1): what the upgrade preflight is.",
+  },
+  "platform.upgrade.loading": { defaultMessage: "Checking the database against this build…", description: "Platform (A246-L1): loading." },
+  "platform.upgrade.failed": { defaultMessage: "The upgrade check could not run", description: "Platform (A246-L1): read failure title." },
+  "platform.upgrade.ready": { defaultMessage: "Ready", description: "Platform (A246-L1): nothing blocks an upgrade." },
+  "platform.upgrade.notReady": { defaultMessage: "Not ready", description: "Platform (A246-L1): something blocks an upgrade." },
+  "platform.upgrade.versions": {
+    defaultMessage: "Schema {schema}, this build {build}, {count} migration(s) to apply",
+    description: "Platform (A246-L1): the database's schema version, the build's, and how many migrations an upgrade applies.",
+  },
+  "platform.upgrade.pending": { defaultMessage: "Migrations to apply", description: "Platform (A246-L1): pending migrations list." },
+  "platform.upgrade.destructive": { defaultMessage: "destructive", description: "Platform (A246-L1): a migration the previous build may not survive." },
+  "platform.upgrade.outsideTransaction": {
+    defaultMessage: "outside a transaction",
+    description: "Platform (A246-L1): a migration that can't roll back as one unit.",
+  },
+  "platform.upgrade.blockers": { defaultMessage: "What stops it", description: "Platform (A246-L1): blockers heading." },
+  "platform.upgrade.warnings": { defaultMessage: "What to know", description: "Platform (A246-L1): warnings heading." },
+  "platform.upgrade.rollback.none": { defaultMessage: "Nothing to apply.", description: "Platform (A246-L1): rollback method none." },
+  "platform.upgrade.rollback.rerun": { defaultMessage: "Rolled back by running again.", description: "Platform (A246-L1): rollback method rerun." },
+  "platform.upgrade.rollback.redeploy": {
+    defaultMessage: "Rolled back by running the previous build.",
+    description: "Platform (A246-L1): rollback method redeploy_previous_binary.",
+  },
+  "platform.upgrade.rollback.restore": {
+    defaultMessage: "Rolled back by restoring a backup.",
+    description: "Platform (A246-L1): rollback method restore_backup.",
+  },
+  "platform.upgrade.backupFresh": { defaultMessage: "Latest verified backup: {at}.", description: "Platform (A246-L1): a fresh verified backup exists." },
+  "platform.upgrade.backupStale": {
+    defaultMessage: "No verified backup from the last 26 hours is visible here.",
+    description: "Platform (A246-L1): no fresh verified backup.",
+  },
   "platform.dr.history.title": {
     defaultMessage: "Signed drill history",
     description: "AUD-54: heading for durable newest-first restore-drill evidence.",

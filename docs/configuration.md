@@ -160,7 +160,8 @@ itself; there is no separate migration binary.
 `trstctl --migrate` applies pending migrations under the advisory lock and exits;
 `trstctl --migrate-status` lists the pending plan (dry run) and exits;
 `trstctl --upgrade-preflight` checks an upgrade without changing anything (what
-it applies, what blocks it, how to roll it back) and exits 1 when it is blocked. See
+it applies, what blocks it, how to roll it back) and exits 1 when it is blocked;
+`--upgrade-preflight-format json` prints that verdict as JSON for a pipeline (A246-L1). See
 [Database migrations & upgrades](migrations.md) for the full upgrade/rollback runbook.
 
 ### High availability (leader election and snapshots)

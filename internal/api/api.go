@@ -186,6 +186,7 @@ type API struct {
 	notificationOutbox                 *orchestrator.Outbox
 	outboxCircuits                     func() []orchestrator.CircuitSnapshot
 	bulkheadStats                      func() []bulkhead.Stats
+	upgradePreflight                   func(context.Context) (any, error)
 	systemReadout                      SystemReadoutProvider
 	idemProtection                     IdempotencyResultProtectionProvider
 	tenantKeyDomains                   TenantKeyDomainLifecycle
@@ -350,6 +351,7 @@ type config struct {
 	notificationOutbox          *orchestrator.Outbox
 	outboxCircuits              func() []orchestrator.CircuitSnapshot
 	bulkheadStats               func() []bulkhead.Stats
+	upgradePreflight            func(context.Context) (any, error)
 	systemReadout               SystemReadoutProvider
 	idemProtection              IdempotencyResultProtectionProvider
 	tenantKeyDomains            TenantKeyDomainLifecycle
@@ -689,6 +691,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		notificationOutbox:          cfg.notificationOutbox,
 		outboxCircuits:              cfg.outboxCircuits,
 		bulkheadStats:               cfg.bulkheadStats,
+		upgradePreflight:            cfg.upgradePreflight,
 		systemReadout:               cfg.systemReadout,
 		idemProtection:              cfg.idemProtection,
 		tenantKeyDomains:            cfg.tenantKeyDomains,

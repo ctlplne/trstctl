@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -56,8 +57,15 @@ type UpgradeRollback struct {
 	Detail string `json:"detail"`
 }
 
+// UpgradePreflightFormat names the verdict's JSON form (A246-L1). A pipeline
+// checks it before reading the fields, and a change that a pipeline would
+// read differently gets a new name.
+const UpgradePreflightFormat = "trstctl.upgrade-preflight.v1"
+
 // UpgradePreflight is the verdict.
 type UpgradePreflight struct {
+	// Format is UpgradePreflightFormat.
+	Format             string                    `json:"format"`
 	GeneratedAt        time.Time                 `json:"generated_at"`
 	Ready              bool                      `json:"ready"`
 	SchemaVersion      int64                     `json:"schema_version"`
@@ -77,6 +85,7 @@ type UpgradePreflight struct {
 // and the backup it would fall back on into the verdict.
 func EvaluateUpgradePreflight(plan store.UpgradePlan, bk UpgradeBackup, now time.Time) UpgradePreflight {
 	out := UpgradePreflight{
+		Format:      UpgradePreflightFormat,
 		GeneratedAt: now.UTC(), SchemaVersion: plan.SchemaVersion, BinaryVersion: plan.BinaryVersion,
 		Pending:            []UpgradePendingMigration{},
 		ChecksumMismatches: append([]string{}, plan.ChecksumMismatches...),
@@ -178,6 +187,16 @@ func RunUpgradePreflight(ctx context.Context, cfg *config.Config, extraMigration
 		return UpgradePreflight{}, fmt.Errorf("read the upgrade plan: %w", err)
 	}
 	return EvaluateUpgradePreflight(plan, upgradeBackupState(cfg.Backup.Directory, now), now), nil
+}
+
+// WriteJSON writes the verdict as JSON for a pipeline (A246-L1): the same
+// verdict, names, versions, flags and times only, with every list present
+// (empty rather than absent), so a pipeline can gate on ready and read the
+// blockers without parsing the text.
+func (p UpgradePreflight) WriteJSON(w io.Writer) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(p)
 }
 
 // WriteText prints the verdict for an operator.

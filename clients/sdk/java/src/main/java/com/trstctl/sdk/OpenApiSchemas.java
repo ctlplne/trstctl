@@ -1290,6 +1290,7 @@ public final class OpenApiSchemas {
       "UnvaultedSecretSummary",
       "UnvaultedSecretVaultProvider",
       "UpgradeArtifact",
+      "UpgradePreflight",
       "UrgentRiskProjectionSummary",
       "UrgentRiskSummary",
       "UsageMeterDefinition",

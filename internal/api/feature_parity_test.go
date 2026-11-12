@@ -394,9 +394,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// an OAuth app at the provider (804). A235-L3 adds the secrets project
 	// and environment renames (806). A237-L3 adds the scoped sync
 	// replacement (807). A238-L7 adds a machine session ending itself (808).
-	// A239-L5 adds a TOTP provider's seed replacement (809).
-	if len(out) != 809 {
-		t.Fatalf("OpenAPI operationIds = %d, want 809", len(out))
+	// A239-L5 adds a TOTP provider's seed replacement (809). A246-L1 adds the
+	// upgrade preflight (810).
+	if len(out) != 810 {
+		t.Fatalf("OpenAPI operationIds = %d, want 810", len(out))
 	}
 	return out
 }
