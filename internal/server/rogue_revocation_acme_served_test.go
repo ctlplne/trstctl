@@ -189,4 +189,39 @@ func TestServedRogueCertificateIsRevokedAtAnACMEAuthorityN10(t *testing.T) {
 	if len(fake.Revocations()) != 1 || fake.RevokedBy(second.SerialNumber) != "" {
 		t.Fatalf("the authority saw %d revocation requests; the refused findings must send none", len(fake.Revocations()))
 	}
+
+	// N10-L1: a finding at a precertificate entry revokes its issued
+	// certificate once another watched log has recorded it under the same
+	// issuer and serial; until then nothing is sent.
+	thirdDER, third := issue("third.corp.example")
+	thirdTBS, err := ctlogtest.TBSOf(thirdDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	precertLog := ctlogtest.NewServer(ctlogtest.PrecertEntry(thirdDER, thirdTBS))
+	t.Cleanup(precertLog.Close)
+	issuedLog := ctlogtest.NewServer(ctlogtest.X509Entry(secondDER), ctlogtest.X509Entry(thirdDER))
+	t.Cleanup(issuedLog.Close)
+	sourceFor := func(url string) map[string]any {
+		return map[string]any{"log": url, "watched_domains": []string{"corp.example"},
+			"allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, url)}}
+	}
+	precertFinding := seedRogueCTFindingAt(t, h, third, precertLog.URL(), 0, sourceFor(precertLog.URL()))
+	precertMessage := queue(precertFinding, "n10l1-precert")
+	if err := dispatcher.Deliver(ctx, precertMessage); err == nil || !strings.Contains(err.Error(), "no watched log has shown its issued certificate yet") {
+		t.Fatalf("a precertificate with no issued certificate seen = %v", err)
+	}
+	if len(fake.Revocations()) != 1 {
+		t.Fatalf("the authority saw %d revocation requests before the issued certificate was seen", len(fake.Revocations()))
+	}
+	seedRogueCTFindingAt(t, h, third, issuedLog.URL(), 1, sourceFor(issuedLog.URL()))
+	if err := dispatcher.Deliver(ctx, precertMessage); err != nil {
+		t.Fatalf("the precertificate's revocation once its issued certificate is seen: %v", err)
+	}
+	if by := fake.RevokedBy(third.SerialNumber); by == "" || by == fake.OwnerOf(third.SerialNumber) || len(fake.Revocations()) != 2 {
+		t.Fatalf("the issued certificate was revoked by %q after %d requests; want trstctl's account", by, len(fake.Revocations()))
+	}
+	if got := rogueIssuerRevocationOf(t, h, token, precertFinding); got == nil || got.Status != "revoked" {
+		t.Fatalf("the precertificate's finding reads %+v; want revoked at the issuer", got)
+	}
 }

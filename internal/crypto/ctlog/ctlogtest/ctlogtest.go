@@ -83,6 +83,16 @@ func IssueCertWithIPs(cn string, ips []net.IP, dnsNames ...string) (der, tbs []b
 	return der, parsed.RawTBSCertificate, nil
 }
 
+// TBSOf returns a certificate's DER-encoded TBSCertificate, to frame a
+// precertificate entry for a certificate issued elsewhere (N10-L1).
+func TBSOf(certDER []byte) ([]byte, error) {
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return nil, err
+	}
+	return cert.RawTBSCertificate, nil
+}
+
 // X509Entry frames a leaf certificate as an RFC 6962 x509_entry: the certificate
 // lives in the MerkleTreeLeaf and extra_data carries an (empty) chain.
 func X509Entry(certDER []byte) LogEntry {

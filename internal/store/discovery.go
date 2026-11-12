@@ -1065,6 +1065,40 @@ func (s *Store) GetDiscoveryFinding(ctx context.Context, tenantID, id string) (D
 	return out, err
 }
 
+// ListCTFindingsBySerial lists the tenant's other Certificate Transparency
+// findings that name a certificate serial, newest first (N10-L1): a
+// precertificate's finding resolves to the issued certificate a watched log
+// recorded under the same serial.
+func (s *Store) ListCTFindingsBySerial(ctx context.Context, tenantID, serial, exceptID string, limit int) ([]DiscoveryFinding, error) {
+	out := []DiscoveryFinding{}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, tenant_id::text, run_id::text, source_id::text, kind, ref,
+			        provenance, fingerprint, risk_score, metadata, discovered_at,
+			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at,
+			        first_seen_at, last_seen_at, seen_count,
+			        triage_assignee, triage_due_at, triage_evidence_ref, risk_accepted_until
+			   FROM discovery_findings
+			  WHERE tenant_id = $1 AND kind = 'ct_unexpected_issuance' AND id::text <> $3
+			    AND lower(ltrim(replace(metadata->>'serial', ':', ''), '0')) = lower(ltrim(replace($2, ':', ''), '0'))
+			  ORDER BY discovered_at DESC, id
+			  LIMIT $4`, tenantID, serial, exceptID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var f DiscoveryFinding
+			if err := scanDiscoveryFinding(rows, &f); err != nil {
+				return err
+			}
+			out = append(out, f)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // ListDiscoveryMonitoringSources returns a tenant-scoped centralized monitoring
 // rollup. It reads only projected tables, so replaying the event log rebuilds the
 // data this query summarizes.

@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A Certificate Transparency finding at a precertificate entry can be revoked at an ACME CA (N10-L1). trstctl
+  finds the issued certificate another watched log recorded under the same issuer and serial, reads it back from
+  that log through its CT source's egress settings, checks it against that finding, and revokes it. Until a watched
+  log has recorded the issued certificate, the revocation waits and says why.
 - Every device of a renewal wave can check in with its MDM under one approval (N9-L2). A wave names 1 to 200 devices
   trstctl has read from that MDM. A reviewer approves exactly that set, and running it queues one check-in and one
   relay job per device, each recorded from the MDM's answer. `GET /api/v1/mdm/{mdm}/check-in-waves` counts how many

@@ -985,8 +985,8 @@ not this file.
 | `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:71` | ParseUint bounds authority to 48 bits and this loop emits one byte at a time (CWE-190). |
 | `internal/connector/wasm/host/host.go:159` | a wasm32 address, bounded by math.MaxUint32 just above (CWE-190). |
 | `internal/crypto/argon2id.go:69` | length of a stored KDF hash, far under the uint32 bound (CWE-190) |
-| `internal/crypto/ctlog/ctlogtest/ctlogtest.go:323` | test-support package compiled only into test binaries (CWE-190) |
-| `internal/crypto/ctlog/ctlogtest/ctlogtest.go:340` | test-support package compiled only into test binaries (CWE-190) |
+| `internal/crypto/ctlog/ctlogtest/ctlogtest.go:333` | test-support package compiled only into test binaries (CWE-190) |
+| `internal/crypto/ctlog/ctlogtest/ctlogtest.go:350` | test-support package compiled only into test binaries (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/signing.go:184` | a positive test clock offset (CWE-190) |
 | `internal/crypto/ctlog/merkle.go:58` | non-negative checked above (CWE-190) |
 | `internal/crypto/ctlog/merkle.go:95` | non-negative checked above (CWE-190) |

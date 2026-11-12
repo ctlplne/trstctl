@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/ctlog"
 	"trstctl.com/trstctl/internal/discovery/ctmonitor"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -100,46 +101,83 @@ func (d *issuanceDispatcher) handleRogueCertificateRevocation(ctx context.Contex
 // logs, read through that source's own egress policy, and the entry must be the
 // certificate the finding names: an issued certificate (a precertificate is not
 // what an ACME authority revokes), with the finding's fingerprint and the
-// request's serial.
+// request's serial. N10-L1: when the finding's entry is a precertificate, the
+// issued certificate is the one another watched log recorded under the same
+// issuer and serial, read back from that finding's own log the same way.
 func (d *issuanceDispatcher) rogueCertificateFromCT(ctx context.Context, tenantID string,
 	requested projections.RogueCertificateRevocationRequested) ([]byte, error) {
 	finding, err := d.store.GetDiscoveryFinding(ctx, tenantID, requested.DiscoveryID)
 	if err != nil {
 		return nil, fmt.Errorf("server: load the CT finding: %w", err)
 	}
+	entry, err := d.ctFindingEntry(ctx, tenantID, finding)
+	if err != nil {
+		return nil, err
+	}
+	if !sameHex(entry.SerialHex, requested.Serial) {
+		return nil, errors.New("server: the CT log entry is not the certificate the finding names")
+	}
+	if entry.Precert {
+		return d.issuedCertificateForPrecert(ctx, tenantID, finding.ID, entry)
+	}
+	if !sameHex(entry.FingerprintSHA256, finding.Fingerprint) {
+		return nil, errors.New("server: the CT log entry is not the certificate the finding names")
+	}
+	return entry.DER, nil
+}
+
+// ctFindingEntry reads the log entry a CT finding names, through its source's
+// own logs and egress policy.
+func (d *issuanceDispatcher) ctFindingEntry(ctx context.Context, tenantID string, finding store.DiscoveryFinding) (ctlog.Entry, error) {
 	var meta struct {
 		LogURL string `json:"log_url"`
 		Index  *int64 `json:"index"`
 	}
 	if json.Unmarshal(finding.Metadata, &meta) != nil || meta.LogURL == "" || meta.Index == nil || *meta.Index < 0 {
-		return nil, errors.New("server: the finding names no CT log position to read its certificate from")
+		return ctlog.Entry{}, errors.New("server: the finding names no CT log position to read its certificate from")
 	}
 	source, err := d.store.GetDiscoverySource(ctx, tenantID, finding.SourceID)
 	if err != nil {
-		return nil, fmt.Errorf("server: load the finding's CT source: %w", err)
+		return ctlog.Entry{}, fmt.Errorf("server: load the finding's CT source: %w", err)
 	}
 	logs, _, _, client, err := ctLogDiscoverySettings(source.Config)
 	if err != nil {
-		return nil, fmt.Errorf("server: the finding's CT source: %w", err)
+		return ctlog.Entry{}, fmt.Errorf("server: the finding's CT source: %w", err)
 	}
 	if !slices.Contains(logs, meta.LogURL) {
-		return nil, errors.New("server: the finding's CT log is no longer one of its source's logs")
+		return ctlog.Entry{}, errors.New("server: the finding's CT log is no longer one of its source's logs")
 	}
 	entries, err := ctmonitor.NewHTTPFetcherWithClient(client).Entries(ctx, meta.LogURL, *meta.Index, *meta.Index+1)
 	if err != nil {
-		return nil, fmt.Errorf("server: read the certificate from its CT log: %w", err)
+		return ctlog.Entry{}, fmt.Errorf("server: read the certificate from its CT log: %w", err)
 	}
 	if len(entries) != 1 || entries[0].Index != *meta.Index {
-		return nil, errors.New("server: the CT log did not return the finding's entry")
+		return ctlog.Entry{}, errors.New("server: the CT log did not return the finding's entry")
 	}
-	entry := entries[0]
-	if entry.Precert {
-		return nil, errors.New("server: the CT log holds a precertificate at the finding's position; an ACME authority revokes the issued certificate")
+	return entries[0], nil
+}
+
+// maxPrecertCandidates bounds the findings a precertificate is matched against.
+const maxPrecertCandidates = 20
+
+// issuedCertificateForPrecert finds the issued certificate for a
+// precertificate (N10-L1): another CT finding of the tenant's with the same
+// serial whose own log entry is an issued certificate from the same issuer,
+// with that finding's fingerprint.
+func (d *issuanceDispatcher) issuedCertificateForPrecert(ctx context.Context, tenantID, findingID string, precert ctlog.Entry) ([]byte, error) {
+	candidates, err := d.store.ListCTFindingsBySerial(ctx, tenantID, precert.SerialHex, findingID, maxPrecertCandidates)
+	if err != nil {
+		return nil, fmt.Errorf("server: look for the precertificate's issued certificate: %w", err)
 	}
-	if !sameHex(entry.FingerprintSHA256, finding.Fingerprint) || !sameHex(entry.SerialHex, requested.Serial) {
-		return nil, errors.New("server: the CT log entry is not the certificate the finding names")
+	for _, candidate := range candidates {
+		entry, err := d.ctFindingEntry(ctx, tenantID, candidate)
+		if err != nil || entry.Precert || entry.Issuer != precert.Issuer || !sameHex(entry.SerialHex, precert.SerialHex) ||
+			!sameHex(entry.FingerprintSHA256, candidate.Fingerprint) {
+			continue
+		}
+		return entry.DER, nil
 	}
-	return entry.DER, nil
+	return nil, errors.New("server: the CT log holds a precertificate at the finding's position, and no watched log has shown its issued certificate yet; an ACME authority revokes the issued certificate")
 }
 
 // sameHex compares two hex renderings of one number or digest, ignoring case,

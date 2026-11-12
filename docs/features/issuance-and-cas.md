@@ -1001,9 +1001,14 @@ that recorded the finding (through that CT source's own egress settings), checks
 them against the finding's fingerprint and serial, gets its own ACME account
 authorized for every DNS name in the certificate through the issuer's DNS-01
 provider (an order it never finalizes), then asks the CA to revoke, as RFC 8555
-§7.6 allows an account authorized for all of a certificate's names. A
-precertificate entry, an entry that is not the finding's certificate, a log the
-source no longer names, or a certificate with an IP identifier is refused without
+§7.6 allows an account authorized for all of a certificate's names. A finding at
+a precertificate entry revokes its issued certificate (N10-L1): trstctl looks for
+another CT finding of the tenant's under the same serial whose log entry is the
+issued certificate from the same issuer, reads that entry back from its own log
+the same way, and sends it. Until a watched log has recorded the issued certificate,
+the revocation waits with that reason. An entry that is not the finding's
+certificate, a log the source no longer names, or a certificate with an IP
+identifier is refused without
 contacting the CA. The finding then shows the revocation queued, and revoked once
 the CA confirms; a CA that has no certificate with that serial, or that refuses
 the account, leaves it unconfirmed with the reason. Automation uses `POST /api/v1/revocation/rogue-certificates/revoke`
