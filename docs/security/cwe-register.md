@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3082 annotated sites across 33 rules. Each row is
+3085 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -913,7 +913,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (478 sites)
+### G115 — CWE-190 Integer overflow or wraparound (479 sites)
 
 | Location | Reason |
 |---|---|
@@ -1253,6 +1253,7 @@ not this file.
 | `internal/store/certificate_sct.go:91` | event sequences fit int64 (CWE-190) |
 | `internal/store/certificate_sct.go:104` | event sequences fit int64 (CWE-190) |
 | `internal/store/code_signing_key_certificate.go:44` | bounded above (CWE-190) |
+| `internal/store/code_signing_transparency.go:51` | bounded above (CWE-190) |
 | `internal/store/compliance_report_retention.go:62` | event sequences fit int64 (CWE-190) |
 | `internal/store/compliance_report_retention.go:69` | event sequences fit int64 (CWE-190) |
 | `internal/store/compliance_report_retention.go:93` | event sequences fit int64 (CWE-190) |
@@ -1320,8 +1321,8 @@ not this file.
 | `internal/store/pam.go:136` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:735` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:815` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1058` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1072` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1059` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1073` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:191` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:247` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:276` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -1341,8 +1342,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:406` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:430` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:52` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:892` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:912` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:895` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:915` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1588,7 +1589,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (400 sites)
+### G204 — CWE-78 OS command injection (401 sites)
 
 | Location | Reason |
 |---|---|
@@ -1795,6 +1796,7 @@ not this file.
 | `internal/server/cbom_native_served_test.go:166` | resolved stock OpenSSL, fixed arguments and owned loopback fixture paths (CWE-78). |
 | `internal/server/cloud_workload_replacement_served_test.go:141` | validated 64-hex owned test container ID and constant stock-client program, separate argv, no shell (CWE-78) |
 | `internal/server/codesign_cosign_lab_p9_test.go:67` | the lab runner names the network and the local cosign image (CWE-78) |
+| `internal/server/codesign_cosign_rekor_lab_p9l2_test.go:101` | the lab runner names the network and the local cosign image (CWE-78) |
 | `internal/server/codesign_ksp_served_p9_test.go:77` | test builds the in-repo provider (CWE-78) |
 | `internal/server/codesign_ksp_served_p9_test.go:84` | test compiles the in-repo C caller (CWE-78) |
 | `internal/server/codesign_ksp_served_p9_test.go:90` | test runs the caller it just built (CWE-78) |
@@ -2871,7 +2873,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (132 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (133 sites)
 
 | Location | Reason |
 |---|---|
@@ -2963,6 +2965,7 @@ not this file.
 | `internal/server/auth_unit_test.go:64` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/cbom_served_test.go:151` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/codesign_cosign_lab_p9_test.go:58` | a public payload, signature and keys the cosign container reads (CWE-22) |
+| `internal/server/codesign_cosign_rekor_lab_p9l2_test.go:88` | public payload, signature, bundle and keys the cosign container reads (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:40` | public lab inputs the tool containers read (CWE-22) |
 | `internal/server/dod_connector_runtime_test.go:817` | public CA fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:390` | public CA certificate fixture (CWE-276) |
@@ -3143,7 +3146,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (46 sites)
+### G702 — CWE-78 OS command injection (taint) (47 sites)
 
 | Location | Reason |
 |---|---|
@@ -3160,6 +3163,7 @@ not this file.
 | `internal/server/audit_feed_lab_p5_test.go:233` | the runner's own lab container (CWE-78) |
 | `internal/server/cloud_workload_replacement_served_test.go:141` | validated 64-hex owned test container ID and constant stock-client program, separate argv, no shell (CWE-78) |
 | `internal/server/codesign_cosign_lab_p9_test.go:67` | the lab runner names the network and the local cosign image (CWE-78) |
+| `internal/server/codesign_cosign_rekor_lab_p9l2_test.go:101` | the lab runner names the network and the local cosign image (CWE-78) |
 | `internal/server/codesign_notation_lab_p9_test.go:73` | the lab runner names the verified Notation binary (CWE-78) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:83` | the lab runner names the local tool images (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -3194,7 +3198,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (160 sites)
+### G703 — CWE-22 Path traversal (taint) (161 sites)
 
 | Location | Reason |
 |---|---|
@@ -3283,6 +3287,7 @@ not this file.
 | `internal/server/audit_feed_syslog_mtls_lab_test.go:83` | the runner's lab output file (CWE-22) |
 | `internal/server/backup_reports.go:117` | the staging tree is this backup's own temp directory (CWE-22) |
 | `internal/server/codesign_cosign_lab_p9_test.go:58` | a public payload, signature and keys the cosign container reads (CWE-22) |
+| `internal/server/codesign_cosign_rekor_lab_p9l2_test.go:88` | public payload, signature, bundle and keys the cosign container reads (CWE-22) |
 | `internal/server/codesign_notation_lab_p9_test.go:66` | the lab trust policy in the test's own temp directory (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:40` | public lab inputs the tool containers read (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:69` | the lab runner's build output (CWE-22) |

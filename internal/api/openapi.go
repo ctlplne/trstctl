@@ -4127,6 +4127,12 @@ func componentSchemas() map[string]*Schema {
 		"transparency_error": str(), "last_error": str(),
 		"created_at": timestamp(), "updated_at": timestamp(),
 	}, "operation_id", "mode", "status", "request_hash", "transparency", "created_at", "updated_at")
+	// P9-L2: a signing operation's recorded Rekor entry and its cosign bundle.
+	codeSigningRekorBundle := object(map[string]*Schema{
+		"operation_id": str(), "entry_uuid": str(), "log_index": {Type: "integer", Format: "int64"},
+		"log_id": str(), "integrated_time": {Type: "integer", Format: "int64"}, "recorded_at": timestamp(),
+		"cosign_bundle": {Type: "string", Description: "the bundle document stock cosign reads: the signature and its Rekor bundle (cosign attach signature --rekor-response, cosign verify-blob --bundle)"},
+	}, "operation_id", "entry_uuid", "log_index", "log_id", "integrated_time", "recorded_at", "cosign_bundle")
 	codeSigningIdentityList := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("CodeSigningIdentity")},
 		"total": {Type: "integer"}, "verified_count": {Type: "integer"},
@@ -8170,7 +8176,8 @@ func componentSchemas() map[string]*Schema {
 	codeSigningKeyCSRRequest := object(map[string]*Schema{"common_name": str()}, "common_name")
 	codeSigningKeyCSR := object(map[string]*Schema{"key_id": str(), "csr_pem": str()}, "key_id", "csr_pem")
 	codeSigningSignature := object(map[string]*Schema{
-		"algorithm": str(), "key_id": str(), "artifact_type": str(),
+		"operation_id": {Type: "string", Description: "the signing operation; read its transparency entry by it (P9-L2)"},
+		"algorithm":    str(), "key_id": str(), "artifact_type": str(),
 		"signature": {Type: "string", Format: "byte"}, "public_key_der": {Type: "string", Format: "byte"},
 		"fulcio_san": str(), "fulcio_issuer": str(), "transparency_destination": str(),
 	}, "algorithm", "artifact_type", "signature", "public_key_der")
@@ -8810,6 +8817,7 @@ func componentSchemas() map[string]*Schema {
 		"OutboxCircuit":                            outboxCircuit,
 		"CodeSigningIdentity":                      codeSigningIdentity,
 		"CodeSigningIdentityList":                  codeSigningIdentityList,
+		"CodeSigningRekorBundle":                   codeSigningRekorBundle,
 		"SSHFleetHost":                             sshFleetHost,
 		"SSHFleetInventory":                        sshFleetInventory,
 		"SSHHostCertificate":                       sshHostCertificate,

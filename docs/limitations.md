@@ -6623,7 +6623,10 @@ This is a deliberate, documented trust boundary, not an accident.
     `notation-trstctl` plugin in `clients/signing` signs through the code-signing API
     with ECDSA P-256 keys: the served test builds it and drives it over the Notation
     plugin contract, and its signature verifies against the served leaf. Stock cosign
-    2.5.3 verifies an image in a local registry signed through trstctl. The
+    2.5.3 verifies an image in a local registry signed through trstctl, with the
+    Rekor entry trstctl recorded for the signature attached and checked offline
+    against the log's key (P9-L2; proven against a stand-in for Rekor's v1 entry API,
+    not the public log). The
     `libtrstctl-pkcs11` module offers the keys to PKCS #11 tools (ECDSA P-256 and
     RSA; sensitive, never-extractable handles): stock jarsigner (Temurin 21,
     SunPKCS11) and osslsigncode 2.5 (the OpenSSL pkcs11 engine) sign a JAR and a

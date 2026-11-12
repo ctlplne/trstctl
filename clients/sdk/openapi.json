@@ -16777,6 +16777,45 @@
         ],
         "type": "object"
       },
+      "CodeSigningRekorBundle": {
+        "properties": {
+          "cosign_bundle": {
+            "description": "the bundle document stock cosign reads: the signature and its Rekor bundle (cosign attach signature --rekor-response, cosign verify-blob --bundle)",
+            "type": "string"
+          },
+          "entry_uuid": {
+            "type": "string"
+          },
+          "integrated_time": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "log_id": {
+            "type": "string"
+          },
+          "log_index": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "entry_uuid",
+          "log_index",
+          "log_id",
+          "integrated_time",
+          "recorded_at",
+          "cosign_bundle"
+        ],
+        "type": "object"
+      },
       "CodeSigningRequest": {
         "properties": {
           "artifact_type": {
@@ -16815,6 +16854,10 @@
             "type": "string"
           },
           "key_id": {
+            "type": "string"
+          },
+          "operation_id": {
+            "description": "the signing operation; read its transparency entry by it (P9-L2)",
             "type": "string"
           },
           "public_key_der": {
@@ -79385,6 +79428,64 @@
           }
         ],
         "summary": "List signing operations with their transparency-log verification state",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/code-signing/identities/{operation_id}/rekor-bundle": {
+      "get": {
+        "operationId": "getCodeSigningRekorBundle",
+        "parameters": [
+          {
+            "description": "Signing operation id",
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeSigningRekorBundle"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read a signing operation's recorded Rekor entry and the cosign bundle that lets stock cosign verify it offline",
         "x-trstctl-permission": "certs:read"
       }
     },

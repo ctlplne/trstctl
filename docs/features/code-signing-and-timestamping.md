@@ -237,21 +237,36 @@ signature with the chain; permissions, policy and approvals apply to every signa
   The plugin offers ECDSA P-256 keys: trstctl signs SHA-256 digests, and Notation
   pairs P-384 with SHA-384 and RSA with RSASSA-PSS.
 - **cosign:** `cosign generate` writes the payload for an image, trstctl signs its
-  SHA-256 digest, and `cosign attach signature` stores the signature in the registry:
+  SHA-256 digest, and `cosign attach signature` stores the signature in the registry
+  with the Rekor entry trstctl recorded for it (P9-L2), so stock `cosign verify` checks
+  the transparency log offline instead of skipping it:
 
 ```bash
 cosign generate registry.example.com/app@sha256:<digest> > payload.json
 printf '{"key_id":"release-key","artifact_type":"oci-image","digest":"%s"}' \
   "$(openssl dgst -sha256 -binary payload.json | base64)" > sign.json
-trstctl-cli code-signing sign -f sign.json | jq -r .signature > payload.sig
-cosign attach signature --payload payload.json --signature payload.sig registry.example.com/app@sha256:<digest>
+trstctl-cli code-signing sign -f sign.json > signed.json
+jq -r .signature signed.json > payload.sig
+# once the outbox has published the signature (code-signing identities shows it verified):
+trstctl-cli code-signing rekor-bundle "$(jq -r .operation_id signed.json)" | jq -r .cosign_bundle > rekor-bundle.json
+cosign attach signature --payload payload.json --signature payload.sig \
+  --rekor-response rekor-bundle.json registry.example.com/app@sha256:<digest>
 trstctl-cli code-signing keys certificate release-key | jq -r .public_key_der | base64 -d |
   openssl pkey -pubin -inform DER -out release-key.pub
-cosign verify --key release-key.pub --insecure-ignore-tlog=true registry.example.com/app@sha256:<digest>
+SIGSTORE_REKOR_PUBLIC_KEY=rekor.pub cosign verify --key release-key.pub --offline=true \
+  registry.example.com/app@sha256:<digest>
 ```
 
-`--insecure-ignore-tlog` tells cosign not to look for its own log bundle; trstctl
-records each signature in Rekor through the outbox as described above.
+trstctl publishes each signature to Rekor through the outbox and records the log's
+receipt only once it verifies (the entry binds the submitted digest, signature and key;
+the log ID binds the pinned log key; the signed entry timestamp verifies).
+`GET /api/v1/code-signing/identities/{operation_id}/rekor-bundle` (`certs:read`; the sign
+response names the `operation_id`) serves that entry, and `cosign_bundle` is the document
+cosign reads: the signature and its Rekor bundle. `rekor.pub` is the log's public key —
+the one trstctl pins as `code_signing.rekor.log_public_key_file` — and cosign refuses the
+bundle under any other log key. Until the entry is recorded the route answers 404. With
+no Rekor log configured there is nothing to check, and cosign needs
+`--insecure-ignore-tlog=true`.
 
 - **Keys in an HSM or cloud KMS:** a code-signing key can be an Enterprise managed
   key (`managed_key_provider`, `managed_key_id`; see

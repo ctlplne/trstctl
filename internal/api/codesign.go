@@ -96,6 +96,9 @@ type CodeSigningPreview struct {
 }
 
 type CodeSigningResponse struct {
+	// OperationID names the signing operation (P9-L2): its transparency
+	// entry is read by it once the log has recorded it.
+	OperationID             string `json:"operation_id,omitempty"`
 	Algorithm               string `json:"algorithm"`
 	KeyID                   string `json:"key_id,omitempty"`
 	ArtifactType            string `json:"artifact_type"`

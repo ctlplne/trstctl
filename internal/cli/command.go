@@ -986,6 +986,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"code-signing", "keys", "attach-certificate"}, Method: "PUT", Path: "/api/v1/code-signing/keys/{key_id}/certificate", Body: bodyFile, Summary: "Attach or rotate a managed code-signing key's certificate chain, checked against the key, without a restart"},
 	{Name: []string{"code-signing", "keys", "csr"}, Method: "POST", Path: "/api/v1/code-signing/keys/{key_id}/csr", Body: bodyFile, Summary: "Get a certificate request signed by a managed code-signing key inside the signer"},
 	{Name: []string{"code-signing", "keyless"}, Method: "POST", Path: "/api/v1/code-signing/keyless", Body: bodyFile, Summary: "Sign an artifact digest with a verified Sigstore/Fulcio identity"},
+	{Name: []string{"code-signing", "rekor-bundle"}, Method: "GET", Path: "/api/v1/code-signing/identities/{operation_id}/rekor-bundle", Summary: "Show a signing operation's recorded Rekor entry and its cosign bundle (for cosign attach signature --rekor-response)"},
 
 	// BYOK/HSM managed-key lifecycle (CRYPTO-005). Generate mints provider-resident
 	// material; rotate/revoke/zeroize are destructive and require a distinct-approver

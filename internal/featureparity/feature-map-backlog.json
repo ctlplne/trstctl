@@ -13264,7 +13264,8 @@
                 "signCodeArtifactKeyless",
                 "getCodeSigningKeyCertificate",
                 "attachCodeSigningKeyCertificate",
-                "createCodeSigningKeyCSR"
+                "createCodeSigningKeyCSR",
+                "getCodeSigningRekorBundle"
             ],
             "api_na": "",
             "cli_surface": [
@@ -13275,7 +13276,8 @@
                 "code-signing sign",
                 "code-signing keys certificate",
                 "code-signing keys attach-certificate",
-                "code-signing keys csr"
+                "code-signing keys csr",
+                "code-signing rekor-bundle"
             ],
             "cli_na": "",
             "facet_evidence": {

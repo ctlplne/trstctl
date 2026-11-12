@@ -3895,6 +3895,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/code-signing/identities/{operation_id}/rekor-bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a signing operation's recorded Rekor entry and the cosign bundle that lets stock cosign verify it offline */
+        get: operations["getCodeSigningRekorBundle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/code-signing/keyless": {
         parameters: {
             query?: never;
@@ -16581,6 +16598,19 @@ export interface components {
             transparency_destination?: string;
             verification_steps: string[];
         };
+        CodeSigningRekorBundle: {
+            /** @description the bundle document stock cosign reads: the signature and its Rekor bundle (cosign attach signature --rekor-response, cosign verify-blob --bundle) */
+            cosign_bundle: string;
+            entry_uuid: string;
+            /** Format: int64 */
+            integrated_time: number;
+            log_id: string;
+            /** Format: int64 */
+            log_index: number;
+            operation_id: string;
+            /** Format: date-time */
+            recorded_at: string;
+        };
         CodeSigningRequest: {
             artifact_type: string;
             /** Format: byte */
@@ -16594,6 +16624,8 @@ export interface components {
             fulcio_issuer?: string;
             fulcio_san?: string;
             key_id?: string;
+            /** @description the signing operation; read its transparency entry by it (P9-L2) */
+            operation_id?: string;
             /** Format: byte */
             public_key_der: string;
             /** Format: byte */
@@ -40203,6 +40235,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CodeSigningIdentityList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCodeSigningRekorBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Signing operation id */
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeSigningRekorBundle"];
                 };
             };
             /** @description client error */

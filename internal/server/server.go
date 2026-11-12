@@ -1946,7 +1946,7 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	}
 	// B-4: signing operations joined to their transparency-log state.
 	if d.Store != nil {
-		*defaults = append(*defaults, api.WithCodeSigningIdentities(s.CodeSigningIdentities))
+		*defaults = append(*defaults, api.WithCodeSigningIdentities(s.CodeSigningIdentities), api.WithCodeSigningRekorBundles(s.CodeSigningRekorBundle))
 	}
 	// B-2: the SSH fleet view over discovered standing keys.
 	if d.Store != nil {

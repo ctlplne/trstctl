@@ -5,6 +5,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -1135,7 +1136,7 @@ func (s *servedCodeSigningService) executeCommand(ctx context.Context, op store.
 			return api.CodeSigningResponse{}, codeSigningTransparencyPayload{}, "", err
 		}
 		return api.CodeSigningResponse{
-				Algorithm: sig.Algorithm, KeyID: sig.KeyID, ArtifactType: sig.ArtifactType,
+				OperationID: op.OperationID, Algorithm: sig.Algorithm, KeyID: sig.KeyID, ArtifactType: sig.ArtifactType,
 				Signature: sig.Value, PublicKeyDER: sig.PublicKeyDER,
 				TransparencyDestination: s.cfg.RekorDestination,
 			}, codeSigningTransparencyPayload{
@@ -1175,7 +1176,7 @@ func (s *servedCodeSigningService) executeCommand(ctx context.Context, op store.
 			return api.CodeSigningResponse{}, codeSigningTransparencyPayload{}, handle, err
 		}
 		return api.CodeSigningResponse{
-				Algorithm: sig.Algorithm, ArtifactType: sig.ArtifactType,
+				OperationID: op.OperationID, Algorithm: sig.Algorithm, ArtifactType: sig.ArtifactType,
 				Signature: sig.Value, PublicKeyDER: sig.PublicKeyDER,
 				FulcioSAN: sig.FulcioSAN, FulcioIssuer: sig.FulcioIssuer,
 				TransparencyDestination: s.cfg.RekorDestination,
@@ -1299,6 +1300,83 @@ func (s *servedCodeSigningService) appendAndProject(ctx context.Context, tenantI
 		return err
 	}
 	return projections.New(s.store).Apply(ctx, event)
+}
+
+// codeSigningTransparencyKeyPrefix prefixes a signing operation's
+// transparency outbox row's idempotency key.
+const codeSigningTransparencyKeyPrefix = "codesign.rekor:"
+
+// recordTransparency records the transparency log's verified receipt for the
+// operation the outbox row names (P9-L2), once per operation: a redelivery
+// appends the same event identity.
+func (s *servedCodeSigningService) recordTransparency(ctx context.Context, tenantID, idempotencyKey string, receipt codeSigningTransparencyReceipt) error {
+	operationID, ok := strings.CutPrefix(idempotencyKey, codeSigningTransparencyKeyPrefix)
+	if !ok || strings.TrimSpace(operationID) == "" {
+		return nil
+	}
+	return s.appendAndProject(ctx, tenantID, projections.EventCodeSigningTransparencyRecorded, operationID,
+		projections.CodeSigningTransparencyRecorded{
+			OperationID: operationID, EntryUUID: receipt.EntryUUID, LogIndex: receipt.LogIndex, LogID: receipt.LogID,
+			IntegratedTime: receipt.IntegratedTime, Body: receipt.Body, SignedEntryTimestamp: receipt.SignedEntryTimestamp,
+		})
+}
+
+// cosignSignedPayload is the document stock cosign reads as a signature's
+// bundle (cosign attach signature --rekor-response, cosign verify-blob
+// --bundle; the file cosign sign-blob --bundle writes): the signature and the
+// Rekor bundle, which cosign checks offline against the log's public key.
+type cosignSignedPayload struct {
+	Base64Signature string            `json:"base64Signature"`
+	RekorBundle     cosignRekorBundle `json:"rekorBundle"`
+}
+
+// cosignRekorBundle is the log's signed entry timestamp and the entry it signs.
+type cosignRekorBundle struct {
+	SignedEntryTimestamp []byte             `json:"SignedEntryTimestamp"`
+	Payload              cosignRekorPayload `json:"Payload"`
+}
+
+type cosignRekorPayload struct {
+	Body           string `json:"body"`
+	IntegratedTime int64  `json:"integratedTime"`
+	LogIndex       int64  `json:"logIndex"`
+	LogID          string `json:"logID"`
+}
+
+// CodeSigningRekorBundle serves a signing operation's recorded transparency
+// entry and the cosign bundle built from it (P9-L2).
+func (s *Server) CodeSigningRekorBundle(ctx context.Context, tenantID, operationID string) (api.CodeSigningRekorBundle, error) {
+	if s.store == nil {
+		return api.CodeSigningRekorBundle{}, api.ErrCodeSigningTransparencyNotRecorded
+	}
+	entry, err := s.store.GetCodeSigningTransparencyEntry(ctx, tenantID, operationID)
+	if store.IsNotFound(err) {
+		return api.CodeSigningRekorBundle{}, api.ErrCodeSigningTransparencyNotRecorded
+	}
+	if err != nil {
+		return api.CodeSigningRekorBundle{}, err
+	}
+	// The signature is the one the logged hashedrekord carries.
+	logged, err := base64.StdEncoding.DecodeString(entry.Body)
+	if err != nil {
+		return api.CodeSigningRekorBundle{}, fmt.Errorf("codesign: the recorded entry body is not base64: %w", err)
+	}
+	var hashed rekorProposedEntry
+	if err := json.Unmarshal(logged, &hashed); err != nil || len(hashed.Spec.Signature.Content) == 0 {
+		return api.CodeSigningRekorBundle{}, fmt.Errorf("codesign: the recorded entry is not a signed hashedrekord")
+	}
+	bundle, err := json.Marshal(cosignSignedPayload{
+		Base64Signature: base64.StdEncoding.EncodeToString(hashed.Spec.Signature.Content),
+		RekorBundle: cosignRekorBundle{SignedEntryTimestamp: entry.SignedEntryTimestamp, Payload: cosignRekorPayload{
+			Body: entry.Body, IntegratedTime: entry.IntegratedTime, LogIndex: entry.LogIndex, LogID: entry.LogID}},
+	})
+	if err != nil {
+		return api.CodeSigningRekorBundle{}, err
+	}
+	return api.CodeSigningRekorBundle{
+		OperationID: entry.OperationID, EntryUUID: entry.EntryUUID, LogIndex: entry.LogIndex, LogID: entry.LogID,
+		IntegratedTime: entry.IntegratedTime, RecordedAt: entry.RecordedAt, CosignBundle: string(bundle),
+	}, nil
 }
 
 func codeSigningEventID(tenantID, eventType, operationID string) string {

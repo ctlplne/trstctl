@@ -201,6 +201,7 @@ type API struct {
 	sshFleet                           SSHFleetProvider
 	sshHostTrust                       SSHHostTrustProvider
 	codeSigningIdentities              CodeSigningIdentityProvider
+	codeSigningRekorBundles            CodeSigningRekorBundleProvider
 	serviceNowBindings                 []ServiceNowBinding
 	outboundEnvCredentialRefs          map[string]struct{}
 	acmeDNS01Providers                 []ACMEDNS01ProviderCatalogItem
@@ -367,6 +368,7 @@ type config struct {
 	sshFleet                    SSHFleetProvider
 	sshHostTrust                SSHHostTrustProvider
 	codeSigningIdentities       CodeSigningIdentityProvider
+	codeSigningRekorBundles     CodeSigningRekorBundleProvider
 	serviceNowBindings          []ServiceNowBinding
 	outboundEnvCredentialRefs   map[string]struct{}
 	acmeDNS01Providers          []ACMEDNS01ProviderCatalogItem
@@ -723,6 +725,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		sshFleet:                    cfg.sshFleet,
 		sshHostTrust:                cfg.sshHostTrust,
 		codeSigningIdentities:       cfg.codeSigningIdentities,
+		codeSigningRekorBundles:     cfg.codeSigningRekorBundles,
 		serviceNowBindings:          append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
 		outboundEnvCredentialRefs:   copyStringSet(cfg.outboundEnvCredentialRefs),
 		acmeDNS01Providers:          append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),

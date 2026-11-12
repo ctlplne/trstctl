@@ -476,7 +476,18 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 			if d.transparency == nil {
 				return orchestrator.DefiniteNoEffect(fmt.Errorf("server: transparency outbox destination is not configured"))
 			}
-			return d.transparency.Deliver(ctx, m)
+			receipter, ok := d.transparency.(codeSigningTransparencyReceipter)
+			if !ok || d.codeSign == nil {
+				return d.transparency.Deliver(ctx, m)
+			}
+			// P9-L2: the verified receipt is recorded, so the signature's
+			// bundle can be served; recording it again on a redelivery is
+			// the same event.
+			receipt, err := receipter.DeliverWithReceipt(ctx, m)
+			if err != nil {
+				return err
+			}
+			return d.codeSign.recordTransparency(ctx, m.TenantID, m.IdempotencyKey, receipt)
 		}
 		if strings.HasPrefix(m.Destination, "managedkey.") {
 			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: managed-key outbox destination is not configured"))

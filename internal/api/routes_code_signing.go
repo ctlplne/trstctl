@@ -19,6 +19,8 @@ func (a *API) codeSigningRoutes() []route {
 		// calling Rekor/Fulcio inline.
 		// B-4: which identities signed, and did the transparency entry land.
 		{method: "GET", path: "/api/v1/code-signing/identities", opID: "listCodeSigningIdentities", summary: "List signing operations with their transparency-log verification state", handler: a.listCodeSigningIdentities, resSchema: "CodeSigningIdentityList", successCode: "200", perm: authz.CertsRead},
+		// P9-L2: a signature's recorded Rekor entry, as the bundle stock cosign verifies offline.
+		{method: "GET", path: "/api/v1/code-signing/identities/{operation_id}/rekor-bundle", opID: "getCodeSigningRekorBundle", summary: "Read a signing operation's recorded Rekor entry and the cosign bundle that lets stock cosign verify it offline", handler: a.getCodeSigningRekorBundle, pathParams: []param{pathString("operation_id", "Signing operation id")}, resSchema: "CodeSigningRekorBundle", successCode: "200", perm: authz.CertsRead},
 		{method: "POST", path: "/api/v1/code-signing/preview", opID: "previewCodeArtifact", summary: "Review an exact managed-key signing plan without signing or publishing", handler: a.previewCodeArtifact, reqSchema: "CodeSigningRequest", resSchema: "CodeSigningPreview", successCode: "200", perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/code-signing/keyless/preview", opID: "previewCodeArtifactKeyless", summary: "Review an exact keyless signing plan without attesting, signing, or publishing", handler: a.previewCodeArtifactKeyless, reqSchema: "CodeSigningKeylessRequest", resSchema: "CodeSigningPreview", successCode: "200", perm: authz.KeysWrite},
 		// P9: the certificate chain that names a managed key, for stock signing

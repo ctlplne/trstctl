@@ -4898,6 +4898,20 @@ CodeSigningPreview = TypedDict(
     total=False,
 )
 
+CodeSigningRekorBundle = TypedDict(
+    'CodeSigningRekorBundle',
+    {
+        'cosign_bundle': str,
+        'entry_uuid': str,
+        'integrated_time': int,
+        'log_id': str,
+        'log_index': int,
+        'operation_id': str,
+        'recorded_at': str,
+    },
+    total=False,
+)
+
 CodeSigningRequest = TypedDict(
     'CodeSigningRequest',
     {
@@ -4917,6 +4931,7 @@ CodeSigningSignature = TypedDict(
         'fulcio_issuer': str,
         'fulcio_san': str,
         'key_id': str,
+        'operation_id': str,
         'public_key_der': str,
         'signature': str,
         'transparency_destination': str,

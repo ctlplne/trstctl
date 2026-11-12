@@ -361,6 +361,7 @@ public final class OpenApiSchemas {
       "CodeSigningKeyCertificateAttach",
       "CodeSigningKeylessRequest",
       "CodeSigningPreview",
+      "CodeSigningRekorBundle",
       "CodeSigningRequest",
       "CodeSigningSignature",
       "ComplianceEvidencePack",

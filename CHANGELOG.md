@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- Stock cosign checks a trstctl signature's transparency-log entry instead of skipping it (P9-L2): trstctl records the
+  Rekor receipt it verified for each signature (`codesign.transparency_recorded`), the sign response names its
+  `operation_id`, and `GET /api/v1/code-signing/identities/{operation_id}/rekor-bundle` (`trstctl-cli code-signing
+  rekor-bundle`) serves the bundle `cosign attach signature --rekor-response` takes, so `cosign verify --offline`
+  verifies the log's signed entry timestamp against the log's key, no `--insecure-ignore-tlog`.
 - The CycloneDX CBOM export carries more than the CBOM inventory (Q3-L2): the certificates the certificate inventory
   holds for its certificate keys (subject, issuer, validity, linked to the key's component), the keys host agents found
   in keystores and key files (as private-key or secret-key material with size and format, never key bytes), the crypto

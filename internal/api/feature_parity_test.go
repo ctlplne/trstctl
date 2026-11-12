@@ -402,8 +402,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// N9-L2 adds asking for, running and listing MDM check-in waves (818).
 	// P3-L1 adds planning canary-first migration cohorts (819).
 	// P9-L1 adds attaching a code-signing key's certificate chain (820).
-	if len(out) != 820 {
-		t.Fatalf("OpenAPI operationIds = %d, want 820", len(out))
+	// P9-L2 adds a signing operation's Rekor bundle (821).
+	if len(out) != 821 {
+		t.Fatalf("OpenAPI operationIds = %d, want 821", len(out))
 	}
 	return out
 }

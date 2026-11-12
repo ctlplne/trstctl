@@ -30,6 +30,9 @@ const (
 	// EventCodeSigningCertificateAttached records a key's certificate chain
 	// attached through the API (P9-L1).
 	EventCodeSigningCertificateAttached = "codesign.certificate_attached"
+	// EventCodeSigningTransparencyRecorded records the transparency log's
+	// verified receipt for a signature (P9-L2).
+	EventCodeSigningTransparencyRecorded = "codesign.transparency_recorded"
 
 	// CodeSigningApprovalEventSchemaVersion adds the exact one-shot approval use
 	// to codesign.commanded. Version 1 remains replayable for deployments where
@@ -66,6 +69,21 @@ type CodeSigningCertificateAttached struct {
 	LeafFingerprint string    `json:"leaf_fingerprint"`
 	NotAfter        time.Time `json:"not_after"`
 	AttachedBy      string    `json:"attached_by"`
+}
+
+// CodeSigningTransparencyRecorded is the Rekor entry a signature landed in,
+// as the log returned it and the Rekor handler verified it (P9-L2): the
+// logged body (base64 of the hashedrekord the log stored), its position and
+// time, the log's identity and its signed entry timestamp. All of it is
+// public transparency-log content.
+type CodeSigningTransparencyRecorded struct {
+	OperationID          string `json:"operation_id"`
+	EntryUUID            string `json:"entry_uuid"`
+	LogIndex             int64  `json:"log_index"`
+	LogID                string `json:"log_id"`
+	IntegratedTime       int64  `json:"integrated_time"`
+	Body                 string `json:"body"`
+	SignedEntryTimestamp []byte `json:"signed_entry_timestamp"`
 }
 
 // CodeSigningOperationID is the privacy-safe operation identity for a raw API
@@ -229,6 +247,7 @@ func init() {
 		EventCodeSigningFailed,
 		EventCodeSigningEphemeralDestroyed,
 		EventCodeSigningCertificateAttached,
+		EventCodeSigningTransparencyRecorded,
 	} {
 		knownSchemaVersions[eventType] = map[int]bool{1: true}
 	}
@@ -455,6 +474,20 @@ func (p *Projector) applyCodeSigningTx(ctx context.Context, tx pgx.Tx, event eve
 			TenantID: event.TenantID, KeyID: payload.KeyID, ChainDER: payload.ChainDER,
 			LeafFingerprint: strings.ToLower(payload.LeafFingerprint), NotAfter: payload.NotAfter,
 			AttachedBy: payload.AttachedBy, AttachedAt: event.Time,
+		}, event.Sequence)
+	case EventCodeSigningTransparencyRecorded:
+		var payload CodeSigningTransparencyRecorded
+		if err := decode(event, &payload); err != nil {
+			return true, err
+		}
+		if strings.TrimSpace(payload.OperationID) == "" || strings.TrimSpace(payload.EntryUUID) == "" || payload.LogIndex < 0 ||
+			payload.IntegratedTime <= 0 || strings.TrimSpace(payload.LogID) == "" || payload.Body == "" || len(payload.SignedEntryTimestamp) == 0 {
+			return true, fmt.Errorf("projections: %s payload is incomplete", event.Type)
+		}
+		return true, p.store.ApplyCodeSigningTransparencyRecordedTx(ctx, tx, store.CodeSigningTransparencyEntry{
+			TenantID: event.TenantID, OperationID: payload.OperationID, EntryUUID: strings.ToLower(payload.EntryUUID),
+			LogIndex: payload.LogIndex, LogID: strings.ToLower(payload.LogID), IntegratedTime: payload.IntegratedTime,
+			Body: payload.Body, SignedEntryTimestamp: payload.SignedEntryTimestamp, RecordedAt: event.Time,
 		}, event.Sequence)
 	default:
 		return false, nil

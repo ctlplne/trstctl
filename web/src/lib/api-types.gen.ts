@@ -3504,6 +3504,16 @@ export interface CodeSigningPreview {
   verification_steps: string[];
 }
 
+export interface CodeSigningRekorBundle {
+  cosign_bundle: string;
+  entry_uuid: string;
+  integrated_time: number;
+  log_id: string;
+  log_index: number;
+  operation_id: string;
+  recorded_at: string;
+}
+
 export interface CodeSigningRequest {
   artifact_type: string;
   digest: string;
@@ -3517,6 +3527,7 @@ export interface CodeSigningSignature {
   fulcio_issuer?: string;
   fulcio_san?: string;
   key_id?: string;
+  operation_id?: string;
   public_key_der: string;
   signature: string;
   transparency_destination?: string;

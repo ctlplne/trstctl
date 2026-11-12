@@ -350,7 +350,9 @@ import (
 // Version 124 carries X6-L3's crypto asset import_source: a version-123
 // payload has no such column, and a restored import's facts would belong to
 // no source, so its next import would not retire what that BOM dropped.
-const SnapshotFormatVersion = 124
+// Version 125 carries P9-L2's code-signing transparency entries: without them
+// a restored deployment could not serve a signature's Rekor bundle.
+const SnapshotFormatVersion = 125
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -445,7 +447,7 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	// Format 119: N9-L2's MDM check-in waves.
 	"mdm_check_in_waves",
 	// Format 123: P9-L1's code-signing key chains attached through the API.
-	"code_signing_key_certificates",
+	"code_signing_key_certificates", "code_signing_transparency_entries",
 	// Format 87: P12's factory batches and their birth certificates.
 	"factory_batches", "factory_birth_certificates",
 	// Format 88: P13's incident closures.
@@ -885,7 +887,8 @@ SELECT jsonb_build_object(
   -- arguments): N1-L2 starts a fifth.
   'adcs_ca_pending_requests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_ca_pending_requests t),
   'mdm_check_in_waves', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM mdm_check_in_waves t),
-  'code_signing_key_certificates', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM code_signing_key_certificates t)
+  'code_signing_key_certificates', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM code_signing_key_certificates t),
+  'code_signing_transparency_entries', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM code_signing_transparency_entries t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL,

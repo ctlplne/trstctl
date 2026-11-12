@@ -99,55 +99,81 @@ type rekorVerification struct {
 	SignedEntryTimestamp []byte `json:"signedEntryTimestamp"`
 }
 
+// codeSigningTransparencyReceipt is the log entry a delivery's receipt
+// verified (P9-L2): what the log returned, kept to serve a cosign bundle.
+type codeSigningTransparencyReceipt struct {
+	EntryUUID            string
+	LogIndex             int64
+	LogID                string
+	IntegratedTime       int64
+	Body                 string
+	SignedEntryTimestamp []byte
+}
+
+// codeSigningTransparencyReceipter is a transparency handler that hands back
+// the receipt it verified, so the dispatcher can record it.
+type codeSigningTransparencyReceipter interface {
+	DeliverWithReceipt(ctx context.Context, message orchestrator.Message) (codeSigningTransparencyReceipt, error)
+}
+
+var _ codeSigningTransparencyReceipter = (*rekorHandler)(nil)
+
 func (h *rekorHandler) Deliver(ctx context.Context, message orchestrator.Message) error {
+	_, err := h.DeliverWithReceipt(ctx, message)
+	return err
+}
+
+// DeliverWithReceipt publishes the signature and returns the log's receipt
+// once it verifies; nothing is returned for a receipt that does not.
+func (h *rekorHandler) DeliverWithReceipt(ctx context.Context, message orchestrator.Message) (codeSigningTransparencyReceipt, error) {
 	if h == nil || h.client == nil || h.endpoint == "" || len(h.logPublicKey.DER) == 0 {
-		return fmt.Errorf("rekor: handler is not configured")
+		return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: handler is not configured")
 	}
 	if message.Destination != defaultRekorDestination {
-		return fmt.Errorf("rekor: unsupported destination %q", message.Destination)
+		return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: unsupported destination %q", message.Destination)
 	}
 	var payload codeSigningTransparencyPayload
 	if err := json.Unmarshal(message.Payload, &payload); err != nil {
-		return fmt.Errorf("rekor: decode transparency payload: %w", err)
+		return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: decode transparency payload: %w", err)
 	}
 	entry, digest, err := rekorEntryFromPayload(payload)
 	if err != nil {
-		return err
+		return codeSigningTransparencyReceipt{}, err
 	}
 	if err := crypto.VerifyDigest(
 		crypto.PublicKey{Algorithm: crypto.Algorithm(payload.Algorithm), DER: payload.PublicKeyDER},
 		digest, payload.Signature,
 		crypto.SignOptions{Hash: crypto.SHA256, RSAPadding: crypto.RSAPKCS1v15},
 	); err != nil {
-		return fmt.Errorf("rekor: refuse invalid artifact signature: %w", err)
+		return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: refuse invalid artifact signature: %w", err)
 	}
 	body, err := json.Marshal(entry)
 	if err != nil {
-		return fmt.Errorf("rekor: encode HashedRekord: %w", err)
+		return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: encode HashedRekord: %w", err)
 	}
 	defer secret.Wipe(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("rekor: build request")
+		return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: build request")
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Trstctl-Idempotency-Key", message.IdempotencyKey)
 	resp, err := h.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("rekor: publish HashedRekord: request failed")
+		return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: publish HashedRekord: request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
 	responseBody, err := secret.ReadBounded(resp.Body, rekorMaxResponseBody+1)
 	if err != nil {
-		return fmt.Errorf("rekor: read response: %w", err)
+		return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: read response: %w", err)
 	}
 	defer secret.Wipe(responseBody)
 	if len(responseBody) > rekorMaxResponseBody {
-		return fmt.Errorf("rekor: response exceeds %d bytes", rekorMaxResponseBody)
+		return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: response exceeds %d bytes", rekorMaxResponseBody)
 	}
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusConflict {
-		return fmt.Errorf("rekor: publish HashedRekord returned HTTP %d", resp.StatusCode)
+		return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: publish HashedRekord returned HTTP %d", resp.StatusCode)
 	}
 	receiptBody := responseBody
 	var fetchedBody []byte
@@ -159,16 +185,33 @@ func (h *rekorHandler) Deliver(ctx context.Context, message orchestrator.Message
 		if err := validateRekorReceipt(receiptBody, entry, h.logPublicKey); err != nil {
 			fetchedBody, err = h.fetchExistingReceipt(ctx, resp.Header.Get("Location"))
 			if err != nil {
-				return err
+				return codeSigningTransparencyReceipt{}, err
 			}
 			defer secret.Wipe(fetchedBody)
 			receiptBody = fetchedBody
 		}
 	}
 	if err := validateRekorReceipt(receiptBody, entry, h.logPublicKey); err != nil {
-		return fmt.Errorf("rekor: invalid transparency receipt: %w", err)
+		return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: invalid transparency receipt: %w", err)
 	}
-	return nil
+	return transparencyReceipt(receiptBody)
+}
+
+// transparencyReceipt reads the one entry of a receipt validateRekorReceipt
+// accepted, copying it out of the response buffer the caller wipes.
+func transparencyReceipt(body []byte) (codeSigningTransparencyReceipt, error) {
+	var entries map[string]rekorLogEntry
+	if err := json.Unmarshal(body, &entries); err != nil {
+		return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: decode verified receipt: %w", err)
+	}
+	for uuid, logged := range entries {
+		return codeSigningTransparencyReceipt{
+			EntryUUID: strings.ToLower(strings.TrimSpace(uuid)), LogIndex: *logged.LogIndex,
+			LogID: strings.ToLower(strings.TrimSpace(logged.LogID)), IntegratedTime: *logged.IntegratedTime,
+			Body: strings.Clone(logged.Body), SignedEntryTimestamp: bytes.Clone(logged.Verification.SignedEntryTimestamp),
+		}, nil
+	}
+	return codeSigningTransparencyReceipt{}, fmt.Errorf("rekor: verified receipt holds no entry")
 }
 
 func (h *rekorHandler) fetchExistingReceipt(ctx context.Context, rawLocation string) ([]byte, error) {
