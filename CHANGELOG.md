@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A PQC pilot can require observed traffic (X3-L5). With `require_observed_traffic`, each wave whose probe
+  negotiated waits until an observer agent has seen real clients connect at every target, and keeps what they
+  negotiated (TLS version, group, whether it is a post-quantum hybrid); only then does the next wave start. A target
+  nobody uses within `observed_traffic_window_seconds` (default one hour) halts the pilot, and the signed readiness
+  report says so. The Posture page's pilot form offers the gate, and each wave shows what real clients negotiated.
 - The PKCS#11 managed-key provider generates EC P-256 and P-384 keys in the HSM as well as RSA-2048 (P9-L3): sign-only
   and never extractable, signing with `CKM_ECDSA`, the signature stored and verified in its ASN.1 form. Proven in
   SoftHSM, including an EC code-signing managed key whose certificate request is signed inside the token.

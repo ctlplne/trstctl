@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/pqc/compatlab"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -28,6 +31,12 @@ import (
 // advances on the probe alone. When a member has both proofs, the observer's
 // finding for its predecessor certificate at that endpoint is marked
 // remediated with the evidence that closed it, and not before.
+//
+// A PQC pilot that requires observed traffic (X3-L5) rides the same pass: a
+// wave whose relay probe passed waits until the observer has seen real
+// clients connect at every negotiated target after its probe (presenting the
+// pilot's leaf on TLS 1.2), and the gate then closes it with that evidence;
+// a target still unobserved when the window ends halts the pilot.
 
 const migrationTrafficInterval = 30 * time.Second
 
@@ -54,7 +63,7 @@ func (s *Server) RunMigrationTrafficGate(ctx context.Context) {
 }
 
 // CheckMigrationTrafficOnce visits every running or paused run that requires
-// observed traffic.
+// observed traffic, and every PQC pilot wave awaiting it.
 func (s *Server) CheckMigrationTrafficOnce(ctx context.Context, now time.Time) error {
 	if s.store == nil || s.orch == nil {
 		return nil
@@ -63,6 +72,11 @@ func (s *Server) CheckMigrationTrafficOnce(ctx context.Context, now time.Time) e
 	if err != nil {
 		return err
 	}
+	pilotTenants, err := s.store.TenantsWithPQCPilotsAwaitingTraffic(ctx)
+	if err != nil {
+		return err
+	}
+	tenants = unionSorted(tenants, pilotTenants)
 	ctx = events.ContextWithActor(ctx, events.Actor{Subject: migrationTrafficActor})
 	var firstErr error
 	note := func(err error) {
@@ -96,8 +110,95 @@ func (s *Server) CheckMigrationTrafficOnce(ctx context.Context, now time.Time) e
 			}
 			note(s.checkRunTraffic(ctx, tenantID, run, awaiting, handshakes, now))
 		}
+		pilots, err := s.store.ListPQCPilotsAwaitingTraffic(ctx, tenantID)
+		if err != nil {
+			note(err)
+			continue
+		}
+		for _, pilot := range pilots {
+			for _, wave := range pilot.Waves {
+				if wave.Status != "awaiting_traffic" {
+					continue
+				}
+				if !loaded {
+					if handshakes, err = s.observedHandshakes(ctx, tenantID); err != nil {
+						note(err)
+						break
+					}
+					loaded = true
+				}
+				note(s.checkPilotTraffic(ctx, tenantID, pilot, wave, handshakes, now))
+			}
+		}
 	}
 	return firstErr
+}
+
+// unionSorted merges two sorted tenant lists without duplicates.
+func unionSorted(a, b []string) []string {
+	seen := make(map[string]bool, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, list := range [][]string{a, b} {
+		for _, id := range list {
+			if !seen[id] {
+				seen[id] = true
+				out = append(out, id)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// checkPilotTraffic closes a pilot wave's observed-traffic gate once every
+// negotiated target has new connections after its probe, or once the window
+// since the wave's assessment has ended (X3-L5).
+func (s *Server) checkPilotTraffic(ctx context.Context, tenantID string, pilot store.PQCPilot, wave store.PQCPilotWave, handshakes []observedHandshake, now time.Time) error {
+	targets := make(map[string]store.PQCPilotTarget, len(wave.Targets))
+	for _, target := range wave.Targets {
+		targets[target.TargetID] = target
+	}
+	observed := map[string]projections.PQCPilotTraffic{}
+	waiting := 0
+	for _, result := range wave.Results {
+		if result.Outcome != string(compatlab.OutcomeNegotiated) {
+			continue
+		}
+		target, ok := targets[result.TargetID]
+		if !ok {
+			continue
+		}
+		h, ok := pilotTrafficEvidence(target, result.ObservedAt, handshakes)
+		if !ok {
+			waiting++
+			continue
+		}
+		lastSeen := h.LastSeen
+		observed[result.TargetID] = projections.PQCPilotTraffic{FindingID: h.FindingID, Server: h.Server,
+			TLSVersion: h.TLSVersion, Group: h.Group, PQHybrid: h.PQHybrid, LastSeen: &lastSeen}
+	}
+	if waiting > 0 && (wave.AssessedAt == nil || now.Sub(*wave.AssessedAt) < orchestrator.PQCPilotTrafficWindow(pilot)) {
+		return nil
+	}
+	return s.orch.RecordPQCPilotTraffic(ctx, tenantID, pilot.ID, wave.Index, observed, now)
+}
+
+// pilotTrafficEvidence finds new connections at a pilot target after its
+// probe: on TLS 1.2 they must present the pilot's leaf; on TLS 1.3 the
+// certificate is encrypted, so the probe already proved the leaf served.
+func pilotTrafficEvidence(target store.PQCPilotTarget, probedAt time.Time, handshakes []observedHandshake) (observedHandshake, bool) {
+	binding := migration.MemberBinding{VerifyAddress: target.Address, VerifyServerName: target.ServerName}
+	leaf := strings.ToLower(target.Fingerprint)
+	for _, h := range handshakes {
+		if !h.at(binding) || h.LastSeen.Before(probedAt) {
+			continue
+		}
+		if h.Visible && h.Fingerprint != leaf {
+			continue
+		}
+		return h, true
+	}
+	return observedHandshake{}, false
 }
 
 func (s *Server) checkRunTraffic(ctx context.Context, tenantID string, run migration.Run, awaiting []migration.RunMemberRef, handshakes []observedHandshake, now time.Time) error {
@@ -153,6 +254,11 @@ type observedHandshake struct {
 	Fingerprint  string
 	Visible      bool
 	LastSeen     time.Time
+	// TLSVersion, Group and PQHybrid say what the real clients negotiated
+	// (kept as a pilot's traffic evidence, X3-L5).
+	TLSVersion string
+	Group      string
+	PQHybrid   bool
 }
 
 // observedHandshakes reads the tenant's observer TLS findings in ID order, up
@@ -177,6 +283,7 @@ func (s *Server) observedHandshakes(ctx context.Context, tenantID string) ([]obs
 			out = append(out, observedHandshake{
 				FindingID: f.ID, TriageStatus: f.TriageStatus, Server: meta["server"], ServerName: meta["server_name"],
 				Fingerprint: strings.ToLower(f.Fingerprint), Visible: meta["certificate_visible"] == "true", LastSeen: lastSeen,
+				TLSVersion: meta["tls_version"], Group: meta["group"], PQHybrid: meta["pq_hybrid"] == "true",
 			})
 		}
 		if len(page) < 500 {

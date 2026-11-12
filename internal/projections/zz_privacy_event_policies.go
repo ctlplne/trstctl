@@ -2172,6 +2172,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventPQCPilotWaveDispatched, 1}:                                           privacyPayloadShape[PQCPilotWaveDispatched](),
 		{EventPQCPilotWaveAssessed, 1}:                                             privacyPayloadShape[PQCPilotWaveAssessed](),
 		{EventPQCPilotReportSigned, 1}:                                             privacyPayloadShape[PQCPilotReportSigned](),
+		{EventPQCPilotWaveTrafficChecked, 1}:                                       privacyPayloadShape[PQCPilotWaveTrafficChecked](),
 		{EventPQCMigrationCampaignClosed, 1}:                                       privacyPayloadShape[PQCMigrationCampaignClosed](),
 		{EventTenantKeyDomainMigrationStarted, 1}:                                  privacyPayloadShape[TenantKeyDomainSnapshot](),
 		{EventTenantKeyDomainMigrationProgressed, 1}:                               privacyPayloadShape[TenantKeyDomainSnapshot](),

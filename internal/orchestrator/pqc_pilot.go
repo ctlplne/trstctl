@@ -43,6 +43,11 @@ type PQCPilotStartRequest struct {
 	RequestedBy    string
 	TimeoutSeconds int
 	Waves          []PQCPilotWaveRequest
+	// RequireObservedTraffic holds each wave after its probe until an
+	// observer agent has seen real clients connect at every target (X3-L5);
+	// ObservedTrafficWindowSeconds bounds the wait (0 = one hour).
+	RequireObservedTraffic       bool
+	ObservedTrafficWindowSeconds int
 }
 
 type PQCPilotWaveRequest struct {
@@ -77,7 +82,20 @@ const (
 	pqcPilotMaxWaves          = 16
 	pqcPilotMaxTargetsPerWave = 64
 	pqcPilotMaxTimeoutSeconds = 120
+	// The observed-traffic window (X3-L5) matches a migration run's: one
+	// hour by default, at most a week.
+	pqcPilotDefaultTrafficWindowSeconds = 3600
+	pqcPilotMaxTrafficWindowSeconds     = 7 * 24 * 3600
 )
+
+// PQCPilotTrafficWindow is how long a wave waits at its observed-traffic gate
+// after its probe before the pilot halts (X3-L5).
+func PQCPilotTrafficWindow(pilot store.PQCPilot) time.Duration {
+	if pilot.ObservedTrafficWindowSeconds > 0 {
+		return time.Duration(pilot.ObservedTrafficWindowSeconds) * time.Second
+	}
+	return pqcPilotDefaultTrafficWindowSeconds * time.Second
+}
 
 func pqcPilotWaveKey(pilotID string, wave int) string {
 	return fmt.Sprintf("pqc-pilot:%s:wave:%d", pilotID, wave)
@@ -102,11 +120,17 @@ func normalizePQCPilot(in PQCPilotStartRequest) (projections.PQCPilotStarted, er
 	if in.TimeoutSeconds < 0 || in.TimeoutSeconds > pqcPilotMaxTimeoutSeconds {
 		return projections.PQCPilotStarted{}, fmt.Errorf("%w: timeout_seconds must be between 0 and %d", ErrPQCPilotInvalid, pqcPilotMaxTimeoutSeconds)
 	}
+	if in.ObservedTrafficWindowSeconds < 0 || in.ObservedTrafficWindowSeconds > pqcPilotMaxTrafficWindowSeconds ||
+		(in.ObservedTrafficWindowSeconds > 0 && !in.RequireObservedTraffic) {
+		return projections.PQCPilotStarted{}, fmt.Errorf("%w: observed_traffic_window_seconds must be between 0 and %d, and only with require_observed_traffic",
+			ErrPQCPilotInvalid, pqcPilotMaxTrafficWindowSeconds)
+	}
 	if len(in.Waves) == 0 || len(in.Waves) > pqcPilotMaxWaves {
 		return projections.PQCPilotStarted{}, fmt.Errorf("%w: a pilot needs between 1 and %d waves; the first is the canary", ErrPQCPilotInvalid, pqcPilotMaxWaves)
 	}
 	out := projections.PQCPilotStarted{ID: id, Name: name, AuthorityID: trimBounded(in.AuthorityID, 120),
-		RequestedBy: trimBounded(in.RequestedBy, 180), TimeoutSeconds: in.TimeoutSeconds}
+		RequestedBy: trimBounded(in.RequestedBy, 180), TimeoutSeconds: in.TimeoutSeconds,
+		RequireObservedTraffic: in.RequireObservedTraffic, ObservedTrafficWindowSeconds: in.ObservedTrafficWindowSeconds}
 	seen := map[string]bool{}
 	for i, wave := range in.Waves {
 		waveName := trimBounded(wave.Name, 120)
@@ -271,33 +295,125 @@ func (o *Orchestrator) RecordPQCPilotWave(ctx context.Context, tenantID, pilotID
 		verdict := compatlab.Assess(cohort)
 		status := "running"
 		haltedAt := ""
+		awaitingTraffic := false
 		switch {
 		case verdict.Halt || (!verdict.Ready && verdict.Rejected == 0 && verdict.NotAttempted == 0 && verdict.Unreachable > 0):
 			// A rejection halts outright; an unreachable canary cannot
 			// vouch for anything either, and rolling a broader wave on
 			// silence is exactly what staging exists to prevent.
 			status, haltedAt = "halted", current.Name
+		case pqcPilotAwaitsTrafficOnly(verdict):
+			// X3-L5: the probe passed; the wave waits at its observed-
+			// traffic gate, and the gate, not the probe, advances it.
+			awaitingTraffic = true
 		case verdict.Ready && wave == len(pilot.Waves):
 			status = "completed"
 		case !verdict.Ready:
 			status, haltedAt = "halted", current.Name
 		}
 		if err := o.appendPQCPilotEventTx(ctx, tx, tenantID, projections.EventPQCPilotWaveAssessed, projections.PQCPilotWaveAssessed{
-			PilotID: pilotID, Wave: wave, Results: results,
-			Verdict: projections.PQCPilotVerdict{Ready: verdict.Ready, Halt: verdict.Halt, Summary: verdict.Summary,
-				Negotiated: verdict.Negotiated, Rejected: verdict.Rejected, Unreachable: verdict.Unreachable, NotAttempted: verdict.NotAttempted},
-			Status: status, HaltedAtWave: haltedAt, AssessedAt: now,
+			PilotID: pilotID, Wave: wave, Results: results, Verdict: pqcPilotVerdictEvent(verdict),
+			Status: status, HaltedAtWave: haltedAt, AssessedAt: now, AwaitingTraffic: awaitingTraffic,
+		}); err != nil {
+			return err
+		}
+		if awaitingTraffic {
+			return nil
+		}
+		if status == "running" {
+			return o.dispatchNextPQCPilotWaveTx(ctx, tx, tenantID, pilot, wave)
+		}
+		after, err := o.store.GetPQCPilotTx(ctx, tx, tenantID, pilotID)
+		if err != nil {
+			return err
+		}
+		finished = &after
+		return nil
+	})
+	if err != nil || finished == nil {
+		return err
+	}
+	return o.signPQCPilotReport(ctx, tenantID, *finished)
+}
+
+// dispatchNextPQCPilotWaveTx dispatches the wave after the given one.
+func (o *Orchestrator) dispatchNextPQCPilotWaveTx(ctx context.Context, tx pgx.Tx, tenantID string, pilot store.PQCPilot, wave int) error {
+	next := pilot.Waves[wave]
+	targets := make([]projections.PQCPilotTarget, 0, len(next.Targets))
+	for _, t := range next.Targets {
+		targets = append(targets, projections.PQCPilotTarget{TargetID: t.TargetID, Address: t.Address,
+			ServerName: t.ServerName, Connector: t.Connector, Fingerprint: t.Fingerprint})
+	}
+	return o.dispatchPQCPilotWaveTx(ctx, tx, tenantID, pilot.ID, wave+1, targets, pqcPilotTimeout(pilot))
+}
+
+// pqcPilotAwaitsTrafficOnly reports a verdict whose only shortfall is the
+// observed-traffic gate still waiting (X3-L5).
+func pqcPilotAwaitsTrafficOnly(v compatlab.Verdict) bool {
+	return !v.Ready && !v.Halt && v.AwaitingTraffic > 0 && v.Unobserved == 0 &&
+		v.Rejected == 0 && v.NotAttempted == 0 && v.Unreachable == 0
+}
+
+func pqcPilotVerdictEvent(v compatlab.Verdict) projections.PQCPilotVerdict {
+	return projections.PQCPilotVerdict{Ready: v.Ready, Halt: v.Halt, Summary: v.Summary, Negotiated: v.Negotiated,
+		Rejected: v.Rejected, Unreachable: v.Unreachable, NotAttempted: v.NotAttempted,
+		AwaitingTraffic: v.AwaitingTraffic, Unobserved: v.Unobserved}
+}
+
+// RecordPQCPilotTraffic closes a wave's observed-traffic gate (X3-L5). The
+// gate calls it once an observer has seen real clients at every negotiated
+// target of the wave, or when the window has ended: observed names the
+// targets seen, with their evidence, and every other negotiated target is
+// unobserved. The verdict over everything through the wave then advances,
+// halts or completes the pilot, exactly as a probe's verdict would. A wave
+// not awaiting traffic changes nothing.
+func (o *Orchestrator) RecordPQCPilotTraffic(ctx context.Context, tenantID, pilotID string, wave int, observed map[string]projections.PQCPilotTraffic, now time.Time) error {
+	var finished *store.PQCPilot
+	err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
+		if err := o.store.LockPQCPilotTx(ctx, tx, tenantID, pilotID); err != nil {
+			return err
+		}
+		pilot, err := o.store.GetPQCPilotTx(ctx, tx, tenantID, pilotID)
+		if err != nil {
+			return err
+		}
+		if pilot.Status != "running" || wave < 1 || wave > len(pilot.Waves) || pilot.Waves[wave-1].Status != "awaiting_traffic" {
+			return nil
+		}
+		current := pilot.Waves[wave-1]
+		results := make([]projections.PQCPilotResult, 0, len(current.Results))
+		for _, r := range current.Results {
+			res := projections.PQCPilotResult{TargetID: r.TargetID, Outcome: r.Outcome, HandshakeMillis: r.HandshakeMillis,
+				ChainBytes: r.ChainBytes, Detail: r.Detail, EvidenceDigest: r.EvidenceDigest, ObservedAt: r.ObservedAt}
+			if r.Outcome == string(compatlab.OutcomeNegotiated) {
+				evidence, ok := observed[r.TargetID]
+				if ok {
+					evidence.Outcome = compatlab.TrafficObserved
+				} else {
+					evidence = projections.PQCPilotTraffic{Outcome: compatlab.TrafficUnobserved}
+				}
+				res.Traffic = &evidence
+			}
+			results = append(results, res)
+		}
+		verdict := compatlab.Assess(pqcPilotCohort(pilot, wave, results))
+		status, haltedAt := "running", ""
+		switch {
+		case verdict.Ready && wave == len(pilot.Waves):
+			status = "completed"
+		case !verdict.Ready:
+			// A target nobody was seen using halts the pilot: silence is
+			// not compatibility, whoever is silent.
+			status, haltedAt = "halted", current.Name
+		}
+		if err := o.appendPQCPilotEventTx(ctx, tx, tenantID, projections.EventPQCPilotWaveTrafficChecked, projections.PQCPilotWaveTrafficChecked{
+			PilotID: pilotID, Wave: wave, Results: results, Verdict: pqcPilotVerdictEvent(verdict),
+			Status: status, HaltedAtWave: haltedAt, CheckedAt: now,
 		}); err != nil {
 			return err
 		}
 		if status == "running" {
-			next := pilot.Waves[wave]
-			targets := make([]projections.PQCPilotTarget, 0, len(next.Targets))
-			for _, t := range next.Targets {
-				targets = append(targets, projections.PQCPilotTarget{TargetID: t.TargetID, Address: t.Address,
-					ServerName: t.ServerName, Connector: t.Connector, Fingerprint: t.Fingerprint})
-			}
-			return o.dispatchPQCPilotWaveTx(ctx, tx, tenantID, pilotID, wave+1, targets, pqcPilotTimeout(pilot))
+			return o.dispatchNextPQCPilotWaveTx(ctx, tx, tenantID, pilot, wave)
 		}
 		after, err := o.store.GetPQCPilotTx(ctx, tx, tenantID, pilotID)
 		if err != nil {
@@ -319,7 +435,7 @@ func pqcPilotTimeout(store.PQCPilot) int { return 0 }
 // pqcPilotCohort accumulates every wave through the given one: the verdict is
 // over everything probed so far, so a canary refusal colors every later wave.
 func pqcPilotCohort(pilot store.PQCPilot, through int, latest []projections.PQCPilotResult) compatlab.Cohort {
-	cohort := compatlab.Cohort{Name: pilot.Name}
+	cohort := compatlab.Cohort{Name: pilot.Name, RequireObservedTraffic: pilot.RequireObservedTraffic}
 	for i := 0; i < through && i < len(pilot.Waves); i++ {
 		w := pilot.Waves[i]
 		for _, target := range w.Targets {
@@ -327,14 +443,22 @@ func pqcPilotCohort(pilot store.PQCPilot, through int, latest []projections.PQCP
 		}
 		if i+1 == through && latest != nil {
 			for _, r := range latest {
-				cohort.Results = append(cohort.Results, compatlab.Result{ClientID: r.TargetID, Outcome: compatlab.Outcome(r.Outcome),
-					HandshakeBytes: r.ChainBytes, LatencyMS: int(r.HandshakeMillis), Detail: r.Detail})
+				res := compatlab.Result{ClientID: r.TargetID, Outcome: compatlab.Outcome(r.Outcome),
+					HandshakeBytes: r.ChainBytes, LatencyMS: int(r.HandshakeMillis), Detail: r.Detail}
+				if r.Traffic != nil {
+					res.Traffic = r.Traffic.Outcome
+				}
+				cohort.Results = append(cohort.Results, res)
 			}
 			continue
 		}
 		for _, r := range w.Results {
-			cohort.Results = append(cohort.Results, compatlab.Result{ClientID: r.TargetID, Outcome: compatlab.Outcome(r.Outcome),
-				HandshakeBytes: r.ChainBytes, LatencyMS: int(r.HandshakeMillis), Detail: r.Detail})
+			res := compatlab.Result{ClientID: r.TargetID, Outcome: compatlab.Outcome(r.Outcome),
+				HandshakeBytes: r.ChainBytes, LatencyMS: int(r.HandshakeMillis), Detail: r.Detail}
+			if r.Traffic != nil {
+				res.Traffic = r.Traffic.Outcome
+			}
+			cohort.Results = append(cohort.Results, res)
 		}
 	}
 	return cohort

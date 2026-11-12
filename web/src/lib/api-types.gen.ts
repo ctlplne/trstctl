@@ -10028,7 +10028,9 @@ export interface PQCPilot {
   halted_at_wave?: string;
   id: string;
   name: string;
+  observed_traffic_window_seconds?: number;
   requested_by?: string;
+  require_observed_traffic?: boolean;
   signed_report?: Record<string, unknown>;
   status: "running" | "halted" | "completed";
   tenant_id: string;
@@ -10051,12 +10053,15 @@ export interface PQCPilotResult {
   observed_at: string;
   outcome: "negotiated" | "rejected" | "unreachable" | "not_attempted";
   target_id: string;
+  traffic?: PQCPilotTraffic;
 }
 
 export interface PQCPilotStartRequest {
   authority_id: string;
   id?: string;
   name: string;
+  observed_traffic_window_seconds?: number;
+  require_observed_traffic?: boolean;
   timeout_seconds?: number;
   waves: PQCPilotWaveRequest[];
 }
@@ -10069,13 +10074,25 @@ export interface PQCPilotTarget {
   target_id: string;
 }
 
+export interface PQCPilotTraffic {
+  finding_id?: string;
+  group?: string;
+  last_seen?: string;
+  outcome: "observed" | "unobserved";
+  pq_hybrid?: boolean;
+  server?: string;
+  tls_version?: string;
+}
+
 export interface PQCPilotVerdict {
+  awaiting_traffic?: number;
   halt: boolean;
   negotiated: number;
   not_attempted: number;
   ready: boolean;
   rejected: number;
   summary: string;
+  unobserved?: number;
   unreachable: number;
 }
 
@@ -10087,8 +10104,9 @@ export interface PQCPilotWave {
   name: string;
   outbox_id?: number;
   results?: PQCPilotResult[];
-  status: "pending" | "probing" | "assessed" | "skipped";
+  status: "pending" | "probing" | "awaiting_traffic" | "assessed" | "skipped";
   targets: PQCPilotTarget[];
+  traffic_checked_at?: string;
   verdict?: PQCPilotVerdict;
 }
 

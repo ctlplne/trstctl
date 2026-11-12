@@ -46517,8 +46517,14 @@
           "name": {
             "type": "string"
           },
+          "observed_traffic_window_seconds": {
+            "type": "integer"
+          },
           "requested_by": {
             "type": "string"
+          },
+          "require_observed_traffic": {
+            "type": "boolean"
           },
           "signed_report": {
             "additionalProperties": {},
@@ -46611,6 +46617,9 @@
           },
           "target_id": {
             "type": "string"
+          },
+          "traffic": {
+            "$ref": "#/components/schemas/PQCPilotTraffic"
           }
         },
         "required": [
@@ -46633,6 +46642,12 @@
           },
           "name": {
             "type": "string"
+          },
+          "observed_traffic_window_seconds": {
+            "type": "integer"
+          },
+          "require_observed_traffic": {
+            "type": "boolean"
           },
           "timeout_seconds": {
             "type": "integer"
@@ -46676,8 +46691,45 @@
         ],
         "type": "object"
       },
+      "PQCPilotTraffic": {
+        "properties": {
+          "finding_id": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string"
+          },
+          "last_seen": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "observed",
+              "unobserved"
+            ],
+            "type": "string"
+          },
+          "pq_hybrid": {
+            "type": "boolean"
+          },
+          "server": {
+            "type": "string"
+          },
+          "tls_version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "type": "object"
+      },
       "PQCPilotVerdict": {
         "properties": {
+          "awaiting_traffic": {
+            "type": "integer"
+          },
           "halt": {
             "type": "boolean"
           },
@@ -46695,6 +46747,9 @@
           },
           "summary": {
             "type": "string"
+          },
+          "unobserved": {
+            "type": "integer"
           },
           "unreachable": {
             "type": "integer"
@@ -46743,6 +46798,7 @@
             "enum": [
               "pending",
               "probing",
+              "awaiting_traffic",
               "assessed",
               "skipped"
             ],
@@ -46753,6 +46809,10 @@
               "$ref": "#/components/schemas/PQCPilotTarget"
             },
             "type": "array"
+          },
+          "traffic_checked_at": {
+            "format": "date-time",
+            "type": "string"
           },
           "verdict": {
             "$ref": "#/components/schemas/PQCPilotVerdict"

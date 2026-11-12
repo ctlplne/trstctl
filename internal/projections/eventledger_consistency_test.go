@@ -230,6 +230,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventPQCPilotWaveDispatched:                   "EventPQCPilotWaveDispatched",
 	projections.EventPQCPilotWaveAssessed:                     "EventPQCPilotWaveAssessed",
 	projections.EventPQCPilotReportSigned:                     "EventPQCPilotReportSigned",
+	projections.EventPQCPilotWaveTrafficChecked:               "EventPQCPilotWaveTrafficChecked",
 	projections.EventRevocationProbeRequested:                 "EventRevocationProbeRequested",
 	projections.EventCertificateRevocationBatchApplied:        "EventCertificateRevocationBatchApplied",
 	projections.EventNHIAccessReviewItemRevocationRecorded:    "EventNHIAccessReviewItemRevocationRecorded",

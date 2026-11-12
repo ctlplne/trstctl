@@ -13976,7 +13976,9 @@ PQCPilot = TypedDict(
         'halted_at_wave': str,
         'id': str,
         'name': str,
+        'observed_traffic_window_seconds': int,
         'requested_by': str,
+        'require_observed_traffic': bool,
         'signed_report': dict[str, Any],
         'status': str,
         'tenant_id': str,
@@ -14007,6 +14009,7 @@ PQCPilotResult = TypedDict(
         'observed_at': str,
         'outcome': str,
         'target_id': str,
+        'traffic': dict[str, Any],
     },
     total=False,
 )
@@ -14017,6 +14020,8 @@ PQCPilotStartRequest = TypedDict(
         'authority_id': str,
         'id': str,
         'name': str,
+        'observed_traffic_window_seconds': int,
+        'require_observed_traffic': bool,
         'timeout_seconds': int,
         'waves': list[dict[str, Any]],
     },
@@ -14035,15 +14040,31 @@ PQCPilotTarget = TypedDict(
     total=False,
 )
 
+PQCPilotTraffic = TypedDict(
+    'PQCPilotTraffic',
+    {
+        'finding_id': str,
+        'group': str,
+        'last_seen': str,
+        'outcome': str,
+        'pq_hybrid': bool,
+        'server': str,
+        'tls_version': str,
+    },
+    total=False,
+)
+
 PQCPilotVerdict = TypedDict(
     'PQCPilotVerdict',
     {
+        'awaiting_traffic': int,
         'halt': bool,
         'negotiated': int,
         'not_attempted': int,
         'ready': bool,
         'rejected': int,
         'summary': str,
+        'unobserved': int,
         'unreachable': int,
     },
     total=False,
@@ -14061,6 +14082,7 @@ PQCPilotWave = TypedDict(
         'results': list[dict[str, Any]],
         'status': str,
         'targets': list[dict[str, Any]],
+        'traffic_checked_at': str,
         'verdict': dict[str, Any],
     },
     total=False,

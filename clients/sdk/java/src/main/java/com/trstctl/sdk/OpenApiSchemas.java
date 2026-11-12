@@ -1006,6 +1006,7 @@ public final class OpenApiSchemas {
       "PQCPilotResult",
       "PQCPilotStartRequest",
       "PQCPilotTarget",
+      "PQCPilotTraffic",
       "PQCPilotVerdict",
       "PQCPilotWave",
       "PQCPilotWaveRequest",

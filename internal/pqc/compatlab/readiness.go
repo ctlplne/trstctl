@@ -37,6 +37,19 @@ const (
 	OutcomeNotAttempted Outcome = "not_attempted"
 )
 
+// Observed-traffic marks (X3-L5). A pilot that requires observed traffic
+// holds a wave until an observer agent has seen real clients connect at
+// every negotiated target after its probe: the probe is trstctl's own
+// client, and the readiness claim is about everyone else's.
+const (
+	// TrafficObserved: real clients were observed connecting at the target
+	// after the probe.
+	TrafficObserved = "observed"
+	// TrafficUnobserved: the observed-traffic window ended with no new
+	// connection seen there.
+	TrafficUnobserved = "unobserved"
+)
+
 // Result is one client's handshake evidence.
 type Result struct {
 	ClientID string
@@ -48,6 +61,10 @@ type Result struct {
 	HandshakeBytes int
 	LatencyMS      int
 	Detail         string
+	// Traffic is the observed-traffic mark (TrafficObserved or
+	// TrafficUnobserved) when the cohort requires observed traffic; empty
+	// while the gate is still waiting, and always empty otherwise.
+	Traffic string `json:",omitempty"`
 }
 
 // Cohort is the set of clients a pilot wave targeted.
@@ -58,6 +75,10 @@ type Cohort struct {
 	// cannot pass as complete.
 	Targeted []string
 	Results  []Result
+	// RequireObservedTraffic makes a negotiated client count toward
+	// readiness only once real clients were observed at its endpoint
+	// (X3-L5).
+	RequireObservedTraffic bool
 }
 
 // Verdict is what the evidence supports.
@@ -71,6 +92,12 @@ type Verdict struct {
 	// on.
 	Summary                                         string
 	Negotiated, Rejected, Unreachable, NotAttempted int
+	// AwaitingTraffic counts negotiated clients whose observed-traffic mark
+	// is still pending; Unobserved those whose window ended with none
+	// (X3-L5). Both are zero, and absent from a report, when the cohort does
+	// not require observed traffic.
+	AwaitingTraffic int `json:",omitempty"`
+	Unobserved      int `json:",omitempty"`
 }
 
 // Assess turns a cohort's handshake evidence into a verdict.
@@ -87,6 +114,10 @@ type Verdict struct {
 //     migration that is already failing.
 //   - a cohort where NOTHING negotiated is not ready even with no rejections,
 //     because it has demonstrated nothing.
+//   - when the cohort REQUIRES OBSERVED TRAFFIC, a negotiated client counts
+//     only once an observer saw real clients connect at its endpoint after
+//     the probe: still waiting is not ready, and a window that ended with no
+//     connection is not ready either — the probe is one client, ours.
 func Assess(c Cohort) Verdict {
 	byClient := map[string]Result{}
 	for _, r := range c.Results {
@@ -144,8 +175,50 @@ func Assess(c Cohort) Verdict {
 			"evidence of readiness, however few failures it recorded."
 		return v
 	}
+	if c.RequireObservedTraffic {
+		return assessObservedTraffic(c, byClient, v)
+	}
 	v.Ready = true
 	v.Summary = fmt.Sprintf(
 		"Ready: all %d targeted clients negotiated the PQ leaf.", v.Negotiated)
+	return v
+}
+
+// assessObservedTraffic finishes a verdict whose every targeted client
+// negotiated, for a cohort that requires observed traffic.
+func assessObservedTraffic(c Cohort, byClient map[string]Result, v Verdict) Verdict {
+	var awaiting, unobserved []string
+	for _, id := range c.Targeted {
+		id = strings.TrimSpace(id)
+		switch byClient[id].Traffic {
+		case TrafficObserved:
+		case TrafficUnobserved:
+			unobserved = append(unobserved, id)
+		default:
+			awaiting = append(awaiting, id)
+		}
+	}
+	v.AwaitingTraffic, v.Unobserved = len(awaiting), len(unobserved)
+	if len(unobserved) > 0 {
+		sort.Strings(unobserved)
+		v.Summary = fmt.Sprintf(
+			"NOT READY: %d of %d targeted clients negotiated the PQ leaf, but no real client was "+
+				"observed connecting at %s within the observed-traffic window. The probe is one "+
+				"client; silence from everyone else is not compatibility.",
+			v.Negotiated, len(c.Targeted), strings.Join(unobserved, ", "))
+		return v
+	}
+	if len(awaiting) > 0 {
+		sort.Strings(awaiting)
+		v.Summary = fmt.Sprintf(
+			"AWAITING TRAFFIC: %d of %d targeted clients negotiated the PQ leaf; waiting for an "+
+				"observer to see real clients connect at %s.",
+			v.Negotiated, len(c.Targeted), strings.Join(awaiting, ", "))
+		return v
+	}
+	v.Ready = true
+	v.Summary = fmt.Sprintf(
+		"Ready: all %d targeted clients negotiated the PQ leaf, and real clients were observed "+
+			"connecting at each.", v.Negotiated)
 	return v
 }

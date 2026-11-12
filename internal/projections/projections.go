@@ -412,6 +412,7 @@ const (
 	EventPQCPilotWaveDispatched             = "pqc.pilot.wave_dispatched"
 	EventPQCPilotWaveAssessed               = "pqc.pilot.wave_assessed"
 	EventPQCPilotReportSigned               = "pqc.pilot.report_signed"
+	EventPQCPilotWaveTrafficChecked         = "pqc.pilot.wave_traffic_checked" // X3-L5: a wave's observed-traffic gate closed
 	EventAccessChangeRequestCreated         = "access.change_request.created"
 	EventAccessChangeRequestDecided         = "access.change_request.decided"
 	EventTenantKeyDomainMigrationStarted    = "tenant.key_domain.migration_started"
@@ -1814,6 +1815,12 @@ type PQCPilotStarted struct {
 	RequestedBy    string         `json:"requested_by,omitempty"`
 	TimeoutSeconds int            `json:"timeout_seconds,omitempty"`
 	Waves          []PQCPilotWave `json:"waves"`
+	// RequireObservedTraffic holds each wave after its probe until an
+	// observer agent has seen real clients connect at every target; a target
+	// still unobserved ObservedTrafficWindowSeconds after the probe halts the
+	// pilot (X3-L5).
+	RequireObservedTraffic       bool `json:"require_observed_traffic,omitempty"`
+	ObservedTrafficWindowSeconds int  `json:"observed_traffic_window_seconds,omitempty"`
 }
 
 type PQCPilotWave struct {
@@ -1850,6 +1857,36 @@ type PQCPilotWaveAssessed struct {
 	Status       string           `json:"status"`
 	HaltedAtWave string           `json:"halted_at_wave,omitempty"`
 	AssessedAt   time.Time        `json:"assessed_at"`
+	// AwaitingTraffic holds the wave at its observed-traffic gate: the probe
+	// passed, the pilot stays running, and no later wave is dispatched until
+	// a wave_traffic_checked event closes the gate (X3-L5).
+	AwaitingTraffic bool `json:"awaiting_traffic,omitempty"`
+}
+
+// PQCPilotWaveTrafficChecked closes a wave's observed-traffic gate (X3-L5):
+// the wave's results with each target's traffic evidence, the verdict over
+// everything accumulated through the wave, and the pilot's status after it.
+type PQCPilotWaveTrafficChecked struct {
+	PilotID      string           `json:"pilot_id"`
+	Wave         int              `json:"wave"`
+	Results      []PQCPilotResult `json:"results"`
+	Verdict      PQCPilotVerdict  `json:"verdict"`
+	Status       string           `json:"status"`
+	HaltedAtWave string           `json:"halted_at_wave,omitempty"`
+	CheckedAt    time.Time        `json:"checked_at"`
+}
+
+// PQCPilotTraffic is one target's observed-traffic evidence (X3-L5): the
+// observer finding that saw real clients connect at the target after its
+// probe, with what they negotiated, or that none did within the window.
+type PQCPilotTraffic struct {
+	Outcome    string     `json:"outcome"`
+	FindingID  string     `json:"finding_id,omitempty"`
+	Server     string     `json:"server,omitempty"`
+	TLSVersion string     `json:"tls_version,omitempty"`
+	Group      string     `json:"group,omitempty"`
+	PQHybrid   bool       `json:"pq_hybrid,omitempty"`
+	LastSeen   *time.Time `json:"last_seen,omitempty"`
 }
 
 type PQCPilotResult struct {
@@ -1860,16 +1897,21 @@ type PQCPilotResult struct {
 	Detail          string    `json:"detail,omitempty"`
 	EvidenceDigest  string    `json:"evidence_digest,omitempty"`
 	ObservedAt      time.Time `json:"observed_at"`
+	// Traffic is the observed-traffic gate's evidence for this target
+	// (X3-L5); absent until the gate closes, and for a pilot without it.
+	Traffic *PQCPilotTraffic `json:"traffic,omitempty"`
 }
 
 type PQCPilotVerdict struct {
-	Ready        bool   `json:"ready"`
-	Halt         bool   `json:"halt"`
-	Summary      string `json:"summary"`
-	Negotiated   int    `json:"negotiated"`
-	Rejected     int    `json:"rejected"`
-	Unreachable  int    `json:"unreachable"`
-	NotAttempted int    `json:"not_attempted"`
+	Ready           bool   `json:"ready"`
+	Halt            bool   `json:"halt"`
+	Summary         string `json:"summary"`
+	Negotiated      int    `json:"negotiated"`
+	Rejected        int    `json:"rejected"`
+	Unreachable     int    `json:"unreachable"`
+	NotAttempted    int    `json:"not_attempted"`
+	AwaitingTraffic int    `json:"awaiting_traffic,omitempty"`
+	Unobserved      int    `json:"unobserved,omitempty"`
 }
 
 // PQCPilotReportSigned retains the signer-signed readiness report (M1) as its
@@ -5635,6 +5677,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPQCPilotWaveDispatched:                   {1: true},
 	EventPQCPilotWaveAssessed:                     {1: true},
 	EventPQCPilotReportSigned:                     {1: true},
+	EventPQCPilotWaveTrafficChecked:               {1: true},
 	EventAccessChangeRequestCreated:               {1: true},
 	EventAccessChangeRequestDecided:               {1: true},
 	EventTenantKeyDomainMigrationStarted:          {1: true},
@@ -9728,8 +9771,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.ID == "" || pl.Name == "" || len(pl.Waves) == 0 {
 			return fmt.Errorf("projections: %s requires id, name and waves", e.Type)
 		}
+		if pl.ObservedTrafficWindowSeconds < 0 || (pl.ObservedTrafficWindowSeconds > 0 && !pl.RequireObservedTraffic) {
+			return fmt.Errorf("projections: %s observed_traffic_window_seconds needs require_observed_traffic", e.Type)
+		}
 		pilot := store.PQCPilot{ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, AuthorityID: pl.AuthorityID,
-			RequestedBy: pl.RequestedBy, CreatedAt: e.Time}
+			RequestedBy: pl.RequestedBy, CreatedAt: e.Time, RequireObservedTraffic: pl.RequireObservedTraffic,
+			ObservedTrafficWindowSeconds: pl.ObservedTrafficWindowSeconds}
 		for i, wave := range pl.Waves {
 			if wave.Name == "" || len(wave.Targets) == 0 {
 				return fmt.Errorf("projections: %s wave %d requires a name and targets", e.Type, i+1)
@@ -9775,16 +9822,39 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if at.IsZero() {
 			at = e.Time
 		}
-		results := make([]store.PQCPilotResult, 0, len(pl.Results))
-		for _, r := range pl.Results {
-			results = append(results, store.PQCPilotResult{TargetID: r.TargetID, Outcome: r.Outcome, HandshakeMillis: r.HandshakeMillis,
-				ChainBytes: r.ChainBytes, Detail: r.Detail, EvidenceDigest: r.EvidenceDigest, ObservedAt: r.ObservedAt})
+		if pl.AwaitingTraffic && pl.Status != "running" {
+			return fmt.Errorf("projections: %s holds a wave for traffic only while the pilot runs", e.Type)
 		}
 		return p.store.ApplyPQCPilotWaveAssessedTx(ctx, tx, e.TenantID, store.PQCPilotWaveAssessment{
-			PilotID: pl.PilotID, Wave: pl.Wave, Results: results,
-			Verdict: store.PQCPilotVerdict{Ready: pl.Verdict.Ready, Halt: pl.Verdict.Halt, Summary: pl.Verdict.Summary,
-				Negotiated: pl.Verdict.Negotiated, Rejected: pl.Verdict.Rejected, Unreachable: pl.Verdict.Unreachable, NotAttempted: pl.Verdict.NotAttempted},
-			Status: pl.Status, HaltedAtWave: pl.HaltedAtWave, AssessedAt: at,
+			PilotID: pl.PilotID, Wave: pl.Wave, Results: storePQCPilotResults(pl.Results),
+			Verdict: storePQCPilotVerdict(pl.Verdict), Status: pl.Status, HaltedAtWave: pl.HaltedAtWave, AssessedAt: at,
+			AwaitingTraffic: pl.AwaitingTraffic,
+		})
+	case EventPQCPilotWaveTrafficChecked:
+		var pl PQCPilotWaveTrafficChecked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.PilotID == "" || pl.Wave <= 0 {
+			return fmt.Errorf("projections: %s requires pilot_id and wave", e.Type)
+		}
+		switch pl.Status {
+		case "running", "halted", "completed":
+		default:
+			return fmt.Errorf("projections: %s status %q is not a pilot status", e.Type, pl.Status)
+		}
+		for _, r := range pl.Results {
+			if r.Traffic != nil && r.Traffic.Outcome != "observed" && r.Traffic.Outcome != "unobserved" {
+				return fmt.Errorf("projections: %s traffic outcome %q is not observed or unobserved", e.Type, r.Traffic.Outcome)
+			}
+		}
+		at := pl.CheckedAt
+		if at.IsZero() {
+			at = e.Time
+		}
+		return p.store.ApplyPQCPilotWaveTrafficCheckedTx(ctx, tx, e.TenantID, store.PQCPilotWaveAssessment{
+			PilotID: pl.PilotID, Wave: pl.Wave, Results: storePQCPilotResults(pl.Results),
+			Verdict: storePQCPilotVerdict(pl.Verdict), Status: pl.Status, HaltedAtWave: pl.HaltedAtWave, AssessedAt: at,
 		})
 	case EventPQCPilotReportSigned:
 		var pl PQCPilotReportSigned

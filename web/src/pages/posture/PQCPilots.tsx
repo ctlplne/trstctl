@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +12,7 @@ import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 import { api, type PQCPilot, type PQCPilotStartRequest } from "@/lib/api";
+import type { PQCPilotTraffic } from "@/lib/api-types.gen";
 import type { StatusTone } from "@/lib/statusVocab";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 
@@ -39,6 +41,13 @@ const waveSchema = z
 const createSchema = z.object({
   name: z.string().trim().min(1, "Pilot name is required."),
   authorityId: z.string().trim().min(1, "The issuing authority is required."),
+  requireTraffic: z.boolean(),
+  trafficWindowMinutes: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 10080), {
+      message: translateNow("posture.pqcPilot.trafficWindowInvalid"),
+    }),
   waves: z
     .string()
     .trim()
@@ -103,8 +112,9 @@ export function PQCPilots() {
   const createForm = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
     mode: "onTouched",
-    defaultValues: { name: "", authorityId: "", waves: exampleWaves },
+    defaultValues: { name: "", authorityId: "", requireTraffic: false, trafficWindowMinutes: "", waves: exampleWaves },
   });
+  const requireTraffic = useWatch({ control: createForm.control, name: "requireTraffic" });
 
   const startPilot = createForm.handleSubmit(async (values) => {
     setBusy(true);
@@ -116,8 +126,12 @@ export function PQCPilots() {
         authority_id: values.authorityId,
         waves: JSON.parse(values.waves) as PQCPilotStartRequest["waves"],
       };
+      if (values.requireTraffic) {
+        request.require_observed_traffic = true;
+        if (values.trafficWindowMinutes !== "") request.observed_traffic_window_seconds = Number(values.trafficWindowMinutes) * 60;
+      }
       const pilot = await api.startPQCPilot(request);
-      createForm.reset({ name: "", authorityId: values.authorityId, waves: exampleWaves });
+      createForm.reset({ name: "", authorityId: values.authorityId, requireTraffic: false, trafficWindowMinutes: "", waves: exampleWaves });
       setSelectedID(pilot.id);
       setNotice(t("posture.pqcPilot.created", { name: pilot.name }));
       await queryClient.invalidateQueries({ queryKey: ["pqc-pilots"] });
@@ -139,6 +153,12 @@ export function PQCPilots() {
   }
 
   const detail = selected.data;
+  function trafficText(traffic: PQCPilotTraffic | undefined, outcome: string) {
+    if (!traffic) return outcome === "negotiated" ? t("posture.pqcPilot.trafficWaiting") : "";
+    if (traffic.outcome !== "observed") return t("posture.pqcPilot.trafficUnobserved");
+    const negotiated = [traffic.tls_version, traffic.group].filter(Boolean).join(" · ");
+    return traffic.pq_hybrid ? t("posture.pqcPilot.trafficObservedHybrid", { negotiated }) : t("posture.pqcPilot.trafficObserved", { negotiated });
+  }
   const report = detail?.signed_report as { key_id?: string; algorithm?: string } | undefined;
 
   return (
@@ -168,6 +188,22 @@ export function PQCPilots() {
         <Field label={t("posture.pqcPilot.waves")} description={t("posture.pqcPilot.wavesHelp")} error={createForm.formState.errors.waves?.message} required>
           {(control) => <Textarea {...control} {...createForm.register("waves")} className="min-h-40 font-mono text-xs" />}
         </Field>
+        <label className="flex items-start gap-2 text-sm font-medium">
+          <Checkbox className="mt-1" {...createForm.register("requireTraffic")} />
+          <span>
+            {t("posture.pqcPilot.requireTraffic")}
+            <span className="mt-1 block text-caption font-normal text-muted-foreground">{t("posture.pqcPilot.requireTrafficHelp")}</span>
+          </span>
+        </label>
+        {requireTraffic ? (
+          <Field
+            label={t("posture.pqcPilot.trafficWindow")}
+            description={t("posture.pqcPilot.trafficWindowHelp")}
+            error={createForm.formState.errors.trafficWindowMinutes?.message}
+          >
+            {(control) => <Input {...control} inputMode="numeric" {...createForm.register("trafficWindowMinutes")} />}
+          </Field>
+        ) : null}
         <Button type="submit" disabled={busy}>
           {busy ? t("posture.pqcPilot.creating") : t("posture.pqcPilot.create")}
         </Button>
@@ -205,6 +241,7 @@ export function PQCPilots() {
               <span className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 <span>{t("posture.pqcPilot.waveProgress", { current: pilot.current_wave, total: pilot.wave_count })}</span>
                 {pilot.halted_at_wave ? <span>{t("posture.pqcPilot.haltedAt", { wave: pilot.halted_at_wave })}</span> : null}
+                {pilot.require_observed_traffic ? <span>{t("posture.pqcPilot.trafficRequired")}</span> : null}
               </span>
               {pilot.verdict_summary ? <span className="text-sm">{pilot.verdict_summary}</span> : null}
             </button>
@@ -235,6 +272,7 @@ export function PQCPilots() {
               {wave.verdict ? <p className="text-sm">{wave.verdict.summary}</p> : null}
               {wave.status === "skipped" ? <p className="text-sm text-muted-foreground">{t("posture.pqcPilot.notProbed")}</p> : null}
               {wave.status === "probing" ? <p className="text-sm text-muted-foreground">{t("posture.pqcPilot.awaitingRelay")}</p> : null}
+              {wave.status === "awaiting_traffic" ? <p className="text-sm text-muted-foreground">{t("posture.pqcPilot.awaitingTraffic")}</p> : null}
               {wave.status === "pending" ? <p className="text-sm text-muted-foreground">{t("posture.pqcPilot.pending")}</p> : null}
               {(wave.results ?? []).length > 0 ? (
                 <table className="w-full text-sm">
@@ -249,6 +287,11 @@ export function PQCPilots() {
                       <th scope="col" className="py-1 pr-2">
                         {t("posture.pqcPilot.handshake")}
                       </th>
+                      {detail?.require_observed_traffic ? (
+                        <th scope="col" className="py-1 pr-2">
+                          {t("posture.pqcPilot.realClients")}
+                        </th>
+                      ) : null}
                       <th scope="col" className="py-1">
                         {t("posture.pqcPilot.detail")}
                       </th>
@@ -264,6 +307,9 @@ export function PQCPilots() {
                         <td className="py-1 pr-2 text-xs text-muted-foreground">
                           {t("posture.pqcPilot.handshakeCost", { ms: result.handshake_ms, bytes: result.chain_bytes })}
                         </td>
+                        {detail?.require_observed_traffic ? (
+                          <td className="py-1 pr-2 text-xs text-muted-foreground">{trafficText(result.traffic, result.outcome)}</td>
+                        ) : null}
                         <td className="py-1 text-xs text-muted-foreground">{result.detail}</td>
                       </tr>
                     ))}

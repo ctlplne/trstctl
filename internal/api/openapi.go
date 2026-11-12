@@ -1963,26 +1963,34 @@ func componentSchemas() map[string]*Schema {
 	}, "name", "targets")
 	pqcPilotStartReq := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "authority_id": str(), "timeout_seconds": {Type: "integer"},
-		"waves": {Type: "array", Items: ref("PQCPilotWaveRequest")},
+		"waves":                           {Type: "array", Items: ref("PQCPilotWaveRequest")},
+		"require_observed_traffic":        {Type: "boolean"},
+		"observed_traffic_window_seconds": {Type: "integer"},
 	}, "name", "authority_id", "waves")
+	pqcPilotTraffic := object(map[string]*Schema{
+		"outcome":    {Type: "string", Enum: []string{"observed", "unobserved"}},
+		"finding_id": str(), "server": str(), "tls_version": str(), "group": str(), "pq_hybrid": {Type: "boolean"},
+		"last_seen": timestamp(),
+	}, "outcome")
 	pqcPilotResult := object(map[string]*Schema{
 		"target_id": str(), "outcome": {Type: "string", Enum: []string{"negotiated", "rejected", "unreachable", "not_attempted"}},
 		"handshake_ms": {Type: "integer"}, "chain_bytes": {Type: "integer"}, "detail": str(), "evidence_digest": str(),
-		"observed_at": timestamp(),
+		"observed_at": timestamp(), "traffic": ref("PQCPilotTraffic"),
 	}, "target_id", "outcome", "handshake_ms", "chain_bytes", "observed_at")
 	pqcPilotVerdict := object(map[string]*Schema{
 		"ready": {Type: "boolean"}, "halt": {Type: "boolean"}, "summary": str(),
 		"negotiated": {Type: "integer"}, "rejected": {Type: "integer"}, "unreachable": {Type: "integer"}, "not_attempted": {Type: "integer"},
+		"awaiting_traffic": {Type: "integer"}, "unobserved": {Type: "integer"},
 	}, "ready", "halt", "summary", "negotiated", "rejected", "unreachable", "not_attempted")
 	pqcPilotWave := object(map[string]*Schema{
 		"index": {Type: "integer"}, "name": str(),
-		"status":          {Type: "string", Enum: []string{"pending", "probing", "assessed", "skipped"}},
+		"status":          {Type: "string", Enum: []string{"pending", "probing", "awaiting_traffic", "assessed", "skipped"}},
 		"targets":         {Type: "array", Items: ref("PQCPilotTarget")},
 		"outbox_id":       {Type: "integer"},
 		"idempotency_key": str(),
 		"results":         {Type: "array", Items: ref("PQCPilotResult")},
 		"verdict":         ref("PQCPilotVerdict"),
-		"dispatched_at":   timestamp(), "assessed_at": timestamp(),
+		"dispatched_at":   timestamp(), "assessed_at": timestamp(), "traffic_checked_at": timestamp(),
 	}, "index", "name", "status", "targets")
 	pqcPilot := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "name": str(), "authority_id": str(), "requested_by": str(),
@@ -1993,7 +2001,9 @@ func componentSchemas() map[string]*Schema {
 		"verdict_summary": str(),
 		"signed_report":   {Type: "object", AdditionalProperties: &Schema{}},
 		"created_at":      timestamp(), "updated_at": timestamp(), "finished_at": timestamp(),
-		"waves": {Type: "array", Items: ref("PQCPilotWave")},
+		"waves":                           {Type: "array", Items: ref("PQCPilotWave")},
+		"require_observed_traffic":        {Type: "boolean"},
+		"observed_traffic_window_seconds": {Type: "integer"},
 	}, "id", "tenant_id", "name", "status", "wave_count", "current_wave", "created_at", "updated_at")
 	accessChangeRequestCreateReq := object(map[string]*Schema{
 		"id": uuid(), "requested_action": {Type: "string", Enum: []string{"grant", "modify", "revoke", "rotate", "deploy", "break_glass"}},
@@ -8486,6 +8496,7 @@ func componentSchemas() map[string]*Schema {
 		"PQCPilotWaveRequest":                   pqcPilotWaveReq,
 		"PQCPilotStartRequest":                  pqcPilotStartReq,
 		"PQCPilotResult":                        pqcPilotResult,
+		"PQCPilotTraffic":                       pqcPilotTraffic,
 		"PQCPilotVerdict":                       pqcPilotVerdict,
 		"PQCPilotWave":                          pqcPilotWave,
 		"PQCPilot":                              pqcPilot,

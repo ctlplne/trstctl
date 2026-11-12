@@ -24668,7 +24668,9 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            observed_traffic_window_seconds?: number;
             requested_by?: string;
+            require_observed_traffic?: boolean;
             signed_report?: {
                 [key: string]: unknown;
             };
@@ -24696,12 +24698,15 @@ export interface components {
             /** @enum {string} */
             outcome: "negotiated" | "rejected" | "unreachable" | "not_attempted";
             target_id: string;
+            traffic?: components["schemas"]["PQCPilotTraffic"];
         };
         PQCPilotStartRequest: {
             authority_id: string;
             /** Format: uuid */
             id?: string;
             name: string;
+            observed_traffic_window_seconds?: number;
+            require_observed_traffic?: boolean;
             timeout_seconds?: number;
             waves: components["schemas"]["PQCPilotWaveRequest"][];
         };
@@ -24712,13 +24717,26 @@ export interface components {
             server_name?: string;
             target_id: string;
         };
+        PQCPilotTraffic: {
+            finding_id?: string;
+            group?: string;
+            /** Format: date-time */
+            last_seen?: string;
+            /** @enum {string} */
+            outcome: "observed" | "unobserved";
+            pq_hybrid?: boolean;
+            server?: string;
+            tls_version?: string;
+        };
         PQCPilotVerdict: {
+            awaiting_traffic?: number;
             halt: boolean;
             negotiated: number;
             not_attempted: number;
             ready: boolean;
             rejected: number;
             summary: string;
+            unobserved?: number;
             unreachable: number;
         };
         PQCPilotWave: {
@@ -24732,8 +24750,10 @@ export interface components {
             outbox_id?: number;
             results?: components["schemas"]["PQCPilotResult"][];
             /** @enum {string} */
-            status: "pending" | "probing" | "assessed" | "skipped";
+            status: "pending" | "probing" | "awaiting_traffic" | "assessed" | "skipped";
             targets: components["schemas"]["PQCPilotTarget"][];
+            /** Format: date-time */
+            traffic_checked_at?: string;
             verdict?: components["schemas"]["PQCPilotVerdict"];
         };
         PQCPilotWaveRequest: {

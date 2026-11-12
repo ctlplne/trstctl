@@ -34317,6 +34317,43 @@ export const messages = {
     description: "Shown for a wave that is probing.",
   },
   "posture.pqcPilot.pending": { defaultMessage: "Waits for the previous wave's verdict.", description: "Shown for a wave not yet dispatched." },
+  "posture.pqcPilot.requireTraffic": {
+    defaultMessage: "Require observed traffic before each wave advances",
+    description: "Checkbox on the pilot start form for the observed-traffic gate.",
+  },
+  "posture.pqcPilot.requireTrafficHelp": {
+    defaultMessage:
+      "After each wave's probe, wait until an observer agent sees real clients connect at every target. A target nobody connects to within the window halts the pilot.",
+    description: "Help text for the observed-traffic gate checkbox.",
+  },
+  "posture.pqcPilot.trafficWindow": { defaultMessage: "Traffic window (minutes)", description: "Field label for the observed-traffic window." },
+  "posture.pqcPilot.trafficWindowHelp": {
+    defaultMessage: "How long a wave waits for real clients after its probe. Leave empty for 60 minutes; at most 10080 (a week).",
+    description: "Help text for the observed-traffic window.",
+  },
+  "posture.pqcPilot.trafficWindowInvalid": {
+    defaultMessage: "Enter whole minutes from 1 to 10080.",
+    description: "Validation message for the observed-traffic window.",
+  },
+  "posture.pqcPilot.trafficRequired": {
+    defaultMessage: "observed traffic required",
+    description: "Pilot list tag for a pilot that requires observed traffic.",
+  },
+  "posture.pqcPilot.awaitingTraffic": {
+    defaultMessage: "The probe passed. Waiting for an observer agent to see real clients connect at every target.",
+    description: "Shown for a wave held at its observed-traffic gate.",
+  },
+  "posture.pqcPilot.realClients": { defaultMessage: "Real clients", description: "Column header: what an observer agent saw real clients negotiate." },
+  "posture.pqcPilot.trafficWaiting": { defaultMessage: "Waiting", description: "Real clients column while the observed-traffic gate waits." },
+  "posture.pqcPilot.trafficUnobserved": {
+    defaultMessage: "None seen within the window",
+    description: "Real clients column when no client was observed before the window ended.",
+  },
+  "posture.pqcPilot.trafficObserved": { defaultMessage: "Seen: {negotiated}", description: "Real clients column: the TLS version and group they negotiated." },
+  "posture.pqcPilot.trafficObservedHybrid": {
+    defaultMessage: "Seen: {negotiated} (post-quantum hybrid)",
+    description: "Real clients column when they negotiated a post-quantum hybrid group.",
+  },
   "posture.pqcPilot.report": { defaultMessage: "Signed readiness report", description: "Heading for the signed report block." },
   "posture.pqcPilot.reportBody": {
     defaultMessage:

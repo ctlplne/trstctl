@@ -1502,10 +1502,13 @@ never live in the API process. What you can do end to end against the running bi
   agree for every member, pauses when the wire proof is late, and marks the
   observer's finding for the predecessor remediated with both proofs. Observer
   evidence is matched by the member's verify address or server name and port; the
-  gate is opt-in per run and covers migration runs, not plain renewals. The Migration
+  gate is opt-in per run and covers migration runs and PQC pilot waves (X3-L5: a
+  wave waits after its probe until real clients are seen at every target, and a
+  target not seen within the window halts the pilot), not plain renewals. The Migration
   page's run history shows the gate and its window, why a run paused, and each
   member's observed traffic (observed, waiting since it was verified live, or not
-  seen in the window).
+  seen in the window); the Posture page's pilot waves show what real clients
+  negotiated at each target.
 - Passive network crypto observer (X1): an agent with the observer role reports
   TLS versions, suites and key-exchange groups, TLS 1.2 certificates, SSH key
   exchange and plaintext HTTP/LDAP from a watched Linux interface, never payload;

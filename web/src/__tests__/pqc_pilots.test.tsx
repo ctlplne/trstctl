@@ -146,3 +146,112 @@ describe("PQCPilots", () => {
     expect(apiMock.startPQCPilot).not.toHaveBeenCalled();
   });
 });
+
+describe("PQCPilots observed traffic (X3-L5)", () => {
+  const gated = {
+    ...halted,
+    id: "77777777-7777-4777-8777-777777777777",
+    name: "Gated PQ pilot",
+    status: "running" as const,
+    current_wave: 2,
+    halted_at_wave: "",
+    verdict_summary: "",
+    signed_report: undefined,
+    require_observed_traffic: true,
+    observed_traffic_window_seconds: 1800,
+    waves: [
+      {
+        index: 1,
+        name: "canary",
+        status: "assessed" as const,
+        targets: [{ target_id: "canary-1", address: "127.0.0.1:4431", fingerprint }],
+        results: [
+          {
+            target_id: "canary-1",
+            outcome: "negotiated" as const,
+            handshake_ms: 4,
+            chain_bytes: 5210,
+            observed_at: "2026-11-12T10:00:00Z",
+            traffic: { outcome: "observed" as const, tls_version: "TLSv1.3", group: "X25519MLKEM768", pq_hybrid: true, last_seen: "2026-11-12T10:00:05Z" },
+          },
+        ],
+        verdict: {
+          ready: true,
+          halt: false,
+          summary: "Ready: all 1 targeted clients negotiated the PQ leaf, and real clients were observed connecting at each.",
+          negotiated: 1,
+          rejected: 0,
+          unreachable: 0,
+          not_attempted: 0,
+        },
+      },
+      {
+        index: 2,
+        name: "broad",
+        status: "awaiting_traffic" as const,
+        targets: [{ target_id: "broad-1", address: "127.0.0.1:4432", fingerprint }],
+        results: [{ target_id: "broad-1", outcome: "negotiated" as const, handshake_ms: 3, chain_bytes: 5210, observed_at: "2026-11-12T10:01:00Z" }],
+        verdict: {
+          ready: false,
+          halt: false,
+          summary: "AWAITING TRAFFIC: 2 of 2 targeted clients negotiated the PQ leaf; waiting for an observer to see real clients connect at broad-1.",
+          negotiated: 2,
+          rejected: 0,
+          unreachable: 0,
+          not_attempted: 0,
+          awaiting_traffic: 1,
+        },
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiMock.pqcPilots.mockResolvedValue({ items: [gated], next_cursor: "" });
+    apiMock.pqcPilot.mockResolvedValue(gated);
+    apiMock.startPQCPilot.mockResolvedValue({ ...gated, id: "88888888-8888-4888-8888-888888888888", name: "New gated pilot", waves: [] });
+  });
+
+  it("starts a pilot that requires observed traffic and shows what real clients negotiated", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <AppQueryProvider>
+        <PQCPilots />
+      </AppQueryProvider>,
+    );
+    const row = await screen.findByRole("button", { name: /Gated PQ pilot/ });
+    expect(within(row).getByText("observed traffic required")).toBeInTheDocument();
+    await user.click(row);
+    const waves = await screen.findByRole("region", { name: /Waves and evidence/ });
+    expect(within(waves).getAllByRole("columnheader", { name: "Real clients" })).toHaveLength(2);
+    expect(within(waves).getByText("Seen: TLSv1.3 · X25519MLKEM768 (post-quantum hybrid)")).toBeInTheDocument();
+    expect(within(waves).getByText(/The probe passed. Waiting for an observer agent/)).toBeInTheDocument();
+    expect(within(waves).getByText("Waiting")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/Pilot name/), "New gated pilot");
+    await user.type(screen.getByLabelText(/Issuing authority ID/), "pq-issuing-ca");
+    const wavesField = screen.getByLabelText(/Waves \(JSON\)/);
+    await user.clear(wavesField);
+    await user.click(wavesField);
+    await user.paste(JSON.stringify([{ name: "canary", targets: [{ target_id: "t-1", address: "web.internal:443", fingerprint }] }]));
+    expect(screen.queryByLabelText(/Traffic window/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: /Require observed traffic/ }));
+    const window = screen.getByLabelText(/Traffic window/);
+    await user.type(window, "0");
+    await user.click(screen.getByRole("button", { name: "Start pilot" }));
+    expect(await screen.findByText("Enter whole minutes from 1 to 10080.")).toBeInTheDocument();
+    expect(apiMock.startPQCPilot).not.toHaveBeenCalled();
+    await user.clear(window);
+    await user.type(window, "30");
+    await user.click(screen.getByRole("button", { name: "Start pilot" }));
+    await waitFor(() => expect(apiMock.startPQCPilot).toHaveBeenCalledTimes(1));
+    expect(apiMock.startPQCPilot.mock.calls[0][0]).toEqual({
+      name: "New gated pilot",
+      authority_id: "pq-issuing-ca",
+      waves: [{ name: "canary", targets: [{ target_id: "t-1", address: "web.internal:443", fingerprint }] }],
+      require_observed_traffic: true,
+      observed_traffic_window_seconds: 1800,
+    });
+    expect(await axe(container)).toHaveNoViolations();
+  });
+});

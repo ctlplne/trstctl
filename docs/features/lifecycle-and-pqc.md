@@ -320,6 +320,23 @@ isolated signer under its `pqc-readiness-report` key and returned as
 Posture page's **Post-quantum pilot waves** panel starts pilots and shows each
 wave's outcomes, verdicts, skipped waves and the signed report.
 
+**Observed traffic (X3-L5).** A pilot started with `"require_observed_traffic": true`
+(on the Posture page, "Require observed traffic before each wave advances") holds
+each wave after its probe. The relay's handshake shows trstctl's own client
+negotiating the leaf; the wave advances only once an observer agent (X1) has also
+seen real clients connect at every negotiated target after that probe — at its
+address, or its server name on the same port — presenting the pilot's leaf on
+TLS 1.2 (TLS 1.3 encrypts the certificate, so there the probe's proof of the leaf
+stands). Until then the wave is `awaiting_traffic` and no later wave is dispatched;
+the leader checks every 30 seconds. Each target's evidence is kept on the wave's
+results: the observer finding, the TLS version and group the clients negotiated,
+whether that group is a post-quantum hybrid such as X25519MLKEM768, and when they
+were last seen. A target nobody was seen using within
+`observed_traffic_window_seconds` (default 3600, at most 604800) of the wave's
+assessment halts the pilot there. The signed readiness report carries the
+requirement and each target's mark, so its verdict is NOT READY over exactly that
+evidence and a reader re-derives it from the report alone.
+
 Campaign mutations emit immutable `pqc.migration_campaign.*` events. PostgreSQL
 projections carry `tenant_id` and forced row-level security. Closure is rejected until
 the readiness gate passes and every selected finding is marked `remediated` or

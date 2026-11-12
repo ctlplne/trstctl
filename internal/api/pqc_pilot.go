@@ -23,6 +23,10 @@ type pqcPilotStartRequest struct {
 	AuthorityID    string                `json:"authority_id,omitempty"`
 	TimeoutSeconds int                   `json:"timeout_seconds,omitempty"`
 	Waves          []pqcPilotWaveRequest `json:"waves"`
+	// RequireObservedTraffic holds each wave after its probe until an
+	// observer agent has seen real clients at every target (X3-L5).
+	RequireObservedTraffic       bool `json:"require_observed_traffic,omitempty"`
+	ObservedTrafficWindowSeconds int  `json:"observed_traffic_window_seconds,omitempty"`
 }
 
 type pqcPilotWaveRequest struct {
@@ -54,6 +58,9 @@ type pqcPilotResponse struct {
 	UpdatedAt      time.Time              `json:"updated_at"`
 	FinishedAt     *time.Time             `json:"finished_at,omitempty"`
 	Waves          []pqcPilotWaveResponse `json:"waves,omitempty"`
+	// X3-L5: the pilot's observed-traffic requirement and window.
+	RequireObservedTraffic       bool `json:"require_observed_traffic,omitempty"`
+	ObservedTrafficWindowSeconds int  `json:"observed_traffic_window_seconds,omitempty"`
 }
 
 type pqcPilotWaveResponse struct {
@@ -67,6 +74,8 @@ type pqcPilotWaveResponse struct {
 	Verdict        *pqcPilotVerdictRes     `json:"verdict,omitempty"`
 	DispatchedAt   *time.Time              `json:"dispatched_at,omitempty"`
 	AssessedAt     *time.Time              `json:"assessed_at,omitempty"`
+	// TrafficCheckedAt is when the wave's observed-traffic gate closed.
+	TrafficCheckedAt *time.Time `json:"traffic_checked_at,omitempty"`
 }
 
 type pqcPilotResultRes struct {
@@ -77,16 +86,30 @@ type pqcPilotResultRes struct {
 	Detail          string    `json:"detail,omitempty"`
 	EvidenceDigest  string    `json:"evidence_digest,omitempty"`
 	ObservedAt      time.Time `json:"observed_at"`
+	// Traffic is the observed-traffic gate's evidence (X3-L5).
+	Traffic *pqcPilotTrafficRes `json:"traffic,omitempty"`
+}
+
+type pqcPilotTrafficRes struct {
+	Outcome    string     `json:"outcome"`
+	FindingID  string     `json:"finding_id,omitempty"`
+	Server     string     `json:"server,omitempty"`
+	TLSVersion string     `json:"tls_version,omitempty"`
+	Group      string     `json:"group,omitempty"`
+	PQHybrid   bool       `json:"pq_hybrid,omitempty"`
+	LastSeen   *time.Time `json:"last_seen,omitempty"`
 }
 
 type pqcPilotVerdictRes struct {
-	Ready        bool   `json:"ready"`
-	Halt         bool   `json:"halt"`
-	Summary      string `json:"summary"`
-	Negotiated   int    `json:"negotiated"`
-	Rejected     int    `json:"rejected"`
-	Unreachable  int    `json:"unreachable"`
-	NotAttempted int    `json:"not_attempted"`
+	Ready           bool   `json:"ready"`
+	Halt            bool   `json:"halt"`
+	Summary         string `json:"summary"`
+	Negotiated      int    `json:"negotiated"`
+	Rejected        int    `json:"rejected"`
+	Unreachable     int    `json:"unreachable"`
+	NotAttempted    int    `json:"not_attempted"`
+	AwaitingTraffic int    `json:"awaiting_traffic,omitempty"`
+	Unobserved      int    `json:"unobserved,omitempty"`
 }
 
 func toPQCPilotResponse(p store.PQCPilot, withWaves bool) pqcPilotResponse {
@@ -94,6 +117,7 @@ func toPQCPilotResponse(p store.PQCPilot, withWaves bool) pqcPilotResponse {
 		ID: p.ID, TenantID: p.TenantID, Name: p.Name, AuthorityID: p.AuthorityID, RequestedBy: p.RequestedBy,
 		Status: p.Status, WaveCount: p.WaveCount, CurrentWave: p.CurrentWave, HaltedAtWave: p.HaltedAtWave,
 		VerdictSummary: p.VerdictSummary, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, FinishedAt: p.FinishedAt,
+		RequireObservedTraffic: p.RequireObservedTraffic, ObservedTrafficWindowSeconds: p.ObservedTrafficWindowSeconds,
 	}
 	if p.SignedReport != "" && json.Valid([]byte(p.SignedReport)) {
 		out.SignedReport = json.RawMessage(p.SignedReport)
@@ -103,20 +127,27 @@ func toPQCPilotResponse(p store.PQCPilot, withWaves bool) pqcPilotResponse {
 	}
 	for _, w := range p.Waves {
 		wave := pqcPilotWaveResponse{Index: w.Index, Name: w.Name, Status: w.Status, OutboxID: w.OutboxID,
-			IdempotencyKey: w.IdempotencyKey, DispatchedAt: w.DispatchedAt, AssessedAt: w.AssessedAt, Targets: []pqcPilotTargetRequest{}}
+			IdempotencyKey: w.IdempotencyKey, DispatchedAt: w.DispatchedAt, AssessedAt: w.AssessedAt,
+			TrafficCheckedAt: w.TrafficCheckedAt, Targets: []pqcPilotTargetRequest{}}
 		for _, t := range w.Targets {
 			wave.Targets = append(wave.Targets, pqcPilotTargetRequest{TargetID: t.TargetID, Address: t.Address,
 				ServerName: t.ServerName, Connector: t.Connector, Fingerprint: t.Fingerprint})
 		}
 		for _, r := range w.Results {
-			wave.Results = append(wave.Results, pqcPilotResultRes{TargetID: r.TargetID, Outcome: r.Outcome,
+			res := pqcPilotResultRes{TargetID: r.TargetID, Outcome: r.Outcome,
 				HandshakeMillis: r.HandshakeMillis, ChainBytes: r.ChainBytes, Detail: r.Detail,
-				EvidenceDigest: r.EvidenceDigest, ObservedAt: r.ObservedAt})
+				EvidenceDigest: r.EvidenceDigest, ObservedAt: r.ObservedAt}
+			if t := r.Traffic; t != nil {
+				res.Traffic = &pqcPilotTrafficRes{Outcome: t.Outcome, FindingID: t.FindingID, Server: t.Server,
+					TLSVersion: t.TLSVersion, Group: t.Group, PQHybrid: t.PQHybrid, LastSeen: t.LastSeen}
+			}
+			wave.Results = append(wave.Results, res)
 		}
 		if w.Verdict != nil {
 			v := *w.Verdict
 			wave.Verdict = &pqcPilotVerdictRes{Ready: v.Ready, Halt: v.Halt, Summary: v.Summary, Negotiated: v.Negotiated,
-				Rejected: v.Rejected, Unreachable: v.Unreachable, NotAttempted: v.NotAttempted}
+				Rejected: v.Rejected, Unreachable: v.Unreachable, NotAttempted: v.NotAttempted,
+				AwaitingTraffic: v.AwaitingTraffic, Unobserved: v.Unobserved}
 		}
 		out.Waves = append(out.Waves, wave)
 	}
@@ -135,7 +166,8 @@ func (a *API) startPQCPilot(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		in := orchestrator.PQCPilotStartRequest{ID: req.ID, Name: req.Name, AuthorityID: req.AuthorityID,
-			RequestedBy: principal.Subject, TimeoutSeconds: req.TimeoutSeconds}
+			RequestedBy: principal.Subject, TimeoutSeconds: req.TimeoutSeconds,
+			RequireObservedTraffic: req.RequireObservedTraffic, ObservedTrafficWindowSeconds: req.ObservedTrafficWindowSeconds}
 		for _, wave := range req.Waves {
 			wr := orchestrator.PQCPilotWaveRequest{Name: wave.Name}
 			for _, t := range wave.Targets {

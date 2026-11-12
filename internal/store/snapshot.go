@@ -342,7 +342,10 @@ import (
 // Version 121 carries P5-L2's audit feed client_cert_ref: a version-120
 // payload has no such column, and a restored syslog feed would stop
 // presenting its client certificate.
-const SnapshotFormatVersion = 121
+// Version 122 carries X3-L5's pilot observed-traffic requirement, window and
+// wave traffic_checked_at: a version-121 payload has no such columns, and a
+// restored pilot would advance on its probe alone.
+const SnapshotFormatVersion = 122
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

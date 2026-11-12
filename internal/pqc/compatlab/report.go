@@ -54,7 +54,11 @@ type Report struct {
 	Cohort      string   `json:"cohort"`
 	Targeted    []string `json:"targeted"`
 	Results     []Result `json:"results"`
-	Verdict     Verdict  `json:"verdict"`
+	// RequireObservedTraffic says the verdict counted a negotiated client
+	// only with real clients observed at its endpoint (X3-L5); absent
+	// otherwise, so an earlier report's bytes are unchanged.
+	RequireObservedTraffic bool    `json:"require_observed_traffic,omitempty"`
+	Verdict                Verdict `json:"verdict"`
 	// GeneratedAt is a caller-supplied unix timestamp. The lab has no clock of
 	// its own here; the caller stamps it so the report is reproducible.
 	GeneratedAt int64 `json:"generated_at"`
@@ -77,14 +81,15 @@ func BuildReport(tenantID, authorityID string, c Cohort, generatedAt int64) (Rep
 		return Report{}, fmt.Errorf("compatlab: a cohort that targeted no clients is not a report")
 	}
 	return Report{
-		SpecVersion: ReportSpecVersion,
-		TenantID:    tenantID,
-		AuthorityID: authorityID,
-		Cohort:      strings.TrimSpace(c.Name),
-		Targeted:    normalizeTargets(c.Targeted),
-		Results:     normalizeResults(c.Results),
-		Verdict:     Assess(c),
-		GeneratedAt: generatedAt,
+		SpecVersion:            ReportSpecVersion,
+		TenantID:               tenantID,
+		AuthorityID:            authorityID,
+		Cohort:                 strings.TrimSpace(c.Name),
+		Targeted:               normalizeTargets(c.Targeted),
+		Results:                normalizeResults(c.Results),
+		RequireObservedTraffic: c.RequireObservedTraffic,
+		Verdict:                Assess(c),
+		GeneratedAt:            generatedAt,
 	}, nil
 }
 
