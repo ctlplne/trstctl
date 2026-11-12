@@ -81,6 +81,18 @@ type secretRepoScanWebhookResponse struct {
 	OutboxDestination string `json:"outbox_destination"`
 	Scanner           string `json:"scanner"`
 	DiscoveryRunPath  string `json:"discovery_run_path"`
+	// Runs lists every scan a native hook's push of several branches or tags
+	// queued (OD-3), the first of which the fields above describe;
+	// RefsNotScanned counts the refs past the per-delivery bound.
+	Runs           []secretRepoScanQueuedRun `json:"runs,omitempty"`
+	RefsNotScanned int                       `json:"refs_not_scanned,omitempty"`
+}
+
+// secretRepoScanQueuedRun is one pushed ref's queued scan.
+type secretRepoScanQueuedRun struct {
+	Ref              string `json:"ref"`
+	RunID            string `json:"run_id"`
+	DiscoveryRunPath string `json:"discovery_run_path"`
 }
 
 type secretRepoScanPostureResponse struct {
@@ -753,7 +765,7 @@ func buildSecretRepoScanPosture(generatedAt string) secretRepoScanPostureRespons
 			ID:               "gitlab",
 			Name:             "GitLab",
 			RealtimeTriggers: []string{"push", "merge_request", "tag_push", "pipeline"},
-			AuthMode:         "authenticated trstctl SecretsWrite webhook; a private repository clones over https with the GitLab token its credential_ref names",
+			AuthMode:         "authenticated trstctl SecretsWrite webhook or a native GitLab hook verified by its signing token (or its secret token); a private repository clones over https with the GitLab token its credential_ref names",
 			IngestMode:       "POST normalized GitLab event enqueues a secret_repo discovery run; worker scans checkout_path or clone_url (a private repository with its credential_ref) with Gitleaks",
 			RefTypes:         []string{"branch", "tag", "merge_request_source", "commit_sha"},
 			SecretHandling:   "raw token and finding value stay outside events; only rule/file/line/redacted reference are recorded",
@@ -763,7 +775,7 @@ func buildSecretRepoScanPosture(generatedAt string) secretRepoScanPostureRespons
 			ID:               "bitbucket",
 			Name:             "Bitbucket",
 			RealtimeTriggers: []string{"repo:push", "pullrequest:created", "pullrequest:updated", "repo:refs_changed"},
-			AuthMode:         "authenticated trstctl SecretsWrite webhook; a private repository clones over https with the Bitbucket token its credential_ref names",
+			AuthMode:         "authenticated trstctl SecretsWrite webhook or a native Bitbucket hook verified by its signature; a private repository clones over https with the Bitbucket token its credential_ref names",
 			IngestMode:       "POST normalized Bitbucket event enqueues a secret_repo discovery run; worker scans checkout_path or clone_url (a private repository with its credential_ref) with Gitleaks",
 			RefTypes:         []string{"branch", "tag", "pull_request_source", "commit_sha"},
 			SecretHandling:   "raw token and finding value stay outside events; only rule/file/line/redacted reference are recorded",
@@ -775,7 +787,7 @@ func buildSecretRepoScanPosture(generatedAt string) secretRepoScanPostureRespons
 		Served:             true,
 		GeneratedAt:        generatedAt,
 		Providers:          providers,
-		WebhookPaths:       []string{"/api/v1/secrets/scans/repositories/github/webhook", "/api/v1/secrets/scans/repositories/gitlab/webhook", "/api/v1/secrets/scans/repositories/bitbucket/webhook"},
+		WebhookPaths:       []string{"/api/v1/secrets/scans/repositories/github/webhook", "/api/v1/secrets/scans/repositories/gitlab/webhook", "/api/v1/secrets/scans/repositories/bitbucket/webhook", "/api/v1/secrets/scans/hooks/{hook_id}"},
 		QueueModel:         "authenticated provider webhook records a tenant-scoped secret_repo discovery source/run and the discovery.run outbox worker performs clone/scan side effects",
 		Scanner:            "gitleaks " + secretscan.GitleaksPinnedVersion,
 		MinimumRulesActive: secretscan.GitleaksMinRulesActive,
@@ -793,14 +805,13 @@ func buildSecretRepoScanPosture(generatedAt string) secretRepoScanPostureRespons
 			{ID: "architecture-lint", Command: "make lint test", Artifact: "local gate transcript", Required: true},
 		},
 		OperatorActions: []string{
-			"install provider webhooks or CI callbacks for GitHub, GitLab, and Bitbucket repository events",
+			"point GitHub, GitLab or Bitbucket repository webhooks at a native hook (secrets.scan_webhooks, verified by the provider's own signature), or CI callbacks at the normalized webhook",
 			"store provider credentials as tenant-scoped secret references, not inline webhook config",
 			"send checkout_path or clone_url to the normalized webhook; a private repository's https clone uses its credential_ref, opened for that clone only and handed to git in its environment, never in the clone's configuration",
 			"route redacted leaked-secret findings into discovery, graph, risk, and incident workflows",
 		},
 		Residuals: []string{
 			"provider webhook delivery latency and repository checkout time determine real-time detection delay",
-			"native GitLab and Bitbucket hook signatures remain a follow-up (a native GitHub hook is verified by its signature)",
 			"self-hosted Git providers may require custom CA/proxy configuration before clone workers can reach them",
 			"historical full-repo scanning still depends on operators scheduling a baseline scan for existing repositories",
 		},
@@ -842,6 +853,16 @@ func secretRepoScanConfig(provider string, req secretRepoScanWebhookRequest) (se
 	if cloneURL != "" && strings.Contains(cloneURL, "://") {
 		if strings.Contains(strings.SplitN(cloneURL, "://", 2)[1], "@") {
 			return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "clone_url must not embed credentials; use credential_ref")
+		}
+	}
+	if checkoutPath == "" {
+		// A clone puts the URL, ref and commit on git's command line, so none
+		// may read as an option (OD-3); a checkout_path is scanned in place.
+		if err := secretscan.ValidateRepositoryRef(req.Ref, req.CommitSHA); err != nil {
+			return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "ref must be a branch or tag name and commit_sha a hex commit ID")
+		}
+		if strings.HasPrefix(cloneURL, "-") {
+			return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "clone_url must be a repository URL or path")
 		}
 	}
 	credentialRef, credentialUser := strings.TrimSpace(req.CredentialRef), strings.TrimSpace(req.CredentialUsername)

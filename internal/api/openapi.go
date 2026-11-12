@@ -8054,6 +8054,12 @@ func componentSchemas() map[string]*Schema {
 		"capability": str(), "provider": str(), "repository": str(), "source_id": uuid(),
 		"run_id": uuid(), "queued": {Type: "boolean"}, "status": str(),
 		"outbox_destination": str(), "scanner": str(), "discovery_run_path": str(),
+		// A native hook's push of several branches or tags queues a scan
+		// each (OD-3): every queued run, and the refs past the bound.
+		"runs": {Type: "array", Items: object(map[string]*Schema{
+			"ref": str(), "run_id": uuid(), "discovery_run_path": str(),
+		}, "ref", "run_id", "discovery_run_path")},
+		"refs_not_scanned": {Type: "integer"},
 	}, "capability", "provider", "repository", "source_id", "run_id", "queued", "status", "outbox_destination", "scanner", "discovery_run_path")
 	thirdPartySecretScanProvider := object(map[string]*Schema{
 		"id": str(), "name": str(),

@@ -1396,15 +1396,17 @@ never live in the API process. What you can do end to end against the running bi
   also folds earlier machine logins, and the rebuilt usage read model is identical.
   Behind a load balancer every request has the balancer's address, so new-network
   detection needs clients that reach trstctl directly.
-- Native GitHub secret-scan webhooks (P6): `POST /api/v1/secrets/scans/hooks/{id}`
-  verifies `X-Hub-Signature-256` with the hook's own secret (`secrets.scan_webhooks`)
-  before reading the delivery, refuses a missing or wrong signature (recorded as a
-  `secret.scan_hook.refused` audit event, P6-L3), answers `ping`,
-  and turns a verified `push` into a repository secret scan of the pushed commit;
-  `X-GitHub-Delivery` makes redeliveries idempotent. The normalized webhook and polling
-  remain. A private repository clones with an https token through `credential_ref`
-  (normalized webhook) or the hook's `clone_credential_ref` (OD-1); SSH clone keys and
-  GitLab/Bitbucket native signatures are not served.
+- Native secret-scan webhooks (P6, OD-3): `POST /api/v1/secrets/scans/hooks/{id}`
+  verifies the provider's own proof with the hook's secret (`secrets.scan_webhooks`)
+  before reading the delivery — GitHub's `X-Hub-Signature-256`, GitLab's signing-token
+  `webhook-signature` (five-minute window) or secret token, Bitbucket's
+  `X-Hub-Signature` — refuses a missing, wrong or stale proof (recorded as a
+  `secret.scan_hook.refused` audit event, P6-L3), answers pings, and turns a verified
+  push into repository secret scans of the pushed commits; the provider's delivery ID
+  makes redeliveries idempotent. The normalized webhook and polling remain. A private
+  repository clones with an https token through `credential_ref` (normalized webhook)
+  or the hook's `clone_credential_ref` (OD-1); SSH clone keys are not served, and a
+  Bitbucket Cloud push of more than ten branches or tags scans the first ten.
 - Secrets workspace (A235): projects with environments over the native store (by name
   prefix `<project>/<environment>/`), restricted environments open only to granted
   members on every read/write surface (native API, references, previews, imports, syncs,

@@ -12069,8 +12069,10 @@ export interface SecretRepositoryWebhookReceipt {
   outbox_destination: string;
   provider: string;
   queued: boolean;
+  refs_not_scanned?: number;
   repository: string;
   run_id: string;
+  runs?: { discovery_run_path: string; ref: string; run_id: string }[];
   scanner: string;
   source_id: string;
   status: string;

@@ -23,6 +23,10 @@ var (
 	// ErrRepositoryCredentialNeedsHTTPS refuses to send a repository credential
 	// anywhere but an https clone URL (OD-1).
 	ErrRepositoryCredentialNeedsHTTPS = errors.New("secretscan: a repository credential_ref needs an https clone_url")
+	// ErrRepositoryUnsafeRef is a ref that is not a plain branch or tag name,
+	// or a commit that is not a hex commit ID: both reach git's command line,
+	// so neither may read as an option (OD-3).
+	ErrRepositoryUnsafeRef = errors.New("secretscan: the ref must be a branch or tag name and the commit a hex commit ID")
 )
 
 // RepositoryCredential is a private repository's clone credential for one
@@ -93,8 +97,11 @@ func PrepareRepositoryTargetWithCredential(ctx context.Context, cfg RepositorySc
 	if cloneURL == "" {
 		return RepositoryTarget{}, ErrRepositoryTargetRequired
 	}
-	if cloneURLHasInlineCredentials(cloneURL) {
+	if cloneURLHasInlineCredentials(cloneURL) || strings.HasPrefix(cloneURL, "-") {
 		return RepositoryTarget{}, ErrRepositoryUnsafeCloneURL
+	}
+	if err := ValidateRepositoryRef(cfg.Ref, cfg.CommitSHA); err != nil {
+		return RepositoryTarget{}, err
 	}
 	var auth []string
 	if cred != nil {
@@ -109,23 +116,79 @@ func PrepareRepositoryTargetWithCredential(ctx context.Context, cfg RepositorySc
 	}
 	cleanup := func() { _ = os.RemoveAll(tmp) }
 	args := []string{"clone", "--no-tags", "--depth", "1"}
-	ref := strings.TrimSpace(cfg.Ref)
 	commit := strings.TrimSpace(cfg.CommitSHA)
-	if ref != "" && commit == "" {
-		args = append(args, "--branch", ref)
+	if branch := cloneBranch(cfg.Ref); branch != "" {
+		// The pushed branch or tag itself, so a push to any branch, not only
+		// the default one, has its commit in the shallow clone (OD-3).
+		args = append(args, "--branch", branch)
 	}
-	args = append(args, cloneURL, tmp)
+	args = append(args, "--", cloneURL, tmp)
 	if err := runGit(ctx, "", auth, args...); err != nil {
 		cleanup()
 		return RepositoryTarget{}, err
 	}
 	if commit != "" {
 		if err := runGit(ctx, tmp, nil, "checkout", "--detach", commit); err != nil {
-			cleanup()
-			return RepositoryTarget{}, err
+			// The branch moved on after the push: fetch the pushed commit
+			// itself (hosts serve a reachable commit by its ID).
+			if ferr := runGit(ctx, tmp, auth, "fetch", "--no-tags", "--depth", "1", "--", "origin", commit); ferr != nil {
+				cleanup()
+				return RepositoryTarget{}, err
+			}
+			if err := runGit(ctx, tmp, nil, "checkout", "--detach", commit); err != nil {
+				cleanup()
+				return RepositoryTarget{}, err
+			}
 		}
 	}
 	return RepositoryTarget{Path: tmp, Cleanup: cleanup, Mode: "clone_url"}, nil
+}
+
+// ValidateRepositoryRef refuses a ref that is not a plain branch or tag name
+// (refs/heads/<name>, refs/tags/<name> or a bare name, per git's ref-name
+// rules: no leading dash, no "..", no spaces, controls or ~^:?*[\) and a
+// commit that is not a 7 to 64 character hex commit ID.
+func ValidateRepositoryRef(ref, commit string) error {
+	ref, commit = strings.TrimSpace(ref), strings.TrimSpace(commit)
+	if commit != "" {
+		if len(commit) < 7 || len(commit) > 64 {
+			return ErrRepositoryUnsafeRef
+		}
+		for _, c := range commit {
+			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+				return ErrRepositoryUnsafeRef
+			}
+		}
+	}
+	if ref == "" {
+		return nil
+	}
+	if len(ref) > 255 || strings.HasPrefix(ref, "-") || strings.Contains(ref, "..") || strings.HasSuffix(ref, "/") ||
+		strings.ContainsAny(ref, " ~^:?*[\\") {
+		return ErrRepositoryUnsafeRef
+	}
+	for _, c := range ref {
+		if c < 0x20 || c == 0x7f {
+			return ErrRepositoryUnsafeRef
+		}
+	}
+	return nil
+}
+
+// cloneBranch names the branch or tag a ref clones as: refs/heads/<name> and
+// refs/tags/<name> by name, a bare name as given, and nothing for any other
+// ref (a pull request's, for one), which clones the default branch.
+func cloneBranch(ref string) string {
+	ref = strings.TrimSpace(ref)
+	for _, prefix := range []string{"refs/heads/", "refs/tags/"} {
+		if name, ok := strings.CutPrefix(ref, prefix); ok {
+			return name
+		}
+	}
+	if strings.HasPrefix(ref, "refs/") || strings.HasPrefix(ref, "-") {
+		return ""
+	}
+	return ref
 }
 
 func cloneURLHasInlineCredentials(raw string) bool {

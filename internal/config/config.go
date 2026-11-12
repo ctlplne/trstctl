@@ -3012,9 +3012,13 @@ func (v SecretValidityChecks) Validate() error {
 type SecretScanWebhook struct {
 	ID       string `json:"id"`
 	TenantID string `json:"tenant_id"`
-	// Provider is github (X-Hub-Signature-256 over the body).
+	// Provider is github (X-Hub-Signature-256 over the body), gitlab (the
+	// hook's signing token, webhook-signature over webhook-id, timestamp and
+	// body, or its secret token in X-Gitlab-Token; OD-3) or bitbucket
+	// (X-Hub-Signature, HMAC-SHA256 over the body; OD-3).
 	Provider string `json:"provider"`
-	// SecretRef holds the hook's signing secret (file: or secret://).
+	// SecretRef holds the hook's signing secret (file: or secret://): for
+	// gitlab, a signing token (whsec_...) or the secret token.
 	SecretRef string `json:"secret_ref"`
 	// CloneCredentialRef holds the access token a pushed private repository
 	// clones with (OD-1; file: or secret://); CloneCredentialUsername is the
@@ -5582,8 +5586,10 @@ func validateSecretScanWebhooks(hooks []SecretScanWebhook) []error {
 		if _, err := uuid.Parse(strings.TrimSpace(hook.TenantID)); err != nil {
 			errs = append(errs, fmt.Errorf("%s: tenant_id must be a UUID", where))
 		}
-		if hook.Provider != "github" {
-			errs = append(errs, fmt.Errorf("%s: provider must be github", where))
+		switch hook.Provider {
+		case "github", "gitlab", "bitbucket":
+		default:
+			errs = append(errs, fmt.Errorf("%s: provider must be github, gitlab or bitbucket", where))
 		}
 		if err := validateCredentialRef(hook.SecretRef); err != nil {
 			errs = append(errs, fmt.Errorf("%s: secret_ref: %w", where, err))

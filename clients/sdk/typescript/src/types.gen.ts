@@ -10789,7 +10789,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Receive a provider-signed (GitHub X-Hub-Signature-256) push webhook and queue a repository secret scan */
+        /** Receive a provider-signed push webhook (GitHub X-Hub-Signature-256, GitLab signing or secret token, Bitbucket X-Hub-Signature) and queue repository secret scans */
         post: operations["receiveSecretScanHook"];
         delete?: never;
         options?: never;
@@ -27376,9 +27376,16 @@ export interface components {
             outbox_destination: string;
             provider: string;
             queued: boolean;
+            refs_not_scanned?: number;
             repository: string;
             /** Format: uuid */
             run_id: string;
+            runs?: {
+                discovery_run_path: string;
+                ref: string;
+                /** Format: uuid */
+                run_id: string;
+            }[];
             scanner: string;
             /** Format: uuid */
             source_id: string;

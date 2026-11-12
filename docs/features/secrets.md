@@ -2442,7 +2442,31 @@ signature was missing or wrong (never the body or the signature); `ping` answers
 pushed repository's `clone_url` at the pushed commit. `X-GitHub-Delivery` is the
 idempotency key, so a redelivery returns the recorded answer and queues nothing new.
 The normalized route and scheduled polling stay for installs that cannot accept
-webhooks. Native GitLab and Bitbucket signatures remain shortfalls, not served.
+webhooks.
+
+GitLab and Bitbucket call trstctl the same way (OD-3), with `provider: gitlab` or
+`provider: bitbucket` on the hook:
+
+| Provider | Proof checked before anything else | Delivery ID (idempotency) | Events that scan |
+|---|---|---|---|
+| GitLab, signing token | `webhook-signature` (`v1,<base64>`): HMAC-SHA256 under the token's secret (`whsec_…`, base64) over `<webhook-id>.<webhook-timestamp>.<body>`; a timestamp more than five minutes from now is refused | `webhook-id` | `Push Hook`, `Tag Push Hook` |
+| GitLab, secret token | `X-Gitlab-Token` equal to the hook's secret token (GitLab calls this the weaker option; prefer a signing token) | `Idempotency-Key`, else `X-Gitlab-Event-UUID` | `Push Hook`, `Tag Push Hook` |
+| Bitbucket Cloud | `X-Hub-Signature` (`sha256=<hex>`): HMAC-SHA256 of the exact body | `X-Request-UUID` | `repo:push` |
+| Bitbucket Data Center | `X-Hub-Signature` as above | `X-Request-Id` | `repo:refs_changed`; `diagnostics:ping` answers `{"pong": true}` |
+
+A GitLab push scans `project.git_http_url` at `checkout_sha`; a Bitbucket Cloud push
+scans each new branch or tag in `push.changes` (at most ten per delivery, each its own
+run, all listed in the receipt's `runs`) from the repository's link plus `.git`; a Data
+Center push scans each changed ref that was not deleted from the repository's `http`
+clone link. A deleted branch scans nothing, and other events are acknowledged and
+ignored. A refused delivery is audited like GitHub's (`signature_missing`,
+`signature_mismatch`, or `signature_stale` for a stale GitLab signature).
+
+Every pushed branch or tag is cloned by name, so a push to any branch — not only the
+default one — has its commit in the shallow clone (if the branch has moved on since, the
+worker fetches the pushed commit itself). A ref that is not a plain branch or tag name,
+or a commit that is not a hex commit ID, is refused (400) before it can reach git's
+command line.
 
 A leaked secret a scan found moves into the native store from the CLI (P6):
 

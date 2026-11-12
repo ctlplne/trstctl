@@ -56039,12 +56039,38 @@
           "queued": {
             "type": "boolean"
           },
+          "refs_not_scanned": {
+            "type": "integer"
+          },
           "repository": {
             "type": "string"
           },
           "run_id": {
             "format": "uuid",
             "type": "string"
+          },
+          "runs": {
+            "items": {
+              "properties": {
+                "discovery_run_path": {
+                  "type": "string"
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "run_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ref",
+                "run_id",
+                "discovery_run_path"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "scanner": {
             "type": "string"
@@ -109524,7 +109550,7 @@
             "description": "server error"
           }
         },
-        "summary": "Receive a provider-signed (GitHub X-Hub-Signature-256) push webhook and queue a repository secret scan",
+        "summary": "Receive a provider-signed push webhook (GitHub X-Hub-Signature-256, GitLab signing or secret token, Bitbucket X-Hub-Signature) and queue repository secret scans",
         "x-trstctl-public-rationale": "public provider webhook: GitHub authenticates each delivery with an HMAC-SHA256 signature under the hook's own secret (X-Hub-Signature-256), checked before any work; the configured hook names its tenant."
       }
     },

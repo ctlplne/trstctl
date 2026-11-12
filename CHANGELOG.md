@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- Native GitLab and Bitbucket push hooks for repository secret scans (OD-3): `secrets.scan_webhooks` takes
+  `provider: gitlab` (the hook's signing token checks `webhook-signature` over `webhook-id`, `webhook-timestamp` and the
+  body, refusing a stale timestamp; a hook with a secret token checks `X-Gitlab-Token`) and `provider: bitbucket`
+  (`X-Hub-Signature`, HMAC-SHA256 of the body; Cloud `repo:push` and Data Center `repo:refs_changed`). A verified push
+  scans each pushed branch or tag, a refused delivery is audited, and the provider's delivery ID keeps redeliveries
+  idempotent.
 - GitHub Dependabot and Codespaces secrets and GitLab instance variables (OD-2): a `secret_store` source's
   `github-actions` provider lists the repository's and organization's secrets in each chosen store (`stores`:
   `actions`, the default, `dependabot`, `codespaces`) and, with `user_codespaces`, the token owner's own Codespaces
@@ -1261,6 +1267,9 @@
 
 ### Fixed
 
+- A push to a branch other than the default one now scans that branch (OD-3): the repository scan cloned the default
+  branch and then could not check out the pushed commit. A ref or commit that git could read as an option is refused
+  before it reaches git's command line.
 - The Security scans retry a container registry error. The Trivy job builds the runtime image
   before scanning it, and Docker Hub answered 500 to the build on 2026-11-12, so the job failed
   without scanning anything. Its registry operations (the base image lookup and the build) now run

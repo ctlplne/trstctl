@@ -1412,7 +1412,7 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 	target, err := secretscan.PrepareRepositoryTargetWithCredential(ctx, cfg, cred)
 	if err != nil {
 		if errors.Is(err, secretscan.ErrRepositoryTargetRequired) || errors.Is(err, secretscan.ErrRepositoryUnsafeCloneURL) ||
-			errors.Is(err, secretscan.ErrRepositoryCredentialNeedsHTTPS) {
+			errors.Is(err, secretscan.ErrRepositoryCredentialNeedsHTTPS) || errors.Is(err, secretscan.ErrRepositoryUnsafeRef) {
 			return netscan.Report{}, "failed", err.Error(), nil
 		}
 		if cred != nil {
