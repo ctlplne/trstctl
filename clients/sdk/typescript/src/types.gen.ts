@@ -5454,6 +5454,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/external-cas/{id}/adcs-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the requests an AD CS issuer's CA holds for a manager's approval, from the relay's latest read of its database */
+        get: operations["listADCSPendingRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/external-cas/{id}/adcs-requests/{request_id}/approval-requests": {
         parameters: {
             query?: never;
@@ -12786,6 +12803,25 @@ export interface components {
             published_by?: string[];
             requires_manager_approval: boolean;
             schema_version?: number;
+        };
+        ADCSPendingRequests: {
+            ca_config: string;
+            issuer_id: string;
+            items: {
+                common_name?: string;
+                /** @description A trstctl issuance is held on this request (N1-L1). */
+                held_issuance: boolean;
+                request_id: number;
+                requester?: string;
+                template?: string;
+            }[];
+            /**
+             * Format: date-time
+             * @description When the relay last read the CA database with its pending requests; absent when it never has.
+             */
+            read_at?: string;
+            /** @description The CA held more pending requests than the read lists (it lists the newest 500). */
+            truncated: boolean;
         };
         ADCSPosture: {
             critical: number;
@@ -44418,6 +44454,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ADCSDecisionList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listADCSPendingRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description configured external CA registry id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ADCSPendingRequests"];
                 };
             };
             /** @description client error */

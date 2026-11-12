@@ -13633,6 +13633,46 @@ export const messages = {
     defaultMessage: "Could not load the issuances held for approval.",
     description: "N1-L1: fallback when the held issuances cannot be read.",
   },
+  "caHierarchy.heldIssues.pendingHeading": {
+    defaultMessage: "Pending at the CA",
+    description: "N1-L2: heading for the requests the CA holds for a manager's approval, from the relay's read of its database.",
+  },
+  "caHierarchy.heldIssues.pendingReadAt": {
+    defaultMessage: "From the relay's read of the CA database at {time}.",
+    description: "N1-L2: when the pending requests were last read.",
+  },
+  "caHierarchy.heldIssues.pendingNeverRead": {
+    defaultMessage: "The relay has not read this CA's database yet; collect it from the AD CS database view.",
+    description: "N1-L2: no read has listed this CA's pending requests.",
+  },
+  "caHierarchy.heldIssues.pendingNone": {
+    defaultMessage: "The CA held no request for approval when it was read.",
+    description: "N1-L2: the latest read listed no pending request.",
+  },
+  "caHierarchy.heldIssues.pendingTruncated": {
+    defaultMessage: "The CA holds more pending requests; the newest 500 are listed.",
+    description: "N1-L2: the read listed the newest 500 of more.",
+  },
+  "caHierarchy.heldIssues.template": {
+    defaultMessage: "Template",
+    description: "N1-L2: column for the certificate template a pending request names.",
+  },
+  "caHierarchy.heldIssues.requestedName": {
+    defaultMessage: "Requested name",
+    description: "N1-L2: column for the name a pending request asks for.",
+  },
+  "caHierarchy.heldIssues.requester": {
+    defaultMessage: "Requester",
+    description: "N1-L2: column for the account that made a pending request.",
+  },
+  "caHierarchy.heldIssues.trstctlIssuance": {
+    defaultMessage: "trstctl issuance",
+    description: "N1-L2: column saying whether a trstctl issuance waits on the request.",
+  },
+  "caHierarchy.heldIssues.heldHere": {
+    defaultMessage: "Held, waiting on this request",
+    description: "N1-L2: a trstctl issuance is held on this pending request.",
+  },
   "caHierarchy.heldIssues.errorTitle": {
     defaultMessage: "Held issuances unavailable",
     description: "N1-L1: error title for the held issuances section.",

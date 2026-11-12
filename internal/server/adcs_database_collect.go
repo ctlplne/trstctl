@@ -43,12 +43,18 @@ func (s *Server) recordADCSDatabase(ctx context.Context, tenantID, agentName, id
 	}
 	sum := report.Summary
 	eventID := uuid.NewSHA1(adcsDatabaseReportNamespace, []byte(tenantID+"\x00"+idempotencyKey)).String()
+	// N1-L2: the CA's pending requests, as the relay listed them.
+	pending := make([]projections.ADCSPendingRequest, 0, len(report.Pending))
+	for _, r := range report.Pending {
+		pending = append(pending, projections.ADCSPendingRequest{RequestID: r.RequestID, Template: r.Template, CommonName: r.CommonName, Requester: r.Requester})
+	}
 	return s.orch.RecordADCSDatabaseCollected(ctx, tenantID, eventID, projections.ADCSDatabaseIngested{
 		CAConfig: intent.CAConfig,
 		Issued:   sum.Issued, Pending: sum.Pending, Revoked: sum.Revoked,
 		Denied: sum.Denied, Failed: sum.Failed, Unknown: sum.Unknown,
 		Unparsed: sum.Unparsed, Total: sum.Total,
 		RowsRead: report.RowsRead, RowsRejected: report.RowsRejected,
-		Source: "relay:" + agentID,
+		Source:          "relay:" + agentID,
+		PendingRequests: pending, PendingListed: report.PendingListed(), PendingTruncated: report.PendingTruncated,
 	})
 }

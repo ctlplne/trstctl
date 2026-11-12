@@ -864,6 +864,43 @@ type ADCSDatabaseIngested struct {
 	RowsRejected int    `json:"rows_rejected"`
 	Source       string `json:"source,omitempty"`
 	LastError    string `json:"last_error,omitempty"`
+	// PendingRequests are the requests the CA holds for a manager's approval,
+	// from a relay's read (N1-L2): newest first, at most 500. PendingListed
+	// says the read listed them (a relay from before N1-L2 only counted them),
+	// and PendingTruncated that the CA holds more.
+	PendingRequests  []ADCSPendingRequest `json:"pending_requests,omitempty"`
+	PendingListed    bool                 `json:"pending_listed,omitempty"`
+	PendingTruncated bool                 `json:"pending_truncated,omitempty"`
+}
+
+// addADCSDatabasePrivacyPolicies classifies adcs.ca_database.ingested: counts
+// and identifiers are opaque; a pending request's requested name is a subject
+// token and its requester an exact identity, so subject erasure reaches them
+// (N1-L2).
+func addADCSDatabasePrivacyPolicies(policies map[privacyEventPolicyKey]events.PrivacyEventPolicy) {
+	const (
+		opaque = events.PrivacyFieldOpaqueExact
+		exact  = events.PrivacyFieldIdentityExact
+		token  = events.PrivacyFieldSubjectToken
+		clear  = events.PrivacyFieldFreeTextClear
+	)
+	policies[privacyEventPolicyKey{EventADCSDatabaseIngested, 1}] = privacyRules(
+		privacyRule("/ca_config", opaque), privacyRule("/issued", opaque), privacyRule("/pending", opaque),
+		privacyRule("/revoked", opaque), privacyRule("/denied", opaque), privacyRule("/failed", opaque),
+		privacyRule("/unknown", opaque), privacyRule("/unparsed", opaque), privacyRule("/total", opaque),
+		privacyRule("/rows_read", opaque), privacyRule("/rows_rejected", opaque), privacyRule("/source", opaque),
+		privacyRule("/last_error", clear), privacyRule("/pending_listed", opaque), privacyRule("/pending_truncated", opaque),
+		privacyRule("/pending_requests/*/request_id", opaque), privacyRule("/pending_requests/*/template", opaque),
+		privacyRule("/pending_requests/*/common_name", token), privacyRule("/pending_requests/*/requester", exact))
+}
+
+// ADCSPendingRequest is one request a CA holds for a manager's approval, as an
+// operator needs it to decide (N1-L2).
+type ADCSPendingRequest struct {
+	RequestID  int    `json:"request_id"`
+	Template   string `json:"template,omitempty"`
+	CommonName string `json:"common_name,omitempty"`
+	Requester  string `json:"requester,omitempty"`
 }
 
 // ADCSDatabaseCollectionRequested is the payload of
@@ -6170,14 +6207,22 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyADCSDatabaseIngestedTx(ctx, tx, store.ADCSDatabaseSummary{
+		if err := p.store.ApplyADCSDatabaseIngestedTx(ctx, tx, store.ADCSDatabaseSummary{
 			TenantID: e.TenantID, CAConfig: pl.CAConfig,
 			Issued: pl.Issued, Pending: pl.Pending, Revoked: pl.Revoked,
 			Denied: pl.Denied, Failed: pl.Failed, Unknown: pl.Unknown,
 			Unparsed: pl.Unparsed, Total: pl.Total,
 			RowsRead: pl.RowsRead, RowsRejected: pl.RowsRejected,
 			Source: pl.Source, LastError: pl.LastError, IngestedAt: e.Time,
-		}, e.Sequence)
+		}, e.Sequence); err != nil || !pl.PendingListed {
+			return err
+		}
+		// N1-L2: the read's pending requests replace the CA's previous list.
+		requests := make([]store.ADCSPendingRequest, 0, len(pl.PendingRequests))
+		for _, r := range pl.PendingRequests {
+			requests = append(requests, store.ADCSPendingRequest{RequestID: r.RequestID, Template: r.Template, CommonName: r.CommonName, Requester: r.Requester})
+		}
+		return p.store.ReplaceADCSPendingRequestsTx(ctx, tx, e.TenantID, pl.CAConfig, requests, pl.PendingTruncated, e.Time, e.Sequence)
 	case EventEdgeSegmentPolicySet:
 		var pl EdgeSegmentPolicySet
 		if err := decode(e, &pl); err != nil {

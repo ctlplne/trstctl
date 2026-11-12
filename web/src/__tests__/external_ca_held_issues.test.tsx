@@ -25,6 +25,12 @@ describe("N1-L1 issuances held for CA approval", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(api, "externalCAHeldIssues").mockResolvedValue(held as never);
+    vi.spyOn(api, "adcsPendingRequests").mockResolvedValue({
+      issuer_id: "corp-adcs-web",
+      ca_config: "CORP-DC01\\Corp Issuing CA",
+      truncated: false,
+      items: [],
+    } as never);
   });
 
   it("lists each AD CS authority's held issuances with the CA's request id", async () => {
@@ -64,6 +70,36 @@ describe("N1-L1 issuances held for CA approval", () => {
     await user.click(await screen.findByRole("button", { name: "Resume the issuance held as CA request 4101" }));
     expect(await screen.findByText("Request 4101 is issued (serial 7a11); its issuance has its certificate.")).toBeInTheDocument();
     await waitFor(() => expect(api.externalCAHeldIssues).toHaveBeenCalledTimes(3));
+  });
+
+  // N1-L2: the CA's pending requests from the relay's latest read, the one a
+  // trstctl issuance waits on marked.
+  it("lists the CA's pending requests from the relay's read", async () => {
+    vi.spyOn(api, "adcsPendingRequests").mockResolvedValue({
+      issuer_id: "corp-adcs-web",
+      ca_config: "CORP-DC01\\Corp Issuing CA",
+      read_at: "2026-11-12T09:00:00Z",
+      truncated: false,
+      items: [
+        { request_id: 4302, template: "WebServer", common_name: "app-b.corp.example", requester: "CORP\\carol", held_issuance: false },
+        { request_id: 4101, template: "WebServer", common_name: "held.corp.example", requester: "CORP\\svc-trstctl", held_issuance: true },
+      ],
+    } as never);
+    render(<ExternalCAHeldIssuesPanel externalCAs={authorities} />);
+    expect(await screen.findByRole("heading", { name: "Pending at the CA" })).toBeInTheDocument();
+    const carol = (await screen.findByText("CORP\\carol")).closest("tr") as HTMLTableRowElement;
+    expect(within(carol).getByText("4302")).toBeInTheDocument();
+    expect(within(carol).getByText("app-b.corp.example")).toBeInTheDocument();
+    const waiting = screen.getByText("CORP\\svc-trstctl").closest("tr") as HTMLTableRowElement;
+    expect(within(waiting).getByText("Held, waiting on this request")).toBeInTheDocument();
+  });
+
+  it("shows no pending list, and no error, for an authority without a relay", async () => {
+    vi.spyOn(api, "adcsPendingRequests").mockRejectedValue(new ApiError(409, JSON.stringify({ status: 409, detail: "this issuer has no AD CS relay" })));
+    render(<ExternalCAHeldIssuesPanel externalCAs={authorities} />);
+    expect(await screen.findByText("4101")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Pending at the CA" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Held issuances unavailable")).not.toBeInTheDocument();
   });
 
   it("shows nothing without an AD CS authority", () => {

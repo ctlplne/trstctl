@@ -83,6 +83,7 @@ public final class OpenApiSchemas {
       "ADCSObservedInventory",
       "ADCSObservedService",
       "ADCSObservedTemplate",
+      "ADCSPendingRequests",
       "ADCSPosture",
       "ADCSRuleFinding",
       "ADCSTemplate",

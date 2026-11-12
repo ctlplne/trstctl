@@ -153,7 +153,9 @@ func TestServedRelayReadsAnADCSCADatabaseWithCertutil(t *testing.T) {
 	if count, err := relay.RunOnce(ctx, channel, http.DefaultClient, 1, 120); err != nil || count != 1 || len(channel.reports) != 1 {
 		t.Fatalf("production relay = %d %v reports %d", count, err, len(channel.reports))
 	}
-	for _, leaked := range []string{"web01", "svc-web", "alice", "LAPTOP-9", "1a00000002"} {
+	// N1-L2: the pending request (4, alice's) leaves the relay as an operator
+	// needs it to decide; nothing of an issued, revoked or failed row does.
+	for _, leaked := range []string{"web01", "web02", "svc-web", "LAPTOP-9", "bob", "1a00000002", "1a00000005"} {
 		if strings.Contains(channel.reports[0].Detail, leaked) {
 			t.Fatalf("the relay report carries %q from a database row: %s", leaked, channel.reports[0].Detail)
 		}

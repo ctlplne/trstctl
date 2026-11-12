@@ -116,6 +116,15 @@ export const apiWorkflowCoverage = [
       "The CA Hierarchy page lists each AD CS authority's issuances held for a CA manager's approval with the CA's request id, the requested names, when they stopped waiting and whether they were issued or denied (N1-L1).",
   },
   {
+    path: "/api/v1/external-cas/{id}/adcs-requests",
+    route: "/ca-hierarchy",
+    owner: "SURFACE/ca",
+    kind: "console-flow",
+    workflow: "Requests pending at an AD CS CA",
+    rationale:
+      "The CA Hierarchy page lists the requests an AD CS issuer's CA holds for a manager's approval, from its relay's latest read of the CA database, with each one's template, requested name and requester, and marks the one a trstctl issuance waits on (N1-L2).",
+  },
+  {
     path: "/api/v1/external-cas/{id}/held-issues/{request_id}/resume",
     route: "/ca-hierarchy",
     owner: "SURFACE/ca",

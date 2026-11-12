@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- The requests an AD CS CA holds for a manager's approval are listed from the relay's read of its database
+  (N1-L2). The relay's `adcs.ca_database` read now returns, with the counts, the newest 500 pending requests
+  with their request id, template, requested name and requester. Issued, revoked and failed rows still leave
+  the relay as counts only. `GET /api/v1/external-cas/{id}/adcs-requests` (CLI `external-cas adcs-requests`)
+  lists them per issuer, marks the ones a trstctl issuance waits on, and the CA Hierarchy page shows them, so
+  an operator picks the request to decide instead of reading its id from the CA.
 - Denying an approval from Slack asks for the reason (N8-L2). The Deny button opens a Slack dialog and decides
   nothing; submitting it denies the request with the reason the member typed (3 to 500 characters), recorded with
   the decision and shown in the updated message as plain text. A blank reason keeps the dialog open with the

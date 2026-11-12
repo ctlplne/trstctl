@@ -717,6 +717,14 @@ export interface ADCSObservedTemplate {
   schema_version?: number;
 }
 
+export interface ADCSPendingRequests {
+  ca_config: string;
+  issuer_id: string;
+  items: { common_name?: string; held_issuance: boolean; request_id: number; requester?: string; template?: string }[];
+  read_at?: string;
+  truncated: boolean;
+}
+
 export interface ADCSPosture {
   critical: number;
   enrollment_service_limit_reached?: boolean;

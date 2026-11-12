@@ -276,6 +276,8 @@ var TenantScopedTables = []string{
 	"adcs_request_decisions",
 	// N1-L1: issuances an external CA holds for approval; no foreign keys.
 	"external_ca_held_issues",
+	// N1-L2: AD CS CAs' pending requests; no foreign keys.
+	"adcs_ca_pending_requests",
 	// N9: MDM device check-ins; no foreign keys.
 	"mdm_device_check_ins",
 	// P12: factory birth certificates, then their batches; no foreign keys.

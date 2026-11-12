@@ -3617,7 +3617,8 @@
                 "executeADCSDecision",
                 "listADCSDecisions",
                 "listExternalCAHeldIssues",
-                "resumeExternalCAHeldIssue"
+                "resumeExternalCAHeldIssue",
+                "listADCSPendingRequests"
             ],
             "api_na": "",
             "cli_surface": [
@@ -3640,6 +3641,7 @@
                 "external-cas adcs-decisions",
                 "external-cas held-issues",
                 "external-cas held-issues resume",
+                "external-cas adcs-requests",
                 "kubernetes csr",
                 "kubernetes cert-manager-requests",
                 "kubernetes trust-bundles",

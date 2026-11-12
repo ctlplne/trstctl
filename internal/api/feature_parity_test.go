@@ -398,8 +398,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// upgrade preflight (810). A259-L4 adds a browser Kubernetes session's
 	// pods list (811). AUD-O1 adds running the weak-key audit now (812).
 	// N1-L1 adds listing and resuming held external CA issuances (814).
-	if len(out) != 814 {
-		t.Fatalf("OpenAPI operationIds = %d, want 814", len(out))
+	// N1-L2 adds listing an AD CS CA's pending requests (815).
+	if len(out) != 815 {
+		t.Fatalf("OpenAPI operationIds = %d, want 815", len(out))
 	}
 	return out
 }

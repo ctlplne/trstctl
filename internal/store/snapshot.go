@@ -332,7 +332,9 @@ import (
 // Version 117 carries N1-L1's held external CA issuances: without them a
 // restored store would forget which CA request each held issuance waits on,
 // and the issuance could not be resumed once approved.
-const SnapshotFormatVersion = 117
+// Version 118 carries N1-L2's AD CS pending requests: without them a restored
+// store would list no pending request until the CA is read again.
+const SnapshotFormatVersion = 118
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -418,6 +420,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"adcs_request_decisions",
 	// Format 117: N1-L1's held external CA issuances.
 	"external_ca_held_issues",
+	// Format 118: N1-L2's AD CS pending requests.
+	"adcs_ca_pending_requests",
 	// Format 82: N2's Key Vault disables.
 	"certificate_key_vault_disables",
 	// Format 86: N9's MDM device check-ins.
@@ -856,6 +860,10 @@ SELECT jsonb_build_object(
     'tenant_set_sha256', $4::text,
     'captured_at', $5::timestamptz
   )
+) || jsonb_build_object(
+  -- The fourth object is full (49 tables and the snapshot set, 100
+  -- arguments): N1-L2 starts a fifth.
+  'adcs_ca_pending_requests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_ca_pending_requests t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL,

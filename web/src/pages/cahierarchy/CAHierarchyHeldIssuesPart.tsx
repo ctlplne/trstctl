@@ -3,7 +3,7 @@ import { useCan } from "@/components/rbac";
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
-import { api, ApiError, type ExternalCA, type ExternalCAHeldIssue } from "@/lib/api";
+import { api, ApiError, type ADCSPendingRequests, type ExternalCA, type ExternalCAHeldIssue } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 
 type HeldNotice = { tone: "status" | "alert"; text: string };
@@ -20,6 +20,9 @@ export function ExternalCAHeldIssuesPanel({ externalCAs }: { externalCAs: Extern
   const authorities = externalCAs.filter((item) => item.type === "adcs" && item.status === "available");
   const authorityKey = authorities.map((item) => item.id).join("\n");
   const [held, setHeld] = useState<Record<string, ExternalCAHeldIssue[]>>({});
+  // N1-L2: each authority's pending requests at the CA, from its relay's
+  // latest read; absent for an authority without a relay route.
+  const [pending, setPending] = useState<Record<string, ADCSPendingRequests>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<HeldNotice | null>(null);
@@ -30,15 +33,27 @@ export function ExternalCAHeldIssuesPanel({ externalCAs }: { externalCAs: Extern
     if (!canRead || authorityKey === "") return;
     let cancelled = false;
     const ids = authorityKey.split("\n");
-    void Promise.allSettled(ids.map((id) => api.externalCAHeldIssues(id))).then((results) => {
+    void Promise.all([
+      Promise.allSettled(ids.map((id) => api.externalCAHeldIssues(id))),
+      Promise.allSettled(ids.map((id) => api.adcsPendingRequests(id))),
+    ]).then(([heldResults, pendingResults]) => {
       if (cancelled) return;
       const next: Record<string, ExternalCAHeldIssue[]> = {};
+      const nextPending: Record<string, ADCSPendingRequests> = {};
       const failures: string[] = [];
-      results.forEach((result, index) => {
+      heldResults.forEach((result, index) => {
         if (result.status === "fulfilled") next[ids[index]] = result.value;
         else failures.push(apiProblemMessage(result.reason, translateNow("caHierarchy.heldIssues.loadFailed")));
       });
+      pendingResults.forEach((result, index) => {
+        if (result.status === "fulfilled") nextPending[ids[index]] = result.value;
+        // 409: the authority has no relay route, so there is no list to show.
+        else if (!(result.reason instanceof ApiError && result.reason.status === 409)) {
+          failures.push(apiProblemMessage(result.reason, translateNow("caHierarchy.heldIssues.loadFailed")));
+        }
+      });
       setHeld(next);
+      setPending(nextPending);
       setError(failures[0] ?? null);
     });
     return () => {
@@ -92,6 +107,7 @@ export function ExternalCAHeldIssuesPanel({ externalCAs }: { externalCAs: Extern
       )}
       {authorities.map((authority) => {
         const items = held[authority.id] ?? [];
+        const atCA = pending[authority.id];
         return (
           <section key={authority.id} aria-label={authority.name} className="ui-panel p-comfortable text-sm">
             <h3 className="text-sm font-semibold">{authority.name}</h3>
@@ -135,6 +151,45 @@ export function ExternalCAHeldIssuesPanel({ externalCAs }: { externalCAs: Extern
                   ))}
                 </tbody>
               </table>
+            )}
+            {atCA && (
+              <div className="mt-4">
+                <h4 className="text-sm font-semibold">{t("caHierarchy.heldIssues.pendingHeading")}</h4>
+                <p className="text-xs text-muted-foreground">
+                  {atCA.read_at
+                    ? t("caHierarchy.heldIssues.pendingReadAt", { time: formatDateTime(atCA.read_at) })
+                    : t("caHierarchy.heldIssues.pendingNeverRead")}
+                </p>
+                {atCA.items.length === 0 ? (
+                  atCA.read_at ? (
+                    <p className="mt-2 text-muted-foreground">{t("caHierarchy.heldIssues.pendingNone")}</p>
+                  ) : null
+                ) : (
+                  <table className="ui-table mt-2">
+                    <thead>
+                      <tr>
+                        <th scope="col">{t("caHierarchy.heldIssues.requestID")}</th>
+                        <th scope="col">{t("caHierarchy.heldIssues.template")}</th>
+                        <th scope="col">{t("caHierarchy.heldIssues.requestedName")}</th>
+                        <th scope="col">{t("caHierarchy.heldIssues.requester")}</th>
+                        <th scope="col">{t("caHierarchy.heldIssues.trstctlIssuance")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {atCA.items.map((request) => (
+                        <tr key={request.request_id}>
+                          <td className="font-mono">{request.request_id}</td>
+                          <td>{request.template || "-"}</td>
+                          <td>{request.common_name || "-"}</td>
+                          <td>{request.requester || "-"}</td>
+                          <td>{request.held_issuance ? t("caHierarchy.heldIssues.heldHere") : "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {atCA.truncated && <p className="mt-2 text-xs text-muted-foreground">{t("caHierarchy.heldIssues.pendingTruncated")}</p>}
+              </div>
             )}
           </section>
         );

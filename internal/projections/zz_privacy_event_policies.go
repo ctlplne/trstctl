@@ -1352,6 +1352,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	addWindowsLocalRotationPrivacyPolicies(policies)
 	addPAMDiscoveryOutboxPrivacyPolicies(policies)
 	addADCSDecisionPrivacyPolicies(policies)
+	addADCSDatabasePrivacyPolicies(policies)
 	addExternalCAHeldPrivacyPolicies(policies)
 	addMDMCheckInPrivacyPolicies(policies)
 	addFactoryPrivacyPolicies(policies)
@@ -1944,6 +1945,9 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 	addWindowsLocalRotationPrivacyShapes(shapes)
 	addPAMDiscoveryOutboxPrivacyShapes(shapes)
 	addADCSDecisionPrivacyShapes(shapes)
+	// N1-L2: the CA database read carries its pending requests' requested
+	// names and requesters, so it has an exact policy, not a closed shape.
+	shapes[privacyEventPolicyKey{EventADCSDatabaseIngested, 1}] = privacyPayloadShape[ADCSDatabaseIngested]()
 	addExternalCAHeldPrivacyShapes(shapes)
 	addMDMCheckInPrivacyShapes(shapes)
 	addFactoryPrivacyShapes(shapes)
@@ -2031,7 +2035,6 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventEdgeDelegationIssued, EdgeCustodyEventSchemaVersion}:                   privacyPayloadShape[EdgeDelegationIssued](),
 		{EventEdgeDelegationRevoked, 1}:                                              privacyPayloadShape[EdgeDelegationRevoked](),
 		{EventEdgeIssuanceReconciled, 1}:                                             privacyPayloadShape[EdgeIssuanceReconciled](),
-		{EventADCSDatabaseIngested, 1}:                                               privacyPayloadShape[ADCSDatabaseIngested](),
 		{EventADCSDatabaseCollectionRequested, 1}:                                    privacyPayloadShape[ADCSDatabaseCollectionRequested](),
 		{EventRogueCertificateRevocationRequested, 1}:                                privacyPayloadShape[RogueCertificateRevocationRequested](),
 		{EventRogueCertificateRevokedAtIssuer, 1}:                                    privacyPayloadShape[RogueCertificateRevokedAtIssuer](),

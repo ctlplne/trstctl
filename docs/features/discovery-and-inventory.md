@@ -1282,8 +1282,10 @@ The Posture page's AD CS certificate database panel shows each CA's
 certificates by disposition: issued, pending a CA manager's approval, revoked,
 denied and failed. **Read with certutil** asks one domain-joined network relay
 to read a CA by certsrv's `HOST\CA-Name` identifier. The relay runs certutil as
-its own domain identity and returns only the counts; no subject, requester or
-certificate leaves it. The panel lists recent reads with their status (queued,
+its own domain identity and returns the counts and, for the requests the CA holds
+for a manager's approval, each one's request id, template, requested name and
+requester (the newest 500, N1-L2). No certificate, and no issued, revoked, denied or
+failed row's subject or requester, leaves it. The panel lists recent reads with their status (queued,
 running, collected, failed) and a failed read's reason; a failed read keeps the
 previous counts. Run the relay on a domain-joined Windows host with
 `--relay-claim` (certutil is `certutil.exe` unless `--adcs-certutil` names

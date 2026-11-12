@@ -73,6 +73,7 @@ func (a *API) adcsDecisionRoutes() []route {
 	return []route{
 		{method: "POST", path: "/api/v1/external-cas/{id}/adcs-requests/{request_id}/approval-requests", opID: "requestADCSDecisionApproval", summary: "Ask for approval to approve or deny one request an AD CS template holds for a CA manager; other reviewers decide it before anything reaches the CA", handler: a.requestADCSDecisionApproval, pathParams: issuerRequest, reqSchema: "ADCSDecisionRequest", resSchema: "ADCSDecisionApproval", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "POST", path: "/api/v1/external-cas/{id}/adcs-requests/{request_id}/decisions", opID: "executeADCSDecision", summary: "Execute an approved decision: the issuer's relay approves (certutil -resubmit) or denies the request at the CA only while the CA still holds it as pending, and reads its disposition back", handler: a.executeADCSDecision, pathParams: issuerRequest, reqSchema: "ADCSDecisionStart", resSchema: "ADCSDecision", successCode: "201", mutation: true, perm: authz.CertsIssue},
+		{method: "GET", path: "/api/v1/external-cas/{id}/adcs-requests", opID: "listADCSPendingRequests", summary: "List the requests an AD CS issuer's CA holds for a manager's approval, from the relay's latest read of its database", handler: a.listADCSPendingRequests, pathParams: []param{pathString("id", "configured external CA registry id")}, resSchema: "ADCSPendingRequests", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/external-cas/{id}/adcs-decisions", opID: "listADCSDecisions", summary: "List an AD CS issuer's decisions, newest first: queued, decided with the CA's disposition, or failed with the relay's reason", handler: a.listADCSDecisions, pathParams: []param{pathString("id", "configured external CA registry id")}, resSchema: "ADCSDecisionList", successCode: "200", perm: authz.CertsRead},
 	}
 }
@@ -243,5 +244,12 @@ func adcsDecisionSchemas() map[string]*Schema {
 			"approval_request_id", "approval_intent_digest"),
 		"ADCSDecision":     decision,
 		"ADCSDecisionList": object(map[string]*Schema{"items": {Type: "array", Items: decision}}, "items"),
+		// N1-L2: the CA's pending requests from the relay's latest read.
+		"ADCSPendingRequests": object(map[string]*Schema{"issuer_id": str(), "ca_config": str(),
+			"read_at":   {Type: "string", Format: "date-time", Description: "When the relay last read the CA database with its pending requests; absent when it never has."},
+			"truncated": {Type: "boolean", Description: "The CA held more pending requests than the read lists (it lists the newest 500)."},
+			"items": {Type: "array", Items: object(map[string]*Schema{"request_id": integer(), "template": str(), "common_name": str(), "requester": str(),
+				"held_issuance": {Type: "boolean", Description: "A trstctl issuance is held on this request (N1-L1)."}}, "request_id", "held_issuance")}},
+			"issuer_id", "ca_config", "truncated", "items"),
 	}
 }

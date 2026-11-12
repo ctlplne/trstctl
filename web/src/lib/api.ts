@@ -351,6 +351,7 @@ import type {
   EventProtectionPlan,
   EventProtectionRequest,
   EventProtectionStatus,
+  ADCSPendingRequests,
   ExternalCA as GenExternalCA,
   ExternalCAHeldIssue,
   ExternalCAHeldIssueList,
@@ -1498,6 +1499,7 @@ export type {
   EventProtectionPlan,
   EventProtectionRequest,
   EventProtectionStatus,
+  ADCSPendingRequests,
   ExternalCAHeldIssue,
   ExternalCAHeldIssueResume,
   ExternalCAIssuedCertificate,
@@ -2399,6 +2401,8 @@ export interface Api {
   externalCAHeldIssues(id: string): Promise<ExternalCAHeldIssue[]>;
   /** N1-L1: reads a held request back by its CA request id and finishes its issuance once approved. */
   resumeExternalCAHeldIssue(id: string, requestID: number): Promise<ExternalCAHeldIssueResume>;
+  /** N1-L2: the requests an AD CS issuer's CA holds for approval, from the relay's latest read. */
+  adcsPendingRequests(id: string): Promise<ADCSPendingRequests>;
   caDiscoveryInventory(): Promise<CADiscovery>;
   identities(): Promise<Identity[]>;
   identityStatusSummary(): Promise<IdentityStatusCounts>;
@@ -3357,6 +3361,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   externalCAs: () => req<ExternalCAList>("/api/v1/external-cas").then((r) => r.items ?? []),
   issueExternalCA: (id, input) => mutate<ExternalCAIssuedCertificate>("POST", `/api/v1/external-cas/${encodeURIComponent(id)}/issue`, input),
   externalCAHeldIssues: (id) => req<ExternalCAHeldIssueList>(`/api/v1/external-cas/${encodeURIComponent(id)}/held-issues`).then((r) => r.items ?? []),
+  adcsPendingRequests: (id) => req<ADCSPendingRequests>(`/api/v1/external-cas/${encodeURIComponent(id)}/adcs-requests`),
   resumeExternalCAHeldIssue: (id, requestID) =>
     mutate<ExternalCAHeldIssueResume>("POST", `/api/v1/external-cas/${encodeURIComponent(id)}/held-issues/${encodeURIComponent(String(requestID))}/resume`),
   caDiscoveryInventory: () => req<CADiscovery>("/api/v1/ca/discovery"),

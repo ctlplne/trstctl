@@ -606,6 +606,12 @@ own); then the requester executes exactly what was approved with `POST
 request's row first and acts only while the CA still holds it as pending — so an
 approval can never re-issue a request a manager already denied — then runs
 `certutil -resubmit` (approve) or `certutil -deny` and reads the row back.
+`GET /api/v1/external-cas/{id}/adcs-requests` lists the requests the issuer's CA holds,
+newest first, from the relay's latest read of its database (`adcs.ca_database`, N1-L2):
+each one's request id, template, requested name and requester, and whether a trstctl
+issuance is held on it. `truncated` says the CA held more than the newest 500, and
+`read_at` says when it was read; a later read replaces the list. The CA Hierarchy page
+shows the same list under each AD CS authority. CLI: `external-cas adcs-requests`.
 `GET /api/v1/external-cas/{id}/adcs-decisions` lists each decision as `queued`,
 `decided` with the CA's disposition (and, for an approval, the issued serial), or
 `failed` with the relay's reason. Status: served.

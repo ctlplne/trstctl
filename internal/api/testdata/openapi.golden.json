@@ -3085,6 +3085,60 @@
         ],
         "type": "object"
       },
+      "ADCSPendingRequests": {
+        "properties": {
+          "ca_config": {
+            "type": "string"
+          },
+          "issuer_id": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "common_name": {
+                  "type": "string"
+                },
+                "held_issuance": {
+                  "description": "A trstctl issuance is held on this request (N1-L1).",
+                  "type": "boolean"
+                },
+                "request_id": {
+                  "type": "integer"
+                },
+                "requester": {
+                  "type": "string"
+                },
+                "template": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "request_id",
+                "held_issuance"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "read_at": {
+            "description": "When the relay last read the CA database with its pending requests; absent when it never has.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "truncated": {
+            "description": "The CA held more pending requests than the read lists (it lists the newest 500).",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "issuer_id",
+          "ca_config",
+          "truncated",
+          "items"
+        ],
+        "type": "object"
+      },
       "ADCSPosture": {
         "properties": {
           "critical": {
@@ -85456,6 +85510,64 @@
           }
         ],
         "summary": "List an AD CS issuer's decisions, newest first: queued, decided with the CA's disposition, or failed with the relay's reason",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/external-cas/{id}/adcs-requests": {
+      "get": {
+        "operationId": "listADCSPendingRequests",
+        "parameters": [
+          {
+            "description": "configured external CA registry id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADCSPendingRequests"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the requests an AD CS issuer's CA holds for a manager's approval, from the relay's latest read of its database",
         "x-trstctl-permission": "certs:read"
       }
     },

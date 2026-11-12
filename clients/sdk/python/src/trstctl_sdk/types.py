@@ -999,6 +999,18 @@ ADCSObservedTemplate = TypedDict(
     total=False,
 )
 
+ADCSPendingRequests = TypedDict(
+    'ADCSPendingRequests',
+    {
+        'ca_config': str,
+        'issuer_id': str,
+        'items': list[dict[str, Any]],
+        'read_at': str,
+        'truncated': bool,
+    },
+    total=False,
+)
+
 ADCSPosture = TypedDict(
     'ADCSPosture',
     {

@@ -26,6 +26,10 @@ const (
 	ExternalCAHeldIssueDenied = "denied"
 )
 
+// ExternalCAHeldIssueListMax bounds one listing of an authority's held
+// issuances.
+const ExternalCAHeldIssueListMax = 500
+
 // ExternalCAHeldIssue is one issuance an external CA holds, or held, for
 // approval.
 type ExternalCAHeldIssue struct {
