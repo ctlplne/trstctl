@@ -291,6 +291,7 @@ const (
 	EventNotificationDeliveryRecorded             = "notification.delivery.recorded"
 	EventCBOMAssetObserved                        = "cbom.asset.observed"
 	EventCBOMSourceReconciled                     = "cbom.source.reconciled"
+	EventCBOMImportReconciled                     = "cbom.import.reconciled"
 	EventLicensedCryptoMigrationStarted           = "licensed_crypto.migration.started"
 	EventLicensedCryptoMigrationAssetCompleted    = "licensed_crypto.migration.asset_completed"
 	EventLicensedCryptoMigrationRollbackCompleted = "licensed_crypto.migration.rollback_completed"
@@ -3533,6 +3534,20 @@ type CBOMAssetObserved struct {
 	QuantumVulnerable      bool     `json:"quantum_vulnerable"`
 	OutOfPolicy            bool     `json:"out_of_policy"`
 	Reasons                []string `json:"reasons,omitempty"`
+	// ImportSource is the CBOM import source (vendor:…, source:…, image:…)
+	// whose import observed this fact (X6-L3); empty for trstctl's own scans.
+	ImportSource string `json:"import_source,omitempty"`
+}
+
+// CBOMImportReconciled records that an import of Source took in every
+// finding of its BOM as the observations from ObservedFromSequence on (X6-L3).
+// The source's facts that this import did not observe again — what a newer
+// BOM dropped — are inactive after it, while their rows and immutable events
+// remain for audit and replay.
+type CBOMImportReconciled struct {
+	Source               string `json:"source"`
+	RunID                string `json:"run_id"`
+	ObservedFromSequence uint64 `json:"observed_from_sequence"`
 }
 
 // CBOMSourceReconciled records one fully observed source snapshot. Older facts
@@ -5551,6 +5566,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventNotificationDeliveryRecorded:             {1: true, NotificationDeliveryRoutingSchemaVersion: true},
 	EventCBOMAssetObserved:                        {1: true},
 	EventCBOMSourceReconciled:                     {1: true},
+	EventCBOMImportReconciled:                     {1: true},
 	EventDeploymentTargetUpserted:                 {1: true},
 	EventDeploymentTargetDeleted:                  {1: true},
 	EventIdentityConnectorTargetBound:             {1: true, 2: true},
@@ -8329,8 +8345,14 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Algorithm: pl.Algorithm, KeyBits: pl.KeyBits, Protocol: pl.Protocol,
 			Cipher: pl.Cipher, Library: pl.Library, Strength: pl.Strength,
 			QuantumVulnerable: pl.QuantumVulnerable, OutOfPolicy: pl.OutOfPolicy,
-			Reasons: pl.Reasons,
+			Reasons: pl.Reasons, ImportSource: pl.ImportSource,
 		}, e.Sequence, e.Time)
+	case EventCBOMImportReconciled:
+		var pl CBOMImportReconciled
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyCryptoImportReconciledTx(ctx, tx, e.TenantID, pl.Source, pl.ObservedFromSequence, e.Sequence)
 	case EventCBOMSourceReconciled:
 		var pl CBOMSourceReconciled
 		if err := decode(e, &pl); err != nil {

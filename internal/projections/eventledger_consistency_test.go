@@ -75,6 +75,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventSecretStaticRotationAdvanced:             "EventSecretStaticRotationAdvanced",
 	projections.EventCBOMAssetObserved:                        "EventCBOMAssetObserved",
 	projections.EventCBOMSourceReconciled:                     "EventCBOMSourceReconciled",
+	projections.EventCBOMImportReconciled:                     "EventCBOMImportReconciled",
 	projections.EventPQCMigrationCampaignStarted:              "EventPQCMigrationCampaignStarted",
 	projections.EventPQCMigrationCampaignUpdated:              "EventPQCMigrationCampaignUpdated",
 	projections.EventPQCMigrationCampaignFindingDispositioned: "EventPQCMigrationCampaignFindingDispositioned",

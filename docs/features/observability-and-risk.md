@@ -390,8 +390,22 @@ components and 32 MiB.
 Each import is a discovery run keyed by the source and the BOM's serial number and
 version (its SHA-256 when it has no serial number). Importing the same BOM again returns
 the first import's result with `replayed: true` and writes nothing; a new version of the
-BOM is a new import. Every finding is recorded as `cbom.asset.observed` first. Discovery
-coverage counts imports: `vendor-embedded-crypto`, `source-code-crypto` and
+BOM is a new import. Every finding is recorded as `cbom.asset.observed` first.
+
+An import also retires what its source no longer lists (X6-L3). Once every finding of the
+BOM is recorded, `cbom.import.reconciled` marks the source's rows that earlier imports
+recorded and this BOM does not list as inactive: a vendor's newer BOM that drops TLS 1.0
+takes TLS 1.0 out of the inventory. The response names those rows as `retired_asset_ids`,
+and the Posture page's import says how many; the rows and their events stay for audit, and
+a later import that lists one again brings it back. A source is exact: importing
+`vendor:acme` never retires `vendor:acme:fw`'s rows, and a row imported before imports named
+their source counts as its source's by location. A BOM whose serial number the source
+already imported at a later version is refused (409), because taking in the earlier
+revision would retire what the later one added; a BOM with another serial number, or none,
+is the source's newest. The same BOM again still replays and retires nothing. Certificates
+an import put in the certificate inventory stay there under the inventory's own lifecycle.
+
+Discovery coverage counts imports: `vendor-embedded-crypto`, `source-code-crypto` and
 `container-image-crypto` are observed while an import of that kind is recent (90 days for
 a vendor's CBOM, which describes a release; the ordinary window for code and images).
 

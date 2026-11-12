@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,9 +33,18 @@ type CBOMImportResponse struct {
 	// certificates that name their SHA-256 fingerprint (X6-L6): recorded by
 	// this import, or already held.
 	CertificateIDs []string `json:"certificate_ids"`
+	// RetiredAssetIDs are the inventory rows that the source's earlier
+	// imports recorded and this BOM no longer lists, which this import
+	// retired (X6-L3). A replay retires nothing.
+	RetiredAssetIDs []string `json:"retired_asset_ids"`
 	// Replayed is true when this BOM was imported before; nothing was written.
 	Replayed bool `json:"replayed"`
 }
+
+// ErrCBOMImportOutdated refuses a BOM revision older than one its source
+// already imported (X6-L3): a CycloneDX BOM's serial number at a lower
+// version than the source's last import of it.
+var ErrCBOMImportOutdated = errors.New("an earlier revision of an imported CBOM")
 
 // CBOMImporter is the served import, implemented beside the scan service.
 type CBOMImporter interface {
@@ -94,6 +104,9 @@ func (a *API) importCBOM(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		resp, err := importer.Import(ctx, tenantID, source, bom, crypto.SHA256Hex(doc))
+		if errors.Is(err, ErrCBOMImportOutdated) {
+			return 0, nil, errStatusFrom(http.StatusConflict, err)
+		}
 		if err != nil {
 			return 0, nil, err
 		}

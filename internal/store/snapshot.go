@@ -347,7 +347,10 @@ import (
 // restored pilot would advance on its probe alone.
 // Version 123 carries P9-L1's code-signing key chains attached through the
 // API: without them a restored key would serve only its configured chain.
-const SnapshotFormatVersion = 123
+// Version 124 carries X6-L3's crypto asset import_source: a version-123
+// payload has no such column, and a restored import's facts would belong to
+// no source, so its next import would not retire what that BOM dropped.
+const SnapshotFormatVersion = 124
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

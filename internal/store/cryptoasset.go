@@ -31,7 +31,10 @@ type CryptoAsset struct {
 	QuantumVulnerable      bool
 	OutOfPolicy            bool
 	Reasons                []string
-	CreatedAt              time.Time
+	// ImportSource is the CBOM import source whose import last observed
+	// this fact (X6-L3); empty for trstctl's own scans.
+	ImportSource string
+	CreatedAt    time.Time
 }
 
 // signature identifies an asset within a tenant: the kind, location, and the
@@ -117,11 +120,12 @@ func (s *Store) ApplyCryptoAssetObservedTx(ctx context.Context, tx pgx.Tx, a Cry
 		    SET signature = $3, kind = $4, location = $5, algorithm = $6, key_bits = $7,
 		        protocol = $8, cipher = $9, library = $10, strength = $11,
 		        quantum_vulnerable = $12, out_of_policy = $13, reasons = $14,
-		        event_sequence = $15, is_active = true, certificate_fingerprint = $16
+		        event_sequence = $15, is_active = true, certificate_fingerprint = $16,
+		        import_source = $17
 		  WHERE tenant_id = $1 AND id = $2 AND event_sequence <= $15`,
 		a.TenantID, a.ID, signature, a.Kind, a.Location, a.Algorithm, a.KeyBits,
 		a.Protocol, a.Cipher, a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy,
-		reasons, sequence, a.CertificateFingerprint)
+		reasons, sequence, a.CertificateFingerprint, a.ImportSource)
 	if err != nil {
 		return err
 	}
@@ -146,15 +150,16 @@ func (s *Store) ApplyCryptoAssetObservedTx(ctx context.Context, tx pgx.Tx, a Cry
 		`INSERT INTO crypto_assets
 		        (id, tenant_id, signature, kind, location, algorithm, key_bits, protocol, cipher,
 		         library, strength, quantum_vulnerable, out_of_policy, reasons, created_at,
-		         event_sequence, is_active, certificate_fingerprint)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, true, $17)
+		         event_sequence, is_active, certificate_fingerprint, import_source)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, true, $17, $18)
 		 ON CONFLICT (tenant_id, signature) DO UPDATE
 		    SET key_bits = EXCLUDED.key_bits, library = EXCLUDED.library, strength = EXCLUDED.strength,
 		        quantum_vulnerable = EXCLUDED.quantum_vulnerable, out_of_policy = EXCLUDED.out_of_policy,
-		        reasons = EXCLUDED.reasons, event_sequence = EXCLUDED.event_sequence, is_active = true, certificate_fingerprint = EXCLUDED.certificate_fingerprint
+		        reasons = EXCLUDED.reasons, event_sequence = EXCLUDED.event_sequence, is_active = true, certificate_fingerprint = EXCLUDED.certificate_fingerprint,
+		        import_source = EXCLUDED.import_source
 		  WHERE EXCLUDED.event_sequence >= crypto_assets.event_sequence`,
 		a.ID, a.TenantID, signature, a.Kind, a.Location, a.Algorithm, a.KeyBits, a.Protocol, a.Cipher,
-		a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, observedAt, sequence, a.CertificateFingerprint)
+		a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, observedAt, sequence, a.CertificateFingerprint, a.ImportSource)
 	return err
 }
 
@@ -211,6 +216,83 @@ func (s *Store) ApplyCryptoSourceReconciledTx(ctx context.Context, tx pgx.Tx, te
 		    AND NOT (id::text = ANY($4::text[])) AND is_active AND event_sequence < $5`,
 		tenantID, location, kinds, observedIDs, sequence)
 	return err
+}
+
+// importedCryptoAssetKinds are the kinds a CBOM import records (internal/cbom).
+var importedCryptoAssetKinds = []string{"imported-algorithm", "imported-certificate", "imported-key", "imported-protocol", "imported-library"}
+
+// cbomImportSourceName is the discovery source name prefix of a CBOM import
+// (sourcecatalog.CBOMImportSourcePrefix).
+const cbomImportSourceName = "cbom-import:"
+
+// ApplyCryptoImportReconciledTx retires the facts an earlier import of source
+// recorded that the import whose observations began at observedFrom did not
+// observe again (X6-L3): a newer BOM's dropped assets. It runs only as a
+// projection of cbom.import.reconciled. Every fact the import observed was
+// projected at a sequence from observedFrom on, so the source's active rows
+// below it are exactly what the BOM no longer lists; they stay as
+// sequence-fenced tombstones, and a later observation reactivates one.
+//
+// A row recorded before imports named their source (import_source empty) is
+// the source's when its location is under "<source>:" and under no longer
+// import source of the tenant, which owns "<source>:<rest>:" itself; it is
+// claimed for the source as it is retired.
+func (s *Store) ApplyCryptoImportReconciledTx(ctx context.Context, tx pgx.Tx, tenantID, source string, observedFrom, eventSequence uint64) error {
+	if source == "" || len(source) > 200 {
+		return errors.New("store: CBOM import reconciliation requires its import source")
+	}
+	if observedFrom == 0 || observedFrom >= eventSequence {
+		return fmt.Errorf("store: CBOM import reconciliation observed from sequence %d, not before its own %d", observedFrom, eventSequence)
+	}
+	from, err := cryptoAssetEventSequence(observedFrom)
+	if err != nil {
+		return err
+	}
+	sequence, err := cryptoAssetEventSequence(eventSequence)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx,
+		`UPDATE crypto_assets SET is_active = false, event_sequence = $4, import_source = $2
+		  WHERE tenant_id = $1 AND is_active AND event_sequence < $3
+		    AND (import_source = $2::text
+		         OR (import_source = '' AND kind = ANY($5::text[]) AND starts_with(location, $2::text || ':')
+		             AND NOT EXISTS (
+		                 SELECT 1 FROM discovery_sources d
+		                  WHERE d.tenant_id = $1
+		                    AND starts_with(d.name, $6::text || $2::text || ':')
+		                    AND starts_with(crypto_assets.location, substr(d.name, length($6::text) + 1) || ':'))))`,
+		tenantID, source, from, sequence, importedCryptoAssetKinds, cbomImportSourceName)
+	return err
+}
+
+// CryptoAssetIDsRetiredByImport lists the rows one cbom.import.reconciled
+// event (at eventSequence) retired for source (X6-L3).
+func (s *Store) CryptoAssetIDsRetiredByImport(ctx context.Context, tenantID, source string, eventSequence uint64) ([]string, error) {
+	sequence, err := cryptoAssetEventSequence(eventSequence)
+	if err != nil {
+		return nil, err
+	}
+	ids := []string{}
+	err = s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text FROM crypto_assets
+			  WHERE tenant_id = $1 AND import_source = $2 AND NOT is_active AND event_sequence = $3
+			  ORDER BY id`, tenantID, source, sequence)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			ids = append(ids, id)
+		}
+		return rows.Err()
+	})
+	return ids, err
 }
 
 // ApplyCryptoAssetMigratedTx projects a licensed crypto migration completion

@@ -7128,6 +7128,8 @@ func componentSchemas() map[string]*Schema {
 		"asset_ids": {Type: "array", Items: str()},
 		"certificate_ids": {Type: "array", Items: str(),
 			Description: "certificate inventory rows of the BOM's certificates that name their SHA-256 fingerprint, recorded by this import or already held"},
+		"retired_asset_ids": {Type: "array", Items: str(),
+			Description: "inventory rows the source's earlier imports recorded and this BOM no longer lists, retired by this import; empty on a replay"},
 		"replayed": {Type: "boolean", Description: "this BOM was imported before; nothing was written"},
 	}, "run_id", "source", "version", "components", "findings", "asset_ids", "replayed")
 	cbomScanPreview := object(map[string]*Schema{

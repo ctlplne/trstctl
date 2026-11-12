@@ -3770,6 +3770,7 @@ CBOMImport = TypedDict(
         'components': int,
         'findings': int,
         'replayed': bool,
+        'retired_asset_ids': list[str],
         'run_id': str,
         'serial_number': str,
         'source': str,

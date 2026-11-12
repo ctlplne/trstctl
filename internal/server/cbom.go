@@ -183,8 +183,15 @@ type eventedCBOMSink struct {
 	store    *store.Store
 	log      *events.Log
 	tenantID string
-	mu       sync.Mutex
-	observed map[string]store.CryptoAsset
+	// importSource names the CBOM import source on each observation (X6-L3);
+	// empty for trstctl's own scans.
+	importSource string
+	mu           sync.Mutex
+	observed     map[string]store.CryptoAsset
+	// firstObserved is the stream sequence of the sink's first recorded
+	// observation: an import's reconciliation retires its source's facts
+	// projected before it.
+	firstObserved uint64
 }
 
 func (s *eventedCBOMSink) observedAssetIDs() []string {
@@ -269,16 +276,17 @@ func (s *eventedCBOMSink) Record(ctx context.Context, f cbom.Finding) error {
 		ID: asset.ID, Kind: asset.Kind, Location: asset.Location, Algorithm: asset.Algorithm, CertificateFingerprint: asset.CertificateFingerprint,
 		KeyBits: asset.KeyBits, Protocol: asset.Protocol, Cipher: asset.Cipher,
 		Library: asset.Library, Strength: asset.Strength, QuantumVulnerable: asset.QuantumVulnerable,
-		OutOfPolicy: asset.OutOfPolicy, Reasons: asset.Reasons,
+		OutOfPolicy: asset.OutOfPolicy, Reasons: asset.Reasons, ImportSource: s.importSource,
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("server: encode CBOM asset event: %w", err)
 	}
-	if err := s.appendAndProject(ctx, events.Event{
+	stored, err := s.appendAndProjectStored(ctx, events.Event{
 		ID: events.NewID(), Type: projections.EventCBOMAssetObserved,
 		TenantID: s.tenantID, Data: data,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -286,11 +294,46 @@ func (s *eventedCBOMSink) Record(ctx context.Context, f cbom.Finding) error {
 		s.observed = make(map[string]store.CryptoAsset)
 	}
 	s.observed[asset.ID] = asset
+	if s.firstObserved == 0 || stored.Sequence < s.firstObserved {
+		s.firstObserved = stored.Sequence
+	}
 	s.mu.Unlock()
 	return nil
 }
 
+// ReconcileImport records that the sink's import of its source took in the
+// whole BOM (X6-L3): the source's facts it did not observe again are retired.
+// It returns the IDs of the rows it retired.
+func (s *eventedCBOMSink) ReconcileImport(ctx context.Context, runID string) ([]string, error) {
+	if s.log == nil || s.store == nil || s.importSource == "" {
+		return nil, errors.New("server: CBOM import reconciliation requires store, event log and import source")
+	}
+	s.mu.Lock()
+	from := s.firstObserved
+	s.mu.Unlock()
+	if from == 0 {
+		return nil, errors.New("server: CBOM import reconciliation before any observation")
+	}
+	data, err := json.Marshal(projections.CBOMImportReconciled{Source: s.importSource, RunID: runID, ObservedFromSequence: from})
+	if err != nil {
+		return nil, fmt.Errorf("server: encode CBOM import reconciliation: %w", err)
+	}
+	stored, err := s.appendAndProjectStored(ctx, events.Event{
+		ID: events.NewID(), Type: projections.EventCBOMImportReconciled,
+		TenantID: s.tenantID, Data: data,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.store.CryptoAssetIDsRetiredByImport(ctx, s.tenantID, s.importSource, stored.Sequence)
+}
+
 func (s *eventedCBOMSink) appendAndProject(ctx context.Context, event events.Event) error {
+	_, err := s.appendAndProjectStored(ctx, event)
+	return err
+}
+
+func (s *eventedCBOMSink) appendAndProjectStored(ctx context.Context, event events.Event) (events.Event, error) {
 	// Pin one event ID across retries. A lost JetStream acknowledgment must not
 	// create a second observation or reconciliation event.
 	var stored events.Event
@@ -299,13 +342,13 @@ func (s *eventedCBOMSink) appendAndProject(ctx context.Context, event events.Eve
 		stored, appendErr = s.log.Append(ctx, event)
 		return appendErr
 	}); err != nil {
-		return fmt.Errorf("server: append CBOM %s event: %w", event.Type, err)
+		return events.Event{}, fmt.Errorf("server: append CBOM %s event: %w", event.Type, err)
 	}
 	// Project the exact canonical event for read-your-write API responses. The tail
 	// worker can apply it concurrently or later; the projection is idempotent by the
 	// tenant-scoped asset signature. Retrying this step never appends another event.
 	if err := retryCBOMWrite(ctx, func() error { return projections.New(s.store).Apply(ctx, stored) }); err != nil {
-		return fmt.Errorf("server: project CBOM %s event: %w", event.Type, err)
+		return events.Event{}, fmt.Errorf("server: project CBOM %s event: %w", event.Type, err)
 	}
-	return nil
+	return stored, nil
 }

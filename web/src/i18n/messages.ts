@@ -33672,6 +33672,10 @@ export const messages = {
     defaultMessage: "{count} certificates named their fingerprint and are in the certificate inventory with their expiry.",
     description: "X6-L6: how many of the BOM's certificates the certificate inventory holds.",
   },
+  "posture.cbom.import.retired": {
+    defaultMessage: "{count} assets that {source}'s earlier imports listed are not in this BOM and were retired from the inventory.",
+    description: "X6-L3: how many assets a newer BOM of the source dropped, which the import retired.",
+  },
   "posture.cbom.inventoryLoadFailed": { defaultMessage: "The saved crypto inventory could not be loaded", description: "CBOM inventory read failure title." },
   "posture.cbom.workflow.scope": { defaultMessage: "Choose what to inspect", description: "First CBOM scan workflow step." },
   "posture.cbom.workflow.scopeBody": {

@@ -70,6 +70,27 @@ describe("CBOM import", () => {
     expect(await screen.findByText("2 certificates named their fingerprint and are in the certificate inventory with their expiry.")).toBeInTheDocument();
   });
 
+  it("says how many assets a newer BOM no longer lists and the import retired (X6-L3)", async () => {
+    vi.spyOn(api, "importCBOM").mockResolvedValue({
+      run_id: "run-11",
+      source: "vendor:acme-router",
+      version: 4,
+      components: 12,
+      findings: 9,
+      asset_ids: [],
+      retired_asset_ids: ["a1", "a2", "a3"],
+      replayed: false,
+    });
+    const user = userEvent.setup();
+    renderPanel();
+    await user.type(screen.getByLabelText(/Source name/), "acme-router");
+    await user.upload(screen.getByLabelText("CycloneDX CBOM (JSON)"), new File([bom], "router-cbom-v4.json", { type: "application/json" }));
+    await user.click(screen.getByRole("button", { name: "Import CBOM" }));
+    expect(
+      await screen.findByText("3 assets that vendor:acme-router's earlier imports listed are not in this BOM and were retired from the inventory."),
+    ).toBeInTheDocument();
+  });
+
   it("names the source kind and says when the same file changed nothing", async () => {
     const spy = vi.spyOn(api, "importCBOM").mockResolvedValue({
       run_id: "run-1",

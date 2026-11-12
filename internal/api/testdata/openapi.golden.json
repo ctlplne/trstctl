@@ -12691,6 +12691,13 @@
             "description": "this BOM was imported before; nothing was written",
             "type": "boolean"
           },
+          "retired_asset_ids": {
+            "description": "inventory rows the source's earlier imports recorded and this BOM no longer lists, retired by this import; empty on a replay",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "run_id": {
             "format": "uuid",
             "type": "string"

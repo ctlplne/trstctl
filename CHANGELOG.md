@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A CBOM import retires what a newer BOM of its source no longer lists (X6-L3): once the BOM is in, the source's
+  earlier rows that it does not list are marked inactive (`cbom.import.reconciled`; rows and events kept), named in the
+  response's `retired_asset_ids` and counted on the Posture page. Another source is never touched, even one whose name
+  extends it (`vendor:acme:fw` for `vendor:acme`). An earlier revision of a BOM the source already imported (same
+  serial number, lower version) is refused with 409 instead of rolling the inventory back.
 - The host agent reports every key of a PKCS#12 keystore (X2-L1): a Java PKCS12 keystore with several aliases, as
   keytool writes it, lists each key at `<file>#<alias>` with its type, size and chain, and counts the trusted entries;
   before, only one key of such a file was reported, without its alias and with every certificate as its chain. Keys are

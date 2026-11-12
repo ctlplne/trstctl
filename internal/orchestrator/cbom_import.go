@@ -5,6 +5,7 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -27,6 +28,20 @@ var (
 	cbomImportSourceNamespace = uuid.MustParse("6b7c0f2e-3c1a-5d84-9e42-7a1f0b3c2d5e")
 	cbomImportRunNamespace    = uuid.MustParse("0c9e2a71-8d4b-5f36-a1e7-4b2c6d8e9f10")
 )
+
+// ErrCBOMImportOutdated refuses an earlier revision of a BOM than one its
+// source already imported (X6-L3): importing it would retire what the later
+// revision added.
+var ErrCBOMImportOutdated = errors.New("orchestrator: an earlier revision of an imported CBOM")
+
+// cbomImportSourceConfig is what a CBOM import source's configuration records:
+// the source and the last imported BOM's size, serial number and version.
+type cbomImportSourceConfig struct {
+	Source       string `json:"source"`
+	Components   int    `json:"components"`
+	SerialNumber string `json:"serial_number,omitempty"`
+	Version      int    `json:"version,omitempty"`
+}
 
 // CBOMImportSourceKind maps an import source to its discovery source kind:
 // vendor:… a vendor-published CBOM, source:… a source-code scan, image:… an
@@ -53,8 +68,11 @@ func CBOMImportRunID(tenantID, source, serialNumber string, version int, digest 
 }
 
 // BeginCBOMImport records the import's source and starts its run. It reports
-// done when the run already finished, in which case nothing is written.
-func (o *Orchestrator) BeginCBOMImport(ctx context.Context, tenantID, source, runID string, components int) (run store.DiscoveryRun, done bool, err error) {
+// done when the run already finished, in which case nothing is written. A BOM
+// whose serial number the source last imported at a later version is refused
+// with ErrCBOMImportOutdated (X6-L3); a BOM with another serial number, or
+// none, is the source's newest.
+func (o *Orchestrator) BeginCBOMImport(ctx context.Context, tenantID, source, runID, serialNumber string, version, components int) (run store.DiscoveryRun, done bool, err error) {
 	kind, err := CBOMImportSourceKind(source)
 	if err != nil {
 		return store.DiscoveryRun{}, false, err
@@ -69,7 +87,17 @@ func (o *Orchestrator) BeginCBOMImport(ctx context.Context, tenantID, source, ru
 		return store.DiscoveryRun{}, false, err
 	}
 	sourceID := uuid.NewSHA1(cbomImportSourceNamespace, []byte(tenantID+"\x00"+source)).String()
-	cfg, err := json.Marshal(map[string]any{"source": source, "components": components})
+	if previous, err := o.store.GetDiscoverySource(ctx, tenantID, sourceID); err == nil {
+		var last cbomImportSourceConfig
+		if json.Unmarshal(previous.Config, &last) == nil && serialNumber != "" &&
+			last.SerialNumber == serialNumber && version < last.Version {
+			return store.DiscoveryRun{}, false, fmt.Errorf("%w: %s already imported version %d of BOM %s; this is version %d",
+				ErrCBOMImportOutdated, source, last.Version, serialNumber, version)
+		}
+	} else if !store.IsNotFound(err) {
+		return store.DiscoveryRun{}, false, err
+	}
+	cfg, err := json.Marshal(cbomImportSourceConfig{Source: source, Components: components, SerialNumber: serialNumber, Version: version})
 	if err != nil {
 		return store.DiscoveryRun{}, false, err
 	}

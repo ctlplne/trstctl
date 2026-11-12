@@ -1351,7 +1351,11 @@ never live in the API process. What you can do end to end against the running bi
   the inventory is keyed by fingerprint. The BOM's dependency graph attributes
   each asset a library provides to that library and fills a key's or
   certificate's algorithm and issuer from what it depends on (X6-L5);
-  references into other BOMs (BOM-Link) are not followed.
+  references into other BOMs (BOM-Link) are not followed. An import retires its
+  source's rows that the BOM no longer lists and refuses an earlier revision of
+  a BOM the source already imported (X6-L3); BOMs with different serial numbers
+  have no order of their own, so the one imported last is the source's current
+  one.
 - Access graph, step 1 (G1): the credential graph holds people (tenant
   members), their roles and AI agents (from agent-broker issuance), with the
   credentials they hold (API tokens, machine sessions, PAM sessions,

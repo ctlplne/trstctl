@@ -2682,6 +2682,7 @@ export interface CBOMImport {
   components: number;
   findings: number;
   replayed: boolean;
+  retired_asset_ids?: string[];
   run_id: string;
   serial_number?: string;
   source: string;

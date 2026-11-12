@@ -15488,6 +15488,8 @@ export interface components {
             findings: number;
             /** @description this BOM was imported before; nothing was written */
             replayed: boolean;
+            /** @description inventory rows the source's earlier imports recorded and this BOM no longer lists, retired by this import; empty on a replay */
+            retired_asset_ids?: string[];
             /** Format: uuid */
             run_id: string;
             serial_number?: string;

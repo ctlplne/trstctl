@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,6 +18,8 @@ import (
 // Import records an imported CBOM (X6): its assets through the same evented
 // sink scans use, inside a discovery run keyed by the BOM's identity, so a
 // second import of the same BOM finds the finished run and writes nothing.
+// Once every finding is recorded, the import reconciles its source (X6-L3):
+// what the source's earlier imports listed and this BOM does not is retired.
 func (s *cbomService) Import(ctx context.Context, tenantID, source string, bom cbom.ImportedBOM, digest string) (api.CBOMImportResponse, error) {
 	resp := api.CBOMImportResponse{
 		Source: source, SerialNumber: bom.SerialNumber, Version: bom.Version,
@@ -31,10 +34,14 @@ func (s *cbomService) Import(ctx context.Context, tenantID, source string, bom c
 	}
 	sort.Strings(resp.AssetIDs)
 	resp.RunID = orchestrator.CBOMImportRunID(tenantID, source, bom.SerialNumber, bom.Version, digest)
-	_, done, err := s.orch.BeginCBOMImport(ctx, tenantID, source, resp.RunID, bom.Components)
+	_, done, err := s.orch.BeginCBOMImport(ctx, tenantID, source, resp.RunID, bom.SerialNumber, bom.Version, bom.Components)
+	if errors.Is(err, orchestrator.ErrCBOMImportOutdated) {
+		return api.CBOMImportResponse{}, fmt.Errorf("%w: %s", api.ErrCBOMImportOutdated, strings.TrimPrefix(err.Error(), orchestrator.ErrCBOMImportOutdated.Error()+": "))
+	}
 	if err != nil {
 		return api.CBOMImportResponse{}, err
 	}
+	resp.RetiredAssetIDs = []string{}
 	certificates := importedCertificates(source, bom)
 	if done {
 		resp.Replayed = true
@@ -43,11 +50,14 @@ func (s *cbomService) Import(ctx context.Context, tenantID, source string, bom c
 		}
 		return resp, nil
 	}
-	sink := &eventedCBOMSink{store: s.store, log: s.log, tenantID: tenantID}
+	sink := &eventedCBOMSink{store: s.store, log: s.log, tenantID: tenantID, importSource: source}
 	for _, f := range bom.Findings {
 		if err := sink.Record(ctx, f); err != nil {
 			return api.CBOMImportResponse{}, err
 		}
+	}
+	if resp.RetiredAssetIDs, err = sink.ReconcileImport(ctx, resp.RunID); err != nil {
+		return api.CBOMImportResponse{}, err
 	}
 	if resp.CertificateIDs, err = s.inventoryImportedCertificates(ctx, tenantID, certificates, true); err != nil {
 		return api.CBOMImportResponse{}, err

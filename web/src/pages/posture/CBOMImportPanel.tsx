@@ -139,6 +139,11 @@ export function CBOMImportPanel({ onImported }: { onImported: (result: CBOMImpor
           {(result.certificate_ids ?? []).length > 0 ? (
             <p className="text-muted-foreground">{t("posture.cbom.import.certificates", { count: String((result.certificate_ids ?? []).length) })}</p>
           ) : null}
+          {(result.retired_asset_ids ?? []).length > 0 ? (
+            <p className="text-muted-foreground">
+              {t("posture.cbom.import.retired", { count: String((result.retired_asset_ids ?? []).length), source: result.source })}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>
