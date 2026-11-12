@@ -406,8 +406,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// Q6-O1 adds listing and retiring decoy files (823).
 	// Q6-O2 adds registering, listing and retiring Kubernetes token decoys
 	// and their clusters' audit events (827).
-	if len(out) != 827 {
-		t.Fatalf("OpenAPI operationIds = %d, want 827", len(out))
+	// OD-8 adds listing, granting and revoking an authority's SPIRE upstream
+	// standing approvals (830).
+	if len(out) != 830 {
+		t.Fatalf("OpenAPI operationIds = %d, want 830", len(out))
 	}
 	return out
 }

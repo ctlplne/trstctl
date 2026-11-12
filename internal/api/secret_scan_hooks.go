@@ -419,7 +419,7 @@ func (a *API) receiveSecretScanHook(w http.ResponseWriter, r *http.Request) {
 	}
 	push, status, reply, err := secretScanHookEvent(provider, r.Header, body)
 	if err != nil {
-		a.writeProblem(w, problem.New(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	if reply != nil {
