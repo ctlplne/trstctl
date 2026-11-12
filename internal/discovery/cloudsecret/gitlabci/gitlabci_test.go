@@ -87,3 +87,57 @@ func TestGitLabCIRefusesAMissingScope(t *testing.T) {
 		t.Fatal("a source with no project or group was accepted")
 	}
 }
+
+// OD-2: instance-level variables are listed with an administrator's token,
+// each body wiped and a value inspected only with content inspection; any
+// other token's 403 fails the listing naming why.
+func TestGitLabInstanceVariablesOD2(t *testing.T) {
+	adminToken := "gl" + "pat-" + strings.Repeat("od2instance", 3)[:24]
+	stand := secretstoretest.NewGitLabWithAdmin("maintainer-token", "admin-token", []secretstoretest.GitLabVariable{
+		{Scope: "instance", Key: "INSTANCE_DEPLOY_TOKEN", Value: adminToken, Masked: true},
+		{Scope: "instance", Key: "REGION", Value: "us-east-1"},
+		{Scope: "group:acme", Key: "GROUP_ONLY", Value: "x"},
+	})
+	t.Cleanup(stand.Close)
+	e, err := gitlabci.New(gitlabci.Config{BaseURL: stand.URL(), HTTPClient: stand.Client(), Instance: true, InspectContent: true,
+		Token: cloudcert.StaticToken("admin-token")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found, err := e.Enumerate(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := strings.TrimPrefix(stand.URL(), "http://")
+	kinds := map[string]int{}
+	for _, f := range found {
+		kinds[f.Kind]++
+		if f.Metadata["scope"] != "instance" || f.Metadata["instance"] != host || f.Location != "instance" ||
+			!strings.HasPrefix(f.Metadata["resource_id"], "gitlab://"+host+"/instance/variables/") {
+			t.Fatalf("instance finding = %+v", f)
+		}
+		for _, v := range f.Metadata {
+			if strings.Contains(v, adminToken) {
+				t.Fatal("a finding carries the variable's value")
+			}
+		}
+	}
+	if kinds["cloud_secret_resource"] != 2 || kinds["secret_store_api_key"] != 1 || len(found) != 3 {
+		t.Fatalf("found kinds %v (%d findings), want 2 resources and the inspected token", kinds, len(found))
+	}
+	if seen := stand.Seen(); len(seen) != 1 || seen[0] != "GET /api/v4/admin/ci/variables?per_page=100&page=1" {
+		t.Fatalf("calls = %v", seen)
+	}
+
+	e, err = gitlabci.New(gitlabci.Config{BaseURL: stand.URL(), HTTPClient: stand.Client(), Group: "acme", Instance: true,
+		Token: cloudcert.StaticToken("maintainer-token")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Enumerate(context.Background()); err == nil || !strings.Contains(err.Error(), "administrator") || !strings.Contains(err.Error(), "status 403") {
+		t.Fatalf("a maintainer's token listing instance variables = %v, want the 403 named with the reason", err)
+	}
+	if _, err := gitlabci.New(gitlabci.Config{Token: cloudcert.StaticToken("x")}); err == nil || !strings.Contains(err.Error(), "instance") {
+		t.Fatalf("no scope = %v, want the instance named among the scopes", err)
+	}
+}

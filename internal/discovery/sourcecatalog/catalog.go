@@ -338,8 +338,8 @@ func cloudSecretCapability(kind, label string) Capability {
 			provider("gcp-secret-manager", "Google Secret Manager", "Metadata: secretmanager.secrets.list. Optional content inspection additionally needs secretmanager.versions.access on the filtered scope.", "token_ref", "project", "token_ref", "label_key", "label_value", "name_prefix", "inspect_content"),
 			provider("azure-key-vault", "Azure Key Vault secrets", "Metadata: secrets/list. Optional content inspection additionally needs secrets/get on the filtered scope.", "token_ref", "vault_url", "token_ref", "name_prefix", "inspect_content"),
 			provider("hashicorp-vault", "HashiCorp Vault KV", "Metadata: list/read on the approved metadata path. Optional content inspection additionally needs read on the filtered data path.", "token_ref", "vault_url", "api_version", "mount", "path_prefix", "token_ref", "inspect_content"),
-			provider("github-actions", "GitHub Actions secrets", "Metadata only: a fine-grained token with Secrets read on the repository (and Environments read for environment secrets) or an org token with Secrets read. GitHub never returns values, so content inspection is refused.", "token_ref", "endpoint", "owner", "repo", "environments", "org", "token_ref", "name_prefix"),
-			provider("gitlab-ci", "GitLab CI/CD variables", "Metadata: a read_api token with at least Maintainer on the project or group (GitLab returns values in the listing; trstctl wipes them unless content inspection is chosen). Hidden variables are never returned.", "token_ref", "endpoint", "project", "group", "token_ref", "name_prefix", "inspect_content"),
+			provider("github-actions", "GitHub secrets (Actions, Dependabot, Codespaces)", "Metadata only: a fine-grained token with read access to each chosen store on the repository or org (Secrets for Actions, plus Environments for environment secrets; Dependabot secrets; Codespaces secrets), and Codespaces user secrets for the token owner's own. GitHub never returns values, so content inspection is refused.", "token_ref", "endpoint", "owner", "repo", "environments", "org", "stores", "user_codespaces", "token_ref", "name_prefix"),
+			provider("gitlab-ci", "GitLab CI/CD variables", "Metadata: a read_api token with at least Maintainer on the project or group, and an administrator's token for instance variables (GitLab returns values in the listing; trstctl wipes them unless content inspection is chosen). Hidden variables are never returned.", "token_ref", "endpoint", "project", "group", "instance", "token_ref", "name_prefix", "inspect_content"),
 		},
 		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-secret-managers",
 	}
@@ -371,10 +371,13 @@ func cloudFields(secret bool) []Field {
 			field("providers[].label_value", "GCP label value", "string", false, false, true, "Optional metadata-only inventory filter."),
 			field("providers[].name_prefix", "Name prefix", "string", false, false, true, "Optional resource-name filter."),
 			field("providers[].owner", "GitHub owner", "string", false, false, false, "Repository owner (user or organization) for repository and environment secrets."),
-			field("providers[].repo", "GitHub repository", "string", false, false, false, "Repository whose Actions secrets are listed."),
+			field("providers[].repo", "GitHub repository", "string", false, false, false, "Repository whose secrets are listed."),
 			field("providers[].environments", "GitHub environments", "string_list", false, false, true, "Deployment environments whose secrets are listed too."),
-			field("providers[].org", "GitHub organization", "string", false, false, false, "Organization whose Actions secrets are listed."),
+			field("providers[].org", "GitHub organization", "string", false, false, false, "Organization whose secrets are listed."),
+			field("providers[].stores", "GitHub secret stores", "string_list", false, false, true, "Stores listed for the repository and organization: actions (the default), dependabot, codespaces."),
+			field("providers[].user_codespaces", "Token owner's Codespaces secrets", "boolean", false, false, true, "Also list the Codespaces secrets of the user the token belongs to."),
 			field("providers[].group", "GitLab group", "string", false, false, false, "Group ID or full path whose CI/CD variables are listed; a project uses the project field."),
+			field("providers[].instance", "GitLab instance variables", "boolean", false, false, true, "Also list the instance-level variables every project inherits (an administrator's token on a self-managed instance)."),
 			field("providers[].inspect_content", "Inspect content for certificates and credentials", "boolean", false, false, true, "Explicit opt-in to retrieve candidate values into wipeable memory and emit certificate metadata and masked, fingerprinted API-key, token, and private-key findings only."),
 		)
 	}

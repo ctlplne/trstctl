@@ -829,8 +829,18 @@ Two more providers cover the code hosts' CI/CD secret stores (A173), each with a
 
 | Provider | Scope fields | What it lists |
 |---|---|---|
-| `github-actions` | `owner` + `repo`, `environments`, `org` | Repository, environment and organization Actions secrets. GitHub never returns a value, so this provider is metadata-only and refuses `inspect_content`. |
-| `gitlab-ci` | `project`, `group` (ID or full path) | CI/CD variables with type, protection, masking, environment scope. A hidden variable's value is never returned and is reported as not inspectable. |
+| `github-actions` | `owner` + `repo`, `environments`, `org`, `stores`, `user_codespaces` | Repository and organization secrets in each chosen store — `actions` (the default), `dependabot`, `codespaces` — plus environment Actions secrets and, with `user_codespaces`, the token owner's own Codespaces secrets. GitHub never returns a value, so this provider is metadata-only and refuses `inspect_content`. |
+| `gitlab-ci` | `project`, `group` (ID or full path), `instance` | CI/CD variables with type, protection, masking, environment scope; with `instance: true`, the instance-level variables every project inherits (GitLab lists them to an administrator's token only). A hidden variable's value is never returned and is reported as not inspectable. |
+
+Each GitHub finding names its store (`store`: `actions`, `dependabot` or `codespaces`) and
+scope (`repository`, `environment`, `organization` or `user`); a user's Codespaces secrets
+are keyed by their login, which the provider reads from `GET /user`. An unknown store, or
+environments without the `actions` store, fails that provider with the reason. Dependabot and
+Codespaces secrets need their own read permissions on the token (for a fine-grained token,
+Dependabot secrets and Codespaces secrets, and Codespaces user secrets for the owner's own).
+A GitLab instance's variables are read from `GET /api/v4/admin/ci/variables`; any other token's
+403 fails that provider saying an administrator's token is required. Like project and group
+variables, their values are wiped once read unless content inspection is chosen.
 
 With `inspect_content: true` on a provider, trstctl also reads each value it is allowed
 to, holds it only in wipeable memory, and looks inside it (A172):

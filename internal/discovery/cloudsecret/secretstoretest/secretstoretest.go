@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-// Package secretstoretest provides in-repository stand-ins for the GitHub
-// Actions and GitLab CI/CD secret APIs the A173 discovery providers read. Each answers only the read calls the providers
+// Package secretstoretest provides in-repository stand-ins, written from the
+// providers' public API documentation, for the GitHub secret APIs (Actions,
+// Dependabot and Codespaces) and the GitLab CI/CD variable APIs (project,
+// group and instance) the A173 and OD-2 discovery providers read. Each answers only the read calls the providers
 // make, enforces its provider's authentication header, paginates like the
 // provider, and records every request so a test can prove which calls a run
 // made (a metadata-only run must never reach a value-returning endpoint).
@@ -90,15 +92,24 @@ func page[T any](items []T, r *http.Request) []T {
 
 func writeJSON(w http.ResponseWriter, v any) { _ = json.NewEncoder(w).Encode(v) }
 
-// GitHubSecret is one Actions secret: its scope is "repo", "env:<name>" or "org".
+// GitHubLogin is the stand-in token owner's login, which GET /user returns.
+const GitHubLogin = "standin-user"
+
+// GitHubSecret is one secret. Scope is "repo", "env:<name>", "org" or "user"
+// (the token owner's own, Codespaces only); Type is "actions" (the default
+// when empty), "dependabot" or "codespaces".
 type GitHubSecret struct {
 	Scope      string
+	Type       string
 	Name       string
 	Visibility string
 }
 
-// NewGitHub serves GitHub's Actions secret listings for one owner/repo and
-// one org. GitHub never returns a secret's value, and neither does this.
+// NewGitHub serves GitHub's secret listings for one owner/repo, one org and
+// the token owner: Actions secrets for the repository, its environments and
+// the org; Dependabot and Codespaces secrets for the repository and the org;
+// and the token owner's Codespaces secrets with GET /user. GitHub never
+// returns a secret's value, and neither does this.
 func NewGitHub(token, owner, repo, org string, secrets []GitHubSecret) *Server {
 	return newServer(func(_ *Server, w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+token {
@@ -109,28 +120,39 @@ func NewGitHub(token, owner, repo, org string, secrets []GitHubSecret) *Server {
 			http.Error(w, `{"message":"read-only stand-in"}`, http.StatusMethodNotAllowed)
 			return
 		}
-		scope := ""
+		scope, typ := "", "actions"
+		repoBase, orgBase := "/repos/"+owner+"/"+repo+"/", "/orgs/"+org+"/"
 		switch path := r.URL.Path; {
-		case path == "/repos/"+owner+"/"+repo+"/actions/secrets":
-			scope = "repo"
-		case strings.HasPrefix(path, "/repos/"+owner+"/"+repo+"/environments/") && strings.HasSuffix(path, "/secrets"):
-			scope = "env:" + strings.TrimSuffix(strings.TrimPrefix(path, "/repos/"+owner+"/"+repo+"/environments/"), "/secrets")
-		case path == "/orgs/"+org+"/actions/secrets":
-			scope = "org"
+		case path == "/user":
+			writeJSON(w, map[string]any{"login": GitHubLogin, "type": "User"})
+			return
+		case path == "/user/codespaces/secrets":
+			scope, typ = "user", "codespaces"
+		case strings.HasPrefix(path, repoBase+"environments/") && strings.HasSuffix(path, "/secrets"):
+			scope = "env:" + strings.TrimSuffix(strings.TrimPrefix(path, repoBase+"environments/"), "/secrets")
+		case strings.HasPrefix(path, repoBase) && githubSecretPath(strings.TrimPrefix(path, repoBase)) != "":
+			scope, typ = "repo", githubSecretPath(strings.TrimPrefix(path, repoBase))
+		case org != "" && strings.HasPrefix(path, orgBase) && githubSecretPath(strings.TrimPrefix(path, orgBase)) != "":
+			scope, typ = "org", githubSecretPath(strings.TrimPrefix(path, orgBase))
 		default:
 			http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
 			return
 		}
 		type row struct {
-			Name       string `json:"name"`
-			CreatedAt  string `json:"created_at"`
-			UpdatedAt  string `json:"updated_at"`
-			Visibility string `json:"visibility,omitempty"`
+			Name                    string `json:"name"`
+			CreatedAt               string `json:"created_at"`
+			UpdatedAt               string `json:"updated_at"`
+			Visibility              string `json:"visibility,omitempty"`
+			SelectedRepositoriesURL string `json:"selected_repositories_url,omitempty"`
 		}
 		var rows []row
 		for _, s := range secrets {
-			if s.Scope == scope {
-				rows = append(rows, row{Name: s.Name, CreatedAt: "2026-10-01T00:00:00Z", UpdatedAt: "2026-10-30T00:00:00Z", Visibility: s.Visibility})
+			if s.Scope == scope && nonempty(s.Type, "actions") == typ {
+				out := row{Name: s.Name, CreatedAt: "2026-10-01T00:00:00Z", UpdatedAt: "2026-10-30T00:00:00Z", Visibility: s.Visibility}
+				if s.Visibility == "selected" {
+					out.SelectedRepositoriesURL = "https://" + r.Host + r.URL.Path + "/" + s.Name + "/repositories"
+				}
+				rows = append(rows, out)
 			}
 		}
 		sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
@@ -138,8 +160,20 @@ func NewGitHub(token, owner, repo, org string, secrets []GitHubSecret) *Server {
 	})
 }
 
-// GitLabVariable is one CI/CD variable. Scope is "project:<id-or-path>" or
-// "group:<id-or-path>"; a hidden variable's value is never returned.
+// githubSecretPath names the store a "<type>/secrets" path under a
+// repository or an org lists, or "" for any other path.
+func githubSecretPath(rest string) string {
+	for _, typ := range []string{"actions", "dependabot", "codespaces"} {
+		if rest == typ+"/secrets" {
+			return typ
+		}
+	}
+	return ""
+}
+
+// GitLabVariable is one CI/CD variable. Scope is "project:<id-or-path>",
+// "group:<id-or-path>" or "instance"; a hidden variable's value is never
+// returned.
 type GitLabVariable struct {
 	Scope            string
 	Key              string
@@ -151,10 +185,19 @@ type GitLabVariable struct {
 	EnvironmentScope string
 }
 
-// NewGitLab serves GitLab's project and group variable listings.
+// NewGitLab serves GitLab's project, group and instance variable listings;
+// the one token is an administrator's.
 func NewGitLab(token string, vars []GitLabVariable) *Server {
+	return NewGitLabWithAdmin(token, token, vars)
+}
+
+// NewGitLabWithAdmin is NewGitLab with a separate administrator token: GitLab
+// lists instance variables (GET /api/v4/admin/ci/variables) to an
+// administrator only and answers anyone else 403.
+func NewGitLabWithAdmin(token, adminToken string, vars []GitLabVariable) *Server {
 	return newServer(func(_ *Server, w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("PRIVATE-TOKEN") != token {
+		caller := r.Header.Get("PRIVATE-TOKEN")
+		if caller != token && caller != adminToken {
 			http.Error(w, `{"message":"401 Unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
@@ -172,19 +215,27 @@ func NewGitLab(token string, vars []GitLabVariable) *Server {
 				scope = strings.TrimSuffix(kind, "s") + ":" + id
 			}
 		}
+		if path == "/api/v4/admin/ci/variables" {
+			if caller != adminToken {
+				http.Error(w, `{"message":"403 Forbidden"}`, http.StatusForbidden)
+				return
+			}
+			scope = "instance"
+		}
 		if scope == "" {
 			http.Error(w, `{"message":"404 Not Found"}`, http.StatusNotFound)
 			return
 		}
 		type row struct {
 			Key              string  `json:"key"`
+			Description      *string `json:"description,omitempty"`
 			Value            *string `json:"value"`
 			VariableType     string  `json:"variable_type"`
 			Protected        bool    `json:"protected"`
 			Masked           bool    `json:"masked"`
-			Hidden           bool    `json:"hidden"`
+			Hidden           *bool   `json:"hidden,omitempty"`
 			Raw              bool    `json:"raw"`
-			EnvironmentScope string  `json:"environment_scope"`
+			EnvironmentScope *string `json:"environment_scope,omitempty"`
 		}
 		var rows []row
 		for _, v := range vars {
@@ -192,10 +243,15 @@ func NewGitLab(token string, vars []GitLabVariable) *Server {
 				continue
 			}
 			value := v.Value
-			out := row{Key: v.Key, Value: &value, VariableType: nonempty(v.VariableType, "env_var"), Protected: v.Protected,
-				Masked: v.Masked || v.Hidden, Hidden: v.Hidden, EnvironmentScope: nonempty(v.EnvironmentScope, "*")}
-			if v.Hidden {
-				out.Value = nil
+			out := row{Key: v.Key, Value: &value, VariableType: nonempty(v.VariableType, "env_var"), Protected: v.Protected, Masked: v.Masked || v.Hidden}
+			if scope != "instance" {
+				// Project and group variables carry an environment scope and
+				// the hidden flag; instance variables have neither.
+				hidden, envScope := v.Hidden, nonempty(v.EnvironmentScope, "*")
+				out.Hidden, out.EnvironmentScope = &hidden, &envScope
+				if v.Hidden {
+					out.Value = nil
+				}
 			}
 			rows = append(rows, out)
 		}

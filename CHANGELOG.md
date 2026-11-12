@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- GitHub Dependabot and Codespaces secrets and GitLab instance variables (OD-2): a `secret_store` source's
+  `github-actions` provider lists the repository's and organization's secrets in each chosen store (`stores`:
+  `actions`, the default, `dependabot`, `codespaces`) and, with `user_codespaces`, the token owner's own Codespaces
+  secrets; each finding names its store and scope, metadata only. The `gitlab-ci` provider's `instance: true` lists
+  the instance-level variables every project inherits with an administrator's token, wiping each value unless content
+  inspection is chosen. An unknown store, or a token GitLab refuses for instance variables, fails that provider with
+  the reason. The console's source setup offers the stores, the owner's Codespaces secrets and instance variables.
 - Repository secret scans clone private repositories (OD-1): the normalized repository webhook's `credential_ref`
   (`file:` or `secret://`, with `credential_username`) and a native GitHub hook's `clone_credential_ref` give the token
   an https clone authenticates with. The scan worker opens it for that clone alone and hands it to git as an

@@ -447,7 +447,7 @@ describe("typed discovery source setup", () => {
     await user.type(screen.getByRole("textbox", { name: /Token reference/ }), "env:GITHUB_DISCOVERY_TOKEN");
     await user.click(screen.getByRole("checkbox", { name: /Inspect secret content/ }));
     await user.click(screen.getByRole("button", { name: "Review exact plan" }));
-    expect(await screen.findByText(/GitHub never returns Actions secret values. Turn content inspection off/)).toBeInTheDocument();
+    expect(await screen.findByText(/GitHub never returns secret values. Turn content inspection off/)).toBeInTheDocument();
     expect(apiMock.createDiscoverySource).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("checkbox", { name: /Inspect secret content/ }));
@@ -462,6 +462,83 @@ describe("typed discovery source setup", () => {
               { provider: "github-actions", owner: "acme", repo: "api", environments: ["production", "staging"], token_ref: "env:GITHUB_DISCOVERY_TOKEN" },
             ],
           },
+        }),
+      ),
+    );
+  });
+
+  it("lists GitHub Dependabot and Codespaces secrets beside Actions secrets (OD-2)", async () => {
+    const user = userEvent.setup();
+    renderSetup();
+
+    await screen.findByText("What this source does");
+    await user.selectOptions(screen.getByRole("combobox", { name: "What should trstctl inspect?" }), "secret_store");
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "Code host stores");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Provider" }), "github-actions");
+    await user.type(screen.getByRole("textbox", { name: "GitHub owner" }), "acme");
+    await user.type(screen.getByRole("textbox", { name: "GitHub repository" }), "api");
+    await user.type(screen.getByRole("textbox", { name: /Token reference/ }), "env:GITHUB_DISCOVERY_TOKEN");
+    expect(screen.getByRole("checkbox", { name: "Actions" })).toBeChecked();
+
+    // A repository with no store chosen is refused before review.
+    await user.click(screen.getByRole("checkbox", { name: "Actions" }));
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(await screen.findByText("Choose at least one secret store for the repository or organization.")).toBeInTheDocument();
+
+    // Environment secrets are Actions secrets.
+    await user.click(screen.getByRole("checkbox", { name: "Dependabot" }));
+    await user.click(screen.getByRole("checkbox", { name: "Codespaces" }));
+    await user.type(screen.getByRole("textbox", { name: /GitHub environments/ }), "production");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(await screen.findByText(/Environment secrets are Actions secrets/)).toBeInTheDocument();
+    expect(apiMock.createDiscoverySource).not.toHaveBeenCalled();
+
+    await user.clear(screen.getByRole("textbox", { name: /GitHub environments/ }));
+    await user.click(screen.getByRole("checkbox", { name: /The token owner's Codespaces secrets/ }));
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(await screen.findByRole("button", { name: "Save source" }));
+    await waitFor(() =>
+      expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "secret_store",
+          config: {
+            providers: [
+              {
+                provider: "github-actions",
+                owner: "acme",
+                repo: "api",
+                stores: ["dependabot", "codespaces"],
+                user_codespaces: true,
+                token_ref: "env:GITHUB_DISCOVERY_TOKEN",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+  });
+
+  it("lists GitLab instance variables without a project or group (OD-2)", async () => {
+    const user = userEvent.setup();
+    renderSetup();
+
+    await screen.findByText("What this source does");
+    await user.selectOptions(screen.getByRole("combobox", { name: "What should trstctl inspect?" }), "secret_store");
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "Instance variables");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Provider" }), "gitlab-ci");
+    await user.type(screen.getByRole("textbox", { name: /Token reference/ }), "env:GITLAB_ADMIN_TOKEN");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(await screen.findByText("Enter a GitLab project or group, or choose the instance variables.")).toBeInTheDocument();
+    expect(apiMock.createDiscoverySource).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("checkbox", { name: /Instance variables/ }));
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(await screen.findByRole("button", { name: "Save source" }));
+    await waitFor(() =>
+      expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "secret_store",
+          config: { providers: [{ provider: "gitlab-ci", instance: true, token_ref: "env:GITLAB_ADMIN_TOKEN" }] },
         }),
       ),
     );

@@ -1714,7 +1714,7 @@
           "label": "GitHub repository",
           "type": "string",
           "required": false,
-          "description": "Repository whose Actions secrets are listed."
+          "description": "Repository whose secrets are listed."
         },
         {
           "path": "providers[].environments",
@@ -1729,7 +1729,23 @@
           "label": "GitHub organization",
           "type": "string",
           "required": false,
-          "description": "Organization whose Actions secrets are listed."
+          "description": "Organization whose secrets are listed."
+        },
+        {
+          "path": "providers[].stores",
+          "label": "GitHub secret stores",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "Stores listed for the repository and organization: actions (the default), dependabot, codespaces."
+        },
+        {
+          "path": "providers[].user_codespaces",
+          "label": "Token owner's Codespaces secrets",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Also list the Codespaces secrets of the user the token belongs to."
         },
         {
           "path": "providers[].group",
@@ -1737,6 +1753,14 @@
           "type": "string",
           "required": false,
           "description": "Group ID or full path whose CI/CD variables are listed; a project uses the project field."
+        },
+        {
+          "path": "providers[].instance",
+          "label": "GitLab instance variables",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Also list the instance-level variables every project inherits (an administrator's token on a self-managed instance)."
         },
         {
           "path": "providers[].inspect_content",
@@ -1807,8 +1831,8 @@
         },
         {
           "id": "github-actions",
-          "label": "GitHub Actions secrets",
-          "least_privilege": "Metadata only: a fine-grained token with Secrets read on the repository (and Environments read for environment secrets) or an org token with Secrets read. GitHub never returns values, so content inspection is refused.",
+          "label": "GitHub secrets (Actions, Dependabot, Codespaces)",
+          "least_privilege": "Metadata only: a fine-grained token with read access to each chosen store on the repository or org (Secrets for Actions, plus Environments for environment secrets; Dependabot secrets; Codespaces secrets), and Codespaces user secrets for the token owner's own. GitHub never returns values, so content inspection is refused.",
           "preferred_credential": "token_ref",
           "fields": [
             "endpoint",
@@ -1816,6 +1840,8 @@
             "repo",
             "environments",
             "org",
+            "stores",
+            "user_codespaces",
             "token_ref",
             "name_prefix"
           ]
@@ -1823,12 +1849,13 @@
         {
           "id": "gitlab-ci",
           "label": "GitLab CI/CD variables",
-          "least_privilege": "Metadata: a read_api token with at least Maintainer on the project or group (GitLab returns values in the listing; trstctl wipes them unless content inspection is chosen). Hidden variables are never returned.",
+          "least_privilege": "Metadata: a read_api token with at least Maintainer on the project or group, and an administrator's token for instance variables (GitLab returns values in the listing; trstctl wipes them unless content inspection is chosen). Hidden variables are never returned.",
           "preferred_credential": "token_ref",
           "fields": [
             "endpoint",
             "project",
             "group",
+            "instance",
             "token_ref",
             "name_prefix",
             "inspect_content"
@@ -2036,7 +2063,7 @@
           "label": "GitHub repository",
           "type": "string",
           "required": false,
-          "description": "Repository whose Actions secrets are listed."
+          "description": "Repository whose secrets are listed."
         },
         {
           "path": "providers[].environments",
@@ -2051,7 +2078,23 @@
           "label": "GitHub organization",
           "type": "string",
           "required": false,
-          "description": "Organization whose Actions secrets are listed."
+          "description": "Organization whose secrets are listed."
+        },
+        {
+          "path": "providers[].stores",
+          "label": "GitHub secret stores",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "Stores listed for the repository and organization: actions (the default), dependabot, codespaces."
+        },
+        {
+          "path": "providers[].user_codespaces",
+          "label": "Token owner's Codespaces secrets",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Also list the Codespaces secrets of the user the token belongs to."
         },
         {
           "path": "providers[].group",
@@ -2059,6 +2102,14 @@
           "type": "string",
           "required": false,
           "description": "Group ID or full path whose CI/CD variables are listed; a project uses the project field."
+        },
+        {
+          "path": "providers[].instance",
+          "label": "GitLab instance variables",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Also list the instance-level variables every project inherits (an administrator's token on a self-managed instance)."
         },
         {
           "path": "providers[].inspect_content",
@@ -2129,8 +2180,8 @@
         },
         {
           "id": "github-actions",
-          "label": "GitHub Actions secrets",
-          "least_privilege": "Metadata only: a fine-grained token with Secrets read on the repository (and Environments read for environment secrets) or an org token with Secrets read. GitHub never returns values, so content inspection is refused.",
+          "label": "GitHub secrets (Actions, Dependabot, Codespaces)",
+          "least_privilege": "Metadata only: a fine-grained token with read access to each chosen store on the repository or org (Secrets for Actions, plus Environments for environment secrets; Dependabot secrets; Codespaces secrets), and Codespaces user secrets for the token owner's own. GitHub never returns values, so content inspection is refused.",
           "preferred_credential": "token_ref",
           "fields": [
             "endpoint",
@@ -2138,6 +2189,8 @@
             "repo",
             "environments",
             "org",
+            "stores",
+            "user_codespaces",
             "token_ref",
             "name_prefix"
           ]
@@ -2145,12 +2198,13 @@
         {
           "id": "gitlab-ci",
           "label": "GitLab CI/CD variables",
-          "least_privilege": "Metadata: a read_api token with at least Maintainer on the project or group (GitLab returns values in the listing; trstctl wipes them unless content inspection is chosen). Hidden variables are never returned.",
+          "least_privilege": "Metadata: a read_api token with at least Maintainer on the project or group, and an administrator's token for instance variables (GitLab returns values in the listing; trstctl wipes them unless content inspection is chosen). Hidden variables are never returned.",
           "preferred_credential": "token_ref",
           "fields": [
             "endpoint",
             "project",
             "group",
+            "instance",
             "token_ref",
             "name_prefix",
             "inspect_content"

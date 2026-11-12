@@ -14128,8 +14128,21 @@ export const messages = {
   "discovery.setup.githubEnvironments": { defaultMessage: "GitHub environments", description: "GitHub deployment environments field." },
   "discovery.setup.githubOrg": { defaultMessage: "GitHub organization", description: "GitHub organization field." },
   "discovery.setup.githubMetadataOnly": {
-    defaultMessage: "GitHub never returns Actions secret values, so this provider inventories names and dates only. Leave content inspection off.",
-    description: "GitHub Actions metadata-only explanation.",
+    defaultMessage: "GitHub never returns secret values, so this provider inventories names and dates only. Leave content inspection off.",
+    description: "GitHub secrets metadata-only explanation.",
+  },
+  "discovery.setup.githubStores": { defaultMessage: "Secret stores", description: "GitHub secret stores fieldset legend." },
+  "discovery.setup.githubStoresDescription": {
+    defaultMessage: "The stores listed for the repository and the organization.",
+    description: "GitHub secret stores fieldset help.",
+  },
+  "discovery.setup.githubStoreActions": { defaultMessage: "Actions", description: "GitHub Actions secrets store option." },
+  "discovery.setup.githubStoreDependabot": { defaultMessage: "Dependabot", description: "GitHub Dependabot secrets store option." },
+  "discovery.setup.githubStoreCodespaces": { defaultMessage: "Codespaces", description: "GitHub Codespaces secrets store option." },
+  "discovery.setup.githubUserCodespaces": { defaultMessage: "The token owner's Codespaces secrets", description: "GitHub user Codespaces secrets option." },
+  "discovery.setup.githubUserCodespacesDescription": {
+    defaultMessage: "Also lists the Codespaces secrets of the user the token belongs to.",
+    description: "GitHub user Codespaces secrets option help.",
   },
   "discovery.setup.listDescription": { defaultMessage: "Optional. Separate several with commas.", description: "Comma-separated list field help." },
   "discovery.setup.gitlabProject": { defaultMessage: "GitLab project", description: "GitLab project field." },
@@ -14138,20 +14151,36 @@ export const messages = {
     defaultMessage: "Numeric ID or full path, for example group/app.",
     description: "GitLab project or group identifier help.",
   },
+  "discovery.setup.gitlabInstance": { defaultMessage: "Instance variables", description: "GitLab instance-level variables option." },
+  "discovery.setup.gitlabInstanceDescription": {
+    defaultMessage: "Also lists the variables every project on the instance inherits. GitLab lists them to an administrator's token only.",
+    description: "GitLab instance-level variables option help.",
+  },
   "discovery.setup.validation.githubRepo": { defaultMessage: "Enter both the owner and the repository.", description: "GitHub repository validation." },
   "discovery.setup.validation.githubScope": {
-    defaultMessage: "Enter a repository (owner and name) or an organization.",
+    defaultMessage: "Enter a repository (owner and name) or an organization, or choose the token owner's Codespaces secrets.",
     description: "GitHub scope validation.",
+  },
+  "discovery.setup.validation.githubStores": {
+    defaultMessage: "Choose at least one secret store for the repository or organization.",
+    description: "GitHub secret stores validation.",
+  },
+  "discovery.setup.validation.githubEnvironmentsActions": {
+    defaultMessage: "Environment secrets are Actions secrets. Choose Actions, or clear the environments.",
+    description: "GitHub environments need the Actions store validation.",
   },
   "discovery.setup.validation.githubEnvironments": {
     defaultMessage: "Environments belong to a repository. Enter the owner and repository.",
     description: "GitHub environments validation.",
   },
   "discovery.setup.validation.githubNoContent": {
-    defaultMessage: "GitHub never returns Actions secret values. Turn content inspection off for this provider.",
+    defaultMessage: "GitHub never returns secret values. Turn content inspection off for this provider.",
     description: "GitHub content-inspection validation.",
   },
-  "discovery.setup.validation.gitlabScope": { defaultMessage: "Enter a GitLab project or group.", description: "GitLab scope validation." },
+  "discovery.setup.validation.gitlabScope": {
+    defaultMessage: "Enter a GitLab project or group, or choose the instance variables.",
+    description: "GitLab scope validation.",
+  },
   "discovery.setup.validation.gcpProject": { defaultMessage: "Enter the authorized Google Cloud project.", description: "Google Cloud project validation." },
   "discovery.setup.validation.gcpLocation": {
     defaultMessage: "Enter the Certificate Manager location.",

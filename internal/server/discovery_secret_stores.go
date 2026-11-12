@@ -17,7 +17,8 @@ import (
 )
 
 // secretStoreProvider builds the code-host secret stores beyond the cloud
-// secret managers (A173): GitHub Actions secrets and GitLab CI/CD variables.
+// secret managers (A173): GitHub's Actions, Dependabot and Codespaces secrets
+// and GitLab's project, group and instance CI/CD variables (OD-2).
 // It reports false for a provider it does not know, so the caller names it
 // unsupported.
 func secretStoreProvider(ctx context.Context, p cloudSecretProviderConfig) (cloudsecret.Provider, bool, error) {
@@ -48,11 +49,12 @@ func buildSecretStoreProvider(provider string, p cloudSecretProviderConfig, endp
 	case githubactions.ProviderName:
 		return githubactions.New(githubactions.Config{
 			BaseURL: endpoint, Owner: p.Owner, Repo: p.Repo, Environments: p.Environments, Org: p.Org,
+			Stores: p.Stores, UserCodespaces: p.UserCodespaces,
 			Token: token, NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, HTTPClient: client,
 		})
 	default:
 		return gitlabci.New(gitlabci.Config{
-			BaseURL: endpoint, Project: p.Project, Group: p.Group,
+			BaseURL: endpoint, Project: p.Project, Group: p.Group, Instance: p.Instance,
 			Token: token, NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, HTTPClient: client,
 		})
 	}

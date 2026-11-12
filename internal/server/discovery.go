@@ -120,6 +120,11 @@ type cloudSecretProviderConfig struct {
 	Org          string   `json:"org"`
 	Environments []string `json:"environments"`
 	Group        string   `json:"group"`
+	// GitHub's Dependabot and Codespaces secrets and GitLab's instance
+	// variables (OD-2).
+	Stores         []string `json:"stores"`
+	UserCodespaces bool     `json:"user_codespaces"`
+	Instance       bool     `json:"instance"`
 }
 
 type ctLogDiscoveryConfig struct {
