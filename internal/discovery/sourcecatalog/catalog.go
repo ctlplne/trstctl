@@ -343,6 +343,8 @@ func cloudSecretCapability(kind, label string) Capability {
 			provider("infisical", "Infisical secrets", "Metadata: a machine identity with the Viewer role on each project to inventory, signing in with Universal Auth (client ID and client secret) or an access token. A metadata-only run asks Infisical to leave values out; content inspection asks for them.", "client_secret_ref", "endpoint", "client_id", "client_secret_ref", "token_ref", "project", "environments", "path_prefix", "name_prefix", "inspect_content"),
 			provider("conjur", "CyberArk Conjur variables", "Metadata: a host (or user) with read on the variables to inventory, signing in with its API key; the resource listing returns only those and never a value. Content inspection also needs execute on them.", "api_key_ref", "endpoint", "account", "login", "api_key_ref", "path_prefix", "name_prefix", "inspect_content"),
 			provider("akeyless", "Akeyless static secrets", "Metadata: an API-key auth method whose role may list the folder; the item listing carries no value. Content inspection also needs read on the items.", "client_secret_ref", "endpoint", "client_id", "client_secret_ref", "path_prefix", "name_prefix", "inspect_content"),
+			provider("1password-connect", "1Password Connect items", "Metadata: a Connect server token with read access to the vaults to inventory; listing returns item titles, categories and tags only. Content inspection reads each item's fields.", "token_ref", "endpoint", "vaults", "token_ref", "name_prefix", "inspect_content"),
+			provider("doppler", "Doppler secrets", "Metadata: a service account or personal token with read on the projects and configs; names come from the names-only endpoint. Content inspection reads each config's values once.", "token_ref", "endpoint", "project", "configs", "token_ref", "name_prefix", "inspect_content"),
 			provider("bitwarden-secrets-manager", "Bitwarden Secrets Manager secrets", "Metadata: a machine account with read access to the projects or secrets to inventory. Its access token signs in and carries the key that decrypts names on this side; the listing carries no value. Content inspection reads the values the account can read.", "token_ref", "endpoint", "identity_endpoint", "token_ref", "name_prefix", "inspect_content"),
 		},
 		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-secret-managers",
@@ -361,7 +363,7 @@ func cloudFields(secret bool) []Field {
 		field("providers[].session_token_ref", "Session token reference", "credential_ref", false, true, true, "Optional short-lived session-token reference."),
 		field("providers[].vault_url", "Vault URL", "url", false, false, false, "Authorized Azure Key Vault or HashiCorp Vault endpoint."),
 		field("providers[].token_ref", "Token reference", "credential_ref", false, true, false, "Reference to a least-privilege token; the value never enters source configuration."),
-		field("providers[].project", "Project", "string", false, false, false, "Authorized Google Cloud project, GitLab project, or Infisical project ID."),
+		field("providers[].project", "Project", "string", false, false, false, "Authorized Google Cloud project, GitLab project, Infisical project ID, or Doppler project."),
 		field("providers[].location", "Location", "string", false, false, false, "Certificate Manager location."),
 	}
 	if secret {
@@ -387,6 +389,8 @@ func cloudFields(secret bool) []Field {
 			field("providers[].account", "Conjur account", "string", false, false, false, "The Conjur account the variables belong to."),
 			field("providers[].login", "Conjur login", "string", false, false, false, "The host (host/<id>) or user that signs in."),
 			field("providers[].api_key_ref", "Conjur API key reference", "credential_ref", false, true, false, "Reference to the login's API key; the value never enters source configuration."),
+			field("providers[].vaults", "1Password vaults", "string_list", false, false, true, "Vault IDs or names to list; empty lists every vault the Connect token can read."),
+			field("providers[].configs", "Doppler configs", "string_list", false, false, true, "Configs of the Doppler project to list; empty lists every config."),
 			field("providers[].identity_endpoint", "Bitwarden identity endpoint", "url", false, false, true, "The identity service a self-hosted Bitwarden serves under /identity; Bitwarden's cloud identity service by default."),
 			field("providers[].inspect_content", "Inspect content for certificates and credentials", "boolean", false, false, true, "Explicit opt-in to retrieve candidate values into wipeable memory and emit certificate metadata and masked, fingerprinted API-key, token, and private-key findings only."),
 		)

@@ -14458,6 +14458,39 @@ export const messages = {
     defaultMessage: "Enter a GitLab project or group, or choose the instance variables.",
     description: "GitLab scope validation.",
   },
+  "discovery.setup.onePasswordVaults": {
+    defaultMessage: "Vaults",
+    description: "OD-14: 1Password Connect vaults field.",
+  },
+  "discovery.setup.onePasswordVaultsDescription": {
+    defaultMessage: "Optional. Vault IDs or names, separated by commas; empty lists every vault the token can read.",
+    description: "OD-14: 1Password Connect vaults help.",
+  },
+  "discovery.setup.onePasswordNote": {
+    defaultMessage:
+      "Put the Connect server's URL in the API endpoint and its access token in the token reference. Listing reads item titles and categories only; field values are read only with content inspection.",
+    description: "OD-14: 1Password Connect note.",
+  },
+  "discovery.setup.dopplerProject": {
+    defaultMessage: "Doppler project",
+    description: "OD-14: Doppler project field.",
+  },
+  "discovery.setup.dopplerProjectDescription": {
+    defaultMessage: "Optional. Empty lists every project the token can read.",
+    description: "OD-14: Doppler project help.",
+  },
+  "discovery.setup.dopplerConfigs": {
+    defaultMessage: "Configs",
+    description: "OD-14: Doppler configs field.",
+  },
+  "discovery.setup.validation.onePasswordEndpoint": {
+    defaultMessage: "Enter the Connect server URL as the API endpoint.",
+    description: "OD-14: 1Password Connect endpoint validation.",
+  },
+  "discovery.setup.validation.dopplerConfigs": {
+    defaultMessage: "Configs belong to a project; enter the Doppler project.",
+    description: "OD-14: Doppler configs validation.",
+  },
   "discovery.setup.infisicalClientID": {
     defaultMessage: "Universal Auth client ID",
     description: "OD-13: Infisical machine identity client ID field.",

@@ -134,6 +134,9 @@ type cloudSecretProviderConfig struct {
 	Login            string `json:"login"`
 	APIKeyRef        string `json:"api_key_ref"`
 	IdentityEndpoint string `json:"identity_endpoint"`
+	// 1Password Connect vaults and Doppler configs (A173, restored in OD-14).
+	Vaults  []string `json:"vaults"`
+	Configs []string `json:"configs"`
 }
 
 type ctLogDiscoveryConfig struct {

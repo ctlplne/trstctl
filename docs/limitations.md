@@ -3646,12 +3646,13 @@ than sending an operator looking for a credential that was never there.
   same served secret-manager connectors as `cloud_secret`
   (aws-secrets-manager, gcp-secret-manager, azure-key-vault,
   hashicorp-vault, since A173 the code hosts github-actions and
-  gitlab-ci, and since OD-13 infisical, conjur, akeyless and
-  bitwarden-secrets-manager; the kinds share the providers config shape;
+  gitlab-ci, since OD-13 infisical, conjur, akeyless and
+  bitwarden-secrets-manager, and since OD-14 1password-connect and
+  doppler; the kinds share the providers config shape;
   Infisical and Conjur are proven against their official images,
-  Akeyless and Bitwarden Secrets Manager only against stand-ins written
-  from their public API references, and a live-account run of each is
-  what comes next; a Bitwarden organization key must be the 64-byte
+  Akeyless, Bitwarden Secrets Manager, 1Password Connect and Doppler
+  only against stand-ins written from their public API references, and a
+  live-account run of each is what comes next; a Bitwarden organization key must be the 64-byte
   AES-CBC-HMAC kind the type-2 encrypted strings use), and a provider
   outside that set fails with the connector's specific "unsupported
   provider" error. GitHub never returns an Actions

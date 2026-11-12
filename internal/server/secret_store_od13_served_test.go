@@ -97,8 +97,8 @@ func od13At(t *testing.T, url string, fields map[string]any) map[string]any {
 // access ID) and Bitwarden Secrets Manager (a machine account token whose key
 // decrypts names) as metadata only, reaching no value endpoint; with content
 // inspection a certificate and an API key in each store become findings and
-// no value is kept; and the source catalog lists the ten secret-store
-// providers.
+// no value is kept; and the source catalog lists every served secret-store
+// provider.
 func TestServedSecretStoresInfisicalConjurAkeylessBitwardenOD13(t *testing.T) {
 	der, _, err := ctlogtest.IssueCert("stores.od13.example", "stores.od13.example")
 	if err != nil {
@@ -216,7 +216,7 @@ func TestServedSecretStoresInfisicalConjurAkeylessBitwardenOD13(t *testing.T) {
 		t.Fatalf("posture rows for the four stores = %d (%s)", seen, raw)
 	}
 
-	// The source catalog lists the ten secret-store providers.
+	// The source catalog lists the served secret-store providers.
 	status, raw = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/capabilities", o.tok, nil)
 	var catalog struct {
 		Items []struct {
@@ -237,14 +237,16 @@ func TestServedSecretStoresInfisicalConjurAkeylessBitwardenOD13(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(ids, ",") != od13SecretStoreProviders {
+	if strings.Join(ids, ",") != servedSecretStoreProviders {
 		t.Fatalf("secret_store providers = %v", ids)
 	}
 	t.Logf("OD13_STANDIN_OK providers=%d", len(ids))
 }
 
-const od13SecretStoreProviders = "aws-secrets-manager,gcp-secret-manager,azure-key-vault,hashicorp-vault,github-actions,gitlab-ci," +
-	"infisical,conjur,akeyless,bitwarden-secrets-manager"
+// servedSecretStoreProviders is the source catalog's secret-store provider
+// list: the six of A173, the four of OD-13 and the two of OD-14.
+const servedSecretStoreProviders = "aws-secrets-manager,gcp-secret-manager,azure-key-vault,hashicorp-vault,github-actions,gitlab-ci," +
+	"infisical,conjur,akeyless,1password-connect,doppler,bitwarden-secrets-manager"
 
 // OD-13 Done-when (official images): the same served source against the
 // official Infisical (v0.167.8) and CyberArk Conjur (1.27.0) images, pinned

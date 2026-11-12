@@ -175,7 +175,7 @@ func TestServedSecretStoreProvidersBeyondCloudSecretManagers(t *testing.T) {
 		t.Fatalf("unserved provider = %d %s", status, body)
 	}
 	// The source catalog lists the served secret-store providers: the six of
-	// A173 and the four of OD-13.
+	// A173, the four of OD-13 and the two of OD-14.
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/capabilities", tok, nil)
 	var catalog struct {
 		Items []struct {
@@ -196,7 +196,7 @@ func TestServedSecretStoreProvidersBeyondCloudSecretManagers(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(ids, ",") != od13SecretStoreProviders {
-		t.Fatalf("secret_store providers = %v, want the ten served ones", ids)
+	if strings.Join(ids, ",") != servedSecretStoreProviders {
+		t.Fatalf("secret_store providers = %v, want the served ones", ids)
 	}
 }

@@ -8,11 +8,21 @@ import type { SetupValues } from "./SourceSetup";
 
 /** The secret stores beside the cloud secret managers: the code hosts' GitHub
  * Actions, Dependabot and Codespaces secrets and GitLab project, group and
- * instance variables (A173, OD-2), and the Infisical, Conjur, Akeyless and
- * Bitwarden Secrets Manager stores (OD-13). Their scope and sign-in fields
+ * instance variables (A173, OD-2), the Infisical, Conjur, Akeyless and
+ * Bitwarden Secrets Manager stores (OD-13), and 1Password Connect and Doppler
+ * (OD-14). Their scope and sign-in fields
  * differ from the cloud providers', so they live beside the wizard rather
  * than inside its cloud section. */
-export const secretStoreProviderIDs = ["github-actions", "gitlab-ci", "infisical", "conjur", "akeyless", "bitwarden-secrets-manager"] as const;
+export const secretStoreProviderIDs = [
+  "github-actions",
+  "gitlab-ci",
+  "infisical",
+  "conjur",
+  "akeyless",
+  "bitwarden-secrets-manager",
+  "1password-connect",
+  "doppler",
+] as const;
 
 export function isSecretStoreProvider(provider: string): boolean {
   return (secretStoreProviderIDs as readonly string[]).includes(provider);
@@ -77,6 +87,10 @@ export function secretStoreScope(values: SetupValues): Record<string, unknown> {
       return { token_ref: "", client_id: values.clientID, client_secret_ref: values.clientSecretRef, path_prefix: values.pathPrefix };
     case "bitwarden-secrets-manager":
       return { identity_endpoint: values.identityEndpoint };
+    case "1password-connect":
+      return { vaults: listOf(values.vaults) };
+    case "doppler":
+      return { project: values.project, configs: listOf(values.configs) };
     default:
       return {};
   }
@@ -115,6 +129,12 @@ export function secretStoreScopeProblems(values: SetupValues): Array<{ path: key
       if (!values.conjurAccount) problems.push({ path: "conjurAccount", key: "discovery.setup.validation.conjurAccount" });
       if (!values.conjurLogin) problems.push({ path: "conjurLogin", key: "discovery.setup.validation.conjurLogin" });
       if (!values.apiKeyRef) problems.push({ path: "apiKeyRef", key: "discovery.setup.validation.apiKeyRef" });
+      break;
+    case "1password-connect":
+      if (!values.endpoint) problems.push({ path: "endpoint", key: "discovery.setup.validation.onePasswordEndpoint" });
+      break;
+    case "doppler":
+      if (listOf(values.configs).length > 0 && !values.project) problems.push({ path: "configs", key: "discovery.setup.validation.dopplerConfigs" });
       break;
     case "akeyless":
       if (!values.clientID) problems.push({ path: "clientID", key: "discovery.setup.validation.accessID" });
@@ -245,6 +265,28 @@ export function SecretStoreFields({ form, provider }: { form: UseFormReturn<Setu
         </Field>
         <Field label={t("discovery.setup.akeylessFolder")} description={t("discovery.setup.akeylessFolderDescription")} error={errors.pathPrefix?.message}>
           {(control) => <Input {...control} {...form.register("pathPrefix")} className="font-mono text-xs" />}
+        </Field>
+      </div>
+    );
+  }
+  if (provider === "1password-connect") {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Field label={t("discovery.setup.onePasswordVaults")} description={t("discovery.setup.onePasswordVaultsDescription")} error={errors.vaults?.message}>
+          {(control) => <Input {...control} {...form.register("vaults")} />}
+        </Field>
+        <p className="text-sm text-muted-foreground lg:col-span-2">{t("discovery.setup.onePasswordNote")}</p>
+      </div>
+    );
+  }
+  if (provider === "doppler") {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Field label={t("discovery.setup.dopplerProject")} description={t("discovery.setup.dopplerProjectDescription")} error={errors.project?.message}>
+          {(control) => <Input {...control} {...form.register("project")} />}
+        </Field>
+        <Field label={t("discovery.setup.dopplerConfigs")} description={t("discovery.setup.listDescription")} error={errors.configs?.message}>
+          {(control) => <Input {...control} {...form.register("configs")} />}
         </Field>
       </div>
     );

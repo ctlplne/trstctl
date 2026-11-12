@@ -98,6 +98,8 @@ const secretFieldPaths = [
   "providers[].login",
   "providers[].api_key_ref",
   "providers[].identity_endpoint",
+  "providers[].vaults",
+  "providers[].configs",
 ] as const;
 
 /** This is the deliberate React adapter side of the server-owned source
@@ -222,6 +224,8 @@ const setupSchema = z
     conjurLogin: z.string().trim(),
     apiKeyRef: z.string().trim(),
     identityEndpoint: z.string().trim(),
+    vaults: z.string(),
+    configs: z.string(),
     allowPrivateEndpoint: z.boolean(),
     privateEgressCIDRs: z.string(),
     adcsURL: z.string().trim(),
@@ -415,6 +419,8 @@ const defaults: SetupValues = {
   conjurLogin: "",
   apiKeyRef: "",
   identityEndpoint: "",
+  vaults: "",
+  configs: "",
   allowPrivateEndpoint: false,
   privateEgressCIDRs: "",
   adcsURL: "ldaps://",

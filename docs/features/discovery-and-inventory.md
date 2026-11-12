@@ -844,11 +844,19 @@ self-hosted Bitwarden), `path_prefix`, `name_prefix` and `inspect_content`:
 | `akeyless` | `client_id` (the access ID) + `client_secret_ref` (the access key); `path_prefix` (a folder) | Static secrets in the folder and below: name, type, tags, version and dates, across every `list-items` page. Inspection reads values by name in small batches. |
 | `bitwarden-secrets-manager` | `token_ref` (the machine account's access token); `identity_endpoint` for a self-hosted server | The secrets the machine account can read, with their projects and dates. Secrets Manager encrypts names and values on the client: the access token signs in and also carries the key that opens the organization key, so trstctl decrypts names in memory (`internal/crypto/bwsm`) and never stores a value. |
 
+Two more read the stores of password managers and app secret platforms (OD-14), each with
+a `token_ref`:
+
+| Provider | Scope fields | What it lists |
+|---|---|---|
+| `1password-connect` | `endpoint` (the Connect server, required), `vaults` (IDs or names) | Items in each vault the Connect token can read: title, category, tag count, version, update time. Field values are read one item at a time only with `inspect_content`, and a credential finding names the field. |
+| `doppler` | `project`, `configs` | Secret names in each project's configs, from the names-only endpoint, so a metadata-only run never receives a value; with `inspect_content` each config's values are read once. |
+
 Infisical (v0.167.8) and Conjur Open Source (1.27.0) are proven against their official
-images, pinned by digest, in a served lab run; Akeyless and Bitwarden Secrets Manager
-against in-repository stand-ins written from their public API references and SDK. The
-Secrets page lists the four beside the cloud managers, and the source wizard asks for each
-one's own sign-in.
+images, pinned by digest, in a served lab run; Akeyless, Bitwarden Secrets Manager,
+1Password Connect and Doppler against in-repository stand-ins written from their public
+API references and SDK. The Secrets page lists the six beside the cloud managers, and the
+source wizard asks for each one's own sign-in.
 
 Each GitHub finding names its store (`store`: `actions`, `dependabot` or `codespaces`) and
 scope (`repository`, `environment`, `organization` or `user`); a user's Codespaces secrets

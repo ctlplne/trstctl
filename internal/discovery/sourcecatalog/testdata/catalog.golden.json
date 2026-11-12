@@ -549,7 +549,7 @@
           "label": "Project",
           "type": "string",
           "required": false,
-          "description": "Authorized Google Cloud project, GitLab project, or Infisical project ID."
+          "description": "Authorized Google Cloud project, GitLab project, Infisical project ID, or Doppler project."
         },
         {
           "path": "providers[].location",
@@ -1631,7 +1631,7 @@
           "label": "Project",
           "type": "string",
           "required": false,
-          "description": "Authorized Google Cloud project, GitLab project, or Infisical project ID."
+          "description": "Authorized Google Cloud project, GitLab project, Infisical project ID, or Doppler project."
         },
         {
           "path": "providers[].location",
@@ -1800,6 +1800,22 @@
           "description": "Reference to the login's API key; the value never enters source configuration."
         },
         {
+          "path": "providers[].vaults",
+          "label": "1Password vaults",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "Vault IDs or names to list; empty lists every vault the Connect token can read."
+        },
+        {
+          "path": "providers[].configs",
+          "label": "Doppler configs",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "Configs of the Doppler project to list; empty lists every config."
+        },
+        {
           "path": "providers[].identity_endpoint",
           "label": "Bitwarden identity endpoint",
           "type": "url",
@@ -1948,6 +1964,33 @@
             "client_id",
             "client_secret_ref",
             "path_prefix",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "1password-connect",
+          "label": "1Password Connect items",
+          "least_privilege": "Metadata: a Connect server token with read access to the vaults to inventory; listing returns item titles, categories and tags only. Content inspection reads each item's fields.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "vaults",
+            "token_ref",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "doppler",
+          "label": "Doppler secrets",
+          "least_privilege": "Metadata: a service account or personal token with read on the projects and configs; names come from the names-only endpoint. Content inspection reads each config's values once.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "project",
+            "configs",
+            "token_ref",
             "name_prefix",
             "inspect_content"
           ]
@@ -2084,7 +2127,7 @@
           "label": "Project",
           "type": "string",
           "required": false,
-          "description": "Authorized Google Cloud project, GitLab project, or Infisical project ID."
+          "description": "Authorized Google Cloud project, GitLab project, Infisical project ID, or Doppler project."
         },
         {
           "path": "providers[].location",
@@ -2253,6 +2296,22 @@
           "description": "Reference to the login's API key; the value never enters source configuration."
         },
         {
+          "path": "providers[].vaults",
+          "label": "1Password vaults",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "Vault IDs or names to list; empty lists every vault the Connect token can read."
+        },
+        {
+          "path": "providers[].configs",
+          "label": "Doppler configs",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "Configs of the Doppler project to list; empty lists every config."
+        },
+        {
           "path": "providers[].identity_endpoint",
           "label": "Bitwarden identity endpoint",
           "type": "url",
@@ -2401,6 +2460,33 @@
             "client_id",
             "client_secret_ref",
             "path_prefix",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "1password-connect",
+          "label": "1Password Connect items",
+          "least_privilege": "Metadata: a Connect server token with read access to the vaults to inventory; listing returns item titles, categories and tags only. Content inspection reads each item's fields.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "vaults",
+            "token_ref",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "doppler",
+          "label": "Doppler secrets",
+          "least_privilege": "Metadata: a service account or personal token with read on the projects and configs; names come from the names-only endpoint. Content inspection reads each config's values once.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "project",
+            "configs",
+            "token_ref",
             "name_prefix",
             "inspect_content"
           ]

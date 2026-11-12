@@ -15,23 +15,26 @@ import (
 	"trstctl.com/trstctl/internal/discovery/cloudsecret/akeyless"
 	"trstctl.com/trstctl/internal/discovery/cloudsecret/bitwardensm"
 	"trstctl.com/trstctl/internal/discovery/cloudsecret/conjur"
+	"trstctl.com/trstctl/internal/discovery/cloudsecret/doppler"
 	"trstctl.com/trstctl/internal/discovery/cloudsecret/githubactions"
 	"trstctl.com/trstctl/internal/discovery/cloudsecret/gitlabci"
 	"trstctl.com/trstctl/internal/discovery/cloudsecret/infisical"
+	"trstctl.com/trstctl/internal/discovery/cloudsecret/onepassword"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
 // secretStoreProvider builds the secret stores beyond the cloud secret
 // managers: the code hosts' GitHub Actions, Dependabot and Codespaces
 // secrets and GitLab project, group and instance CI/CD variables (A173,
-// OD-2), and the Infisical, Conjur, Akeyless and Bitwarden Secrets Manager
-// stores (OD-13). It reports false for a provider it does not know, so the
+// OD-2), the Infisical, Conjur, Akeyless and Bitwarden Secrets Manager
+// stores (OD-13), and 1Password Connect and Doppler (OD-14). It reports false
+// for a provider it does not know, so the
 // caller names it unsupported. Credentials are resolved for this one run.
 func secretStoreProvider(ctx context.Context, p cloudSecretProviderConfig) (cloudsecret.Provider, bool, error) {
 	provider := strings.TrimSpace(p.Provider)
 	switch provider {
 	case githubactions.ProviderName, gitlabci.ProviderName, infisical.ProviderName, conjur.ProviderName,
-		akeyless.ProviderName, bitwardensm.ProviderName:
+		akeyless.ProviderName, bitwardensm.ProviderName, onepassword.ProviderName, doppler.ProviderName:
 	default:
 		return nil, false, nil
 	}
@@ -70,7 +73,8 @@ func resolvedRef(ctx context.Context, name, ref string) (cloudcert.TokenProvider
 func buildSecretStoreProvider(ctx context.Context, provider string, p cloudSecretProviderConfig, endpoint string, client *http.Client) (cloudsecret.Provider, error) {
 	var token cloudcert.TokenProvider
 	switch provider {
-	case githubactions.ProviderName, gitlabci.ProviderName, bitwardensm.ProviderName, infisical.ProviderName:
+	case githubactions.ProviderName, gitlabci.ProviderName, bitwardensm.ProviderName, infisical.ProviderName,
+		onepassword.ProviderName, doppler.ProviderName:
 		// Conjur and Akeyless sign in with their own credentials; a token_ref
 		// left on them is never resolved.
 		var err error
@@ -113,6 +117,16 @@ func buildSecretStoreProvider(ctx context.Context, provider string, p cloudSecre
 		}
 		return conjur.New(conjur.Config{
 			BaseURL: endpoint, Account: p.Account, Login: p.Login, APIKey: apiKey, PathPrefix: p.PathPrefix,
+			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, HTTPClient: client,
+		})
+	case onepassword.ProviderName:
+		return onepassword.New(onepassword.Config{
+			BaseURL: endpoint, Vaults: p.Vaults, Token: token,
+			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, HTTPClient: client,
+		})
+	case doppler.ProviderName:
+		return doppler.New(doppler.Config{
+			BaseURL: endpoint, Project: p.Project, Configs: p.Configs, Token: token,
 			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, HTTPClient: client,
 		})
 	case akeyless.ProviderName:

@@ -79,6 +79,8 @@ const catalog: DiscoveryCapabilityCatalog = {
       { id: "conjur", label: "CyberArk Conjur variables", least_privilege: "read", preferred_credential: "api_key_ref", fields: [] },
       { id: "akeyless", label: "Akeyless static secrets", least_privilege: "list", preferred_credential: "client_secret_ref", fields: [] },
       { id: "bitwarden-secrets-manager", label: "Bitwarden Secrets Manager secrets", least_privilege: "read", preferred_credential: "token_ref", fields: [] },
+      { id: "1password-connect", label: "1Password Connect items", least_privilege: "read", preferred_credential: "token_ref", fields: [] },
+      { id: "doppler", label: "Doppler secrets", least_privilege: "read", preferred_credential: "token_ref", fields: [] },
     ]),
   ],
 };
@@ -620,6 +622,39 @@ describe("typed discovery source setup", () => {
           config: {
             providers: [
               { provider: "infisical", client_id: "ua-client", client_secret_ref: "env:INFISICAL_SECRET", project: "p-1", environments: ["dev", "prod"] },
+            ],
+          },
+        }),
+      ),
+    );
+  });
+
+  it("configures 1Password Connect vaults and Doppler configs (OD-14)", async () => {
+    const user = userEvent.setup();
+    renderSetup();
+
+    await screen.findByText("What this source does");
+    await user.selectOptions(screen.getByRole("combobox", { name: "What should trstctl inspect?" }), "secret_store");
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "Password manager");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Provider" }), "doppler");
+    await user.type(screen.getByRole("textbox", { name: /Token reference/ }), "env:STORE_TOKEN");
+    await user.type(screen.getByRole("textbox", { name: /^Configs/ }), "prd");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(await screen.findByText("Configs belong to a project; enter the Doppler project.")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Provider" }), "1password-connect");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(await screen.findByText("Enter the Connect server URL as the API endpoint.")).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: /API endpoint/ }), "https://connect.example.test");
+    await user.type(screen.getByRole("textbox", { name: /^Vaults/ }), "Payments, Infra");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(await screen.findByRole("button", { name: "Save source" }));
+    await waitFor(() =>
+      expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: {
+            providers: [
+              { provider: "1password-connect", endpoint: "https://connect.example.test", token_ref: "env:STORE_TOKEN", vaults: ["Payments", "Infra"] },
             ],
           },
         }),

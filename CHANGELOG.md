@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- 1Password Connect and Doppler as `cloud_secret` and `secret_store` discovery providers (OD-14, restored from A173):
+  `1password-connect` lists the items of a Connect server's vaults (titles and categories; field values only with
+  `inspect_content`), and `doppler` lists secret names per project config from the names-only endpoint (values only
+  with `inspect_content`). Both are proven against stand-ins written from their public API references; the source
+  wizard, the source catalog (twelve secret-store providers) and the Secrets page include them.
 - Four more secret stores for `cloud_secret` and `secret_store` discovery (OD-13): `infisical` (Universal Auth or an
   access token; projects, environments and folders), `conjur` (a host's or user's API key; variables under a policy
   path), `akeyless` (an API-key access ID; static secrets under a folder) and `bitwarden-secrets-manager` (a machine
