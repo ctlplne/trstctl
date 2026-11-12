@@ -45,6 +45,7 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 			p = p.WithExtension(k, v)
 		}
 		a.writeProblem(w, p)
+	case a.writeExternalCAHeldError(w, err):
 	case a.writeExternalCAError(w, err):
 	case a.writeCAHierarchyError(w, err):
 	case a.writeEdgeDelegationError(w, err):

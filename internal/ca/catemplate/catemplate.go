@@ -52,6 +52,15 @@ type RevokingBackend interface {
 	Revoke(ctx context.Context, req ca.RevokeRequest) error
 }
 
+// HeldBackend is the optional capability of a Backend whose CA can hold a
+// request for a manager's approval (N1-L1): it reads the request back by the
+// CA's request id, returning the issued chain once approved, a *ca.HeldError
+// while still held, or the CA's refusal.
+type HeldBackend interface {
+	Backend
+	RetrieveHeld(ctx context.Context, requestID int) (chainPEM []byte, err error)
+}
+
 // Plugin adapts a Backend to the ca.CA interface, contributing all the shared
 // logic so the Backend stays minimal.
 type Plugin struct {
@@ -88,6 +97,29 @@ func (p *Plugin) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate
 	if err != nil {
 		return ca.Certificate{}, fmt.Errorf("catemplate: %s: issue: %w", name, err)
 	}
+	return p.certificate(name, chain)
+}
+
+// RetrieveHeld reads a request the CA held for approval back by its request
+// id, when the backend can (N1-L1).
+func (p *Plugin) RetrieveHeld(ctx context.Context, requestID int) (ca.Certificate, error) {
+	if p == nil || p.backend == nil {
+		return ca.Certificate{}, errors.New("catemplate: plugin is destroyed")
+	}
+	name := p.backend.CAName()
+	h, ok := p.backend.(HeldBackend)
+	if !ok {
+		return ca.Certificate{}, fmt.Errorf("%w: %s", ca.ErrHeldRetrievalUnsupported, name)
+	}
+	chain, err := h.RetrieveHeld(ctx, requestID)
+	if err != nil {
+		return ca.Certificate{}, fmt.Errorf("catemplate: %s: retrieve held request: %w", name, err)
+	}
+	return p.certificate(name, chain)
+}
+
+// certificate parses an issued chain into the returned certificate.
+func (p *Plugin) certificate(name string, chain []byte) (ca.Certificate, error) {
 	if len(chain) == 0 {
 		return ca.Certificate{}, fmt.Errorf("catemplate: %s: upstream returned an empty chain", name)
 	}

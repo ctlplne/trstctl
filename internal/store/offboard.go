@@ -274,6 +274,8 @@ var TenantScopedTables = []string{
 	"switching_wave_rows", "switching_waves", "switching_import_rows", "switching_imports",
 	// N1: AD CS request decisions; no foreign keys.
 	"adcs_request_decisions",
+	// N1-L1: issuances an external CA holds for approval; no foreign keys.
+	"external_ca_held_issues",
 	// N9: MDM device check-ins; no foreign keys.
 	"mdm_device_check_ins",
 	// P12: factory birth certificates, then their batches; no foreign keys.

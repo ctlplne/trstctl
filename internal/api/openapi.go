@@ -1121,6 +1121,20 @@ func componentSchemas() map[string]*Schema {
 		"certificate_pem": str(), "serial": str(), "not_after": timestamp(), "issuer": str(),
 	}, "certificate_pem", "serial", "not_after", "issuer")
 
+	// N1-L1: issuances an upstream CA holds for a manager's approval.
+	externalCAHeldIssueProps := map[string]*Schema{
+		"ca_request_id": {Type: "integer", Description: "The CA's own request id; resuming reads the request back by it."},
+		"dns_names":     {Type: "array", Items: str()},
+		"status":        {Type: "string", Enum: []string{"held", "issued", "denied"}},
+		"serial":        str(), "held_at": timestamp(), "resolved_at": timestamp(),
+	}
+	externalCAHeldIssue := object(externalCAHeldIssueProps, "ca_request_id", "dns_names", "status", "held_at")
+	externalCAHeldIssueResumeProps := map[string]*Schema{"certificate_pem": str(), "not_after": timestamp()}
+	for name, schema := range externalCAHeldIssueProps {
+		externalCAHeldIssueResumeProps[name] = schema
+	}
+	externalCAHeldIssueResume := object(externalCAHeldIssueResumeProps, "ca_request_id", "dns_names", "status", "held_at")
+
 	identityKinds := []string{"x509_certificate", "ssh_certificate", "ssh_key", "secret", "api_key", "workload_identity"}
 	identity := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: identityKinds},
@@ -9546,6 +9560,9 @@ func componentSchemas() map[string]*Schema {
 		"ExternalCAList":              list("ExternalCA"),
 		"ExternalCAIssueRequest":      externalCAIssueReq,
 		"ExternalCAIssuedCertificate": externalCAIssued,
+		"ExternalCAHeldIssue":         externalCAHeldIssue,
+		"ExternalCAHeldIssueList":     list("ExternalCAHeldIssue"),
+		"ExternalCAHeldIssueResume":   externalCAHeldIssueResume,
 		"Identity":                    identity,
 		"IdentityRequest":             identityReq,
 		"IdentityStatusSummary": object(map[string]*Schema{

@@ -39,6 +39,42 @@ type adcsCertsrvStandIn struct {
 	// deny makes certfnsh.asp refuse the way AD CS does when the template's
 	// permissions do not allow the requester to enroll.
 	deny bool
+	// hold makes every new request wait for a CA manager (N1-L1): certfnsh.asp
+	// answers the pending page with the request id, and certnew.cer answers 404
+	// until approveHeld signs it, or a denial page after denyHeld.
+	hold   bool
+	held   map[int][]byte
+	denied map[int]bool
+	seq    int
+}
+
+// approveHeld issues a held request, as a CA manager's approval does.
+func (a *adcsCertsrvStandIn) approveHeld(t *testing.T, id int) {
+	t.Helper()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	csr := a.held[id]
+	if csr == nil {
+		t.Fatalf("the CA holds no request %d", id)
+	}
+	leaf, err := crypto.SignLeafFromCSR(a.caDER, a.caKey, csr, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(a.held, id)
+	a.issued[id] = leaf
+}
+
+// denyHeld refuses a held request, as a CA manager's denial does.
+func (a *adcsCertsrvStandIn) denyHeld(t *testing.T, id int) {
+	t.Helper()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.held[id] == nil {
+		t.Fatalf("the CA holds no request %d", id)
+	}
+	delete(a.held, id)
+	a.denied[id] = true
 }
 
 func newADCSCertsrvStandIn(t *testing.T) (*adcsCertsrvStandIn, *httptest.Server) {
@@ -52,7 +88,7 @@ func newADCSCertsrvStandIn(t *testing.T) (*adcsCertsrvStandIn, *httptest.Server)
 	if err != nil {
 		t.Fatal(err)
 	}
-	standIn := &adcsCertsrvStandIn{caDER: caDER, caKey: key, issued: map[int][]byte{}}
+	standIn := &adcsCertsrvStandIn{caDER: caDER, caKey: key, issued: map[int][]byte{}, held: map[int][]byte{}, denied: map[int]bool{}}
 	srv := httptest.NewServer(http.HandlerFunc(standIn.serve))
 	t.Cleanup(srv.Close)
 	return standIn, srv
@@ -77,12 +113,20 @@ func (a *adcsCertsrvStandIn) serve(w http.ResponseWriter, r *http.Request) {
 			_, _ = fmt.Fprint(w, "<P>Your request was denied.</P><P>The request was denied by policy module 0x80094012: the permissions on the certificate template do not allow the current user to enroll.</P>")
 			return
 		}
+		a.seq++
+		id := a.seq
+		if a.hold {
+			a.held[id] = append([]byte(nil), block.Bytes...)
+			a.templates = append(a.templates, strings.TrimPrefix(r.Form.Get("CertAttrib"), "CertificateTemplate:"))
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = fmt.Fprintf(w, "<P>Certificate Pending</P><P>Your certificate request has been received. However, you must wait for an administrator to issue the certificate you requested.</P><P>Your Request Id is %d.</P>", id)
+			return
+		}
 		leaf, err := crypto.SignLeafFromCSR(a.caDER, a.caKey, block.Bytes, 24*time.Hour)
 		if err != nil {
 			http.Error(w, "The request was denied", http.StatusOK)
 			return
 		}
-		id := len(a.issued) + 1
 		a.issued[id] = leaf
 		a.templates = append(a.templates, strings.TrimPrefix(r.Form.Get("CertAttrib"), "CertificateTemplate:"))
 		w.Header().Set("Content-Type", "text/html")
@@ -90,6 +134,11 @@ func (a *adcsCertsrvStandIn) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && r.URL.Path == "/certsrv/certnew.cer":
 		var id int
 		_, _ = fmt.Sscanf(r.URL.Query().Get("ReqID"), "%d", &id)
+		if a.denied[id] {
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = fmt.Fprintf(w, "<P>Your certificate request (Request Id %d) was denied by the CA administrator.</P>", id)
+			return
+		}
 		leaf := a.issued[id]
 		if leaf == nil {
 			http.NotFound(w, r)

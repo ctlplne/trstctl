@@ -418,6 +418,17 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 	if req.RequestBinding == "" {
 		return errors.New("ca: external issue payload has no authenticated request binding")
 	}
+	// A certificate already recorded under this issuance's key finishes the
+	// delivery: a held issuance resumed once the CA issued it (N1-L1), or a
+	// crash after recording. The provider is not called again.
+	if recovered, found, err := s.recoverExternalIssue(ctx, m.TenantID, m.IdempotencyKey, req.RequestBinding); err != nil {
+		return preserveOrClassifyExternalIssueError("external_ca_recovery_failed", "external CA recovery failed", err)
+	} else if found {
+		if err := s.recordDependentOnce(ctx, req, m.IdempotencyKey, recovered); err != nil {
+			return safeExternalIssueError("external_ca_observation_failed", "external CA issuance observation failed", err)
+		}
+		return nil
+	}
 	// Every served external-CA adapter receives a stable provider token. The
 	// durable certificate projection closes crash-after-record for all adapters;
 	// only adapters whose receiver actually enforces that token may re-enter the
@@ -430,6 +441,14 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 		}
 		cert, err := s.ca.Issue(ctx, req)
 		if err != nil {
+			// The CA holds the request for a manager's approval: record its
+			// request id, the handle that resumes this issuance once the request
+			// is approved (N1-L1).
+			if requestID, held := HeldRequestID(err); held {
+				if recordErr := s.recordHeld(ctx, m.TenantID, m.IdempotencyKey, req, requestID); recordErr != nil {
+					err = errors.Join(err, recordErr)
+				}
+			}
 			safe := preserveOrClassifyExternalIssueError("external_ca_provider_failed", "external CA provider issuance failed", err)
 			if errors.Is(err, ErrIssuanceNotSubmitted) {
 				return nil, orchestrator.ConfirmedNoMutation(safe)

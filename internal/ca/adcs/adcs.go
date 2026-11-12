@@ -83,6 +83,9 @@ type RefusalError struct {
 	Code        string
 }
 
+// Is matches ca.ErrRequestRefused: the CA's answer is definitive.
+func (e *RefusalError) Is(target error) bool { return target == ca.ErrRequestRefused }
+
 func (e *RefusalError) Error() string {
 	if e.Code != "" {
 		return fmt.Sprintf("adcs: request %d not issued (%s, %s)", e.RequestID, e.Disposition, e.Code)
@@ -197,7 +200,9 @@ func (b *backend) resolve(ctx context.Context, sub Submission) ([]byte, error) {
 			return sub.CertChainPEM, nil
 		case DispUnderSubmission:
 			if polls >= maxPolls {
-				return nil, fmt.Errorf("adcs: request %d still under submission after %d polls", sub.RequestID, polls)
+				// The CA holds the request for a manager's approval; its id is the
+				// handle that resumes the issuance once approved (N1-L1).
+				return nil, fmt.Errorf("adcs: request %d still under submission after %d polls: %w", sub.RequestID, polls, &ca.HeldError{RequestID: sub.RequestID})
 			}
 			select {
 			case <-ctx.Done():
@@ -214,5 +219,33 @@ func (b *backend) resolve(ctx context.Context, sub Submission) ([]byte, error) {
 			// let it escape: IIS/proxies can echo submitted credentials in it.
 			return nil, &RefusalError{RequestID: sub.RequestID, Disposition: sub.Disposition, Code: safeRefusalCode(sub.StatusMessage)}
 		}
+	}
+}
+
+// RetrieveHeld reads a request the CA held for approval back by its request id
+// (ICertRequest::RetrievePending), once: the issued chain once a manager
+// approved it, a *ca.HeldError while it is still held, or the CA's refusal.
+// It only reads, so it can be repeated (N1-L1).
+func (b *backend) RetrieveHeld(ctx context.Context, requestID int) ([]byte, error) {
+	if requestID <= 0 {
+		return nil, fmt.Errorf("adcs: a held request needs its request id")
+	}
+	sub, err := b.transport.RetrievePending(ctx, b.cfg.CAConfig, requestID)
+	if err != nil {
+		return nil, fmt.Errorf("adcs: retrieve request %d: %w", requestID, err)
+	}
+	if sub.RequestID != 0 && sub.RequestID != requestID {
+		return nil, fmt.Errorf("adcs: the CA answered request %d for request %d", sub.RequestID, requestID)
+	}
+	switch sub.Disposition {
+	case DispIssued:
+		if len(sub.CertChainPEM) == 0 {
+			return nil, fmt.Errorf("adcs: request %d issued but returned no certificate", requestID)
+		}
+		return sub.CertChainPEM, nil
+	case DispUnderSubmission:
+		return nil, &ca.HeldError{RequestID: requestID}
+	default:
+		return nil, &RefusalError{RequestID: requestID, Disposition: sub.Disposition, Code: safeRefusalCode(sub.StatusMessage)}
 	}
 }

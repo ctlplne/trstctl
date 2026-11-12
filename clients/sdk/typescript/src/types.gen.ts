@@ -5488,6 +5488,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/external-cas/{id}/held-issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issuances an upstream CA holds for a manager's approval */
+        get: operations["listExternalCAHeldIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-cas/{id}/held-issues/{request_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read a held request back from the upstream CA and finish its issuance once approved */
+        post: operations["resumeExternalCAHeldIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/external-cas/{id}/issue": {
         parameters: {
             query?: never;
@@ -18815,6 +18849,37 @@ export interface components {
             revokes_by_serial: boolean;
             status: string;
             type: string;
+        };
+        ExternalCAHeldIssue: {
+            /** @description The CA's own request id; resuming reads the request back by it. */
+            ca_request_id: number;
+            dns_names: string[];
+            /** Format: date-time */
+            held_at: string;
+            /** Format: date-time */
+            resolved_at?: string;
+            serial?: string;
+            /** @enum {string} */
+            status: "held" | "issued" | "denied";
+        };
+        ExternalCAHeldIssueList: {
+            items: components["schemas"]["ExternalCAHeldIssue"][];
+            next_cursor?: string;
+        };
+        ExternalCAHeldIssueResume: {
+            /** @description The CA's own request id; resuming reads the request back by it. */
+            ca_request_id: number;
+            certificate_pem?: string;
+            dns_names: string[];
+            /** Format: date-time */
+            held_at: string;
+            /** Format: date-time */
+            not_after?: string;
+            /** Format: date-time */
+            resolved_at?: string;
+            serial?: string;
+            /** @enum {string} */
+            status: "held" | "issued" | "denied";
         };
         ExternalCAIssueRequest: {
             csr_pem: string;
@@ -44453,6 +44518,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ADCSDecision"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listExternalCAHeldIssues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description configured external CA registry id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalCAHeldIssueList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resumeExternalCAHeldIssue: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description configured external CA registry id */
+                id: string;
+                /** @description the CA's request id */
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalCAHeldIssueResume"];
                 };
             };
             /** @description client error */

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3025 annotated sites across 33 rules. Each row is
+3026 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -444,7 +444,7 @@ not this file.
 | `internal/schedulerhistory/history_test.go:81` | deliberately toxic fixture proves closed parsing without echo (CWE-798). |
 | `internal/secretscan/known_value_test.go:17` | fabricated decoy fixture; no value is real (CWE-798) |
 | `internal/secretsync/parameter_store_scoped_test.go:20` | a stand-in fixture value, not a credential (CWE-798) |
-| `internal/server/acme_adcs_upstream_served_test.go:133` | fabricated test-only webhook credential (CWE-798) |
+| `internal/server/acme_adcs_upstream_served_test.go:182` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/acme_dns01_live_txt_served_test.go:28` | fabricated fixture reference, no value is real (CWE-798) |
 | `internal/server/acme_dns01_qualification.go:23` | this is an operator-facing disclosure sentence, not credential material. |
 | `internal/server/acme_dns_persist_policy_served_test.go:41` | fabricated fixture reference, no value is real (CWE-798) |
@@ -900,7 +900,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (460 sites)
+### G115 — CWE-190 Integer overflow or wraparound (461 sites)
 
 | Location | Reason |
 |---|---|
@@ -1107,10 +1107,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7359` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7376` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7389` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7423` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7362` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7379` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7392` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7426` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1263,6 +1263,7 @@ not this file.
 | `internal/store/enrollment_diagnostics.go:234` | JetStream/PostgreSQL sequences share the signed-bigint storage bound (CWE-190) |
 | `internal/store/enrollment_diagnostics.go:275` | JetStream/PostgreSQL sequences share the signed-bigint storage bound (CWE-190) |
 | `internal/store/enrollment_diagnostics.go:372` | constrained positive bigint written from a JetStream sequence (CWE-190) |
+| `internal/store/external_ca_held.go:48` | bounded above (CWE-190) |
 | `internal/store/external_observation.go:83` | event sequences fit int64 (CWE-190) |
 | `internal/store/external_observation.go:101` | event sequences fit int64 (CWE-190) |
 | `internal/store/external_observation.go:112` | non-negative by constraint (CWE-190) |
@@ -1289,8 +1290,8 @@ not this file.
 | `internal/store/pam.go:136` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:735` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:815` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1049` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1063` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1052` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1066` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:191` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:247` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:276` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -1310,8 +1311,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:406` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:430` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:52` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:856` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:876` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:862` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:882` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1995,8 +1996,8 @@ not this file.
 | `internal/protocols/acme/certbot_client_test.go:291` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/cmp/openssl_client_test.go:168` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/scep/sscep_client_test.go:196` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/acme_adcs_upstream_served_test.go:127` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/acme_adcs_upstream_served_test.go:158` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/acme_adcs_upstream_served_test.go:176` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/acme_adcs_upstream_served_test.go:207` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/agentchannel_served_test.go:1553` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/java_sdk_served_test.go:45` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:245` | the container's keycloak user must read the import directory (CWE-276) |

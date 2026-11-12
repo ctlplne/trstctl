@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- An issuance an AD CS template holds for CA manager approval can be resumed by the CA's request id
+  (N1-L1). When an issuance gives up waiting with the request still held, trstctl records the request id;
+  `GET /api/v1/external-cas/{id}/held-issues` lists held, issued and denied issuances, and `POST
+  /api/v1/external-cas/{id}/held-issues/{request_id}/resume` reads the request back once a manager approved
+  it and records the certificate under the issuance's own key, so its caller gets it by replaying the request.
+  The CA is never sent the request a second time. A request still held answers 409, and a denied one
+  resumes as `denied`. CLI: `external-cas held-issues` and `external-cas held-issues resume`.
 - Certificate Transparency monitoring watches IP addresses and CIDR ranges as well as domains
   (N10-L2). A watched `203.0.113.0/24` or `198.51.100.7` catches a logged certificate issued for
   an address in it, matched on the certificate's IP address names, which a domain watchlist never

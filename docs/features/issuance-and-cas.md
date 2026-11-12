@@ -610,6 +610,21 @@ approval can never re-issue a request a manager already denied — then runs
 `decided` with the CA's disposition (and, for an approval, the issued serial), or
 `failed` with the relay's reason. Status: served.
 
+**Resuming an issuance the CA held (N1-L1).** An issuance through an AD CS template
+that requires CA manager approval waits for the request for 60 polls (two minutes at
+the default `poll_interval`), then gives up with the request still held. trstctl
+records the CA's request id with the issuance. `GET
+/api/v1/external-cas/{id}/held-issues` lists each one as `held`, `issued` or `denied`,
+newest first. Once a CA manager has approved the request, `POST
+/api/v1/external-cas/{id}/held-issues/{request_id}/resume` reads it back from the CA by
+that id. trstctl then records the certificate under the held issuance's own idempotency
+key. The issuance's caller gets the certificate by replaying its request, and the
+issuance's delivery finishes without contacting the CA again. While the CA still holds
+the request, resuming answers 409 and records nothing; a denied request resumes as
+`denied`. Reading a request back cannot issue a second certificate, so resuming again is
+safe and gives the same answer. CLI: `external-cas held-issues` and `external-cas
+held-issues resume`. Status: served.
+
 The **registration-authority (RA) model** is a role split that prevents the classic
 PKI abuse of one person approving and fulfilling their own request. The built-in
 `ra-officer` role can read/write profiles and *request* certificates but doesn't hold

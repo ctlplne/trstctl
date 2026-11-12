@@ -329,7 +329,10 @@ import (
 // Version 116 carries N8-L1's granted Slack scopes: a payload without them
 // would restore an install that cannot say whether it checks the approval
 // channel before posting.
-const SnapshotFormatVersion = 116
+// Version 117 carries N1-L1's held external CA issuances: without them a
+// restored store would forget which CA request each held issuance waits on,
+// and the issuance could not be resumed once approved.
+const SnapshotFormatVersion = 117
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -413,6 +416,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"switching_imports", "switching_import_rows", "switching_waves", "switching_wave_rows",
 	// Format 81: N1's AD CS request decisions.
 	"adcs_request_decisions",
+	// Format 117: N1-L1's held external CA issuances.
+	"external_ca_held_issues",
 	// Format 82: N2's Key Vault disables.
 	"certificate_key_vault_disables",
 	// Format 86: N9's MDM device check-ins.
@@ -804,6 +809,7 @@ SELECT jsonb_build_object(
   'switching_waves', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM switching_waves t),
   'switching_wave_rows', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM switching_wave_rows t),
   'adcs_request_decisions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_request_decisions t),
+  'external_ca_held_issues', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM external_ca_held_issues t),
   'certificate_key_vault_disables', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM certificate_key_vault_disables t),
   'incident_closures', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM incident_closures t),
   'pam_session_recordings', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_session_recordings t),

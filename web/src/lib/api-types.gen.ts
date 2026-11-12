@@ -5371,6 +5371,31 @@ export interface ExternalCA {
   type: string;
 }
 
+export interface ExternalCAHeldIssue {
+  ca_request_id: number;
+  dns_names: string[];
+  held_at: string;
+  resolved_at?: string;
+  serial?: string;
+  status: "held" | "issued" | "denied";
+}
+
+export interface ExternalCAHeldIssueList {
+  items: ExternalCAHeldIssue[];
+  next_cursor?: string;
+}
+
+export interface ExternalCAHeldIssueResume {
+  ca_request_id: number;
+  certificate_pem?: string;
+  dns_names: string[];
+  held_at: string;
+  not_after?: string;
+  resolved_at?: string;
+  serial?: string;
+  status: "held" | "issued" | "denied";
+}
+
 export interface ExternalCAIssueRequest {
   csr_pem: string;
   dns_names: string[];

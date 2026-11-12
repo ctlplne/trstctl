@@ -397,8 +397,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A239-L5 adds a TOTP provider's seed replacement (809). A246-L1 adds the
 	// upgrade preflight (810). A259-L4 adds a browser Kubernetes session's
 	// pods list (811). AUD-O1 adds running the weak-key audit now (812).
-	if len(out) != 812 {
-		t.Fatalf("OpenAPI operationIds = %d, want 812", len(out))
+	// N1-L1 adds listing and resuming held external CA issuances (814).
+	if len(out) != 814 {
+		t.Fatalf("OpenAPI operationIds = %d, want 814", len(out))
 	}
 	return out
 }

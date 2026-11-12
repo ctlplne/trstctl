@@ -436,9 +436,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A237-L3 adds `secrets scoped-syncs replace`. A238-L7 adds `secrets
 	// sessions end`. A239-L5 adds `secrets leases totp-seed`. A246-L1 adds
 	// `platform upgrade-preflight`. A259-L4 adds `access sessions pods`.
-	// AUD-O1 adds `discovery weak-key-audit run`.
-	if len(out) != 879 {
-		t.Fatalf("CLI commands = %d, want 879", len(out))
+	// AUD-O1 adds `discovery weak-key-audit run`. N1-L1 adds `external-cas
+	// held-issues` and `external-cas held-issues resume`.
+	if len(out) != 881 {
+		t.Fatalf("CLI commands = %d, want 881", len(out))
 	}
 	return out
 }

@@ -7429,6 +7429,43 @@ ExternalCA = TypedDict(
     total=False,
 )
 
+ExternalCAHeldIssue = TypedDict(
+    'ExternalCAHeldIssue',
+    {
+        'ca_request_id': int,
+        'dns_names': list[str],
+        'held_at': str,
+        'resolved_at': str,
+        'serial': str,
+        'status': str,
+    },
+    total=False,
+)
+
+ExternalCAHeldIssueList = TypedDict(
+    'ExternalCAHeldIssueList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+ExternalCAHeldIssueResume = TypedDict(
+    'ExternalCAHeldIssueResume',
+    {
+        'ca_request_id': int,
+        'certificate_pem': str,
+        'dns_names': list[str],
+        'held_at': str,
+        'not_after': str,
+        'resolved_at': str,
+        'serial': str,
+        'status': str,
+    },
+    total=False,
+)
+
 ExternalCAIssueRequest = TypedDict(
     'ExternalCAIssueRequest',
     {

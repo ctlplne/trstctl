@@ -25486,6 +25486,110 @@
         ],
         "type": "object"
       },
+      "ExternalCAHeldIssue": {
+        "properties": {
+          "ca_request_id": {
+            "description": "The CA's own request id; resuming reads the request back by it.",
+            "type": "integer"
+          },
+          "dns_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "held_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "resolved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "held",
+              "issued",
+              "denied"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "ca_request_id",
+          "dns_names",
+          "status",
+          "held_at"
+        ],
+        "type": "object"
+      },
+      "ExternalCAHeldIssueList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExternalCAHeldIssue"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ExternalCAHeldIssueResume": {
+        "properties": {
+          "ca_request_id": {
+            "description": "The CA's own request id; resuming reads the request back by it.",
+            "type": "integer"
+          },
+          "certificate_pem": {
+            "type": "string"
+          },
+          "dns_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "held_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "resolved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "held",
+              "issued",
+              "denied"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "ca_request_id",
+          "dns_names",
+          "status",
+          "held_at"
+        ],
+        "type": "object"
+      },
       "ExternalCAIssueRequest": {
         "properties": {
           "csr_pem": {
@@ -85524,6 +85628,140 @@
           }
         ],
         "summary": "Execute an approved decision: the issuer's relay approves (certutil -resubmit) or denies the request at the CA only while the CA still holds it as pending, and reads its disposition back",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/external-cas/{id}/held-issues": {
+      "get": {
+        "operationId": "listExternalCAHeldIssues",
+        "parameters": [
+          {
+            "description": "configured external CA registry id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalCAHeldIssueList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List issuances an upstream CA holds for a manager's approval",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/external-cas/{id}/held-issues/{request_id}/resume": {
+      "post": {
+        "operationId": "resumeExternalCAHeldIssue",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "configured external CA registry id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the CA's request id",
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalCAHeldIssueResume"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read a held request back from the upstream CA and finish its issuance once approved",
         "x-trstctl-permission": "certs:issue"
       }
     },
