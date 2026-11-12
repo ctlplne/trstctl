@@ -51,6 +51,25 @@ describe("CBOM import", () => {
     await waitFor(() => expect(onImported).toHaveBeenCalledWith(expect.objectContaining({ run_id: "run-7" }), inventory));
   });
 
+  it("says how many of the BOM's certificates the certificate inventory holds (X6-L6)", async () => {
+    vi.spyOn(api, "importCBOM").mockResolvedValue({
+      run_id: "run-9",
+      source: "vendor:acme-hsm",
+      version: 3,
+      components: 6,
+      findings: 4,
+      asset_ids: [],
+      certificate_ids: ["c1", "c2"],
+      replayed: false,
+    });
+    const user = userEvent.setup();
+    renderPanel();
+    await user.type(screen.getByLabelText(/Source name/), "acme-hsm");
+    await user.upload(screen.getByLabelText("CycloneDX CBOM (JSON)"), new File([bom], "hsm-cbom.json", { type: "application/json" }));
+    await user.click(screen.getByRole("button", { name: "Import CBOM" }));
+    expect(await screen.findByText("2 certificates named their fingerprint and are in the certificate inventory with their expiry.")).toBeInTheDocument();
+  });
+
   it("names the source kind and says when the same file changed nothing", async () => {
     const spy = vi.spyOn(api, "importCBOM").mockResolvedValue({
       run_id: "run-1",

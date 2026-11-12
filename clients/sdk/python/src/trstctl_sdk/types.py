@@ -3766,6 +3766,7 @@ CBOMImport = TypedDict(
     'CBOMImport',
     {
         'asset_ids': list[str],
+        'certificate_ids': list[str],
         'components': int,
         'findings': int,
         'replayed': bool,

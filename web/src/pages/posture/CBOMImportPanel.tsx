@@ -124,17 +124,22 @@ export function CBOMImportPanel({ onImported }: { onImported: (result: CBOMImpor
         </p>
       ) : null}
       {result ? (
-        <p role="status" className="text-sm">
-          {result.replayed
-            ? t("posture.cbom.import.replayed", { source: result.source, version: String(result.version) })
-            : t("posture.cbom.import.imported", {
-                source: result.source,
-                components: String(result.components),
-                findings: String(result.findings),
-                version: String(result.version),
-                run: result.run_id,
-              })}
-        </p>
+        <div role="status" className="grid gap-1 text-sm">
+          <p>
+            {result.replayed
+              ? t("posture.cbom.import.replayed", { source: result.source, version: String(result.version) })
+              : t("posture.cbom.import.imported", {
+                  source: result.source,
+                  components: String(result.components),
+                  findings: String(result.findings),
+                  version: String(result.version),
+                  run: result.run_id,
+                })}
+          </p>
+          {(result.certificate_ids ?? []).length > 0 ? (
+            <p className="text-muted-foreground">{t("posture.cbom.import.certificates", { count: String((result.certificate_ids ?? []).length) })}</p>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );

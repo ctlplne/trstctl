@@ -4,7 +4,9 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/cbom"
@@ -33,8 +35,12 @@ func (s *cbomService) Import(ctx context.Context, tenantID, source string, bom c
 	if err != nil {
 		return api.CBOMImportResponse{}, err
 	}
+	certificates := importedCertificates(source, bom)
 	if done {
 		resp.Replayed = true
+		if resp.CertificateIDs, err = s.inventoryImportedCertificates(ctx, tenantID, certificates, false); err != nil {
+			return api.CBOMImportResponse{}, err
+		}
 		return resp, nil
 	}
 	sink := &eventedCBOMSink{store: s.store, log: s.log, tenantID: tenantID}
@@ -43,10 +49,74 @@ func (s *cbomService) Import(ctx context.Context, tenantID, source string, bom c
 			return api.CBOMImportResponse{}, err
 		}
 	}
+	if resp.CertificateIDs, err = s.inventoryImportedCertificates(ctx, tenantID, certificates, true); err != nil {
+		return api.CBOMImportResponse{}, err
+	}
 	if err := s.orch.FinishCBOMImport(ctx, tenantID, resp.RunID, bom.Components, len(ids)); err != nil {
 		return api.CBOMImportResponse{}, err
 	}
 	return resp, nil
+}
+
+// importedCertificates are the BOM's certificates that name their SHA-256
+// fingerprint (X6-L6), one per fingerprint, as certificate inventory
+// observations: subject, issuer, serial, key algorithm and validity as the
+// BOM states them, with no certificate bytes, under source "cbom:<source>".
+// A certificate without a fingerprint stays a CBOM row only.
+func importedCertificates(source string, bom cbom.ImportedBOM) []store.Certificate {
+	seen := map[string]bool{}
+	var out []store.Certificate
+	for _, f := range bom.Findings {
+		c := f.Certificate
+		if c == nil || c.Fingerprint == "" || seen[c.Fingerprint] {
+			continue
+		}
+		seen[c.Fingerprint] = true
+		out = append(out, store.Certificate{Subject: c.Subject, Issuer: c.Issuer, Serial: c.Serial, Fingerprint: c.Fingerprint,
+			KeyAlgorithm: importedKeyAlgorithm(f), NotBefore: c.NotBefore, NotAfter: c.NotAfter,
+			Source: "cbom:" + source, ObservationOnly: true})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Fingerprint < out[j].Fingerprint })
+	return out
+}
+
+func importedKeyAlgorithm(f cbom.Finding) string {
+	alg := strings.TrimSpace(f.Algorithm)
+	if alg != "" && f.KeyBits > 0 && !strings.ContainsAny(alg, "0123456789") {
+		return fmt.Sprintf("%s-%d", alg, f.KeyBits)
+	}
+	return alg
+}
+
+// inventoryImportedCertificates takes the BOM's fingerprinted certificates
+// into the certificate inventory and returns their rows' IDs. A fingerprint
+// the inventory already holds keeps its row exactly as it is: an issued or
+// ingested certificate's owner, names, location and bytes are better facts
+// than a BOM's statement about the same certificate, and recording an
+// observation over them would replace them. Without record (a replayed
+// import) it only looks the rows up.
+func (s *cbomService) inventoryImportedCertificates(ctx context.Context, tenantID string, certificates []store.Certificate, record bool) ([]string, error) {
+	ids := []string{}
+	for _, c := range certificates {
+		existing, err := s.store.GetCertificateByFingerprint(ctx, tenantID, c.Fingerprint)
+		if err == nil {
+			ids = append(ids, existing.ID)
+			continue
+		}
+		if !store.IsNotFound(err) {
+			return nil, err
+		}
+		if !record {
+			continue
+		}
+		row, err := s.orch.RecordCertificate(ctx, tenantID, c)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, row.ID)
+	}
+	sort.Strings(ids)
+	return ids, nil
 }
 
 // cbomAssetFor is the inventory row a finding becomes; Record and Import

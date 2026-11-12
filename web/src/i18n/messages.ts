@@ -33638,6 +33638,10 @@ export const messages = {
     defaultMessage: "{source} version {version} already holds this exact file; nothing changed.",
     description: "X6-L4: the same BOM imported again.",
   },
+  "posture.cbom.import.certificates": {
+    defaultMessage: "{count} certificates named their fingerprint and are in the certificate inventory with their expiry.",
+    description: "X6-L6: how many of the BOM's certificates the certificate inventory holds.",
+  },
   "posture.cbom.inventoryLoadFailed": { defaultMessage: "The saved crypto inventory could not be loaded", description: "CBOM inventory read failure title." },
   "posture.cbom.workflow.scope": { defaultMessage: "Choose what to inspect", description: "First CBOM scan workflow step." },
   "posture.cbom.workflow.scopeBody": {

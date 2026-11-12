@@ -42,6 +42,10 @@ type Finding struct {
 	// carries them, so they are not serialized.
 	KeyWeakReasons []string `json:"-"`
 	KeyDistrust    string   `json:"-"`
+	// Certificate is an imported certificate component's own facts (X6-L6):
+	// the import takes a fingerprinted one into the certificate inventory.
+	// It never reaches the CBOM row, which records the asset's crypto only.
+	Certificate *ImportedCertificate `json:"-"`
 }
 
 // Classified returns a copy of the finding with its classification filled in

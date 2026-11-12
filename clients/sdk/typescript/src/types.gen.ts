@@ -15481,6 +15481,8 @@ export interface components {
         };
         CBOMImport: {
             asset_ids: string[];
+            /** @description certificate inventory rows of the BOM's certificates that name their SHA-256 fingerprint, recorded by this import or already held */
+            certificate_ids?: string[];
             components: number;
             findings: number;
             /** @description this BOM was imported before; nothing was written */

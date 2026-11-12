@@ -28,6 +28,10 @@ type CBOMImportResponse struct {
 	Components   int      `json:"components"`
 	Findings     int      `json:"findings"`
 	AssetIDs     []string `json:"asset_ids"`
+	// CertificateIDs are the certificate inventory rows of the BOM's
+	// certificates that name their SHA-256 fingerprint (X6-L6): recorded by
+	// this import, or already held.
+	CertificateIDs []string `json:"certificate_ids"`
 	// Replayed is true when this BOM was imported before; nothing was written.
 	Replayed bool `json:"replayed"`
 }

@@ -368,7 +368,7 @@ trstctl-cli cbom verify-cyclonedx --export cbom-export.json --audit-jwks audit.j
 #### Importing CBOMs from vendors, code and images
 
 `POST /api/v1/cbom/imports?source=<source>` (`discovery:write`, `trstctl-cli cbom import
---source <source> -f bom.cdx.json`) takes a CycloneDX 1.4–1.6 CBOM into the same inventory.
+--source <source> -f bom.cdx.json`) takes a CycloneDX 1.4–1.7 CBOM into the same inventory.
 The source says who produced it and is part of every location: `vendor:<product>` for a
 CBOM a vendor published for its appliance or software, `source:<repository>` for a scan of
 code, `image:<reference>` for a scan of a container image, directory or archive. Each
@@ -377,8 +377,8 @@ its cipher suites) and each crypto library component (OpenSSL, BoringSSL, Bouncy
 others) becomes one inventory finding located at `<source>:<occurrence>` (the file and line
 the BOM gives, or the component's reference), classified like trstctl's own scans: a
 1024-bit RSA key is weak, TLS 1.0 is weak, ECDH is quantum-vulnerable. A document that is
-not a CycloneDX BOM, or holds no crypto, is refused; one import takes at most 5,000
-components and 8 MiB.
+not a CycloneDX BOM, or holds no crypto, is refused; one import takes at most 50,000
+components and 32 MiB.
 
 Each import is a discovery run keyed by the source and the BOM's serial number and
 version (its SHA-256 when it has no serial number). Importing the same BOM again returns
@@ -387,6 +387,18 @@ BOM is a new import. Every finding is recorded as `cbom.asset.observed` first. D
 coverage counts imports: `vendor-embedded-crypto`, `source-code-crypto` and
 `container-image-crypto` are observed while an import of that kind is recent (90 days for
 a vendor's CBOM, which describes a release; the ordinary window for code and images).
+
+A certificate component that names its SHA-256 fingerprint — in its `hashes` (CycloneDX
+1.6) or in its certificate properties' `fingerprint` (1.7) — also enters the certificate
+inventory (`GET /api/v1/certificates`) with the subject, issuer, serial number, key
+algorithm and validity the BOM states, source `cbom:<source>`, and no certificate bytes
+(X6-L6). The inventory's expiry queries (`trstctl-cli certificates list --expiring-before`,
+`certificates health`) and reports then see a vendor's certificates. A fingerprint the
+inventory already holds keeps its row as it is: an issued or ingested certificate's owner,
+names and location are not replaced by a BOM's statement about it. A certificate the BOM
+gives no fingerprint for, such as each entry of an image's CA bundle in an image scanner's
+CBOM, stays a CBOM row. The import's response lists the certificate rows as
+`certificate_ids`, and the Posture page's import says how many there are.
 
 Two commands produce a CBOM to import on your own machine, offline; neither sends
 anything:

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // CycloneDX CBOM import (X6): a CBOM another tool or a vendor published —
@@ -27,6 +28,21 @@ const (
 	AssetImportedProtocol    AssetKind = "imported-protocol"
 	AssetImportedLibrary     AssetKind = "imported-library"
 )
+
+// ImportedCertificate is what an imported certificate component says about
+// the certificate itself (X6-L6): who it names, who issued it, when it is
+// valid, and its SHA-256 fingerprint when the BOM gives one (a 1.6
+// component's hashes, or a 1.7 certificate's fingerprint). With a fingerprint
+// and an expiry it is a certificate the inventory can hold; without a
+// fingerprint it stays a CBOM row only, because the inventory is keyed by it.
+type ImportedCertificate struct {
+	Fingerprint string
+	Subject     string
+	Issuer      string
+	Serial      string
+	NotBefore   *time.Time
+	NotAfter    *time.Time
+}
 
 // MaxImportComponents bounds one import. A real image scan is large: the
 // operating system's CA bundle in a small Alpine image alone gives a scanner
@@ -58,6 +74,12 @@ type importComponent struct {
 	CryptoProperties *importCryptoProps `json:"cryptoProperties"`
 	Evidence         *importEvidence    `json:"evidence"`
 	Components       []importComponent  `json:"components"`
+	Hashes           []importHash       `json:"hashes"`
+}
+
+type importHash struct {
+	Alg     string `json:"alg"`
+	Content string `json:"content"`
 }
 
 type importCryptoProps struct {
@@ -76,11 +98,14 @@ type importAlgorithmProps struct {
 }
 
 type importCertificateProps struct {
-	SubjectName           string `json:"subjectName"`
-	IssuerName            string `json:"issuerName"`
-	NotValidAfter         string `json:"notValidAfter"`
-	SignatureAlgorithmRef string `json:"signatureAlgorithmRef"`
-	SubjectPublicKeyRef   string `json:"subjectPublicKeyRef"`
+	SubjectName           string      `json:"subjectName"`
+	IssuerName            string      `json:"issuerName"`
+	NotValidBefore        string      `json:"notValidBefore"`
+	NotValidAfter         string      `json:"notValidAfter"`
+	SignatureAlgorithmRef string      `json:"signatureAlgorithmRef"`
+	SubjectPublicKeyRef   string      `json:"subjectPublicKeyRef"`
+	SerialNumber          string      `json:"serialNumber"` // CycloneDX 1.7
+	Fingerprint           *importHash `json:"fingerprint"`  // CycloneDX 1.7
 }
 
 type importMaterialProps struct {
@@ -187,6 +212,7 @@ func importFindings(c importComponent, byRef map[string]importComponent, source 
 	case cp.AssetType == "certificate":
 		base = Finding{Kind: AssetImportedCertificate}
 		if cert := cp.CertificateProperties; cert != nil {
+			base.Certificate = importedCertificate(c, cert)
 			if key, ok := byRef[cert.SubjectPublicKeyRef]; ok && key.CryptoProperties != nil {
 				if m := key.CryptoProperties.RelatedCryptoMaterial; m != nil {
 					if alg, ok := byRef[m.AlgorithmRef]; ok && alg.CryptoProperties != nil {
@@ -332,4 +358,42 @@ func importedProtocol(kind, version string) string {
 		return "TLSv1.3"
 	}
 	return ""
+}
+
+var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// importedCertificate reads what a certificate component says about the
+// certificate (X6-L6). A fingerprint counts only as a SHA-256 of 64 hex
+// digits; a validity date only as RFC 3339.
+func importedCertificate(c importComponent, cert *importCertificateProps) *ImportedCertificate {
+	out := &ImportedCertificate{
+		Subject: strings.TrimSpace(cert.SubjectName), Issuer: strings.TrimSpace(cert.IssuerName),
+		Serial: strings.TrimSpace(cert.SerialNumber),
+	}
+	if out.Subject == "" {
+		out.Subject = strings.TrimSpace(c.Name)
+	}
+	hashes := c.Hashes
+	if cert.Fingerprint != nil {
+		hashes = append([]importHash{*cert.Fingerprint}, hashes...)
+	}
+	for _, h := range hashes {
+		content := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(h.Content), ":", ""))
+		if strings.EqualFold(strings.TrimSpace(h.Alg), "SHA-256") && sha256Hex.MatchString(content) {
+			out.Fingerprint = content
+			break
+		}
+	}
+	out.NotBefore = importedTime(cert.NotValidBefore)
+	out.NotAfter = importedTime(cert.NotValidAfter)
+	return out
+}
+
+func importedTime(value string) *time.Time {
+	t, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+	if err != nil {
+		return nil
+	}
+	t = t.UTC()
+	return &t
 }

@@ -1341,7 +1341,10 @@ never live in the API process. What you can do end to end against the running bi
   holds up to 50,000 components and 32 MiB; an image scan of that size takes
   seconds to tens of seconds to import, because each finding is recorded as its
   own event. Imported rows are the BOM's statements; the source scan recognizes
-  direct API calls, not every indirect path.
+  direct API calls, not every indirect path. A certificate the BOM names its
+  SHA-256 fingerprint for also enters the certificate inventory with the BOM's
+  validity (X6-L6); one without a fingerprint (an image scanner's CA bundle
+  entries) stays a CBOM row, because the inventory is keyed by fingerprint.
 - Access graph, step 1 (G1): the credential graph holds people (tenant
   members), their roles and AI agents (from agent-broker issuance), with the
   credentials they hold (API tokens, machine sessions, PAM sessions,

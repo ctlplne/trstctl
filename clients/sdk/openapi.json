@@ -12674,6 +12674,13 @@
             },
             "type": "array"
           },
+          "certificate_ids": {
+            "description": "certificate inventory rows of the BOM's certificates that name their SHA-256 fingerprint, recorded by this import or already held",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "components": {
             "type": "integer"
           },

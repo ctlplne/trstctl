@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- An imported CBOM's certificates that name their SHA-256 fingerprint enter the certificate inventory (X6-L6): a
+  CycloneDX 1.6 component's `hashes` or a 1.7 certificate's `fingerprint`, with the subject, issuer, serial, key
+  algorithm and validity the BOM states, under source `cbom:<source>`. Expiry queries and reports now see a vendor's
+  certificates; a fingerprint the inventory already holds is left as it is. The import's response lists them as
+  `certificate_ids`, and the Posture page's import says how many.
 - A PQC pilot can require observed traffic (X3-L5). With `require_observed_traffic`, each wave whose probe
   negotiated waits until an observer agent has seen real clients connect at every target, and keeps what they
   negotiated (TLS version, group, whether it is a post-quantum hybrid); only then does the next wave start. A target

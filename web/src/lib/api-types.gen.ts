@@ -2678,6 +2678,7 @@ export interface CBOMCycloneDXExport {
 
 export interface CBOMImport {
   asset_ids: string[];
+  certificate_ids?: string[];
   components: number;
   findings: number;
   replayed: boolean;
