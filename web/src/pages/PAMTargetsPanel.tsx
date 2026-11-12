@@ -46,6 +46,8 @@ const targetSchema = z
     web_url: z.string().trim(),
     web_ca_pem: z.string().trim(),
     web_server_name: z.string().trim(),
+    web_sign_in_url: z.string().trim(),
+    web_sign_in_ca_pem: z.string().trim(),
   })
   .superRefine((value, ctx) => {
     if (value.target_type === "webconsole") {
@@ -55,6 +57,9 @@ const targetSchema = z
       // A273-O3: an origin, or the path the console lives under (no dot segments).
       if (!/^https:\/\/[^\s/?#@]+(?:\/(?!\.{1,2}(?:\/|$))[^\s/?#\\]+)*\/?$/.test(value.web_url))
         ctx.addIssue({ code: "custom", path: ["web_url"], message: translateNow("admin.access.webconsole.urlHelp") });
+      // A273-O1: the identity provider is an origin of its own.
+      if (value.web_sign_in_url && !/^https:\/\/[^\s/?#@]+\/?$/.test(value.web_sign_in_url))
+        ctx.addIssue({ code: "custom", path: ["web_sign_in_url"], message: translateNow("admin.access.webconsole.signInURLHelp") });
       if (!value.gateway_agent_id) ctx.addIssue({ code: "custom", path: ["gateway_agent_id"], message: translateNow("admin.access.gatewayRequired") });
       if (!value.gateway_address) ctx.addIssue({ code: "custom", path: ["gateway_address"], message: translateNow("admin.access.gatewayRequired") });
     } else if (value.target_type !== "ssh") {
@@ -103,6 +108,8 @@ const emptyTarget: TargetForm = {
   web_url: "",
   web_ca_pem: "",
   web_server_name: "",
+  web_sign_in_url: "",
+  web_sign_in_ca_pem: "",
 };
 // Check-out accounts (A268 windows_local, A271 account) are vaulted accounts a
 // provider rotates in place: checked out, never a session, so they name no
@@ -174,6 +181,8 @@ export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canMana
               url: form.web_url,
               ...(form.web_ca_pem ? { ca_pem: form.web_ca_pem } : {}),
               ...(form.web_server_name ? { server_name: form.web_server_name } : {}),
+              ...(form.web_sign_in_url ? { sign_in_url: form.web_sign_in_url } : {}),
+              ...(form.web_sign_in_ca_pem ? { sign_in_ca_pem: form.web_sign_in_ca_pem } : {}),
             },
           }
         : form.target_type !== "ssh"
@@ -430,6 +439,15 @@ export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canMana
                     </option>
                   ))}
               </datalist>
+              <label className="grid gap-1 text-sm">
+                {t("admin.access.webconsole.signInURL")}
+                <Input {...register("web_sign_in_url")} aria-invalid={!!errors.web_sign_in_url} />
+                {errors.web_sign_in_url ? <span role="alert">{t("admin.access.webconsole.signInURLHelp")}</span> : null}
+              </label>
+              <label className="grid gap-1 text-sm">
+                {t("admin.access.webconsole.signInCAPEM")}
+                <Textarea className="min-h-20 font-mono text-caption" {...register("web_sign_in_ca_pem")} />
+              </label>
             </>
           ) : targetType !== "ssh" ? (
             <>

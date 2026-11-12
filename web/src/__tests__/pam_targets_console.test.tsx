@@ -407,6 +407,45 @@ it("registers a web admin console whose account an in-place provider rotates aft
   );
 });
 
+it("registers a web admin console that signs in through its identity provider (A273-O1)", async () => {
+  const user = userEvent.setup();
+  apiMock.pamTargets.mockResolvedValue({ items: [] });
+  apiMock.registerPAMTarget.mockImplementation(async (input) => ({ ...input, source: "tenant", enabled: true }));
+  mount(true);
+  await user.click(await screen.findByRole("button", { name: "Register target" }));
+  const form = screen.getByRole("dialog", { name: "Register target" });
+  await user.type(within(form).getByRole("textbox", { name: "Target ID" }), "sso-console");
+  await user.selectOptions(within(form).getByRole("combobox", { name: "Target type" }), "webconsole");
+  const secret = within(form).getByRole("textbox", { name: "Account secret" });
+  await user.clear(secret);
+  await user.type(secret, "consoles/sso-admin");
+  await user.type(within(form).getByRole("textbox", { name: "Console address" }), "https://console.internal.example");
+  const idp = within(form).getByRole("textbox", { name: "Identity provider address (optional)" });
+  await user.type(idp, "https://idp.internal.example/realms/lab");
+  await user.type(within(form).getByRole("textbox", { name: "Gateway agent ID" }), "gateway-agent");
+  await user.type(within(form).getByRole("textbox", { name: "Gateway address (host:port)" }), "gateway.example:8443");
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
+  expect(await within(form).findByText(/A single sign-on template follows the sign-in there/)).toBeInTheDocument();
+  expect(apiMock.registerPAMTarget).not.toHaveBeenCalled();
+  await user.clear(idp);
+  await user.type(idp, "https://idp.internal.example");
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
+  await waitFor(() =>
+    expect(apiMock.registerPAMTarget).toHaveBeenCalledWith(
+      {
+        id: "sso-console",
+        target_type: "webconsole",
+        allowed_roles: ["consoles/sso-admin"],
+        account_secret: "consoles/sso-admin",
+        web: { url: "https://console.internal.example", sign_in_url: "https://idp.internal.example" },
+        gateway_agent_id: "gateway-agent",
+        gateway_address: "gateway.example:8443",
+      },
+      expect.any(String),
+    ),
+  );
+});
+
 it("registers a Windows local administrator account for check-out with its native provider and no gateway (A268)", async () => {
   const user = userEvent.setup();
   apiMock.pamTargets.mockResolvedValue({ items: [] });

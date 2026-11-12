@@ -1489,7 +1489,7 @@ not this file.
 | `ee/provider/saml_authenticator.go:234` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
 | `ee/provider/saml_authenticator.go:338` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:345` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
-| `internal/agent/accessgateway/webconsole.go:905` | the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614) |
+| `internal/agent/accessgateway/webconsole.go:962` | the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614) |
 | `internal/api/auth.go:1168` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
 | `internal/api/auth.go:1179` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth.go:1203` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
@@ -3221,8 +3221,8 @@ not this file.
 | `internal/server/pam_gateway_kubernetes_kind_test.go:46` | test reads the cluster CA its runner wrote (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
 | `internal/server/pam_gateway_private_ca_served_test.go:88` | the fixture's own data directory (CWE-22) |
-| `internal/server/pam_webconsole_served_test.go:511` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
-| `internal/server/pam_webconsole_served_test.go:515` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
+| `internal/server/pam_webconsole_served_test.go:513` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
+| `internal/server/pam_webconsole_served_test.go:517` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:60` | public lab inputs the containers read (CWE-22) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:82` | the lab runner's build output (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:316` | test path inside its own tempdir/checkout (CWE-22) |

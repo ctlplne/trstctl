@@ -214,8 +214,15 @@ func (s *pamService) withTemplate(ctx context.Context, tenantID string, req api.
 		signIn.BrowserCookies = append([]string(nil), t.WebSignIn.BrowserCookies...)
 		// A273-O3: the gateway posts the account's password only to a
 		// sign-in page under the console's path.
-		if target, err := s.databaseTarget(ctx, tenantID, req.TargetType, req.TargetID); err == nil && target.cfg.Web != nil && !target.cfg.Web.SignsInWithin(signIn) {
-			return req, 0, nil, fmt.Errorf("%w: the template's sign-in page %s is outside the console's path %s", api.ErrPAMInvalid, signIn.LoginPath, target.cfg.Web.Prefix())
+		if target, err := s.databaseTarget(ctx, tenantID, req.TargetType, req.TargetID); err == nil && target.cfg.Web != nil {
+			if !target.cfg.Web.SignsInWithin(signIn) {
+				return req, 0, nil, fmt.Errorf("%w: the template's sign-in page %s is outside the console's path %s", api.ErrPAMInvalid, signIn.LoginPath, target.cfg.Web.Prefix())
+			}
+			// A273-O1: a single sign-on follows the console's identity
+			// provider, which only it uses.
+			if !target.cfg.Web.SignsInThrough(signIn) {
+				return req, 0, nil, fmt.Errorf("%w: a single sign-on template needs a console whose route names its identity provider (sign_in_url), and only it uses one", api.ErrPAMInvalid)
+			}
 		}
 		req.ResolvedWebSignIn = &signIn
 	}

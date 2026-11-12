@@ -13431,6 +13431,9 @@ PAMWebConsoleRoute = TypedDict(
     {
         'ca_pem': str,
         'server_name': str,
+        'sign_in_ca_pem': str,
+        'sign_in_server_name': str,
+        'sign_in_url': str,
         'url': str,
     },
     total=False,

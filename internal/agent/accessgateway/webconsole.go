@@ -212,10 +212,14 @@ type webConsoleState struct {
 	// action is the path the console's sign-in form posts to; the browser
 	// may not post there.
 	action string
+	// idpCookies (A273-O1) are the gateway's own session with the console's
+	// identity provider: never sent to the console or the browser.
+	idpCookies map[string]*secret.Buffer
+	idpOrder   []string
 }
 
 func newWebConsoleState() *webConsoleState {
-	return &webConsoleState{cookies: map[string]*secret.Buffer{}}
+	return &webConsoleState{cookies: map[string]*secret.Buffer{}, idpCookies: map[string]*secret.Buffer{}}
 }
 
 // destroy wipes the session's cookies; nothing signs in afterwards.
@@ -226,7 +230,11 @@ func (s *webConsoleState) destroy() {
 		b.Destroy()
 		delete(s.cookies, name)
 	}
-	s.order = nil
+	for name, b := range s.idpCookies {
+		b.Destroy()
+		delete(s.idpCookies, name)
+	}
+	s.order, s.idpOrder = nil, nil
 	s.signedIn, s.closed = false, true
 	s.refused = errors.New("accessgateway: the console session ended")
 }
@@ -242,26 +250,50 @@ func (s *webConsoleState) keep(c *http.Cookie) bool {
 // keepLocked stores (or, expired or emptied, drops) a cookie the console set
 // and reports whether it dropped one the session held.
 func (s *webConsoleState) keepLocked(c *http.Cookie) bool {
+	return s.keepInLocked(s.cookies, &s.order, c)
+}
+
+// keepIdPLocked stores a cookie the console's identity provider set.
+func (s *webConsoleState) keepIdPLocked(c *http.Cookie) bool {
+	return s.keepInLocked(s.idpCookies, &s.idpOrder, c)
+}
+
+func (s *webConsoleState) keepInLocked(jar map[string]*secret.Buffer, order *[]string, c *http.Cookie) bool {
 	held := false
-	if old := s.cookies[c.Name]; old != nil {
+	if old := jar[c.Name]; old != nil {
 		held = true
 		old.Destroy()
-		delete(s.cookies, c.Name)
-		s.order = slices.DeleteFunc(s.order, func(name string) bool { return name == c.Name })
+		delete(jar, c.Name)
+		*order = slices.DeleteFunc(*order, func(name string) bool { return name == c.Name })
 	}
 	if s.closed {
 		return held
 	}
-	if c.MaxAge < 0 || c.Value == "" || (!c.Expires.IsZero() && !c.Expires.After(time.Now())) || len(c.Value) > webCookieBytes || len(s.cookies) >= webMaxCookies {
+	if c.MaxAge < 0 || c.Value == "" || (!c.Expires.IsZero() && !c.Expires.After(time.Now())) || len(c.Value) > webCookieBytes || len(jar) >= webMaxCookies {
 		return held
 	}
 	b, err := secret.NewFrom([]byte(c.Value))
 	if err != nil {
 		return held
 	}
-	s.cookies[c.Name] = b
-	s.order = append(s.order, c.Name)
+	jar[c.Name] = b
+	*order = append(*order, c.Name)
 	return false
+}
+
+// idpCookieHeaderLocked is the Cookie header the identity provider gets: its
+// own cookies only.
+func (s *webConsoleState) idpCookieHeaderLocked() string {
+	var b strings.Builder
+	for _, name := range s.idpOrder {
+		if b.Len() > 0 {
+			b.WriteString("; ")
+		}
+		b.WriteString(name)
+		b.WriteByte('=')
+		b.Write(s.idpCookies[name].Bytes())
+	}
+	return b.String()
 }
 
 // cookieHeader is the Cookie header the console gets: its own cookies, then
@@ -303,9 +335,11 @@ func (s *webConsoleState) cookieHeaderLocked(browser []*http.Cookie) string {
 func (s *webConsoleState) maskCookies(text string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, b := range s.cookies {
-		if v := b.Bytes(); len(v) >= webMaskMin {
-			text = strings.ReplaceAll(text, string(v), "[masked:cookie]")
+	for _, jar := range []map[string]*secret.Buffer{s.cookies, s.idpCookies} {
+		for _, b := range jar {
+			if v := b.Bytes(); len(v) >= webMaskMin {
+				text = strings.ReplaceAll(text, string(v), "[masked:cookie]")
+			}
 		}
 	}
 	return text
@@ -345,6 +379,10 @@ type webConsoleClient struct {
 	in      accessweb.SignIn
 	account webAccount
 	rec     *connRecorder
+	// idp and idpTransport (A273-O1) are the console's identity provider and
+	// the gateway's way to it, for a single sign-on only.
+	idp          *url.URL
+	idpTransport http.RoundTripper
 }
 
 func (c *webConsoleClient) event(name, kind, text string) {
@@ -373,7 +411,11 @@ func (s *webConsoleState) ensureSignedIn(ctx context.Context, c *webConsoleClien
 		return errors.New("accessgateway: the console keeps signing the session out")
 	}
 	s.signIns++
-	err := s.formSignInLocked(ctx, c)
+	signIn := s.formSignInLocked
+	if c.in.Mode == accessweb.SignInSSO {
+		signIn = s.ssoSignInLocked
+	}
+	err := signIn(ctx, c)
 	var judged *webSignInRefused
 	switch {
 	case err == nil:
@@ -772,6 +814,21 @@ func serveWebConsole(ctx context.Context, client net.Conn, raw []byte, intent Se
 	defer transport.CloseIdleConnections()
 	target.Path, target.RawPath = "", ""
 	c := &webConsoleClient{transport: transport, target: target, home: home, in: *in, account: account, rec: rec}
+	if in.Mode == accessweb.SignInSSO {
+		// A273-O1: the identity provider the console's route names, reached
+		// on its own transport and verified with its own CA.
+		idpRoute, err := url.Parse(intent.WebSignInURL)
+		if err != nil || intent.WebSignInURL == "" {
+			return errors.New("accessgateway: the console's route names no identity provider")
+		}
+		idp, idpTransport, err := httpUpstream{URL: intent.WebSignInURL, CAPEM: intent.WebSignInCAPEM, ServerName: intent.WebSignInServerName}.transport(webDial(dial, idpRoute))
+		if err != nil {
+			return err
+		}
+		defer idpTransport.CloseIdleConnections()
+		idp.Path, idp.RawPath = "", ""
+		c.idp, c.idpTransport = idp, idpTransport
+	}
 	var authorization string
 	switch in.Mode {
 	case accessweb.SignInBasic:
@@ -811,7 +868,7 @@ func serveWebConsole(ctx context.Context, client net.Conn, raw []byte, intent Se
 			webGatewayPage(w, http.StatusForbidden, "This session reaches only the console's own path.")
 			return
 		}
-		if in.Mode == accessweb.SignInForm {
+		if in.Mode == accessweb.SignInForm || in.Mode == accessweb.SignInSSO {
 			if r.URL.Path == in.LoginPath || (r.URL.Path == state.formAction() && r.Method != http.MethodGet && r.Method != http.MethodHead) {
 				// The console's sign-in is the gateway's: the browser never
 				// posts a password to it.
@@ -913,8 +970,14 @@ func (c *webConsoleClient) response(resp *http.Response, state *webConsoleState,
 	}
 	status := strconv.Itoa(resp.StatusCode)
 	if location := resp.Header.Get("Location"); location != "" {
-		if next, err := resp.Request.URL.Parse(location); err == nil && sameOrigin(next, c.target) {
-			if c.in.Mode == accessweb.SignInForm && next.Path == c.in.LoginPath && resp.Request.URL.Path != c.in.LoginPath {
+		next, err := resp.Request.URL.Parse(location)
+		onConsole := err == nil && sameOrigin(next, c.target)
+		formSignOut := onConsole && c.in.Mode == accessweb.SignInForm && next.Path == c.in.LoginPath && resp.Request.URL.Path != c.in.LoginPath
+		// A273-O1: a console that sends the browser to its identity
+		// provider has signed the session out; the browser never goes there.
+		ssoSignOut := err == nil && c.idp != nil && sameOrigin(next, c.idp)
+		if formSignOut || ssoSignOut {
+			{
 				// The console signed the session out: sign in again at the
 				// next request and send the browser back where it was (home,
 				// when the request itself signed out or was not a read).
@@ -930,6 +993,8 @@ func (c *webConsoleClient) response(resp *http.Response, state *webConsoleState,
 				c.event("result", "response", status+": signed out by the console; the gateway signs in again")
 				return nil
 			}
+		}
+		if onConsole {
 			resp.Header.Set("Location", webTunnelURI(next))
 		}
 	}

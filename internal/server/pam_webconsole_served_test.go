@@ -124,8 +124,9 @@ var (
 // the tunnel (A273-O2); terminating the session stops the browser's access.
 // A session without a template that signs in, a misdeclared target or
 // template, and a check-out of the account are refused. A console under a
-// path is reached only under it (A273-O3), and a console's account its
-// provider rotates rotates after each session (A273-O4).
+// path is reached only under it (A273-O3). A console whose provider rotates its
+// account has it rotated after each session (A273-O4), and a console that
+// signs in through an identity provider is signed in through it (A273-O1).
 func TestServedWebConsoleSessionA273(t *testing.T) {
 	if testing.Short() {
 		t.Skip("gateway session proof")
@@ -502,6 +503,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 		t.Fatalf("terminate the path session = %d %s", status, body)
 	}
 	servedWebConsoleAccountRotatesAfterSession(t, f, bmc, gatewayID, custodian, account, request, template)
+	servedWebConsoleSingleSignOn(t, f, gatewayID, account, request, template)
 }
 
 // a273AwaitBrowser writes note to <dir>/<write> and waits (up to half an
@@ -622,5 +624,83 @@ func servedWebConsoleAccountRotatesAfterSession(t *testing.T, f *gatewayFixture,
 	if err := h.store.SystemPool().QueryRow(ctx, `SELECT count(*) FROM pam_sessions WHERE tenant_id=$1 AND target_type='webconsole' AND target_id='a273-lab-console' AND account_rotation_provider=''`,
 		h.tenant).Scan(&unrotatedSessions); err != nil || unrotatedSessions != 1 {
 		t.Fatalf("the console without a provider: %d sessions without a rotation: %v", unrotatedSessions, err)
+	}
+}
+
+// servedWebConsoleSingleSignOn is A273-O1: a console that signs its users in
+// only through an OpenID Connect provider. Its target names the provider on
+// its route; a template signing in by the console's own form is refused for
+// it; a single sign-on session through the CLI tunnel shows the console
+// signed in, and the browser's network traffic carries neither the password,
+// nor the provider's origin, nor either side's cookies.
+func servedWebConsoleSingleSignOn(t *testing.T, f *gatewayFixture, gatewayID, account string,
+	request func(string) map[string]any, template func(string, map[string]any) (int, api.PAMAccessTemplate)) {
+	t.Helper()
+	h := f.h
+	idp, err := infratest.StartOIDCProvider("admin", a273ConsolePassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(idp.Close)
+	console := infratest.StartSSOWebConsole(idp, "a273-sso-console", "a273-sso-client-secret")
+	t.Cleanup(console.Close)
+	route := map[string]any{"url": console.URL(), "ca_pem": string(console.CAPEM()), "sign_in_url": idp.URL(), "sign_in_ca_pem": string(idp.CAPEM())}
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/targets", f.operator, "a273-sso-register",
+		map[string]any{"id": "a273-sso-console", "target_type": "webconsole", "account_secret": account, "allowed_roles": []string{account},
+			"gateway_agent_id": gatewayID, "gateway_address": f.gatewayAddr, "web": route}); status != http.StatusCreated || !strings.Contains(string(body), idp.URL()) {
+		t.Fatalf("register the single sign-on console = %d %s", status, body)
+	}
+	status, form := template("form-for-sso", map[string]any{"mode": "form", "login_path": "/login", "username_field": "username", "password_field": "password"})
+	if status != http.StatusCreated {
+		t.Fatalf("save a form template = %d", status)
+	}
+	wrong := request(form.ID)
+	wrong["target_id"], wrong["request_id"] = "a273-sso-console", uuid.NewString()
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/session-requests", f.requester, "a273-sso-form", wrong); status != http.StatusUnprocessableEntity ||
+		!strings.Contains(string(body), "identity provider") {
+		t.Fatalf("a form sign-in for a single sign-on console = %d %s", status, body)
+	}
+	status, sso := template("sso", map[string]any{"mode": "sso", "login_path": "/login", "username_field": "username", "password_field": "password"})
+	if status != http.StatusCreated {
+		t.Fatalf("save the single sign-on template = %d", status)
+	}
+	req := request(sso.ID)
+	req["target_id"] = "a273-sso-console"
+	session := servedPAMReviewedOpen(t, h.servedHarness, f.requester, f.reviewerOne, f.reviewerTwo, "a273-open-sso", req)
+	out, stop := f.connect(session.ID, session.Gateway.Ticket, a273OpenLine.MatchString)
+	defer stop()
+	capture := startA273Capture(t, a273OpenLine.FindStringSubmatch(out)[1])
+	base := "http://" + capture.ln.Addr().String()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	browser := &http.Client{Jar: jar, Timeout: 30 * time.Second}
+	a201Await(t, "the single sign-on console through the gateway", func() bool {
+		resp, err := browser.Get(base + "/")
+		if err != nil {
+			return false
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		return resp.StatusCode == http.StatusOK && strings.Contains(string(body), "Signed in as admin")
+	})
+	if idp.SignIns() != 1 || console.SignIns() != 1 {
+		t.Fatalf("sign-ins: provider %d, console %d", idp.SignIns(), console.SignIns())
+	}
+	local, _ := url.Parse(base)
+	if cookies := jar.Cookies(local); len(cookies) != 0 {
+		t.Fatalf("the browser holds cookies: %v", cookies)
+	}
+	seen := capture.seen()
+	for _, leak := range append(append([]string{a273ConsolePassword, idp.URL(), strings.TrimPrefix(idp.URL(), "https://"), infratest.OIDCSessionCookie,
+		infratest.SSOConsoleSessionCookie}, idp.SessionCookies()...), console.SessionCookies()...) {
+		if bytes.Contains(seen, []byte(leak)) {
+			t.Fatalf("the browser's traffic carries %q", leak)
+		}
+	}
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/sessions/"+session.ID+"/terminate", f.operator, "a273-terminate-sso",
+		map[string]any{"reason": "A273-O1 proof complete"}); status != http.StatusAccepted {
+		t.Fatalf("terminate the single sign-on session = %d %s", status, body)
 	}
 }

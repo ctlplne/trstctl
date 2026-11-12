@@ -1790,6 +1790,32 @@ sign-in is not tried again in the session. Each request and response is recorded
 credential and password-like fields masked, and terminating the session ends the browser's
 access. The account cannot be checked out: its credential is never shown.
 
+A console that signs its users in only through an identity provider, such as an OpenID
+Connect provider in front of an internal tool, names that provider on its route. Use
+`sign_in_url` for the provider's origin over https, and optionally `sign_in_ca_pem` and
+`sign_in_server_name` for its certificate. Then sign in with the `sso` mode, giving the
+console page that starts the sign-in (`login_path`) and the field names on the provider's
+sign-in form:
+
+```json
+{"web": {"url": "https://tool.internal.example", "sign_in_url": "https://idp.internal.example"}}
+```
+
+```json
+{"web_sign_in": {"mode": "sso", "login_path": "/login", "username_field": "username", "password_field": "password"}}
+```
+
+The gateway starts the console's sign-in at that page and follows it to the provider, but
+to no other origin. It fills the provider's form with the vaulted account, then follows the
+answer back to the console. The console finishes the sign-in with the provider directly.
+The browser never reaches the provider. The provider's cookies stay at the gateway as its
+own session with the provider, and reach neither the console nor the browser. When the
+console ends its session, the gateway signs in again on that provider session, without the
+password. A password the provider refuses is not sent again in the session. The `sso` mode
+needs a route that names its provider, and only that mode may use one. A session requested
+otherwise is refused. A provider that asks for a second factor, or that answers the sign-in
+with a page needing its scripts (such as SAML's self-submitting POST form), is refused.
+
 A console under a path is reached only under it. The tunnel's root leads there. Any other
 path on its host is refused at the gateway and recorded, including one that would climb out
 through a dot segment, an encoded slash or a backslash. The template's sign-in page must

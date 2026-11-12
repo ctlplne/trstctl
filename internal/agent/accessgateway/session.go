@@ -125,6 +125,13 @@ type SessionIntent struct {
 	UpstreamURL        string `json:"upstream_url,omitempty"`
 	UpstreamCAPEM      string `json:"upstream_ca_pem,omitempty"`
 	UpstreamServerName string `json:"upstream_server_name,omitempty"`
+	// WebSignInURL, WebSignInCAPEM and WebSignInServerName (A273-O1) are the
+	// identity provider a web console signs in through, from its reviewed
+	// route: the only origin a single sign-on may follow besides the
+	// console's. A gateway that predates them refuses the sso sign-in mode.
+	WebSignInURL        string `json:"web_sign_in_url,omitempty"`
+	WebSignInCAPEM      string `json:"web_sign_in_ca_pem,omitempty"`
+	WebSignInServerName string `json:"web_sign_in_server_name,omitempty"`
 	// DatabaseCAPEM and DatabaseServerName (A256-L1) are how the gateway
 	// verifies a PostgreSQL, Redis or MongoDB target's TLS: its provider's
 	// CA, carried with the job, so a private CA needs no file on the
@@ -235,7 +242,8 @@ func ValidateSessionIntent(in SessionIntent) error {
 		return err
 	}
 	if in.TargetType == TargetWeb {
-		route := accessweb.Route{URL: in.UpstreamURL, CAPEM: in.UpstreamCAPEM, ServerName: in.UpstreamServerName}
+		route := accessweb.Route{URL: in.UpstreamURL, CAPEM: in.UpstreamCAPEM, ServerName: in.UpstreamServerName,
+			SignInURL: in.WebSignInURL, SignInCAPEM: in.WebSignInCAPEM, SignInServerName: in.WebSignInServerName}
 		switch {
 		case in.CredentialRef != CredentialRef(in.SessionID):
 			return errors.New("accessgateway: a session redeems only its own credential")
@@ -243,9 +251,11 @@ func ValidateSessionIntent(in SessionIntent) error {
 			return errors.New("accessgateway: a web console session carries no SSH routing")
 		case in.WebSignIn == nil || in.WebSignIn.Validate() != nil || in.CommandPolicy != nil || route.Validate(true) != nil:
 			return errors.New("accessgateway: a web console session needs its reviewed route and sign-in, and carries no command rules")
+		case !route.SignsInThrough(*in.WebSignIn):
+			return errors.New("accessgateway: a single sign-on needs its console's identity provider, and only it names one")
 		}
 		return nil
-	} else if in.WebSignIn != nil {
+	} else if in.WebSignIn != nil || in.WebSignInURL != "" || in.WebSignInCAPEM != "" || in.WebSignInServerName != "" {
 		return errors.New("accessgateway: only a web console session carries a web sign-in")
 	}
 	if in.TargetType == TargetNetDevice {

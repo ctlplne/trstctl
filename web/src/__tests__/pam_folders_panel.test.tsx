@@ -98,6 +98,24 @@ it("sets a template's web sign-in for web admin consoles, field names only (A273
   );
   expect(await axe(view.container)).toHaveNoViolations();
 });
+it("sets a single sign-on for a console that signs in through its identity provider (A273-O1)", async () => {
+  const user = userEvent.setup();
+  mount();
+  await user.click(await screen.findByRole("button", { name: "Set web sign-in" }));
+  const editor = screen.getByRole("group", { name: "Web sign-in for production" });
+  await user.selectOptions(screen.getByRole("combobox", { name: "Mode" }), "sso");
+  expect(editor).toHaveTextContent("The browser never reaches the identity provider.");
+  const path = screen.getByRole("textbox", { name: "Sign-in page" });
+  await user.clear(path);
+  await user.type(path, "/oauth/start");
+  await user.click(screen.getByRole("button", { name: "Save sign-in" }));
+  await waitFor(() =>
+    expect(mocks.updatePAMTemplate).toHaveBeenCalledWith(template.id, {
+      ...template,
+      web_sign_in: { mode: "sso", login_path: "/oauth/start", username_field: "username", password_field: "password", browser_cookies: [] },
+    }),
+  );
+});
 it("preserves a revision conflict for the operator and gates configuration by permission", async () => {
   const user = userEvent.setup();
   mocks.savePAMFolder.mockRejectedValue(new Error("the folder changed; read it again"));

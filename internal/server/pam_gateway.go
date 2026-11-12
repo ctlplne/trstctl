@@ -330,6 +330,8 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 			}
 			signIn := *rec.WebSignIn
 			intent.UpstreamURL, intent.UpstreamCAPEM, intent.UpstreamServerName = target.cfg.Web.URL, target.cfg.Web.CAPEM, target.cfg.Web.ServerName
+			// A273-O1: the identity provider a single sign-on follows.
+			intent.WebSignInURL, intent.WebSignInCAPEM, intent.WebSignInServerName = target.cfg.Web.SignInURL, target.cfg.Web.SignInCAPEM, target.cfg.Web.SignInServerName
 			intent.WebSignIn = &signIn
 		}
 		if rec.TargetType == pamTargetAWSConsole {

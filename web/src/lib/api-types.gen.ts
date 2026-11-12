@@ -9643,6 +9643,9 @@ export interface PAMTerminalRequest {
 export interface PAMWebConsoleRoute {
   ca_pem?: string;
   server_name?: string;
+  sign_in_ca_pem?: string;
+  sign_in_server_name?: string;
+  sign_in_url?: string;
   url: string;
 }
 
@@ -9651,7 +9654,7 @@ export interface PAMWebSignIn {
   header?: string;
   header_prefix?: string;
   login_path?: string;
-  mode: "form" | "header" | "basic";
+  mode: "form" | "sso" | "header" | "basic";
   password_field?: string;
   username_field?: string;
 }

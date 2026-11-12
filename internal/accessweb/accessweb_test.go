@@ -121,3 +121,47 @@ func TestRoutePathA273O3(t *testing.T) {
 		t.Fatal("sign-in pages under the console's path")
 	}
 }
+
+// TestSingleSignOnRouteA273O1: a single sign-on template fills the identity
+// provider's form fields and starts at the console's sign-in page; a route
+// names its identity provider as another https origin (loopback only in a
+// lab), with its own CA and name; only a single sign-on uses it.
+func TestSingleSignOnRouteA273O1(t *testing.T) {
+	sso := SignIn{Mode: SignInSSO, LoginPath: "/login", UsernameField: "username", PasswordField: "password"}
+	if err := sso.Validate(); err != nil {
+		t.Fatalf("a single sign-on: %v", err)
+	}
+	for name, bad := range map[string]SignIn{
+		"no page":       {Mode: SignInSSO, UsernameField: "u", PasswordField: "p"},
+		"same fields":   {Mode: SignInSSO, LoginPath: "/login", UsernameField: "p", PasswordField: "p"},
+		"with a header": {Mode: SignInSSO, LoginPath: "/login", UsernameField: "u", PasswordField: "p", Header: "X-Token"},
+	} {
+		if bad.Validate() == nil {
+			t.Fatalf("%s: accepted", name)
+		}
+	}
+	ca := "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n"
+	route := Route{URL: "https://console.internal.example", SignInURL: "https://idp.internal.example", SignInCAPEM: ca, SignInServerName: "idp.internal.example"}
+	if err := route.Validate(false); err != nil {
+		t.Fatalf("a console with its identity provider: %v", err)
+	}
+	if !route.SignsInThrough(sso) || route.SignsInThrough(SignIn{Mode: SignInForm}) || (Route{URL: route.URL}).SignsInThrough(sso) {
+		t.Fatal("only a single sign-on uses the route's identity provider, and it needs one")
+	}
+	for name, bad := range map[string]Route{
+		"provider path":       {URL: route.URL, SignInURL: "https://idp.internal.example/realms/lab"},
+		"provider over http":  {URL: route.URL, SignInURL: "http://idp.internal.example"},
+		"provider is console": {URL: route.URL, SignInURL: "https://console.internal.example:443"},
+		"CA without provider": {URL: route.URL, SignInCAPEM: ca},
+		"name without one":    {URL: route.URL, SignInServerName: "idp.internal.example"},
+		"loopback, no opt-in": {URL: route.URL, SignInURL: "https://127.0.0.1:9443"},
+		"provider CA not PEM": {URL: route.URL, SignInURL: "https://idp.internal.example", SignInCAPEM: "not a certificate"},
+	} {
+		if bad.Validate(false) == nil {
+			t.Fatalf("%s: accepted %+v", name, bad)
+		}
+	}
+	if err := (Route{URL: "https://127.0.0.1:8443", SignInURL: "https://127.0.0.1:9443"}).Validate(true); err != nil {
+		t.Fatalf("a lab console and provider: %v", err)
+	}
+}

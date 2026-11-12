@@ -24080,6 +24080,12 @@ export interface components {
             ca_pem?: string;
             /** @description the name the console's certificate is checked against; none: the URL's host */
             server_name?: string;
+            /** @description PEM certificates the identity provider's certificate is checked against; none: the system roots */
+            sign_in_ca_pem?: string;
+            /** @description the name the identity provider's certificate is checked against; none: its URL's host */
+            sign_in_server_name?: string;
+            /** @description the origin of the identity provider the console signs its users in through (A273-O1); a single sign-on follows the console's sign-in to it and no other origin */
+            sign_in_url?: string;
             /** @description the console's origin (https://host[:port]), or the path it lives under on that origin (A273-O3), without user information, query or fragment (A273) */
             url: string;
         };
@@ -24090,16 +24096,16 @@ export interface components {
             header?: string;
             /** @description header: text before the token (e.g. Bearer and a space) */
             header_prefix?: string;
-            /** @description form: the console's sign-in page (a path) */
+            /** @description form, sso: the console's sign-in page (a path); a single sign-on starts there */
             login_path?: string;
             /**
-             * @description how the access gateway signs in to a web console for the operator (A273): its own sign-in form, a header token, or HTTP basic authentication
+             * @description how the access gateway signs in to a web console for the operator (A273): its own sign-in form, its identity provider's sign-in form (sso, A273-O1), a header token, or HTTP basic authentication
              * @enum {string}
              */
-            mode: "form" | "header" | "basic";
-            /** @description form: the password field's name */
+            mode: "form" | "sso" | "header" | "basic";
+            /** @description form, sso: the password field's name (sso: on the identity provider's form) */
             password_field?: string;
-            /** @description form: the username field's name */
+            /** @description form, sso: the username field's name (sso: on the identity provider's form) */
             username_field?: string;
         };
         PAMWindowsLocalAccount: {

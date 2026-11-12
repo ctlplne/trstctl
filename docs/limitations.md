@@ -10065,7 +10065,9 @@ against a stand-in console built the way such consoles commonly are; no vendor c
 it.
 
 What comes next:
-- Consoles that sign in through a single sign-on provider.
+- A single sign-on whose identity provider asks for a second factor, or answers the sign-in with
+  a page that needs its scripts (such as SAML's self-submitting POST form): the gateway refuses
+  it, since it fills and follows the provider's forms itself.
 - A console origin that a script assembles from parts at run time, or that a body the console
   compresses despite the gateway's request carries, reaches the browser as written; such a
   link leaves the tunnel.

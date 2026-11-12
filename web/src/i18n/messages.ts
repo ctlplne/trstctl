@@ -1059,6 +1059,19 @@ export const messages = {
       "Enter the console's address over https: its origin, such as https://console.internal.example, or the path it lives under, such as https://apps.internal.example/console/.",
     description: "Web console target registration (A273).",
   },
+  "admin.access.webconsole.signInURL": {
+    defaultMessage: "Identity provider address (optional)",
+    description: "Web console target registration (A273-O1): the origin of the identity provider the console signs in through.",
+  },
+  "admin.access.webconsole.signInURLHelp": {
+    defaultMessage:
+      "For a console that signs its users in only through an identity provider: its origin over https, such as https://idp.internal.example. A single sign-on template follows the sign-in there and nowhere else.",
+    description: "Web console target registration (A273-O1).",
+  },
+  "admin.access.webconsole.signInCAPEM": {
+    defaultMessage: "Identity provider CA (PEM, optional)",
+    description: "Web console target registration (A273-O1): the CA the identity provider's certificate is checked against.",
+  },
   "admin.access.webconsole.caPEM": {
     defaultMessage: "Console CA (PEM, optional)",
     description: "Web console target registration (A273): the CA its certificate is checked against.",
@@ -1095,6 +1108,15 @@ export const messages = {
   },
   "admin.access.folders.webSignIn.none": { defaultMessage: "None", description: "A template that sets no web sign-in (A273)." },
   "admin.access.folders.webSignIn.form": { defaultMessage: "Sign-in form", description: "Web sign-in mode (A273)." },
+  "admin.access.folders.webSignIn.sso": {
+    defaultMessage: "Single sign-on",
+    description: "Web sign-in mode (A273-O1): through the console's identity provider.",
+  },
+  "admin.access.folders.webSignIn.ssoHelp": {
+    defaultMessage:
+      "The gateway starts the console's sign-in at its sign-in page, signs in on the identity provider the console's target names with these field names, and follows the sign-in back. The browser never reaches the identity provider.",
+    description: "Web sign-in editor help for single sign-on (A273-O1).",
+  },
   "admin.access.folders.webSignIn.header": { defaultMessage: "Header token", description: "Web sign-in mode (A273)." },
   "admin.access.folders.webSignIn.basic": { defaultMessage: "Basic authentication", description: "Web sign-in mode (A273)." },
   "admin.access.folders.webSignIn.edit": { defaultMessage: "Set web sign-in", description: "Opens a template's web sign-in editor (A273)." },

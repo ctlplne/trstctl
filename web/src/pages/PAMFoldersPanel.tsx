@@ -350,6 +350,7 @@ type WebSignIn = NonNullable<PAMAccessTemplate["web_sign_in"]>;
 const WEB_SIGN_IN_LABEL = {
   none: "admin.access.folders.webSignIn.none",
   form: "admin.access.folders.webSignIn.form",
+  sso: "admin.access.folders.webSignIn.sso",
   header: "admin.access.folders.webSignIn.header",
   basic: "admin.access.folders.webSignIn.basic",
 } as const;
@@ -395,6 +396,7 @@ function WebSignInEditor({
   const value = (): WebSignIn | undefined => {
     switch (mode) {
       case "form":
+      case "sso":
         return { mode, login_path: loginPath, username_field: usernameField, password_field: passwordField, browser_cookies: browserCookies };
       case "header":
         return { mode, header, ...(headerPrefix ? { header_prefix: headerPrefix } : {}), browser_cookies: browserCookies };
@@ -410,7 +412,7 @@ function WebSignInEditor({
       <Field label={t("admin.access.folders.webSignIn.mode")}>
         {(control) => (
           <Select {...control} value={mode} onChange={(e) => setMode(e.target.value as WebSignIn["mode"] | "none")}>
-            {(["none", "form", "header", "basic"] as const).map((m) => (
+            {(["none", "form", "sso", "header", "basic"] as const).map((m) => (
               <option key={m} value={m}>
                 {t(WEB_SIGN_IN_LABEL[m])}
               </option>
@@ -418,7 +420,8 @@ function WebSignInEditor({
           </Select>
         )}
       </Field>
-      {mode === "form" ? (
+      {mode === "sso" ? <p className="text-caption text-muted-foreground">{t("admin.access.folders.webSignIn.ssoHelp")}</p> : null}
+      {mode === "form" || mode === "sso" ? (
         <>
           <Field label={t("admin.access.folders.webSignIn.loginPath")}>
             {(control) => <Input {...control} value={loginPath} onChange={(e) => setLoginPath(e.target.value)} />}

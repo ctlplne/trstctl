@@ -278,6 +278,25 @@ func TestWebConsoleSessionIntentA273(t *testing.T) {
 	if err := ValidateSessionIntent(underPath); err != nil {
 		t.Fatalf("a console under a path (A273-O3): %v", err)
 	}
+	sso := good
+	sso.WebSignIn = &accessweb.SignIn{Mode: accessweb.SignInSSO, LoginPath: "/login", UsernameField: "u", PasswordField: "p"}
+	sso.WebSignInURL = "https://idp.internal.example"
+	if err := ValidateSessionIntent(sso); err != nil {
+		t.Fatalf("a single sign-on with its identity provider (A273-O1): %v", err)
+	}
+	ssoWithout := sso
+	ssoWithout.WebSignInURL = ""
+	formWith := good
+	formWith.WebSignInURL = "https://idp.internal.example"
+	other := good
+	other.TargetType, other.UpstreamURL, other.WebSignIn = TargetPostgres, "", nil
+	other.WebSignInURL = "https://idp.internal.example"
+	for name, in := range map[string]SessionIntent{"single sign-on without its provider": ssoWithout, "basic sign-in with a provider": formWith,
+		"a provider on another target": other} {
+		if ValidateSessionIntent(in) == nil {
+			t.Fatalf("%s: accepted", name)
+		}
+	}
 	for name, mutate := range map[string]func(*SessionIntent){
 		"no sign-in":         func(in *SessionIntent) { in.WebSignIn = nil },
 		"bad sign-in":        func(in *SessionIntent) { in.WebSignIn = &accessweb.SignIn{Mode: "saml"} },

@@ -28,6 +28,12 @@ const (
 	// SignInBasic: the gateway adds HTTP basic authentication to every
 	// request.
 	SignInBasic = "basic"
+	// SignInSSO (A273-O1): the console signs its users in through an
+	// identity provider. The gateway starts the console's sign-in at its
+	// page, follows it to the provider named on the console's route, fills
+	// the provider's form itself and follows it back; the browser never
+	// reaches the provider, and both sides' cookies stay at the gateway.
+	SignInSSO = "sso"
 )
 
 // MaxBrowserCookies bounds the cookies a template lets the browser hold.
@@ -68,15 +74,15 @@ var reservedHeaders = map[string]bool{"host": true, "cookie": true, "set-cookie"
 // credential.
 func (s SignIn) Validate() error {
 	switch s.Mode {
-	case SignInForm:
+	case SignInForm, SignInSSO:
 		if s.Header != "" || s.HeaderPrefix != "" {
-			return errors.New("a form sign-in sets no header")
+			return errors.New("a form or single sign-on sign-in sets no header")
 		}
 		if err := validPath(s.LoginPath); err != nil {
-			return errors.New("a form sign-in names its sign-in page as a path (/login), without query or fragment")
+			return errors.New("a form or single sign-on sign-in names the console's sign-in page as a path (/login), without query or fragment")
 		}
 		if !formField.MatchString(s.UsernameField) || !formField.MatchString(s.PasswordField) || s.UsernameField == s.PasswordField {
-			return errors.New("a form sign-in names its distinct username and password fields")
+			return errors.New("a form or single sign-on sign-in names its distinct username and password fields")
 		}
 	case SignInHeader:
 		if s.LoginPath != "" || s.UsernameField != "" || s.PasswordField != "" {
@@ -93,7 +99,7 @@ func (s SignIn) Validate() error {
 			return errors.New("a basic sign-in names no form or header")
 		}
 	default:
-		return errors.New("a web sign-in mode is form, header or basic")
+		return errors.New("a web sign-in mode is form, sso, header or basic")
 	}
 	if len(s.BrowserCookies) > MaxBrowserCookies {
 		return errors.New("a template lets the browser hold at most 8 cookies")
@@ -127,6 +133,13 @@ type Route struct {
 	URL        string `json:"url"`
 	CAPEM      string `json:"ca_pem,omitempty"`
 	ServerName string `json:"server_name,omitempty"`
+	// SignInURL (A273-O1) is the origin of the identity provider the console
+	// signs its users in through, with the CA and name its certificate is
+	// checked against. A single sign-on template needs it; the gateway
+	// follows the console's sign-in to this origin and no other.
+	SignInURL        string `json:"sign_in_url,omitempty"`
+	SignInCAPEM      string `json:"sign_in_ca_pem,omitempty"`
+	SignInServerName string `json:"sign_in_server_name,omitempty"`
 }
 
 // hostName is a DNS name a server certificate may be checked against.
@@ -161,7 +174,40 @@ func (r Route) Validate(allowLoopback bool) error {
 	if r.ServerName != "" && !hostName.MatchString(r.ServerName) {
 		return errors.New("a console's server name is a DNS name")
 	}
+	if r.SignInURL == "" {
+		if r.SignInCAPEM != "" || r.SignInServerName != "" {
+			return errors.New("an identity provider's CA or server name needs its sign_in_url")
+		}
+		return nil
+	}
+	idp := Route{URL: r.SignInURL, CAPEM: r.SignInCAPEM, ServerName: r.SignInServerName}
+	if err := idp.Validate(allowLoopback); err != nil || idp.Prefix() != "/" {
+		return errors.New("a console's identity provider is an origin over https (https://idp.example), with its own CA and server name")
+	}
+	if sameOrigin(idp.Origin(), r.Origin()) {
+		return errors.New("a console's identity provider is another origin than the console's")
+	}
 	return nil
+}
+
+// sameOrigin compares two origins' scheme, host and port, a default port
+// written out matching one left implicit.
+func sameOrigin(a, b string) bool {
+	ua, errA := url.Parse(a)
+	ub, errB := url.Parse(b)
+	if errA != nil || errB != nil {
+		return a == b
+	}
+	port := func(u *url.URL) string {
+		if p := u.Port(); p != "" {
+			return p
+		}
+		if strings.EqualFold(u.Scheme, "https") {
+			return "443"
+		}
+		return "80"
+	}
+	return strings.EqualFold(ua.Scheme, ub.Scheme) && strings.EqualFold(ua.Hostname(), ub.Hostname()) && port(ua) == port(ub)
 }
 
 // Origin is the route's origin: its scheme and host, without a path.
@@ -205,9 +251,15 @@ func (r Route) Within(p string) bool {
 
 // SignsInWithin reports whether a sign-in stays under the console's path: a
 // form sign-in's page must lie under it, since the gateway posts the
-// account's password there.
+// account's password there, and a single sign-on starts there.
 func (r Route) SignsInWithin(s SignIn) bool {
-	return s.Mode != SignInForm || r.Within(s.LoginPath)
+	return s.Mode != SignInForm && s.Mode != SignInSSO || r.Within(s.LoginPath)
+}
+
+// SignsInThrough reports whether a route can carry a sign-in: a single
+// sign-on needs the route's identity provider, and only it uses one.
+func (r Route) SignsInThrough(s SignIn) bool {
+	return (s.Mode == SignInSSO) == (r.SignInURL != "")
 }
 
 func validPath(p string) error {

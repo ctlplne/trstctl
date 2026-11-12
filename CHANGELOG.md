@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 ### Added
+- A web console that signs its users in only through an identity provider can be reached through the
+  gateway (A273-O1). Its target's route names the provider (`sign_in_url`, with an optional
+  `sign_in_ca_pem` and `sign_in_server_name`), and a template's `sso` web sign-in names the console
+  page that starts the sign-in and the provider's form fields. The gateway follows the console's
+  sign-in to that provider and no other origin, fills the provider's form with the vaulted account,
+  and follows the answer back to the console. The browser never reaches the provider, and the
+  provider's cookies stay at the gateway. A console that ends its session is signed in again on the
+  provider's session, without the password. The console's template editor and target form take the
+  mode and the provider.
 - A web console's account can rotate after each session (A273-O4). A `webconsole` target may name an
   in-place account provider (ESXi, vCenter single sign-on, Redfish or a network device) that rotates
   its account secret. Once a session to it ends, the expiry worker queues one rotation through that
