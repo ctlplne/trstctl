@@ -1561,7 +1561,7 @@ but reports only metadata: path, key format, algorithm, file-mode status, and a
 public-key-derived fingerprint when one can be computed. The agent wipes file buffers
 after inspection and never sends PEM/DER key bytes to the control plane.
 `--inventory-keystores` (with `--inventory-keystore-password-file`) does the same for
-the key entries of Java keystores (JKS, JCEKS) and PKCS#12 files, and `--inventory-crypto-libraries`
+the key entries of Java keystores (JKS, JCEKS, BCFKS) and PKCS#12 files, and `--inventory-crypto-libraries`
 and `--inventory-go-binaries` report TLS library and Go program versions with whether
 each can negotiate X25519MLKEM768.
 `--inventory-mcp-config-roots` names home or configuration directories whose MCP

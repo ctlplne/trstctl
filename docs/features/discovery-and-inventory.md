@@ -587,8 +587,8 @@ expires or its CA revokes it; the inventory row keeps its status. `GET
 /api/v1/certificates/{id}/key-vault-disables` lists them. Status: served.
 
 Keystores get the same treatment (X2). `--inventory-keystores` names Java keystores
-(JKS, JCEKS) and PKCS#12 files, directories or globs; a directory walk reads `.jks`,
-`.jceks`, `.keystore`, `.ks`, `.p12` and `.pfx` files. Each key entry is reported as
+(JKS, JCEKS, BCFKS) and PKCS#12 files, directories or globs; a directory walk reads `.jks`,
+`.jceks`, `.bcfks`, `.keystore`, `.ks`, `.p12` and `.pfx` files. Each key entry is reported as
 private-key metadata: the alias, the key type and size, the public-key fingerprint (the
 same basis as a key file, so one key found in both places correlates) and the chain length,
 all read from the entry's certificate. A JKS or JCEKS key is never decrypted: both keep
@@ -598,7 +598,10 @@ password and marked `integrity_verified=false` until a password from
 `changeit`) matches the store's integrity digest. A JCEKS store's secret keys (X2-L2) are
 stepped over sealed, never opened, and counted as `keystore_secret_keys` on its key
 findings; a store of secret keys only, such as a Hadoop credential store, is reported once
-as the keystore with that count. A PKCS#12 file is
+as the keystore with that count. A Bouncy Castle FIPS keystore (BCFKS, X2-L2) is encrypted
+as a whole, so like a PKCS#12 file it is read only with its password: its integrity MAC
+checks the password, the store is decrypted to reach the certificates, its private and
+secret keys stay sealed, and a store no password opens is reported `locked`. A PKCS#12 file is
 read for its certificates only: its MAC checks the password, the contents holding
 certificates are decrypted, and a key bag is never decrypted (X2-L3); a file no password
 opens is reported `locked`, with nothing listed. Every key of a PKCS#12 file is reported

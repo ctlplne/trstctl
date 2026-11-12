@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3075 annotated sites across 33 rules. Each row is
+3081 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -913,7 +913,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (473 sites)
+### G115 — CWE-190 Integer overflow or wraparound (478 sites)
 
 | Location | Reason |
 |---|---|
@@ -1007,6 +1007,11 @@ not this file.
 | `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:71` | ParseUint bounds authority to 48 bits and this loop emits one byte at a time (CWE-190). |
 | `internal/connector/wasm/host/host.go:159` | a wasm32 address, bounded by math.MaxUint32 just above (CWE-190). |
 | `internal/crypto/argon2id.go:69` | length of a stored KDF hash, far under the uint32 bound (CWE-190) |
+| `internal/crypto/bcfks/bcfks.go:301` | splitting a UTF-16 code unit into its two bytes (CWE-190) |
+| `internal/crypto/bcfks/bcfks.go:323` | the CCM length field size L is 2..8 (CWE-190) |
+| `internal/crypto/bcfks/bcfks.go:326` | one byte of a bounded block counter (CWE-190) |
+| `internal/crypto/bcfks/bcfks.go:340` | flags from a bounded tag length and L (CWE-190) |
+| `internal/crypto/bcfks/bcfks.go:343` | one byte of the bounded message length (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/ctlogtest.go:333` | test-support package compiled only into test binaries (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/ctlogtest.go:350` | test-support package compiled only into test binaries (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/signing.go:184` | a positive test clock offset (CWE-190) |
@@ -3188,7 +3193,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (159 sites)
+### G703 — CWE-22 Path traversal (taint) (160 sites)
 
 | Location | Reason |
 |---|---|
@@ -3204,6 +3209,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:222` | receiver is a private test directory and name ranges over two fixed archive basenames. |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `ee/auditcompliance/retention_download_test.go:87` | the test's own archive under its t.TempDir (CWE-22) |
+| `internal/agent/discovery/keystore_bcfks_test.go:22` | the test writes its fixture into its own t.TempDir() (CWE-22) |
 | `internal/agent/discovery/keystore_jceks_test.go:30` | the test writes its fixture into its own t.TempDir() (CWE-22) |
 | `internal/agent/discovery/keystore_multikey_test.go:23` | the test writes its fixture into its own t.TempDir() (CWE-22) |
 | `internal/agent/observe/capture_linux_test.go:65` | the lab runner names the report path in the test environment, never a request (CWE-22) |

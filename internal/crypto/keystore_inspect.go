@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 
+	"trstctl.com/trstctl/internal/crypto/bcfks"
 	"trstctl.com/trstctl/internal/crypto/jks"
 	"trstctl.com/trstctl/internal/crypto/pfx"
 )
@@ -43,10 +44,10 @@ type KeystoreKeyInfo struct {
 
 // KeystoreReport is what a keystore yields.
 type KeystoreReport struct {
-	Format       string // "JKS", "JCEKS" or "PKCS12"
+	Format       string // "JKS", "JCEKS", "BCFKS" or "PKCS12"
 	Keys         []KeystoreKeyInfo
 	TrustedCerts int
-	// SecretKeys counts a JCEKS store's secret key entries (X2-L2).
+	// SecretKeys counts a JCEKS or BCFKS store's secret key entries (X2-L2).
 	SecretKeys int
 	// IntegrityVerified is true when a supplied password matched the store's
 	// integrity check. A JKS lists its entries without one; a PKCS#12 file
@@ -54,12 +55,13 @@ type KeystoreReport struct {
 	IntegrityVerified bool
 }
 
-// ErrKeystoreLocked reports a PKCS#12 file that none of the supplied passwords
-// opens: nothing in it can be listed.
-var ErrKeystoreLocked = errors.New("crypto: no supplied password opens this PKCS#12 file")
+// ErrKeystoreLocked reports a PKCS#12 file or BCFKS store that none of the
+// supplied passwords opens: nothing in it can be listed.
+var ErrKeystoreLocked = errors.New("crypto: no supplied password opens this keystore")
 
-// InspectKeystore reads a JKS, JCEKS or PKCS#12 keystore's metadata, trying
-// each password in order (and an empty one last). Other formats are refused.
+// InspectKeystore reads a JKS, JCEKS, BCFKS or PKCS#12 keystore's metadata,
+// trying each password in order (and an empty one last). Other formats are
+// refused.
 func InspectKeystore(data []byte, passwords [][]byte) (KeystoreReport, error) {
 	if jks.IsJKS(data) {
 		return inspectJKS(data, passwords)
@@ -67,7 +69,42 @@ func InspectKeystore(data []byte, passwords [][]byte) (KeystoreReport, error) {
 	if jks.IsJCEKS(data) {
 		return inspectJCEKS(data, passwords)
 	}
+	if bcfks.IsBCFKS(data) {
+		return inspectBCFKS(data, passwords)
+	}
 	return inspectPKCS12(data, passwords)
+}
+
+// inspectBCFKS reads a Bouncy Castle FIPS keystore (X2-L2, part 2). Its whole
+// store is encrypted, so like a PKCS#12 file it is read only with its
+// password, and a store no password opens is locked; secret keys are counted.
+func inspectBCFKS(data []byte, passwords [][]byte) (KeystoreReport, error) {
+	for _, password := range append(append([][]byte(nil), passwords...), nil) {
+		entries, err := bcfks.Entries(data, password)
+		if errors.Is(err, bcfks.ErrIncorrectPassword) {
+			continue
+		}
+		if err != nil {
+			return KeystoreReport{}, fmt.Errorf("crypto: read BCFKS: %w", err)
+		}
+		report := KeystoreReport{Format: "BCFKS", IntegrityVerified: true}
+		for _, entry := range entries {
+			switch {
+			case entry.SecretKey:
+				report.SecretKeys++
+			case entry.KeyEntry:
+				info, err := keystoreKeyInfo(entry.Alias, entry.ChainDER)
+				if err != nil {
+					return KeystoreReport{}, err
+				}
+				report.Keys = append(report.Keys, info)
+			default:
+				report.TrustedCerts++
+			}
+		}
+		return report, nil
+	}
+	return KeystoreReport{Format: "BCFKS"}, ErrKeystoreLocked
 }
 
 // inspectJCEKS reads a JCEKS keystore (X2-L2) like a JKS one: certificates

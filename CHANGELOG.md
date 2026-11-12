@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The host agent reads Bouncy Castle FIPS keystores (BCFKS, X2-L2 part 2): the store's integrity MAC checks the password,
+  the store is decrypted (PBKDF2, AES-CCM) only to reach its certificates, and its key entries, trusted certificates and
+  secret keys are reported like a JCEKS store's; private and secret keys stay sealed, and a store no password opens is
+  reported locked. Directory walks read `.bcfks` files.
 - The host agent reads JCEKS keystores (X2-L2, part 1): key entries are reported like a JKS store's (alias, type, size,
   fingerprint, chain; certificates are in the clear, keys never decrypted), and secret key entries are stepped over
   sealed and counted; a store of secret keys only, such as a Hadoop credential store, is reported once as the keystore.

@@ -19,9 +19,9 @@ import (
 // and Go programs it runs. Both report metadata only over the agent channel.
 var (
 	inventoryKeystores = flag.String("inventory-keystores", "",
-		"comma-separated Java keystore (JKS, JCEKS) and PKCS#12 files, directories or globs whose key entries the agent inventories: alias, key type and size from each entry's certificate, never key bytes; a JCEKS store's secret keys are counted, never unsealed")
+		"comma-separated Java keystore (JKS, JCEKS, BCFKS) and PKCS#12 files, directories or globs whose key entries the agent inventories: alias, key type and size from each entry's certificate, never key bytes; a JCEKS or BCFKS store's secret keys are counted, never unsealed")
 	inventoryKeystorePasswordFile = flag.String("inventory-keystore-password-file", "",
-		"file holding keystore passwords, one per line, tried in order before the published default \"changeit\"; a file rather than a flag, because process arguments expose credentials. A JKS or JCEKS lists its entries without one (marked unverified); a PKCS#12 file it cannot open is reported locked")
+		"file holding keystore passwords, one per line, tried in order before the published default \"changeit\"; a file rather than a flag, because process arguments expose credentials. A JKS or JCEKS lists its entries without one (marked unverified); a PKCS#12 file or BCFKS store it cannot open is reported locked")
 	inventoryCryptoLibraries = flag.String("inventory-crypto-libraries", "",
 		"comma-separated TLS library files, directories or globs (libssl, libcrypto, libgnutls, NSS's libsoftokn3) whose versions the agent reads from the files, with whether each can negotiate X25519MLKEM768; nothing is executed")
 	inventoryGoBinaries = flag.String("inventory-go-binaries", "",

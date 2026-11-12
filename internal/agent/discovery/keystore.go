@@ -14,11 +14,11 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
-// SourceKeystore is the agent inventory source for Java keystores (JKS, JCEKS)
-// and PKCS#12 files (X2). Each key entry is reported as private-key metadata:
+// SourceKeystore is the agent inventory source for Java keystores (JKS, JCEKS,
+// BCFKS) and PKCS#12 files (X2). Each key entry is reported as private-key metadata:
 // its alias, the key type and size read from the entry's certificate, and the
 // public-key fingerprint. No key material leaves the host, and no key is ever
-// decrypted; a JCEKS store's secret keys are counted (X2-L2).
+// decrypted; a JCEKS or BCFKS store's secret keys are counted (X2-L2).
 const SourceKeystore = "keystore"
 
 // SourceNetworkObserver is the source passive observers report under (X1);
@@ -33,7 +33,7 @@ const maxKeystoreFileSize = 8 << 20
 
 // keystoreExtensions name the files a directory walk reads as keystores; a
 // path named directly is always read.
-var keystoreExtensions = map[string]bool{".jks": true, ".jceks": true, ".keystore": true, ".ks": true, ".p12": true, ".pfx": true}
+var keystoreExtensions = map[string]bool{".jks": true, ".jceks": true, ".bcfks": true, ".keystore": true, ".ks": true, ".p12": true, ".pfx": true}
 
 // defaultKeystorePasswords are the published defaults tried after the
 // operator's passwords: Java's "changeit" and the empty password.
@@ -88,11 +88,15 @@ func (s *KeystoreSource) keystore(path string) []PrivateKeyFound {
 	secret.Wipe(data)
 	restricted, metadata := privateKeyPermissionState(path, fi)
 	if errors.Is(err, cryptoboundary.ErrKeystoreLocked) {
+		format := report.Format
+		if format == "" {
+			format = "PKCS12"
+		}
 		meta := keystoreMetadata(metadata)
-		meta["keystore_format"] = "PKCS12"
+		meta["keystore_format"] = format
 		meta["keystore_state"] = "locked"
 		return []PrivateKeyFound{{
-			Source: SourceKeystore, Location: path, Format: "PKCS12", Algorithm: "unknown",
+			Source: SourceKeystore, Location: path, Format: format, Algorithm: "unknown",
 			Encrypted: true, Restricted: restricted, Metadata: meta,
 		}}
 	}
