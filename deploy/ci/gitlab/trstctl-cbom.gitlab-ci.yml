@@ -1,0 +1,37 @@
+# trstctl CBOM import for GitLab CI (X6-L7).
+#
+# Scans the project's crypto uses offline with trstctl-cli, then imports the
+# CycloneDX CBOM into trstctl as source:<group>/<project>. Importing the same
+# BOM again changes nothing. Set these CI/CD variables: TRSTCTL_RELEASE_VERSION
+# (a published release), TRSTCTL_SERVER (the control plane's base URL) and
+# TRSTCTL_TOKEN (masked and protected: an API token with discovery:write only).
+#
+#   include:
+#     - local: trstctl-cbom.gitlab-ci.yml
+trstctl-cbom:
+  stage: test
+  image: alpine:3.20
+  variables:
+    CBOM_SOURCE: ""
+    SCAN_DIR: "."
+  script:
+    - apk add --no-cache curl jq tar
+    - |
+      set -eu
+      version="$TRSTCTL_RELEASE_VERSION"
+      platform=linux_amd64
+      base="https://github.com/ctlplne/trstctl/releases/download/v${version}"
+      archive="trstctl-cli_${version}_${platform}.tar.gz"
+      manifest="trstctl-cli_${version}_manifest.json"
+      checksums="trstctl-cli_${version}_SHA256SUMS"
+      for file in "$archive" "$manifest" "$checksums"; do
+        curl --fail --location --proto '=https' --tlsv1.2 --remote-name "${base}/${file}"
+      done
+      grep -E " (${archive}|${manifest})$" "$checksums" | sha256sum -c -
+      tar -xzf "$archive" trstctl-cli
+      expected_commit="$(jq -r .source_commit "$manifest")"
+      case "$expected_commit" in (*[!0-9a-f]*|'') exit 1;; esac
+      ./trstctl-cli --version | grep -F "commit ${expected_commit}"
+      install -m 0755 trstctl-cli /usr/local/bin/trstctl-cli
+    - trstctl-cli cbom scan-source "$SCAN_DIR" --out cbom.cdx.json
+    - trstctl-cli cbom import --source "${CBOM_SOURCE:-source:$CI_PROJECT_PATH}" -f cbom.cdx.json

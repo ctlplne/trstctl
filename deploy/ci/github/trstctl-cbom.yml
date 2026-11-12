@@ -1,0 +1,90 @@
+# trstctl CBOM import for GitHub Actions (X6-L7).
+#
+# Scans the calling repository's crypto uses (RSA, ECDH and others in Go, Java
+# and Python) offline with trstctl-cli, then imports the CycloneDX CBOM into
+# trstctl as source:<owner>/<repo>. Importing the same BOM again changes
+# nothing. The token needs only discovery:write; keep it in a repository or
+# environment secret named TRSTCTL_TOKEN.
+#
+# Call it from a workflow:
+#
+#   jobs:
+#     cbom:
+#       uses: ./.github/workflows/trstctl-cbom.yml
+#       with:
+#         trstctl-version: "0.8.0"
+#         server: https://trstctl.example.com
+#       secrets:
+#         TRSTCTL_TOKEN: ${{ secrets.TRSTCTL_TOKEN }}
+name: trstctl CBOM
+
+on:
+  workflow_call:
+    inputs:
+      trstctl-version:
+        description: A published trstctl release with the CLI archive, manifest and checksums
+        required: true
+        type: string
+      server:
+        description: The trstctl control plane's base URL
+        required: true
+        type: string
+      source:
+        description: The import source; empty uses source:<owner>/<repo>
+        required: false
+        type: string
+        default: ""
+      directory:
+        description: The directory to scan
+        required: false
+        type: string
+        default: "."
+    secrets:
+      TRSTCTL_TOKEN:
+        description: A trstctl API token with discovery:write only
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  cbom:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Install trstctl-cli (pinned release, checksums and commit verified)
+        env:
+          TRSTCTL_RELEASE_VERSION: ${{ inputs.trstctl-version }}
+        run: |
+          set -eu
+          version="$TRSTCTL_RELEASE_VERSION"
+          platform=linux_amd64
+          base="https://github.com/ctlplne/trstctl/releases/download/v${version}"
+          archive="trstctl-cli_${version}_${platform}.tar.gz"
+          manifest="trstctl-cli_${version}_manifest.json"
+          checksums="trstctl-cli_${version}_SHA256SUMS"
+          for file in "$archive" "$manifest" "$checksums"; do
+            curl --fail --location --proto '=https' --tlsv1.2 --remote-name "${base}/${file}"
+          done
+          grep -E " (${archive}|${manifest})$" "$checksums" | sha256sum -c -
+          tar -xzf "$archive" trstctl-cli
+          expected_commit="$(jq -r .source_commit "$manifest")"
+          case "$expected_commit" in (*[!0-9a-f]*|'') exit 1;; esac
+          ./trstctl-cli --version | grep -F "commit ${expected_commit}"
+          mkdir -p "$RUNNER_TEMP/bin"
+          install -m 0755 trstctl-cli "$RUNNER_TEMP/bin/trstctl-cli"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Scan the repository's crypto uses
+        env:
+          SCAN_DIR: ${{ inputs.directory }}
+        run: trstctl-cli cbom scan-source "$SCAN_DIR" --out "$RUNNER_TEMP/cbom.cdx.json"
+      - name: Import the CBOM into trstctl
+        env:
+          TRSTCTL_SERVER: ${{ inputs.server }}
+          TRSTCTL_TOKEN: ${{ secrets.TRSTCTL_TOKEN }}
+          CBOM_SOURCE: ${{ inputs.source }}
+          REPOSITORY: ${{ github.repository }}
+        run: trstctl-cli cbom import --source "${CBOM_SOURCE:-source:$REPOSITORY}" -f "$RUNNER_TEMP/cbom.cdx.json"

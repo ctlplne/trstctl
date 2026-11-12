@@ -405,6 +405,11 @@ trstctl-cli cbom scan-image --scanner /usr/local/bin/cbomkit-theia --out app.cdx
 trstctl-cli cbom import --source image:registry.example/app:1.4 -f app.cdx.json
 ```
 
+To import on every pipeline run, use the CI templates in `deploy/ci` (X6-L7): a reusable
+GitHub Actions workflow and a GitLab CI job that install `trstctl-cli` from a published
+release (checksums and source commit verified), run `cbom scan-source` and import the
+result as `source:<repository>`, with an API token that carries only `discovery:write`.
+
 Imported findings are what the BOM says. trstctl does not re-check a vendor's claims or
 the image scanner's results, and the source scan finds calls it recognizes, not every
 path by which code reaches cryptography; the location names the source so a reader knows

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3052 annotated sites across 33 rules. Each row is
+3054 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (708 sites)
+### G101 — CWE-798 Use of hardcoded credentials (709 sites)
 
 | Location | Reason |
 |---|---|
@@ -212,6 +212,7 @@ not this file.
 | `internal/cbom/coverage/envelope.go:61` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cli/access_agent_test.go:21` | a fake run token the test's fake control plane expects (CWE-798) |
 | `internal/cli/agent_delegation_command_test.go:14` | API route names are public identifiers, not credential values (CWE-798) |
+| `internal/cli/ci_templates_test.go:116` | a stand-in's test token, not a credential (CWE-798) |
 | `internal/cloudauth/aws_credential_chain.go:31` | a link-local endpoint address, not a credential (CWE-798) |
 | `internal/cloudauth/aws_credential_chain_test.go:28` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/cloudauth/aws_credential_chain_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
@@ -2096,7 +2097,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (745 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (746 sites)
 
 | Location | Reason |
 |---|---|
@@ -2415,6 +2416,7 @@ not this file.
 | `internal/cli/certificate_key_attestation.go:71` | operator-named local file (CWE-22) |
 | `internal/cli/certificate_key_attestation.go:81` | operator-named local file (CWE-22) |
 | `internal/cli/certificate_key_attestation.go:87` | operator-named local file (CWE-22) |
+| `internal/cli/ci_templates_test.go:109` | test reads the repo's own shipped templates (CWE-22) |
 | `internal/cli/cli.go:294` | the operator explicitly names the public trust-bundle path (CWE-22) |
 | `internal/cli/cli.go:691` | operator-passed local file argument on their own command line (CWE-22) |
 | `internal/cli/cli_test.go:2176` | test reads its own fixture/tempdir path (CWE-22) |

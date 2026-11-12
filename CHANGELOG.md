@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- CI templates import a repository's CBOM on every pipeline run (X6-L7, `deploy/ci`): a reusable GitHub Actions
+  workflow and a GitLab CI job install `trstctl-cli` from a published release (checksums and source commit checked),
+  run `cbom scan-source` and `cbom import` as `source:<repository>`, with a token that carries only `discovery:write`.
 - The host agent reads the system crypto policy (X2-L6): `/etc/crypto-policies/config` and its OpenSSL back-end
   become a `crypto_library` finding (library `crypto-policies`) that says whether the policy keeps the ML-KEM hybrid
   groups in OpenSSL's TLS defaults; a LEGACY policy rates as the highest risk.
