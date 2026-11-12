@@ -62,7 +62,11 @@ func TestCertificateChainDERRefusesAnythingButCertificates(t *testing.T) {
 // returns a bounded, non-empty chain, and a chain it returns parses back to
 // itself.
 func FuzzCertificateChainDER(f *testing.F) {
-	leafPEM, leafDER := testCert(f)
+	leafPEM, leafDER, err := newTestCert()
+	if err != nil {
+		f.Fatal(err)
+		return
+	}
 	f.Add([]byte{})
 	f.Add(leafDER)
 	f.Add(leafPEM)

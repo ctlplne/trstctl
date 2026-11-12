@@ -18,11 +18,22 @@ import (
 	"time"
 )
 
-func testCert(t testing.TB) (pemBytes, derBytes []byte) {
+func testCert(t *testing.T) (pemBytes, derBytes []byte) {
 	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	pemBytes, derBytes, err := newTestCert()
 	if err != nil {
 		t.Fatal(err)
+	}
+	return pemBytes, derBytes
+}
+
+// newTestCert builds the self-signed test certificate. It takes no testing
+// value, so a fuzz target can seed from it (ClusterFuzzLite's build cannot
+// hand *testing.F to a testing.TB helper).
+func newTestCert() (pemBytes, derBytes []byte, err error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, err
 	}
 	tmpl := &x509.Certificate{
 		SerialNumber:   big.NewInt(12345),
@@ -36,9 +47,9 @@ func testCert(t testing.TB) (pemBytes, derBytes []byte) {
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
 	if err != nil {
-		t.Fatal(err)
+		return nil, nil, err
 	}
-	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), der
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), der, nil
 }
 
 func TestInspectPublicKeyBits(t *testing.T) {
