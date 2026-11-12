@@ -777,7 +777,7 @@ func (s *pamService) RequestPAMSession(ctx context.Context, tenantID, requester 
 		Reason:            req.Reason,
 		EvidenceRefs:      evidenceRefs,
 		RequiredApprovals: requiredApprovals, TTL: s.approvalTTL,
-	}, pamAutoApprovalRequest{Kind: "session", TargetType: req.TargetType, TargetID: req.TargetID, Reason: originalReason, TTLSeconds: int(s.ttl(req.TTLSeconds) / time.Second)}, req.RequestID)
+	}, pamAutoApprovalRequest{Kind: "session", TargetType: req.TargetType, TargetID: req.TargetID, Role: req.Role, RunID: req.RunID, Reason: originalReason, TTLSeconds: int(s.ttl(req.TTLSeconds) / time.Second)}, req.RequestID)
 	if err != nil {
 		return api.PAMApprovalRequest{}, err
 	}
@@ -1146,6 +1146,9 @@ func (s *pamService) authorizeActivation(ctx context.Context, tenantID, idempote
 	}
 	if !containsExactString(approval.EvidenceRefs, "pam-command-sha256:"+digest) {
 		return time.Time{}, fmt.Errorf("%w: PAM command differs from the approved intent", api.ErrPAMRejected)
+	}
+	if err := s.pamStandingApprovalInForce(ctx, tenantID, approval.EvidenceRefs); err != nil {
+		return time.Time{}, err
 	}
 	use, err := store.OperationApprovalUseFromRequest(approval)
 	if err != nil {

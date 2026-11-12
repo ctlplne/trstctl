@@ -10,6 +10,7 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { api, type AccessActivityFilter, type AccessAuthority, type AccessBundle, type AccessRun, type AccessRunIssued } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
+import { BundleStandingApprovals } from "./agentaccess/BundleStandingApprovals";
 
 // A251: agent access bundles. A bundle is a reusable set of permissions for
 // custom agents, CI jobs and private MCP servers; a grant gives it to a user or
@@ -80,6 +81,9 @@ const activityKey: Record<string, MessageKey> = {
   run_issued: "agentAccess.activity.action.runIssued",
   run_revoked: "agentAccess.activity.action.runRevoked",
   run_used: "agentAccess.activity.action.runUsed",
+  standing_approval_granted: "agentAccess.activity.action.standingGranted",
+  standing_approval_revoked: "agentAccess.activity.action.standingRevoked",
+  standing_approval_used: "agentAccess.activity.action.standingUsed",
 };
 
 const audienceKey: Record<Audience, MessageKey> = {
@@ -425,6 +429,8 @@ export function AgentAccess() {
                 </Button>
               </div>
             </section>
+
+            <BundleStandingApprovals key={bundle.id} bundle={bundle} onChanged={refresh} />
 
             <section className="grid gap-3 md:grid-cols-3" aria-labelledby="agent-access-run">
               <h2 id="agent-access-run" className="font-medium md:col-span-3">

@@ -52,6 +52,18 @@ func (o *Orchestrator) GrantAccessBundle(ctx context.Context, tenantID string, g
 	return o.emitAccessBundleEvent(ctx, tenantID, projections.EventAccessBundleGranted, granted)
 }
 
+// GrantAccessBundleStandingApproval records a standing approval for one of a
+// bundle's delegated accounts (OD-9).
+func (o *Orchestrator) GrantAccessBundleStandingApproval(ctx context.Context, tenantID string, granted projections.AccessBundleStandingApprovalGranted) error {
+	return o.emitAccessBundleEvent(ctx, tenantID, projections.EventAccessBundleStandingApprovalGranted, granted)
+}
+
+// RevokeAccessBundleStandingApproval records a standing approval's
+// revocation (OD-9).
+func (o *Orchestrator) RevokeAccessBundleStandingApproval(ctx context.Context, tenantID string, revoked projections.AccessBundleStandingApprovalRevoked) error {
+	return o.emitAccessBundleEvent(ctx, tenantID, projections.EventAccessBundleStandingApprovalRevoked, revoked)
+}
+
 // UngrantAccessBundle removes one grant.
 func (o *Orchestrator) UngrantAccessBundle(ctx context.Context, tenantID string, ungranted projections.AccessBundleUngranted) error {
 	return o.emitAccessBundleEvent(ctx, tenantID, projections.EventAccessBundleUngranted, ungranted)

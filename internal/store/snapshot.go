@@ -368,7 +368,9 @@ import (
 // Version 129 carries OD-8's upstream standing approvals
 // (ca_upstream_standing_approvals): an older payload has no such table, and a
 // restore from it would forget a granted approval or, worse, a revocation.
-const SnapshotFormatVersion = 129
+// Version 130 carries OD-9's access bundle standing approvals
+// (access_bundle_standing_approvals), for the same reason.
+const SnapshotFormatVersion = 130
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -448,7 +450,7 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	// Format 77: A247's rehearsals.
 	"rehearsal_scenarios", "rehearsal_runs",
 	// Format 78: A251's access bundles; grants reference their bundle.
-	"access_bundles", "access_bundle_grants", "access_bundle_runs", "access_bundle_activity",
+	"access_bundles", "access_bundle_grants", "access_bundle_runs", "access_bundle_activity", "access_bundle_standing_approvals",
 	"switching_imports", "switching_import_rows", "switching_waves", "switching_wave_rows",
 	// Format 81: N1's AD CS request decisions.
 	"adcs_request_decisions",
@@ -905,7 +907,8 @@ SELECT jsonb_build_object(
   'mdm_check_in_waves', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM mdm_check_in_waves t),
   'code_signing_key_certificates', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM code_signing_key_certificates t),
   'code_signing_transparency_entries', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM code_signing_transparency_entries t),
-  'ca_upstream_standing_approvals', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM ca_upstream_standing_approvals t)
+  'ca_upstream_standing_approvals', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM ca_upstream_standing_approvals t),
+  'access_bundle_standing_approvals', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM access_bundle_standing_approvals t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL,

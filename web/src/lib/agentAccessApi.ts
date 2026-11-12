@@ -9,6 +9,10 @@ import type {
   AccessBundleGrantRequest,
   AccessBundleList,
   AccessBundleRequest,
+  AccessBundleStandingApproval,
+  AccessBundleStandingApprovalList,
+  AccessBundleStandingApprovalRequest,
+  AccessBundleStandingApprovalRevoked,
   AccessRun,
   AccessRunIssued,
   AccessRunList,
@@ -44,6 +48,18 @@ export const ungrantAccessBundle = (id: string, grantID: string, reason?: string
     "DELETE",
     `/api/v1/access/bundles/${encodeURIComponent(id)}/grants/${encodeURIComponent(grantID)}${query({ reason })}`,
     undefined,
+    idempotencyKey,
+  );
+// OD-9: a bundle's standing approvals for its delegated accounts.
+export const accessBundleStandingApprovals = async (id: string) =>
+  (await req<AccessBundleStandingApprovalList>(`/api/v1/access/bundles/${encodeURIComponent(id)}/standing-approvals`)).items ?? [];
+export const grantAccessBundleStandingApproval = (id: string, request: AccessBundleStandingApprovalRequest, idempotencyKey?: string) =>
+  mutate<AccessBundleStandingApproval>("POST", `/api/v1/access/bundles/${encodeURIComponent(id)}/standing-approvals`, request, idempotencyKey);
+export const revokeAccessBundleStandingApproval = (id: string, approvalID: string, reason: string, idempotencyKey?: string) =>
+  mutate<AccessBundleStandingApprovalRevoked>(
+    "POST",
+    `/api/v1/access/bundles/${encodeURIComponent(id)}/standing-approvals/${encodeURIComponent(approvalID)}/revoke`,
+    { reason },
     idempotencyKey,
   );
 export const accessAuthority = (principal: string) => req<AccessAuthority>(`/api/v1/access/authority${query({ principal })}`);

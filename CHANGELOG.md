@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 ### Added
+- Standing approvals for an access bundle's delegated accounts (OD-9): never on by default; an administrator with
+  `access:approve` as well as `access:write`, who the bundle is not granted to, grants one for one delegated account
+  and role with a reason and an expiry at most 90 days away (`POST /api/v1/access/bundles/{id}/standing-approvals`,
+  `trstctl-cli access bundles standing-approvals grant`, or Standing approvals on the Agent access page). The bundle's
+  runs' session requests for that account and role are then approved without a reviewer while the run's grant is
+  live, the bundle still delegates them and the session ends before the approval expires; the request records one
+  approval by `standing-approval:<id>`. Sessions stay recorded and revocable; revoking the approval (with a reason)
+  ends the live sessions it approved, refuses one it approved that was not opened yet, and the next request waits for
+  reviewers. The bundle's activity records each grant, each approved session's run and the revocation. Migration 0463.
 - Standing approval for a SPIRE server's upstream CA requests (OD-8): two custodians approve one
   `grant_upstream_standing_approval` ceremony naming the SPIRE server's token subject, its trust domain, the CA spec
   (its `ttl_seconds` the longest CA lifetime) and how long the approval lasts (at most 90 days), and an administrator

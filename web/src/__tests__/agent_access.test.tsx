@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { AccessAuthority, AccessBundle, AccessRun } from "@/lib/api";
+import type { AccessAuthority, AccessBundle, AccessBundleStandingApproval, AccessRun } from "@/lib/api";
 import { AgentAccess } from "@/pages/AgentAccess";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -20,6 +20,9 @@ const { apiMock } = vi.hoisted(() => ({
     revokeAccessRun: vi.fn(),
     accessActivity: vi.fn(),
     exportAccessActivity: vi.fn(),
+    accessBundleStandingApprovals: vi.fn(),
+    grantAccessBundleStandingApproval: vi.fn(),
+    revokeAccessBundleStandingApproval: vi.fn(),
   },
 }));
 
@@ -100,6 +103,7 @@ describe("A251 agent access in the console", () => {
       runs: [run],
     });
     apiMock.accessRuns.mockResolvedValue({ items: [run] });
+    apiMock.accessBundleStandingApprovals.mockResolvedValue([]);
     apiMock.accessActivity.mockResolvedValue({
       items: [
         {
@@ -199,6 +203,75 @@ describe("A251 agent access in the console", () => {
         revision: 1,
       }),
     );
+  });
+
+  it("grants a standing approval for one delegated account and revokes it, ending its sessions (OD-9)", async () => {
+    const targeted = {
+      ...full,
+      permissions: ["access:sessions.open"],
+      access_targets: [{ target_type: "postgres" as const, target_id: "orders-db", roles: ["readonly", "readwrite"] }],
+    };
+    const approval: AccessBundleStandingApproval = {
+      id: "sa-1",
+      bundle_id: "b-full",
+      target_type: "postgres",
+      target_id: "orders-db",
+      role: "readwrite",
+      reason: "nightly report agent",
+      granted_by: "approver",
+      granted_at: now,
+      expires_at: "2026-11-11T04:00:00Z",
+      status: "active",
+      approvals: 0,
+    };
+    let current: AccessBundleStandingApproval[] = [];
+    apiMock.accessBundles.mockResolvedValue({ items: [targeted] });
+    apiMock.accessBundle.mockResolvedValue({ ...targeted, grants: [], runs: [] });
+    apiMock.accessBundleStandingApprovals.mockImplementation(async () => current);
+    apiMock.grantAccessBundleStandingApproval.mockImplementation(async () => {
+      current = [{ ...approval, approvals: 2, last_approved_at: now }];
+      return approval;
+    });
+    apiMock.revokeAccessBundleStandingApproval.mockImplementation(async () => {
+      current = [{ ...approval, status: "revoked", approvals: 2, revoke_reason: "agent retired" }];
+      return { approval: current[0], ended_sessions: [{ id: "s-1" }] };
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "deploy-full" }));
+    const section = within(await screen.findByRole("region", { name: "Standing approvals for deploy-full" }));
+    expect(await section.findByText("No standing approval: every session this bundle's runs request waits for a reviewer.")).toBeInTheDocument();
+    await user.selectOptions(section.getByLabelText("Account"), "postgres/orders-db:readwrite");
+    await user.click(section.getByRole("button", { name: "Grant standing approval" }));
+    expect(await section.findByText("Give a reason for the standing approval.")).toBeInTheDocument();
+    expect(apiMock.grantAccessBundleStandingApproval).not.toHaveBeenCalled();
+    await user.type(section.getByLabelText("Reason"), "nightly report agent");
+    await user.click(section.getByRole("button", { name: "Grant standing approval" }));
+    await waitFor(() =>
+      expect(apiMock.grantAccessBundleStandingApproval).toHaveBeenCalledWith("b-full", {
+        target_type: "postgres",
+        target_id: "orders-db",
+        role: "readwrite",
+        reason: "nightly report agent",
+        expires_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      }),
+    );
+    const table = within(await section.findByRole("table", { name: "Standing approvals" }));
+    expect(table.getByText("postgres/orders-db as readwrite")).toBeInTheDocument();
+    expect(table.getByText(/^2 \(last /)).toBeInTheDocument();
+    await user.click(table.getByRole("button", { name: "Revoke the standing approval for postgres/orders-db as readwrite" }));
+    await user.click(table.getByRole("button", { name: "Revoke and end its sessions" }));
+    expect(await section.findByText("Give a reason for revoking the approval.")).toBeInTheDocument();
+    expect(apiMock.revokeAccessBundleStandingApproval).not.toHaveBeenCalled();
+    await user.type(table.getByLabelText("Reason for revoking"), "agent retired");
+    await user.click(table.getByRole("button", { name: "Revoke and end its sessions" }));
+    await waitFor(() => expect(apiMock.revokeAccessBundleStandingApproval).toHaveBeenCalledWith("b-full", "sa-1", "agent retired"));
+    expect(
+      await section.findByText(
+        "Revoked the standing approval for postgres/orders-db as readwrite; 1 live session was ended. The next session request waits for a reviewer.",
+      ),
+    ).toBeInTheDocument();
+    expect(await section.findByText("Revoked")).toBeInTheDocument();
   });
 
   it("refuses an access target line it cannot read without saving", async () => {

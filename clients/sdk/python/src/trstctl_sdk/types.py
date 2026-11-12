@@ -1504,6 +1504,65 @@ AccessBundleRequest = TypedDict(
     total=False,
 )
 
+AccessBundleStandingApproval = TypedDict(
+    'AccessBundleStandingApproval',
+    {
+        'approvals': int,
+        'bundle_id': str,
+        'expires_at': str,
+        'granted_at': str,
+        'granted_by': str,
+        'id': str,
+        'last_approved_at': str,
+        'reason': str,
+        'revoke_reason': str,
+        'revoked_at': str,
+        'revoked_by': str,
+        'role': str,
+        'status': str,
+        'target_id': str,
+        'target_type': str,
+    },
+    total=False,
+)
+
+AccessBundleStandingApprovalList = TypedDict(
+    'AccessBundleStandingApprovalList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+AccessBundleStandingApprovalRequest = TypedDict(
+    'AccessBundleStandingApprovalRequest',
+    {
+        'expires_at': str,
+        'reason': str,
+        'role': str,
+        'target_id': str,
+        'target_type': str,
+    },
+    total=False,
+)
+
+AccessBundleStandingApprovalRevokeRequest = TypedDict(
+    'AccessBundleStandingApprovalRevokeRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
+AccessBundleStandingApprovalRevoked = TypedDict(
+    'AccessBundleStandingApprovalRevoked',
+    {
+        'approval': dict[str, Any],
+        'ended_sessions': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 AccessChangeDecision = TypedDict(
     'AccessChangeDecision',
     {

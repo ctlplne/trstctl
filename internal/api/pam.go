@@ -241,6 +241,10 @@ type PAMSessionRequest struct {
 	// is the template's fresh-sign-in window, filled by the server.
 	SignedInAt                   time.Time
 	ResolvedReauthenticateWithin time.Duration
+	// RunID is set when the requester is an access bundle run (A251): a
+	// standing approval of one of its bundles may approve the request
+	// (OD-9). It is not part of the reviewed command.
+	RunID string
 }
 
 // PAMReauthenticationRequired refuses a session or credential release
@@ -423,6 +427,7 @@ func (a *API) requestPAMSession(w http.ResponseWriter, r *http.Request) {
 		if err := a.requireDelegatedAccount(ctx, tenantID, principal, req); err != nil {
 			return 0, nil, err
 		}
+		req.RunID = principal.RunID
 		pending, err := a.pam.RequestPAMSession(ctx, tenantID, principal.Subject, req)
 		if err != nil {
 			return 0, nil, err

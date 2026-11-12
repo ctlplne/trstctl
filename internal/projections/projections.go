@@ -5420,6 +5420,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCAUpstreamStandingApprovalGranted:        {1: true},
 	EventCAUpstreamStandingApprovalRevoked:        {1: true},
 	EventCAUpstreamStandingApprovalSigned:         {1: true},
+	EventAccessBundleStandingApprovalGranted:      {1: true},
+	EventAccessBundleStandingApprovalRevoked:      {1: true},
+	EventAccessBundleStandingApprovalUsed:         {1: true},
 	EventWorkloadJWTKeyRotated:                    {1: true},
 	EventComplianceReportLegalHoldPlaced:          {1: true},
 	EventComplianceReportLegalHoldReleased:        {1: true},
@@ -5976,6 +5979,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyCAUpstreamStandingApprovalTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyAccessBundleStandingApprovalTx(ctx, tx, e); handled {
 		return err
 	}
 	if handled, err := p.applyWorkloadJWTKeyTx(ctx, tx, e); handled {
@@ -9341,6 +9347,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		if pl.RequestID == "" || pl.Requester == "" || pl.BaseDigest == "" || (pl.Kind != "session" && pl.Kind != "checkout") || pl.At.IsZero() || !pl.ExpiresAt.After(pl.At) || (pl.Rule == nil) != (pl.Facts == nil) {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		if s := pl.Standing; s != nil && (pl.Rule != nil || pl.Kind != "session" || s.ApprovalID == "" || s.BundleID == "" || s.RunID == "" || s.Role == "" || !s.ExpiresAt.After(pl.At)) {
+			return fmt.Errorf("projections: incomplete %s standing approval", e.Type)
 		}
 		return nil // frozen authorization metadata, not a new read-model state
 	case EventPAMAutoApprovalApplied:

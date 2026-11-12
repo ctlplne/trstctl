@@ -38400,6 +38400,140 @@ export const messages = {
     defaultMessage: "None",
     description: "A257-L3: a bundle that names no access target.",
   },
+  "agentAccess.standing.title": {
+    defaultMessage: "Standing approvals for {name}",
+    description: "OD-9: heading of a bundle's standing approvals.",
+  },
+  "agentAccess.standing.description": {
+    defaultMessage:
+      "Nothing is approved in advance unless you grant it here. A standing approval lets this bundle's runs open sessions to one delegated account, as one role, without a reviewer until it expires or you revoke it. Each session is still recorded and can be revoked, and revoking the approval ends the live sessions it approved. Only someone who may approve access, and who this bundle is not granted to, can grant one.",
+    description: "OD-9: what a standing approval is.",
+  },
+  "agentAccess.standing.loadFailed": {
+    defaultMessage: "Standing approvals unavailable",
+    description: "OD-9: error title when the approvals cannot be read.",
+  },
+  "agentAccess.standing.none": {
+    defaultMessage: "No standing approval: every session this bundle's runs request waits for a reviewer.",
+    description: "OD-9: empty state.",
+  },
+  "agentAccess.standing.tableLabel": {
+    defaultMessage: "Standing approvals",
+    description: "OD-9: accessible name of the approvals table.",
+  },
+  "agentAccess.standing.account": {
+    defaultMessage: "Account",
+    description: "OD-9: column and field for the delegated account and role.",
+  },
+  "agentAccess.standing.accountLabel": {
+    defaultMessage: "{type}/{id} as {role}",
+    description: "OD-9: a delegated account and the role a session takes.",
+  },
+  "agentAccess.standing.expires": {
+    defaultMessage: "Expires",
+    description: "OD-9: column and field for when the approval expires.",
+  },
+  "agentAccess.standing.expiresHelp": {
+    defaultMessage: "At most 90 days from now; a session it approves must end before it does.",
+    description: "OD-9: help for the expiry field.",
+  },
+  "agentAccess.standing.expiresInvalid": {
+    defaultMessage: "Choose when the approval expires.",
+    description: "OD-9: the expiry is missing.",
+  },
+  "agentAccess.standing.approvals": {
+    defaultMessage: "Sessions approved",
+    description: "OD-9: column for how many session requests it approved.",
+  },
+  "agentAccess.standing.approvalsLast": {
+    defaultMessage: "{count} (last {time})",
+    description: "OD-9: sessions approved, with the latest.",
+  },
+  "agentAccess.standing.state": {
+    defaultMessage: "State",
+    description: "OD-9: column for active, expired or revoked.",
+  },
+  "agentAccess.standing.status.active": {
+    defaultMessage: "Active",
+    description: "OD-9: an approval in force.",
+  },
+  "agentAccess.standing.status.expired": {
+    defaultMessage: "Expired",
+    description: "OD-9: an approval past its expiry.",
+  },
+  "agentAccess.standing.status.revoked": {
+    defaultMessage: "Revoked",
+    description: "OD-9: a revoked approval.",
+  },
+  "agentAccess.standing.reason": {
+    defaultMessage: "Reason",
+    description: "OD-9: column and field for why the approval was granted.",
+  },
+  "agentAccess.standing.grantedBy": {
+    defaultMessage: "Granted by {actor}",
+    description: "OD-9: who granted the approval.",
+  },
+  "agentAccess.standing.actions": {
+    defaultMessage: "Actions",
+    description: "OD-9: hidden column header for the revoke action.",
+  },
+  "agentAccess.standing.revoke": {
+    defaultMessage: "Revoke",
+    description: "OD-9: button that starts revoking an approval.",
+  },
+  "agentAccess.standing.revokeLabel": {
+    defaultMessage: "Revoke the standing approval for {account}",
+    description: "OD-9: accessible label of one approval's revoke button.",
+  },
+  "agentAccess.standing.revokeReason": {
+    defaultMessage: "Reason for revoking",
+    description: "OD-9: field for the revocation reason.",
+  },
+  "agentAccess.standing.confirmRevoke": {
+    defaultMessage: "Revoke and end its sessions",
+    description: "OD-9: button that confirms the revocation.",
+  },
+  "agentAccess.standing.cancelRevoke": {
+    defaultMessage: "Keep",
+    description: "OD-9: button that cancels the revocation.",
+  },
+  "agentAccess.standing.revokeReasonRequired": {
+    defaultMessage: "Give a reason for revoking the approval.",
+    description: "OD-9: a revocation needs a reason.",
+  },
+  "agentAccess.standing.revokedNotice": {
+    defaultMessage:
+      "Revoked the standing approval for {account}; {sessions, plural, =0 {no live session was} one {# live session was} other {# live sessions were}} ended. The next session request waits for a reviewer.",
+    description: "OD-9: notice after a revocation.",
+  },
+  "agentAccess.standing.revokeFailed": {
+    defaultMessage: "Could not revoke the standing approval.",
+    description: "OD-9: fallback when a revocation fails.",
+  },
+  "agentAccess.standing.reasonRequired": {
+    defaultMessage: "Give a reason for the standing approval.",
+    description: "OD-9: a grant needs a reason.",
+  },
+  "agentAccess.standing.grant": {
+    defaultMessage: "Grant standing approval",
+    description: "OD-9: button that grants the approval.",
+  },
+  "agentAccess.standing.grantedNotice": {
+    defaultMessage: "Granted a standing approval for {account} until {expires}.",
+    description: "OD-9: notice after a grant.",
+  },
+  "agentAccess.standing.grantFailed": {
+    defaultMessage: "Could not grant the standing approval.",
+    description: "OD-9: fallback when a grant fails.",
+  },
+  "agentAccess.standing.noAccounts": {
+    defaultMessage: "This bundle delegates no accounts, so there is nothing to approve in advance.",
+    description: "OD-9: the bundle has no access targets.",
+  },
+  "agentAccess.standing.needsApprove": {
+    defaultMessage: "Granting a standing approval needs access:approve as well as access:write.",
+    description: "OD-9: the viewer cannot grant one.",
+  },
   "agentAccess.targets.title": {
     defaultMessage: "Access targets for {name}",
     description: "A257-L3: heading of the selected bundle's access target editor.",
@@ -38508,6 +38642,18 @@ export const messages = {
   "agentAccess.activity.action.runIssued": { defaultMessage: "Run started under {bundles}", description: "Activity action." },
   "agentAccess.activity.action.runRevoked": { defaultMessage: "Run revoked ({bundles})", description: "Activity action." },
   "agentAccess.activity.action.runUsed": { defaultMessage: "Run used ({bundles})", description: "Activity action." },
+  "agentAccess.activity.action.standingGranted": {
+    defaultMessage: "Standing approval granted ({bundles})",
+    description: "OD-9: activity action, a standing approval for a delegated account was granted.",
+  },
+  "agentAccess.activity.action.standingRevoked": {
+    defaultMessage: "Standing approval revoked ({bundles})",
+    description: "OD-9: activity action, a standing approval was revoked.",
+  },
+  "agentAccess.activity.action.standingUsed": {
+    defaultMessage: "Session approved by a standing approval ({bundles})",
+    description: "OD-9: activity action, a run's session request was approved by a standing approval.",
+  },
   "agentAccess.activity.newest": { defaultMessage: "Newest", description: "Returns to the newest activity page." },
   "agentAccess.activity.older": { defaultMessage: "Older", description: "Loads the next, older activity page." },
 } as const;

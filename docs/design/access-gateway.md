@@ -243,7 +243,8 @@ job with gateway sessions to the accounts its task is delegated, and no credenti
 - **The agent's own identity.** An unattended run acts as the agent: the operator grants
   the bundle to the agent's ID (its broker identity's `agent_id`) and mints a run for it,
   and the run's token goes to the CI job. Every session it opens records `requested_by:
-  bundle-run:<agent>`. Reviews are not bypassed: each session still needs its approvals.
+  bundle-run:<agent>`. Reviews are not bypassed: each session still needs its approvals,
+  unless an administrator granted the bundle a standing approval for that account (below).
 - **The launcher.** With that token it requests each account's session, waits for the
   approvals, opens each through its gateway and serves each session's tunnel on a loopback
   address from its own process. The command runs with `TRSTCTL_ACCESS_INSTRUCTIONS` (a file
@@ -262,9 +263,22 @@ job with gateway sessions to the accounts its task is delegated, and no credenti
   is removed. `certs:issue` is all the call needs: ending what the identity opened is part
   of revoking it. The response lists the runs and sessions it ended, and a retry with the
   same key ends nothing twice.
+- **Standing approvals (OD-9).** A bundle may hold a standing approval for one delegated
+  account and one role, never by default: granted by someone with `access:approve` and
+  `access:write` who the bundle is not granted to, with a reason and an expiry at most 90
+  days away. The PAM review evaluation, after its automatic review rules, approves a run's
+  session request with it when the run's own grant of the bundle is live, the bundle still
+  delegates that account and role, and the session ends before the approval expires; the
+  choice is frozen with the evaluation (`pam.auto_approval.evaluated`), the request records
+  one approval by `standing-approval:<id>`, and `access.bundle_standing_approval.used` names
+  the run. Opening a session it approved checks it is still in force. Revoking it ends the
+  live sessions it approved, as an operator's revocation does, under keys derived from the
+  call's own.
 - **What it does not do.** The command's network is not confined: it holds no credential
   for its accounts, but it can reach whatever its host can. MCP traffic never flows through
-  the gateway or the launcher.
+  the gateway or the launcher. A session that was being opened at the moment its standing
+  approval was revoked is not among the sessions the revocation ends; it shows as active and
+  is revoked like any other.
 
 ## Credential health, access templates and emergency access (A258)
 

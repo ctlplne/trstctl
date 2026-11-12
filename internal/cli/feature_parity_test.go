@@ -445,9 +445,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// honeytokens files list` and `secrets honeytokens files retire` (890).
 	// Q6-O2 adds `secrets honeytokens kubernetes register`, `list`, `retire`
 	// and `report-audit-events` (894). OD-8 adds `ca authorities
-	// standing-approvals list`, `grant` and `revoke` (897).
-	if len(out) != 897 {
-		t.Fatalf("CLI commands = %d, want 897", len(out))
+	// standing-approvals list`, `grant` and `revoke` (897). OD-9 adds
+	// `access bundles standing-approvals list`, `grant` and `revoke` (900).
+	if len(out) != 900 {
+		t.Fatalf("CLI commands = %d, want 900", len(out))
 	}
 	return out
 }

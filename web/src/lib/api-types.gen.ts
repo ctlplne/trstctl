@@ -1010,14 +1010,14 @@ export interface AccessActivityExport {
   fields: string[];
   filters: { bundle?: string; principal?: string; q?: string };
   generated_at: string;
-  items: ({ action: "saved" | "deleted" | "granted" | "ungranted" | "run_issued" | "run_revoked" | "run_used"; actor?: string; at: string; bundle_ids: string[]; bundle_names: string[]; detail?: string; grant_id?: string; principal?: string; run_id?: string })[];
+  items: ({ action: "saved" | "deleted" | "granted" | "ungranted" | "run_issued" | "run_revoked" | "run_used" | "standing_approval_granted" | "standing_approval_revoked" | "standing_approval_used"; actor?: string; at: string; bundle_ids: string[]; bundle_names: string[]; detail?: string; grant_id?: string; principal?: string; run_id?: string })[];
   kind: string;
   rows: number;
   truncated: boolean;
 }
 
 export interface AccessActivityList {
-  items: ({ action: "saved" | "deleted" | "granted" | "ungranted" | "run_issued" | "run_revoked" | "run_used"; actor?: string; at: string; bundle_ids: string[]; bundle_names: string[]; detail?: string; grant_id?: string; principal?: string; run_id?: string })[];
+  items: ({ action: "saved" | "deleted" | "granted" | "ungranted" | "run_issued" | "run_revoked" | "run_used" | "standing_approval_granted" | "standing_approval_revoked" | "standing_approval_used"; actor?: string; at: string; bundle_ids: string[]; bundle_names: string[]; detail?: string; grant_id?: string; principal?: string; run_id?: string })[];
   next_cursor: string;
 }
 
@@ -1080,6 +1080,45 @@ export interface AccessBundleRequest {
   name: string;
   permissions: string[];
   revision?: number;
+}
+
+export interface AccessBundleStandingApproval {
+  approvals: number;
+  bundle_id: string;
+  expires_at: string;
+  granted_at: string;
+  granted_by: string;
+  id: string;
+  last_approved_at?: string;
+  reason: string;
+  revoke_reason?: string;
+  revoked_at?: string;
+  revoked_by?: string;
+  role: string;
+  status: "active" | "expired" | "revoked";
+  target_id: string;
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+}
+
+export interface AccessBundleStandingApprovalList {
+  items: ({ approvals: number; bundle_id: string; expires_at: string; granted_at: string; granted_by: string; id: string; last_approved_at?: string; reason: string; revoke_reason?: string; revoked_at?: string; revoked_by?: string; role: string; status: "active" | "expired" | "revoked"; target_id: string; target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" })[];
+}
+
+export interface AccessBundleStandingApprovalRequest {
+  expires_at: string;
+  reason: string;
+  role: string;
+  target_id: string;
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+}
+
+export interface AccessBundleStandingApprovalRevokeRequest {
+  reason: string;
+}
+
+export interface AccessBundleStandingApprovalRevoked {
+  approval: { approvals: number; bundle_id: string; expires_at: string; granted_at: string; granted_by: string; id: string; last_approved_at?: string; reason: string; revoke_reason?: string; revoked_at?: string; revoked_by?: string; role: string; status: "active" | "expired" | "revoked"; target_id: string; target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" };
+  ended_sessions: PAMSession[];
 }
 
 export interface AccessChangeDecision {

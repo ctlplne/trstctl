@@ -281,6 +281,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/bundles/{id}/standing-approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a bundle's standing approvals for its delegated accounts with their state and how many session requests each approved (OD-9) */
+        get: operations["listAccessBundleStandingApprovals"];
+        put?: never;
+        /** Approve in advance a bundle's runs' session requests for one delegated account as one role until a time; needs access:approve too, and nobody the bundle is granted to may grant it (OD-9) */
+        post: operations["grantAccessBundleStandingApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/bundles/{id}/standing-approvals/{approval_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a standing approval at once and end the live sessions it approved; the bundle's next session request needs a reviewer again (OD-9) */
+        post: operations["revokeAccessBundleStandingApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/checkouts": {
         parameters: {
             query?: never;
@@ -13348,7 +13383,7 @@ export interface components {
             generated_at: string;
             items: {
                 /** @enum {string} */
-                action: "saved" | "deleted" | "granted" | "ungranted" | "run_issued" | "run_revoked" | "run_used";
+                action: "saved" | "deleted" | "granted" | "ungranted" | "run_issued" | "run_revoked" | "run_used" | "standing_approval_granted" | "standing_approval_revoked" | "standing_approval_used";
                 actor?: string;
                 /** Format: date-time */
                 at: string;
@@ -13366,7 +13401,7 @@ export interface components {
         AccessActivityList: {
             items: {
                 /** @enum {string} */
-                action: "saved" | "deleted" | "granted" | "ungranted" | "run_issued" | "run_revoked" | "run_used";
+                action: "saved" | "deleted" | "granted" | "ungranted" | "run_issued" | "run_revoked" | "run_used" | "standing_approval_granted" | "standing_approval_revoked" | "standing_approval_used";
                 actor?: string;
                 /** Format: date-time */
                 at: string;
@@ -13698,6 +13733,92 @@ export interface components {
             name: string;
             permissions: string[];
             revision?: number;
+        };
+        AccessBundleStandingApproval: {
+            approvals: number;
+            bundle_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            granted_at: string;
+            granted_by: string;
+            id: string;
+            /** Format: date-time */
+            last_approved_at?: string;
+            reason: string;
+            revoke_reason?: string;
+            /** Format: date-time */
+            revoked_at?: string;
+            revoked_by?: string;
+            role: string;
+            /** @enum {string} */
+            status: "active" | "expired" | "revoked";
+            target_id: string;
+            /** @enum {string} */
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+        };
+        AccessBundleStandingApprovalList: {
+            items: {
+                approvals: number;
+                bundle_id: string;
+                /** Format: date-time */
+                expires_at: string;
+                /** Format: date-time */
+                granted_at: string;
+                granted_by: string;
+                id: string;
+                /** Format: date-time */
+                last_approved_at?: string;
+                reason: string;
+                revoke_reason?: string;
+                /** Format: date-time */
+                revoked_at?: string;
+                revoked_by?: string;
+                role: string;
+                /** @enum {string} */
+                status: "active" | "expired" | "revoked";
+                target_id: string;
+                /** @enum {string} */
+                target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+            }[];
+        };
+        AccessBundleStandingApprovalRequest: {
+            /** Format: date-time */
+            expires_at: string;
+            reason: string;
+            role: string;
+            target_id: string;
+            /** @enum {string} */
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+        };
+        AccessBundleStandingApprovalRevokeRequest: {
+            reason: string;
+        };
+        AccessBundleStandingApprovalRevoked: {
+            approval: {
+                approvals: number;
+                bundle_id: string;
+                /** Format: date-time */
+                expires_at: string;
+                /** Format: date-time */
+                granted_at: string;
+                granted_by: string;
+                id: string;
+                /** Format: date-time */
+                last_approved_at?: string;
+                reason: string;
+                revoke_reason?: string;
+                /** Format: date-time */
+                revoked_at?: string;
+                revoked_by?: string;
+                role: string;
+                /** @enum {string} */
+                status: "active" | "expired" | "revoked";
+                target_id: string;
+                /** @enum {string} */
+                target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+            };
+            ended_sessions: components["schemas"]["PAMSession"][];
         };
         AccessChangeDecision: {
             approver_subject: string;
@@ -30221,6 +30342,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccessBundleGrantChange"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listAccessBundleStandingApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessBundleStandingApprovalList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    grantAccessBundleStandingApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessBundleStandingApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessBundleStandingApproval"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeAccessBundleStandingApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessBundleStandingApprovalRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessBundleStandingApprovalRevoked"];
                 };
             };
             /** @description client error */

@@ -269,7 +269,8 @@ var TenantScopedTables = []string{
 	// A247: rehearsal scenarios and their runs; no foreign keys.
 	"rehearsal_runs", "rehearsal_scenarios",
 	// A251: runs, then grants (which reference their bundle), then bundles.
-	"access_bundle_activity", "access_bundle_runs", "access_bundle_grants", "access_bundles",
+	// OD-9: standing approvals reference their bundle too.
+	"access_bundle_standing_approvals", "access_bundle_activity", "access_bundle_runs", "access_bundle_grants", "access_bundles",
 	// A265: wave rows, then waves (which reference their import), then the
 	// import's rows, then imports.
 	"switching_wave_rows", "switching_waves", "switching_import_rows", "switching_imports",

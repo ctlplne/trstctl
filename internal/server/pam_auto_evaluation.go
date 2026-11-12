@@ -80,6 +80,13 @@ func (s *pamService) pamEnsureReviewedRequest(ctx context.Context, tenantID stri
 				evaluated.Facts = &projections.PAMAutoApprovalFacts{Target: matched.Target, Folder: matched.Folder, Roles: matched.Roles, Window: matched.Window, Ticket: matched.Ticket}
 				break
 			}
+			if evaluated.Rule == nil {
+				standing, err := s.pamStandingApproval(work, tenantID, intent.Requester, facts)
+				if err != nil {
+					return err
+				}
+				evaluated.Standing = standing
+			}
 			raw, err := json.Marshal(evaluated)
 			if err != nil {
 				return err
@@ -101,11 +108,19 @@ func (s *pamService) pamEnsureReviewedRequest(ctx context.Context, tenantID stri
 		}
 		intent.EvidenceRefs = append(intent.EvidenceRefs, "pam-auto-evaluation:"+evaluationID)
 		intent.ExpiresAtNotAfter = evaluated.ExpiresAt
-		if evaluated.Rule != nil {
+		if evaluated.Rule != nil || evaluated.Standing != nil {
 			intent.RequiredApprovals = 1
+		}
+		if evaluated.Standing != nil {
+			// Activation checks the approval is still in force (OD-9).
+			intent.EvidenceRefs = append(intent.EvidenceRefs, pamStandingApprovalEvidence+evaluated.Standing.ApprovalID)
 		}
 		approval, err := s.orch.EnsureOperationApprovalRequest(work, tenantID, intent)
 		if err != nil {
+			return err
+		}
+		if evaluated.Standing != nil {
+			result, err = s.pamApproveUnderStandingApproval(work, tenantID, evaluationID, requestID, evaluated, intent, approval)
 			return err
 		}
 		if evaluated.Rule == nil {
@@ -179,6 +194,11 @@ func pamCanonicalAutoEvaluation(source events.Event, tenantID, eventID, requestI
 	if out.Rule != nil && (!validUUID(out.Rule.ID) || out.Rule.Name == "" || out.Rule.Revision < 1 || out.Facts.Target != req.TargetType+"/"+req.TargetID || "auto-approval:"+out.Rule.ID == requester) {
 		return out, fmt.Errorf("%w: automatic review rule witness is incomplete", store.ErrIdempotencyConflict)
 	}
+	if st := out.Standing; st != nil && (out.Rule != nil || req.Kind != "session" || !validUUID(st.ApprovalID) || !validUUID(st.BundleID) ||
+		st.RunID == "" || st.RunID != req.RunID || st.Role != req.Role || pamStandingApprover(st.ApprovalID) == requester ||
+		out.At.Add(time.Duration(req.TTLSeconds)*time.Second).After(st.ExpiresAt)) {
+		return out, fmt.Errorf("%w: the standing approval witness differs", store.ErrIdempotencyConflict)
+	}
 	if out.Rule != nil {
 		frozen := req
 		frozen.At, frozen.Folder, frozen.Roles = out.At, out.Folder, slices.Clone(source.Actor.Roles)
@@ -218,4 +238,93 @@ func pamAutoApprovalBaseDigest(tenantID string, in orchestrator.OperationApprova
 		return "", err
 	}
 	return crypto.SHA256Hex(raw), nil
+}
+
+// pamStandingApprovalEvidence marks an approval request a bundle's standing
+// approval approved (OD-9); activation checks the approval is still in force.
+const pamStandingApprovalEvidence = "pam-standing-approval:"
+
+// pamStandingApprover is the synthetic approver a standing approval records.
+func pamStandingApprover(approvalID string) string { return "standing-approval:" + approvalID }
+
+// pamStandingApproval finds the access bundle standing approval (OD-9) that
+// approves a run's session request: one for exactly this account and role,
+// on a bundle the run's own live grants give and that still delegates them,
+// in force for the whole session it asks for. Anything else, and every
+// request that is not a run's session, keeps the human review.
+func (s *pamService) pamStandingApproval(ctx context.Context, tenantID, requester string, facts pamAutoApprovalRequest) (*projections.PAMStandingApprovalMatch, error) {
+	principal, isRun := orchestrator.BundleRunPrincipal(requester)
+	if facts.Kind != "session" || facts.RunID == "" || !isRun || facts.Role == "" || facts.TTLSeconds <= 0 {
+		return nil, nil
+	}
+	approval, ok, err := s.store.ActiveRunStandingApproval(ctx, tenantID, facts.RunID, facts.TargetType, facts.TargetID, facts.Role, facts.At)
+	if err != nil || !ok {
+		return nil, err
+	}
+	expires := approval.ExpiresAt.UTC().Truncate(time.Microsecond)
+	if pamStandingApprover(approval.ID) == requester || facts.At.Add(time.Duration(facts.TTLSeconds)*time.Second).After(expires) {
+		return nil, nil
+	}
+	return &projections.PAMStandingApprovalMatch{ApprovalID: approval.ID, BundleID: approval.BundleID, RunID: facts.RunID,
+		Principal: principal, Role: facts.Role, ExpiresAt: expires}, nil
+}
+
+// pamApproveUnderStandingApproval records the standing approval's one
+// approval of the request and, beside it, the approval's use, both
+// canonical so a retry after a crash repeats them exactly.
+func (s *pamService) pamApproveUnderStandingApproval(work context.Context, tenantID, evaluationID, requestID string, evaluated projections.PAMAutoApprovalEvaluated, intent orchestrator.OperationApprovalIntent, approval store.OperationApprovalRequest) (store.OperationApprovalRequest, error) {
+	st := evaluated.Standing
+	approver := pamStandingApprover(st.ApprovalID)
+	system := events.ContextWithActor(work, events.Actor{Subject: approver, Roles: []string{"policy"}})
+	approval, err := s.orch.RecordOperationApprovalDecision(system, tenantID, orchestrator.OperationApprovalDecision{
+		RequestID: approval.ID, IntentDigest: approval.IntentDigest, Approver: approver, Decision: store.ApprovalDecisionApprove,
+		Reason:               fmt.Sprintf("standing approval %s of access bundle %s for %s/%s as %s", st.ApprovalID, st.BundleID, evaluated.TargetType, evaluated.TargetID, st.Role),
+		ExpectedResourceKind: intent.ResourceKind, ExpectedResourceID: intent.ResourceID, ExpectedAction: intent.Action,
+	})
+	if err != nil {
+		return approval, err
+	}
+	used := projections.AccessBundleStandingApprovalUsed{ID: st.ApprovalID, BundleID: st.BundleID, RunID: st.RunID,
+		Principal: st.Principal, RequestID: requestID, ApprovalRequestID: approval.ID}
+	raw, err := json.Marshal(used)
+	if err != nil {
+		return approval, err
+	}
+	eventID := crypto.UUIDv5OID([]byte("pam-standing-approval-used\x00" + tenantID + "\x00" + evaluationID))
+	event, found, err := s.log.EventByID(system, eventID)
+	if err != nil {
+		return approval, err
+	}
+	if !found {
+		event, err = s.log.Append(system, events.Event{ID: eventID, Type: projections.EventAccessBundleStandingApprovalUsed, TenantID: tenantID, Time: evaluated.At, Data: raw})
+		if err != nil {
+			return approval, err
+		}
+	}
+	if event.ID != eventID || event.TenantID != tenantID || event.Type != projections.EventAccessBundleStandingApprovalUsed || !bytes.Equal(event.Data, raw) || event.Actor == nil || event.Actor.Subject != approver {
+		return approval, fmt.Errorf("%w: the canonical standing approval use differs", store.ErrIdempotencyConflict)
+	}
+	return approval, s.projector.Apply(system, event)
+}
+
+// pamStandingApprovalInForce refuses to activate a request a standing
+// approval approved once that approval was revoked or has expired (OD-9).
+func (s *pamService) pamStandingApprovalInForce(ctx context.Context, tenantID string, evidenceRefs []string) error {
+	for _, ref := range evidenceRefs {
+		id, ok := strings.CutPrefix(ref, pamStandingApprovalEvidence)
+		if !ok {
+			continue
+		}
+		approval, err := s.store.GetAccessBundleStandingApproval(ctx, tenantID, id)
+		if errors.Is(err, store.ErrAccessBundleStandingApprovalNotFound) {
+			return fmt.Errorf("%w: the standing approval that approved this request is gone; start a new request", api.ErrPAMRejected)
+		}
+		if err != nil {
+			return err
+		}
+		if approval.RevokedAt != nil || !approval.ExpiresAt.After(s.clock().UTC()) {
+			return fmt.Errorf("%w: the standing approval that approved this request was revoked or has expired; start a new request", api.ErrPAMRejected)
+		}
+	}
+	return nil
 }

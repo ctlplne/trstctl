@@ -844,6 +844,23 @@ environment has no control-plane token, and the gateway signs in for it. A run i
 any account its bundles do not name. Revoking the agent's broker identity revokes its runs and
 ends its live sessions in the same call.
 
+By default each of those sessions waits for its reviewers. A bundle may hold a standing
+approval for one of its delegated accounts (OD-9), and nothing is approved in advance until
+one is granted: an administrator who may approve access (`access:approve` as well as
+`access:write`), and who the bundle is not granted to, grants it for one account and one role
+until a time at most 90 days away (`POST /api/v1/access/bundles/{id}/standing-approvals`,
+`trstctl-cli access bundles standing-approvals grant`, or **Standing approvals** on the Agent
+access page). A run of the bundle that requests that account as that role is then approved
+without a reviewer, if the bundle still delegates it, the run's own grant of the bundle is
+live and the session ends before the approval expires; the request records one approval by
+`standing-approval:<id>`, and the approval counts it. Anything else (another account or role,
+another principal, a run of another bundle, a request for an operator) waits for reviewers as
+before. Sessions opened under it are recorded and revocable like any other. Revoking it
+(`.../standing-approvals/{approval_id}/revoke`, a reason required) ends the live sessions it
+approved at once, refuses a request it approved that was not opened yet, and the bundle's next
+request waits for reviewers. The bundle's activity records each grant, each session it
+approved (with the run) and the revocation.
+
 ```bash
 trstctl-cli access agent --account postgres/orders-db:readonly --reason "nightly report" \
   --method github_oidc --payload-file "$OIDC_TOKEN_FILE" -- ./report-agent

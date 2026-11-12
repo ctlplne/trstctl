@@ -955,6 +955,8 @@ export type {
   AccessBundle,
   AccessBundleGrantChange,
   AccessBundleRequest,
+  AccessBundleStandingApproval,
+  AccessBundleStandingApprovalRevoked,
   AccessRun,
   AccessRunIssued,
 } from "./api-types.gen";
@@ -2717,6 +2719,9 @@ export interface Api {
   deleteAccessBundle: typeof agentAccess.deleteAccessBundle;
   grantAccessBundle: typeof agentAccess.grantAccessBundle;
   ungrantAccessBundle: typeof agentAccess.ungrantAccessBundle;
+  accessBundleStandingApprovals: typeof agentAccess.accessBundleStandingApprovals;
+  grantAccessBundleStandingApproval: typeof agentAccess.grantAccessBundleStandingApproval;
+  revokeAccessBundleStandingApproval: typeof agentAccess.revokeAccessBundleStandingApproval;
   accessAuthority: typeof agentAccess.accessAuthority;
   issueAccessRun: typeof agentAccess.issueAccessRun;
   accessRuns: typeof agentAccess.accessRuns;
@@ -3800,6 +3805,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   deleteAccessBundle: agentAccess.deleteAccessBundle,
   grantAccessBundle: agentAccess.grantAccessBundle,
   ungrantAccessBundle: agentAccess.ungrantAccessBundle,
+  accessBundleStandingApprovals: agentAccess.accessBundleStandingApprovals,
+  grantAccessBundleStandingApproval: agentAccess.grantAccessBundleStandingApproval,
+  revokeAccessBundleStandingApproval: agentAccess.revokeAccessBundleStandingApproval,
   accessAuthority: agentAccess.accessAuthority,
   issueAccessRun: agentAccess.issueAccessRun,
   accessRuns: agentAccess.accessRuns,

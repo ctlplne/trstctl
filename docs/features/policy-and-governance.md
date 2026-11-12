@@ -236,6 +236,14 @@ TRSTCTL_TOKEN=<the machine's own token> trstctl-cli access runs create -f run.js
   (`docs/design/access-gateway.md`, "Agent launcher"). The Agent access page lists each
   bundle's accounts, sets them when it creates a bundle, and edits a bundle's accounts at the
   revision it read, one per line as `type/id: role, role`.
+- **Standing approvals (OD-9).** Off unless granted. A bundle's runs' session requests for one
+  delegated account and role are approved without a reviewer while a standing approval for
+  them is in force. Granting one needs `access:approve` as well as `access:write`, an account
+  and role the bundle delegates, an expiry at most 90 days away, a reason, and a grantor the
+  bundle is not granted to (nobody approves their own sessions in advance; a run cannot grant
+  one). The Agent access page shows each approval with its expiry, the sessions it approved
+  and its state, grants one and revokes one with a reason, which ends the live sessions it
+  approved.
 
 **Activity and the launcher.** `GET /api/v1/access/activity` (`trstctl-cli access activity`)
 searches every change (bundles saved and deleted, grants given and removed, runs issued and

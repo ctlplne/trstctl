@@ -680,6 +680,21 @@ trstctl-cli access agent --account postgres/orders-db:readonly --reason "nightly
   credential) instead of through a gateway is revoked at once and the command does not run.
 - Revoking the agent's broker identity (`broker agent-identities revoke`) revokes the runs
   minted for its agent ID and ends its live sessions in the same call.
+- A standing approval (OD-9) approves a bundle's runs' sessions to one delegated account, as
+  one role, without a reviewer until it expires or is revoked. It is never on by default;
+  granting it needs `access:approve` as well as `access:write`, and nobody the bundle is
+  granted to may grant it.
+
+```bash
+cat > standing.json <<'JSON'
+{"target_type":"postgres","target_id":"orders-db","role":"readonly","reason":"nightly report agent","expires_at":"2026-12-01T00:00:00Z"}
+JSON
+trstctl-cli --idempotency-key report-standing-1 access bundles standing-approvals grant <bundle-id> -f standing.json
+trstctl-cli access bundles standing-approvals list <bundle-id>
+# Revoking ends the live sessions it approved; the next request waits for reviewers.
+echo '{"reason":"agent retired"}' > standing-revoke.json
+trstctl-cli --idempotency-key report-standing-revoke-1 access bundles standing-approvals revoke <bundle-id> <approval-id> -f standing-revoke.json --force
+```
 
 ## Credential health, templates and emergency access
 

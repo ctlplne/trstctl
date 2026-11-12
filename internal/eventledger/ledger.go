@@ -57,6 +57,9 @@ const (
 	EventCAEndEntityIssued                        = "ca.endentity.issued"
 	EventCAUpstreamStandingApprovalGranted        = "ca.upstream_standing_approval.granted"
 	EventCAUpstreamStandingApprovalRevoked        = "ca.upstream_standing_approval.revoked"
+	EventAccessBundleStandingApprovalGranted      = "access.bundle_standing_approval.granted"
+	EventAccessBundleStandingApprovalRevoked      = "access.bundle_standing_approval.revoked"
+	EventAccessBundleStandingApprovalUsed         = "access.bundle_standing_approval.used"
 	EventBreakglassIssued                         = "breakglass.issued"
 	EventBreakglassCARotated                      = "breakglass.ca.rotated"
 	EventBreakglassCACrossSigned                  = "breakglass.ca.cross_signed"
@@ -453,6 +456,10 @@ var ledger = []FeatureEvent{
 	{"F33", "Just-in-time issuance with approval flows", "recover_pam_ssh_signing", "openPAMSession", []string{EventPAMSSHSigningRecoveryRequested, EventPAMSSHSigningRecovered}},
 	{"F33", "Just-in-time issuance with approval flows", "expire_pam_session", "openPAMSession", []string{EventPAMSessionExpired}},
 	{"F33", "Just-in-time issuance with approval flows", "revoke_pam_session", "revokePAMSession", []string{EventPAMSessionRevocationRequested, EventPAMSessionRevocationFailed, EventPAMSessionRevoked}},
+	// OD-9: an access bundle's standing approval for one delegated account.
+	{"F33", "Just-in-time issuance with approval flows", "grant_bundle_standing_approval", "grantAccessBundleStandingApproval", []string{EventAccessBundleStandingApprovalGranted}},
+	{"F33", "Just-in-time issuance with approval flows", "revoke_bundle_standing_approval", "revokeAccessBundleStandingApproval", []string{EventAccessBundleStandingApprovalRevoked}},
+	{"F33", "Just-in-time issuance with approval flows", "use_bundle_standing_approval", "requestPAMSession", []string{EventAccessBundleStandingApprovalUsed}},
 	{"F33", "Just-in-time issuance with approval flows", "request_operation_approval", "transitionIdentity", []string{
 		EventApprovalRequested,
 		EventApprovalStatusChanged,

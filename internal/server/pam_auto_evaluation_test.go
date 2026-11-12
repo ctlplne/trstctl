@@ -116,3 +116,67 @@ func FuzzPAMCanonicalAutoEvaluation(f *testing.F) {
 		}
 	})
 }
+
+// OD-9: a frozen evaluation a bundle's standing approval decided is canonical
+// only for the run and role it was decided for, never beside a rule, never
+// for a check-out, and only while the session ends before the approval does.
+func TestCanonicalAutoEvaluationBindsTheStandingApprovalOD9(t *testing.T) {
+	at := time.Date(2026, 11, 13, 1, 0, 0, 0, time.UTC)
+	req := pamAutoApprovalRequest{Kind: "session", TargetType: "postgres", TargetID: "orders-db", Role: "readonly", RunID: "run-a", TTLSeconds: 600, At: at}
+	requester := "bundle-run:agent-9"
+	build := func(change func(*projections.PAMAutoApprovalEvaluated)) events.Event {
+		v := projections.PAMAutoApprovalEvaluated{RequestID: "request", Kind: "session", Requester: requester, BaseDigest: "digest",
+			TargetType: "postgres", TargetID: "orders-db", At: at, ExpiresAt: at.Add(a261ReviewTTL),
+			Standing: &projections.PAMStandingApprovalMatch{ApprovalID: "22222222-2222-4222-8222-222222222222",
+				BundleID: "33333333-3333-4333-8333-333333333333", RunID: "run-a", Principal: "agent-9", Role: "readonly", ExpiresAt: at.Add(time.Hour)}}
+		if change != nil {
+			change(&v)
+		}
+		raw, _ := json.Marshal(v)
+		return events.Event{ID: "event", TenantID: "tenant", Type: projections.EventPAMAutoApprovalEvaluated, Time: at, Actor: &events.Actor{Subject: requester}, Data: raw}
+	}
+	if _, err := pamCanonicalAutoEvaluation(build(nil), "tenant", "event", "request", req, requester, "digest", a261ReviewTTL); err != nil {
+		t.Fatalf("the evaluation it froze: %v", err)
+	}
+	other := req
+	other.RunID = "run-b"
+	if _, err := pamCanonicalAutoEvaluation(build(nil), "tenant", "event", "request", other, requester, "digest", a261ReviewTTL); err == nil {
+		t.Fatal("another run's retry kept the standing approval")
+	}
+	otherRole := req
+	otherRole.Role = "readwrite"
+	if _, err := pamCanonicalAutoEvaluation(build(nil), "tenant", "event", "request", otherRole, requester, "digest", a261ReviewTTL); err == nil {
+		t.Fatal("another role's retry kept the standing approval")
+	}
+	longer := req
+	longer.TTLSeconds = 2 * 3600
+	if _, err := pamCanonicalAutoEvaluation(build(nil), "tenant", "event", "request", longer, requester, "digest", a261ReviewTTL); err == nil {
+		t.Fatal("a session outliving the approval kept it")
+	}
+	for name, change := range map[string]func(*projections.PAMAutoApprovalEvaluated){
+		"not a UUID approval": func(v *projections.PAMAutoApprovalEvaluated) { v.Standing.ApprovalID = "approval" },
+		"the requester itself": func(v *projections.PAMAutoApprovalEvaluated) {
+			v.Standing.ApprovalID = "44444444-4444-4444-8444-444444444444"
+		},
+		"beside a rule": func(v *projections.PAMAutoApprovalEvaluated) {
+			rule, _ := a261MatchingRule()
+			v.Rule, v.Facts = &rule, &projections.PAMAutoApprovalFacts{Target: "postgres/orders-db"}
+		},
+	} {
+		requesterFor := requester
+		if name == "the requester itself" {
+			requesterFor = "standing-approval:44444444-4444-4444-8444-444444444444"
+		}
+		event := build(change)
+		event.Actor = &events.Actor{Subject: requesterFor}
+		if _, err := pamCanonicalAutoEvaluation(event, "tenant", "event", "request", req, requesterFor, "digest", a261ReviewTTL); err == nil {
+			t.Errorf("%s: the frozen standing approval was accepted", name)
+		}
+	}
+	checkout := req
+	checkout.Kind = "checkout"
+	event := build(func(v *projections.PAMAutoApprovalEvaluated) { v.Kind = "checkout" })
+	if _, err := pamCanonicalAutoEvaluation(event, "tenant", "event", "request", checkout, requester, "digest", a261ReviewTTL); err == nil {
+		t.Fatal("a check-out's evaluation kept a standing approval")
+	}
+}

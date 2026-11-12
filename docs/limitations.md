@@ -9378,9 +9378,12 @@ delegate is refused; and one call revoking its identity revokes its run (the run
 refused from then on), ends its held database connection, and the gateway acknowledges while
 the session's login stops signing in.
 
+Standing approvals (OD-9) let a bundle's runs open sessions to one delegated account and role
+without a reviewer while one is in force; none exists unless an administrator grants it.
+Revoking one ends the live sessions it approved; a session that was being opened at that
+moment is not among them and is revoked like any other.
+
 What comes next:
-- Standing approvals for a bundle's delegated accounts: each session the launcher opens still
-  waits for its reviewers (no automatic approval is added by default).
 - Confining the command's network to its tunnels (namespaces or a sandbox); today it holds no
   credential for its accounts, but it can reach whatever its host can.
 

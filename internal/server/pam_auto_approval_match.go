@@ -16,11 +16,15 @@ import (
 type pamAutoApprovalRequest struct {
 	Kind                 string // "session" or "checkout"
 	TargetType, TargetID string
-	Folder               string
-	Roles                []string
-	Reason               string
-	TTLSeconds           int
-	At                   time.Time
+	// Role is the session's account role; RunID is the access bundle run
+	// that requests it, if one does. A bundle's standing approval (OD-9)
+	// matches on both; rules match neither.
+	Role, RunID string
+	Folder      string
+	Roles       []string
+	Reason      string
+	TTLSeconds  int
+	At          time.Time
 }
 
 // pamAutoApprovalMatch is what a rule matched; it is recorded with the

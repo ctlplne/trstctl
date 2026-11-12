@@ -31,6 +31,22 @@ type PAMAutoApprovalEvaluated struct {
 	Folder     string                     `json:"folder,omitempty"`
 	Rule       *store.PAMAutoApprovalRule `json:"rule,omitempty"`
 	Facts      *PAMAutoApprovalFacts      `json:"facts,omitempty"`
-	At         time.Time                  `json:"at"`
-	ExpiresAt  time.Time                  `json:"expires_at"`
+	// Standing is the access bundle standing approval (OD-9) that approved
+	// a run's session request when no rule did.
+	Standing  *PAMStandingApprovalMatch `json:"standing,omitempty"`
+	At        time.Time                 `json:"at"`
+	ExpiresAt time.Time                 `json:"expires_at"`
+}
+
+// PAMStandingApprovalMatch is the standing approval of an access bundle's
+// delegated account (OD-9) that approved a run's session request, frozen with
+// the evaluation: the approval, its bundle, the run, the run's principal, the
+// role and when the approval expires.
+type PAMStandingApprovalMatch struct {
+	ApprovalID string    `json:"approval_id"`
+	BundleID   string    `json:"bundle_id"`
+	RunID      string    `json:"run_id"`
+	Principal  string    `json:"principal"`
+	Role       string    `json:"role"`
+	ExpiresAt  time.Time `json:"expires_at"`
 }

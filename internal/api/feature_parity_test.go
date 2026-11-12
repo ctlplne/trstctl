@@ -407,9 +407,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// Q6-O2 adds registering, listing and retiring Kubernetes token decoys
 	// and their clusters' audit events (827).
 	// OD-8 adds listing, granting and revoking an authority's SPIRE upstream
-	// standing approvals (830).
-	if len(out) != 830 {
-		t.Fatalf("OpenAPI operationIds = %d, want 830", len(out))
+	// standing approvals (830). OD-9 adds listing, granting and revoking an
+	// access bundle's standing approvals for its delegated accounts (833).
+	if len(out) != 833 {
+		t.Fatalf("OpenAPI operationIds = %d, want 833", len(out))
 	}
 	return out
 }

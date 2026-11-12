@@ -870,7 +870,7 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// A247: projected from the rehearsal.* events.
 	"rehearsal_scenarios", "rehearsal_runs",
 	// A251: projected from the access.bundle.* events.
-	"access_bundles", "access_bundle_grants", "access_bundle_runs", "access_bundle_activity",
+	"access_bundles", "access_bundle_grants", "access_bundle_runs", "access_bundle_activity", "access_bundle_standing_approvals",
 	"switching_imports", "switching_import_rows", "switching_waves", "switching_wave_rows",
 	// N1: projected from adcs.request.decision_queued and adcs.request.decided.
 	"adcs_request_decisions",

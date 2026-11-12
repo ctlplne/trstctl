@@ -4325,7 +4325,10 @@
                     "ungranted",
                     "run_issued",
                     "run_revoked",
-                    "run_used"
+                    "run_used",
+                    "standing_approval_granted",
+                    "standing_approval_revoked",
+                    "standing_approval_used"
                   ],
                   "type": "string"
                 },
@@ -4406,7 +4409,10 @@
                     "ungranted",
                     "run_issued",
                     "run_revoked",
-                    "run_used"
+                    "run_used",
+                    "standing_approval_granted",
+                    "standing_approval_revoked",
+                    "standing_approval_used"
                   ],
                   "type": "string"
                 },
@@ -5772,6 +5778,347 @@
         "required": [
           "name",
           "permissions"
+        ],
+        "type": "object"
+      },
+      "AccessBundleStandingApproval": {
+        "properties": {
+          "approvals": {
+            "type": "integer"
+          },
+          "bundle_id": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "granted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "granted_by": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_approved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "revoke_reason": {
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revoked_by": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "expired",
+              "revoked"
+            ],
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "aws",
+              "aws-console",
+              "azure",
+              "clickhouse",
+              "gcp",
+              "kubernetes",
+              "mongodb",
+              "mysql",
+              "postgres",
+              "rdp",
+              "redis",
+              "snowflake",
+              "ssh"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "bundle_id",
+          "target_type",
+          "target_id",
+          "role",
+          "reason",
+          "granted_by",
+          "granted_at",
+          "expires_at",
+          "status",
+          "approvals"
+        ],
+        "type": "object"
+      },
+      "AccessBundleStandingApprovalList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "approvals": {
+                  "type": "integer"
+                },
+                "bundle_id": {
+                  "type": "string"
+                },
+                "expires_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "granted_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "granted_by": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "last_approved_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "revoke_reason": {
+                  "type": "string"
+                },
+                "revoked_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "revoked_by": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "active",
+                    "expired",
+                    "revoked"
+                  ],
+                  "type": "string"
+                },
+                "target_id": {
+                  "type": "string"
+                },
+                "target_type": {
+                  "enum": [
+                    "aws",
+                    "aws-console",
+                    "azure",
+                    "clickhouse",
+                    "gcp",
+                    "kubernetes",
+                    "mongodb",
+                    "mysql",
+                    "postgres",
+                    "rdp",
+                    "redis",
+                    "snowflake",
+                    "ssh"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "bundle_id",
+                "target_type",
+                "target_id",
+                "role",
+                "reason",
+                "granted_by",
+                "granted_at",
+                "expires_at",
+                "status",
+                "approvals"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "AccessBundleStandingApprovalRequest": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "aws",
+              "aws-console",
+              "azure",
+              "clickhouse",
+              "gcp",
+              "kubernetes",
+              "mongodb",
+              "mysql",
+              "postgres",
+              "rdp",
+              "redis",
+              "snowflake",
+              "ssh"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id",
+          "role",
+          "reason",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "AccessBundleStandingApprovalRevokeRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
+      "AccessBundleStandingApprovalRevoked": {
+        "properties": {
+          "approval": {
+            "properties": {
+              "approvals": {
+                "type": "integer"
+              },
+              "bundle_id": {
+                "type": "string"
+              },
+              "expires_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "granted_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "granted_by": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "last_approved_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "revoke_reason": {
+                "type": "string"
+              },
+              "revoked_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "revoked_by": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "active",
+                  "expired",
+                  "revoked"
+                ],
+                "type": "string"
+              },
+              "target_id": {
+                "type": "string"
+              },
+              "target_type": {
+                "enum": [
+                  "aws",
+                  "aws-console",
+                  "azure",
+                  "clickhouse",
+                  "gcp",
+                  "kubernetes",
+                  "mongodb",
+                  "mysql",
+                  "postgres",
+                  "rdp",
+                  "redis",
+                  "snowflake",
+                  "ssh"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "bundle_id",
+              "target_type",
+              "target_id",
+              "role",
+              "reason",
+              "granted_by",
+              "granted_at",
+              "expires_at",
+              "status",
+              "approvals"
+            ],
+            "type": "object"
+          },
+          "ended_sessions": {
+            "items": {
+              "$ref": "#/components/schemas/PAMSession"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "approval",
+          "ended_sessions"
         ],
         "type": "object"
       },
@@ -64236,6 +64583,225 @@
           }
         ],
         "summary": "Remove one grant of an access bundle and return the principal's effective authority after the change",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/bundles/{id}/standing-approvals": {
+      "get": {
+        "operationId": "listAccessBundleStandingApprovals",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessBundleStandingApprovalList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List a bundle's standing approvals for its delegated accounts with their state and how many session requests each approved (OD-9)",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "grantAccessBundleStandingApproval",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessBundleStandingApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessBundleStandingApproval"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Approve in advance a bundle's runs' session requests for one delegated account as one role until a time; needs access:approve too, and nobody the bundle is granted to may grant it (OD-9)",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/bundles/{id}/standing-approvals/{approval_id}/revoke": {
+      "post": {
+        "operationId": "revokeAccessBundleStandingApproval",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessBundleStandingApprovalRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessBundleStandingApprovalRevoked"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke a standing approval at once and end the live sessions it approved; the bundle's next session request needs a reviewer again (OD-9)",
         "x-trstctl-permission": "access:write"
       }
     },
