@@ -1556,8 +1556,10 @@ never live in the API process. What you can do end to end against the running bi
   configuration file and `java.security`. A PKCS#12 file holds one key here (a
   multi-key file is not read), JCEKS is not read, a PKCS#12 key is never decrypted
   (X2-L3: the file's MAC checks the password, only the contents holding certificates
-  are decrypted, and a key bag is noted, never opened), and BoringSSL, LibreSSL, GnuTLS, NSS
-  and Java providers are not rated. Keystore and library findings are discovery
+  are decrypted, and a key bag is noted, never opened). LibreSSL, GnuTLS, NSS and an older
+  OpenSSL with oqsprovider in its configuration are rated (X2-L4); BoringSSL (no release
+  versions), wolfSSL (no version string the agent can identify) and Java providers are
+  not. Keystore and library findings are discovery
   findings, not yet CBOM assets.
 - Access reviews that act (Q1): a revoke decision runs the credential's own
   revoke once (PAM sessions, API tokens, machine sessions, dynamic-secret leases)

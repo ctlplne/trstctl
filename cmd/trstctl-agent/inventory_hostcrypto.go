@@ -23,7 +23,7 @@ var (
 	inventoryKeystorePasswordFile = flag.String("inventory-keystore-password-file", "",
 		"file holding keystore passwords, one per line, tried in order before the published default \"changeit\"; a file rather than a flag, because process arguments expose credentials. A JKS lists its entries without one (marked unverified); a PKCS#12 file it cannot open is reported locked")
 	inventoryCryptoLibraries = flag.String("inventory-crypto-libraries", "",
-		"comma-separated TLS library files, directories or globs (libssl, libcrypto) whose versions the agent reads from the files, with whether each can negotiate X25519MLKEM768; nothing is executed")
+		"comma-separated TLS library files, directories or globs (libssl, libcrypto, libgnutls, NSS's libsoftokn3) whose versions the agent reads from the files, with whether each can negotiate X25519MLKEM768; nothing is executed")
 	inventoryGoBinaries = flag.String("inventory-go-binaries", "",
 		"comma-separated Go program files or globs whose build information the agent reads for the same post-quantum answer")
 )

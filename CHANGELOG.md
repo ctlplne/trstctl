@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- The host agent rates more TLS libraries for X25519MLKEM768 (X2-L4): LibreSSL by its release notes (4.3.0 and
+  later), GnuTLS by whether the build names the hybrid group, NSS by the groups its `libnss3` names, and an OpenSSL
+  before 3.5 whose configuration activates oqsprovider (`yes` when its default Groups list names an ML-KEM hybrid).
 - A CBOM import reads the BOM's dependency graph (X6-L5): what a library component `provides` is listed under that
   library (`openssl 1.1.1w`), so a weak algorithm points at the library to upgrade, and a key or certificate takes the
   algorithm, and a certificate the issuer, that its `dependsOn` names when its own properties leave them out.

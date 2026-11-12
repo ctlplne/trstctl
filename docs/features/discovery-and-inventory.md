@@ -598,14 +598,27 @@ clear, so its entries are listed even without the store password and marked
 decodes its key with its password on the way to the certificates; the agent wipes it at
 once, and a file no password opens is reported `locked`, with nothing listed.
 
-`--inventory-crypto-libraries` names TLS libraries (`libssl`, `libcrypto`) and
-`--inventory-go-binaries` names Go programs. The agent reads each version from the file
-itself (the library's version string, the binary's build information; nothing is
-executed or loaded) and says whether that version can negotiate the X25519MLKEM768
-hybrid key exchange: OpenSSL 3.5 and later and Go 1.24 and later can (unless built with
-`tlsmlkem=0`), OpenSSL before 3.5 and Go before 1.24 cannot, and BoringSSL and LibreSSL
-read `unknown`, because their version does not settle it. A loaded OpenSSL provider that
-adds ML-KEM to an older OpenSSL is not checked.
+`--inventory-crypto-libraries` names TLS libraries (`libssl`, `libcrypto`, GnuTLS's
+`libgnutls`, NSS's `libsoftokn3`) and `--inventory-go-binaries` names Go programs. The
+agent reads each version from the file itself (the library's version string, the binary's
+build information; nothing is executed or loaded) and says whether that version can
+negotiate the X25519MLKEM768 hybrid key exchange: OpenSSL 3.5 and later and Go 1.24 and
+later can (unless built with `tlsmlkem=0`), Go before 1.24 cannot, and BoringSSL reads
+`unknown`, because it has no release versions. X2-L4 adds the others:
+
+- LibreSSL by its release notes: 4.3.0 and later can (4.3.0 added the key share; 4.4.0
+  makes it libtls's preferred group), earlier versions cannot.
+- GnuTLS by what the build carries: 3.8.8 added X25519MLKEM768 as experimental, only
+  in builds with a post-quantum backend, so a build that names the group can and one
+  that names none (or a version before 3.8.8) cannot.
+- NSS: its software token (`libsoftokn3`) names the version, and `libnss3` beside it
+  names the groups the installation supports; `unknown` when no `libnss3` is beside it.
+- OpenSSL before 3.5 through its configuration: the library names its `OPENSSLDIR`,
+  and when that directory's `openssl.cnf` activates oqsprovider (its module present in
+  the library's `MODULESDIR`, or the path the section names), ML-KEM is added: `yes`
+  when the configuration's default `Groups` list names an ML-KEM hybrid, `unknown` when
+  it names none (programs then offer it only if they set their own groups), `no` when the
+  provider's module is missing. An `OPENSSL_CONF` set for one program is not seen.
 
 Beside them the agent reads the host's system crypto policy (X2-L6), on Fedora, RHEL and
 their relatives: `/etc/crypto-policies/config` names the policy every TLS library starts
