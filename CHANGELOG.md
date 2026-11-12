@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- `cbom scan-source` follows key sizes and curves through names (X6-L2): Go package constants and constant
+  expressions, variables assigned once (across the package's files or in the function), a curve held in a variable,
+  and one level of wrapper function in the same package, reported at the caller's line; Java and Python key sizes
+  given as a name resolve to the number the file assigns it once. A 1024-bit key behind a constant is now found weak.
 - An imported CBOM's certificates that name their SHA-256 fingerprint enter the certificate inventory (X6-L6): a
   CycloneDX 1.6 component's `hashes` or a 1.7 certificate's `fingerprint`, with the subject, issuer, serial, key
   algorithm and validity the BOM states, under source `cbom:<source>`. Expiry queries and reports now see a vendor's

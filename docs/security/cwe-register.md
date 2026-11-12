@@ -2397,8 +2397,8 @@ not this file.
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cbom/cyclonedx_test.go:104` | the package's own golden test fixture (CWE-22) |
 | `internal/cbom/hostsource/hostsource.go:81` | an authorized, previewed discovery selector; the read is size-bounded below (CWE-22) |
-| `internal/cbom/sourcescan/sourcescan.go:94` | a repository the operator named; reading its files is the product function (CWE-22) |
-| `internal/cbom/sourcescan/sourcescan.go:253` | a repository the operator named; reading its files is the product function (CWE-22) |
+| `internal/cbom/sourcescan/sourcescan.go:148` | a repository the operator named; reading its files is the product function (CWE-22) |
+| `internal/cbom/sourcescan/sourcescan.go:680` | a repository the operator named; reading its files is the product function (CWE-22) |
 | `internal/cbom/tlssource/tlssource_key_verdict_test.go:19` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/cli/access_agent.go:121` | the operator names their own attestation payload file (CWE-22) |
 | `internal/cli/access_agent_test.go:128` | the file the test's own child wrote in the test's temp dir (CWE-22) |

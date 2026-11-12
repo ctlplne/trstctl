@@ -417,6 +417,19 @@ trstctl-cli cbom scan-image --scanner /usr/local/bin/cbomkit-theia --out app.cdx
 trstctl-cli cbom import --source image:registry.example/app:1.4 -f app.cdx.json
 ```
 
+The source scan reads a key size or curve wherever it can be worked out without running
+the code (X6-L2). In Go it follows a package's constants and constant expressions
+(`const legacyBits = 1024`, `bits * 3`, `1 << 12`), variables assigned once and never
+again — in the package or in the function — across the package's files, and a curve held
+in a variable (`curve := elliptic.P384()`); and it follows one level of wrapper: a
+function of the same package that hands its own parameter to `rsa.GenerateKey` or
+`ecdsa.GenerateKey` is reported again at each call in the package that passes a size or
+curve it can read (`newRSA(1024)`), with the call's file and line. In Java and Python a
+key size given as a name (`initialize(KEY_SIZE)`, `key_size=KEY_BITS`) resolves to the
+number the file assigns it once. A name assigned more than once, a struct field, a value
+read from configuration or a deeper chain of wrappers is not resolved, and the use is
+reported without a size.
+
 To import on every pipeline run, use the CI templates in `deploy/ci` (X6-L7): a reusable
 GitHub Actions workflow and a GitLab CI job that install `trstctl-cli` from a published
 release (checksums and source commit verified), run `cbom scan-source` and import the
