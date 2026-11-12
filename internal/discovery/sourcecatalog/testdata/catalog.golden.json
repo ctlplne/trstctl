@@ -844,6 +844,30 @@
           "secret_ref": true,
           "advanced": true,
           "description": "Optional short-lived session-token reference."
+        },
+        {
+          "path": "providers[].project",
+          "label": "Project",
+          "type": "string",
+          "required": false,
+          "description": "Google Cloud: the project whose service-account keys are read."
+        },
+        {
+          "path": "providers[].token_ref",
+          "label": "Bearer token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Google Cloud: reference to a short-lived read-only OAuth token; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].activity_endpoint",
+          "label": "Key activity endpoint",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "Google Cloud: where each key's last authentication is read; Policy Analyzer by default."
         }
       ],
       "providers": [
@@ -857,6 +881,18 @@
             "access_key_id_ref",
             "secret_access_key_ref",
             "session_token_ref"
+          ]
+        },
+        {
+          "id": "gcp-iam",
+          "label": "Google Cloud service-account keys",
+          "least_privilege": "iam.serviceAccounts.list and iam.serviceAccountKeys.list on the project, and Policy Analyzer's key last-authentication activity",
+          "preferred_credential": "a short-lived read-only token reference",
+          "fields": [
+            "project",
+            "token_ref",
+            "endpoint",
+            "activity_endpoint"
           ]
         }
       ],

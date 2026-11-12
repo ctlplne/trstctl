@@ -638,7 +638,7 @@ that shape eight times, here is what each one actually finds:
 | Source kind                           | What it finds                                                                                                                                                                                                                                                                                 | Config essentials                                                                                                                                                                         |
 | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cloud_certificate` (F49)             | Certificates the cloud provider already knows about: AWS ACM, Azure Key Vault, GCP Certificate Manager                                                                                                                                                                                        | `providers[]` (region/vault/project plus `access_key_id_ref`, `secret_access_key_ref`, or `token_ref`); inline credentials are rejected before storage                                    |
-| `cloud_access_key` (M3)               | IAM users' long-lived access keys with owner, status, age and last use; an active key unused for 90 days is flagged stale                                                                                                                                                                     | `providers[]` with `provider: aws-iam`, `access_key_id_ref`, `secret_access_key_ref`, optional `session_token_ref` and `endpoint`                                                         |
+| `cloud_access_key` (M3)               | IAM users' long-lived access keys, and a Google Cloud project's service-account keys (M3-L1), with owner, status, age and last use; an active key unused for 90 days is flagged stale                                                                                                          | `providers[]` with `provider: aws-iam`, `access_key_id_ref`, `secret_access_key_ref`, optional `session_token_ref` and `endpoint`; or `provider: gcp-iam`, `project`, `token_ref`, optional `endpoint` and `activity_endpoint` |
 | `cloud_kms_key` (X4)                  | Keys a cloud KMS holds with type, size, usage, state and automatic-rotation status; a key KMS could rotate but is not rotating is flagged unrotated                                                                                                                                           | `providers[]` with `provider: aws-kms`, `region`, `access_key_id_ref`, `secret_access_key_ref`, optional `session_token_ref` and `endpoint`                                               |
 | `load_balancer_tls` (X4)              | The TLS policy each AWS load-balancer listener or F5 BIG-IP virtual server enforces; one crypto-inventory finding per listener at the oldest version it allows                                                                                                                                | `providers[]`: `aws-elbv2` (`region` + AWS references) or `f5-bigip` (`endpoint` + `token_ref` or `username_ref`/`password_ref`)                                                          |
 | `nhi_cross_surface`                   | Non-certificate machine identities across six surfaces: IdP, cloud, SaaS, on-prem, code, and CI                                                                                                                                                                                               | `observations[]`: `surface`, `system`, `external_id`, `principal`, `owner`, `credential_kind`, `scopes`; needs at least one observation per surface                                       |
@@ -872,6 +872,20 @@ reaches only its endpoint: a private endpoint needs `allow_private_endpoint` wit
 `private_egress_cidrs`, and with the air-gap guard on (`air_gap.enabled`) a run reaches
 only hosts the guard allows, so an account outside them fails the run and records
 nothing.
+
+A `gcp-iam` provider (M3-L1) reads a Google Cloud project's user-managed service-account
+keys: `project`, a `token_ref` to a short-lived read-only OAuth token, an optional
+`endpoint` (default `https://iam.googleapis.com`) and an optional `activity_endpoint`
+(default `https://policyanalyzer.googleapis.com`). The token needs
+`iam.serviceAccounts.list`, `iam.serviceAccountKeys.list` and Policy Analyzer's
+`serviceAccountKeyLastAuthentication` activity. A run lists every service account (all
+pages) and its user-managed keys, and reads each key's last authentication from Policy
+Analyzer. A finding's `user` is the service account and `access_key_id` the key ID;
+`status` is `Active`, `Disabled` (the key or its account) or `Expired`; `expires_at` is
+the key's expiry; `last_used_at` its last authentication, or `never_used: true`, and the
+same 90-day rule makes an active key stale. When Policy Analyzer cannot be read, the keys
+are still recorded with `last_use_unknown: true`, none is called stale for want of it,
+and the run is `partial` with the reason; a missing last use is never read as non-use.
 
 ### Cloud KMS keys
 

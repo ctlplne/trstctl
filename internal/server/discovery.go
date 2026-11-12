@@ -81,6 +81,9 @@ type cloudCertificateProviderConfig struct {
 	WriteTokenRef string `json:"write_token_ref"`
 	Project       string `json:"project"`
 	Location      string `json:"location"`
+	// ActivityEndpoint (gcp-iam cloud access keys, M3-L1) is where a key's
+	// last authentication is read: Policy Analyzer by default.
+	ActivityEndpoint string `json:"activity_endpoint"`
 	// SubscriptionID (azure-network, A167-L1) names the Azure subscription
 	// whose public IPs, network security groups and route tables are read.
 	SubscriptionID string `json:"subscription_id"`

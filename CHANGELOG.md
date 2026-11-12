@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- Cloud access-key discovery reads Google Cloud service-account keys (M3-L1). A `cloud_access_key`
+  source's `gcp-iam` provider lists a project's user-managed service-account keys with their status,
+  creation and expiry, and reads each key's last authentication from Policy Analyzer; an active key
+  that has not authenticated for 90 days is flagged stale, as for AWS. When Policy Analyzer cannot be
+  read, the keys are still recorded with their last use unknown and the run is partial; none is called
+  stale for want of it.
 - The Risk page's stale credentials show their recorded usage (M1-L3). Each stale finding for an API
   token or machine login method carries `usage`: when tracking began, its last use and where from,
   and each source it was used from, newest first, with the days seen and whether it is still new.

@@ -205,8 +205,9 @@ func cloudCertificateCapability() Capability {
 }
 
 // cloudAccessKeyCapability reads a cloud account's long-lived user access keys
-// (M3): each key's owner, status, age and last use, never a secret. An active
-// key nobody has used in 90 days is flagged stale.
+// (M3) and a Google Cloud project's service-account keys (M3-L1): each key's
+// owner, status, age and last use, never a secret. An active key nobody has
+// used in 90 days is flagged stale.
 func cloudAccessKeyCapability() Capability {
 	return Capability{
 		Kind: "cloud_access_key", Label: "Cloud access keys", Tool: "Discover", Route: "/discovery?tab=sources&kind=cloud_access_key", SetupSurface: SetupSourceWizard,
@@ -221,9 +222,13 @@ func cloudAccessKeyCapability() Capability {
 			field("providers[].access_key_id_ref", "Access key ID reference", "credential_ref", true, true, true, "Reference only; use a short-lived least-privilege credential."),
 			field("providers[].secret_access_key_ref", "Secret access key reference", "credential_ref", true, true, true, "Reference only; the value never enters source configuration."),
 			field("providers[].session_token_ref", "Session token reference", "credential_ref", false, true, true, "Optional short-lived session-token reference."),
+			field("providers[].project", "Project", "string", false, false, false, "Google Cloud: the project whose service-account keys are read."),
+			field("providers[].token_ref", "Bearer token reference", "credential_ref", false, true, true, "Google Cloud: reference to a short-lived read-only OAuth token; the value never enters source configuration."),
+			field("providers[].activity_endpoint", "Key activity endpoint", "url", false, false, true, "Google Cloud: where each key's last authentication is read; Policy Analyzer by default."),
 		},
 		Providers: []Provider{
 			provider("aws-iam", "AWS IAM user access keys", "iam:ListUsers, iam:ListAccessKeys and iam:GetAccessKeyLastUsed on the authorized account", "env: credential references", "endpoint", "access_key_id_ref", "secret_access_key_ref", "session_token_ref"),
+			provider("gcp-iam", "Google Cloud service-account keys", "iam.serviceAccounts.list and iam.serviceAccountKeys.list on the project, and Policy Analyzer's key last-authentication activity", "a short-lived read-only token reference", "project", "token_ref", "endpoint", "activity_endpoint"),
 		},
 		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-access-keys",
 	}

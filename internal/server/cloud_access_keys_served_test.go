@@ -5,8 +5,12 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -189,5 +193,171 @@ func TestServedCloudAccessKeyDiscoveryFlagsNinetyDaysUnusedM3(t *testing.T) {
 	run, err = h.store.GetDiscoveryRun(ctx, h.tenant, blockedID)
 	if err != nil || run.Status != "failed" || run.Discovered != 0 || len(blocked) != 0 || guard.Trips() == 0 {
 		t.Fatalf("air-gapped run = %+v %v findings=%v trips=%d", run, err, blocked, guard.Trips())
+	}
+}
+
+// m3l1IAMStandIn is AWS IAM's Query API (ListUsers, ListAccessKeys,
+// GetAccessKeyLastUsed; version 2010-05-08), written from AWS's public API
+// reference: two users across two ListUsers pages, a key used two days ago,
+// an active key never used, and an inactive key. It keeps every request's
+// Authorization header and body.
+type m3l1IAMStandIn struct {
+	now  time.Time
+	mu   sync.Mutex
+	seen []string
+}
+
+func (s *m3l1IAMStandIn) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	raw, _ := io.ReadAll(r.Body)
+	form, _ := url.ParseQuery(string(raw))
+	s.mu.Lock()
+	s.seen = append(s.seen, r.Header.Get("Authorization")+"\n"+string(raw))
+	s.mu.Unlock()
+	if form.Get("Version") != "2010-05-08" || !strings.HasPrefix(r.Header.Get("Authorization"), "AWS4-HMAC-SHA256 Credential=m3l1-reader/") {
+		http.Error(w, "unsigned or wrong version", http.StatusForbidden)
+		return
+	}
+	day := func(d int) string { return s.now.AddDate(0, 0, d).Format(time.RFC3339) }
+	key := func(user, id, status, created string) string {
+		return "<member><UserName>" + user + "</UserName><AccessKeyId>" + id + "</AccessKeyId><Status>" + status + "</Status><CreateDate>" + created + "</CreateDate></member>"
+	}
+	w.Header().Set("Content-Type", "text/xml")
+	switch form.Get("Action") {
+	case "ListUsers":
+		if form.Get("Marker") == "" {
+			_, _ = io.WriteString(w, `<ListUsersResponse><ListUsersResult><Users><member><UserName>m3-ci-deployer</UserName></member></Users><IsTruncated>true</IsTruncated><Marker>page-2</Marker></ListUsersResult></ListUsersResponse>`)
+			return
+		}
+		_, _ = io.WriteString(w, `<ListUsersResponse><ListUsersResult><Users><member><UserName>m3-backup-job</UserName></member></Users><IsTruncated>false</IsTruncated></ListUsersResult></ListUsersResponse>`)
+	case "ListAccessKeys":
+		var keys string
+		switch form.Get("UserName") {
+		case "m3-ci-deployer":
+			keys = key("m3-ci-deployer", "m3l1-key-used", "Active", day(-10))
+		case "m3-backup-job":
+			keys = key("m3-backup-job", "m3l1-key-never", "Active", day(-5)) + key("m3-backup-job", "m3l1-key-off", "Inactive", day(-200))
+		default:
+			http.Error(w, "NoSuchEntity", http.StatusNotFound)
+			return
+		}
+		_, _ = io.WriteString(w, `<ListAccessKeysResponse><ListAccessKeysResult><AccessKeyMetadata>`+keys+`</AccessKeyMetadata><IsTruncated>false</IsTruncated></ListAccessKeysResult></ListAccessKeysResponse>`)
+	case "GetAccessKeyLastUsed":
+		if form.Get("AccessKeyId") == "m3l1-key-used" {
+			_, _ = io.WriteString(w, `<GetAccessKeyLastUsedResponse><GetAccessKeyLastUsedResult><UserName>m3-ci-deployer</UserName><AccessKeyLastUsed><LastUsedDate>`+day(-2)+`</LastUsedDate><ServiceName>iam</ServiceName><Region>us-east-1</Region></AccessKeyLastUsed></GetAccessKeyLastUsedResult></GetAccessKeyLastUsedResponse>`)
+			return
+		}
+		// A key never used: IAM answers N/A for the service and region and no date.
+		_, _ = io.WriteString(w, `<GetAccessKeyLastUsedResponse><GetAccessKeyLastUsedResult><AccessKeyLastUsed><ServiceName>N/A</ServiceName><Region>N/A</Region></AccessKeyLastUsed></GetAccessKeyLastUsedResult></GetAccessKeyLastUsedResponse>`)
+	default:
+		http.Error(w, "InvalidAction", http.StatusBadRequest)
+	}
+}
+
+// TestServedCloudAccessKeyDiscoveryReadsAWSKeysOnAnIAMStandInM3L1 keeps the
+// AWS path served without a LocalStack container: M3-L1 moved every
+// provider's keys through one record path, and an aws-iam provider still
+// records each key with its owner, status, age and last use (service and
+// region included). An active key unused for 90 days, or never used 90 days
+// after creation, is stale with risk 80; an inactive key never is. Requests
+// are signed, and the secret access key never travels or reaches a finding.
+func TestServedCloudAccessKeyDiscoveryReadsAWSKeysOnAnIAMStandInM3L1(t *testing.T) {
+	iam := &m3l1IAMStandIn{now: time.Now().UTC()}
+	srv := httptest.NewServer(iam)
+	t.Cleanup(srv.Close)
+	const signingSecret = "m3l1-standin-signing-value" // #nosec G101 -- the test's own stand-in signing value, not a credential (CWE-798)
+	t.Setenv("TRSTCTL_M3L1_IAM_ACCESS_KEY_ID", "m3l1-reader")
+	t.Setenv("TRSTCTL_M3L1_IAM_SECRET_ACCESS_KEY", signingSecret)
+	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+		"env:TRSTCTL_M3L1_IAM_ACCESS_KEY_ID", "env:TRSTCTL_M3L1_IAM_SECRET_ACCESS_KEY"))
+	ctx := t.Context()
+	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read", string(authz.PrivateEgress))
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", writer, map[string]any{
+		"name": "aws-iam-keys-standin", "kind": "cloud_access_key", "config": map[string]any{"providers": []map[string]any{{ // #nosec G101 -- credential references only; no credential value enters the config (CWE-798)
+			"provider": "aws-iam", "endpoint": srv.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, srv.URL)},
+			"access_key_id_ref": "env:TRSTCTL_M3L1_IAM_ACCESS_KEY_ID", "secret_access_key_ref": "env:TRSTCTL_M3L1_IAM_SECRET_ACCESS_KEY",
+		}}},
+	})
+	var source struct {
+		ID string `json:"id"`
+	}
+	if status != http.StatusCreated || json.Unmarshal(body, &source) != nil || source.ID == "" {
+		t.Fatalf("create the aws-iam cloud_access_key source: %d %s", status, body)
+	}
+	type finding struct {
+		Ref         string         `json:"ref"`
+		Fingerprint string         `json:"fingerprint"`
+		RiskScore   int            `json:"risk_score"`
+		Metadata    map[string]any `json:"metadata"`
+	}
+	runAt := func(key string) map[string]finding {
+		t.Helper()
+		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/runs", writer, key, map[string]any{"source_id": source.ID})
+		var queued struct {
+			ID string `json:"id"`
+		}
+		if status != http.StatusCreated || json.Unmarshal(body, &queued) != nil || queued.ID == "" {
+			t.Fatalf("queue %s: %d %s", key, status, body)
+		}
+		if err := h.srv.Drain(ctx); err != nil {
+			t.Fatalf("drain %s: %v", key, err)
+		}
+		if run, err := h.store.GetDiscoveryRun(ctx, h.tenant, queued.ID); err != nil || run.Status != "succeeded" {
+			t.Fatalf("run %s = %+v, %v", key, run, err)
+		}
+		status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, writer, nil)
+		var listed struct {
+			Items []finding `json:"items"`
+		}
+		if status != http.StatusOK || json.Unmarshal(body, &listed) != nil || bytes.Contains(body, []byte(signingSecret)) {
+			t.Fatalf("findings of %s: %d %s", key, status, body)
+		}
+		byKey := map[string]finding{}
+		for _, f := range listed.Items {
+			byKey[f.Metadata["access_key_id"].(string)] = f
+		}
+		return byKey
+	}
+
+	today := runAt("m3l1-aws-today")
+	if len(today) != 3 {
+		t.Fatalf("today = %d keys: %v", len(today), today)
+	}
+	u := today["m3l1-key-used"]
+	if u.Metadata["provider"] != "aws-iam" || u.Metadata["user"] != "m3-ci-deployer" || u.Metadata["status"] != "Active" ||
+		u.Metadata["last_used_service"] != "iam" || u.Metadata["last_used_region"] != "us-east-1" || u.Metadata["last_used_at"] == nil ||
+		u.Metadata["age_days"] != float64(10) || u.Metadata["unused_days"] != float64(2) || u.Metadata["stale"] != false || u.RiskScore != 30 ||
+		u.Ref != "aws-iam:m3-ci-deployer:m3l1-key-used" || u.Fingerprint != "aws-iam:m3l1-key-used" {
+		t.Fatalf("the used key today = %+v", u)
+	}
+	if n := today["m3l1-key-never"]; n.Metadata["never_used"] != true || n.Metadata["last_used_at"] != nil || n.Metadata["stale"] != false || n.Metadata["created_at"] == nil || n.Metadata["last_use_unknown"] != nil {
+		t.Fatalf("the never-used key today = %+v", n)
+	}
+	if off := today["m3l1-key-off"]; off.Metadata["status"] != "Inactive" || off.Metadata["stale"] != false || off.RiskScore != 30 {
+		t.Fatalf("the inactive key today = %+v", off)
+	}
+
+	// 91 days on: both active keys are unused for 90 days; the inactive one is not flagged.
+	dispatcher := h.srv.obHandler.(*issuanceDispatcher)
+	dispatcher.accessKeyNow = func() time.Time { return iam.now.Add(91 * 24 * time.Hour) }
+	defer func() { dispatcher.accessKeyNow = nil }()
+	aged := runAt("m3l1-aws-91-days")
+	for _, id := range []string{"m3l1-key-used", "m3l1-key-never"} {
+		if f := aged[id]; f.Metadata["stale"] != true || f.RiskScore != 80 || f.Metadata["unused_days"].(float64) < 90 {
+			t.Fatalf("an active key unused for 90 days is not flagged: %+v", f)
+		}
+	}
+	if off := aged["m3l1-key-off"]; off.Metadata["stale"] != false || off.RiskScore != 30 {
+		t.Fatalf("the inactive key is flagged: %+v", off)
+	}
+
+	iam.mu.Lock()
+	defer iam.mu.Unlock()
+	if len(iam.seen) == 0 {
+		t.Fatal("the stand-in saw no request")
+	}
+	for _, req := range iam.seen {
+		if strings.Contains(req, signingSecret) {
+			t.Fatal("the secret access key travelled in a request")
+		}
 	}
 }

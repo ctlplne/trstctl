@@ -12,4 +12,6 @@ const (
 	FindingKind = "cloud_access_key"
 	// ProviderAWSIAM reads IAM user access keys.
 	ProviderAWSIAM = "aws-iam"
+	// ProviderGCPIAM reads user-managed service-account keys (M3-L1).
+	ProviderGCPIAM = "gcp-iam"
 )

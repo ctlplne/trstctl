@@ -13,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/discovery/cloudkeys"
 	"trstctl.com/trstctl/internal/discovery/cloudkeys/awsiamkeys"
+	"trstctl.com/trstctl/internal/discovery/cloudkeys/gcpsakeys"
 	"trstctl.com/trstctl/internal/discovery/netscan"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/projections"
@@ -37,41 +38,56 @@ func (d *issuanceDispatcher) executeCloudAccessKeyDiscoveryRun(ctx context.Conte
 	}
 	rep := netscan.Report{Targets: len(cfg.Providers)}
 	var failures []string
+	now := time.Now().UTC()
+	if d.accessKeyNow != nil {
+		now = d.accessKeyNow().UTC()
+	}
 	for i, p := range cfg.Providers {
-		keys, host, err := readAWSAccessKeys(ctx, p, d.egress)
+		read, err := readCloudAccessKeys(ctx, p, d.egress, now)
+		keys, host, lastUseErr := read.keys, read.host, read.lastUseErr
 		if err != nil {
 			rep.Failed++
 			failures = append(failures, fmt.Sprintf("provider %d: %v", i+1, err))
 			continue
 		}
-		now := time.Now().UTC()
-		if d.accessKeyNow != nil {
-			now = d.accessKeyNow().UTC()
+		if lastUseErr != nil {
+			// The keys are recorded; their last use is unknown, never "never used".
+			failures = append(failures, fmt.Sprintf("provider %d: %v", i+1, lastUseErr))
 		}
 		for _, k := range keys {
 			meta := map[string]any{
-				"provider": cloudkeys.ProviderAWSIAM, "user": k.User, "access_key_id": k.AccessKeyID, "status": k.Status,
-				"created_at": k.Created, "age_days": wholeDays(now.Sub(k.Created)),
-				"unused_days": wholeDays(k.Unused(now)), "stale": k.Stale(now),
+				"provider": k.provider, "user": k.owner, "access_key_id": k.keyID, "status": k.status,
+				"created_at": k.created, "age_days": wholeDays(now.Sub(k.created)), "stale": k.stale,
 			}
-			if k.LastUsed != nil {
-				meta["last_used_at"], meta["last_used_service"], meta["last_used_region"] = *k.LastUsed, k.LastUsedService, k.LastUsedRegion
-			} else {
+			for key, value := range k.extra {
+				meta[key] = value
+			}
+			switch {
+			case !k.lastUseKnown:
+				meta["last_use_unknown"] = true
+			case k.lastUsed != nil:
+				meta["last_used_at"] = *k.lastUsed
+				meta["unused_days"] = wholeDays(k.unused)
+			default:
 				meta["never_used"] = true
+				meta["unused_days"] = wholeDays(k.unused)
+			}
+			if k.expires != nil {
+				meta["expires_at"] = *k.expires
 			}
 			raw, err := json.Marshal(meta)
 			if err != nil {
 				return rep, "", "", err
 			}
 			risk := 30
-			if k.Stale(now) {
+			if k.stale {
 				risk = 80
 			}
 			if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
 				RunID: run.ID, SourceID: src.ID, Kind: cloudkeys.FindingKind,
-				Ref:         cloudkeys.ProviderAWSIAM + ":" + k.User + ":" + k.AccessKeyID,
-				Provenance:  cloudkeys.ProviderAWSIAM + ":" + host,
-				Fingerprint: cloudkeys.ProviderAWSIAM + ":" + k.AccessKeyID,
+				Ref:         k.provider + ":" + k.owner + ":" + k.keyID,
+				Provenance:  k.provider + ":" + host,
+				Fingerprint: k.provider + ":" + k.keyID,
 				RiskScore:   risk, Metadata: raw,
 			}); err != nil {
 				return rep, "", "", err
@@ -80,12 +96,98 @@ func (d *issuanceDispatcher) executeCloudAccessKeyDiscoveryRun(ctx context.Conte
 		}
 	}
 	switch {
+	case rep.Failed == 0 && len(failures) > 0:
+		return rep, "partial", "some keys' last use could not be read: " + strings.Join(failures, "; "), nil
 	case rep.Failed > 0 && rep.Discovered > 0:
 		return rep, "partial", "some cloud access-key providers failed: " + strings.Join(failures, "; "), nil
 	case rep.Failed > 0:
 		return rep, "failed", "every cloud access-key provider failed: " + strings.Join(failures, "; "), nil
 	}
 	return rep, "succeeded", "", nil
+}
+
+// cloudAccessKey is one provider's key as a finding records it.
+type cloudAccessKey struct {
+	provider, owner, keyID, status string
+	created                        time.Time
+	expires, lastUsed              *time.Time
+	lastUseKnown, stale            bool
+	unused                         time.Duration
+	extra                          map[string]any
+}
+
+// cloudAccessKeyRead is one provider's read: its keys, the host they came
+// from, and why their last use could not be read, if it could not.
+type cloudAccessKeyRead struct {
+	keys       []cloudAccessKey
+	host       string
+	lastUseErr error
+}
+
+// readCloudAccessKeys reads one provider's keys with its own credentials.
+func readCloudAccessKeys(ctx context.Context, p cloudCertificateProviderConfig, guard *egress.Guard, now time.Time) (cloudAccessKeyRead, error) {
+	switch strings.TrimSpace(p.Provider) {
+	case cloudkeys.ProviderAWSIAM:
+		keys, host, err := readAWSAccessKeys(ctx, p, guard)
+		out := make([]cloudAccessKey, 0, len(keys))
+		for _, k := range keys {
+			out = append(out, cloudAccessKey{provider: cloudkeys.ProviderAWSIAM, owner: k.User, keyID: k.AccessKeyID, status: k.Status,
+				created: k.Created, lastUsed: k.LastUsed, lastUseKnown: true, stale: k.Stale(now), unused: k.Unused(now),
+				extra: map[string]any{"last_used_service": k.LastUsedService, "last_used_region": k.LastUsedRegion}})
+		}
+		return cloudAccessKeyRead{keys: out, host: host}, err
+	case cloudkeys.ProviderGCPIAM:
+		return readGCPServiceAccountKeys(ctx, p, guard, now)
+	default:
+		return cloudAccessKeyRead{}, fmt.Errorf("unsupported %s provider %q", cloudkeys.SourceKind, p.Provider)
+	}
+}
+
+// readGCPServiceAccountKeys reads one project's user-managed service-account
+// keys and their last authentication (M3-L1).
+func readGCPServiceAccountKeys(ctx context.Context, p cloudCertificateProviderConfig, guard *egress.Guard, now time.Time) (cloudAccessKeyRead, error) {
+	if strings.TrimSpace(p.Project) == "" {
+		return cloudAccessKeyRead{}, fmt.Errorf("gcp-iam needs project")
+	}
+	endpoint := firstNonEmpty(strings.TrimSpace(p.Endpoint), "https://iam.googleapis.com")
+	activity := firstNonEmpty(strings.TrimSpace(p.ActivityEndpoint), "https://policyanalyzer.googleapis.com")
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" {
+		return cloudAccessKeyRead{}, fmt.Errorf("gcp-iam endpoint is not a URL")
+	}
+	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	if err != nil {
+		return cloudAccessKeyRead{}, err
+	}
+	activityClient, err := cloudHTTPClient(activity, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	if err != nil {
+		return cloudAccessKeyRead{}, err
+	}
+	if guard.Enabled() {
+		client.Transport = guard.WrapTransport(client.Transport)
+		activityClient.Transport = guard.WrapTransport(activityClient.Transport)
+	}
+	token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+	if err != nil {
+		return cloudAccessKeyRead{}, fmt.Errorf("resolve token_ref: %w", err)
+	}
+	reader, err := gcpsakeys.New(gcpsakeys.Config{Endpoint: endpoint, ActivityEndpoint: activity, Project: p.Project,
+		Token: []byte(token), HTTPClient: client, ActivityHTTPClient: activityClient})
+	if err != nil {
+		return cloudAccessKeyRead{}, err
+	}
+	defer reader.Close()
+	res, err := reader.Keys(ctx)
+	if err != nil {
+		return cloudAccessKeyRead{}, err
+	}
+	out := make([]cloudAccessKey, 0, len(res.Keys))
+	for _, k := range res.Keys {
+		out = append(out, cloudAccessKey{provider: cloudkeys.ProviderGCPIAM, owner: k.ServiceAccount, keyID: k.KeyID, status: k.Status(now),
+			created: k.Created, expires: k.Expires, lastUsed: k.LastAuthenticated, lastUseKnown: k.LastUseKnown,
+			stale: k.Stale(now), unused: k.Unused(now), extra: map[string]any{"project": p.Project}})
+	}
+	return cloudAccessKeyRead{keys: out, host: u.Host, lastUseErr: res.LastUseError}, nil
 }
 
 // readAWSAccessKeys reads one provider's keys with its own credentials; with
