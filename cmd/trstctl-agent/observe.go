@@ -24,7 +24,7 @@ var (
 	observeInterface = flag.String("observe-interface", "",
 		"network interface (a mirror or span port, or this host's interface) whose connections' handshakes the agent observes passively; needs the observer role and, on Linux, CAP_NET_RAW. Only handshake metadata is kept, never payload")
 	observePorts = flag.String("observe-ports", "443,8443,636,993,995,465,22,80,389,5432,3306,25,587,143,110",
-		"comma-separated server ports whose connections are observed (at most 32)")
+		"comma-separated server ports whose connections are observed, TCP and UDP (QUIC, DTLS) alike (at most 32)")
 	observeMaxFlows = flag.Int("observe-max-flows", 2048,
 		"connections followed at once; more are counted and skipped, never buffered")
 	observeReportInterval = flag.Duration("observe-report-interval", time.Minute,

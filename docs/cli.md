@@ -1570,7 +1570,8 @@ transport, the program it starts or the host it calls, and which fields hold a s
 credential. Values never leave the host, and a rescan that finds nothing new sends
 nothing.
 `--observe-interface` (Linux, observer role) watches an interface's handshakes and
-reports what each connection negotiated, never payload; `--observe-ports`,
+reports what each connection negotiated, never payload (TLS, SSH and plaintext over TCP;
+QUIC and DTLS over UDP); `--observe-ports` (TCP and UDP),
 `--observe-max-flows` and `--observe-report-interval` bound it. `--observe-pcap <file>`
 (observer role) reads a saved classic pcap capture once at start and reports its
 handshakes the same way.

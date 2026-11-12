@@ -19,7 +19,7 @@ import (
 
 // Observation is what one connection's handshake reveals.
 type Observation struct {
-	Protocol string `json:"protocol"` // tls, ssh, http, ldap, smtp, imap, pop3, postgresql or mysql
+	Protocol string `json:"protocol"` // tls, quic, dtls, ssh, http, ldap, smtp, imap, pop3, postgresql or mysql
 	// TLS
 	TLSVersion    string   `json:"tls_version,omitempty"`
 	CipherSuite   string   `json:"cipher_suite,omitempty"`
@@ -291,6 +291,12 @@ func versionName(v uint16) string {
 		return "TLSv1.2"
 	case 0x0304:
 		return "TLSv1.3"
+	case 0xfeff:
+		return "DTLSv1.0"
+	case 0xfefd:
+		return "DTLSv1.2"
+	case 0xfefc:
+		return "DTLSv1.3"
 	}
 	return fmt.Sprintf("0x%04X", v)
 }

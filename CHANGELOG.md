@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- The passive network observer reads QUIC and DTLS over UDP (X1-L4 part 2): it removes the published protection of
+  QUIC Initial packets (RFC 9001; versions 1 and 2) to read the ClientHello and ServerHello, however many packets they
+  span, and reads DTLS hello messages, certificates and ECDHE groups in the clear through a cookie exchange. Findings
+  are `tls_handshake` with `protocol` `quic` or `dtls`; HTTP/3 on port 443 is watched by default. Proven on real
+  captures of nginx 1.30 HTTP/3 negotiating X25519MLKEM768 with OpenSSL 3.5's QUIC client, and of OpenSSL DTLS 1.2.
 - Stock cosign checks a trstctl signature's transparency-log entry instead of skipping it (P9-L2): trstctl records the
   Rekor receipt it verified for each signature (`codesign.transparency_recorded`), the sign response names its
   `operation_id`, and `GET /api/v1/code-signing/identities/{operation_id}/rekor-bundle` (`trstctl-cli code-signing

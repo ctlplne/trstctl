@@ -21,45 +21,8 @@ type Segment struct {
 // DecodeFrame reads an Ethernet frame (with up to two VLAN tags) carrying
 // IPv4 or IPv6 and TCP. ok is false for anything else.
 func DecodeFrame(frame []byte) (Segment, bool) {
-	if len(frame) < 14 {
-		return Segment{}, false
-	}
-	etherType, rest := binary.BigEndian.Uint16(frame[12:14]), frame[14:]
-	for i := 0; i < 2 && (etherType == 0x8100 || etherType == 0x88a8); i++ {
-		if len(rest) < 4 {
-			return Segment{}, false
-		}
-		etherType, rest = binary.BigEndian.Uint16(rest[2:4]), rest[4:]
-	}
-	var src, dst netip.Addr
-	var tcp []byte
-	switch etherType {
-	case 0x0800:
-		if len(rest) < 20 || rest[0]>>4 != 4 {
-			return Segment{}, false
-		}
-		ihl := int(rest[0]&0x0f) * 4
-		total := int(binary.BigEndian.Uint16(rest[2:4]))
-		fragment := binary.BigEndian.Uint16(rest[6:8])
-		if rest[9] != 6 || ihl < 20 || total < ihl || total > len(rest) || fragment&0x3fff != 0 {
-			return Segment{}, false
-		}
-		src, dst = netip.AddrFrom4([4]byte(rest[12:16])), netip.AddrFrom4([4]byte(rest[16:20]))
-		tcp = rest[ihl:total]
-	case 0x86dd:
-		if len(rest) < 40 || rest[6] != 6 {
-			return Segment{}, false
-		}
-		payload := int(binary.BigEndian.Uint16(rest[4:6]))
-		if 40+payload > len(rest) {
-			return Segment{}, false
-		}
-		src, dst = netip.AddrFrom16([16]byte(rest[8:24])), netip.AddrFrom16([16]byte(rest[24:40]))
-		tcp = rest[40 : 40+payload]
-	default:
-		return Segment{}, false
-	}
-	if len(tcp) < 20 {
+	src, dst, proto, tcp, ok := decodeIP(frame)
+	if !ok || proto != 6 || len(tcp) < 20 {
 		return Segment{}, false
 	}
 	offset := int(tcp[12]>>4) * 4
@@ -79,6 +42,47 @@ func DecodeFrame(frame []byte) (Segment, bool) {
 	}, true
 }
 
+// decodeIP reads an Ethernet frame (with up to two VLAN tags) carrying IPv4
+// (no later fragments) or IPv6 (no extension headers before the transport
+// header), and returns the addresses, the transport protocol and its bytes.
+func decodeIP(frame []byte) (src, dst netip.Addr, proto byte, l4 []byte, ok bool) {
+	if len(frame) < 14 {
+		return src, dst, 0, nil, false
+	}
+	etherType, rest := binary.BigEndian.Uint16(frame[12:14]), frame[14:]
+	for i := 0; i < 2 && (etherType == 0x8100 || etherType == 0x88a8); i++ {
+		if len(rest) < 4 {
+			return src, dst, 0, nil, false
+		}
+		etherType, rest = binary.BigEndian.Uint16(rest[2:4]), rest[4:]
+	}
+	switch etherType {
+	case 0x0800:
+		if len(rest) < 20 || rest[0]>>4 != 4 {
+			return src, dst, 0, nil, false
+		}
+		ihl := int(rest[0]&0x0f) * 4
+		total := int(binary.BigEndian.Uint16(rest[2:4]))
+		fragment := binary.BigEndian.Uint16(rest[6:8])
+		if ihl < 20 || total < ihl || total > len(rest) || fragment&0x3fff != 0 {
+			return src, dst, 0, nil, false
+		}
+		src, dst = netip.AddrFrom4([4]byte(rest[12:16])), netip.AddrFrom4([4]byte(rest[16:20]))
+		return src, dst, rest[9], rest[ihl:total], true
+	case 0x86dd:
+		if len(rest) < 40 {
+			return src, dst, 0, nil, false
+		}
+		payload := int(binary.BigEndian.Uint16(rest[4:6]))
+		if 40+payload > len(rest) {
+			return src, dst, 0, nil, false
+		}
+		src, dst = netip.AddrFrom16([16]byte(rest[8:24])), netip.AddrFrom16([16]byte(rest[24:40]))
+		return src, dst, rest[6], rest[40 : 40+payload], true
+	}
+	return src, dst, 0, nil, false
+}
+
 // Event is one observed connection, emitted once.
 type Event struct {
 	Server netip.AddrPort
@@ -89,7 +93,9 @@ type Event struct {
 
 // Stats counts what the assembler did; drops are never silent.
 type Stats struct {
-	Segments     uint64 `json:"segments"`
+	Segments uint64 `json:"segments"`
+	// Datagrams counts UDP datagrams read for QUIC and DTLS (X1-L4).
+	Datagrams    uint64 `json:"datagrams"`
 	Connections  uint64 `json:"connections"`
 	Observations uint64 `json:"observations"`
 	TableFull    uint64 `json:"table_full"`
@@ -152,6 +158,7 @@ type Assembler struct {
 	maxFlows int
 	idle     time.Duration
 	flows    map[flowKey]*flow
+	udp      map[flowKey]*udpFlow
 	emit     func(Event)
 	stats    Stats
 	swept    time.Time
@@ -164,7 +171,7 @@ func NewAssembler(ports []uint16, maxFlows int, idle time.Duration, emit func(Ev
 	for _, p := range ports {
 		watched[p] = true
 	}
-	return &Assembler{ports: watched, maxFlows: maxFlows, idle: idle, flows: map[flowKey]*flow{}, emit: emit}
+	return &Assembler{ports: watched, maxFlows: maxFlows, idle: idle, flows: map[flowKey]*flow{}, udp: map[flowKey]*udpFlow{}, emit: emit}
 }
 
 // Stats reports the assembler's counters and its current footprint.
@@ -172,7 +179,7 @@ func (a *Assembler) Stats() Stats {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	s := a.stats
-	s.ActiveFlows = len(a.flows)
+	s.ActiveFlows = len(a.flows) + len(a.udp)
 	for _, f := range a.flows {
 		s.BufferedBytes += len(f.clientBuf) + len(f.serverBuf) + heldBytes(f.clientAhead) + heldBytes(f.serverAhead)
 	}
@@ -327,6 +334,11 @@ func (a *Assembler) sweep(now time.Time) {
 	for key, f := range a.flows {
 		if now.Sub(f.last) > a.idle {
 			a.finish(key, f, now)
+		}
+	}
+	for key, f := range a.udp {
+		if now.Sub(f.last) > a.idle {
+			a.finishUDP(key, f, now)
 		}
 	}
 }

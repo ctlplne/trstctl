@@ -82,15 +82,16 @@ func ReplayPcap(r io.Reader, a *Assembler) (int, error) {
 		if frame == nil {
 			continue
 		}
-		seg, ok := DecodeFrame(frame)
-		if !ok {
-			continue
-		}
 		nsec := int64(frac)
 		if !nanos {
 			nsec *= int64(time.Microsecond)
 		}
-		a.Segment(seg, time.Unix(int64(sec), nsec).UTC())
+		at := time.Unix(int64(sec), nsec).UTC()
+		if seg, ok := DecodeFrame(frame); ok {
+			a.Segment(seg, at)
+		} else if d, ok := DecodeUDPFrame(frame); ok {
+			a.Datagram(d, at)
+		}
 	}
 }
 
@@ -136,5 +137,8 @@ func (a *Assembler) Flush(now time.Time) {
 	defer a.mu.Unlock()
 	for key, f := range a.flows {
 		a.finish(key, f, now)
+	}
+	for key, f := range a.udp {
+		a.finishUDP(key, f, now)
 	}
 }

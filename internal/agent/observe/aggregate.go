@@ -114,7 +114,13 @@ func itemRef(server netip.AddrPort, obs Observation, cert *CertificateFacts) (st
 	case obs.Protocol == "ssh":
 		return "ssh_kex", fmt.Sprintf("ssh %s %s %s", server, obs.KexAlgorithm, obs.HostKeyAlgorithm)
 	}
-	parts := []string{"tls", server.String(), obs.TLSVersion, obs.Group, obs.CipherSuite}
+	// QUIC and DTLS (X1-L4) name their protocol: the same server port can
+	// also answer TLS over TCP.
+	protocol := "tls"
+	if obs.Protocol == "quic" || obs.Protocol == "dtls" {
+		protocol = obs.Protocol
+	}
+	parts := []string{protocol, server.String(), obs.TLSVersion, obs.Group, obs.CipherSuite}
 	if cert != nil {
 		parts = append(parts, cert.SHA256[:16])
 	}

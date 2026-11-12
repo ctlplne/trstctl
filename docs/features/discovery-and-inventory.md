@@ -483,6 +483,17 @@ to see both directions of a host's own connections:
   `mysql-ssl`). A database's own TLS settings show here: PostgreSQL 17's default
   `ssl_ecdh_curve` (prime256v1) keeps its sessions on secp256r1 even between OpenSSL 3.5
   peers that offer X25519MLKEM768.
+- QUIC and DTLS over UDP (X1-L4): datagrams to a watched port are read too. A QUIC
+  handshake (HTTP/3) is TLS 1.3 inside the client's and the server's Initial packets,
+  whose protection anyone can remove — RFC 9001 derives its keys from the client's
+  connection ID and a published salt — so the observer decrypts them as the server does
+  (QUIC versions 1 and 2), reassembles the ClientHello however many packets it spans (an
+  ML-KEM hybrid key share needs two), and reads the server's group and suite; the rest of
+  the connection stays unreadable. DTLS 1.0 and 1.2 hello messages, and the server's
+  certificate and ECDHE group, are read in the clear across records and datagrams,
+  through a cookie exchange; DTLS 1.3 encrypts its certificate as TLS 1.3 does. Findings
+  are `tls_handshake` with `protocol` `quic` or `dtls`; port 443 is watched by default,
+  so HTTP/3 is, and a DTLS service's port joins `--observe-ports`.
 - Plaintext: an HTTP request line or an LDAP operation before StartTLS on a watched port,
   a PostgreSQL startup message or a MySQL login sent without TLS, or a mail login, AUTH
   or MAIL command before any STARTTLS raises one `plaintext_protocol` finding per

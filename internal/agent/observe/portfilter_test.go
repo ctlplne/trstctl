@@ -81,7 +81,7 @@ func runBPF(t *testing.T, prog []bpfInsn, pkt []byte) uint32 {
 	return 0
 }
 
-func TestPortFilterKeepsOnlyWatchedTCP(t *testing.T) {
+func TestPortFilterKeepsOnlyWatchedTCPAndUDP(t *testing.T) {
 	prog := portFilterProgram([]uint16{443, 22, 389}, 2048)
 	client := netip.MustParseAddrPort("10.0.0.7:51000")
 	for _, tc := range []struct {
@@ -98,10 +98,22 @@ func TestPortFilterKeepsOnlyWatchedTCP(t *testing.T) {
 			t.Errorf("%s: filter returned %d, want %d", tc.name, got, tc.want)
 		}
 	}
+	// X1-L4: UDP to a watched port (QUIC, DTLS) is kept, UDP to another
+	// port and any other protocol are dropped.
 	udp := frame(client, netip.MustParseAddrPort("10.0.0.5:443"), 1, syn, nil)
 	udp[14+9] = 17
-	if got := runBPF(t, prog, udp); got != 0 {
-		t.Errorf("UDP to 443 kept: %d", got)
+	if got := runBPF(t, prog, udp); got != 2048 {
+		t.Errorf("UDP to 443 dropped: %d", got)
+	}
+	udpOther := frame(client, netip.MustParseAddrPort("10.0.0.5:5353"), 1, syn, nil)
+	udpOther[14+9] = 17
+	if got := runBPF(t, prog, udpOther); got != 0 {
+		t.Errorf("UDP to 5353 kept: %d", got)
+	}
+	sctp := frame(client, netip.MustParseAddrPort("10.0.0.5:443"), 1, syn, nil)
+	sctp[14+9] = 132
+	if got := runBPF(t, prog, sctp); got != 0 {
+		t.Errorf("SCTP to 443 kept: %d", got)
 	}
 	fragment := frame(client, netip.MustParseAddrPort("10.0.0.5:443"), 1, syn, nil)
 	fragment[14+7] = 0x10 // a later fragment (offset 128 bytes) carries no TCP header
@@ -116,6 +128,14 @@ func TestPortFilterKeepsOnlyWatchedTCP(t *testing.T) {
 	binary.BigEndian.PutUint16(v6[56:58], 22)
 	if got := runBPF(t, prog, v6); got != 2048 {
 		t.Errorf("IPv6 to 22 dropped: %d", got)
+	}
+	v6[14+6] = 17
+	if got := runBPF(t, prog, v6); got != 2048 {
+		t.Errorf("IPv6 UDP to 22 dropped: %d", got)
+	}
+	v6[14+6] = 58 // ICMPv6
+	if got := runBPF(t, prog, v6); got != 0 {
+		t.Errorf("ICMPv6 kept: %d", got)
 	}
 }
 
@@ -174,8 +194,13 @@ func TestPortFilterReadsThroughVLANTagsX1L2(t *testing.T) {
 	}
 	udp := tagged(v4, dot1q)
 	udp[18+9] = 17
-	if got := runBPF(t, prog, udp); got != 0 {
-		t.Errorf("tagged UDP to 443 kept: %d", got)
+	if got := runBPF(t, prog, udp); got != 2048 {
+		t.Errorf("tagged UDP to 443 dropped: %d", got)
+	}
+	sctp := tagged(v4, dot1q)
+	sctp[18+9] = 132
+	if got := runBPF(t, prog, sctp); got != 0 {
+		t.Errorf("tagged SCTP to 443 kept: %d", got)
 	}
 	fragment := tagged(v4, dot1ad, dot1q)
 	fragment[22+7] = 0x10

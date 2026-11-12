@@ -1539,8 +1539,13 @@ never live in the API process. What you can do end to end against the running bi
   connection), reads saved classic pcap captures (`--observe-pcap`; not pcapng),
   reads TLS reached by SMTP/IMAP STARTTLS, POP3 STLS, LDAP StartTLS, PostgreSQL's
   SSLRequest and MySQL's SSL request (X1-L4; proven on captures of PostgreSQL 17,
-  MariaDB 11.8 and OpenLDAP 2.6), does not read QUIC or TLS over UDP (DTLS), and
-  needs Linux AF_PACKET for live capture (other platforms report an error).
+  MariaDB 11.8 and OpenLDAP 2.6), reads QUIC (versions 1 and 2) and DTLS handshakes
+  over UDP to a watched port (X1-L4; proven on captures of nginx 1.30 HTTP/3 with
+  OpenSSL 3.5's QUIC client and OpenSSL DTLS 1.2, with the RFC 9001 and RFC 9369 key
+  vectors), and needs Linux AF_PACKET for live capture (other platforms report an
+  error). A QUIC Retry (the client's next Initial keyed by the server's connection
+  ID) follows RFC 9001 but was not among the captures, and a connection that migrates
+  to another address mid-handshake is not followed.
 - Host TLS session observer (X5): an agent with the session-observer role reports,
   from probes on the host's OpenSSL 3 libraries, each TLS handshake's version, suite,
   key-exchange group, HelloRetryRequest and the peer's certificate — the one TLS 1.3

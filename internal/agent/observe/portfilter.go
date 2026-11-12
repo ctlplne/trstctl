@@ -2,9 +2,10 @@
 
 package observe
 
-// A classic BPF program (linux/filter.h) that keeps only TCP segments to or
-// from a watched port, so the kernel drops everything else before it is
-// copied to the observer. It reads IPv4 (no later fragments) and IPv6 (no
+// A classic BPF program (linux/filter.h) that keeps only TCP segments and UDP
+// datagrams (QUIC and DTLS, X1-L4) to or from a watched port, so the kernel
+// drops everything else before it is copied to the observer. The ports sit at
+// the same offsets in both transport headers. It reads IPv4 (no later fragments) and IPv6 (no
 // extension headers before TCP), untagged or behind up to two in-band VLAN
 // tags (802.1Q 0x8100, 802.1ad 0x88a8; X1-L2): a trunk mirror's frames, and
 // a QinQ frame whose outer tag the kernel moved out of band, keep their
@@ -85,9 +86,11 @@ func portFilterProgram(ports []uint16, snaplen uint32) []bpfInsn {
 	prog = append(prog, insn{code: bpfLdxImm, k: 14})
 	mark("l3")
 	prog = append(prog, insn{code: bpfJeqK, k: 0x0800, jf: "v6"})
-	// IPv4: TCP, not a later fragment; X moves past the header (IHL).
+	// IPv4: TCP or UDP, not a later fragment; X moves past the header (IHL).
 	prog = append(prog, insn{code: bpfLdBInd, k: 9})
-	prog = append(prog, insn{code: bpfJeqK, k: 6, jf: "drop"})
+	prog = append(prog, insn{code: bpfJeqK, k: 6, jt: "v4l4"})
+	prog = append(prog, insn{code: bpfJeqK, k: 17, jf: "drop"})
+	mark("v4l4")
 	prog = append(prog, insn{code: bpfLdHInd, k: 6})
 	prog = append(prog, insn{code: bpfJsetK, k: 0x1fff, jt: "drop"})
 	prog = append(prog, insn{code: bpfLdBInd, k: 0})
@@ -101,7 +104,9 @@ func portFilterProgram(ports []uint16, snaplen uint32) []bpfInsn {
 	mark("v6")
 	prog = append(prog, insn{code: bpfJeqK, k: 0x86dd, jf: "drop"})
 	prog = append(prog, insn{code: bpfLdBInd, k: 6})
-	prog = append(prog, insn{code: bpfJeqK, k: 6, jf: "drop"})
+	prog = append(prog, insn{code: bpfJeqK, k: 6, jt: "v6l4"})
+	prog = append(prog, insn{code: bpfJeqK, k: 17, jf: "drop"})
+	mark("v6l4")
 	matchPorts(bpfLdHInd, 40, "v6dst")
 	mark("v6dst")
 	matchPorts(bpfLdHInd, 42, "drop")

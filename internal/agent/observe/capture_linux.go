@@ -61,6 +61,8 @@ func Capture(ctx context.Context, iface string, ports []uint16, snaplen int, a *
 		}
 		if seg, ok := DecodeFrame(buf[:n]); ok {
 			a.Segment(seg, time.Now())
+		} else if d, ok := DecodeUDPFrame(buf[:n]); ok {
+			a.Datagram(d, time.Now())
 		}
 	}
 	return nil
