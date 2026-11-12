@@ -55,6 +55,10 @@ type ExternalCA struct {
 	// Both are false for an authority that is not available.
 	RevokesBySerial      bool `json:"revokes_by_serial"`
 	RevokesByCertificate bool `json:"revokes_by_certificate"`
+	// RevokeBy is how a Venafi authority's revocations address the
+	// certificate (OD-7): by its SHA-1 thumbprint, or by the DN of the
+	// certificate object that holds it; empty for other authorities.
+	RevokeBy string `json:"revoke_by,omitempty"`
 	// UpstreamDNS01 is in-process metadata (never serialized): the authority
 	// validates names through tenant DNS-01 provider configs, so the endpoint
 	// preview must confirm one can publish for the requested name.

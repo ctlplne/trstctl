@@ -11983,6 +11983,10 @@ export const messages = {
     defaultMessage: "An AD CS issuer revokes through certutil, which takes reasons up to cessation of operation. Choose another reason.",
     description: "A163-L1: the chosen reason is one AD CS cannot record.",
   },
+  "certificates.rogue.issuerByCertificateDN": {
+    defaultMessage: "{name} (revokes by certificate DN)",
+    description: "OD-7: a Venafi authority whose revocations address the certificate object's DN.",
+  },
   "certificates.rogue.issuerChoose": {
     defaultMessage: "Choose the CA that issued it",
     description: "A163: empty authority choice.",

@@ -5429,6 +5429,7 @@ export interface EvidenceReport {
 export interface ExternalCA {
   id: string;
   name: string;
+  revoke_by?: "thumbprint" | "certificate_dn";
   revokes_by_certificate: boolean;
   revokes_by_serial: boolean;
   status: string;

@@ -51,7 +51,17 @@ type Config struct {
 	AccessToken []byte // bearer token (AN-8: []byte, never logged)
 	PolicyDN    string // e.g. \VED\Policy\Certificates\trstctl
 	Application string // optional requester/application label for audit in Venafi
+	// RevokeBy is how a revocation addresses the certificate (OD-7):
+	// RevokeByThumbprint (the default, when empty) or RevokeByCertificateDN,
+	// for a Venafi policy that revokes only by the certificate object's DN.
+	RevokeBy string
 }
+
+// How a revocation addresses the certificate at Venafi (OD-7).
+const (
+	RevokeByThumbprint    = "thumbprint"
+	RevokeByCertificateDN = "certificate_dn"
+)
 
 type backend struct {
 	cfg          Config
@@ -238,6 +248,38 @@ func (b *backend) post(ctx context.Context, url string, body, out any) error {
 		if err := json.Unmarshal(data, out); err != nil {
 			return fmt.Errorf("venafi: decode response: %w", err)
 		}
+	}
+	return nil
+}
+
+// get reads a Venafi Web SDK resource into out.
+func (b *backend) get(ctx context.Context, url string, out any) error {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	if len(b.cfg.AccessToken) != 0 {
+		httpReq.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.cfg.AccessToken))
+	}
+	httpReq.Header.Set("Accept", "application/json")
+	resp, err := b.client.Do(httpReq)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return errors.New("venafi: request failed")
+	}
+	defer func() { _ = resp.Body.Close() }()
+	data, err := secret.ReadBounded(resp.Body, maxBody)
+	if err != nil {
+		return errors.New("venafi: read response failed")
+	}
+	defer secret.Wipe(data)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return apiError(resp.StatusCode, data)
+	}
+	if err := json.Unmarshal(data, out); err != nil {
+		return fmt.Errorf("venafi: decode response: %w", err)
 	}
 	return nil
 }

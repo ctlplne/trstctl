@@ -96,6 +96,13 @@ func externalCAsFromConfig(ctx context.Context, items []config.ExternalCAConfig,
 		if item.Type == "adcs" && item.RevocationRelay != "" {
 			upstream.ADCSRevocation = ADCSRevocationRelay{CAConfig: item.CAConfig, Relay: item.RevocationRelay}
 		}
+		if item.Type == "venafi" {
+			// OD-7: how its revocations address the certificate, for the list.
+			upstream.RevokeBy = item.RevokeBy
+			if upstream.RevokeBy == "" {
+				upstream.RevokeBy = "thumbprint"
+			}
+		}
 		out = append(out, upstream)
 	}
 	return out, nil
@@ -371,7 +378,7 @@ func buildCommercialExternalCA(item config.ExternalCAConfig, poll, defaultTTL ti
 		}
 		return venafi.New(venafi.Config{
 			Name: item.Name, BaseURL: item.Endpoint, AccessToken: token,
-			PolicyDN: item.PolicyDN, Application: item.Application,
+			PolicyDN: item.PolicyDN, Application: item.Application, RevokeBy: item.RevokeBy,
 		}, opts...), nil
 	default:
 		return nil, fmt.Errorf("unsupported commercial external CA type %q", item.Type)

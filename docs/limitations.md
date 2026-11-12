@@ -8626,7 +8626,7 @@ and is proven against that authority's protocol by a test:
 | `ejbca` | yes | REST `PUT /certificate/{issuer_dn}/{serial}/revoke` |
 | `digicert` | yes | CertCentral: the order found by `filters[serial_number]`, then `PUT /certificate/{id}/revoke` with the reason and `skip_approval`; done only when the order reads back `revoked` |
 | `sectigo` | yes | SCM `POST /ssl/v1/revoke/serial/{serial}`; a refused retry is read back by serial before it counts as a failure |
-| `venafi` | yes | `POST /vedsdk/Certificates/Revoke` by SHA-1 thumbprint; done only when Venafi answers `Revoked` |
+| `venafi` | yes | `POST /vedsdk/Certificates/Revoke` by SHA-1 thumbprint, or with `revoke_by: certificate_dn` (OD-7) by the DN of the certificate object whose current certificate has that thumbprint (`GET Certificates?Thumbprint=`), for a policy that revokes only by DN; done only when Venafi answers `Revoked` |
 | `awspca` | yes | `RevokeCertificate` with the colon-separated serial; `RequestAlreadyProcessedException` on a retry counts as done |
 | `gcpcas` | yes | `caPools.certificates.list` filtered by hex serial, then `:revoke` on that resource name |
 | `smallstep` | yes | `POST /1.0/revoke` (passive) under a provisioner token whose subject is the decimal serial |

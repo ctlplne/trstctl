@@ -25769,6 +25769,14 @@
           "name": {
             "type": "string"
           },
+          "revoke_by": {
+            "description": "A Venafi authority's revocation addressing (OD-7): by the certificate's SHA-1 thumbprint, or by the DN of the certificate object that holds it (found by thumbprint, for a policy that revokes only by DN). Absent for other authorities.",
+            "enum": [
+              "thumbprint",
+              "certificate_dn"
+            ],
+            "type": "string"
+          },
           "revokes_by_certificate": {
             "description": "This authority, when available, revokes a found certificate from its bytes (an ACME authority, N10).",
             "type": "boolean"

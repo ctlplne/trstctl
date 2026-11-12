@@ -7505,6 +7505,7 @@ ExternalCA = TypedDict(
     {
         'id': str,
         'name': str,
+        'revoke_by': str,
         'revokes_by_certificate': bool,
         'revokes_by_serial': bool,
         'status': str,

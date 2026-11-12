@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- Venafi revocation by certificate DN (OD-7): a `venafi` external CA with `revoke_by: certificate_dn` revokes by the DN
+  of the certificate object whose current certificate has the certificate's thumbprint (found with Venafi's certificate
+  search), for a policy that revokes only by DN; an object that has moved on to another certificate, or a thumbprint
+  more than one object holds, is refused rather than revoked. The external CA list and the console's issuer
+  revocation picker name it.
 - An RS256 key option for the OpenID issuer (OD-6): `protocols.spiffe.jwt_key_algorithm: RS256`
   (`TRSTCTL_PROTOCOLS_SPIFFE_JWT_KEY_ALGORITHM`) has the signer create the workload JWT keys as RSA-2048, so a cloud
   that accepts only RS256 trusts exchanged workload tokens; the issuer advertises RS256 and publishes an RSA key, and

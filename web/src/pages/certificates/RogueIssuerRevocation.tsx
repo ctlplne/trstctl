@@ -123,7 +123,7 @@ export function RogueIssuerRevocationCell({
           <option value="">{t("certificates.rogue.issuerChoose")}</option>
           {offered.map((ca) => (
             <option key={ca.id} value={ca.id}>
-              {ca.name}
+              {ca.revoke_by === "certificate_dn" ? t("certificates.rogue.issuerByCertificateDN", { name: ca.name }) : ca.name}
             </option>
           ))}
         </Select>

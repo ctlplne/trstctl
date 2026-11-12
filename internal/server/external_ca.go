@@ -63,6 +63,9 @@ type ExternalCA struct {
 	UpstreamDNS01 bool
 	// ADCSRevocation routes an adcs issuer's revocations to its relay (A162).
 	ADCSRevocation ADCSRevocationRelay
+	// RevokeBy is how a venafi authority's revocations address the
+	// certificate (OD-7): thumbprint or certificate_dn; empty for others.
+	RevokeBy string
 }
 
 type factoryExternalCA struct {
@@ -232,7 +235,7 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 			}
 		}
 		meta := api.ExternalCA{ID: id, Type: typ, Name: name, Status: "available", UpstreamDNS01: cfg.UpstreamDNS01,
-			RevocationRelay: cfg.ADCSRevocation.Relay, RevocationCAConfig: cfg.ADCSRevocation.CAConfig}
+			RevocationRelay: cfg.ADCSRevocation.Relay, RevocationCAConfig: cfg.ADCSRevocation.CAConfig, RevokeBy: cfg.RevokeBy}
 		replaySafety := cfg.ReplaySafety
 		if externalCATypeHasReceiverIdempotency(typ) {
 			replaySafety = ca.ExternalIssueReconciled

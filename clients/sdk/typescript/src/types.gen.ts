@@ -19141,6 +19141,11 @@ export interface components {
         ExternalCA: {
             id: string;
             name: string;
+            /**
+             * @description A Venafi authority's revocation addressing (OD-7): by the certificate's SHA-1 thumbprint, or by the DN of the certificate object that holds it (found by thumbprint, for a policy that revokes only by DN). Absent for other authorities.
+             * @enum {string}
+             */
+            revoke_by?: "thumbprint" | "certificate_dn";
             /** @description This authority, when available, revokes a found certificate from its bytes (an ACME authority, N10). */
             revokes_by_certificate: boolean;
             /** @description This authority, when available, revokes a certificate trstctl did not issue by its serial alone (A163). */

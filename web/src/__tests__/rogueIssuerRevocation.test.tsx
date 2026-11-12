@@ -135,6 +135,34 @@ describe("A163 revoke a rogue certificate at its issuer", () => {
     expect(await screen.findByText("Revocation queued at corp-digicert.")).toBeInTheDocument();
   });
 
+  // OD-7: a Venafi authority that revokes by the certificate object's DN says so.
+  it("names a Venafi authority that revokes by certificate DN", async () => {
+    apiMock.externalCAs.mockReset().mockResolvedValue([
+      {
+        id: "corp-venafi-dn",
+        type: "venafi",
+        name: "Corp Venafi",
+        status: "available",
+        revokes_by_serial: false,
+        revokes_by_certificate: true,
+        revoke_by: "certificate_dn",
+      },
+      {
+        id: "corp-venafi-thumb",
+        type: "venafi",
+        name: "Corp Venafi (thumbprint)",
+        status: "available",
+        revokes_by_serial: false,
+        revokes_by_certificate: true,
+        revoke_by: "thumbprint",
+      },
+    ]);
+    render(<RogueCertificatePanel posture={posture} />);
+    const shadow = rowOf("shadow.corp.example");
+    expect(await within(shadow).findByRole("option", { name: "Corp Venafi (revokes by certificate DN)" })).toBeInTheDocument();
+    expect(within(shadow).getByRole("option", { name: "Corp Venafi (thumbprint)" })).toBeInTheDocument();
+  });
+
   // A163-L1: an AD CS issuer with a revocation relay revokes by serial; its
   // certutil takes reasons only up to cessationOfOperation, so the console
   // refuses another reason before sending anything.

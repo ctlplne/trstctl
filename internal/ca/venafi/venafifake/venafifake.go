@@ -38,6 +38,10 @@ type Server struct {
 	revoked      map[string]int // CertificateDN -> reason
 	pendingPolls int
 	seq          int
+	// history holds each object's replaced certificates (OD-7).
+	history map[string][][]byte
+	// revokeByDNOnly models a policy that revokes only by CertificateDN.
+	revokeByDNOnly bool
 }
 
 // NewServer starts a fake Venafi API backed by a fresh software CA.
@@ -52,11 +56,13 @@ func NewServer() (*Server, error) {
 		guids:        map[string]string{},
 		retrieveSeen: map[string]int{},
 		revoked:      map[string]int{},
+		history:      map[string][][]byte{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /vedsdk/Certificates/Request", s.handleRequest)
 	mux.HandleFunc("POST /vedsdk/Certificates/Retrieve", s.handleRetrieve)
 	mux.HandleFunc("POST /vedsdk/Certificates/Revoke", s.handleRevoke)
+	mux.HandleFunc("GET /vedsdk/Certificates/", s.handleSearch)
 	s.ts = httptest.NewServer(s.auth(mux))
 	return s, nil
 }

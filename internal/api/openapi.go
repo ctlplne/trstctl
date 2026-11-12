@@ -1115,6 +1115,7 @@ func componentSchemas() map[string]*Schema {
 		"id": str(), "type": str(), "name": str(), "status": str(),
 		"revokes_by_serial":      {Type: "boolean", Description: "This authority, when available, revokes a certificate trstctl did not issue by its serial alone (A163)."},
 		"revokes_by_certificate": {Type: "boolean", Description: "This authority, when available, revokes a found certificate from its bytes (an ACME authority, N10)."},
+		"revoke_by":              {Type: "string", Enum: []string{"thumbprint", "certificate_dn"}, Description: "A Venafi authority's revocation addressing (OD-7): by the certificate's SHA-1 thumbprint, or by the DN of the certificate object that holds it (found by thumbprint, for a policy that revokes only by DN). Absent for other authorities."},
 	}, "id", "type", "name", "status", "revokes_by_serial", "revokes_by_certificate")
 	externalCAIssueReq := object(map[string]*Schema{
 		"csr_pem": str(), "dns_names": {Type: "array", Items: str()}, "ttl_seconds": {Type: "integer"},

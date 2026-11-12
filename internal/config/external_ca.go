@@ -184,6 +184,10 @@ type ExternalCAConfig struct {
 	AccessTokenRef string `json:"access_token_ref,omitempty"`
 	PolicyDN       string `json:"policy_dn,omitempty"`
 	Application    string `json:"application,omitempty"`
+	// RevokeBy is how a revocation addresses the certificate at Venafi
+	// (OD-7): thumbprint (the default) or certificate_dn, for a policy that
+	// revokes only by the certificate object's DN.
+	RevokeBy string `json:"revoke_by,omitempty"`
 
 	PollInterval string `json:"poll_interval,omitempty"`
 }
@@ -508,6 +512,13 @@ func validateExternalCAFieldScope(where string, c ExternalCAConfig) []error {
 	}
 	if c.Type != "adcs" && c.RevocationRelay != "" {
 		errs = append(errs, fmt.Errorf("%s.revocation_relay applies only to adcs authorities, not %q", where, c.Type))
+	}
+	switch {
+	case c.RevokeBy == "":
+	case c.Type != "venafi":
+		errs = append(errs, fmt.Errorf("%s.revoke_by applies only to venafi authorities, not %q", where, c.Type))
+	case c.RevokeBy != "thumbprint" && c.RevokeBy != "certificate_dn":
+		errs = append(errs, fmt.Errorf("%s.revoke_by %q must be thumbprint or certificate_dn", where, c.RevokeBy))
 	}
 	return errs
 }

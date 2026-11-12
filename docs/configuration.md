@@ -406,6 +406,17 @@ Supported `type` values are `adcs`, `awspca`, `azurekv`, `digicert`, `ejbca`,
 provider's required fields before the server accepts traffic. The exact connector
 target schemas are listed in [Deployment connectors](features/deployment-connectors.md).
 
+A `venafi` authority revokes by the certificate's SHA-1 thumbprint. For a Venafi
+policy that revokes only by the certificate object's DN, set `revoke_by:
+certificate_dn` (OD-7): a revocation then finds the object whose current certificate
+has that thumbprint (`GET /vedsdk/Certificates/?Thumbprint=`) and revokes it by that
+DN. An object that has since moved on to another certificate is refused rather than
+revoked, because revoking by DN revokes the object's current certificate; so is a
+thumbprint more than one object holds. The token then also needs read access to the
+policy folder's certificate objects. `revoke_by` (`thumbprint`, the default, or
+`certificate_dn`) is refused on any other authority type, and the external CA list
+(`revoke_by`) and the console's issuer revocation picker show it.
+
 ### Vault PKI: keep the existing signing authority
 
 Start with [the complete Vault configuration example](examples/vault-external-ca.json).
