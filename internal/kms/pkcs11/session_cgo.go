@@ -7,6 +7,7 @@ package pkcs11
 import (
 	"bytes"
 	"encoding/asn1"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -67,6 +68,9 @@ type objectPair struct {
 	private  p11.ObjectHandle
 	revoked  bool
 	zeroized bool
+	// alg is the pair's algorithm, read from the token (P9-L3): RSA-2048,
+	// or an EC curve, whose CKM_ECDSA signature is converted to ASN.1.
+	alg crypto.Algorithm
 }
 
 // OpenModuleSession opens, initializes, and logs into a real PKCS#11 module.
@@ -183,7 +187,7 @@ func (s *moduleSession) GenerateKeyForOperation(operationID string, alg crypto.A
 }
 
 func (s *moduleSession) generateKeyWithID(alg crypto.Algorithm, keyID []byte) (string, []byte, error) {
-	if alg != crypto.RSA2048 {
+	if alg != crypto.RSA2048 && !crypto.IsPKCS11ECAlgorithm(alg) {
 		return "", nil, fmt.Errorf("pkcs11: unsupported algorithm %q", alg)
 	}
 	if len(keyID) != 16 {
@@ -203,32 +207,33 @@ func (s *moduleSession) generateKeyWithID(alg crypto.Algorithm, keyID []byte) (s
 		if pub == 0 || priv == 0 {
 			return "", nil, fmt.Errorf("pkcs11: operation object %q is only partially present", handle)
 		}
-		der, err := s.publicDERLocked(pub)
+		der, existing, err := s.publicKeyLocked(pub)
 		if err != nil {
 			return "", nil, err
 		}
-		s.handles[handle] = objectPair{public: pub, private: priv}
+		if existing != alg {
+			return "", nil, fmt.Errorf("pkcs11: operation object %q holds a %s key, not %s", handle, existing, alg)
+		}
+		s.handles[handle] = objectPair{public: pub, private: priv, alg: existing}
 		return handle, der, nil
 	}
 	label := fmt.Sprintf("%s-%s", s.label, hex.EncodeToString(keyID))
 	// P9-L4: a managed key signs and verifies, nothing else. The token's
 	// defaults would let the private key decrypt and unwrap and the public key
-	// encrypt and wrap (SoftHSM did), so the template says so explicitly.
+	// encrypt and wrap (SoftHSM did), so the template says so explicitly; an
+	// EC private key also may not derive (ECDH).
+	keyType, mechanism := uint(p11.CKK_RSA), uint(p11.CKM_RSA_PKCS_KEY_PAIR_GEN)
 	publicAttrs := []*p11.Attribute{
 		p11.NewAttribute(p11.CKA_CLASS, p11.CKO_PUBLIC_KEY),
-		p11.NewAttribute(p11.CKA_KEY_TYPE, p11.CKK_RSA),
 		p11.NewAttribute(p11.CKA_TOKEN, true),
 		p11.NewAttribute(p11.CKA_VERIFY, true),
 		p11.NewAttribute(p11.CKA_ENCRYPT, false),
 		p11.NewAttribute(p11.CKA_WRAP, false),
-		p11.NewAttribute(p11.CKA_PUBLIC_EXPONENT, []byte{1, 0, 1}),
-		p11.NewAttribute(p11.CKA_MODULUS_BITS, 2048),
 		p11.NewAttribute(p11.CKA_LABEL, label),
 		p11.NewAttribute(p11.CKA_ID, keyID),
 	}
 	privateAttrs := []*p11.Attribute{
 		p11.NewAttribute(p11.CKA_CLASS, p11.CKO_PRIVATE_KEY),
-		p11.NewAttribute(p11.CKA_KEY_TYPE, p11.CKK_RSA),
 		p11.NewAttribute(p11.CKA_TOKEN, true),
 		p11.NewAttribute(p11.CKA_PRIVATE, true),
 		p11.NewAttribute(p11.CKA_SIGN, true),
@@ -239,8 +244,24 @@ func (s *moduleSession) generateKeyWithID(alg crypto.Algorithm, keyID []byte) (s
 		p11.NewAttribute(p11.CKA_LABEL, label),
 		p11.NewAttribute(p11.CKA_ID, keyID),
 	}
+	if crypto.IsPKCS11ECAlgorithm(alg) {
+		// P9-L3: an EC key on the curve alg names.
+		params, err := crypto.PKCS11ECParams(alg)
+		if err != nil {
+			return "", nil, err
+		}
+		keyType, mechanism = p11.CKK_EC, p11.CKM_EC_KEY_PAIR_GEN
+		publicAttrs = append(publicAttrs, p11.NewAttribute(p11.CKA_EC_PARAMS, params))
+		privateAttrs = append(privateAttrs, p11.NewAttribute(p11.CKA_DERIVE, false))
+	} else {
+		publicAttrs = append(publicAttrs,
+			p11.NewAttribute(p11.CKA_PUBLIC_EXPONENT, []byte{1, 0, 1}),
+			p11.NewAttribute(p11.CKA_MODULUS_BITS, 2048))
+	}
+	publicAttrs = append(publicAttrs, p11.NewAttribute(p11.CKA_KEY_TYPE, keyType))
+	privateAttrs = append(privateAttrs, p11.NewAttribute(p11.CKA_KEY_TYPE, keyType))
 	pub, priv, err = s.ctx.GenerateKeyPair(s.session,
-		[]*p11.Mechanism{p11.NewMechanism(p11.CKM_RSA_PKCS_KEY_PAIR_GEN, nil)},
+		[]*p11.Mechanism{p11.NewMechanism(mechanism, nil)},
 		publicAttrs,
 		privateAttrs,
 	)
@@ -250,20 +271,72 @@ func (s *moduleSession) generateKeyWithID(alg crypto.Algorithm, keyID []byte) (s
 		// declaring the operation indeterminate.
 		existingPub, existingPriv, lookupErr := s.findObjectsByIDLocked(handle, keyID)
 		if lookupErr == nil && existingPub != 0 && existingPriv != 0 {
-			der, readErr := s.publicDERLocked(existingPub)
-			if readErr == nil {
-				s.handles[handle] = objectPair{public: existingPub, private: existingPriv}
+			der, existing, readErr := s.publicKeyLocked(existingPub)
+			if readErr == nil && existing == alg {
+				s.handles[handle] = objectPair{public: existingPub, private: existingPriv, alg: existing}
 				return handle, der, nil
 			}
 		}
-		return "", nil, fmt.Errorf("pkcs11: generate RSA key pair: %w", err)
+		return "", nil, fmt.Errorf("pkcs11: generate %s key pair: %w", alg, err)
 	}
-	der, err := s.publicDERLocked(pub)
+	der, got, err := s.publicKeyLocked(pub)
 	if err != nil {
 		return "", nil, err
 	}
-	s.handles[handle] = objectPair{public: pub, private: priv}
+	if got != alg {
+		return "", nil, fmt.Errorf("pkcs11: the token generated a %s key for a %s request", got, alg)
+	}
+	s.handles[handle] = objectPair{public: pub, private: priv, alg: got}
 	return handle, der, nil
+}
+
+// publicKeyLocked reads a public object's key type and its PKIX DER: an RSA
+// key from its modulus and exponent, an EC key (P9-L3) from its curve
+// parameters and point.
+func (s *moduleSession) publicKeyLocked(pub p11.ObjectHandle) ([]byte, crypto.Algorithm, error) {
+	attrs, err := s.ctx.GetAttributeValue(s.session, pub, []*p11.Attribute{p11.NewAttribute(p11.CKA_KEY_TYPE, nil)})
+	if err != nil || len(attrs) != 1 {
+		return nil, "", fmt.Errorf("pkcs11: read the public key's type: %w", err)
+	}
+	switch keyTypeOf(attrs[0].Value) {
+	case p11.CKK_RSA:
+		der, err := s.publicDERLocked(pub)
+		return der, crypto.RSA2048, err
+	case p11.CKK_EC:
+		attrs, err := s.ctx.GetAttributeValue(s.session, pub, []*p11.Attribute{
+			p11.NewAttribute(p11.CKA_EC_PARAMS, nil),
+			p11.NewAttribute(p11.CKA_EC_POINT, nil),
+		})
+		if err != nil {
+			return nil, "", fmt.Errorf("pkcs11: read EC public key attributes: %w", err)
+		}
+		var params, point []byte
+		for _, attr := range attrs {
+			switch attr.Type {
+			case p11.CKA_EC_PARAMS:
+				params = bytes.Clone(attr.Value)
+			case p11.CKA_EC_POINT:
+				point = bytes.Clone(attr.Value)
+			}
+		}
+		return crypto.ECDSAPublicKeyDERFromPKCS11(params, point)
+	default:
+		return nil, "", errors.New("pkcs11: the token key is neither RSA nor EC")
+	}
+}
+
+// keyTypeOf reads a CK_KEY_TYPE attribute value (a CK_ULONG in host order).
+func keyTypeOf(value []byte) uint {
+	var v uint64
+	switch len(value) {
+	case 8:
+		v = binary.NativeEndian.Uint64(value)
+	case 4:
+		v = uint64(binary.NativeEndian.Uint32(value))
+	default:
+		return ^uint(0)
+	}
+	return uint(v)
 }
 
 func (s *moduleSession) publicDERLocked(pub p11.ObjectHandle) ([]byte, error) {
@@ -305,13 +378,6 @@ func (s *moduleSession) SignDigest(handle string, digest []byte, opts crypto.Sig
 	if opts.Hash == "" {
 		opts.Hash = crypto.SHA256
 	}
-	if opts.RSAPadding != "" && opts.RSAPadding != crypto.RSAPKCS1v15 {
-		return nil, fmt.Errorf("pkcs11: unsupported RSA padding %q", opts.RSAPadding)
-	}
-	digestInfo, err := rsaDigestInfo(opts.Hash, digest)
-	if err != nil {
-		return nil, err
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -326,6 +392,30 @@ func (s *moduleSession) SignDigest(handle string, digest []byte, opts crypto.Sig
 	}
 	if pair.zeroized {
 		return nil, fmt.Errorf("pkcs11: object handle %q is zeroized", handle)
+	}
+	if crypto.IsPKCS11ECAlgorithm(pair.alg) {
+		// P9-L3: CKM_ECDSA signs the host-computed digest as it is and
+		// returns r||s, which trstctl stores and verifies as ASN.1. The
+		// signer's wire carries PKCS #1 v1.5 as its default padding, which
+		// an EC key ignores; asking for PSS is refused.
+		if opts.RSAPadding == crypto.RSAPSS {
+			return nil, fmt.Errorf("pkcs11: an EC key takes no RSA padding (%q)", opts.RSAPadding)
+		}
+		if err := s.ctx.SignInit(s.session, []*p11.Mechanism{p11.NewMechanism(p11.CKM_ECDSA, nil)}, pair.private); err != nil {
+			return nil, fmt.Errorf("pkcs11: sign init: %w", err)
+		}
+		raw, err := s.ctx.Sign(s.session, digest)
+		if err != nil {
+			return nil, fmt.Errorf("pkcs11: sign digest: %w", err)
+		}
+		return crypto.ECDSASignatureDERFromRaw(raw, pair.alg)
+	}
+	if opts.RSAPadding != "" && opts.RSAPadding != crypto.RSAPKCS1v15 {
+		return nil, fmt.Errorf("pkcs11: unsupported RSA padding %q", opts.RSAPadding)
+	}
+	digestInfo, err := rsaDigestInfo(opts.Hash, digest)
+	if err != nil {
+		return nil, err
 	}
 	if err := s.ctx.SignInit(s.session, []*p11.Mechanism{p11.NewMechanism(p11.CKM_RSA_PKCS, nil)}, pair.private); err != nil {
 		return nil, fmt.Errorf("pkcs11: sign init: %w", err)
@@ -437,7 +527,14 @@ func (s *moduleSession) findPairLocked(handle string) (objectPair, error) {
 	if pub == 0 || priv == 0 {
 		return objectPair{}, fmt.Errorf("pkcs11: object handle %q does not resolve to a complete token key pair", handle)
 	}
-	pair := objectPair{public: pub, private: priv}
+	if cached, ok := s.handles[handle]; ok && cached.public == pub && cached.private == priv && cached.alg != "" {
+		return cached, nil
+	}
+	_, alg, err := s.publicKeyLocked(pub)
+	if err != nil {
+		return objectPair{}, err
+	}
+	pair := objectPair{public: pub, private: priv, alg: alg}
 	s.handles[handle] = pair
 	return pair, nil
 }

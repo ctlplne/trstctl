@@ -52,7 +52,7 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 		"test -n \"$TRSTCTL_SOFTHSM_MODULE\"",
 		"export TRSTCTL_SOFTHSM_TOKEN_LABEL=trstctl-kms03",
 		"export TRSTCTL_SOFTHSM_USER_PIN=987654",
-		"CGO_ENABLED=1 GOCACHE=/tmp/gocache GOMODCACHE=/gomodcache GOPROXY=off go test -tags=pkcs11cgo ./internal/kms/pkcs11 -run 'TestSoftHSMRealBindingGenerateSign|TestSoftHSMEdgeCAHandleSurvivesSessionRestart|TestSoftHSMTokenAttestationObjectsRead|TestSoftHSMGeneratedKeysAreSignOnlyP9L4' -count=1 -v",
+		"CGO_ENABLED=1 GOCACHE=/tmp/gocache GOMODCACHE=/gomodcache GOPROXY=off go test -tags=pkcs11cgo ./internal/kms/pkcs11 -run 'TestSoftHSMRealBindingGenerateSign|TestSoftHSMEdgeCAHandleSurvivesSessionRestart|TestSoftHSMTokenAttestationObjectsRead|TestSoftHSMGeneratedKeysAreSignOnlyP9L4|TestSoftHSMGeneratesECKeysP9L3' -count=1 -v",
 		"pkcs11-tool --module \"$TRSTCTL_SOFTHSM_MODULE\" --token-label trstctl-kms03 --login --pin 987654 --list-objects --type privkey >/tmp/private-objects.txt",
 		"grep -qi 'sensitive' /tmp/private-objects.txt",
 		"grep -qi 'never extractable' /tmp/private-objects.txt",
@@ -82,6 +82,9 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "SOFTHSM_SIGN_ONLY_OK") {
 		t.Fatalf("SoftHSM sign-only key attributes (P9-L4) did not report success:\n%s", out)
+	}
+	if !strings.Contains(string(out), "SOFTHSM_EC_OK") {
+		t.Fatalf("SoftHSM EC keys (P9-L3) did not report success:\n%s", out)
 	}
 }
 

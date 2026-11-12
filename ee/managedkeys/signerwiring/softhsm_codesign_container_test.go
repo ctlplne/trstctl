@@ -61,7 +61,7 @@ func TestSoftHSMContainerCodeSigningKeyP9(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SoftHSM code signing failed: %v\n%s", err, out)
 	}
-	for _, marker := range []string{"SOFTHSM_CODE_SIGNING_OK", "SOFTHSM_KEY_NEVER_EXTRACTABLE"} {
+	for _, marker := range []string{"SOFTHSM_CODE_SIGNING_OK", "SOFTHSM_KEY_NEVER_EXTRACTABLE", "SOFTHSM_EC_MANAGED_KEY_OK"} {
 		if !strings.Contains(string(out), marker) {
 			t.Fatalf("the SoftHSM code-signing proof did not report %s:\n%s", marker, out)
 		}

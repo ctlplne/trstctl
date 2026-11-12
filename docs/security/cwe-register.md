@@ -1700,7 +1700,7 @@ not this file.
 | `internal/kmip/independent_verifier_test.go:119` | python is LookPath-resolved and module is a fixed repository verifier path (CWE-78). |
 | `internal/kmip/pykmip_client_test.go:49` | fixed docker subcommands with test-owned arguments (CWE-78) |
 | `internal/kmip/pykmip_tenants_test.go:46` | fixed docker subcommands with test-owned arguments (CWE-78) |
-| `internal/kms/pkcs11/softhsm_container_test.go:190` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
+| `internal/kms/pkcs11/softhsm_container_test.go:193` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/kms/tpm/swtpm_container_test.go:110` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:165` | the repository's own signer (CWE-78) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:181` | test executes a fixed local tool or fixture it built itself (CWE-78) |

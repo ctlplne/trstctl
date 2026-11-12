@@ -137,4 +137,24 @@ func TestSoftHSMCodeSigningKeyP9(t *testing.T) {
 		t.Fatal("another tenant signed with the SoftHSM code-signing key")
 	}
 	t.Log("SOFTHSM_CODE_SIGNING_OK")
+
+	// P9-L3: an EC managed key in the same token. Its public key is the
+	// token's own, and a certificate request it signs inside SoftHSM
+	// verifies.
+	ecKey, err := client.ManageKey(ctx, signing.ManagedKeyCommand{
+		TenantID: codeSigningTenantA, Provider: "pkcs11", OperationID: "p9l3-generate-ec-code-signing-key",
+		Action: signing.ManagedKeyGenerate, Algorithm: crypto.ECDSAP256,
+	})
+	if err != nil || ecKey.KeyID == "" || ecKey.Algorithm != crypto.ECDSAP256 || len(ecKey.PublicDER) == 0 {
+		t.Fatalf("the EC code-signing key in SoftHSM = %+v, %v", ecKey, err)
+	}
+	ecSigner, err := client.SignerForManagedKey(codeSigningTenantA, "pkcs11", ecKey.KeyID, crypto.ECDSAP256, ecKey.PublicDER, signing.PurposeCodeSign, authorizer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ecCSR, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "release signer EC (SoftHSM)", RequestedEKUs: []string{"codeSigning"}}, ecSigner)
+	if err != nil || crypto.VerifyCertificateRequest(ecCSR) != nil {
+		t.Fatalf("a certificate request signed by the EC key in SoftHSM: %v", err)
+	}
+	t.Log("SOFTHSM_EC_MANAGED_KEY_OK")
 }

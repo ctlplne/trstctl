@@ -247,6 +247,9 @@ records each signature in Rekor through the outbox as described above.
   [Configuration](../configuration.md#code-signing)) instead of a signer handle. The
   stock tools above use it the same way; each signature runs in the HSM or KMS through
   the isolated signer, authorized per signature and journaled by the signing command.
+  A PKCS#11 managed key is RSA-2048, or EC P-256 or P-384 (P9-L3): generated inside the
+  token, sign-only and never extractable (an EC private key also may not derive); an EC
+  key signs the digest with `CKM_ECDSA`, and trstctl stores and verifies its ASN.1 form.
 - **jarsigner, osslsigncode and other PKCS #11 tools:** `libtrstctl-pkcs11`
   (`make signing-clients`) is a PKCS #11 module with one token whose PIN is your
   API token and whose objects are the keys `TRSTCTL_PKCS11_KEYS` names, each with

@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- The PKCS#11 managed-key provider generates EC P-256 and P-384 keys in the HSM as well as RSA-2048 (P9-L3): sign-only
+  and never extractable, signing with `CKM_ECDSA`, the signature stored and verified in its ASN.1 form. Proven in
+  SoftHSM, including an EC code-signing managed key whose certificate request is signed inside the token.
 - CI templates import a repository's CBOM on every pipeline run (X6-L7, `deploy/ci`): a reusable GitHub Actions
   workflow and a GitLab CI job install `trstctl-cli` from a published release (checksums and source commit checked),
   run `cbom scan-source` and `cbom import` as `source:<repository>`, with a token that carries only `discovery:write`.

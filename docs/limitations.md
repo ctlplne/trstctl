@@ -6624,7 +6624,8 @@ This is a deliberate, documented trust boundary, not an accident.
     the token, never extractable and sign-only — the private key cannot decrypt or
     unwrap, the public key cannot encrypt or wrap (P9-L4); a certificate request and code signatures made inside
     it; a repeated command answered from the journal; another tenant refused). The
-    PKCS#11 provider generates RSA-2048 keys; EC keys in an HSM are what comes next.
+    PKCS#11 provider generates RSA-2048 and EC P-256 and P-384 keys (P9-L3; P-521 and
+    Ed25519 are not offered).
     Stock Notation 1.3.2 signs an image in a local registry through the plugin and
     verifies it under a strict trust policy rooted at the issuing CA, and a principal
     without `keys:write` is refused. Real HSM and cloud KMS accounts, and an arm64
