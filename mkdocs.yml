@@ -136,6 +136,7 @@ nav:
           - Connectors: guides/connector-authoring.md
           - Plugins: guides/plugin-authoring.md
           - Splunk app: guides/splunk-app.md
+          - SIEM content packs: guides/siem-content.md
           - Certificate profiles: guides/profile-authoring.md
           - EST enrollment: guides/est-enrollment.md
           - SCEP enrollment: guides/scep-enrollment.md

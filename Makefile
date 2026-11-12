@@ -1048,3 +1048,9 @@ ee-lint-ratchet: ## Lint ee/ uncapped and fail if the finding count grew past .e
 splunk-app: ## Build the deterministic trstctl Splunk app package (no vendor runtime included)
 	@mkdir -p bin
 	PYTHONDONTWRITEBYTECODE=1 python3 deploy/splunk/tools/package_app.py --output bin/trstctl-splunk.spl
+
+.PHONY: siem-content
+siem-content: ## Build the deterministic Elasticsearch/OpenSearch and rsyslog content packs for the audit feeds (P5-L5)
+	@mkdir -p bin
+	$(GO) run ./tools/siempack --pack elastic --repo . --out bin/trstctl-elastic-content.tar.gz
+	$(GO) run ./tools/siempack --pack rsyslog --repo . --out bin/trstctl-rsyslog-content.tar.gz

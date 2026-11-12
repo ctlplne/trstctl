@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- SIEM content packs ship for the syslog and Elasticsearch audit feeds (P5-L5): the Elasticsearch/OpenSearch index
+  template and ingest pipeline, and an rsyslog receiver configuration that keeps trstctl's audit messages and parses
+  each record's JSON. `make siem-content` builds both into deterministic archives (`tools/siempack`); see
+  `docs/guides/siem-content.md`. Proven against rsyslog 8.2608.0 and OpenSearch 3.9.0.
 - An Elasticsearch/OpenSearch index template and ingest pipeline ship for the elastic audit feed (P5-L6,
   `deploy/elastic`). The template maps every field the feed writes and keeps each event type's own data unindexed,
   so event types cannot conflict over a field; the pipeline maps each batch's chain trailer as its own
