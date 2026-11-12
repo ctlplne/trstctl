@@ -944,6 +944,11 @@
 
 ### Fixed
 
+- A managed-key mutation whose short synchronous wait ran out during a read returns its `202`
+  receipt (A261-O1). The command was already durable, but a read that failed because the wait's
+  own time ran out (a driver reporting it as cancellation, or the completed key's read crossing it)
+  returned an error instead of the pollable operation the wait's timer returns. A read that fails
+  before the wait's time runs out, and the caller's own cancellation, are still errors.
 - The Provider certificate cap counts current certificates (MTR-D1). The certificate meter the cap and
   the usage evidence read, `certificates_stored`, counted every certificate not revoked: a renewal
   keeps its predecessor as superseded, so the count grew by one per renewal (about eight a year per

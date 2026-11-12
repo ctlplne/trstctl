@@ -1040,7 +1040,8 @@ the control plane exposes:
 - `GET /api/v1/managed-keys/operations/{operation_id}` — read a tenant-scoped
   provider command's durable `queued`, `completed`, or `failed` state. A mutation
   still running after its short synchronous wait returns `202` with this opaque
-  ID and status URL; replaying the same idempotency key returns the same receipt;
+  ID and status URL, also when a read inside that wait runs out of its time;
+  replaying the same idempotency key returns the same receipt;
 - `POST /api/v1/managed-keys/verify-custody` — ask the isolated signer to sign a
   fresh random challenge with the exact owned key, then verify the signature
   against the saved public key. The response and inventory show the last proof

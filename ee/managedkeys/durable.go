@@ -430,12 +430,21 @@ func (s *durableService) wait(ctx context.Context, tenantID, operationID string)
 	}
 	waitCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
+	// A261-O1: a read that fails because this wait's own budget ran out is
+	// the same outcome as the timer below: the command is already durable,
+	// so the caller gets its pollable receipt. A driver may report that
+	// expiry as cancellation, and the completed key's read can cross the
+	// same budget. The caller's own cancellation and a read that failed
+	// before the budget ran out stay failures.
+	ownBudgetSpent := func(err error) bool {
+		return ctx.Err() == nil && (errors.Is(err, context.DeadlineExceeded) || errors.Is(waitCtx.Err(), context.DeadlineExceeded))
+	}
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		op, err := s.operation(waitCtx, tenantID, operationID)
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			if ownBudgetSpent(err) {
 				return Result{}, &api.ManagedKeyOperationPendingError{OperationID: operationID}
 			}
 			return Result{}, err
@@ -444,6 +453,9 @@ func (s *durableService) wait(ctx context.Context, tenantID, operationID string)
 		case "completed":
 			key, err := s.key(waitCtx, tenantID, op.Provider, op.ResultKeyID)
 			if err != nil {
+				if ownBudgetSpent(err) {
+					return Result{}, &api.ManagedKeyOperationPendingError{OperationID: operationID}
+				}
 				return Result{}, err
 			}
 			return Result{Provider: key.Provider, KeyID: key.KeyID, Algorithm: crypto.Algorithm(key.Algorithm), Version: key.Version, State: managedkeystate.PublicState(key.Provider, key.State), PublicDER: key.PublicDER,
