@@ -709,6 +709,7 @@ public final class OpenApiSchemas {
       "MigrationAssessedWave",
       "MigrationAssessment",
       "MigrationMemberBinding",
+      "MigrationPredecessorPreview",
       "MigrationRun",
       "MigrationRunActionRequest",
       "MigrationRunList",

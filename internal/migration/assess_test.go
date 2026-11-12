@@ -141,3 +141,57 @@ func TestAssessedWavesAreInExecutionOrder(t *testing.T) {
 		}
 	}
 }
+
+// P3-L4: assessing a planned switch lists, member by member, the certificate
+// the switch would revoke and the CA that would revoke it. One no trstctl CA
+// can revoke is a blocking unknown, because the start refuses it; a plain
+// assessment lists no predecessors.
+func TestAssessSwitchListsWhatItWouldRevokeP3L4(t *testing.T) {
+	t.Parallel()
+	p := migration.Plan{
+		ID: "switch", RequireFullTrust: true,
+		Waves: []migration.Wave{{ID: "canary", Ordinal: 1, Members: []string{"issued", "imported", "unread"}}},
+	}
+	ready := func(m string, pf *migration.PredecessorFacts) migration.MemberFacts {
+		return migration.MemberFacts{Member: m, TrustStoresObserved: 1, HasDeploymentTarget: true, HasVerifyAddress: true, Predecessor: pf}
+	}
+	facts := map[string]migration.MemberFacts{
+		"issued": ready("issued", &migration.PredecessorFacts{CertificateID: "cert-1", Serial: "0a1b", Fingerprint: "ff00",
+			CAID: "ca-1", CAName: "Platform issuing CA"}),
+		"imported": ready("imported", &migration.PredecessorFacts{CertificateID: "cert-2", Serial: "0c2d",
+			Problem: "its current certificate does not resolve to exactly one trstctl CA that can revoke it"}),
+		"unread": ready("unread", nil),
+	}
+	a := migration.AssessSwitch(p, facts)
+	if !a.RevokePredecessors || len(a.Predecessors) != 3 {
+		t.Fatalf("switch assessment = %+v", a)
+	}
+	want := migration.Predecessor{Member: "issued", CertificateID: "cert-1", Serial: "0a1b", Fingerprint: "ff00",
+		CAID: "ca-1", CAName: "Platform issuing CA", Revocable: true}
+	if a.Predecessors[0] != want {
+		t.Fatalf("revocable row = %+v, want %+v", a.Predecessors[0], want)
+	}
+	if row := a.Predecessors[1]; row.Revocable || row.Serial != "0c2d" || !strings.Contains(row.Problem, "exactly one trstctl CA") {
+		t.Fatalf("an imported certificate's row = %+v", row)
+	}
+	if row := a.Predecessors[2]; row.Revocable || row.Problem == "" {
+		t.Fatalf("an unread certificate's row = %+v", row)
+	}
+	if a.Migratable != 1 || len(a.Waves[0].Blocked) != 2 {
+		t.Fatalf("migratable %d, blocked %v; want 1 and the two that cannot be revoked", a.Migratable, a.Waves[0].Blocked)
+	}
+	kinds := 0
+	for _, u := range a.Unknowns {
+		if u.Kind == migration.UnknownPredecessorNotRevocable {
+			kinds++
+		}
+	}
+	if kinds != 2 || !strings.Contains(a.Guidance, "planned switch") {
+		t.Fatalf("%d predecessor unknowns, guidance %q", kinds, a.Guidance)
+	}
+
+	plain := migration.Assess(p, facts)
+	if plain.RevokePredecessors || plain.Predecessors != nil || plain.Migratable != 3 {
+		t.Fatalf("a plain assessment = %+v", plain)
+	}
+}

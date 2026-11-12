@@ -9911,6 +9911,7 @@ MigrationAssessRequest = TypedDict(
         'min_trust_percent': int,
         'plan_id': str,
         'require_full_trust': bool,
+        'revoke_predecessors': bool,
         'waves': list[dict[str, Any]],
     },
     total=False,
@@ -9935,6 +9936,8 @@ MigrationAssessment = TypedDict(
         'members': int,
         'migratable': int,
         'plan_id': str,
+        'predecessors': list[dict[str, Any]],
+        'revoke_predecessors': bool,
         'unknowns': list[dict[str, Any]],
         'waves': list[dict[str, Any]],
     },
@@ -9968,6 +9971,21 @@ MigrationMemberBinding = TypedDict(
         'trust_anchor_pem': str,
         'verify_address': str,
         'verify_server_name': str,
+    },
+    total=False,
+)
+
+MigrationPredecessorPreview = TypedDict(
+    'MigrationPredecessorPreview',
+    {
+        'ca_id': str,
+        'ca_name': str,
+        'certificate_id': str,
+        'fingerprint': str,
+        'member': str,
+        'problem': str,
+        'revocable': bool,
+        'serial': str,
     },
     total=False,
 )

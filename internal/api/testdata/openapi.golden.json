@@ -33631,6 +33631,10 @@
           "require_full_trust": {
             "type": "boolean"
           },
+          "revoke_predecessors": {
+            "description": "assess a planned CA switch (P3-L4): also list the certificate each member's switch would revoke and the trstctl CA that would revoke it",
+            "type": "boolean"
+          },
           "waves": {
             "items": {
               "properties": {
@@ -33707,6 +33711,15 @@
           "plan_id": {
             "type": "string"
           },
+          "predecessors": {
+            "items": {
+              "$ref": "#/components/schemas/MigrationPredecessorPreview"
+            },
+            "type": "array"
+          },
+          "revoke_predecessors": {
+            "type": "boolean"
+          },
           "unknowns": {
             "items": {
               "$ref": "#/components/schemas/MigrationUnknown"
@@ -33726,7 +33739,8 @@
           "unknowns",
           "members",
           "migratable",
-          "guidance"
+          "guidance",
+          "revoke_predecessors"
         ],
         "type": "object"
       },
@@ -33846,6 +33860,39 @@
           "subject_dns_names",
           "predecessor_certificate_id",
           "predecessor_fingerprint"
+        ],
+        "type": "object"
+      },
+      "MigrationPredecessorPreview": {
+        "properties": {
+          "ca_id": {
+            "type": "string"
+          },
+          "ca_name": {
+            "type": "string"
+          },
+          "certificate_id": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "member": {
+            "type": "string"
+          },
+          "problem": {
+            "type": "string"
+          },
+          "revocable": {
+            "type": "boolean"
+          },
+          "serial": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "member",
+          "revocable"
         ],
         "type": "object"
       },
@@ -34130,7 +34177,8 @@
             "enum": [
               "no_trust_store_observed",
               "no_verification_address",
-              "no_deployment_target"
+              "no_deployment_target",
+              "predecessor_not_revocable"
             ],
             "type": "string"
           },

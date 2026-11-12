@@ -523,6 +523,15 @@ signed); rolling back restores the current cohort, never a cohort whose predeces
 are already revoked. Starting the same switch again with the same Idempotency-Key
 returns the existing run and changes nothing.
 
+Before starting, assess the switch as one (P3-L4): `POST /api/v1/migrations/assess` with
+`"revoke_predecessors": true` lists, member by member, the certificate the switch would
+revoke (its id, serial and fingerprint) and the CA that would revoke it, read by the
+same rules as the start. A member whose current certificate no trstctl CA can revoke is
+listed with the reason and is an unknown (`predecessor_not_revocable`) that blocks the
+start. The Migration page assesses a switch this way and shows **Certificates this
+switch revokes** in the review; an assessment that was not a switch's does not open
+**Start migration** for one. Assessing changes nothing.
+
 ```sh
 trstctl migrations start -f run.json
 trstctl migrations list

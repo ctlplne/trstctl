@@ -16729,6 +16729,22 @@ export const messages = {
   "migration.form.predecessors": { defaultMessage: "Predecessors", description: "P3-L3: review label for what happens to each member's previous certificate." },
   "migration.form.predecessorsRevoked": { defaultMessage: "Revoked once each successor is verified live", description: "P3-L3: the run revokes predecessors." },
   "migration.form.predecessorsKept": { defaultMessage: "Kept until they expire", description: "P3-L3: the run leaves predecessors to expire." },
+  "migration.switch.predecessorsTitle": {
+    defaultMessage: "Certificates this switch revokes",
+    description: "P3-L4: heading over the assessment's list of each member's current certificate a planned switch would revoke.",
+  },
+  "migration.switch.predecessorsBody": {
+    defaultMessage: "Each one is revoked (superseded) through the CA named beside it, only after that member's new certificate is verified live.",
+    description: "P3-L4: explains when and how a planned switch revokes the listed certificates.",
+  },
+  "migration.switch.predecessorRevoked": {
+    defaultMessage: "serial {serial}, revoked through {ca}",
+    description: "P3-L4: one member's current certificate and the CA that would revoke it.",
+  },
+  "migration.switch.predecessorBlocked": {
+    defaultMessage: "cannot be revoked by a trstctl CA, so the switch cannot start",
+    description: "P3-L4: a member whose current certificate no trstctl CA can revoke; the reason is listed with the blockers.",
+  },
   "migration.form.planId": {
     defaultMessage: "Plan ID",
     description: "Operator-chosen migration plan identifier.",

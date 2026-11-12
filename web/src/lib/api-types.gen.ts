@@ -7139,6 +7139,7 @@ export interface MigrationAssessRequest {
   min_trust_percent?: number;
   plan_id?: string;
   require_full_trust?: boolean;
+  revoke_predecessors?: boolean;
   waves: { id: string; members: string[]; ordinal: number }[];
 }
 
@@ -7155,6 +7156,8 @@ export interface MigrationAssessment {
   members: number;
   migratable: number;
   plan_id: string;
+  predecessors?: MigrationPredecessorPreview[];
+  revoke_predecessors: boolean;
   unknowns: MigrationUnknown[];
   waves: MigrationAssessedWave[];
 }
@@ -7184,6 +7187,17 @@ export interface MigrationMemberBinding {
   trust_anchor_pem: string;
   verify_address: string;
   verify_server_name?: string;
+}
+
+export interface MigrationPredecessorPreview {
+  ca_id?: string;
+  ca_name?: string;
+  certificate_id?: string;
+  fingerprint?: string;
+  member: string;
+  problem?: string;
+  revocable: boolean;
+  serial?: string;
 }
 
 export interface MigrationRun {
@@ -7265,7 +7279,7 @@ export interface MigrationRunWave {
 
 export interface MigrationUnknown {
   detail: string;
-  kind: "no_trust_store_observed" | "no_verification_address" | "no_deployment_target";
+  kind: "no_trust_store_observed" | "no_verification_address" | "no_deployment_target" | "predecessor_not_revocable";
   member: string;
 }
 

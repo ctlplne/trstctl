@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -152,6 +153,52 @@ func TestServedPlannedCASwitchP3(t *testing.T) {
 	approveCACeremony(t, h.servedHarness, caApprover, ceremony.ID, 1, "p3-root-approval")
 	newRoot := createRootCA(t, h.servedHarness, caOperator, ceremony.ID, rootSpec, "p3-root-create")
 
+	// P3-L4: assessing the switch first says which certificate it would
+	// revoke and through which CA. A member no trstctl CA issued a
+	// certificate to blocks it, and a plain assessment lists none.
+	assessor := seedScopedTokenSubject(t, h.store, h.tenant, "p3l4-assessor", "graph:read")
+	noCertID := "40400000-0000-4000-8000-0000000000f4"
+	if _, err := h.srv.orch.EnsureIdentity(ctx, h.tenant, noCertID, store.Identity{
+		Kind: store.KindX509Certificate, Name: "ca-switch-p3-none.test", OwnerID: owner.ID, Attributes: attrs,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	assessBody := map[string]any{
+		"plan_id": "switch-p3", "require_full_trust": true, "revoke_predecessors": true,
+		"waves": []any{map[string]any{"id": "canary", "ordinal": 1, "members": []any{identityID, noCertID}}},
+	}
+	status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/migrations/assess", assessor, "p3l4-assess", assessBody)
+	var assessed migration.Assessment
+	if status != http.StatusOK || json.Unmarshal(body, &assessed) != nil || !assessed.RevokePredecessors || len(assessed.Predecessors) != 2 {
+		t.Fatalf("assess the switch: HTTP %d %s", status, body)
+	}
+	want := migration.Predecessor{Member: identityID, CertificateID: old.ID, Serial: old.Serial,
+		Fingerprint: cleanFingerprint(old.Fingerprint), CAID: IssuingCAID(), CAName: "trstctl platform CA", Revocable: true}
+	if assessed.Predecessors[0] != want {
+		t.Fatalf("the switch would revoke %+v, want %+v", assessed.Predecessors[0], want)
+	}
+	if none := assessed.Predecessors[1]; none.Member != noCertID || none.Revocable || !strings.Contains(none.Problem, "exactly one active predecessor certificate") {
+		t.Fatalf("a member with no certificate: %+v", none)
+	}
+	var predecessorUnknowns []string
+	for _, u := range assessed.Unknowns {
+		if u.Kind == migration.UnknownPredecessorNotRevocable {
+			predecessorUnknowns = append(predecessorUnknowns, u.Member)
+		}
+	}
+	if len(predecessorUnknowns) != 1 || predecessorUnknowns[0] != noCertID || !slices.Contains(assessed.Waves[0].Blocked, noCertID) {
+		t.Fatalf("only the member a switch cannot revoke is blocked for it: %v %+v", predecessorUnknowns, assessed.Waves)
+	}
+	delete(assessBody, "revoke_predecessors")
+	status, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/migrations/assess", assessor, "p3l4-assess-plain", assessBody)
+	var plain migration.Assessment
+	if status != http.StatusOK || json.Unmarshal(body, &plain) != nil || plain.RevokePredecessors || plain.Predecessors != nil {
+		t.Fatalf("a plain assessment: HTTP %d %s", status, body)
+	}
+	if ledger, found, err := h.store.LookupIssuedCert(ctx, h.tenant, IssuingCAID(), old.Serial); err != nil || !found || ledger.Revoked() {
+		t.Fatalf("assessing touched the old certificate: %+v %v %v", ledger, found, err)
+	}
+
 	// The endpoint goes down before the switch reaches it.
 	stop()
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "p3-switch-operator", "keys:read", "keys:write", "certs:issue")
@@ -161,7 +208,7 @@ func TestServedPlannedCASwitchP3(t *testing.T) {
 			"identity_id": identityID, "agent_id": agentRowID(h.tenant, h.agent), "trust_anchor_path": trustPath,
 		}}}},
 	}
-	status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/migrations/runs", token, "p3-start", start)
+	status, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/migrations/runs", token, "p3-start", start)
 	var started migration.Run
 	if status != http.StatusCreated || json.Unmarshal(body, &started) != nil || !started.RevokePredecessors {
 		t.Fatalf("start the switch: HTTP %d %s", status, body)

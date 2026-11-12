@@ -43,7 +43,27 @@ const (
 	UnknownNoVerificationAddress = "no_verification_address"
 	// UnknownNoDeploymentTarget: nothing knows how to deliver to this member.
 	UnknownNoDeploymentTarget = "no_deployment_target"
+	// UnknownPredecessorNotRevocable: a planned switch (P3) revokes each
+	// member's current certificate through the trstctl CA that issued it, and
+	// this member's cannot be resolved to one, so the start would refuse it
+	// (P3-L4).
+	UnknownPredecessorNotRevocable = "predecessor_not_revocable"
 )
+
+// Predecessor is one row of a planned switch's preview (P3-L4): the
+// certificate a switch would revoke (superseded) for the member once its
+// successor is verified live, and the CA that would revoke it.
+type Predecessor struct {
+	Member        string `json:"member"`
+	CertificateID string `json:"certificate_id,omitempty"`
+	Serial        string `json:"serial,omitempty"`
+	Fingerprint   string `json:"fingerprint,omitempty"`
+	CAID          string `json:"ca_id,omitempty"`
+	CAName        string `json:"ca_name,omitempty"`
+	// Revocable is false when a switch could not revoke it; Problem says why.
+	Revocable bool   `json:"revocable"`
+	Problem   string `json:"problem,omitempty"`
+}
 
 // Assessment is the read-only answer.
 type Assessment struct {
@@ -61,6 +81,10 @@ type Assessment struct {
 	// someone to round it up.
 	Migratable int    `json:"migratable"`
 	Guidance   string `json:"guidance"`
+	// RevokePredecessors says this assessed a planned switch (P3-L4), and
+	// Predecessors then lists, member by member, what it would revoke.
+	RevokePredecessors bool          `json:"revoke_predecessors"`
+	Predecessors       []Predecessor `json:"predecessors,omitempty"`
 }
 
 // AssessedWave is one wave's read-only summary.
@@ -71,6 +95,10 @@ type AssessedWave struct {
 	Blocked  []string `json:"blocked"`
 	Guidance string   `json:"guidance,omitempty"`
 }
+
+const switchGuidance = " This assesses a planned switch: once a member's successor is verified " +
+	"live, the certificate listed for it is revoked (superseded) through the CA named beside it, " +
+	"and a certificate no trstctl CA can revoke blocks the start."
 
 const assessGuidance = "This is a read-only assessment: nothing was distributed, issued, or " +
 	"deployed. Unknowns are gaps in what has been OBSERVED, not findings about the estate — a " +
@@ -91,11 +119,41 @@ type MemberFacts struct {
 	TrustStoresObserved int
 	HasDeploymentTarget bool
 	HasVerifyAddress    bool
+	// Predecessor is what a planned switch would revoke for this member; nil
+	// when the switch is not being assessed, or its certificate was not read.
+	Predecessor *PredecessorFacts
+}
+
+// PredecessorFacts is a member's current certificate and the trstctl CA that
+// issued it, as a planned switch would bind them.
+type PredecessorFacts struct {
+	CertificateID string
+	Serial        string
+	Fingerprint   string
+	CAID          string
+	CAName        string
+	// Problem says why a switch could not revoke it; empty when it can.
+	Problem string
 }
 
 // Assess enumerates what a plan would touch and what is unknown about it.
 func Assess(p Plan, facts map[string]MemberFacts) Assessment {
-	out := Assessment{PlanID: p.ID, Guidance: assessGuidance}
+	return assess(p, facts, false)
+}
+
+// AssessSwitch is Assess for a planned CA switch (P3-L4): it also lists the
+// certificate each member's switch would revoke and the CA that would revoke
+// it, and one no trstctl CA can revoke is an unknown that blocks the start.
+func AssessSwitch(p Plan, facts map[string]MemberFacts) Assessment {
+	return assess(p, facts, true)
+}
+
+func assess(p Plan, facts map[string]MemberFacts, switching bool) Assessment {
+	out := Assessment{PlanID: p.ID, Guidance: assessGuidance, RevokePredecessors: switching}
+	if switching {
+		out.Guidance += switchGuidance
+		out.Predecessors = []Predecessor{}
+	}
 	waves := append([]Wave(nil), p.Waves...)
 	sort.SliceStable(waves, func(i, j int) bool { return waves[i].Ordinal < waves[j].Ordinal })
 
@@ -128,6 +186,23 @@ func Assess(p Plan, facts map[string]MemberFacts) Assessment {
 						"this member and the wave would wait on it forever",
 				})
 				blocked = true
+			}
+			if switching {
+				row := Predecessor{Member: m, Problem: "the member's current certificate was not read"}
+				if pf := f.Predecessor; known && pf != nil {
+					row = Predecessor{Member: m, CertificateID: pf.CertificateID, Serial: pf.Serial,
+						Fingerprint: pf.Fingerprint, CAID: pf.CAID, CAName: pf.CAName, Problem: pf.Problem}
+				}
+				row.Revocable = row.Problem == ""
+				out.Predecessors = append(out.Predecessors, row)
+				if !row.Revocable {
+					out.Unknowns = append(out.Unknowns, Unknown{
+						Member: m, Kind: UnknownPredecessorNotRevocable,
+						Detail: "a switch revokes each member's current certificate through the trstctl CA " +
+							"that issued it, and this one cannot be: " + row.Problem,
+					})
+					blocked = true
+				}
 			}
 			if blocked {
 				aw.Blocked = append(aw.Blocked, m)

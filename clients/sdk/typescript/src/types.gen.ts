@@ -21120,6 +21120,8 @@ export interface components {
             min_trust_percent?: number;
             plan_id?: string;
             require_full_trust?: boolean;
+            /** @description assess a planned CA switch (P3-L4): also list the certificate each member's switch would revoke and the trstctl CA that would revoke it */
+            revoke_predecessors?: boolean;
             waves: {
                 id: string;
                 members: string[];
@@ -21138,6 +21140,8 @@ export interface components {
             members: number;
             migratable: number;
             plan_id: string;
+            predecessors?: components["schemas"]["MigrationPredecessorPreview"][];
+            revoke_predecessors: boolean;
             unknowns: components["schemas"]["MigrationUnknown"][];
             waves: components["schemas"]["MigrationAssessedWave"][];
         };
@@ -21172,6 +21176,16 @@ export interface components {
             trust_anchor_pem: string;
             verify_address: string;
             verify_server_name?: string;
+        };
+        MigrationPredecessorPreview: {
+            ca_id?: string;
+            ca_name?: string;
+            certificate_id?: string;
+            fingerprint?: string;
+            member: string;
+            problem?: string;
+            revocable: boolean;
+            serial?: string;
         };
         MigrationRun: {
             approval?: components["schemas"]["MigrationApprovalUse"];
@@ -21256,7 +21270,7 @@ export interface components {
         MigrationUnknown: {
             detail: string;
             /** @enum {string} */
-            kind: "no_trust_store_observed" | "no_verification_address" | "no_deployment_target";
+            kind: "no_trust_store_observed" | "no_verification_address" | "no_deployment_target" | "predecessor_not_revocable";
             member: string;
         };
         NHIAttackPathRequest: {

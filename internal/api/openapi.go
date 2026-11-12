@@ -6130,14 +6130,19 @@ func componentSchemas() map[string]*Schema {
 			"members": {Type: "array", Items: str()},
 		}, "id", "ordinal", "members")},
 		"require_full_trust": {Type: "boolean"}, "min_trust_percent": {Type: "integer"},
+		"revoke_predecessors": {Type: "boolean", Description: "assess a planned CA switch (P3-L4): also list the certificate each member's switch would revoke and the trstctl CA that would revoke it"},
 	}, "waves")
 	migrationUnknown := object(map[string]*Schema{
 		"member": str(),
 		"kind": {Type: "string", Enum: []string{
-			"no_trust_store_observed", "no_verification_address", "no_deployment_target",
+			"no_trust_store_observed", "no_verification_address", "no_deployment_target", "predecessor_not_revocable",
 		}},
 		"detail": str(),
 	}, "member", "kind", "detail")
+	migrationPredecessorPreview := object(map[string]*Schema{
+		"member": str(), "certificate_id": str(), "serial": str(), "fingerprint": str(),
+		"ca_id": str(), "ca_name": str(), "revocable": {Type: "boolean"}, "problem": str(),
+	}, "member", "revocable")
 	migrationAssessedWave := object(map[string]*Schema{
 		"id": str(), "ordinal": {Type: "integer"},
 		"members":  {Type: "array", Items: str()},
@@ -6149,8 +6154,10 @@ func componentSchemas() map[string]*Schema {
 		"waves":    {Type: "array", Items: ref("MigrationAssessedWave")},
 		"unknowns": {Type: "array", Items: ref("MigrationUnknown")},
 		"members":  {Type: "integer"}, "migratable": {Type: "integer"},
-		"guidance": str(),
-	}, "plan_id", "waves", "unknowns", "members", "migratable", "guidance")
+		"guidance":            str(),
+		"revoke_predecessors": {Type: "boolean"},
+		"predecessors":        {Type: "array", Items: ref("MigrationPredecessorPreview")},
+	}, "plan_id", "waves", "unknowns", "members", "migratable", "guidance", "revoke_predecessors")
 	migrationRunStartMember := object(map[string]*Schema{
 		"identity_id": uuid(), "agent_id": uuid(), "trust_anchor_path": str(),
 	}, "identity_id")
@@ -9415,6 +9422,7 @@ func componentSchemas() map[string]*Schema {
 		"MigrationUnknown":                      migrationUnknown,
 		"MigrationAssessedWave":                 migrationAssessedWave,
 		"MigrationAssessment":                   migrationAssessment,
+		"MigrationPredecessorPreview":           migrationPredecessorPreview,
 		"MigrationRunStartMember":               migrationRunStartMember,
 		"MigrationRunStartWave":                 migrationRunStartWave,
 		"MigrationRunStartRequest":              migrationRunStartRequest,

@@ -130,6 +130,8 @@ describe("migration operator plan", () => {
       guidance: "Any unknown blocks the start of a migration.",
       unknowns: [],
       waves: [{ id: "canary", ordinal: 1, members: [identityID] }],
+      revoke_predecessors: true,
+      predecessors: [{ member: identityID, serial: "4e1eed08", ca_id: "ca-platform", ca_name: "trstctl platform CA", revocable: true }],
     });
     apiMock.startMigrationRun.mockResolvedValue({ id: "run-switch", plan_id: "ca-switch", status: "running", revoke_predecessors: true, waves: [] });
     renderRoute();
@@ -152,6 +154,73 @@ describe("migration operator plan", () => {
       revoke_predecessors: true,
       waves: [{ id: "canary", ordinal: 1, members: [{ identity_id: identityID, agent_id: agentID, trust_anchor_path: "/etc/trstctl/next-root.pem" }] }],
     });
+  });
+
+  // P3-L4: a switch is assessed as one; the review lists each certificate it
+  // would revoke and the CA that revokes it, and one no trstctl CA can revoke
+  // keeps the start closed. An assessment that is not a switch's does not
+  // count for one.
+  it("lists the certificates a switch revokes before it can start", async () => {
+    const user = userEvent.setup();
+    const switchAssessment = {
+      plan_id: "ca-switch",
+      members: 1,
+      migratable: 1,
+      guidance: "Any unknown blocks the start of a migration.",
+      unknowns: [],
+      waves: [{ id: "canary", ordinal: 1, members: [identityID] }],
+      revoke_predecessors: true,
+      predecessors: [{ member: identityID, serial: "4e1eed08", ca_id: "ca-platform", ca_name: "trstctl platform CA", revocable: true }],
+    };
+    apiMock.assessMigration
+      .mockResolvedValueOnce({ ...switchAssessment, revoke_predecessors: false, predecessors: undefined })
+      .mockResolvedValueOnce({
+        ...switchAssessment,
+        migratable: 0,
+        unknowns: [
+          {
+            member: identityID,
+            kind: "predecessor_not_revocable",
+            detail: "its current certificate does not resolve to exactly one trstctl CA that can revoke it",
+          },
+        ],
+        waves: [{ id: "canary", ordinal: 1, members: [identityID], blocked: [identityID] }],
+        predecessors: [
+          {
+            member: identityID,
+            serial: "0c2d",
+            revocable: false,
+            problem: "its current certificate does not resolve to exactly one trstctl CA that can revoke it",
+          },
+        ],
+      })
+      .mockResolvedValueOnce(switchAssessment);
+    renderRoute();
+    await user.click(await screen.findByRole("button", { name: "Start migration plan" }));
+    await user.type(screen.getByLabelText("Plan ID"), "ca-switch");
+    await user.selectOptions(await screen.findByLabelText("New CA authority"), authorityID);
+    await user.click(screen.getByRole("checkbox", { name: /Revoke each predecessor once its successor is verified live/ }));
+    await user.click(screen.getByRole("button", { name: "Map waves" }));
+    await user.selectOptions(screen.getByLabelText("Identity"), identityID);
+    await user.selectOptions(screen.getByLabelText("Host agent"), agentID);
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+
+    // An assessment that is not a switch's does not open the start.
+    await user.click(screen.getByRole("button", { name: "Check cutover readiness" }));
+    expect(apiMock.assessMigration).toHaveBeenLastCalledWith(expect.objectContaining({ plan_id: "ca-switch", revoke_predecessors: true }));
+    expect(await screen.findByText(/no longer matches|does not match/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start migration" })).not.toBeInTheDocument();
+
+    // A certificate no trstctl CA can revoke keeps it closed, and says so.
+    await user.click(screen.getByRole("button", { name: "Check cutover readiness" }));
+    expect(await screen.findByText("Certificates this switch revokes")).toBeInTheDocument();
+    expect(screen.getByText(/cannot be revoked by a trstctl CA, so the switch cannot start/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start migration" })).not.toBeInTheDocument();
+
+    // Revocable: the review names the serial and the CA, and the start opens.
+    await user.click(screen.getByRole("button", { name: "Check cutover readiness" }));
+    expect(await screen.findByText(/serial 4e1eed08, revoked through trstctl platform CA/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Start migration" })).toBeInTheDocument();
   });
 
   it("says on a run whether it revokes predecessors", async () => {

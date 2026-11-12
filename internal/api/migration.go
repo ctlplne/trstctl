@@ -46,6 +46,9 @@ type migrationAssessRequest struct {
 	} `json:"waves"`
 	RequireFullTrust bool `json:"require_full_trust"`
 	MinTrustPercent  int  `json:"min_trust_percent"`
+	// RevokePredecessors assesses a planned switch (P3-L4): the assessment
+	// also lists the certificate each member's switch would revoke.
+	RevokePredecessors bool `json:"revoke_predecessors"`
 }
 
 type migrationStartRequest struct {
@@ -165,9 +168,13 @@ func (a *API) assessMigration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	facts, err := a.migrationFacts(r, tenantID, plan)
+	facts, err := a.migrationFacts(r, tenantID, plan, req.RevokePredecessors)
 	if err != nil {
 		a.writeError(w, err)
+		return
+	}
+	if req.RevokePredecessors {
+		a.writeJSON(w, http.StatusOK, migration.AssessSwitch(plan, facts))
 		return
 	}
 	a.writeJSON(w, http.StatusOK, migration.Assess(plan, facts))
@@ -179,7 +186,7 @@ func (a *API) assessMigration(w http.ResponseWriter, r *http.Request) {
 // the assessment can distinguish "no trust store" from "an empty trust store":
 // the graph records what was OBSERVED, so a member whose host has no store node
 // is a member nobody scanned, not a member confirmed bare.
-func (a *API) migrationFacts(r *http.Request, tenantID string, plan migration.Plan) (map[string]migration.MemberFacts, error) {
+func (a *API) migrationFacts(r *http.Request, tenantID string, plan migration.Plan, switching bool) (map[string]migration.MemberFacts, error) {
 	out := map[string]migration.MemberFacts{}
 	if a.store == nil {
 		return out, nil
@@ -210,6 +217,9 @@ func (a *API) migrationFacts(r *http.Request, tenantID string, plan migration.Pl
 				f.HasDeploymentTarget = true
 				f.HasVerifyAddress = targetHasVerifyAddress(t.Config)
 				f.TrustStoresObserved = observedMigrationTrustStores(g, t)
+			}
+			if switching {
+				f.Predecessor = a.switchPredecessorFacts(r.Context(), tenantID, ident)
 			}
 			out[m] = f
 		}
@@ -414,14 +424,51 @@ func (a *API) bindSwitchPredecessorAuthorities(ctx context.Context, tenantID str
 			if err != nil {
 				return fmt.Errorf("switch member %s: its current certificate is no longer inventoried", member.IdentityID)
 			}
-			caID, err := a.store.ExactIssuedCertificateAuthority(ctx, tenantID, cert.Serial)
-			if err != nil || strings.TrimSpace(caID) == "" {
-				return fmt.Errorf("switch member %s: its current certificate does not resolve to exactly one trstctl CA that can revoke it", member.IdentityID)
+			caID, err := a.switchPredecessorCA(ctx, tenantID, cert)
+			if err != nil {
+				return fmt.Errorf("switch member %s: %w", member.IdentityID, err)
 			}
 			member.Binding.PredecessorCAID = caID
 		}
 	}
 	return nil
+}
+
+// errSwitchPredecessorNotRevocable is why a switch cannot revoke a member's
+// current certificate: no single trstctl CA issued it.
+var errSwitchPredecessorNotRevocable = errors.New("its current certificate does not resolve to exactly one trstctl CA that can revoke it")
+
+// switchPredecessorCA names the trstctl CA that issued cert: the one a
+// planned switch revokes it through.
+func (a *API) switchPredecessorCA(ctx context.Context, tenantID string, cert store.Certificate) (string, error) {
+	caID, err := a.store.ExactIssuedCertificateAuthority(ctx, tenantID, cert.Serial)
+	if err != nil || strings.TrimSpace(caID) == "" {
+		return "", errSwitchPredecessorNotRevocable
+	}
+	return caID, nil
+}
+
+// switchPredecessorFacts reads, for the assessment of a planned switch
+// (P3-L4), the certificate the start would bind as the member's predecessor
+// and the CA that would revoke it, by the same rules as the start.
+func (a *API) switchPredecessorFacts(ctx context.Context, tenantID string, ident store.Identity) *migration.PredecessorFacts {
+	cert, err := a.migrationPredecessorCertificate(ctx, tenantID, ident)
+	if err != nil {
+		return &migration.PredecessorFacts{Problem: err.Error()}
+	}
+	out := &migration.PredecessorFacts{CertificateID: cert.ID, Serial: cert.Serial, Fingerprint: cleanMigrationFingerprint(cert.Fingerprint)}
+	caID, err := a.switchPredecessorCA(ctx, tenantID, cert)
+	if err != nil {
+		out.Problem = err.Error()
+		return out
+	}
+	out.CAID = caID
+	if caID == a.platformIssuingCAID {
+		out.CAName = "trstctl platform CA"
+	} else if authority, err := a.store.GetCAAuthority(ctx, tenantID, caID); err == nil {
+		out.CAName = authority.CommonName
+	}
+	return out
 }
 
 func (a *API) buildMigrationMember(

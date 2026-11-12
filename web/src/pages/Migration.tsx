@@ -47,6 +47,9 @@ export function Migration() {
       const result = await api.assessMigration({
         plan_id: request.plan_id,
         require_full_trust: true,
+        // P3-L4: a planned switch is assessed as one, so the review lists
+        // the certificates it would revoke.
+        ...(request.revoke_predecessors ? { revoke_predecessors: true } : {}),
         waves: request.waves.map((wave) => ({ ...wave, members: wave.members.map((member) => member.identity_id) })),
       });
       if (revision !== planRevision.current) return;
@@ -172,6 +175,22 @@ export function Migration() {
                     {assessment.unknowns.map((unknown, index) => (
                       <li key={`${unknown.member}:${unknown.kind}:${index}`}>
                         <code className="break-all">{unknown.member}</code> · {unknown.detail}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {assessment.revoke_predecessors ? (
+                <div className="rounded-panel border border-border p-4">
+                  <h3 className="font-semibold">{t("migration.switch.predecessorsTitle")}</h3>
+                  <p className="mt-1 text-caption text-muted-foreground">{t("migration.switch.predecessorsBody")}</p>
+                  <ul className="mt-2 grid gap-2 text-sm">
+                    {(assessment.predecessors ?? []).map((row) => (
+                      <li key={row.member}>
+                        <code className="break-all">{row.member}</code> ·{" "}
+                        {row.revocable
+                          ? t("migration.switch.predecessorRevoked", { serial: row.serial ?? "", ca: row.ca_name || row.ca_id || "" })
+                          : t("migration.switch.predecessorBlocked")}
                       </li>
                     ))}
                   </ul>
@@ -414,6 +433,8 @@ function canRollback(status: MigrationRun["status"]): boolean {
 
 function assessmentMatchesRequest(assessment: MigrationAssessment, request: MigrationRunStartRequest): boolean {
   if (assessment.plan_id !== request.plan_id || assessment.waves.length !== request.waves.length) return false;
+  // A switch's review must have listed what it revokes (P3-L4).
+  if (Boolean(assessment.revoke_predecessors) !== Boolean(request.revoke_predecessors)) return false;
   return assessment.waves.every((assessedWave) => {
     const requestedWave = request.waves.find((wave) => wave.id === assessedWave.id && wave.ordinal === assessedWave.ordinal);
     if (!requestedWave) return false;

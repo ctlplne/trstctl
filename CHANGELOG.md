@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- Assessing a planned CA switch lists the certificates it would revoke (P3-L4). `POST /api/v1/migrations/assess`
+  with `revoke_predecessors` names each member's current certificate (id, serial, fingerprint) and the trstctl CA
+  that would revoke it, by the start's own rules; a certificate no trstctl CA can revoke is a
+  `predecessor_not_revocable` unknown that blocks the start. The Migration page shows the list in its review.
 - An ACME authority's `upstream_dns_persist_issuer` pins which of the issuer domain names a public CA lists the
   dns-persist-01 standing record names (P1-L5). Only a record naming the pin then counts as standing, a new
   record names it, and a pin the authority does not list refuses the order before anything is published.

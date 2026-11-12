@@ -887,7 +887,7 @@ not this file.
 | `internal/crypto/mtls/server_test.go:152` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/crypto/mtls/server_test.go:215` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/crypto/mtls/server_test.go:289` | local test listener owned and torn down by the test (CWE-400) |
-| `internal/server/ca_switch_served_test.go:77` | loopback fixture closed by its stop func (CWE-400) |
+| `internal/server/ca_switch_served_test.go:78` | loopback fixture closed by its stop func (CWE-400) |
 | `internal/server/closed_loop_served_test.go:73` | loopback fixture closed below (CWE-400) |
 | `internal/server/dod_parent_substrate_bridge_runtime_test.go:183` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/server/evaluate_incident_served_test.go:57` | loopback fixture is closed below (CWE-400) |
