@@ -7340,6 +7340,7 @@ export interface MigrationPredecessorPreview {
   ca_id?: string;
   ca_name?: string;
   certificate_id?: string;
+  external_ca_id?: string;
   fingerprint?: string;
   member: string;
   problem?: string;

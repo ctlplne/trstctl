@@ -34520,6 +34520,10 @@
           "certificate_id": {
             "type": "string"
           },
+          "external_ca_id": {
+            "description": "P3-L2: the external CA that would revoke a predecessor no trstctl CA issued; ca_id is then empty",
+            "type": "string"
+          },
           "fingerprint": {
             "type": "string"
           },

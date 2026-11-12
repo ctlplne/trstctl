@@ -424,28 +424,60 @@ func (a *API) bindSwitchPredecessorAuthorities(ctx context.Context, tenantID str
 			if err != nil {
 				return fmt.Errorf("switch member %s: its current certificate is no longer inventoried", member.IdentityID)
 			}
-			caID, err := a.switchPredecessorCA(ctx, tenantID, cert)
+			revoker, err := a.switchPredecessorRevoker(ctx, tenantID, cert)
 			if err != nil {
 				return fmt.Errorf("switch member %s: %w", member.IdentityID, err)
 			}
-			member.Binding.PredecessorCAID = caID
+			member.Binding.PredecessorCAID = revoker.caID
+			if revoker.externalCAID != "" {
+				member.Binding.PredecessorExternalCAID = revoker.externalCAID
+			}
 		}
 	}
 	return nil
 }
 
-// errSwitchPredecessorNotRevocable is why a switch cannot revoke a member's
-// current certificate: no single trstctl CA issued it.
-var errSwitchPredecessorNotRevocable = errors.New("its current certificate does not resolve to exactly one trstctl CA that can revoke it")
+var (
+	// errSwitchPredecessorNotRevocable is why a switch cannot revoke a
+	// member's current certificate: neither one trstctl CA nor an external
+	// CA the registry knows issued it.
+	errSwitchPredecessorNotRevocable = errors.New("its current certificate does not resolve to exactly one trstctl CA, or an external CA, that can revoke it")
+	// errSwitchPredecessorVendorCannotRevoke is a predecessor an external CA
+	// issued whose integration cannot revoke it (P3-L2).
+	errSwitchPredecessorVendorCannotRevoke = errors.New("its current certificate was issued by an external CA whose integration cannot revoke it")
+)
 
-// switchPredecessorCA names the trstctl CA that issued cert: the one a
-// planned switch revokes it through.
-func (a *API) switchPredecessorCA(ctx context.Context, tenantID string, cert store.Certificate) (string, error) {
-	caID, err := a.store.ExactIssuedCertificateAuthority(ctx, tenantID, cert.Serial)
-	if err != nil || strings.TrimSpace(caID) == "" {
-		return "", errSwitchPredecessorNotRevocable
+// switchRevoker is the authority a planned switch revokes a predecessor
+// through: a trstctl CA, or the external CA that issued it (P3-L2).
+type switchRevoker struct {
+	caID, externalCAID, name string
+}
+
+// switchPredecessorRevoker names the authority that revokes cert in a
+// planned switch: the trstctl CA that issued it, or else the external CA the
+// registry issued it through, when that CA's integration can revoke.
+func (a *API) switchPredecessorRevoker(ctx context.Context, tenantID string, cert store.Certificate) (switchRevoker, error) {
+	if caID, err := a.store.ExactIssuedCertificateAuthority(ctx, tenantID, cert.Serial); err == nil && strings.TrimSpace(caID) != "" {
+		return switchRevoker{caID: caID}, nil
 	}
-	return caID, nil
+	external := strings.TrimSpace(cert.IssuingExternalCAID)
+	if external == "" || a.externalCAs == nil {
+		return switchRevoker{}, errSwitchPredecessorNotRevocable
+	}
+	cas, err := a.externalCAs.ListExternalCAs(ctx, tenantID)
+	if err != nil {
+		return switchRevoker{}, err
+	}
+	for _, c := range cas {
+		if c.ID != external {
+			continue
+		}
+		if bySerial, byCertificate := externalCARevocation(c); !bySerial && !byCertificate {
+			return switchRevoker{}, errSwitchPredecessorVendorCannotRevoke
+		}
+		return switchRevoker{externalCAID: external, name: c.Name}, nil
+	}
+	return switchRevoker{}, errSwitchPredecessorNotRevocable
 }
 
 // switchPredecessorFacts reads, for the assessment of a planned switch
@@ -457,13 +489,16 @@ func (a *API) switchPredecessorFacts(ctx context.Context, tenantID string, ident
 		return &migration.PredecessorFacts{Problem: err.Error()}
 	}
 	out := &migration.PredecessorFacts{CertificateID: cert.ID, Serial: cert.Serial, Fingerprint: cleanMigrationFingerprint(cert.Fingerprint)}
-	caID, err := a.switchPredecessorCA(ctx, tenantID, cert)
+	revoker, err := a.switchPredecessorRevoker(ctx, tenantID, cert)
 	if err != nil {
 		out.Problem = err.Error()
 		return out
 	}
-	out.CAID = caID
-	if caID == a.platformIssuingCAID {
+	caID := revoker.caID
+	out.CAID, out.ExternalCAID = caID, revoker.externalCAID
+	if revoker.externalCAID != "" {
+		out.CAName = revoker.name
+	} else if caID == a.platformIssuingCAID {
 		out.CAName = "trstctl platform CA"
 	} else if authority, err := a.store.GetCAAuthority(ctx, tenantID, caID); err == nil {
 		out.CAName = authority.CommonName

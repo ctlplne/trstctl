@@ -546,9 +546,17 @@ same gates — the new root distributed and read back first, then the successor 
 and deployed, then the signed live receipt that the endpoint serves the new chain
 (and the observed-traffic proof when the run requires it) — and only then is each
 member's previous certificate revoked, reason `superseded`, through the trstctl CA
-that issued it, which publishes its CRL before the cohort counts as done. A member
-whose current certificate no trstctl CA can revoke is refused at start rather than
-left valid. The first cohort is the canary: a failed trust readback or live check in
+that issued it, which publishes its CRL before the cohort counts as done. A switch away
+from a vendor CA (P3-L2) revokes a previous certificate the external CA registry issued
+at that vendor, through its integration (by serial, or from the certificate for an ACME
+authority): the revocation is recorded, and the member counts as done, only once the
+vendor accepted it. A vendor that holds the request for an approver leaves the member
+waiting and the request is sent again until it is accepted; a vendor whose integration
+cannot revoke pauses the run with the reason. The assessment names the vendor that
+would revoke each predecessor (`external_ca_id`, `ca_name`), and the cohort planner's
+`issuer_ca_id` selects by an external CA too. A member whose current certificate
+neither a trstctl CA nor a vendor integration can revoke is refused at start rather
+than left valid. The first cohort is the canary: a failed trust readback or live check in
 any cohort pauses the run, naming the member, with nothing revoked and no later cohort
 started. Resuming retries exactly the failed members as the same jobs (the host agent
 reuses the key and certificate it kept for that job, so no second successor is

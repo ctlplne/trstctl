@@ -189,7 +189,7 @@ export function Migration() {
                       <li key={row.member}>
                         <code className="break-all">{row.member}</code> ·{" "}
                         {row.revocable
-                          ? t("migration.switch.predecessorRevoked", { serial: row.serial ?? "", ca: row.ca_name || row.ca_id || "" })
+                          ? t("migration.switch.predecessorRevoked", { serial: row.serial ?? "", ca: row.ca_name || row.ca_id || row.external_ca_id || "" })
                           : t("migration.switch.predecessorBlocked")}
                       </li>
                     ))}

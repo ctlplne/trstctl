@@ -6248,6 +6248,7 @@ func componentSchemas() map[string]*Schema {
 	migrationPredecessorPreview := object(map[string]*Schema{
 		"member": str(), "certificate_id": str(), "serial": str(), "fingerprint": str(),
 		"ca_id": str(), "ca_name": str(), "revocable": {Type: "boolean"}, "problem": str(),
+		"external_ca_id": {Type: "string", Description: "P3-L2: the external CA that would revoke a predecessor no trstctl CA issued; ca_id is then empty"},
 	}, "member", "revocable")
 	migrationAssessedWave := object(map[string]*Schema{
 		"id": str(), "ordinal": {Type: "integer"},

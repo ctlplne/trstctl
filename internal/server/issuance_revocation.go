@@ -279,20 +279,27 @@ func (d *issuanceDispatcher) certificateRevocationOrigins(ctx context.Context, t
 	return origins, nil
 }
 
+// errExternalRevocationUnsupported is an external authority that cannot revoke
+// through its integration: retrying changes nothing (P3-L2 pauses on it).
+var errExternalRevocationUnsupported = errors.New("server: recorded external authority does not support revocation through this integration")
+
 func (d *issuanceDispatcher) revokeExternalCertificate(ctx context.Context, tenantID, authorityID string, cert store.Certificate, reason, revocationID string) error {
 	if d.externalCAs == nil {
 		return errors.New("server: recorded external revocation authority is unavailable; no CA was substituted")
 	}
 	entry, ok := d.externalCAs.byID[authorityID]
-	if !ok || entry.tenantID != "" && entry.tenantID != tenantID || entry.revocationCA == nil {
+	if !ok || entry.tenantID != "" && entry.tenantID != tenantID {
 		return errors.New("server: recorded external revocation authority is unavailable for this tenant; no CA was substituted")
+	}
+	if entry.revocationCA == nil {
+		return fmt.Errorf("%w; no CA was substituted", errExternalRevocationUnsupported)
 	}
 	if entry.adcsRevocation.Relay != "" {
 		return d.revokeThroughADCSRelay(ctx, tenantID, entry.adcsRevocation, cert, reason, revocationID)
 	}
 	err := ca.RevokeThrough(ctx, entry.revocationCA, ca.RevokeRequest{TenantID: tenantID, Serial: cert.Serial, CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.CertificateDER}), ReasonCode: crypto.CRLReasonCode(crypto.RevocationReason(reason))})
 	if errors.Is(err, ca.ErrRevocationUnsupported) {
-		return errors.New("server: recorded external authority does not support revocation through this integration; use its issuing CA")
+		return fmt.Errorf("%w; use its issuing CA", errExternalRevocationUnsupported)
 	}
 	if err != nil {
 		return fmt.Errorf("server: external certificate revocation not confirmed: %s", externalCAUpstreamDetail(err))

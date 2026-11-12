@@ -207,7 +207,9 @@ type MemberBinding struct {
 	// rows demand.
 	ExecutionModel string `json:"execution_model,omitempty"`
 	// PredecessorCAID is the exact responder/revocation authority. Incident
-	// response requires it; a generic migration may leave it empty.
+	// response requires it; a generic migration may leave it empty. A planned
+	// switch away from an external CA (P3-L2) leaves it empty and revokes
+	// through PredecessorExternalCAID, the vendor that issued the predecessor.
 	PredecessorCAID string `json:"predecessor_ca_id,omitempty"`
 	// Environment is frozen from the owner and target classification. Game-day
 	// validation accepts only an explicit non-production value.
@@ -788,7 +790,8 @@ func ValidateExecutableRun(run Run) error {
 				!bytes.Equal(b.TrustAnchorPEM, anchorPEM) {
 				return errors.New("migration: every member must retain the same reviewed CA authority and public anchor")
 			}
-			if run.RevokePredecessors && run.Incident == nil && strings.TrimSpace(b.PredecessorCAID) == "" {
+			if run.RevokePredecessors && run.Incident == nil &&
+				(strings.TrimSpace(b.PredecessorCAID) == "") == (strings.TrimSpace(b.PredecessorExternalCAID) == "") {
 				return fmt.Errorf("migration: switch member %s has no exact predecessor revocation authority", member.IdentityID)
 			}
 			if run.Incident != nil {

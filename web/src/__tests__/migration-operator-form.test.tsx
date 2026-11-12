@@ -156,6 +156,34 @@ describe("migration operator plan", () => {
     });
   });
 
+  // P3-L2: a switch away from a vendor CA names the vendor that revokes the
+  // predecessor at review time.
+  it("names the vendor that revokes a predecessor the external registry issued", async () => {
+    const user = userEvent.setup();
+    apiMock.assessMigration.mockResolvedValue({
+      plan_id: "vendor-switch",
+      members: 1,
+      migratable: 1,
+      guidance: "Any unknown blocks the start of a migration.",
+      unknowns: [],
+      waves: [{ id: "canary", ordinal: 1, members: [identityID] }],
+      revoke_predecessors: true,
+      predecessors: [{ member: identityID, serial: "84ee9b53", external_ca_id: "dc-1", ca_name: "DigiCert (stand-in)", revocable: true }],
+    });
+    renderRoute();
+    await user.click(await screen.findByRole("button", { name: "Start migration plan" }));
+    await user.type(screen.getByLabelText("Plan ID"), "vendor-switch");
+    await user.selectOptions(await screen.findByLabelText("New CA authority"), authorityID);
+    await user.click(screen.getByRole("checkbox", { name: /Revoke each predecessor once its successor is verified live/ }));
+    await user.click(screen.getByRole("button", { name: "Map waves" }));
+    await user.selectOptions(screen.getByLabelText("Identity"), identityID);
+    await user.selectOptions(screen.getByLabelText("Host agent"), agentID);
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(screen.getByRole("button", { name: "Check cutover readiness" }));
+    expect(await screen.findByText(/serial 84ee9b53, revoked through DigiCert \(stand-in\)/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Start migration" })).toBeInTheDocument();
+  });
+
   // P3-L4: a switch is assessed as one; the review lists each certificate it
   // would revoke and the CA that revokes it, and one no trstctl CA can revoke
   // keeps the start closed. An assessment that is not a switch's does not

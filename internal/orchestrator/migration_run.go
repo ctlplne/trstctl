@@ -335,6 +335,10 @@ type IncidentPredecessorRevocationIntent struct {
 	PredecessorCertificateID string `json:"predecessor_certificate_id"`
 	PredecessorFingerprint   string `json:"predecessor_fingerprint"`
 	PredecessorCAID          string `json:"predecessor_ca_id"`
+	// PredecessorExternalCAID names the vendor CA that revokes the
+	// predecessor when no trstctl CA issued it (P3-L2); PredecessorCAID is
+	// then empty.
+	PredecessorExternalCAID string `json:"predecessor_external_ca_id,omitempty"`
 	// Reason is the RFC 5280 reason: superseded for a planned switch (P3);
 	// empty means keyCompromise, an incident's reason.
 	Reason string `json:"reason,omitempty"`
@@ -404,7 +408,7 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 			RunID: run.ID, WaveID: action.WaveID, IdentityID: action.IdentityID,
 			PredecessorCertificateID: b.PredecessorCertificateID,
 			PredecessorFingerprint:   b.PredecessorFingerprint, PredecessorCAID: b.PredecessorCAID,
-			Reason: reason,
+			PredecessorExternalCAID: b.PredecessorExternalCAID, Reason: reason,
 		})
 	case migration.ActionRollbackSuccessor:
 		destination = relay.KindConnectorRollback

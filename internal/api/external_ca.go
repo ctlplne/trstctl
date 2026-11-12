@@ -116,14 +116,19 @@ func (a *API) listExternalCAs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for i := range items {
-		available := items[i].Status == "available"
-		// An AD CS authority with a revocation relay revokes by serial too:
-		// the relay runs certutil -revoke with it (A163-L1).
-		items[i].RevokesBySerial = available && (ca.RevokesBySerial(items[i].Type) ||
-			strings.EqualFold(items[i].Type, "adcs") && items[i].RevocationRelay != "")
-		items[i].RevokesByCertificate = available && ca.RevokesByCertificate(items[i].Type)
+		items[i].RevokesBySerial, items[i].RevokesByCertificate = externalCARevocation(items[i])
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
+}
+
+// externalCARevocation says how an available external authority can revoke
+// a certificate: by its serial, or from the certificate's bytes. An AD CS
+// authority with a revocation relay revokes by serial too: the relay runs
+// certutil -revoke with it (A163-L1).
+func externalCARevocation(item ExternalCA) (bySerial, byCertificate bool) {
+	available := item.Status == "available"
+	bySerial = available && (ca.RevokesBySerial(item.Type) || strings.EqualFold(item.Type, "adcs") && item.RevocationRelay != "")
+	return bySerial, available && ca.RevokesByCertificate(item.Type)
 }
 
 //trstctl:mutation

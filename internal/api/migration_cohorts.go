@@ -185,12 +185,14 @@ func (a *API) buildCohortPlan(ctx context.Context, tenantID string, sel migratio
 					skip(ident, "its current certificate could not be read: "+err.Error())
 					continue
 				}
-				caID, err := a.switchPredecessorCA(ctx, tenantID, cert)
+				revoker, err := a.switchPredecessorRevoker(ctx, tenantID, cert)
 				if err != nil {
 					skip(ident, err.Error())
 					continue
 				}
-				if caID != sel.IssuerCAID {
+				// The issuer may be a trstctl CA or the external CA that
+				// issued the current certificate (P3-L2).
+				if revoker.caID != sel.IssuerCAID && revoker.externalCAID != sel.IssuerCAID {
 					continue
 				}
 			}

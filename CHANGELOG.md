@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A planned CA switch can move away from a vendor CA (P3-L2): a member whose current certificate the external CA
+  registry issued is admitted when that vendor's integration can revoke, and once its successor is verified live the
+  predecessor is revoked (superseded) at the vendor; the revocation is recorded, and the member done, only when the
+  vendor accepts it (a request held for an approver is sent again; a vendor that cannot revoke pauses the run). The
+  assessment names the revoking vendor (`external_ca_id`), and the cohort planner selects by external issuer too.
 - Every replaced endpoint waits for wire evidence (X3-L1): when a verification finds an endpoint serving another
   certificate than before — a plain renewal's deployment or any other replacement — the endpoint records the replaced
   certificate and waits, without a migration run, until an observer agent sees new connections at it (presenting the

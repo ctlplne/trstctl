@@ -21540,6 +21540,8 @@ export interface components {
             ca_id?: string;
             ca_name?: string;
             certificate_id?: string;
+            /** @description P3-L2: the external CA that would revoke a predecessor no trstctl CA issued; ca_id is then empty */
+            external_ca_id?: string;
             fingerprint?: string;
             member: string;
             problem?: string;

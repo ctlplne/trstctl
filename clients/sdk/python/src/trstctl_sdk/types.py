@@ -10180,6 +10180,7 @@ MigrationPredecessorPreview = TypedDict(
         'ca_id': str,
         'ca_name': str,
         'certificate_id': str,
+        'external_ca_id': str,
         'fingerprint': str,
         'member': str,
         'problem': str,

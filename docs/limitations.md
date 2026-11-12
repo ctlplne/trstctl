@@ -6358,8 +6358,11 @@ This is a deliberate, documented trust boundary, not an accident.
   jobs; a repeated start changes nothing. Proven in the served test against a real TLS
   endpoint and host agent. A read-only planner builds canary-first cohorts by issuer,
   profile, owner or connector (P3-L1), at most 1,000 members a plan; identities carry
-  no tags, so there is no tag selector. Switching to or from an external (vendor)
-  issuer is what comes next: the target and the predecessors are trstctl CAs today.
+  no tags, so there is no tag selector. A switch away from a vendor CA revokes its
+  predecessors at the vendor (P3-L2), proven against a vendor stand-in; the revocation
+  waits for the vendor to accept it, so a vendor approval queue holds the cohort until
+  someone approves there. Switching to an external (vendor) issuer is what comes next:
+  the target is a trstctl CA today.
 - ACME server with ARI: all three domain-validation challenges are validated
   for real, each failing closed — HTTP-01 (RFC 8555 §8.3), DNS-01 (§8.4, the
   `_acme-challenge` TXT digest), and TLS-ALPN-01 (RFC 8737, the `acme-tls/1`

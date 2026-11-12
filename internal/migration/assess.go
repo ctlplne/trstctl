@@ -59,7 +59,10 @@ type Predecessor struct {
 	Serial        string `json:"serial,omitempty"`
 	Fingerprint   string `json:"fingerprint,omitempty"`
 	CAID          string `json:"ca_id,omitempty"`
-	CAName        string `json:"ca_name,omitempty"`
+	// ExternalCAID names the vendor CA that would revoke a predecessor no
+	// trstctl CA issued (P3-L2); CAID is then empty.
+	ExternalCAID string `json:"external_ca_id,omitempty"`
+	CAName       string `json:"ca_name,omitempty"`
 	// Revocable is false when a switch could not revoke it; Problem says why.
 	Revocable bool   `json:"revocable"`
 	Problem   string `json:"problem,omitempty"`
@@ -131,6 +134,7 @@ type PredecessorFacts struct {
 	Serial        string
 	Fingerprint   string
 	CAID          string
+	ExternalCAID  string
 	CAName        string
 	// Problem says why a switch could not revoke it; empty when it can.
 	Problem string
@@ -191,7 +195,7 @@ func assess(p Plan, facts map[string]MemberFacts, switching bool) Assessment {
 				row := Predecessor{Member: m, Problem: "the member's current certificate was not read"}
 				if pf := f.Predecessor; known && pf != nil {
 					row = Predecessor{Member: m, CertificateID: pf.CertificateID, Serial: pf.Serial,
-						Fingerprint: pf.Fingerprint, CAID: pf.CAID, CAName: pf.CAName, Problem: pf.Problem}
+						Fingerprint: pf.Fingerprint, CAID: pf.CAID, ExternalCAID: pf.ExternalCAID, CAName: pf.CAName, Problem: pf.Problem}
 				}
 				row.Revocable = row.Problem == ""
 				out.Predecessors = append(out.Predecessors, row)
