@@ -16729,6 +16729,34 @@ export const messages = {
   "migration.form.predecessors": { defaultMessage: "Predecessors", description: "P3-L3: review label for what happens to each member's previous certificate." },
   "migration.form.predecessorsRevoked": { defaultMessage: "Revoked once each successor is verified live", description: "P3-L3: the run revokes predecessors." },
   "migration.form.predecessorsKept": { defaultMessage: "Kept until they expire", description: "P3-L3: the run leaves predecessors to expire." },
+  "migration.cohorts.title": {
+    defaultMessage: "Plan cohorts from a selector",
+    description: "P3-L1: heading of the plan editor's helper that builds canary-first cohorts from a profile or an issuer.",
+  },
+  "migration.cohorts.help": {
+    defaultMessage:
+      "Build canary-first cohorts from the deployed certificates of a profile or an issuer. Nothing changes until you review, assess and start the plan.",
+    description: "P3-L1: explains that the cohort planner only proposes waves.",
+  },
+  "migration.cohorts.profile": { defaultMessage: "Profile", description: "P3-L1: cohort planner field: the profile name to select by." },
+  "migration.cohorts.issuer": { defaultMessage: "Issued by", description: "P3-L1: cohort planner field: the CA that issued the current certificates." },
+  "migration.cohorts.anyIssuer": { defaultMessage: "Any issuer", description: "P3-L1: cohort planner issuer option that does not filter by issuer." },
+  "migration.cohorts.canarySize": { defaultMessage: "Canary size", description: "P3-L1: cohort planner field: members in the first cohort." },
+  "migration.cohorts.cohortSize": { defaultMessage: "Cohort size", description: "P3-L1: cohort planner field: members in each later cohort." },
+  "migration.cohorts.plan": { defaultMessage: "Plan cohorts", description: "P3-L1: button that asks for a read-only cohort plan." },
+  "migration.cohorts.summary": {
+    defaultMessage: "{members} members in {cohorts} cohorts; {skipped} skipped",
+    description: "P3-L1: summary of a cohort plan.",
+  },
+  "migration.cohorts.truncated": {
+    defaultMessage: "More certificates match than one plan places; narrow the selector.",
+    description: "P3-L1: a cohort plan stopped at its member limit.",
+  },
+  "migration.cohorts.use": { defaultMessage: "Use these cohorts", description: "P3-L1: button that fills the plan's waves from the cohort plan." },
+  "migration.cohorts.error": {
+    defaultMessage: "The cohorts could not be planned. Check the selector and try again.",
+    description: "P3-L1: the cohort plan request failed.",
+  },
   "migration.switch.predecessorsTitle": {
     defaultMessage: "Certificates this switch revokes",
     description: "P3-L4: heading over the assessment's list of each member's current certificate a planned switch would revoke.",

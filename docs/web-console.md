@@ -443,7 +443,8 @@ incomplete gate, and rollback restores predecessor leaves newest-first before
 removing successor trust. A failed signed gate starts that inverse automatically;
 the button remains the operator-initiated path. The buttons do not locally advance anything: only
 signature-verified host-agent trust readback and live-listener receipts move a gate.
-Backed by `/api/v1/migrations/assess`, `/api/v1/migrations/runs`, and the
+Backed by `/api/v1/migrations/cohort-plan` (the waves step's cohort planner),
+`/api/v1/migrations/assess`, `/api/v1/migrations/runs`, and the
 `/api/v1/migrations/runs/{id}/{pause,resume,rollback}` mutations.
 
 ### What to fix first (`/risk`)

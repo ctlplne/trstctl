@@ -439,9 +439,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// AUD-O1 adds `discovery weak-key-audit run`. N1-L1 adds `external-cas
 	// held-issues` and `external-cas held-issues resume`. N1-L2 adds
 	// `external-cas adcs-requests`. N9-L2 adds `mdm check-in-wave ask`, `mdm
-	// check-in-wave run` and `mdm check-in-waves`.
-	if len(out) != 885 {
-		t.Fatalf("CLI commands = %d, want 885", len(out))
+	// check-in-wave run` and `mdm check-in-waves`. P3-L1 adds `migrations
+	// plan-cohorts`.
+	if len(out) != 886 {
+		t.Fatalf("CLI commands = %d, want 886", len(out))
 	}
 	return out
 }

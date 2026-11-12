@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A read-only planner builds canary-first migration cohorts from a selector (P3-L1). `GET
+  /api/v1/migrations/cohort-plan` (CLI `migrations plan-cohorts`) places the deployed X.509 identities of a profile,
+  an issuing trstctl CA, an owner or a connector in a canary and then cohorts, each member with its target's host
+  agent, and lists the ones a run could not take with the reason. The Migration page's waves step plans them by
+  profile or issuer and fills the waves for review. It records nothing.
 - Assessing a planned CA switch lists the certificates it would revoke (P3-L4). `POST /api/v1/migrations/assess`
   with `revoke_predecessors` names each member's current certificate (id, serial, fingerprint) and the trstctl CA
   that would revoke it, by the start's own rules; a certificate no trstctl CA can revoke is a

@@ -6301,9 +6301,10 @@ This is a deliberate, documented trust boundary, not an accident.
   after the endpoint serves the new chain. A failed canary or later cohort pauses the
   run with nothing revoked; resuming retries exactly the failed members as the same
   jobs; a repeated start changes nothing. Proven in the served test against a real TLS
-  endpoint and host agent. Cohorts are listed explicitly (no issuer/profile/tag
-  selector yet), and switching to or from an external (vendor) issuer is what comes
-  next: the target and the predecessors are trstctl CAs today.
+  endpoint and host agent. A read-only planner builds canary-first cohorts by issuer,
+  profile, owner or connector (P3-L1), at most 1,000 members a plan; identities carry
+  no tags, so there is no tag selector. Switching to or from an external (vendor)
+  issuer is what comes next: the target and the predecessors are trstctl CAs today.
 - ACME server with ARI: all three domain-validation challenges are validated
   for real, each failing closed — HTTP-01 (RFC 8555 §8.3), DNS-01 (§8.4, the
   `_acme-challenge` TXT digest), and TLS-ALPN-01 (RFC 8737, the `acme-tls/1`

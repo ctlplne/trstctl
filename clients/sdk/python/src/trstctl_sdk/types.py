@@ -9944,6 +9944,22 @@ MigrationAssessment = TypedDict(
     total=False,
 )
 
+MigrationCohortPlan = TypedDict(
+    'MigrationCohortPlan',
+    {
+        'canary_size': int,
+        'cohort_size': int,
+        'guidance': str,
+        'members': int,
+        'selector': dict[str, Any],
+        'skipped': list[dict[str, Any]],
+        'skipped_count': int,
+        'truncated': bool,
+        'waves': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 MigrationMemberBinding = TypedDict(
     'MigrationMemberBinding',
     {
@@ -9971,6 +9987,26 @@ MigrationMemberBinding = TypedDict(
         'trust_anchor_pem': str,
         'verify_address': str,
         'verify_server_name': str,
+    },
+    total=False,
+)
+
+MigrationPlannedCohort = TypedDict(
+    'MigrationPlannedCohort',
+    {
+        'id': str,
+        'members': list[dict[str, Any]],
+        'ordinal': int,
+    },
+    total=False,
+)
+
+MigrationPlannedMember = TypedDict(
+    'MigrationPlannedMember',
+    {
+        'agent_id': str,
+        'identity_id': str,
+        'name': str,
     },
     total=False,
 )

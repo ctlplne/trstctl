@@ -199,6 +199,25 @@ func TestServedPlannedCASwitchP3(t *testing.T) {
 		t.Fatalf("assessing touched the old certificate: %+v %v %v", ledger, found, err)
 	}
 
+	// P3-L1: the cohort planner selects by issuer: the platform CA issued the
+	// canary's current certificate, so it is placed (with its host agent),
+	// and the member with no certificate is skipped as not deployed.
+	status, body = secretsReqKey(t, h.servedHarness, http.MethodGet,
+		"/api/v1/migrations/cohort-plan?profile=p3-api&issuer_ca_id="+IssuingCAID(), assessor, "", nil)
+	var planned migrationCohortPlanView
+	if status != http.StatusOK || json.Unmarshal(body, &planned) != nil || planned.Members != 1 || len(planned.Waves) != 1 ||
+		planned.Waves[0].Members[0].IdentityID != identityID || planned.Waves[0].Members[0].AgentID != agentRowID(h.tenant, h.agent) {
+		t.Fatalf("plan by issuer: HTTP %d %s", status, body)
+	}
+	if planned.SkippedCount != 1 || planned.Skipped[0].IdentityID != noCertID || !strings.HasPrefix(planned.Skipped[0].Reason, "not deployed") {
+		t.Fatalf("plan by issuer skipped %+v", planned.Skipped)
+	}
+	status, body = secretsReqKey(t, h.servedHarness, http.MethodGet,
+		"/api/v1/migrations/cohort-plan?profile=p3-api&issuer_ca_id="+newRoot.ID, assessor, "", nil)
+	if status != http.StatusOK || json.Unmarshal(body, &planned) != nil || planned.Members != 0 {
+		t.Fatalf("plan by another issuer: HTTP %d %s", status, body)
+	}
+
 	// The endpoint goes down before the switch reaches it.
 	stop()
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "p3-switch-operator", "keys:read", "keys:write", "certs:issue")

@@ -7427,6 +7427,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/migrations/cohort-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plan canary-first migration cohorts read-only from a selector: issuer, profile, owner or connector */
+        get: operations["planMigrationCohorts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/migrations/runs": {
         parameters: {
             query?: never;
@@ -21145,6 +21162,26 @@ export interface components {
             unknowns: components["schemas"]["MigrationUnknown"][];
             waves: components["schemas"]["MigrationAssessedWave"][];
         };
+        MigrationCohortPlan: {
+            canary_size: number;
+            cohort_size: number;
+            guidance: string;
+            members: number;
+            selector: {
+                connector?: string;
+                issuer_ca_id?: string;
+                owner_id?: string;
+                profile?: string;
+            };
+            skipped: {
+                identity_id: string;
+                name: string;
+                reason: string;
+            }[];
+            skipped_count: number;
+            truncated: boolean;
+            waves: components["schemas"]["MigrationPlannedCohort"][];
+        };
         MigrationMemberBinding: {
             connector: string;
             /** @enum {string} */
@@ -21176,6 +21213,16 @@ export interface components {
             trust_anchor_pem: string;
             verify_address: string;
             verify_server_name?: string;
+        };
+        MigrationPlannedCohort: {
+            id: string;
+            members: components["schemas"]["MigrationPlannedMember"][];
+            ordinal: number;
+        };
+        MigrationPlannedMember: {
+            agent_id?: string;
+            identity_id: string;
+            name: string;
         };
         MigrationPredecessorPreview: {
             ca_id?: string;
@@ -50323,6 +50370,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MigrationAssessment"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    planMigrationCohorts: {
+        parameters: {
+            query?: {
+                /** @description Place deployed X.509 identities issued under this profile name. */
+                profile?: string;
+                /** @description Place identities whose current certificate this trstctl CA issued (the CA a planned switch revokes it through). */
+                issuer_ca_id?: string;
+                /** @description Place identities of this owner. */
+                owner_id?: string;
+                /** @description Place identities whose deployment target is this connector type (for example nginx). */
+                connector?: string;
+                /** @description Members in the first cohort, the canary (1-10, default 1). */
+                canary_size?: number;
+                /** @description Members in each later cohort (1-500, default 25). */
+                cohort_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationCohortPlan"];
                 };
             };
             /** @description client error */

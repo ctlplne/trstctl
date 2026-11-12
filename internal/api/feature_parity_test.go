@@ -400,8 +400,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// N1-L1 adds listing and resuming held external CA issuances (814).
 	// N1-L2 adds listing an AD CS CA's pending requests (815).
 	// N9-L2 adds asking for, running and listing MDM check-in waves (818).
-	if len(out) != 818 {
-		t.Fatalf("OpenAPI operationIds = %d, want 818", len(out))
+	// P3-L1 adds planning canary-first migration cohorts (819).
+	if len(out) != 819 {
+		t.Fatalf("OpenAPI operationIds = %d, want 819", len(out))
 	}
 	return out
 }

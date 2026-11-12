@@ -755,6 +755,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"graph", "crypto-readiness", "export"}, Method: "GET", Path: "/api/v1/graph/crypto-readiness/export", Summary: "Export the canonical crypto-readiness dataset as signed JSON with exact CSV and NDJSON"},
 	{Name: []string{"graph", "trust-stores"}, Method: "GET", Path: "/api/v1/graph/trust-stores/{id}", Summary: "List the discovered trust stores that carry a CA's anchor, and the hosts they sit on"},
 	{Name: []string{"migrations", "assess"}, Method: "POST", Path: "/api/v1/migrations/assess", Summary: "Assess a migration plan read-only: what it would touch and what is unknown"},
+	{Name: []string{"migrations", "plan-cohorts"}, Method: "GET", Path: "/api/v1/migrations/cohort-plan", Query: []string{"profile", "issuer_ca_id", "owner_id", "connector", "canary_size", "cohort_size"}, Summary: "Plan canary-first migration cohorts read-only from a selector: issuer, profile, owner or connector"},
 	{Name: []string{"migrations", "start"}, Method: "POST", Path: "/api/v1/migrations/runs", Body: bodyFile, Summary: "Start exact-agent trust distribution, then release successor leaves only after signed readback"},
 	{Name: []string{"migrations", "list"}, Method: "GET", Path: "/api/v1/migrations/runs", Summary: "List executable CA migration runs and their durable gates"},
 	{Name: []string{"migrations", "show"}, Method: "GET", Path: "/api/v1/migrations/runs/{id}", Summary: "Show one executable migration run"},

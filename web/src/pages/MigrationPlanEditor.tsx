@@ -13,8 +13,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, type MigrationRunStartRequest } from "@/lib/api";
+import { api, type MigrationPlannedCohort, type MigrationRunStartRequest } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
+import { MigrationCohortPlanner } from "@/pages/MigrationCohortPlanner";
 
 // trust_anchor_path is always a string in the form; an empty value means an
 // appliance member (A33), which the request omits the path for.
@@ -144,7 +145,7 @@ export function MigrationPlanEditor({
     handleSubmit,
     formState: { errors },
   } = useForm<PlanForm>({ resolver: zodResolver(schema), mode: "onTouched", defaultValues: initialPlan });
-  const { fields: waveFields, append: appendWave, remove: removeWave, move: moveWave } = useFieldArray({ control, name: "waves" });
+  const { fields: waveFields, append: appendWave, remove: removeWave, move: moveWave, replace: replaceWaves } = useFieldArray({ control, name: "waves" });
   const watched = useWatch({ control });
   const initialized = useRef(false);
   const focused = useRef(false);
@@ -207,6 +208,17 @@ export function MigrationPlanEditor({
     onPlanChanged();
     setStep(0);
     setAdvanced(false);
+  }
+
+  // P3-L1: a planned set of cohorts replaces the waves, each member on its
+  // target's host agent with the default trust anchor path.
+  function applyCohorts(cohorts: MigrationPlannedCohort[]) {
+    replaceWaves(
+      cohorts.map((cohort) => ({
+        id: cohort.id,
+        members: cohort.members.map((member) => ({ ...newMember(), identity_id: member.identity_id, agent_id: member.agent_id ?? "" })),
+      })),
+    );
   }
 
   function addMember(waveIndex: number) {
@@ -316,6 +328,7 @@ export function MigrationPlanEditor({
               ) : null}
               {step === 1 ? (
                 <div className="grid gap-4">
+                  <MigrationCohortPlanner authorities={authorities} onUse={applyCohorts} />
                   {waveFields.map((wave, waveIndex) => {
                     const members = watched.waves?.[waveIndex]?.members ?? [];
                     return (

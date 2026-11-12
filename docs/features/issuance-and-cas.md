@@ -390,7 +390,25 @@ retirement-retry.json`; its body uses `command_event_id`, `expected_attempts`,
 ### Executing a CA migration in waves (H2)
 
 CA rollover is served as a durable trust-before-leaf workflow, not as a batch loop.
-First run the read-only assessment:
+A run lists its cohorts explicitly. To build them from the estate instead of by hand,
+ask the read-only cohort planner (P3-L1): `GET /api/v1/migrations/cohort-plan` selects
+the deployed X.509 identities bound to an enabled deployment target by `profile`, by
+`issuer_ca_id` (the trstctl CA that issued each one's current certificate, the CA a
+planned switch revokes it through), by `owner_id` or by `connector`, and cuts them
+canary first: a canary of `canary_size` (1 to 10, default 1), then cohorts of
+`cohort_size` (1 to 500, default 25), in name order, each member with its target's
+host agent. Identities the selector matched but a run could not take (not deployed,
+no enabled target, a current certificate whose issuer cannot be read) are listed as
+skipped with the reason. A plan places at most 1,000 members and says when it was
+truncated; it records nothing. On the Migration page, **Plan cohorts from a selector**
+on the waves step does the same by profile or issuer, and **Use these cohorts** fills
+the waves for review.
+
+```sh
+trstctl migrations plan-cohorts --profile web-tls --canary_size 1 --cohort_size 25
+```
+
+Then run the read-only assessment:
 
 ```sh
 trstctl migrations assess -f assessment.json

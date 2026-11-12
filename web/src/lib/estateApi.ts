@@ -7,6 +7,7 @@ import type {
   GraphReachers,
   GraphTrustStores,
   MigrationAssessment,
+  MigrationCohortPlan,
   MigrationRun,
   MigrationRunActionRequest,
   MigrationRunList,
@@ -56,6 +57,23 @@ export const assessMigration = (request: unknown) =>
     body: JSON.stringify(request),
     headers: { "Content-Type": "application/json" },
   });
+
+/** P3-L1: canary-first cohorts from a selector, read-only. Mutates nothing. */
+export type MigrationCohortPlanParams = {
+  profile?: string;
+  issuer_ca_id?: string;
+  owner_id?: string;
+  connector?: string;
+  canary_size?: number;
+  cohort_size?: number;
+};
+export const migrationCohortPlan = (params: MigrationCohortPlanParams) => {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") query.set(key, String(value));
+  }
+  return req<MigrationCohortPlan>(`/api/v1/migrations/cohort-plan?${query.toString()}`);
+};
 
 /** H2: start one durable trust-before-leaf run. */
 export const startMigrationRun = (request: MigrationRunStartRequest) =>

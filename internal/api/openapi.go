@@ -6139,6 +6139,26 @@ func componentSchemas() map[string]*Schema {
 		}},
 		"detail": str(),
 	}, "member", "kind", "detail")
+	migrationPlannedMember := object(map[string]*Schema{
+		"identity_id": str(), "name": str(), "agent_id": str(),
+	}, "identity_id", "name")
+	migrationPlannedCohort := object(map[string]*Schema{
+		"id": str(), "ordinal": {Type: "integer"},
+		"members": {Type: "array", Items: ref("MigrationPlannedMember")},
+	}, "id", "ordinal", "members")
+	migrationCohortPlan := object(map[string]*Schema{
+		"selector": object(map[string]*Schema{
+			"profile": str(), "issuer_ca_id": str(), "owner_id": str(), "connector": str(),
+		}),
+		"canary_size": {Type: "integer"}, "cohort_size": {Type: "integer"},
+		"members": {Type: "integer"}, "truncated": {Type: "boolean"},
+		"waves": {Type: "array", Items: ref("MigrationPlannedCohort")},
+		"skipped": {Type: "array", Items: object(map[string]*Schema{
+			"identity_id": str(), "name": str(), "reason": str(),
+		}, "identity_id", "name", "reason")},
+		"skipped_count": {Type: "integer"},
+		"guidance":      str(),
+	}, "selector", "canary_size", "cohort_size", "members", "truncated", "waves", "skipped", "skipped_count", "guidance")
 	migrationPredecessorPreview := object(map[string]*Schema{
 		"member": str(), "certificate_id": str(), "serial": str(), "fingerprint": str(),
 		"ca_id": str(), "ca_name": str(), "revocable": {Type: "boolean"}, "problem": str(),
@@ -9423,6 +9443,9 @@ func componentSchemas() map[string]*Schema {
 		"MigrationAssessedWave":                 migrationAssessedWave,
 		"MigrationAssessment":                   migrationAssessment,
 		"MigrationPredecessorPreview":           migrationPredecessorPreview,
+		"MigrationCohortPlan":                   migrationCohortPlan,
+		"MigrationPlannedCohort":                migrationPlannedCohort,
+		"MigrationPlannedMember":                migrationPlannedMember,
 		"MigrationRunStartMember":               migrationRunStartMember,
 		"MigrationRunStartWave":                 migrationRunStartWave,
 		"MigrationRunStartRequest":              migrationRunStartRequest,

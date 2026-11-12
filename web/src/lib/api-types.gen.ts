@@ -7162,6 +7162,18 @@ export interface MigrationAssessment {
   waves: MigrationAssessedWave[];
 }
 
+export interface MigrationCohortPlan {
+  canary_size: number;
+  cohort_size: number;
+  guidance: string;
+  members: number;
+  selector: { connector?: string; issuer_ca_id?: string; owner_id?: string; profile?: string };
+  skipped: { identity_id: string; name: string; reason: string }[];
+  skipped_count: number;
+  truncated: boolean;
+  waves: MigrationPlannedCohort[];
+}
+
 export interface MigrationMemberBinding {
   connector: string;
   execution_model?: "host" | "appliance" | "cloud_store";
@@ -7187,6 +7199,18 @@ export interface MigrationMemberBinding {
   trust_anchor_pem: string;
   verify_address: string;
   verify_server_name?: string;
+}
+
+export interface MigrationPlannedCohort {
+  id: string;
+  members: MigrationPlannedMember[];
+  ordinal: number;
+}
+
+export interface MigrationPlannedMember {
+  agent_id?: string;
+  identity_id: string;
+  name: string;
 }
 
 export interface MigrationPredecessorPreview {

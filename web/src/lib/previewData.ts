@@ -986,6 +986,17 @@ const previewReaders: Record<string, (launchSearch: string) => unknown> = {
     unknowns: [],
     waves: [{ id: "canary", ordinal: 1, members: ["identity-preview-api"] }],
   }),
+  migrationCohortPlan: () => ({
+    selector: { profile: "preview-web" },
+    canary_size: 1,
+    cohort_size: 25,
+    members: 1,
+    truncated: false,
+    waves: [{ id: "canary", ordinal: 1, members: [{ identity_id: "identity-preview-api", name: "api.preview.example" }] }],
+    skipped: [],
+    skipped_count: 0,
+    guidance: "A read-only proposal: nothing was distributed, issued or recorded.",
+  }),
   migrationRuns: () => ({ items: [] }),
 };
 

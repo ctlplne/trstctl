@@ -33744,6 +33744,85 @@
         ],
         "type": "object"
       },
+      "MigrationCohortPlan": {
+        "properties": {
+          "canary_size": {
+            "type": "integer"
+          },
+          "cohort_size": {
+            "type": "integer"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "members": {
+            "type": "integer"
+          },
+          "selector": {
+            "properties": {
+              "connector": {
+                "type": "string"
+              },
+              "issuer_ca_id": {
+                "type": "string"
+              },
+              "owner_id": {
+                "type": "string"
+              },
+              "profile": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "skipped": {
+            "items": {
+              "properties": {
+                "identity_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "identity_id",
+                "name",
+                "reason"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "skipped_count": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "waves": {
+            "items": {
+              "$ref": "#/components/schemas/MigrationPlannedCohort"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "selector",
+          "canary_size",
+          "cohort_size",
+          "members",
+          "truncated",
+          "waves",
+          "skipped",
+          "skipped_count",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "MigrationMemberBinding": {
         "properties": {
           "connector": {
@@ -33860,6 +33939,46 @@
           "subject_dns_names",
           "predecessor_certificate_id",
           "predecessor_fingerprint"
+        ],
+        "type": "object"
+      },
+      "MigrationPlannedCohort": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/MigrationPlannedMember"
+            },
+            "type": "array"
+          },
+          "ordinal": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "ordinal",
+          "members"
+        ],
+        "type": "object"
+      },
+      "MigrationPlannedMember": {
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "name"
         ],
         "type": "object"
       },
@@ -94259,6 +94378,105 @@
           }
         ],
         "summary": "Assess a migration plan read-only: what it would touch and what is unknown",
+        "x-trstctl-permission": "graph:read"
+      }
+    },
+    "/api/v1/migrations/cohort-plan": {
+      "get": {
+        "operationId": "planMigrationCohorts",
+        "parameters": [
+          {
+            "description": "Place deployed X.509 identities issued under this profile name.",
+            "in": "query",
+            "name": "profile",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Place identities whose current certificate this trstctl CA issued (the CA a planned switch revokes it through).",
+            "in": "query",
+            "name": "issuer_ca_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Place identities of this owner.",
+            "in": "query",
+            "name": "owner_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Place identities whose deployment target is this connector type (for example nginx).",
+            "in": "query",
+            "name": "connector",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Members in the first cohort, the canary (1-10, default 1).",
+            "in": "query",
+            "name": "canary_size",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Members in each later cohort (1-500, default 25).",
+            "in": "query",
+            "name": "cohort_size",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrationCohortPlan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Plan canary-first migration cohorts read-only from a selector: issuer, profile, owner or connector",
         "x-trstctl-permission": "graph:read"
       }
     },

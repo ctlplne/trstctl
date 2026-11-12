@@ -373,6 +373,7 @@ import type {
   GraphImpact,
   GraphTrustStores,
   MigrationAssessment,
+  MigrationCohortPlan,
   MigrationRun,
   MigrationRunActionRequest,
   MigrationRunList,
@@ -954,6 +955,7 @@ export type { CertificateAssuranceRecord, AssuranceRecord } from "./api-types.ge
 export type { KMIPClient, KMIPClientEnrollment, KMIPClientList, KMIPClientRegisterRequest } from "./api-types.gen";
 export type { GraphAccessGrant, GraphAccessLink } from "./api-types.gen";
 export type { DecoySecret, DecoySecretList, DecoySecretRegisterRequest } from "./api-types.gen";
+export type { MigrationPlannedCohort } from "./api-types.gen";
 export type { SlackApp, SlackApprovalChannel, SlackChannelList, SlackInstallStart, SlackLinkCode } from "./api-types.gen";
 export type { IdentityApplicationView } from "./api-types.gen";
 export type {
@@ -1519,6 +1521,7 @@ export type {
   GraphImpact,
   GraphTrustStores,
   MigrationAssessment,
+  MigrationCohortPlan,
   MigrationRun,
   MigrationRunActionRequest,
   MigrationRunList,
@@ -2680,6 +2683,8 @@ export interface Api {
   graphTrustStores(id: string): Promise<GraphTrustStores>;
   // H2: read-only assessment of a migration plan.
   assessMigration(request: unknown): Promise<MigrationAssessment>;
+  // P3-L1: read-only canary-first cohorts from a selector.
+  migrationCohortPlan(params: import("./estateApi").MigrationCohortPlanParams): Promise<MigrationCohortPlan>;
   startMigrationRun(request: MigrationRunStartRequest): Promise<MigrationRun | MigrationRunStartPending>;
   migrationRuns(): Promise<MigrationRunList>;
   planChangeSet(set: import("./api-types.gen").ChangeSet): Promise<import("./api-types.gen").ChangePlan>;
@@ -3746,6 +3751,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   caKeyReprotectionPlan: estate.caKeyReprotectionPlan,
   startCAKeyReprotection: estate.startCAKeyReprotection,
   assessMigration: estate.assessMigration,
+  migrationCohortPlan: estate.migrationCohortPlan,
   startMigrationRun: estate.startMigrationRun,
   migrationRuns: estate.migrationRuns,
   planChangeSet: changeSets.planChangeSet,
