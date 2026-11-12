@@ -25,7 +25,7 @@ func TestEveryDiscoverySourceRegistrationHasOwnerClassification(t *testing.T) {
 		"internal/api/secrets_scanning.go:queueSecretRepoScan":                        "product-owned repository secret scan (authenticated and provider-signed webhooks)",
 		"internal/orchestrator/discovery.go:RecordAgentInventory":                     "product-owned authenticated agent inventory",
 		"internal/orchestrator/discovery.go:RecordSecretScan":                         "product-owned local secret scan",
-		"internal/orchestrator/weak_key_audit.go:RecordWeakKeyAudit":                  "product-owned inventory weak-key audit",
+		"internal/orchestrator/weak_key_audit.go:EnsureWeakKeyAuditSource":            "product-owned inventory weak-key audit (the six-hourly sweep and an operator's run-now, AUD-O1)",
 		"internal/orchestrator/endpoint_chain_finding.go:RecordEndpointChainMismatch": "product-owned endpoint issuer-chain verification",
 		"internal/orchestrator/exposure_probe.go:QueueExposureProbe":                  "product-owned NHI exposure reachability probe",
 		"internal/orchestrator/remediation_rotate.go:RecordRotationUnverified":        "product-owned credential-rotate replacement verification",
