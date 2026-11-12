@@ -204,17 +204,28 @@ real RFC 3161 proof.
 Stock signing tools need a certificate that names the signing key; the key itself
 stays in the isolated signer. Get a certificate request the key signs inside the
 signer, have your CA issue a certificate with the `codeSigning` extended key usage
-from it, and configure the chain (leaf first) beside the key as
-`code_signing.keys[].certificate_chain_file`:
+from it, and attach the chain (leaf first) to the key through the API (P9-L1), or the
+Code signing page's **Key certificates** panel:
 
 ```bash
 echo '{"common_name": "Acme release signing"}' > csr.json
 trstctl-cli code-signing keys csr release-key -f csr.json | jq -r .csr_pem > release-key.csr
-# your CA issues the certificate; save the chain, leaf first, as the configured file
+# your CA issues the certificate; attach the chain, leaf first
+jq -n --rawfile chain release-key-chain.pem '{chain_pem: $chain}' > chain.json
+trstctl-cli code-signing keys attach-certificate release-key -f chain.json
 trstctl-cli code-signing keys certificate release-key
 ```
 
-Startup refuses a chain whose leaf does not carry the key's public key or lacks the
+`PUT /api/v1/code-signing/keys/{key_id}/certificate` (`keys:write`) checks the chain
+exactly as startup checks a configured one — the leaf must carry the key's public key
+and the `codeSigning` usage — and also refuses an expired leaf, more than ten
+certificates or more than 64 KiB. It records `codesign.certificate_attached` and the
+chain is served from the next request on, on every replica, without a configuration
+change or a restart; attaching a new chain rotates it, and an exact retry with the same
+`Idempotency-Key` records nothing more. `GET .../certificate` says where the chain came
+from (`source`: `attached`, which wins, or `configured`) and who attached it. A chain
+can still be configured beside the key as `code_signing.keys[].certificate_chain_file`;
+startup refuses one whose leaf does not carry the key's public key or lacks the
 `codeSigning` usage. Each certificate request is recorded as `codesign.csr_signed`.
 The signing clients in [`clients/signing`](https://github.com/ctlplne/trstctl/tree/main/clients/signing) (MPL-2.0,
 standard library only) hash locally, have trstctl sign the digest, and return the

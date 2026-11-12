@@ -27,6 +27,9 @@ const (
 	EventCodeSigningCompleted          = "codesign.completed"
 	EventCodeSigningFailed             = "codesign.failed"
 	EventCodeSigningEphemeralDestroyed = "codesign.ephemeral.destroyed"
+	// EventCodeSigningCertificateAttached records a key's certificate chain
+	// attached through the API (P9-L1).
+	EventCodeSigningCertificateAttached = "codesign.certificate_attached"
 
 	// CodeSigningApprovalEventSchemaVersion adds the exact one-shot approval use
 	// to codesign.commanded. Version 1 remains replayable for deployments where
@@ -52,6 +55,17 @@ type CodeSigningCommanded struct {
 
 type CodeSigningCommandReference struct {
 	OperationID string `json:"operation_id"`
+}
+
+// CodeSigningCertificateAttached is a code-signing key's certificate chain,
+// leaf first, checked against the key's public key and the codeSigning usage
+// before it was recorded (P9-L1). Certificates are public material.
+type CodeSigningCertificateAttached struct {
+	KeyID           string    `json:"key_id"`
+	ChainDER        [][]byte  `json:"chain_der"`
+	LeafFingerprint string    `json:"leaf_fingerprint"`
+	NotAfter        time.Time `json:"not_after"`
+	AttachedBy      string    `json:"attached_by"`
 }
 
 // CodeSigningOperationID is the privacy-safe operation identity for a raw API
@@ -214,6 +228,7 @@ func init() {
 		EventCodeSigningCompleted,
 		EventCodeSigningFailed,
 		EventCodeSigningEphemeralDestroyed,
+		EventCodeSigningCertificateAttached,
 	} {
 		knownSchemaVersions[eventType] = map[int]bool{1: true}
 	}
@@ -427,6 +442,20 @@ func (p *Projector) applyCodeSigningTx(ctx context.Context, tx pgx.Tx, event eve
 		}
 		return true, p.store.ApplyCodeSigningCleanupCompletedTx(ctx, tx, event.TenantID,
 			payload.OperationID, event.Time)
+	case EventCodeSigningCertificateAttached:
+		var payload CodeSigningCertificateAttached
+		if err := decode(event, &payload); err != nil {
+			return true, err
+		}
+		if strings.TrimSpace(payload.KeyID) == "" || len(payload.ChainDER) == 0 || len(payload.ChainDER) > 10 ||
+			len(payload.LeafFingerprint) != 64 || payload.NotAfter.IsZero() {
+			return true, fmt.Errorf("projections: %s payload is incomplete", event.Type)
+		}
+		return true, p.store.ApplyCodeSigningKeyCertificateAttachedTx(ctx, tx, store.CodeSigningKeyCertificate{
+			TenantID: event.TenantID, KeyID: payload.KeyID, ChainDER: payload.ChainDER,
+			LeafFingerprint: strings.ToLower(payload.LeafFingerprint), NotAfter: payload.NotAfter,
+			AttachedBy: payload.AttachedBy, AttachedAt: event.Time,
+		}, event.Sequence)
 	default:
 		return false, nil
 	}

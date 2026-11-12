@@ -2197,6 +2197,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventCodeSigningCompleted, 1}:                                             privacyPayloadShape[CodeSigningCompleted](),
 		{EventCodeSigningFailed, 1}:                                                privacyPayloadShape[CodeSigningFailed](),
 		{EventCodeSigningEphemeralDestroyed, 1}:                                    privacyPayloadShape[CodeSigningCommandReference](),
+		{EventCodeSigningCertificateAttached, 1}:                                   privacyPayloadShape[CodeSigningCertificateAttached](),
 		{EventManagedKeyCommandRequested, 1}:                                       privacyPayloadShape[privacyManagedKeyCommandV1](),
 		{EventManagedKeyCommandRequested, ManagedKeyApprovalLegacySchemaVersion}:   privacyPayloadShape[privacyManagedKeyCommandV2](),
 		{EventManagedKeyCommandRequested, ManagedKeyApprovalEventSchemaVersion}:    privacyPayloadShape[privacyManagedKeyCommandV2](),
@@ -2310,6 +2311,9 @@ func projectorRejectPrivacyRules() map[string][]events.PrivacyFieldRule {
 		EventCodeSigningCompleted: {
 			privacyRule("/response", opaque),
 			privacyRule("/rekor_payload", opaque),
+		},
+		EventCodeSigningCertificateAttached: {
+			privacyRule("/chain_der/*", opaque),
 		},
 		EventDynamicSecretOperationRequested: {
 			privacyRule("/response", opaque),

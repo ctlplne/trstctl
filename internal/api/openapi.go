@@ -8161,7 +8161,10 @@ func componentSchemas() map[string]*Schema {
 	codeSigningKeyCertificate := object(map[string]*Schema{
 		"key_id": str(), "algorithm": str(), "public_key_der": {Type: "string", Format: "byte"},
 		"chain_pem": str(), "leaf_fingerprint": str(), "not_after": timestamp(), "code_signing_eku": {Type: "boolean"},
-	}, "key_id", "algorithm", "public_key_der", "chain_pem", "leaf_fingerprint", "not_after", "code_signing_eku")
+		"source":      {Type: "string", Enum: []string{"attached", "configured"}},
+		"attached_by": str(), "attached_at": timestamp(),
+	}, "key_id", "algorithm", "public_key_der", "chain_pem", "leaf_fingerprint", "not_after", "code_signing_eku", "source")
+	codeSigningKeyCertificateAttach := object(map[string]*Schema{"chain_pem": str()}, "chain_pem")
 	codeSigningKeyCSRRequest := object(map[string]*Schema{"common_name": str()}, "common_name")
 	codeSigningKeyCSR := object(map[string]*Schema{"key_id": str(), "csr_pem": str()}, "key_id", "csr_pem")
 	codeSigningSignature := object(map[string]*Schema{
@@ -9813,6 +9816,7 @@ func componentSchemas() map[string]*Schema {
 		"CodeSigningPreview":                 codeSigningPreview,
 		"CodeSigningSignature":               codeSigningSignature,
 		"CodeSigningKeyCertificate":          codeSigningKeyCertificate,
+		"CodeSigningKeyCertificateAttach":    codeSigningKeyCertificateAttach,
 		"CodeSigningKeyCSRRequest":           codeSigningKeyCSRRequest,
 		"CodeSigningKeyCSR":                  codeSigningKeyCSR,
 		"ManagedKeyCustodyRequirement":       managedKeyCustodyRequirement,

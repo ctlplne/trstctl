@@ -9373,6 +9373,36 @@ export const messages = {
   "codesign.transparency.failed": { defaultMessage: "Transparency failed", description: "Failed transparency state." },
   "codesign.transparency.notPublished": { defaultMessage: "Not published", description: "Not-published transparency state." },
   "codesign.workflow.title": { defaultMessage: "Sign an artifact safely", description: "F50 signing workflow title." },
+  "codesign.keyCertificate.title": { defaultMessage: "Key certificates", description: "P9-L1: code-signing key certificate panel title." },
+  "codesign.keyCertificate.description": {
+    defaultMessage:
+      "The certificate chain stock signing tools get for a key. Attach or rotate it here: it is checked against the key and used at once, with no restart.",
+    description: "P9-L1: code-signing key certificate panel description.",
+  },
+  "codesign.keyCertificate.keyId": { defaultMessage: "Key ID", description: "P9-L1: code-signing key id field." },
+  "codesign.keyCertificate.keyIdHelp": { defaultMessage: "The managed code-signing key's ID.", description: "P9-L1: key id help." },
+  "codesign.keyCertificate.load": { defaultMessage: "Show certificate", description: "P9-L1: load the key's certificate." },
+  "codesign.keyCertificate.none": {
+    defaultMessage: "No certificate chain is attached or configured for this key yet.",
+    description: "P9-L1: the key has no chain.",
+  },
+  "codesign.keyCertificate.source": { defaultMessage: "Chain", description: "P9-L1: where the chain came from." },
+  "codesign.keyCertificate.sourceAttached": { defaultMessage: "Attached here", description: "P9-L1: the chain was attached through the console or API." },
+  "codesign.keyCertificate.sourceConfigured": { defaultMessage: "From configuration", description: "P9-L1: the chain was configured beside the key." },
+  "codesign.keyCertificate.expires": { defaultMessage: "Leaf expires", description: "P9-L1: the leaf certificate's expiry." },
+  "codesign.keyCertificate.fingerprint": { defaultMessage: "Leaf SHA-256", description: "P9-L1: the leaf certificate's fingerprint." },
+  "codesign.keyCertificate.attachedBy": { defaultMessage: "Attached by", description: "P9-L1: who attached the chain." },
+  "codesign.keyCertificate.chain": { defaultMessage: "Certificate chain (PEM, leaf first)", description: "P9-L1: chain to attach." },
+  "codesign.keyCertificate.chainHelp": {
+    defaultMessage: "The leaf must name this key and allow code signing; it replaces the chain the key had.",
+    description: "P9-L1: chain help.",
+  },
+  "codesign.keyCertificate.attach": { defaultMessage: "Attach chain", description: "P9-L1: attach button." },
+  "codesign.keyCertificate.attached": {
+    defaultMessage: "Chain attached to {keyId}; signing tools get it now.",
+    description: "P9-L1: notice after attaching.",
+  },
+  "codesign.keyCertificate.error": { defaultMessage: "The key certificate could not be updated", description: "P9-L1: error title." },
   "codesign.workflow.description": {
     defaultMessage: "Review the exact digest, signer, effects, recovery, and proof before one durable signing request.",
     description: "F50 signing workflow description.",

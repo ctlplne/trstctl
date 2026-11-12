@@ -234,6 +234,7 @@ import type {
   CertificateKeyAttestation,
   CertificateList,
   CloudSecretManagerIntegration,
+  CodeSigningKeyCertificate,
   CodeSigningIdentity,
   CodeSigningIdentityList,
   CodeSigningKeylessRequest,
@@ -1405,6 +1406,7 @@ export type {
   CBOMScanPreview,
   CBOMScanRequest,
   CloudSecretManagerIntegration,
+  CodeSigningKeyCertificate,
   CodeSigningIdentity,
   CodeSigningIdentityList,
   CodeSigningKeylessRequest,
@@ -2577,6 +2579,8 @@ export interface Api {
   signCode(input: CodeSigningRequest, idempotencyKey?: string): Promise<CodeSigningSignature>;
   signCodeKeyless(input: CodeSigningKeylessRequest, idempotencyKey?: string): Promise<CodeSigningSignature>;
   codeSigningIdentities(): Promise<CodeSigningIdentityList>;
+  codeSigningKeyCertificate(keyID: string): Promise<CodeSigningKeyCertificate>;
+  attachCodeSigningKeyCertificate(keyID: string, chainPEM: string, idempotencyKey?: string): Promise<CodeSigningKeyCertificate>;
   risk(options?: RiskQuery): Promise<CredentialRisk[]>;
   contextualRiskPriorities(): Promise<ContextualRiskPriorities>;
   profiles(): Promise<Profile[]>;
@@ -3615,6 +3619,14 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   signCode: (input, idempotencyKey) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/sign", input, idempotencyKey),
   signCodeKeyless: (input, idempotencyKey) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/keyless", input, idempotencyKey),
   codeSigningIdentities: () => req<CodeSigningIdentityList>("/api/v1/code-signing/identities"),
+  codeSigningKeyCertificate: (keyID) => req<CodeSigningKeyCertificate>(`/api/v1/code-signing/keys/${encodeURIComponent(String(keyID))}/certificate`),
+  attachCodeSigningKeyCertificate: (keyID, chainPEM, idempotencyKey) =>
+    mutate<CodeSigningKeyCertificate>(
+      "PUT",
+      `/api/v1/code-signing/keys/${encodeURIComponent(String(keyID))}/certificate`,
+      { chain_pem: chainPEM },
+      idempotencyKey,
+    ),
   risk: (options) => req<CredentialRiskList>(`/api/v1/risk/credentials${riskQueryString(options)}`).then((r) => r.credentials ?? []),
   contextualRiskPriorities: () => req<ContextualRiskPriorities>("/api/v1/risk/contextual-priorities"),
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),

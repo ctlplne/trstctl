@@ -948,7 +948,9 @@ for the key; startup refuses a chain whose leaf does not carry the key's public 
 or lacks the `codeSigning` extended key usage. trstctl serves it at
 `GET /api/v1/code-signing/keys/{key_id}/certificate` for stock signing tools, and
 `POST /api/v1/code-signing/keys/{key_id}/csr` returns a certificate request the key
-signs inside the signer. A changed chain takes effect at the next start.
+signs inside the signer. A changed file takes effect at the next start; a chain
+attached through the API (`PUT /api/v1/code-signing/keys/{key_id}/certificate`, P9-L1)
+takes effect at once on every replica and wins over the file.
 `managed_key_provider` and `managed_key_id` bind a code-signing key held in an HSM or
 cloud KMS — an Enterprise managed key created with `POST /api/v1/managed-keys` — instead
 of a signer handle, and cannot be combined with `handle`, `create_if_missing` or

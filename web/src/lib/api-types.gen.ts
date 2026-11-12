@@ -3450,12 +3450,19 @@ export interface CodeSigningKeyCSRRequest {
 
 export interface CodeSigningKeyCertificate {
   algorithm: string;
+  attached_at?: string;
+  attached_by?: string;
   chain_pem: string;
   code_signing_eku: boolean;
   key_id: string;
   leaf_fingerprint: string;
   not_after: string;
   public_key_der: string;
+  source: "attached" | "configured";
+}
+
+export interface CodeSigningKeyCertificateAttach {
+  chain_pem: string;
 }
 
 export interface CodeSigningKeylessRequest {

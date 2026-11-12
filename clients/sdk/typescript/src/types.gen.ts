@@ -3936,9 +3936,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read the certificate chain configured for a managed code-signing key */
+        /** Read the certificate chain of a managed code-signing key: the one attached through the API, or else the one configured beside it */
         get: operations["getCodeSigningKeyCertificate"];
-        put?: never;
+        /** Attach or rotate a managed code-signing key's certificate chain (leaf first), checked against the key; signing tools get it at once, without a restart */
+        put: operations["attachCodeSigningKeyCertificate"];
         post?: never;
         delete?: never;
         options?: never;
@@ -16522,6 +16523,9 @@ export interface components {
         };
         CodeSigningKeyCertificate: {
             algorithm: string;
+            /** Format: date-time */
+            attached_at?: string;
+            attached_by?: string;
             chain_pem: string;
             code_signing_eku: boolean;
             key_id: string;
@@ -16530,6 +16534,11 @@ export interface components {
             not_after: string;
             /** Format: byte */
             public_key_der: string;
+            /** @enum {string} */
+            source: "attached" | "configured";
+        };
+        CodeSigningKeyCertificateAttach: {
+            chain_pem: string;
         };
         CodeSigningKeylessRequest: {
             artifact_type: string;
@@ -40312,6 +40321,54 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeSigningKeyCertificate"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    attachCodeSigningKeyCertificate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description Code-signing key id */
+                key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeSigningKeyCertificateAttach"];
+            };
+        };
         responses: {
             /** @description success */
             200: {

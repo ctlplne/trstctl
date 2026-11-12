@@ -13263,6 +13263,7 @@
                 "signCodeArtifact",
                 "signCodeArtifactKeyless",
                 "getCodeSigningKeyCertificate",
+                "attachCodeSigningKeyCertificate",
                 "createCodeSigningKeyCSR"
             ],
             "api_na": "",
@@ -13273,6 +13274,7 @@
                 "code-signing preview",
                 "code-signing sign",
                 "code-signing keys certificate",
+                "code-signing keys attach-certificate",
                 "code-signing keys csr"
             ],
             "cli_na": "",

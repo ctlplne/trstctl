@@ -282,6 +282,8 @@ var TenantScopedTables = []string{
 	"mdm_device_check_ins",
 	// N9-L2: MDM check-in waves; no foreign keys.
 	"mdm_check_in_waves",
+	// P9-L1: code-signing key chains attached through the API; no foreign keys.
+	"code_signing_key_certificates",
 	// P12: factory birth certificates, then their batches; no foreign keys.
 	"factory_birth_certificates", "factory_batches",
 	// P13: incident closures; no foreign keys.

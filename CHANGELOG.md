@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A code-signing key's certificate chain is attached or rotated through the API (P9-L1):
+  `PUT /api/v1/code-signing/keys/{key_id}/certificate` (`trstctl-cli code-signing keys attach-certificate`, or the Code
+  signing page's Key certificates panel) checks the chain against the key and the `codeSigning` usage, records it, and
+  stock signing tools get it from the next request on, on every replica, with no configuration change or restart.
 - An access review's revoke decision acts on certificates and identities (Q1-L1): a certificate is revoked by the
   trstctl CA that issued it (`cessationOfOperation`) and an identity moves to `revoked` through its lifecycle, both as
   the reviewer through the same gate an operator's request meets. A reviewer the gate refuses (authority, policy, dual

@@ -345,7 +345,9 @@ import (
 // Version 122 carries X3-L5's pilot observed-traffic requirement, window and
 // wave traffic_checked_at: a version-121 payload has no such columns, and a
 // restored pilot would advance on its probe alone.
-const SnapshotFormatVersion = 122
+// Version 123 carries P9-L1's code-signing key chains attached through the
+// API: without them a restored key would serve only its configured chain.
+const SnapshotFormatVersion = 123
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -439,6 +441,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"mdm_device_check_ins",
 	// Format 119: N9-L2's MDM check-in waves.
 	"mdm_check_in_waves",
+	// Format 123: P9-L1's code-signing key chains attached through the API.
+	"code_signing_key_certificates",
 	// Format 87: P12's factory batches and their birth certificates.
 	"factory_batches", "factory_birth_certificates",
 	// Format 88: P13's incident closures.
@@ -877,7 +881,8 @@ SELECT jsonb_build_object(
   -- The fourth object is full (49 tables and the snapshot set, 100
   -- arguments): N1-L2 starts a fifth.
   'adcs_ca_pending_requests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_ca_pending_requests t),
-  'mdm_check_in_waves', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM mdm_check_in_waves t)
+  'mdm_check_in_waves', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM mdm_check_in_waves t),
+  'code_signing_key_certificates', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM code_signing_key_certificates t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL,

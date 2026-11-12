@@ -6606,9 +6606,10 @@ This is a deliberate, documented trust boundary, not an accident.
     SAN/issuer is derived. Rekor publication uses the transactional outbox
     and acknowledges only an exact HashedRekord receipt whose signed-entry
     timestamp verifies under the operator-pinned log key.
-  - Stock signing tools (P9): a code-signing key's certificate chain is configured
-    beside it (`certificate_chain_file`, checked against the key at startup) and
-    served at `GET /api/v1/code-signing/keys/{key_id}/certificate`; a certificate
+  - Stock signing tools (P9): a code-signing key's certificate chain is attached
+    through the API (P9-L1: checked against the key, used at once on every replica,
+    no restart) or configured beside it (`certificate_chain_file`, checked at
+    startup), and served at `GET /api/v1/code-signing/keys/{key_id}/certificate`; a certificate
     request for the key is signed inside the signer and recorded. The
     `notation-trstctl` plugin in `clients/signing` signs through the code-signing API
     with ECDSA P-256 keys: the served test builds it and drives it over the Notation

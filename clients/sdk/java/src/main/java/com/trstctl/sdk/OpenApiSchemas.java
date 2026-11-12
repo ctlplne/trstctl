@@ -358,6 +358,7 @@ public final class OpenApiSchemas {
       "CodeSigningKeyCSR",
       "CodeSigningKeyCSRRequest",
       "CodeSigningKeyCertificate",
+      "CodeSigningKeyCertificateAttach",
       "CodeSigningKeylessRequest",
       "CodeSigningPreview",
       "CodeSigningRequest",

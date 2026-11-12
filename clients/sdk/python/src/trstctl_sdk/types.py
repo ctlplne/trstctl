@@ -4830,12 +4830,23 @@ CodeSigningKeyCertificate = TypedDict(
     'CodeSigningKeyCertificate',
     {
         'algorithm': str,
+        'attached_at': str,
+        'attached_by': str,
         'chain_pem': str,
         'code_signing_eku': bool,
         'key_id': str,
         'leaf_fingerprint': str,
         'not_after': str,
         'public_key_der': str,
+        'source': str,
+    },
+    total=False,
+)
+
+CodeSigningKeyCertificateAttach = TypedDict(
+    'CodeSigningKeyCertificateAttach',
+    {
+        'chain_pem': str,
     },
     total=False,
 )

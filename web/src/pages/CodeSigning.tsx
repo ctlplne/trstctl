@@ -9,6 +9,7 @@ import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { useApiQuery } from "@/lib/query";
 import { useCapabilityExecution } from "@/lib/capabilities";
 import { CodeSigningWorkflow } from "@/pages/codesigning/CodeSigningWorkflow";
+import { CodeSigningKeyCertificate } from "@/pages/codesigning/CodeSigningKeyCertificate";
 
 const auditReceipts = [
   "the artifact digest is the signed subject; artifact bytes never enter the browser",
@@ -152,6 +153,10 @@ export function CodeSigning() {
 
       <SectionCard title={t("codesign.workflow.title")} description={t("codesign.workflow.description")}>
         <CodeSigningWorkflow />
+      </SectionCard>
+
+      <SectionCard title={t("codesign.keyCertificate.title")} description={t("codesign.keyCertificate.description")}>
+        <CodeSigningKeyCertificate />
       </SectionCard>
 
       <SectionCard title={translateNow("source.audit.and.key.boundary.1ff2138216")} description="What the browser can and cannot see during signing.">
