@@ -54,6 +54,8 @@ type upstreamACMEDNS01Solver struct {
 	issuer string
 	// persist answers dns-persist-01 with a standing record (P1).
 	persist bool
+	// persistIssuer pins the issuer domain name that record names (P1-L5).
+	persistIssuer string
 }
 
 // SolvableChallenges reports dns-01 only.
@@ -256,6 +258,7 @@ type upstreamDVBinding struct {
 	caaIssuerDomain string
 	issuer          string
 	persist         bool
+	persistIssuer   string
 }
 
 var (
@@ -275,7 +278,7 @@ func (b *upstreamDVBinding) solver() *upstreamACMEDNS01Solver {
 	}
 	return &upstreamACMEDNS01Solver{
 		automation: automation, log: log,
-		caaIssuerDomain: b.caaIssuerDomain, issuer: b.issuer, persist: b.persist,
+		caaIssuerDomain: b.caaIssuerDomain, issuer: b.issuer, persist: b.persist, persistIssuer: b.persistIssuer,
 	}
 }
 

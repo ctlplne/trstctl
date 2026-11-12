@@ -3,6 +3,7 @@
 package config
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -49,6 +50,44 @@ func TestUpstreamDNSPersistNeedsUpstreamDNS01(t *testing.T) {
 		}
 		if refused != tc.refused {
 			t.Fatalf("%+v: refused=%v, want %v", tc.cfg, refused, tc.refused)
+		}
+	}
+}
+
+// P1-L5: upstream_dns_persist_issuer pins the issuer domain name the
+// standing record names. It needs upstream_dns_persist, and it must be a
+// lowercase DNS name: it is written into the record's value, so anything
+// else could add a parameter to the record.
+func TestUpstreamDNSPersistIssuerPinIsCheckedP1L5(t *testing.T) {
+	var cfg ExternalCAConfig
+	if err := json.Unmarshal([]byte(`{"type":"letsencrypt","upstream_dns01":true,"caa_issuer_domain":"letsencrypt.org",
+		"upstream_dns_persist":true,"upstream_dns_persist_issuer":"ca2.example.test"}`), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.UpstreamDNSPersistIssuer != "ca2.example.test" {
+		t.Fatalf("upstream_dns_persist_issuer = %q", cfg.UpstreamDNSPersistIssuer)
+	}
+	if errs := validateExternalCAFieldScope("external_cas[0]", cfg); len(errs) != 0 {
+		t.Fatalf("a pinned lowercase DNS name was refused: %v", errs)
+	}
+	for _, tc := range []struct {
+		pin, persist string
+		want         string
+	}{
+		{"ca2.example.test", "off", "needs upstream_dns_persist"},
+		{"ca2.example.test; policy=wildcard", "on", "is not a lowercase DNS name"},
+		{"CA2.example.test", "on", "is not a lowercase DNS name"},
+		{"ca2", "on", "is not a lowercase DNS name"},
+	} {
+		bad := cfg
+		bad.UpstreamDNSPersistIssuer = tc.pin
+		bad.UpstreamDNSPersist = tc.persist == "on"
+		var got []string
+		for _, err := range validateExternalCAFieldScope("external_cas[0]", bad) {
+			got = append(got, err.Error())
+		}
+		if !strings.Contains(strings.Join(got, "|"), "external_cas[0].upstream_dns_persist_issuer") || !strings.Contains(strings.Join(got, "|"), tc.want) {
+			t.Fatalf("pin %q (persist %s): errors %v, want %q", tc.pin, tc.persist, got, tc.want)
 		}
 	}
 }

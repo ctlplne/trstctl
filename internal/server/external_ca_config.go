@@ -248,7 +248,8 @@ func buildACMEExternalCA(item config.ExternalCAConfig, client *http.Client, acme
 	if item.UpstreamDNS01 && upstreamDV != nil {
 		// Bound to THIS authority's CAA identifier, not a process-wide one;
 		// see upstreamDVHolder.
-		binding := upstreamDV.bind(item.CAAIssuerDomain, item.ID).withPersist(item.UpstreamDNSPersist)
+		binding := upstreamDV.bind(item.CAAIssuerDomain, item.ID).withPersist(item.UpstreamDNSPersist).
+			withPersistIssuer(item.UpstreamDNSPersistIssuer)
 		acmeOpts = append(acmeOpts, letsencrypt.WithChallengeSolver(binding), letsencrypt.WithDVObserver(binding))
 	}
 	if strings.TrimSpace(item.ACMEProfile) != "" {

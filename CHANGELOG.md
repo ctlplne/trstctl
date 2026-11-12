@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An ACME authority's `upstream_dns_persist_issuer` pins which of the issuer domain names a public CA lists the
+  dns-persist-01 standing record names (P1-L5). Only a record naming the pin then counts as standing, a new
+  record names it, and a pin the authority does not list refuses the order before anything is published.
+  Without it the record names the first listed name, as before.
 - A dns-persist-01 standing record with `policy=wildcard` also validates every subdomain of its domain (P1-L2,
   draft-ietf-acme-dns-persist §5.1 and §6). The ACME server reads the name's own `_validation-persist` record,
   then its parent domains nearest first up to the registrable domain (at most 16 lookups), so one record at

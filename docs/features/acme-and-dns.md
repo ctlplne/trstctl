@@ -492,6 +492,15 @@ refused with that reason. Each record is its own authorization: a record at the 
 that names another account does not hide a parent's record that passes. A lookup
 that fails for any reason other than "no such name" refuses the order.
 
+Upstream, an ACME authority configured with `upstream_dns_persist` (with
+`upstream_dns01`) answers a public CA's dns-persist-01 by publishing the standing record
+at each name through the consenting DNS-01 provider configs, once, and never retracting
+it. The record names the first issuer domain name the authority lists in its challenge.
+When it lists several, `upstream_dns_persist_issuer` pins the one the record names
+(P1-L5): only a record naming the pin then stands, a new record names it, and a pin the
+authority does not list refuses the order before the CAA check and before anything is
+published.
+
 ### S/MIME certificates for a mailbox: email-reply-00 (P15, RFC 8823)
 
 With `protocols.acme_email` set, the ACME server also issues signing-only S/MIME

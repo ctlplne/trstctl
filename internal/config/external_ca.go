@@ -133,6 +133,14 @@ type ExternalCAConfig struct {
 	// public CA offers the challenge in production.
 	UpstreamDNSPersist bool `json:"upstream_dns_persist,omitempty"`
 
+	// UpstreamDNSPersistIssuer pins the issuer domain name the standing
+	// record names (P1-L5), for an authority that lists several in its
+	// dns-persist-01 challenge. Empty uses the first name the authority
+	// lists. A pinned name the authority does not list refuses the order
+	// instead of publishing a record for another name. A lowercase DNS name;
+	// requires upstream_dns_persist.
+	UpstreamDNSPersistIssuer string `json:"upstream_dns_persist_issuer,omitempty"`
+
 	// ARIIssuerKeyIDs names this authority's issuing intermediates by their
 	// Subject Key Identifier (hex), so a DISCOVERED leaf that carries one of
 	// them as its Authority Key Identifier gets an upstream ARI poll too (A51).
@@ -473,6 +481,16 @@ func validateExternalCAFieldScope(where string, c ExternalCAConfig) []error {
 	}
 	if c.UpstreamDNSPersist && (c.Type != "letsencrypt" || !c.UpstreamDNS01) {
 		errs = append(errs, fmt.Errorf("%s.upstream_dns_persist applies only to ACME (letsencrypt) authorities with upstream_dns01 enabled", where))
+	}
+	if pin := c.UpstreamDNSPersistIssuer; pin != "" {
+		switch {
+		case !c.UpstreamDNSPersist:
+			errs = append(errs, fmt.Errorf("%s.upstream_dns_persist_issuer needs upstream_dns_persist", where))
+		case len(pin) > 253 || !issuerDomainNamePattern.MatchString(pin):
+			// The name is written into the TXT record's value: anything but a
+			// DNS name could add a parameter to the record.
+			errs = append(errs, fmt.Errorf("%s.upstream_dns_persist_issuer %q is not a lowercase DNS name", where, pin))
+		}
 	}
 	if c.Type != "letsencrypt" && strings.TrimSpace(c.ACMEProfile) != "" {
 		errs = append(errs, fmt.Errorf("%s.acme_profile applies only to ACME (letsencrypt) authorities, not %q", where, c.Type))
