@@ -12645,6 +12645,7 @@ PAMPostgresCredential = TypedDict(
 PAMQueryRequest = TypedDict(
     'PAMQueryRequest',
     {
+        'command': str,
         'sql': str,
     },
     total=False,

@@ -18,7 +18,7 @@ import { Eyebrow, Num } from "@/components/typography";
 import { SSHCommandConsole } from "@/components/access/SSHCommandConsole";
 import { BrowserTerminal } from "@/components/access/BrowserTerminal";
 import { PodTerminal } from "@/components/access/PodTerminal";
-import { SqlConsole } from "@/components/access/SqlConsole";
+import { SqlConsole, type ConsoleEngine } from "@/components/access/SqlConsole";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -74,7 +74,9 @@ const PAM_SESSION_TYPES = [
   "netdevice",
   "webconsole",
 ] as const;
-const PAM_BROWSER_TYPES = new Set<string>(["postgres", "ssh", "kubernetes"]);
+const PAM_BROWSER_TYPES = new Set<string>(["postgres", "ssh", "kubernetes", "mysql", "mongodb", "redis"]);
+// A259-L5: the session types with a database console in the browser.
+const PAM_CONSOLE_TYPES = new Set<string>(["postgres", "mysql", "mongodb", "redis"]);
 const pamFormSchema = z
   .object({
     target_type: z.enum(PAM_SESSION_TYPES),
@@ -1592,9 +1594,14 @@ function PAMFormDialog({
             )
           ) : null}
           {browser && created.target_type === "kubernetes" ? <PodTerminal sessionID={created.id} /> : null}
-          {browser && created.target_type === "postgres" ? (
+          {browser && PAM_CONSOLE_TYPES.has(created.target_type) ? (
             terminalOpen ? (
-              <SqlConsole sessionID={created.id} commandRules={!!created.command_policy?.rules.length} onClose={() => setTerminalOpen(false)} />
+              <SqlConsole
+                sessionID={created.id}
+                engine={created.target_type as ConsoleEngine}
+                commandRules={!!created.command_policy?.rules.length}
+                onClose={() => setTerminalOpen(false)}
+              />
             ) : (
               <Button type="button" size="sm" onClick={() => setTerminalOpen(true)}>
                 {t("admin.access.openConsole")}

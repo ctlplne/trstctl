@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- MySQL, MongoDB and Redis sessions opened for the browser have a database console (A259-L5), as
+  PostgreSQL sessions do: SQL on MySQL, a command on Redis as redis-cli takes it, and a JSON
+  command document on MongoDB, each run through the session's gateway, which signs in as the
+  session's account and records it. `POST /api/v1/access/sessions/{id}/queries` takes `command`
+  beside `sql`.
 - A Kubernetes session opened for the browser lists its pods and containers (A259-L4): the
   console's pod form picks from the pods the session's service account can see, in the
   provider's namespace or one you name, instead of typed names. `GET

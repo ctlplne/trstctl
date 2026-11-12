@@ -1425,7 +1425,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run SQL on your PostgreSQL session opened for the browser; the gateway signs in, records and masks, and the reply holds the last result's rows */
+        /** Run SQL on your PostgreSQL or MySQL session opened for the browser, or a command on your MongoDB or Redis one; the gateway signs in, records and masks, and the reply holds the last result's rows */
         post: operations["runPAMQuery"];
         delete?: never;
         options?: never;
@@ -23359,14 +23359,16 @@ export interface components {
             username: string;
         };
         PAMQueryRequest: {
-            /** @description one SQL text (up to 64 KiB); the last statement's result is returned */
-            sql: string;
+            /** @description Redis sessions: one command as redis-cli takes it (words, double- or single-quoted); MongoDB sessions: one extended JSON command document, run on the provider's database unless it names $db. Up to 64 KiB. Give sql or command, not both. */
+            command?: string;
+            /** @description PostgreSQL or MySQL sessions: one SQL text (up to 64 KiB); the last statement's result is returned. A MySQL console runs one statement at a time. */
+            sql?: string;
         };
         PAMQueryResult: {
             columns: string[];
             command_tag?: string;
             error?: {
-                /** @description the database's SQLSTATE */
+                /** @description the database's own code: PostgreSQL's SQLSTATE, MySQL's error number with its SQLSTATE, MongoDB's code name, Redis's error prefix */
                 code: string;
                 message: string;
             };

@@ -9341,8 +9341,6 @@ form opens it in the named pod, the SQL console shows rows, NULLs and refusals, 
 ticket, and all pass the axe accessibility check.
 
 What comes next:
-- A MySQL, MongoDB or Redis console (today the database console serves PostgreSQL sessions;
-  the other types are reached with their stock clients).
 - Gateways the control plane cannot reach (a reverse tunnel over the agent channel).
 
 ## Privileged account discovery (A260) — served

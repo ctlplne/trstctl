@@ -498,6 +498,10 @@ func (p *configuredDynamicProvider) publicCredential(ctx context.Context, ref st
 	return out, err
 }
 
+// DynamicSecretDatabase is the database a provider grants its accounts on (a
+// MongoDB session's console runs there unless a command names $db).
+func (p *configuredDynamicProvider) DynamicSecretDatabase() string { return p.cfg.Database }
+
 // DynamicSecretKubernetesScope is the namespace a kubernetes provider creates
 // its ServiceAccounts in and the audience of their tokens, which the
 // Vault-compatible API reports and checks.

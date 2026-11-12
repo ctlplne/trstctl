@@ -42579,14 +42579,15 @@
       },
       "PAMQueryRequest": {
         "properties": {
+          "command": {
+            "description": "Redis sessions: one command as redis-cli takes it (words, double- or single-quoted); MongoDB sessions: one extended JSON command document, run on the provider's database unless it names $db. Up to 64 KiB. Give sql or command, not both.",
+            "type": "string"
+          },
           "sql": {
-            "description": "one SQL text (up to 64 KiB); the last statement's result is returned",
+            "description": "PostgreSQL or MySQL sessions: one SQL text (up to 64 KiB); the last statement's result is returned. A MySQL console runs one statement at a time.",
             "type": "string"
           }
         },
-        "required": [
-          "sql"
-        ],
         "type": "object"
       },
       "PAMQueryResult": {
@@ -42603,7 +42604,7 @@
           "error": {
             "properties": {
               "code": {
-                "description": "the database's SQLSTATE",
+                "description": "the database's own code: PostgreSQL's SQLSTATE, MySQL's error number with its SQLSTATE, MongoDB's code name, Redis's error prefix",
                 "type": "string"
               },
               "message": {
@@ -68251,7 +68252,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Run SQL on your PostgreSQL session opened for the browser; the gateway signs in, records and masks, and the reply holds the last result's rows",
+        "summary": "Run SQL on your PostgreSQL or MySQL session opened for the browser, or a command on your MongoDB or Redis one; the gateway signs in, records and masks, and the reply holds the last result's rows",
         "x-trstctl-permission": "access:sessions.open",
         "x-trstctl-sensitive-response": true
       }

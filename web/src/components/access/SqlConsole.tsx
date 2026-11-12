@@ -7,14 +7,43 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type PAMQueryResult } from "@/lib/api";
 
-// A259 part 2: a database console on a PostgreSQL session opened for the
-// browser. The control plane runs each SQL text through the session's gateway,
-// which signs in as the session's login and records the statement; the
-// console shows the last result's rows or the database's own refusal. No
-// credential or ticket reaches the browser.
+// A259 part 2: a database console on a session opened for the browser. The
+// control plane runs each text through the session's gateway, which signs in
+// as the session's account and records it; the console shows the last
+// result's rows or the database's own refusal. No credential or ticket reaches
+// the browser. A259-L5: PostgreSQL and MySQL sessions take SQL; a Redis
+// session takes a command as redis-cli does, a MongoDB session a command
+// document.
 
-export function SqlConsole({ sessionID, onClose, commandRules = false }: { sessionID: string; onClose: () => void; commandRules?: boolean }) {
+export type ConsoleEngine = "postgres" | "mysql" | "mongodb" | "redis";
+
+const consoleLabel = {
+  postgres: "admin.access.console.sql",
+  mysql: "admin.access.console.sql",
+  redis: "admin.access.console.command",
+  mongodb: "admin.access.console.commandDocument",
+} as const;
+
+const consoleHint = {
+  postgres: null,
+  mysql: "admin.access.console.mysqlHint",
+  redis: "admin.access.console.redisHint",
+  mongodb: "admin.access.console.mongoHint",
+} as const;
+
+export function SqlConsole({
+  sessionID,
+  onClose,
+  commandRules = false,
+  engine = "postgres",
+}: {
+  sessionID: string;
+  onClose: () => void;
+  commandRules?: boolean;
+  engine?: ConsoleEngine;
+}) {
   const { t } = useTranslation();
+  const hint = consoleHint[engine];
   const active = useRef<AbortController | null>(null);
   useEffect(() => () => active.current?.abort(), []);
   const [sql, setSQL] = useState("");
@@ -30,7 +59,8 @@ export function SqlConsole({ sessionID, onClose, commandRules = false }: { sessi
     const controller = new AbortController();
     active.current = controller;
     try {
-      setResult(await api.runPAMQuery(sessionID, text, `pam-query:${sessionID}:${crypto.randomUUID()}`, controller.signal));
+      const query = engine === "postgres" || engine === "mysql" ? { sql: text } : { command: text };
+      setResult(await api.runPAMQuery(sessionID, query, `pam-query:${sessionID}:${crypto.randomUUID()}`, controller.signal));
     } catch (err) {
       setResult(null);
       setFailure(controller.signal.aborted ? t("admin.access.rules.queryCanceled") : err instanceof Error ? err.message : String(err));
@@ -57,7 +87,7 @@ export function SqlConsole({ sessionID, onClose, commandRules = false }: { sessi
           {t("admin.access.console.close")}
         </Button>
       </div>
-      <Field label={t("admin.access.console.sql")}>
+      <Field label={t(consoleLabel[engine])} description={hint ? t(hint) : undefined}>
         {(control) => (
           <Textarea {...control} className="min-h-24 font-mono text-xs" value={sql} onChange={(event) => setSQL(event.target.value)} spellCheck={false} />
         )}
@@ -105,7 +135,11 @@ export function SqlConsole({ sessionID, onClose, commandRules = false }: { sessi
                     const value = cell as string | null;
                     return (
                       <td key={c} className="font-mono text-xs">
-                        {value === null ? <span className="text-muted-foreground">{t("admin.access.console.null")}</span> : value}
+                        {value === null ? (
+                          <span className="text-muted-foreground">{t(engine === "redis" ? "admin.access.console.nil" : "admin.access.console.null")}</span>
+                        ) : (
+                          value
+                        )}
                       </td>
                     );
                   })}

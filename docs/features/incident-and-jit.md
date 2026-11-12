@@ -547,9 +547,14 @@ what comes next.
 A session can be worked in from the console instead (A259). Open it with `"browser": true`
 (Request privileged session → "Open in the browser"): the control plane keeps the session's
 ticket for the person who opened it, the reply carries none, and the gateway still signs in,
-records and masks. On an SSH session "Open terminal" opens a shell in the browser; on a
-PostgreSQL session "Open database console" runs SQL and shows the last result (at most 1,000
-rows) or the database's refusal; on a Kubernetes session the pod form lists the pods the
+records and masks. On an SSH session "Open terminal" opens a shell in the browser. On a
+PostgreSQL, MySQL, MongoDB or Redis session "Open database console" runs what the session's
+database takes and shows the last result (at most 1,000 rows) or the database's own refusal:
+SQL on PostgreSQL and on MySQL (one statement at a time), a command on Redis as redis-cli
+takes it, and on MongoDB one command document in JSON, which runs on the provider's database
+unless it names `$db`. The gateway refuses a sign-in sent through a console (AUTH, HELLO with
+AUTH and RESET on Redis; `saslStart` and its kin on MongoDB), and the console keeps the
+session's account. On a Kubernetes session the pod form lists the pods the
 session's service account can see, with their containers, and opens a terminal in the one you
 choose as that account. The list starts in the provider's namespace; name another namespace
 and choose **List pods** to read that one, which the cluster refuses where the account may not
@@ -558,7 +563,9 @@ so the gateway records it; when the account may not list pods, type the pod and 
 instead. The API is `POST /api/v1/access/sessions/{id}/terminals` (output by long-poll, typed
 input, resize, close), `GET /api/v1/access/sessions/{id}/pods` (`namespace` optional; the
 first 500 pods, marked `truncated` when there are more) and
-`POST /api/v1/access/sessions/{id}/queries`; the CLI has `trstctl-cli access sessions pods`.
+`POST /api/v1/access/sessions/{id}/queries` (`sql` for PostgreSQL and MySQL, `command` for
+Redis and MongoDB); the CLI has `trstctl-cli access sessions pods` and
+`trstctl-cli access sessions query`.
 The control plane must reach the gateway's address; only the opener can use a session's
 terminals and list its pods.
 

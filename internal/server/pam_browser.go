@@ -417,7 +417,7 @@ func (s *pamService) sweepBrowser(now time.Time) {
 			}
 		}
 		if console := s.browser.consoles[key]; console != nil {
-			_ = console.conn.Close(context.Background())
+			console.client.close()
 			delete(s.browser.consoles, key)
 		}
 	}
@@ -474,9 +474,9 @@ func (s *Server) ListPAMSessionPods(ctx context.Context, tenantID, sessionID, pr
 	return s.pam.ListPAMSessionPods(ctx, tenantID, sessionID, principal, namespace)
 }
 
-func (s *Server) RunPAMQuery(ctx context.Context, tenantID, sessionID, principal, sql string) (api.PAMQueryResult, error) {
+func (s *Server) RunPAMQuery(ctx context.Context, tenantID, sessionID, principal string, req api.PAMQueryRequest) (api.PAMQueryResult, error) {
 	if s.pam == nil {
 		return api.PAMQueryResult{}, api.ErrPAMUnavailable
 	}
-	return s.pam.RunPAMQuery(ctx, tenantID, sessionID, principal, sql)
+	return s.pam.RunPAMQuery(ctx, tenantID, sessionID, principal, req)
 }

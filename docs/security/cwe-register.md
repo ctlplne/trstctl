@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3009 annotated sites across 33 rules. Each row is
+3011 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -624,7 +624,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:94` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1614` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1618` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:140` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:156` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
@@ -891,7 +891,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (458 sites)
+### G115 — CWE-190 Integer overflow or wraparound (460 sites)
 
 | Location | Reason |
 |---|---|
@@ -1137,6 +1137,8 @@ not this file.
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_breakglass_served_test.go:180` | a positive clock step in a test (CWE-190) |
 | `internal/server/pam_browser.go:337` | offsets within the ring, at most 1 MiB apart (CWE-190) |
+| `internal/server/pam_browser_console.go:459` | an opcode's two's-complement bits (CWE-190) |
+| `internal/server/pam_browser_console.go:466` | a request id's two's-complement bits (CWE-190) |
 | `internal/server/pam_browser_kube.go:185` | a 7-bit length below 126 (CWE-190) |
 | `internal/server/pam_browser_kube.go:188` | a 16-bit length under 1<<16 (CWE-190) |
 | `internal/server/pam_browser_kube.go:191` | a payload length, never negative (CWE-190) |

@@ -342,7 +342,10 @@ job with gateway sessions to the accounts its task is delegated, and no credenti
 - **Console.** Request privileged session → "Open in the browser" (an SSH request then sends
   no key: the gateway makes its own); once the session is open, "Open terminal" shows an SSH
   session in xterm.js, loaded on demand, with screen-reader mode on, "Open database
-  console" a PostgreSQL session's SQL console with its result table, and on a Kubernetes
+  console" the database console of a PostgreSQL, MySQL, MongoDB or Redis session with its
+  result table (each keeps one admitted connection for its opener: pgconn for PostgreSQL, the
+  MySQL driver on that one connection, RESP2 arrays for Redis, OP_MSG command documents for
+  MongoDB; every reply is read whole and kept to 1,000 rows of 4 KiB cells), and on a Kubernetes
   session the pod form lists the pods and containers the session's account can see and opens
   the same terminal in the one chosen. The control plane asks for the list on an admitted
   connection, as a plain `GET /api/v1/namespaces/{namespace}/pods?limit=500` that the gateway

@@ -9093,7 +9093,8 @@ export interface PAMPostgresCredential {
 }
 
 export interface PAMQueryRequest {
-  sql: string;
+  command?: string;
+  sql?: string;
 }
 
 export interface PAMQueryResult {

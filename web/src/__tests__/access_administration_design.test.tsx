@@ -369,6 +369,58 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     expect(within(dialog).getByText("terminal on aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")).toBeInTheDocument();
   });
 
+  it("opens a Redis session for the browser and its database console takes a command (A259-L5)", async () => {
+    const user = userEvent.setup();
+    const review = {
+      request_id: "77777777-7777-4777-8777-777777777777",
+      approval_request_id: "66666666-6666-4666-8666-666666666666",
+      intent_digest: "reviewed-redis",
+      approval_count: 2,
+      required_approvals: 2,
+    };
+    apiMock.pamRequestProgress.mockResolvedValue({ ...review, status: "approved", expires_at: "2026-11-05T10:05:00Z" });
+    apiMock.requestPAMSession.mockResolvedValue({
+      ...review,
+      status: "pending",
+      approval_count: 0,
+      target_type: "redis",
+      target_id: "cache",
+      role: "redis-writer",
+    });
+    apiMock.openPAMSession.mockResolvedValue({
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      target_type: "redis",
+      target_id: "cache",
+      role: "redis-writer",
+      status: "active",
+      subject: "operator",
+      requested_by: "operator",
+      started_at: "2026-11-05T10:00:00Z",
+      expires_at: "2026-11-05T10:10:00Z",
+      delivery: "gateway",
+      gateway: { agent_id: "gw", address: "gw.internal:7443", spiffe_id: "spiffe://t/agent/gw" },
+    });
+    renderPage();
+    await screen.findByRole("heading", { level: 1, name: "People and roles" });
+    await user.click(screen.getByText("Sessions and access keys", { exact: true }));
+    await user.click(await screen.findByRole("button", { name: "Request privileged session" }));
+    const dialog = screen.getByRole("dialog", { name: "Request privileged session" });
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Target type" }), "redis");
+    await user.click(within(dialog).getByRole("checkbox", { name: /Open in the browser/ }));
+    await user.type(within(dialog).getByRole("textbox", { name: "Target ID" }), "cache");
+    await user.type(within(dialog).getByRole("textbox", { name: "Role" }), "redis-writer");
+    await user.type(within(dialog).getByRole("textbox", { name: "Method" }), "oidc");
+    await user.type(within(dialog).getByRole("textbox", { name: "Payload (base64)" }), "Z2VudWluZQ==");
+    await user.click(within(dialog).getByRole("button", { name: "Request review" }));
+    await waitFor(() => expect(apiMock.requestPAMSession).toHaveBeenCalledTimes(1));
+    await user.click(await within(dialog).findByRole("button", { name: "Activate approved session" }));
+    expect(await within(dialog).findByText("Session opened")).toBeInTheDocument();
+    expect(apiMock.openPAMSession.mock.calls[0][0].browser).toBe(true);
+    await user.click(within(dialog).getByRole("button", { name: "Open database console" }));
+    expect(within(dialog).getByRole("textbox", { name: "Command" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("textbox", { name: "SQL" })).not.toBeInTheDocument();
+  });
+
   it("labels missing historical PAM attestation evidence without inventing a verification time", async () => {
     const user = userEvent.setup();
     apiMock.pamSessions.mockResolvedValue({

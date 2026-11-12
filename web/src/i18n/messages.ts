@@ -7305,6 +7305,28 @@ export const messages = {
   "admin.access.console.title": { defaultMessage: "Database console", description: "Heading of the browser database console on a privileged session (A259)." },
   "admin.access.console.close": { defaultMessage: "Close console", description: "Button closing the database console; the session stays open (A259)." },
   "admin.access.console.sql": { defaultMessage: "SQL", description: "Label of the SQL text area in the database console (A259)." },
+  "admin.access.console.command": {
+    defaultMessage: "Command",
+    description: "Label of the command text area in a Redis session's database console (A259-L5).",
+  },
+  "admin.access.console.commandDocument": {
+    defaultMessage: "Command document (JSON)",
+    description: "Label of the command text area in a MongoDB session's database console; JSON stays literal (A259-L5).",
+  },
+  "admin.access.console.mysqlHint": {
+    defaultMessage: "One SQL statement at a time.",
+    description: "Help under a MySQL session's console text area (A259-L5).",
+  },
+  "admin.access.console.redisHint": {
+    defaultMessage:
+      "One command as redis-cli takes it, for example GET key. The gateway signs in as the session's user and refuses AUTH, HELLO with AUTH and RESET.",
+    description: "Help under a Redis session's console text area; command names stay literal (A259-L5).",
+  },
+  "admin.access.console.mongoHint": {
+    defaultMessage: "One command document in JSON, with the command's name first. It runs on the provider's database unless it names $db.",
+    description: "Help under a MongoDB session's console text area; JSON and $db stay literal (A259-L5).",
+  },
+  "admin.access.console.nil": { defaultMessage: "(nil)", description: "How a Redis console shows a nil reply, as redis-cli does (A259-L5)." },
   "admin.access.console.run": { defaultMessage: "Run", description: "Button running the SQL in the database console (A259)." },
   "admin.access.console.running": {
     defaultMessage: "Running through the session's gateway…",

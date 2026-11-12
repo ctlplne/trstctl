@@ -9213,12 +9213,15 @@ func componentSchemas() map[string]*Schema {
 			"emergency":            ref("PAMEmergencyGrant"),
 		}, "checkout", "credential", "emergency"),
 		"PAMEmergencyReviewRequest": object(map[string]*Schema{"outcome": {Type: "string", Enum: []string{"justified", "unjustified"}}, "notes": str()}, "outcome", "notes"),
-		"PAMQueryRequest":           object(map[string]*Schema{"sql": {Type: "string", Description: "one SQL text (up to 64 KiB); the last statement's result is returned"}}, "sql"),
+		"PAMQueryRequest": object(map[string]*Schema{
+			"sql":     {Type: "string", Description: "PostgreSQL or MySQL sessions: one SQL text (up to 64 KiB); the last statement's result is returned. A MySQL console runs one statement at a time."},
+			"command": {Type: "string", Description: "Redis sessions: one command as redis-cli takes it (words, double- or single-quoted); MongoDB sessions: one extended JSON command document, run on the provider's database unless it names $db. Up to 64 KiB. Give sql or command, not both."},
+		}),
 		"PAMQueryResult": object(map[string]*Schema{
 			"columns":     {Type: "array", Items: str()},
 			"rows":        {Type: "array", Items: &Schema{Type: "array", Items: &Schema{Type: "string", Description: "a cell; null is SQL NULL"}}, Description: "at most 1000 rows; a cell beyond 4 KiB is cut and marked"},
 			"command_tag": str(), "truncated": {Type: "boolean"},
-			"error": object(map[string]*Schema{"code": {Type: "string", Description: "the database's SQLSTATE"}, "message": str()}, "code", "message"),
+			"error": object(map[string]*Schema{"code": {Type: "string", Description: "the database's own code: PostgreSQL's SQLSTATE, MySQL's error number with its SQLSTATE, MongoDB's code name, Redis's error prefix"}, "message": str()}, "code", "message"),
 		}, "columns", "rows"),
 		"PAMTerminalRequest": object(map[string]*Schema{"ssh_command": {Type: "string", Description: "SSH only: a complete exec command, 1-65536 bytes. Required in a command-rule session; no interactive shell is opened. Arguments never enter policy evidence."}, "cols": {Type: "integer"}, "rows": {Type: "integer"},
 			"namespace": {Type: "string", Description: "Kubernetes sessions: the pod's namespace"}, "pod": {Type: "string", Description: "Kubernetes sessions: the pod to exec into"},

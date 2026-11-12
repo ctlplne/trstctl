@@ -51,9 +51,17 @@ type PAMTerminalOutput struct {
 	ExitStatus *int   `json:"exit_status,omitempty"`
 }
 
-// PAMQueryResult is one SQL text's last result on a database console (part
-// 2): its columns and rows (a NULL cell is null), bounded; or the server's
-// error, which is a result, not a failure of the call.
+// PAMQueryRequest is one text for a database console: SQL for a PostgreSQL or
+// MySQL session, a command for a Redis session (as redis-cli takes it) or a
+// MongoDB session (one extended JSON command document) (A259-L5).
+type PAMQueryRequest struct {
+	SQL     string `json:"sql,omitempty"`
+	Command string `json:"command,omitempty"`
+}
+
+// PAMQueryResult is one SQL text's or command's last result on a database
+// console (part 2): its columns and rows (a NULL cell is null), bounded; or
+// the server's error, which is a result, not a failure of the call.
 type PAMQueryResult struct {
 	Columns    []string       `json:"columns"`
 	Rows       [][]*string    `json:"rows"`
@@ -94,7 +102,7 @@ type PAMBrowserBridge interface {
 	WritePAMTerminal(ctx context.Context, tenantID, sessionID, terminalID, principal string, data []byte) error
 	ResizePAMTerminal(ctx context.Context, tenantID, sessionID, terminalID, principal string, cols, rows int) error
 	ClosePAMTerminal(ctx context.Context, tenantID, sessionID, terminalID, principal string) error
-	RunPAMQuery(ctx context.Context, tenantID, sessionID, principal, sql string) (PAMQueryResult, error)
+	RunPAMQuery(ctx context.Context, tenantID, sessionID, principal string, req PAMQueryRequest) (PAMQueryResult, error)
 	ListPAMSessionPods(ctx context.Context, tenantID, sessionID, principal, namespace string) (PAMSessionPods, error)
 }
 
@@ -107,7 +115,7 @@ func (a *API) pamBrowserRoutes() []route {
 		{method: "POST", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/input", opID: "writePAMTerminalInput", summary: "Type into a terminal; a retried request with the same Idempotency-Key types nothing twice", handler: a.writePAMTerminal, pathParams: terminal, reqSchema: "PAMTerminalInput", resSchema: "PAMTerminal", successCode: "200", mutation: true, perm: authz.AccessSessionsOpen},
 		{method: "POST", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/resize", opID: "resizePAMTerminal", summary: "Change a terminal's size", handler: a.resizePAMTerminal, pathParams: terminal, reqSchema: "PAMTerminalRequest", resSchema: "PAMTerminal", successCode: "200", mutation: true, perm: authz.AccessSessionsOpen},
 		{method: "GET", path: "/api/v1/access/sessions/{id}/pods", opID: "listPAMSessionPods", summary: "List the pods your Kubernetes session opened for the browser can see in a namespace, with their containers; the gateway reads them as the session's own account", handler: a.listPAMSessionPods, pathParams: session, query: []param{{name: "namespace", typ: "string", desc: "the namespace to list (default: the session provider's)"}}, resSchema: "PAMSessionPods", successCode: "200", perm: authz.AccessSessionsOpen},
-		{method: "POST", path: "/api/v1/access/sessions/{id}/queries", opID: "runPAMQuery", summary: "Run SQL on your PostgreSQL session opened for the browser; the gateway signs in, records and masks, and the reply holds the last result's rows", handler: a.runPAMQuery, pathParams: session, reqSchema: "PAMQueryRequest", resSchema: "PAMQueryResult", successCode: "200", mutation: true, sensitiveResponse: true, perm: authz.AccessSessionsOpen},
+		{method: "POST", path: "/api/v1/access/sessions/{id}/queries", opID: "runPAMQuery", summary: "Run SQL on your PostgreSQL or MySQL session opened for the browser, or a command on your MongoDB or Redis one; the gateway signs in, records and masks, and the reply holds the last result's rows", handler: a.runPAMQuery, pathParams: session, reqSchema: "PAMQueryRequest", resSchema: "PAMQueryResult", successCode: "200", mutation: true, sensitiveResponse: true, perm: authz.AccessSessionsOpen},
 		{method: "DELETE", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}", opID: "closePAMTerminal", summary: "End a terminal; the session stays open", handler: a.closePAMTerminal, pathParams: terminal, resSchema: "PAMTerminal", successCode: "200", mutation: true, perm: authz.AccessSessionsOpen},
 	}
 }
@@ -285,13 +293,11 @@ func (a *API) runPAMQuery(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		var body struct {
-			SQL string `json:"sql"`
-		}
+		var body PAMQueryRequest
 		if err := decodeJSON(r, &body); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		result, err := bridge.RunPAMQuery(ctx, tenantID, r.PathValue("id"), principalSubject(ctx), body.SQL)
+		result, err := bridge.RunPAMQuery(ctx, tenantID, r.PathValue("id"), principalSubject(ctx), body)
 		if err != nil {
 			return 0, nil, err
 		}

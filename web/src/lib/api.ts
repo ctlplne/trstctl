@@ -601,6 +601,7 @@ import type {
   PAMAccountActionRequest,
   PAMAccountActionReview,
   PAMTargetRequest,
+  PAMQueryRequest,
   PAMQueryResult,
   PAMSessionPods,
   PAMTerminal,
@@ -1671,6 +1672,7 @@ export type {
   PAMAccountActionRequest,
   PAMAccountActionReview,
   PAMTargetRequest,
+  PAMQueryRequest,
   PAMQueryResult,
   PAMSessionPods,
   PAMTerminal,
@@ -2803,7 +2805,7 @@ export interface Api {
   writePAMTerminal(sessionID: string, terminalID: string, data: string, idempotencyKey?: string): Promise<PAMTerminal>;
   resizePAMTerminal(sessionID: string, terminalID: string, size: { cols: number; rows: number }, idempotencyKey?: string): Promise<PAMTerminal>;
   closePAMTerminal(sessionID: string, terminalID: string, idempotencyKey?: string): Promise<PAMTerminal>;
-  runPAMQuery(sessionID: string, sql: string, idempotencyKey?: string, signal?: AbortSignal): Promise<PAMQueryResult>;
+  runPAMQuery(sessionID: string, query: PAMQueryRequest, idempotencyKey?: string, signal?: AbortSignal): Promise<PAMQueryResult>;
   acmeDNS01ProviderConfig(id: string): Promise<ACMEDNS01ProviderConfig>;
   createACMEDNS01ProviderConfig(input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
   updateACMEDNS01ProviderConfig(id: string, input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
@@ -3959,11 +3961,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
       size,
       idempotencyKey,
     ),
-  runPAMQuery: (sessionID, sql, idempotencyKey = newIdempotencyKey(), signal) =>
+  runPAMQuery: (sessionID, query, idempotencyKey = newIdempotencyKey(), signal) =>
     req<PAMQueryResult>(`/api/v1/access/sessions/${encodeURIComponent(sessionID)}/queries`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify({ sql }),
+      body: JSON.stringify(query),
       signal,
     }),
   closePAMTerminal: (sessionID, terminalID, idempotencyKey) =>
