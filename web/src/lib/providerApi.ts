@@ -74,6 +74,19 @@ export interface ProviderBillingCompanies {
   companies: ProviderBillingCompany[];
 }
 
+/** MSP-2: one customer usage period pushed (or held) for one billing system. */
+export interface ProviderBillingSyncPush {
+  target_id: string;
+  period_start: string;
+  period_end: string;
+  status: "queued" | "held" | "delivered" | "failed";
+  external_company_id?: string;
+  evidence_digest?: string;
+  reason?: string;
+  response_status?: number;
+  updated_at: string;
+}
+
 export interface ProviderBrand {
   product_name?: string;
   logo_data_uri?: string;
@@ -604,6 +617,8 @@ export const providerApi = {
       method: "PUT",
       body: JSON.stringify({ external_company_id: externalCompanyId }),
     }),
+  billingSyncPushes: (id: string): Promise<{ pushes: ProviderBillingSyncPush[] }> =>
+    providerReq<{ pushes: ProviderBillingSyncPush[] }>(`/provider/v1/tenants/${encodeURIComponent(id)}/billing-sync`),
   clearBillingCompany: (id: string, target: string): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/billing-companies/${encodeURIComponent(target)}`, { method: "DELETE" }),
   getBrand: async (id: string): Promise<ProviderBrandSnapshot> => {

@@ -284,6 +284,11 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// IDs holding a verified SCT whose inclusion is not yet proven; every SCT
 		// row is then read inside that tenant's RLS context.
 		"internal/store/certificate_sct.go": 1,
+		// MSP-2: the billing sync sweep's leader enumerator lists the customers
+		// mapped in one deployment-configured target (tenant ID and company
+		// only); each period is then read and queued inside that tenant's RLS
+		// context.
+		"internal/store/provider_billing_sync.go": 1,
 		// A265: the switching-import applier's leader enumerator lists at most
 		// 100 tenant IDs with an import still being applied; the import and its
 		// rows are then read inside that tenant's RLS context.

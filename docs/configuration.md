@@ -1468,7 +1468,7 @@ each customer's closed, signed usage periods to (MSP-2):
           "type": "json",
           "endpoint": "https://billing.example.test/usage",
           "signing_key_ref": "file:/run/secrets/billing-hmac",
-          "token_ref": "secret://integrations/billing-token",
+          "token_ref": "env:TRSTCTL_BILLING_TOKEN",
           "cadence": "monthly"
         }
       ]
@@ -1483,16 +1483,45 @@ types); `endpoint` is an absolute https URL without credentials (http only with
 `allow_insecure_loopback` for a loopback test receiver; `allow_private_endpoint`
 with `private_egress_cidrs` for an approved private one); `signing_key_ref` is
 required, because every push is HMAC-signed so the receiver can refuse a changed or
-replayed period; `token_ref` is an optional bearer token; both are references
-(`file:/absolute/path` or `secret://name`), resolved per delivery. `cadence` is
-`monthly` (the default) or `daily`, in whole UTC calendar periods. Startup refuses
-an invalid target. A target receives nothing until a Provider operator with
+replayed period; `token_ref` is an optional bearer token; both are deployment-level
+references (`file:/absolute/path`, custody-checked, or `env:NAME`; a tenant's
+`secret://` store does not apply to a Provider target), resolved for each delivery
+and wiped after it. `cadence` is `monthly` (the default) or `daily`, in whole UTC
+calendar periods. Startup refuses an invalid target. A target receives nothing until a Provider operator with
 `billing:write` maps a delegated customer to its company there
 (`PUT /provider/v1/tenants/{id}/billing-companies/{target}` with
 `{"external_company_id": "…"}`; `DELETE` removes it; `GET
 /provider/v1/tenants/{id}/billing-companies` lists the targets and the customer's
 mappings). One company in one target belongs to one customer: mapping a company
 another customer holds is refused with 409 before anything is recorded.
+
+On the leader, the billing-sync sweep (every 10 minutes) looks at the last three
+closed periods of each target's cadence, two hours after each ends, for every
+customer mapped there. A period whose usage evidence is signable (complete
+coverage, reconciled, signed with the audit evidence key) is queued once, in the
+same transaction as its outbox entry, and delivered as one POST to `endpoint`:
+
+```json
+{"customer_id": "…", "external_company_id": "…", "target_id": "psa",
+ "period_start": "2026-10-01T00:00:00Z", "period_end": "2026-11-01T00:00:00Z",
+ "lines": [{"meter": "certificates_current", "kind": "gauge", "value": 42},
+           {"meter": "agents", "kind": "gauge", "value": 3},
+           {"meter": "secrets_stored", "kind": "gauge", "value": 17}],
+ "evidence_digest": "sha256:…", "evidence_jws": "…"}
+```
+
+with `Idempotency-Key` and `X-Trstctl-Delivery` set to
+`billing-sync:<target>:<period_start>` (the same on every retry, so the receiver
+drops a duplicate), `X-Trstctl-Timestamp`, `X-Trstctl-Signature` (the signed
+webhook's HMAC over the timestamp and the exact body) and the bearer token. The
+evidence JWS verifies against `GET /provider/v1/evidence/verification-keys`. Before
+sending, delivery re-reads the customer's mapping and refuses a period queued for
+a company the customer is no longer mapped to. A 2xx answer records the period
+delivered; a period that cannot be signed is held with its reason and one
+`billing_sync.held` alert and is never sent (a later sweep queues it once it becomes
+signable); a delivery that exhausts its retries is recorded failed with one
+`billing_sync.failed` alert (when a request was sent, its outcome is reported as
+unknown). `GET /provider/v1/tenants/{id}/billing-sync` lists a customer's pushes.
 
 ## Browser SSO
 

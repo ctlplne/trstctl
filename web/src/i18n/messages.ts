@@ -1761,6 +1761,50 @@ export const messages = {
     defaultMessage: "Removed the mapping for {target}.",
     description: "MSP-2: mapping removed notice.",
   },
+  "provider.billingSync.historyCaption": {
+    defaultMessage: "Usage pushes",
+    description: "MSP-2: caption of the customer's usage push history.",
+  },
+  "provider.billingSync.historyTarget": {
+    defaultMessage: "System",
+    description: "MSP-2: push history target column.",
+  },
+  "provider.billingSync.historyPeriod": {
+    defaultMessage: "Period (UTC)",
+    description: "MSP-2: push history period column.",
+  },
+  "provider.billingSync.historyStatus": {
+    defaultMessage: "Status",
+    description: "MSP-2: push history status column.",
+  },
+  "provider.billingSync.historyDetail": {
+    defaultMessage: "Detail",
+    description: "MSP-2: push history detail column.",
+  },
+  "provider.billingSync.historyEmpty": {
+    defaultMessage: "No period has been pushed for this customer yet.",
+    description: "MSP-2: empty push history.",
+  },
+  "provider.billingSync.historyCompany": {
+    defaultMessage: "To company {company}",
+    description: "MSP-2: the company a period went to.",
+  },
+  "provider.billingSync.status.queued": {
+    defaultMessage: "Queued",
+    description: "MSP-2: push status queued.",
+  },
+  "provider.billingSync.status.held": {
+    defaultMessage: "Held: not signable",
+    description: "MSP-2: push status held.",
+  },
+  "provider.billingSync.status.delivered": {
+    defaultMessage: "Delivered",
+    description: "MSP-2: push status delivered.",
+  },
+  "provider.billingSync.status.failed": {
+    defaultMessage: "Failed",
+    description: "MSP-2: push status failed.",
+  },
   "provider.billingSync.conflict": {
     defaultMessage: "That company is already mapped to another customer in this billing system. Remove it there first.",
     description: "MSP-2: company already mapped to another customer.",

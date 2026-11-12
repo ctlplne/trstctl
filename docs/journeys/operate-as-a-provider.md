@@ -110,7 +110,11 @@ company for a delegated customer; each change is a Provider authority event, so 
 appears in activity and rebuilds from history. A customer's usage periods go only
 to the company mapped here, and one company belongs to one customer: mapping a
 company another customer holds is refused and names the conflict, so one customer's
-counts can never reach another's company.
+counts can never reach another's company. Below it, **Usage pushes** lists each
+closed period pushed for the customer: queued, delivered (to which company), held
+because its evidence cannot be signed (with the reason; one alert is raised), or
+failed after its retries (also alerted). A period is sent once; a held period is
+sent when it becomes signable.
 Under Operator access, choose View delegations for an operator to inspect active,
 expired and revoked grants. Use Next delegations and Previous delegations to
 reach every returned grant. Closing the details returns to that operator's row;

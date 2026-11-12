@@ -132,6 +132,8 @@ type Config struct {
 	// customer-to-company mappings. Without the store, mapping refuses.
 	BillingTargets   []BillingTarget
 	BillingCompanies BillingCompanyStore
+	// BillingSyncPushes reads each customer's recorded usage pushes.
+	BillingSyncPushes BillingSyncPushReader
 	// Reports reads customers' signed assurance reports from core (A187). Nil
 	// leaves the report routes refusing.
 	Reports          api.TenantReportReader
@@ -213,27 +215,28 @@ type IsolationDrillReport struct {
 // Service enforces provider privilege-domain, license, tenant-band, and
 // break-glass rules over the storage boundary.
 type Service struct {
-	license          *license.Manager
-	store            Store
-	audit            AuditSink
-	mutations        MutationSink
-	offboarding      *TenantOffboarder
-	activity         ActivitySource
-	authenticator    OperatorAuthenticator
-	delegations      DelegationSource
-	access           OperatorAccessStore
-	telemetry        TelemetryReader
-	quotas           QuotaStore
-	brands           BrandStore
-	drills           IsolationDriller
-	tenantConsent    TenantConsentReader
-	auditStreams     AuditStreamReader
-	templates        TemplateDeps
-	billingTargets   []BillingTarget
-	billingCompanies BillingCompanyStore
-	reports          api.TenantReportReader
-	clock            func() time.Time
-	maxBreakGlassTTL time.Duration
+	license           *license.Manager
+	store             Store
+	audit             AuditSink
+	mutations         MutationSink
+	offboarding       *TenantOffboarder
+	activity          ActivitySource
+	authenticator     OperatorAuthenticator
+	delegations       DelegationSource
+	access            OperatorAccessStore
+	telemetry         TelemetryReader
+	quotas            QuotaStore
+	brands            BrandStore
+	drills            IsolationDriller
+	tenantConsent     TenantConsentReader
+	auditStreams      AuditStreamReader
+	templates         TemplateDeps
+	billingTargets    []BillingTarget
+	billingCompanies  BillingCompanyStore
+	billingSyncPushes BillingSyncPushReader
+	reports           api.TenantReportReader
+	clock             func() time.Time
+	maxBreakGlassTTL  time.Duration
 }
 
 func NewService(cfg Config) *Service {
@@ -272,7 +275,8 @@ func NewService(cfg Config) *Service {
 		mutations: cfg.Mutations, activity: cfg.Activity, offboarding: cfg.Offboarding,
 		delegations: cfg.Delegations, access: cfg.Access, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
 		drills: cfg.Drills, tenantConsent: cfg.TenantConsent, auditStreams: cfg.AuditStreams, templates: cfg.Templates, reports: cfg.Reports, clock: clock, maxBreakGlassTTL: maxTTL,
-		billingTargets: append([]BillingTarget(nil), cfg.BillingTargets...), billingCompanies: cfg.BillingCompanies}
+		billingTargets: append([]BillingTarget(nil), cfg.BillingTargets...), billingCompanies: cfg.BillingCompanies,
+		billingSyncPushes: cfg.BillingSyncPushes}
 }
 
 // ListActivity returns newest-first immutable Provider authority evidence,

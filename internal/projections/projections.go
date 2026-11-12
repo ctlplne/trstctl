@@ -5423,6 +5423,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAccessBundleStandingApprovalGranted:      {1: true},
 	EventAccessBundleStandingApprovalRevoked:      {1: true},
 	EventAccessBundleStandingApprovalUsed:         {1: true},
+	EventBillingSyncQueued:                        {1: true},
+	EventBillingSyncHeld:                          {1: true},
+	EventBillingSyncDelivered:                     {1: true},
+	EventBillingSyncFailed:                        {1: true},
 	EventWorkloadJWTKeyRotated:                    {1: true},
 	EventComplianceReportLegalHoldPlaced:          {1: true},
 	EventComplianceReportLegalHoldReleased:        {1: true},
@@ -5982,6 +5986,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyAccessBundleStandingApprovalTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyBillingSyncTx(ctx, tx, e); handled {
 		return err
 	}
 	if handled, err := p.applyWorkloadJWTKeyTx(ctx, tx, e); handled {

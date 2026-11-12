@@ -164,3 +164,51 @@ func TestProviderBillingCompanyMappingsMSP2(t *testing.T) {
 		t.Fatalf("rebuilt A = %+v, want none", got.Companies)
 	}
 }
+
+// MSP-2 (part 2): a delegated customer's recorded usage pushes are read
+// through the plane, newest period first, with each held period's reason; an
+// operator without the customer's delegation is refused.
+func TestProviderBillingSyncPushHistoryMSP2(t *testing.T) {
+	ctx := context.Background()
+	st := openProviderStore(t)
+	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:10]
+	customer, other := CustomerID("history-a-"+suffix), CustomerID("history-b-"+suffix)
+	for _, row := range []struct {
+		start, status, reason string
+	}{
+		{"2026-09-01T00:00:00Z", "delivered", ""},
+		{"2026-10-01T00:00:00Z", "held", "metering coverage has a gap"},
+	} {
+		start, _ := time.Parse(time.RFC3339, row.start)
+		if _, err := st.SystemPool().Exec(ctx, `INSERT INTO provider_billing_sync_pushes
+			(tenant_id, target_id, period_start, period_end, status, external_company_id, reason, event_sequence, updated_at)
+			VALUES ($1, 'psa', $2, $3, $4, 'COMPANY-A', $5, 1, now())`, customer, start, start.AddDate(0, 1, 0), row.status, row.reason); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := NewHandler(Config{
+		License:           providerLicense(t, 10),
+		Store:             NewPGStore(st),
+		Authenticator:     billingOperatorAuth{},
+		Delegations:       fullyDelegated("op-billing", customer),
+		BillingSyncPushes: st,
+	})
+	get := func(id string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/provider/v1/tenants/"+id+"/billing-sync", nil)
+		req.Header.Set("Authorization", "Bearer billing-admin")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := get(customer)
+	var out struct {
+		Pushes []BillingSyncPush `json:"pushes"`
+	}
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &out) != nil || len(out.Pushes) != 2 ||
+		out.Pushes[0].Status != "held" || out.Pushes[0].Reason != "metering coverage has a gap" || out.Pushes[1].Status != "delivered" {
+		t.Fatalf("history = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := get(other); rec.Code != http.StatusForbidden && rec.Code != http.StatusNotFound {
+		t.Fatalf("an undelegated customer's history = %d %s", rec.Code, rec.Body.String())
+	}
+}

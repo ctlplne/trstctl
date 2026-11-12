@@ -75,6 +75,9 @@ const (
 	// channels its schedule names (A103). The notice references the archived
 	// report; it never carries the report body.
 	DestinationComplianceReport = "notification.compliance_report"
+	// DestinationBillingSync carries the Provider billing sync's held and
+	// failed period alerts (MSP-2).
+	DestinationBillingSync = "notification.billing_sync"
 )
 
 // Alert kinds.
@@ -153,6 +156,11 @@ const (
 	// KindScopedSyncDeliveryFailed (A237-L4): a scoped secret sync could not
 	// write or delete a destination key it manages.
 	KindScopedSyncDeliveryFailed = "secret.scoped_sync.delivery_failed" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	// KindBillingSyncHeld and KindBillingSyncFailed (MSP-2): a customer's
+	// usage period was not sent to a billing target because it cannot be
+	// signed, or its delivery failed for good.
+	KindBillingSyncHeld   = "billing_sync.held"
+	KindBillingSyncFailed = "billing_sync.failed"
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing

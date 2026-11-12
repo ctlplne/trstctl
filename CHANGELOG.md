@@ -1,6 +1,16 @@
 ## [Unreleased]
 
 ### Added
+- Billing-sync pushes for the Provider plane (MSP-2, part 2): on the leader, each closed period of a billing
+  target's cadence is signed (the existing usage evidence, reconciled and signed with the audit key) and pushed once
+  per mapped customer to its company: one HMAC-signed JSON POST with the current certificates, agents and stored
+  secrets and the evidence JWS, keyed by `billing-sync:<target>:<period_start>` so a retry is never a second period.
+  An unsignable period is held with its reason and one `billing_sync.held` alert, a delivery that exhausts its
+  retries is recorded failed with a `billing_sync.failed` alert, and delivery refuses a period queued for a company
+  the customer is no longer mapped to. Every push is an event (`provider.billing_sync.queued/.held/.delivered/.failed`)
+  projected into `provider_billing_sync_pushes` (migration 0465, snapshot format 131), listed at
+  `GET /provider/v1/tenants/{id}/billing-sync` and in the Provider console's Usage pushes. Billing target
+  credentials are `file:` or `env:` references (a tenant's `secret://` does not apply to a Provider target).
 - Billing systems for the Provider plane (MSP-2, part 1): `provider.billing_sync.targets` names the billing or PSA
   systems a Provider pushes customers' signed usage periods to (signed JSON targets with an HMAC `signing_key_ref`,
   an optional bearer `token_ref`, monthly or daily cadence), and a Provider operator with the new `billing:write`

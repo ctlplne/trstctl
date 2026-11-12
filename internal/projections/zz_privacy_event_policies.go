@@ -2020,7 +2020,15 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventAccessBundleStandingApprovalGranted, 1}: privacyPayloadShape[AccessBundleStandingApprovalGranted](),
 		{EventAccessBundleStandingApprovalRevoked, 1}: privacyPayloadShape[AccessBundleStandingApprovalRevoked](),
 		{EventAccessBundleStandingApprovalUsed, 1}:    privacyPayloadShape[AccessBundleStandingApprovalUsed](),
-		{EventWorkloadJWTKeyRotated, 1}:               privacyPayloadShape[WorkloadJWTKeyRotated](),
+		// MSP-2: a customer's usage period pushed to a billing target: the
+		// target, the period, the company identifier in the operator's own
+		// billing system, metered counts, the signed evidence and its digest,
+		// and a machine reason or response status; no personal data.
+		{EventBillingSyncQueued, 1}:     privacyPayloadShape[BillingSyncPushEvent](),
+		{EventBillingSyncHeld, 1}:       privacyPayloadShape[BillingSyncPushEvent](),
+		{EventBillingSyncDelivered, 1}:  privacyPayloadShape[BillingSyncPushEvent](),
+		{EventBillingSyncFailed, 1}:     privacyPayloadShape[BillingSyncPushEvent](),
+		{EventWorkloadJWTKeyRotated, 1}: privacyPayloadShape[WorkloadJWTKeyRotated](),
 		// A211: issuer certificates a scan saw served with a leaf: public PKI
 		// material and digests.
 		{EventScannedCertificateChainObserved, 1}: privacyPayloadShape[ScannedCertificateChainObserved](),

@@ -2164,13 +2164,15 @@ never live in the API process. What you can do end to end against the running bi
   transitions projection, so a rebuild-in-progress can transiently refuse to
   sign — the refusal names the numbers, which is the correct behavior while
   the projection catches up.
-- Billing systems (MSP-2, part 1): a Provider maps each delegated customer to
-  its company in each configured billing target
-  (`provider.billing_sync.targets`; `/provider/v1/tenants/{id}/billing-companies`),
-  recorded as Provider authority events, with one company per target held by
-  one customer. Pushing each closed, signed usage period to the mapped company
-  (held with an alert when the period cannot be signed, and recorded per push)
-  is what comes next (MSP-2 part 2); until then the targets receive nothing.
+- Billing systems (MSP-2): a Provider maps each delegated customer to its
+  company in each configured billing target, and the leader's sweep pushes
+  each closed, signed usage period (current certificates, agents, secrets and
+  the evidence JWS) once through the outbox, holds an unsignable one with an
+  alert, and records every push. The core push is the generic signed JSON
+  target, proven against a verifying stand-in receiver; the PSA and RMM
+  connectors (MSP-3 to MSP-15) and live vendor runs are what comes next. The
+  sweep looks back three periods, so a period older than that is not pushed
+  automatically.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts
   resolve through the configured severity-to-channel matrix, dedup by
   per-subject/threshold/channel, and are inspectable through the served

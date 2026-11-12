@@ -257,6 +257,8 @@ type issuanceDispatcher struct {
 	// egress is the product-wide air-gap guard; with it enforcing, cloud
 	// access-key discovery (M3) reaches only the hosts the operator allowed.
 	egress *egress.Guard
+	// billingSync is the Provider's configured billing targets (MSP-2).
+	billingSync config.ProviderBillingSync
 
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
@@ -402,6 +404,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleCMDBCertificateExport(ctx, m)
 	case orchestrator.DestinationITSMServiceNow:
 		return d.handleServiceNowTicket(ctx, m)
+	case orchestrator.DestinationBillingSync:
+		return d.handleBillingSync(ctx, m)
 	case orchestrator.DestinationITSMServiceNowClose:
 		return d.handleServiceNowClose(ctx, m)
 	case orchestrator.DestinationResponseSplunk:
@@ -538,6 +542,9 @@ func (d *issuanceDispatcher) DeliverTerminalFailure(ctx context.Context, m orche
 	}
 	if m.Destination == orchestrator.DestinationConnectorRightSize {
 		return d.failConnectorRightSizeTerminal(ctx, m)
+	}
+	if m.Destination == orchestrator.DestinationBillingSync {
+		return d.failBillingSyncTerminal(ctx, m, cause)
 	}
 	// A cloud-store member's spent row is its failed receipt (A166-L4).
 	if handled, err := d.failCloudStoreMigrationTerminal(ctx, m); handled || err != nil {

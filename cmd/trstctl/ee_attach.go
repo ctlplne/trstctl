@@ -304,6 +304,16 @@ func attachEEProviderAPI(
 		Templates:                eeprovider.TemplateDeps{Store: eeprovider.NewPGStore(deps.Store)},
 		BillingTargets:           providerBillingTargets(cfg.Provider.BillingSync),
 		BillingCompanies:         eeprovider.NewPGBillingCompanyStore(deps.Store),
+		BillingSyncPushes:        deps.Store,
+	}
+	// MSP-2: the billing-sync sweep runs on the leader once metering and at
+	// least one billing target are attached; it queues through the
+	// orchestrator, bound below when the spine is assembled.
+	var billingSweeper *eebilling.SyncSweeper
+	if len(cfg.Provider.BillingSync.Targets) > 0 && billingEvidence.deps.Reader != nil {
+		billingSweeper = &eebilling.SyncSweeper{Store: deps.Store, Evidence: billingEvidence.deps,
+			Targets: cfg.Provider.BillingSync.Targets, Log: log}
+		deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, billingSweeper)
 	}
 	// Preserve the authenticated surface during assembly, but keep destructive
 	// commands unavailable until core supplies its fully assembled projector.
@@ -311,6 +321,9 @@ func attachEEProviderAPI(
 	deps.ProviderHandlerFactory = func(orch *orchestrator.Orchestrator, services api.ProviderTenantServices) (http.Handler, error) {
 		if authorityRuntime == nil || orch == nil {
 			return nil, errors.New("provider command surface requires the assembled mutation spine")
+		}
+		if billingSweeper != nil {
+			billingSweeper.Bind(orch)
 		}
 		configured := providerConfig
 		configured.Offboarding = eeprovider.NewTenantOffboarder(deps.Store, deps.Log, orch, authorityRuntime.Mutations)

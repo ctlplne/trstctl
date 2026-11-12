@@ -202,7 +202,8 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          audit_feed_deliveries, audit_feed_destinations,
 		          mdm_scep_policies, mdm_poll_schedules, mdm_device_correlations, agent_upgrade_campaigns,
 		          provider_breakglass_grants, provider_tenants, provider_operator_delegations, provider_suspend_commands,
-		          provider_tenant_quotas, provider_usage_coverage, provider_usage_meters, provider_billing_companies
+		          provider_tenant_quotas, provider_usage_coverage, provider_usage_meters, provider_billing_companies,
+		          provider_billing_sync_pushes
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("reset shared server postgres: %v", err)
 	}

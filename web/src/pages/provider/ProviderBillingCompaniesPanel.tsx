@@ -6,7 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { translateNow } from "@/i18n/I18nProvider";
-import { ProviderApiError, ProviderAuthError, providerApi, type ProviderBillingCompanies as BillingView } from "@/lib/providerApi";
+import {
+  ProviderApiError,
+  ProviderAuthError,
+  providerApi,
+  type ProviderBillingCompanies as BillingView,
+  type ProviderBillingSyncPush,
+} from "@/lib/providerApi";
 
 /** MSP-2: the selected customer's company in every configured billing
  * system. A customer's closed, signed usage periods go only to the company
@@ -14,6 +20,7 @@ import { ProviderApiError, ProviderAuthError, providerApi, type ProviderBillingC
  * which the plane enforces. */
 export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: { customerId: string; canWrite: boolean; onAuthError: () => void }) {
   const [view, setView] = useState<BillingView | null>(null);
+  const [pushes, setPushes] = useState<ProviderBillingSyncPush[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -37,11 +44,13 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
   const load = useCallback(
     async (id: string) => {
       setView(null);
+      setPushes([]);
       setError(null);
       if (!id) return;
       try {
-        const out = await providerApi.billingCompanies(id);
+        const [out, history] = await Promise.all([providerApi.billingCompanies(id), providerApi.billingSyncPushes(id)]);
         setView(out);
+        setPushes(history.pushes ?? []);
         setDrafts(Object.fromEntries(out.companies.map((company) => [company.target_id, company.external_company_id])));
       } catch (err) {
         failed(err);
@@ -149,6 +158,49 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
             );
           })}
         </ul>
+      ) : null}
+      {view && view.targets.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-caption">
+            <caption className="py-1 text-left font-medium">{translateNow("provider.billingSync.historyCaption")}</caption>
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="py-1">{translateNow("provider.billingSync.historyTarget")}</th>
+                <th className="py-1">{translateNow("provider.billingSync.historyPeriod")}</th>
+                <th className="py-1">{translateNow("provider.billingSync.historyStatus")}</th>
+                <th className="py-1">{translateNow("provider.billingSync.historyDetail")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pushes.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-1 text-muted-foreground">
+                    {translateNow("provider.billingSync.historyEmpty")}
+                  </td>
+                </tr>
+              ) : (
+                pushes.map((push) => (
+                  <tr key={`${push.target_id}:${push.period_start}`} className="border-t border-border/60">
+                    <td className="py-1 font-mono">{push.target_id}</td>
+                    <td className="py-1 tabular-nums">
+                      {push.period_start.slice(0, 10)} – {push.period_end.slice(0, 10)}
+                    </td>
+                    <td className={push.status === "delivered" ? "py-1 text-status-success" : push.status === "queued" ? "py-1" : "py-1 text-status-warning"}>
+                      {translateNow(`provider.billingSync.status.${push.status}` as "provider.billingSync.status.queued")}
+                    </td>
+                    <td className="py-1 text-muted-foreground">
+                      {push.status === "held" || push.status === "failed"
+                        ? push.reason
+                        : push.external_company_id
+                          ? translateNow("provider.billingSync.historyCompany", { company: push.external_company_id })
+                          : ""}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       ) : null}
     </div>
   );

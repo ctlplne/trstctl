@@ -1674,6 +1674,17 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
+		if ev.Type == projections.EventBillingSyncQueued || ev.Type == projections.EventBillingSyncHeld ||
+			ev.Type == projections.EventBillingSyncFailed {
+			inserted, err := o.reconcileBillingSync(ctx, ev)
+			if err != nil {
+				return err
+			}
+			if inserted {
+				healed++
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == EventITSMTicketRequested {
 			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
 				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{

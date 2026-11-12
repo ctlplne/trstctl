@@ -237,6 +237,8 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.getQuota(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/billing-companies"):
 		h.listBillingCompanies(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/billing-sync"):
+		h.listBillingSyncPushes(w, r)
 	case (r.Method == http.MethodPut || r.Method == http.MethodDelete) && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") &&
 		strings.Contains(r.URL.Path, "/billing-companies/"):
 		h.writeBillingCompany(w, r)
@@ -921,6 +923,23 @@ func (h *handler) listBillingCompanies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// listBillingSyncPushes reads a delegated customer's recorded usage pushes
+// (MSP-2).
+func (h *handler) listBillingSyncPushes(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	customerID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), "/billing-sync")
+	out, err := h.svc.ListTenantBillingSyncPushes(r.Context(), op, customerID)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"pushes": out})
 }
 
 // writeBillingCompany maps (PUT) or unmaps (DELETE) a delegated customer's

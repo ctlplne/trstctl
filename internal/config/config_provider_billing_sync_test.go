@@ -13,8 +13,8 @@ import (
 // reference, a monthly or daily cadence, and named CIDRs for a private
 // endpoint. Every valid shape is accepted.
 func TestProviderBillingSyncTargetsMSP2(t *testing.T) {
-	valid := ProviderBillingTarget{ID: "psa-main", Type: "json", Endpoint: "https://billing.example.test/usage",
-		SigningKeyRef: "file:/run/secrets/billing-hmac", TokenRef: "secret://integrations/billing"}
+	valid := ProviderBillingTarget{ID: "psa-main", Type: "json", Endpoint: "https://billing.example.test/usage", // #nosec G101 -- file: and env: references to test-only values (CWE-798)
+		SigningKeyRef: "file:/run/secrets/billing-hmac", TokenRef: "env:TRSTCTL_BILLING_TOKEN"}
 	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{valid}}); len(errs) != 0 {
 		t.Fatalf("valid target refused: %v", errs)
 	}
@@ -30,16 +30,17 @@ func TestProviderBillingSyncTargetsMSP2(t *testing.T) {
 		mutate func(*ProviderBillingTarget)
 		want   string
 	}{
-		"upper-case id":      {func(t *ProviderBillingTarget) { t.ID = "PSA" }, ".id"},
-		"empty id":           {func(t *ProviderBillingTarget) { t.ID = "" }, ".id"},
-		"unknown type":       {func(t *ProviderBillingTarget) { t.Type = "connectwise" }, ".type"},
-		"relative endpoint":  {func(t *ProviderBillingTarget) { t.Endpoint = "/usage" }, ".endpoint"},
-		"plain http":         {func(t *ProviderBillingTarget) { t.Endpoint = "http://billing.example.test/usage" }, ".endpoint"},
-		"credentials in url": {func(t *ProviderBillingTarget) { t.Endpoint = "https://user:pw@billing.example.test/usage" }, ".endpoint"},
-		"no signing key":     {func(t *ProviderBillingTarget) { t.SigningKeyRef = "" }, ".signing_key_ref"},
-		"inline signing key": {func(t *ProviderBillingTarget) { t.SigningKeyRef = "hunter2" }, ".signing_key_ref"},
-		"inline token":       {func(t *ProviderBillingTarget) { t.TokenRef = "abc123" }, ".token_ref"},
-		"weekly cadence":     {func(t *ProviderBillingTarget) { t.Cadence = "weekly" }, ".cadence"},
+		"upper-case id":       {func(t *ProviderBillingTarget) { t.ID = "PSA" }, ".id"},
+		"empty id":            {func(t *ProviderBillingTarget) { t.ID = "" }, ".id"},
+		"unknown type":        {func(t *ProviderBillingTarget) { t.Type = "connectwise" }, ".type"},
+		"relative endpoint":   {func(t *ProviderBillingTarget) { t.Endpoint = "/usage" }, ".endpoint"},
+		"plain http":          {func(t *ProviderBillingTarget) { t.Endpoint = "http://billing.example.test/usage" }, ".endpoint"},
+		"credentials in url":  {func(t *ProviderBillingTarget) { t.Endpoint = "https://user:pw@billing.example.test/usage" }, ".endpoint"},
+		"no signing key":      {func(t *ProviderBillingTarget) { t.SigningKeyRef = "" }, ".signing_key_ref"},
+		"inline signing key":  {func(t *ProviderBillingTarget) { t.SigningKeyRef = "hunter2" }, ".signing_key_ref"},
+		"inline token":        {func(t *ProviderBillingTarget) { t.TokenRef = "abc123" }, ".token_ref"},
+		"tenant secret token": {func(t *ProviderBillingTarget) { t.TokenRef = "secret://integrations/billing" }, ".token_ref"},
+		"weekly cadence":      {func(t *ProviderBillingTarget) { t.Cadence = "weekly" }, ".cadence"},
 		"private without cidrs": {func(t *ProviderBillingTarget) {
 			t.AllowPrivateEndpoint = true
 		}, "private_egress_cidrs"},

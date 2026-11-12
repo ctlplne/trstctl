@@ -293,3 +293,47 @@ func billingTargetIDValid(id string) bool {
 	}
 	return true
 }
+
+// BillingSyncPush is one customer's usage period in one target as the plane
+// shows it (MSP-2): queued, held with its reason, delivered or failed.
+type BillingSyncPush struct {
+	TargetID          string    `json:"target_id"`
+	PeriodStart       time.Time `json:"period_start"`
+	PeriodEnd         time.Time `json:"period_end"`
+	Status            string    `json:"status"`
+	ExternalCompanyID string    `json:"external_company_id,omitempty"`
+	EvidenceDigest    string    `json:"evidence_digest,omitempty"`
+	Reason            string    `json:"reason,omitempty"`
+	ResponseStatus    int       `json:"response_status,omitempty"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// BillingSyncPushReader reads a customer's recorded pushes.
+type BillingSyncPushReader interface {
+	BillingSyncPushes(ctx context.Context, tenantID string, limit int) ([]corestore.BillingSyncPush, error)
+}
+
+// ListTenantBillingSyncPushes reads a delegated customer's recent pushes,
+// newest period first.
+func (s *Service) ListTenantBillingSyncPushes(ctx context.Context, actor Operator, customerID string) ([]BillingSyncPush, error) {
+	if err := s.requireOperator(actor); err != nil {
+		return nil, err
+	}
+	if err := s.authorize(ctx, actor, customerID, OpRead); err != nil {
+		return nil, err
+	}
+	out := []BillingSyncPush{}
+	if s.billingSyncPushes == nil {
+		return out, nil
+	}
+	rows, err := s.billingSyncPushes.BillingSyncPushes(ctx, customerID, 100)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out = append(out, BillingSyncPush{TargetID: r.TargetID, PeriodStart: r.PeriodStart, PeriodEnd: r.PeriodEnd, Status: r.Status,
+			ExternalCompanyID: r.ExternalCompanyID, EvidenceDigest: r.EvidenceDigest, Reason: r.Reason,
+			ResponseStatus: r.ResponseStatus, UpdatedAt: r.UpdatedAt})
+	}
+	return out, nil
+}

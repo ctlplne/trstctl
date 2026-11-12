@@ -370,7 +370,10 @@ import (
 // restore from it would forget a granted approval or, worse, a revocation.
 // Version 130 carries OD-9's access bundle standing approvals
 // (access_bundle_standing_approvals), for the same reason.
-const SnapshotFormatVersion = 130
+// Version 131 carries MSP-2's billing sync pushes
+// (provider_billing_sync_pushes): an older payload has no such table, and a
+// restore from it would forget a queued or delivered period and push it again.
+const SnapshotFormatVersion = 131
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -452,6 +455,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	// Format 78: A251's access bundles; grants reference their bundle.
 	"access_bundles", "access_bundle_grants", "access_bundle_runs", "access_bundle_activity", "access_bundle_standing_approvals",
 	"switching_imports", "switching_import_rows", "switching_waves", "switching_wave_rows",
+	// Format 131: MSP-2's billing sync pushes.
+	"provider_billing_sync_pushes",
 	// Format 81: N1's AD CS request decisions.
 	"adcs_request_decisions",
 	// Format 117: N1-L1's held external CA issuances.
@@ -908,7 +913,8 @@ SELECT jsonb_build_object(
   'code_signing_key_certificates', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM code_signing_key_certificates t),
   'code_signing_transparency_entries', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM code_signing_transparency_entries t),
   'ca_upstream_standing_approvals', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM ca_upstream_standing_approvals t),
-  'access_bundle_standing_approvals', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM access_bundle_standing_approvals t)
+  'access_bundle_standing_approvals', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM access_bundle_standing_approvals t),
+  'provider_billing_sync_pushes', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_billing_sync_pushes t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL,

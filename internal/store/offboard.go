@@ -271,6 +271,8 @@ var TenantScopedTables = []string{
 	// A251: runs, then grants (which reference their bundle), then bundles.
 	// OD-9: standing approvals reference their bundle too.
 	"access_bundle_standing_approvals", "access_bundle_activity", "access_bundle_runs", "access_bundle_grants", "access_bundles",
+	// MSP-2: the customer's billing sync pushes; no foreign keys.
+	"provider_billing_sync_pushes",
 	// A265: wave rows, then waves (which reference their import), then the
 	// import's rows, then imports.
 	"switching_wave_rows", "switching_waves", "switching_import_rows", "switching_imports",

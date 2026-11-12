@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -92,11 +93,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		if strings.TrimSpace(t.SigningKeyRef) == "" {
 			errs = append(errs, fmt.Errorf("%s.signing_key_ref is required: every push is HMAC-signed so the receiver can refuse a changed or replayed period", where))
-		} else if err := validateCredentialRef(t.SigningKeyRef); err != nil {
+		} else if err := validateDeploymentCredentialRef(t.SigningKeyRef); err != nil {
 			errs = append(errs, fmt.Errorf("%s.signing_key_ref: %w", where, err))
 		}
 		if strings.TrimSpace(t.TokenRef) != "" {
-			if err := validateCredentialRef(t.TokenRef); err != nil {
+			if err := validateDeploymentCredentialRef(t.TokenRef); err != nil {
 				errs = append(errs, fmt.Errorf("%s.token_ref: %w", where, err))
 			}
 		}
@@ -110,4 +111,23 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 	}
 	return errs
+}
+
+// validateDeploymentCredentialRef checks a deployment-level credential
+// reference: a billing target belongs to the Provider, not to a tenant, so
+// it reads a file or an environment variable, never a tenant's secret store.
+func validateDeploymentCredentialRef(raw string) error {
+	raw = strings.TrimSpace(raw)
+	switch {
+	case strings.HasPrefix(raw, "file:"):
+		path := strings.TrimSpace(strings.TrimPrefix(raw, "file:"))
+		if path == "" || !filepath.IsAbs(path) {
+			return errors.New("file reference must contain an absolute path")
+		}
+		return nil
+	case strings.HasPrefix(raw, "env:") && strings.TrimSpace(strings.TrimPrefix(raw, "env:")) != "":
+		return nil
+	default:
+		return errors.New("must use file:/absolute/path or env:NAME")
+	}
 }
