@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A syslog audit feed can present a client certificate to a receiver that requires RFC 5425 mutual TLS (P5-L2).
+  `client_cert_ref` names an operator-approved `env:` reference holding the certificate chain and key; the Audit
+  page's feed form offers it for syslog. Every syslog dial now waits for a TLS 1.3 receiver's verdict on the client,
+  so a receiver that refuses it fails the batch, which retries, instead of the batch counting as delivered.
 - An Elasticsearch audit feed can authenticate with basic auth or a bearer token as well as an API key (P5-L4).
   `auth_scheme` (`api_key`, the default; `basic`, where the credential reference holds `user:password`; or
   `bearer`) sets the `Authorization` header; only an `elastic` feed takes one. The Audit page's feed form offers

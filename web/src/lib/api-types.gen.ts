@@ -1832,6 +1832,7 @@ export interface AuditFeed {
   attempts: number;
   auth_scheme?: "api_key" | "basic" | "bearer";
   batch_size: number;
+  client_cert_ref?: string;
   collector_request_id?: string;
   enabled: boolean;
   endpoint_url: string;
@@ -1888,6 +1889,7 @@ export interface AuditFeedRequest {
   allow_private_endpoint?: boolean;
   auth_scheme?: "api_key" | "basic" | "bearer";
   batch_size: number;
+  client_cert_ref?: string;
   enabled: boolean;
   endpoint_url: string;
   interval_seconds: number;

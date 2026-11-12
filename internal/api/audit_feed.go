@@ -38,6 +38,10 @@ type auditFeedRequest struct {
 	// (P5-L4): api_key (the default), basic (the credential is
 	// user:password) or bearer.
 	AuthScheme string `json:"auth_scheme,omitempty"`
+	// ClientCertRef names, for a syslog feed, the certificate chain and key
+	// it presents to a receiver that requires RFC 5425 mutual TLS (P5-L2):
+	// an operator-approved env:NAME reference holding one PEM bundle.
+	ClientCertRef string `json:"client_cert_ref,omitempty"`
 }
 
 type auditFeedResponse struct {
@@ -48,6 +52,7 @@ type auditFeedResponse struct {
 	EndpointURL            string   `json:"endpoint_url"`
 	TokenRef               string   `json:"token_ref"`
 	AuthScheme             string   `json:"auth_scheme,omitempty"`
+	ClientCertRef          string   `json:"client_cert_ref,omitempty"`
 	IntervalSeconds        int      `json:"interval_seconds"`
 	BatchSize              int      `json:"batch_size"`
 	Enabled                bool     `json:"enabled"`
@@ -258,6 +263,18 @@ func (a *API) normalizeAuditFeedConfiguration(ctx context.Context, tenantID, raw
 	if err != nil {
 		return normalizedAuditFeedConfiguration{}, err
 	}
+	clientCertRef := strings.TrimSpace(body.ClientCertRef)
+	if clientCertRef != "" {
+		if provider != auditsink.ProviderSyslog {
+			return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "client_cert_ref applies only to syslog feeds")
+		}
+		if !strings.HasPrefix(clientCertRef, "env:") {
+			return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "client_cert_ref must be an operator-approved env:NAME credential reference")
+		}
+		if err := a.requireOutboundEnvCredentialRefAllowed(clientCertRef, "client_cert_ref"); err != nil {
+			return normalizedAuditFeedConfiguration{}, err
+		}
+	}
 	if body.IntervalSeconds < minAuditFeedInterval {
 		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "interval_seconds must be at least 60")
 	}
@@ -282,7 +299,7 @@ func (a *API) normalizeAuditFeedConfiguration(ctx context.Context, tenantID, raw
 		Name: name, Provider: provider, EndpointURL: endpoint, TokenRef: tokenRef,
 		IntervalSeconds: body.IntervalSeconds, BatchSize: body.BatchSize, Enabled: body.Enabled,
 		AllowPrivateEndpoint: body.AllowPrivateEndpoint, PrivateEgressCIDRs: cidrs,
-		AuthScheme: auditFeedAuthSchemeName(provider, scheme),
+		AuthScheme: auditFeedAuthSchemeName(provider, scheme), ClientCertRef: clientCertRef,
 	}
 	return normalizedAuditFeedConfiguration{
 		ID: id, Request: normalized, EndpointHost: parsedEndpoint.Hostname(),
@@ -290,7 +307,7 @@ func (a *API) normalizeAuditFeedConfiguration(ctx context.Context, tenantID, raw
 			ID: id, Name: name, Provider: provider, EndpointURL: endpoint, TokenRef: tokenRef,
 			IntervalSeconds: body.IntervalSeconds, BatchSize: body.BatchSize, Enabled: body.Enabled,
 			AllowPrivateEndpoint: body.AllowPrivateEndpoint, PrivateEgressCIDRs: cidrs,
-			AuthScheme: scheme,
+			AuthScheme: scheme, ClientCertRef: clientCertRef,
 		},
 	}, nil
 }
@@ -357,6 +374,7 @@ func auditFeedFromStore(feed store.AuditFeed) auditFeedResponse {
 	out := auditFeedResponse{
 		ID: feed.ID, TenantID: feed.TenantID, Name: feed.Name, Provider: feed.Provider,
 		EndpointURL: feed.EndpointURL, TokenRef: feed.TokenRef, AuthScheme: auditFeedAuthSchemeName(feed.Provider, feed.AuthScheme),
+		ClientCertRef:   feed.ClientCertRef,
 		IntervalSeconds: feed.IntervalSeconds, BatchSize: feed.BatchSize, Enabled: feed.Enabled,
 		AllowPrivateEndpoint: feed.AllowPrivateEndpoint,
 		PrivateEgressCIDRs:   append([]string(nil), feed.PrivateEgressCIDRs...),

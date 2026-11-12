@@ -29,7 +29,10 @@ type FeedBatch struct {
 	TokenRef      string `json:"token_ref"`
 	// AuthScheme is how an Elasticsearch feed presents its credential
 	// (P5-L4): empty for an API key, basic or bearer.
-	AuthScheme           string              `json:"auth_scheme,omitempty"`
+	AuthScheme string `json:"auth_scheme,omitempty"`
+	// ClientCertRef names the certificate and key a syslog feed presents for
+	// RFC 5425 mutual TLS (P5-L2).
+	ClientCertRef        string              `json:"client_cert_ref,omitempty"`
 	AllowPrivateEndpoint bool                `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string            `json:"private_egress_cidrs,omitempty"`
 	StartSequence        uint64              `json:"start_sequence"`

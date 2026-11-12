@@ -339,7 +339,10 @@ import (
 // Version 120 carries P5-L4's audit feed auth_scheme: a version-119 payload
 // has no such column, and a restored Elasticsearch feed would present its
 // credential the wrong way.
-const SnapshotFormatVersion = 120
+// Version 121 carries P5-L2's audit feed client_cert_ref: a version-120
+// payload has no such column, and a restored syslog feed would stop
+// presenting its client certificate.
+const SnapshotFormatVersion = 121
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3032 annotated sites across 33 rules. Each row is
+3037 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (703 sites)
+### G101 — CWE-798 Use of hardcoded credentials (705 sites)
 
 | Location | Reason |
 |---|---|
@@ -490,6 +490,8 @@ not this file.
 | `internal/server/audit_feed_syslog_elastic_served_test.go:61` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/audit_feed_syslog_elastic_served_test.go:63` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/audit_feed_syslog_elastic_served_test.go:65` | token_ref is a non-secret environment locator (CWE-798) |
+| `internal/server/audit_feed_syslog_mtls_lab_test.go:49` | token_ref is a non-secret environment locator (CWE-798) |
+| `internal/server/audit_feed_syslog_mtls_served_test.go:56` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/auth_unit_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/aws_acm_listener_rollback_served_test.go:31` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/aws_honeytoken_served_test.go:140` | the fixture's fake decoy secret, not a credential (CWE-798) |
@@ -1111,10 +1113,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7414` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7431` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7444` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7478` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7418` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7435` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7448` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7482` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1204,12 +1206,12 @@ not this file.
 | `internal/store/audit_checkpoint.go:52` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/audit_checkpoint.go:86` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/audit_checkpoint.go:116` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/audit_feed.go:422` | PostgreSQL bigint event sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:423` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:424` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:425` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:438` | positive PostgreSQL bigint by schema (CWE-190) |
-| `internal/store/audit_feed.go:439` | positive PostgreSQL bigint by schema (CWE-190) |
+| `internal/store/audit_feed.go:426` | PostgreSQL bigint event sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:427` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:428` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:429` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:442` | positive PostgreSQL bigint by schema (CWE-190) |
+| `internal/store/audit_feed.go:443` | positive PostgreSQL bigint by schema (CWE-190) |
 | `internal/store/audit_retention_scope.go:22` | PostgreSQL advisory keys are signed bit patterns. |
 | `internal/store/aws_honey_trail.go:76` | bounded above (CWE-190) |
 | `internal/store/breakglass_authority_receipt.go:36` | MaxInt64 checked above. |
@@ -1316,8 +1318,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:406` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:430` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:52` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:878` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:898` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:881` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:901` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1546,7 +1548,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4221` | closed test table list above |
+| `internal/store/migration_content_test.go:4222` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
@@ -2090,7 +2092,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (734 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (737 sites)
 
 | Location | Reason |
 |---|---|
@@ -2571,6 +2573,9 @@ not this file.
 | `internal/server/audit_feed_lab_p5_test.go:35` | the runner's lab CA (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:106` | the runner's mounted rsyslog output (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:160` | the runner's mounted rsyslog output (CWE-22) |
+| `internal/server/audit_feed_syslog_mtls_lab_test.go:29` | the runner's lab CA (CWE-22) |
+| `internal/server/audit_feed_syslog_mtls_lab_test.go:33` | the runner's lab client certificate and key (CWE-22) |
+| `internal/server/audit_feed_syslog_mtls_lab_test.go:83` | the runner's lab output file (CWE-22) |
 | `internal/server/backup.go:147` | operator-configured public trust anchor path (CWE-22) |
 | `internal/server/backup.go:210` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup.go:381` | operator-invoked backup/restore over its own configured directory (CWE-22) |
@@ -3150,7 +3155,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (150 sites)
+### G703 — CWE-22 Path traversal (taint) (153 sites)
 
 | Location | Reason |
 |---|---|
@@ -3227,6 +3232,9 @@ not this file.
 | `internal/server/audit_feed_lab_p5_test.go:35` | the runner's lab CA (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:106` | the runner's mounted rsyslog output (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:160` | the runner's mounted rsyslog output (CWE-22) |
+| `internal/server/audit_feed_syslog_mtls_lab_test.go:29` | the runner's lab CA (CWE-22) |
+| `internal/server/audit_feed_syslog_mtls_lab_test.go:33` | the runner's lab client certificate and key (CWE-22) |
+| `internal/server/audit_feed_syslog_mtls_lab_test.go:83` | the runner's lab output file (CWE-22) |
 | `internal/server/backup_reports.go:117` | the staging tree is this backup's own temp directory (CWE-22) |
 | `internal/server/codesign_cosign_lab_p9_test.go:58` | a public payload, signature and keys the cosign container reads (CWE-22) |
 | `internal/server/codesign_notation_lab_p9_test.go:66` | the lab trust policy in the test's own temp directory (CWE-22) |

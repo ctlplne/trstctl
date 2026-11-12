@@ -192,7 +192,15 @@ trailer is one RFC 5424 message, facility *log audit* and severity
 *informational*, with the record JSON as its message body, octet-counted as RFC
 5425 requires. The receiver's certificate is verified through the system roots,
 or through the CA certificate a `token_ref` names; the dial passes the same
-egress guard as the HTTP collectors. Syslog acknowledges nothing per message, so
+egress guard as the HTTP collectors. A receiver that requires mutual TLS is shown
+the client certificate a `client_cert_ref` names (P5-L2): an operator-approved
+`env:` reference holding the certificate chain and its key in one PEM bundle, read
+for each delivery and wiped after the dial. Under TLS 1.3 a client finishes its
+handshake before the receiver checks its certificate, so every syslog dial waits
+briefly (about one handshake's time, between 0.2 and 2 seconds) for the
+receiver's verdict: a receiver that refuses the client, or a feed with no client
+certificate where one is required, fails the batch, which retries, instead of
+being counted as delivered. Syslog acknowledges nothing per message, so
 a batch counts as delivered once every message is written and the TLS session
 closes cleanly; a retry resends the batch, and each message carries its audit
 sequence for the receiver to drop a repeat. An `elastic` feed posts an

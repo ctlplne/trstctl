@@ -3945,6 +3945,9 @@ type AuditFeedDestinationConfigured struct {
 	// AuthScheme is how an Elasticsearch feed presents its credential
 	// (P5-L4): api_key (empty), basic or bearer.
 	AuthScheme string `json:"auth_scheme,omitempty"`
+	// ClientCertRef names the certificate and key a syslog feed presents to
+	// its receiver for RFC 5425 mutual TLS (P5-L2); a reference only.
+	ClientCertRef string `json:"client_cert_ref,omitempty"`
 }
 
 // AuditFeedScheduleChecked advances an empty schedule through the immutable
@@ -3967,6 +3970,7 @@ type AuditFeedBatchQueued struct {
 	EndpointURL          string   `json:"endpoint_url"`
 	TokenRef             string   `json:"token_ref"`
 	AuthScheme           string   `json:"auth_scheme,omitempty"`
+	ClientCertRef        string   `json:"client_cert_ref,omitempty"`
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
 	IntervalSeconds      int      `json:"interval_seconds"`
@@ -8604,12 +8608,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.ID == "" || pl.Name == "" || pl.EndpointURL == "" || (pl.TokenRef == "" && pl.Provider != "syslog") ||
 			(pl.Provider != "splunk-hec" && pl.Provider != "sentinel" && pl.Provider != "syslog" && pl.Provider != "elastic") ||
 			pl.IntervalSeconds < 60 || pl.BatchSize < 1 || pl.BatchSize > 500 ||
-			!validAuditFeedAuthScheme(pl.Provider, pl.AuthScheme) {
+			!validAuditFeedAuthScheme(pl.Provider, pl.AuthScheme) ||
+			(pl.ClientCertRef != "" && pl.Provider != "syslog") {
 			return fmt.Errorf("projections: %s has invalid destination configuration", e.Type)
 		}
 		return p.store.ApplyAuditFeedConfiguredTx(ctx, tx, store.AuditFeed{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Provider: pl.Provider,
-			EndpointURL: pl.EndpointURL, TokenRef: pl.TokenRef, AuthScheme: pl.AuthScheme,
+			EndpointURL: pl.EndpointURL, TokenRef: pl.TokenRef, AuthScheme: pl.AuthScheme, ClientCertRef: pl.ClientCertRef,
 			IntervalSeconds: pl.IntervalSeconds, BatchSize: pl.BatchSize, Enabled: pl.Enabled,
 			AllowPrivateEndpoint: pl.AllowPrivateEndpoint, PrivateEgressCIDRs: pl.PrivateEgressCIDRs,
 			ConfigEventSequence: e.Sequence, NextRunAt: e.Time, CreatedAt: e.Time, UpdatedAt: e.Time,

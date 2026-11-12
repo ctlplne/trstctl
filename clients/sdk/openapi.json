@@ -9212,6 +9212,9 @@
           "batch_size": {
             "type": "integer"
           },
+          "client_cert_ref": {
+            "type": "string"
+          },
           "collector_request_id": {
             "type": "string"
           },
@@ -9472,6 +9475,10 @@
           },
           "batch_size": {
             "type": "integer"
+          },
+          "client_cert_ref": {
+            "description": "syslog only (P5-L2): an operator-approved env:NAME reference to the PEM certificate chain and key presented to a receiver that requires RFC 5425 mutual TLS",
+            "type": "string"
           },
           "enabled": {
             "type": "boolean"

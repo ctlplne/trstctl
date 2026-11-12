@@ -47,6 +47,11 @@ function buildSchema(t: (key: ValidationMessage) => string) {
       privateEgressCidrs: z.string(),
       // P5-L4: how an Elasticsearch feed presents its credential.
       authScheme: z.enum(["api_key", "basic", "bearer"]),
+      // P5-L2: the client certificate a syslog feed presents for mutual TLS.
+      clientCertRef: z
+        .string()
+        .trim()
+        .regex(/^(env:[A-Z][A-Z0-9_]*)?$/, t("audit.feeds.validation.tokenRef")),
     })
     .superRefine((values, context) => {
       // P5: a syslog receiver may be verified through the system roots, so its
@@ -75,6 +80,7 @@ function emptyValues(): FeedValues {
     allowPrivateEndpoint: false,
     privateEgressCidrs: "",
     authScheme: "api_key",
+    clientCertRef: "",
   };
 }
 
@@ -161,6 +167,7 @@ export function AuditFeedPanel() {
       allowPrivateEndpoint: feed.allow_private_endpoint,
       privateEgressCidrs: feed.private_egress_cidrs.join("\n"),
       authScheme: feed.auth_scheme ?? "api_key",
+      clientCertRef: feed.client_cert_ref ?? "",
     });
     setNotice(null);
     setOperationError(null);
@@ -299,6 +306,15 @@ export function AuditFeedPanel() {
             >
               {(control) => <Input {...control} placeholder={t("audit.feeds.tokenRefPlaceholder")} autoComplete="off" {...form.register("tokenRef")} />}
             </Field>
+            {watchedValues.provider === "syslog" ? (
+              <Field
+                label={t("audit.feeds.clientCertRef")}
+                description={t("audit.feeds.clientCertRefHelp")}
+                error={form.formState.errors.clientCertRef?.message}
+              >
+                {(control) => <Input {...control} placeholder={t("audit.feeds.tokenRefPlaceholder")} autoComplete="off" {...form.register("clientCertRef")} />}
+              </Field>
+            ) : null}
             {watchedValues.provider === "elastic" ? (
               <Field label={t("audit.feeds.authScheme")} description={t("audit.feeds.authSchemeHelp")} required>
                 {(control) => (
@@ -377,6 +393,7 @@ function auditFeedRequest(values: FeedValues): AuditFeedRequest {
     allow_private_endpoint: values.allowPrivateEndpoint,
     private_egress_cidrs: values.allowPrivateEndpoint ? lines(values.privateEgressCidrs) : [],
     ...(values.provider === "elastic" ? { auth_scheme: values.authScheme } : {}),
+    ...(values.provider === "syslog" && values.clientCertRef.trim() !== "" ? { client_cert_ref: values.clientCertRef.trim() } : {}),
   };
 }
 
@@ -394,6 +411,7 @@ function auditFeedRequestKey(id: string, request: AuditFeedRequest): string {
       allow_private_endpoint: request.allow_private_endpoint ?? false,
       private_egress_cidrs: request.private_egress_cidrs ?? [],
       auth_scheme: request.auth_scheme ?? "",
+      client_cert_ref: request.client_cert_ref ?? "",
     },
   });
 }
@@ -411,6 +429,9 @@ function AuditFeedReview({ plan, current }: { plan: AuditFeedPreview; current: b
       <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
         <ReviewFact label={t("audit.feeds.reviewDestination")} value={plan.endpoint_host} mono />
         <ReviewFact label={t("audit.feeds.reviewCredential")} value={plan.normalized_request.token_ref} mono />
+        {plan.normalized_request.client_cert_ref ? (
+          <ReviewFact label={t("audit.feeds.reviewClientCert")} value={plan.normalized_request.client_cert_ref} mono />
+        ) : null}
         {plan.normalized_request.auth_scheme ? <ReviewFact label={t("audit.feeds.reviewAuthScheme")} value={plan.normalized_request.auth_scheme} mono /> : null}
         <ReviewFact label={t("audit.feeds.reviewPermission")} value={plan.required_permission} mono />
         <ReviewFact label={t("audit.feeds.reviewState")} value={current ? t("audit.feeds.reviewCurrent") : t("audit.feeds.reviewStale")} />

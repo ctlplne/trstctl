@@ -3762,6 +3762,15 @@ export const messages = {
     defaultMessage: "https://collector.example.test/events",
     description: "Non-production absolute HTTPS example for the collector endpoint field.",
   },
+  "audit.feeds.clientCertRef": {
+    defaultMessage: "Client certificate reference",
+    description: "P5-L2: field naming the client certificate a syslog feed presents for mutual TLS.",
+  },
+  "audit.feeds.clientCertRefHelp": {
+    defaultMessage: "For a receiver that requires mutual TLS: an approved env: reference holding the certificate chain and its key in one PEM bundle.",
+    description: "P5-L2: help for the syslog client certificate reference.",
+  },
+  "audit.feeds.reviewClientCert": { defaultMessage: "Client certificate", description: "P5-L2: review label for the syslog client certificate reference." },
   "audit.feeds.authScheme": {
     defaultMessage: "Elasticsearch authentication",
     description: "P5-L4: field choosing how an Elasticsearch audit feed presents its credential.",

@@ -16,8 +16,9 @@ import (
 
 // Syslog audit feeds (P5) deliver over TLS (RFC 5425). The receiver's
 // certificate is verified against the system roots, or against the CA
-// certificate a destination's token_ref names; the dial passes through the
-// same egress guard as the HTTP collectors. Syslog acknowledges nothing per
+// certificate a destination's token_ref names, and a receiver that requires
+// mutual TLS is shown the certificate client_cert_ref names (P5-L2); the dial
+// passes through the same egress guard as the HTTP collectors. Syslog acknowledges nothing per
 // message, so a batch is delivered once every framed message is written and
 // the TLS session is closed cleanly; a retry after a broken connection resends
 // the whole batch, and each message carries its audit sequence, so the
@@ -45,9 +46,18 @@ func deliverSyslogBatch(ctx context.Context, batch auditsink.FeedBatch, payload 
 		}
 		defer secret.Wipe(caPEM)
 	}
+	// P5-L2: a receiver that requires mutual TLS gets the client certificate
+	// and key client_cert_ref names; the bundle is wiped after the dial.
+	var clientPEM []byte
+	if strings.TrimSpace(batch.ClientCertRef) != "" {
+		if clientPEM, err = resolveDiscoveryCredentialBytesRef(ctx, batch.ClientCertRef); err != nil {
+			return "", fmt.Errorf("server: resolve audit feed client certificate reference: %w", err)
+		}
+		defer secret.Wipe(clientPEM)
+	}
 	dialCtx, cancel := context.WithTimeout(ctx, syslogFeedTimeout)
 	defer cancel()
-	conn, err := mtls.DialVerifiedTCPWithControl(dialCtx, addr, serverName, caPEM, netsec.SafeDialControlWithOptions(opts))
+	conn, err := mtls.DialVerifiedTCPWithClientCert(dialCtx, addr, serverName, caPEM, clientPEM, netsec.SafeDialControlWithOptions(opts))
 	if err != nil {
 		return "", fmt.Errorf("server: audit feed collector request failed: %w", err)
 	}

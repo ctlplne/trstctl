@@ -14489,6 +14489,7 @@ export interface components {
             /** @enum {string} */
             auth_scheme?: "api_key" | "basic" | "bearer";
             batch_size: number;
+            client_cert_ref?: string;
             collector_request_id?: string;
             enabled: boolean;
             endpoint_url: string;
@@ -14558,6 +14559,8 @@ export interface components {
              */
             auth_scheme?: "api_key" | "basic" | "bearer";
             batch_size: number;
+            /** @description syslog only (P5-L2): an operator-approved env:NAME reference to the PEM certificate chain and key presented to a receiver that requires RFC 5425 mutual TLS */
+            client_cert_ref?: string;
             enabled: boolean;
             endpoint_url: string;
             interval_seconds: number;
