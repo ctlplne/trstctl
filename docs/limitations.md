@@ -1402,8 +1402,9 @@ never live in the API process. What you can do end to end against the running bi
   `secret.scan_hook.refused` audit event, P6-L3), answers `ping`,
   and turns a verified `push` into a repository secret scan of the pushed commit;
   `X-GitHub-Delivery` makes redeliveries idempotent. The normalized webhook and polling
-  remain. GitLab/Bitbucket native signatures and private-repository clone credentials
-  are not served.
+  remain. A private repository clones with an https token through `credential_ref`
+  (normalized webhook) or the hook's `clone_credential_ref` (OD-1); SSH clone keys and
+  GitLab/Bitbucket native signatures are not served.
 - Secrets workspace (A235): projects with environments over the native store (by name
   prefix `<project>/<environment>/`), restricted environments open only to granted
   members on every read/write surface (native API, references, previews, imports, syncs,

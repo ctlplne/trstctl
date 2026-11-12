@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- Repository secret scans clone private repositories (OD-1): the normalized repository webhook's `credential_ref`
+  (`file:` or `secret://`, with `credential_username`) and a native GitHub hook's `clone_credential_ref` give the token
+  an https clone authenticates with. The scan worker opens it for that clone alone and hands it to git as an
+  Authorization header for the clone URL's origin only, through git's environment, never its arguments, the URL or the
+  checkout; a redirect elsewhere gets nothing, and a refused token fails the run without echoing the host's answer.
 - A planned CA switch can move to a vendor CA (P3-L2): `new_external_ca_id` (an available CA from the external CA
   registry) with `new_trust_anchor_pem` (its root), or **Vendor CAs** in the Migration page's issuer choice. Host
   members trust the vendor root first, then the vendor signs the certificate request each host makes, and the endpoint

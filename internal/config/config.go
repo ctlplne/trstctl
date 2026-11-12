@@ -3016,6 +3016,11 @@ type SecretScanWebhook struct {
 	Provider string `json:"provider"`
 	// SecretRef holds the hook's signing secret (file: or secret://).
 	SecretRef string `json:"secret_ref"`
+	// CloneCredentialRef holds the access token a pushed private repository
+	// clones with (OD-1; file: or secret://); CloneCredentialUsername is the
+	// user it clones as, by default the provider's (x-access-token).
+	CloneCredentialRef      string `json:"clone_credential_ref,omitempty"`
+	CloneCredentialUsername string `json:"clone_credential_username,omitempty"`
 }
 
 // Transit configures the encryption-as-a-service keyring's durability.
@@ -5582,6 +5587,15 @@ func validateSecretScanWebhooks(hooks []SecretScanWebhook) []error {
 		}
 		if err := validateCredentialRef(hook.SecretRef); err != nil {
 			errs = append(errs, fmt.Errorf("%s: secret_ref: %w", where, err))
+		}
+		if ref := strings.TrimSpace(hook.CloneCredentialRef); ref != "" {
+			if err := validateCredentialRef(ref); err != nil {
+				errs = append(errs, fmt.Errorf("%s: clone_credential_ref: %w", where, err))
+			}
+		}
+		if user := strings.TrimSpace(hook.CloneCredentialUsername); user != "" &&
+			(strings.TrimSpace(hook.CloneCredentialRef) == "" || len(user) > 128 || strings.ContainsAny(user, ":\r\n")) {
+			errs = append(errs, fmt.Errorf("%s: clone_credential_username goes with a clone_credential_ref and is a user name of at most 128 characters", where))
 		}
 	}
 	return errs

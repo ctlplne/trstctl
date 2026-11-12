@@ -56083,6 +56083,11 @@
             "type": "string"
           },
           "credential_ref": {
+            "description": "OD-1: a private repository's clone credential, a file: or tenant secret:// reference opened for the clone alone and sent only to the https clone_url's origin",
+            "type": "string"
+          },
+          "credential_username": {
+            "description": "the user name the credential_ref token clones with; default by provider: x-access-token (GitHub), oauth2 (GitLab), x-token-auth (Bitbucket)",
             "type": "string"
           },
           "event": {

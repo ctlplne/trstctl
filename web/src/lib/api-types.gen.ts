@@ -12081,6 +12081,7 @@ export interface SecretRepositoryWebhookRequest {
   clone_url?: string;
   commit_sha?: string;
   credential_ref?: string;
+  credential_username?: string;
   event?: string;
   ref?: string;
   repository: string;

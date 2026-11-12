@@ -2411,13 +2411,28 @@ posture for GitHub, GitLab, and Bitbucket; `POST
 /api/v1/secrets/scans/repositories/{provider}/webhook` takes a normalized event —
 `repository`, `checkout_path`, `ref`, `commit_sha`, `event`, `credential_ref` — and
 upserts a tenant-scoped `secret_repo` discovery source plus a `discovery.run` outbox
-row. The outbox worker scans `checkout_path` directly, or clones a public/local
-`clone_url`; credential-bearing URLs are rejected, and private credentials must stay
-secret references, never payload values.
+row. The outbox worker scans `checkout_path` directly, or clones `clone_url`;
+credential-bearing URLs are rejected, and private credentials stay secret references,
+never payload values.
+
+A private repository clones with its `credential_ref` (OD-1): a `file:` or tenant
+`secret://` reference to the access token, for an https `clone_url` only (any other
+reference, or a token for a non-https URL, is refused with 400). The outbox worker opens
+it for that one clone and destroys it after. The token goes to git as an
+`Authorization` header scoped to the clone URL's origin, through git's environment —
+never its arguments, the URL or the checkout's configuration — so a redirect to another
+origin gets no credential, and the host's credential helpers and any git configuration
+the worker's environment carries are not used. `credential_username` names the user the
+token clones as; by default `x-access-token` (GitHub), `oauth2` (GitLab) or
+`x-token-auth` (Bitbucket). A token the host refuses fails the run with a reason that
+names the `credential_ref` and nothing it returned; the discovery source keeps the
+reference, never the token.
 
 GitHub can also call trstctl directly (P6): configure a hook under
-`secrets.scan_webhooks` (an `id`, the `tenant_id`, `provider: github` and a
-`secret_ref` holding the webhook's secret) and point the repository's webhook at
+`secrets.scan_webhooks` (an `id`, the `tenant_id`, `provider: github`, a
+`secret_ref` holding the webhook's secret, and for private repositories a
+`clone_credential_ref` holding the token the push's clone uses) and point the
+repository's webhook at
 `POST /api/v1/secrets/scans/hooks/{id}`. trstctl checks `X-Hub-Signature-256`
 (HMAC-SHA256 of the exact body under that secret) in constant time before reading
 anything else and refuses a missing or wrong signature with 401, recording a
@@ -2427,8 +2442,7 @@ signature was missing or wrong (never the body or the signature); `ping` answers
 pushed repository's `clone_url` at the pushed commit. `X-GitHub-Delivery` is the
 idempotency key, so a redelivery returns the recorded answer and queues nothing new.
 The normalized route and scheduled polling stay for installs that cannot accept
-webhooks. Native GitLab and Bitbucket signatures and private `credential_ref` clone
-resolution remain shortfalls, not served.
+webhooks. Native GitLab and Bitbucket signatures remain shortfalls, not served.
 
 A leaked secret a scan found moves into the native store from the CLI (P6):
 

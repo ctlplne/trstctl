@@ -27388,7 +27388,10 @@ export interface components {
             checkout_path?: string;
             clone_url?: string;
             commit_sha?: string;
+            /** @description OD-1: a private repository's clone credential, a file: or tenant secret:// reference opened for the clone alone and sent only to the https clone_url's origin */
             credential_ref?: string;
+            /** @description the user name the credential_ref token clones with; default by provider: x-access-token (GitHub), oauth2 (GitLab), x-token-auth (Bitbucket) */
+            credential_username?: string;
             event?: string;
             ref?: string;
             repository: string;

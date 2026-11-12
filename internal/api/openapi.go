@@ -8046,7 +8046,9 @@ func componentSchemas() map[string]*Schema {
 	}, "capability", "served", "generated_at", "providers", "webhook_paths", "queue_model", "scanner", "minimum_rules_active", "redaction_model", "event_flow", "release_gates", "operator_actions", "residuals", "evidence_refs", "architecture_controls")
 	secretRepoWebhookReq := object(map[string]*Schema{
 		"repository": str(), "clone_url": str(), "checkout_path": str(), "ref": str(),
-		"commit_sha": str(), "event": str(), "credential_ref": str(),
+		"commit_sha": str(), "event": str(),
+		"credential_ref":      {Type: "string", Description: "OD-1: a private repository's clone credential, a file: or tenant secret:// reference opened for the clone alone and sent only to the https clone_url's origin"},
+		"credential_username": {Type: "string", Description: "the user name the credential_ref token clones with; default by provider: x-access-token (GitHub), oauth2 (GitLab), x-token-auth (Bitbucket)"},
 	}, "repository")
 	secretRepoWebhookReceipt := object(map[string]*Schema{
 		"capability": str(), "provider": str(), "repository": str(), "source_id": uuid(),

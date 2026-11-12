@@ -227,6 +227,10 @@ type issuanceDispatcher struct {
 	// secretRepoScanner runs repository secret scans from the discovery.run outbox
 	// worker. It is the same pinned/redacting scanner used by POST /secrets/scans.
 	secretRepoScanner secretScanner
+	// repoCredentials opens a private repository's clone credential_ref
+	// (file: or a tenant secret://) for one clone (OD-1), as locked bytes the
+	// caller destroys. Nil refuses a source that names one.
+	repoCredentials func(ctx context.Context, tenantID, ref string) (*secret.Buffer, error)
 	// validity checks a found secret where the scan found it (P14).
 	validity *validity.Checker
 	// dns01 publishes and cleans ACME DNS-01 challenge records through tenant

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3116 annotated sites across 33 rules. Each row is
+3131 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (713 sites)
+### G101 — CWE-798 Use of hardcoded credentials (717 sites)
 
 | Location | Reason |
 |---|---|
@@ -193,11 +193,11 @@ not this file.
 | `internal/api/secrets_posture.go:1103` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1251` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:40` | public MAC domain label, not a credential |
-| `internal/api/secrets_scanning.go:658` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:682` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:739` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:749` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:759` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:661` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:685` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:742` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:752` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:762` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/audit/audit_test.go:179` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
 | `internal/audit/audit_test.go:211` | deliberately toxic fixture proves retained-prefix redaction (CWE-798). |
 | `internal/auth/oidc_client_secret.go:15` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -230,8 +230,8 @@ not this file.
 | `internal/config/audit_test.go:66` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config.go:3501` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:4301` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3506` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:4306` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:28` | credential file paths only, no credential value (CWE-798) |
@@ -449,6 +449,7 @@ not this file.
 | `internal/schedulerhistory/history_test.go:12` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
 | `internal/schedulerhistory/history_test.go:81` | deliberately toxic fixture proves closed parsing without echo (CWE-798). |
 | `internal/secretscan/known_value_test.go:17` | fabricated decoy fixture; no value is real (CWE-798) |
+| `internal/secretscan/repository_credential_test.go:108` | fabricated fixture token for the stand-in host (CWE-798) |
 | `internal/secretsync/parameter_store_scoped_test.go:20` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/acme_adcs_upstream_served_test.go:182` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/acme_dns01_live_txt_served_test.go:28` | fabricated fixture reference, no value is real (CWE-798) |
@@ -653,6 +654,9 @@ not this file.
 | `internal/server/secret_reference_scope_served_test.go:156` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:174` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/secret_repository_private_clone_served_test.go:73` | fabricated fixture token for the stand-in host (CWE-798) |
+| `internal/server/secret_repository_private_clone_served_test.go:120` | credential references to fabricated fixture values (CWE-798) |
+| `internal/server/secret_repository_private_clone_served_test.go:121` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_scoped_sync_alert_served_test.go:81` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_approval_served_test.go:33` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_replace_served_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1604,7 +1608,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (406 sites)
+### G204 — CWE-78 OS command injection (411 sites)
 
 | Location | Reason |
 |---|---|
@@ -1791,7 +1795,9 @@ not this file.
 | `internal/secretscan/installer_retry_test.go:192` | the shipped wrapper around the test's own stand-in (CWE-78) |
 | `internal/secretscan/move.go:147` | the pinned gitleaks binary over the operator's own checkout (CWE-78) |
 | `internal/secretscan/move_test.go:52` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/secretscan/repository.go:96` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
+| `internal/secretscan/repository.go:171` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
+| `internal/secretscan/repository_credential_test.go:44` | the local git (CWE-78) |
+| `internal/secretscan/repository_credential_test.go:84` | the local git over the test's own repository (CWE-78) |
 | `internal/secretscli/secretscli.go:97` | runs the operator's own command line verbatim; injecting secrets into their process is the feature (CWE-78) |
 | `internal/server/agent_workload_api_darwin_path_test.go:42` | test builds a fixed local fixture (CWE-78) |
 | `internal/server/agent_workload_api_darwin_path_test.go:96` | test runs the client it built (CWE-78) |
@@ -1933,6 +1939,9 @@ not this file.
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:60` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:90` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_move_served_test.go:104` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_repository_private_clone_served_test.go:39` | the local git over the test's own repository (CWE-78) |
+| `internal/server/secret_repository_private_clone_served_test.go:46` | the local git (CWE-78) |
+| `internal/server/secret_repository_private_clone_served_test.go:188` | the local git over the test's own repository (CWE-78) |
 | `internal/server/secret_scan_hooks_served_test.go:51` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_scan_hooks_served_test.go:59` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_scan_hooks_served_test.go:63` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2138,7 +2147,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (758 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (761 sites)
 
 | Location | Reason |
 |---|---|
@@ -2490,9 +2499,9 @@ not this file.
 | `internal/cloudauth/azure_token_source.go:77` | operator-configured projected token path (CWE-22) |
 | `internal/cloudauth/gcp_token_source.go:109` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:3596` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:4948` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:4967` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:3601` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:4953` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4972` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:310` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -2619,6 +2628,8 @@ not this file.
 | `internal/secretscan/installer_retry_test.go:215` | the test's own temporary file (CWE-22) |
 | `internal/secretscan/locate.go:124` | a file inside the operator's reviewed artifact path, checked by exportFile (CWE-22) |
 | `internal/secretscan/locate_test.go:14` | test fixture under t.TempDir (CWE-22) |
+| `internal/secretscan/repository_credential_test.go:144` | the test's own clone (CWE-22) |
+| `internal/secretscan/repository_credential_test.go:147` | the test's own clone (CWE-22) |
 | `internal/secretscan/secretscan_test.go:124` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/secretscan/thirdparty.go:106` | operator-owned artifact path from the reviewed source config, bounded by size above (CWE-22) |
 | `internal/secretscan/thirdparty.go:110` | operator-owned signature path from the reviewed source config (CWE-22) |
@@ -2741,6 +2752,7 @@ not this file.
 | `internal/server/secret_render_served_test.go:323` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_served_test.go:363` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_served_test.go:371` | the test's own temp file (CWE-22) |
+| `internal/server/secret_repository_private_clone_served_test.go:97` | the server's own temporary clone (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:35` | test reads its own tempdir path (CWE-22) |
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
@@ -3146,6 +3158,13 @@ not this file.
 |---|---|
 | `internal/crypto/pfx/certonly.go:9` | legacy PKCS#12 files encrypt their certificate contents with 3DES; reading them needs it, and nothing here encrypts (CWE-327) |
 
+### G504 — CWE-? (unmapped rule) (2 sites)
+
+| Location | Reason |
+|---|---|
+| `internal/secretscan/repository_credential_test.go:11` | test-only stand-in host: serves the local git-http-backend; the toolchain is far past the CVE-2016-5386 fix (CWE-284) |
+| `internal/server/secret_repository_private_clone_served_test.go:14` | test-only stand-in host: serves the local git-http-backend; the toolchain is far past the CVE-2016-5386 fix (CWE-284) |
+
 ### G505 — CWE-328 Weak hash import (SHA-1) (15 sites)
 
 | Location | Reason |
@@ -3276,8 +3295,8 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
-| `internal/config/config.go:4948` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:4967` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4953` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4972` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |
@@ -3481,7 +3500,7 @@ not this file.
 |---|---|
 | `internal/connector/paloalto/paloaltotest/paloaltotest.go:579` | test double: the op command decodes into a fixed struct, and encoding/xml resolves no external entities (CWE-502) |
 
-### G710 — CWE-601 Open redirect (taint) (5 sites)
+### G710 — CWE-601 Open redirect (taint) (6 sites)
 
 | Location | Reason |
 |---|---|
@@ -3489,5 +3508,6 @@ not this file.
 | `ee/enterpriseauth/auth_saml_served_test.go:294` | test IdP redirects to the SP's own SLO URL read from its metadata (CWE-601) |
 | `ee/enterpriseauth/auth_saml_served_test.go:375` | test IdP redirects to the ACS it read from the SP's own metadata (CWE-601) |
 | `ee/enterpriseauth/oidc_fixture_test.go:48` | test redirect within its own local server (CWE-601) |
+| `internal/secretscan/repository_credential_test.go:58` | the test's own redirect to its second stand-in host; the clone must not carry the credential there (CWE-601) |
 | `internal/server/auth_served_test.go:66` | test redirect within its own local server (CWE-601) |
 

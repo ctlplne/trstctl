@@ -1386,10 +1386,34 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 	if err := json.Unmarshal(src.Config, &cfg); err != nil {
 		return netscan.Report{}, "", "", fmt.Errorf("decode secret repository source config: %w", err)
 	}
-	target, err := secretscan.PrepareRepositoryTarget(ctx, cfg)
+	// OD-1: a private repository clones with its credential_ref, opened for
+	// this clone alone and destroyed once it is done.
+	var cred *secretscan.RepositoryCredential
+	if ref := strings.TrimSpace(cfg.CredentialRef); ref != "" && strings.TrimSpace(cfg.CheckoutPath) == "" {
+		if d.repoCredentials == nil {
+			return netscan.Report{}, "failed", "repository credential references are not configured", nil
+		}
+		buf, err := d.repoCredentials(ctx, tenantID, ref)
+		if err != nil {
+			return netscan.Report{}, "failed", "the repository's credential_ref could not be opened", nil
+		}
+		defer buf.Destroy()
+		user := strings.TrimSpace(cfg.CredentialUsername)
+		if user == "" {
+			user = secretscan.DefaultRepositoryUsername(cfg.Provider)
+		}
+		cred = &secretscan.RepositoryCredential{Username: user, Secret: buf.Bytes()}
+	}
+	target, err := secretscan.PrepareRepositoryTargetWithCredential(ctx, cfg, cred)
 	if err != nil {
-		if errors.Is(err, secretscan.ErrRepositoryTargetRequired) || errors.Is(err, secretscan.ErrRepositoryUnsafeCloneURL) {
+		if errors.Is(err, secretscan.ErrRepositoryTargetRequired) || errors.Is(err, secretscan.ErrRepositoryUnsafeCloneURL) ||
+			errors.Is(err, secretscan.ErrRepositoryCredentialNeedsHTTPS) {
 			return netscan.Report{}, "failed", err.Error(), nil
+		}
+		if cred != nil {
+			// A refused or unreachable private clone fails the run, said
+			// without the host's answer, which could echo the request.
+			return netscan.Report{}, "failed", "the private repository could not be cloned with its credential_ref", nil
 		}
 		return netscan.Report{}, "", "", err
 	}

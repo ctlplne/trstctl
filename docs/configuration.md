@@ -3237,8 +3237,12 @@ Provider-native repository webhooks are configured under `secrets.scan_webhooks`
 entry has an `id` (one path segment; the hook's URL is
 `/api/v1/secrets/scans/hooks/{id}`), the `tenant_id` whose scans it queues,
 `provider: github`, and `secret_ref` (`file:` or `secret://`) holding the webhook
-secret GitHub signs deliveries with. Startup refuses a duplicate id, a provider other
-than github or an invalid reference.
+secret GitHub signs deliveries with. For private repositories (OD-1),
+`clone_credential_ref` (`file:` or `secret://`) holds the access token a pushed
+repository's https clone authenticates with, and `clone_credential_username` the user
+it clones as (default `x-access-token`). Startup refuses a duplicate id, a provider other
+than github, an invalid reference, or a `clone_credential_username` without a
+`clone_credential_ref`.
 
 Leaked-secret validity checks (P14) are configured under `secrets.validity_checks`:
 `enabled` turns them on; `endpoints` maps `aws` to the HTTPS base URL its check calls

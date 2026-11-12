@@ -16817,6 +16817,7 @@ SecretRepositoryWebhookRequest = TypedDict(
         'clone_url': str,
         'commit_sha': str,
         'credential_ref': str,
+        'credential_username': str,
         'event': str,
         'ref': str,
         'repository': str,

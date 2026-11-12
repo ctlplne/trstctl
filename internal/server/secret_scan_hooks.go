@@ -11,6 +11,21 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
+// secretScanHookCloneCredentialsAPIOption names each hook's private clone
+// credential (OD-1): the reference, opened by the scan worker for the clone.
+func secretScanHookCloneCredentialsAPIOption(d Deps) api.Option {
+	refs := make(map[string][2]string, len(d.SecretScanWebhooks))
+	for _, hook := range d.SecretScanWebhooks {
+		if ref := strings.TrimSpace(hook.CloneCredentialRef); ref != "" {
+			refs[strings.TrimSpace(hook.ID)] = [2]string{ref, strings.TrimSpace(hook.CloneCredentialUsername)}
+		}
+	}
+	return api.WithSecretScanHookCloneCredentials(func(hookID string) (string, string) {
+		clone := refs[hookID]
+		return clone[0], clone[1]
+	})
+}
+
 // secretScanHooksAPIOption attaches the configured provider-native scan
 // webhooks (P6). Each delivery resolves its hook's signing secret for that one
 // check, as locked bytes the API destroys.

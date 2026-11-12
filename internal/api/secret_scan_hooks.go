@@ -38,6 +38,15 @@ func WithSecretScanHooks(lookup SecretScanHookLookup) Option {
 	return func(c *config) { c.secretScanHooks = lookup }
 }
 
+// SecretScanHookCloneCredential names the credential_ref (and its user name)
+// a hook's pushed private repository clones with (OD-1); empty for none.
+type SecretScanHookCloneCredential func(hookID string) (credentialRef, username string)
+
+// WithSecretScanHookCloneCredentials attaches the hooks' clone credentials.
+func WithSecretScanHookCloneCredentials(lookup SecretScanHookCloneCredential) Option {
+	return func(c *config) { c.secretScanHookClone = lookup }
+}
+
 const secretScanHookMaxBody = 1 << 20
 
 // githubDeliveryIdempotencyKey is the native GitHub webhook's idempotency key:
@@ -153,6 +162,9 @@ func (a *API) receiveSecretScanHook(w http.ResponseWriter, r *http.Request) {
 	req := secretRepoScanWebhookRequest{
 		Repository: push.Repository.FullName, CloneURL: push.Repository.CloneURL,
 		Ref: push.Ref, CommitSHA: push.After, Event: "push",
+	}
+	if a.secretScanHookClone != nil {
+		req.CredentialRef, req.CredentialUsername = a.secretScanHookClone(r.PathValue("hook_id"))
 	}
 	binding := "secret-scan-hook:v1:" + crypto.SHA256Hex([]byte(r.PathValue("hook_id"))) + ":" + crypto.SHA256Hex(body)
 	a.mutatePublicTenantBound(w, r, tenantID, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
