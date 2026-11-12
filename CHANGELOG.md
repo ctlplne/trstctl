@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- Database gateway sessions verify a private CA with no file on the gateway's host (A256-L1).
+  The control plane carries the provider's CA with the session's job, in
+  `database_ca_pem` and `database_server_name`: Redis's `redis_tls_ca_ref` and
+  `redis_tls_server_name`, and the root file a PostgreSQL or MongoDB administrator DSN names,
+  read on the control plane's host. The gateway's PostgreSQL, Redis and MongoDB sign-ins
+  verify against it ahead of a root file the session's credential names. A gateway that
+  predates the fields ignores them and verifies as before.
 
 - The upgrade preflight has a JSON form and a console panel (A246-L1): `trstctl --upgrade-preflight
   --upgrade-preflight-format json` writes the verdict for a pipeline (format `trstctl.upgrade-preflight.v1`,

@@ -57,6 +57,11 @@ type Target struct {
 	AuthSource string
 	TLS        bool
 	TLSCAFile  string
+	// rootPEM and serverName are the target's CA and certificate name as the
+	// session carries them (A256-L1); they take precedence over TLSCAFile
+	// and the host's name.
+	rootPEM    []byte
+	serverName string
 }
 
 // Wipe clears the password.
@@ -150,6 +155,13 @@ func ParseURI(credential []byte) (*Target, error) {
 type Options struct {
 	// Dial reaches the target; nil uses a plain dialer.
 	Dial func(ctx context.Context, network, address string) (net.Conn, error)
+	// RootCAPEM is the target's CA as the control plane carries it with the
+	// session (A256-L1): a private CA verifies the server without a CA file
+	// on the gateway's host, and takes precedence over the URI's tlsCAFile.
+	// ServerName, when set, is the certificate name to verify instead of the
+	// host's.
+	RootCAPEM  []byte
+	ServerName string
 }
 
 // SignIn connects to the credential's primary and authenticates as its
@@ -164,6 +176,7 @@ func SignIn(ctx context.Context, credential []byte, opts Options) (net.Conn, err
 		return nil, err
 	}
 	defer target.Wipe()
+	target.rootPEM, target.serverName = opts.RootCAPEM, opts.ServerName
 	dial := opts.Dial
 	if dial == nil {
 		dial = (&net.Dialer{}).DialContext
@@ -222,8 +235,19 @@ func connect(ctx context.Context, dial func(context.Context, string, string) (ne
 		return conn, nil
 	}
 	name, _, _ := net.SplitHostPort(host)
+	if target.serverName != "" {
+		name = target.serverName
+	}
 	config := &tls.Config{ServerName: name, MinVersion: tls.VersionTLS12}
-	if target.TLSCAFile != "" {
+	switch {
+	case len(target.rootPEM) > 0:
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM(target.rootPEM) {
+			_ = conn.Close()
+			return nil, errors.New("mongosignin: the session's CA holds no certificate")
+		}
+		config.RootCAs = roots
+	case target.TLSCAFile != "":
 		pemBytes, err := os.ReadFile(target.TLSCAFile) // #nosec G304 -- the session's URI names the CA file on the gateway's host, as a driver's tlsCAFile does (CWE-22)
 		if err != nil {
 			_ = conn.Close()

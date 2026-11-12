@@ -40,6 +40,11 @@ type Target struct {
 	// SSLRootCert a PEM file of trusted roots on the gateway's host, or
 	// "system".
 	SSLMode, SSLRootCert string
+	// rootPEM and serverName are the target's CA and certificate name as the
+	// session carries them (A256-L1); they take precedence over SSLRootCert
+	// and Host.
+	rootPEM    []byte
+	serverName string
 }
 
 // Wipe clears the password.
@@ -63,6 +68,13 @@ type Options struct {
 	// Runtime carries client runtime parameters (application_name,
 	// client_encoding, ...) into the startup message; see RuntimeParameter.
 	Runtime [][2]string
+	// RootCAPEM is the target's CA as the control plane carries it with the
+	// session (A256-L1): a private CA verifies the database without a root
+	// file on the gateway's host, and takes precedence over the DSN's
+	// sslrootcert, a path on the control plane's host. ServerName, when set,
+	// is the certificate name to verify instead of the DSN's host.
+	RootCAPEM  []byte
+	ServerName string
 }
 
 // RuntimeParameter reports whether a client's startup parameter may be passed
@@ -109,6 +121,7 @@ func SignIn(ctx context.Context, dsn []byte, opts Options) (*Session, error) {
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = conn.SetDeadline(deadline)
 	}
+	target.rootPEM, target.serverName = opts.RootCAPEM, opts.ServerName
 	session, err := signIn(conn, &target, opts.Runtime)
 	if err != nil {
 		_ = conn.Close()
@@ -206,7 +219,17 @@ func negotiateTLS(conn net.Conn, target *Target) (net.Conn, error) {
 		return nil, errors.New("pgsignin: the database answered the TLS request with something else")
 	}
 	config := &tls.Config{ServerName: target.Host, MinVersion: tls.VersionTLS12}
-	if target.SSLRootCert != "" && target.SSLRootCert != "system" {
+	if target.serverName != "" {
+		config.ServerName = target.serverName
+	}
+	switch {
+	case len(target.rootPEM) > 0:
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM(target.rootPEM) {
+			return nil, errors.New("pgsignin: the session's CA holds no certificate")
+		}
+		config.RootCAs = roots
+	case target.SSLRootCert != "" && target.SSLRootCert != "system":
 		pemBytes, err := os.ReadFile(target.SSLRootCert) // #nosec G304 -- the session's DSN names the root file on the gateway's host, as libpq's sslrootcert does (CWE-22)
 		if err != nil {
 			return nil, errors.New("pgsignin: sslrootcert cannot be read on the gateway's host")

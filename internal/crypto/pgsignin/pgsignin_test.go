@@ -5,6 +5,7 @@ package pgsignin
 import (
 	"context"
 	"crypto/md5" // #nosec G501 -- the test recomputes PostgreSQL's md5 password exchange (CWE-327)
+	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
 	"io"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/certtest"
 )
 
 func TestParseDSNKeepsThePasswordInBytes(t *testing.T) {
@@ -58,7 +61,7 @@ func TestParseDSNKeepsThePasswordInBytes(t *testing.T) {
 // fakePostgres answers one connection with the given authentication request,
 // records the password message it gets, and after it sends the ready
 // sequence.
-func fakePostgres(t *testing.T, authCode uint32, sslAnswer byte, password chan<- []byte) string {
+func fakePostgres(t *testing.T, authCode uint32, sslAnswer byte, password chan<- []byte, serverTLS ...*tls.Config) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -77,7 +80,15 @@ func fakePostgres(t *testing.T, authCode uint32, sslAnswer byte, password chan<-
 		}
 		if binary.BigEndian.Uint32(head[4:]) == sslRequestCode {
 			_, _ = conn.Write([]byte{sslAnswer})
-			if sslAnswer != 'N' {
+			switch {
+			case sslAnswer == 'S' && len(serverTLS) > 0:
+				// The rest of the exchange runs inside TLS.
+				server := tls.Server(conn, serverTLS[0])
+				if err := server.Handshake(); err != nil {
+					return
+				}
+				conn = server
+			case sslAnswer != 'N':
 				return
 			}
 			if _, err := io.ReadFull(conn, head); err != nil {
@@ -154,4 +165,47 @@ func TestSignInAnswersTheServersPasswordRequest(t *testing.T) {
 func md5Hex(s string) string {
 	sum := md5.Sum([]byte(s)) // #nosec G401 -- the test recomputes PostgreSQL's md5 password exchange (CWE-327)
 	return hex.EncodeToString(sum[:])
+}
+
+// TestSignInVerifiesThePrivateCATheSessionCarriesA256L1 is A256-L1: a
+// database behind a private CA verifies against the CA the session carries,
+// with no root file on the gateway's host, and that CA takes precedence over
+// a DSN's sslrootcert (a path on the control plane's host). Without it the
+// handshake does not verify; a CA with no certificate is refused.
+func TestSignInVerifiesThePrivateCATheSessionCarriesA256L1(t *testing.T) {
+	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("db.private.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverTLS := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	dsn := func(addr, extra string) []byte {
+		host, port, _ := net.SplitHostPort(addr)
+		return []byte("host=" + host + " port=" + port + " user=u password=p dbname=d sslmode=verify-full" + extra)
+	}
+	carried := Options{RootCAPEM: caPEM, ServerName: "db.private.test"}
+	for name, extra := range map[string]string{
+		"no root file":                 "",
+		"a control-plane path ignored": " sslrootcert=/nonexistent/on/this/host/root.pem",
+	} {
+		session, err := SignIn(ctx, dsn(fakePostgres(t, 0, 'S', nil, serverTLS), extra), carried)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if _, ok := session.Conn.(*tls.Conn); !ok || session.ProcessID != 7 {
+			t.Fatalf("%s: session = %+v", name, session)
+		}
+		_ = session.Conn.Close()
+	}
+	if _, err := SignIn(ctx, dsn(fakePostgres(t, 0, 'S', nil, serverTLS), ""), Options{}); err == nil || !strings.Contains(err.Error(), "does not verify") {
+		t.Fatalf("a private CA without the carried CA = %v, want unverified", err)
+	}
+	if _, err := SignIn(ctx, dsn(fakePostgres(t, 0, 'S', nil, serverTLS), ""), Options{RootCAPEM: []byte("not a certificate"), ServerName: "db.private.test"}); err == nil || !strings.Contains(err.Error(), "holds no certificate") {
+		t.Fatalf("a carried CA with no certificate = %v", err)
+	}
 }

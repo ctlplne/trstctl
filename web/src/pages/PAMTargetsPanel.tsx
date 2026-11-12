@@ -498,6 +498,7 @@ export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canMana
           {targetType === "windows_local" ? <p>{t("admin.access.windowsLocal.proof")}</p> : null}
           {targetType === "account" ? <p>{t("admin.access.inPlaceAccount.proof")}</p> : null}
           {targetType === "breakglass" ? <p>{t("admin.access.breakglass.proof")}</p> : null}
+          {targetType === "postgres" ? <p>{t("admin.access.postgresTLSProof")}</p> : null}
           {targetType === "snowflake" ? <p>{t("admin.access.snowflakeProof")}</p> : null}
           {targetType === "aws" ? <p>{t("admin.access.awsAPIProof")}</p> : null}
           {targetType === "aws-console" ? <p>{t("admin.access.awsConsoleProof")}</p> : null}

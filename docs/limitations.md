@@ -9112,7 +9112,8 @@ one-time ticket and the gateway's identity, never a credential; the gateway
 connections carrying the ticket. For PostgreSQL it redeems the session's login into locked
 memory and signs in upstream itself (its own sign-in — the agent binary links no database
 driver — answering SCRAM-SHA-256, MD5 or cleartext as the target demands, with TLS,
-whenever used, verified against `sslrootcert` or the system roots). For SSH it generates
+whenever used, verified against the provider's CA carried with the session, else
+`sslrootcert` or the system roots). For SSH it generates
 the session's key in locked memory and the tenant SSH CA certifies it for the job it holds
 (key ID `pam:<session>`, the session's principal, ending at the deadline, terminal only),
 then signs in to the target, accepting only a pinned host key, and relays shell, exec and
@@ -9254,11 +9255,8 @@ What comes next:
 - ClickHouse's native protocol (`clickhouse-client`) through the gateway.
 - MongoDB through `mongodb+srv://` (DNS seed lists) and SCRAM-SHA-1 users.
 - MySQL over TLS: the gateway signs in over plaintext, where full authentication trusts the
-  RSA key the server sends (as a driver does without TLS); verified TLS with the
-  provider's CA comes with the private-CA lead below.
-- A Redis target behind TLS with a private CA: the gateway verifies `rediss://` against the
-  system roots, and the provider's `redis_tls_ca_ref` is not yet carried to it with the
-  session's credential.
+  RSA key the server sends (as a driver does without TLS). Verified TLS with the
+  provider's CA, carried as PostgreSQL, Redis and MongoDB sessions carry theirs, comes next.
 
 ## Agent launcher (A257) — served
 

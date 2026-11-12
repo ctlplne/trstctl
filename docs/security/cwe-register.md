@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3004 annotated sites across 33 rules. Each row is
+3009 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -624,7 +624,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:94` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1542` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1614` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:140` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:156` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
@@ -891,7 +891,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (457 sites)
+### G115 — CWE-190 Integer overflow or wraparound (458 sites)
 
 | Location | Reason |
 |---|---|
@@ -926,7 +926,7 @@ not this file.
 | `internal/agent/accessgateway/pgrecord.go:183` | the wire field is a signed length (-1 is NULL) (CWE-190) |
 | `internal/agent/accessgateway/pgrecord_test.go:21` | test rows are small (CWE-190) |
 | `internal/agent/accessgateway/pgrecord_test.go:23` | test values are small (CWE-190) |
-| `internal/agent/accessgateway/postgres.go:136` | gateway-built messages are small (CWE-190) |
+| `internal/agent/accessgateway/postgres.go:137` | gateway-built messages are small (CWE-190) |
 | `internal/agent/accessgateway/sftp_test.go:17` | test packets are small (CWE-190) |
 | `internal/agent/accessgateway/sftp_test.go:21` | test strings are small (CWE-190) |
 | `internal/agent/desktop/server.go:553` | k is at most chunk (4096) (CWE-190) |
@@ -990,10 +990,10 @@ not this file.
 | `internal/crypto/mongosignin/bson.go:81` | a command document is short (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:194` | a BSON int32's two's-complement bits (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:196` | a BSON int64's two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:365` | a message length is bounded by its reader (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:366` | a request id is its two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:367` | a request id is its two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:368` | an op code is a small constant (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:389` | a message length is bounded by its reader (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:390` | a request id is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:391` | a request id is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:392` | an op code is a small constant (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:135` | the 3-byte little-endian length of a payload checked above (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:197` | the capability flags' lower half (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:200` | the capability flags' upper half (CWE-190) |
@@ -1007,10 +1007,10 @@ not this file.
 | `internal/crypto/pfx/certonly.go:205` | RFC 7292 B.2 adds modulo 2^(8v): keeping the low byte and carrying is the algorithm (CWE-190) |
 | `internal/crypto/pfx/certonly.go:367` | pad is at most the block size (CWE-190) |
 | `internal/crypto/pfx/rc2.go:55` | 255 modulo a power of two up to 256 fits a byte (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:136` | a startup message is a few hundred bytes (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:326` | a SCRAM client-first message is under 100 bytes (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:384` | sign-in messages are bounded and small (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin_test.go:90` | a fake server's messages are a few bytes (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:149` | a startup message is a few hundred bytes (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:349` | a SCRAM client-first message is under 100 bytes (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:407` | sign-in messages are bounded and small (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin_test.go:101` | a fake server's messages are a few bytes (CWE-190) |
 | `internal/crypto/rdp/desktop.go:241` | len(text) is at most MaxClipboard (CWE-190) |
 | `internal/crypto/seal/generation.go:168` | bounded to maxUint16Value by the guard above (CWE-190) |
 | `internal/crypto/seal/seal.go:118` | slice lengths cannot exceed uint64. |
@@ -1144,6 +1144,7 @@ not this file.
 | `internal/server/pam_browser_kube_test.go:41` | test frame length under 1<<16 (CWE-190) |
 | `internal/server/pam_browser_kube_test.go:44` | test frame length, never negative (CWE-190) |
 | `internal/server/pam_gateway_mongo_served_test.go:106` | a request id's two's-complement bits (CWE-190) |
+| `internal/server/pam_gateway_private_ca_served_test.go:71` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_health.go:94` | a positive interval in nanoseconds, never negative (CWE-190) |
 | `internal/server/pam_served_test.go:731` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/protocol_mounts.go:1035` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
@@ -1948,7 +1949,7 @@ not this file.
 | `tools/trstctllint/repo_selftest_test.go:111` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:177` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 
-### G301 — CWE-276 Incorrect default permissions (directory) (57 sites)
+### G301 — CWE-276 Incorrect default permissions (directory) (58 sites)
 
 | Location | Reason |
 |---|---|
@@ -1986,6 +1987,7 @@ not this file.
 | `internal/server/agentchannel_served_test.go:1553` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/java_sdk_served_test.go:45` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:245` | the container's keycloak user must read the import directory (CWE-276) |
+| `internal/server/pam_gateway_private_ca_served_test.go:64` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pam_served_test.go:724` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:137` | a disposable lab certificate the Envoy container reads |
 | `internal/server/protocols_served_stock_clients_test.go:51` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2069,7 +2071,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (730 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (732 sites)
 
 | Location | Reason |
 |---|---|
@@ -2424,7 +2426,7 @@ not this file.
 | `internal/crypto/fsatomic/syncdir_other.go:10` | the caller's own state directory (CWE-22) |
 | `internal/crypto/kerberos/client_test.go:87` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
-| `internal/crypto/mongosignin/mongosignin.go:227` | the session's URI names the CA file on the gateway's host, as a driver's tlsCAFile does (CWE-22) |
+| `internal/crypto/mongosignin/mongosignin.go:251` | the session's URI names the CA file on the gateway's host, as a driver's tlsCAFile does (CWE-22) |
 | `internal/crypto/mtls/agent.go:215` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/agent.go:233` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/server.go:240` | operator-selected public certificate path, validated as a regular file (CWE-22) |
@@ -2442,7 +2444,7 @@ not this file.
 | `internal/crypto/pfx/certonly_test.go:259` | the test's own file (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:43` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/crypto/pgsignin/pgsignin.go:210` | the session's DSN names the root file on the gateway's host, as libpq's sslrootcert does (CWE-22) |
+| `internal/crypto/pgsignin/pgsignin.go:233` | the session's DSN names the root file on the gateway's host, as libpq's sslrootcert does (CWE-22) |
 | `internal/crypto/possession_openssl_test.go:39` | the test's own temporary file (CWE-22) |
 | `internal/crypto/possession_openssl_test.go:81` | the test's own temporary file (CWE-22) |
 | `internal/crypto/possession_openssl_test.go:85` | the test's own temporary file (CWE-22) |
@@ -2606,6 +2608,7 @@ not this file.
 | `internal/server/pam_desktop_served_test.go:465` | unique owned task file under fixed lab account home (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:46` | test reads the cluster CA its runner wrote (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
+| `internal/server/pam_gateway_private_ca_served_test.go:84` | the fixture's own data directory (CWE-22) |
 | `internal/server/pam_gateway_served_test.go:228` | the test's own temporary files (CWE-22) |
 | `internal/server/pam_gateway_ssh_served_test.go:282` | the test's own temporary files (CWE-22) |
 | `internal/server/pam_served_test.go:921` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2644,6 +2647,7 @@ not this file.
 | `internal/server/sdk_registry_install_served_test.go:330` | the test reads what it downloaded under its own temp dir (CWE-22) |
 | `internal/server/sdk_registry_install_served_test.go:348` | the test reads what it installed under its own temp dir (CWE-22) |
 | `internal/server/sdk_registry_install_served_test.go:352` | the test reads what it installed under its own temp dir (CWE-22) |
+| `internal/server/secret_integrations.go:476` | the operator's own administrator DSN names this root file on the control plane's host (CWE-22) |
 | `internal/server/secret_render_served_test.go:69` | the test's own temp file or the lab directory the runner created (CWE-22) |
 | `internal/server/secret_render_served_test.go:323` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_served_test.go:363` | the test's own temp file (CWE-22) |
@@ -2950,9 +2954,9 @@ not this file.
 | `internal/crypto/mysqlsignin/mysqlsignin.go:381` | mysql_native_password (CWE-327) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:417` | the OAEP hash MySQL servers use (CWE-327) |
 | `internal/crypto/opaque_x509.go:274` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
-| `internal/crypto/pgsignin/pgsignin.go:285` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
-| `internal/crypto/pgsignin/pgsignin.go:290` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
-| `internal/crypto/pgsignin/pgsignin_test.go:155` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin.go:308` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin.go:313` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin_test.go:166` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
 | `internal/crypto/pqc_x509.go:96` | key identifier, not integrity (CWE-328) |
 | `internal/crypto/thumbprint.go:15` | an identifier a CA API requires, not integrity (CWE-328) |
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
@@ -3123,7 +3127,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (149 sites)
+### G703 — CWE-22 Path traversal (taint) (150 sites)
 
 | Location | Reason |
 |---|---|
@@ -3214,6 +3218,7 @@ not this file.
 | `internal/server/pam_desktop_served_test.go:187` | one of two fixed owned native fixture credential paths, selected by the test (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:46` | test reads the cluster CA its runner wrote (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
+| `internal/server/pam_gateway_private_ca_served_test.go:88` | the fixture's own data directory (CWE-22) |
 | `internal/server/pam_webconsole_served_test.go:396` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
 | `internal/server/pam_webconsole_served_test.go:400` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:60` | public lab inputs the containers read (CWE-22) |

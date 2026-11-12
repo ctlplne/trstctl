@@ -2678,7 +2678,8 @@ instances or distinct prefixes for separate authority domains. Configure
 Redis server certificate. `redis_tls_ca_ref` pins a private CA from a mode-0600
 `file:` or tenant `secret://` reference; if omitted, system roots are used.
 The administrator connection verifies TLS before sending its password, and
-issued credentials use `rediss://`. Workload clients must trust the same CA.
+issued credentials use `rediss://`. Workload clients must trust the same CA; an
+access gateway is given it with each session, so its host needs no copy.
 For example:
 
 ```json

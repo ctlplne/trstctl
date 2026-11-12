@@ -559,7 +559,7 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 			g.cfg.Logf("accessgateway: session %s: command enforcement unavailable", s.intent.SessionID)
 			return
 		}
-		if err := servePostgres(ctx, conn, dsn, s.intent.ExpiresAt, g.cfg.Dial, rec, guard); err != nil {
+		if err := servePostgres(ctx, conn, dsn, s.intent.ExpiresAt, g.cfg.Dial, s.intent.upstreamTrust(), rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetRedis:
@@ -570,7 +570,7 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		}
 		credential := s.credential()
 		defer secret.Wipe(credential)
-		if err := serveRedis(ctx, conn, credential, s.intent.ExpiresAt, g.cfg.Dial, rec, guard); err != nil {
+		if err := serveRedis(ctx, conn, credential, s.intent.ExpiresAt, g.cfg.Dial, s.intent.upstreamTrust(), rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetMySQL:
@@ -592,7 +592,7 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		}
 		uri := s.credential()
 		defer secret.Wipe(uri)
-		if err := serveMongo(ctx, conn, uri, s.intent.ExpiresAt, g.cfg.Dial, rec, guard); err != nil {
+		if err := serveMongo(ctx, conn, uri, s.intent.ExpiresAt, g.cfg.Dial, s.intent.upstreamTrust(), rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetClickHouse:

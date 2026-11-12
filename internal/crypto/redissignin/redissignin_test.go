@@ -5,12 +5,15 @@ package redissignin
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"io"
 	"net"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/certtest"
 )
 
 func TestParseURLReadsTheProviderCredential(t *testing.T) {
@@ -37,7 +40,7 @@ func TestParseURLReadsTheProviderCredential(t *testing.T) {
 
 // fakeRedis answers one connection's sign-in: AUTH with the expected user and
 // password, then SELECT when asked; it reports what it was sent.
-func fakeRedis(t *testing.T, user, password string, refuse bool) (string, chan []string) {
+func fakeRedis(t *testing.T, user, password string, refuse bool, serverTLS ...*tls.Config) (string, chan []string) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -51,6 +54,13 @@ func fakeRedis(t *testing.T, user, password string, refuse bool) (string, chan [
 			return
 		}
 		defer func() { _ = conn.Close() }()
+		if len(serverTLS) > 0 {
+			server := tls.Server(conn, serverTLS[0])
+			if err := server.Handshake(); err != nil {
+				return
+			}
+			conn = server
+		}
 		r := bufio.NewReader(conn)
 		for {
 			args, err := readCommand(r)
@@ -138,5 +148,39 @@ func TestSignInVerifiesTLS(t *testing.T) {
 	defer cancel()
 	if _, err := SignIn(ctx, []byte("rediss://u:p@"+addr+"/0"), Options{}); err == nil || !strings.Contains(err.Error(), "TLS") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// TestSignInVerifiesThePrivateCATheSessionCarriesA256L1 is A256-L1: a
+// rediss:// target behind a private CA verifies against the provider's CA the
+// session carries (redis_tls_ca_ref) under its certificate name
+// (redis_tls_server_name); without it the handshake does not verify.
+func TestSignInVerifiesThePrivateCATheSessionCarriesA256L1(t *testing.T) {
+	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("cache.private.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverTLS := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	addr, seen := fakeRedis(t, "u", "p", false, serverTLS)
+	conn, err := SignIn(ctx, []byte("rediss://u:p@"+addr+"/0"), Options{RootCAPEM: caPEM, ServerName: "cache.private.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := conn.(*tls.Conn); !ok {
+		t.Fatalf("the signed-in connection is %T, want TLS", conn)
+	}
+	_ = conn.Close()
+	if auth := <-seen; len(auth) != 3 || !strings.EqualFold(auth[0], "AUTH") || auth[1] != "u" {
+		t.Fatalf("first command = %q", auth)
+	}
+	addr, _ = fakeRedis(t, "u", "p", false, serverTLS)
+	if _, err := SignIn(ctx, []byte("rediss://u:p@"+addr+"/0"), Options{}); err == nil || !strings.Contains(err.Error(), "does not verify") {
+		t.Fatalf("a private CA without the carried CA = %v, want unverified", err)
 	}
 }

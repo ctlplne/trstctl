@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -45,6 +46,13 @@ func (t *Target) Wipe() { secret.Wipe(t.Password) }
 type Options struct {
 	// Dial reaches the target; nil uses a plain dialer.
 	Dial func(ctx context.Context, network, address string) (net.Conn, error)
+	// RootCAPEM is the target's CA as the control plane carries it with the
+	// session (A256-L1), its provider's redis_tls_ca_ref: a rediss:// target
+	// behind a private CA verifies against it instead of the system roots.
+	// ServerName, when set, is the certificate name to verify instead of the
+	// URL's host.
+	RootCAPEM  []byte
+	ServerName string
 }
 
 // ParseURL reads a session credential: redis:// or rediss://, a user and a
@@ -115,7 +123,19 @@ func SignIn(ctx context.Context, credential []byte, opts Options) (net.Conn, err
 		_ = conn.SetDeadline(deadline)
 	}
 	if target.TLS {
-		tlsConn := tls.Client(conn, &tls.Config{ServerName: target.Host, MinVersion: tls.VersionTLS12})
+		config := &tls.Config{ServerName: target.Host, MinVersion: tls.VersionTLS12}
+		if opts.ServerName != "" {
+			config.ServerName = opts.ServerName
+		}
+		if len(opts.RootCAPEM) > 0 {
+			roots := x509.NewCertPool()
+			if !roots.AppendCertsFromPEM(opts.RootCAPEM) {
+				_ = conn.Close()
+				return nil, errors.New("redissignin: the session's CA holds no certificate")
+			}
+			config.RootCAs = roots
+		}
+		tlsConn := tls.Client(conn, config)
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
 			_ = conn.Close()
 			return nil, fmt.Errorf("redissignin: the server's TLS certificate does not verify: %w", err)

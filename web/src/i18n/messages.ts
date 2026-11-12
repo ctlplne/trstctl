@@ -7850,6 +7850,11 @@ export const messages = {
     description: "A263 cloud account qualification limits.",
   },
   "admin.access.snowflake": { defaultMessage: "Snowflake SQL API", description: "A263 gateway account type." },
+  "admin.access.postgresTLSProof": {
+    defaultMessage:
+      "Through a gateway, this database's TLS is verified against the CA its provider's administrator connection trusts. trstctl reads that CA and carries it with each session, so a private CA needs no copy on the gateway's host.",
+    description: "A256-L1 how a gateway verifies a PostgreSQL target's TLS.",
+  },
   "admin.access.snowflakeProof": {
     defaultMessage:
       "SQL API access is proven against a stand-in. Configure a Snowflake key-pair provider and bind a gateway. Live Snowflake and SnowSQL wire sessions are unverified.",

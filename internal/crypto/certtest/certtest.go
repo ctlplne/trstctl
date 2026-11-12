@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-// Package certtest builds bulk X.509 fixtures for scale tests. It lives below
+// Package certtest builds bulk X.509 fixtures for scale tests, and a private
+// CA with a server certificate for TLS tests. It lives below
 // internal/crypto for the same reason edgetest does: fixture certificate
 // construction must not teach test packages elsewhere to bypass the AN-3
 // crypto boundary. Every key is generated for the fixture and discarded; the
@@ -13,8 +14,10 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
 	"time"
 )
 
@@ -76,4 +79,60 @@ func DistinctLeaves(n int, commonNamePrefix string) ([][]byte, error) {
 		out = append(out, der)
 	}
 	return out, nil
+}
+
+// PrivateCAServer returns a private CA's certificate and a TLS server
+// certificate it issued for names (DNS names or IP addresses), with that
+// server's PKCS #8 key, all PEM: a server whose CA no system trusts. Both are
+// valid for a day.
+func PrivateCAServer(names ...string) (caPEM, certPEM, keyPEM []byte, err error) {
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	notBefore := time.Now().Add(-time.Hour)
+	ca := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "trstctl test private CA"},
+		NotBefore:             notBefore,
+		NotAfter:              notBefore.Add(25 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		MaxPathLenZero:        true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, ca, ca, &caKey.PublicKey, caKey)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	leaf := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: names[0]},
+		NotBefore:    notBefore,
+		NotAfter:     notBefore.Add(25 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	for _, name := range names {
+		if ip := net.ParseIP(name); ip != nil {
+			leaf.IPAddresses = append(leaf.IPAddresses, ip)
+		} else {
+			leaf.DNSNames = append(leaf.DNSNames, name)
+		}
+	}
+	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, ca, &key.PublicKey, caKey)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	pkcs8, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}),
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}),
+		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8}), nil
 }

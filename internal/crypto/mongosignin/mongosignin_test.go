@@ -4,7 +4,14 @@ package mongosignin
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
+	"net"
+	"strings"
 	"testing"
+	"time"
+
+	"trstctl.com/trstctl/internal/crypto/certtest"
 )
 
 func TestParseURIReadsTheProviderCredential(t *testing.T) {
@@ -54,5 +61,53 @@ func TestBSONRoundTrip(t *testing.T) {
 	}
 	if _, err := Elements(doc[:len(doc)-1]); err == nil {
 		t.Fatal("a truncated document was read")
+	}
+}
+
+// TestConnectVerifiesThePrivateCATheSessionCarriesA256L1 is A256-L1: a
+// tls=true target behind a private CA verifies against the CA the session
+// carries, ahead of a tlsCAFile that names a path on the control plane's
+// host; without it the handshake does not verify.
+func TestConnectVerifiesThePrivateCATheSessionCarriesA256L1(t *testing.T) {
+	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("mongo.private.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer func() { _ = conn.Close() }()
+				_ = conn.(*tls.Conn).Handshake()
+				_, _ = conn.Read(make([]byte, 1))
+			}()
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	dial := (&net.Dialer{}).DialContext
+	carried := &Target{TLS: true, TLSCAFile: "/nonexistent/on/this/host/ca.pem", rootPEM: caPEM, serverName: "mongo.private.test"}
+	conn, err := connect(ctx, dial, ln.Addr().String(), carried)
+	if err != nil {
+		t.Fatalf("the carried CA: %v", err)
+	}
+	_ = conn.Close()
+	if _, err := connect(ctx, dial, ln.Addr().String(), &Target{TLS: true}); err == nil || !strings.Contains(err.Error(), "does not verify") {
+		t.Fatalf("a private CA without the carried CA = %v, want unverified", err)
+	}
+	if _, err := connect(ctx, dial, ln.Addr().String(), &Target{TLS: true, rootPEM: []byte("x"), serverName: "mongo.private.test"}); err == nil || !strings.Contains(err.Error(), "holds no certificate") {
+		t.Fatalf("a carried CA with no certificate = %v", err)
 	}
 }

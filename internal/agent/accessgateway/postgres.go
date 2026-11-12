@@ -30,7 +30,7 @@ const (
 // session's parameters, key data and readiness and relays the protocol both
 // ways until either side closes or the deadline passes. The client never
 // receives the DSN.
-func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder, guards ...*commandConnection) error {
+func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), trust upstreamTrust, rec *connRecorder, guards ...*commandConnection) error {
 	params, err := readClientStartup(client)
 	if err != nil {
 		return err
@@ -47,7 +47,8 @@ func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline ti
 	}
 	signInCtx, cancel := context.WithDeadline(ctx, earliest(deadline, time.Now().Add(30*time.Second)))
 	defer cancel()
-	upstream, err := pgsignin.SignIn(signInCtx, dsn, pgsignin.Options{Dial: dial, Database: database, Runtime: runtime})
+	upstream, err := pgsignin.SignIn(signInCtx, dsn, pgsignin.Options{Dial: dial, Database: database, Runtime: runtime,
+		RootCAPEM: trust.caPEM, ServerName: trust.serverName})
 	if err != nil {
 		_ = refusePostgres(client, "the upstream database refused the session's login")
 		return err

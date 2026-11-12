@@ -534,6 +534,16 @@ trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --list
 kubectl --kubeconfig ticket.txt.kubeconfig get pods
 ```
 
+Through the gateway, a PostgreSQL, Redis or MongoDB target's TLS is verified against the CA
+its provider trusts, which the control plane carries with each session: for Redis the
+provider's `redis_tls_ca_ref` under its `redis_tls_server_name`, for PostgreSQL and MongoDB
+the root file the administrator DSN names (`sslrootcert`, `tlsCAFile`), read on the control
+plane's host. A private CA needs no copy on the gateway's host. With none, the gateway
+verifies against a root file the session's credential names, or the system roots. A gateway
+from before this release ignores the carried CA and verifies as before, so upgrade the
+gateway before relying on it. MySQL sessions sign in without TLS; verified TLS for them is
+what comes next.
+
 A session can be worked in from the console instead (A259). Open it with `"browser": true`
 (Request privileged session → "Open in the browser"): the control plane keeps the session's
 ticket for the person who opened it, the reply carries none, and the gateway still signs in,

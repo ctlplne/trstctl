@@ -125,6 +125,15 @@ type SessionIntent struct {
 	UpstreamURL        string `json:"upstream_url,omitempty"`
 	UpstreamCAPEM      string `json:"upstream_ca_pem,omitempty"`
 	UpstreamServerName string `json:"upstream_server_name,omitempty"`
+	// DatabaseCAPEM and DatabaseServerName (A256-L1) are how the gateway
+	// verifies a PostgreSQL, Redis or MongoDB target's TLS: its provider's
+	// CA, carried with the job, so a private CA needs no file on the
+	// gateway's host, and the certificate name to verify. Empty: the
+	// credential's own setting (a root file its DSN names) or the system
+	// roots. A gateway that predates them ignores them and verifies as
+	// before.
+	DatabaseCAPEM      string `json:"database_ca_pem,omitempty"`
+	DatabaseServerName string `json:"database_server_name,omitempty"`
 	// Record asks the gateway to record the session (A255): masked, and
 	// uploaded over its agent channel as the session runs.
 	Record bool `json:"record,omitempty"`
@@ -170,6 +179,9 @@ func ValidateSessionIntent(in SessionIntent) error {
 		return errors.New("accessgateway: a session carries its ticket's SHA-256")
 	case in.ExpiresAt.IsZero():
 		return errors.New("accessgateway: a session has a deadline")
+	}
+	if (in.DatabaseCAPEM != "" || in.DatabaseServerName != "") && in.TargetType != TargetPostgres && in.TargetType != TargetRedis && in.TargetType != TargetMongo {
+		return errors.New("accessgateway: only a PostgreSQL, Redis or MongoDB session carries a database CA")
 	}
 	if in.TargetType == TargetRDP {
 		if in.Desktop == nil || in.Desktop.Validate() != nil || in.CommandPolicy != nil {
@@ -338,4 +350,18 @@ func KindForIntent(in SessionIntent) string {
 		return KindSessionWeb
 	}
 	return KindForPolicy(in.CommandPolicy)
+}
+
+// upstreamTrust is how a database session verifies its target's TLS: the CA
+// and certificate name its provider gave the job (A256-L1).
+type upstreamTrust struct {
+	caPEM      []byte
+	serverName string
+}
+
+func (in SessionIntent) upstreamTrust() upstreamTrust {
+	if strings.TrimSpace(in.DatabaseCAPEM) == "" && in.DatabaseServerName == "" {
+		return upstreamTrust{}
+	}
+	return upstreamTrust{caPEM: []byte(in.DatabaseCAPEM), serverName: in.DatabaseServerName}
 }

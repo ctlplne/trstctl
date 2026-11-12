@@ -85,6 +85,18 @@ it("lists a gateway-served Redis target by its provider and roles", async () => 
   expect(screen.getByText("redis-writer")).toBeInTheDocument();
 });
 
+it("tells the registrar a PostgreSQL target's private CA travels with each gateway session (A256-L1)", async () => {
+  const user = userEvent.setup();
+  apiMock.pamTargets.mockResolvedValue({ items: [] });
+  mount(true);
+  await user.click(await screen.findByRole("button", { name: "Register target" }));
+  const form = screen.getByRole("dialog", { name: "Register target" });
+  expect(within(form).getByRole("combobox", { name: "Target type" })).toHaveValue("postgres");
+  expect(within(form).getByText(/a private CA needs no copy on the gateway's host/)).toBeInTheDocument();
+  await user.selectOptions(within(form).getByRole("combobox", { name: "Target type" }), "ssh");
+  expect(within(form).queryByText(/a private CA needs no copy on the gateway's host/)).not.toBeInTheDocument();
+});
+
 it("requires a gateway for a Snowflake stand-in account and submits only references", async () => {
   const user = userEvent.setup();
   apiMock.pamTargets.mockResolvedValue({ items: [] });

@@ -181,6 +181,16 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 		Record: s.recordings != nil, CommandPolicy: rec.CommandPolicy}
 	if rec.TargetType != pamTargetSSH {
 		intent.CredentialRef = accessgateway.CredentialRef(rec.ID)
+		// A256-L1: a database target's TLS is verified against its provider's
+		// CA, carried with the job; no root file need sit on the gateway's
+		// host.
+		if rec.TargetType == pamTargetPostgres || rec.TargetType == pamTargetRedis || rec.TargetType == pamTargetMongo {
+			caPEM, serverName, err := s.databaseTLS(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
+			if err != nil {
+				return accessgateway.SessionIntent{}, err
+			}
+			intent.DatabaseCAPEM, intent.DatabaseServerName = string(caPEM), serverName
+		}
 		if accessgateway.HTTPUpstream(rec.TargetType) {
 			// A ClickHouse credential is a user and password, a Kubernetes
 			// one a token; where the server answers is the provider's
@@ -389,6 +399,26 @@ func (s *pamService) databaseUpstream(ctx context.Context, tenantID, targetType,
 		}
 	}
 	return "", nil, "", fmt.Errorf("the %s target's provider names no endpoint", targetType)
+}
+
+// databaseTLS is the CA and certificate name a database target's provider
+// trusts (A256-L1), for its gateway session's sign-in.
+func (s *pamService) databaseTLS(ctx context.Context, tenantID, targetType, targetID string) ([]byte, string, error) {
+	target, err := s.databaseTarget(ctx, tenantID, targetType, targetID)
+	if err != nil {
+		return nil, "", err
+	}
+	for _, provider := range s.providers.ForTenant(tenantID) {
+		if provider == nil || provider.Name() != target.cfg.ProviderID {
+			continue
+		}
+		if p, ok := provider.(interface {
+			DynamicSecretGatewayTLS(context.Context) ([]byte, string, error)
+		}); ok {
+			return p.DynamicSecretGatewayTLS(ctx)
+		}
+	}
+	return nil, "", nil
 }
 
 // gatewaySessionCredential reopens an active gateway session's upstream

@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -22,7 +23,9 @@ import (
 	"trstctl.com/trstctl/internal/cloudauth"
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/mongosignin"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/pgsignin"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
@@ -407,23 +410,92 @@ func (p *configuredDynamicProvider) DynamicSecretGatewayUpstream(ctx context.Con
 	case "kubernetes":
 		var caPEM []byte
 		if p.cfg.KubernetesTLSCARef != "" {
-			buf, err := p.credentials.resolve(ctx, p.tenantID, p.cfg.KubernetesTLSCARef)
-			if err != nil {
+			var err error
+			if caPEM, err = p.publicCredential(ctx, p.cfg.KubernetesTLSCARef); err != nil {
 				return "", nil, "", fmt.Errorf("the cluster CA: %w", err)
-			}
-			// A CA certificate is public: it leaves the buffer as plain bytes.
-			err = buf.Use(func(b []byte) error {
-				caPEM = append([]byte(nil), b...)
-				return nil
-			})
-			buf.Destroy()
-			if err != nil {
-				return "", nil, "", err
 			}
 		}
 		return p.cfg.Endpoint, caPEM, p.cfg.KubernetesTLSServerName, nil
 	}
 	return "", nil, "", nil
+}
+
+// DynamicSecretGatewayTLS is how an access gateway verifies a database
+// target's TLS when it signs in for a session (A256-L1): the CA and the
+// certificate name the provider itself trusts. A Redis provider names them
+// (redis_tls_ca_ref, redis_tls_server_name); a PostgreSQL or MongoDB
+// provider's administrator connection names its root file (sslrootcert,
+// tlsCAFile), a path on the control plane's host that the gateway's host may
+// not share, so the file is read here and carried with the session. A CA
+// certificate is public. Nothing named: none, and the gateway verifies
+// against what the session's credential names, or the system roots.
+func (p *configuredDynamicProvider) DynamicSecretGatewayTLS(ctx context.Context) ([]byte, string, error) {
+	switch p.cfg.Type {
+	case "redis":
+		if p.cfg.RedisTLSCARef == "" {
+			return nil, p.cfg.RedisTLSServerName, nil
+		}
+		caPEM, err := p.publicCredential(ctx, p.cfg.RedisTLSCARef)
+		if err != nil {
+			return nil, "", fmt.Errorf("the Redis CA: %w", err)
+		}
+		return caPEM, p.cfg.RedisTLSServerName, nil
+	case "postgresql", "mongodb":
+		if p.cfg.AdminDSNRef == "" {
+			return nil, "", nil
+		}
+		buf, err := p.credentials.resolve(ctx, p.tenantID, p.cfg.AdminDSNRef)
+		if err != nil {
+			return nil, "", fmt.Errorf("the administrator connection: %w", err)
+		}
+		defer buf.Destroy()
+		var rootFile string
+		err = buf.Use(func(dsn []byte) error {
+			if p.cfg.Type == "postgresql" {
+				target, err := pgsignin.ParseDSN(dsn)
+				if err != nil {
+					return nil // a DSN the sign-in can't read names no root file
+				}
+				defer target.Wipe()
+				if target.SSLRootCert != "system" {
+					rootFile = target.SSLRootCert
+				}
+				return nil
+			}
+			target, err := mongosignin.ParseURI(dsn)
+			if err != nil {
+				return nil
+			}
+			defer target.Wipe()
+			rootFile = target.TLSCAFile
+			return nil
+		})
+		if err != nil || rootFile == "" {
+			return nil, "", err
+		}
+		caPEM, err := os.ReadFile(rootFile) // #nosec G304 -- the operator's own administrator DSN names this root file on the control plane's host (CWE-22)
+		if err != nil {
+			return nil, "", fmt.Errorf("the administrator connection's root file cannot be read")
+		}
+		return caPEM, "", nil
+	}
+	return nil, "", nil
+}
+
+// publicCredential resolves a reference to public material (a CA
+// certificate), which may then leave its locked buffer as plain bytes.
+func (p *configuredDynamicProvider) publicCredential(ctx context.Context, ref string) ([]byte, error) {
+	buf, err := p.credentials.resolve(ctx, p.tenantID, ref)
+	if err != nil {
+		return nil, err
+	}
+	defer buf.Destroy()
+	var out []byte
+	err = buf.Use(func(b []byte) error {
+		out = append([]byte(nil), b...)
+		return nil
+	})
+	return out, err
 }
 
 // DynamicSecretKubernetesScope is the namespace a kubernetes provider creates

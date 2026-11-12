@@ -62,8 +62,9 @@ inside the tunnel admits them.
    as the target's `pg_hba` demands; Kerberos, GSSAPI and SSPI are refused), passes only
    the client's harmless runtime parameters (`application_name`,
    `client_encoding`, `DateStyle`, `TimeZone`, `extra_float_digits`, `IntervalStyle`),
-   and whenever it uses TLS it verifies the database's certificate against `sslrootcert`
-   (a file on the gateway's host) or the system roots, including the host name —
+   and whenever it uses TLS it verifies the database's certificate, including the host
+   name, against the provider's CA carried with the session (A256-L1), else
+   `sslrootcert` (a file on the gateway's host) or the system roots —
    stricter than libpq's `prefer`, `require` and `verify-ca`.
    For SSH (inside `internal/crypto/sshgateway`) the admission answer carries the gateway's
    own SSH host key, which the CLI — having verified the gateway over TLS — writes to a
@@ -154,7 +155,9 @@ are served only through a gateway; the target builder refuses one without a bind
 
 - **Redis.** The provider's ACL user for the session (the role's key prefixes and commands;
   PING is always allowed). The gateway sends `AUTH <user> <password>` and, for a database
-  other than 0, `SELECT`, over plaintext or `rediss://` verified against the system roots,
+  other than 0, `SELECT`, over plaintext or `rediss://` verified against the provider's
+  `redis_tls_ca_ref` under its `redis_tls_server_name`, carried with the session, or the
+  system roots,
   then relays RESP. It reads each client command's name before forwarding anything: AUTH,
   HELLO with an AUTH option and RESET would change the connection's login, so they are
   never forwarded — a command the server answers with an error
@@ -183,8 +186,9 @@ are served only through a gateway; the target builder refuses one without a bind
   rows by size) with a truncation marker, OK counts and error codes, masked.
 - **MongoDB.** The provider's user for the session (`read` or `readWrite` on the
   provider's database). The gateway signs in with SCRAM-SHA-256 through `saslStart` and
-  `saslContinue` on the user's database, over plaintext or TLS verified against `tlsCAFile`
-  (a file on the gateway's host) or the system roots; with several hosts it asks each, on
+  `saslContinue` on the user's database, over plaintext or TLS verified against the
+  provider's CA carried with the session, else `tlsCAFile` (a file on the gateway's host)
+  or the system roots; with several hosts it asks each, on
   a connection of its own, whether it is the writable primary. The session's connection
   carries no hello of the gateway's: a server takes client metadata only in a
   connection's first hello, which is the stock client's. `saslStart`, `saslContinue`,
