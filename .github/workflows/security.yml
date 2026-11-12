@@ -87,13 +87,16 @@ jobs:
         run: |
           set -euo pipefail
           base="gcr.io/distroless/static-debian12:nonroot"
-          digest="$(docker buildx imagetools inspect "$base" --format '{{.Manifest.Digest}}')"
+          digest="$(bash scripts/ci/retry-registry-errors.sh docker buildx imagetools inspect "$base" --format '{{.Manifest.Digest}}')"
           echo "ref=gcr.io/distroless/static-debian12@${digest}" >> "$GITHUB_OUTPUT"
 
+      # The build pulls its stages' images from Docker Hub, which answers 5xx in
+      # bursts (a 500 failed this job on 2026-11-12): a registry error is retried
+      # a bounded number of times, any other build failure is not.
       - name: Build the runtime image from the digest-pinned base
         run: |
           set -euo pipefail
-          docker build \
+          bash scripts/ci/retry-registry-errors.sh docker build \
             --target release \
             --build-arg BASE_IMAGE='${{ steps.base.outputs.ref }}' \
             -f deploy/docker/Dockerfile \

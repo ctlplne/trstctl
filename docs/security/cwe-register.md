@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3017 annotated sites across 33 rules. Each row is
+3021 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1553,7 +1553,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (399 sites)
+### G204 — CWE-78 OS command injection (400 sites)
 
 | Location | Reason |
 |---|---|
@@ -1735,7 +1735,8 @@ not this file.
 | `internal/secretscan/gitdiff.go:169` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscan/gitdiff_test.go:93` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/secretscan/gitleaks.go:228` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
-| `internal/secretscan/installer_retry_test.go:92` | the test's own script, against its own server (CWE-78) |
+| `internal/secretscan/installer_retry_test.go:96` | the test's own script, against its own server (CWE-78) |
+| `internal/secretscan/installer_retry_test.go:192` | the shipped wrapper around the test's own stand-in (CWE-78) |
 | `internal/secretscan/move.go:147` | the pinned gitleaks binary over the operator's own checkout (CWE-78) |
 | `internal/secretscan/move_test.go:52` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/secretscan/repository.go:96` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
@@ -2079,7 +2080,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (732 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (734 sites)
 
 | Location | Reason |
 |---|---|
@@ -2542,7 +2543,9 @@ not this file.
 | `internal/secretscan/gitleaks.go:341` | path is resolved inside an operator-configured scan root |
 | `internal/secretscan/gitleaks.go:545` | the operator's own scanner config, already validated as a path this process was told to use (CWE-22) |
 | `internal/secretscan/gitleaks_options_test.go:186` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/secretscan/installer_retry_test.go:103` | the test's own temporary file (CWE-22) |
+| `internal/secretscan/installer_retry_test.go:107` | the test's own temporary file (CWE-22) |
+| `internal/secretscan/installer_retry_test.go:203` | the test's own temporary file (CWE-22) |
+| `internal/secretscan/installer_retry_test.go:215` | the test's own temporary file (CWE-22) |
 | `internal/secretscan/locate.go:124` | a file inside the operator's reviewed artifact path, checked by exportFile (CWE-22) |
 | `internal/secretscan/locate_test.go:14` | test fixture under t.TempDir (CWE-22) |
 | `internal/secretscan/secretscan_test.go:124` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2816,7 +2819,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (130 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (131 sites)
 
 | Location | Reason |
 |---|---|
@@ -2899,6 +2902,7 @@ not this file.
 | `internal/secrets/vault_test.go:180` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/secretscan/gitleaks_options_test.go:72` | executable is an isolated test fixture |
 | `internal/secretscan/gitleaks_options_test.go:178` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/secretscan/installer_retry_test.go:183` | a test-owned executable stand-in (CWE-276). |
 | `internal/server/adcs_database_collect_served_test.go:42` | a test-owned executable stand-in (CWE-276). |
 | `internal/server/adcs_decisions_served_test.go:50` | a test-owned executable stand-in (CWE-276). |
 | `internal/server/adcs_revoke_relay_served_test.go:121` | a test-owned executable stand-in (CWE-276). |

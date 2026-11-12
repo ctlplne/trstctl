@@ -1047,6 +1047,11 @@
 
 ### Fixed
 
+- The Security scans retry a container registry error. The Trivy job builds the runtime image
+  before scanning it, and Docker Hub answered 500 to the build on 2026-11-12, so the job failed
+  without scanning anything. Its registry operations (the base image lookup and the build) now run
+  through `scripts/ci/retry-registry-errors.sh`: an HTTP 429 or 5xx answer or a network timeout is
+  retried up to four runs in all, 20, 40 and 60 seconds apart; any other failure is not retried.
 - A Windows host agent's rotation report is accepted with the outcome the agent sends
   (A268-O1). The agent reports a proved local-account rotation as verified and any other result
   as failed, but the control plane accepted only an executed outcome, so a rotation the host
