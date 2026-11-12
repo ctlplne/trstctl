@@ -88,11 +88,31 @@ func (s *Store) ApplyExternalCAIssueResumedTx(ctx context.Context, tx pgx.Tx, te
 const externalCAHeldColumns = `authority_id, ca_request_id, issue_key, request_binding, key_origin, dns_names, status, serial,
 	held_at, resolved_at`
 
+const prefixedExternalCAHeldColumns = `h.authority_id, h.ca_request_id, h.issue_key, h.request_binding, h.key_origin, h.dns_names, h.status,
+	h.serial, h.held_at, h.resolved_at`
+
 func scanExternalCAHeldIssue(row pgx.Row) (ExternalCAHeldIssue, error) {
 	var h ExternalCAHeldIssue
 	err := row.Scan(&h.AuthorityID, &h.CARequestID, &h.IssueKey, &h.RequestBinding, &h.KeyOrigin, &h.DNSNames, &h.Status, &h.Serial,
 		&h.HeldAt, &h.ResolvedAt)
 	return h, err
+}
+
+// HeldIssueForADCSDecisionTx reads the issuance still held on the request an
+// AD CS decision decided, when there is one: the decision's issuer is the
+// authority, and its request id the CA's.
+func (s *Store) HeldIssueForADCSDecisionTx(ctx context.Context, tx pgx.Tx, tenantID, decisionID string) (ExternalCAHeldIssue, bool, error) {
+	h, err := scanExternalCAHeldIssue(tx.QueryRow(ctx, `SELECT `+prefixedExternalCAHeldColumns+`
+		FROM adcs_request_decisions d
+		JOIN external_ca_held_issues h ON h.tenant_id = d.tenant_id AND h.authority_id = d.issuer_id AND h.ca_request_id = d.request_id
+		WHERE d.tenant_id = $1 AND d.id = $2 AND h.status = 'held'`, tenantID, decisionID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ExternalCAHeldIssue{}, false, nil
+	}
+	if err != nil {
+		return ExternalCAHeldIssue{}, false, err
+	}
+	return h, true, nil
 }
 
 // GetExternalCAHeldIssue reads one held issuance by the CA's request id.

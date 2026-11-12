@@ -387,6 +387,11 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: external CA outbox destination is not configured"))
 		}
 		return d.externalCAs.DeliverExternalCAIssue(ctx, m)
+	case orchestrator.DestinationExternalCAResumeHeld:
+		if d.externalCAs == nil {
+			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: external CA outbox destination is not configured"))
+		}
+		return d.externalCAs.DeliverExternalCAResumeHeld(ctx, m)
 	case store.ACMEUpstreamARIFetchDestination:
 		return d.deliverExternalCAARI(ctx, m)
 	case cmdbexport.Destination:

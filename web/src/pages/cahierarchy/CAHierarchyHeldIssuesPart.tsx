@@ -1,0 +1,144 @@
+import { useEffect, useState } from "react";
+import { useCan } from "@/components/rbac";
+import { ErrorState } from "@/components/StatePrimitives";
+import { Button } from "@/components/ui/button";
+import { translateNow, useTranslation } from "@/i18n/I18nProvider";
+import { api, ApiError, type ExternalCA, type ExternalCAHeldIssue } from "@/lib/api";
+import { apiProblemMessage } from "@/lib/apiProblem";
+
+type HeldNotice = { tone: "status" | "alert"; text: string };
+
+/**
+ * N1-L1: issuances an AD CS authority holds for a CA manager's approval. Each
+ * one is listed with the CA's request id; once a manager approves the request,
+ * Resume reads it back from the CA by that id and finishes the issuance.
+ */
+export function ExternalCAHeldIssuesPanel({ externalCAs }: { externalCAs: ExternalCA[] }) {
+  const { t, formatDateTime } = useTranslation();
+  const canRead = useCan("certs:read");
+  const canResume = useCan("certs:issue");
+  const authorities = externalCAs.filter((item) => item.type === "adcs" && item.status === "available");
+  const authorityKey = authorities.map((item) => item.id).join("\n");
+  const [held, setHeld] = useState<Record<string, ExternalCAHeldIssue[]>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<HeldNotice | null>(null);
+
+  const [reloads, setReloads] = useState(0);
+
+  useEffect(() => {
+    if (!canRead || authorityKey === "") return;
+    let cancelled = false;
+    const ids = authorityKey.split("\n");
+    void Promise.allSettled(ids.map((id) => api.externalCAHeldIssues(id))).then((results) => {
+      if (cancelled) return;
+      const next: Record<string, ExternalCAHeldIssue[]> = {};
+      const failures: string[] = [];
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") next[ids[index]] = result.value;
+        else failures.push(apiProblemMessage(result.reason, translateNow("caHierarchy.heldIssues.loadFailed")));
+      });
+      setHeld(next);
+      setError(failures[0] ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authorityKey, canRead, reloads]);
+
+  if (!canRead || authorities.length === 0) return null;
+
+  async function resume(authorityID: string, requestID: number) {
+    setBusy(`${authorityID}:${requestID}`);
+    setNotice(null);
+    try {
+      const resumed = await api.resumeExternalCAHeldIssue(authorityID, requestID);
+      setNotice(
+        resumed.status === "issued"
+          ? { tone: "status", text: t("caHierarchy.heldIssues.issuedNotice", { requestID, serial: resumed.serial ?? "" }) }
+          : { tone: "status", text: t("caHierarchy.heldIssues.deniedNotice", { requestID }) },
+      );
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setNotice({ tone: "status", text: t("caHierarchy.heldIssues.stillHeldNotice", { requestID }) });
+      } else {
+        setNotice({ tone: "alert", text: apiProblemMessage(err, t("caHierarchy.heldIssues.resumeFailed")) });
+      }
+    } finally {
+      setBusy(null);
+      setReloads((count) => count + 1);
+    }
+  }
+
+  function statusText(item: ExternalCAHeldIssue): string {
+    if (item.status === "issued") return t("caHierarchy.heldIssues.status.issued", { serial: item.serial ?? "" });
+    if (item.status === "denied") return t("caHierarchy.heldIssues.status.denied");
+    return t("caHierarchy.heldIssues.status.held");
+  }
+
+  return (
+    <section aria-labelledby="external-ca-held-heading" className="grid gap-3 border-b border-border py-4">
+      <div>
+        <h2 id="external-ca-held-heading" className="text-title font-semibold">
+          {t("caHierarchy.heldIssues.heading")}
+        </h2>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("caHierarchy.heldIssues.description")}</p>
+      </div>
+      {error && <ErrorState title={t("caHierarchy.heldIssues.errorTitle")}>{error}</ErrorState>}
+      {notice && (
+        <p role={notice.tone} className={notice.tone === "alert" ? "text-sm text-destructive" : "text-sm"}>
+          {notice.text}
+        </p>
+      )}
+      {authorities.map((authority) => {
+        const items = held[authority.id] ?? [];
+        return (
+          <section key={authority.id} aria-label={authority.name} className="ui-panel p-comfortable text-sm">
+            <h3 className="text-sm font-semibold">{authority.name}</h3>
+            {items.length === 0 ? (
+              <p className="mt-2 text-muted-foreground">{t("caHierarchy.heldIssues.none")}</p>
+            ) : (
+              <table className="ui-table mt-2">
+                <thead>
+                  <tr>
+                    <th scope="col">{t("caHierarchy.heldIssues.requestID")}</th>
+                    <th scope="col">{t("caHierarchy.heldIssues.names")}</th>
+                    <th scope="col">{t("caHierarchy.heldIssues.heldSince")}</th>
+                    <th scope="col">{t("caHierarchy.heldIssues.state")}</th>
+                    <th scope="col">
+                      <span className="sr-only">{t("caHierarchy.heldIssues.actions")}</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.ca_request_id}>
+                      <td className="font-mono">{item.ca_request_id}</td>
+                      <td>{item.dns_names.join(", ")}</td>
+                      <td>{formatDateTime(item.held_at)}</td>
+                      <td>{statusText(item)}</td>
+                      <td>
+                        {item.status === "held" && canResume ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={busy !== null}
+                            aria-label={t("caHierarchy.heldIssues.resumeLabel", { requestID: item.ca_request_id })}
+                            onClick={() => void resume(authority.id, item.ca_request_id)}
+                          >
+                            {t("caHierarchy.heldIssues.resume")}
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        );
+      })}
+    </section>
+  );
+}

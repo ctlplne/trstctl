@@ -13560,6 +13560,83 @@ export const messages = {
     defaultMessage: "signer-backed",
     description: "Small status label for discovered authorities with a signer-held key handle.",
   },
+  "caHierarchy.heldIssues.heading": {
+    defaultMessage: "Held for CA approval",
+    description: "N1-L1: heading for issuances an AD CS authority holds for a CA manager's approval.",
+  },
+  "caHierarchy.heldIssues.description": {
+    defaultMessage:
+      "An issuance through an AD CS template that needs a CA manager's approval stops waiting while the CA still holds the request. Once a manager approves it, Resume reads the request back from the CA by its request id and finishes the issuance. An approval through the issuer's relay resumes it on its own.",
+    description: "N1-L1: what a held issuance is and what Resume does.",
+  },
+  "caHierarchy.heldIssues.none": {
+    defaultMessage: "No issuance is held for approval at this authority.",
+    description: "N1-L1: empty state for one authority's held issuances.",
+  },
+  "caHierarchy.heldIssues.requestID": {
+    defaultMessage: "CA request ID",
+    description: "N1-L1: column for the CA's own request id.",
+  },
+  "caHierarchy.heldIssues.names": {
+    defaultMessage: "Names",
+    description: "N1-L1: column for the names the held issuance requested.",
+  },
+  "caHierarchy.heldIssues.heldSince": {
+    defaultMessage: "Held since",
+    description: "N1-L1: column for when the issuance stopped waiting on the CA.",
+  },
+  "caHierarchy.heldIssues.state": {
+    defaultMessage: "State",
+    description: "N1-L1: column for held, issued or denied.",
+  },
+  "caHierarchy.heldIssues.actions": {
+    defaultMessage: "Actions",
+    description: "N1-L1: screen-reader label for the actions column.",
+  },
+  "caHierarchy.heldIssues.status.held": {
+    defaultMessage: "Held for approval",
+    description: "N1-L1: the CA still holds the request.",
+  },
+  "caHierarchy.heldIssues.status.issued": {
+    defaultMessage: "Issued (serial {serial})",
+    description: "N1-L1: the CA issued the request and the issuance finished.",
+  },
+  "caHierarchy.heldIssues.status.denied": {
+    defaultMessage: "Denied by the CA",
+    description: "N1-L1: a CA manager denied the request.",
+  },
+  "caHierarchy.heldIssues.resume": {
+    defaultMessage: "Resume",
+    description: "N1-L1: reads a held request back from the CA and finishes its issuance.",
+  },
+  "caHierarchy.heldIssues.resumeLabel": {
+    defaultMessage: "Resume the issuance held as CA request {requestID}",
+    description: "N1-L1: accessible label for one held issuance's Resume button.",
+  },
+  "caHierarchy.heldIssues.issuedNotice": {
+    defaultMessage: "Request {requestID} is issued (serial {serial}); its issuance has its certificate.",
+    description: "N1-L1: Resume found the request issued and finished the issuance.",
+  },
+  "caHierarchy.heldIssues.deniedNotice": {
+    defaultMessage: "A CA manager denied request {requestID}; its issuance will not complete.",
+    description: "N1-L1: Resume found the request denied.",
+  },
+  "caHierarchy.heldIssues.stillHeldNotice": {
+    defaultMessage: "The CA still holds request {requestID} for approval. Resume it once a CA manager approves it.",
+    description: "N1-L1: Resume found the request still held; nothing changed.",
+  },
+  "caHierarchy.heldIssues.resumeFailed": {
+    defaultMessage: "Could not resume the held issuance.",
+    description: "N1-L1: fallback when Resume fails for another reason.",
+  },
+  "caHierarchy.heldIssues.loadFailed": {
+    defaultMessage: "Could not load the issuances held for approval.",
+    description: "N1-L1: fallback when the held issuances cannot be read.",
+  },
+  "caHierarchy.heldIssues.errorTitle": {
+    defaultMessage: "Held issuances unavailable",
+    description: "N1-L1: error title for the held issuances section.",
+  },
   "caHierarchy.externalIssue.heading": {
     defaultMessage: "Outbound external CA issuance",
     description: "Heading for the external CA issuance panel.",

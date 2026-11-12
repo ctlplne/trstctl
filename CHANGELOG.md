@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An AD CS issuance held for approval finishes on its own once the issuer's relay approves its request (N1-L1).
+  Recording the relay's approval queues the issuance's resume in the same transaction, and the resume reads the
+  request back by its CA request id. The CA Hierarchy page lists each AD CS authority's held issuances with their
+  request ids, names and outcome, and Resume finishes one a manager approved at the CA.
 - An issuance an AD CS template holds for CA manager approval can be resumed by the CA's request id
   (N1-L1). When an issuance gives up waiting with the request still held, trstctl records the request id;
   `GET /api/v1/external-cas/{id}/held-issues` lists held, issued and denied issuances, and `POST

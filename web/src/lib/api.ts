@@ -352,6 +352,9 @@ import type {
   EventProtectionRequest,
   EventProtectionStatus,
   ExternalCA as GenExternalCA,
+  ExternalCAHeldIssue,
+  ExternalCAHeldIssueList,
+  ExternalCAHeldIssueResume,
   ExternalCAIssuedCertificate,
   ExternalCAIssueRequest,
   ExternalCAList,
@@ -1495,6 +1498,8 @@ export type {
   EventProtectionPlan,
   EventProtectionRequest,
   EventProtectionStatus,
+  ExternalCAHeldIssue,
+  ExternalCAHeldIssueResume,
   ExternalCAIssuedCertificate,
   ExternalCAIssueRequest,
   FleetReissuanceActionRequest,
@@ -2390,6 +2395,10 @@ export interface Api {
   activateProtocolProfile(): Promise<ProtocolProfileStatus>;
   externalCAs(): Promise<ExternalCA[]>;
   issueExternalCA(id: string, input: ExternalCAIssueRequest): Promise<ExternalCAIssuedCertificate>;
+  /** N1-L1: issuances an AD CS authority holds for a CA manager's approval. */
+  externalCAHeldIssues(id: string): Promise<ExternalCAHeldIssue[]>;
+  /** N1-L1: reads a held request back by its CA request id and finishes its issuance once approved. */
+  resumeExternalCAHeldIssue(id: string, requestID: number): Promise<ExternalCAHeldIssueResume>;
   caDiscoveryInventory(): Promise<CADiscovery>;
   identities(): Promise<Identity[]>;
   identityStatusSummary(): Promise<IdentityStatusCounts>;
@@ -3347,6 +3356,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   activateProtocolProfile: () => mutate<ProtocolProfileStatus>("POST", "/api/v1/setup/protocols/activate"),
   externalCAs: () => req<ExternalCAList>("/api/v1/external-cas").then((r) => r.items ?? []),
   issueExternalCA: (id, input) => mutate<ExternalCAIssuedCertificate>("POST", `/api/v1/external-cas/${encodeURIComponent(id)}/issue`, input),
+  externalCAHeldIssues: (id) => req<ExternalCAHeldIssueList>(`/api/v1/external-cas/${encodeURIComponent(id)}/held-issues`).then((r) => r.items ?? []),
+  resumeExternalCAHeldIssue: (id, requestID) =>
+    mutate<ExternalCAHeldIssueResume>("POST", `/api/v1/external-cas/${encodeURIComponent(id)}/held-issues/${encodeURIComponent(String(requestID))}/resume`),
   caDiscoveryInventory: () => req<CADiscovery>("/api/v1/ca/discovery"),
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
   identityStatusSummary: async () => {

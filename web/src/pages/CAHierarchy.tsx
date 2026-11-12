@@ -33,6 +33,7 @@ import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { IssuerSetupDialog } from "./cahierarchy/CAIssuerSetupParts";
 import { CAHorizonBadge, CAHorizonRenewBy, CALineageTree, isOfflineRoot } from "./cahierarchy/CAHierarchyPageParts";
 import { CARolloverDraft } from "./cahierarchy/CARolloverDraft";
+import { ExternalCAHeldIssuesPanel } from "./cahierarchy/CAHierarchyHeldIssuesPart";
 import {
   CACeremonyReviewDialog,
   CancelCeremonyDialog,
@@ -873,6 +874,7 @@ export function CAHierarchy() {
           onChange={(patch) => setExternalIssueForm((current) => ({ ...current, ...patch }))}
           onIssue={() => void issueExternalCA()}
         />
+        <ExternalCAHeldIssuesPanel externalCAs={externalCARegistry} />
       </div>
 
       <div {...tabPanelProps("ca", "lifecycle")} className={tab === "lifecycle" ? undefined : "hidden"}>

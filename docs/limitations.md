@@ -8221,8 +8221,9 @@ relay's readback of the CA database row. Revocation at AD CS is A162's relay pat
 `require_approval` is on. Proven against a certutil stand-in that keeps the CA database rows; the live proof on
 a Windows CA is a Track B row (the AD CS forest). A trstctl issuance that gave up while its request was pending
 records the CA's request id, and resuming it after an approval reads the request back and finishes the issuance
-(N1-L1). It is resumed by an operator (`POST .../held-issues/{request_id}/resume`), not yet on its own when the
-relay's approval is recorded. The relay names request ids the operator reads from the CA; trstctl does not list
+(N1-L1). The issuer's relay approving the request resumes it on its own; an approval made at the CA itself is
+resumed by an operator (`POST .../held-issues/{request_id}/resume`, or Resume on the CA Hierarchy page). The
+relay names request ids the operator reads from the CA; trstctl does not list
 pending requests itself (the CA database collection returns counts, not rows).
 
 ## Azure Key Vault disable, labeled not revoked (N2) — served

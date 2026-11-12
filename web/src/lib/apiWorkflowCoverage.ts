@@ -107,6 +107,24 @@ export const apiWorkflowCoverage = [
       "The CA Hierarchy page shows authority inventory, managed status, issuer visibility, and CA discovery evidence with loading, empty, and error states.",
   },
   {
+    path: "/api/v1/external-cas/{id}/held-issues",
+    route: "/ca-hierarchy",
+    owner: "SURFACE/ca",
+    kind: "console-flow",
+    workflow: "Issuances held for CA approval",
+    rationale:
+      "The CA Hierarchy page lists each AD CS authority's issuances held for a CA manager's approval with the CA's request id, the requested names, when they stopped waiting and whether they were issued or denied (N1-L1).",
+  },
+  {
+    path: "/api/v1/external-cas/{id}/held-issues/{request_id}/resume",
+    route: "/ca-hierarchy",
+    owner: "SURFACE/ca",
+    kind: "console-flow",
+    workflow: "Resume an issuance held for CA approval",
+    rationale:
+      "The CA Hierarchy page's Resume reads a held request back by its CA request id once a manager approved it and finishes the issuance; a request the CA still holds says so and changes nothing (N1-L1).",
+  },
+  {
     path: "/api/v1/ca/authorities/intermediates",
     route: "/ca-hierarchy",
     owner: "SURFACE/ca",

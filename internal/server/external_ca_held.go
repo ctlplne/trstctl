@@ -4,12 +4,14 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -105,4 +107,29 @@ func (c factoryExternalCA) RetrieveHeld(ctx context.Context, requestID int) (ca.
 // RetrieveHeld forwards to the wrapped authority (N1-L1).
 func (c diagnosticExternalCA) RetrieveHeld(ctx context.Context, requestID int) (ca.Certificate, error) {
 	return ca.RetrieveHeldThrough(ctx, c.inner, requestID)
+}
+
+// DeliverExternalCAResumeHeld resumes a held issuance once the issuer's relay
+// approved its request (N1-L1). The CA's answer can lag the relay's readback,
+// so a request still held is retried; an issuance resolved meanwhile answers
+// as resolved, and one that no longer exists, or an authority that cannot read
+// a request back, ends the job without an effect.
+func (r *externalCARegistry) DeliverExternalCAResumeHeld(ctx context.Context, m orchestrator.Message) error {
+	var payload orchestrator.ExternalCAResumeHeld
+	if err := json.Unmarshal(m.Payload, &payload); err != nil {
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: decode held issuance resume: %w", err))
+	}
+	entry, err := r.entryFor(m.TenantID, payload.AuthorityID)
+	if err != nil {
+		return orchestrator.DefiniteNoEffect(err)
+	}
+	_, err = entry.svc.ResumeHeld(ctx, m.TenantID, payload.CARequestID)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, store.ErrExternalCAHeldIssueNotFound), errors.Is(err, ca.ErrHeldRetrievalUnsupported):
+		return orchestrator.DefiniteNoEffect(err)
+	default:
+		return err
+	}
 }

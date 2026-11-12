@@ -623,7 +623,12 @@ issuance's delivery finishes without contacting the CA again. While the CA still
 the request, resuming answers 409 and records nothing; a denied request resumes as
 `denied`. Reading a request back cannot issue a second certificate, so resuming again is
 safe and gives the same answer. CLI: `external-cas held-issues` and `external-cas
-held-issues resume`. Status: served.
+held-issues resume`. When the issuer's relay approves a request a trstctl issuance is
+held on (N1), recording that decision queues the resume in the same transaction, so the
+issuance finishes on its own. A manager's approval made at the CA itself is resumed by an
+operator. The CA Hierarchy page lists each AD CS authority's held issuances (request id,
+names, when they stopped waiting, and whether they were issued or denied) with Resume.
+Status: served.
 
 The **registration-authority (RA) model** is a role split that prevents the classic
 PKI abuse of one person approving and fulfilling their own request. The built-in
