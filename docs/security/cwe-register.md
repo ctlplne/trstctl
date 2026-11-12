@@ -119,7 +119,7 @@ not this file.
 | `internal/agent/relay/legacy_rollback_test.go:36` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/mdm_jamf_client_test.go:20` | credential reference, no credential value present (CWE-798) |
 | `internal/agent/relay/mdm_jamf_client_test.go:21` | a stand-in fixture value, not a credential (CWE-798) |
-| `internal/agent/relay/mdmcheckin_test.go:24` | credential reference (secret store pointer), no credential value present (CWE-798) |
+| `internal/agent/relay/mdmcheckin_test.go:26` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:23` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:159` | credential reference, no credential value present (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:160` | a stand-in fixture value, not a credential (CWE-798) |

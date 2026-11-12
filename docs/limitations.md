@@ -8245,8 +8245,9 @@ trstctl can ask an MDM to have one device check in now — Intune's `syncDevice`
 to one computer — so it fetches a new or renewed SCEP profile without waiting for its schedule. The device must be
 one trstctl has read from that MDM; the check-in waits on another reviewer's approval of that exact device, runs
 on the MDM schedule's relay with the schedule's token redeemed for the one call, and is recorded from the MDM's
-answer (`checked_in` with its status, or `failed` with the relay's reason). It is the only write to an MDM, it sends
-no body, and a failed check-in is not retried on its own. Proven against Intune Graph and Jamf Pro stand-ins over
+answer (`checked_in` with its status, or `failed` with the relay's reason). It is the only write to an MDM, and it
+sends no body. A check-in the MDM throttles (429) or fails on its side (5xx) is asked again in the same job under the
+same approval, within four posts and a minute of waits (N9-L3); any other failure is not retried on its own. Proven against Intune Graph and Jamf Pro stand-ins over
 TLS with the production relay; a live Intune tenant and Jamf Pro server are a Track B row. What comes next: Jamf
 mobile devices (the device read today covers computers only), and checking in every device of a renewal wave
 under one approval.

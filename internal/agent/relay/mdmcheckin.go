@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/mdm"
@@ -115,6 +117,56 @@ func MDMCheckInEndpoint(intent MDMCheckInIntent) string {
 	return base + "/JSSResource/computercommands/command/BlankPush/id/" + url.PathEscape(intent.DeviceID)
 }
 
+// N9-L3: an MDM that answers 429 or 5xx is asked again in the same job, under
+// the same approval and the same redeemed token: at most mdmCheckInAttempts
+// posts, each wait the MDM's Retry-After (or 2, 4, 8 seconds), at most
+// mdmCheckInMaxWait, and the waits together at most mdmCheckInBudget, inside
+// the job's lease.
+const (
+	mdmCheckInAttempts = 4
+	mdmCheckInMaxWait  = 30 * time.Second
+	mdmCheckInBudget   = 60 * time.Second
+)
+
+// MDMCheckInWait waits between check-in attempts; a test replaces it.
+var MDMCheckInWait = func(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+// mdmRetryable is an answer worth asking again: the MDM throttled the call or
+// failed on its side.
+func mdmRetryable(status int) bool {
+	return status == http.StatusTooManyRequests || status >= 500 && status <= 599
+}
+
+// mdmRetryWait is how long to wait before the next attempt: the MDM's
+// Retry-After (seconds or an HTTP date), or 2^attempt seconds, at most
+// mdmCheckInMaxWait.
+func mdmRetryWait(header string, attempt int, now time.Time) time.Duration {
+	wait := time.Duration(1<<attempt) * time.Second
+	if v := strings.TrimSpace(header); v != "" {
+		if seconds, err := strconv.Atoi(v); err == nil && seconds >= 0 {
+			wait = time.Duration(seconds) * time.Second
+		} else if at, err := http.ParseTime(v); err == nil {
+			wait = at.Sub(now)
+		}
+	}
+	if wait < 0 {
+		wait = 0
+	}
+	if wait > mdmCheckInMaxWait {
+		wait = mdmCheckInMaxWait
+	}
+	return wait
+}
+
 func runMDMCheckIn(ctx context.Context, ch Channel, client *http.Client, job Job) bool {
 	var intent MDMCheckInIntent
 	if err := decodeJobPayload(job.Payload, &intent); err != nil || ValidateMDMCheckInIntent(intent) != nil {
@@ -160,25 +212,43 @@ func runMDMCheckIn(ctx context.Context, ch Channel, client *http.Client, job Job
 		defer secret.Wipe(access)
 		token = access
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, MDMCheckInEndpoint(intent), nil)
-	if err != nil {
-		report(ctx, ch, job, OutcomeFailed, "the check-in request could not be built")
-		return false
+	var status int
+	var waited time.Duration
+	for attempt := 1; ; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, MDMCheckInEndpoint(intent), nil)
+		if err != nil {
+			report(ctx, ch, job, OutcomeFailed, "the check-in request could not be built")
+			return false
+		}
+		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
+		req.Header.Set("Accept", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			report(ctx, ch, job, OutcomeFailed, "the MDM could not be reached from this relay's vantage")
+			return false
+		}
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+		_ = resp.Body.Close()
+		status = resp.StatusCode
+		if status >= 200 && status <= 299 {
+			break
+		}
+		wait := mdmRetryWait(resp.Header.Get("Retry-After"), attempt, time.Now())
+		if !mdmRetryable(status) || attempt >= mdmCheckInAttempts || waited+wait > mdmCheckInBudget {
+			refusal := fmt.Sprintf("the MDM refused the check-in with status %d", status)
+			if attempt > 1 {
+				refusal += fmt.Sprintf(" after %d attempts", attempt)
+			}
+			report(ctx, ch, job, OutcomeFailed, refusal)
+			return false
+		}
+		if err := MDMCheckInWait(ctx, wait); err != nil {
+			report(ctx, ch, job, OutcomeFailed, fmt.Sprintf("the MDM refused the check-in with status %d and the job ended before it could ask again", status))
+			return false
+		}
+		waited += wait
 	}
-	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
-	req.Header.Set("Accept", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		report(ctx, ch, job, OutcomeFailed, "the MDM could not be reached from this relay's vantage")
-		return false
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
-	_ = resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		report(ctx, ch, job, OutcomeFailed, fmt.Sprintf("the MDM refused the check-in with status %d", resp.StatusCode))
-		return false
-	}
-	detail, err := json.Marshal(MDMCheckInReport{MDM: intent.MDM, DeviceID: intent.DeviceID, ProviderStatus: resp.StatusCode})
+	detail, err := json.Marshal(MDMCheckInReport{MDM: intent.MDM, DeviceID: intent.DeviceID, ProviderStatus: status})
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "the check-in report could not be encoded")
 		return false

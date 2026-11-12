@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An MDM device check-in the MDM throttles or fails on its side is asked again under the same approval (N9-L3).
+  On a 429 or 5xx the relay posts again in the same job with the same token, at most four times, waiting for the
+  MDM's `Retry-After` (at most 30 seconds) or 2, 4 and 8 seconds, and no more than a minute in all. Any other
+  refusal still fails the check-in at once.
 - The requests an AD CS CA holds for a manager's approval are listed from the relay's read of its database
   (N1-L2). The relay's `adcs.ca_database` read now returns, with the counts, the newest 500 pending requests
   with their request id, template, requested name and requester. Issued, revoked and failed rows still leave

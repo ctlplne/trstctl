@@ -411,8 +411,12 @@ that approval (`POST /api/v1/mdm/{mdm}/devices/{id}/check-ins`,
 approval. Executing it again returns the same check-in. `GET
 /api/v1/mdm/{mdm}/check-ins` (`trstctl-cli mdm check-ins`) shows each one as
 `queued`, `checked_in` with the MDM's status code, or `failed` with the relay's
-reason (a device deleted at the MDM answers 404). A failed check-in is not retried
-on its own; ask again. A check-in only tells the MDM to contact the device: whether
+reason (a device deleted at the MDM answers 404). An MDM that throttles the call (429)
+or fails on its side (5xx) is asked again in the same job, under the same approval and
+token (N9-L3): at most four posts, each wait the MDM's `Retry-After` (at most 30
+seconds) or 2, 4 and 8 seconds, and no more than a minute of waiting in all. Any other
+refusal, or one that outlasts those bounds, fails the check-in; ask again. A check-in
+only tells the MDM to contact the device: whether
 the device is online and installs the profile still shows in its trace.
 
 ## Use it

@@ -30,6 +30,8 @@ func TestServedMDMDeviceCheckInBehindApprovalN9(t *testing.T) {
 	const intuneDevice = "0f7c2a4e-3b1d-4e5f-9a8b-7c6d5e4f3a2b"
 	var mu sync.Mutex
 	var calls []string
+	// N9-L3: the MDM throttles the first push to computer 417.
+	pushes417 := 0
 	// One TLS stand-in serves both MDMs: Graph under /graph, Jamf Pro under
 	// /jamf. Jamf computer 418 was deleted at the MDM after trstctl read it.
 	stand := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +43,15 @@ func TestServedMDMDeviceCheckInBehindApprovalN9(t *testing.T) {
 		case r.Method == http.MethodPost && r.URL.Path == "/graph/v1.0/deviceManagement/managedDevices/"+intuneDevice+"/syncDevice":
 			w.WriteHeader(http.StatusNoContent)
 		case r.Method == http.MethodPost && r.URL.Path == "/jamf/JSSResource/computercommands/command/BlankPush/id/417":
+			mu.Lock()
+			pushes417++
+			throttled := pushes417 == 1
+			mu.Unlock()
+			if throttled {
+				w.Header().Set("Retry-After", "0")
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
 			w.WriteHeader(http.StatusCreated)
 		default:
 			http.Error(w, "not found", http.StatusNotFound)
@@ -211,13 +222,17 @@ func TestServedMDMDeviceCheckInBehindApprovalN9(t *testing.T) {
 		t.Fatalf("Intune check-in = %+v", c)
 	}
 
-	// Jamf: a blank push to computer 417.
+	// Jamf: a blank push to computer 417. The MDM throttles the first push;
+	// the relay asks again in the same job, under the same approval (N9-L3).
 	a417 := ask(mdm.MDMJamf, "417")
 	approve(a417, "n9-review-417")
 	execute(mdm.MDMJamf, "417", a417, "n9-exec-417", http.StatusCreated)
 	runRelay(1)
 	if c := checkIns(mdm.MDMJamf)["417"]; c.Status != "checked_in" || c.ProviderStatus != http.StatusCreated {
 		t.Fatalf("Jamf check-in = %+v", c)
+	}
+	if n := mdmCheckInJobs(t, h); n != 2 {
+		t.Fatalf("%d check-in jobs for two approvals, want 2: the throttled push was retried in its own job", n)
 	}
 
 	// Jamf computer 418 is gone at the MDM: the check-in fails with its answer.
@@ -229,10 +244,12 @@ func TestServedMDMDeviceCheckInBehindApprovalN9(t *testing.T) {
 		t.Fatalf("check-in of a deleted device = %+v", c)
 	}
 
-	// Exactly the three approved calls reached the MDMs: one bodiless POST each,
-	// with the schedule's redeemed token.
+	// Only the three approved check-ins reached the MDMs: one bodiless POST
+	// each, and the throttled one asked again, with the schedule's redeemed
+	// token.
 	want := []string{
 		"POST /graph/v1.0/deviceManagement/managedDevices/" + intuneDevice + "/syncDevice Bearer graph-test-token 0",
+		"POST /jamf/JSSResource/computercommands/command/BlankPush/id/417 Bearer jamf-test-token 0",
 		"POST /jamf/JSSResource/computercommands/command/BlankPush/id/417 Bearer jamf-test-token 0",
 		"POST /jamf/JSSResource/computercommands/command/BlankPush/id/418 Bearer jamf-test-token 0",
 	}
