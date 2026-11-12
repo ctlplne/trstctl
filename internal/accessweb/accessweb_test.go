@@ -58,6 +58,8 @@ func TestRouteValidateA273(t *testing.T) {
 	for _, r := range []Route{
 		{URL: "https://grafana.internal.example"},
 		{URL: "https://10.0.0.5:8443/", CAPEM: ca, ServerName: "console.internal.example"},
+		{URL: "https://apps.internal.example/console/"},
+		{URL: "https://apps.internal.example/tools/console"},
 	} {
 		if err := r.Validate(false); err != nil {
 			t.Fatalf("%+v: %v", r, err)
@@ -70,7 +72,10 @@ func TestRouteValidateA273(t *testing.T) {
 		"plain http":         {URL: "http://console.internal.example"},
 		"loopback, no opt":   {URL: "https://127.0.0.1:8443"},
 		"user info":          {URL: (&url.URL{Scheme: "https", User: url.UserPassword("admin", "x"), Host: "console.internal.example"}).String()},
-		"path":               {URL: "https://console.internal.example/admin"},
+		"dot segment":        {URL: "https://console.internal.example/admin/../other"},
+		"escaped path":       {URL: "https://console.internal.example/ad%2Fmin"},
+		"empty segment":      {URL: "https://console.internal.example//admin"},
+		"two slashes after":  {URL: "https://console.internal.example/admin//"},
 		"query":              {URL: "https://console.internal.example/?a=b"},
 		"fragment":           {URL: "https://console.internal.example/#x"},
 		"no host":            {URL: "https:///"},
@@ -84,5 +89,35 @@ func TestRouteValidateA273(t *testing.T) {
 	}
 	if (Route{URL: "https://console.internal.example/"}).Origin() != "https://console.internal.example" {
 		t.Fatal("origin")
+	}
+}
+
+// TestRoutePathA273O3: a route under a path keeps its origin apart from its
+// path; a request path is under the console's path only as a whole segment,
+// never through a dot segment or a backslash; a form sign-in must post under
+// it, and a header or basic sign-in posts nowhere.
+func TestRoutePathA273O3(t *testing.T) {
+	at, under := Route{URL: "https://console.internal.example"}, Route{URL: "https://apps.internal.example/tools/console"}
+	if at.Prefix() != "/" || under.Prefix() != "/tools/console/" || under.Origin() != "https://apps.internal.example" ||
+		(Route{URL: "https://apps.internal.example/tools/console/"}).Prefix() != "/tools/console/" {
+		t.Fatalf("prefixes: %q %q, origin %q", at.Prefix(), under.Prefix(), under.Origin())
+	}
+	for p, want := range map[string]bool{
+		"/tools/console/": true, "/tools/console/settings": true, "/tools/console/a/b?x": true,
+		"/": false, "/tools/console": false, "/tools/consoles/x": false, "/other-app": false,
+		"/tools/console/../other-app": false, "/tools/console/./x": false, `/tools/console/..\other-app`: false,
+	} {
+		if under.Within(p) != want {
+			t.Fatalf("%s within %s = %v", p, under.Prefix(), !want)
+		}
+	}
+	if !at.Within("/anything/../at-all") {
+		t.Fatal("a console at its origin takes every path")
+	}
+	form := SignIn{Mode: SignInForm, LoginPath: "/tools/console/login", UsernameField: "u", PasswordField: "p"}
+	outside := form
+	outside.LoginPath = "/login"
+	if !under.SignsInWithin(form) || under.SignsInWithin(outside) || !under.SignsInWithin(SignIn{Mode: SignInBasic}) || !at.SignsInWithin(outside) {
+		t.Fatal("sign-in pages under the console's path")
 	}
 }

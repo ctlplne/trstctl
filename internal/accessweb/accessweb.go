@@ -118,9 +118,10 @@ func (s SignIn) AllowsBrowserCookie(name string) bool {
 	return false
 }
 
-// Route is where a console answers: an origin with no path, query, fragment
-// or user information, over https — plain http only on a loopback address a
-// lab opted into — with the CA and server name its certificate is checked
+// Route is where a console answers: an origin, or the path under one that the
+// console lives under (A273-O3), with no query, fragment or user
+// information, over https — plain http only on a loopback address a lab
+// opted into — with the CA and server name its certificate is checked
 // against (no CA: the system roots).
 type Route struct {
 	URL        string `json:"url"`
@@ -137,8 +138,11 @@ func (r Route) Validate(allowLoopback bool) error {
 		return errors.New("a console URL is a single origin under 2048 characters")
 	}
 	u, err := url.Parse(r.URL)
-	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || (u.Path != "" && u.Path != "/") || u.Opaque != "" {
-		return errors.New("a console URL is an origin (https://host[:port]) without user information, path, query or fragment")
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" {
+		return errors.New("a console URL is an origin (https://host[:port]) or a path under one, without user information, query or fragment")
+	}
+	if trimmed := strings.TrimSuffix(u.Path, "/"); trimmed != "" && (u.RawPath != "" || strings.HasSuffix(trimmed, "/") || validPath(trimmed) != nil) {
+		return errors.New("a console's path is plain segments under its origin, such as /console/")
 	}
 	host := strings.ToLower(u.Hostname())
 	ip := net.ParseIP(host)
@@ -160,8 +164,51 @@ func (r Route) Validate(allowLoopback bool) error {
 	return nil
 }
 
-// Origin is the route's origin without a trailing slash.
-func (r Route) Origin() string { return strings.TrimSuffix(r.URL, "/") }
+// Origin is the route's origin: its scheme and host, without a path.
+func (r Route) Origin() string {
+	u, err := url.Parse(r.URL)
+	if err != nil || u.Host == "" {
+		return strings.TrimSuffix(r.URL, "/")
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+// Prefix is the path the console lives under, ending in a slash: "/" for a
+// console at its origin.
+func (r Route) Prefix() string {
+	u, err := url.Parse(r.URL)
+	if err != nil || strings.TrimSuffix(u.Path, "/") == "" {
+		return "/"
+	}
+	return strings.TrimSuffix(u.Path, "/") + "/"
+}
+
+// Within reports whether a request path stays under the console's path. A
+// console at its origin takes every path. Under a path, it takes that path
+// and what lies below it, never with a dot segment or a backslash that a
+// server could resolve to climb out of it (A273-O3).
+func (r Route) Within(p string) bool {
+	prefix := r.Prefix()
+	if prefix == "/" {
+		return true
+	}
+	if strings.ContainsRune(p, '\\') {
+		return false
+	}
+	for _, segment := range strings.Split(p, "/") {
+		if segment == "." || segment == ".." {
+			return false
+		}
+	}
+	return strings.HasPrefix(p, prefix)
+}
+
+// SignsInWithin reports whether a sign-in stays under the console's path: a
+// form sign-in's page must lie under it, since the gateway posts the
+// account's password there.
+func (r Route) SignsInWithin(s SignIn) bool {
+	return s.Mode != SignInForm || r.Within(s.LoginPath)
+}
 
 func validPath(p string) error {
 	if p == "" || len(p) > 512 || p[0] != '/' || strings.HasPrefix(p, "//") || strings.ContainsAny(p, "?#\\\r\n\x00 ") {

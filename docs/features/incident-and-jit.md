@@ -1744,9 +1744,10 @@ shell answers to every rule, as on an SSH host.
 
 Vault the console's account as an application secret (`{"username": ..., "password": ...}`,
 or `{"token": ...}` for a header sign-in) and register it as a `webconsole` access target:
-the account secret (its only role), the console's route — its origin over https, with the
-CA and server name its certificate is checked against — and the gateway that serves it. No
-provider rotates it.
+the account secret (its only role), the console's route — its origin over https, or the
+path it lives under on that origin (such as `https://apps.internal.example/grafana/`), with
+the CA and server name its certificate is checked against — and the gateway that serves it.
+No provider rotates it.
 
 ```json
 {"id": "grafana-admin", "target_type": "webconsole",
@@ -1778,6 +1779,12 @@ shows the password gets asterisks; the browser cannot post to the sign-in page; 
 sign-in is not tried again in the session. Each request and response is recorded with the
 credential and password-like fields masked, and terminating the session ends the browser's
 access. The account cannot be checked out: its credential is never shown.
+
+A console under a path is reached only under it. The tunnel's root leads there. Any other
+path on its host is refused at the gateway and recorded, including one that would climb out
+through a dot segment, an encoded slash or a backslash. The template's sign-in page must
+lie under the path, because the gateway posts the account's password there. A session
+requested through a template that signs in elsewhere is refused.
 
 Many consoles write their own origin into what they send. The gateway rewrites it to the
 tunnel's origin, the one the browser is on, so a link followed as written stays on the

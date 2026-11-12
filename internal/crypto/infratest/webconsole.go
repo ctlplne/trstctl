@@ -24,10 +24,13 @@ import (
 // a JavaScript-readable XSRF-TOKEN cookie, and a careless account page that
 // echoes the account's password. Its API also takes HTTP basic
 // authentication or an API key header. A links page and a JSON answer name
-// the console's own origin, as many consoles' pages do (A273-O2).
+// the console's own origin, as many consoles' pages do (A273-O2). Started
+// under a path (A273-O3), it answers only there, beside another application
+// on the same host.
 type WebConsole struct {
 	mu        sync.Mutex
 	srv       *httptest.Server
+	prefix    string // the path the console lives under, without a trailing slash
 	passwords map[string][]byte
 	tokens    map[string]string // API key -> user
 	sessions  map[string]*webConsoleSession
@@ -52,7 +55,13 @@ const (
 
 // StartWebConsole brings up the console with one administrator.
 func StartWebConsole(admin, password string) *WebConsole {
-	c := &WebConsole{passwords: map[string][]byte{admin: []byte(password)}, tokens: map[string]string{},
+	return StartWebConsoleUnder(admin, password, "")
+}
+
+// StartWebConsoleUnder brings up the console under a path such as
+// "/console" (A273-O3); the host's /other-app is another application.
+func StartWebConsoleUnder(admin, password, prefix string) *WebConsole {
+	c := &WebConsole{prefix: strings.TrimSuffix(prefix, "/"), passwords: map[string][]byte{admin: []byte(password)}, tokens: map[string]string{},
 		sessions: map[string]*webConsoleSession{}, pre: map[string]string{}, failed: map[string]int{}, banner: "welcome"}
 	c.srv = httptest.NewTLSServer(http.HandlerFunc(c.serve))
 	return c
@@ -60,6 +69,12 @@ func StartWebConsole(admin, password string) *WebConsole {
 
 // URL is the console's origin.
 func (c *WebConsole) URL() string { return c.srv.URL }
+
+// Route is the URL a target names: the origin and the console's path.
+func (c *WebConsole) Route() string { return c.srv.URL + c.at("/") }
+
+// at is a console path under the console's own path.
+func (c *WebConsole) at(p string) string { return c.prefix + p }
 
 // CAPEM is the console's self-signed certificate.
 func (c *WebConsole) CAPEM() []byte {
@@ -147,8 +162,22 @@ func (c *WebConsole) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	path := r.URL.Path
+	if c.prefix != "" {
+		if path == "/other-app" || strings.HasPrefix(path, "/other-app/") {
+			// Another application on the console's host, outside its path.
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_, _ = fmt.Fprint(w, "another application on this host")
+			return
+		}
+		if !strings.HasPrefix(path, c.prefix+"/") {
+			http.NotFound(w, r)
+			return
+		}
+		path = strings.TrimPrefix(path, c.prefix)
+	}
 	session := c.sessionFor(r)
-	switch r.URL.Path {
+	switch path {
 	case "/login":
 		c.loginPage(w, r, "")
 	case "/session":
@@ -157,8 +186,8 @@ func (c *WebConsole) serve(w http.ResponseWriter, r *http.Request) {
 		if cookie, err := r.Cookie(WebConsoleSessionCookie); err == nil {
 			delete(c.sessions, cookie.Value)
 		}
-		http.SetCookie(w, &http.Cookie{Name: WebConsoleSessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
-		http.Redirect(w, r, c.srv.URL+"/login", http.StatusFound)
+		http.SetCookie(w, &http.Cookie{Name: WebConsoleSessionCookie, Value: "", Path: c.at("/"), MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
+		http.Redirect(w, r, c.srv.URL+c.at("/login"), http.StatusFound)
 	case "/api/whoami":
 		user := ""
 		if session != nil {
@@ -181,10 +210,10 @@ func (c *WebConsole) serve(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"user": user})
 	default:
 		if session == nil {
-			http.Redirect(w, r, c.srv.URL+"/login", http.StatusFound)
+			http.Redirect(w, r, c.srv.URL+c.at("/login"), http.StatusFound)
 			return
 		}
-		c.signedIn(w, r, session)
+		c.signedIn(w, r, path, session)
 	}
 }
 
@@ -208,18 +237,18 @@ func (c *WebConsole) loginPage(w http.ResponseWriter, r *http.Request, message s
 	} else {
 		pre = newWebToken()
 		c.pre[pre] = newWebToken()
-		http.SetCookie(w, &http.Cookie{Name: WebConsolePreCookie, Value: pre, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
+		http.SetCookie(w, &http.Cookie{Name: WebConsolePreCookie, Value: pre, Path: c.at("/"), HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = fmt.Fprintf(w, `<!doctype html><html><head><title>Lab console sign-in</title></head><body>
 <p class="message">%s</p>
-<form method="post" action="/session" id="sign-in">
+<form method="post" action="%s" id="sign-in">
 <input type="hidden" name="csrf" value="%s">
 <label>User <input type="text" name="username"></label>
 <label>Password <input type="password" name="password"></label>
 <input type="checkbox" name="remember" value="1">
 <button type="submit" name="action" value="sign-in">Sign in</button>
-</form></body></html>`, html.EscapeString(message), c.pre[pre])
+</form></body></html>`, html.EscapeString(message), c.at("/session"), c.pre[pre])
 }
 
 func (c *WebConsole) signIn(w http.ResponseWriter, r *http.Request) {
@@ -243,18 +272,19 @@ func (c *WebConsole) signIn(w http.ResponseWriter, r *http.Request) {
 	c.signIns++
 	id := newWebToken()
 	c.sessions[id] = &webConsoleSession{user: user, csrf: newWebToken()}
-	http.SetCookie(w, &http.Cookie{Name: WebConsolePreCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
-	http.SetCookie(w, &http.Cookie{Name: WebConsoleSessionCookie, Value: id, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.SetCookie(w, &http.Cookie{Name: WebConsolePreCookie, Value: "", Path: c.at("/"), MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, &http.Cookie{Name: WebConsoleSessionCookie, Value: id, Path: c.at("/"), HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
+	http.Redirect(w, r, c.at("/"), http.StatusSeeOther)
 }
 
-func (c *WebConsole) signedIn(w http.ResponseWriter, r *http.Request, s *webConsoleSession) {
+func (c *WebConsole) signedIn(w http.ResponseWriter, r *http.Request, path string, s *webConsoleSession) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	switch r.URL.Path {
+	switch path {
 	case "/":
-		http.SetCookie(w, &http.Cookie{Name: WebConsoleXSRFCookie, Value: s.csrf, Path: "/", Secure: true, SameSite: http.SameSiteLaxMode}) // #nosec G124 -- a double-submit CSRF token the page's scripts must read (CWE-1004)
+		http.SetCookie(w, &http.Cookie{Name: WebConsoleXSRFCookie, Value: s.csrf, Path: c.at("/"), Secure: true, SameSite: http.SameSiteLaxMode}) // #nosec G124 -- a double-submit CSRF token the page's scripts must read (CWE-1004)
 		_, _ = fmt.Fprintf(w, `<!doctype html><html><body><h1>Lab console</h1><p>Signed in as %s</p><p class="banner">%s</p>
-<a href="/settings">Settings</a> <a href="/account">Account</a> <a href="/logout">Sign out</a></body></html>`, html.EscapeString(s.user), html.EscapeString(c.banner))
+<a href="%[3]s">Settings</a> <a href="%[4]s">Account</a> <a href="%[5]s">Sign out</a></body></html>`, html.EscapeString(s.user), html.EscapeString(c.banner),
+			c.at("/settings"), c.at("/account"), c.at("/logout"))
 	case "/settings":
 		if r.Method == http.MethodPost {
 			if r.ParseForm() != nil || subtle.ConstantTimeCompare([]byte(s.csrf), []byte(r.PostForm.Get("csrf"))) != 1 {
@@ -265,30 +295,30 @@ func (c *WebConsole) signedIn(w http.ResponseWriter, r *http.Request, s *webCons
 			if r.PostForm.Get("new_password") != "" {
 				c.newPass++
 			}
-			http.Redirect(w, r, c.srv.URL+"/settings?saved=1", http.StatusSeeOther)
+			http.Redirect(w, r, c.srv.URL+c.at("/settings?saved=1"), http.StatusSeeOther)
 			return
 		}
 		_, _ = fmt.Fprintf(w, `<!doctype html><html><body><h1>Settings</h1>
-<form method="post" action="/settings"><input type="hidden" name="csrf" value="%s">
+<form method="post" action="%s"><input type="hidden" name="csrf" value="%s">
 <label>Banner <input type="text" name="banner" value="%s"></label>
 <label>New service password <input type="password" name="new_password"></label>
-<button type="submit">Save</button></form></body></html>`, s.csrf, html.EscapeString(c.banner))
+<button type="submit">Save</button></form></body></html>`, c.at("/settings"), s.csrf, html.EscapeString(c.banner))
 	case "/links":
 		// Absolute links to its own origin: a <base>, a scheme-relative
 		// script, an anchor, a WebSocket URL, a Refresh and a Link header,
 		// a Content-Security-Policy naming it, and a look-alike origin
 		// that is not the console's.
 		authority := strings.TrimPrefix(c.srv.URL, "https://")
-		w.Header().Set("Refresh", "600; url="+c.srv.URL+"/settings")
-		w.Header().Set("Link", "<"+c.srv.URL+"/app.css>; rel=preload; as=style")
+		w.Header().Set("Refresh", "600; url="+c.srv.URL+c.at("/settings"))
+		w.Header().Set("Link", "<"+c.srv.URL+c.at("/app.css")+">; rel=preload; as=style")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; connect-src 'self' wss://"+authority+"; img-src "+authority+" data:; upgrade-insecure-requests")
-		_, _ = fmt.Fprintf(w, `<!doctype html><html><head><base href="%[1]s/"><script src="//%[2]s/app.js"></script></head><body>
-<a href="%[1]s/settings" id="absolute">Settings</a> <a href="%[1]s.example/elsewhere" id="look-alike">Elsewhere</a>
-<script>var events = "wss://%[2]s/events";</script></body></html>`, c.srv.URL, authority)
+		_, _ = fmt.Fprintf(w, `<!doctype html><html><head><base href="%[1]s%[3]s/"><script src="//%[2]s%[3]s/app.js"></script></head><body>
+<a href="%[1]s%[3]s/settings" id="absolute">Settings</a> <a href="%[1]s.example/elsewhere" id="look-alike">Elsewhere</a>
+<script>var events = "wss://%[2]s%[3]s/events";</script></body></html>`, c.srv.URL, authority, c.prefix)
 	case "/api/links":
 		// A JSON answer whose encoder escapes slashes.
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"self":"%s"}`, strings.ReplaceAll(c.srv.URL+"/api/whoami", "/", `\/`))
+		_, _ = fmt.Fprintf(w, `{"self":"%s"}`, strings.ReplaceAll(c.srv.URL+c.at("/api/whoami"), "/", `\/`))
 	case "/account":
 		// A careless page: it shows the account's own password.
 		_, _ = fmt.Fprintf(w, `<!doctype html><html><body><h1>Account</h1><input type="password" name="current" value="%s"></body></html>`,

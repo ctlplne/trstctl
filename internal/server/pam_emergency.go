@@ -212,6 +212,11 @@ func (s *pamService) withTemplate(ctx context.Context, tenantID string, req api.
 		}
 		signIn := *t.WebSignIn
 		signIn.BrowserCookies = append([]string(nil), t.WebSignIn.BrowserCookies...)
+		// A273-O3: the gateway posts the account's password only to a
+		// sign-in page under the console's path.
+		if target, err := s.databaseTarget(ctx, tenantID, req.TargetType, req.TargetID); err == nil && target.cfg.Web != nil && !target.cfg.Web.SignsInWithin(signIn) {
+			return req, 0, nil, fmt.Errorf("%w: the template's sign-in page %s is outside the console's path %s", api.ErrPAMInvalid, signIn.LoginPath, target.cfg.Web.Prefix())
+		}
 		req.ResolvedWebSignIn = &signIn
 	}
 	if t == nil {

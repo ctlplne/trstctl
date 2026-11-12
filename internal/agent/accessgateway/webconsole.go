@@ -315,13 +315,13 @@ func (s *webConsoleState) maskCookies(text string) string {
 // uri, and is where the browser goes next: back to uri, unless the request
 // itself signed out (the console dropped the session's cookie, or uri was
 // bounced moments ago), when it goes to the console's home page.
-func (s *webConsoleState) signedOut(uri string, dropped bool) string {
+func (s *webConsoleState) signedOut(uri, home string, dropped bool) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.signedIn = false
 	back := uri
 	if dropped || (uri == s.bounced && time.Since(s.bouncedAt) < 30*time.Second) {
-		back = "/"
+		back = home
 	}
 	s.bounced, s.bouncedAt = uri, time.Now()
 	return back
@@ -339,9 +339,12 @@ type webConsoleClient struct {
 	// sent on it one at a time (redirects and cookies are the gateway's).
 	transport http.RoundTripper
 	target    *url.URL
-	in        accessweb.SignIn
-	account   webAccount
-	rec       *connRecorder
+	// home is the console's path ("/" at its origin), where the browser
+	// lands after a sign-in or a sign-out.
+	home    string
+	in      accessweb.SignIn
+	account webAccount
+	rec     *connRecorder
 }
 
 func (c *webConsoleClient) event(name, kind, text string) {
@@ -755,13 +758,20 @@ func serveWebConsole(ctx context.Context, client net.Conn, raw []byte, intent Se
 	if err != nil {
 		return errors.New("accessgateway: the console session's route is not a URL")
 	}
+	// A273-O3: a console under a path is reached only under that path, and
+	// the gateway posts the account's password only to a sign-in page there.
+	reviewed := accessweb.Route{URL: intent.UpstreamURL}
+	if !reviewed.SignsInWithin(*in) {
+		return errors.New("accessgateway: the console's sign-in page is outside its reviewed path")
+	}
+	home := reviewed.Prefix()
 	target, transport, err := httpUpstream{URL: intent.UpstreamURL, CAPEM: intent.UpstreamCAPEM, ServerName: intent.UpstreamServerName}.transport(webDial(dial, route))
 	if err != nil {
 		return err
 	}
 	defer transport.CloseIdleConnections()
 	target.Path, target.RawPath = "", ""
-	c := &webConsoleClient{transport: transport, target: target, in: *in, account: account, rec: rec}
+	c := &webConsoleClient{transport: transport, target: target, home: home, in: *in, account: account, rec: rec}
 	var authorization string
 	switch in.Mode {
 	case accessweb.SignInBasic:
@@ -790,6 +800,17 @@ func serveWebConsole(ctx context.Context, client net.Conn, raw []byte, intent Se
 		ErrorLog: log.New(io.Discard, "", 0),
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !reviewed.Within(r.URL.Path) {
+			// The tunnel's root leads to the console's path; any other path
+			// on the console's host is not the reviewed console.
+			if r.URL.Path == "/" || r.URL.Path+"/" == home {
+				http.Redirect(w, r, home, http.StatusSeeOther)
+				return
+			}
+			c.event("web", "refused", r.Method+" "+r.URL.Path+": outside the console's path "+home)
+			webGatewayPage(w, http.StatusForbidden, "This session reaches only the console's own path.")
+			return
+		}
 		if in.Mode == accessweb.SignInForm {
 			if r.URL.Path == in.LoginPath || (r.URL.Path == state.formAction() && r.Method != http.MethodGet && r.Method != http.MethodHead) {
 				// The console's sign-in is the gateway's: the browser never
@@ -803,7 +824,7 @@ func serveWebConsole(ctx context.Context, client net.Conn, raw []byte, intent Se
 					webGatewayPage(w, http.StatusBadGateway, "The access gateway could not sign in to the console.")
 					return
 				}
-				http.Redirect(w, r, "/", http.StatusSeeOther)
+				http.Redirect(w, r, home, http.StatusSeeOther)
 				return
 			}
 			if err := state.ensureSignedIn(ctx, c); err != nil {
@@ -897,11 +918,11 @@ func (c *webConsoleClient) response(resp *http.Response, state *webConsoleState,
 				// The console signed the session out: sign in again at the
 				// next request and send the browser back where it was (home,
 				// when the request itself signed out or was not a read).
-				uri := "/"
+				uri := c.home
 				if resp.Request.Method == http.MethodGet || resp.Request.Method == http.MethodHead {
 					uri = resp.Request.URL.RequestURI()
 				}
-				back := state.signedOut(uri, dropped)
+				back := state.signedOut(uri, c.home, dropped)
 				_ = resp.Body.Close()
 				resp.StatusCode, resp.Status = http.StatusSeeOther, "303 See Other"
 				resp.Header = http.Header{"Location": {back}, "Cache-Control": {"no-store"}}

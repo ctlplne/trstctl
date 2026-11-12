@@ -1055,7 +1055,8 @@ export const messages = {
   "admin.access.webconsole.target": { defaultMessage: "Web admin console (HTTPS)", description: "Web console target registration (A273)." },
   "admin.access.webconsole.url": { defaultMessage: "Console address", description: "Web console target registration (A273): its https origin." },
   "admin.access.webconsole.urlHelp": {
-    defaultMessage: "Enter the console's origin over https, such as https://console.internal.example, with no path.",
+    defaultMessage:
+      "Enter the console's address over https: its origin, such as https://console.internal.example, or the path it lives under, such as https://apps.internal.example/console/.",
     description: "Web console target registration (A273).",
   },
   "admin.access.webconsole.caPEM": {

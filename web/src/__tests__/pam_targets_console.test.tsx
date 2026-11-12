@@ -346,10 +346,15 @@ it("registers a web admin console with its vaulted account, its https origin and
   await user.type(within(form).getByRole("textbox", { name: "Gateway agent ID" }), "gateway-agent");
   await user.type(within(form).getByRole("textbox", { name: "Gateway address (host:port)" }), "gateway.example:8443");
   await user.click(within(form).getByRole("button", { name: "Register target" }));
-  expect(await within(form).findByText(/origin over https/)).toBeInTheDocument();
+  expect(await within(form).findByText(/the path it lives under/)).toBeInTheDocument();
+  expect(apiMock.registerPAMTarget).not.toHaveBeenCalled();
+  // A273-O3: a path may follow the origin, but not one that climbs out of it.
+  await user.clear(address);
+  await user.type(address, "https://apps.internal.example/grafana/../other");
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
   expect(apiMock.registerPAMTarget).not.toHaveBeenCalled();
   await user.clear(address);
-  await user.type(address, "https://grafana.internal.example");
+  await user.type(address, "https://apps.internal.example/grafana/");
   await user.click(within(form).getByRole("button", { name: "Register target" }));
   await waitFor(() =>
     expect(apiMock.registerPAMTarget).toHaveBeenCalledWith(
@@ -358,7 +363,7 @@ it("registers a web admin console with its vaulted account, its https origin and
         target_type: "webconsole",
         allowed_roles: ["consoles/grafana-admin"],
         account_secret: "consoles/grafana-admin",
-        web: { url: "https://grafana.internal.example" },
+        web: { url: "https://apps.internal.example/grafana/" },
         gateway_agent_id: "gateway-agent",
         gateway_address: "gateway.example:8443",
       },

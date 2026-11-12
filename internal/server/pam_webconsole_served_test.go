@@ -122,7 +122,8 @@ var (
 // masked; links the console writes with its own origin keep the browser on
 // the tunnel (A273-O2); terminating the session stops the browser's access.
 // A session without a template that signs in, a misdeclared target or
-// template, and a check-out of the account are refused.
+// template, and a check-out of the account are refused. A console under a
+// path is reached only under it (A273-O3).
 func TestServedWebConsoleSessionA273(t *testing.T) {
 	if testing.Short() {
 		t.Skip("gateway session proof")
@@ -190,7 +191,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 	}
 	for name, target := range map[string]map[string]any{
 		"plain http":     {"id": "a273-plain", "web": map[string]any{"url": "http://console.internal.example"}},
-		"route path":     {"id": "a273-path", "web": map[string]any{"url": "https://console.internal.example/admin"}},
+		"route climbs":   {"id": "a273-path", "web": map[string]any{"url": "https://console.internal.example/admin/../other"}},
 		"no route":       {"id": "a273-noroute", "web": nil},
 		"with provider":  {"id": "a273-provider", "provider_id": "some-provider"},
 		"no gateway":     {"id": "a273-nogw", "gateway_agent_id": "", "gateway_address": ""},
@@ -420,6 +421,70 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 	}
 	if browserDir != "" {
 		a273AwaitBrowser(t, browserDir, "terminated", "terminated\n", "exit")
+	}
+
+	// A273-O3: a console that lives under a path. Its target names the path,
+	// a template whose sign-in page lies outside it is refused when the
+	// session is requested, and through the session's tunnel the browser
+	// lands on the path and reaches only it, never another application on the
+	// same host.
+	underPath := infratest.StartWebConsoleUnder("admin", a273ConsolePassword, "/console")
+	t.Cleanup(underPath.Close)
+	if status, body := register("a273-register-path", map[string]any{"id": "a273-path-console", "web": map[string]any{"url": underPath.Route(), "ca_pem": string(underPath.CAPEM())}}); status != http.StatusCreated ||
+		!strings.Contains(string(body), underPath.Route()) {
+		t.Fatalf("register the console under a path = %d %s", status, body)
+	}
+	pathRequest := func(templateID string) map[string]any {
+		r := request(templateID)
+		r["target_id"] = "a273-path-console"
+		return r
+	}
+	outside := pathRequest(signsIn.ID)
+	outside["request_id"] = uuid.NewString()
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/session-requests", f.requester, "a273-path-outside", outside); status != http.StatusUnprocessableEntity ||
+		!strings.Contains(string(body), "outside the console's path /console/") {
+		t.Fatalf("a template signing in outside the console's path = %d %s", status, body)
+	}
+	status, pathSignsIn := template("form-path", map[string]any{"mode": "form", "login_path": "/console/login", "username_field": "username", "password_field": "password"})
+	if status != http.StatusCreated {
+		t.Fatalf("save the path console's template = %d", status)
+	}
+	pathSession := servedPAMReviewedOpen(t, h.servedHarness, f.requester, f.reviewerOne, f.reviewerTwo, "a273-open-path", pathRequest(pathSignsIn.ID))
+	pathOut, stopPath := f.connect(pathSession.ID, pathSession.Gateway.Ticket, a273OpenLine.MatchString)
+	defer stopPath()
+	pathCapture := startA273Capture(t, a273OpenLine.FindStringSubmatch(pathOut)[1])
+	pathBase := "http://" + pathCapture.ln.Addr().String()
+	pathJar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pathBrowser := &http.Client{Jar: pathJar, Timeout: 30 * time.Second}
+	a201Await(t, "the console under a path through the gateway", func() bool {
+		resp, err := pathBrowser.Get(pathBase + "/")
+		if err != nil {
+			return false
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		return resp.StatusCode == http.StatusOK && resp.Request.URL.Path == "/console/" && strings.Contains(string(body), "Signed in as admin")
+	})
+	for _, elsewhere := range []string{"/other-app", "/console/../other-app"} {
+		resp, err := pathBrowser.Get(pathBase + elsewhere)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden || strings.Contains(string(body), "another application") {
+			t.Fatalf("%s outside the console's path: %d %s", elsewhere, resp.StatusCode, body)
+		}
+	}
+	if served := strings.Join(underPath.Served(), "\n"); strings.Contains(served, "other-app") || !strings.Contains(served, "POST /console/session") {
+		t.Fatalf("the host under a path served:\n%s", served)
+	}
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/sessions/"+pathSession.ID+"/terminate", f.operator, "a273-terminate-path",
+		map[string]any{"reason": "A273-O3 proof complete"}); status != http.StatusAccepted {
+		t.Fatalf("terminate the path session = %d %s", status, body)
 	}
 }
 

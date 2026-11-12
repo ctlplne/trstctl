@@ -9059,7 +9059,7 @@ func componentSchemas() map[string]*Schema {
 			"truncated":         {Type: "boolean", Description: "a bound (lines returned or bytes read) stopped the search before every recording was read"},
 		}, "items", "sessions_searched", "truncated"),
 		"PAMWebConsoleRoute": object(map[string]*Schema{
-			"url":         {Type: "string", Description: "the console's origin (https://host[:port]), without user information, path, query or fragment (A273)"},
+			"url":         {Type: "string", Description: "the console's origin (https://host[:port]), or the path it lives under on that origin (A273-O3), without user information, query or fragment (A273)"},
 			"ca_pem":      {Type: "string", Description: "PEM certificates the console's certificate is checked against; none: the system roots"},
 			"server_name": {Type: "string", Description: "the name the console's certificate is checked against; none: the URL's host"},
 		}, "url"),

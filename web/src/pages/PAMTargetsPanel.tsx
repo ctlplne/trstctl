@@ -52,7 +52,8 @@ const targetSchema = z
       // A273: a web console's vaulted account and route; no provider.
       if (splitList(value.allowed_roles).length !== 1)
         ctx.addIssue({ code: "custom", path: ["allowed_roles"], message: translateNow("admin.access.webconsole.oneAccount") });
-      if (!/^https:\/\/[^\s/?#@]+\/?$/.test(value.web_url))
+      // A273-O3: an origin, or the path the console lives under (no dot segments).
+      if (!/^https:\/\/[^\s/?#@]+(?:\/(?!\.{1,2}(?:\/|$))[^\s/?#\\]+)*\/?$/.test(value.web_url))
         ctx.addIssue({ code: "custom", path: ["web_url"], message: translateNow("admin.access.webconsole.urlHelp") });
       if (!value.gateway_agent_id) ctx.addIssue({ code: "custom", path: ["gateway_agent_id"], message: translateNow("admin.access.gatewayRequired") });
       if (!value.gateway_address) ctx.addIssue({ code: "custom", path: ["gateway_address"], message: translateNow("admin.access.gatewayRequired") });

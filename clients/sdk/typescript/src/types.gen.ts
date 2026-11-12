@@ -24080,7 +24080,7 @@ export interface components {
             ca_pem?: string;
             /** @description the name the console's certificate is checked against; none: the URL's host */
             server_name?: string;
-            /** @description the console's origin (https://host[:port]), without user information, path, query or fragment (A273) */
+            /** @description the console's origin (https://host[:port]), or the path it lives under on that origin (A273-O3), without user information, query or fragment (A273) */
             url: string;
         };
         PAMWebSignIn: {

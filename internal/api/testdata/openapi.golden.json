@@ -44887,7 +44887,7 @@
             "type": "string"
           },
           "url": {
-            "description": "the console's origin (https://host[:port]), without user information, path, query or fragment (A273)",
+            "description": "the console's origin (https://host[:port]), or the path it lives under on that origin (A273-O3), without user information, query or fragment (A273)",
             "type": "string"
           }
         },

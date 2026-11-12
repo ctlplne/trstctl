@@ -10065,8 +10065,7 @@ against a stand-in console built the way such consoles commonly are; no vendor c
 it.
 
 What comes next:
-- Consoles that sign in through a single sign-on provider, or live under a path rather than
-  at an origin.
+- Consoles that sign in through a single sign-on provider.
 - A console origin that a script assembles from parts at run time, or that a body the console
   compresses despite the gateway's request carries, reaches the browser as written; such a
   link leaves the tunnel.

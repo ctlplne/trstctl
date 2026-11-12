@@ -273,11 +273,16 @@ func TestWebConsoleSessionIntentA273(t *testing.T) {
 	if KindForIntent(good) != KindSessionWeb || !MatchesSessionJob(KindSessionWeb, good) || MatchesSessionJob(KindSession, good) {
 		t.Fatal("a web console session rides only its own kind")
 	}
+	underPath := good
+	underPath.UpstreamURL = "https://apps.internal.example/console/"
+	if err := ValidateSessionIntent(underPath); err != nil {
+		t.Fatalf("a console under a path (A273-O3): %v", err)
+	}
 	for name, mutate := range map[string]func(*SessionIntent){
 		"no sign-in":         func(in *SessionIntent) { in.WebSignIn = nil },
 		"bad sign-in":        func(in *SessionIntent) { in.WebSignIn = &accessweb.SignIn{Mode: "saml"} },
 		"plain http":         func(in *SessionIntent) { in.UpstreamURL = "http://console.internal.example" },
-		"path":               func(in *SessionIntent) { in.UpstreamURL = "https://console.internal.example/admin" },
+		"dot segment":        func(in *SessionIntent) { in.UpstreamURL = "https://console.internal.example/admin/../other" },
 		"other credential":   func(in *SessionIntent) { in.CredentialRef = CredentialRef("other") },
 		"ssh routing":        func(in *SessionIntent) { in.SSHAddress = "127.0.0.1:22" },
 		"sign-in elsewhere":  func(in *SessionIntent) { in.TargetType = TargetPostgres; in.UpstreamURL = "" },
@@ -339,5 +344,65 @@ func TestWebDialRefusesTheGatewaysNeighboursA273(t *testing.T) {
 	}
 	if len(dialed) != 2 || dialed[0] != "10.20.30.40:8443" || dialed[1] != "127.0.0.1:9443" {
 		t.Fatalf("dialed %v", dialed)
+	}
+}
+
+// TestWebConsoleUnderAPathStaysUnderItA273O3: a console that lives under a
+// path is reached only there. The tunnel's root and the bare path lead to
+// it; the operator's task runs under it; another application on the same
+// host, and a dot segment or encoded slash that would climb out, are refused
+// at the gateway and never reach the host; a template whose sign-in page
+// lies outside the path does not open the session.
+func TestWebConsoleUnderAPathStaysUnderItA273O3(t *testing.T) {
+	ctx := context.Background()
+	console := infratest.StartWebConsoleUnder("admin", webTestPassword, "/console")
+	t.Cleanup(console.Close)
+	intent := SessionIntent{SessionID: "web-path", TargetType: TargetWeb, UpstreamURL: console.Route(), UpstreamCAPEM: string(console.CAPEM()),
+		WebSignIn: &accessweb.SignIn{Mode: accessweb.SignInForm, LoginPath: "/console/login", UsernameField: "username", PasswordField: "password"}}
+	credential := `{"username":"admin","password":"` + webTestPassword + `"}`
+	rec, frames := testConnRecorder(t, []byte(webTestPassword))
+	browser := newWebBrowser(t, ctx, intent, credential, newWebConsoleState(), rec)
+
+	for _, start := range []string{"/", "/console"} {
+		resp, err := browser.client.Get(webTunnel + start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || resp.Request.URL.Path != "/console/" || !strings.Contains(string(page), "Signed in as admin") {
+			t.Fatalf("%s led to %s: %d %s", start, resp.Request.URL.Path, resp.StatusCode, page)
+		}
+	}
+	status, page := browser.get(t, "/console/settings")
+	m := webCSRF.FindStringSubmatch(page)
+	if status != http.StatusOK || m == nil {
+		t.Fatalf("the settings page under the path: %d %s", status, page)
+	}
+	resp := browser.post(t, "/console/settings", url.Values{"csrf": {m[1]}, "banner": {"under a path"}}, false)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/console/settings?saved=1" || console.Banner() != "under a path" {
+		t.Fatalf("the task under the path: %d, Location %q, banner %q", resp.StatusCode, resp.Header.Get("Location"), console.Banner())
+	}
+	for _, outside := range []string{"/other-app", "/console/../other-app", "/console/..%2fother-app", "/consoles/x"} {
+		if status, page := browser.get(t, outside); status != http.StatusForbidden || strings.Contains(page, "another application") {
+			t.Fatalf("%s outside the console's path: %d %s", outside, status, page)
+		}
+	}
+	if served := strings.Join(console.Served(), "\n"); strings.Contains(served, "other-app") || strings.Contains(served, "/consoles/") {
+		t.Fatalf("a path outside the console reached its host:\n%s", served)
+	}
+	if text := frames(); !strings.Contains(text, "refused: GET /other-app: outside the console's path /console/") {
+		t.Fatalf("the recording lacks the refusal:\n%s", text)
+	}
+
+	outside := intent
+	signIn := *intent.WebSignIn
+	signIn.LoginPath = "/login"
+	outside.WebSignIn = &signIn
+	browserEnd, gatewayEnd := net.Pipe()
+	defer func() { _ = browserEnd.Close() }()
+	if err := serveWebConsole(ctx, gatewayEnd, []byte(credential), outside, newWebConsoleState(), nil, nil); err == nil || !strings.Contains(err.Error(), "outside its reviewed path") {
+		t.Fatalf("a sign-in page outside the console's path opened the session: %v", err)
 	}
 }

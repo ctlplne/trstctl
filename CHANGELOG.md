@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- A web console target may name the path its console lives under (A273-O3), such as
+  `https://apps.internal.example/grafana/`. The browser's tunnel leads there and reaches only
+  that path. Another path on the console's host is refused at the gateway and recorded,
+  including one that climbs out through a dot segment, an encoded slash or a backslash. The
+  template's sign-in page must lie under the path, and a session requested through a template
+  that signs in elsewhere is refused.
 - A web console session keeps the browser on its tunnel when the console writes its own origin
   (A273-O2). The gateway rewrites the origin to the tunnel's in absolute links, form actions,
   `<base>`, scheme-relative and WebSocket URLs, JSON with escaped slashes, the `Refresh`,
