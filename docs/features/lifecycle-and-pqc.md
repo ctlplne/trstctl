@@ -577,11 +577,20 @@ rotations and approvals:
   uncertain until its gateway reports it closed;
 - **ended machine sessions** (`machine_session_revocation`);
 - **managed-key operations** (`managed_key_operation`): a completed custody check reads
-  verified, another completed action delivered.
+  verified, another completed action delivered;
+- **SSH certificate revocations** (`ssh_certificate_revocation`, `certs:read`): one row per
+  revocation, named by its serial or as "a key ID" (the key ID itself is never shown),
+  with the operator's reason and who revoked it. It reads queued until the served KRL
+  lists it, delivered once listed (the reason names the KRL version that first listed
+  it), and verified once every host agent that reports its KRL enforces that version or
+  a newer one — served lists only grow, and a host refuses one that drops a revocation.
+  The rows are a read model of the `ssh.cert.revoked` events, so a rebuild reproduces
+  them, and the listing versions are rebuilt from the same events after a restart.
 
 Each shows only to a caller who may read its domain (`agents:read`, `access:read`,
-`secrets:read`, `keys:read`) and opens by its own id, such as `agent_job:<number>` or
-`managed_key_operation:<operation id>`.
+`secrets:read`, `keys:read`, `certs:read`) and opens by its own id, such as
+`agent_job:<number>`, `managed_key_operation:<operation id>` or
+`ssh_certificate_revocation:<event id>`.
 
 ### Revocation report: an external CA's own status (A245-L3)
 

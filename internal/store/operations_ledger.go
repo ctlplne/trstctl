@@ -15,13 +15,15 @@ import (
 // that command is stranded or quarantined, and whether an endpoint was seen
 // presenting the certificate it carried. A245-L1 adds host and relay agent
 // jobs (their outbox command and the agent's signed receipt), access and
-// machine session revocations, and managed-key operations. It writes nothing.
+// machine session revocations, managed-key operations and SSH certificate
+// revocations. It writes nothing.
 
 // OperationLedgerRow is one operation as its own source records it.
 type OperationLedgerRow struct {
 	// Source is certificate_rotation, connector_delivery, secret_rotation,
 	// approval, agent_job, access_session_revocation,
-	// machine_session_revocation or managed_key_operation.
+	// machine_session_revocation, managed_key_operation or
+	// ssh_certificate_revocation.
 	Source      string
 	ID          string
 	SubjectKind string
@@ -200,6 +202,19 @@ func (s *Store) operationLedgerRows(ctx context.Context, tenantID string, after 
 			    WHERE k.tenant_id = $1 AND $5 IN ('', 'managed_key_operation') AND (nullif($6, '') IS NULL OR k.operation_id = $6)
 			      AND ($2::timestamptz IS NULL OR (k.updated_at, 'managed_key_operation:' || k.operation_id) < ($2, $3))
 			    ORDER BY k.updated_at DESC, 'managed_key_operation:' || k.operation_id DESC LIMIT $4)
+			  UNION ALL
+			  -- A245-L1 part 2: an SSH certificate revocation, by serial, key
+			  -- ID or both; the key ID itself is never kept. Whether the
+			  -- served KRL lists it and the hosts enforce it is read live.
+			  (SELECT 'ssh_certificate_revocation', c.event_id, 'ssh_certificate', '',
+			          CASE WHEN c.serial <> '' AND c.by_key_id THEN 'serial ' || c.serial || ' and a key ID'
+			               WHEN c.serial <> '' THEN 'serial ' || c.serial ELSE 'a key ID' END,
+			          'revoked', c.reason, 'revoked by ' || coalesce(nullif(c.revoked_by, ''), 'the system'), '', '', '',
+			          NULL::uuid, NULL::bigint, c.revoked_at, c.revoked_at AS updated_at
+			     FROM ssh_certificate_revocations c
+			    WHERE c.tenant_id = $1 AND $5 IN ('', 'ssh_certificate_revocation') AND (nullif($6, '') IS NULL OR c.event_id = $6)
+			      AND ($2::timestamptz IS NULL OR (c.revoked_at, 'ssh_certificate_revocation:' || c.event_id) < ($2, $3))
+			    ORDER BY c.revoked_at DESC, 'ssh_certificate_revocation:' || c.event_id DESC LIMIT $4)
 			)
 			SELECT p.source, p.id, p.subject_kind, p.subject_id, p.subject_name, p.status, p.detail,
 			       p.origin, p.target, p.rollback_ref, p.fingerprint,

@@ -30,6 +30,7 @@ const sourceCopy = {
   access_session_revocation: "operations.ledger.source.access_session_revocation",
   machine_session_revocation: "operations.ledger.source.machine_session_revocation",
   managed_key_operation: "operations.ledger.source.managed_key_operation",
+  ssh_certificate_revocation: "operations.ledger.source.ssh_certificate_revocation",
 } as const;
 
 const stepCopy = {

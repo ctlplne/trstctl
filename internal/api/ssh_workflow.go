@@ -37,6 +37,9 @@ type SSHWorkflowService interface {
 	RetireSSHHost(ctx context.Context, tenantID, idempotencyKey string, req SSHHostRetireRequest) (SSHHostRetirement, error)
 	AdoptSSHKRL(ctx context.Context, tenantID, idempotencyKey string, krl []byte) (SSHKRLAdoption, error)
 	SSHKRLFleet(ctx context.Context, tenantID string) (SSHKRLFleet, error)
+	// SSHRevocationAdoption backs the operations ledger's SSH revocations
+	// (A245-L1).
+	SSHRevocationAdoption(ctx context.Context, tenantID string, eventIDs []string) (SSHRevocationAdoption, error)
 }
 
 // WithSSHWorkflow wires the served SSH-at-scale workflow API. Without it, routes
@@ -260,6 +263,16 @@ type SSHKRLAdoptionCarried struct {
 	Keys             int `json:"keys"`
 	KeyHashes        int `json:"key_hashes"`
 	BroadenedToAnyCA int `json:"broadened_to_any_ca"`
+}
+
+// SSHRevocationAdoption is where SSH revocations stand in the served KRL and
+// on the hosts (A245-L1). ListedIn maps a revocation's event ID to the KRL
+// version that first listed it; a revocation the served list does not reach
+// yet is absent. HostInstalledVersions holds the KRL version each reporting
+// host agent says its sshd enforces.
+type SSHRevocationAdoption struct {
+	ListedIn              map[string]uint64
+	HostInstalledVersions []uint64
 }
 
 // SSHKRLFleet is the served KRL beside what each reporting host's sshd

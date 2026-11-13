@@ -65,6 +65,16 @@ describe("operations ledger (A245)", () => {
     }
   });
 
+  it("names an SSH certificate revocation as its own source (A245-L1)", async () => {
+    list.mockResolvedValue({
+      items: [item("ssh_certificate_revocation:krl-a245l1-1", "verified", "ssh_certificate_revocation")],
+    });
+    show(<OperationsLedgerPanel />);
+    const region = within(await screen.findByRole("region", { name: "Operations ledger" }));
+    await region.findByText("reason for verified");
+    expect(region.getByText("SSH certificate revoked", { exact: false })).toBeInTheDocument();
+  });
+
   it("shows each operation in its normalized state and filters by state", async () => {
     list.mockResolvedValue({
       items: [item("connector_delivery:a", "delivered"), item("connector_delivery:b", "failed"), item("secret_rotation:c", "verified", "secret_rotation")],

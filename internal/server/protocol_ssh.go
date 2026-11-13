@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 	"sync"
@@ -73,6 +74,12 @@ type sshProtocol struct {
 	// deletion and retained-size changes force another full safety preflight.
 	verifiedSnapshot events.StreamSnapshot
 	replayCount      uint64 // guarded by syncMu; exposes repeated full scans to tests
+	// listedIn maps each applied ssh.cert.revoked event's ID to the KRL
+	// version that first listed it (A245-L1), guarded by syncMu. A host whose
+	// installed list carries that version or a newer one enforces the
+	// revocation: served lists only grow, and a host refuses one that drops a
+	// revocation it enforces.
+	listedIn map[string]uint64
 }
 
 // sshMutationGuard wraps a raw SSH mutation in the API mutation guard for perm.
@@ -307,7 +314,9 @@ func (p *sshProtocol) syncRevocationsWithLimit(ctx context.Context, force bool, 
 	// closed rather than publishing an incomplete KRL.
 	// Stage into a private copy. A decode error, timeout, or rewrite cannot
 	// advance the live cursor or publish a partial revocation list.
-	candidate := &sshProtocol{krl: p.krl.Clone(), tenantID: p.tenantID, applied: p.applied}
+	// The candidate collects only this catch-up's revocations; they join
+	// listedIn when the catch-up is published.
+	candidate := &sshProtocol{krl: p.krl.Clone(), tenantID: p.tenantID, applied: p.applied, listedIn: map[string]uint64{}}
 	candidate.krlVersion.Store(p.krlVersion.Load())
 	through := before.LastSequence
 	if limit != 0 && through-p.applied > limit {
@@ -337,6 +346,10 @@ func (p *sshProtocol) syncRevocationsWithLimit(ctx context.Context, force bool, 
 	p.krl = candidate.krl
 	p.krlVersion.Store(candidate.krlVersion.Load())
 	p.applied = candidate.applied
+	if p.listedIn == nil {
+		p.listedIn = make(map[string]uint64, len(candidate.listedIn))
+	}
+	maps.Copy(p.listedIn, candidate.listedIn)
 	if through < before.LastSequence {
 		// Keep the verified head and poll throttle behind the source. The
 		// partial projection is private to this process; every served read
@@ -362,6 +375,9 @@ func (p *sshProtocol) applyRevocationEvent(event events.Event) error {
 			return fmt.Errorf("decode ssh.cert.revoked event %d: serial or key_id is required", event.Sequence)
 		}
 		p.Revoke(req.Serial, req.KeyID)
+		if p.listedIn != nil {
+			p.listedIn[event.ID] = p.krlVersion.Load()
+		}
 	}
 	if event.Type == eventSSHKRLAdopted && event.TenantID == p.tenantID {
 		if err := p.applySSHKRLAdoption(event); err != nil {
@@ -402,6 +418,20 @@ func (p *sshProtocol) applyRevocationEvent(event events.Event) error {
 }
 
 func (p *sshProtocol) KRLVersion() uint64 { return p.krlVersion.Load() }
+
+// revocationsListedIn returns the KRL version that first listed each named
+// ssh.cert.revoked event; an event this replica has not applied yet is absent.
+func (p *sshProtocol) revocationsListedIn(eventIDs []string) map[string]uint64 {
+	p.syncMu.Lock()
+	defer p.syncMu.Unlock()
+	out := make(map[string]uint64, len(eventIDs))
+	for _, id := range eventIDs {
+		if version, ok := p.listedIn[id]; ok {
+			out[id] = version
+		}
+	}
+	return out
+}
 
 func (p *sshProtocol) RevokedCount() int {
 	p.syncMu.Lock()

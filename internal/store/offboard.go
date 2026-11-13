@@ -273,6 +273,8 @@ var TenantScopedTables = []string{
 	"access_bundle_standing_approvals", "access_bundle_activity", "access_bundle_runs", "access_bundle_grants", "access_bundles",
 	// MSP-2: the customer's billing sync pushes; no foreign keys.
 	"provider_billing_sync_pushes",
+	// A245-L1: SSH certificate revocations; no foreign keys.
+	"ssh_certificate_revocations",
 	// MSP-3: the customer's PSA tickets; no foreign keys.
 	"provider_psa_tickets",
 	// MSP-9: the customer's RMM devices; no foreign keys.

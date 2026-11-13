@@ -8100,10 +8100,12 @@ version (A244 proved the destination), and by a subject key algorithm set on the
 same destination and issuer, while an ownership reassignment leaves a fresh
 approval standing (A245-L5). What it reads from, and what comes next:
 
-- **Sources (A245-L1).** Host and relay agent jobs, ended access and machine
-  sessions, and managed-key operations are in the ledger. SSH certificate
-  revocations are not yet: they are kept only in the event log, so reading them
-  needs a read model of their own, which is what comes next.
+- **SSH revocations are proven by the hosts that report (A245-L1).** An SSH
+  certificate revocation reads verified once every host agent that reports its
+  KRL enforces a list at or past the version that first listed it. A host that
+  runs no KRL watcher reports nothing and is not counted, so a fleet with such
+  hosts reads verified on the reporting ones alone; the KRL fleet view lists the
+  hosts that report.
 - **Sessions are not observed.** Existing-session termination is confirmed only
   by a containment stop or removal receipt after the revocation; trstctl does
   not see the sessions themselves.

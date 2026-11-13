@@ -37817,6 +37817,10 @@ export const messages = {
     defaultMessage: "Managed key operation",
     description: "Operations ledger on the Operations page (A245-L1): a key operation at a key provider.",
   },
+  "operations.ledger.source.ssh_certificate_revocation": {
+    defaultMessage: "SSH certificate revoked",
+    description: "Operations ledger on the Operations page (A245-L1): an SSH certificate revocation, listed in the KRL and enforced by the hosts.",
+  },
   "operations.ledger.updated": { defaultMessage: "Updated {at}", description: "Operations ledger on the Operations page (A245)." },
   "operations.ledger.chain": { defaultMessage: "Causal chain", description: "Operations ledger on the Operations page (A245)." },
   "operations.ledger.actions": { defaultMessage: "Actions", description: "Operations ledger on the Operations page (A245)." },

@@ -879,6 +879,8 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"switching_imports", "switching_import_rows", "switching_waves", "switching_wave_rows",
 	// MSP-2: projected from the provider.billing_sync.* events.
 	"provider_billing_sync_pushes",
+	// A245-L1: projected from ssh.cert.revoked.
+	"ssh_certificate_revocations",
 	// MSP-3: projected from the provider.psa_ticket.* events.
 	"provider_psa_tickets",
 	// MSP-9: projected from the provider.rmm_device.* events.

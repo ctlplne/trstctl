@@ -373,7 +373,11 @@ import (
 // Version 131 carries MSP-2's billing sync pushes
 // (provider_billing_sync_pushes): an older payload has no such table, and a
 // restore from it would forget a queued or delivered period and push it again.
-const SnapshotFormatVersion = 134
+// Version 135 carries A245-L1's SSH certificate revocations
+// (ssh_certificate_revocations): an older payload has none, and a restore from
+// it would drop the operations ledger's SSH revocations while its covered
+// offset skipped their events.
+const SnapshotFormatVersion = 135
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -463,6 +467,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"provider_rmm_devices",
 	// Format 134: MSP-14's documentation records.
 	"provider_doc_records",
+	// Format 135: A245-L1's SSH certificate revocations.
+	"ssh_certificate_revocations",
 	// Format 81: N1's AD CS request decisions.
 	"adcs_request_decisions",
 	// Format 117: N1-L1's held external CA issuances.
@@ -923,7 +929,8 @@ SELECT jsonb_build_object(
   'provider_billing_sync_pushes', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_billing_sync_pushes t),
   'provider_psa_tickets', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_psa_tickets t),
   'provider_rmm_devices', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_rmm_devices t),
-  'provider_doc_records', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_doc_records t)
+  'provider_doc_records', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_doc_records t),
+  'ssh_certificate_revocations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM ssh_certificate_revocations t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL,

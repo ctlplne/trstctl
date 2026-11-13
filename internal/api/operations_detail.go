@@ -81,8 +81,9 @@ func parseOperationID(id string) (source, sourceID string, ok bool) {
 }
 
 // validOperationSourceID checks an id against its source's own form: an
-// agent job is its outbox command's number, a machine session or a managed-key
-// operation a short token, every other source a uuid (A245-L1).
+// agent job is its outbox command's number, a machine session, a managed-key
+// operation or an SSH revocation's event a short token, every other source a
+// uuid (A245-L1).
 func validOperationSourceID(source, id string) bool {
 	switch source {
 	case "agent_job":
@@ -95,7 +96,7 @@ func validOperationSourceID(source, id string) bool {
 			}
 		}
 		return true
-	case "machine_session_revocation", "managed_key_operation":
+	case "machine_session_revocation", "managed_key_operation", "ssh_certificate_revocation":
 		if len(id) == 0 || len(id) > 128 {
 			return false
 		}
@@ -153,7 +154,12 @@ func (a *API) getOperationLedgerItem(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusNotFound, "resource not found"))
 		return
 	}
-	item, err := a.operationLedgerItem(r, tenantID, row)
+	ssh, err := a.sshRevocationViewFor(r, tenantID, []store.OperationLedgerRow{row})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	item, err := a.operationLedgerItem(r, tenantID, row, ssh)
 	if err != nil {
 		a.writeError(w, err)
 		return

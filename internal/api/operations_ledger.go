@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -39,8 +40,9 @@ var operationStates = []string{opStateReviewed, opStateAwaitingApproval, opState
 
 var operationSources = []string{"certificate_rotation", "connector_delivery", "secret_rotation", "approval",
 	// A245-L1: host and relay agent jobs, ended access and machine sessions,
-	// and managed-key operations.
-	"agent_job", "access_session_revocation", "machine_session_revocation", "managed_key_operation"}
+	// managed-key operations and SSH certificate revocations.
+	"agent_job", "access_session_revocation", "machine_session_revocation", "managed_key_operation",
+	"ssh_certificate_revocation"}
 
 type operationSubject struct {
 	ID   string `json:"id,omitempty"`
@@ -301,8 +303,77 @@ func (a *API) operationVisible(r *http.Request, principal authz.Principal, tenan
 		return principal.Can(authz.SecretsRead, scope)
 	case "managed_key_operation":
 		return principal.Can(authz.KeysRead, scope)
+	case "ssh_certificate_revocation":
+		return principal.Can(authz.CertsRead, scope)
 	}
 	return false
+}
+
+// sshRevocationView is where a page's SSH certificate revocations stand
+// (A245-L1), read once per page: the KRL version that first listed each, and
+// the version each reporting host enforces. Unavailable says why the SSH
+// workflow cannot tell now.
+type sshRevocationView struct {
+	adoption    SSHRevocationAdoption
+	unavailable string
+}
+
+func (a *API) sshRevocationViewFor(r *http.Request, tenantID string, rows []store.OperationLedgerRow) (*sshRevocationView, error) {
+	var ids []string
+	for _, row := range rows {
+		if row.Source == "ssh_certificate_revocation" {
+			ids = append(ids, row.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	if a.sshWorkflow == nil {
+		return &sshRevocationView{unavailable: "the SSH workflow is not running on this control plane"}, nil
+	}
+	adoption, err := a.sshWorkflow.SSHRevocationAdoption(r.Context(), tenantID, ids)
+	switch {
+	case errors.Is(err, ErrSSHWorkflowUnavailable), errors.Is(err, ErrSSHWorkflowRejected):
+		return &sshRevocationView{unavailable: "the SSH workflow cannot read its served list now"}, nil
+	case err != nil:
+		return nil, err
+	}
+	return &sshRevocationView{adoption: adoption}, nil
+}
+
+// sshRevocationState places one SSH revocation: queued until the served KRL
+// lists it, delivered once listed, and verified only when every host agent
+// that reports its KRL enforces a list at or past the version that first
+// listed it. Served lists only grow and a host refuses one that drops a
+// revocation, so that version or a newer one carries the revocation.
+func sshRevocationState(view *sshRevocationView, eventID string) (string, string) {
+	if view == nil || view.unavailable != "" {
+		why := "the SSH workflow cannot say"
+		if view != nil {
+			why = view.unavailable
+		}
+		return opStateUncertain, "recorded; " + why + " whether the served KRL lists it or the hosts enforce it"
+	}
+	version, listed := view.adoption.ListedIn[eventID]
+	if !listed {
+		return opStateQueued, "recorded; the served KRL does not list it yet"
+	}
+	hosts := len(view.adoption.HostInstalledVersions)
+	adopted := 0
+	for _, installed := range view.adoption.HostInstalledVersions {
+		if installed >= version {
+			adopted++
+		}
+	}
+	listedIn := fmt.Sprintf("listed in the served KRL from version %d", version)
+	switch {
+	case hosts == 0:
+		return opStateDelivered, listedIn + "; no host agent reports the KRL its sshd enforces"
+	case adopted == hosts:
+		return opStateVerified, fmt.Sprintf("%s; every reporting host (%d) enforces a KRL that lists it", listedIn, hosts)
+	default:
+		return opStateDelivered, fmt.Sprintf("%s; %d of %d reporting hosts enforce a KRL that lists it", listedIn, adopted, hosts)
+	}
 }
 
 func (a *API) listOperationLedger(w http.ResponseWriter, r *http.Request) {
@@ -337,11 +408,19 @@ func (a *API) listOperationLedger(w http.ResponseWriter, r *http.Request) {
 		page.NextCursor = encodeOperationCursor(rows[len(rows)-1])
 	}
 	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
+	visible := make([]store.OperationLedgerRow, 0, len(rows))
 	for _, row := range rows {
-		if !a.operationVisible(r, principal, tenantID, row) {
-			continue
+		if a.operationVisible(r, principal, tenantID, row) {
+			visible = append(visible, row)
 		}
-		item, err := a.operationLedgerItem(r, tenantID, row)
+	}
+	ssh, err := a.sshRevocationViewFor(r, tenantID, visible)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	for _, row := range visible {
+		item, err := a.operationLedgerItem(r, tenantID, row, ssh)
 		if err != nil {
 			a.writeError(w, err)
 			return
@@ -354,7 +433,7 @@ func (a *API) listOperationLedger(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, page)
 }
 
-func (a *API) operationLedgerItem(r *http.Request, tenantID string, row store.OperationLedgerRow) (operationLedgerItem, error) {
+func (a *API) operationLedgerItem(r *http.Request, tenantID string, row store.OperationLedgerRow, ssh *sshRevocationView) (operationLedgerItem, error) {
 	adoption := consumerAdoptionNotRequested
 	if row.Source == "secret_rotation" && row.Status == store.SecretStaticRotationCompleted && a.secrets != nil {
 		cmd, err := a.store.GetSecretStaticRotationCommand(r.Context(), tenantID, row.ID)
@@ -371,6 +450,9 @@ func (a *API) operationLedgerItem(r *http.Request, tenantID string, row store.Op
 		}
 	}
 	state, reason := normalizeOperation(row, adoption)
+	if row.Source == "ssh_certificate_revocation" {
+		state, reason = sshRevocationState(ssh, row.ID)
+	}
 	item := operationLedgerItem{ID: row.Key(), Source: row.Source, CredentialType: operationCredentialType(row),
 		Subject: operationSubject{ID: row.SubjectID, Name: row.SubjectName}, State: state, StateReason: reason,
 		SourceStatus: row.Status, Fingerprint: row.Fingerprint, ObservedVantage: row.ObservedVantage,
@@ -384,7 +466,7 @@ func (a *API) operationLedgerItem(r *http.Request, tenantID string, row store.Op
 func operationLedgerRoutes(a *API) []route {
 	return []route{
 		{method: "GET", path: "/api/v1/operations/ledger", opID: "listOperationLedger",
-			summary: "List rotations, deliveries, secret rotations, approvals, agent jobs, session revocations and managed-key operations in one normalized state, newest first: verified only on consumer evidence, never on an HTTP 200 or an outbox receipt alone",
+			summary: "List rotations, deliveries, secret rotations, approvals, agent jobs, session revocations, managed-key operations and SSH certificate revocations in one normalized state, newest first: verified only on consumer evidence, never on an HTTP 200 or an outbox receipt alone",
 			handler: a.listOperationLedger, query: operationLedgerQuery(), resSchema: "OperationLedgerPage", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/operations/ledger/{id}", opID: "getOperationLedgerItem",
 			summary: "Show one operation's causal chain (request, authority, external action, receipt, consumer observation, revocation) and the retry and rollback that apply to exactly it",

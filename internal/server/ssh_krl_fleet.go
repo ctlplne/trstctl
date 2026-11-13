@@ -107,3 +107,36 @@ func sshKRLHostState(host api.SSHKRLHost, servedSHA256 string, now time.Time) st
 		return api.SSHKRLHostBehind
 	}
 }
+
+// SSHRevocationAdoption reports, for the operations ledger (A245-L1), the KRL
+// version that first listed each named ssh.cert.revoked event and the version
+// each enrolled host agent's newest signed receipt says its sshd enforces. A
+// receipt's installed version is read back from the host's RevokedKeys file.
+func (s *Server) SSHRevocationAdoption(ctx context.Context, tenantID string, eventIDs []string) (api.SSHRevocationAdoption, error) {
+	sp, err := s.sshWorkflowProtocol(tenantID)
+	if err != nil {
+		return api.SSHRevocationAdoption{}, err
+	}
+	if err := sp.syncRevocations(ctx, false); err != nil {
+		return api.SSHRevocationAdoption{}, fmt.Errorf("%w: the revocation list cannot be brought up to date: %v", api.ErrSSHWorkflowUnavailable, err)
+	}
+	out := api.SSHRevocationAdoption{ListedIn: sp.revocationsListedIn(eventIDs), HostInstalledVersions: []uint64{}}
+	if s.store == nil {
+		return out, nil
+	}
+	rows, err := s.store.ListAgentSSHKRLReceipts(ctx, tenantID, 0)
+	if err != nil {
+		return api.SSHRevocationAdoption{}, err
+	}
+	for _, row := range rows {
+		var receipt sshkrlreceipt.Receipt
+		if err := json.Unmarshal(row.Receipt, &receipt); err != nil {
+			return api.SSHRevocationAdoption{}, fmt.Errorf("decode SSH KRL receipt of agent %s: %w", row.AgentID, err)
+		}
+		if receipt.KRLTenantID != tenantID {
+			continue
+		}
+		out.HostInstalledVersions = append(out.HostInstalledVersions, receipt.InstalledVersion)
+	}
+	return out, nil
+}

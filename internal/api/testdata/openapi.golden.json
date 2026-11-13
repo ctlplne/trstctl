@@ -39577,7 +39577,8 @@
               "agent_job",
               "access_session_revocation",
               "machine_session_revocation",
-              "managed_key_operation"
+              "managed_key_operation",
+              "ssh_certificate_revocation"
             ],
             "type": "string"
           },
@@ -39681,7 +39682,8 @@
               "agent_job",
               "access_session_revocation",
               "machine_session_revocation",
-              "managed_key_operation"
+              "managed_key_operation",
+              "ssh_certificate_revocation"
             ],
             "type": "string"
           },
@@ -99118,7 +99120,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "List rotations, deliveries, secret rotations, approvals, agent jobs, session revocations and managed-key operations in one normalized state, newest first: verified only on consumer evidence, never on an HTTP 200 or an outbox receipt alone",
+        "summary": "List rotations, deliveries, secret rotations, approvals, agent jobs, session revocations, managed-key operations and SSH certificate revocations in one normalized state, newest first: verified only on consumer evidence, never on an HTTP 200 or an outbox receipt alone",
         "x-trstctl-permission": "lifecycle:read"
       }
     },

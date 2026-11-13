@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The operations ledger reads SSH certificate revocations (A245-L1): each revocation by serial or key ID (the key ID
+  never shown) reads delivered once the served KRL lists it and verified once every host agent that reports its KRL
+  enforces the version that first listed it; the rows are a read model of the revocation events (migration 0474), and
+  the Operations page names the source.
 - The access graph holds the PAM targets from static configuration (G1-L5): each is a `res:pam:<type>:<id>` node
   marked `configured: static` that `CONNECTS_TO` the dynamic-secret backend it signs in through, as a registered
   target does, for every graph the API builds.
