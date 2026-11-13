@@ -527,3 +527,47 @@ func TestProviderBillingSyncKaseyaTargetMSP13(t *testing.T) {
 		}
 	}
 }
+
+// MSP-11: an automate target is an RMM target with the integrator user, a
+// password reference, the integration's client ID, the execute command and
+// three shell lines.
+func TestProviderBillingSyncAutomateTargetMSP11(t *testing.T) {
+	valid := func() ProviderBillingTarget {
+		return ProviderBillingTarget{ID: "automate", Type: "automate", Endpoint: "https://automate.example.com",
+			Automate: &AutomateTarget{Username: "trstctl-integrator", PasswordRef: "env:AUTOMATE_PASSWORD", // #nosec G101 -- an env: reference, not a value (CWE-798)
+				ClientID: "0f9e8d7c-6b5a-4c3d-9e8f-7a6b5c4d3e2f", ExecuteCommandID: 2, InstallLine: `powershell.exe!!! -File C:\trstctl\install.ps1`,
+				UpgradeLine: `powershell.exe!!! -File C:\trstctl\upgrade.ps1`, RemoveLine: `cmd.exe!!! /c C:\trstctl\remove.cmd`}}
+	}
+	ok := valid()
+	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{ok}}); len(errs) != 0 {
+		t.Fatalf("valid automate target refused: %v", errs)
+	}
+	if !ok.IsRMM() || ok.PushesUsage() || ok.TicketKinds() != nil {
+		t.Fatalf("an automate target: rmm=%v usage=%v kinds=%v", ok.IsRMM(), ok.PushesUsage(), ok.TicketKinds())
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*ProviderBillingTarget)
+		want   string
+	}{
+		"no block":          {func(t *ProviderBillingTarget) { t.Automate = nil }, ".automate is required"},
+		"signing key":       {func(t *ProviderBillingTarget) { t.SigningKeyRef = "env:X" }, "json targets only"},
+		"no user":           {func(t *ProviderBillingTarget) { t.Automate.Username = "" }, ".username"},
+		"inline password":   {func(t *ProviderBillingTarget) { t.Automate.PasswordRef = "hunter2" }, ".password_ref"},
+		"client id":         {func(t *ProviderBillingTarget) { t.Automate.ClientID = "trstctl" }, ".client_id"},
+		"no command":        {func(t *ProviderBillingTarget) { t.Automate.ExecuteCommandID = 0 }, ".execute_command_id"},
+		"no shell marker":   {func(t *ProviderBillingTarget) { t.Automate.InstallLine = `C:\trstctl\install.ps1` }, ".install_line"},
+		"control character": {func(t *ProviderBillingTarget) { t.Automate.RemoveLine = "cmd.exe!!! /c a\nb" }, ".remove_line"},
+		"block on kaseya":   {func(t *ProviderBillingTarget) { t.Type = "kaseya" }, "automate targets only"},
+	} {
+		target := valid()
+		tc.mutate(&target)
+		errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{target}})
+		joined := ""
+		for _, err := range errs {
+			joined += err.Error() + "\n"
+		}
+		if !strings.Contains(joined, tc.want) {
+			t.Errorf("%s: errors %q, want one naming %q", name, joined, tc.want)
+		}
+	}
+}

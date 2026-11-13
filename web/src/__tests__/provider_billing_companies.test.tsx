@@ -304,6 +304,22 @@ describe("Provider billing systems (MSP-2)", () => {
     ).toBeInTheDocument();
   });
 
+  it("names a ConnectWise Automate target and what its company is (MSP-11)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/provider/v1/tenants/alpha/billing-companies")
+          return json({ targets: [{ id: "automate", name: "Automate", type: "automate", cadence: "monthly", rmm: true }], companies: [] });
+        if (url === "/provider/v1/tenants/alpha/billing-sync") return json({ pushes: [] });
+        if (url === "/provider/v1/tenants/alpha/rmm-devices") return json({ devices: [] });
+        throw new Error("unexpected path " + url);
+      }),
+    );
+    renderPanel(true);
+    expect(await screen.findByText("ConnectWise Automate, devices and agents")).toBeInTheDocument();
+    expect(screen.getByText("The Automate client ID, a number. The client's computers are listed and matched to this customer's agents.")).toBeInTheDocument();
+  });
+
   it("installs, upgrades and removes the agent through the RMM with rmm:write (MSP-9)", async () => {
     const actions: { url: string; body: unknown; key: string }[] = [];
     let busy = false;

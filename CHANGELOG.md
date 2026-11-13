@@ -8,6 +8,11 @@
   health written to the device's custom field when it changes. Devices are events (`provider.rmm_device.*`) projected
   into `provider_rmm_devices` (migration 0467, snapshot format 133), listed at `GET /provider/v1/tenants/{id}/rmm-devices`
   and in the Provider console. RMM targets take no usage periods.
+- ConnectWise Automate (MSP-11): an `automate` target (server, the integrator user and password reference, the
+  integration's client ID, Automate's execute command and the install, upgrade and remove shell lines) lists each mapped
+  customer's computers under its Automate client, maps them to its agents and runs the lines through the execute command;
+  an install appends the server, identity and one-time enrollment token for the customer's own tenant. Health is not
+  written back to Automate yet.
 - Kaseya VSA (MSP-13): a `kaseya` target (server, the VSA user and personal access token reference, the install,
   upgrade and remove agent procedure IDs, an enrollment custom field and an optional health custom field) lists each
   mapped customer's agents under its VSA organization, maps them to its trstctl agents, writes their health to the custom

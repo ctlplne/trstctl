@@ -1906,6 +1906,38 @@ install overwrites it (it enrolls once, within an hour). Health goes to the cust
 field `health_field`. VSA's agent field names come from its REST help pages and
 published module; the live run (Track B) confirms them.
 
+An `automate` target (MSP-11) does the same through a ConnectWise Automate server,
+except health, which is not written back to Automate yet (its extra-data-field write
+is documented only on a signed-in instance; the live run settles it):
+
+```json
+{
+  "id": "automate",
+  "name": "ConnectWise Automate",
+  "type": "automate",
+  "endpoint": "https://automate.example.com",
+  "automate": {
+    "username": "trstctl-integrator",
+    "password_ref": "file:/run/secrets/automate-integrator-password",
+    "client_id": "0f9e8d7c-6b5a-4c3d-9e8f-7a6b5c4d3e2f",
+    "execute_command_id": 2,
+    "install_line": "powershell.exe!!! -NonInteractive -File C:\\ProgramData\\trstctl\\install.ps1",
+    "upgrade_line": "powershell.exe!!! -NonInteractive -File C:\\ProgramData\\trstctl\\upgrade.ps1",
+    "remove_line": "powershell.exe!!! -NonInteractive -File C:\\ProgramData\\trstctl\\remove.ps1"
+  }
+}
+```
+
+Delivery signs in at `/cwa/api/v1/apitoken` with the integrator user (one that does
+not require two-factor sign-in) and the integration's `client_id`, sent as the
+`clientID` header on every call, and keeps the access token only for that delivery. A
+customer's company in this target is its Automate client ID; the inventory lists that
+client's computers. Each action runs its line through the command
+`execute_command_id` (Automate's command that executes a shell line, as its published
+module uses) on the computer; an install appends `-Server "…" -ServerName "…"
+-Identity "…" -Token "…"`, so the one-time token appears in that computer's command
+history (it enrolls once, within an hour).
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

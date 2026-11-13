@@ -2200,9 +2200,12 @@ never live in the API process. What you can do end to end against the running bi
   its public API reference; Kaseya VSA (MSP-13) through organization
   agents, custom fields and agent procedures (the install reads its
   enrollment line from a custom field), against a stand-in written from its
-  public help pages and module; ConnectWise Automate (MSP-11) and live
-  NinjaOne, Datto RMM, N-central and Kaseya VSA servers are what comes
-  next. The
+  public help pages and module; ConnectWise Automate (MSP-11) through
+  client computers and its execute command, against a stand-in written from
+  the calls its published module makes. Writing agent health back to
+  Automate (its extra-data-field write is documented only on a signed-in
+  instance) and live NinjaOne, Datto RMM, N-central, Kaseya VSA and Automate
+  servers are what comes next. The
   sweep looks back three periods, so a period older than that is not pushed
   automatically.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts

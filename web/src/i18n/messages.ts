@@ -1809,6 +1809,14 @@ export const messages = {
     defaultMessage: "The VSA organization ID, a number. The organization's agents are listed and matched to this customer's trstctl agents.",
     description: "MSP-13: what to enter as the company in a Kaseya VSA target.",
   },
+  "provider.billingSync.type.automate": {
+    defaultMessage: "ConnectWise Automate, devices and agents",
+    description: "MSP-11: a ConnectWise Automate target.",
+  },
+  "provider.billingSync.automateCompanyHint": {
+    defaultMessage: "The Automate client ID, a number. The client's computers are listed and matched to this customer's agents.",
+    description: "MSP-11: what to enter as the company in a ConnectWise Automate target.",
+  },
   "provider.rmmDevices.caption": {
     defaultMessage: "Devices in the RMM and the customer's agents on them",
     description: "MSP-9: RMM device table caption.",

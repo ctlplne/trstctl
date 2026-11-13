@@ -1,1 +1,0 @@
-import{m as s,t}from"./schemas-di8oocFV.js";function r(r){return s(t,r)}export{r as t};

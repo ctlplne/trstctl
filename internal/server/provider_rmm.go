@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/rmm"
+	"trstctl.com/trstctl/internal/rmm/automate"
 	"trstctl.com/trstctl/internal/rmm/datto"
 	"trstctl.com/trstctl/internal/rmm/kaseya"
 	"trstctl.com/trstctl/internal/rmm/ncentral"
@@ -277,6 +278,20 @@ func (d *issuanceDispatcher) withRMMClient(target config.ProviderBillingTarget, 
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: RMM target endpoint rejected: %w", err))
 	}
 	switch {
+	case target.Type == "automate" && target.Automate != nil:
+		a := target.Automate
+		password, err := resolveDeploymentCredentialRef(a.PasswordRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the automate target's password_ref"))
+		}
+		defer password.Destroy()
+		c, err := automate.New(automate.Config{BaseURL: target.Endpoint, Username: a.Username, ClientID: a.ClientID, CommandID: a.ExecuteCommandID,
+			Commands: map[rmm.Action]string{rmm.ActionInstall: a.InstallLine, rmm.ActionUpgrade: a.UpgradeLine, rmm.ActionRemove: a.RemoveLine}},
+			client, automate.Credentials{Password: password.Bytes()})
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return fn(c)
 	case target.Type == "kaseya" && target.Kaseya != nil:
 		k := target.Kaseya
 		pat, err := resolveDeploymentCredentialRef(k.AccessTokenRef)

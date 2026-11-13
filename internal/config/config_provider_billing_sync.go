@@ -95,6 +95,31 @@ type ProviderBillingTarget struct {
 	// agent procedures run the agent's install, upgrade and remove. Endpoint
 	// is the VSA server, e.g. https://vsa.example.com.
 	Kaseya *KaseyaTarget `json:"kaseya,omitempty"`
+	// Automate configures an "automate" RMM target (MSP-11): the same for a
+	// ConnectWise Automate server, whose clients are the customers' and
+	// whose execute command runs the agent's install, upgrade and remove
+	// shell lines. Health is not written back to Automate yet. Endpoint is
+	// the server, e.g. https://automate.example.com.
+	Automate *AutomateTarget `json:"automate,omitempty"`
+}
+
+// AutomateTarget is a ConnectWise Automate server the Provider runs agents
+// through.
+type AutomateTarget struct {
+	// Username is the integrator user; PasswordRef names its password
+	// (file: or env:).
+	Username    string `json:"username"`
+	PasswordRef string `json:"password_ref"`
+	// ClientID is the integration's client ID, sent as the clientID header.
+	ClientID string `json:"client_id"`
+	// ExecuteCommandID is the Automate command that executes a shell line.
+	ExecuteCommandID int64 `json:"execute_command_id"`
+	// InstallLine, UpgradeLine and RemoveLine are each action's shell line
+	// in Automate's "<shell>!!! <arguments>" form; an install's enrollment
+	// arguments are appended.
+	InstallLine string `json:"install_line"`
+	UpgradeLine string `json:"upgrade_line"`
+	RemoveLine  string `json:"remove_line"`
 }
 
 // KaseyaTarget is a Kaseya VSA server the Provider runs agents through.
@@ -169,7 +194,7 @@ type NinjaOneTarget struct {
 }
 
 // RMMTargetTypes are the target types that run the agent through an RMM.
-var RMMTargetTypes = map[string]bool{"ninjaone": true, "datto": true, "ncentral": true, "kaseya": true}
+var RMMTargetTypes = map[string]bool{"ninjaone": true, "datto": true, "ncentral": true, "kaseya": true, "automate": true}
 
 // IsRMM reports whether the target runs the agent's lifecycle through an
 // RMM (MSP-9 onward).
@@ -426,7 +451,7 @@ var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
 var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}, "gradient": {}, "pax8": {},
-	"ninjaone": {}, "datto": {}, "ncentral": {}, "kaseya": {}}
+	"ninjaone": {}, "datto": {}, "ncentral": {}, "kaseya": {}, "automate": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -458,7 +483,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone, datto, ncentral, kaseya)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone, datto, ncentral, kaseya, automate)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -495,6 +520,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 			errs = append(errs, validateNCentralTarget(where, t)...)
 		case "kaseya":
 			errs = append(errs, validateKaseyaTarget(where, t)...)
+		case "automate":
+			errs = append(errs, validateAutomateTarget(where, t)...)
+		}
+		if t.Type != "automate" && t.Automate != nil {
+			errs = append(errs, fmt.Errorf("%s.automate applies to automate targets only", where))
 		}
 		if t.Type != "kaseya" && t.Kaseya != nil {
 			errs = append(errs, fmt.Errorf("%s.kaseya applies to kaseya targets only", where))
@@ -697,6 +727,40 @@ func validateKaseyaTarget(where string, t ProviderBillingTarget) []error {
 	}
 	if k.HealthField != "" && (!rmmFieldPattern.MatchString(k.HealthField) || k.HealthField == k.EnrollmentField) {
 		errs = append(errs, fmt.Errorf("%s.health_field must be another custom field name", where))
+	}
+	return errs
+}
+
+func validateAutomateTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; an automate target signs in with its integrator user", where))
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	a := t.Automate
+	if a == nil {
+		return append(errs, fmt.Errorf("%s.automate is required for an automate target", where))
+	}
+	where += ".automate"
+	if !validConnectWiseName(a.Username) {
+		errs = append(errs, fmt.Errorf("%s.username must be the integrator user (1-100 characters)", where))
+	}
+	if err := validateDeploymentCredentialRef(a.PasswordRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.password_ref: %w", where, err))
+	}
+	if !pax8IDPattern.MatchString(a.ClientID) {
+		errs = append(errs, fmt.Errorf("%s.client_id must be the integration's client ID (a GUID)", where))
+	}
+	if a.ExecuteCommandID <= 0 {
+		errs = append(errs, fmt.Errorf("%s.execute_command_id must be the Automate command that executes a shell line", where))
+	}
+	for _, line := range []struct{ name, value string }{{"install_line", a.InstallLine}, {"upgrade_line", a.UpgradeLine}, {"remove_line", a.RemoveLine}} {
+		v := strings.TrimSpace(line.value)
+		if !strings.Contains(v, "!!! ") || len(v) > 1000 || strings.IndexFunc(v, unicode.IsControl) >= 0 {
+			errs = append(errs, fmt.Errorf("%s.%s must be a shell line in Automate's \"<shell>!!! <arguments>\" form (at most 1000 characters)", where, line.name))
+		}
 	}
 	return errs
 }

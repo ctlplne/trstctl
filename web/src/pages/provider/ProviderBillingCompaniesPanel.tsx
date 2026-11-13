@@ -432,6 +432,8 @@ function targetTypeLabel(type: string): string {
       return translateNow("provider.billingSync.type.ncentral");
     case "kaseya":
       return translateNow("provider.billingSync.type.kaseya");
+    case "automate":
+      return translateNow("provider.billingSync.type.automate");
     case "json":
       return translateNow("provider.billingSync.type.json");
     default:
@@ -462,6 +464,8 @@ function companyHint(type: string): string | undefined {
       return translateNow("provider.billingSync.ncentralCompanyHint");
     case "kaseya":
       return translateNow("provider.billingSync.kaseyaCompanyHint");
+    case "automate":
+      return translateNow("provider.billingSync.automateCompanyHint");
     default:
       return undefined;
   }
