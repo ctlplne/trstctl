@@ -2,10 +2,12 @@
 # rotator's proof (A240). Test-only: secret_static_rotation_unix_container_test.go
 # builds it, installs the administrator's public key for root and pins the host
 # key it generates at start. orders-svc-a and orders-svc-b share the orders
-# group (a two-user role); orders-single is rotated in place.
+# group (a two-user role); orders-single is rotated in place. sudo is there
+# so a non-root discovery administrator can list other accounts' rights
+# (A260-L3).
 FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends openssh-server passwd \
+    && apt-get install -y --no-install-recommends openssh-server passwd sudo \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /run/sshd /root/.ssh \
     && chmod 0700 /root/.ssh \

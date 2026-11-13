@@ -9733,8 +9733,9 @@ Remaining limits:
   `pam.checkout.rotation_blocked` alert (A261-L2); it ends at the next expiry tick once a
   rotation can be queued, and nothing retires its credential before then.
 - Vaulted accounts on the other database types the gateway serves.
-- A host's sudo rights when the administrator cannot read the sudoers files are reported
-  unknown (`sudoers: unreadable`), not guessed; keys an `AuthorizedKeysCommand` returns, and
+- A host's sudo rights when the administrator cannot read the sudoers files and sudo does not
+  let it list other users' rights (the `list` pseudo-command, A260-L3) are reported unknown
+  (`sudoers: unreadable`), not guessed; keys an `AuthorizedKeysCommand` returns, and
   a `Match` block's own `AuthorizedKeysFile`, are not read (the account says when a command is
   configured); Windows hosts' local administrators.
 

@@ -85,3 +85,43 @@ func TestParseSSHAccountInventoryKeyFilesA260L2(t *testing.T) {
 		t.Fatalf("an inventory without the sshd section = %+v, %v", older, err)
 	}
 }
+
+// A260-L3: the inventory's sudo-list section carries sudo's own listing per
+// login account, kept apart from the sudoers files it stands in for; an
+// inventory from before it has none.
+func TestParseSSHAccountInventorySudoListA260L3(t *testing.T) {
+	inv, err := parseSSHAccountInventory([]byte(strings.Join([]string{
+		"=== passwd", "orders-single:x:1002:1002::/home/orders-single:/bin/bash",
+		"=== sudoers", "--- /etc/sudoers unreadable",
+		"=== sudo-list",
+		"--- orders-single",
+		"User orders-single may run the following commands on lab:",
+		"    (root) NOPASSWD: /usr/bin/systemctl restart app",
+		"",
+		"--- plain",
+		"User plain is not allowed to run sudo on lab.",
+		"--- refused unlisted",
+		"=== end",
+	}, "\n") + "\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, refused := inv.SudoList["refused"]; refused || len(inv.SudoList) != 2 || len(inv.SudoList["orders-single"]) != 2 ||
+		inv.SudoList["plain"][0] != "User plain is not allowed to run sudo on lab." {
+		t.Fatalf("sudo list = %#v", inv.SudoList)
+	}
+	if len(inv.Sudoers) != 1 || inv.Sudoers[0].Readable {
+		t.Fatalf("sudoers = %+v", inv.Sudoers)
+	}
+	older, err := parseSSHAccountInventory([]byte("=== passwd\nroot:x:0:0::/root:/bin/sh\n=== end\n"))
+	if err != nil || older.SudoList != nil {
+		t.Fatalf("an inventory without the section: %#v %v", older.SudoList, err)
+	}
+	// Every sudo the script runs reads /dev/null: the script itself is on
+	// stdin.
+	for _, line := range strings.Split(sshAccountInventoryScript, "\n") {
+		if strings.Contains(line, "sudo -n") && !strings.Contains(line, "</dev/null") {
+			t.Fatalf("a sudo call that could read the script from stdin: %q", line)
+		}
+	}
+}

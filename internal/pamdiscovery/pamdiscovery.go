@@ -9,6 +9,7 @@
 package pamdiscovery
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -143,6 +144,10 @@ type HostInventory struct {
 	// no file holds.
 	KeyFiles    []string
 	KeysCommand bool
+	// SudoList is sudo's own listing of each login account's rights (`sudo -l
+	// -U`), read when a sudoers file was unreadable and the administrator may
+	// list them (A260-L3).
+	SudoList map[string][]string
 }
 
 // defaultKeyFiles are sshd's AuthorizedKeysFile when none is configured.
@@ -156,7 +161,9 @@ type localUser struct {
 // of an administrators' group (sudo, wheel, admin, root), and accounts a
 // sudoers rule names directly, through a group or through a user alias. Each
 // carries its authorized keys' fingerprints. When a sudoers file could not be
-// read, every account says so (sudoers=unreadable): its sudo rights are
+// read, sudo's own listing of each login account's rights stands in for it
+// when the administrator may read one (sudoers=listed by sudo, A260-L3);
+// otherwise every account says so (sudoers=unreadable): its sudo rights are
 // unknown, not absent.
 func HostAccounts(inv HostInventory) []Account {
 	var users []localUser
@@ -218,6 +225,20 @@ func HostAccounts(inv HostInventory) []Account {
 			add(name, grant)
 		}
 	}
+	// A260-L3: sudo's listing covers what an unreadable file hid.
+	listed := unreadable && len(inv.SudoList) > 0
+	if listed {
+		for name, lines := range inv.SudoList {
+			if grant := sudoListGrant(lines); grant != "" && !slices.Contains(privileges[name], grant) {
+				if grant == "sudo:ALL" {
+					privileges[name] = slices.DeleteFunc(privileges[name], func(p string) bool { return p == "sudo:commands" })
+				} else if slices.Contains(privileges[name], "sudo:ALL") {
+					continue
+				}
+				add(name, grant)
+			}
+		}
+	}
 	keys := map[string][]AuthorizedKey{}
 	keysUnreadable := map[string]bool{}
 	for _, k := range inv.Keys {
@@ -236,6 +257,9 @@ func HostAccounts(inv HostInventory) []Account {
 		details := map[string]string{"uid": u.uid, "shell": u.shell}
 		if unreadable {
 			details["sudoers"] = "unreadable"
+			if _, ok := inv.SudoList[u.name]; ok && listed {
+				details["sudoers"] = "listed by sudo"
+			}
 		}
 		// A260-L2: where the keys were read from, when it is not sshd's
 		// default, and that a command can add keys no file holds.
@@ -375,4 +399,48 @@ func joinContinuations(lines []string) []string {
 		out = append(out, strings.TrimSpace(cur.String()))
 	}
 	return out
+}
+
+// sudoListGrant reads `sudo -l -U` output (LC_ALL=C): the rules under "may
+// run the following commands" grant "sudo:ALL" when one runs any command and
+// "sudo:commands" when they name commands; none, or only the list
+// pseudo-command, grants nothing (A260-L3).
+func sudoListGrant(lines []string) string {
+	grant, inRules := "", false
+	for _, line := range lines {
+		if strings.Contains(line, "may run the following commands") {
+			inRules = true
+			continue
+		}
+		if !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") {
+			inRules = false // another heading ends the rules
+			continue
+		}
+		if !inRules {
+			continue
+		}
+		rule := strings.TrimSpace(line)
+		if strings.HasPrefix(rule, "(") {
+			if end := strings.Index(rule, ")"); end >= 0 {
+				rule = strings.TrimSpace(rule[end+1:])
+			}
+		}
+		for {
+			tag, rest, ok := strings.Cut(rule, ":")
+			if !ok || tag == "" || strings.ToUpper(tag) != tag || strings.ContainsAny(tag, " /,") {
+				break
+			}
+			rule = strings.TrimSpace(rest)
+		}
+		for _, command := range strings.Split(rule, ",") {
+			switch command = strings.TrimSpace(command); command {
+			case "ALL":
+				return "sudo:ALL"
+			case "", "list":
+			default:
+				grant = "sudo:commands"
+			}
+		}
+	}
+	return grant
 }

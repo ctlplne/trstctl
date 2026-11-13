@@ -596,6 +596,20 @@ from:"). When sshd has an `AuthorizedKeysCommand`, each account says so
 (`authorized_keys_command: configured`): keys it returns are in no file the scan reads, and a
 `Match` block's own `AuthorizedKeysFile` is not applied.
 
+An administrator that is not root usually cannot read `/etc/sudoers` or `/etc/sudoers.d`
+(A260-L3). When a sudoers file is unreadable and sudo lets the administrator list other users'
+rights, the scan asks sudo itself — `sudo -n -l -U <account>` for each account with a login
+shell — and reads the rules it prints: one that runs any command grants `sudo:ALL`, one naming
+commands `sudo:commands`. Those accounts say `sudoers: listed by sudo`. Grant the right with
+sudoers' `list` pseudo-command, run as any user:
+
+```sudoers
+discover-admin ALL = (ALL) NOPASSWD: list
+```
+
+Without it, or for an account sudo refuses to list, the rights stay unknown
+(`sudoers: unreadable`), never read as none.
+
 ```bash
 echo '{"interval_seconds": 86400}' | trstctl-cli access discovery sources save orders-pg -f -
 trstctl-cli access discovery scan orders-pg

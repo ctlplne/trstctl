@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- Privileged account discovery reads a host's sudo rights through a non-root administrator (A260-L3): when a sudoers
+  file is unreadable and sudo lets the administrator list other users' rights (`admin ALL = (ALL) NOPASSWD: list`),
+  the scan asks `sudo -n -l -U` for each login account and stages `sudo:ALL` or `sudo:commands` from what sudo prints,
+  marked `sudoers: listed by sudo`; an account sudo will not list stays unknown. The lab host image installs sudo
+  (Debian bookworm, sudo 1.9.13p3).
 - The operations ledger reads agent jobs, ended sessions and managed-key operations (A245-L1): a host or relay agent's
   job in the state its signed receipt reports (`agent_job`), ended access sessions (a gateway session uncertain until
   its gateway reports it closed) and machine sessions, and managed-key operations, each shown only to a caller who may

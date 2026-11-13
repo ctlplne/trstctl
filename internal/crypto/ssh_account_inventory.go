@@ -28,6 +28,15 @@ import (
 // the account's fields in its environment, so a passwd field is never code.
 // An AuthorizedKeysCommand is named too: the keys it returns cannot be read
 // from a file.
+//
+// A260-L3: a sudoers file a non-root administrator cannot read hides who may
+// run what. When one is unreadable and sudo lets the administrator list other
+// users' rights (sudoers' list pseudo-command, run as any user: `admin ALL =
+// (ALL) NOPASSWD: list`), the script asks sudo itself, `sudo -n -l -U
+// <account>`, for every account with a login shell. A listing sudo refuses
+// (it exits non-zero) is marked unlisted: that account's rights stay unknown,
+// never read as none. Every sudo call reads /dev/null: the script arrives on
+// stdin, and nothing it runs may read the rest of it.
 
 // sshAccountInventoryScript prints framed sections; a file it cannot read is
 // named as unreadable rather than skipped.
@@ -109,6 +118,23 @@ echo '=== keys'
     if [ -r "$f" ]; then echo "--- $name"; cat "$f"; echo; else echo "--- $name unreadable"; fi
   done
 done
+echo '=== sudo-list'
+sudoers_hidden=''
+for f in /etc/sudoers /etc/sudoers.d/*; do
+  [ -f "$f" ] || continue
+  [ -r "$f" ] || sudoers_hidden=1
+done
+if [ -n "$sudoers_hidden" ] && command -v sudo >/dev/null 2>&1 && sudo -n -l -U root </dev/null >/dev/null 2>&1; then
+  getent passwd | while IFS=: read -r name _ _ _ _ _ shell; do
+    case "$shell" in */nologin|*/false) continue ;; esac
+    if listing=$(sudo -n -l -U "$name" </dev/null 2>/dev/null); then
+      echo "--- $name"
+      printf '%s\n' "$listing" | head -n 200
+    else
+      echo "--- $name unlisted"
+    fi
+  done
+fi
 echo '=== end'
 `
 
@@ -150,6 +176,11 @@ type SSHAccountInventory struct {
 	// KeysCommand reports an AuthorizedKeysCommand: keys it returns are
 	// not in any file the inventory read.
 	KeysCommand bool
+	// SudoList is sudo's own listing of each login account's rights, read
+	// when a sudoers file was unreadable and the administrator may list
+	// other users' rights (A260-L3); nil when it was not read. An account
+	// whose listing sudo refused is absent.
+	SudoList map[string][]string
 }
 
 // ReadSSHAccountInventory runs the fixed read-only inventory on target as
@@ -204,7 +235,7 @@ func (l *limitedBuffer) Write(p []byte) (int, error) {
 // reduced to type and fingerprint here and their bytes dropped.
 func parseSSHAccountInventory(raw []byte) (SSHAccountInventory, error) {
 	var inv SSHAccountInventory
-	section, ended := "", false
+	section, ended, listed := "", false, ""
 	var sudoers *SSHSudoersFile
 	var keys *SSHAccountKeys
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
@@ -212,13 +243,28 @@ func parseSSHAccountInventory(raw []byte) (SSHAccountInventory, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if name, ok := strings.CutPrefix(line, "=== "); ok {
-			section, sudoers, keys = name, nil, nil
+			section, sudoers, keys, listed = name, nil, nil, ""
 			if name == "end" {
 				ended = true
 			}
 			continue
 		}
 		switch section {
+		case "sudo-list":
+			if account, ok := strings.CutPrefix(line, "--- "); ok {
+				if inv.SudoList == nil {
+					inv.SudoList = map[string][]string{}
+				}
+				listed = ""
+				if !strings.HasSuffix(account, " unlisted") {
+					listed = account
+					inv.SudoList[account] = []string{}
+				}
+				continue
+			}
+			if listed != "" && strings.TrimSpace(line) != "" {
+				inv.SudoList[listed] = append(inv.SudoList[listed], line)
+			}
 		case "sshd":
 			if files, ok := strings.CutPrefix(line, "files "); ok {
 				inv.KeyFiles = strings.Fields(files)
