@@ -162,7 +162,7 @@ func (s *attestedIssuerService) issueGitHubAttempt(ctx context.Context, tenantID
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 		Source: "attested:github_oidc", CertificateDER: append([]byte(nil), certDER...),
 		IssuanceIdempotencyKey: key, IssuanceRequestBinding: binding, IssuanceResponse: response,
-		KeyOrigin: string(custody.OriginRequester),
+		KeyOrigin: string(custody.OriginRequester), EnrollmentProtocol: "attested",
 	})
 	if err != nil {
 		return api.AttestedSVID{}, err

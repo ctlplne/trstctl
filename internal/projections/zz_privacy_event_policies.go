@@ -343,7 +343,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/issuance_response", opaque), privacyRule("/issuance_idempotency_key", opaque),
 		privacyRule("/issuance_request_binding", opaque), privacyRule("/key_origin", opaque),
 		privacyRule("/key_storage", opaque), privacyRule("/key_exportable", opaque),
-		privacyRule("/key_generated_by", opaque),
+		privacyRule("/key_generated_by", opaque), privacyRule("/enrollment_protocol", opaque),
 		privacyRule("/broker_issuance/agent_id", token),
 		privacyRule("/broker_issuance/subject", token),
 		privacyRule("/broker_issuance/method", opaque),
@@ -1458,9 +1458,10 @@ type privacyCertificateRecordedV3 struct {
 	// key_origin half of the same bug was found while implementing B2; these
 	// three were found by going back and looking, which is the only way this
 	// class of defect ever is.
-	KeyStorage     string `json:"key_storage,omitempty"`
-	KeyExportable  string `json:"key_exportable,omitempty"`
-	KeyGeneratedBy string `json:"key_generated_by,omitempty"`
+	KeyStorage         string `json:"key_storage,omitempty"`
+	KeyExportable      string `json:"key_exportable,omitempty"`
+	KeyGeneratedBy     string `json:"key_generated_by,omitempty"`
+	EnrollmentProtocol string `json:"enrollment_protocol,omitempty"`
 }
 
 type privacyCertificateRecordedV1 struct {
@@ -1488,6 +1489,7 @@ type privacyCertificateRecordedV1 struct {
 	KeyStorage             string                `json:"key_storage,omitempty"`
 	KeyExportable          string                `json:"key_exportable,omitempty"`
 	KeyGeneratedBy         string                `json:"key_generated_by,omitempty"`
+	EnrollmentProtocol     string                `json:"enrollment_protocol,omitempty"`
 }
 
 type privacyCertificateRecordedV4 struct {
@@ -1516,6 +1518,7 @@ type privacyCertificateRecordedV4 struct {
 	KeyStorage             string                `json:"key_storage,omitempty"`
 	KeyExportable          string                `json:"key_exportable,omitempty"`
 	KeyGeneratedBy         string                `json:"key_generated_by,omitempty"`
+	EnrollmentProtocol     string                `json:"enrollment_protocol,omitempty"`
 }
 
 type privacyCertificateObservedV5 struct {

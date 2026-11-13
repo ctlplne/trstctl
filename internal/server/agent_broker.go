@@ -321,7 +321,7 @@ func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenan
 		Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 		Source: "broker:" + identity.Attestation.Method, CertificateDER: append([]byte(nil), identity.CertDER...),
-		IssuanceIdempotencyKey: idemKey,
+		IssuanceIdempotencyKey: idemKey, EnrollmentProtocol: "broker",
 		IssuanceRequestBinding: binding,
 		BrokerIssuance: &store.BrokerIssuance{
 			AgentID: identity.AgentID, Subject: identity.Subject, Method: identity.Attestation.Method,

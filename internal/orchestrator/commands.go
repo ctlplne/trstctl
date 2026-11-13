@@ -2088,6 +2088,7 @@ func certificateRecordedPayload(id string, in store.Certificate, approval *store
 		KeyStorage:             in.KeyStorage,
 		KeyExportable:          in.KeyExportable,
 		KeyGeneratedBy:         in.KeyGeneratedBy,
+		EnrollmentProtocol:     in.EnrollmentProtocol,
 		Approval:               approval,
 		ApprovalBinding:        approvalBinding,
 	}
@@ -2928,6 +2929,7 @@ func (o *Orchestrator) RecordSuccessorCertificate(ctx context.Context, tenantID 
 		KeyStorage:             in.KeyStorage,
 		KeyExportable:          in.KeyExportable,
 		KeyGeneratedBy:         in.KeyGeneratedBy,
+		EnrollmentProtocol:     in.EnrollmentProtocol,
 	})
 	if err != nil {
 		return store.Certificate{}, err

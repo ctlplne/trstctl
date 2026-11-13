@@ -88,7 +88,7 @@ describe("certificate application view (A244)", () => {
     expect(section.getByText(/Seen by a network agent, as a client sees it at/)).toBeInTheDocument();
     expect(section.queryByText("That sighting is of an earlier certificate, not the active one.")).not.toBeInTheDocument();
     expect(section.getByText("Renew before it expires")).toBeInTheDocument();
-    expect(section.getByText("Enrollment methods: acme, api")).toBeInTheDocument();
+    expect(section.getByText("Permitted enrollment methods: acme, api")).toBeInTheDocument();
     const steps = section.getAllByRole("listitem").map((item) => item.textContent);
     expect(steps.slice(0, 4)).toEqual([
       "An approver signs off under profile orders-tls",
@@ -106,6 +106,17 @@ describe("certificate application view (A244)", () => {
       profile_name: "orders-tls",
       issuer_key: "external:corp-digicert",
     });
+  });
+
+  it("names the method that enrolled the active certificate and the first one, apart from the profile's permitted methods (A244-L4)", async () => {
+    const view = fixture();
+    view.enrollment = { first_method: "est", first_certificate_id: "cert-1", current_method: "acme" };
+    read.mockResolvedValue(view);
+    show();
+    const section = within(await screen.findByRole("region", { name: "Application view" }));
+    await section.findByText("Enrolled by: acme");
+    expect(section.getByText("First certificate enrolled by: est")).toBeInTheDocument();
+    expect(section.getByText("Permitted enrollment methods: acme, api")).toBeInTheDocument();
   });
 
   it("says a renewal's certificate is only delivered and names what changed under an approval", async () => {

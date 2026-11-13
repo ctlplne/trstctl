@@ -532,6 +532,11 @@ everything one certificate's application depends on in one answer:
 
 - **owner and profile**: the owner, the active profile version, whether issuance
   needs approval, and the enrollment methods the profile permits;
+- **how it was enrolled** (A244-L4): the path that issued the identity's first
+  certificate and the one that issued the active certificate — `api` (issued or
+  renewed through the control plane), `agent` (its host agent's key and CSR),
+  `acme`, `est`, `scep` or `cmp`, `broker`, `attested` or `ephemeral` — as each
+  certificate recorded it when it was issued;
 - **the exact issuer**: the CA the identity is bound to (platform, private or
   external, by ID) and the issuer name inside the active certificate;
 - **where it goes and what was seen**: the destination (target, connector,

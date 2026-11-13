@@ -77,6 +77,17 @@ type applicationIssuer struct {
 	CertificateIssuer string `json:"certificate_issuer,omitempty"`
 }
 
+// applicationEnrollment is how the identity's certificates were enrolled
+// (A244-L4): the path that issued its first certificate and the one that
+// issued the active certificate, as each issuing front end named it (api,
+// agent, acme, est, scep, cmp, broker, attested, ephemeral). Empty is
+// unrecorded: issued before paths were kept.
+type applicationEnrollment struct {
+	FirstMethod        string `json:"first_method,omitempty"`
+	FirstCertificateID string `json:"first_certificate_id,omitempty"`
+	CurrentMethod      string `json:"current_method,omitempty"`
+}
+
 type applicationProfile struct {
 	Name             string `json:"name"`
 	Version          int    `json:"version"`
@@ -186,6 +197,7 @@ type identityApplicationView struct {
 	Issuer         applicationIssuer       `json:"issuer"`
 	Profile        *applicationProfile     `json:"profile,omitempty"`
 	Certificate    *applicationCertificate `json:"certificate,omitempty"`
+	Enrollment     *applicationEnrollment  `json:"enrollment,omitempty"`
 	Destination    *applicationDestination `json:"destination,omitempty"`
 	Served         *applicationServed      `json:"served,omitempty"`
 	Approvals      []applicationApproval   `json:"approvals"`
@@ -287,8 +299,19 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 			c := certs[i]
 			view.Certificate = &applicationCertificate{ID: c.ID, Fingerprint: c.Fingerprint, Serial: c.Serial, Status: c.Status, NotAfter: c.NotAfter}
 			view.Issuer.CertificateIssuer = c.Issuer
+			view.Enrollment = &applicationEnrollment{CurrentMethod: c.EnrollmentProtocol}
 			break
 		}
+	}
+	// A244-L4: the method that first enrolled the identity's certificate, which
+	// the profile's permitted protocols can't tell.
+	if firstID, firstMethod, err := a.store.IdentityFirstEnrollment(ctx, tenantID, id); err != nil {
+		return identityApplicationView{}, err
+	} else if firstID != "" {
+		if view.Enrollment == nil {
+			view.Enrollment = &applicationEnrollment{}
+		}
+		view.Enrollment.FirstMethod, view.Enrollment.FirstCertificateID = firstMethod, firstID
 	}
 	if attrs.Target != "" {
 		if target, err := a.store.GetDeploymentTarget(ctx, tenantID, attrs.Target); err == nil {
@@ -495,6 +518,8 @@ func identityApplicationSchemas() map[string]*Schema {
 			"certificate": object(map[string]*Schema{
 				"id": uuid(), "fingerprint": str(), "serial": str(), "status": str(), "not_after": timestamp(),
 			}, "id", "fingerprint", "serial", "status"),
+			"enrollment": {Type: "object", Description: "How the identity's certificates were enrolled (A244-L4): the path that issued its first certificate and the one that issued the active certificate (api, agent, acme, est, scep, cmp, broker, attested, ephemeral); empty is unrecorded.",
+				Properties: map[string]*Schema{"first_method": str(), "first_certificate_id": uuid(), "current_method": str()}},
 			"destination": object(map[string]*Schema{
 				"target_id": uuid(), "name": str(), "connector": str(), "revision": str(), "enabled": {Type: "boolean"},
 				"verify_address":       {Type: "string", Description: "The endpoint the destination serves, from its target's verify_address, verified every interval (A244-L1); empty when nothing observes the destination."},

@@ -770,6 +770,9 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		defer material.destroyKey()
 		cert := material.Certificate
 		cert.IssuanceIdempotencyKey = idemKey
+		// A244-L4: an identity's issuance through the control plane is the
+		// api enrollment path its profile check names.
+		cert.EnrollmentProtocol = "api"
 		// Retain exactly the public chain selected at issuance, never a later active CA.
 		cert.CertificatePEM = append(append([]byte(nil), material.CertPEM...), material.ChainPEM...)
 		recorded, err := d.orch.RecordCertificate(ctx, m.TenantID, cert)
@@ -1036,6 +1039,7 @@ func (d *issuanceDispatcher) executeRenewal(ctx context.Context, m orchestrator.
 		}
 		successor := material.Certificate
 		successor.IssuanceIdempotencyKey = idemKey
+		successor.EnrollmentProtocol = "api" // A244-L4: renewed through the control plane
 		recorded, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID)
 		if err != nil {
 			material.destroyKey()

@@ -339,7 +339,7 @@ func (s *attestedIssuerService) IssueAttestedSVID(ctx context.Context, tenantID,
 		Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 		Source: "attested:" + att.Method, CertificateDER: append([]byte(nil), certDER...),
-		IssuanceIdempotencyKey: idemKey,
+		IssuanceIdempotencyKey: idemKey, EnrollmentProtocol: "attested",
 		// The workload supplied only its public key. Record that custody fact
 		// through the certificate event; storage and exportability stay unknown.
 		KeyOrigin: string(custody.OriginRequester),

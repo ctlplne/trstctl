@@ -1139,6 +1139,7 @@ const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
 	472: true, // TestMigration0472KeepsScopedSyncsOnTheDefaultInterval
+	473: true, // TestMigration0473KeepsCertificatesWithNoEnrollmentPath
 	454: true, // TestMigration0454KeepsPilotsAndRequiresNoObservedTraffic
 	456: true, // TestMigration0456KeepsCryptoAssetsAndNamesNoImportSource
 	453: true, // TestMigration0453KeepsFeedsAndStartsWithNoClientCertificate

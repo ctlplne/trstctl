@@ -1343,6 +1343,12 @@ type CertificateRecorded struct {
 	KeyStorage     string `json:"key_storage,omitempty"`
 	KeyExportable  string `json:"key_exportable,omitempty"`
 	KeyGeneratedBy string `json:"key_generated_by,omitempty"`
+	// EnrollmentProtocol is the enrollment path that issued the certificate
+	// (api, acme, est, scep, cmp, agent, ...), as its front end named it to
+	// the profile check (A244-L4). Optional on every schema version: an event
+	// without it projects an unrecorded path, and the first recorded path
+	// stays.
+	EnrollmentProtocol string `json:"enrollment_protocol,omitempty"`
 }
 
 // CertificateCustodyAttested is the signed host-agent terminal receipt that
@@ -6677,6 +6683,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			KeyGeneratedBy:        pl.KeyGeneratedBy,
 			KeyOriginDerivation:   derivation,
 			KeyOriginProofEventID: proofEventID,
+			EnrollmentProtocol:    pl.EnrollmentProtocol,
 		}); err != nil {
 			return err
 		}

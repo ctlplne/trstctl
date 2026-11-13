@@ -144,6 +144,8 @@ func (m *Manager) renew(ctx context.Context, tenantID string, old store.Certific
 		// of their inventory rather than of the source.
 		KeyOrigin:  string(custody.OriginControlPlane),
 		KeyStorage: string(custody.StorageLockedMemory),
+		// A244-L4: renewed through the control plane.
+		EnrollmentProtocol: "api",
 	}
 
 	// Record the successor and retire the predecessor through event-sourced

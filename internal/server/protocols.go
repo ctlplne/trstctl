@@ -288,6 +288,9 @@ func (p *protocolIssuer) issueProtocolLeafChainForProfile(ctx context.Context, t
 			// The enrollment adapter knows whether it received a client CSR.
 			// That establishes neither storage nor exportability nor an actor.
 			KeyOrigin: string(origin),
+			// A244-L4: the enrollment path that issued it, which stays when a
+			// later observation changes the source.
+			EnrollmentProtocol: protocolName,
 		}); err != nil {
 			return nil, err
 		}

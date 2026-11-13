@@ -28585,6 +28585,22 @@
             ],
             "type": "object"
           },
+          "enrollment": {
+            "description": "How the identity's certificates were enrolled (A244-L4): the path that issued its first certificate and the one that issued the active certificate (api, agent, acme, est, scep, cmp, broker, attested, ephemeral); empty is unrecorded.",
+            "properties": {
+              "current_method": {
+                "type": "string"
+              },
+              "first_certificate_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "first_method": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
           "identity": {
             "$ref": "#/components/schemas/Identity"
           },

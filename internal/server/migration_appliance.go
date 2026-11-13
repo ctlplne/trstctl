@@ -111,6 +111,7 @@ func (d *issuanceDispatcher) issueApplianceSuccessor(
 	defer material.destroyKey()
 	cert := material.Certificate
 	cert.IssuanceIdempotencyKey = issueKey
+	cert.EnrollmentProtocol = "api" // A244-L4: issued by the control plane for the migration
 	cert.CertificatePEM = append(append([]byte(nil), material.CertPEM...), material.ChainPEM...)
 	recorded, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, cert, b.PredecessorCertificateID)
 	if err != nil {

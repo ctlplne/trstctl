@@ -38058,10 +38058,21 @@ export const messages = {
     description: "Application view of one certificate in identity detail: what the identity itself puts into the certificate changed under an approval.",
   },
   "identities.application.enrollment": {
-    defaultMessage: "Enrollment methods: {methods}",
-    description: "Application view of one certificate in identity detail.",
+    defaultMessage: "Permitted enrollment methods: {methods}",
+    description: "Application view of one certificate in identity detail: the enrollment protocols the profile permits.",
   },
-  "identities.application.enrollmentAny": { defaultMessage: "Enrollment methods: any", description: "Application view of one certificate in identity detail." },
+  "identities.application.enrollmentAny": {
+    defaultMessage: "Permitted enrollment methods: any",
+    description: "Application view of one certificate in identity detail: the profile permits every enrollment protocol.",
+  },
+  "identities.application.enrolledBy": {
+    defaultMessage: "Enrolled by: {method}",
+    description: "Application view of one certificate in identity detail: the enrollment path that issued the active certificate (api, agent, acme, ...).",
+  },
+  "identities.application.firstEnrolledBy": {
+    defaultMessage: "First certificate enrolled by: {method}",
+    description: "Application view of one certificate in identity detail: the enrollment path that issued the identity's first certificate.",
+  },
   "identities.application.plan": { defaultMessage: "Review plan", description: "Application view of one certificate in identity detail." },
   "identities.application.planHelp": {
     defaultMessage: "What the next issuance or renewal does, step by step. No secret or key material appears here.",

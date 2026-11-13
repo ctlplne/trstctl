@@ -438,7 +438,7 @@ func (s *ephemeralIssuerService) issueApprovedEphemeralCredential(
 		Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 		Source: "ephemeral:" + issued.Attestation.Method, CertificateDER: append([]byte(nil), issued.CertDER...),
-		IssuanceIdempotencyKey: issueKey,
+		IssuanceIdempotencyKey: issueKey, EnrollmentProtocol: "ephemeral",
 		// B5: the workload presented its own public key, so the control plane
 		// signed for a key it never saw the private half of. Storage stays
 		// unrecorded — the key lives wherever the attested workload put it, and

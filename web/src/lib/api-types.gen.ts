@@ -5999,6 +5999,7 @@ export interface IdentityApplicationView {
   certificate?: { fingerprint: string; id: string; not_after?: string; serial: string; status: string };
   defaults: { connector?: string; issuer_id?: string; issuer_source?: string; owner_id?: string; profile_name?: string };
   destination?: { connector: string; enabled: boolean; last_delivery_at?: string; last_delivery_fingerprint?: string; last_delivery_status?: string; name: string; revision: string; target_id: string; verify_address?: string };
+  enrollment?: { current_method?: string; first_certificate_id?: string; first_method?: string };
   identity: Identity;
   inventory_state: "requested" | "issued" | "delivered" | "served" | "revoked" | "retired";
   issuer: { certificate_issuer?: string; id?: string; name?: string; source: "platform" | "private" | "external" };

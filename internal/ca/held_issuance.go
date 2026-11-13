@@ -68,7 +68,9 @@ func (s *IssuanceService) ResumeHeld(ctx context.Context, tenantID string, reque
 	switch {
 	case err == nil:
 		s.observeLifetime(tenantID, cert)
-		if err := s.record(ctx, tenantID, held.IssueKey, held.RequestBinding, held.KeyOrigin, cert); err != nil {
+		// A held issuance keeps no enrollment path, so the certificate it
+		// delivers records none (A244-L4).
+		if err := s.record(ctx, tenantID, held.IssueKey, held.RequestBinding, held.KeyOrigin, "", cert); err != nil {
 			return HeldResume{}, safeExternalIssueError("external_ca_record_failed", "external CA certificate recording failed", err)
 		}
 		if err := s.recordDependentOnce(ctx, IssueRequest{TenantID: tenantID}, held.IssueKey, cert); err != nil {

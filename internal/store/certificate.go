@@ -65,6 +65,12 @@ type Certificate struct {
 	// always replaces a derived one; a derived one never replaces a recorded one.
 	KeyOriginDerivation   string
 	KeyOriginProofEventID string
+	// EnrollmentProtocol is the enrollment path that issued the certificate
+	// (api, acme, est, scep, cmp, agent, ...), as its front end named it to the
+	// profile check (A244-L4). Empty means unrecorded: issued before the path
+	// was kept, or observed or imported rather than enrolled here. The first
+	// recorded path stays.
+	EnrollmentProtocol string
 	// ObservedBy, ObservedKind and LastSeenAt are provenance (epic C3): which
 	// source last confirmed this certificate exists, of what kind, and when.
 	//
@@ -411,7 +417,7 @@ const certificateColumns = `id::text, tenant_id::text, owner_id::text, subject, 
         status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at,
         key_origin, key_storage, key_exportable, key_generated_by,
         observed_by, observed_kind, last_seen_at, issuance_request_binding, broker_issuance, issuance_event_id, validity_anchor, issuing_external_ca_id,
-        key_origin_derivation, key_origin_proof_event_id`
+        key_origin_derivation, key_origin_proof_event_id, enrollment_protocol`
 
 func scanCertificate(row pgx.Row, c *Certificate) error {
 	return row.Scan(&c.ID, &c.TenantID, &c.OwnerID, &c.Subject, &c.SANs, &c.Issuer, &c.Serial,
@@ -427,7 +433,9 @@ func scanCertificate(row pgx.Row, c *Certificate) error {
 		&c.ObservedBy, &c.ObservedKind, &c.LastSeenAt, &c.IssuanceRequestBinding, &c.BrokerIssuance, &c.IssuanceEventID, &c.ValidityAnchor, &c.IssuingExternalCAID,
 		// Owner decision 2026-10-24: an origin derived from the retained
 		// issuance event, and the rule and event that prove it.
-		&c.KeyOriginDerivation, &c.KeyOriginProofEventID)
+		&c.KeyOriginDerivation, &c.KeyOriginProofEventID,
+		// A244-L4: the enrollment path that issued it.
+		&c.EnrollmentProtocol)
 }
 
 // GetCertificate loads a certificate in its tenant context.

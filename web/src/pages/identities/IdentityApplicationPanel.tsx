@@ -141,9 +141,17 @@ function ApplicationDetails({ view, formatDateTime }: { view: IdentityApplicatio
               <span className="block text-xs text-muted-foreground">
                 {t("identities.certificate.expires")}: {formatDateTime(certificate.not_after)}
               </span>
+              {view.enrollment?.current_method && (
+                <span className="block text-xs text-muted-foreground">
+                  {t("identities.application.enrolledBy", { method: view.enrollment.current_method })}
+                </span>
+              )}
             </>
           ) : (
             t("identities.application.noCertificate")
+          )}
+          {view.enrollment?.first_method && (
+            <span className="block text-xs text-muted-foreground">{t("identities.application.firstEnrolledBy", { method: view.enrollment.first_method })}</span>
           )}
         </Fact>
         <Fact label={t("identities.application.destination")}>

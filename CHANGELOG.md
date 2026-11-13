@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- An identity's Application view names how its certificates were enrolled (A244-L4): each certificate records the
+  path that issued it (`api`, `agent`, `acme`, `est`, `scep`, `cmp`, `broker`, `attested`, `ephemeral`; migration
+  0473, carried on `certificate.recorded`, the first recorded path kept), and the view's `enrollment` names the path
+  of the identity's first certificate and of the active one, apart from the methods its profile permits. The console
+  shows both under the certificate.
 - A restarted CSI secrets plugin ends the session its volume used before the restart (A238-L9): the volume's
   value-free state keeps the session's ID (never its token), and the plugin's next login for the volume names it in
   `replaces` on `POST /api/v1/secrets/login`, which ends it once the pod's token proves the same principal and method

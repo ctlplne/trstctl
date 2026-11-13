@@ -336,6 +336,8 @@ func (d *issuanceDispatcher) recordAgentCSRMaterial(ctx context.Context, tenantI
 	// appliance a relay asked, A122), and add the agent that requested it.
 	cert.KeyOrigin = string(agentCSRKeyOrigin(intent))
 	cert.KeyGeneratedBy = agentName
+	// A244-L4: the identity enrolled through its host agent's CSR.
+	cert.EnrollmentProtocol = "agent"
 	if intent.ReprotectJobID != "" {
 		// The predecessor remains active until the signed report proves the
 		// successor is served. A certificate.recorded event with replaces_id

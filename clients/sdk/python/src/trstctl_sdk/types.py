@@ -8323,6 +8323,7 @@ IdentityApplicationView = TypedDict(
         'certificate': dict[str, Any],
         'defaults': dict[str, Any],
         'destination': dict[str, Any],
+        'enrollment': dict[str, Any],
         'identity': dict[str, Any],
         'inventory_state': str,
         'issuer': dict[str, Any],

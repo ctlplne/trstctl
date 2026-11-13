@@ -480,14 +480,16 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		         -- in the code and not in the row is not auditable, which is the
 		         -- entire reason the column exists.
 		         key_origin, key_storage, key_exportable, key_generated_by, validity_anchor, issuing_external_ca_id,
-		         key_origin_derivation, key_origin_proof_event_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
+		         key_origin_derivation, key_origin_proof_event_id,
+		         -- A244-L4: the enrollment path that issued it.
+		         enrollment_protocol)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
 		 ON CONFLICT DO NOTHING`,
 		c.ID, c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, certPEM, issuanceResponse,
 		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID, c.CreatedAt,
 		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy, c.ValidityAnchor, c.IssuingExternalCAID,
-		c.KeyOriginDerivation, c.KeyOriginProofEventID)
+		c.KeyOriginDerivation, c.KeyOriginProofEventID, c.EnrollmentProtocol)
 	if err != nil {
 		return err
 	}
@@ -528,7 +530,10 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		        key_storage = CASE WHEN key_storage = '' AND $20::text <> '' THEN $20 ELSE key_storage END,
 		        key_exportable = CASE WHEN key_exportable = '' AND $21::text <> '' THEN $21 ELSE key_exportable END,
 		        key_generated_by = CASE WHEN key_generated_by = '' AND $22::text <> '' THEN $22 ELSE key_generated_by END,
-		        issuing_external_ca_id = CASE WHEN issuing_external_ca_id = '' AND $24::text <> '' THEN $24 ELSE issuing_external_ca_id END
+		        issuing_external_ca_id = CASE WHEN issuing_external_ca_id = '' AND $24::text <> '' THEN $24 ELSE issuing_external_ca_id END,
+		        -- A244-L4: the first recorded enrollment path stays; a later
+		        -- record (an observation, a re-record) fills only an empty one.
+		        enrollment_protocol = CASE WHEN enrollment_protocol = '' AND $27::text <> '' THEN $27 ELSE enrollment_protocol END
 		  WHERE tenant_id = $1 AND fingerprint = $7
 		    AND (issuance_idempotency_key NOT LIKE 'broker-issue:%'
 		      OR (($16::text = '' OR issuance_idempotency_key = $16)
@@ -546,7 +551,7 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, certPEM, issuanceResponse,
 		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID,
 		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy, c.ValidityAnchor, c.IssuingExternalCAID,
-		c.KeyOriginDerivation, c.KeyOriginProofEventID)
+		c.KeyOriginDerivation, c.KeyOriginProofEventID, c.EnrollmentProtocol)
 	if err != nil {
 		return err
 	}

@@ -20009,6 +20009,13 @@ export interface components {
                 /** @description The endpoint the destination serves, from its target's verify_address, verified every interval (A244-L1); empty when nothing observes the destination. */
                 verify_address?: string;
             };
+            /** @description How the identity's certificates were enrolled (A244-L4): the path that issued its first certificate and the one that issued the active certificate (api, agent, acme, est, scep, cmp, broker, attested, ephemeral); empty is unrecorded. */
+            enrollment?: {
+                current_method?: string;
+                /** Format: uuid */
+                first_certificate_id?: string;
+                first_method?: string;
+            };
             identity: components["schemas"]["Identity"];
             /** @enum {string} */
             inventory_state: "requested" | "issued" | "delivered" | "served" | "revoked" | "retired";
