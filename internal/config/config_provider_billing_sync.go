@@ -67,6 +67,41 @@ type ProviderBillingTarget struct {
 	// Gradient forwards to the MSP's PSA. Endpoint is the API root,
 	// https://app.usegradient.com.
 	Gradient *GradientBillingTarget `json:"gradient,omitempty"`
+	// Pax8 configures a "pax8" target (MSP-8): each customer's figures are
+	// uploaded as usage lines of its Pax8 subscription. Endpoint is the API
+	// root, https://api.pax8.com.
+	Pax8 *Pax8BillingTarget `json:"pax8,omitempty"`
+}
+
+// Pax8DefaultAudience is the audience of Pax8's client-credentials tokens.
+const Pax8DefaultAudience = "api://p8p.client"
+
+// Pax8BillingTarget is a Pax8 vendor integration.
+type Pax8BillingTarget struct {
+	// TokenURL is the OAuth2 token endpoint and Audience its audience
+	// (default api://p8p.client), as Pax8 issues them at vendor onboarding.
+	TokenURL string `json:"token_url"`
+	Audience string `json:"audience,omitempty"`
+	// ClientID is the vendor application's client ID; ClientSecretRef names
+	// its secret (file: or env:).
+	ClientID        string `json:"client_id"`
+	ClientSecretRef string `json:"client_secret_ref"`
+	// Products maps a meter to its Pax8 product and unit of measurement.
+	Products map[string]Pax8Product `json:"products"`
+}
+
+// Pax8Product is the Pax8 product and unit a meter's usage line carries.
+type Pax8Product struct {
+	ProductID         string `json:"product_id"`
+	UnitOfMeasurement string `json:"unit_of_measurement"`
+}
+
+// EffectiveAudience is the token audience, the Pax8 default when unset.
+func (p Pax8BillingTarget) EffectiveAudience() string {
+	if strings.TrimSpace(p.Audience) != "" {
+		return p.Audience
+	}
+	return Pax8DefaultAudience
 }
 
 // GradientBillingTarget is a Gradient Synthesize vendor integration.
@@ -284,7 +319,7 @@ var (
 var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
-var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}, "gradient": {}}
+var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}, "gradient": {}, "pax8": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -316,7 +351,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json, connectwise, autotask, syncro, halopsa, gradient)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json, connectwise, autotask, syncro, halopsa, gradient, pax8)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -343,6 +378,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 			errs = append(errs, validateHaloPSABillingTarget(where, t)...)
 		case "gradient":
 			errs = append(errs, validateGradientBillingTarget(where, t)...)
+		case "pax8":
+			errs = append(errs, validatePax8BillingTarget(where, t)...)
+		}
+		if t.Type != "pax8" && t.Pax8 != nil {
+			errs = append(errs, fmt.Errorf("%s.pax8 applies to pax8 targets only", where))
 		}
 		if t.Type != "gradient" && t.Gradient != nil {
 			errs = append(errs, fmt.Errorf("%s.gradient applies to gradient targets only", where))
@@ -387,6 +427,55 @@ func validateJSONBillingTarget(where string, t ProviderBillingTarget) []error {
 }
 
 var haloTenantPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
+
+// pax8IDPattern is a Pax8 product or subscription ID.
+var pax8IDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+func validatePax8BillingTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; a pax8 target signs in with its client credentials", where))
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	p := t.Pax8
+	if p == nil {
+		return append(errs, fmt.Errorf("%s.pax8 is required for a pax8 target", where))
+	}
+	where += ".pax8"
+	u, err := url.Parse(strings.TrimSpace(p.TokenURL))
+	switch {
+	case err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http"):
+		errs = append(errs, fmt.Errorf("%s.token_url must be an absolute https URL", where))
+	case u.Scheme == "http" && !t.AllowInsecureLoopback:
+		errs = append(errs, fmt.Errorf("%s.token_url must use https (http only with allow_insecure_loopback for a loopback test receiver)", where))
+	case u.User != nil:
+		errs = append(errs, fmt.Errorf("%s.token_url must not carry credentials", where))
+	}
+	if p.Audience != "" && !validConnectWiseName(p.Audience) {
+		errs = append(errs, fmt.Errorf("%s.audience must be 1-100 characters", where))
+	}
+	if !validConnectWiseName(p.ClientID) {
+		errs = append(errs, fmt.Errorf("%s.client_id must be the vendor application's client ID (1-100 characters)", where))
+	}
+	if err := validateDeploymentCredentialRef(p.ClientSecretRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.client_secret_ref: %w", where, err))
+	}
+	if len(p.Products) == 0 {
+		errs = append(errs, fmt.Errorf("%s.products must map at least one meter (%s) to a Pax8 product", where, strings.Join(BillingSyncMeters, ", ")))
+	}
+	for _, meter := range slices.Sorted(maps.Keys(p.Products)) {
+		prod := p.Products[meter]
+		if !slices.Contains(BillingSyncMeters, meter) {
+			errs = append(errs, fmt.Errorf("%s.products names %q, which is not a pushed meter (%s)", where, meter, strings.Join(BillingSyncMeters, ", ")))
+		}
+		if !pax8IDPattern.MatchString(prod.ProductID) || !validConnectWiseName(prod.UnitOfMeasurement) {
+			errs = append(errs, fmt.Errorf("%s.products.%s needs a Pax8 product ID (a UUID) and a unit of measurement", where, meter))
+		}
+	}
+	return errs
+}
 
 // gradientServicePattern is a Gradient service ID as it sits in a URL path.
 var gradientServicePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)

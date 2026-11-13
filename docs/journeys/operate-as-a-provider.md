@@ -115,7 +115,9 @@ closed period pushed for the customer: queued, delivered (to which company), hel
 because its evidence cannot be signed (with the reason; one alert is raised), or
 failed after its retries (also alerted). A period is sent once; a held period is
 sent when it becomes signable.
-Each system shows how it receives the periods: a signed JSON push; Gradient
+Each system shows how it receives the periods: a signed JSON push; Pax8, where a
+customer's company is its Pax8 subscription ID and the figures become usage lines;
+Gradient
 Synthesize, where a customer's company is its Gradient account ID and the figures
 become service counts Gradient forwards to the MSP's PSA; HaloPSA, where a
 customer's company is its HaloPSA client ID and the figures become the line quantities

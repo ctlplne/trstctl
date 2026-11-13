@@ -1769,6 +1769,14 @@ export const messages = {
     defaultMessage: "The Gradient account ID trstctl reports this customer under. Map it to the customer's PSA company in Gradient.",
     description: "MSP-7: what to enter as the company in a Gradient target.",
   },
+  "provider.billingSync.type.pax8": {
+    defaultMessage: "Pax8, usage lines",
+    description: "MSP-8: a Pax8 billing target.",
+  },
+  "provider.billingSync.pax8CompanyHint": {
+    defaultMessage: "The customer's Pax8 subscription ID (a UUID). Usage is uploaded as lines of that subscription.",
+    description: "MSP-8: what to enter as the company in a Pax8 target.",
+  },
   "provider.billingSync.connectwiseCompanyHint": {
     defaultMessage: "The ConnectWise company record ID or its identifier. Usage lands on that company's one active agreement of the configured type.",
     description: "MSP-3: what to enter as the company in a ConnectWise target.",

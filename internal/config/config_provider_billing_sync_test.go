@@ -299,3 +299,54 @@ func TestProviderBillingSyncGradientTargetMSP7(t *testing.T) {
 		}
 	}
 }
+
+// MSP-8: a pax8 target names its token URL (https, no credentials), client
+// ID and secret reference, and at least one meter's product (a UUID) and
+// unit; the audience defaults to Pax8's; json and connectwise fields are
+// refused on it, and its block on other types; it opens no tickets.
+func TestProviderBillingSyncPax8TargetMSP8(t *testing.T) {
+	valid := func() ProviderBillingTarget {
+		return ProviderBillingTarget{ID: "pax8", Type: "pax8", Endpoint: "https://api.pax8.com",
+			Pax8: &Pax8BillingTarget{TokenURL: "https://login.pax8.com/oauth/token", ClientID: "trstctl-vendor-app",
+				ClientSecretRef: "file:/run/secrets/pax8-secret", // #nosec G101 -- a file: reference to a test-only value (CWE-798)
+				Products:        map[string]Pax8Product{"agents": {ProductID: "6b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e", UnitOfMeasurement: "Agent"}}}}
+	}
+	ok := valid()
+	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{ok}}); len(errs) != 0 {
+		t.Fatalf("valid pax8 target refused: %v", errs)
+	}
+	if ok.Pax8.EffectiveAudience() != "api://p8p.client" || ok.TicketKinds() != nil {
+		t.Fatalf("audience %q, kinds %v", ok.Pax8.EffectiveAudience(), ok.TicketKinds())
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*ProviderBillingTarget)
+		want   string
+	}{
+		"no block":          {func(t *ProviderBillingTarget) { t.Pax8 = nil }, ".pax8 is required"},
+		"signing key":       {func(t *ProviderBillingTarget) { t.SigningKeyRef = "env:X" }, "json targets only"},
+		"relative token":    {func(t *ProviderBillingTarget) { t.Pax8.TokenURL = "/oauth/token" }, ".token_url"},
+		"plain http token":  {func(t *ProviderBillingTarget) { t.Pax8.TokenURL = "http://login.pax8.com/oauth/token" }, ".token_url must use https"},
+		"token credentials": {func(t *ProviderBillingTarget) { t.Pax8.TokenURL = "https://a:b@login.pax8.com/oauth/token" }, "must not carry credentials"},
+		"no client id":      {func(t *ProviderBillingTarget) { t.Pax8.ClientID = "" }, ".client_id"},
+		"inline secret":     {func(t *ProviderBillingTarget) { t.Pax8.ClientSecretRef = "s3cret" }, ".client_secret_ref"},
+		"no products":       {func(t *ProviderBillingTarget) { t.Pax8.Products = nil }, ".products must map"},
+		"bad product": {func(t *ProviderBillingTarget) {
+			t.Pax8.Products["agents"] = Pax8Product{ProductID: "x", UnitOfMeasurement: "Agent"}
+		}, ".products.agents"},
+		"no unit": {func(t *ProviderBillingTarget) {
+			t.Pax8.Products["agents"] = Pax8Product{ProductID: "6b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e"}
+		}, ".products.agents"},
+		"block on gradient": {func(t *ProviderBillingTarget) { t.Type = "gradient" }, "pax8 targets only"},
+	} {
+		target := valid()
+		tc.mutate(&target)
+		errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{target}})
+		joined := ""
+		for _, err := range errs {
+			joined += err.Error() + "\n"
+		}
+		if !strings.Contains(joined, tc.want) {
+			t.Errorf("%s: errors %q, want one naming %q", name, joined, tc.want)
+		}
+	}
+}

@@ -2185,7 +2185,10 @@ never live in the API process. What you can do end to end against the running bi
   HaloPSA accounts and the other connectors (MSP-8 to MSP-15) are what comes
   next. Gradient Synthesize (MSP-7) posts each customer's service counts for
   the PSAs Gradient covers, against a stand-in written from Gradient's public
-  vendor API reference; a live Gradient account is what comes next. The
+  vendor API reference; a live Gradient account is what comes next. The Pax8
+  Usage API (MSP-8) uploads each customer's lines for its subscription against
+  a stand-in written from Pax8's public developer reference; the live run
+  waits for Pax8 vendor onboarding. The
   sweep looks back three periods, so a period older than that is not pushed
   automatically.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts

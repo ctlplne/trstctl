@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/psa/connectwise"
 	"trstctl.com/trstctl/internal/psa/gradient"
 	"trstctl.com/trstctl/internal/psa/halopsa"
+	"trstctl.com/trstctl/internal/psa/pax8"
 	"trstctl.com/trstctl/internal/psa/syncro"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -276,6 +277,23 @@ func (d *issuanceDispatcher) withPSAClient(target config.ProviderBillingTarget, 
 		}
 		defer token.Destroy()
 		psaClient, err := gradient.New(gradient.Config{BaseURL: target.Endpoint, Services: g.Services}, client, gradient.Credentials{Token: token.Bytes()})
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return fn(psaClient)
+	case target.Type == "pax8" && target.Pax8 != nil:
+		p := target.Pax8
+		secretValue, err := resolveDeploymentCredentialRef(p.ClientSecretRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the pax8 target's client_secret_ref"))
+		}
+		defer secretValue.Destroy()
+		products := make(map[string]pax8.Product, len(p.Products))
+		for meter, prod := range p.Products {
+			products[meter] = pax8.Product{ProductID: prod.ProductID, UnitOfMeasurement: prod.UnitOfMeasurement}
+		}
+		psaClient, err := pax8.New(pax8.Config{BaseURL: target.Endpoint, TokenURL: p.TokenURL, Audience: p.EffectiveAudience(),
+			ClientID: p.ClientID, Products: products}, client, pax8.Credentials{ClientSecret: secretValue.Bytes()})
 		if err != nil {
 			return orchestrator.DefiniteNoEffect(err)
 		}

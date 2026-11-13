@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- Pax8 Usage API as a billing target (MSP-8): a `pax8` target (the token URL and audience Pax8 issues at vendor
+  onboarding, the client ID and secret reference, and a product and unit per meter) signs in with client credentials
+  for each delivery and uploads each customer's signed period as usage lines of its Pax8 subscription for the period's
+  billing month, with stable summary keys so a same-day retry overwrites rather than adds.
 - Gradient Synthesize as a billing target (MSP-7): a `gradient` target (a `GRADIENT-TOKEN` reference and a service ID
   per meter) posts each customer's signed period as absolute service counts under its Gradient account, which Gradient
   forwards to the MSP's PSA; a retry posts the same count, and an account Gradient has not mapped yet is refused with

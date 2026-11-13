@@ -1727,6 +1727,33 @@ retry posts the same number. When Gradient answers that the account or service i
 mapped yet, nothing was counted: the period is refused and recorded as not delivered
 rather than sent elsewhere. Gradient carries usage only; it opens no tickets.
 
+A `pax8` target (MSP-8) uploads a customer's figures to the Pax8 Usage API as usage
+lines of its Pax8 subscription:
+
+```json
+{
+  "id": "pax8",
+  "name": "Pax8",
+  "type": "pax8",
+  "endpoint": "https://api.pax8.com",
+  "pax8": {
+    "token_url": "https://login.pax8.com/oauth/token",
+    "client_id": "trstctl-vendor-app",
+    "client_secret_ref": "file:/run/secrets/pax8-client-secret",
+    "products": {"certificates_current": {"product_id": "5a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", "unit_of_measurement": "Certificate"}}
+  }
+}
+```
+
+`token_url`, `audience` (default `api://p8p.client`) and the client credentials are
+the ones Pax8 issues at vendor onboarding; the secret is resolved for each delivery
+and the access token kept only for it. A customer's company in this target is its Pax8
+subscription ID. Each period uploads one line per configured product (`POST
+/v2/usage/lines` with the subscription and the period's `billingPeriod`), its quantity
+the period's figure and its summary key stable per meter, so a retry the same day
+overwrites rather than adds. An unknown subscription or a refused sign-in is refused
+with nothing stored. Pax8 carries usage only; it opens no tickets.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

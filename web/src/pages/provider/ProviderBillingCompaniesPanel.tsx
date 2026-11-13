@@ -289,6 +289,8 @@ function targetTypeLabel(type: string): string {
       return translateNow("provider.billingSync.type.halopsa");
     case "gradient":
       return translateNow("provider.billingSync.type.gradient");
+    case "pax8":
+      return translateNow("provider.billingSync.type.pax8");
     case "json":
       return translateNow("provider.billingSync.type.json");
     default:
@@ -309,6 +311,8 @@ function companyHint(type: string): string | undefined {
       return translateNow("provider.billingSync.halopsaCompanyHint");
     case "gradient":
       return translateNow("provider.billingSync.gradientCompanyHint");
+    case "pax8":
+      return translateNow("provider.billingSync.pax8CompanyHint");
     default:
       return undefined;
   }
