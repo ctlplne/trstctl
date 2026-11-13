@@ -1801,6 +1801,14 @@ export const messages = {
     defaultMessage: "The N-central customer ID, a number. The customer's devices are listed and matched to this customer's agents.",
     description: "MSP-12: what to enter as the company in an N-central target.",
   },
+  "provider.billingSync.type.kaseya": {
+    defaultMessage: "Kaseya VSA, devices and agents",
+    description: "MSP-13: a Kaseya VSA target.",
+  },
+  "provider.billingSync.kaseyaCompanyHint": {
+    defaultMessage: "The VSA organization ID, a number. The organization's agents are listed and matched to this customer's trstctl agents.",
+    description: "MSP-13: what to enter as the company in a Kaseya VSA target.",
+  },
   "provider.rmmDevices.caption": {
     defaultMessage: "Devices in the RMM and the customer's agents on them",
     description: "MSP-9: RMM device table caption.",

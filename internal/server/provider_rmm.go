@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/rmm"
 	"trstctl.com/trstctl/internal/rmm/datto"
+	"trstctl.com/trstctl/internal/rmm/kaseya"
 	"trstctl.com/trstctl/internal/rmm/ncentral"
 	"trstctl.com/trstctl/internal/rmm/ninjaone"
 	"trstctl.com/trstctl/internal/store"
@@ -276,6 +277,20 @@ func (d *issuanceDispatcher) withRMMClient(target config.ProviderBillingTarget, 
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: RMM target endpoint rejected: %w", err))
 	}
 	switch {
+	case target.Type == "kaseya" && target.Kaseya != nil:
+		k := target.Kaseya
+		pat, err := resolveDeploymentCredentialRef(k.AccessTokenRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the kaseya target's access_token_ref"))
+		}
+		defer pat.Destroy()
+		c, err := kaseya.New(kaseya.Config{BaseURL: target.Endpoint, Username: k.Username, EnrollmentField: k.EnrollmentField, HealthField: k.HealthField,
+			Procedures: map[rmm.Action]int64{rmm.ActionInstall: k.InstallProcedureID, rmm.ActionUpgrade: k.UpgradeProcedureID, rmm.ActionRemove: k.RemoveProcedureID}},
+			client, kaseya.Credentials{AccessToken: pat.Bytes()})
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return fn(c)
 	case target.Type == "ncentral" && target.NCentral != nil:
 		nc := target.NCentral
 		jwt, err := resolveDeploymentCredentialRef(nc.UserJWTRef)

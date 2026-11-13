@@ -485,3 +485,45 @@ func TestProviderBillingSyncNCentralTargetMSP12(t *testing.T) {
 		}
 	}
 }
+
+// MSP-13: a kaseya target is an RMM target with the VSA user, a personal
+// access token reference, three procedure IDs, the enrollment custom field
+// and an optional, different health custom field.
+func TestProviderBillingSyncKaseyaTargetMSP13(t *testing.T) {
+	valid := func() ProviderBillingTarget {
+		return ProviderBillingTarget{ID: "vsa", Type: "kaseya", Endpoint: "https://vsa.example.com",
+			Kaseya: &KaseyaTarget{Username: "trstctl-integration", AccessTokenRef: "env:VSA_PAT", // #nosec G101 -- an env: reference, not a value (CWE-798)
+				InstallProcedureID: 41, UpgradeProcedureID: 42, RemoveProcedureID: 43, EnrollmentField: "trstctlEnrollment", HealthField: "trstctlAgent"}}
+	}
+	ok := valid()
+	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{ok}}); len(errs) != 0 {
+		t.Fatalf("valid kaseya target refused: %v", errs)
+	}
+	if !ok.IsRMM() || ok.PushesUsage() || ok.TicketKinds() != nil {
+		t.Fatalf("a kaseya target: rmm=%v usage=%v kinds=%v", ok.IsRMM(), ok.PushesUsage(), ok.TicketKinds())
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*ProviderBillingTarget)
+		want   string
+	}{
+		"no block":            {func(t *ProviderBillingTarget) { t.Kaseya = nil }, ".kaseya is required"},
+		"token ref":           {func(t *ProviderBillingTarget) { t.TokenRef = "env:X" }, "json targets only"},
+		"colon in user":       {func(t *ProviderBillingTarget) { t.Kaseya.Username = "a:b" }, ".username"},
+		"inline token":        {func(t *ProviderBillingTarget) { t.Kaseya.AccessTokenRef = "pat-value" }, ".access_token_ref"},
+		"no remove procedure": {func(t *ProviderBillingTarget) { t.Kaseya.RemoveProcedureID = 0 }, ".remove_procedure_id"},
+		"no enrollment field": {func(t *ProviderBillingTarget) { t.Kaseya.EnrollmentField = "" }, ".enrollment_field"},
+		"same health field":   {func(t *ProviderBillingTarget) { t.Kaseya.HealthField = "trstctlEnrollment" }, ".health_field"},
+		"block on ncentral":   {func(t *ProviderBillingTarget) { t.Type = "ncentral" }, "kaseya targets only"},
+	} {
+		target := valid()
+		tc.mutate(&target)
+		errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{target}})
+		joined := ""
+		for _, err := range errs {
+			joined += err.Error() + "\n"
+		}
+		if !strings.Contains(joined, tc.want) {
+			t.Errorf("%s: errors %q, want one naming %q", name, joined, tc.want)
+		}
+	}
+}

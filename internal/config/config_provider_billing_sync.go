@@ -90,6 +90,31 @@ type ProviderBillingTarget struct {
 	// and remove as direct scheduled tasks. Endpoint is the server, e.g.
 	// https://ncentral.example.com.
 	NCentral *NCentralTarget `json:"ncentral,omitempty"`
+	// Kaseya configures a "kaseya" RMM target (MSP-13): the same for a
+	// Kaseya VSA 9 server, whose organizations are the customers' and whose
+	// agent procedures run the agent's install, upgrade and remove. Endpoint
+	// is the VSA server, e.g. https://vsa.example.com.
+	Kaseya *KaseyaTarget `json:"kaseya,omitempty"`
+}
+
+// KaseyaTarget is a Kaseya VSA server the Provider runs agents through.
+type KaseyaTarget struct {
+	// Username is the VSA user; AccessTokenRef names the user's personal
+	// access token (file: or env:).
+	Username       string `json:"username"`
+	AccessTokenRef string `json:"access_token_ref"`
+	// InstallProcedureID, UpgradeProcedureID and RemoveProcedureID are the
+	// agent procedures of each agent action.
+	InstallProcedureID int64 `json:"install_procedure_id"`
+	UpgradeProcedureID int64 `json:"upgrade_procedure_id"`
+	RemoveProcedureID  int64 `json:"remove_procedure_id"`
+	// EnrollmentField is the agent custom field an install's enrollment
+	// line is written to; the install procedure reads it (a procedure run
+	// now takes no parameters).
+	EnrollmentField string `json:"enrollment_field"`
+	// HealthField is the agent custom field the agent's health is written
+	// to; empty reports none.
+	HealthField string `json:"health_field,omitempty"`
 }
 
 // NCentralTarget is an N-able N-central server the Provider runs agents
@@ -144,7 +169,7 @@ type NinjaOneTarget struct {
 }
 
 // RMMTargetTypes are the target types that run the agent through an RMM.
-var RMMTargetTypes = map[string]bool{"ninjaone": true, "datto": true, "ncentral": true}
+var RMMTargetTypes = map[string]bool{"ninjaone": true, "datto": true, "ncentral": true, "kaseya": true}
 
 // IsRMM reports whether the target runs the agent's lifecycle through an
 // RMM (MSP-9 onward).
@@ -401,7 +426,7 @@ var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
 var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}, "gradient": {}, "pax8": {},
-	"ninjaone": {}, "datto": {}, "ncentral": {}}
+	"ninjaone": {}, "datto": {}, "ncentral": {}, "kaseya": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -433,7 +458,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone, datto, ncentral)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone, datto, ncentral, kaseya)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -468,6 +493,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 			errs = append(errs, validateDattoTarget(where, t)...)
 		case "ncentral":
 			errs = append(errs, validateNCentralTarget(where, t)...)
+		case "kaseya":
+			errs = append(errs, validateKaseyaTarget(where, t)...)
+		}
+		if t.Type != "kaseya" && t.Kaseya != nil {
+			errs = append(errs, fmt.Errorf("%s.kaseya applies to kaseya targets only", where))
 		}
 		if t.Type != "ncentral" && t.NCentral != nil {
 			errs = append(errs, fmt.Errorf("%s.ncentral applies to ncentral targets only", where))
@@ -631,6 +661,42 @@ func validateNCentralTarget(where string, t ProviderBillingTarget) []error {
 	}
 	if n.HealthPropertyID < 0 {
 		errs = append(errs, fmt.Errorf("%s.health_property_id must be a device custom property ID (0 for none)", where))
+	}
+	return errs
+}
+
+func validateKaseyaTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; a kaseya target signs in with its user's personal access token", where))
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	k := t.Kaseya
+	if k == nil {
+		return append(errs, fmt.Errorf("%s.kaseya is required for a kaseya target", where))
+	}
+	where += ".kaseya"
+	if !validConnectWiseName(k.Username) || strings.Contains(k.Username, ":") {
+		errs = append(errs, fmt.Errorf("%s.username must be the VSA user (1-100 characters, no colon)", where))
+	}
+	if err := validateDeploymentCredentialRef(k.AccessTokenRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.access_token_ref: %w", where, err))
+	}
+	for _, proc := range []struct {
+		name string
+		id   int64
+	}{{"install_procedure_id", k.InstallProcedureID}, {"upgrade_procedure_id", k.UpgradeProcedureID}, {"remove_procedure_id", k.RemoveProcedureID}} {
+		if proc.id <= 0 {
+			errs = append(errs, fmt.Errorf("%s.%s must be an agent procedure ID", where, proc.name))
+		}
+	}
+	if !rmmFieldPattern.MatchString(k.EnrollmentField) {
+		errs = append(errs, fmt.Errorf("%s.enrollment_field must name the custom field the install procedure reads (a letter, then letters, digits or underscores)", where))
+	}
+	if k.HealthField != "" && (!rmmFieldPattern.MatchString(k.HealthField) || k.HealthField == k.EnrollmentField) {
+		errs = append(errs, fmt.Errorf("%s.health_field must be another custom field name", where))
 	}
 	return errs
 }

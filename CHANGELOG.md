@@ -8,6 +8,11 @@
   health written to the device's custom field when it changes. Devices are events (`provider.rmm_device.*`) projected
   into `provider_rmm_devices` (migration 0467, snapshot format 133), listed at `GET /provider/v1/tenants/{id}/rmm-devices`
   and in the Provider console. RMM targets take no usage periods.
+- Kaseya VSA (MSP-13): a `kaseya` target (server, the VSA user and personal access token reference, the install,
+  upgrade and remove agent procedure IDs, an enrollment custom field and an optional health custom field) lists each
+  mapped customer's agents under its VSA organization, maps them to its trstctl agents, writes their health to the custom
+  field, and runs the agent procedures now; an install first writes the server, identity and one-time enrollment token
+  for the customer's own tenant to the agent's enrollment field, which the install procedure reads.
 - N-able N-central (MSP-12): an `ncentral` target (server, the API user's JWT reference, the install, upgrade and
   remove repository script IDs, an optional task credential type and health custom property) lists each mapped
   customer's devices, maps them to its agents, writes their health to the device custom property, and runs install,

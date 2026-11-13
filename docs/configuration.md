@@ -1875,6 +1875,37 @@ empty); the install script receives the parameters `TrstctlServer`,
 `TrstctlServerName`, `TrstctlIdentity` and `TrstctlToken`. N-central's device
 listing and custom-property calls are marked preview in its API reference.
 
+A `kaseya` target (MSP-13) does the same through a Kaseya VSA 9 server:
+
+```json
+{
+  "id": "vsa",
+  "name": "Kaseya VSA",
+  "type": "kaseya",
+  "endpoint": "https://vsa.example.com",
+  "kaseya": {
+    "username": "trstctl-integration",
+    "access_token_ref": "file:/run/secrets/vsa-personal-access-token",
+    "install_procedure_id": 41,
+    "upgrade_procedure_id": 42,
+    "remove_procedure_id": 43,
+    "enrollment_field": "trstctlEnrollment",
+    "health_field": "trstctlAgent"
+  }
+}
+```
+
+Delivery signs in at `/api/v1.0/auth` with the user name and personal access token
+and keeps the session token only for that delivery. A customer's company in this
+target is its VSA organization ID; the inventory lists the agents of that
+organization only. A procedure run now takes no parameters, so an install first
+writes one line, `-Server "…" -ServerName "…" -Identity "…" -Token "…"`, to the
+agent's custom field `enrollment_field`, and the install procedure reads it from
+there; the field keeps the one-time token until the procedure clears it or the next
+install overwrites it (it enrolls once, within an hour). Health goes to the custom
+field `health_field`. VSA's agent field names come from its REST help pages and
+published module; the live run (Track B) confirms them.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.
