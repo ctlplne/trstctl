@@ -3053,7 +3053,10 @@ from the database catalogs. An `aws-iam` provider reads the policies of the role
 `role_bindings` name from IAM at `iam_endpoint` (optional; default the region
 partition's IAM, `https://iam.amazonaws.com`, signed for `us-east-1`), so its
 credentials need `iam:ListAttachedRolePolicies` and `iam:ListRolePolicies` on those
-roles; without them a lease's policies read `unknown`. MySQL, MongoDB and Redis
+roles; without them a lease's policies read `unknown`. To read each policy's statements
+(G2-L1) they also need `iam:GetPolicy` and `iam:GetPolicyVersion` on the attached
+managed policies and `iam:GetRolePolicy` on the roles; without them each policy says its
+statements are unreadable. MySQL, MongoDB and Redis
 providers read the lease user's grants, roles or ACL rules with their admin login
 (`SHOW GRANTS`, `usersInfo`, `ACL GETUSER`). A `kubernetes` provider's token needs to
 get service accounts and list RoleBindings, ClusterRoleBindings, Roles and

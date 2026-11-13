@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An AWS STS lease's role is read statement by statement (G2-L1): each managed policy's default version and each
+  inline policy's document is read from IAM, every statement shows what it allows or denies, on what and under which
+  condition keys, and the statements are weighed as IAM decides a request (deny wins): the graph says when a role is a
+  full administrator and when an allow is overridden by a deny; a refused document is named, never read as no access.
 - The access graph shows the secret store and who may read it (G1-L4): for a reader holding `secrets:read`, a scope per
   secrets-project environment and the store's root, each open scope's secrets (`CONTAINS`), and `CAN_READ` from every
   held role, API token and machine session that grants `secrets:read`; a restricted environment is read only by its

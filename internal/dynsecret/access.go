@@ -191,10 +191,13 @@ func postgresTargetRef(dsn []byte, database string) string {
 	return "postgresql://" + host + "/" + database
 }
 
-// ResolveAccess reads the role an STS lease assumed and the managed and inline
-// policies IAM lists for it. The provider's credentials need
-// iam:ListAttachedRolePolicies and iam:ListRolePolicies on the role; without
-// them the grants are recorded as unknown.
+// ResolveAccess reads the role an STS lease assumed, the managed and inline
+// policies IAM lists for it and, statement by statement, what each allows or
+// denies (G2-L1). The provider's credentials need iam:ListAttachedRolePolicies
+// and iam:ListRolePolicies on the role, without which the grants are recorded
+// as unknown, and iam:GetPolicy, iam:GetPolicyVersion and iam:GetRolePolicy to
+// read the statements, without which each policy says its statements are
+// unreadable.
 func (b *AWSSTSBackend) ResolveAccess(ctx context.Context, backendRef string) (Access, error) {
 	var ref awsSTSRef
 	if err := json.Unmarshal([]byte(backendRef), &ref); err != nil || ref.RoleARN == "" {
@@ -212,6 +215,7 @@ func (b *AWSSTSBackend) ResolveAccess(ctx context.Context, backendRef string) (A
 		return access, ErrAccessUnsupported
 	}
 	var grants []string
+	var policies []awsPolicyRef
 	for marker, pages := "", 0; pages < 20; pages++ {
 		params := map[string]string{"Action": "ListAttachedRolePolicies", "Version": "2010-05-08", "RoleName": roleName, "MaxItems": "100"}
 		if marker != "" {
@@ -236,6 +240,7 @@ func (b *AWSSTSBackend) ResolveAccess(ctx context.Context, backendRef string) (A
 		}
 		for _, p := range page.Result.Policies {
 			grants = append(grants, "managed policy "+p.Name+" ("+p.ARN+")")
+			policies = append(policies, awsPolicyRef{label: "managed policy " + p.Name, arn: p.ARN})
 		}
 		if !page.Result.IsTruncated || page.Result.Marker == "" {
 			break
@@ -263,13 +268,18 @@ func (b *AWSSTSBackend) ResolveAccess(ctx context.Context, backendRef string) (A
 		}
 		for _, name := range page.Result.Names {
 			grants = append(grants, "inline policy "+name)
+			policies = append(policies, awsPolicyRef{label: "inline policy " + name, name: name})
 		}
 		if !page.Result.IsTruncated || page.Result.Marker == "" {
 			break
 		}
 		marker = page.Result.Marker
 	}
-	return boundGrants(access, grants), nil
+	statements, err := b.readPolicyStatements(ctx, roleName, policies)
+	if err != nil {
+		return access, err
+	}
+	return boundGrants(access, append(grants, statements...)), nil
 }
 
 func awsAccessError(err error) error {

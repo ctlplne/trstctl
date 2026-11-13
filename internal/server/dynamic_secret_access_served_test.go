@@ -76,6 +76,34 @@ func newG2AWSStandIn(t *testing.T) *g2AWSStandIn {
 			default:
 				_, _ = fmt.Fprint(w, `<ListRolePoliciesResponse><ListRolePoliciesResult><PolicyNames><member>g2-kms-decrypt</member></PolicyNames><IsTruncated>false</IsTruncated></ListRolePoliciesResult></ListRolePoliciesResponse>`)
 			}
+		case "GetPolicy", "GetPolicyVersion", "GetRolePolicy":
+			// G2-L1: each policy's statements, as IAM's documented API
+			// returns them (a URL-encoded JSON document).
+			documents := map[string]string{
+				"arn:aws:iam::123456789012:policy/g2-artifact-publish": `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:PutObject","s3:GetObject"],"Resource":"arn:aws:s3:::g2-artifacts/*"}]}`,
+				"g2-kms-decrypt": `{"Version":"2012-10-17","Statement":{"Effect":"Allow","Action":"kms:Decrypt","Resource":"*","Condition":{"StringEquals":{"kms:ViaService":"s3.us-west-2.amazonaws.com"}}}}`,
+			}
+			key := r.Form.Get("PolicyArn")
+			if action == "GetRolePolicy" {
+				key = r.Form.Get("PolicyName")
+			}
+			doc, ok := documents[key]
+			switch {
+			case !strings.Contains(auth, "/us-east-1/iam/aws4_request"):
+				http.Error(w, "not signed for IAM", http.StatusBadRequest)
+			case s.denyIAM.Load():
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = fmt.Fprint(w, `<ErrorResponse><Error><Code>AccessDenied</Code></Error></ErrorResponse>`)
+			case !ok:
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = fmt.Fprint(w, `<ErrorResponse><Error><Code>NoSuchEntity</Code></Error></ErrorResponse>`)
+			case action == "GetPolicy":
+				_, _ = fmt.Fprint(w, `<GetPolicyResponse><GetPolicyResult><Policy><DefaultVersionId>v1</DefaultVersionId></Policy></GetPolicyResult></GetPolicyResponse>`)
+			case action == "GetPolicyVersion":
+				_, _ = fmt.Fprintf(w, `<GetPolicyVersionResponse><GetPolicyVersionResult><PolicyVersion><Document>%s</Document></PolicyVersion></GetPolicyVersionResult></GetPolicyVersionResponse>`, url.QueryEscape(doc))
+			default:
+				_, _ = fmt.Fprintf(w, `<GetRolePolicyResponse><GetRolePolicyResult><PolicyDocument>%s</PolicyDocument></GetRolePolicyResult></GetRolePolicyResponse>`, url.QueryEscape(doc))
+			}
 		default:
 			http.Error(w, "unexpected action", http.StatusBadRequest)
 		}
@@ -256,9 +284,12 @@ func TestServedLeaseAccessShowsTheDatabaseAndTheRoleG2(t *testing.T) {
 
 	st, ok := g.node("lease:" + stsLease)
 	if !ok || st.Attrs["access_status"] != store.DynamicSecretAccessResolved || !strings.HasPrefix(st.Attrs["login"], "AROAG2DEPLOYER:") ||
-		st.Attrs["target"] != g2RoleARN || st.Attrs["grant_count"] != "2" ||
+		st.Attrs["target"] != g2RoleARN || st.Attrs["grant_count"] != "4" ||
 		!strings.Contains(st.Attrs["grants"], "managed policy g2-artifact-publish (arn:aws:iam::123456789012:policy/g2-artifact-publish)") ||
-		!strings.Contains(st.Attrs["grants"], "inline policy g2-kms-decrypt") {
+		!strings.Contains(st.Attrs["grants"], "inline policy g2-kms-decrypt") ||
+		// G2-L1: each policy's statements, read from its document.
+		!strings.Contains(st.Attrs["grants"], "managed policy g2-artifact-publish: allow s3:GetObject, s3:PutObject on arn:aws:s3:::g2-artifacts/*") ||
+		!strings.Contains(st.Attrs["grants"], "inline policy g2-kms-decrypt: allow kms:Decrypt on every resource when StringEquals kms:ViaService") {
 		t.Fatalf("STS lease node = %+v", st)
 	}
 	if role, ok := g.node(roleNode); !ok || role.Attrs["resource_kind"] != "aws_iam_role" || !g.edge("lease:"+stsLease, roleNode, "GRANTS_ACCESS") {
@@ -303,7 +334,7 @@ func TestServedLeaseAccessShowsTheDatabaseAndTheRoleG2(t *testing.T) {
 	}
 	resolve()
 	g = readG2Graph(t, h, reader)
-	if n, _ := g.node("lease:" + deniedLease); n.Attrs["access_status"] != store.DynamicSecretAccessResolved || n.Attrs["grant_count"] != "2" {
+	if n, _ := g.node("lease:" + deniedLease); n.Attrs["access_status"] != store.DynamicSecretAccessResolved || n.Attrs["grant_count"] != "4" {
 		t.Fatalf("the retried lease = %+v", n.Attrs)
 	}
 

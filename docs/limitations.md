@@ -1505,8 +1505,11 @@ never live in the API process. What you can do end to end against the running bi
   once a day as a heartbeat; a read that finds it as recorded only stamps it (G2-L3),
   and the lease shows both `access_checked_at` (its latest read) and
   `access_recorded_at`. That stamp is the worker's own bookkeeping, so a rebuild clears
-  it and the next pass reads those leases once more. Policies are listed by
-  name, not evaluated statement by statement. Kubernetes, GCP and Azure leases
+  it and the next pass reads those leases once more. An AWS role's own policies
+  are read statement by statement and weighed with deny winning (G2-L1); its
+  permission boundary, session policies, service control policies and resource
+  policies are not read, so the weighing covers the role's own policies only.
+  Kubernetes, GCP and Azure leases
   show the RBAC rules bound to their service account, the roles the provider's
   project policy grants its service account, and their application's app roles,
   directory roles and groups (G2-L2); GCP folder, organization and resource-level

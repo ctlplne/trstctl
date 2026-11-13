@@ -133,7 +133,15 @@ the project's IAM policy grants the service account its key belongs to; an Azure
 links to `res:azure_application:azure://applications/<object id>` with its application's
 app roles (by value, on the API that defines them), directory roles and groups, read from
 Microsoft Graph. An AWS STS lease links to `res:aws_iam_role:<arn>`, the role it assumed,
-with the role's attached managed and inline policies from IAM in `grants`. `access_status`
+with the role's attached managed and inline policies from IAM in `grants`, and, statement
+by statement (G2-L1), what each allows or denies, on which resources and under which
+condition keys (`managed policy ci-deploy: allow s3:GetObject, s3:PutObject on
+arn:aws:s3:::artifacts/*`); the statements are then weighed as IAM decides a request, an
+explicit deny winning, so `grants` also says when the role is a full administrator (an
+unconditional allow of every action on every resource with no deny) and when an allow is
+overridden by a deny. Reading the statements needs `iam:GetPolicy`, `iam:GetPolicyVersion`
+and `iam:GetRolePolicy`; a policy whose document IAM refuses says its statements are
+unreadable, and its name is still listed. `access_status`
 is `resolved`, `unknown` (the target could not be read; `access_reason` says why, and the
 lease is read again five minutes later), `unsupported` (other providers), or `not_read`
 before the first read. `unknown` never means "no grants". In the console, a lease's node
@@ -143,8 +151,9 @@ target reported, with when it was read, or why the target could not say (G2-L4).
 What the graph does not see: permissions inside systems other than PostgreSQL, MySQL,
 MongoDB, Redis, Kubernetes RBAC, a GCP project's IAM policy, Microsoft Entra and AWS IAM;
 GCP grants on folders, the organization or single resources; Azure resource (ARM) role
-assignments; Kubernetes bindings to a group rather than the service account; what a
-policy's statements allow (policies are listed by name), who requested a
+assignments; Kubernetes bindings to a group rather than the service account; an AWS
+role's permission boundary, session policies, organization service control policies and
+resource policies (only the role's own policies are weighed), who requested a
 dynamic-secret lease opened before G1-L1 (newer leases record their requester, who holds
 them in the graph), and access granted outside trstctl. An empty answer is therefore not proof that nobody has access. PAM sessions
 started before this release do not record their approval, so their approvers read as

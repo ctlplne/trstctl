@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3274 annotated sites across 35 rules. Each row is
+3276 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -368,7 +368,7 @@ not this file.
 | `internal/dns/ultradns/ultradns_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/docsys/hudu/hudu_test.go:18` | a test-only value (CWE-798) |
 | `internal/docsys/itglue/itglue_test.go:18` | a test-only value (CWE-798) |
-| `internal/dynsecret/access_test.go:142` | test fixture DSNs with a dummy password; the test asserts it never reaches the target ref (CWE-798) |
+| `internal/dynsecret/access_test.go:211` | test fixture DSNs with a dummy password; the test asserts it never reaches the target ref (CWE-798) |
 | `internal/dynsecret/clickhouse_test.go:28` | fabricated lab administrator password (CWE-798) |
 | `internal/dynsecret/couchbase_test.go:32` | fabricated stand-in administrator (CWE-798) |
 | `internal/dynsecret/elasticsearch_test.go:29` | fabricated lab administrator password (CWE-798) |
@@ -1948,7 +1948,7 @@ not this file.
 | `internal/server/docker_fixture_command_test.go:20` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/server/dod_signer_binary_test.go:105` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_access_databases_container_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/dynamic_secret_access_served_test.go:329` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/dynamic_secret_access_served_test.go:360` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_totp_lab_test.go:35` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_totp_lab_test.go:82` | fixed lab image, arguments built by the test (CWE-78) |
 | `internal/server/enrollment_relay_served_test.go:107` | fixed current test binary and fixed test selector (CWE-78) |
@@ -3621,7 +3621,7 @@ not this file.
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |
 | `tools/dodcensus/proof/launched.go:1770` | developer tool calling the endpoint it was pointed at (CWE-918) |
 
-### G705 — CWE-79 Cross-site scripting (taint) (17 sites)
+### G705 — CWE-79 Cross-site scripting (taint) (19 sites)
 
 | Location | Reason |
 |---|---|
@@ -3632,6 +3632,8 @@ not this file.
 | `internal/ca/letsencrypt/acmefake/acmefake.go:589` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/connector/fortigate/fortigatetest/fortigatetest.go:241` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/dns/akamai/akamai_test.go:131` | test writes fixture bytes to its own recorder/local server (CWE-79) |
+| `internal/dynsecret/access_test.go:83` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/dynsecret/access_test.go:91` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/dynsecret/aws_sts_deny_test.go:69` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/operator/reconcile_test.go:263` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/secretstore/access.go:86` | the secret read API returns the secret by contract; served as octet-stream with nosniff, never an HTML context (CWE-79) |
