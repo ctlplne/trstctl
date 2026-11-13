@@ -213,6 +213,15 @@ func (a *API) secretScopeAllows(ctx context.Context, tenantID, name string, writ
 	if err != nil || a.store == nil {
 		return true, nil // no request principal: an internal job
 	}
+	return a.secretScopeAllowsSubject(ctx, tenantID, name, subject, write)
+}
+
+// secretScopeAllowsSubject is secretScopeAllows for a named subject: an
+// internal job acting for a definition's author asks for them (A237-L6).
+func (a *API) secretScopeAllowsSubject(ctx context.Context, tenantID, name, subject string, write bool) (bool, error) {
+	if a.store == nil {
+		return true, nil
+	}
 	scope, err := a.store.SecretScopeFor(ctx, tenantID, name, subject)
 	if err != nil {
 		return false, err

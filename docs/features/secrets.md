@@ -1961,7 +1961,11 @@ A definition is `manual` (it waits for a reviewed apply) or `auto`
 drift, it plans the sync again. A plan with changes and nothing blocked is applied exactly
 as a reviewed apply would be, and the receipt names the reconciler. A blocked or failed
 plan is recorded on the definition (`reconcile_status`, `reconcile_reason`) and writes
-nothing until someone reviews it.
+nothing until someone reviews it. The reconciler reads the source as the sync's author
+(A237-L6): a restricted environment the author isn't granted is left out of the plan, a
+sync whose author no longer reads its source is recorded `blocked` and writes nothing, and
+a change to the author's grants re-plans the sync on the next pass, as a source change
+does.
 
 A third mode, `approved`, is approval-gated convergence (A237-L1). The control plane
 plans an approved sync like an auto one. A plan with changes is applied only once the

@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A scoped sync's reconciler reads the source as the sync's author (A237-L6): a restricted environment the author
+  isn't granted is left out of an automatic plan, a sync whose author no longer reads its source is recorded
+  `blocked` and writes nothing, and a change to the author's grants re-plans the sync on the next pass, as a
+  source change does.
 - A subject erasure rewrites the subject in scoped syncs' secret names (A237-L5): a segment of a sync's source or
   destination prefix, a managed key or its source name, or a queued delete that is exactly the erased subject becomes
   the subject's placeholder in the scoped-sync events and in the sync's records alike; the subject's export lists

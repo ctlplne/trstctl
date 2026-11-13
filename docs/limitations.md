@@ -6043,9 +6043,11 @@ GitLab, Vercel, Netlify, Kubernetes, Terraform Cloud, the webhook and generic CI
 take a scoped sync from their delivery receipts only (A237-L2): the definition sets
 `adopt_existing` and keeps `delete_scope` at `none`, a key the sync didn't write can't be
 seen there and would be replaced, and a key whose source is gone stays. Continuous mode (A237 part b):
-an `auto` definition is re-planned on the leader when its source set changes (checked
-every 30 seconds) or its 15-minute drift check is due, and applied when nothing is
-blocked; a blocked or failed plan is recorded on the definition and writes nothing. A
+an `auto` definition is re-planned on the leader when its source set or its author's
+grants change (checked every 30 seconds) or its 15-minute drift check is due, and applied
+when nothing is blocked; it reads the source as its author (A237-L6), so it stops at a
+restricted environment the author loses; a blocked or failed plan is recorded on the
+definition and writes nothing. A
 managed key's write or delete that fails for good raises one warning
 (`secret.scoped_sync.delivery_failed`) beside its status in `show`. The
 console's Secrets → Sync page defines, previews, applies and switches scoped syncs.

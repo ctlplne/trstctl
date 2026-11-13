@@ -611,14 +611,12 @@ func (a *API) planSecretScopedSync(ctx context.Context, tenantID string, d store
 		return plan, err
 	}
 	receiptOnly := !secretsync.ScopedListsKeys(scoped)
-	if ok, err := a.secretScopeAllows(ctx, tenantID, d.SourcePrefix, false); err != nil {
-		return plan, err
-	} else if !ok {
-		return plan, errStatus(http.StatusForbidden, "the source is a restricted environment you are not a member of")
-	}
-	hidden, err := a.hiddenSecretPrefixes(ctx, tenantID)
+	allowed, hidden, err := a.scopedSyncSourceScope(ctx, tenantID, d)
 	if err != nil {
 		return plan, err
+	}
+	if !allowed {
+		return plan, errStatus(http.StatusForbidden, "the source is a restricted environment you are not a member of")
 	}
 	sources, err := a.store.ListSecretNamesUnder(ctx, tenantID, []string{d.SourcePrefix}, hidden, scopedSyncSourceLimit+1)
 	if err != nil {
@@ -768,6 +766,46 @@ func (a *API) planSecretScopedSync(ctx context.Context, tenantID string, d store
 	}
 	plan.PlanDigest = crypto.SHA256Hex(material)
 	return plan, nil
+}
+
+// scopedSyncSourceScope is whether the source may be read and which
+// restricted environments under it are hidden. A request reads it as its
+// caller; an internal job — the reconciler — reads it as the definition's
+// author (A237-L6), so a sync stops exporting a restricted environment once
+// its author no longer reads it, and never reaches one they weren't granted.
+func (a *API) scopedSyncSourceScope(ctx context.Context, tenantID string, d store.SecretScopedSync) (bool, []string, error) {
+	if _, err := requestPrincipalSubject(ctx); err == nil {
+		allowed, err := a.secretScopeAllows(ctx, tenantID, d.SourcePrefix, false)
+		if err != nil || !allowed {
+			return false, nil, err
+		}
+		hidden, err := a.hiddenSecretPrefixes(ctx, tenantID)
+		return true, hidden, err
+	}
+	allowed, err := a.secretScopeAllowsSubject(ctx, tenantID, d.SourcePrefix, d.DefinedBy, false)
+	if err != nil || !allowed {
+		return false, nil, err
+	}
+	hidden, err := a.store.RestrictedSecretPrefixes(ctx, tenantID, d.DefinedBy)
+	return true, hidden, err
+}
+
+// scopedSyncAuthorScopeDigest fingerprints what the definition's author may
+// read of its source — whether they read it and which restricted
+// environments are hidden from them — so a grant change re-plans the
+// definition on the reconciler's next pass, as a source change does (A237-L6).
+func (a *API) scopedSyncAuthorScopeDigest(ctx context.Context, tenantID string, d store.SecretScopedSync) (string, error) {
+	allowed, err := a.secretScopeAllowsSubject(ctx, tenantID, d.SourcePrefix, d.DefinedBy, false)
+	if err != nil {
+		return "", err
+	}
+	hidden, err := a.store.RestrictedSecretPrefixes(ctx, tenantID, d.DefinedBy)
+	if err != nil {
+		return "", err
+	}
+	hidden = slices.Clone(hidden)
+	slices.Sort(hidden)
+	return crypto.SHA256Hex([]byte(fmt.Sprintf("trstctl.scoped-sync.author-scope.v1\x00%t\x00%s", allowed, strings.Join(hidden, "\x00")))), nil
 }
 
 // scopedSyncKeyHint suggests the env transform when a path key is refused.
@@ -1003,6 +1041,14 @@ func (a *API) ReconcileScopedSecretSyncs(ctx context.Context, tenants []string, 
 				firstErr = errors.Join(firstErr, err)
 				continue
 			}
+			// A237-L6: the author's reach into the source is part of what
+			// changed, so a grant change re-plans like a source change.
+			authorScope, err := a.scopedSyncAuthorScopeDigest(ctx, tenantID, d)
+			if err != nil {
+				firstErr = errors.Join(firstErr, err)
+				continue
+			}
+			digest = crypto.SHA256Hex([]byte(digest + "\x00" + authorScope))
 			key := tenantID + "/" + d.ID
 			// A plan awaiting approval is looked at every pass, so an approval
 			// is acted on as soon as it is given.
@@ -1030,6 +1076,10 @@ func (a *API) ReconcileScopedSecretSyncs(ctx context.Context, tenants []string, 
 // reconcileScopedSync plans one auto definition and applies the plan when it
 // has changes and nothing blocked. Reasons are a closed set (no target text).
 func (a *API) reconcileScopedSync(ctx context.Context, tenantID string, d store.SecretScopedSync) (status, reason, planDigest string) {
+	if allowed, err := a.secretScopeAllowsSubject(ctx, tenantID, d.SourcePrefix, d.DefinedBy, false); err == nil && !allowed {
+		// A237-L6: the author no longer reads the source; nothing is planned.
+		return "blocked", "its author no longer reads the source's restricted environment; redefine it or remove it", ""
+	}
 	plan, err := a.planSecretScopedSync(ctx, tenantID, d)
 	switch {
 	case err != nil:
