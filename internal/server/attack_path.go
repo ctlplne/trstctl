@@ -30,10 +30,12 @@ import (
 // endpoints the exposure posture chose. The control plane resolves the
 // source's read-only credentials, asks the cloud for the network configuration
 // on the path to each endpoint's public addresses, and records one verdict per
-// address: open, blocked at a named resource (an AWS route table, network ACL
-// or security group; a Google Cloud route, firewall rule or network; an Azure
-// network security group, route table or public IP), not in the account, or
-// unknown with the reason. It sends nothing to
+// address: open, blocked at a named resource (an AWS route table, network ACL,
+// security group, load balancer listener or NAT gateway; a Google Cloud route,
+// firewall rule or network; an Azure network security group, route table or
+// public IP), not in the account, or unknown with the reason — including a
+// path that leaves through a transit gateway, an inspection endpoint or an
+// appliance whose own rules decide (A167-L2). It sends nothing to
 // the endpoints themselves: the only network contact is the provider's API and
 // the name lookup that turns an endpoint's host into its addresses.
 
@@ -165,8 +167,19 @@ func awsAttackPathReaderFor(ctx context.Context, p cloudCertificateProviderConfi
 	if err != nil {
 		return nil, fmt.Errorf("resolve session_token_ref: %w", err)
 	}
+	// A167-L2: load balancers are read from Elastic Load Balancing, through
+	// a client whose endpoint passes the same egress checks.
+	elbEndpoint := strings.TrimSpace(p.ELBEndpoint)
+	if elbEndpoint == "" {
+		elbEndpoint = "https://elasticloadbalancing." + region + ".amazonaws.com"
+	}
+	elbClient, err := cloudHTTPClient(elbEndpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	if err != nil {
+		return nil, fmt.Errorf("elb_endpoint: %w", err)
+	}
 	reader, err := awsnetpath.New(awsnetpath.Config{Region: region, Endpoint: endpoint, AccessKeyID: accessKeyID,
-		SecretAccessKey: secretAccessKey, SessionToken: sessionToken, HTTPClient: client})
+		SecretAccessKey: secretAccessKey, SessionToken: sessionToken, HTTPClient: client,
+		ELBEndpoint: elbEndpoint, ELBHTTPClient: elbClient})
 	if err != nil {
 		return nil, err
 	}

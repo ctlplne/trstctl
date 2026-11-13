@@ -665,6 +665,14 @@
           "description": "Optional compatible endpoint; public provider defaults are safer."
         },
         {
+          "path": "providers[].elb_endpoint",
+          "label": "Load balancing API endpoint",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "AWS: where load balancers' listeners and security groups are read; the Region's Elastic Load Balancing endpoint by default."
+        },
+        {
           "path": "providers[].allow_private_endpoint",
           "label": "Allow approved private endpoint",
           "type": "boolean",
@@ -743,11 +751,12 @@
         {
           "id": "aws-ec2",
           "label": "Amazon EC2 network configuration",
-          "least_privilege": "ec2:DescribeNetworkInterfaces, ec2:DescribeSecurityGroups, ec2:DescribeRouteTables and ec2:DescribeNetworkAcls on the authorized account/region",
+          "least_privilege": "ec2:DescribeNetworkInterfaces, ec2:DescribeSecurityGroups, ec2:DescribeRouteTables and ec2:DescribeNetworkAcls, and elasticloadbalancing:DescribeLoadBalancers and elasticloadbalancing:DescribeListeners, on the authorized account/region",
           "preferred_credential": "env: credential references",
           "fields": [
             "region",
             "endpoint",
+            "elb_endpoint",
             "access_key_id_ref",
             "secret_access_key_ref",
             "session_token_ref"

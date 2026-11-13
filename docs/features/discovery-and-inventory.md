@@ -895,9 +895,12 @@ reported.
 
 A `cloud_network_path` source (A167) holds one AWS account's read-only network
 credentials, as references: `providers[]` with `provider: aws-ec2`, `region`,
-`access_key_id_ref`, `secret_access_key_ref` and an optional `session_token_ref`. It
-needs `ec2:DescribeNetworkInterfaces`, `ec2:DescribeSecurityGroups`,
-`ec2:DescribeRouteTables` and `ec2:DescribeNetworkAcls` and nothing else. It does not
+`access_key_id_ref`, `secret_access_key_ref`, an optional `session_token_ref` and an
+optional `elb_endpoint` (default `https://elasticloadbalancing.<region>.amazonaws.com`,
+held to the same egress checks as `endpoint`). It needs `ec2:DescribeNetworkInterfaces`,
+`ec2:DescribeSecurityGroups`, `ec2:DescribeRouteTables`, `ec2:DescribeNetworkAcls`,
+`elasticloadbalancing:DescribeLoadBalancers` and `elasticloadbalancing:DescribeListeners`
+and nothing else. It does not
 sweep the account: it answers for the endpoints the NHI exposure posture names, when an
 operator validates them from Risk → exposure (**Validate paths in the cloud**) or with
 `POST /api/v1/nhi/posture/exposure/attack-paths`. For each public address the control
@@ -905,7 +908,26 @@ plane finds the network interface that holds it, then follows the path a packet 
 internet would take: the subnet's route table must send `0.0.0.0/0` (or `::/0`) to an
 internet gateway, the network ACL's first internet-wide rule for the port must allow it
 in and the reply out, and a security group on the interface must admit the port from the
-internet. The verdict names the resource that decided it. A dry run of the source
+internet. The verdict names the resource that decided it.
+
+What holds the address changes the path (A167-L2). An interface Elastic Load Balancing
+manages for an application, network or classic load balancer is judged as that load
+balancer: it must listen on the port over TCP (HTTP, HTTPS, TCP, TLS, SSL or TCP_UDP),
+read with `DescribeListeners` across every page (or the classic `DescribeLoadBalancers`),
+and its own security groups must admit the port — a network load balancer created without
+security groups is filtered by the subnet's network ACL alone; an open path reads
+interface, load balancer, security group, network ACL, route table, internet gateway, and
+a port it does not listen on is blocked at the load balancer (`listener`). A NAT gateway's
+address admits no connection from the internet and is blocked at the NAT gateway
+(`nat_gateway`). The subnet's internet-wide route is read for where replies go: to a NAT
+gateway, an egress-only internet gateway, a peering connection or a virtual private
+gateway it blocks the path at the route table, naming that target, and a blackhole route
+names the missing target; to a transit gateway, a gateway load balancer endpoint or an
+appliance it makes the verdict unknown, naming that resource, unless a network ACL or
+security group on the way blocks it outright. When the route leads to the internet
+gateway, the gateway's own route table (ingress routing) is read too, and a route that
+steers the interface's subnet through an inspection endpoint or appliance makes the
+verdict unknown the same way. A dry run of the source
 checks only that its providers can be built; a full run, and every run a schedule on the
 source queues (A167-L4), re-validates the endpoints the exposure posture names — at most
 50 a run, records never validated first and then the longest unchecked, so successive

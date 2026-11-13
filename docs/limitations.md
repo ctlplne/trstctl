@@ -1811,13 +1811,17 @@ never live in the API process. What you can do end to end against the running bi
     `cloud_network_path` discovery source holding an account's read-only EC2
     credentials as references, and the control plane asks that account — signed
     `DescribeNetworkInterfaces`, `DescribeSecurityGroups`, `DescribeRouteTables`
-    and `DescribeNetworkAcls`, nothing else — whether its own configuration
+    and `DescribeNetworkAcls`, and for a load balancer's address Elastic Load
+    Balancing's `DescribeLoadBalancers` and `DescribeListeners` (A167-L2),
+    nothing else — whether its own configuration
     admits the internet to each exposed endpoint's public addresses, up to 50
     endpoints per validation. Each address becomes a finding (`nhi-attack-path`)
     with its verdict: open (the security group that admits it and the path
     through the network ACL, route table and internet gateway), blocked by a
-    named route table, network ACL (inbound or the return traffic) or security
-    group, not in the account, or unknown with the reason. A rule that admits a
+    named route table, network ACL (inbound or the return traffic), security
+    group, load balancer listener or NAT gateway (A167-L2), not in the account,
+    or unknown with the reason (a path through a transit gateway, an inspection
+    endpoint or an appliance is unknown with that resource named). A rule that admits a
     partner range does not make an endpoint internet-reachable; only the
     internet-wide range decides. The exposure posture shows the latest verdict
     per record (`attack_path`) and counts validated and open records; a
@@ -1849,8 +1853,12 @@ never live in the API process. What you can do end to end against the running bi
     stand-in that pages the public IP list and checks the bearer token, with
     a live subscription in Track B. GCP hierarchical and network firewall
     policies, Azure Virtual Network Manager security admin rules and routes
-    learned over BGP, and paths through load balancers, application
-    gateways, NAT or transit gateways are what comes next.
+    learned over BGP, Google Cloud load balancers and Cloud NAT, Azure
+    application gateways, load balancers and NAT gateways, and following an
+    AWS transit gateway's, inspection endpoint's or appliance's own routes
+    and rules (unknown today, with the resource named) are what comes next;
+    the AWS load balancer and NAT reads are proven against the EC2 stand-in's
+    Elastic Load Balancing answers, with a live account in Track B.
 - Rogue and non-compliant certificate posture:
   `GET /api/v1/revocation/rogue-certificates` and
   `trstctl-cli revocation rogue-certificates` combine unexpected CT findings with

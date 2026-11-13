@@ -3194,7 +3194,7 @@ func componentSchemas() map[string]*Schema {
 	attackPathStatus := []string{"open", "blocked", "not_in_account", "unknown"}
 	nhiExposureAttackPathAddress := object(map[string]*Schema{
 		"address": str(), "status": {Type: "string", Enum: attackPathStatus},
-		"blocked_by": {Type: "string", Enum: []string{"route", "network_acl", "network_acl_return", "security_group", "firewall", "network_security_group", "public_ip"}},
+		"blocked_by": {Type: "string", Enum: []string{"route", "network_acl", "network_acl_return", "security_group", "firewall", "network_security_group", "public_ip", "listener", "nat_gateway"}},
 		"resource":   str(), "rule": str(), "path": {Type: "array", Items: str()}, "reason": str(), "checked_at": timestamp(),
 	}, "address", "status", "checked_at")
 	nhiExposureAttackPath := object(map[string]*Schema{

@@ -21026,6 +21026,14 @@ export const messages = {
     defaultMessage: "network security group",
     description: "A167-L1: cloud path stage name: an Azure network security group on the subnet or the network interface.",
   },
+  "risk.nhiExposure.pathStage.listener": {
+    defaultMessage: "load balancer listener",
+    description: "A167-L2: cloud path stage name: the AWS load balancer holding the address has no listener on the port.",
+  },
+  "risk.nhiExposure.pathStage.nat_gateway": {
+    defaultMessage: "NAT gateway",
+    description: "A167-L2: cloud path stage name: the address belongs to an AWS NAT gateway, which admits no connection from the internet.",
+  },
   "risk.nhiExposure.pathStage.public_ip": {
     defaultMessage: "public IP",
     description:

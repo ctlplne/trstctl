@@ -7,6 +7,13 @@
 // the EC2 Query API, signs them with AWS Signature Version 4 (digests and the
 // keyed MAC through the crypto boundary, AN-3), and hands the result to the
 // provider-neutral evaluator in netpath.
+//
+// A167-L2: when a load balancer's node holds the address, its listeners and
+// its own security groups are read through the read-only Elastic Load
+// Balancing Query API (DescribeLoadBalancers and DescribeListeners, or the
+// classic DescribeLoadBalancers); a NAT gateway's address is named as one; and
+// the internet gateway's own route table (ingress routing) is read when the
+// subnet's internet route leads to that gateway.
 package awsnetpath
 
 import (
@@ -30,9 +37,14 @@ import (
 )
 
 const (
-	service    = "ec2"
-	apiVersion = "2016-11-15"
-	maxBody    = 4 << 20
+	ec2Service        = "ec2"
+	apiVersion        = "2016-11-15"
+	elbService        = "elasticloadbalancing"
+	elbV2Version      = "2015-12-01"
+	elbClassicVersion = "2012-06-01"
+	maxBody           = 4 << 20
+	// maxListenerPages bounds one load balancer's listener pages (A167-L2).
+	maxListenerPages = 20
 )
 
 // Config configures the EC2 reader.
@@ -44,12 +56,25 @@ type Config struct {
 	SessionToken    string
 	HTTPClient      *http.Client
 	Now             func() time.Time
+	// ELBEndpoint is where load balancers are read (A167-L2); the Region's
+	// Elastic Load Balancing endpoint by default. ELBHTTPClient defaults to
+	// HTTPClient.
+	ELBEndpoint   string
+	ELBHTTPClient *http.Client
 }
 
 // Reader reads one account and region's network configuration.
 type Reader struct {
-	cfg  Config
-	host string
+	cfg Config
+	ec2 endpoint
+	elb endpoint
+}
+
+// endpoint is one signed Query API: where it is, the service it is signed for
+// and the client that reaches it.
+type endpoint struct {
+	url, host, service string
+	client             *http.Client
 }
 
 // New builds a reader.
@@ -60,9 +85,16 @@ func New(cfg Config) (*Reader, error) {
 	if cfg.Endpoint == "" {
 		cfg.Endpoint = "https://ec2." + cfg.Region + ".amazonaws.com"
 	}
+	if cfg.ELBEndpoint == "" {
+		cfg.ELBEndpoint = "https://elasticloadbalancing." + cfg.Region + ".amazonaws.com"
+	}
 	u, err := url.Parse(cfg.Endpoint)
 	if err != nil || u.Host == "" {
 		return nil, fmt.Errorf("awsnetpath: bad endpoint")
+	}
+	lb, err := url.Parse(cfg.ELBEndpoint)
+	if err != nil || lb.Host == "" {
+		return nil, fmt.Errorf("awsnetpath: bad load balancing endpoint")
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
@@ -70,7 +102,13 @@ func New(cfg Config) (*Reader, error) {
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = netsec.HardenedClient(30 * time.Second)
 	}
-	return &Reader{cfg: cfg, host: u.Host}, nil
+	if cfg.ELBHTTPClient == nil {
+		cfg.ELBHTTPClient = cfg.HTTPClient
+	}
+	return &Reader{cfg: cfg,
+		ec2: endpoint{url: cfg.Endpoint, host: u.Host, service: ec2Service, client: cfg.HTTPClient},
+		elb: endpoint{url: cfg.ELBEndpoint, host: lb.Host, service: elbService, client: cfg.ELBHTTPClient},
+	}, nil
 }
 
 // Path reads the configuration on the path to the interface holding ip. found
@@ -81,7 +119,7 @@ func (r *Reader) Path(ctx context.Context, ip netip.Addr) (cfg netpath.Config, f
 		filter = "ipv6-addresses.ipv6-address"
 	}
 	var enis describeNetworkInterfacesResponse
-	if err := r.call(ctx, url.Values{"Action": {"DescribeNetworkInterfaces"},
+	if err := r.call(ctx, r.ec2, apiVersion, url.Values{"Action": {"DescribeNetworkInterfaces"},
 		"Filter.1.Name": {filter}, "Filter.1.Value.1": {ip.Unmap().String()}}, &enis); err != nil {
 		return netpath.Config{}, false, err
 	}
@@ -90,8 +128,26 @@ func (r *Reader) Path(ctx context.Context, ip netip.Addr) (cfg netpath.Config, f
 	}
 	eni := enis.Interfaces[0]
 	cfg.Interface = netpath.Interface{ID: eni.ID, SubnetID: eni.SubnetID, VPCID: eni.VPCID}
+	if private, err := netip.ParseAddr(strings.TrimSpace(eni.PrivateIP)); err == nil {
+		cfg.Interface.PrivateIP = private
+	}
+	// A167-L2: a NAT gateway's address admits no connection from the
+	// internet, whatever its subnet says.
+	if nat, ok := natGatewayOf(eni.InterfaceType, eni.Description, eni.ID); ok {
+		cfg.NATGateway = nat
+		return cfg, true, nil
+	}
 	for _, group := range eni.Groups {
 		cfg.Interface.SecurityGroups = append(cfg.Interface.SecurityGroups, group.ID)
+	}
+	// A167-L2: a load balancer's node answers on its listeners, behind the
+	// load balancer's own security groups.
+	if ref, ok := loadBalancerOf(eni.RequesterManaged, eni.Description); ok {
+		balancer, groups, err := r.loadBalancer(ctx, ref)
+		if err != nil {
+			return netpath.Config{}, true, err
+		}
+		cfg.LoadBalancer, cfg.Interface.SecurityGroups = balancer, groups
 	}
 	if cfg.SecurityGroups, err = r.securityGroups(ctx, cfg.Interface.SecurityGroups); err != nil {
 		return netpath.Config{}, true, err
@@ -102,7 +158,141 @@ func (r *Reader) Path(ctx context.Context, ip netip.Addr) (cfg netpath.Config, f
 	if cfg.NetworkACL, err = r.networkACL(ctx, eni.SubnetID); err != nil {
 		return netpath.Config{}, true, err
 	}
+	internet := "0.0.0.0/0"
+	if ip.Is6() && !ip.Is4In6() {
+		internet = "::/0"
+	}
+	if gateway := internetGatewayRoute(cfg.RouteTable, internet); gateway != "" {
+		if cfg.GatewayRouteTable, err = r.gatewayRouteTable(ctx, gateway); err != nil {
+			return netpath.Config{}, true, err
+		}
+	}
 	return cfg, true, nil
+}
+
+// natGatewayOf reports whether the interface is a NAT gateway's, and names
+// the gateway from the description EC2 gives it ("Interface for NAT Gateway
+// nat-…"), or the interface when the description does not say.
+func natGatewayOf(kind, description, id string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "nat_gateway", "natgateway":
+	default:
+		return "", false
+	}
+	for _, field := range strings.Fields(description) {
+		if strings.HasPrefix(field, "nat-") {
+			return field, true
+		}
+	}
+	return id, true
+}
+
+// lbRef is the load balancer an interface's description names.
+type lbRef struct {
+	id, name string
+	classic  bool
+}
+
+// loadBalancerOf reads the description Elastic Load Balancing gives its
+// nodes' interfaces: "ELB app/<name>/<id>" or "ELB net/<name>/<id>", or
+// "ELB <name>" for a classic load balancer. Only an interface the service
+// manages counts; a gateway load balancer's ("ELB gwy/…") holds no public
+// address.
+func loadBalancerOf(requesterManaged bool, description string) (lbRef, bool) {
+	rest, ok := strings.CutPrefix(description, "ELB ")
+	if !requesterManaged || !ok || rest == "" || len(rest) > 255 || strings.ContainsAny(rest, " \t") {
+		return lbRef{}, false
+	}
+	parts := strings.Split(rest, "/")
+	switch {
+	case len(parts) == 3 && (parts[0] == "app" || parts[0] == "net") && parts[1] != "" && parts[2] != "":
+		return lbRef{id: rest, name: parts[1]}, true
+	case len(parts) == 1:
+		return lbRef{id: rest, name: rest, classic: true}, true
+	}
+	return lbRef{}, false
+}
+
+// loadBalancer reads the load balancer, its listeners and its security group
+// IDs.
+func (r *Reader) loadBalancer(ctx context.Context, ref lbRef) (*netpath.LoadBalancer, []string, error) {
+	if ref.classic {
+		var out describeClassicLoadBalancersResponse
+		if err := r.call(ctx, r.elb, elbClassicVersion, url.Values{"Action": {"DescribeLoadBalancers"}, "LoadBalancerNames.member.1": {ref.name}}, &out); err != nil {
+			return nil, nil, err
+		}
+		for _, lb := range out.LoadBalancers {
+			if lb.Name != ref.name {
+				continue
+			}
+			balancer := &netpath.LoadBalancer{ID: ref.id, Type: "classic"}
+			for _, l := range lb.Listeners {
+				balancer.Listeners = append(balancer.Listeners, netpath.Listener{Port: l.Port, Protocol: l.Protocol})
+			}
+			return balancer, lb.SecurityGroups, nil
+		}
+		return nil, nil, fmt.Errorf("awsnetpath: load balancer %s holding the address was not found", ref.id)
+	}
+	var out describeLoadBalancersResponse
+	if err := r.call(ctx, r.elb, elbV2Version, url.Values{"Action": {"DescribeLoadBalancers"}, "Names.member.1": {ref.name}}, &out); err != nil {
+		return nil, nil, err
+	}
+	for _, lb := range out.LoadBalancers {
+		if !strings.HasSuffix(lb.ARN, ":loadbalancer/"+ref.id) {
+			continue
+		}
+		balancer := &netpath.LoadBalancer{ID: ref.id, Type: lb.Type, Unfiltered: lb.Type == "network" && len(lb.SecurityGroups) == 0}
+		marker := ""
+		for page := 0; ; page++ {
+			if page == maxListenerPages {
+				return nil, nil, fmt.Errorf("awsnetpath: load balancer %s: more than %d listener pages", ref.id, maxListenerPages)
+			}
+			params := url.Values{"Action": {"DescribeListeners"}, "LoadBalancerArn": {lb.ARN}, "PageSize": {"400"}}
+			if marker != "" {
+				params.Set("Marker", marker)
+			}
+			var listeners describeListenersResponse
+			if err := r.call(ctx, r.elb, elbV2Version, params, &listeners); err != nil {
+				return nil, nil, err
+			}
+			for _, l := range listeners.Listeners {
+				balancer.Listeners = append(balancer.Listeners, netpath.Listener{Port: l.Port, Protocol: l.Protocol})
+			}
+			if marker = strings.TrimSpace(listeners.NextMarker); marker == "" {
+				break
+			}
+		}
+		return balancer, lb.SecurityGroups, nil
+	}
+	return nil, nil, fmt.Errorf("awsnetpath: load balancer %s holding the address was not found", ref.id)
+}
+
+// internetGatewayRoute returns the internet gateway the subnet's active
+// internet-wide route leads to.
+func internetGatewayRoute(table *netpath.RouteTable, internet string) string {
+	if table == nil {
+		return ""
+	}
+	for _, route := range table.Routes {
+		if route.Active && route.Destination == internet && strings.HasPrefix(route.Target, "igw-") {
+			return route.Target
+		}
+	}
+	return ""
+}
+
+// gatewayRouteTable reads the route table associated with the internet
+// gateway (an edge association), or nil when there is none.
+func (r *Reader) gatewayRouteTable(ctx context.Context, gateway string) (*netpath.RouteTable, error) {
+	var out describeRouteTablesResponse
+	if err := r.call(ctx, r.ec2, apiVersion, url.Values{"Action": {"DescribeRouteTables"},
+		"Filter.1.Name": {"association.gateway-id"}, "Filter.1.Value.1": {gateway}}, &out); err != nil {
+		return nil, err
+	}
+	if len(out.Tables) == 0 {
+		return nil, nil
+	}
+	return tableFrom(out.Tables[0]), nil
 }
 
 func (r *Reader) securityGroups(ctx context.Context, ids []string) ([]netpath.SecurityGroup, error) {
@@ -114,7 +304,7 @@ func (r *Reader) securityGroups(ctx context.Context, ids []string) ([]netpath.Se
 		params.Set("GroupId."+strconv.Itoa(i+1), id)
 	}
 	var out describeSecurityGroupsResponse
-	if err := r.call(ctx, params, &out); err != nil {
+	if err := r.call(ctx, r.ec2, apiVersion, params, &out); err != nil {
 		return nil, err
 	}
 	groups := make([]netpath.SecurityGroup, 0, len(out.Groups))
@@ -140,12 +330,12 @@ func (r *Reader) securityGroups(ctx context.Context, ids []string) ([]netpath.Se
 // VPC's main table when the subnet has none, as EC2 routes.
 func (r *Reader) routeTable(ctx context.Context, subnetID, vpcID string) (*netpath.RouteTable, error) {
 	var out describeRouteTablesResponse
-	if err := r.call(ctx, url.Values{"Action": {"DescribeRouteTables"},
+	if err := r.call(ctx, r.ec2, apiVersion, url.Values{"Action": {"DescribeRouteTables"},
 		"Filter.1.Name": {"association.subnet-id"}, "Filter.1.Value.1": {subnetID}}, &out); err != nil {
 		return nil, err
 	}
 	if len(out.Tables) == 0 {
-		if err := r.call(ctx, url.Values{"Action": {"DescribeRouteTables"},
+		if err := r.call(ctx, r.ec2, apiVersion, url.Values{"Action": {"DescribeRouteTables"},
 			"Filter.1.Name": {"vpc-id"}, "Filter.1.Value.1": {vpcID},
 			"Filter.2.Name": {"association.main"}, "Filter.2.Value.1": {"true"}}, &out); err != nil {
 			return nil, err
@@ -154,21 +344,30 @@ func (r *Reader) routeTable(ctx context.Context, subnetID, vpcID string) (*netpa
 	if len(out.Tables) == 0 {
 		return nil, nil
 	}
-	table := &netpath.RouteTable{ID: out.Tables[0].ID}
-	for _, route := range out.Tables[0].Routes {
+	return tableFrom(out.Tables[0]), nil
+}
+
+// tableFrom reads a route table, taking each route's target from whichever
+// of EC2's target fields carries it (A167-L2: transit gateways, peering
+// connections, egress-only gateways and endpoints are named, not dropped).
+func tableFrom(in routeTableXML) *netpath.RouteTable {
+	table := &netpath.RouteTable{ID: in.ID}
+	for _, route := range in.Routes {
 		destination := route.DestinationIPv4
 		if destination == "" {
 			destination = route.DestinationIPv6
 		}
-		target := firstNonEmpty(route.GatewayID, route.NATGatewayID, route.TransitGatewayID, route.InstanceID, route.NetworkInterfaceID)
+		target := firstNonEmpty(route.GatewayID, route.NATGatewayID, route.TransitGatewayID, route.EgressOnlyGatewayID,
+			route.PeeringConnectionID, route.VPCEndpointID, route.InstanceID, route.NetworkInterfaceID, route.CarrierGatewayID,
+			route.LocalGatewayID, route.CoreNetworkARN)
 		table.Routes = append(table.Routes, netpath.Route{Destination: destination, Target: target, Active: route.State == "active"})
 	}
-	return table, nil
+	return table
 }
 
 func (r *Reader) networkACL(ctx context.Context, subnetID string) (*netpath.NetworkACL, error) {
 	var out describeNetworkACLsResponse
-	if err := r.call(ctx, url.Values{"Action": {"DescribeNetworkAcls"},
+	if err := r.call(ctx, r.ec2, apiVersion, url.Values{"Action": {"DescribeNetworkAcls"},
 		"Filter.1.Name": {"association.subnet-id"}, "Filter.1.Value.1": {subnetID}}, &out); err != nil {
 		return nil, err
 	}
@@ -199,19 +398,19 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-// call signs and sends one EC2 Query operation and decodes its XML response.
-// A non-2xx answer is reported by status only: EC2 error bodies can echo
-// request detail.
-func (r *Reader) call(ctx context.Context, params url.Values, out any) error {
-	params.Set("Version", apiVersion)
+// call signs and sends one Query operation and decodes its XML response. A
+// non-2xx answer is reported by status only: error bodies can echo request
+// detail.
+func (r *Reader) call(ctx context.Context, ep endpoint, version string, params url.Values, out any) error {
+	params.Set("Version", version)
 	body := []byte(params.Encode())
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(r.cfg.Endpoint, "/")+"/", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(ep.url, "/")+"/", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
-	r.signV4(req, body, r.cfg.Now().UTC())
-	resp, err := r.cfg.HTTPClient.Do(req)
+	r.signV4(req, body, r.cfg.Now().UTC(), ep)
+	resp, err := ep.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("awsnetpath: %s: %w", params.Get("Action"), err)
 	}
@@ -231,7 +430,7 @@ func (r *Reader) call(ctx context.Context, params url.Values, out any) error {
 
 // signV4 adds AWS Signature Version 4 headers. Digests and the keyed MAC route
 // through the crypto boundary (AN-3).
-func (r *Reader) signV4(req *http.Request, body []byte, t time.Time) {
+func (r *Reader) signV4(req *http.Request, body []byte, t time.Time, ep endpoint) {
 	amzDate := t.Format("20060102T150405Z")
 	dateStamp := t.Format("20060102")
 	req.Header.Set("X-Amz-Date", amzDate)
@@ -247,7 +446,7 @@ func (r *Reader) signV4(req *http.Request, body []byte, t time.Time) {
 	for _, h := range signed {
 		v := strings.TrimSpace(req.Header.Get(h))
 		if h == "host" {
-			v = r.host
+			v = ep.host
 		}
 		canonHeaders.WriteString(h + ":" + v + "\n")
 	}
@@ -255,11 +454,11 @@ func (r *Reader) signV4(req *http.Request, body []byte, t time.Time) {
 	canonicalRequest := strings.Join([]string{
 		req.Method, req.URL.EscapedPath(), "", canonHeaders.String(), signedHeaders, crypto.SHA256Hex(body),
 	}, "\n")
-	credScope := dateStamp + "/" + r.cfg.Region + "/" + service + "/aws4_request"
+	credScope := dateStamp + "/" + r.cfg.Region + "/" + ep.service + "/aws4_request"
 	stringToSign := strings.Join([]string{"AWS4-HMAC-SHA256", amzDate, credScope, crypto.SHA256Hex([]byte(canonicalRequest))}, "\n")
 	kDate := crypto.HMACSHA256([]byte("AWS4"+r.cfg.SecretAccessKey), []byte(dateStamp))
 	kRegion := crypto.HMACSHA256(kDate, []byte(r.cfg.Region))
-	kService := crypto.HMACSHA256(kRegion, []byte(service))
+	kService := crypto.HMACSHA256(kRegion, []byte(ep.service))
 	kSigning := crypto.HMACSHA256(kService, []byte("aws4_request"))
 	signature := hex.EncodeToString(crypto.HMACSHA256(kSigning, []byte(stringToSign)))
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential="+r.cfg.AccessKeyID+"/"+credScope+
@@ -268,10 +467,14 @@ func (r *Reader) signV4(req *http.Request, body []byte, t time.Time) {
 
 type describeNetworkInterfacesResponse struct {
 	Interfaces []struct {
-		ID       string `xml:"networkInterfaceId"`
-		SubnetID string `xml:"subnetId"`
-		VPCID    string `xml:"vpcId"`
-		Groups   []struct {
+		ID               string `xml:"networkInterfaceId"`
+		SubnetID         string `xml:"subnetId"`
+		VPCID            string `xml:"vpcId"`
+		InterfaceType    string `xml:"interfaceType"`
+		Description      string `xml:"description"`
+		RequesterManaged bool   `xml:"requesterManaged"`
+		PrivateIP        string `xml:"privateIpAddress"`
+		Groups           []struct {
 			ID string `xml:"groupId"`
 		} `xml:"groupSet>item"`
 	} `xml:"networkInterfaceSet>item"`
@@ -295,19 +498,61 @@ type describeSecurityGroupsResponse struct {
 }
 
 type describeRouteTablesResponse struct {
-	Tables []struct {
-		ID     string `xml:"routeTableId"`
-		Routes []struct {
-			DestinationIPv4    string `xml:"destinationCidrBlock"`
-			DestinationIPv6    string `xml:"destinationIpv6CidrBlock"`
-			GatewayID          string `xml:"gatewayId"`
-			NATGatewayID       string `xml:"natGatewayId"`
-			TransitGatewayID   string `xml:"transitGatewayId"`
-			InstanceID         string `xml:"instanceId"`
-			NetworkInterfaceID string `xml:"networkInterfaceId"`
-			State              string `xml:"state"`
-		} `xml:"routeSet>item"`
-	} `xml:"routeTableSet>item"`
+	Tables []routeTableXML `xml:"routeTableSet>item"`
+}
+
+type routeTableXML struct {
+	ID     string `xml:"routeTableId"`
+	Routes []struct {
+		DestinationIPv4     string `xml:"destinationCidrBlock"`
+		DestinationIPv6     string `xml:"destinationIpv6CidrBlock"`
+		GatewayID           string `xml:"gatewayId"`
+		NATGatewayID        string `xml:"natGatewayId"`
+		TransitGatewayID    string `xml:"transitGatewayId"`
+		EgressOnlyGatewayID string `xml:"egressOnlyInternetGatewayId"`
+		PeeringConnectionID string `xml:"vpcPeeringConnectionId"`
+		VPCEndpointID       string `xml:"vpcEndpointId"`
+		InstanceID          string `xml:"instanceId"`
+		NetworkInterfaceID  string `xml:"networkInterfaceId"`
+		CarrierGatewayID    string `xml:"carrierGatewayId"`
+		LocalGatewayID      string `xml:"localGatewayId"`
+		CoreNetworkARN      string `xml:"coreNetworkArn"`
+		State               string `xml:"state"`
+	} `xml:"routeSet>item"`
+}
+
+// describeLoadBalancersResponse is Elastic Load Balancing's
+// DescribeLoadBalancers (2015-12-01) answer.
+type describeLoadBalancersResponse struct {
+	LoadBalancers []struct {
+		ARN            string   `xml:"LoadBalancerArn"`
+		Name           string   `xml:"LoadBalancerName"`
+		Type           string   `xml:"Type"`
+		Scheme         string   `xml:"Scheme"`
+		SecurityGroups []string `xml:"SecurityGroups>member"`
+	} `xml:"DescribeLoadBalancersResult>LoadBalancers>member"`
+}
+
+type describeListenersResponse struct {
+	Listeners []struct {
+		Port     int    `xml:"Port"`
+		Protocol string `xml:"Protocol"`
+	} `xml:"DescribeListenersResult>Listeners>member"`
+	NextMarker string `xml:"DescribeListenersResult>NextMarker"`
+}
+
+// describeClassicLoadBalancersResponse is the classic DescribeLoadBalancers
+// (2012-06-01) answer.
+type describeClassicLoadBalancersResponse struct {
+	LoadBalancers []struct {
+		Name           string   `xml:"LoadBalancerName"`
+		Scheme         string   `xml:"Scheme"`
+		SecurityGroups []string `xml:"SecurityGroups>member"`
+		Listeners      []struct {
+			Protocol string `xml:"Listener>Protocol"`
+			Port     int    `xml:"Listener>LoadBalancerPort"`
+		} `xml:"ListenerDescriptions>member"`
+	} `xml:"DescribeLoadBalancersResult>LoadBalancerDescriptions>member"`
 }
 
 type describeNetworkACLsResponse struct {

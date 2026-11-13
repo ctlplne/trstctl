@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3210 annotated sites across 34 rules. Each row is
+3212 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (778 sites)
+### G101 — CWE-798 Use of hardcoded credentials (780 sites)
 
 | Location | Reason |
 |---|---|
@@ -353,7 +353,7 @@ not this file.
 | `internal/discovery/lbtls/awselb/awselb_test.go:75` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/discovery/lbtls/bigip/bigip_test.go:40` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/discovery/lbtls/bigip/bigip_test.go:69` | a URL carrying credentials, built to prove it is refused; no value is real (CWE-798) |
-| `internal/discovery/netpath/awsnetpath/awsnetpath_test.go:17` | fabricated fixture credential (CWE-798) |
+| `internal/discovery/netpath/awsnetpath/awsnetpath_test.go:18` | fabricated fixture credential (CWE-798) |
 | `internal/discovery/netpath/azurenetpath/azurenetpath_test.go:18` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/discovery/netpath/gcpnetpath/gcpnetpath_test.go:15` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/dns/akamai/akamai_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -507,6 +507,8 @@ not this file.
 | `internal/server/attack_path_azure_served_test.go:72` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/attack_path_gcp_served_test.go:26` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/attack_path_gcp_served_test.go:57` | token_ref is a non-secret environment locator (CWE-798) |
+| `internal/server/attack_path_lb_served_test.go:31` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/attack_path_lb_served_test.go:92` | credential references only (CWE-798) |
 | `internal/server/attack_path_scheduled_served_test.go:24` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/attack_path_scheduled_served_test.go:55` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/attack_path_served_test.go:45` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |

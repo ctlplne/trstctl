@@ -35867,7 +35867,9 @@
               "security_group",
               "firewall",
               "network_security_group",
-              "public_ip"
+              "public_ip",
+              "listener",
+              "nat_gateway"
             ],
             "type": "string"
           },

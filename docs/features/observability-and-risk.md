@@ -147,16 +147,20 @@ The cloud's own answer is the second check (A167). `POST
 /api/v1/nhi/posture/exposure/attack-paths` (`trstctl-cli nhi posture exposure
 attack-paths`, discovery:write) takes a `source_id` naming a
 [cloud network paths](discovery-and-inventory.md#cloud-network-paths) source and asks
-that AWS account whether its route tables, network ACLs and security groups admit the
-internet to each exposed record's public addresses, that Google Cloud project whether
+that AWS account whether its route tables, network ACLs and security groups — and, for
+an address on a load balancer, its listeners and its own security groups (A167-L2) —
+admit the internet to each exposed record's public addresses, that Google Cloud project whether
 its VPC routes and firewall rules do, or that Azure subscription whether its network
 security groups, route tables and public IPs do (A167-L1). The posture then carries an
 `attack_path` per record — open through a named security group, firewall rule or
 network security group, blocked at a named route table, route, network ACL, security
-group, firewall rule, network, network security group or public IP (`blocked_by` says
-which stage: `route`, `network_acl`, `network_acl_return`, `security_group`,
-`firewall`, `network_security_group` or `public_ip`), not in the account, or unknown
-with the reason — and
+group, load balancer, NAT gateway, firewall rule, network, network security group or
+public IP (`blocked_by` says which stage: `route`, `network_acl`, `network_acl_return`,
+`security_group`, `listener`, `nat_gateway`, `firewall`, `network_security_group` or
+`public_ip`), not in the account, or unknown with the reason — including a path whose
+replies leave through an AWS transit gateway, inspection endpoint or appliance, or whose
+inbound traffic the internet gateway's own route table steers through one, which names
+that resource because its own rules decide (A167-L2) — and
 the exposure panel has a **Validate paths in the cloud** button and a **Cloud path**
 column that shows the verdict with the reason beneath it; a schedule on the source
 re-validates every exposed endpoint on its own (A167-L4). A probe says something
@@ -167,8 +171,9 @@ authenticates weakly, uses insecure transport or admits wildcard reachability, w
 `cloud_path_open` finding type, a risk score to match and a recommendation to close the
 rule the Cloud path names. The posture automation's `nhi_posture` rules see the same
 raised severity, risk and finding type. A blocked verdict lowers nothing, because paths
-the provider adapters do not read yet (load balancers, NAT, gateways) may still reach
-the endpoint.
+the provider adapters do not read yet (Google Cloud and Azure load balancers and NAT, and
+what lies beyond an AWS transit gateway or inspection endpoint) may still reach the
+endpoint.
 
 A stale NHI can be handed to a new accountable owner with
 `POST /api/v1/nhi/posture/stale/handoff` (`trstctl-cli nhi posture stale handoff`):

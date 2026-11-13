@@ -87,6 +87,10 @@ type cloudCertificateProviderConfig struct {
 	// SubscriptionID (azure-network, A167-L1) names the Azure subscription
 	// whose public IPs, network security groups and route tables are read.
 	SubscriptionID string `json:"subscription_id"`
+	// ELBEndpoint (aws-ec2 cloud_network_path, A167-L2) is where load
+	// balancers' listeners and security groups are read: the Region's
+	// Elastic Load Balancing endpoint by default.
+	ELBEndpoint string `json:"elb_endpoint"`
 }
 
 type cloudSecretDiscoveryConfig struct {

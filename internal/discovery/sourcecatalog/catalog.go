@@ -311,6 +311,7 @@ func cloudNetworkPathCapability() Capability {
 			field("providers[].project", "Project", "string", false, false, false, "The Google Cloud project whose VPC firewall rules and routes are read."),
 			field("providers[].subscription_id", "Subscription ID", "string", false, false, false, "The Azure subscription whose public IPs, network security groups and route tables are read."),
 			field("providers[].endpoint", "API endpoint", "url", false, false, true, "Optional compatible endpoint; public provider defaults are safer."),
+			field("providers[].elb_endpoint", "Load balancing API endpoint", "url", false, false, true, "AWS: where load balancers' listeners and security groups are read; the Region's Elastic Load Balancing endpoint by default."),
 			field("providers[].allow_private_endpoint", "Allow approved private endpoint", "boolean", false, false, true, "Requires private-egress authorization and explicit CIDRs."),
 			field("providers[].private_egress_cidrs", "Approved private endpoint CIDRs", "cidr_list", false, false, true, "Private destinations allowed for this provider; metadata and loopback remain blocked."),
 			field("providers[].access_key_id_ref", "Access key ID reference", "credential_ref", false, true, true, "Reference only; use a short-lived least-privilege credential."),
@@ -321,7 +322,7 @@ func cloudNetworkPathCapability() Capability {
 		Providers: []Provider{
 			provider("gcp-compute", "Google Compute Engine network configuration", "compute.instances.list, compute.firewalls.list and compute.routes.list on the project (roles/compute.networkViewer)", "token_ref", "project", "endpoint", "token_ref"),
 			provider("azure-network", "Azure virtual network configuration", "Microsoft.Network/publicIPAddresses/read, networkInterfaces/read, virtualNetworks/subnets/read, networkSecurityGroups/read and routeTables/read on the subscription (the built-in Reader role grants them)", "token_ref", "subscription_id", "endpoint", "token_ref"),
-			provider("aws-ec2", "Amazon EC2 network configuration", "ec2:DescribeNetworkInterfaces, ec2:DescribeSecurityGroups, ec2:DescribeRouteTables and ec2:DescribeNetworkAcls on the authorized account/region", "env: credential references", "region", "endpoint", "access_key_id_ref", "secret_access_key_ref", "session_token_ref"),
+			provider("aws-ec2", "Amazon EC2 network configuration", "ec2:DescribeNetworkInterfaces, ec2:DescribeSecurityGroups, ec2:DescribeRouteTables and ec2:DescribeNetworkAcls, and elasticloadbalancing:DescribeLoadBalancers and elasticloadbalancing:DescribeListeners, on the authorized account/region", "env: credential references", "region", "endpoint", "elb_endpoint", "access_key_id_ref", "secret_access_key_ref", "session_token_ref"),
 		},
 		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-network-paths",
 	}

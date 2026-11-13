@@ -1,6 +1,16 @@
 ## [Unreleased]
 
 ### Added
+- Cloud attack paths through AWS load balancers, NAT and transit gateways (A167-L2): an address on an application,
+  network or classic load balancer is judged by the load balancer's own listeners and security groups (read with
+  `elasticloadbalancing:DescribeLoadBalancers` and `DescribeListeners`; a new optional `elb_endpoint`), so a port it does
+  not listen on is blocked at the load balancer (`blocked_by: listener`) and a network load balancer without security
+  groups is open on its listeners; a NAT gateway's address is blocked at the NAT gateway (`nat_gateway`); a subnet whose
+  replies leave through a NAT gateway, an egress-only internet gateway, a peering connection or a virtual private
+  gateway is blocked at its route table with that target named; and a path through a transit gateway, a gateway load
+  balancer endpoint or an appliance — including inbound traffic the internet gateway's own route table steers through
+  one — is unknown with that resource named, never open or blocked. An AWS `cloud_network_path` credential now needs
+  the two Elastic Load Balancing read permissions as well.
 - NinjaOne RMM devices and agent health (MSP-9, part 1): a `ninjaone` target (the region host, the API client's ID and
   secret reference, the agent's install, upgrade and remove script IDs, a health custom field) gets one inventory per
   mapped customer every 10 minutes on the leader: the devices under the customer's NinjaOne organization (and only

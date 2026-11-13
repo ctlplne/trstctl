@@ -4,7 +4,11 @@
 // Describe operations attack-path validation calls (A167). It verifies every
 // request's Signature Version 4 under the configured key, answers in EC2's XML
 // shapes from a seeded network, and counts any other action so a test can
-// prove nothing was changed.
+// prove nothing was changed. A167-L2: it also answers the read-only Elastic
+// Load Balancing calls (DescribeLoadBalancers and DescribeListeners of API
+// version 2015-12-01, and the classic DescribeLoadBalancers of 2012-06-01),
+// signed for the elasticloadbalancing service, written from the public API
+// reference, with one listener a page so paging is exercised.
 package ec2test
 
 import (
@@ -21,10 +25,15 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// Interface is a seeded elastic network interface.
+// Interface is a seeded elastic network interface. Type, Description and
+// RequesterManaged are what EC2 reports for an interface a service created
+// (A167-L2): a load balancer's ("ELB app/<name>/<id>", "ELB net/…", or "ELB
+// <name>" for a classic one) or a NAT gateway's (type nat_gateway).
 type Interface struct {
 	ID, SubnetID, VPCID, PublicIP, IPv6 string
 	Groups                              []string
+	Type, Description, PrivateIP        string
+	RequesterManaged                    bool
 }
 
 // Permission is a seeded inbound security group permission.
@@ -40,18 +49,36 @@ type SecurityGroup struct {
 	Inbound []Permission
 }
 
-// Route is a seeded route.
+// Route is a seeded route. Blackhole marks a route whose target no longer
+// exists.
 type Route struct {
 	Destination, Target string
+	Blackhole           bool
 }
 
 // RouteTable is a seeded table: Main marks the VPC's main table; Subnets are
-// its explicit associations.
+// its explicit associations and Gateways its edge associations (an internet
+// gateway's own table, A167-L2).
 type RouteTable struct {
 	ID, VPCID string
 	Main      bool
 	Subnets   []string
+	Gateways  []string
 	Routes    []Route
+}
+
+// LoadBalancer is a seeded Elastic Load Balancing load balancer (A167-L2).
+// Type is application, network or classic; ARN is unused for a classic one.
+type LoadBalancer struct {
+	ARN, Name, Type, Scheme string
+	SecurityGroups          []string
+	Listeners               []Listener
+}
+
+// Listener is a seeded listener.
+type Listener struct {
+	Port     int
+	Protocol string
 }
 
 // ACLEntry is a seeded network ACL entry.
@@ -78,6 +105,7 @@ type Server struct {
 	groups               map[string]SecurityGroup
 	tables               []RouteTable
 	acls                 []NetworkACL
+	lbs                  []LoadBalancer
 	calls                map[string]int
 	refused              int
 }
@@ -105,7 +133,15 @@ func (s *Server) Seed(interfaces []Interface, groups []SecurityGroup, tables []R
 	s.acls = append(s.acls, acls...)
 }
 
-// Calls reports how many times each action was called.
+// SeedLoadBalancers adds load balancers (A167-L2).
+func (s *Server) SeedLoadBalancers(lbs ...LoadBalancer) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lbs = append(s.lbs, lbs...)
+}
+
+// Calls reports how many times each action was called. Elastic Load Balancing
+// actions are counted as "elbv2:<action>" and "elb:<action>" (classic).
 func (s *Server) Calls(action string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -119,7 +155,7 @@ func (s *Server) NonDescribeCalls() int {
 	defer s.mu.Unlock()
 	n := 0
 	for action, count := range s.calls {
-		if !strings.HasPrefix(action, "Describe") {
+		if !strings.HasPrefix(action[strings.LastIndex(action, ":")+1:], "Describe") {
 			n += count
 		}
 	}
@@ -135,7 +171,8 @@ func (s *Server) Refused() int {
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if !s.verify(r, body) {
+	service, ok := s.verify(r, body)
+	if !ok {
 		s.mu.Lock()
 		s.refused++
 		s.mu.Unlock()
@@ -148,6 +185,14 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	action := form.Get("Action")
+	if service == "elasticloadbalancing" {
+		s.handleELB(w, form)
+		return
+	}
+	if service != "ec2" {
+		http.Error(w, "<Response><Errors><Error><Code>InvalidClientTokenId</Code></Error></Errors></Response>", http.StatusForbidden)
+		return
+	}
 	s.mu.Lock()
 	s.calls[action]++
 	s.mu.Unlock()
@@ -191,10 +236,14 @@ type xmlGroupRef struct {
 }
 
 type xmlInterface struct {
-	ID       string                `xml:"networkInterfaceId"`
-	SubnetID string                `xml:"subnetId"`
-	VPCID    string                `xml:"vpcId"`
-	Groups   xmlItems[xmlGroupRef] `xml:"groupSet"`
+	ID               string                `xml:"networkInterfaceId"`
+	SubnetID         string                `xml:"subnetId"`
+	VPCID            string                `xml:"vpcId"`
+	Type             string                `xml:"interfaceType,omitempty"`
+	Description      string                `xml:"description,omitempty"`
+	RequesterManaged bool                  `xml:"requesterManaged"`
+	PrivateIP        string                `xml:"privateIpAddress,omitempty"`
+	Groups           xmlItems[xmlGroupRef] `xml:"groupSet"`
 }
 
 func (s *Server) describeInterfaces(filters map[string]string) any {
@@ -208,7 +257,11 @@ func (s *Server) describeInterfaces(filters map[string]string) any {
 		if ip, ok := filters["ipv6-addresses.ipv6-address"]; ok && eni.IPv6 != ip {
 			continue
 		}
-		item := xmlInterface{ID: eni.ID, SubnetID: eni.SubnetID, VPCID: eni.VPCID}
+		item := xmlInterface{ID: eni.ID, SubnetID: eni.SubnetID, VPCID: eni.VPCID, Type: eni.Type, Description: eni.Description,
+			RequesterManaged: eni.RequesterManaged, PrivateIP: eni.PrivateIP}
+		if item.Type == "" {
+			item.Type = "interface"
+		}
 		for _, g := range eni.Groups {
 			item.Groups.Items = append(item.Groups.Items, xmlGroupRef{ID: g})
 		}
@@ -274,11 +327,20 @@ func (s *Server) describeGroups(form url.Values) any {
 	}{Groups: xmlItems[xmlGroup]{Items: items}}
 }
 
+// xmlRoute carries a route's target in the field EC2's Route type names for
+// it (A167-L2): a gateway load balancer endpoint, like an internet or virtual
+// private gateway, in gatewayId.
 type xmlRoute struct {
-	Destination string `xml:"destinationCidrBlock,omitempty"`
-	Gateway     string `xml:"gatewayId,omitempty"`
-	NAT         string `xml:"natGatewayId,omitempty"`
-	State       string `xml:"state"`
+	Destination      string `xml:"destinationCidrBlock,omitempty"`
+	Destination6     string `xml:"destinationIpv6CidrBlock,omitempty"`
+	Gateway          string `xml:"gatewayId,omitempty"`
+	NAT              string `xml:"natGatewayId,omitempty"`
+	Transit          string `xml:"transitGatewayId,omitempty"`
+	EgressOnly       string `xml:"egressOnlyInternetGatewayId,omitempty"`
+	Peering          string `xml:"vpcPeeringConnectionId,omitempty"`
+	Instance         string `xml:"instanceId,omitempty"`
+	NetworkInterface string `xml:"networkInterfaceId,omitempty"`
+	State            string `xml:"state"`
 }
 
 type xmlRouteTable struct {
@@ -301,13 +363,33 @@ func (s *Server) describeRouteTables(filters map[string]string) any {
 		if main, ok := filters["association.main"]; ok && (main == "true") != table.Main {
 			continue
 		}
+		if gateway, ok := filters["association.gateway-id"]; ok && !contains(table.Gateways, gateway) {
+			continue
+		}
 		item := xmlRouteTable{ID: table.ID, VPCID: table.VPCID}
 		for _, route := range table.Routes {
 			r := xmlRoute{Destination: route.Destination, State: "active"}
-			if strings.HasPrefix(route.Target, "nat-") {
-				r.NAT = route.Target
-			} else {
-				r.Gateway = route.Target
+			if strings.Contains(route.Destination, ":") {
+				r.Destination, r.Destination6 = "", route.Destination
+			}
+			if route.Blackhole {
+				r.State = "blackhole"
+			}
+			switch target := route.Target; {
+			case strings.HasPrefix(target, "nat-"):
+				r.NAT = target
+			case strings.HasPrefix(target, "tgw-"):
+				r.Transit = target
+			case strings.HasPrefix(target, "eigw-"):
+				r.EgressOnly = target
+			case strings.HasPrefix(target, "pcx-"):
+				r.Peering = target
+			case strings.HasPrefix(target, "i-"):
+				r.Instance = target
+			case strings.HasPrefix(target, "eni-"):
+				r.NetworkInterface = target
+			default:
+				r.Gateway = target
 			}
 			item.Routes.Items = append(item.Routes.Items, r)
 		}
@@ -366,12 +448,12 @@ func (s *Server) describeACLs(filters map[string]string) any {
 }
 
 // verify recomputes the request's Signature Version 4 under the stand-in's key,
-// as the service does.
-func (s *Server) verify(r *http.Request, body []byte) bool {
+// as the service does, and returns the service the request was signed for.
+func (s *Server) verify(r *http.Request, body []byte) (string, bool) {
 	const algo = "AWS4-HMAC-SHA256 "
 	auth := r.Header.Get("Authorization")
 	if !strings.HasPrefix(auth, algo) {
-		return false
+		return "", false
 	}
 	cred, signedHeaders, sig := "", "", ""
 	for _, f := range strings.Split(auth[len(algo):], ",") {
@@ -387,11 +469,11 @@ func (s *Server) verify(r *http.Request, body []byte) bool {
 	}
 	scope := strings.SplitN(cred, "/", 2)
 	if len(scope) != 2 || scope[0] != s.accessKey || signedHeaders == "" || sig == "" {
-		return false
+		return "", false
 	}
 	cs := strings.Split(scope[1], "/")
-	if len(cs) != 4 || cs[2] != "ec2" || cs[3] != "aws4_request" {
-		return false
+	if len(cs) != 4 || (cs[2] != "ec2" && cs[2] != "elasticloadbalancing") || cs[3] != "aws4_request" {
+		return "", false
 	}
 	var canonHeaders strings.Builder
 	for _, h := range strings.Split(signedHeaders, ";") {
@@ -407,7 +489,7 @@ func (s *Server) verify(r *http.Request, body []byte) bool {
 	k = crypto.HMACSHA256(k, []byte(cs[1]))
 	k = crypto.HMACSHA256(k, []byte(cs[2]))
 	k = crypto.HMACSHA256(k, []byte("aws4_request"))
-	return hex.EncodeToString(crypto.HMACSHA256(k, []byte(toSign))) == sig
+	return cs[2], hex.EncodeToString(crypto.HMACSHA256(k, []byte(toSign))) == sig
 }
 
 func contains(values []string, want string) bool {
@@ -417,4 +499,157 @@ func contains(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// handleELB answers the read-only Elastic Load Balancing calls (A167-L2):
+// DescribeLoadBalancers by name and DescribeListeners by load balancer ARN
+// (2015-12-01), and the classic DescribeLoadBalancers by name (2012-06-01). A
+// name that matches nothing is LoadBalancerNotFound, as the service answers.
+func (s *Server) handleELB(w http.ResponseWriter, form url.Values) {
+	action, version := form.Get("Action"), form.Get("Version")
+	prefix := "elbv2:"
+	if version == "2012-06-01" {
+		prefix = "elb:"
+	} else if version != "2015-12-01" {
+		http.Error(w, "<ErrorResponse><Error><Code>InvalidAction</Code></Error></ErrorResponse>", http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	s.calls[prefix+action]++
+	lbs := append([]LoadBalancer(nil), s.lbs...)
+	s.mu.Unlock()
+	notFound := func() {
+		http.Error(w, "<ErrorResponse><Error><Code>LoadBalancerNotFound</Code></Error></ErrorResponse>", http.StatusBadRequest)
+	}
+	var out any
+	switch {
+	case prefix == "elbv2:" && action == "DescribeLoadBalancers":
+		names := members(form, "Names")
+		var items []xmlLoadBalancerV2
+		for _, lb := range lbs {
+			if lb.Type == "classic" || !contains(names, lb.Name) {
+				continue
+			}
+			items = append(items, xmlLoadBalancerV2{ARN: lb.ARN, Name: lb.Name, Type: lb.Type, Scheme: lb.Scheme,
+				SecurityGroups: xmlMembers[string]{Members: lb.SecurityGroups}})
+		}
+		if len(items) == 0 {
+			notFound()
+			return
+		}
+		out = struct {
+			XMLName xml.Name                      `xml:"DescribeLoadBalancersResponse"`
+			Result  xmlMembers[xmlLoadBalancerV2] `xml:"DescribeLoadBalancersResult>LoadBalancers"`
+		}{Result: xmlMembers[xmlLoadBalancerV2]{Members: items}}
+	case prefix == "elbv2:" && action == "DescribeListeners":
+		arn := form.Get("LoadBalancerArn")
+		var listeners []xmlListenerV2
+		found := false
+		for _, lb := range lbs {
+			if lb.Type == "classic" || lb.ARN != arn {
+				continue
+			}
+			found = true
+			for i, l := range lb.Listeners {
+				listeners = append(listeners, xmlListenerV2{ARN: strings.Replace(lb.ARN, ":loadbalancer/", ":listener/", 1) + "/" + strconv.Itoa(i+1),
+					LoadBalancerARN: lb.ARN, Port: l.Port, Protocol: l.Protocol})
+			}
+		}
+		if !found {
+			notFound()
+			return
+		}
+		// One listener a page, so a reader that ignores NextMarker misses
+		// listeners.
+		start, _ := strconv.Atoi(form.Get("Marker"))
+		page, next := []xmlListenerV2(nil), ""
+		if start < len(listeners) {
+			page = listeners[start : start+1]
+			if start+1 < len(listeners) {
+				next = strconv.Itoa(start + 1)
+			}
+		}
+		out = struct {
+			XMLName    xml.Name                  `xml:"DescribeListenersResponse"`
+			Listeners  xmlMembers[xmlListenerV2] `xml:"DescribeListenersResult>Listeners"`
+			NextMarker string                    `xml:"DescribeListenersResult>NextMarker,omitempty"`
+		}{Listeners: xmlMembers[xmlListenerV2]{Members: page}, NextMarker: next}
+	case prefix == "elb:" && action == "DescribeLoadBalancers":
+		names := members(form, "LoadBalancerNames")
+		var items []xmlLoadBalancerClassic
+		for _, lb := range lbs {
+			if lb.Type != "classic" || !contains(names, lb.Name) {
+				continue
+			}
+			item := xmlLoadBalancerClassic{Name: lb.Name, Scheme: lb.Scheme, SecurityGroups: xmlMembers[string]{Members: lb.SecurityGroups}}
+			for _, l := range lb.Listeners {
+				item.Listeners.Members = append(item.Listeners.Members, xmlListenerDescription{Listener: xmlListenerClassic{
+					Protocol: l.Protocol, LoadBalancerPort: l.Port, InstanceProtocol: l.Protocol, InstancePort: l.Port}})
+			}
+			items = append(items, item)
+		}
+		if len(items) == 0 {
+			notFound()
+			return
+		}
+		out = struct {
+			XMLName xml.Name                           `xml:"DescribeLoadBalancersResponse"`
+			Result  xmlMembers[xmlLoadBalancerClassic] `xml:"DescribeLoadBalancersResult>LoadBalancerDescriptions"`
+		}{Result: xmlMembers[xmlLoadBalancerClassic]{Members: items}}
+	default:
+		http.Error(w, "<ErrorResponse><Error><Code>InvalidAction</Code></Error></ErrorResponse>", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "text/xml;charset=UTF-8")
+	_ = xml.NewEncoder(w).Encode(out)
+}
+
+// members reads a Query API list parameter (Name.member.1, Name.member.2, …).
+func members(form url.Values, name string) []string {
+	var out []string
+	for i := 1; i <= 20; i++ {
+		v := form.Get(name + ".member." + strconv.Itoa(i))
+		if v == "" {
+			break
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+type xmlMembers[T any] struct {
+	Members []T `xml:"member"`
+}
+
+type xmlLoadBalancerV2 struct {
+	ARN            string             `xml:"LoadBalancerArn"`
+	Name           string             `xml:"LoadBalancerName"`
+	Scheme         string             `xml:"Scheme"`
+	Type           string             `xml:"Type"`
+	SecurityGroups xmlMembers[string] `xml:"SecurityGroups"`
+}
+
+type xmlListenerV2 struct {
+	ARN             string `xml:"ListenerArn"`
+	LoadBalancerARN string `xml:"LoadBalancerArn"`
+	Port            int    `xml:"Port"`
+	Protocol        string `xml:"Protocol"`
+}
+
+type xmlListenerClassic struct {
+	Protocol         string `xml:"Protocol"`
+	LoadBalancerPort int    `xml:"LoadBalancerPort"`
+	InstanceProtocol string `xml:"InstanceProtocol"`
+	InstancePort     int    `xml:"InstancePort"`
+}
+
+type xmlListenerDescription struct {
+	Listener xmlListenerClassic `xml:"Listener"`
+}
+
+type xmlLoadBalancerClassic struct {
+	Name           string                             `xml:"LoadBalancerName"`
+	Scheme         string                             `xml:"Scheme"`
+	SecurityGroups xmlMembers[string]                 `xml:"SecurityGroups"`
+	Listeners      xmlMembers[xmlListenerDescription] `xml:"ListenerDescriptions"`
 }

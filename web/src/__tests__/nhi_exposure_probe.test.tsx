@@ -348,6 +348,62 @@ describe("NHI exposure live reachability", () => {
     expect(within(spare).getByText("Blocked at pip-spare (public IP)")).toBeInTheDocument();
   });
 
+  // A167-L2: an AWS address on a load balancer that does not listen on the
+  // port reads as blocked at the load balancer's listener, a NAT gateway's as
+  // blocked at the NAT gateway, and a path through a transit gateway as
+  // unknown with the reason naming it.
+  it("names a load balancer listener, a NAT gateway and a transit gateway", async () => {
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ops-1", tenant_id: "t1", email: "ops@example.test" });
+    const posture = await apiMock.nhiExposurePosture();
+    const verdict = (address: string, fields: Record<string, unknown>) => ({
+      status: fields.status,
+      checked_at: "2026-11-13T04:00:00Z",
+      endpoints: [{ address, checked_at: "2026-11-13T04:00:00Z", ...fields }],
+    });
+    posture.findings = [
+      exposureFinding({
+        inventory_id: "finding/aws-alb",
+        display_name: "aws-alb-token",
+        attack_path: verdict("203.0.113.20:8443", {
+          status: "blocked",
+          blocked_by: "listener",
+          resource: "app/web/50dc6c495c0c9188",
+          reason: "load balancer app/web/50dc6c495c0c9188 has no listener on tcp/8443 (it listens on tcp/80, tcp/443)",
+        }),
+      }),
+      exposureFinding({
+        inventory_id: "finding/aws-nat",
+        display_name: "aws-nat-token",
+        attack_path: verdict("203.0.113.23:443", {
+          status: "blocked",
+          blocked_by: "nat_gateway",
+          resource: "nat-0a1b2c3d",
+          reason: "the address belongs to a NAT gateway (nat-0a1b2c3d), which admits only replies to connections opened from inside the VPC",
+        }),
+      }),
+      exposureFinding({
+        inventory_id: "finding/aws-hub",
+        display_name: "aws-hub-token",
+        attack_path: verdict("203.0.113.24:443", {
+          status: "unknown",
+          resource: "tgw-1",
+          path: ["eni-hub", "sg-web", "acl-1", "rtb-hub", "tgw-1"],
+          reason: "security group sg-web admits tcp/443 from 0.0.0.0/0, but replies for 0.0.0.0/0 leave the subnet through transit gateway tgw-1",
+        }),
+      }),
+    ];
+    apiMock.nhiExposurePosture.mockResolvedValue(posture);
+    renderRisk();
+
+    const table = await screen.findByRole("table", { name: "Exposed NHI deployment recommendations" });
+    const alb = (await within(table).findByText("aws-alb-token")).closest("tr") as HTMLElement;
+    expect(within(alb).getByText("Blocked at app/web/50dc6c495c0c9188 (load balancer listener)")).toBeInTheDocument();
+    const nat = within(table).getByText("aws-nat-token").closest("tr") as HTMLElement;
+    expect(within(nat).getByText("Blocked at nat-0a1b2c3d (NAT gateway)")).toBeInTheDocument();
+    const hub = within(table).getByText("aws-hub-token").closest("tr") as HTMLElement;
+    expect(within(hub).getByText(/^Unknown: .*transit gateway tgw-1/)).toBeInTheDocument();
+  });
+
   it("says where to add a cloud network path source when none exists", async () => {
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ops-1", tenant_id: "t1", email: "ops@example.test" });
     renderRisk();
