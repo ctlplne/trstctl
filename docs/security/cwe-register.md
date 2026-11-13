@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3244 annotated sites across 35 rules. Each row is
+3246 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1802,7 +1802,7 @@ not this file.
 | `internal/agent/relay/native_probe_host_test.go:81` | fixed stock command against owned loopback fixtures. |
 | `internal/agent/reportstate/local_account_rotation_test.go:290` | current Go test executable with one fixed test selector and an owned public temp root; no shell or credentials (CWE-78) |
 | `internal/agent/reportstate/task_execution_test.go:337` | the current Go test executable and one fixed test name, public owned fixture root only, no shell or credential (CWE-78) |
-| `internal/agent/secretrender/secretrender.go:658` | operator-configured reload argv from the renderer's own configuration; running it is the feature (CWE-78) |
+| `internal/agent/secretrender/secretrender.go:668` | operator-configured reload argv from the renderer's own configuration; running it is the feature (CWE-78) |
 | `internal/agent/sessionobserve/observer_linux_test.go:101` | the proof's own traffic script, named by the proof runner (CWE-78) |
 | `internal/agent/sshkrl/revocations_test.go:92` | fixed ssh-keygen argv over test-owned temp paths |
 | `internal/agent/sshtrust/sshd_live_test.go:61` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2251,7 +2251,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (768 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (770 sites)
 
 | Location | Reason |
 |---|---|
@@ -2492,16 +2492,17 @@ not this file.
 | `internal/agent/secretinject/secretinject_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/secretrender/lease_test.go:106` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/lease_test.go:130` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/login.go:86` | operator-configured workload credential file (CWE-22) |
 | `internal/agent/secretrender/ownership_unix_test.go:78` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/replace_windows_test.go:49` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/replacement_test.go:53` | this test reads only its own temporary renderer destination (CWE-22) |
 | `internal/agent/secretrender/replacement_test.go:82` | this test reads only its own temporary renderer destination (CWE-22) |
 | `internal/agent/secretrender/restrict_windows_test.go:70` | the test's own file (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:348` | the renderer's own state directory and a validated template name (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:640` | operator-configured pid file (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:732` | a fresh random name beside the configured destination (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:774` | the destination's own directory (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:821` | operator-configured token file (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:358` | the renderer's own state directory and a validated template name (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:650` | operator-configured pid file (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:742` | a fresh random name beside the configured destination (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:784` | the destination's own directory (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:831` | operator-configured token file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:83` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:142` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:154` | the test's own temp file (CWE-22) |
@@ -2857,6 +2858,7 @@ not this file.
 | `internal/server/sdk_registry_install_served_test.go:348` | the test reads what it installed under its own temp dir (CWE-22) |
 | `internal/server/sdk_registry_install_served_test.go:352` | the test reads what it installed under its own temp dir (CWE-22) |
 | `internal/server/secret_integrations.go:476` | the operator's own administrator DSN names this root file on the control plane's host (CWE-22) |
+| `internal/server/secret_render_login_served_test.go:70` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_served_test.go:69` | the test's own temp file or the lab directory the runner created (CWE-22) |
 | `internal/server/secret_render_served_test.go:323` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_served_test.go:363` | the test's own temp file (CWE-22) |

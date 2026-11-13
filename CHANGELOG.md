@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A secret renderer can sign in as its workload (A238-L1): `login_method` and `login_credential_file` replace
+  `token_file`, and the renderer exchanges the workload's own credential at `POST /api/v1/secrets/login` for a
+  machine session — re-reading the credential at each sign-in, signing in again before the session expires or when
+  the control plane stops accepting it, and ending it on stop — so it holds no broad `secrets:read` token.
 - A scoped sync's reconciler reads the source as the sync's author (A237-L6): a restricted environment the author
   isn't granted is left out of an automatic plan, a sync whose author no longer reads its source is recorded
   `blocked` and writes nothing, and a change to the author's grants re-plans the sync on the next pass, as a

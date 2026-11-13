@@ -47,11 +47,32 @@ func runSecretRender(ctx context.Context, path string) error {
 	} else if cp, err = netsec.OutboundClientForEndpoint(cfg.Server, 15*time.Second); err != nil {
 		return err
 	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	if cfg.LoginMethod != "" {
+		// A238-L1: sign in as the workload; the session is ended on stop.
+		session, err := secretrender.NewSessionClient(cfg.Server, cfg.Tenant, cfg.LoginMethod, cfg.LoginCredentialFile, cp)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			closeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := session.Close(closeCtx); err != nil {
+				logger.Warn("the machine session could not be ended", "error", err.Error())
+			}
+		}()
+		renderer, err := secretrender.New(cfg, session, session, logger)
+		if err != nil {
+			return err
+		}
+		renderer.UseLeases(session)
+		return renderer.Run(ctx)
+	}
 	client, err := secretrender.NewHTTPClient(cfg.Server, cfg.Tenant, cfg.TokenFile, cp)
 	if err != nil {
 		return err
 	}
-	renderer, err := secretrender.New(cfg, client, client, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	renderer, err := secretrender.New(cfg, client, client, logger)
 	if err != nil {
 		return err
 	}

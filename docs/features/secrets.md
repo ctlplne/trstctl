@@ -1746,7 +1746,7 @@ pod readiness separately for sidecar runtime failures.
 
 `trstctl-agent --secret-render-config render.yaml` keeps files current for an
 application on the host, with no Kubernetes Secret in the path. It reads secrets with an
-API token (`secrets:read`) and needs no enrollment:
+API token (`secrets:read`), or signs in as its workload, and needs no enrollment:
 
 ```yaml
 server: https://trstctl.example:8443
@@ -1768,6 +1768,16 @@ templates:
     verify: { url: "http://127.0.0.1/", username: app, password_secret: web/prod/password }
     on_stale: remove           # or keep
 ```
+
+Instead of `token_file`, a renderer can sign in as its workload (A238-L1):
+`login_method` names the tenant's machine auth method (`kubernetes`, `aws`, `token`, …)
+and `login_credential_file` the workload's own credential, such as a projected
+service-account token. The renderer exchanges it at `POST /api/v1/secrets/login` for a
+machine session, so what it may read is that method's role rather than a broad API token.
+It reads the credential file again at each sign-in, so a rotated token works; signs in
+again a minute before the session expires, or once when the control plane stops accepting
+it; and ends the session when it stops. Each sign-in is a fresh session, so one after the
+control plane ended the last never gets that session back.
 
 A template is literal text with `{{ secret "name" }}` placeholders and nothing else, so it
 can't run code. It's rendered over bytes: a value is never turned into a string, never

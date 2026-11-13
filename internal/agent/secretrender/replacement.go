@@ -84,6 +84,9 @@ func (c *HTTPClient) ReadReplacement(ctx context.Context, id string) (Replacemen
 		return ReplacementPublication{}, errors.New("the control plane could not be reached")
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return ReplacementPublication{}, refusedError{resp.StatusCode, "the replacement publication"}
+	}
 	if resp.StatusCode != http.StatusOK {
 		return ReplacementPublication{}, errors.New("replacement publication is not accessible")
 	}

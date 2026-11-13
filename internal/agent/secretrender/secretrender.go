@@ -43,15 +43,21 @@ import (
 
 // Config is the renderer's configuration file.
 type Config struct {
-	Server    string        `yaml:"server" json:"server"`
-	CAFile    string        `yaml:"ca_file" json:"ca_file"`
-	TokenFile string        `yaml:"token_file" json:"token_file"`
-	Tenant    string        `yaml:"tenant" json:"tenant"`
-	Consumer  string        `yaml:"consumer" json:"consumer"`
-	Interval  time.Duration `yaml:"interval" json:"interval"`
-	Freshness time.Duration `yaml:"freshness" json:"freshness"`
-	StateDir  string        `yaml:"state_dir" json:"state_dir"`
-	Templates []Template    `yaml:"templates" json:"templates"`
+	Server    string `yaml:"server" json:"server"`
+	CAFile    string `yaml:"ca_file" json:"ca_file"`
+	TokenFile string `yaml:"token_file" json:"token_file"`
+	// LoginMethod and LoginCredentialFile sign the renderer in as its
+	// workload instead of TokenFile (A238-L1): the credential (a service
+	// account token, a cloud identity token) is exchanged at the tenant's
+	// machine auth method for a session.
+	LoginMethod         string        `yaml:"login_method" json:"login_method"`
+	LoginCredentialFile string        `yaml:"login_credential_file" json:"login_credential_file"`
+	Tenant              string        `yaml:"tenant" json:"tenant"`
+	Consumer            string        `yaml:"consumer" json:"consumer"`
+	Interval            time.Duration `yaml:"interval" json:"interval"`
+	Freshness           time.Duration `yaml:"freshness" json:"freshness"`
+	StateDir            string        `yaml:"state_dir" json:"state_dir"`
+	Templates           []Template    `yaml:"templates" json:"templates"`
 }
 
 // Template is one rendered file.
@@ -200,8 +206,12 @@ func parseTemplate(text string) ([]segment, []string, []string, error) {
 // Validate checks a configuration before anything runs.
 func (c *Config) Validate() error {
 	switch {
-	case c.Server == "" || c.TokenFile == "" || c.Consumer == "" || c.StateDir == "":
-		return errors.New("secretrender: server, token_file, consumer and state_dir are required")
+	case c.Server == "" || c.Consumer == "" || c.StateDir == "":
+		return errors.New("secretrender: server, consumer and state_dir are required")
+	case (c.TokenFile == "") == (c.LoginMethod == "" && c.LoginCredentialFile == ""):
+		return errors.New("secretrender: give either token_file or login_method with login_credential_file")
+	case c.TokenFile == "" && (c.LoginMethod == "" || c.LoginCredentialFile == ""):
+		return errors.New("secretrender: login_method and login_credential_file go together")
 	case len(c.Templates) == 0:
 		return errors.New("secretrender: at least one template is required")
 	}
@@ -932,6 +942,10 @@ func (c *HTTPClient) Report(ctx context.Context, consumer, state string, version
 		return errors.New("the control plane could not be reached")
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusUnauthorized {
+		// A238-L1: a session client signs in again on this.
+		return refusedError{resp.StatusCode, "the delivery report"}
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("the control plane answered %d", resp.StatusCode)
 	}
@@ -996,6 +1010,9 @@ func (c *HTTPClient) post(ctx context.Context, path, key string, body []byte, ou
 		return errors.New("the control plane could not be reached")
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return refusedError{resp.StatusCode, path}
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("the control plane answered %d", resp.StatusCode)
 	}
