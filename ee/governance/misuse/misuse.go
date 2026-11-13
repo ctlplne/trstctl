@@ -103,13 +103,17 @@ func (p *Projection) ResetTx(ctx context.Context, tx pgx.Tx) error {
 		return err
 	}
 	//trstctl:system-query — the same rebuild clears the derived misuse policies (M2-L2).
-	_, err := tx.Exec(ctx, `DELETE FROM misuse_policies`)
+	if _, err := tx.Exec(ctx, `DELETE FROM misuse_policies`); err != nil {
+		return err
+	}
+	//trstctl:system-query — and the derived misuse incidents (M2-L3).
+	_, err := tx.Exec(ctx, `DELETE FROM misuse_incidents`)
 	return err
 }
 
 // Apply projects one event in its own tenant transaction.
 func (p *Projection) Apply(ctx context.Context, ev eventspec.Event) error {
-	if ev.Type != EventFindingDetected && ev.Type != EventPolicySet {
+	if ev.Type != EventFindingDetected && ev.Type != EventPolicySet && ev.Type != EventIncidentOpened && ev.Type != EventIncidentClosed {
 		return nil
 	}
 	return p.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error { return p.ApplyTx(ctx, tx, ev) })
@@ -120,6 +124,9 @@ func (p *Projection) Apply(ctx context.Context, ev eventspec.Event) error {
 func (p *Projection) ApplyTx(ctx context.Context, tx pgx.Tx, ev eventspec.Event) error {
 	if ev.Type == EventPolicySet {
 		return p.applyPolicySetTx(ctx, tx, ev)
+	}
+	if ev.Type == EventIncidentOpened || ev.Type == EventIncidentClosed {
+		return p.applyIncidentTx(ctx, tx, ev)
 	}
 	if ev.Type != EventFindingDetected {
 		return nil
@@ -379,6 +386,10 @@ func (d *Detector) record(ctx context.Context, tenantID string, c candidate, pol
 			return err
 		}
 		if err := d.proj.ApplyTx(ctx, tx, ev); err != nil {
+			return err
+		}
+		// M2-L3: the finding opens its token's incident when none is open.
+		if err := d.openIncidentTx(ctx, tx, tenantID, c); err != nil {
 			return err
 		}
 		if !c.finding.Alerted {

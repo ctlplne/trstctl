@@ -677,6 +677,15 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 		// M2-L2: a tenant's misuse detection thresholds; numbers only.
 		entry(misuse.EventPolicySet, 1,
 			rejectingTypedLicensedPrivacyPolicy[misuse.Policy]()),
+		// M2-L3: the incident a finding opens, and its close.
+		entry(misuse.EventIncidentOpened, 1,
+			typedLicensedPrivacyPolicy[misuse.IncidentOpened](
+				licensedPrivacyRule("/principal", events.PrivacyFieldIdentityExact),
+			)),
+		entry(misuse.EventIncidentClosed, 1,
+			typedLicensedPrivacyPolicy[misuse.IncidentClosed](
+				licensedPrivacyRule("/note", events.PrivacyFieldFreeTextClear),
+			)),
 
 		entry(delegation.TypeDelegationRecorded, delegation.DelegationRecordedSchemaV1,
 			rejectingTypedLicensedPrivacyPolicy[delegation.DelegationRecordedV1]()),

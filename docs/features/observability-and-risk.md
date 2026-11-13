@@ -143,6 +143,18 @@ applies from the next detection pass, including the days and window an alert nam
 Risk page's Misuse detection thresholds section shows them and lets a policy writer
 change them.
 
+A finding also opens an incident for its token (M2-L3), alerted or not: a token has one
+open incident at a time, and its later findings count toward that one (the
+`misuse.incident.opened` event, rebuilt with the findings). `GET /api/v1/misuse/incidents`
+(incidents:read; `status` open or closed) lists them newest first with the token, its
+subject, when it opened and how many findings it holds; `POST
+/api/v1/misuse/incidents/{id}/close` (incidents:write) closes one with a resolution —
+`token_revoked`, `expected_use` or `other` — and an optional note, recording who closed
+it (`misuse.incident.closed`); a second close is refused. A finding after the close opens
+a new incident. The Risk page's Open misuse incidents section lists the open ones and
+closes them. Closing records the decision; revoking the token is done where tokens are
+managed.
+
 What the exposure posture reads from metadata can be checked live:
 `POST /api/v1/nhi/posture/exposure/probe` (`trstctl-cli nhi posture exposure probe`,
 discovery:write) asks a network relay to connect to the exposed records' public

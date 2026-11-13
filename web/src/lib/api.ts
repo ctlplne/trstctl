@@ -917,6 +917,26 @@ export interface MisusePolicy extends MisusePolicyThresholds {
   updated_at?: string;
 }
 
+// M2-L3: the incident a misuse finding opened for its API token (licensed).
+export type MisuseIncidentResolution = "token_revoked" | "expected_use" | "other";
+
+export interface MisuseIncident {
+  id: string;
+  credential_id: string;
+  principal: string;
+  status: "open" | "closed";
+  opened_at: string;
+  findings: number;
+  closed_at?: string;
+  closed_by?: string;
+  resolution?: MisuseIncidentResolution;
+  note?: string;
+}
+
+export interface MisuseIncidentList {
+  items: MisuseIncident[];
+}
+
 export interface UsageEvidence {
   customer_id: string;
   period_start: string;
@@ -2343,6 +2363,10 @@ export interface Api {
   misusePolicy(): Promise<MisusePolicy>;
   /** M2-L2: set this tenant's misuse detection thresholds (policy:write). */
   setMisusePolicy(input: MisusePolicyThresholds, idempotencyKey?: string): Promise<MisusePolicy>;
+  /** M2-L3: this tenant's misuse incidents, newest first; licensed. */
+  misuseIncidents(status?: "open" | "closed"): Promise<MisuseIncidentList>;
+  /** M2-L3: close a misuse incident with its resolution (incidents:write). */
+  closeMisuseIncident(id: string, input: { resolution: MisuseIncidentResolution; note?: string }, idempotencyKey?: string): Promise<MisuseIncident>;
   /** M2: crypto assets sequenced for migration by observed dependency, not severity alone. */
   cryptoReadiness(): Promise<CryptoReadiness>;
   cryptoReadinessExport(): Promise<CryptoReadinessExport>;
@@ -3280,6 +3304,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   },
   misusePolicy: () => req<MisusePolicy>("/api/v1/misuse/policy"),
   setMisusePolicy: (input, idempotencyKey = newIdempotencyKey()) => mutate<MisusePolicy>("PUT", "/api/v1/misuse/policy", input, idempotencyKey),
+  misuseIncidents: (status) => req<MisuseIncidentList>(`/api/v1/misuse/incidents${status ? `?status=${status}` : ""}`),
+  closeMisuseIncident: (id, input, idempotencyKey = newIdempotencyKey()) =>
+    mutate<MisuseIncident>("POST", `/api/v1/misuse/incidents/${encodeURIComponent(id)}/close`, input, idempotencyKey),
   cryptoReadiness: () => req<CryptoReadiness>("/api/v1/graph/crypto-readiness"),
   cryptoReadinessExport: () => req<CryptoReadinessExport>("/api/v1/graph/crypto-readiness/export"),
   ownershipConflicts: () => req<OwnershipConflictList>("/api/v1/owners/ownership-conflicts"),

@@ -4,6 +4,7 @@ package misuse
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -166,10 +167,13 @@ func PolicyRoutes(policies PolicyService) []api.LicensedRoute {
 func NewAPIOptionsFactory(reader FindingReader) editionseam.LicensedAPIOptionsFactory {
 	return func(deps editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
 		policies := PolicyStore{Store: deps.Store, Log: deps.Log, Defaults: DefaultPolicy(0)}
+		incidents := IncidentStore{Store: deps.Store, Log: deps.Log}
+		routes := append(append(Routes(reader), PolicyRoutes(policies)...), IncidentRoutes(incidents)...)
 		return []api.Option{
-			api.WithLicensedRoutes(append(Routes(reader), PolicyRoutes(policies)...)...),
+			api.WithLicensedRoutes(routes...),
 			api.WithLicensedSchemas(findingSchemas()),
 			api.WithLicensedSchemas(policySchemas()),
+			api.WithLicensedSchemas(incidentSchemas()),
 		}, nil
 	}
 }
@@ -301,6 +305,134 @@ func findingSchemas() map[string]*api.Schema {
 				"next_cursor": str(),
 			},
 			Required: []string{"items", "next_cursor"},
+		},
+	}
+}
+
+// IncidentService lists and closes a tenant's misuse incidents (M2-L3).
+type IncidentService interface {
+	List(ctx context.Context, tenantID, status string, limit int) ([]Incident, error)
+	Close(ctx context.Context, tenantID, incidentID, resolution, note string) (Incident, error)
+}
+
+// IncidentList is a page of misuse incidents.
+type IncidentList struct {
+	Items []Incident `json:"items"`
+}
+
+// IncidentRoutes is the served incident surface (M2-L3).
+func IncidentRoutes(incidents IncidentService) []api.LicensedRoute {
+	return []api.LicensedRoute{{
+		Method:      http.MethodGet,
+		Path:        "/api/v1/misuse/incidents",
+		OperationID: "listMisuseIncidents",
+		Summary:     "Misuse incidents: one per API token a finding flagged, open until closed with a resolution",
+		Query: []api.RouteParam{
+			{Name: "status", Type: "string", Description: "open or closed"},
+			{Name: "limit", Type: "integer", Description: "page size, 1-200 (default 50)"},
+		},
+		Handler: func(a *api.API) http.HandlerFunc {
+			return func(w http.ResponseWriter, r *http.Request) { serveIncidents(a, w, r, incidents) }
+		},
+		ResponseSchema: "MisuseIncidentList",
+		SuccessCode:    "200",
+		Permission:     authz.IncidentsRead,
+	}, {
+		Method:        http.MethodPost,
+		Path:          "/api/v1/misuse/incidents/{id}/close",
+		OperationID:   "closeMisuseIncident",
+		Summary:       "Close a misuse incident with its resolution",
+		PathParams:    []api.RouteParam{{Name: "id", Type: "string", Description: "incident id"}},
+		RequestSchema: "MisuseIncidentCloseRequest",
+		Handler: func(a *api.API) http.HandlerFunc {
+			return func(w http.ResponseWriter, r *http.Request) { closeIncident(a, w, r, incidents) }
+		},
+		ResponseSchema: "MisuseIncident",
+		SuccessCode:    "200",
+		Mutation:       true,
+		Permission:     authz.IncidentsWrite,
+	}}
+}
+
+func serveIncidents(a *api.API, w http.ResponseWriter, r *http.Request, incidents IncidentService) {
+	tenantID, ok := a.Tenant(r)
+	if !ok || strings.TrimSpace(tenantID) == "" {
+		a.WriteProblemUnauthorized(w)
+		return
+	}
+	q := r.URL.Query()
+	status := strings.TrimSpace(q.Get("status"))
+	if status != "" && status != "open" && status != "closed" {
+		a.WriteError(w, api.ErrStatus(http.StatusBadRequest, "status must be open or closed"))
+		return
+	}
+	limit := findingsDefaultLimit
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > maxIncidentList {
+			a.WriteError(w, api.ErrStatus(http.StatusBadRequest, "limit must be 1-200"))
+			return
+		}
+		limit = n
+	}
+	items, err := incidents.List(r.Context(), tenantID, status, limit)
+	if err != nil {
+		a.WriteError(w, err)
+		return
+	}
+	a.WriteJSON(w, http.StatusOK, IncidentList{Items: append([]Incident{}, items...)})
+}
+
+func closeIncident(a *api.API, w http.ResponseWriter, r *http.Request, incidents IncidentService) {
+	a.Mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		var body struct {
+			Resolution string `json:"resolution"`
+			Note       string `json:"note,omitempty"`
+		}
+		if err := api.DecodeJSONStrict(r, &body); err != nil {
+			return 0, nil, api.ErrWithStatus(http.StatusBadRequest, err)
+		}
+		if !validResolution(body.Resolution) {
+			return 0, nil, api.ErrStatus(http.StatusBadRequest, "resolution must be token_revoked, expected_use or other")
+		}
+		in, err := incidents.Close(ctx, tenantID, r.PathValue("id"), body.Resolution, body.Note)
+		switch {
+		case errors.Is(err, ErrIncidentNotFound):
+			return 0, nil, api.ErrStatus(http.StatusNotFound, "no such misuse incident")
+		case errors.Is(err, ErrIncidentNotOpen):
+			return 0, nil, api.ErrStatus(http.StatusConflict, "the incident is already closed")
+		case err != nil:
+			return 0, nil, api.ErrWithStatus(http.StatusBadRequest, err)
+		}
+		return http.StatusOK, in, nil
+	})
+}
+
+func incidentSchemas() map[string]*api.Schema {
+	str := func() *api.Schema { return &api.Schema{Type: "string"} }
+	stamp := func() *api.Schema { return &api.Schema{Type: "string", Format: "date-time"} }
+	resolution := &api.Schema{Type: "string", Enum: []string{ResolutionTokenRevoked, ResolutionExpectedUse, ResolutionOther}}
+	return map[string]*api.Schema{
+		"MisuseIncident": {
+			Type: "object",
+			Description: "M2-L3: the incident a misuse finding opened for its API token. findings counts the token's " +
+				"findings from the opening to the close (or now).",
+			Properties: map[string]*api.Schema{
+				"id": str(), "credential_id": str(), "principal": str(),
+				"status": {Type: "string", Enum: []string{"open", "closed"}}, "opened_at": stamp(),
+				"findings": {Type: "integer"}, "closed_at": stamp(), "closed_by": str(), "resolution": resolution, "note": str(),
+			},
+			Required: []string{"id", "credential_id", "principal", "status", "opened_at", "findings"},
+		},
+		"MisuseIncidentList": {
+			Type:       "object",
+			Properties: map[string]*api.Schema{"items": {Type: "array", Items: &api.Schema{Ref: "#/components/schemas/MisuseIncident"}}},
+			Required:   []string{"items"},
+		},
+		"MisuseIncidentCloseRequest": {
+			Type:       "object",
+			Properties: map[string]*api.Schema{"resolution": resolution, "note": {Type: "string", Description: "at most 500 characters"}},
+			Required:   []string{"resolution"},
 		},
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -201,5 +202,81 @@ func TestMisusePolicyRoutesReadAndSetTheTenantsThresholdsM2L2(t *testing.T) {
 	}
 	if code, view, body := call(reader, http.MethodGet, "", ""); code != http.StatusOK || view.Policy != want || !view.Custom {
 		t.Fatalf("read back = %d %s", code, body)
+	}
+}
+
+// M2-L3: GET /api/v1/misuse/incidents lists the tenant's misuse incidents
+// (incidents:read) and POST /api/v1/misuse/incidents/{id}/close closes one
+// with a resolution (incidents:write) through the real router: a caller
+// without the permission is refused, a bad resolution is a 400, a missing
+// incident a 404, a second close a 409.
+func TestMisuseIncidentRoutesListAndCloseM2L3(t *testing.T) {
+	ctx := context.Background()
+	st := newMisuseTestStore(t)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	proj := projections.New(st)
+	reg, err := log.Append(ctx, events.Event{Type: projections.EventTenantRegistered, TenantID: misuseTenant, Data: []byte(`{"name":"misuse tenant"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := proj.Apply(ctx, reg); err != nil {
+		t.Fatal(err)
+	}
+	findings := misuse.NewProjection(st)
+	opened, err := log.Append(ctx, events.Event{Type: misuse.EventIncidentOpened, TenantID: misuseTenant,
+		Data: []byte(`{"incident_id":"inc-1","credential_id":"reader","principal":"svc-reader","finding_id":"inc-1"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := findings.Apply(ctx, opened); err != nil {
+		t.Fatal(err)
+	}
+	reader := authz.Role{Name: "incident-reader", Permissions: []authz.Permission{authz.IncidentsRead}}
+	writer := authz.Role{Name: "incident-writer", Permissions: []authz.Permission{authz.IncidentsRead, authz.IncidentsWrite}}
+	incidents := misuse.IncidentStore{Store: st, Log: log}
+	call := func(role authz.Role, method, path, body string) (int, string) {
+		t.Helper()
+		principal := authz.Principal{TenantID: misuseTenant, Subject: "responder",
+			Grants: []authz.Grant{{Role: role, Scope: authz.Scope{TenantID: misuseTenant}}}}
+		a := api.New(st, orchestrator.NewIdempotency(st), nil,
+			api.WithLicensedRoutes(misuse.IncidentRoutes(incidents)...),
+			api.WithRoles(reader, writer),
+			api.WithPrincipalResolver(func(*http.Request) (authz.Principal, error) { return principal, nil }),
+		)
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		if method != http.MethodGet {
+			req.Header.Set("Idempotency-Key", "m2l3-"+strconv.Itoa(len(body))+"-"+role.Name+"-"+path)
+			req.Header.Set("Content-Type", "application/json")
+		}
+		rec := httptest.NewRecorder()
+		a.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.String()
+	}
+	if code, body := call(reader, http.MethodGet, "/api/v1/misuse/incidents?status=open", ""); code != http.StatusOK ||
+		!strings.Contains(body, `"id":"inc-1"`) || !strings.Contains(body, `"status":"open"`) {
+		t.Fatalf("open incidents = %d %s", code, body)
+	}
+	if code, body := call(reader, http.MethodGet, "/api/v1/misuse/incidents?status=everything", ""); code != http.StatusBadRequest {
+		t.Fatalf("a bad status = %d %s", code, body)
+	}
+	if code, body := call(reader, http.MethodPost, "/api/v1/misuse/incidents/inc-1/close", `{"resolution":"expected_use"}`); code != http.StatusForbidden {
+		t.Fatalf("closing without incidents:write = %d %s", code, body)
+	}
+	if code, body := call(writer, http.MethodPost, "/api/v1/misuse/incidents/inc-1/close", `{"resolution":"shrug"}`); code != http.StatusBadRequest {
+		t.Fatalf("a bad resolution = %d %s", code, body)
+	}
+	if code, body := call(writer, http.MethodPost, "/api/v1/misuse/incidents/inc-9/close", `{"resolution":"other"}`); code != http.StatusNotFound {
+		t.Fatalf("a missing incident = %d %s", code, body)
+	}
+	if code, body := call(writer, http.MethodPost, "/api/v1/misuse/incidents/inc-1/close", `{"resolution":"expected_use","note":"nightly batch"}`); code != http.StatusOK ||
+		!strings.Contains(body, `"status":"closed"`) || !strings.Contains(body, `"closed_by":"responder"`) {
+		t.Fatalf("close = %d %s", code, body)
+	}
+	if code, body := call(writer, http.MethodPost, "/api/v1/misuse/incidents/inc-1/close", `{"resolution":"other"}`); code != http.StatusConflict {
+		t.Fatalf("a second close = %d %s", code, body)
 	}
 }

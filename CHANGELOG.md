@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A misuse finding opens an incident for its API token (M2-L3, Enterprise governance): one open incident per token,
+  later findings counting toward it; `GET /api/v1/misuse/incidents` lists them and `POST
+  /api/v1/misuse/incidents/{id}/close` closes one with a resolution (token revoked, expected use, other) and who closed
+  it; the Risk page lists and closes the open ones.
 - Misuse detection thresholds are tenant policy (M2-L2, Enterprise governance): `GET`/`PUT /api/v1/misuse/policy`
   read and set the new-network day count, the burst floor, factor and window, and the hourly alert cap
   (`misuse.policy.set`, rebuilt from the log); detection and its alerts use them from the next pass, and the Risk page

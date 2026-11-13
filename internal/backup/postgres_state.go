@@ -1422,6 +1422,8 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"misuse_findings",
 		// M2-L2: the tenants' misuse detection policies, the same posture.
 		"misuse_policies",
+		// M2-L3: the misuse incidents findings open, the same posture.
+		"misuse_incidents",
 		// M4: single-use records of machine login tokens (tenant rows, no
 		// foreign keys).
 		"machine_credential_replays",

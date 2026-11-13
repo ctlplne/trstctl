@@ -236,6 +236,8 @@ var RecoveredFromPostgresBackup = []string{
 	"misuse_findings",
 	// M2-L2: the tenants' misuse detection policies, the same posture.
 	"misuse_policies",
+	// M2-L3: the misuse incidents findings open, the same posture.
+	"misuse_incidents",
 	// A90: custom Provider roles share provider_operators' dual recovery
 	// posture: the EE projection rebuilds them from provider.role.* events, and
 	// the full PostgreSQL artifact carries the rows for an event-only restore

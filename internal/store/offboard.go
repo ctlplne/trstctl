@@ -255,7 +255,7 @@ var TenantScopedTables = []string{
 	// M1: credential usage, its sources and recording gaps; no foreign keys.
 	"credential_usage", "credential_usage_sources", "credential_usage_gaps",
 	// M1's hourly usage windows and the licensed misuse findings (M2).
-	"credential_usage_windows", "misuse_findings", "misuse_policies",
+	"credential_usage_windows", "misuse_findings", "misuse_policies", "misuse_incidents",
 	// P6: leaked-secret findings moved into the native store; no foreign keys.
 	"discovery_finding_secret_moves",
 	// A235: the secrets workspace; no foreign keys.

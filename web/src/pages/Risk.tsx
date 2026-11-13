@@ -28,6 +28,7 @@ import { UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { RiskPosture } from "@/components/risk/posture";
 import { MisuseFindingsPanel } from "@/components/risk/MisuseFindingsPanel";
+import { MisuseIncidentsPanel } from "@/components/risk/MisuseIncidentsPanel";
 import { MisusePolicyPanel } from "@/components/risk/MisusePolicyPanel";
 import { Meter, type ChartTone, type MeterSegment } from "@/components/charts";
 import { Num } from "@/components/typography";
@@ -401,6 +402,7 @@ export function Risk() {
           <NHIStaticPanel posture={nhiStaticPosture} loading={nhiStaticPostureLoading} error={nhiStaticPostureError} />
           <NHIExposurePanel posture={nhiExposurePosture} loading={nhiExposurePostureLoading} error={nhiExposurePostureError} />
           <MisuseFindingsPanel />
+          <MisuseIncidentsPanel />
           <MisusePolicyPanel />
           <NHIAutomationPanel plan={nhiAutomation} loading={nhiAutomationLoading} error={nhiAutomationError} />
 
