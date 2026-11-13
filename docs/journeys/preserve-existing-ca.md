@@ -58,8 +58,9 @@ below. The control-plane operator must:
    with its own `caa_issuer_domain`), make
    sure the tenant has a **DNS-01 provider config** that covers the zone of every
    name you will issue, with `dns-01` in `allowed_methods` and
-   `allow_upstream_dv` enabled. Without it, issuance cannot publish the challenge
-   record. The endpoint lifecycle preview now refuses with that exact reason instead
+   `allow_upstream_dv` enabled (and `allow_wildcards` for a wildcard name, whose
+   base name the authority validates under CAA's `issuewild`). Without it,
+   issuance cannot publish the challenge record. The endpoint lifecycle preview now refuses with that exact reason instead
    of queueing work that would fail asynchronously. Create the config through
    **Certificates → How machines request credentials → Automatic certificate renewal
    (ACME) → View setup → Add DNS-01 provider**, or through

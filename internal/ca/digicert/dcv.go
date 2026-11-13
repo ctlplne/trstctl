@@ -42,16 +42,20 @@ func (b *backend) validateDomains(ctx context.Context, tenantID string, orderID 
 			}
 		}
 	}()
+	// A165-L3: CertCentral validates a wildcard's base name, so the record
+	// goes there, but the publisher is told the name is a wildcard so its
+	// wildcard policy and CAA issuewild apply.
+	bases, wildcard := ca.DCVBaseNames(dnsNames)
 	seen := map[string]bool{}
-	for _, name := range dnsNames {
-		name = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(name), "*."))
-		if name == "" || seen[name] {
-			continue
-		}
+	for _, name := range bases {
 		seen[name] = true
-		retract, perr := b.dcv.PublishTXT(ctx, tenantID, name, "_dnsauth."+name, randomValue)
+		identifier := name
+		if wildcard[name] {
+			identifier = "*." + name
+		}
+		retract, perr := b.dcv.PublishTXT(ctx, tenantID, identifier, "_dnsauth."+name, randomValue)
 		if perr != nil {
-			return fmt.Errorf("digicert: publish the DCV record for %s: %w", name, perr)
+			return fmt.Errorf("digicert: publish the DCV record for %s: %w", identifier, perr)
 		}
 		if retract != nil {
 			retractions = append(retractions, retract)

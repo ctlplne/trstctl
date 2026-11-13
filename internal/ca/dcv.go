@@ -2,7 +2,34 @@
 
 package ca
 
-import "context"
+import (
+	"context"
+	"strings"
+)
+
+// DCVBaseNames turns an order's names into the base names a vendor
+// validates, in order and once each, and says which of them a wildcard asked
+// for (A165-L3): "*.example.com" and "example.com" validate example.com once,
+// as a wildcard.
+func DCVBaseNames(dnsNames []string) ([]string, map[string]bool) {
+	var bases []string
+	wildcard := map[string]bool{}
+	for _, name := range dnsNames {
+		raw := strings.ToLower(strings.TrimSpace(name))
+		base := strings.TrimPrefix(raw, "*.")
+		if base == "" {
+			continue
+		}
+		if _, ok := wildcard[base]; !ok {
+			bases = append(bases, base)
+			wildcard[base] = false
+		}
+		if raw != base {
+			wildcard[base] = true
+		}
+	}
+	return bases, wildcard
+}
 
 // TXTPublisher publishes one DNS TXT record for an authority's domain
 // validation and returns its retraction (A165). Vendors whose validation is a

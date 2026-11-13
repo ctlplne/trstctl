@@ -28,21 +28,18 @@ const (
 
 // validateDomains runs SCM's TXT validation for every requested name.
 func (b *backend) validateDomains(ctx context.Context, tenantID string, dnsNames []string) error {
-	seen := map[string]bool{}
-	for _, name := range dnsNames {
-		name = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(name), "*."))
-		if name == "" || seen[name] {
-			continue
-		}
-		seen[name] = true
-		if err := b.validateDomain(ctx, tenantID, name); err != nil {
+	// A165-L3: SCM validates a wildcard's base name; the publisher is told
+	// the name is a wildcard so its wildcard policy and CAA issuewild apply.
+	bases, wildcard := ca.DCVBaseNames(dnsNames)
+	for _, name := range bases {
+		if err := b.validateDomain(ctx, tenantID, name, wildcard[name]); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (b *backend) validateDomain(ctx context.Context, tenantID, domain string) (err error) {
+func (b *backend) validateDomain(ctx context.Context, tenantID, domain string, wildcard bool) (err error) {
 	var status struct {
 		Status string `json:"status"`
 	}
@@ -64,7 +61,11 @@ func (b *backend) validateDomain(ctx context.Context, tenantID, domain string) (
 	if strings.TrimSpace(started.Host) == "" || strings.TrimSpace(started.Point) == "" {
 		return fmt.Errorf("sectigo: DCV for %s named no TXT record to publish", domain)
 	}
-	retract, err := b.dcv.PublishTXT(ctx, tenantID, domain, strings.TrimSuffix(started.Host, "."), started.Point)
+	identifier := domain
+	if wildcard {
+		identifier = "*." + domain
+	}
+	retract, err := b.dcv.PublishTXT(ctx, tenantID, identifier, strings.TrimSuffix(started.Host, "."), started.Point)
 	if err != nil {
 		return fmt.Errorf("sectigo: publish the DCV record for %s: %w", domain, err)
 	}

@@ -122,23 +122,31 @@ func (s *upstreamACMEDNS01Solver) Solve(ctx context.Context, req acmekey.Challen
 // publishTXT publishes a vendor's own domain validation record (A165) under
 // the rules an upstream dns-01 answer follows: a DNS-01 provider config that
 // consented to upstream validation for the identifier, and CAA that authorizes
-// this authority. The vendor names the record and its value.
+// this authority. The vendor names the record and its value. A165-L3: a
+// wildcard arrives with its "*." intact — the vendors validate its base name,
+// where the record goes — so the wildcard is held to the provider config's
+// wildcard policy and to CAA's issuewild, exactly as an upstream ACME
+// wildcard is.
 func (s *upstreamACMEDNS01Solver) publishTXT(ctx context.Context, tenantID, identifier, recordName, value string) (func(context.Context) error, error) {
 	if s == nil || s.automation == nil {
 		return nil, errors.New("server: upstream domain validation is not configured")
 	}
-	tenantID, identifier, recordName = strings.TrimSpace(tenantID), strings.TrimSpace(identifier), strings.TrimSpace(recordName)
-	if tenantID == "" || identifier == "" || recordName == "" || value == "" || strings.HasPrefix(identifier, "*.") {
-		return nil, errors.New("server: a domain validation record needs a tenant, a non-wildcard name, a record and a value")
+	tenantID, identifier, recordName = strings.TrimSpace(tenantID), strings.ToLower(strings.TrimSpace(identifier)), strings.TrimSpace(recordName)
+	base := strings.TrimPrefix(identifier, "*.")
+	if tenantID == "" || base == "" || strings.Contains(base, "*") || recordName == "" || value == "" {
+		return nil, errors.New("server: a domain validation record needs a tenant, a name (at most one leading wildcard), a record and a value")
 	}
 	cfg, err := s.automation.selectProviderConfigForUpstream(ctx, tenantID, identifier)
 	if err != nil {
 		return nil, err
 	}
+	if identifier != base && !cfg.AllowWildcards {
+		return nil, fmt.Errorf("server: %s is a wildcard and the DNS-01 provider config for it does not allow wildcards", identifier)
+	}
 	if err := s.enforceUpstreamCAA(ctx, identifier); err != nil {
 		return nil, err
 	}
-	return s.automation.presentRecord(ctx, tenantID, cfg, identifier, recordName, value)
+	return s.automation.presentRecord(ctx, tenantID, cfg, base, recordName, value)
 }
 
 // enforceUpstreamCAA checks the domain's CAA authorizes the EXTERNAL issuer.
