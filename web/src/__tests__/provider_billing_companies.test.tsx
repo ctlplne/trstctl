@@ -132,4 +132,57 @@ describe("Provider billing systems (MSP-2)", () => {
     );
     expect(within(generic).getByRole("textbox", { name: "Company ID in Main PSA" })).not.toHaveAccessibleDescription();
   });
+
+  it("lists the PSA tickets the customer's alerts opened when a system opens tickets (MSP-3)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/provider/v1/tenants/alpha/billing-companies")
+          return json({
+            targets: [{ id: "cw", name: "ConnectWise", type: "connectwise", cadence: "monthly", tickets: true }],
+            companies: [{ tenant_id: "alpha", target_id: "cw", external_company_id: "ALPHA" }],
+          });
+        if (url === "/provider/v1/tenants/alpha/billing-sync") return json({ pushes: [] });
+        if (url === "/provider/v1/tenants/alpha/psa-tickets")
+          return json({
+            tickets: [
+              {
+                target_id: "cw",
+                alert_kind: "certificate.expiry",
+                subject: "c-1",
+                generation: 1,
+                status: "open",
+                external_company_id: "ALPHA",
+                external_ticket_id: "502",
+                notes: 2,
+                updated_at: "2026-11-13T00:00:00Z",
+              },
+              {
+                target_id: "cw",
+                alert_kind: "identity.renewal_failed",
+                subject: "orders-api",
+                generation: 1,
+                status: "closed",
+                external_company_id: "ALPHA",
+                external_ticket_id: "501",
+                notes: 0,
+                reason: "a renewal succeeded",
+                updated_at: "2026-11-12T00:00:00Z",
+              },
+            ],
+          });
+        throw new Error("unexpected path " + url);
+      }),
+    );
+    renderPanel(false);
+    const table = await screen.findByRole("table", { name: "Tickets opened in the PSA for this customer's alerts" });
+    const rows = within(table).getAllByRole("row");
+    expect(rows).toHaveLength(3);
+    expect(within(rows[1]).getByText("Certificate expiry")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("#502 (company ALPHA)")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Notes from later alerts: 2")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("Renewal failed")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("Closed")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("a renewal succeeded")).toBeInTheDocument();
+  });
 });

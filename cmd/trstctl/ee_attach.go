@@ -305,6 +305,7 @@ func attachEEProviderAPI(
 		BillingTargets:           providerBillingTargets(cfg.Provider.BillingSync),
 		BillingCompanies:         eeprovider.NewPGBillingCompanyStore(deps.Store),
 		BillingSyncPushes:        deps.Store,
+		PSATickets:               deps.Store,
 	}
 	// MSP-2: the billing-sync sweep runs on the leader once metering and at
 	// least one billing target are attached; it queues through the
@@ -315,6 +316,18 @@ func attachEEProviderAPI(
 			Targets: cfg.Provider.BillingSync.Targets, Log: log}
 		deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, billingSweeper)
 	}
+	// MSP-3: a target that opens tickets turns a mapped customer's alerts
+	// into ticket work (an alert observer ahead of the alert's channels) and
+	// closes the tickets whose condition cleared (a leader worker); both are
+	// bound to the orchestrator with the sweep.
+	var ticketObserver *eebilling.TicketObserver
+	var ticketCloser *eebilling.TicketCloser
+	if ticketTargets := eebilling.TicketTargets(cfg.Provider.BillingSync); len(ticketTargets) > 0 {
+		ticketObserver = &eebilling.TicketObserver{Store: deps.Store, Targets: ticketTargets}
+		ticketCloser = &eebilling.TicketCloser{Store: deps.Store, Targets: ticketTargets, Log: log}
+		deps.AlertObservers = append(deps.AlertObservers, ticketObserver)
+		deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, ticketCloser)
+	}
 	// Preserve the authenticated surface during assembly, but keep destructive
 	// commands unavailable until core supplies its fully assembled projector.
 	deps.ProviderHandler = eeprovider.NewHandler(providerConfig)
@@ -324,6 +337,10 @@ func attachEEProviderAPI(
 		}
 		if billingSweeper != nil {
 			billingSweeper.Bind(orch)
+		}
+		if ticketObserver != nil {
+			ticketObserver.Bind(orch)
+			ticketCloser.Bind(orch)
 		}
 		configured := providerConfig
 		configured.Offboarding = eeprovider.NewTenantOffboarder(deps.Store, deps.Log, orch, authorityRuntime.Mutations)
@@ -695,7 +712,8 @@ func (a isolationDrillerAdapter) RunIsolationDrill(ctx context.Context) (eeprovi
 func providerBillingTargets(sync config.ProviderBillingSync) []eeprovider.BillingTarget {
 	out := make([]eeprovider.BillingTarget, 0, len(sync.Targets))
 	for _, t := range sync.Targets {
-		out = append(out, eeprovider.BillingTarget{ID: t.ID, Name: t.Name, Type: t.Type, Cadence: t.EffectiveCadence()})
+		out = append(out, eeprovider.BillingTarget{ID: t.ID, Name: t.Name, Type: t.Type, Cadence: t.EffectiveCadence(),
+			Tickets: t.ConnectWise != nil && t.ConnectWise.Tickets != nil})
 	}
 	return out
 }

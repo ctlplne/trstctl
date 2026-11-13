@@ -2028,6 +2028,8 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventBillingSyncHeld, 1}:       privacyPayloadShape[BillingSyncPushEvent](),
 		{EventBillingSyncDelivered, 1}:  privacyPayloadShape[BillingSyncPushEvent](),
 		{EventBillingSyncFailed, 1}:     privacyPayloadShape[BillingSyncPushEvent](),
+		{EventPSATicketRequested, 1}:    privacyPayloadShape[PSATicketEvent](),
+		{EventPSATicketRecorded, 1}:     privacyPayloadShape[PSATicketEvent](),
 		{EventWorkloadJWTKeyRotated, 1}: privacyPayloadShape[WorkloadJWTKeyRotated](),
 		// A211: issuer certificates a scan saw served with a leaf: public PKI
 		// material and digests.

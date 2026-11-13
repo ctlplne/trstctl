@@ -253,3 +253,33 @@ func TestAttachEEAuditComplianceOwnsAnchoringRetentionAndPacks(t *testing.T) {
 		})
 	}
 }
+
+// MSP-3: a Provider deployment with a PSA target that opens tickets attaches
+// the ticket observer ahead of the alert channels and the close sweep as a
+// licensed leader worker; without such a target, neither is attached.
+func TestAttachEEProviderAttachesPSATicketsMSP3(t *testing.T) {
+	withTickets := &config.Config{}
+	withTickets.Provider.BillingSync.Targets = []config.ProviderBillingTarget{{ID: "cw", Type: "connectwise",
+		ConnectWise: &config.ConnectWiseBillingTarget{Tickets: &config.ConnectWiseTickets{Board: "Managed PKI", ClosedStatus: ">Closed"}}}}
+	deps := &server.Deps{}
+	if err := attachEE(context.Background(), withTickets, nil, commercialLicense(t, license.TierProvider), deps); err != nil {
+		t.Fatalf("provider attachEE: %v", err)
+	}
+	if len(deps.AlertObservers) != 1 {
+		t.Fatalf("alert observers = %d, want the ticket observer", len(deps.AlertObservers))
+	}
+	closer := false
+	for _, worker := range deps.LicensedBackgroundWorkers {
+		closer = closer || worker.Name() == "provider.psa_ticket.close_sweep"
+	}
+	if !closer {
+		t.Fatal("the ticket close sweep is not a licensed background worker")
+	}
+	plain := &server.Deps{}
+	if err := attachEE(context.Background(), &config.Config{}, nil, commercialLicense(t, license.TierProvider), plain); err != nil {
+		t.Fatalf("provider attachEE: %v", err)
+	}
+	if len(plain.AlertObservers) != 0 {
+		t.Fatal("a deployment with no ticket target attached a ticket observer")
+	}
+}

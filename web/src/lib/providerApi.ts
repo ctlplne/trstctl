@@ -58,6 +58,8 @@ export interface ProviderBillingTarget {
   name?: string;
   type: string;
   cadence: string;
+  /** MSP-3: the target opens service tickets for the customer's alerts. */
+  tickets?: boolean;
 }
 
 /** MSP-2: one customer's company in one billing system. */
@@ -84,6 +86,23 @@ export interface ProviderBillingSyncPush {
   evidence_digest?: string;
   reason?: string;
   response_status?: number;
+  updated_at: string;
+}
+
+/** MSP-3: one alert subject's service ticket in a PSA. */
+export interface ProviderPSATicket {
+  target_id: string;
+  alert_kind: string;
+  subject: string;
+  generation: number;
+  status: "opening" | "open" | "closing" | "closed" | "failed";
+  external_company_id: string;
+  external_ticket_id?: string;
+  summary?: string;
+  notes: number;
+  reason?: string;
+  opened_at?: string;
+  closed_at?: string;
   updated_at: string;
 }
 
@@ -619,6 +638,8 @@ export const providerApi = {
     }),
   billingSyncPushes: (id: string): Promise<{ pushes: ProviderBillingSyncPush[] }> =>
     providerReq<{ pushes: ProviderBillingSyncPush[] }>(`/provider/v1/tenants/${encodeURIComponent(id)}/billing-sync`),
+  psaTickets: (id: string): Promise<{ tickets: ProviderPSATicket[] }> =>
+    providerReq<{ tickets: ProviderPSATicket[] }>(`/provider/v1/tenants/${encodeURIComponent(id)}/psa-tickets`),
   clearBillingCompany: (id: string, target: string): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/billing-companies/${encodeURIComponent(target)}`, { method: "DELETE" }),
   getBrand: async (id: string): Promise<ProviderBrandSnapshot> => {

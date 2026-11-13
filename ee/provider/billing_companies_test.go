@@ -212,3 +212,54 @@ func TestProviderBillingSyncPushHistoryMSP2(t *testing.T) {
 		t.Fatalf("an undelegated customer's history = %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+// MSP-3: a delegated customer's PSA tickets read most recently changed
+// first, with the alert kind and subject split out, the PSA's ticket ID and
+// the note count; an undelegated customer's tickets are refused.
+func TestProviderPSATicketHistoryMSP3(t *testing.T) {
+	ctx := context.Background()
+	st := openProviderStore(t)
+	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:10]
+	customer, other := CustomerID("tickets-a-"+suffix), CustomerID("tickets-b-"+suffix)
+	for _, row := range []struct {
+		key, status, ticket, reason string
+		notes                       int
+		age                         time.Duration
+	}{
+		{"identity.renewal_failed:orders-api", "closed", "501", "a renewal succeeded", 1, 2 * time.Hour},
+		{"certificate.expiry:c-1", "open", "502", "", 0, time.Minute},
+	} {
+		if _, err := st.SystemPool().Exec(ctx, `INSERT INTO provider_psa_tickets (tenant_id, target_id, alert_key, generation, kind, status,
+			external_company_id, external_ticket_id, summary, notes, reason, event_sequence, updated_at)
+			VALUES ($1, 'cw', $2, 1, split_part($2, ':', 1), $3, 'ALPHA', $4, 'summary', $5, $6, 1, now() - $7::interval)`,
+			customer, row.key, row.status, row.ticket, row.notes, row.reason, row.age.String()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := NewHandler(Config{
+		License:       providerLicense(t, 10),
+		Store:         NewPGStore(st),
+		Authenticator: billingOperatorAuth{},
+		Delegations:   fullyDelegated("op-billing", customer),
+		PSATickets:    st,
+	})
+	get := func(id string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/provider/v1/tenants/"+id+"/psa-tickets", nil)
+		req.Header.Set("Authorization", "Bearer billing-admin")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := get(customer)
+	var out struct {
+		Tickets []PSATicket `json:"tickets"`
+	}
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &out) != nil || len(out.Tickets) != 2 ||
+		out.Tickets[0].AlertKind != "certificate.expiry" || out.Tickets[0].Subject != "c-1" || out.Tickets[0].ExternalTicketID != "502" ||
+		out.Tickets[1].Status != "closed" || out.Tickets[1].Notes != 1 || out.Tickets[1].Reason != "a renewal succeeded" {
+		t.Fatalf("tickets = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := get(other); rec.Code != http.StatusForbidden && rec.Code != http.StatusNotFound {
+		t.Fatalf("an undelegated customer's tickets = %d %s", rec.Code, rec.Body.String())
+	}
+}

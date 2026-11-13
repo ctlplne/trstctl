@@ -120,6 +120,11 @@ PSA, where a customer's company is its ConnectWise company record ID or identifi
 and the period's figures become the quantities of that company's agreement
 additions (one per configured product, set rather than added to, newest period
 last).
+When a system opens tickets, **Tickets opened in the PSA for this customer's alerts**
+lists each one: the alert it follows (certificate expiry, renewal failed, revocation
+endpoint, credential drift), its subject, its status (opening, open, closing, closed,
+failed), the PSA's ticket number and company, and either how many later alerts added
+a note or why it closed or failed.
 Under Operator access, choose View delegations for an operator to inspect active,
 expired and revoked grants. Use Next delegations and Previous delegations to
 reach every returned grant. Closing the details returns to that operator's row;

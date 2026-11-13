@@ -48,3 +48,35 @@ var ErrBeforeWrite = errors.New("psa: refused before any write")
 // ErrRefused marks the system's definitive answer to a write (a 4xx other
 // than 408 or 429): the same request would be refused again.
 var ErrRefused = errors.New("psa: the system refused the write")
+
+// TicketOpen opens one alert subject's service ticket under the customer's
+// company. Reference is stable for the subject's ticket generation; the
+// client looks for a ticket carrying it before it creates one, so a retry
+// after a lost answer finds the ticket instead of opening a second.
+type TicketOpen struct {
+	ExternalCompanyID string
+	Reference         string
+	Summary           string
+	Description       string
+}
+
+// TicketNote adds one alert's note to an open ticket. A note already
+// carrying Reference is not added again.
+type TicketNote struct {
+	TicketID  string
+	Reference string
+	Text      string
+}
+
+// TicketClose closes a ticket with the reason its condition cleared. A
+// ticket already closed, or gone, is left as it is.
+type TicketClose struct {
+	TicketID   string
+	Reference  string
+	Resolution string
+}
+
+// NoteMarker is the line a note carries so a retry can find it.
+func NoteMarker(reference string) string {
+	return "[trstctl ref " + reference + "]"
+}

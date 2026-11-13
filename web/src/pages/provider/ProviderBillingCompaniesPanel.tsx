@@ -12,6 +12,7 @@ import {
   providerApi,
   type ProviderBillingCompanies as BillingView,
   type ProviderBillingSyncPush,
+  type ProviderPSATicket,
 } from "@/lib/providerApi";
 
 /** MSP-2: the selected customer's company in every configured billing
@@ -21,6 +22,7 @@ import {
 export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: { customerId: string; canWrite: boolean; onAuthError: () => void }) {
   const [view, setView] = useState<BillingView | null>(null);
   const [pushes, setPushes] = useState<ProviderBillingSyncPush[]>([]);
+  const [tickets, setTickets] = useState<ProviderPSATicket[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -45,12 +47,17 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
     async (id: string) => {
       setView(null);
       setPushes([]);
+      setTickets([]);
       setError(null);
       if (!id) return;
       try {
         const [out, history] = await Promise.all([providerApi.billingCompanies(id), providerApi.billingSyncPushes(id)]);
         setView(out);
         setPushes(history.pushes ?? []);
+        if (out.targets.some((target) => target.tickets)) {
+          const opened = await providerApi.psaTickets(id);
+          setTickets(opened.tickets ?? []);
+        }
         setDrafts(Object.fromEntries(out.companies.map((company) => [company.target_id, company.external_company_id])));
       } catch (err) {
         failed(err);
@@ -193,7 +200,7 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
                       {translateNow(`provider.billingSync.status.${push.status}` as "provider.billingSync.status.queued")}
                     </td>
                     <td className="py-1 text-muted-foreground">
-                      {push.status === "held" || push.status === "failed"
+                      {push.status === "held" || push.status === "failed" || push.reason
                         ? push.reason
                         : push.external_company_id
                           ? translateNow("provider.billingSync.historyCompany", { company: push.external_company_id })
@@ -206,8 +213,67 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
           </table>
         </div>
       ) : null}
+      {view && view.targets.some((target) => target.tickets) ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-caption">
+            <caption className="py-1 text-left font-medium">{translateNow("provider.psaTickets.caption")}</caption>
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="py-1">{translateNow("provider.psaTickets.alert")}</th>
+                <th className="py-1">{translateNow("provider.psaTickets.subject")}</th>
+                <th className="py-1">{translateNow("provider.psaTickets.status")}</th>
+                <th className="py-1">{translateNow("provider.psaTickets.ticket")}</th>
+                <th className="py-1">{translateNow("provider.psaTickets.detail")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tickets.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-1 text-muted-foreground">
+                    {translateNow("provider.psaTickets.empty")}
+                  </td>
+                </tr>
+              ) : (
+                tickets.map((ticket) => (
+                  <tr key={`${ticket.target_id}:${ticket.alert_kind}:${ticket.subject}`} className="border-t border-border/60">
+                    <td className="py-1">{alertKindLabel(ticket.alert_kind)}</td>
+                    <td className="max-w-xs truncate py-1 font-mono" title={ticket.subject}>
+                      {ticket.subject}
+                    </td>
+                    <td className={ticket.status === "failed" ? "py-1 text-status-warning" : ticket.status === "closed" ? "py-1 text-status-success" : "py-1"}>
+                      {translateNow(`provider.psaTickets.status.${ticket.status}` as "provider.psaTickets.status.open")}
+                    </td>
+                    <td className="py-1 font-mono">
+                      {ticket.external_ticket_id
+                        ? translateNow("provider.psaTickets.ticketRef", { ticket: ticket.external_ticket_id, company: ticket.external_company_id })
+                        : ""}
+                    </td>
+                    <td className="py-1 text-muted-foreground">{ticket.reason || translateNow("provider.psaTickets.notes", { count: ticket.notes })}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+// alertKindLabel names the alert a ticket follows (MSP-3).
+function alertKindLabel(kind: string): string {
+  switch (kind) {
+    case "certificate.expiry":
+      return translateNow("provider.psaTickets.kind.expiry");
+    case "identity.renewal_failed":
+      return translateNow("provider.psaTickets.kind.renewal");
+    case "revocation.health":
+      return translateNow("provider.psaTickets.kind.revocation");
+    case "credential.drift":
+      return translateNow("provider.psaTickets.kind.drift");
+    default:
+      return kind;
+  }
 }
 
 // targetTypeLabel names how a target receives a customer's periods (MSP-3).

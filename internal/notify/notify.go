@@ -161,6 +161,9 @@ const (
 	// signed, or its delivery failed for good.
 	KindBillingSyncHeld   = "billing_sync.held"
 	KindBillingSyncFailed = "billing_sync.failed"
+	// KindPSATicketFailed (MSP-3): opening, noting or closing a customer's
+	// PSA ticket failed for good.
+	KindPSATicketFailed = "psa_ticket.failed"
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing

@@ -49,6 +49,9 @@ type BillingTarget struct {
 	Name    string `json:"name,omitempty"`
 	Type    string `json:"type"`
 	Cadence string `json:"cadence"`
+	// Tickets says the target opens service tickets for customers' alerts
+	// (MSP-3).
+	Tickets bool `json:"tickets,omitempty"`
 }
 
 // BillingCompany is one customer's company in one billing target.
@@ -306,6 +309,56 @@ type BillingSyncPush struct {
 	Reason            string    `json:"reason,omitempty"`
 	ResponseStatus    int       `json:"response_status,omitempty"`
 	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// PSATicket is one alert subject's service ticket in a PSA target as the
+// plane shows it (MSP-3): opening, open (with the PSA's ticket ID and the
+// notes later alerts added), closing, closed, or failed with the reason.
+type PSATicket struct {
+	TargetID          string     `json:"target_id"`
+	AlertKind         string     `json:"alert_kind"`
+	Subject           string     `json:"subject"`
+	Generation        int        `json:"generation"`
+	Status            string     `json:"status"`
+	ExternalCompanyID string     `json:"external_company_id"`
+	ExternalTicketID  string     `json:"external_ticket_id,omitempty"`
+	Summary           string     `json:"summary,omitempty"`
+	Notes             int        `json:"notes"`
+	Reason            string     `json:"reason,omitempty"`
+	OpenedAt          *time.Time `json:"opened_at,omitempty"`
+	ClosedAt          *time.Time `json:"closed_at,omitempty"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+// PSATicketReader reads a customer's PSA tickets.
+type PSATicketReader interface {
+	PSATickets(ctx context.Context, tenantID string, limit int) ([]corestore.PSATicket, error)
+}
+
+// ListTenantPSATickets reads a delegated customer's PSA tickets, most
+// recently changed first.
+func (s *Service) ListTenantPSATickets(ctx context.Context, actor Operator, customerID string) ([]PSATicket, error) {
+	if err := s.requireOperator(actor); err != nil {
+		return nil, err
+	}
+	if err := s.authorize(ctx, actor, customerID, OpRead); err != nil {
+		return nil, err
+	}
+	out := []PSATicket{}
+	if s.psaTickets == nil {
+		return out, nil
+	}
+	rows, err := s.psaTickets.PSATickets(ctx, customerID, 100)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		kind, subject, _ := strings.Cut(r.AlertKey, ":")
+		out = append(out, PSATicket{TargetID: r.TargetID, AlertKind: kind, Subject: subject, Generation: r.Generation, Status: r.Status,
+			ExternalCompanyID: r.ExternalCompanyID, ExternalTicketID: r.ExternalTicketID, Summary: r.Summary, Notes: r.Notes,
+			Reason: r.Reason, OpenedAt: r.OpenedAt, ClosedAt: r.ClosedAt, UpdatedAt: r.UpdatedAt})
+	}
+	return out, nil
 }
 
 // BillingSyncPushReader reads a customer's recorded pushes.

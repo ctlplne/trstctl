@@ -239,6 +239,8 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.listBillingCompanies(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/billing-sync"):
 		h.listBillingSyncPushes(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/psa-tickets"):
+		h.listPSATickets(w, r)
 	case (r.Method == http.MethodPut || r.Method == http.MethodDelete) && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") &&
 		strings.Contains(r.URL.Path, "/billing-companies/"):
 		h.writeBillingCompany(w, r)
@@ -940,6 +942,22 @@ func (h *handler) listBillingSyncPushes(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"pushes": out})
+}
+
+// listPSATickets reads a delegated customer's PSA tickets (MSP-3).
+func (h *handler) listPSATickets(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	customerID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), "/psa-tickets")
+	out, err := h.svc.ListTenantPSATickets(r.Context(), op, customerID)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tickets": out})
 }
 
 // writeBillingCompany maps (PUT) or unmaps (DELETE) a delegated customer's

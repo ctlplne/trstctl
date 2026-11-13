@@ -1566,6 +1566,38 @@ to a `connectwise` target oldest first, and an older period that arrives after a
 newer one was delivered writes nothing (its record says the newer period already
 set the quantities).
 
+Add `tickets` to a `connectwise` block to open service tickets for customers'
+alerts:
+
+```json
+"tickets": {"board": "Managed PKI", "new_status": "New", "closed_status": ">Closed",
+            "kinds": ["certificate.expiry", "identity.renewal_failed", "revocation.health", "credential.drift"]}
+```
+
+`board` is the service board, `new_status` the status a ticket opens with (empty
+takes the board's default), `closed_status` the board status that closes it, and
+`kinds` the alerts that open tickets (all four when empty). The API member also needs
+to add and edit service tickets and their notes. A mapped customer's alert of a
+listed kind opens one ticket under the customer's company, before the alert reaches
+any notification channel, so a customer with no channel still gets one. A ticket
+follows one subject: the certificate for `certificate.expiry`, the identity for
+`identity.renewal_failed`, the certificate and endpoint for `revocation.health`, the
+path for `credential.drift`. A later alert of the same subject while its ticket is
+open adds a note, and the close sweep (on the leader, every 10 minutes) closes the
+ticket with a resolution note once the condition clears: the certificate is no longer
+active (renewed, revoked or removed), the identity is deployed or issued again, the
+revocation endpoint answers fresh again, or the latest scan no longer reports the
+drift (or it was remediated or dismissed). A subject that comes back opens a new
+ticket. Each ticket carries an external reference unique to the customer, subject and
+ticket, and each note a reference line, so a retry after a lost answer finds the
+ticket or note instead of making a second. For a white-labeled tenant, the ticket's
+description, notes and resolution end with "Powered by trstctl". Delivery refuses
+work for a customer no longer mapped to the ticket's company; a customer mapped to a
+new company gets new tickets there, and its tickets under the old company are left as
+they are. An operation that fails for good is recorded with its reason and raises one
+`psa_ticket.failed` alert. `GET /provider/v1/tenants/{id}/psa-tickets` lists a
+customer's tickets.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

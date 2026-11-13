@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -191,5 +192,95 @@ func TestPushUsageRefusedWriteAndMissingMeterMSP3(t *testing.T) {
 	}
 	if adds := s.Additions(21); len(adds) != 1 || adds[0].Product != "TRST-AGENT" || adds[0].Quantity != 0 {
 		t.Fatalf("a meter with no reading: %+v", adds)
+	}
+}
+
+func newTicketClient(t *testing.T, s *psatest.ConnectWise) *connectwise.Client {
+	t.Helper()
+	c, err := connectwise.New(connectwise.Config{BaseURL: s.URL(), CompanyID: cwLogin, ClientID: cwClient,
+		Tickets: &connectwise.TicketConfig{Board: "Managed PKI", NewStatus: "New (trstctl)", ClosedStatus: ">Closed"}},
+		http.DefaultClient, connectwise.Credentials{PublicKey: []byte(cwPublic), PrivateKey: []byte(cwPrivate)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+// MSP-3 Done-when (tickets, connector): a ticket opens on the board under
+// the mapped company with its reference, and opening it again (a retry after
+// a lost answer) finds it instead of opening a second; a note is added once
+// however often it is retried; closing notes the resolution and moves it to
+// the closed status, and closing it again (or a ticket gone at the PSA)
+// changes nothing; another company's ticket with the same reference is never
+// touched.
+func TestTicketsOpenNoteAndCloseOnceMSP3(t *testing.T) {
+	ctx := context.Background()
+	s := newStandIn(t)
+	s.AddBoard("Managed PKI", ">Closed")
+	c := newTicketClient(t, s)
+	open := psa.TicketOpen{ExternalCompanyID: "ALPHA", Reference: "trstctl-0123456789abcdef01234567",
+		Summary: strings.Repeat("Certificate expires in 14 days: api.alpha.example ", 4), Description: "first alert\nPowered by trstctl"}
+	s.FailWritesAfterApplying(1)
+	if _, err := c.OpenTicket(ctx, open); err == nil || errors.Is(err, psa.ErrBeforeWrite) {
+		t.Fatalf("a lost answer on open = %v, want an unknown outcome", err)
+	}
+	id, err := c.OpenTicket(ctx, open)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tickets := s.Tickets()
+	if len(tickets) != 1 || strconv.FormatInt(tickets[0].ID, 10) != id || tickets[0].CompanyID != 101 || tickets[0].Board != "Managed PKI" ||
+		tickets[0].Status != "New (trstctl)" || len([]rune(tickets[0].Summary)) != 100 || !strings.Contains(tickets[0].Description, "Powered by trstctl") {
+		t.Fatalf("tickets after open + retry = %+v (id %s)", tickets, id)
+	}
+	// Beta holds a ticket with the same reference: Alpha's open never finds it.
+	betaOpen := open
+	betaOpen.ExternalCompanyID = "202"
+	betaID, err := c.OpenTicket(ctx, betaOpen)
+	if err != nil || betaID == id {
+		t.Fatalf("Beta's ticket = %s (%v), want its own", betaID, err)
+	}
+	if again, err := c.OpenTicket(ctx, open); err != nil || again != id {
+		t.Fatalf("opening Alpha's ticket again = %s (%v), want %s", again, err, id)
+	}
+	note := psa.TicketNote{TicketID: id, Reference: "n-111", Text: "second alert: 7 days left"}
+	s.FailWritesAfterApplying(1)
+	if err := c.AddNote(ctx, note); err == nil {
+		t.Fatal("a lost answer on a note did not fail the attempt")
+	}
+	for i := 0; i < 2; i++ {
+		if err := c.AddNote(ctx, note); err != nil {
+			t.Fatal(err)
+		}
+	}
+	closing := psa.TicketClose{TicketID: id, Reference: "c-222", Resolution: "the certificate was renewed"}
+	if err := c.CloseTicket(ctx, closing); err != nil {
+		t.Fatal(err)
+	}
+	_, writes, _ := s.Counts()
+	if err := c.CloseTicket(ctx, closing); err != nil {
+		t.Fatal(err)
+	}
+	if _, again, _ := s.Counts(); again != writes {
+		t.Fatalf("closing a closed ticket wrote %d times", again-writes)
+	}
+	for _, ticket := range s.Tickets() {
+		if strconv.FormatInt(ticket.ID, 10) == id {
+			if !ticket.Closed || ticket.Status != ">Closed" || len(ticket.Notes) != 2 || !ticket.Notes[1].Resolution ||
+				!strings.Contains(ticket.Notes[0].Text, psa.NoteMarker("n-111")) {
+				t.Fatalf("Alpha's ticket after notes and close = %+v", ticket)
+			}
+		} else if ticket.Closed || len(ticket.Notes) != 0 {
+			t.Fatalf("Beta's ticket was touched: %+v", ticket)
+		}
+	}
+	if err := c.CloseTicket(ctx, psa.TicketClose{TicketID: "999999", Reference: "c-x", Resolution: "gone"}); err != nil {
+		t.Fatalf("closing a ticket gone at the PSA = %v, want nothing to do", err)
+	}
+	if _, err := c.OpenTicket(ctx, psa.TicketOpen{ExternalCompanyID: "ALPHA", Reference: `ref" or externalXRef="x`, Summary: "s"}); !errors.Is(err, psa.ErrBeforeWrite) {
+		t.Fatalf("a reference that needs escaping = %v", err)
+	}
+	if _, _, refused := s.Counts(); refused != 0 {
+		t.Fatalf("%d requests were refused", refused)
 	}
 }

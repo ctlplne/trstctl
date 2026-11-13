@@ -64,6 +64,8 @@ const (
 	EventBillingSyncHeld                          = "provider.billing_sync.held"
 	EventBillingSyncDelivered                     = "provider.billing_sync.delivered"
 	EventBillingSyncFailed                        = "provider.billing_sync.failed"
+	EventPSATicketRequested                       = "provider.psa_ticket.requested"
+	EventPSATicketRecorded                        = "provider.psa_ticket.recorded"
 	EventBreakglassIssued                         = "breakglass.issued"
 	EventBreakglassCARotated                      = "breakglass.ca.rotated"
 	EventBreakglassCACrossSigned                  = "breakglass.ca.cross_signed"

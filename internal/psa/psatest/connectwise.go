@@ -51,6 +51,26 @@ type CWAddition struct {
 	Cancelled     bool
 }
 
+// CWTicket is one service ticket with its notes.
+type CWTicket struct {
+	ID           int64
+	CompanyID    int64
+	Board        string
+	Summary      string
+	Status       string
+	Description  string
+	ExternalXRef string
+	Closed       bool
+	Notes        []CWNote
+}
+
+// CWNote is one ticket note.
+type CWNote struct {
+	ID         int64
+	Text       string
+	Resolution bool
+}
+
 // ConnectWise is a ConnectWise PSA REST 3.0 stand-in: Basic
 // companyId+publicKey:privateKey and the clientId header on every request,
 // conditions queries (quoted strings, numbers, null, true/false joined by
@@ -71,6 +91,8 @@ type ConnectWise struct {
 	refused    int
 	failWrite  int
 	rejected   map[string]bool
+	boards     map[string]string
+	tickets    []CWTicket
 	seen       []string
 }
 
@@ -132,6 +154,28 @@ func (s *ConnectWise) FailWritesAfterApplying(n int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.failWrite = n
+}
+
+// AddBoard records a service board whose closedStatus closes a ticket.
+func (s *ConnectWise) AddBoard(name, closedStatus string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.boards == nil {
+		s.boards = map[string]string{}
+	}
+	s.boards[name] = closedStatus
+}
+
+// Tickets returns every ticket with its notes.
+func (s *ConnectWise) Tickets() []CWTicket {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]CWTicket, 0, len(s.tickets))
+	for _, t := range s.tickets {
+		t.Notes = append([]CWNote(nil), t.Notes...)
+		out = append(out, t)
+	}
+	return out
 }
 
 // RejectProduct makes the catalog refuse additions of a product, as for a
@@ -219,6 +263,8 @@ func (s *ConnectWise) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		cwJSON(w, http.StatusOK, out)
+	case len(parts) >= 2 && parts[0] == "service" && parts[1] == "tickets":
+		s.serveTickets(w, r, parts[2:], conds)
 	case len(parts) >= 4 && parts[0] == "finance" && parts[1] == "agreements" && parts[3] == "additions":
 		agreementID, _ := strconv.ParseInt(parts[2], 10, 64)
 		if !s.hasAgreement(agreementID) {
@@ -320,6 +366,140 @@ func (s *ConnectWise) serveAdditions(w http.ResponseWriter, r *http.Request, agr
 			return
 		}
 		cwError(w, http.StatusNotFound, "NotFound", "Addition not found")
+	default:
+		cwError(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "unsupported")
+	}
+}
+
+func (s *ConnectWise) ticket(id int64) *CWTicket {
+	for i := range s.tickets {
+		if s.tickets[i].ID == id {
+			return &s.tickets[i]
+		}
+	}
+	return nil
+}
+
+func cwTicketJSON(t CWTicket) map[string]any {
+	return map[string]any{"id": t.ID, "summary": t.Summary, "board": map[string]any{"name": t.Board},
+		"company": map[string]any{"id": t.CompanyID}, "status": map[string]any{"name": t.Status},
+		"externalXRef": t.ExternalXRef, "closedFlag": t.Closed}
+}
+
+func (s *ConnectWise) serveTickets(w http.ResponseWriter, r *http.Request, rest []string, conds conditions) {
+	switch {
+	case r.Method == http.MethodGet && len(rest) == 0:
+		out := []any{}
+		for _, t := range s.tickets {
+			if conds.match(map[string]any{"externalXRef": t.ExternalXRef, "company/id": t.CompanyID, "closedFlag": t.Closed}) {
+				out = append(out, cwTicketJSON(t))
+			}
+		}
+		cwJSON(w, http.StatusOK, out)
+	case r.Method == http.MethodPost && len(rest) == 0:
+		var body struct {
+			Summary string `json:"summary"`
+			Board   struct {
+				Name string `json:"name"`
+			} `json:"board"`
+			Company struct {
+				ID int64 `json:"id"`
+			} `json:"company"`
+			Status *struct {
+				Name string `json:"name"`
+			} `json:"status"`
+			InitialDescription string `json:"initialDescription"`
+			ExternalXRef       string `json:"externalXRef"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Summary) == "" || len([]rune(body.Summary)) > 100 {
+			cwError(w, http.StatusBadRequest, "InvalidObject", "a ticket needs a summary of at most 100 characters")
+			return
+		}
+		if _, ok := s.boards[body.Board.Name]; !ok {
+			cwError(w, http.StatusBadRequest, "InvalidObject", "board "+body.Board.Name+" was not found")
+			return
+		}
+		known := false
+		for _, c := range s.companies {
+			known = known || (c.ID == body.Company.ID && !c.Deleted)
+		}
+		if !known {
+			cwError(w, http.StatusBadRequest, "InvalidObject", "company was not found")
+			return
+		}
+		status := "New"
+		if body.Status != nil && body.Status.Name != "" {
+			status = body.Status.Name
+		}
+		s.nextID++
+		t := CWTicket{ID: s.nextID, CompanyID: body.Company.ID, Board: body.Board.Name, Summary: body.Summary, Status: status,
+			Description: body.InitialDescription, ExternalXRef: body.ExternalXRef}
+		s.tickets = append(s.tickets, t)
+		s.writes++
+		if s.lostAnswer(w) {
+			return
+		}
+		cwJSON(w, http.StatusCreated, cwTicketJSON(t))
+	case len(rest) >= 1:
+		id, _ := strconv.ParseInt(rest[0], 10, 64)
+		t := s.ticket(id)
+		if t == nil {
+			cwError(w, http.StatusNotFound, "NotFound", "Ticket not found")
+			return
+		}
+		switch {
+		case r.Method == http.MethodGet && len(rest) == 1:
+			cwJSON(w, http.StatusOK, cwTicketJSON(*t))
+		case r.Method == http.MethodPatch && len(rest) == 1:
+			var ops []struct {
+				Op    string `json:"op"`
+				Path  string `json:"path"`
+				Value struct {
+					Name string `json:"name"`
+				} `json:"value"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&ops); err != nil || len(ops) == 0 {
+				cwError(w, http.StatusBadRequest, "InvalidObject", "a patch is a JSON Patch operation list")
+				return
+			}
+			for _, op := range ops {
+				if op.Op != "replace" || op.Path != "status" || op.Value.Name == "" {
+					cwError(w, http.StatusBadRequest, "InvalidObject", "this stand-in replaces status by name only")
+					return
+				}
+				t.Status = op.Value.Name
+				t.Closed = op.Value.Name == s.boards[t.Board]
+			}
+			s.writes++
+			if s.lostAnswer(w) {
+				return
+			}
+			cwJSON(w, http.StatusOK, cwTicketJSON(*t))
+		case r.Method == http.MethodGet && len(rest) == 2 && rest[1] == "notes":
+			out := []any{}
+			for _, n := range t.Notes {
+				out = append(out, map[string]any{"id": n.ID, "ticketId": t.ID, "text": n.Text, "resolutionFlag": n.Resolution})
+			}
+			cwJSON(w, http.StatusOK, out)
+		case r.Method == http.MethodPost && len(rest) == 2 && rest[1] == "notes":
+			var body struct {
+				Text           string `json:"text"`
+				ResolutionFlag bool   `json:"resolutionFlag"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Text) == "" {
+				cwError(w, http.StatusBadRequest, "InvalidObject", "a note needs its text")
+				return
+			}
+			s.nextID++
+			t.Notes = append(t.Notes, CWNote{ID: s.nextID, Text: body.Text, Resolution: body.ResolutionFlag})
+			s.writes++
+			if s.lostAnswer(w) {
+				return
+			}
+			cwJSON(w, http.StatusCreated, map[string]any{"id": s.nextID, "ticketId": t.ID, "text": body.Text})
+		default:
+			cwError(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "unsupported")
+		}
 	default:
 		cwError(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "unsupported")
 	}

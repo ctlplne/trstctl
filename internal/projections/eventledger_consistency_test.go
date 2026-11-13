@@ -43,6 +43,8 @@ var projectionEventConstants = map[string]string{
 	projections.EventBillingSyncHeld:                          "EventBillingSyncHeld",
 	projections.EventBillingSyncDelivered:                     "EventBillingSyncDelivered",
 	projections.EventBillingSyncFailed:                        "EventBillingSyncFailed",
+	projections.EventPSATicketRequested:                       "EventPSATicketRequested",
+	projections.EventPSATicketRecorded:                        "EventPSATicketRecorded",
 	projections.EventCAEndEntityIssued:                        "EventCAEndEntityIssued",
 	projections.EventBreakglassIssued:                         "EventBreakglassIssued",
 	projections.EventBreakglassCARotated:                      "EventBreakglassCARotated",

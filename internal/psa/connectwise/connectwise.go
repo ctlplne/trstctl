@@ -47,6 +47,16 @@ type Config struct {
 	// Products maps a meter to the catalog product identifier of its
 	// addition. A meter without a product is not pushed.
 	Products map[string]string
+	// Tickets is the board and statuses alert tickets use; nil when the
+	// target opens no tickets.
+	Tickets *TicketConfig
+}
+
+// TicketConfig is the service board and statuses of alert tickets.
+type TicketConfig struct {
+	Board        string
+	NewStatus    string
+	ClosedStatus string
 }
 
 // Credentials are the API member's keys, borrowed for one push: the caller
@@ -85,7 +95,7 @@ func New(cfg Config, httpClient *http.Client, creds Credentials) (*Client, error
 		len(creds.PublicKey) == 0 || len(creds.PrivateKey) == 0 {
 		return nil, errors.New("connectwise: the target needs its company, clientId and both API keys")
 	}
-	if !conditionValue.MatchString(cfg.AgreementType) {
+	if cfg.AgreementType != "" && !conditionValue.MatchString(cfg.AgreementType) {
 		return nil, errors.New("connectwise: the agreement type cannot be used in a conditions query")
 	}
 	for meter, product := range cfg.Products {
@@ -426,4 +436,150 @@ func transportCause(err error) error {
 		return urlErr.Err
 	}
 	return err
+}
+
+// maxTicketSummary is the length of a ticket summary the client sends.
+const maxTicketSummary = 100
+
+type ticketRef struct {
+	ID           int64  `json:"id"`
+	ExternalXRef string `json:"externalXRef"`
+	ClosedFlag   bool   `json:"closedFlag"`
+	Company      struct {
+		ID int64 `json:"id"`
+	} `json:"company"`
+}
+
+// OpenTicket opens the subject's ticket under the mapped company, or finds
+// the one a previous attempt opened (the same external reference under the
+// same company), and returns its ID.
+func (c *Client) OpenTicket(ctx context.Context, t psa.TicketOpen) (string, error) {
+	if c.cfg.Tickets == nil {
+		return "", fmt.Errorf("%w: this target opens no tickets", psa.ErrBeforeWrite)
+	}
+	if !conditionValue.MatchString(t.Reference) {
+		return "", fmt.Errorf("%w: the ticket reference cannot be used in a conditions query", psa.ErrBeforeWrite)
+	}
+	company, err := c.company(ctx, t.ExternalCompanyID)
+	if err != nil {
+		return "", err
+	}
+	var list []ticketRef
+	q := url.Values{
+		"conditions": {fmt.Sprintf(`externalXRef="%s" and company/id=%d`, t.Reference, company.ID)},
+		"fields":     {"id,externalXRef,closedFlag,company"},
+		"pageSize":   {"2"},
+	}
+	if _, err := c.do(ctx, http.MethodGet, "/service/tickets", q, nil, &list, false); err != nil {
+		return "", err
+	}
+	var found []ticketRef
+	for _, ticket := range list {
+		if ticket.ExternalXRef == t.Reference && ticket.Company.ID == company.ID {
+			found = append(found, ticket)
+		}
+	}
+	switch len(found) {
+	case 1:
+		return strconv.FormatInt(found[0].ID, 10), nil
+	case 0:
+	default:
+		return "", fmt.Errorf("%w: company %d has %d tickets with reference %s", psa.ErrBeforeWrite, company.ID, len(found), t.Reference)
+	}
+	body := map[string]any{
+		"summary":            truncateRunes(t.Summary, maxTicketSummary),
+		"board":              map[string]string{"name": c.cfg.Tickets.Board},
+		"company":            map[string]int64{"id": company.ID},
+		"initialDescription": t.Description,
+		"externalXRef":       t.Reference,
+	}
+	if c.cfg.Tickets.NewStatus != "" {
+		body["status"] = map[string]string{"name": c.cfg.Tickets.NewStatus}
+	}
+	var created ticketRef
+	if _, err := c.do(ctx, http.MethodPost, "/service/tickets", nil, body, &created, true); err != nil {
+		return "", err
+	}
+	if created.ID <= 0 {
+		return "", errors.New("connectwise: the created ticket carries no ID")
+	}
+	return strconv.FormatInt(created.ID, 10), nil
+}
+
+type ticketNote struct {
+	ID   int64  `json:"id"`
+	Text string `json:"text"`
+}
+
+// AddNote adds a note to an open ticket, unless a note already carries its
+// reference.
+func (c *Client) AddNote(ctx context.Context, n psa.TicketNote) error {
+	id, err := ticketID(n.TicketID)
+	if err != nil {
+		return err
+	}
+	return c.addNote(ctx, id, n.Reference, n.Text, false)
+}
+
+func (c *Client) addNote(ctx context.Context, id int64, reference, text string, resolution bool) error {
+	marker := psa.NoteMarker(reference)
+	path := "/service/tickets/" + strconv.FormatInt(id, 10) + "/notes"
+	var notes []ticketNote
+	if _, err := c.do(ctx, http.MethodGet, path, url.Values{"fields": {"id,text"}, "pageSize": {"1000"}}, nil, &notes, false); err != nil {
+		return err
+	}
+	for _, note := range notes {
+		if strings.Contains(note.Text, marker) {
+			return nil
+		}
+	}
+	body := map[string]any{"text": strings.TrimSpace(text) + "\n\n" + marker, "detailDescriptionFlag": true, "resolutionFlag": resolution}
+	_, err := c.do(ctx, http.MethodPost, path, nil, body, nil, true)
+	return err
+}
+
+// CloseTicket notes the resolution and moves the ticket to the closed
+// status. A ticket already closed, or deleted at the PSA, is left alone.
+func (c *Client) CloseTicket(ctx context.Context, cl psa.TicketClose) error {
+	if c.cfg.Tickets == nil {
+		return fmt.Errorf("%w: this target opens no tickets", psa.ErrBeforeWrite)
+	}
+	id, err := ticketID(cl.TicketID)
+	if err != nil {
+		return err
+	}
+	var ticket ticketRef
+	status, err := c.do(ctx, http.MethodGet, "/service/tickets/"+strconv.FormatInt(id, 10), url.Values{"fields": {"id,closedFlag,company,externalXRef"}}, nil, &ticket, false)
+	if status == http.StatusNotFound {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if ticket.ClosedFlag {
+		return nil
+	}
+	if err := c.addNote(ctx, id, cl.Reference, cl.Resolution, true); err != nil {
+		return err
+	}
+	patch := []map[string]any{{"op": "replace", "path": "status", "value": map[string]string{"name": c.cfg.Tickets.ClosedStatus}}}
+	_, err = c.do(ctx, http.MethodPatch, "/service/tickets/"+strconv.FormatInt(id, 10), nil, patch, nil, true)
+	return err
+}
+
+func ticketID(raw string) (int64, error) {
+	id, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("%w: %q is not a ConnectWise ticket ID", psa.ErrBeforeWrite, raw)
+	}
+	return id, nil
+}
+
+// truncateRunes bounds s to n runes.
+func truncateRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
 }

@@ -167,32 +167,17 @@ func (d *issuanceDispatcher) pushBillingConnectWise(ctx context.Context, m orche
 		push.Reason = "nothing written: the period starting " + laterDelivered.Format("2006-01-02") + " already set this customer's quantities"
 		return d.orch.RecordBillingSyncOutcome(ctx, m.TenantID, push, true)
 	}
-	client, err := d.billingSyncHTTPClient(target)
-	if err != nil {
-		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: billing target endpoint rejected: %w", err))
-	}
-	publicKey, err := resolveDeploymentCredentialRef(cw.PublicKeyRef)
-	if err != nil {
-		return orchestrator.DefiniteNoEffect(errors.New("server: resolve the connectwise target's public_key_ref"))
-	}
-	defer publicKey.Destroy()
-	privateKey, err := resolveDeploymentCredentialRef(cw.PrivateKeyRef)
-	if err != nil {
-		return orchestrator.DefiniteNoEffect(errors.New("server: resolve the connectwise target's private_key_ref"))
-	}
-	defer privateKey.Destroy()
-	psaClient, err := connectwise.New(connectwise.Config{BaseURL: target.Endpoint, CompanyID: cw.CompanyID, ClientID: cw.ClientID,
-		AgreementType: cw.AgreementType, Products: cw.Products}, client,
-		connectwise.Credentials{PublicKey: publicKey.Bytes(), PrivateKey: privateKey.Bytes()})
-	if err != nil {
-		return orchestrator.DefiniteNoEffect(err)
-	}
 	lines := make([]psa.UsageLine, 0, len(push.Lines))
 	for _, line := range push.Lines {
 		lines = append(lines, psa.UsageLine{Meter: line.Meter, Value: line.Value})
 	}
-	out, err := psaClient.PushUsage(ctx, psa.UsagePeriod{CustomerID: m.TenantID, ExternalCompanyID: push.ExternalCompanyID,
-		PeriodStart: push.PeriodStart, PeriodEnd: push.PeriodEnd, Lines: lines, EvidenceDigest: push.EvidenceDigest})
+	var out psa.UsageOutcome
+	err = d.withConnectWise(target, func(client *connectwise.Client) error {
+		var err error
+		out, err = client.PushUsage(ctx, psa.UsagePeriod{CustomerID: m.TenantID, ExternalCompanyID: push.ExternalCompanyID,
+			PeriodStart: push.PeriodStart, PeriodEnd: push.PeriodEnd, Lines: lines, EvidenceDigest: push.EvidenceDigest})
+		return err
+	})
 	if err != nil {
 		if errors.Is(err, psa.ErrBeforeWrite) {
 			return orchestrator.DefiniteNoEffect(err)

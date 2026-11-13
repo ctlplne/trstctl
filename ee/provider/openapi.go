@@ -47,6 +47,7 @@ var providerOperations = []providerOperation{
 	{"PUT", "/provider/v1/tenants/{id}/billing-companies/{target}", "setProviderTenantBillingCompany", "Map a customer to its company in a configured billing system", "204", "ProviderBillingCompanyRequest", "", false, false, false},
 	{"DELETE", "/provider/v1/tenants/{id}/billing-companies/{target}", "clearProviderTenantBillingCompany", "Remove a customer's company mapping in a billing system", "204", "", "", false, false, false},
 	{"GET", "/provider/v1/tenants/{id}/billing-sync", "listProviderTenantBillingSyncPushes", "Read a customer's usage pushes to its billing systems", "200", "", "ProviderBillingSyncPushes", false, false, false},
+	{"GET", "/provider/v1/tenants/{id}/psa-tickets", "listProviderTenantPSATickets", "Read the PSA tickets a customer's alerts opened", "200", "", "ProviderPSATickets", false, false, false},
 	{"PUT", "/provider/v1/tenants/{id}/brand", "setProviderTenantBrand", "Replace a customer brand using its current ETag", "204", "ProviderBrandRequest", "", false, false, false},
 	{"GET", "/provider/v1/tenants/{id}/brand", "getProviderTenantBrand", "Read saved customer brand and revision ETag", "200", "", "ProviderBrand", false, false, false},
 	{"POST", "/provider/v1/templates", "recordProviderTemplate", "Record a tenant template version: profiles, lifecycle policy, CA bindings, connector targets, notification channels, member roles and report schedules", "200", "ProviderTemplateRequest", "ProviderTemplate", false, false, false},
@@ -280,7 +281,7 @@ func providerOpenAPISchemas() map[string]any {
 		"ProviderOffboardRequest":   object(map[string]any{"request_event_id": str}),
 		"ProviderQuota":             object(map[string]any{"tenant_id": str, "max_agents": integer, "max_certificates_stored": certificateCap, "max_secrets_stored": integer, "updated_by": str}),
 		"ProviderQuotaRequest":      object(map[string]any{"max_agents": integer, "max_certificates_stored": certificateCap, "max_secrets_stored": integer}),
-		"ProviderBillingTarget":     object(map[string]any{"id": str, "name": str, "type": str, "cadence": str}, "id", "type", "cadence"),
+		"ProviderBillingTarget":     object(map[string]any{"id": str, "name": str, "type": str, "cadence": str, "tickets": boolean}, "id", "type", "cadence"),
 		"ProviderBillingCompany":    object(map[string]any{"tenant_id": str, "target_id": str, "external_company_id": str, "mapped_by": str, "mapped_at": time}, "tenant_id", "target_id", "external_company_id"),
 		"ProviderBillingCompanies": object(map[string]any{
 			"targets":   map[string]any{"type": "array", "items": providerSchemaRef("ProviderBillingTarget")},
@@ -294,6 +295,14 @@ func providerOpenAPISchemas() map[string]any {
 		"ProviderBillingSyncPushes": object(map[string]any{
 			"pushes": map[string]any{"type": "array", "items": providerSchemaRef("ProviderBillingSyncPush")},
 		}, "pushes"),
+		"ProviderPSATicket": object(map[string]any{"target_id": str, "alert_kind": str, "subject": str, "generation": integer,
+			"status":              map[string]any{"type": "string", "enum": []string{"opening", "open", "closing", "closed", "failed"}},
+			"external_company_id": str, "external_ticket_id": str, "summary": str, "notes": integer, "reason": str,
+			"opened_at": time, "closed_at": time, "updated_at": time},
+			"target_id", "alert_kind", "subject", "generation", "status", "external_company_id", "notes", "updated_at"),
+		"ProviderPSATickets": object(map[string]any{
+			"tickets": map[string]any{"type": "array", "items": providerSchemaRef("ProviderPSATicket")},
+		}, "tickets"),
 		"ProviderBrand":               brand,
 		"ProviderBrandRequest":        brandRequest,
 		"ProviderIsolationDrill":      object(map[string]any{"passed": boolean, "ran_at": time, "checks": array(providerSchemaRef("ProviderIsolationCheck"))}, "passed", "checks", "ran_at"),

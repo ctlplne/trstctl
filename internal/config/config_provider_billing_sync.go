@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // ProviderBillingSync configures where the Provider plane pushes each
@@ -68,6 +70,37 @@ type ConnectWiseBillingTarget struct {
 	// to the catalog identifier of its addition. A meter without a product
 	// is not pushed.
 	Products map[string]string `json:"products"`
+	// Tickets, when set, opens a service ticket under the customer's
+	// company for its alerts, notes later alerts on it and closes it when
+	// the alert's condition clears (MSP-3).
+	Tickets *ConnectWiseTickets `json:"tickets,omitempty"`
+}
+
+// ConnectWiseTickets configures alert tickets on a ConnectWise site.
+type ConnectWiseTickets struct {
+	// Board is the service board the tickets open on.
+	Board string `json:"board"`
+	// NewStatus is the status a ticket opens with; empty takes the board's
+	// default.
+	NewStatus string `json:"new_status,omitempty"`
+	// ClosedStatus is the board's status that closes a ticket.
+	ClosedStatus string `json:"closed_status"`
+	// Kinds limits the alert kinds that open tickets; empty means all of
+	// PSATicketAlertKinds.
+	Kinds []string `json:"kinds,omitempty"`
+}
+
+// PSATicketAlertKinds are the alert kinds a PSA target can open tickets for:
+// certificate expiry, a failed renewal, an unhealthy revocation endpoint and
+// credential drift.
+var PSATicketAlertKinds = []string{"certificate.expiry", "identity.renewal_failed", "revocation.health", "credential.drift"}
+
+// EffectiveKinds is the alert kinds that open tickets.
+func (t ConnectWiseTickets) EffectiveKinds() []string {
+	if len(t.Kinds) == 0 {
+		return append([]string(nil), PSATicketAlertKinds...)
+	}
+	return append([]string(nil), t.Kinds...)
 }
 
 // BillingSyncMeters are the meters a period push carries.
@@ -194,6 +227,22 @@ func validateConnectWiseBillingTarget(where string, t ProviderBillingTarget) []e
 	if len(cw.Products) == 0 {
 		errs = append(errs, fmt.Errorf("%s.products must map at least one meter (%s) to a catalog product", where, strings.Join(BillingSyncMeters, ", ")))
 	}
+	if tk := cw.Tickets; tk != nil {
+		if !validConnectWiseName(tk.Board) {
+			errs = append(errs, fmt.Errorf("%s.tickets.board must name the service board (1-100 characters)", where))
+		}
+		if tk.NewStatus != "" && !validConnectWiseName(tk.NewStatus) {
+			errs = append(errs, fmt.Errorf("%s.tickets.new_status must be a board status name (1-100 characters)", where))
+		}
+		if !validConnectWiseName(tk.ClosedStatus) {
+			errs = append(errs, fmt.Errorf("%s.tickets.closed_status must name the board status that closes a ticket (1-100 characters)", where))
+		}
+		for _, kind := range tk.Kinds {
+			if !slices.Contains(PSATicketAlertKinds, kind) {
+				errs = append(errs, fmt.Errorf("%s.tickets.kinds names %q, which is not a ticketed alert kind (%s)", where, kind, strings.Join(PSATicketAlertKinds, ", ")))
+			}
+		}
+	}
 	for _, meter := range slices.Sorted(maps.Keys(cw.Products)) {
 		product := cw.Products[meter]
 		if !slices.Contains(BillingSyncMeters, meter) {
@@ -204,6 +253,16 @@ func validateConnectWiseBillingTarget(where string, t ProviderBillingTarget) []e
 		}
 	}
 	return errs
+}
+
+// validConnectWiseName is a board or status name: 1-100 characters, none of
+// them control characters. Names travel only in JSON bodies, never inside a
+// conditions query, so ConnectWise's sorting prefixes such as ">Closed" fit.
+func validConnectWiseName(name string) bool {
+	if strings.TrimSpace(name) == "" || utf8.RuneCountInString(name) > 100 {
+		return false
+	}
+	return !strings.ContainsFunc(name, unicode.IsControl)
 }
 
 // validateDeploymentCredentialRef checks a deployment-level credential

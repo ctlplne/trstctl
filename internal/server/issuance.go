@@ -259,6 +259,8 @@ type issuanceDispatcher struct {
 	egress *egress.Guard
 	// billingSync is the Provider's configured billing targets (MSP-2).
 	billingSync config.ProviderBillingSync
+	// alertObservers see each alert before its channels (MSP-3).
+	alertObservers []AlertObserver
 
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
@@ -406,6 +408,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleServiceNowTicket(ctx, m)
 	case orchestrator.DestinationBillingSync:
 		return d.handleBillingSync(ctx, m)
+	case orchestrator.DestinationPSATicket:
+		return d.handlePSATicket(ctx, m)
 	case orchestrator.DestinationITSMServiceNowClose:
 		return d.handleServiceNowClose(ctx, m)
 	case orchestrator.DestinationResponseSplunk:
@@ -451,6 +455,9 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 			}
 		}
 		if strings.HasPrefix(m.Destination, "notification.") {
+			if err := d.observeAlert(ctx, m); err != nil {
+				return err
+			}
 			slackPosted := false
 			if m.Destination == notify.DestinationApproval && d.slackApprovals != nil {
 				var alert notify.Alert
@@ -545,6 +552,9 @@ func (d *issuanceDispatcher) DeliverTerminalFailure(ctx context.Context, m orche
 	}
 	if m.Destination == orchestrator.DestinationBillingSync {
 		return d.failBillingSyncTerminal(ctx, m, cause)
+	}
+	if m.Destination == orchestrator.DestinationPSATicket {
+		return d.failPSATicketTerminal(ctx, m, cause)
 	}
 	// A cloud-store member's spent row is its failed receipt (A166-L4).
 	if handled, err := d.failCloudStoreMigrationTerminal(ctx, m); handled || err != nil {

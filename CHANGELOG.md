@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 ### Added
+- Alert tickets in ConnectWise PSA (MSP-3, part 2): a `connectwise` target with a `tickets` block (board, new and
+  closed status, ticketed kinds) opens one service ticket under the customer's company for each subject of its
+  certificate expiry, failed renewal, unhealthy revocation endpoint and credential drift alerts, before the alert
+  reaches any channel. A later alert adds a note, and a leader sweep closes the ticket with a resolution note once
+  the condition clears. A subject that comes back opens a new ticket. External references on tickets and notes make
+  retries find what an earlier attempt made. A white-labeled tenant's ticket text ends with "Powered by trstctl".
+  Every operation is an event (`provider.psa_ticket.requested/.recorded`) projected into `provider_psa_tickets`
+  (migration 0466, snapshot format 132), listed at `GET /provider/v1/tenants/{id}/psa-tickets` and in the
+  Provider console. Core gained an alert-observer seam on the notification surface.
 - ConnectWise PSA as a billing target (MSP-3, part 1): a `connectwise` target (`provider.billing_sync.targets[].type`,
   with the site's REST root, the login company, the integration's clientId, the API member's key references, an
   agreement type and a catalog product per meter) sets each customer's signed period as additions of its company's one

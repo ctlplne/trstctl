@@ -273,6 +273,8 @@ var TenantScopedTables = []string{
 	"access_bundle_standing_approvals", "access_bundle_activity", "access_bundle_runs", "access_bundle_grants", "access_bundles",
 	// MSP-2: the customer's billing sync pushes; no foreign keys.
 	"provider_billing_sync_pushes",
+	// MSP-3: the customer's PSA tickets; no foreign keys.
+	"provider_psa_tickets",
 	// A265: wave rows, then waves (which reference their import), then the
 	// import's rows, then imports.
 	"switching_wave_rows", "switching_waves", "switching_import_rows", "switching_imports",

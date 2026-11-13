@@ -874,6 +874,8 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"switching_imports", "switching_import_rows", "switching_waves", "switching_wave_rows",
 	// MSP-2: projected from the provider.billing_sync.* events.
 	"provider_billing_sync_pushes",
+	// MSP-3: projected from the provider.psa_ticket.* events.
+	"provider_psa_tickets",
 	// N1: projected from adcs.request.decision_queued and adcs.request.decided.
 	"adcs_request_decisions",
 	// N1-L1: projected from certificate.external_issue_held and

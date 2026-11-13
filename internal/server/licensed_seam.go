@@ -22,3 +22,4 @@ type ManagedKeyCustody = editionseam.ManagedKeyCustody
 type GatedDestruction = editionseam.GatedDestruction
 type ProtocolLeafIssuer = editionseam.ProtocolLeafIssuer
 type AdmissionHook = editionseam.AdmissionHook
+type AlertObserver = editionseam.AlertObserver
