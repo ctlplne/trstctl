@@ -619,6 +619,10 @@ type Deps struct {
 	// Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and JWT. Empty keeps those methods
 	// off while preserving the HMAC token method when SecretsAuthSecret is configured.
 	MachineAuthMethods func(tenantID string) []authmethod.Method
+	// MachineCredentialUseLimit is each tenant's limit of live single-use
+	// records the token exchange keeps (M4-L2; 0 means the default). The
+	// login methods carry theirs from withMachineCredentialReplayGuardLimit.
+	MachineCredentialUseLimit int
 	// DynamicSecretProviders are the configured dynamic-secret providers exposed by
 	// /api/v1/secrets/leases (F65). Empty keeps the route fail-closed.
 	DynamicSecretProviders []dynsecret.Provider
@@ -1120,6 +1124,10 @@ type Server struct {
 	// GAP-006 secrets surface) can confirm the running binary actually mounts a
 	// capability. It is the same *api.API behind the served mux.
 	api *api.API
+
+	// machineCredentialUseLimit bounds each tenant's live single-use records
+	// the token exchange keeps (M4-L2).
+	machineCredentialUseLimit int
 }
 
 // Build assembles the control plane over the given dependencies in dependency
@@ -1193,6 +1201,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	}
 	s = &Server{
 		tenantServiceCheck:        d.TenantServiceCheck,
+		machineCredentialUseLimit: d.MachineCredentialUseLimit,
 		store:                     d.Store,
 		log:                       d.Log,
 		reportArchive:             reportarchive.Archive{Dir: reportarchive.Dir{Root: d.AuditArchiveDir}, Objects: d.ArchiveObjectStore},

@@ -417,6 +417,11 @@ type Auth struct {
 // operator sets no auth.api_tokens.max_lifetime (F267).
 const DefaultAPITokenMaxLifetime = 90 * 24 * time.Hour
 
+// DefaultMachineAuthSingleUseLimit is each tenant's limit of live single-use
+// machine-login records when secrets.machine_auth_single_use_limit is unset
+// (M4-L2).
+const DefaultMachineAuthSingleUseLimit = 100000
+
 // APITokens bounds bearer tokens minted through the served API (F267). Tokens a
 // deployment administrator creates with `trstctl token create` stay inside that
 // custody boundary and are not limited here.
@@ -3045,6 +3050,11 @@ type Secrets struct {
 	// or token-bound with tenant_claim; otherwise a credential could be replayed
 	// across tenant headers.
 	MachineAuth []MachineAuthMethod `json:"machine_auth,omitempty"`
+	// MachineAuthSingleUseLimit bounds each tenant's live single-use records of
+	// machine-login and token-exchange tokens (M4-L2): a token that would be
+	// one more is refused with 429 and a Retry-After until older ones expire.
+	// Zero means DefaultMachineAuthSingleUseLimit; at most 10,000,000.
+	MachineAuthSingleUseLimit int `json:"machine_auth_single_use_limit,omitempty"`
 	// ScanWebhooks are provider-native repository webhooks (P6): GitHub signs
 	// each delivery with the hook's own secret, and a push it verifies queues a
 	// repository secret scan for the hook's tenant.
@@ -5349,6 +5359,9 @@ func validateServedSurfaces(c *Config) []error {
 		}
 	}
 	errs = append(errs, validateSecretsMachineAuth(c.Secrets.MachineAuth)...)
+	if n := c.Secrets.MachineAuthSingleUseLimit; n < 0 || n > 10_000_000 {
+		errs = append(errs, fmt.Errorf("secrets.machine_auth_single_use_limit must be between 0 (the default, %d) and 10000000", DefaultMachineAuthSingleUseLimit))
+	}
 	errs = append(errs, validateSecretScanWebhooks(c.Secrets.ScanWebhooks)...)
 	if err := c.Secrets.ValidityChecks.Validate(); err != nil {
 		errs = append(errs, err)

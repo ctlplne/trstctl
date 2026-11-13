@@ -617,6 +617,11 @@ func (a *API) machineLoginForTenant(w http.ResponseWriter, r *http.Request, tena
 			return 0, nil, managerErr
 		}
 		sess, loginErr := mgr.Login(ctx, method, []byte(req.Credential))
+		if errors.Is(loginErr, store.ErrSingleUseLimitReached) {
+			// M4-L2: the token passed every check, but the tenant's live
+			// single-use records are at their limit; it is not used up.
+			return 0, nil, loginErr
+		}
 		if loginErr != nil || sess.TenantID != resolvedTenantID || len(sess.Scopes) == 0 {
 			// Never echo the credential or the verifier's failure detail.
 			return 0, nil, errStatus(http.StatusUnauthorized, "machine login failed")

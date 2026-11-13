@@ -7,9 +7,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // OAuth 2.0 Token Exchange (RFC 8693, M4). A workload posts the JWT its
@@ -43,6 +46,8 @@ type oauthError struct {
 	status int
 	code   string
 	detail string
+	// retryAfter, when set, is sent as Retry-After (M4-L2).
+	retryAfter time.Duration
 }
 
 func (e *oauthError) Error() string { return e.code + ": " + e.detail }
@@ -62,6 +67,9 @@ func (s *Server) tokenExchangeHandler(methods func(string) []authmethod.Method) 
 			var oe *oauthError
 			if !errors.As(err, &oe) {
 				oe = oauthFail(http.StatusServiceUnavailable, "temporarily_unavailable", "the exchange could not be completed")
+			}
+			if oe.retryAfter > 0 {
+				w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(oe.retryAfter.Seconds()))))
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(oe.status)
@@ -164,8 +172,16 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 	if err != nil {
 		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_grant", "the subject token was not accepted")
 	}
-	guard := machineCredentialReplayGuard{store: s.store, tenantID: tenantID}
-	if first, err := guard.FirstUse(r.Context(), method.Name(), key, keyExpiry); err != nil {
+	guard := machineCredentialReplayGuard{store: s.store, tenantID: tenantID, limit: s.machineCredentialUseLimit}
+	var full *store.SingleUseLimitError
+	if first, err := guard.FirstUse(r.Context(), method.Name(), key, keyExpiry); errors.As(err, &full) {
+		// M4-L2: the tenant's single-use records are at their limit; the
+		// subject token is not used up and works once older ones expire.
+		oe := oauthFail(http.StatusTooManyRequests, "temporarily_unavailable",
+			"this tenant's single-use token records are at their limit; retry after the Retry-After interval")
+		oe.retryAfter = max(time.Until(full.RetryAt), time.Second)
+		return tokenExchangeResponse{}, oe
+	} else if err != nil {
 		return tokenExchangeResponse{}, err
 	} else if !first {
 		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_grant", "the subject token was already used")

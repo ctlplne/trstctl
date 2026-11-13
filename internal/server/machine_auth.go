@@ -23,12 +23,20 @@ import (
 // allow_token_reuse is left without the guard, for clients that present a
 // platform-managed token more than once (the CSI secrets driver).
 func withMachineCredentialReplayGuard(methods func(string) []authmethod.Method, st *store.Store) func(string) []authmethod.Method {
+	return withMachineCredentialReplayGuardLimit(methods, st, 0)
+}
+
+// withMachineCredentialReplayGuardLimit is withMachineCredentialReplayGuard
+// holding each tenant to limit live single-use records (M4-L2; 0 means
+// config.DefaultMachineAuthSingleUseLimit).
+func withMachineCredentialReplayGuardLimit(methods func(string) []authmethod.Method, st *store.Store, limit int) func(string) []authmethod.Method {
 	if methods == nil || st == nil {
 		return methods
 	}
+	limit = machineCredentialUseLimit(limit)
 	return func(tenantID string) []authmethod.Method {
 		out := methods(tenantID)
-		guard := machineCredentialReplayGuard{store: st, tenantID: tenantID}
+		guard := machineCredentialReplayGuard{store: st, tenantID: tenantID, limit: limit}
 		for i, m := range out {
 			switch method := m.(type) {
 			case authmethod.OIDCMethod:
@@ -63,10 +71,20 @@ func withMachineCredentialReplayGuard(methods func(string) []authmethod.Method, 
 type machineCredentialReplayGuard struct {
 	store    *store.Store
 	tenantID string
+	limit    int
 }
 
 func (g machineCredentialReplayGuard) FirstUse(ctx context.Context, method, key string, expires time.Time) (bool, error) {
-	return g.store.FirstMachineCredentialUse(ctx, g.tenantID, method, key, expires)
+	return g.store.FirstMachineCredentialUse(ctx, g.tenantID, method, key, expires, machineCredentialUseLimit(g.limit))
+}
+
+// machineCredentialUseLimit is the configured per-tenant limit of live
+// single-use records, or the default.
+func machineCredentialUseLimit(limit int) int {
+	if limit <= 0 {
+		return config.DefaultMachineAuthSingleUseLimit
+	}
+	return limit
 }
 
 type configuredMachineAuthMethod struct {

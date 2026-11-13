@@ -528,7 +528,11 @@ digest) only after the whole request has been checked, and refuses it again with
 recorded as `token.exchanged`. The SPIFFE surface must be enabled for the tenant.
 Because subject tokens are single-use and Kubernetes hands a pod the same projected
 token until kubelet rotates it, a pod that exchanges more than once per rotation
-requests a fresh token (the TokenRequest API) for each exchange.
+requests a fresh token (the TokenRequest API) for each exchange. Each tenant holds at
+most `secrets.machine_auth_single_use_limit` live single-use records (M4-L2; default
+100,000, shared with machine logins): an exchange that would add one more answers 429
+`temporarily_unavailable` with a `Retry-After` until the oldest record expires, and
+leaves its subject token unused.
 
 ### trstctl as the OpenID issuer clouds trust (N5)
 

@@ -3968,6 +3968,13 @@ more than once per rotation needs a fresh token each time — or, for a `kuberne
 again until it expires (A238-L8). The CSI secrets driver needs it: it presents the
 kubelet's projected token until the kubelet rotates it. Reuse lets anyone who copies
 such a token log in with it until it expires, so leave it off for every other method.
+Each tenant holds at most `secrets.machine_auth_single_use_limit` live single-use records
+(M4-L2; default 100,000, at most 10,000,000), shared by machine logins and the token
+exchange. A token that would be one more is refused with 429 and a `Retry-After` until
+the tenant's oldest record expires; it is not used up and works once there is room. A
+replayed token is still refused as a replay. Each check counts the tenant's live records
+up to the limit, and logins arriving at the same moment may each pass it, so the limit
+can be exceeded by the logins in flight.
 
 Treat the credential-store KEK as the root that also protects the signer's sealed
 audit-evidence handle: **protect it and back it up** (a lost KEK means sealed

@@ -5,7 +5,10 @@ package api
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
+	"strconv"
+	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -17,7 +20,14 @@ import (
 // surfaces as a misleading 500 (DP2-049, DP2-050, DP2-052). It reports whether it
 // handled err, in the shape writeError's switch uses for every error family.
 func (a *API) writeBackpressureError(w http.ResponseWriter, err error) bool {
+	var singleUseFull *store.SingleUseLimitError
 	switch {
+	case errors.As(err, &singleUseFull):
+		// M4-L2: a machine login past the tenant's limit of live single-use
+		// records waits for the oldest to expire; its token is not used up.
+		w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(max(time.Until(singleUseFull.RetryAt), time.Second).Seconds()))))
+		a.writeProblem(w, problem.New(http.StatusTooManyRequests, "this tenant's single-use login records are at their limit; retry after the Retry-After interval").
+			WithExtension("single_use_limit", singleUseFull.Limit))
 	case errors.Is(err, orchestrator.ErrInProgress):
 		// An identical request with this Idempotency-Key is still executing; the
 		// recorded result is not there yet. A retry will replay it (AN-5).

@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- Each tenant holds at most `secrets.machine_auth_single_use_limit` live single-use machine-login records (M4-L2;
+  default 100,000): a machine login or token exchange whose token would be one more answers 429 with a
+  `Retry-After` until the oldest record expires, without using the token up; a replay is still refused as one.
 - A discovered AWS IAM user key is replaced from its finding with an AWS STS dynamic-secret role (M3-L4): trstctl
   sets the key `Inactive` at IAM (`UpdateAccessKey`, never a deletion) through the source's own connection, records
   what IAM confirmed under `provider_actions.deactivate_key` and marks the finding remediated with the role as its
