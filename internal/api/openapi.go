@@ -663,6 +663,20 @@ func componentSchemas() map[string]*Schema {
 		"ceremony_id": uuid(), "spec": ref("CASpec"),
 	}, "ceremony_id", "spec")
 	oauthProviderActionReq := object(map[string]*Schema{"reason": str()})
+	cloudKeyReplaceReq := object(map[string]*Schema{
+		"provider": {Type: "string", Description: "The tenant dynamic-secret provider's ID: an aws-sts provider, or its legacy aws-iam name."},
+		"role":     {Type: "string", Description: "One of the provider's allowed roles."},
+		"reason":   str(),
+	}, "provider", "role")
+	cloudKeyActionResult := object(map[string]*Schema{
+		"request_id": uuid(), "finding_id": uuid(),
+		"action":        {Type: "string", Enum: []string{"deactivate_key"}},
+		"provider":      {Type: "string", Enum: []string{"aws-iam"}},
+		"user":          str(),
+		"access_key_id": str(),
+		"replacement":   {Type: "string", Description: "dynamic-secret:<provider>/<role>, the evidence the finding records."},
+		"status":        {Type: "string", Enum: []string{"queued"}},
+	}, "request_id", "finding_id", "action", "provider", "user", "access_key_id", "replacement", "status")
 	findingAnnotationReq := object(map[string]*Schema{"reason": str()})
 	findingAnnotationResult := object(map[string]*Schema{
 		"request_id": uuid(), "finding_id": uuid(),
@@ -9669,6 +9683,8 @@ func componentSchemas() map[string]*Schema {
 		"CAImportOfflineRootRequest":              caImportOfflineRootReq,
 		"DistrustedRootRemovalRequest":            distrustedRootRemovalReq,
 		"OAuthProviderActionRequest":              oauthProviderActionReq,
+		"CloudKeyReplaceRequest":                  cloudKeyReplaceReq,
+		"CloudKeyActionResult":                    cloudKeyActionResult,
 		"OAuthProviderActionResult":               oauthProviderActionResult,
 		"FindingAnnotationRequest":                findingAnnotationReq,
 		"FindingAnnotationResult":                 findingAnnotationResult,

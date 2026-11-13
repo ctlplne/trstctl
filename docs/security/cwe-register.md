@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3280 annotated sites across 35 rules. Each row is
+3283 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (802 sites)
+### G101 — CWE-798 Use of hardcoded credentials (805 sites)
 
 | Location | Reason |
 |---|---|
@@ -350,6 +350,7 @@ not this file.
 | `internal/discovery/apikey/apikey_test.go:20` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:25` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/cloudkeys/awsiamkeys/awsiamkeys_test.go:80` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/discovery/cloudkeys/awsiamkeys/deactivate_test.go:34` | fabricated fixture signing value; no value is real (CWE-798) |
 | `internal/discovery/cloudsecret/apikeys.go:28` | a hash domain-separation tag, not a credential (CWE-798) |
 | `internal/discovery/cloudsecret/outcomes_test.go:35` | fabricated fixture secret name; the test needs the shape, no value is real (CWE-798) |
 | `internal/discovery/cloudsecret/secretstoretest/conjur.go:33` | a stand-in's fixed fake access token, not a credential (CWE-798) |
@@ -557,6 +558,8 @@ not this file.
 | `internal/server/cloud_access_keys_served_test.go:374` | the test's own stand-in signing value, not a credential (CWE-798) |
 | `internal/server/cloud_access_keys_served_test.go:382` | credential references only; no credential value enters the config (CWE-798) |
 | `internal/server/cloud_certificate_revocation_served_test.go:55` | fabricated fixture credential references; no value is real (CWE-798) |
+| `internal/server/cloud_key_replace_served_test.go:38` | the test's own stand-in signing value, not a credential (CWE-798) |
+| `internal/server/cloud_key_replace_served_test.go:64` | credential references only; no credential value enters the config (CWE-798) |
 | `internal/server/cloud_kms_keys_served_test.go:57` | credential references only; no credential value enters the config (CWE-798) |
 | `internal/server/cloud_relay_execution_served_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/cloud_relay_execution_served_test.go:32` | a secret-store NAME the target references, not a credential value (CWE-798) |

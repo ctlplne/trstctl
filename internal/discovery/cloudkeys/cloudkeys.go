@@ -5,6 +5,12 @@
 // key's age and last use so a key nobody has used in 90 days stands out.
 package cloudkeys
 
+import (
+	"errors"
+	"net/url"
+	"strings"
+)
+
 const (
 	// SourceKind is the discovery source that reads cloud access keys.
 	SourceKind = "cloud_access_key"
@@ -17,3 +23,20 @@ const (
 	// ProviderAzureEntra reads app-registration client secrets (M3-L2).
 	ProviderAzureEntra = "azure-entra"
 )
+
+// DefaultAWSIAMEndpoint is IAM's global endpoint.
+const DefaultAWSIAMEndpoint = "https://iam.amazonaws.com"
+
+// AWSIAMEndpoint is an aws-iam connection's endpoint (IAM's global one when
+// none is set) and the host its findings name in their provenance.
+func AWSIAMEndpoint(endpoint string) (string, string, error) {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		endpoint = DefaultAWSIAMEndpoint
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" {
+		return "", "", errors.New("aws-iam endpoint is not a URL")
+	}
+	return endpoint, u.Host, nil
+}

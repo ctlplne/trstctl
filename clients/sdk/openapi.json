@@ -16377,6 +16377,77 @@
         ],
         "type": "object"
       },
+      "CloudKeyActionResult": {
+        "properties": {
+          "access_key_id": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "deactivate_key"
+            ],
+            "type": "string"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "aws-iam"
+            ],
+            "type": "string"
+          },
+          "replacement": {
+            "description": "dynamic-secret:\u003cprovider\u003e/\u003crole\u003e, the evidence the finding records.",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued"
+            ],
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "finding_id",
+          "action",
+          "provider",
+          "user",
+          "access_key_id",
+          "replacement",
+          "status"
+        ],
+        "type": "object"
+      },
+      "CloudKeyReplaceRequest": {
+        "properties": {
+          "provider": {
+            "description": "The tenant dynamic-secret provider's ID: an aws-sts provider, or its legacy aws-iam name.",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "role": {
+            "description": "One of the provider's allowed roles.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "role"
+        ],
+        "type": "object"
+      },
       "CloudMachineChange": {
         "properties": {
           "adoption": {
@@ -84680,6 +84751,83 @@
         ],
         "summary": "Claim a discovery finding as managed",
         "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/discovery/findings/{id}/cloud-key/replace": {
+      "post": {
+        "operationId": "replaceCloudAccessKey",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudKeyReplaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudKeyActionResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Replace a discovered AWS IAM user key with a dynamic-secret role's short-lived credentials, and set the key Inactive",
+        "x-trstctl-permission": "connectors:write"
       }
     },
     "/api/v1/discovery/findings/{id}/dismiss": {

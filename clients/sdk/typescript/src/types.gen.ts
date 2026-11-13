@@ -4772,6 +4772,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/findings/{id}/cloud-key/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace a discovered AWS IAM user key with a dynamic-secret role's short-lived credentials, and set the key Inactive */
+        post: operations["replaceCloudAccessKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/findings/{id}/dismiss": {
         parameters: {
             query?: never;
@@ -16677,6 +16694,29 @@ export interface components {
                 name: string;
                 spec: unknown;
             }[];
+        };
+        CloudKeyActionResult: {
+            access_key_id: string;
+            /** @enum {string} */
+            action: "deactivate_key";
+            /** Format: uuid */
+            finding_id: string;
+            /** @enum {string} */
+            provider: "aws-iam";
+            /** @description dynamic-secret:<provider>/<role>, the evidence the finding records. */
+            replacement: string;
+            /** Format: uuid */
+            request_id: string;
+            /** @enum {string} */
+            status: "queued";
+            user: string;
+        };
+        CloudKeyReplaceRequest: {
+            /** @description The tenant dynamic-secret provider's ID: an aws-sts provider, or its legacy aws-iam name. */
+            provider: string;
+            reason?: string;
+            /** @description One of the provider's allowed roles. */
+            role: string;
         };
         CloudMachineChange: {
             adoption?: components["schemas"]["CloudMachineChangeAdoption"];
@@ -43500,6 +43540,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoveryFinding"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    replaceCloudAccessKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudKeyReplaceRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudKeyActionResult"];
                 };
             };
             /** @description client error */

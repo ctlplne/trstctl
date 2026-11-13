@@ -17921,6 +17921,46 @@ export const messages = {
     description: "Notice after a provider action is queued.",
   },
   "discovery.findings.oauthProvider.error": { defaultMessage: "Could not queue the provider action.", description: "Fallback error for a provider action." },
+  "discovery.findings.cloudKey.heading": {
+    defaultMessage: "Replace with short-lived credentials",
+    description: "M3-L4: heading of the AWS IAM user key finding section that replaces the key with a dynamic-secret role.",
+  },
+  "discovery.findings.cloudKey.help": {
+    defaultMessage:
+      "Move the workload that signs with {key} of {user} onto a dynamic-secret role, then replace the key: trstctl sets it Inactive at AWS through the source's IAM connection and records the role. IAM can set the key Active again.",
+    description: "M3-L4: explanation of the key replacement; names the access key ID and the IAM user.",
+  },
+  "discovery.findings.cloudKey.state": {
+    defaultMessage: "Key deactivation: {status}. {detail}",
+    description: "M3-L4: status line of the key deactivation: queued, confirmed, already absent or failed, with IAM's detail.",
+  },
+  "discovery.findings.cloudKey.replacedBy": {
+    defaultMessage: "Replaced by {replacement}.",
+    description: "M3-L4: the dynamic-secret provider and role recorded as the key's replacement.",
+  },
+  "discovery.findings.cloudKey.loading": { defaultMessage: "Loading dynamic-secret providers…", description: "M3-L4: shown while the provider list loads." },
+  "discovery.findings.cloudKey.noProvider": {
+    defaultMessage: "No AWS STS dynamic-secret provider is configured. Add one to replace this key with its role's leases.",
+    description: "M3-L4: shown when the tenant has no ready AWS STS dynamic-secret provider.",
+  },
+  "discovery.findings.cloudKey.provider": { defaultMessage: "Dynamic-secret provider", description: "M3-L4: label of the provider picker." },
+  "discovery.findings.cloudKey.role": { defaultMessage: "Role", description: "M3-L4: label of the role picker." },
+  "discovery.findings.cloudKey.choose": { defaultMessage: "Choose…", description: "M3-L4: empty choice of a picker." },
+  "discovery.findings.cloudKey.replace": { defaultMessage: "Replace key", description: "M3-L4: button that starts the key replacement." },
+  "discovery.findings.cloudKey.confirmText": {
+    defaultMessage: "Set {key} of {user} Inactive at AWS and record {provider}/{role} as its replacement?",
+    description: "M3-L4: confirmation before the key is set Inactive; names the key, user, provider and role.",
+  },
+  "discovery.findings.cloudKey.confirm": { defaultMessage: "Confirm", description: "M3-L4: confirms the key replacement." },
+  "discovery.findings.cloudKey.cancel": { defaultMessage: "Cancel", description: "M3-L4: cancels the key replacement." },
+  "discovery.findings.cloudKey.queued": {
+    defaultMessage: "Queued: IAM sets {key} Inactive (request {request}). The finding shows what IAM confirms.",
+    description: "M3-L4: notice after the key replacement is queued.",
+  },
+  "discovery.findings.cloudKey.error": {
+    defaultMessage: "Could not queue the key replacement.",
+    description: "M3-L4: fallback error for the key replacement.",
+  },
   "discovery.sourceKind.cloudNetworkPath": {
     defaultMessage: "Cloud network paths",
     description: "Discovery source kind label: read-only cloud network configuration used to validate exposed endpoints.",

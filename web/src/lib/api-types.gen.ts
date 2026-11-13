@@ -3353,6 +3353,23 @@ export interface ChangeSet {
   profiles?: { name: string; spec: unknown }[];
 }
 
+export interface CloudKeyActionResult {
+  access_key_id: string;
+  action: "deactivate_key";
+  finding_id: string;
+  provider: "aws-iam";
+  replacement: string;
+  request_id: string;
+  status: "queued";
+  user: string;
+}
+
+export interface CloudKeyReplaceRequest {
+  provider: string;
+  reason?: string;
+  role: string;
+}
+
 export interface CloudMachineChange {
   adoption?: CloudMachineChangeAdoption;
   approval_request_id: string;

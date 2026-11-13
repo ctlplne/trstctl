@@ -403,6 +403,7 @@
                 "blockOAuthAppAtProvider",
                 "unblockOAuthAppAtProvider",
                 "annotateFindingAtProvider",
+                "replaceCloudAccessKey",
                 "getADCSPosture",
                 "getADCSTemplateDrift",
                 "getDiscoveryCoverage",
@@ -464,7 +465,8 @@
                 "discovery findings revoke-oauth-grant",
                 "discovery findings block-oauth-app",
                 "discovery findings unblock-oauth-app",
-                "discovery findings annotate"
+                "discovery findings annotate",
+                "discovery findings replace-cloud-key"
             ],
             "cli_na": "",
             "facet_evidence": {

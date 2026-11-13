@@ -14,6 +14,7 @@ import { KubernetesDeliveryFields, emptyKubernetesDelivery, kubernetesDeliveryCo
 import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
 import { DiscoveryFingerprintScopeNotice } from "./discovery/DiscoveryFingerprintScopeNotice";
 import { OAuthGrantProviderActions, type OAuthProviderAction } from "./discovery/OAuthGrantProviderActions";
+import { CloudKeyReplacement, isAWSKeyFinding } from "./discovery/CloudKeyReplacement";
 import { GCPMachineFindingParts } from "./discovery/GCPMachineFindingParts";
 import { CloudMachineFindingParts } from "./discovery/CloudMachineFindingParts";
 import { FindingAnnotation } from "./discovery/FindingAnnotation";
@@ -36,6 +37,7 @@ import {
   type DiscoveryCoverage,
   type DiscoveryFinding,
   type DiscoveryMonitoring,
+  type DynamicSecretConfiguredProvider,
   type DiscoveryPlanPreview,
   type DiscoveryRun,
   type DiscoverySchedule,
@@ -2205,6 +2207,25 @@ function FindingTable({
   const [actionBusy, setActionBusy] = useState(false);
   const [confirmRootRemovalID, setConfirmRootRemovalID] = useState<string | null>(null);
   const selected = selectedID ? (allFindings.find((finding) => finding.id === selectedID) ?? null) : null;
+  // M3-L4: an AWS IAM user key's replacement picks from the tenant's AWS
+  // dynamic-secret providers, read when such a finding is open.
+  const [leaseProviders, setLeaseProviders] = useState<DynamicSecretConfiguredProvider[] | null>(null);
+  const awsKeySelected = isAWSKeyFinding(selected);
+  useEffect(() => {
+    if (!awsKeySelected) return;
+    let live = true;
+    api
+      .dynamicSecretProviders()
+      .then((catalog) => {
+        if (live) setLeaseProviders(catalog.configured_providers);
+      })
+      .catch(() => {
+        if (live) setLeaseProviders([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [awsKeySelected]);
   const ownerByID = useMemo(() => new Map(ownerRoster.map((item) => [item.id, item])), [ownerRoster]);
   const selectedIdentity = identityRoster.find((identity) => identity.id === managedIdentityID) ?? null;
   const normalizedIdentitySearch = identitySearch.trim().toLowerCase();
@@ -2358,6 +2379,19 @@ function FindingTable({
       onNotice({ kind: "success", message: t("discovery.findings.oauthProvider.queued", { provider: queued.provider, request: queued.request_id }) });
     } catch (err) {
       onNotice(noticeForError(err, t("discovery.findings.oauthProvider.error")));
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  async function replaceCloudKey(finding: DiscoveryFinding, provider: string, role: string) {
+    setActionBusy(true);
+    onNotice(null);
+    try {
+      const queued = await api.replaceCloudAccessKey(finding.id, { provider, role });
+      onNotice({ kind: "success", message: t("discovery.findings.cloudKey.queued", { key: queued.access_key_id, request: queued.request_id }) });
+    } catch (err) {
+      onNotice(noticeForError(err, t("discovery.findings.cloudKey.error")));
     } finally {
       setActionBusy(false);
     }
@@ -2607,6 +2641,12 @@ function FindingTable({
           </div>
 
           <OAuthGrantProviderActions finding={selected} busy={actionBusy} onAction={(action) => actAtOAuthProvider(selected, action)} />
+          <CloudKeyReplacement
+            finding={selected}
+            providers={leaseProviders}
+            busy={actionBusy}
+            onReplace={(provider, role) => replaceCloudKey(selected, provider, role)}
+          />
           <CloudMachineFindingParts finding={selected} />
           <GCPMachineFindingParts finding={selected} />
           <AzureMachineFindingParts finding={selected} />

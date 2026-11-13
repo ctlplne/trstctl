@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -188,6 +189,30 @@ type getAccessKeyLastUsedResponse struct {
 	Region       string `xml:"GetAccessKeyLastUsedResult>AccessKeyLastUsed>Region"`
 }
 
+// StatusError is IAM's refusal of one call, by HTTP status; the body is
+// never kept (M3-L4).
+type StatusError struct {
+	Action string
+	Status int
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("awsiamkeys: %s: status %d (response body redacted)", e.Action, e.Status)
+}
+
+// DeactivateKey sets one user's access key Inactive through IAM's
+// UpdateAccessKey (M3-L4). The key stays and can be activated again; IAM
+// answers 404 when the user or key is gone. It needs iam:UpdateAccessKey.
+func (r *Reader) DeactivateKey(ctx context.Context, user, accessKeyID string) error {
+	if strings.TrimSpace(user) == "" || strings.TrimSpace(accessKeyID) == "" {
+		return errors.New("awsiamkeys: a deactivation names the user and the key")
+	}
+	var out struct {
+		XMLName xml.Name `xml:"UpdateAccessKeyResponse"`
+	}
+	return r.call(ctx, url.Values{"Action": {"UpdateAccessKey"}, "UserName": {user}, "AccessKeyId": {accessKeyID}, "Status": {"Inactive"}}, &out)
+}
+
 func (r *Reader) call(ctx context.Context, params url.Values, out any) error {
 	params.Set("Version", apiVersion)
 	body := []byte(params.Encode())
@@ -207,7 +232,7 @@ func (r *Reader) call(ctx context.Context, params url.Values, out any) error {
 		return fmt.Errorf("awsiamkeys: %s: read response: %w", params.Get("Action"), err)
 	}
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("awsiamkeys: %s: status %d (response body redacted)", params.Get("Action"), resp.StatusCode)
+		return &StatusError{Action: params.Get("Action"), Status: resp.StatusCode}
 	}
 	if err := xml.Unmarshal(raw, out); err != nil {
 		return fmt.Errorf("awsiamkeys: %s: decode response: %w", params.Get("Action"), err)

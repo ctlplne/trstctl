@@ -233,16 +233,24 @@ func readAzureAppSecrets(ctx context.Context, p cloudCertificateProviderConfig, 
 // readAWSAccessKeys reads one provider's keys with its own credentials; with
 // the air-gap guard enforcing, only an operator-allowed endpoint is reached.
 func readAWSAccessKeys(ctx context.Context, p cloudCertificateProviderConfig, guard *egress.Guard) ([]awsiamkeys.Key, string, error) {
+	reader, host, err := awsIAMReader(ctx, p, guard)
+	if err != nil {
+		return nil, "", err
+	}
+	keys, err := reader.Keys(ctx)
+	return keys, host, err
+}
+
+// awsIAMReader opens one aws-iam provider's IAM connection with its own
+// credentials, through the egress guard: discovery reads keys with it, and a
+// key replacement (M3-L4) sets one Inactive.
+func awsIAMReader(ctx context.Context, p cloudCertificateProviderConfig, guard *egress.Guard) (*awsiamkeys.Reader, string, error) {
 	if strings.TrimSpace(p.Provider) != cloudkeys.ProviderAWSIAM {
 		return nil, "", fmt.Errorf("unsupported %s provider %q", cloudkeys.SourceKind, p.Provider)
 	}
-	endpoint := strings.TrimSpace(p.Endpoint)
-	if endpoint == "" {
-		endpoint = "https://iam.amazonaws.com"
-	}
-	u, err := url.Parse(endpoint)
-	if err != nil || u.Host == "" {
-		return nil, "", fmt.Errorf("aws-iam endpoint is not a URL")
+	endpoint, host, err := awsIAMEndpoint(p)
+	if err != nil {
+		return nil, "", err
 	}
 	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
@@ -268,8 +276,13 @@ func readAWSAccessKeys(ctx context.Context, p cloudCertificateProviderConfig, gu
 	if err != nil {
 		return nil, "", err
 	}
-	keys, err := reader.Keys(ctx)
-	return keys, u.Host, err
+	return reader, host, nil
+}
+
+// awsIAMEndpoint is an aws-iam connection's endpoint and the host its
+// findings name in their provenance.
+func awsIAMEndpoint(p cloudCertificateProviderConfig) (string, string, error) {
+	return cloudkeys.AWSIAMEndpoint(p.Endpoint)
 }
 
 func wholeDays(d time.Duration) int {

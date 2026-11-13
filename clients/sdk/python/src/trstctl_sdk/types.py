@@ -4715,6 +4715,31 @@ ChangeSet = TypedDict(
     total=False,
 )
 
+CloudKeyActionResult = TypedDict(
+    'CloudKeyActionResult',
+    {
+        'access_key_id': str,
+        'action': str,
+        'finding_id': str,
+        'provider': str,
+        'replacement': str,
+        'request_id': str,
+        'status': str,
+        'user': str,
+    },
+    total=False,
+)
+
+CloudKeyReplaceRequest = TypedDict(
+    'CloudKeyReplaceRequest',
+    {
+        'provider': str,
+        'reason': str,
+        'role': str,
+    },
+    total=False,
+)
+
 CloudMachineChange = TypedDict(
     'CloudMachineChange',
     {

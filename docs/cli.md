@@ -1548,6 +1548,11 @@ trstctl-cli discovery findings revoke-oauth-grant FINDING_ID --force
 trstctl-cli discovery findings block-oauth-app FINDING_ID --force
 trstctl-cli discovery findings unblock-oauth-app FINDING_ID --force
 
+# Replace a stale AWS IAM user key with an AWS STS dynamic-secret role
+# ({"provider":"aws-prod","role":"deployer"}): IAM sets the key Inactive through
+# the source's own connection, and the finding records it remediated (M3-L4).
+trstctl-cli discovery findings replace-cloud-key FINDING_ID -f cloud-key-replace.json --force
+
 # Write a third-party scan finding back where the credential was seen: a Slack
 # thread reply, a Jira comment, a commit status, or an image referrer.
 trstctl-cli discovery findings annotate FINDING_ID

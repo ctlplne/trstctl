@@ -493,6 +493,8 @@ import type {
   NHIAttackPathResult,
   OAuthProviderActionRequest,
   OAuthProviderActionResult,
+  CloudKeyReplaceRequest,
+  CloudKeyActionResult,
   FindingAnnotationRequest,
   FindingAnnotationResult,
   NHIExposureAttackPath,
@@ -1640,6 +1642,8 @@ export type {
   NHIAttackPathResult,
   OAuthProviderActionRequest,
   OAuthProviderActionResult,
+  CloudKeyReplaceRequest,
+  CloudKeyActionResult,
   FindingAnnotationRequest,
   FindingAnnotationResult,
   NHIExposureAttackPath,
@@ -2580,6 +2584,8 @@ export interface Api {
   blockOAuthAppAtProvider(id: string, input: OAuthProviderActionRequest): Promise<OAuthProviderActionResult>;
   /** A171-L1: undo a block at the provider. */
   unblockOAuthAppAtProvider(id: string, input: OAuthProviderActionRequest): Promise<OAuthProviderActionResult>;
+  /** M3-L4: replace an AWS IAM user key with a dynamic-secret role; IAM sets the key Inactive. */
+  replaceCloudAccessKey(id: string, input: CloudKeyReplaceRequest): Promise<CloudKeyActionResult>;
   connectorCatalog(options?: { limit?: number; cursor?: string }): Promise<ConnectorCatalog>;
   connectorTargets(): Promise<DeploymentTargetList>;
   createConnectorTarget(input: DeploymentTargetRequest): Promise<DeploymentTarget>;
@@ -3633,6 +3639,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<OAuthProviderActionResult>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/oauth-grant/block`, input),
   unblockOAuthAppAtProvider: (id, input) =>
     mutate<OAuthProviderActionResult>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/oauth-grant/unblock`, input),
+  replaceCloudAccessKey: (id, input) => mutate<CloudKeyActionResult>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/cloud-key/replace`, input),
   connectorCatalog: (options) => req<ConnectorCatalog>("/api/v1/connectors/catalog" + pageQueryString(options)),
   connectorTargets: () => req<DeploymentTargetList>("/api/v1/connectors/targets"),
   createConnectorTarget: (input) => mutate<DeploymentTarget>("POST", "/api/v1/connectors/targets", input),

@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A discovered AWS IAM user key is replaced from its finding with an AWS STS dynamic-secret role (M3-L4): trstctl
+  sets the key `Inactive` at IAM (`UpdateAccessKey`, never a deletion) through the source's own connection, records
+  what IAM confirmed under `provider_actions.deactivate_key` and marks the finding remediated with the role as its
+  evidence (`POST /api/v1/discovery/findings/{id}/cloud-key/replace`, `trstctl-cli discovery findings
+  replace-cloud-key`; the console's finding view offers it).
 - The access graph links each discovered cloud access key to the principal it acts as (M3-L3): an AWS key to its IAM
   user by ARN (now recorded from `ListUsers` as `user_arn`), a Google Cloud key to its service account and an Entra
   secret to its application (by object id, `app_object_id`), on the same nodes a dynamic-secret lease reaches.

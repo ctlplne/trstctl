@@ -354,6 +354,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleAttackPathValidate(ctx, m) // A167
 	case orchestrator.DestinationOAuthProviderAction:
 		return d.handleOAuthProviderAction(ctx, m) // A170, A171
+	case orchestrator.DestinationCloudKeyAction:
+		return d.handleCloudKeyAction(ctx, m) // M3-L4
 	case orchestrator.DestinationScanAnnotation:
 		return d.handleScanAnnotation(ctx, m) // a finding's annotation at its provider (A174)
 	case orchestrator.DestinationSCIMWriteback:

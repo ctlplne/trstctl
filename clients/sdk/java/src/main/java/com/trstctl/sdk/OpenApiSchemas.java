@@ -353,6 +353,8 @@ public final class OpenApiSchemas {
       "ChangeImpact",
       "ChangePlan",
       "ChangeSet",
+      "CloudKeyActionResult",
+      "CloudKeyReplaceRequest",
       "CloudMachineChange",
       "CloudMachineChangeAdoption",
       "CloudMachineChangeIntent",

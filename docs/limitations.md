@@ -9293,9 +9293,9 @@ it, and with the air-gap guard enforcing the run reaches nothing.
 
 What comes next:
 - Against a real AWS account (IAM's own last-used tracking, a production account's
-  scale) — a live proof, Track B.
-- Remediation does not yet offer to replace a stale key with a dynamic AWS credential
-  from the finding. (The access graph links each key to its principal, M3-L3.)
+  scale, and a replacement's `UpdateAccessKey`, M3-L4) — a live proof, Track B.
+- Replacing a Google Cloud service-account key or an Entra client secret from its
+  finding; today a replacement acts on an AWS IAM user key only (M3-L4).
 
 ## Cloud KMS keys and load-balancer TLS policies (X4) — served
 

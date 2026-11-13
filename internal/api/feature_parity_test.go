@@ -410,9 +410,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// standing approvals (830). OD-9 adds listing, granting and revoking an
 	// access bundle's standing approvals for its delegated accounts (833).
 	// A236-L4 adds listDeletedSecrets, restoreDeletedSecret and
-	// purgeDeletedSecret (836).
-	if len(out) != 836 {
-		t.Fatalf("OpenAPI operationIds = %d, want 836", len(out))
+	// purgeDeletedSecret (836). M3-L4 adds replaceCloudAccessKey (837).
+	if len(out) != 837 {
+		t.Fatalf("OpenAPI operationIds = %d, want 837", len(out))
 	}
 	return out
 }

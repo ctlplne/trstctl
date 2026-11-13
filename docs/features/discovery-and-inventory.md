@@ -1043,11 +1043,12 @@ admin rules and routes learned over BGP are not read yet.
 ### Cloud access keys
 
 A `cloud_access_key` source (M3) finds the long-lived access keys an AWS account's IAM
-users sign in with. It holds one account's read-only credentials as references:
+users sign in with. It holds one account's credentials as references:
 `providers[]` with `provider: aws-iam`, `access_key_id_ref`, `secret_access_key_ref`, an
 optional `session_token_ref` and an optional `endpoint` (default
-`https://iam.amazonaws.com`). It needs `iam:ListUsers`, `iam:ListAccessKeys` and
-`iam:GetAccessKeyLastUsed` and nothing else. A run lists every user (all pages), each
+`https://iam.amazonaws.com`). Discovery needs `iam:ListUsers`, `iam:ListAccessKeys` and
+`iam:GetAccessKeyLastUsed` and nothing else; replacing a key from its finding (below) also
+needs `iam:UpdateAccessKey`. A run lists every user (all pages), each
 user's keys and each key's last use, and records one `cloud_access_key` finding per key
 (at most 10,000 a run) with:
 
@@ -1071,6 +1072,22 @@ reaches only its endpoint: a private endpoint needs `allow_private_endpoint` wit
 `private_egress_cidrs`, and with the air-gap guard on (`air_gap.enabled`) a run reaches
 only hosts the guard allows, so an account outside them fails the run and records
 nothing.
+
+An AWS key is replaced from its finding with a dynamic-secret role's short-lived
+credentials (M3-L4): `POST /api/v1/discovery/findings/{id}/cloud-key/replace` with
+`provider` and `role` naming one of the tenant's AWS STS dynamic-secret providers and a role
+it allows (`connectors:write`; `trstctl-cli discovery findings replace-cloud-key ID -f
+request.json --force`, and the console's finding view offers it). Move the workload onto
+the role's leases first. trstctl then sets the key `Inactive` with IAM `UpdateAccessKey`
+through the source's own connection at the host the finding names (never a deletion, so IAM
+can set it `Active` again; a source reading several accounts at one host is tried account
+by account). The finding records the request under `provider_actions.deactivate_key`:
+`queued`, then `confirmed`, `already_absent` when IAM no longer has the key, or `failed`
+with IAM's status. A confirmed or absent key marks the finding `remediated` with
+`status: Inactive`, `replaced_by: dynamic-secret:<provider>/<role>` and `deactivated_at`.
+IAM out of reach, throttling or failing on its side is retried. A provider that is not AWS
+STS, a role it does not allow and a key that is not `Active` are refused before anything
+is queued.
 
 A `gcp-iam` provider (M3-L1) reads a Google Cloud project's user-managed service-account
 keys: `project`, a `token_ref` to a short-lived read-only OAuth token, an optional
