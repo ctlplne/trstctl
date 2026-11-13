@@ -1761,6 +1761,14 @@ export const messages = {
     defaultMessage: "The HaloPSA client ID, a number. Usage sets the line quantities of that client's recurring invoice.",
     description: "MSP-5: what to enter as the company in a HaloPSA target.",
   },
+  "provider.billingSync.type.gradient": {
+    defaultMessage: "Gradient Synthesize, service counts",
+    description: "MSP-7: a Gradient Synthesize billing target.",
+  },
+  "provider.billingSync.gradientCompanyHint": {
+    defaultMessage: "The Gradient account ID trstctl reports this customer under. Map it to the customer's PSA company in Gradient.",
+    description: "MSP-7: what to enter as the company in a Gradient target.",
+  },
   "provider.billingSync.connectwiseCompanyHint": {
     defaultMessage: "The ConnectWise company record ID or its identifier. Usage lands on that company's one active agreement of the configured type.",
     description: "MSP-3: what to enter as the company in a ConnectWise target.",

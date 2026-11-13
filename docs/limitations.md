@@ -2182,8 +2182,10 @@ never live in the API process. What you can do end to end against the running bi
   tickets, against a stand-in written from Halo's public descriptions (the
   published HaloAPI client and Halo's conventions, as Halo's own API
   reference pages are not public). Live ConnectWise, Autotask, Syncro and
-  HaloPSA accounts and the other connectors (MSP-7 to MSP-15) are what comes
-  next. The
+  HaloPSA accounts and the other connectors (MSP-8 to MSP-15) are what comes
+  next. Gradient Synthesize (MSP-7) posts each customer's service counts for
+  the PSAs Gradient covers, against a stand-in written from Gradient's public
+  vendor API reference; a live Gradient account is what comes next. The
   sweep looks back three periods, so a period older than that is not pushed
   automatically.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts

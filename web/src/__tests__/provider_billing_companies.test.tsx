@@ -115,6 +115,7 @@ describe("Provider billing systems (MSP-2)", () => {
             targets: [
               { id: "at", name: "Autotask", type: "autotask", cadence: "monthly" },
               { id: "cw", name: "ConnectWise", type: "connectwise", cadence: "monthly" },
+              { id: "gradient", name: "Gradient", type: "gradient", cadence: "monthly" },
               { id: "halo", name: "HaloPSA", type: "halopsa", cadence: "monthly" },
               { id: "psa", name: "Main PSA", type: "json", cadence: "daily" },
               { id: "syncro", name: "Syncro", type: "syncro", cadence: "monthly" },
@@ -127,7 +128,11 @@ describe("Provider billing systems (MSP-2)", () => {
     );
     renderPanel(true);
     const list = await screen.findByRole("list", { name: "Configured billing systems" });
-    const [autotaskItem, connectwise, haloItem, generic, syncroItem] = within(list).getAllByRole("listitem");
+    const [autotaskItem, connectwise, gradientItem, haloItem, generic, syncroItem] = within(list).getAllByRole("listitem");
+    expect(within(gradientItem).getByText("Gradient Synthesize, service counts")).toBeInTheDocument();
+    expect(within(gradientItem).getByRole("textbox", { name: "Company ID in Gradient" })).toHaveAccessibleDescription(
+      "The Gradient account ID trstctl reports this customer under. Map it to the customer's PSA company in Gradient.",
+    );
     expect(within(haloItem).getByText("HaloPSA, recurring invoice lines")).toBeInTheDocument();
     expect(within(haloItem).getByRole("textbox", { name: "Company ID in HaloPSA" })).toHaveAccessibleDescription(
       "The HaloPSA client ID, a number. Usage sets the line quantities of that client's recurring invoice.",

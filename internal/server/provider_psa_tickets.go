@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/psa"
 	"trstctl.com/trstctl/internal/psa/autotask"
 	"trstctl.com/trstctl/internal/psa/connectwise"
+	"trstctl.com/trstctl/internal/psa/gradient"
 	"trstctl.com/trstctl/internal/psa/halopsa"
 	"trstctl.com/trstctl/internal/psa/syncro"
 	"trstctl.com/trstctl/internal/store"
@@ -263,6 +264,18 @@ func (d *issuanceDispatcher) withPSAClient(target config.ProviderBillingTarget, 
 			cfg.Tickets = &halopsa.TicketConfig{TicketTypeID: tk.TicketTypeID, StatusNewID: tk.StatusNewID, StatusClosedID: tk.StatusClosedID}
 		}
 		psaClient, err := halopsa.New(cfg, client, halopsa.Credentials{ClientSecret: secretValue.Bytes()})
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return fn(psaClient)
+	case target.Type == "gradient" && target.Gradient != nil:
+		g := target.Gradient
+		token, err := resolveDeploymentCredentialRef(g.TokenRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the gradient target's token_ref"))
+		}
+		defer token.Destroy()
+		psaClient, err := gradient.New(gradient.Config{BaseURL: target.Endpoint, Services: g.Services}, client, gradient.Credentials{Token: token.Bytes()})
 		if err != nil {
 			return orchestrator.DefiniteNoEffect(err)
 		}

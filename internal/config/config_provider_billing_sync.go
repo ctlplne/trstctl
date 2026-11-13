@@ -62,6 +62,21 @@ type ProviderBillingTarget struct {
 	// figures become the line quantities of its client's recurring invoice.
 	// Endpoint is the instance root, https://{instance}.halopsa.com.
 	HaloPSA *HaloPSABillingTarget `json:"halopsa,omitempty"`
+	// Gradient configures a "gradient" target (MSP-7): each customer's
+	// figures become its account's counts of Gradient services, which
+	// Gradient forwards to the MSP's PSA. Endpoint is the API root,
+	// https://app.usegradient.com.
+	Gradient *GradientBillingTarget `json:"gradient,omitempty"`
+}
+
+// GradientBillingTarget is a Gradient Synthesize vendor integration.
+type GradientBillingTarget struct {
+	// TokenRef names the GRADIENT-TOKEN value the MSP's Gradient account
+	// issues for this integration (file: or env:).
+	TokenRef string `json:"token_ref"`
+	// Services maps a meter to the Gradient service (SKU) ID whose count
+	// carries it.
+	Services map[string]string `json:"services"`
 }
 
 // HaloPSABillingTarget is a HaloPSA instance the Provider pushes usage to.
@@ -269,7 +284,7 @@ var (
 var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
-var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}}
+var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}, "gradient": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -301,7 +316,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json, connectwise, autotask, syncro, halopsa)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json, connectwise, autotask, syncro, halopsa, gradient)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -326,6 +341,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 			errs = append(errs, validateSyncroBillingTarget(where, t)...)
 		case "halopsa":
 			errs = append(errs, validateHaloPSABillingTarget(where, t)...)
+		case "gradient":
+			errs = append(errs, validateGradientBillingTarget(where, t)...)
+		}
+		if t.Type != "gradient" && t.Gradient != nil {
+			errs = append(errs, fmt.Errorf("%s.gradient applies to gradient targets only", where))
 		}
 		if t.Type != "halopsa" && t.HaloPSA != nil {
 			errs = append(errs, fmt.Errorf("%s.halopsa applies to halopsa targets only", where))
@@ -367,6 +387,39 @@ func validateJSONBillingTarget(where string, t ProviderBillingTarget) []error {
 }
 
 var haloTenantPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
+
+// gradientServicePattern is a Gradient service ID as it sits in a URL path.
+var gradientServicePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+func validateGradientBillingTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; a gradient target authenticates with gradient.token_ref", where))
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	g := t.Gradient
+	if g == nil {
+		return append(errs, fmt.Errorf("%s.gradient is required for a gradient target", where))
+	}
+	where += ".gradient"
+	if err := validateDeploymentCredentialRef(g.TokenRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.token_ref: %w", where, err))
+	}
+	if len(g.Services) == 0 {
+		errs = append(errs, fmt.Errorf("%s.services must map at least one meter (%s) to a Gradient service ID", where, strings.Join(BillingSyncMeters, ", ")))
+	}
+	for _, meter := range slices.Sorted(maps.Keys(g.Services)) {
+		if !slices.Contains(BillingSyncMeters, meter) {
+			errs = append(errs, fmt.Errorf("%s.services names %q, which is not a pushed meter (%s)", where, meter, strings.Join(BillingSyncMeters, ", ")))
+		}
+		if !gradientServicePattern.MatchString(g.Services[meter]) {
+			errs = append(errs, fmt.Errorf("%s.services.%s must be a Gradient service ID (letters, digits, dashes or underscores)", where, meter))
+		}
+	}
+	return errs
+}
 
 func validateHaloPSABillingTarget(where string, t ProviderBillingTarget) []error {
 	var errs []error

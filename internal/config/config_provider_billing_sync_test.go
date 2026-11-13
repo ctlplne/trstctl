@@ -258,3 +258,44 @@ func TestProviderBillingSyncHaloPSATargetMSP5(t *testing.T) {
 		}
 	}
 }
+
+// MSP-7: a gradient target names its GRADIENT-TOKEN reference and at least
+// one meter's service ID (path-safe); json and connectwise fields are refused
+// on it, and its block on other types; it opens no tickets.
+func TestProviderBillingSyncGradientTargetMSP7(t *testing.T) {
+	valid := func() ProviderBillingTarget {
+		return ProviderBillingTarget{ID: "gradient", Type: "gradient", Endpoint: "https://app.usegradient.com",
+			Gradient: &GradientBillingTarget{TokenRef: "env:TRSTCTL_GRADIENT_TOKEN", Services: map[string]string{"agents": "trstctl-agents"}}} // #nosec G101 -- an env: reference to a test-only value (CWE-798)
+	}
+	ok := valid()
+	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{ok}}); len(errs) != 0 {
+		t.Fatalf("valid gradient target refused: %v", errs)
+	}
+	if ok.TicketKinds() != nil {
+		t.Fatalf("a gradient target tickets %v", ok.TicketKinds())
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*ProviderBillingTarget)
+		want   string
+	}{
+		"no block":          {func(t *ProviderBillingTarget) { t.Gradient = nil }, ".gradient is required"},
+		"bearer":            {func(t *ProviderBillingTarget) { t.TokenRef = "env:X" }, "json targets only"},
+		"inline token":      {func(t *ProviderBillingTarget) { t.Gradient.TokenRef = "abc" }, ".token_ref"},
+		"no services":       {func(t *ProviderBillingTarget) { t.Gradient.Services = nil }, ".services must map"},
+		"unknown meter":     {func(t *ProviderBillingTarget) { t.Gradient.Services["certificates_issued"] = "x" }, "not a pushed meter"},
+		"path in service":   {func(t *ProviderBillingTarget) { t.Gradient.Services["agents"] = "a/../b" }, ".services.agents"},
+		"block on halopsa":  {func(t *ProviderBillingTarget) { t.Type = "halopsa" }, "gradient targets only"},
+		"connectwise block": {func(t *ProviderBillingTarget) { t.ConnectWise = &ConnectWiseBillingTarget{} }, "connectwise targets only"},
+	} {
+		target := valid()
+		tc.mutate(&target)
+		errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{target}})
+		joined := ""
+		for _, err := range errs {
+			joined += err.Error() + "\n"
+		}
+		if !strings.Contains(joined, tc.want) {
+			t.Errorf("%s: errors %q, want one naming %q", name, joined, tc.want)
+		}
+	}
+}

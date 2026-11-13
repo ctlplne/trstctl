@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- Gradient Synthesize as a billing target (MSP-7): a `gradient` target (a `GRADIENT-TOKEN` reference and a service ID
+  per meter) posts each customer's signed period as absolute service counts under its Gradient account, which Gradient
+  forwards to the MSP's PSA; a retry posts the same count, and an account Gradient has not mapped yet is refused with
+  nothing counted.
 - HaloPSA as a billing target (MSP-5): a `halopsa` target (the instance root, an optional hosted tenant, the API
   application's client ID and client secret reference, an item ID per meter, an optional recurring invoice name and
   ticket type and status IDs) signs in with client credentials for each delivery, sets each customer's signed period

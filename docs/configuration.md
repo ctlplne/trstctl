@@ -1700,6 +1700,33 @@ ticket search. Halo's public API reference is thin: the request shapes follow th
 published HaloAPI client and Halo's conventions, and a live instance is what comes
 next.
 
+A `gradient` target (MSP-7) sends a customer's figures to Gradient Synthesize, which
+forwards them to whichever PSA the MSP connected there, for PSAs without a direct
+connector:
+
+```json
+{
+  "id": "gradient",
+  "name": "Gradient",
+  "type": "gradient",
+  "endpoint": "https://app.usegradient.com",
+  "gradient": {
+    "token_ref": "env:TRSTCTL_GRADIENT_TOKEN",
+    "services": {"certificates_current": "trstctl-certificates", "agents": "trstctl-agents"}
+  }
+}
+```
+
+`token_ref` names the `GRADIENT-TOKEN` value the MSP's Gradient account issues for the
+integration (`file:` or `env:`); `services` maps meters to Gradient service IDs. A
+customer's company in this target is its Gradient account ID, the ID trstctl reports
+the customer's usage under, which the MSP maps to a PSA company inside Gradient. Each
+period posts every service's absolute count (`POST
+/api/vendor-api/service/{serviceId}/count` with `unitCount` and `accountId`), so a
+retry posts the same number. When Gradient answers that the account or service is not
+mapped yet, nothing was counted: the period is refused and recorded as not delivered
+rather than sent elsewhere. Gradient carries usage only; it opens no tickets.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.
