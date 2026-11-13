@@ -163,3 +163,49 @@ func TestProviderBillingSyncAutotaskTargetMSP4(t *testing.T) {
 		}
 	}
 }
+
+// MSP-6: a syncro target names its API token as a deployment reference and
+// at least one meter's product ID; tickets need a problem type, and their
+// statuses default to New and Resolved; json, connectwise and autotask
+// fields are refused on it, and its block on other types.
+func TestProviderBillingSyncSyncroTargetMSP6(t *testing.T) {
+	valid := func() ProviderBillingTarget {
+		return ProviderBillingTarget{ID: "syncro", Type: "syncro", Endpoint: "https://alpha.syncromsp.com/api/v1",
+			Syncro: &SyncroBillingTarget{APITokenRef: "file:/run/secrets/syncro-token", Products: map[string]int64{"agents": 1288302}, // #nosec G101 -- a file: reference to a test-only value (CWE-798)
+				Tickets: &SyncroTickets{ProblemType: "Certificates"}}}
+	}
+	ok := valid()
+	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{ok}}); len(errs) != 0 {
+		t.Fatalf("valid syncro target refused: %v", errs)
+	}
+	if ok.Syncro.Tickets.EffectiveStatusNew() != "New" || ok.Syncro.Tickets.EffectiveStatusClosed() != "Resolved" || len(ok.TicketKinds()) != 4 {
+		t.Fatalf("defaults = %q %q %v", ok.Syncro.Tickets.EffectiveStatusNew(), ok.Syncro.Tickets.EffectiveStatusClosed(), ok.TicketKinds())
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*ProviderBillingTarget)
+		want   string
+	}{
+		"no block":           {func(t *ProviderBillingTarget) { t.Syncro = nil }, ".syncro is required"},
+		"bearer":             {func(t *ProviderBillingTarget) { t.TokenRef = "env:X" }, "json targets only"},
+		"autotask block":     {func(t *ProviderBillingTarget) { t.Autotask = &AutotaskBillingTarget{} }, "autotask targets only"},
+		"inline token":       {func(t *ProviderBillingTarget) { t.Syncro.APITokenRef = "T0KEN" }, ".api_token_ref"},
+		"no products":        {func(t *ProviderBillingTarget) { t.Syncro.Products = nil }, ".products must map"},
+		"negative product":   {func(t *ProviderBillingTarget) { t.Syncro.Products["agents"] = -1 }, ".products.agents"},
+		"no problem type":    {func(t *ProviderBillingTarget) { t.Syncro.Tickets.ProblemType = "" }, ".tickets.problem_type"},
+		"same statuses":      {func(t *ProviderBillingTarget) { t.Syncro.Tickets.StatusClosed = "New" }, "must differ"},
+		"unknown kind":       {func(t *ProviderBillingTarget) { t.Syncro.Tickets.Kinds = []string{"risk.urgent"} }, "not a ticketed alert kind"},
+		"block on autotask":  {func(t *ProviderBillingTarget) { t.Type = "autotask" }, "syncro targets only"},
+		"long schedule name": {func(t *ProviderBillingTarget) { t.Syncro.ScheduleName = strings.Repeat("s", 101) }, ".schedule_name"},
+	} {
+		target := valid()
+		tc.mutate(&target)
+		errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{target}})
+		joined := ""
+		for _, err := range errs {
+			joined += err.Error() + "\n"
+		}
+		if !strings.Contains(joined, tc.want) {
+			t.Errorf("%s: errors %q, want one naming %q", name, joined, tc.want)
+		}
+	}
+}

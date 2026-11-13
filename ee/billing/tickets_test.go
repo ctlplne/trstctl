@@ -192,3 +192,14 @@ func TestTicketTargetsFollowEveryVendorMSP4(t *testing.T) {
 		t.Fatalf("autotask kinds = %v", kinds)
 	}
 }
+
+// MSP-6: a Syncro target with ticket settings is a ticket target too.
+func TestTicketTargetsIncludeSyncroMSP6(t *testing.T) {
+	targets := billing.TicketTargets(config.ProviderBillingSync{Targets: []config.ProviderBillingTarget{
+		{ID: "syncro", Type: "syncro", Syncro: &config.SyncroBillingTarget{Tickets: &config.SyncroTickets{ProblemType: "Certificates"}}},
+		{ID: "syncro-usage-only", Type: "syncro", Syncro: &config.SyncroBillingTarget{}},
+	}})
+	if len(targets) != 1 || targets[0].ID != "syncro" || len(targets[0].TicketKinds()) != 4 {
+		t.Fatalf("ticket targets = %+v", targets)
+	}
+}

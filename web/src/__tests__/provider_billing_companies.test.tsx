@@ -116,6 +116,7 @@ describe("Provider billing systems (MSP-2)", () => {
               { id: "at", name: "Autotask", type: "autotask", cadence: "monthly" },
               { id: "cw", name: "ConnectWise", type: "connectwise", cadence: "monthly" },
               { id: "psa", name: "Main PSA", type: "json", cadence: "daily" },
+              { id: "syncro", name: "Syncro", type: "syncro", cadence: "monthly" },
             ],
             companies: [],
           });
@@ -125,7 +126,11 @@ describe("Provider billing systems (MSP-2)", () => {
     );
     renderPanel(true);
     const list = await screen.findByRole("list", { name: "Configured billing systems" });
-    const [autotaskItem, connectwise, generic] = within(list).getAllByRole("listitem");
+    const [autotaskItem, connectwise, generic, syncroItem] = within(list).getAllByRole("listitem");
+    expect(within(syncroItem).getByText("Syncro, recurring invoice lines")).toBeInTheDocument();
+    expect(within(syncroItem).getByRole("textbox", { name: "Company ID in Syncro" })).toHaveAccessibleDescription(
+      "The Syncro customer ID, a number. Usage sets the line quantities of that customer's one active recurring invoice schedule.",
+    );
     expect(within(autotaskItem).getByText("Autotask PSA, contract services")).toBeInTheDocument();
     expect(within(autotaskItem).getByRole("textbox", { name: "Company ID in Autotask" })).toHaveAccessibleDescription(
       "The Autotask company ID, a number. Usage sets the units of that company's Recurring Service contract services.",

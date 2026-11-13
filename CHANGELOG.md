@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- Syncro as a billing target (MSP-6): a `syncro` target (the account's API root, an API token reference, a product ID
+  per meter, an optional schedule name and ticket problem type and statuses) sets each customer's signed period as the
+  line quantities of its one active recurring invoice schedule (a missing line is added, an existing one set, so a
+  retry cannot double a line) and opens, comments and resolves tickets for its alerts. The token travels only in the
+  Authorization header.
 - Autotask PSA as a billing target (MSP-4): an `autotask` target (the zone's REST root, the API user, secret and
   tracking identifier references, a service ID per meter, optional contract name and ticket picklist values) sets each
   customer's signed period as the whole units of its company's Recurring Service contract services, effective from

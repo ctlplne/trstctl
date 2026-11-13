@@ -53,6 +53,50 @@ type ProviderBillingTarget struct {
 	// contract services. Endpoint is the zone's REST root,
 	// https://webservicesN.autotask.net/atservicesrest/v1.0.
 	Autotask *AutotaskBillingTarget `json:"autotask,omitempty"`
+	// Syncro configures a "syncro" target (MSP-6): each customer's figures
+	// become the line quantities of its one active recurring invoice
+	// schedule. Endpoint is the account's API root,
+	// https://{subdomain}.syncromsp.com/api/v1.
+	Syncro *SyncroBillingTarget `json:"syncro,omitempty"`
+}
+
+// SyncroBillingTarget is a Syncro account the Provider pushes usage to.
+type SyncroBillingTarget struct {
+	// APITokenRef names the API token (file: or env:), resolved for each
+	// delivery and sent only in the Authorization header.
+	APITokenRef string `json:"api_token_ref"`
+	// ScheduleName, when set, picks the schedule among a customer's active
+	// recurring invoice schedules.
+	ScheduleName string `json:"schedule_name,omitempty"`
+	// Products maps a meter to the Syncro product ID whose line carries it.
+	Products map[string]int64 `json:"products"`
+	// Tickets, when set, opens a ticket for the customer's alerts (MSP-6).
+	Tickets *SyncroTickets `json:"tickets,omitempty"`
+}
+
+// SyncroTickets is the problem type and statuses of alert tickets.
+type SyncroTickets struct {
+	ProblemType  string   `json:"problem_type"`
+	StatusNew    string   `json:"status_new,omitempty"`
+	StatusClosed string   `json:"status_closed,omitempty"`
+	Kinds        []string `json:"kinds,omitempty"`
+}
+
+// EffectiveStatusNew is the status a ticket opens with, "New" when unset.
+func (t SyncroTickets) EffectiveStatusNew() string {
+	if t.StatusNew != "" {
+		return t.StatusNew
+	}
+	return "New"
+}
+
+// EffectiveStatusClosed is the status that closes a ticket, "Resolved"
+// when unset.
+func (t SyncroTickets) EffectiveStatusClosed() string {
+	if t.StatusClosed != "" {
+		return t.StatusClosed
+	}
+	return "Resolved"
 }
 
 // AutotaskBillingTarget is an Autotask PSA zone the Provider pushes usage to.
@@ -113,6 +157,11 @@ func (t ProviderBillingTarget) TicketKinds() []string {
 			return append([]string(nil), PSATicketAlertKinds...)
 		}
 		return append([]string(nil), t.Autotask.Tickets.Kinds...)
+	case t.Syncro != nil && t.Syncro.Tickets != nil:
+		if len(t.Syncro.Tickets.Kinds) == 0 {
+			return append([]string(nil), PSATicketAlertKinds...)
+		}
+		return append([]string(nil), t.Syncro.Tickets.Kinds...)
 	}
 	return nil
 }
@@ -185,7 +234,7 @@ var (
 var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
-var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}}
+var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -217,7 +266,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json, connectwise, autotask)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json, connectwise, autotask, syncro)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -238,9 +287,14 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 			errs = append(errs, validateConnectWiseBillingTarget(where, t)...)
 		case "autotask":
 			errs = append(errs, validateAutotaskBillingTarget(where, t)...)
+		case "syncro":
+			errs = append(errs, validateSyncroBillingTarget(where, t)...)
 		}
 		if t.Type != "autotask" && t.Autotask != nil {
 			errs = append(errs, fmt.Errorf("%s.autotask applies to autotask targets only", where))
+		}
+		if t.Type != "syncro" && t.Syncro != nil {
+			errs = append(errs, fmt.Errorf("%s.syncro applies to syncro targets only", where))
 		}
 		switch t.EffectiveCadence() {
 		case "monthly", "daily":
@@ -268,6 +322,57 @@ func validateJSONBillingTarget(where string, t ProviderBillingTarget) []error {
 	}
 	if t.ConnectWise != nil {
 		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	return errs
+}
+
+func validateSyncroBillingTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; a syncro target authenticates with its api_token_ref", where))
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	sy := t.Syncro
+	if sy == nil {
+		return append(errs, fmt.Errorf("%s.syncro is required for a syncro target", where))
+	}
+	where += ".syncro"
+	if err := validateDeploymentCredentialRef(sy.APITokenRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.api_token_ref: %w", where, err))
+	}
+	if sy.ScheduleName != "" && !validConnectWiseName(sy.ScheduleName) {
+		errs = append(errs, fmt.Errorf("%s.schedule_name must be 1-100 characters", where))
+	}
+	if len(sy.Products) == 0 {
+		errs = append(errs, fmt.Errorf("%s.products must map at least one meter (%s) to a Syncro product ID", where, strings.Join(BillingSyncMeters, ", ")))
+	}
+	for _, meter := range slices.Sorted(maps.Keys(sy.Products)) {
+		if !slices.Contains(BillingSyncMeters, meter) {
+			errs = append(errs, fmt.Errorf("%s.products names %q, which is not a pushed meter (%s)", where, meter, strings.Join(BillingSyncMeters, ", ")))
+		}
+		if sy.Products[meter] <= 0 {
+			errs = append(errs, fmt.Errorf("%s.products.%s must be a Syncro product ID", where, meter))
+		}
+	}
+	if tk := sy.Tickets; tk != nil {
+		if !validConnectWiseName(tk.ProblemType) {
+			errs = append(errs, fmt.Errorf("%s.tickets.problem_type must name a ticket problem type (1-100 characters)", where))
+		}
+		for _, status := range []struct{ name, value string }{{"status_new", tk.StatusNew}, {"status_closed", tk.StatusClosed}} {
+			if status.value != "" && !validConnectWiseName(status.value) {
+				errs = append(errs, fmt.Errorf("%s.tickets.%s must be a ticket status (1-100 characters)", where, status.name))
+			}
+		}
+		if tk.EffectiveStatusNew() == tk.EffectiveStatusClosed() {
+			errs = append(errs, fmt.Errorf("%s.tickets.status_new and status_closed must differ", where))
+		}
+		for _, kind := range tk.Kinds {
+			if !slices.Contains(PSATicketAlertKinds, kind) {
+				errs = append(errs, fmt.Errorf("%s.tickets.kinds names %q, which is not a ticketed alert kind (%s)", where, kind, strings.Join(PSATicketAlertKinds, ", ")))
+			}
+		}
 	}
 	return errs
 }

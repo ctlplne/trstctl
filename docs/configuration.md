@@ -1635,6 +1635,36 @@ so a retry after a lost answer cannot double a line. Quantities are whole units.
 `priority`, `queue_id`, `note_type` and `note_publish` are your zone's picklist
 values (the last two default to 1); a ticket's `externalID` carries its reference.
 
+A `syncro` target (MSP-6) puts a customer's figures into Syncro as the quantities of
+line items on its one active recurring invoice schedule:
+
+```json
+{
+  "id": "syncro",
+  "name": "Syncro",
+  "type": "syncro",
+  "endpoint": "https://your-subdomain.syncromsp.com/api/v1",
+  "syncro": {
+    "api_token_ref": "file:/run/secrets/syncro-api-token",
+    "schedule_name": "Managed PKI",
+    "products": {"certificates_current": 1288301, "agents": 1288302},
+    "tickets": {"problem_type": "Certificates", "status_new": "New", "status_closed": "Resolved"}
+  }
+}
+```
+
+`endpoint` is your account's API root; `api_token_ref` names an API token (`file:` or
+`env:`), sent only in the `Authorization` header, never in a URL. A customer's company
+in this target is its Syncro customer ID (a number); the customer must not be
+disabled. Delivery resolves the customer's one active, unpaused recurring invoice
+schedule (`schedule_name` picks one when a customer has several) and each product's
+line before writing anything; then it adds a missing line or sets an existing line's
+quantity, so a retry cannot double a line. With `tickets`, alerts open tickets as
+described above with `problem_type`, `status_new` (default `New`) and
+`status_closed` (default `Resolved`); the alert is a hidden, un-emailed comment.
+Syncro tickets have no external reference field, so a ticket's reference ends its
+subject in brackets and a retry finds it with Syncro's ticket search.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

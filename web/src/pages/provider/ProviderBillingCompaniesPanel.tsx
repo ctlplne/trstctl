@@ -283,6 +283,8 @@ function targetTypeLabel(type: string): string {
       return translateNow("provider.billingSync.type.connectwise");
     case "autotask":
       return translateNow("provider.billingSync.type.autotask");
+    case "syncro":
+      return translateNow("provider.billingSync.type.syncro");
     case "json":
       return translateNow("provider.billingSync.type.json");
     default:
@@ -297,6 +299,8 @@ function companyHint(type: string): string | undefined {
       return translateNow("provider.billingSync.connectwiseCompanyHint");
     case "autotask":
       return translateNow("provider.billingSync.autotaskCompanyHint");
+    case "syncro":
+      return translateNow("provider.billingSync.syncroCompanyHint");
     default:
       return undefined;
   }

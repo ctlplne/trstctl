@@ -1745,6 +1745,14 @@ export const messages = {
     defaultMessage: "The Autotask company ID, a number. Usage sets the units of that company's Recurring Service contract services.",
     description: "MSP-4: what to enter as the company in an Autotask target.",
   },
+  "provider.billingSync.type.syncro": {
+    defaultMessage: "Syncro, recurring invoice lines",
+    description: "MSP-6: a Syncro billing target.",
+  },
+  "provider.billingSync.syncroCompanyHint": {
+    defaultMessage: "The Syncro customer ID, a number. Usage sets the line quantities of that customer's one active recurring invoice schedule.",
+    description: "MSP-6: what to enter as the company in a Syncro target.",
+  },
   "provider.billingSync.connectwiseCompanyHint": {
     defaultMessage: "The ConnectWise company record ID or its identifier. Usage lands on that company's one active agreement of the configured type.",
     description: "MSP-3: what to enter as the company in a ConnectWise target.",

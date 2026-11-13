@@ -2176,8 +2176,10 @@ never live in the API process. What you can do end to end against the running bi
   customer's company for its expiry, failed-renewal, revocation-endpoint and
   drift alerts. Autotask PSA (MSP-4) does the same through contract service
   units and tickets, proven against a stand-in written from Autotask's public
-  REST entity reference. Live ConnectWise and Autotask sites and the other PSA
-  and RMM connectors (MSP-5 to MSP-15) are what comes next. The
+  REST entity reference, and Syncro (MSP-6) through recurring invoice lines and
+  tickets, proven against a stand-in written from Syncro's public OpenAPI
+  description. Live ConnectWise, Autotask and Syncro accounts and the other PSA
+  and RMM connectors (MSP-5, MSP-7 to MSP-15) are what comes next. The
   sweep looks back three periods, so a period older than that is not pushed
   automatically.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts

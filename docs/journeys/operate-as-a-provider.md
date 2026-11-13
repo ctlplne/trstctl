@@ -115,7 +115,9 @@ closed period pushed for the customer: queued, delivered (to which company), hel
 because its evidence cannot be signed (with the reason; one alert is raised), or
 failed after its retries (also alerted). A period is sent once; a held period is
 sent when it becomes signable.
-Each system shows how it receives the periods: a signed JSON push; Autotask PSA,
+Each system shows how it receives the periods: a signed JSON push; Syncro, where a
+customer's company is its Syncro customer ID and the figures become the line
+quantities of its recurring invoice schedule; Autotask PSA,
 where a customer's company is its Autotask company ID and the figures become the
 whole units of its Recurring Service contract services; or ConnectWise PSA, where a customer's company is its ConnectWise company record ID or identifier
 and the period's figures become the quantities of that company's agreement

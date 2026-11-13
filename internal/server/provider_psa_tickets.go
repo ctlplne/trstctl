@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/psa"
 	"trstctl.com/trstctl/internal/psa/autotask"
 	"trstctl.com/trstctl/internal/psa/connectwise"
+	"trstctl.com/trstctl/internal/psa/syncro"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -228,6 +229,22 @@ func (d *issuanceDispatcher) withPSAClient(target config.ProviderBillingTarget, 
 				Priority: tk.Priority, NoteType: tk.EffectiveNoteType(), NotePublish: tk.EffectiveNotePublish()}
 		}
 		psaClient, err := autotask.New(cfg, client, autotask.Credentials{Secret: secretValue.Bytes(), IntegrationCode: code.Bytes()})
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return fn(psaClient)
+	case target.Type == "syncro" && target.Syncro != nil:
+		sy := target.Syncro
+		token, err := resolveDeploymentCredentialRef(sy.APITokenRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the syncro target's api_token_ref"))
+		}
+		defer token.Destroy()
+		cfg := syncro.Config{BaseURL: target.Endpoint, ScheduleName: sy.ScheduleName, Products: sy.Products}
+		if tk := sy.Tickets; tk != nil {
+			cfg.Tickets = &syncro.TicketConfig{ProblemType: tk.ProblemType, StatusNew: tk.EffectiveStatusNew(), StatusClosed: tk.EffectiveStatusClosed()}
+		}
+		psaClient, err := syncro.New(cfg, client, syncro.Credentials{APIToken: token.Bytes()})
 		if err != nil {
 			return orchestrator.DefiniteNoEffect(err)
 		}
