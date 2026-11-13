@@ -45,8 +45,12 @@ type Config struct {
 	Token          cloudcert.TokenProvider
 	NamePrefix     string
 	InspectContent bool
-	HTTPClient     *http.Client
-	Retry          cloudcert.RetryPolicy
+	// GenericHighEntropy adds the opt-in generic high-entropy rule to
+	// content inspection (A172-L4); it has no effect without
+	// InspectContent.
+	GenericHighEntropy bool
+	HTTPClient         *http.Client
+	Retry              cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only Doppler secret source.
@@ -182,7 +186,8 @@ func (e *Enumerator) inspectConfig(ctx context.Context, project string, c config
 		}
 		resource := "doppler://" + e.host + "/" + location + "/" + name
 		found, err := cloudsecret.InspectSecret(ProviderName, cloudsecret.Secret{
-			Name: name, ResourceID: resource, Location: location, Provenance: resource, Value: value,
+			GenericHighEntropy: e.cfg.GenericHighEntropy,
+			Name:               name, ResourceID: resource, Location: location, Provenance: resource, Value: value,
 			Fields: []cloudsecret.SecretField{{Name: name, Value: value}},
 			Metadata: map[string]string{
 				"secret_name": name, "resource_id": resource, "project": project, "config": c.Name, "content_inspected": "true",

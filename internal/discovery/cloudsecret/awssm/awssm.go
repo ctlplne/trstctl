@@ -48,9 +48,13 @@ type Config struct {
 	// InspectContent is the explicit opt-in to GetSecretValue. The default
 	// metadata-only inventory never calls that API.
 	InspectContent bool
-	HTTPClient     *http.Client
-	Now            func() time.Time
-	Retry          cloudcert.RetryPolicy
+	// GenericHighEntropy adds the opt-in generic high-entropy rule to
+	// content inspection (A172-L4); it has no effect without
+	// InspectContent.
+	GenericHighEntropy bool
+	HTTPClient         *http.Client
+	Now                func() time.Time
+	Retry              cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only AWS Secrets Manager certificate-secret source.
@@ -207,11 +211,12 @@ func (e *Enumerator) inspectSecret(ctx context.Context, s secretSummary) ([]clou
 	defer secret.Wipe(value)
 	provenance := "aws-sm://" + e.cfg.Region + "/" + s.Name
 	return cloudsecret.InspectSecret(e.Name(), cloudsecret.Secret{
-		Name:       s.Name,
-		ResourceID: s.ARN,
-		Location:   e.cfg.Region,
-		Provenance: provenance,
-		Value:      value,
+		GenericHighEntropy: e.cfg.GenericHighEntropy,
+		Name:               s.Name,
+		ResourceID:         s.ARN,
+		Location:           e.cfg.Region,
+		Provenance:         provenance,
+		Value:              value,
 		Metadata: map[string]string{
 			"secret_name":       s.Name,
 			"resource_id":       s.ARN,

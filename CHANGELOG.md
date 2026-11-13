@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- An opt-in generic high-entropy rule for secret-store content inspection (A172-L4): a `cloud_secret` or `secret_store`
+  provider with `inspect_content: true` may also set `generic_high_entropy: true`, and a value or field that is one
+  random-looking token no specific rule names becomes a masked, fingerprinted `generic_high_entropy` finding. Off by
+  default; refused without content inspection when the source is saved; offered in the source wizard once content
+  inspection is chosen. All eleven value-reading providers pass the opt-in (a guard test keeps it that way).
 - A leaked credential lines up with its stored copies (A172-L1): a `leaked_secret` finding whose line holds an API key,
   token or private key the secret-store rules recognize records `credential_fingerprint` (the same fingerprint the
   `secret_store_api_key` finding carries) and `credential_rule`, read from the scanned tree in memory and wiped, using

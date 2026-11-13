@@ -37,8 +37,12 @@ type Config struct {
 	Token          cloudcert.TokenProvider
 	NamePrefix     string
 	InspectContent bool
-	HTTPClient     *http.Client
-	Retry          cloudcert.RetryPolicy
+	// GenericHighEntropy adds the opt-in generic high-entropy rule to
+	// content inspection (A172-L4); it has no effect without
+	// InspectContent.
+	GenericHighEntropy bool
+	HTTPClient         *http.Client
+	Retry              cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only 1Password Connect item source.
@@ -202,7 +206,8 @@ func (e *Enumerator) inspectItem(ctx context.Context, v vault, it item, resource
 	}
 	defer secret.Wipe(joined)
 	return cloudsecret.InspectSecret(ProviderName, cloudsecret.Secret{
-		Name: it.Title, ResourceID: resource, Location: v.Name, Provenance: resource, Value: joined, Fields: fields,
+		GenericHighEntropy: e.cfg.GenericHighEntropy,
+		Name:               it.Title, ResourceID: resource, Location: v.Name, Provenance: resource, Value: joined, Fields: fields,
 		Metadata: map[string]string{
 			"secret_name": it.Title, "resource_id": resource, "vault": v.Name, "vault_id": v.ID, "item_id": it.ID,
 			"content_inspected": "true",

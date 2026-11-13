@@ -95,7 +95,7 @@ func buildSecretStoreProvider(ctx context.Context, provider string, p cloudSecre
 	case gitlabci.ProviderName:
 		return gitlabci.New(gitlabci.Config{
 			BaseURL: endpoint, Project: p.Project, Group: p.Group, Instance: p.Instance,
-			Token: token, NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, HTTPClient: client,
+			Token: token, NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	case infisical.ProviderName:
 		clientSecret, err := resolvedRef(ctx, "client_secret_ref", p.ClientSecretRef)
@@ -105,7 +105,7 @@ func buildSecretStoreProvider(ctx context.Context, provider string, p cloudSecre
 		return infisical.New(infisical.Config{
 			BaseURL: endpoint, ClientID: p.ClientID, ClientSecret: clientSecret, Token: token,
 			Project: p.Project, Environments: p.Environments, SecretPath: p.PathPrefix,
-			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, HTTPClient: client,
+			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	case conjur.ProviderName:
 		apiKey, err := resolvedRef(ctx, "api_key_ref", p.APIKeyRef)
@@ -117,17 +117,17 @@ func buildSecretStoreProvider(ctx context.Context, provider string, p cloudSecre
 		}
 		return conjur.New(conjur.Config{
 			BaseURL: endpoint, Account: p.Account, Login: p.Login, APIKey: apiKey, PathPrefix: p.PathPrefix,
-			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, HTTPClient: client,
+			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	case onepassword.ProviderName:
 		return onepassword.New(onepassword.Config{
 			BaseURL: endpoint, Vaults: p.Vaults, Token: token,
-			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, HTTPClient: client,
+			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	case doppler.ProviderName:
 		return doppler.New(doppler.Config{
 			BaseURL: endpoint, Project: p.Project, Configs: p.Configs, Token: token,
-			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, HTTPClient: client,
+			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	case akeyless.ProviderName:
 		accessKey, err := resolvedRef(ctx, "client_secret_ref", p.ClientSecretRef)
@@ -136,12 +136,12 @@ func buildSecretStoreProvider(ctx context.Context, provider string, p cloudSecre
 		}
 		return akeyless.New(akeyless.Config{
 			BaseURL: endpoint, AccessID: p.ClientID, AccessKey: accessKey, PathPrefix: p.PathPrefix,
-			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, HTTPClient: client,
+			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	default:
 		return bitwardensm.New(bitwardensm.Config{
 			BaseURL: endpoint, IdentityURL: p.IdentityEndpoint, AccessToken: token,
-			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, HTTPClient: client,
+			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	}
 }

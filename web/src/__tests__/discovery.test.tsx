@@ -1169,6 +1169,35 @@ describe("discovery control-plane surface", () => {
         ],
       },
     },
+    {
+      // A172-L4: the generic high-entropy rule is offered only once content
+      // inspection is chosen, and travels as its own opt-in.
+      kind: "secret_store",
+      name: "prod-vault-generic",
+      provider: "hashicorp-vault",
+      fill: async (user: ReturnType<typeof userEvent.setup>, form: HTMLElement) => {
+        await user.type(within(form).getByLabelText("Vault URL"), "https://vault.example");
+        await user.type(within(form).getByLabelText("Token reference"), "env:TRSTCTL_DISCOVERY_TOKEN");
+        await user.clear(within(form).getByLabelText("KV mount"));
+        await user.type(within(form).getByLabelText("KV mount"), "secret");
+        expect(within(form).queryByLabelText(/Also report random-looking values no rule names/)).not.toBeInTheDocument();
+        await user.click(within(form).getByLabelText(/Inspect secret content for certificates and credentials/));
+        await user.click(within(form).getByLabelText(/Also report random-looking values no rule names/));
+      },
+      config: {
+        providers: [
+          {
+            provider: "hashicorp-vault",
+            vault_url: "https://vault.example",
+            token_ref: "env:TRSTCTL_DISCOVERY_TOKEN",
+            mount: "secret",
+            api_version: "v1",
+            inspect_content: true,
+            generic_high_entropy: true,
+          },
+        ],
+      },
+    },
   ])("previews a reference-only $kind plan before saving", async ({ kind, name, provider, fill, config }) => {
     const user = userEvent.setup();
     renderDiscovery([`/discovery?tab=sources&kind=${kind}`]);

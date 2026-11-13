@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -129,6 +130,7 @@ func inspectCredentials(provider string, s Secret) []Found {
 		add(c)
 	}
 	for _, f := range fields {
+		before := len(creds)
 		if f.Name != "" && awsSecretFieldName.MatchString(f.Name) && awsSecretFieldValue.Match(bytes.TrimSpace(f.Value)) {
 			add(newCredential("aws_secret_access_key", "api_key", 70, nil, f.Name, bytes.TrimSpace(f.Value)))
 		}
@@ -139,6 +141,11 @@ func inspectCredentials(provider string, s Secret) []Found {
 				}
 				add(newCredential(rule.id, rule.kind, rule.risk, rule.prefixes, f.Name, f.Value[m[2]:m[3]]))
 			}
+		}
+		// A172-L4: only when the source asked for it, and only for a field no
+		// specific rule (or the service account key) already named.
+		if s.GenericHighEntropy && len(creds) == before && !serviceAccountField(f.Name, fields) && genericHighEntropy(f.Value) {
+			add(newCredential(genericHighEntropyRule, "secret", genericHighEntropyRisk, nil, f.Name, bytes.TrimSpace(f.Value)))
 		}
 	}
 	truncated := len(creds) > maxCredentialsPerSecret
@@ -199,6 +206,67 @@ func CredentialsStartingIn(text []byte, from, to int) []LocatedCredential {
 		}
 	}
 	return out
+}
+
+// The opt-in generic rule (A172-L4). A secret store is full of random
+// strings, so the rule is off unless a source asks for it. When on, a field
+// (or a whole value) that is a single token of 20 to 512 characters from a
+// key alphabet, with Shannon entropy of at least 4 bits a character (3 for a
+// hex token of 32 or more), is reported as a secret no specific rule names.
+const (
+	genericHighEntropyRule    = "generic_high_entropy"
+	genericHighEntropyRisk    = 30
+	genericHighEntropyMinLen  = 20
+	genericHighEntropyMaxLen  = 512
+	genericHighEntropyMinBits = 4.0
+	genericHexMinLen          = 32
+	genericHexMinBits         = 3.0
+)
+
+// genericHighEntropy reports whether value is one random-looking token.
+func genericHighEntropy(value []byte) bool {
+	v := bytes.TrimSpace(value)
+	if len(v) < genericHighEntropyMinLen || len(v) > genericHighEntropyMaxLen {
+		return false
+	}
+	hex := true
+	var counts [256]int
+	for _, c := range v {
+		switch {
+		case c >= '0' && c <= '9', c >= 'a' && c <= 'f', c >= 'A' && c <= 'F':
+		case c >= 'g' && c <= 'z', c >= 'G' && c <= 'Z', c == '+', c == '/', c == '=', c == '_', c == '-', c == '.', c == '~':
+			hex = false
+		default:
+			return false
+		}
+		counts[c]++
+	}
+	bits := 0.0
+	for _, n := range counts {
+		if n == 0 {
+			continue
+		}
+		p := float64(n) / float64(len(v))
+		bits -= p * math.Log2(p)
+	}
+	if hex {
+		return len(v) >= genericHexMinLen && bits >= genericHexMinBits
+	}
+	return bits >= genericHighEntropyMinBits
+}
+
+// serviceAccountField is true for a field of a Google service account key
+// value, which the service account rule already reports as one credential.
+func serviceAccountField(name string, fields []SecretField) bool {
+	if name == "" {
+		return false
+	}
+	for _, f := range fields {
+		if f.Name == "type" && bytes.Equal(f.Value, []byte("service_account")) {
+			return true
+		}
+	}
+	return false
 }
 
 // credentialFields returns the fields to search: the provider's, a flat JSON

@@ -897,8 +897,17 @@ certificate for that key has, read whatever the key's encoding (an encrypted key
 none). The credential graph links the stored key to every certificate in the inventory
 with that public key (`KEY_OF`), so the certificate's blast radius starts at the secret
 store that holds its key. The value is wiped after inspection and never stored, logged
-or shown. There is no generic high-entropy rule: a string that matches no rule is not
-reported.
+or shown. By default there is no generic high-entropy rule: a secret store is full of
+random strings, and a string that matches no rule is not reported. A provider may opt in
+with `generic_high_entropy: true` beside `inspect_content: true` (A172-L4; the console's
+**Also report random-looking values no rule names**): a value or field that is one
+random-looking token — 20 to 512 characters from a key alphabet with at least 4 bits of
+Shannon entropy a character, or a hex token of 32 or more with at least 3 — that no
+specific rule names becomes a `generic_high_entropy` finding (kind `secret`, risk 30),
+masked to its length and fingerprinted like the others. A value a specific rule already
+named, the fields of a service account key file, and ordinary text are never reported
+twice or at all. The opt-in without content inspection is refused when the source is
+saved.
 
 A credential leaked in a repository, a CI log, a chat or a wiki page lines up with its
 stored copies (A172-L1). The scanners report where a leaked secret is, never what it is,

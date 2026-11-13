@@ -49,8 +49,12 @@ type Config struct {
 	Token          cloudcert.TokenProvider
 	NamePrefix     string
 	InspectContent bool
-	HTTPClient     *http.Client
-	Retry          cloudcert.RetryPolicy
+	// GenericHighEntropy adds the opt-in generic high-entropy rule to
+	// content inspection (A172-L4); it has no effect without
+	// InspectContent.
+	GenericHighEntropy bool
+	HTTPClient         *http.Client
+	Retry              cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only GitLab CI/CD variable source.
@@ -183,7 +187,8 @@ func (e *Enumerator) enumerateScope(ctx context.Context, kind, id, path, resourc
 			"environment_scope": envScope, "content_inspected": "true",
 		}
 		found, err := cloudsecret.InspectSecret(ProviderName, cloudsecret.Secret{
-			Name: v.Key, ResourceID: resource, Location: location, Provenance: resource,
+			GenericHighEntropy: e.cfg.GenericHighEntropy,
+			Name:               v.Key, ResourceID: resource, Location: location, Provenance: resource,
 			Value: value, Fields: []cloudsecret.SecretField{{Name: v.Key, Value: value}}, Metadata: inspectMeta,
 		})
 		if err != nil {

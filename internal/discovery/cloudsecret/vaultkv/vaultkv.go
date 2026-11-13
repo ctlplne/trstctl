@@ -35,8 +35,12 @@ type Config struct {
 	NamePrefix string
 	// InspectContent is the explicit opt-in to the value-returning data path.
 	InspectContent bool
-	HTTPClient     *http.Client
-	Retry          cloudcert.RetryPolicy
+	// GenericHighEntropy adds the opt-in generic high-entropy rule to
+	// content inspection (A172-L4); it has no effect without
+	// InspectContent.
+	GenericHighEntropy bool
+	HTTPClient         *http.Client
+	Retry              cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only Vault KV v2 certificate-secret source.
@@ -196,12 +200,13 @@ func (e *Enumerator) inspectSecret(ctx context.Context, path string) ([]cloudsec
 	}
 	resource := "vault://" + e.host + "/" + joinVaultPath(e.cfg.Mount, path)
 	found, err := cloudsecret.InspectSecret(e.Name(), cloudsecret.Secret{
-		Name:       path,
-		ResourceID: resource,
-		Location:   e.host,
-		Provenance: resource,
-		Value:      value,
-		Fields:     fields,
+		GenericHighEntropy: e.cfg.GenericHighEntropy,
+		Name:               path,
+		ResourceID:         resource,
+		Location:           e.host,
+		Provenance:         resource,
+		Value:              value,
+		Fields:             fields,
 		Metadata: map[string]string{
 			"secret_name":       path,
 			"resource_id":       resource,

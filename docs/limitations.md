@@ -3694,8 +3694,8 @@ than sending an operator looking for a credential that was never there.
   `secret_store_api_key` finding with its rule, field, masked display and a
   fingerprint shared by every stored copy of the credential, and a private key
   with its public key's SHA-256, which links it to its certificate in the graph
-  (A172-L3); the value is wiped after inspection and never persisted. There is deliberately no generic
-  high-entropy rule. The network, ssh, cloud_certificate, cloud_secret, ct_log, drift,
+  (A172-L3); the value is wiped after inspection and never persisted. A generic
+  high-entropy rule is off by default and opt-in per provider (`generic_high_entropy`, A172-L4). The network, ssh, cloud_certificate, cloud_secret, ct_log, drift,
   k8s_ingress_gateway, and manual source kinds are wired through the served
   discovery worker (see "Discovery control plane" above), alongside the NHI
   kinds (nhi_cross_surface, oauth_grant, service_account, nhi_behavior,

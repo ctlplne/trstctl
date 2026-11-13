@@ -35,8 +35,12 @@ type Config struct {
 	NamePrefix string
 	// InspectContent is the explicit opt-in to versions/latest:access.
 	InspectContent bool
-	HTTPClient     *http.Client
-	Retry          cloudcert.RetryPolicy
+	// GenericHighEntropy adds the opt-in generic high-entropy rule to
+	// content inspection (A172-L4); it has no effect without
+	// InspectContent.
+	GenericHighEntropy bool
+	HTTPClient         *http.Client
+	Retry              cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only GCP Secret Manager certificate-secret source.
@@ -169,11 +173,12 @@ func (e *Enumerator) inspectSecret(ctx context.Context, s secretEntry) ([]clouds
 	defer secret.Wipe(value)
 	name := shortName(s.Name)
 	return cloudsecret.InspectSecret(e.Name(), cloudsecret.Secret{
-		Name:       name,
-		ResourceID: s.Name,
-		Location:   e.cfg.Project,
-		Provenance: "gcp-sm://" + e.cfg.Project + "/" + name,
-		Value:      value,
+		GenericHighEntropy: e.cfg.GenericHighEntropy,
+		Name:               name,
+		ResourceID:         s.Name,
+		Location:           e.cfg.Project,
+		Provenance:         "gcp-sm://" + e.cfg.Project + "/" + name,
+		Value:              value,
 		Metadata: map[string]string{
 			"secret_name":       name,
 			"resource_id":       s.Name,

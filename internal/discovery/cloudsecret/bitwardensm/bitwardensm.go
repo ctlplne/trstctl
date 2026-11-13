@@ -52,8 +52,12 @@ type Config struct {
 	AccessToken    cloudcert.TokenProvider
 	NamePrefix     string
 	InspectContent bool
-	HTTPClient     *http.Client
-	Retry          cloudcert.RetryPolicy
+	// GenericHighEntropy adds the opt-in generic high-entropy rule to
+	// content inspection (A172-L4); it has no effect without
+	// InspectContent.
+	GenericHighEntropy bool
+	HTTPClient         *http.Client
+	Retry              cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only Secrets Manager source.
@@ -191,7 +195,8 @@ func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error)
 				continue
 			}
 			found, err := cloudsecret.InspectSecret(ProviderName, cloudsecret.Secret{
-				Name: b.name, ResourceID: b.resource, Location: b.location, Provenance: b.resource, Value: value,
+				GenericHighEntropy: e.cfg.GenericHighEntropy,
+				Name:               b.name, ResourceID: b.resource, Location: b.location, Provenance: b.resource, Value: value,
 				Fields: []cloudsecret.SecretField{{Name: b.name, Value: value}},
 				Metadata: map[string]string{
 					"secret_name": b.name, "resource_id": b.resource, "secret_id": b.id, "content_inspected": "true",

@@ -84,6 +84,7 @@ const secretFieldPaths = [
   "providers[].label_value",
   "providers[].name_prefix",
   "providers[].inspect_content",
+  "providers[].generic_high_entropy",
   "providers[].owner",
   "providers[].repo",
   "providers[].environments",
@@ -208,6 +209,7 @@ const setupSchema = z
     pathPrefix: z.string().trim(),
     namePrefix: z.string().trim(),
     inspectContent: z.boolean(),
+    genericHighEntropy: z.boolean(),
     owner: z.string().trim(),
     repo: z.string().trim(),
     environments: z.string(),
@@ -403,6 +405,7 @@ const defaults: SetupValues = {
   pathPrefix: "",
   namePrefix: "",
   inspectContent: false,
+  genericHighEntropy: false,
   owner: "",
   repo: "",
   environments: "",
@@ -1049,6 +1052,16 @@ function CloudFields({ form, providers }: { form: ReturnType<typeof useForm<Setu
           </span>
         </label>
       ) : null}
+      {(form.watch("kind") === "cloud_secret" || form.watch("kind") === "secret_store") && form.watch("inspectContent") ? (
+        // A172-L4: the generic rule is a second, separate opt-in.
+        <label htmlFor="source-setup-generic-high-entropy" className="flex items-start gap-3 rounded-panel border border-border p-4 text-sm">
+          <Checkbox {...form.register("genericHighEntropy")} id="source-setup-generic-high-entropy" className="mt-0.5" />
+          <span>
+            <strong>{t("discovery.setup.genericHighEntropy")}</strong>
+            <span className="mt-0.5 block text-muted-foreground">{t("discovery.setup.genericHighEntropyDescription")}</span>
+          </span>
+        </label>
+      ) : null}
       <details className="rounded-panel border border-border p-4">
         <summary className="cursor-pointer font-medium">{t("discovery.setup.privateEndpointBoundary")}</summary>
         <label htmlFor="source-setup-cloud-private" className="mt-3 flex items-start gap-3 text-sm">
@@ -1208,6 +1221,7 @@ function buildConfig(values: SetupValues): Record<string, unknown> {
     endpoint: values.endpoint,
     name_prefix: values.namePrefix,
     inspect_content: values.inspectContent,
+    generic_high_entropy: values.inspectContent && values.genericHighEntropy,
     allow_private_endpoint: values.allowPrivateEndpoint,
     private_egress_cidrs: splitList(values.privateEgressCIDRs),
   });

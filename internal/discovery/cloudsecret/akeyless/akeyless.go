@@ -46,8 +46,12 @@ type Config struct {
 	PathPrefix     string
 	NamePrefix     string
 	InspectContent bool
-	HTTPClient     *http.Client
-	Retry          cloudcert.RetryPolicy
+	// GenericHighEntropy adds the opt-in generic high-entropy rule to
+	// content inspection (A172-L4); it has no effect without
+	// InspectContent.
+	GenericHighEntropy bool
+	HTTPClient         *http.Client
+	Retry              cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only Akeyless secret source.
@@ -188,7 +192,8 @@ func (e *Enumerator) inspect(ctx context.Context, token string, batch []item) ([
 		}
 		resource := "akeyless://" + e.host + it.Name
 		found, err := cloudsecret.InspectSecret(ProviderName, cloudsecret.Secret{
-			Name: it.Name, ResourceID: resource, Location: folder(it.Name), Provenance: resource, Value: value,
+			GenericHighEntropy: e.cfg.GenericHighEntropy,
+			Name:               it.Name, ResourceID: resource, Location: folder(it.Name), Provenance: resource, Value: value,
 			Fields:   []cloudsecret.SecretField{{Name: lastSegment(it.Name), Value: value}},
 			Metadata: map[string]string{"secret_name": it.Name, "resource_id": resource, "content_inspected": "true"},
 		})

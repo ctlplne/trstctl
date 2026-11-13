@@ -57,8 +57,12 @@ type Config struct {
 	SecretPath     string
 	NamePrefix     string
 	InspectContent bool
-	HTTPClient     *http.Client
-	Retry          cloudcert.RetryPolicy
+	// GenericHighEntropy adds the opt-in generic high-entropy rule to
+	// content inspection (A172-L4); it has no effect without
+	// InspectContent.
+	GenericHighEntropy bool
+	HTTPClient         *http.Client
+	Retry              cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only Infisical secret source.
@@ -229,7 +233,8 @@ func (e *Enumerator) enumerateEnvironment(ctx context.Context, token string, p p
 			continue
 		}
 		found, err := cloudsecret.InspectSecret(ProviderName, cloudsecret.Secret{
-			Name: item.SecretKey, ResourceID: resource, Location: location, Provenance: resource,
+			GenericHighEntropy: e.cfg.GenericHighEntropy,
+			Name:               item.SecretKey, ResourceID: resource, Location: location, Provenance: resource,
 			Value: item.SecretValue, Fields: []cloudsecret.SecretField{{Name: item.SecretKey, Value: item.SecretValue}},
 			Metadata: map[string]string{
 				"secret_name": item.SecretKey, "resource_id": resource, "project": p.ID,

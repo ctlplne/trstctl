@@ -48,8 +48,12 @@ type Config struct {
 	PathPrefix     string
 	NamePrefix     string
 	InspectContent bool
-	HTTPClient     *http.Client
-	Retry          cloudcert.RetryPolicy
+	// GenericHighEntropy adds the opt-in generic high-entropy rule to
+	// content inspection (A172-L4); it has no effect without
+	// InspectContent.
+	GenericHighEntropy bool
+	HTTPClient         *http.Client
+	Retry              cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only Conjur variable source.
@@ -182,7 +186,8 @@ func (e *Enumerator) inspect(ctx context.Context, token []byte, path, resourceID
 	}
 	defer secret.Wipe(value)
 	return cloudsecret.InspectSecret(ProviderName, cloudsecret.Secret{
-		Name: path, ResourceID: resourceID, Location: e.cfg.Account, Provenance: resourceID, Value: value,
+		GenericHighEntropy: e.cfg.GenericHighEntropy,
+		Name:               path, ResourceID: resourceID, Location: e.cfg.Account, Provenance: resourceID, Value: value,
 		Fields: []cloudsecret.SecretField{{Name: lastSegment(path), Value: value}},
 		Metadata: map[string]string{
 			"secret_name": path, "resource_id": resourceID, "account": e.cfg.Account, "content_inspected": "true",

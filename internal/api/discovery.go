@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/apikey"
+	"trstctl.com/trstctl/internal/discovery/cloudsecret"
 	"trstctl.com/trstctl/internal/discovery/compromise"
 	"trstctl.com/trstctl/internal/discovery/driftplan"
 	"trstctl.com/trstctl/internal/discovery/k8stls"
@@ -1547,6 +1548,11 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	}
 	if err := sourcecatalog.ValidateConfig(req.Kind, cfg); err != nil {
 		return nil, errStatusFrom(http.StatusBadRequest, err)
+	}
+	if req.Kind == cloudsecret.SourceKind || req.Kind == "secret_store" {
+		if err := cloudsecret.ValidateProviderOptions(cfg); err != nil {
+			return nil, errStatusFrom(http.StatusBadRequest, err)
+		}
 	}
 	if req.Kind == "network" || req.Kind == "ssh" {
 		if _, err := segmentscan.Resolve(req.Kind, cfg); err != nil {

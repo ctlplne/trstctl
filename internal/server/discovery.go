@@ -118,6 +118,9 @@ type cloudSecretProviderConfig struct {
 	LabelValue           string   `json:"label_value"`
 	NamePrefix           string   `json:"name_prefix"`
 	InspectContent       bool     `json:"inspect_content"`
+	// GenericHighEntropy adds the opt-in generic high-entropy rule to
+	// content inspection (A172-L4).
+	GenericHighEntropy bool `json:"generic_high_entropy"`
 	// Code-host secret stores (A173).
 	Owner        string   `json:"owner"`
 	Repo         string   `json:"repo"`
@@ -1087,6 +1090,9 @@ func cloudProviderLabel(provider string, index int) string {
 }
 
 func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (cloudsecret.Provider, error) {
+	if p.GenericHighEntropy && !p.InspectContent {
+		return nil, cloudsecret.ErrGenericHighEntropyNeedsInspection
+	}
 	switch strings.TrimSpace(p.Provider) {
 	case "aws-secrets-manager":
 		region := strings.TrimSpace(p.Region)
@@ -1119,7 +1125,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 			Region: region, Endpoint: endpoint, AccessKeyID: accessKeyID,
 			SecretAccessKey: secretAccessKey, SessionToken: sessionToken,
 			TagKey: p.TagKey, TagValue: p.TagValue, NamePrefix: p.NamePrefix,
-			InspectContent: p.InspectContent, HTTPClient: client,
+			InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	case "gcp-secret-manager":
 		project := strings.TrimSpace(p.Project)
@@ -1142,7 +1148,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		return gcpsmdisc.New(gcpsmdisc.Config{
 			Project: project, Endpoint: endpoint, Token: cloudcert.StaticToken(token),
 			LabelKey: p.LabelKey, LabelValue: p.LabelValue, NamePrefix: p.NamePrefix,
-			InspectContent: p.InspectContent, HTTPClient: client,
+			InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	case "azure-key-vault":
 		vaultURL := strings.TrimSpace(p.VaultURL)
@@ -1160,7 +1166,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		return azurekvsecretdisc.New(azurekvsecretdisc.Config{
 			VaultURL: vaultURL, APIVersion: p.APIVersion, Token: cloudcert.StaticToken(token),
 			TagKey: p.TagKey, TagValue: p.TagValue, NamePrefix: p.NamePrefix,
-			InspectContent: p.InspectContent, HTTPClient: client,
+			InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	case "hashicorp-vault", "vault":
 		vaultURL := strings.TrimSpace(p.VaultURL)
@@ -1178,7 +1184,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		return vaultkvdisc.New(vaultkvdisc.Config{
 			VaultURL: vaultURL, Mount: p.Mount, PathPrefix: p.PathPrefix, Token: cloudcert.StaticToken(token),
 			TagKey: p.TagKey, TagValue: p.TagValue, NamePrefix: p.NamePrefix,
-			InspectContent: p.InspectContent, HTTPClient: client,
+			InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	default:
 		if provider, ok, err := secretStoreProvider(ctx, p); ok {

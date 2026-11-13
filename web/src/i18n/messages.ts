@@ -15199,6 +15199,15 @@ export const messages = {
     defaultMessage: "Inspect secret content for certificates and credentials.",
     description: "Optional cloud-secret content inspection choice.",
   },
+  "discovery.setup.genericHighEntropy": {
+    defaultMessage: "Also report random-looking values no rule names",
+    description: "A172-L4: opt-in to the generic high-entropy rule during content inspection.",
+  },
+  "discovery.setup.genericHighEntropyDescription": {
+    defaultMessage:
+      "Off by default, because a secret store is full of random strings. When on, a value or field that is one random-looking token of 20 to 512 characters, which no specific rule recognizes, becomes a masked, fingerprinted finding.",
+    description: "A172-L4: what the generic high-entropy rule reports and why it is off by default.",
+  },
   "discovery.setup.inspectContentDescription": {
     defaultMessage:
       "Optional and off by default. The provider value is held only in wipeable memory; trstctl emits certificate metadata and masked, fingerprinted API-key, token, and private-key findings, and never stores, logs, or renders the value.",

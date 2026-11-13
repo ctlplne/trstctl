@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3222 annotated sites across 34 rules. Each row is
+3226 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (788 sites)
+### G101 — CWE-798 Use of hardcoded credentials (789 sites)
 
 | Location | Reason |
 |---|---|
@@ -348,7 +348,7 @@ not this file.
 | `internal/discovery/apikey/apikey_test.go:20` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:25` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/cloudkeys/awsiamkeys/awsiamkeys_test.go:80` | fabricated fixture credential; no value is real (CWE-798) |
-| `internal/discovery/cloudsecret/apikeys.go:27` | a hash domain-separation tag, not a credential (CWE-798) |
+| `internal/discovery/cloudsecret/apikeys.go:28` | a hash domain-separation tag, not a credential (CWE-798) |
 | `internal/discovery/cloudsecret/outcomes_test.go:35` | fabricated fixture secret name; the test needs the shape, no value is real (CWE-798) |
 | `internal/discovery/cloudsecret/secretstoretest/conjur.go:33` | a stand-in's fixed fake access token, not a credential (CWE-798) |
 | `internal/discovery/lbtls/awselb/awselb_test.go:41` | fabricated fixture credential; no value is real (CWE-798) |
@@ -722,6 +722,7 @@ not this file.
 | `internal/server/secret_store_api_key_served_test.go:106` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_api_key_served_test.go:107` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_api_key_served_test.go:108` | credential references to fabricated fixture values (CWE-798) |
+| `internal/server/secret_store_generic_entropy_served_test.go:45` | a credential reference to a fabricated fixture (CWE-798) |
 | `internal/server/secret_store_more_scopes_served_test.go:90` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_more_scopes_served_test.go:92` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_more_scopes_served_test.go:159` | credential references to fabricated fixture values (CWE-798) |
@@ -2229,7 +2230,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (767 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (768 sites)
 
 | Location | Reason |
 |---|---|
@@ -2642,6 +2643,7 @@ not this file.
 | `internal/crypto/windependents/services_native_windows_test.go:288` | fixed filename in the exclusively created native protected test directory, O_EXCL refuses substitution (CWE-22) |
 | `internal/crypto/windependents/tasks_native_windows_test.go:55` | fixed public nonce under the exact native ProgramData fixture path with validated random suffix; no credential file (CWE-22) |
 | `internal/crypto/windependents/tasks_native_windows_test.go:127` | fixed bounded public receipt inside the exclusively created native protected fixture directory, exact path revalidated (CWE-22) |
+| `internal/discovery/cloudsecret/generic_entropy_test.go:133` | repository source files under test (CWE-22) |
 | `internal/discovery/ctmonitor/ctmonitor_posture_test.go:20` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/discovery/netscan/chain_observation_test.go:24` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/discovery/netscan/chain_observation_test.go:53` | a fixed test fixture, named by the test itself (CWE-22) |
@@ -3191,7 +3193,7 @@ not this file.
 | `internal/crypto/possession_test.go:283` | a throwaway test root key |
 | `internal/crypto/weakkey/weakkey_test.go:413` | a deliberately weak RSA-1024 key, to prove it is rated weak (CWE-326) |
 
-### G404 — CWE-338 Cryptographically weak PRNG (34 sites)
+### G404 — CWE-338 Cryptographically weak PRNG (36 sites)
 
 | Location | Reason |
 |---|---|
@@ -3223,12 +3225,14 @@ not this file.
 | `internal/crypto/x509_property_test.go:175` | deterministic property-test name, not security randomness (CWE-338) |
 | `internal/crypto/x509_property_test.go:196` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/discovery/adcs/membership_paths_test.go:48` | deterministic property-test permutations, never a cryptographic choice (CWE-330). |
+| `internal/discovery/cloudsecret/generic_entropy_test.go:18` | a seeded fixture generator: reproducible test data, not a secret (CWE-338) |
 | `internal/orchestrator/outbox.go:490` | retry backoff jitter, not a security decision (CWE-338) |
 | `internal/protocols/acme/property_test.go:90` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/protocols/acme/property_test.go:144` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |
 | `internal/query/adversarial_test.go:223` | test jitter/shuffle, not a security decision (CWE-338) |
 | `internal/query/filter_test.go:150` | test shuffle, not a security decision (CWE-338) |
+| `internal/server/secret_store_generic_entropy_served_test.go:26` | a seeded fixture generator: reproducible test data, not a secret (CWE-338) |
 
 ### G405 — CWE-? (unmapped rule) (1 sites)
 

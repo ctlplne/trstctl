@@ -9,6 +9,7 @@ package cloudsecret
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -42,6 +43,34 @@ type Secret struct {
 	Value      []byte
 	Fields     []SecretField
 	Metadata   map[string]string
+	// GenericHighEntropy adds the opt-in generic high-entropy rule to the
+	// credential rules (A172-L4): a value no specific rule names is reported
+	// when it is one random-looking token.
+	GenericHighEntropy bool
+}
+
+// ErrGenericHighEntropyNeedsInspection refuses the generic rule on a
+// provider that does not inspect content: the rule reads values (A172-L4).
+var ErrGenericHighEntropyNeedsInspection = errors.New("generic_high_entropy needs inspect_content: the generic rule reads values")
+
+// ValidateProviderOptions refuses a source configuration whose provider asks
+// for the generic high-entropy rule without content inspection (A172-L4).
+func ValidateProviderOptions(raw []byte) error {
+	var cfg struct {
+		Providers []struct {
+			InspectContent     bool `json:"inspect_content"`
+			GenericHighEntropy bool `json:"generic_high_entropy"`
+		} `json:"providers"`
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return fmt.Errorf("decode secret store providers: %w", err)
+	}
+	for i, p := range cfg.Providers {
+		if p.GenericHighEntropy && !p.InspectContent {
+			return fmt.Errorf("provider %d: %w", i+1, ErrGenericHighEntropyNeedsInspection)
+		}
+	}
+	return nil
 }
 
 // Found is one certificate discovered inside a managed cloud secret.
