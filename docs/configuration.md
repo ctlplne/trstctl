@@ -2244,8 +2244,10 @@ endpoint with `writeback_endpoint` and `writeback_token_file` (both or neither;
 https, or http only to a loopback host). A role change or offboard an operator
 makes in trstctl to a member that token provisioned is then written to the
 directory's User (`active` and `roles`), read back, and recorded as
-`scim.writeback.recorded`. The outbound bearer is loaded at startup into locked
-memory and read only at startup: rotate it by writing the file and restarting.
+`scim.writeback.recorded`. The outbound bearer is held in locked memory and,
+like the inbound tokens, reloaded when its file changes (A207-L1): rotate it by
+writing the file, and the next write-back carries the new bearer without a
+restart; an unreadable or empty rewrite keeps the last good one.
 
 A directory on a private network is reached only through the networks the
 operator lists for that token in `writeback_private_egress_cidrs` (exact private

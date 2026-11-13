@@ -32,15 +32,24 @@ type scimDirectoryDouble struct {
 	byName  map[string]string
 	patches []map[string]any
 	bearer  string
+	refused int
+}
+
+// accept makes the directory accept only bearer from now on (A207-L1).
+func (d *scimDirectoryDouble) accept(bearer string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.bearer = bearer
 }
 
 func (d *scimDirectoryDouble) handle(w http.ResponseWriter, r *http.Request) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if r.Header.Get("Authorization") != "Bearer "+d.bearer {
+		d.refused++
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
 	w.Header().Set("Content-Type", "application/scim+json")
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/scim/v2/Users":

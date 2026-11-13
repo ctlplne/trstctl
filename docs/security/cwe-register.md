@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3241 annotated sites across 35 rules. Each row is
+3243 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (796 sites)
+### G101 — CWE-798 Use of hardcoded credentials (798 sites)
 
 | Location | Reason |
 |---|---|
@@ -95,8 +95,10 @@ not this file.
 | `ee/enterpriseauth/scim_served_test.go:34` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `ee/enterpriseauth/scim_subject_binding_served_test.go:38` | fabricated local fixture, not a credential (CWE-798) |
 | `ee/enterpriseauth/scim_writeback_private_test.go:50` | fabricated fixture credential (CWE-798) |
-| `ee/enterpriseauth/scim_writeback_served_test.go:101` | fabricated fixture credential (CWE-798) |
-| `ee/enterpriseauth/scim_writeback_served_test.go:102` | fabricated fixture credential (CWE-798) |
+| `ee/enterpriseauth/scim_writeback_rotation_served_test.go:36` | fabricated fixture credential (CWE-798) |
+| `ee/enterpriseauth/scim_writeback_rotation_served_test.go:37` | fabricated fixture credentials (CWE-798) |
+| `ee/enterpriseauth/scim_writeback_served_test.go:110` | fabricated fixture credential (CWE-798) |
+| `ee/enterpriseauth/scim_writeback_served_test.go:111` | fabricated fixture credential (CWE-798) |
 | `ee/governance/misuse/misuse.go:40` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `ee/managedkeys/signerwiring/gcp_workload_test.go:46` | a stand-in fixture value, not a credential (CWE-798) |
 | `ee/provider/aud58_test.go:173` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
@@ -2409,7 +2411,7 @@ not this file.
 | `ee/auditcompliance/retention_download_test.go:82` | the test's own archive (CWE-22) |
 | `ee/auditcompliance/retention_test.go:357` | glob is restricted to this test's private temporary archive directory. |
 | `ee/billing/evidence_test.go:150` | test reads repo source files it names itself (CWE-22) |
-| `ee/enterpriseauth/scim_config.go:70` | the operator's own configured CA file (CWE-22) |
+| `ee/enterpriseauth/scim_config.go:63` | the operator's own configured CA file (CWE-22) |
 | `ee/managedkeys/signerwiring/tenantkek.go:80` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
 | `ee/managedkeys/signerwiring/tenantkek.go:222` | the signer operator's configured wrapped-key file, never remote input (CWE-22). |
 | `ee/managedkeys/signerwiring/tenantkek_kms_test.go:69` | the fixture adapter's log in the test tempdir (CWE-22) |

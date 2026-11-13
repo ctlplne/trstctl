@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The SCIM writeback bearer rotates without a restart (A207-L1): `auth.scim.tokens[].writeback_token_file` is checked
+  as the inbound token files are, and a rewritten file's bearer replaces the one in locked memory for the next
+  write-back; an unreadable or empty rewrite keeps the last good bearer, and a reload never wipes a bearer a request
+  is using.
 - Provider tenant templates define tenant custom roles (A186-L2): a baseline's `custom_roles` (name, description,
   permissions from the custom role vocabulary) are defined in the customer tenant before the members that hold them,
   drift reads each role from the tenant's record (a customer's change shows drifted; applying again redefines it), and

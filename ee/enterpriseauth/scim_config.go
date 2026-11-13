@@ -45,31 +45,24 @@ func buildSCIMConfig(cfg config.SCIM) (*api.SCIMConfig, error) {
 		seen[hash] = true
 		token := api.SCIMToken{Name: tok.Name, TenantID: tok.TenantID, TokenHash: hash, SubjectAttribute: tok.SubjectAttribute, GroupRoles: tok.GroupRoles}
 		if tok.WritebackConfigured() {
-			// A73: the outbound bearer stays in locked memory for the life of
-			// the process; the core seam sees only the endpoint.
-			bearer, err := secretfile.Load(tok.WritebackTokenFile)
+			// A73: the outbound bearer stays in locked memory; the core seam
+			// sees only the endpoint. A207-L1: it reloads when the operator
+			// rotates the file, as the inbound tokens do.
+			buffer, err := newSCIMWritebackBearer(tok.WritebackTokenFile)
 			if err != nil {
 				return nil, fmt.Errorf("auth.scim.tokens[%d].writeback_token_file: %w", i, err)
-			}
-			buffer, err := secret.NewFrom(bytes.TrimSpace(bearer))
-			secret.Wipe(bearer)
-			if err != nil {
-				return nil, err
-			}
-			if buffer.Len() == 0 {
-				return nil, fmt.Errorf("auth.scim.tokens[%d].writeback_token_file is empty", i)
 			}
 			token.WritebackEndpoint = strings.TrimRight(strings.TrimSpace(tok.WritebackEndpoint), "/")
 			prefixes, prefixErrs := tok.WritebackPrivatePrefixes()
 			if len(prefixErrs) > 0 {
-				buffer.Destroy()
+				buffer.destroy()
 				return nil, fmt.Errorf("auth.scim.tokens[%d].writeback_private_egress_cidrs %w", i, errors.Join(prefixErrs...))
 			}
 			var rootPEM []byte
 			if caFile := strings.TrimSpace(tok.WritebackCAFile); caFile != "" {
 				rootPEM, err = os.ReadFile(caFile) // #nosec G304 -- the operator's own configured CA file (CWE-22)
 				if err != nil {
-					buffer.Destroy()
+					buffer.destroy()
 					return nil, fmt.Errorf("auth.scim.tokens[%d].writeback_ca_file: %w", i, err)
 				}
 			}
@@ -78,7 +71,7 @@ func buildSCIMConfig(cfg config.SCIM) (*api.SCIMConfig, error) {
 				privateCIDRs: prefixes, rootPEM: rootPEM,
 			})
 			if err != nil {
-				buffer.Destroy()
+				buffer.destroy()
 				return nil, fmt.Errorf("auth.scim.tokens[%d] writeback client: %w", i, err)
 			}
 			writebacks[tok.TenantID] = target

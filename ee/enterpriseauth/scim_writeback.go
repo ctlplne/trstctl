@@ -20,7 +20,6 @@ import (
 	"trstctl.com/trstctl/ee/enterpriseauth/scim"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto/mtls"
-	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/trust"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -35,7 +34,7 @@ type scimWritebackTarget struct {
 	TokenName        string
 	Endpoint         string
 	SubjectAttribute string
-	bearer           *secret.Buffer
+	bearer           *scimWritebackBearer
 	// privateCIDRs are the private networks the operator lets this
 	// directory's writeback reach; rootPEM is the internal CA its
 	// certificate chains to, when it names one.
@@ -272,8 +271,12 @@ func (w *scimWriteback) call(ctx context.Context, target scimWritebackTarget, me
 	if err != nil {
 		return err
 	}
-	bearer := target.bearer.Bytes()
-	req.Header.Set("Authorization", "Bearer "+string(bearer))
+	if err := target.bearer.use(func(bearer []byte) error {
+		req.Header.Set("Authorization", "Bearer "+string(bearer))
+		return nil
+	}); err != nil {
+		return err
+	}
 	req.Header.Set("Accept", scim.ContentType)
 	if body != nil {
 		req.Header.Set("Content-Type", scim.ContentType)

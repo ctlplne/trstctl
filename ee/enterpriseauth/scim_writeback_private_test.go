@@ -66,7 +66,7 @@ func TestSCIMWritebackReachesAPrivateDirectoryOnlyWhenItsNetworkIsListed(t *test
 	member := &store.SCIMIdentity{UserName: "alice@example.com"}
 	const tenantID = "11111111-1111-1111-1111-111111111111"
 
-	unlisted, err := withSCIMWritebackClient(scimWritebackTarget{Endpoint: endpoint, bearer: bearer, rootPEM: rootPEM})
+	unlisted, err := withSCIMWritebackClient(scimWritebackTarget{Endpoint: endpoint, bearer: fixedSCIMWritebackBearer(bearer), rootPEM: rootPEM})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestSCIMWritebackReachesAPrivateDirectoryOnlyWhenItsNetworkIsListed(t *test
 		t.Fatalf("an unlisted private directory was reached: %d patches", n)
 	}
 
-	listed, err := withSCIMWritebackClient(scimWritebackTarget{Endpoint: endpoint, bearer: bearer, rootPEM: rootPEM,
+	listed, err := withSCIMWritebackClient(scimWritebackTarget{Endpoint: endpoint, bearer: fixedSCIMWritebackBearer(bearer), rootPEM: rootPEM,
 		privateCIDRs: []netip.Prefix{netip.PrefixFrom(address, 32)}})
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func TestSCIMWritebackReachesAPrivateDirectoryOnlyWhenItsNetworkIsListed(t *test
 	}
 
 	// Configuration carries both settings into the delivery target.
-	if _, err := withSCIMWritebackClient(scimWritebackTarget{Endpoint: endpoint, bearer: bearer, rootPEM: []byte("not a certificate")}); err == nil {
+	if _, err := withSCIMWritebackClient(scimWritebackTarget{Endpoint: endpoint, bearer: fixedSCIMWritebackBearer(bearer), rootPEM: []byte("not a certificate")}); err == nil {
 		t.Fatal("a CA file with no certificate was accepted")
 	}
 	tok := config.SCIMToken{WritebackEndpoint: endpoint, WritebackPrivateEgressCIDRs: []string{netip.PrefixFrom(address, 32).String()}}
