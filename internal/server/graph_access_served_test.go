@@ -73,7 +73,10 @@ func TestServedWhoCanReachADatabaseNamesHolderCredentialAndApproversAcrossColdRe
 	defer stopPG()
 	seedPAMPostgresTable(t, pgDSN)
 	adminDSNRef := pamPostgresAdminFileRef(t, pgDSN)
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+	// The deployment's configuration, kept for the cold restart below: a
+	// restarted server reads the same PAM targets (G1-L5 puts the statically
+	// configured ones in the graph).
+	configure := func(d *Deps) {
 		wirePAMPostgresProvider(d, adminDSNRef, 10*time.Minute)
 		d.PAM = PAMConfig{
 			Enabled: true, DefaultTTL: 5 * time.Minute, MaxTTL: 10 * time.Minute,
@@ -86,7 +89,8 @@ func TestServedWhoCanReachADatabaseNamesHolderCredentialAndApproversAcrossColdRe
 		}
 		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy,
 			Attestors: []attest.Attestor{servedBrokerAttestor{}}}
-	})
+	}
+	h := newOperatingServedHarness(t, config.Protocols{}, configure)
 	startServedExternalCADispatcher(t, h)
 	for _, m := range []store.TenantMember{
 		{Subject: "pam-requester", DisplayName: "Rita Requester", Email: "rita@example.test", Roles: []string{"operator"}, Source: "test"},
@@ -245,10 +249,12 @@ func TestServedWhoCanReachADatabaseNamesHolderCredentialAndApproversAcrossColdRe
 
 	// A fresh assembly over the same PostgreSQL/event/signer spine answers the
 	// same bytes, and so does a full rebuild of the read models from events.
-	restarted, err := Build(t.Context(), Deps{
+	restartDeps := Deps{
 		Store: h.store, Log: h.log, Signer: h.signer, SignAuthorizer: h.authz,
 		CACertFile: h.caFile, KEK: h.kek,
-	})
+	}
+	configure(&restartDeps)
+	restarted, err := Build(t.Context(), restartDeps)
 	if err != nil {
 		t.Fatalf("restart assembly: %v", err)
 	}

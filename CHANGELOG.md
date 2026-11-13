@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- The access graph holds the PAM targets from static configuration (G1-L5): each is a `res:pam:<type>:<id>` node
+  marked `configured: static` that `CONNECTS_TO` the dynamic-secret backend it signs in through, as a registered
+  target does, for every graph the API builds.
 - `trstctl-cli access agent --confine-network` runs the launched command in a network of its own that reaches only
   its tunnels (A257-L2, Linux): an unprivileged user and network namespace with loopback alone, each account's
   loopback address carried to the launcher's tunnel over a private Unix socket, no capability for the command, and a

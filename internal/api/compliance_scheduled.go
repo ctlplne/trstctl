@@ -183,7 +183,7 @@ func (a *API) scheduledCompliancePayload(ctx context.Context, tenantID string, s
 			NHIViewMayBeIncomplete: inventorySourceMayBeTruncated(inventory),
 		})
 	case "cbom_posture":
-		g, err := graph.Build(ctx, a.store, tenantID)
+		g, err := graph.BuildWith(ctx, a.store, tenantID, a.graphOptions(tenantID, graph.BuildOptions{}))
 		if err != nil {
 			return nil, err
 		}

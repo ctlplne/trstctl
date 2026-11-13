@@ -121,7 +121,7 @@ func (a *API) buildGraph(w http.ResponseWriter, r *http.Request) (*graph.Graph, 
 		a.writeProblem(w, problemUnauthorized())
 		return nil, false
 	}
-	g, err := graph.BuildWith(r.Context(), a.store, tenantID, graph.BuildOptions{OmitAccess: graphOmitsAccess(r, tenantID)})
+	g, err := graph.BuildWith(r.Context(), a.store, tenantID, a.graphOptions(tenantID, graph.BuildOptions{OmitAccess: graphOmitsAccess(r, tenantID)}))
 	if err != nil {
 		a.writeError(w, err)
 		return nil, false

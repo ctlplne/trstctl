@@ -54,6 +54,17 @@ type BuildOptions struct {
 	// Who holds what is access:read data, so a reader holding graph:read
 	// without access:read gets the graph without it (G1-L2).
 	OmitAccess bool
+	// PAMTargets are the PAM targets the deployment configures statically
+	// (G1-L5): they are not in the store, so the caller names them, each
+	// with the dynamic-secret provider it signs in through.
+	PAMTargets []PAMTargetRef
+}
+
+// PAMTargetRef is a PAM target from static configuration.
+type PAMTargetRef struct {
+	TargetType string
+	ID         string
+	ProviderID string
 }
 
 // BuildWith is Build with options.
@@ -326,7 +337,7 @@ func BuildWith(ctx context.Context, st *store.Store, tenantID string, opts Build
 	}
 
 	if !opts.OmitAccess {
-		if err := addAccessSources(ctx, st, tenantID, g, certs, time.Now().UTC()); err != nil {
+		if err := addAccessSources(ctx, st, tenantID, g, certs, time.Now().UTC(), opts.PAMTargets); err != nil {
 			return nil, err
 		}
 	}

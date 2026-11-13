@@ -31,6 +31,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -1953,4 +1954,26 @@ var pamNetDeviceProviderTypes = map[string]bool{"iosxe": true, "junos": true, "e
 // principal) and the pinned host key.
 type pamNetDeviceRoute interface {
 	DynamicSecretGatewaySSH(role string) (address, principal string, pins []string, err error)
+}
+
+// StaticPAMTargets names the tenant's PAM database targets from static
+// configuration and the dynamic-secret provider each signs in through, for
+// the access graph (G1-L5).
+func (s *Server) StaticPAMTargets(tenantID string) []graph.PAMTargetRef {
+	if s.pam == nil {
+		return nil
+	}
+	var out []graph.PAMTargetRef
+	for id, target := range s.pam.databases {
+		if id.tenantID == tenantID {
+			out = append(out, graph.PAMTargetRef{TargetType: id.targetType, ID: id.id, ProviderID: target.cfg.ProviderID})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].TargetType != out[j].TargetType {
+			return out[i].TargetType < out[j].TargetType
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
 }

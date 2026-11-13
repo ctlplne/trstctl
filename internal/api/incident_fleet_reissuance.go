@@ -291,7 +291,7 @@ func (a *API) prepareFleetReissuance(ctx context.Context, tenantID, idempotencyK
 	if err != nil {
 		return plan, errStatus(http.StatusConflict, "compromised issuer has an invalid public CA certificate")
 	}
-	g, err := graph.Build(ctx, a.store, tenantID)
+	g, err := graph.BuildWith(ctx, a.store, tenantID, a.graphOptions(tenantID, graph.BuildOptions{}))
 	if err != nil {
 		return plan, err
 	}

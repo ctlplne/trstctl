@@ -58,7 +58,7 @@ func (a *API) generateNHIReviewCampaign(w http.ResponseWriter, r *http.Request) 
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		g, err := graph.Build(ctx, a.store, tenantID)
+		g, err := graph.BuildWith(ctx, a.store, tenantID, a.graphOptions(tenantID, graph.BuildOptions{}))
 		if err != nil {
 			return 0, nil, err
 		}

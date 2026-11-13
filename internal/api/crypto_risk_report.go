@@ -111,7 +111,7 @@ func (a *API) onDemandCryptoRiskReport(r *http.Request, limit int) (cryptorisk.R
 
 // cryptoRiskInputs reads the report's inputs under the tenant.
 func (a *API) cryptoRiskInputs(ctx context.Context, tenantID string, now time.Time, withCertificates bool) (cryptorisk.Inputs, error) {
-	g, err := graph.Build(ctx, a.store, tenantID)
+	g, err := graph.BuildWith(ctx, a.store, tenantID, a.graphOptions(tenantID, graph.BuildOptions{}))
 	if err != nil {
 		return cryptorisk.Inputs{}, err
 	}

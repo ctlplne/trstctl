@@ -57,7 +57,7 @@ func (p principalIndex) node(g *Graph, subject string) string {
 	return id
 }
 
-func addAccessSources(ctx context.Context, st *store.Store, tenantID string, g *Graph, certs []store.Certificate, now time.Time) error {
+func addAccessSources(ctx context.Context, st *store.Store, tenantID string, g *Graph, certs []store.Certificate, now time.Time, staticPAMTargets []PAMTargetRef) error {
 	principals := principalIndex{}
 	if err := addPeopleAndRoles(ctx, st, tenantID, g, principals); err != nil {
 		return err
@@ -70,7 +70,29 @@ func addAccessSources(ctx context.Context, st *store.Store, tenantID string, g *
 			return err
 		}
 	}
+	addStaticPAMTargets(g, staticPAMTargets)
 	return nil
+}
+
+// addStaticPAMTargets adds the PAM targets the deployment configures
+// statically (G1-L5) and links each that signs in through a dynamic-secret
+// provider to that provider's backend, as a registered target is linked.
+func addStaticPAMTargets(g *Graph, targets []PAMTargetRef) {
+	for _, t := range targets {
+		id := pamTargetResourceID(t.TargetType, t.ID)
+		if _, ok := g.nodes[id]; !ok {
+			g.AddNode(Node{ID: id, Kind: KindResource, Name: t.ID, Attrs: map[string]string{
+				"resource_kind": "pam_target", "target_type": t.TargetType, "provider_id": t.ProviderID, "configured": "static",
+			}})
+		} else if attrs := g.nodes[id].Attrs; attrs != nil {
+			attrs["provider_id"], attrs["configured"] = t.ProviderID, "static"
+		}
+		if t.ProviderID != "" {
+			ensureDynamicSecretBackend(g, t.ProviderID)
+			g.AddEdge(Edge{From: id, To: resourceID("dynamic-secret:" + t.ProviderID), Type: EdgeConnectsTo,
+				Source: "PAM target provider reference (static configuration)", Confidence: confidenceAuthority})
+		}
+	}
 }
 
 func addPeopleAndRoles(ctx context.Context, st *store.Store, tenantID string, g *Graph, principals principalIndex) error {
