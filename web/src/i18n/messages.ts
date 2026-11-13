@@ -1802,6 +1802,31 @@ export const messages = {
   "provider.rmmDevices.match.hostname": { defaultMessage: "Matched by host name", description: "MSP-9: agent matched by host name." },
   "provider.rmmDevices.match.none": { defaultMessage: "No agent", description: "MSP-9: no agent on the device." },
   "provider.rmmDevices.action": { defaultMessage: "{action}: {status}", description: "MSP-9: the last agent action and its status." },
+  "provider.rmmDevices.actions": { defaultMessage: "Agent actions", description: "MSP-9: RMM device table column with the agent action buttons." },
+  "provider.rmmDevices.install": { defaultMessage: "Install agent", description: "MSP-9: run the agent install through the RMM." },
+  "provider.rmmDevices.upgrade": { defaultMessage: "Upgrade agent", description: "MSP-9: run the agent upgrade through the RMM." },
+  "provider.rmmDevices.remove": { defaultMessage: "Remove agent", description: "MSP-9: run the agent removal through the RMM." },
+  "provider.rmmDevices.cancel": { defaultMessage: "Cancel", description: "MSP-9: keep the agent on the device." },
+  "provider.rmmDevices.confirmRemove": {
+    defaultMessage: "Remove the trstctl agent from {device}?",
+    description: "MSP-9: confirm removing the agent from a device through the RMM.",
+  },
+  "provider.rmmDevices.requested.install": {
+    defaultMessage: "Install requested on {device}. The RMM runs it with a one-time enrollment token for this customer; the device shows the outcome.",
+    description: "MSP-9: an install was queued.",
+  },
+  "provider.rmmDevices.requested.upgrade": {
+    defaultMessage: "Upgrade requested on {device}; the device shows the outcome.",
+    description: "MSP-9: an upgrade was queued.",
+  },
+  "provider.rmmDevices.requested.remove": {
+    defaultMessage: "Removal requested on {device}; the device shows the outcome.",
+    description: "MSP-9: a removal was queued.",
+  },
+  "provider.rmmDevices.inFlight": {
+    defaultMessage: "An agent action is still running on {device}; wait for its outcome before asking again.",
+    description: "MSP-9: another action is in flight on the device.",
+  },
   "provider.billingSync.connectwiseCompanyHint": {
     defaultMessage: "The ConnectWise company record ID or its identifier. Usage lands on that company's one active agreement of the configured type.",
     description: "MSP-3: what to enter as the company in a ConnectWise target.",

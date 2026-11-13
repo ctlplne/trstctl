@@ -10,11 +10,11 @@ import { ProviderBillingCompanies } from "@/pages/provider/ProviderBillingCompan
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const targets = [{ id: "psa", name: "Main PSA", type: "json", cadence: "monthly" }];
 
-function renderPanel(canWrite: boolean) {
+function renderPanel(canWrite: boolean, canWriteRMM = false) {
   return render(
     <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
       <AppQueryProvider>
-        <ProviderBillingCompanies customerId="alpha" canWrite={canWrite} onAuthError={vi.fn()} />
+        <ProviderBillingCompanies customerId="alpha" canWrite={canWrite} canWriteRMM={canWriteRMM} onAuthError={vi.fn()} />
       </AppQueryProvider>
     </IntlProvider>,
   );
@@ -249,5 +249,77 @@ describe("Provider billing systems (MSP-2)", () => {
     expect(within(rows[1]).getByText("trstctl agent healthy (version 1.4.2)")).toBeInTheDocument();
     expect(within(rows[2]).getByText("no longer in the RMM")).toBeInTheDocument();
     expect(within(rows[2]).getByText("No agent")).toBeInTheDocument();
+    expect(within(table).queryByRole("button")).toBeNull();
+  });
+
+  it("installs, upgrades and removes the agent through the RMM with rmm:write (MSP-9)", async () => {
+    const actions: { url: string; body: unknown; key: string }[] = [];
+    let busy = false;
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/provider/v1/tenants/alpha/billing-companies")
+        return json({
+          targets: [{ id: "ninja", name: "NinjaOne", type: "ninjaone", cadence: "monthly", rmm: true }],
+          companies: [{ tenant_id: "alpha", target_id: "ninja", external_company_id: "11" }],
+        });
+      if (url === "/provider/v1/tenants/alpha/billing-sync") return json({ pushes: [] });
+      if (url === "/provider/v1/tenants/alpha/rmm-devices")
+        return json({
+          devices: [
+            {
+              target_id: "ninja",
+              device_id: "1001",
+              device_name: "ALPHA-DC01",
+              present: true,
+              agent_id: "a1",
+              agent_match: "hostname",
+              updated_at: "2026-11-13T00:00:00Z",
+            },
+            {
+              target_id: "ninja",
+              device_id: "1003",
+              device_name: "ALPHA-NEW01",
+              present: true,
+              ...(actions.length > 0 ? { action: "install", action_status: "requested" } : {}),
+              updated_at: "2026-11-13T00:00:00Z",
+            },
+            { target_id: "ninja", device_id: "1004", device_name: "ALPHA-OLD01", present: false, updated_at: "2026-11-12T00:00:00Z" },
+          ],
+        });
+      if (url.startsWith("/provider/v1/tenants/alpha/rmm-devices/ninja/") && init?.method === "POST") {
+        actions.push({ url, body: JSON.parse(String(init.body)), key: (init.headers as Record<string, string>)["Idempotency-Key"] });
+        if (busy) return json({ title: "conflict", detail: "an agent action is still running" }, 409);
+        return json(
+          { request_event_id: "ev-" + actions.length, action: (JSON.parse(String(init.body)) as { action: string }).action, status: "requested" },
+          202,
+        );
+      }
+      throw new Error("unexpected path " + url);
+    });
+    vi.stubGlobal("fetch", fetcher);
+    renderPanel(false, true);
+    const table = await screen.findByRole("table", { name: "Devices in the RMM and the customer's agents on them" });
+    let rows = within(table).getAllByRole("row");
+    expect(within(rows[3]).queryByRole("button")).toBeNull();
+    fireEvent.click(within(rows[2]).getByRole("button", { name: "Install agent" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Install requested on ALPHA-NEW01");
+    expect(actions[0]).toMatchObject({ url: "/provider/v1/tenants/alpha/rmm-devices/ninja/1003/actions", body: { action: "install" } });
+    expect(actions[0].key).toBeTruthy();
+    rows = within(table).getAllByRole("row");
+    await waitFor(() => expect(within(within(table).getAllByRole("row")[2]).getByRole("button", { name: "Install agent" })).toBeDisabled());
+
+    fireEvent.click(within(rows[1]).getByRole("button", { name: "Remove agent" }));
+    expect(within(table).getByText("Remove the trstctl agent from ALPHA-DC01?")).toBeInTheDocument();
+    expect(actions).toHaveLength(1);
+    fireEvent.click(within(table).getByRole("button", { name: "Cancel" }));
+    expect(within(table).queryByText("Remove the trstctl agent from ALPHA-DC01?")).toBeNull();
+    busy = true;
+    fireEvent.click(within(within(table).getAllByRole("row")[1]).getByRole("button", { name: "Upgrade agent" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("An agent action is still running on ALPHA-DC01");
+    busy = false;
+    fireEvent.click(within(within(table).getAllByRole("row")[1]).getByRole("button", { name: "Remove agent" }));
+    fireEvent.click(within(table).getByRole("button", { name: "Remove agent" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Removal requested on ALPHA-DC01");
+    expect(actions.map((a) => (a.body as { action: string }).action)).toEqual(["install", "upgrade", "remove"]);
+    expect(new Set(actions.map((a) => a.key)).size).toBe(3);
   });
 });

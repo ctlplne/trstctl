@@ -39,6 +39,7 @@ const (
 	PermBreakGlassResults Permission = "breakglass:results"
 	PermTemplatesWrite    Permission = "templates:write"
 	PermBillingWrite      Permission = "billing:write"
+	PermRMMWrite          Permission = "rmm:write"
 )
 
 // PermissionDescription is the served vocabulary entry.
@@ -63,6 +64,7 @@ var ProviderPermissions = []PermissionDescription{
 	{PermBreakGlassResults, "Read an active two-custodian emergency snapshot."},
 	{PermTemplatesWrite, "Record tenant templates, apply them to delegated customers and roll out new versions."},
 	{PermBillingWrite, "Map a delegated customer to its company in a configured billing system."},
+	{PermRMMWrite, "Install, upgrade or remove the trstctl agent on a delegated customer's devices through a configured RMM."},
 }
 
 var permissionSet = func() map[Permission]bool {

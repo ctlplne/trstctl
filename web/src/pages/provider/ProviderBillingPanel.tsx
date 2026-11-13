@@ -40,11 +40,14 @@ export function ProviderBillingPanel({
   tenants,
   onAuthError,
   canWriteBilling,
+  canWriteRMM,
 }: {
   tenants: ProviderTenant[];
   onAuthError: () => void;
   /** MSP-2: may the operator map this customer to its billing companies. */
   canWriteBilling?: (customerId: string) => boolean;
+  /** MSP-9: may the operator run agent actions on this customer's RMM devices. */
+  canWriteRMM?: (customerId: string) => boolean;
 }) {
   const defaults = defaultBillingPeriod();
   const [customerId, setCustomerId] = useState("");
@@ -292,7 +295,14 @@ export function ProviderBillingPanel({
           </div>
         </div>
       ) : null}
-      {customerId ? <ProviderBillingCompanies customerId={customerId} canWrite={canWriteBilling?.(customerId) ?? false} onAuthError={onAuthError} /> : null}
+      {customerId ? (
+        <ProviderBillingCompanies
+          customerId={customerId}
+          canWrite={canWriteBilling?.(customerId) ?? false}
+          canWriteRMM={canWriteRMM?.(customerId) ?? false}
+          onAuthError={onAuthError}
+        />
+      ) : null}
     </section>
   );
 }

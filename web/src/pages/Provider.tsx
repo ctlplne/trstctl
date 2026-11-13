@@ -761,6 +761,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
       <ProviderBillingPanel
         tenants={tenants ?? []}
         canWriteBilling={(id) => Boolean(authority?.customers[id]?.write_billing)}
+        canWriteRMM={(id) => Boolean(authority?.customers[id]?.write_rmm)}
         onAuthError={() => {
           clearProviderToken();
           onSignOut("authentication");

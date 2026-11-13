@@ -657,7 +657,7 @@ not this file.
 | `internal/server/provider_billing_halopsa_served_test.go:40` | a test-only value (CWE-798) |
 | `internal/server/provider_billing_pax8_served_test.go:24` | test-only values (CWE-798) |
 | `internal/server/provider_billing_syncro_served_test.go:40` | a test-only value (CWE-798) |
-| `internal/server/provider_rmm_ninjaone_served_test.go:32` | test-only values (CWE-798) |
+| `internal/server/provider_rmm_ninjaone_served_test.go:36` | test-only values (CWE-798) |
 | `internal/server/redfish_mockup_served_test.go:191` | fabricated test-only password for the mockup (CWE-798) |
 | `internal/server/response_integrations_served_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -2282,10 +2282,10 @@ not this file.
 | `cmd/trstctl/connector.go:155` | the operator names their reviewed public preview file (CWE-22) |
 | `cmd/trstctl/connector.go:250` | the operator names their reviewed public preview file (CWE-22) |
 | `cmd/trstctl/connector.go:382` | the operator explicitly names the public trust-bundle path (CWE-22) |
-| `cmd/trstctl/ee_attach.go:393` | operator-supplied path to their own IdP's JWKS (CWE-22) |
-| `cmd/trstctl/ee_attach.go:423` | operator-supplied path to their own IdP's JWKS (CWE-22) |
-| `cmd/trstctl/ee_attach.go:433` | operator-configured client secret file (CWE-22) |
-| `cmd/trstctl/ee_attach.go:499` | operator-pinned local IdP metadata, validated as configuration. |
+| `cmd/trstctl/ee_attach.go:395` | operator-supplied path to their own IdP's JWKS (CWE-22) |
+| `cmd/trstctl/ee_attach.go:425` | operator-supplied path to their own IdP's JWKS (CWE-22) |
+| `cmd/trstctl/ee_attach.go:435` | operator-configured client secret file (CWE-22) |
+| `cmd/trstctl/ee_attach.go:501` | operator-pinned local IdP metadata, validated as configuration. |
 | `cmd/trstctl/main.go:471` | the configured public certificate of this process's own listener (CWE-22) |
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |

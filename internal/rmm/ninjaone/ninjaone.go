@@ -230,7 +230,11 @@ func (c *Client) RunAction(ctx context.Context, deviceID string, action rmm.Acti
 			body[i] = 0
 		}
 	}()
-	_, err = c.do(ctx, http.MethodPost, "/v2/device/"+strconv.FormatInt(id, 10)+"/script/run", nil, json.RawMessage(body), nil, true)
+	var token []byte
+	if install != nil {
+		token = install.Token
+	}
+	_, err = c.do(ctx, http.MethodPost, "/v2/device/"+strconv.FormatInt(id, 10)+"/script/run", nil, json.RawMessage(body), nil, true, token)
 	return "", err
 }
 
@@ -250,7 +254,8 @@ func (c *Client) ReportHealth(ctx context.Context, deviceID, summary string) err
 
 // do sends one API request. A lookup failure is always before anything
 // ran; a write's 4xx other than 408 and 429 is the RMM's definitive refusal.
-func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, out any, write bool) (int, error) {
+// redact names request secrets (an install's token) an error must not echo.
+func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, out any, write bool, redact ...[]byte) (int, error) {
 	if err := c.signIn(ctx); err != nil {
 		return 0, err
 	}
@@ -289,7 +294,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	defer func() { _ = resp.Body.Close() }()
 	data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponse))
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		cause := fmt.Sprintf("ninjaone: %s answered %d%s", label, resp.StatusCode, c.errorDetail(data))
+		cause := fmt.Sprintf("ninjaone: %s answered %d%s", label, resp.StatusCode, c.errorDetail(data, redact...))
 		retryable := resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
 		switch {
 		case !write:
@@ -312,8 +317,9 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 }
 
 // errorDetail renders the {resultCode, errorMessage} body the published
-// client reads, bounded, printable, with any echo of the secret removed.
-func (c *Client) errorDetail(raw []byte) string {
+// client reads, bounded, printable, with any echo of the secret or of a
+// request secret removed.
+func (c *Client) errorDetail(raw []byte, redact ...[]byte) string {
 	var body struct {
 		ResultCode   string `json:"resultCode"`
 		ErrorMessage string `json:"errorMessage"`
@@ -332,6 +338,11 @@ func (c *Client) errorDetail(raw []byte) string {
 		return ""
 	}
 	text := bytes.ReplaceAll([]byte(strings.Join(parts, "; ")), c.creds.ClientSecret, []byte("[redacted]"))
+	for _, secret := range redact {
+		if len(secret) > 0 {
+			text = bytes.ReplaceAll(text, secret, []byte("[redacted]"))
+		}
+	}
 	s := strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
 			return ' '

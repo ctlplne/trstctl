@@ -108,6 +108,13 @@ export interface ProviderRMMDevice {
   updated_at: string;
 }
 
+/** MSP-9: an agent action requested on a customer's RMM device. */
+export interface ProviderRMMActionResult {
+  request_event_id: string;
+  action: "install" | "upgrade" | "remove";
+  status: "requested";
+}
+
 /** MSP-3: one alert subject's service ticket in a PSA. */
 export interface ProviderPSATicket {
   target_id: string;
@@ -253,6 +260,7 @@ export interface ProviderConsoleCustomerAuthority {
   break_glass: boolean;
   break_glass_write: boolean;
   write_billing?: boolean;
+  write_rmm?: boolean;
 }
 
 export interface ProviderConsoleAuthority {
@@ -661,6 +669,11 @@ export const providerApi = {
     providerReq<{ tickets: ProviderPSATicket[] }>(`/provider/v1/tenants/${encodeURIComponent(id)}/psa-tickets`),
   rmmDevices: (id: string): Promise<{ devices: ProviderRMMDevice[] }> =>
     providerReq<{ devices: ProviderRMMDevice[] }>(`/provider/v1/tenants/${encodeURIComponent(id)}/rmm-devices`),
+  rmmAction: (id: string, target: string, device: string, action: "install" | "upgrade" | "remove"): Promise<ProviderRMMActionResult> =>
+    providerReq<ProviderRMMActionResult>(
+      `/provider/v1/tenants/${encodeURIComponent(id)}/rmm-devices/${encodeURIComponent(target)}/${encodeURIComponent(device)}/actions`,
+      { method: "POST", body: JSON.stringify({ action }) },
+    ),
   clearBillingCompany: (id: string, target: string): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/billing-companies/${encodeURIComponent(target)}`, { method: "DELETE" }),
   getBrand: async (id: string): Promise<ProviderBrandSnapshot> => {

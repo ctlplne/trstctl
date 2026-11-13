@@ -358,6 +358,8 @@ func attachEEProviderAPI(
 		configured.Offboarding = eeprovider.NewTenantOffboarder(deps.Store, deps.Log, orch, authorityRuntime.Mutations)
 		configured.Templates.Baselines, configured.Templates.RegisterTenant = services, orch.RegisterTenant
 		configured.Reports = services
+		// MSP-9: agent actions on customers' RMM devices queue through core.
+		configured.RMMActions = orch
 		return eeprovider.NewHandler(configured), nil
 	}
 	if log == nil {

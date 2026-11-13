@@ -387,6 +387,61 @@ type RMMDeviceReader interface {
 	RMMDevices(ctx context.Context, tenantID string, limit int) ([]corestore.RMMDevice, error)
 }
 
+// RMMActionQueuer queues an agent action on one of a customer's RMM devices
+// (MSP-9): core records the request in the customer's event log and runs it
+// through the outbox. requestKey makes a retried request queue one action.
+type RMMActionQueuer interface {
+	QueueRMMAction(ctx context.Context, tenantID, targetID, deviceID, action, by, requestKey string) (string, error)
+}
+
+var (
+	// ErrRMMActionInvalid refuses an action other than install, upgrade
+	// or remove.
+	ErrRMMActionInvalid = errors.New("provider: an RMM agent action is install, upgrade or remove")
+	// ErrRMMActionsUnavailable refuses actions on a deployment whose
+	// command spine is not assembled.
+	ErrRMMActionsUnavailable = errors.New("provider: RMM agent actions are not available on this deployment")
+)
+
+func (s *Service) hasRMMTarget() bool {
+	for _, t := range s.billingTargets {
+		if t.RMM {
+			return true
+		}
+	}
+	return false
+}
+
+// RequestTenantRMMAction asks the RMM to install, upgrade or remove the
+// trstctl agent on one of a delegated customer's devices (MSP-9). The
+// request is recorded in the customer's event log with the operator; an
+// install carries a one-time enrollment token for the customer's own tenant,
+// minted when the RMM runs it. It reports the request's event ID.
+func (s *Service) RequestTenantRMMAction(ctx context.Context, actor Operator, customerID, targetID, deviceID, action string) (string, error) {
+	if err := s.requirePermission(ctx, actor, PermRMMWrite); err != nil {
+		return "", err
+	}
+	if err := s.authorize(ctx, actor, customerID, OpProvision); err != nil {
+		return "", err
+	}
+	if t, ok := s.billingTarget(targetID); !ok || !t.RMM {
+		return "", ErrBillingTargetUnknown
+	}
+	switch action {
+	case "install", "upgrade", "remove":
+	default:
+		return "", ErrRMMActionInvalid
+	}
+	if s.rmmActions == nil {
+		return "", ErrRMMActionsUnavailable
+	}
+	key := mutationKeyFromContext(ctx)
+	if key == "" {
+		return "", errors.New("provider: Idempotency-Key header is required for mutations")
+	}
+	return s.rmmActions.QueueRMMAction(ctx, customerID, targetID, deviceID, action, actor.Email, key)
+}
+
 // ListTenantRMMDevices reads a delegated customer's RMM devices.
 func (s *Service) ListTenantRMMDevices(ctx context.Context, actor Operator, customerID string) ([]RMMDevice, error) {
 	if err := s.requireOperator(actor); err != nil {

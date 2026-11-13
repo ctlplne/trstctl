@@ -88,6 +88,18 @@ func (s *NinjaOne) RemoveDevice(id int64) {
 	s.devices = kept
 }
 
+// MoveDevice moves a device to another organization, as when it is
+// reassigned in NinjaOne.
+func (s *NinjaOne) MoveDevice(id, org int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.devices {
+		if s.devices[i].ID == id {
+			s.devices[i].OrgID = org
+		}
+	}
+}
+
 // AddScript records an automation-library script.
 func (s *NinjaOne) AddScript(id int64) {
 	s.mu.Lock()

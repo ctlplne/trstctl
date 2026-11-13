@@ -1674,6 +1674,16 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
+		if ev.Type == projections.EventRMMDeviceActionRequested {
+			inserted, err := o.reconcileRMMAction(ctx, ev)
+			if err != nil {
+				return err
+			}
+			if inserted {
+				healed++
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == projections.EventPSATicketRequested || ev.Type == projections.EventPSATicketRecorded {
 			inserted, err := o.reconcilePSATicket(ctx, ev)
 			if err != nil {

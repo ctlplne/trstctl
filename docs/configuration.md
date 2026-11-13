@@ -1788,6 +1788,32 @@ their agents and health are recorded per customer, including a device the RMM no
 longer lists. An RMM target receives no usage periods and opens no tickets. `GET
 /provider/v1/tenants/{id}/rmm-devices` lists a customer's devices.
 
+A Provider operator whose role holds `rmm:write` (and who holds the customer's
+`provision` delegation) installs, upgrades or removes the trstctl agent on one of a
+customer's devices with `POST
+/provider/v1/tenants/{id}/rmm-devices/{target}/{device}/actions` and
+`{"action": "install"}` (or `upgrade`, `remove`), under an `Idempotency-Key`: the same
+request again queues nothing more. The device must be one the customer's inventory
+lists as present, and one action runs on a device at a time (another while it is
+still running is refused 409). The request is recorded in the customer's event log
+with the operator and runs through the outbox. At delivery the device must still be
+listed by NinjaOne under the customer's organization (a device moved to another
+organization runs nothing and the action is recorded failed). The scripts run as
+`run_as` (`system` when empty). An install mints a one-time enrollment token for
+the customer's own tenant at that moment, pinned to the identity
+`rmm-<target>-<device>`, and passes the install script these parameters:
+
+```text
+-Server "<agent_channel.public_address>" -ServerName "<agent_channel.server_name>" -Identity "rmm-<target>-<device>" -Token "<one-time token>"
+```
+
+The token enrolls one agent of that identity, into that customer's tenant only, once,
+within an hour; it is never stored outside the hashed token store, logged or recorded.
+An install needs `agent_channel.public_address` (without it the action is recorded
+failed). Write the install script to be safe to run again: a lost answer from
+NinjaOne retries the run with a new token. Upgrade and remove run their scripts with
+no parameters. Each action's outcome (or why it failed) shows on the device.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

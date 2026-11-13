@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/agent/enroll"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/ca"
@@ -114,6 +115,12 @@ func connectorPluginDeployerFromManager(pm *PluginManager) connectorPluginDeploy
 // profile enforcement. Key custody does not change authority or name admission;
 // legacy control-plane generation remains the existing classical path.
 type issuanceDispatcher struct {
+	// agentEnroll mints the one-time enrollment token an install through a
+	// customer's RMM carries, for that customer's tenant; agentServer and
+	// agentServerName are where the installed agent enrolls (MSP-9).
+	agentEnroll     *enroll.Authority
+	agentServer     string
+	agentServerName string
 	// pamSignIns reads a provider's managed accounts' sign-ins and explains
 	// each (A274); nil when privileged access is not served.
 	pamSignIns              func(ctx context.Context, tenantID, providerID, sourceID, runID string, since, now time.Time, record bool) (pamSignInCollection, error)
@@ -412,6 +419,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handlePSATicket(ctx, m)
 	case orchestrator.DestinationRMMInventory:
 		return d.handleRMMInventory(ctx, m)
+	case orchestrator.DestinationRMMAction:
+		return d.handleRMMAction(ctx, m)
 	case orchestrator.DestinationITSMServiceNowClose:
 		return d.handleServiceNowClose(ctx, m)
 	case orchestrator.DestinationResponseSplunk:

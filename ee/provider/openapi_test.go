@@ -158,9 +158,10 @@ func TestProviderOpenAPIIncludesConfiguredIdentityRoutes(t *testing.T) {
 	// MSP-2 added a customer's /billing-companies (GET) and
 	// /billing-companies/{target} (PUT, DELETE): 45 / 57, and its
 	// /billing-sync push history (GET): 46 / 58.
-	// /psa-tickets (GET, MSP-3): 47 / 59; /rmm-devices (GET, MSP-9): 48 / 60.
-	if len(paths) != 48 || operationCount != 60 {
-		t.Fatalf("configured Provider/SCIM contract = %d paths / %d operations, want 48 / 60", len(paths), operationCount)
+	// /psa-tickets (GET, MSP-3): 47 / 59; /rmm-devices (GET, MSP-9): 48 / 60;
+	// /rmm-devices/{target}/{device}/actions (POST, MSP-9): 49 / 61.
+	if len(paths) != 49 || operationCount != 61 {
+		t.Fatalf("configured Provider/SCIM contract = %d paths / %d operations, want 49 / 61", len(paths), operationCount)
 	}
 	components := doc["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)

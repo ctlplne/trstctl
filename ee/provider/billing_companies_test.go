@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -301,5 +302,129 @@ func TestProviderRMMDevicesMSP9(t *testing.T) {
 	}
 	if rec := get(other); rec.Code != http.StatusForbidden && rec.Code != http.StatusNotFound {
 		t.Fatalf("an undelegated customer's devices = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+type fakeRMMActions struct {
+	mu    sync.Mutex
+	calls []string
+	err   error
+}
+
+func (f *fakeRMMActions) QueueRMMAction(_ context.Context, tenantID, targetID, deviceID, action, by, requestKey string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return "", f.err
+	}
+	f.calls = append(f.calls, strings.Join([]string{tenantID, targetID, deviceID, action, by, requestKey}, "|"))
+	return "request-" + deviceID + "-" + action, nil
+}
+
+// MSP-9 (agent actions): an operator with rmm:write asks core to install,
+// upgrade or remove the agent on a delegated customer's device through an
+// RMM target, with the request's idempotency key so a retry queues nothing
+// more; an operator without the permission, an undelegated customer, a
+// target that is not an RMM, an unknown action and a missing key are
+// refused before core is asked; core's refusals (no such device, an action
+// in flight) answer 404 and 409; and the console authority offers the
+// actions only where the operator may take them.
+func TestProviderRMMActionsMSP9(t *testing.T) {
+	st := openProviderStore(t)
+	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:10]
+	customer, other := CustomerID("rmm-act-a-"+suffix), CustomerID("rmm-act-b-"+suffix)
+	queue := &fakeRMMActions{}
+	h := NewHandler(Config{
+		License:       providerLicense(t, 10),
+		Store:         NewPGStore(st),
+		Idempotency:   orchestrator.NewIdempotency(st),
+		Authenticator: billingOperatorAuth{},
+		Delegations:   fullyDelegated("op-billing", customer),
+		BillingTargets: []BillingTarget{{ID: "ninja", Type: "ninjaone", Cadence: "monthly", RMM: true},
+			{ID: "psa", Type: "json", Cadence: "monthly"}},
+		RMMActions: queue,
+	})
+	post := func(customerID, target, device, auth, key, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/provider/v1/tenants/"+customerID+"/rmm-devices/"+target+"/"+device+"/actions", bytes.NewBufferString(body))
+		req.Header.Set("Authorization", auth)
+		if key != "" {
+			req.Header.Set("Idempotency-Key", key)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	install := `{"action":"install"}`
+	if rec := post(customer, "ninja", "1003", "Bearer billing-admin", "", install); rec.Code != http.StatusBadRequest {
+		t.Fatalf("an action without an Idempotency-Key = %d %s", rec.Code, rec.Body.String())
+	}
+	rec := post(customer, "ninja", "1003", "Bearer billing-admin", "act-"+suffix, install)
+	var out struct {
+		RequestEventID string `json:"request_event_id"`
+		Action         string `json:"action"`
+		Status         string `json:"status"`
+	}
+	if rec.Code != http.StatusAccepted || json.Unmarshal(rec.Body.Bytes(), &out) != nil || out.RequestEventID != "request-1003-install" ||
+		out.Action != "install" || out.Status != "requested" {
+		t.Fatalf("install = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := post(customer, "ninja", "1003", "Bearer billing-admin", "act-"+suffix, install); rec.Code != http.StatusAccepted {
+		t.Fatalf("a replayed install = %d %s", rec.Code, rec.Body.String())
+	}
+	if want := customer + "|ninja|1003|install|op-billing@provider.example.test|act-" + suffix; len(queue.calls) != 1 || queue.calls[0] != want {
+		t.Fatalf("core was asked %q, want once %q", queue.calls, want)
+	}
+	for _, tc := range []struct {
+		name, customer, target, auth, body string
+		code                               int
+		problem                            string
+	}{
+		{"an operator without rmm:write", customer, "ninja", "Bearer break-glass-operator", install, http.StatusForbidden, "forbidden"},
+		{"an undelegated customer", other, "ninja", "Bearer billing-admin", install, http.StatusForbidden, ""},
+		{"a target that is not an RMM", customer, "psa", "Bearer billing-admin", install, http.StatusNotFound, "billing_target_unknown"},
+		{"an unknown target", customer, "nowhere", "Bearer billing-admin", install, http.StatusNotFound, "billing_target_unknown"},
+		{"an unknown action", customer, "ninja", "Bearer billing-admin", `{"action":"reboot"}`, http.StatusBadRequest, "rmm_action_invalid"},
+		{"an extra field", customer, "ninja", "Bearer billing-admin", `{"action":"install","script":"x"}`, http.StatusBadRequest, ""},
+	} {
+		rec := post(tc.customer, tc.target, "1003", tc.auth, "act-"+uuid.NewString(), tc.body)
+		codeOK := rec.Code == tc.code || (tc.code == http.StatusForbidden && rec.Code == http.StatusNotFound)
+		if !codeOK || !strings.Contains(rec.Body.String(), tc.problem) {
+			t.Fatalf("%s = %d %s", tc.name, rec.Code, rec.Body.String())
+		}
+	}
+	if len(queue.calls) != 1 {
+		t.Fatalf("a refused request reached core: %q", queue.calls)
+	}
+	queue.err = orchestrator.ErrRMMDeviceUnknown
+	if rec := post(customer, "ninja", "2001", "Bearer billing-admin", "act-unknown-"+suffix, install); rec.Code != http.StatusNotFound ||
+		!strings.Contains(rec.Body.String(), "rmm_device_unknown") {
+		t.Fatalf("a device the customer's inventory lacks = %d %s", rec.Code, rec.Body.String())
+	}
+	queue.err = orchestrator.ErrRMMActionInFlight
+	if rec := post(customer, "ninja", "1003", "Bearer billing-admin", "act-busy-"+suffix, `{"action":"upgrade"}`); rec.Code != http.StatusConflict ||
+		!strings.Contains(rec.Body.String(), "rmm_action_in_flight") {
+		t.Fatalf("an action in flight = %d %s", rec.Code, rec.Body.String())
+	}
+
+	session := func(handler http.Handler, auth string) ConsoleCustomerAuthority {
+		req := httptest.NewRequest(http.MethodGet, "/provider/v1/auth/session", nil)
+		req.Header.Set("Authorization", auth)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		var body struct {
+			Authority ConsoleAuthority `json:"authority"`
+		}
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &body) != nil {
+			t.Fatalf("session = %d %s", rec.Code, rec.Body.String())
+		}
+		return body.Authority.Customers[customer]
+	}
+	if !session(h, "Bearer billing-admin").WriteRMM || session(h, "Bearer break-glass-operator").WriteRMM {
+		t.Fatal("the console offers RMM actions to the wrong operators")
+	}
+	without := NewHandler(Config{License: providerLicense(t, 10), Store: NewPGStore(st), Authenticator: billingOperatorAuth{},
+		Delegations: fullyDelegated("op-billing", customer), BillingTargets: []BillingTarget{{ID: "ninja", Type: "ninjaone", Cadence: "monthly", RMM: true}}})
+	if session(without, "Bearer billing-admin").WriteRMM {
+		t.Fatal("the console offers RMM actions without the command spine")
 	}
 }

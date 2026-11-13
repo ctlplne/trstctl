@@ -20,7 +20,18 @@ import {
  * system. A customer's closed, signed usage periods go only to the company
  * its own mapping names; one company in one system belongs to one customer,
  * which the plane enforces. */
-export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: { customerId: string; canWrite: boolean; onAuthError: () => void }) {
+export function ProviderBillingCompanies({
+  customerId,
+  canWrite,
+  canWriteRMM = false,
+  onAuthError,
+}: {
+  customerId: string;
+  canWrite: boolean;
+  /** MSP-9: may install, upgrade or remove the agent through the RMM. */
+  canWriteRMM?: boolean;
+  onAuthError: () => void;
+}) {
   const [view, setView] = useState<BillingView | null>(null);
   const [pushes, setPushes] = useState<ProviderBillingSyncPush[]>([]);
   const [tickets, setTickets] = useState<ProviderPSATicket[]>([]);
@@ -29,6 +40,7 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
   const failed = useCallback(
     (err: unknown) => {
@@ -111,7 +123,30 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
     }
   }
 
+  async function act(device: ProviderRMMDevice, action: "install" | "upgrade" | "remove") {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    setConfirmRemove(null);
+    const name = device.device_name || device.device_id;
+    try {
+      await providerApi.rmmAction(customerId, device.target_id, device.device_id, action);
+      setNotice(translateNow(`provider.rmmDevices.requested.${action}` as "provider.rmmDevices.requested.install", { device: name }));
+      const listed = await providerApi.rmmDevices(customerId);
+      setDevices(listed.devices ?? []);
+    } catch (err) {
+      if (err instanceof ProviderApiError && err.status === 409) {
+        setError(translateNow("provider.rmmDevices.inFlight", { device: name }));
+      } else {
+        failed(err);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const writable = customerId !== "" && canWrite;
+  const actionable = customerId !== "" && canWriteRMM;
   return (
     <div className="mt-4 grid gap-2 rounded-md border border-border/60 p-4" aria-labelledby="provider-billing-sync-title">
       <h3 id="provider-billing-sync-title" className="text-sm font-semibold">
@@ -230,12 +265,13 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
                 <th className="py-1">{translateNow("provider.rmmDevices.agent")}</th>
                 <th className="py-1">{translateNow("provider.rmmDevices.health")}</th>
                 <th className="py-1">{translateNow("provider.rmmDevices.lastAction")}</th>
+                {actionable ? <th className="py-1">{translateNow("provider.rmmDevices.actions")}</th> : null}
               </tr>
             </thead>
             <tbody>
               {devices.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-1 text-muted-foreground">
+                  <td colSpan={actionable ? 5 : 4} className="py-1 text-muted-foreground">
                     {translateNow("provider.rmmDevices.empty")}
                   </td>
                 </tr>
@@ -263,6 +299,46 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
                           (device.action_reason ? ` (${device.action_reason})` : "")
                         : ""}
                     </td>
+                    {actionable ? (
+                      <td className="py-1">
+                        {!device.present ? null : confirmRemove === `${device.target_id}:${device.device_id}` ? (
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span>{translateNow("provider.rmmDevices.confirmRemove", { device: device.device_name || device.device_id })}</span>
+                            <Button type="button" size="sm" variant="destructive" disabled={busy} onClick={() => void act(device, "remove")}>
+                              {translateNow("provider.rmmDevices.remove")}
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => setConfirmRemove(null)}>
+                              {translateNow("provider.rmmDevices.cancel")}
+                            </Button>
+                          </span>
+                        ) : device.agent_id ? (
+                          <span className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={busy || device.action_status === "requested"}
+                              onClick={() => void act(device, "upgrade")}
+                            >
+                              {translateNow("provider.rmmDevices.upgrade")}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={busy || device.action_status === "requested"}
+                              onClick={() => setConfirmRemove(`${device.target_id}:${device.device_id}`)}
+                            >
+                              {translateNow("provider.rmmDevices.remove")}
+                            </Button>
+                          </span>
+                        ) : (
+                          <Button type="button" size="sm" disabled={busy || device.action_status === "requested"} onClick={() => void act(device, "install")}>
+                            {translateNow("provider.rmmDevices.install")}
+                          </Button>
+                        )}
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               )}

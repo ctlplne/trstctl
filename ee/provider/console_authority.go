@@ -34,6 +34,9 @@ type ConsoleCustomerAuthority struct {
 	// WriteBilling (MSP-2): may map this customer to its company in a
 	// configured billing system.
 	WriteBilling bool `json:"write_billing"`
+	// WriteRMM (MSP-9): may install, upgrade or remove the agent on this
+	// customer's devices through a configured RMM.
+	WriteRMM bool `json:"write_rmm"`
 }
 
 func (s *Service) consoleAuthority(ctx context.Context, actor Operator) ConsoleAuthority {
@@ -57,6 +60,7 @@ func (s *Service) consoleAuthority(ctx context.Context, actor Operator) ConsoleA
 	can := func(perm Permission) bool { return s.requirePermission(ctx, actor, perm) == nil }
 	canProvision, canLifecycle := can(PermTenantsProvision), can(PermTenantsLifecycle)
 	canQuota, canBrand, canBilling := can(PermQuotaWrite), can(PermBrandWrite), can(PermBillingWrite)
+	canRMM := can(PermRMMWrite) && s.rmmActions != nil && s.hasRMMTarget()
 	canBreakGlassWrite := can(PermBreakGlassRequest) || can(PermBreakGlassConsent)
 	a.AccessRead = s.requireAdminAccessRead(ctx, actor) == nil && s.access != nil
 	a.AccessWrite = a.AccessRead && can(PermOperatorsAdmin)
@@ -77,6 +81,7 @@ func (s *Service) consoleAuthority(ctx context.Context, actor Operator) ConsoleA
 			BreakGlassWrite: canBreakGlassWrite && set.Authorize(actor, customer, OpBreakGlass) == nil,
 			WriteBilling: canBilling && set.Authorize(actor, customer, OpProvision) == nil && s.billingCompanies != nil &&
 				len(s.billingTargets) > 0,
+			WriteRMM: canRMM && set.Authorize(actor, customer, OpProvision) == nil,
 		}
 	}
 	return a

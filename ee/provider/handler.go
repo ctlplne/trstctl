@@ -243,6 +243,9 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.listPSATickets(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/rmm-devices"):
 		h.listRMMDevices(w, r)
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") &&
+		strings.Contains(r.URL.Path, "/rmm-devices/") && strings.HasSuffix(r.URL.Path, "/actions"):
+		h.requestRMMAction(w, r)
 	case (r.Method == http.MethodPut || r.Method == http.MethodDelete) && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") &&
 		strings.Contains(r.URL.Path, "/billing-companies/"):
 		h.writeBillingCompany(w, r)
@@ -962,6 +965,47 @@ func (h *handler) listRMMDevices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"devices": out})
 }
 
+// requestRMMAction asks the RMM to install, upgrade or remove the agent on
+// one of a delegated customer's devices (MSP-9).
+func (h *handler) requestRMMAction(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	rest := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), "/actions")
+	customerID, device, found := strings.Cut(rest, "/rmm-devices/")
+	targetID, deviceID, split := strings.Cut(device, "/")
+	if !found || !split || customerID == "" || targetID == "" || deviceID == "" || strings.Contains(customerID, "/") || strings.Contains(deviceID, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	r, ok = h.withMutationKey(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Action string `json:"action"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		writeProviderError(w, errors.New("RMM action request must contain exactly one JSON object"))
+		return
+	}
+	id, err := h.svc.RequestTenantRMMAction(r.Context(), op, customerID, targetID, deviceID, body.Action)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"request_event_id": id, "action": body.Action, "status": "requested"})
+}
+
 // listPSATickets reads a delegated customer's PSA tickets (MSP-3).
 func (h *handler) listPSATickets(w http.ResponseWriter, r *http.Request) {
 	op, ok := h.operatorFromRequest(r)
@@ -1354,6 +1398,14 @@ func writeProviderError(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "billing_company_conflict"
 	case errors.Is(err, ErrBillingTargetUnknown):
 		status, code = http.StatusNotFound, "billing_target_unknown"
+	case errors.Is(err, ErrRMMActionInvalid):
+		status, code = http.StatusBadRequest, "rmm_action_invalid"
+	case errors.Is(err, ErrRMMActionsUnavailable):
+		status, code = http.StatusServiceUnavailable, "rmm_actions_unavailable"
+	case errors.Is(err, orchestrator.ErrRMMDeviceUnknown):
+		status, code = http.StatusNotFound, "rmm_device_unknown"
+	case errors.Is(err, orchestrator.ErrRMMActionInFlight):
+		status, code = http.StatusConflict, "rmm_action_in_flight"
 	case errors.Is(err, ErrTemplateInvalid):
 		status, code = http.StatusBadRequest, "template_invalid"
 	case errors.Is(err, ErrTemplateRolloutStale):

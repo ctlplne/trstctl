@@ -8,6 +8,12 @@
   health written to the device's custom field when it changes. Devices are events (`provider.rmm_device.*`) projected
   into `provider_rmm_devices` (migration 0467, snapshot format 133), listed at `GET /provider/v1/tenants/{id}/rmm-devices`
   and in the Provider console. RMM targets take no usage periods.
+- NinjaOne agent install, upgrade and remove (MSP-9, part 2): an operator with the new `rmm:write` permission asks
+  for an action on a customer's device (`POST /provider/v1/tenants/{id}/rmm-devices/{target}/{device}/actions`,
+  idempotent); it is recorded in the customer's event log and runs through the outbox only while NinjaOne still
+  lists the device under the customer's organization. An install's one-time enrollment token is minted at delivery
+  for the customer's own tenant, pinned to the identity `rmm-<target>-<device>`, handed to the install script and
+  wiped; it never reaches logs, the outbox or events. The console's device table gains Install, Upgrade and Remove.
 - Pax8 Usage API as a billing target (MSP-8): a `pax8` target (the token URL and audience Pax8 issues at vendor
   onboarding, the client ID and secret reference, and a product and unit per meter) signs in with client credentials
   for each delivery and uploads each customer's signed period as usage lines of its Pax8 subscription for the period's

@@ -132,7 +132,13 @@ last).
 When a system is an RMM (NinjaOne), **Devices in the RMM and the customer's agents on
 them** lists each device under the customer's organization: the agent on it (installed
 through the RMM, or matched by host name), the health last written back to the RMM,
-and the last agent action; a device the RMM no longer lists stays, marked as gone.
+and the last agent action; a device the RMM no longer lists stays, marked as gone. An
+operator whose role holds `rmm:write` gets **Install agent** on a device with no
+agent, and **Upgrade agent** and **Remove agent** (after a confirmation) on one with
+an agent. The RMM runs the configured script on that device only while it is still
+under the customer's organization; an install carries a one-time enrollment token
+for the customer's own tenant, so the new agent enrolls there and nowhere else, and
+the device then maps to it as installed through the RMM.
 When a system opens tickets, **Tickets opened in the PSA for this customer's alerts**
 lists each one: the alert it follows (certificate expiry, renewal failed, revocation
 endpoint, credential drift), its subject, its status (opening, open, closing, closed,
