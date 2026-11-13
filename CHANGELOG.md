@@ -8,6 +8,10 @@
   health written to the device's custom field when it changes. Devices are events (`provider.rmm_device.*`) projected
   into `provider_rmm_devices` (migration 0467, snapshot format 133), listed at `GET /provider/v1/tenants/{id}/rmm-devices`
   and in the Provider console. RMM targets take no usage periods.
+- Large AD CS databases (A162-L1): when one certutil read of a CA database exceeds its 64 MiB output bound, the relay
+  lists the request ids (one small column) and reads the rows in pages of 100,000 ids with `-restrict
+  "RequestID>lo,RequestID<=hi"`, halving any page still over the bound, so a large CA is summarized instead of
+  refused; a row that names no request id is still counted as rejected.
 - MDM tokens kept across relay jobs (A156-L2): a relay that exchanges an Intune app registration's or a Jamf Pro API
   client's secret for an access token now keeps the token in locked memory, keyed by the token endpoint, the client and
   a digest of the secret, and reuses it for later reads and check-ins until two minutes before it expires (at most an

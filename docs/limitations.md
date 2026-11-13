@@ -4717,8 +4717,10 @@ than sending an operator looking for a credential that was never there.
   `certutil.exe` by default on Windows) and advertise the reader in its
   executor census, and `adcs.ca_database` must be claimable. Proven with the
   production relay loop against a certutil stand-in that prints certutil's CSV
-  view; a live CA database on a Windows forest is not yet proven, and one read
-  is bounded to 64 MiB of certutil output (a larger CA needs a narrower read).
+  view; a live CA database on a Windows forest is not yet proven. One certutil
+  read is bounded to 64 MiB of output; a larger database is read in pages of
+  request ids (`-restrict`, 100,000 ids a page, a page still over the bound
+  halved), up to a million rows in all.
   In-domain
   Kerberos authentication is served (`kerberos_*`, A158; NTLM is not offered),
   and so is fronting AD CS templates with trstctl ACME/EST (A159, a profile's

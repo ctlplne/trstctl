@@ -1395,7 +1395,9 @@ to read a CA by certsrv's `HOST\CA-Name` identifier. The relay runs certutil as
 its own domain identity and returns the counts and, for the requests the CA holds
 for a manager's approval, each one's request id, template, requested name and
 requester (the newest 500, N1-L2). No certificate, and no issued, revoked, denied or
-failed row's subject or requester, leaves it. The panel lists recent reads with their status (queued,
+failed row's subject or requester, leaves it. A database too large for one certutil
+read (64 MiB of output) is read in pages of request ids and summarized the same way, up to
+a million rows. The panel lists recent reads with their status (queued,
 running, collected, failed) and a failed read's reason; a failed read keeps the
 previous counts. Run the relay on a domain-joined Windows host with
 `--relay-claim` (certutil is `certutil.exe` unless `--adcs-certutil` names

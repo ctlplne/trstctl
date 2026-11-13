@@ -28,6 +28,15 @@ func SetMDMTokenClockForTest(now func() time.Time) (restore func(), kept func() 
 	return func() { mdmTokens = previous }, cache.len
 }
 
+// SetCertutilPagingForTest lowers one certutil read's byte bound and the
+// request ids a paged read covers (A162-L1); it returns the restore
+// function.
+func SetCertutilPagingForTest(bound int64, pageRows int) func() {
+	previousBound, previousRows := certutilOutputBound, certutilPageRows
+	certutilOutputBound, certutilPageRows = bound, pageRows
+	return func() { certutilOutputBound, certutilPageRows = previousBound, previousRows }
+}
+
 // PluginHTTPDoerForTest is the HTTP service a plugin call gives its module
 // (A193), so a test can read exactly what the module would be handed.
 func PluginHTTPDoerForTest(call PluginCall) pluginhost.HTTPDoer {

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -214,12 +215,91 @@ func runADCSDatabase(ctx context.Context, ch Channel, job Job) bool {
 	return true
 }
 
+// certutilPageRows is how many request ids one paged read covers (A162-L1).
+var certutilPageRows = 100_000
+
+// certutilOutputBound is one certutil read's byte bound.
+var certutilOutputBound int64 = maxCertutilOutputBytes
+
+// errCertutilOutputBound is a read whose output exceeded the byte bound.
+var errCertutilOutputBound = errors.New("relay: certutil output exceeds the byte bound")
+
 // readCertutilView runs certutil -config <ca> -view -out <columns> csv,
-// bounded in time as well as bytes and rows.
+// bounded in time as well as bytes and rows. A162-L1: a database whose rows
+// exceed one read's byte bound is read again in pages of request ids, each
+// page under the bound, so a large CA is summarized instead of refused.
 func readCertutilView(ctx context.Context, certutil, caConfig string) ([]map[string]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, certutilTimeout)
 	defer cancel()
-	return readCertutilCSV(ctx, certutil, "-config", caConfig, "-view", "-out", certutilViewColumns, "csv")
+	rows, err := readCertutilCSV(ctx, certutil, "-config", caConfig, "-view", "-out", certutilViewColumns, "csv")
+	if !errors.Is(err, errCertutilOutputBound) {
+		return rows, err
+	}
+	return readCertutilViewPaged(ctx, certutil, caConfig)
+}
+
+// readCertutilViewPaged lists the database's request ids (a small read: one
+// column), then reads the rows in ranges of certutilPageRows ids with
+// -restrict "RequestID>lo,RequestID<=hi"; a range whose output still exceeds
+// the bound is halved. A row that names no request id is kept as the id list
+// read it, so the parser counts it as rejected instead of losing it.
+func readCertutilViewPaged(ctx context.Context, certutil, caConfig string) ([]map[string]string, error) {
+	idRows, err := readCertutilCSV(ctx, certutil, "-config", caConfig, "-view", "-out", "RequestID", "csv")
+	if err != nil {
+		return nil, err
+	}
+	var rows []map[string]string
+	ids := make([]int, 0, len(idRows))
+	seen := map[int]bool{}
+	for _, r := range idRows {
+		id := adcsdb.RequestIDOf(r)
+		switch {
+		case id <= 0:
+			rows = append(rows, r)
+		case !seen[id]:
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	sort.Ints(ids)
+	var readRange func(ids []int, lo int) error
+	readRange = func(ids []int, lo int) error {
+		if len(ids) == 0 {
+			return nil
+		}
+		hi := ids[len(ids)-1]
+		page, err := readCertutilCSV(ctx, certutil, "-config", caConfig, "-restrict", "RequestID>"+strconv.Itoa(lo)+",RequestID<="+strconv.Itoa(hi),
+			"-view", "-out", certutilViewColumns, "csv")
+		if errors.Is(err, errCertutilOutputBound) && len(ids) > 1 {
+			half := len(ids) / 2
+			if err := readRange(ids[:half], lo); err != nil {
+				return err
+			}
+			return readRange(ids[half:], ids[half-1])
+		}
+		if err != nil {
+			return err
+		}
+		rows = append(rows, page...)
+		if len(rows) > maxCertutilRows {
+			return errors.New("relay: the CA database exceeds the row bound")
+		}
+		return nil
+	}
+	for start := 0; start < len(ids); start += certutilPageRows {
+		end := start + certutilPageRows
+		if end > len(ids) {
+			end = len(ids)
+		}
+		lo := 0
+		if start > 0 {
+			lo = ids[start-1]
+		}
+		if err := readRange(ids[start:end], lo); err != nil {
+			return nil, err
+		}
+	}
+	return rows, nil
 }
 
 // runCertutil runs one certutil action. Its output is not read: what reaches
@@ -241,10 +321,12 @@ func readCertutilCSV(ctx context.Context, certutil string, args ...string) ([]ma
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	counted := &countingReader{r: io.LimitReader(stdout, maxCertutilOutputBytes+1)}
+	counted := &countingReader{r: io.LimitReader(stdout, certutilOutputBound+1)}
 	rows, parseErr := parseCertutilCSV(counted)
-	if parseErr == nil && counted.n > maxCertutilOutputBytes {
-		parseErr = errors.New("relay: certutil output exceeds the byte bound")
+	if counted.n > certutilOutputBound {
+		// Whatever the parser made of the cut output, the read is over the
+		// bound (A162-L1 pages it).
+		parseErr = errCertutilOutputBound
 	}
 	if parseErr != nil {
 		// Stop certutil rather than drain output nobody will read.

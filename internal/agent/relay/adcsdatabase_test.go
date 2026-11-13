@@ -4,6 +4,7 @@ package relay_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -215,5 +216,117 @@ func TestADCSDatabaseReportPendingListIsCheckedN1L2(t *testing.T) {
 	}
 	if err := relay.ValidateADCSDatabaseReport(intent, base(relay.MaxADCSPendingRequests+3, full, false)); err == nil {
 		t.Fatal("a list at the bound that does not say it is cut short was accepted")
+	}
+}
+
+// certutilPagingStandIn writes a POSIX stand-in that serves out the way
+// certutil does: every row for a plain view, the request-id column for -out
+// RequestID, and only the rows in range for -restrict
+// "RequestID>lo,RequestID<=hi". Each invocation's argv is appended to the
+// log, one line per invocation.
+func certutilPagingStandIn(t *testing.T, out string) (script, argsLog string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the certutil stand-in is a POSIX shell script")
+	}
+	dir := t.TempDir()
+	argsLog = filepath.Join(dir, "args")
+	data := filepath.Join(dir, "view.csv")
+	if err := os.WriteFile(data, []byte(out), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script = filepath.Join(dir, "certutil")
+	body := `#!/bin/sh
+echo "$*" >> '` + argsLog + `'
+cols=""; restrict=""; prev=""
+for a in "$@"; do
+  [ "$prev" = "-out" ] && cols="$a"
+  [ "$prev" = "-restrict" ] && restrict="$a"
+  prev="$a"
+done
+if [ "$cols" = "RequestID" ]; then
+  awk 'NR==1 { print "\"Issued Request ID\""; next } { split($0, f, "\",\""); id=f[1]; gsub(/"/, "", id); print "\"" id "\"" }' '` + data + `'
+  exit 0
+fi
+if [ -n "$restrict" ]; then
+  lo=$(echo "$restrict" | sed -n 's/^RequestID>\([0-9]*\),RequestID<=\([0-9]*\)$/\1/p')
+  hi=$(echo "$restrict" | sed -n 's/^RequestID>\([0-9]*\),RequestID<=\([0-9]*\)$/\2/p')
+  awk -v lo="$lo" -v hi="$hi" 'NR==1 { print; next } { split($0, f, "\",\""); id=f[1]; gsub(/"/, "", id); if (id ~ /^[0-9]+$/ && id+0 > lo+0 && id+0 <= hi+0) print }' '` + data + `'
+  exit 0
+fi
+cat '` + data + `'
+`
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil { // #nosec G306 -- a test-owned executable stand-in (CWE-276).
+		t.Fatal(err)
+	}
+	return script, argsLog
+}
+
+// A162-L1: a CA database whose rows exceed one certutil read's byte bound is
+// read in pages of request ids — each page under the bound, a page still
+// over it halved — and summarized exactly as one read of every row would be,
+// with a row that names no request id still counted as rejected.
+func TestRelayADCSDatabaseReadsALargeDatabaseInPagesA162L1(t *testing.T) {
+	header := strings.SplitN(certutilCSV, "\n", 2)[0]
+	var b strings.Builder
+	b.WriteString(header + "\n")
+	for id := 10; id <= 21; id++ {
+		fmt.Fprintf(&b, "\"%d\",\"20 -- Issued\",\"1a000000%d\",\"10/1/2026 9:00 AM\",\"10/1/2027 9:00 AM\",\"host%d.corp.example\",\"WebServer\",\"CORP\\svc\",\"EMPTY\"\n", id, id, id)
+	}
+	b.WriteString("\"EMPTY\",\"30 -- Error\",\"EMPTY\",\"EMPTY\",\"EMPTY\",\"EMPTY\",\"EMPTY\",\"CORP\\bob\",\"EMPTY\"\n")
+	out := b.String()
+	rowLen := len(strings.SplitN(out, "\n", 3)[1]) + 1
+	bound := int64(len(header) + 1 + 6*rowLen) // five rows fit; the whole database does not
+	run := func(pageRows int) (relay.ADCSDatabaseReport, []string) {
+		t.Helper()
+		script, argsLog := certutilPagingStandIn(t, out)
+		useCertutil(t, script)
+		restore := relay.SetCertutilPagingForTest(bound, pageRows)
+		defer restore()
+		ch := &fakeChannel{jobs: []relay.Job{adcsDatabaseJob(t, `ca01.corp.example\CORP-CA`)}}
+		if executed, err := relay.RunOnce(t.Context(), ch, nil, 1, 60); err != nil || executed != 1 || ch.reports[0].outcome != transport.JobOutcomeExecuted {
+			t.Fatalf("executed = %d, %v; reports %+v", executed, err, ch.reports)
+		}
+		var got relay.ADCSDatabaseReport
+		if err := json.Unmarshal([]byte(ch.reports[0].detail), &got); err != nil {
+			t.Fatal(err)
+		}
+		if err := relay.ValidateADCSDatabaseReport(relay.ADCSDatabaseIntent{CAConfig: `ca01.corp.example\CORP-CA`}, got); err != nil {
+			t.Fatalf("the paged report does not validate: %v", err)
+		}
+		raw, err := os.ReadFile(argsLog) // #nosec G304 -- test-owned temp file (CWE-22).
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got, strings.Split(strings.TrimSpace(string(raw)), "\n")
+	}
+	restricts := func(calls []string) []string {
+		var out []string
+		for _, c := range calls {
+			if _, after, found := strings.Cut(c, "-restrict "); found {
+				out = append(out, strings.Fields(after)[0])
+			}
+		}
+		return out
+	}
+	want := adcsdb.DBSummary{Issued: 12, Total: 12}
+
+	got, calls := run(5)
+	if got.Summary != want || got.RowsRead != 13 || got.RowsRejected != 1 {
+		t.Fatalf("paged report = %+v", got)
+	}
+	if len(calls) != 5 || !strings.Contains(calls[0], "-out "+"RequestID,Request.Disposition") || !strings.Contains(calls[1], "-out RequestID csv") ||
+		strings.Join(restricts(calls), " ") != "RequestID>0,RequestID<=14 RequestID>14,RequestID<=19 RequestID>19,RequestID<=21" {
+		t.Fatalf("certutil calls = %q", calls)
+	}
+
+	// One page of every id is still over the bound: it is halved until each
+	// part fits, and the summary is unchanged.
+	got, calls = run(100)
+	if got.Summary != want || got.RowsRead != 13 || got.RowsRejected != 1 {
+		t.Fatalf("halved report = %+v", got)
+	}
+	if strings.Join(restricts(calls), " ") != "RequestID>0,RequestID<=21 RequestID>0,RequestID<=15 RequestID>15,RequestID<=21" {
+		t.Fatalf("halved certutil restrictions = %q", restricts(calls))
 	}
 }
