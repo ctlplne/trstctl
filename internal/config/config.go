@@ -2200,6 +2200,35 @@ type ReconcileAuthoritySource struct {
 	// source names its vault in Address (https://{vault}.vault.azure.net)
 	// and reads its token from TokenFile; both take AllCustomerKeys.
 	KeyRing string `json:"key_ring,omitempty"`
+	// KeyDatesSince (an RFC 3339 time; awskms, gcpkms, azurekv and
+	// managed_keys, A168-L3) compares key creation and deletion dates for
+	// keys the provider created at or after it: the cloud sources assert the
+	// provider's dates and the managed-key authority the provider dates its
+	// lifecycle results recorded. Every cloud KMS and managed_keys authority
+	// in one round sets the same value; set it no earlier than the upgrade
+	// that records provider dates, so every key it covers has them.
+	KeyDatesSince string `json:"key_dates_since,omitempty"`
+}
+
+// KeyDatesSinceTime parses KeyDatesSince; zero when unset (A168-L3).
+func (src *ReconcileAuthoritySource) KeyDatesSinceTime() (time.Time, error) {
+	if src == nil || strings.TrimSpace(src.KeyDatesSince) == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse(time.RFC3339, strings.TrimSpace(src.KeyDatesSince))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("key_dates_since must be an RFC 3339 time")
+	}
+	return t.UTC(), nil
+}
+
+// cloudKMSDatesKind reports whether a source kind takes key_dates_since.
+func cloudKMSDatesKind(kind string) bool {
+	switch strings.TrimSpace(kind) {
+	case ReconcileSourceKindAWSKMS, ReconcileSourceKindGCPKMS, ReconcileSourceKindAzureKV, ReconcileSourceKindManagedKeys:
+		return true
+	}
+	return false
 }
 
 // The external authority source kinds served today. An awskms source observes
@@ -2265,6 +2294,13 @@ func refuseCloudKMSFields(label string, src *ReconcileAuthoritySource) []error {
 	}
 	if kind != ReconcileSourceKindManagedKeys && strings.TrimSpace(src.Provider) != "" {
 		errs = append(errs, fmt.Errorf("%s.provider belongs to a managed_keys authority, not a %s one", label, kind))
+	}
+	if strings.TrimSpace(src.KeyDatesSince) != "" {
+		if !cloudKMSDatesKind(kind) {
+			errs = append(errs, fmt.Errorf("%s.key_dates_since belongs to awskms, gcpkms, azurekv and managed_keys authorities, not a %s one", label, kind))
+		} else if _, err := src.KeyDatesSinceTime(); err != nil {
+			errs = append(errs, fmt.Errorf("%s.%w", label, err))
+		}
 	}
 	return errs
 }
@@ -2346,7 +2382,7 @@ func validateReconcileManagedKeysSource(label string, src *ReconcileAuthoritySou
 	if strings.TrimSpace(src.Address+src.TokenFile+src.Namespace+src.ServerName+src.CAFile+src.ClientCertFile+src.ClientKeyFile+src.DSNFile+src.IssuerCertificatesFile) != "" ||
 		len(src.KVMounts)+len(src.PKIMounts)+len(src.TransitMounts)+len(src.CANames)+len(src.PrivateEndpointCIDRs) > 0 ||
 		src.PageSize != 0 || src.MaxObjects != 0 || src.AllowTLS12 || src.AllowInsecureLoopback {
-		return []error{fmt.Errorf("%s: a managed_keys authority reads the managed-key inventory; only provider belongs to it", label)}
+		return []error{fmt.Errorf("%s: a managed_keys authority reads the managed-key inventory; only provider and key_dates_since belong to it", label)}
 	}
 	return nil
 }
@@ -4921,6 +4957,7 @@ func validateOptionalServices(c *Config) []error {
 	// One authority id keeps one source across schedules.
 	reconcileSources := map[string]string{}
 	for i, s := range c.Reconcile.Schedules {
+		errs = append(errs, validateReconcileKeyDatesSince(fmt.Sprintf("reconcile.schedules[%d]", i), s)...)
 		for j, a := range s.Authorities {
 			if a.Source == nil {
 				continue
@@ -6497,4 +6534,32 @@ func validLevel(level string) bool {
 	default:
 		return false
 	}
+}
+
+// validateReconcileKeyDatesSince keeps a round's cloud KMS and managed_keys
+// authorities on one key_dates_since (A168-L3): dates are compared only when
+// both sides assert them for the same keys, so one side setting it alone, or
+// two different moments, would read every covered key as disagreeing.
+func validateReconcileKeyDatesSince(label string, s ReconcileSchedule) []error {
+	values := map[string]bool{}
+	kms := 0
+	for _, a := range s.Authorities {
+		if a.Source == nil || !cloudKMSDatesKind(a.Source.Kind) {
+			continue
+		}
+		kms++
+		since, err := a.Source.KeyDatesSinceTime()
+		if err != nil {
+			return nil // reported on the source itself
+		}
+		if since.IsZero() {
+			values[""] = true
+		} else {
+			values[since.Format(time.RFC3339)] = true
+		}
+	}
+	if kms > 1 && len(values) > 1 {
+		return []error{fmt.Errorf("%s: every cloud KMS and managed_keys authority in a round must set the same key_dates_since, or none", label)}
+	}
+	return nil
 }

@@ -74,6 +74,9 @@ type AWSKMSSourceConfig struct {
 	PrivateEndpointCIDRs  []netip.Prefix
 	HTTPClient            *http.Client
 	Now                   func() time.Time
+	// KeyDatesSince, when set, asserts the creation and deletion dates of
+	// keys KMS created at or after it (A168-L3).
+	KeyDatesSince time.Time
 }
 
 var errAWSKMSSourceConfig = errors.New("xrec aws kms source: configuration")
@@ -195,11 +198,13 @@ func (s *awsKMSSource) describe(ctx context.Context, sb *reducers.ObservationSan
 	}
 	var out struct {
 		KeyMetadata struct {
-			KeyID      string `json:"KeyId"`
-			Arn        string `json:"Arn"`
-			KeyState   string `json:"KeyState"`
-			KeySpec    string `json:"KeySpec"`
-			KeyManager string `json:"KeyManager"`
+			KeyID        string  `json:"KeyId"`
+			Arn          string  `json:"Arn"`
+			KeyState     string  `json:"KeyState"`
+			KeySpec      string  `json:"KeySpec"`
+			KeyManager   string  `json:"KeyManager"`
+			CreationDate float64 `json:"CreationDate"`
+			DeletionDate float64 `json:"DeletionDate"`
 		} `json:"KeyMetadata"`
 	}
 	if err := s.call(ctx, creds, "DescribeKey", map[string]any{"KeyId": id}, &out); err != nil {
@@ -223,13 +228,13 @@ func (s *awsKMSSource) describe(ctx context.Context, sb *reducers.ObservationSan
 	if err != nil {
 		return reducers.CloudKMSKey{}, false, err
 	}
-	// Creation and deletion dates are not asserted: the managed-key authority
-	// records when its operation completed, seconds after KMS created the key,
-	// and the canonical five-minute buckets would turn that gap into a false
-	// disagreement. The state carries a scheduled deletion.
+	// A168-L3: KMS's own creation and deletion dates, for keys created at or
+	// after key_dates_since (the managed-key authority asserts the same
+	// provider dates trstctl recorded).
+	created, deletion := cloudKMSKeyDates(s.cfg.KeyDatesSince, epochSeconds(md.CreationDate), epochSeconds(md.DeletionDate))
 	return reducers.CloudKMSKey{
 		KeyID: md.KeyID, AlgorithmSpec: md.KeySpec, Status: awsKMSKeyStatus(md.KeyState),
-		RotationEnabled: rotation, NativeID: md.Arn,
+		RotationEnabled: rotation, NativeID: md.Arn, CreatedAt: created, DeletedAt: deletion,
 	}, true, nil
 }
 
@@ -417,4 +422,13 @@ func (s *awsKMSSource) signV4(req *http.Request, body []byte, creds awsKMSCreden
 	k = crypto.HMACSHA256(k, []byte("aws4_request"))
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential="+string(creds.accessKeyID)+"/"+scope+
 		", SignedHeaders="+signedHeaders+", Signature="+hex.EncodeToString(crypto.HMACSHA256(k, []byte(toSign))))
+}
+
+// epochSeconds reads an AWS JSON date (seconds since the epoch, with a
+// fraction); zero when absent.
+func epochSeconds(v float64) time.Time {
+	if v <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(int64(v), int64((v-float64(int64(v)))*1e9)).UTC()
 }

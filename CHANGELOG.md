@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- Cloud KMS reconciliation compares key dates (A168-L3, part 2): with the same `key_dates_since` (RFC 3339) on every
+  cloud KMS source (`awskms`, `gcpkms`, `azurekv`) and `managed_keys` authority in a round, each key the provider
+  created at or after it is asserted with the provider's own creation date and scheduled deletion date — by the source
+  from the provider, and by the managed-key authority from the dates trstctl's lifecycle results recorded — so a
+  deletion rescheduled at the provider, or a covered key whose record has no provider date, is witnessed as an
+  attribute conflict, while keys created before that moment are compared without dates. Config validation refuses a
+  round where only some of those authorities set it, or set different moments.
 - Managed keys record the provider's own dates (A168-L3, part 1): after each lifecycle action on a cloud KMS key (AWS
   KMS, Azure Key Vault/Managed HSM, GCP Cloud KMS), the isolated signer reads the provider's creation date and, once
   deletion is scheduled, its deletion date, and returns them with the result (signer protocol fields

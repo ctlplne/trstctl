@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // GCPVersion is one crypto key version.
@@ -25,6 +26,9 @@ type GCPVersion struct {
 	Number    int
 	State     string // ENABLED, DISABLED, DESTROY_SCHEDULED, DESTROYED
 	Algorithm string
+	// Created and Destroys are the version's createTime and, once
+	// destruction is scheduled, its destroyTime (A168-L3).
+	Created, Destroys time.Time
 }
 
 // GCPKey is one crypto key in the ring.
@@ -132,7 +136,14 @@ func (g *GCP) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, v := range key.Versions {
-			items = append(items, map[string]any{"name": g.VersionName(id, v.Number), "state": v.State, "algorithm": v.Algorithm})
+			item := map[string]any{"name": g.VersionName(id, v.Number), "state": v.State, "algorithm": v.Algorithm}
+			if !v.Created.IsZero() {
+				item["createTime"] = v.Created.Format(time.RFC3339Nano)
+			}
+			if !v.Destroys.IsZero() {
+				item["destroyTime"] = v.Destroys.Format(time.RFC3339Nano)
+			}
+			items = append(items, item)
 		}
 	default:
 		writeJSONStatus(w, http.StatusNotFound, map[string]any{"error": map[string]any{"code": 404, "status": "NOT_FOUND"}})
@@ -155,6 +166,9 @@ type AzureKey struct {
 	Versions []AzureVersion
 	// Deleted keys are listed under deletedkeys only.
 	Deleted bool
+	// PurgeAt is a deleted key's scheduledPurgeDate (A168-L3); unset reads
+	// as 2030-01-01.
+	PurgeAt time.Time
 }
 
 // AzureVersion is one key version: an EC key names its curve (Crv), an RSA
@@ -164,6 +178,25 @@ type AzureVersion struct {
 	Enabled bool
 	Crv     string
 	RSABits int
+	// Created is the version's created attribute (A168-L3).
+	Created time.Time
+}
+
+// attributes are a version's attributes as Key Vault reports them.
+func (v AzureVersion) attributes() map[string]any {
+	out := map[string]any{"enabled": v.Enabled}
+	if !v.Created.IsZero() {
+		out["created"] = v.Created.Unix()
+	}
+	return out
+}
+
+// purge is a deleted key's scheduledPurgeDate in Unix seconds.
+func (k *AzureKey) purge() int64 {
+	if k.PurgeAt.IsZero() {
+		return 1893456000
+	}
+	return k.PurgeAt.Unix()
 }
 
 // jwk is the public key a version's bundle carries.
@@ -290,7 +323,7 @@ func (a *Azure) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, v := range key.Versions {
 			if v.ID == parts[2] {
-				writeJSONStatus(w, http.StatusOK, map[string]any{"key": a.jwk(key.Name, v), "attributes": map[string]any{"enabled": v.Enabled}, "tags": key.Tags})
+				writeJSONStatus(w, http.StatusOK, map[string]any{"key": a.jwk(key.Name, v), "attributes": v.attributes(), "tags": key.Tags})
 				return
 			}
 		}
@@ -303,8 +336,10 @@ func (a *Azure) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		latest := key.Versions[len(key.Versions)-1]
+		// A deleted key bundle carries its purge date beside the key's
+		// attributes, as Key Vault's DeletedKeyBundle does.
 		writeJSONStatus(w, http.StatusOK, map[string]any{"key": a.jwk(key.Name, latest), "recoveryId": a.srv.URL + "/deletedkeys/" + key.Name,
-			"attributes": map[string]any{"enabled": latest.Enabled}, "tags": key.Tags})
+			"scheduledPurgeDate": key.purge(), "attributes": latest.attributes(), "tags": key.Tags})
 		return
 	case len(parts) == 1 && parts[0] == "deletedkeys":
 		for _, name := range names {
@@ -314,7 +349,7 @@ func (a *Azure) handle(w http.ResponseWriter, r *http.Request) {
 			}
 			latest := key.Versions[len(key.Versions)-1]
 			items = append(items, map[string]any{"kid": a.srv.URL + "/keys/" + name, "recoveryId": a.srv.URL + "/deletedkeys/" + name, "tags": key.Tags,
-				"attributes": map[string]any{"enabled": latest.Enabled, "scheduledPurgeDate": 1893456000}})
+				"scheduledPurgeDate": key.purge(), "attributes": map[string]any{"enabled": latest.Enabled}})
 		}
 	default:
 		writeJSONStatus(w, http.StatusNotFound, map[string]any{"error": map[string]any{"code": "NotFound"}})

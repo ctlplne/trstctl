@@ -395,10 +395,17 @@ func reconcileAWSKMSSourcesFromConfig(c config.Reconcile) []reconcile.AWSKMSSour
 			AccessKeyIDFile: strings.TrimSpace(src.AccessKeyIDFile), SecretAccessKeyFile: strings.TrimSpace(src.SecretAccessKeyFile),
 			SessionTokenFile: strings.TrimSpace(src.SessionTokenFile), AllCustomerKeys: src.AllCustomerKeys,
 			MaxObjects: src.MaxObjects, AllowInsecureLoopback: src.AllowInsecureLoopback,
-			PrivateEndpointCIDRs: reconcilePrivateCIDRs(src.PrivateEndpointCIDRs),
+			PrivateEndpointCIDRs: reconcilePrivateCIDRs(src.PrivateEndpointCIDRs), KeyDatesSince: reconcileKeyDatesSince(src),
 		})
 	})
 	return out
+}
+
+// reconcileKeyDatesSince is a source's key_dates_since (A168-L3), checked when
+// the config loaded.
+func reconcileKeyDatesSince(src *config.ReconcileAuthoritySource) time.Time {
+	since, _ := src.KeyDatesSinceTime()
+	return since
 }
 
 // reconcileGCPKMSSourcesFromConfig collects the gcpkms source blocks
@@ -410,6 +417,7 @@ func reconcileGCPKMSSourcesFromConfig(c config.Reconcile) []reconcile.GCPKMSSour
 			AuthorityID: id, KeyRing: strings.TrimSpace(src.KeyRing), Address: strings.TrimSpace(src.Address),
 			TokenFile: strings.TrimSpace(src.TokenFile), AllCustomerKeys: src.AllCustomerKeys, MaxObjects: src.MaxObjects,
 			AllowInsecureLoopback: src.AllowInsecureLoopback, PrivateEndpointCIDRs: reconcilePrivateCIDRs(src.PrivateEndpointCIDRs),
+			KeyDatesSince: reconcileKeyDatesSince(src),
 		})
 	})
 	return out
@@ -424,6 +432,7 @@ func reconcileAzureKVKeySourcesFromConfig(c config.Reconcile) []reconcile.AzureK
 			AuthorityID: id, VaultURL: strings.TrimSpace(src.Address), TokenFile: strings.TrimSpace(src.TokenFile),
 			AllCustomerKeys: src.AllCustomerKeys, MaxObjects: src.MaxObjects,
 			AllowInsecureLoopback: src.AllowInsecureLoopback, PrivateEndpointCIDRs: reconcilePrivateCIDRs(src.PrivateEndpointCIDRs),
+			KeyDatesSince: reconcileKeyDatesSince(src),
 		})
 	})
 	return out
@@ -434,7 +443,7 @@ func reconcileAzureKVKeySourcesFromConfig(c config.Reconcile) []reconcile.AzureK
 func reconcileManagedKeyAuthoritiesFromConfig(c config.Reconcile) []reconcile.ManagedKeyAuthorityConfig {
 	var out []reconcile.ManagedKeyAuthorityConfig
 	reconcileSourcesOfKind(c, config.ReconcileSourceKindManagedKeys, func(id string, src *config.ReconcileAuthoritySource) {
-		out = append(out, reconcile.ManagedKeyAuthorityConfig{AuthorityID: id, Provider: strings.TrimSpace(src.Provider)})
+		out = append(out, reconcile.ManagedKeyAuthorityConfig{AuthorityID: id, Provider: strings.TrimSpace(src.Provider), KeyDatesSince: reconcileKeyDatesSince(src)})
 	})
 	return out
 }

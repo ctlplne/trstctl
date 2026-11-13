@@ -72,8 +72,11 @@ type GCPKMSSourceConfig struct {
 	MaxObjects            int
 	AllowInsecureLoopback bool
 	PrivateEndpointCIDRs  []netip.Prefix
-	HTTPClient            *http.Client
-	Now                   func() time.Time
+	// KeyDatesSince, when set, asserts the creation and destruction dates of
+	// versions Cloud KMS created at or after it (A168-L3).
+	KeyDatesSince time.Time
+	HTTPClient    *http.Client
+	Now           func() time.Time
 }
 
 var errGCPKMSSourceConfig = errors.New("xrec gcp kms source: configuration")
@@ -184,9 +187,12 @@ func (s *gcpKMSSource) CloudKMSSnapshot(ctx context.Context, tenantID string, sb
 		if err := s.list(ctx, token, key.Name+"/cryptoKeyVersions", func(raw json.RawMessage) (int, error) {
 			var page struct {
 				CryptoKeyVersions []struct {
-					Name      string `json:"name"`
-					State     string `json:"state"`
-					Algorithm string `json:"algorithm"`
+					Name             string `json:"name"`
+					State            string `json:"state"`
+					Algorithm        string `json:"algorithm"`
+					CreateTime       string `json:"createTime"`
+					DestroyTime      string `json:"destroyTime"`
+					DestroyEventTime string `json:"destroyEventTime"`
 				} `json:"cryptoKeyVersions"`
 			}
 			if err := json.Unmarshal(raw, &page); err != nil {
@@ -201,11 +207,16 @@ func (s *gcpKMSSource) CloudKMSSnapshot(ctx context.Context, tenantID string, sb
 				if versions > s.cfg.MaxObjects {
 					return 0, fmt.Errorf("the key ring holds more than %d key versions; raise max_objects rather than observe part of it", s.cfg.MaxObjects)
 				}
-				// Creation and destruction times are not asserted, as for AWS:
-				// the managed-key record notes when its operation completed.
+				// A168-L3: the version's own creation and destruction times, for
+				// versions created at or after key_dates_since.
+				destroy := version.DestroyTime
+				if destroy == "" {
+					destroy = version.DestroyEventTime
+				}
+				created, deletion := cloudKMSKeyDates(s.cfg.KeyDatesSince, rfc3339OrZero(version.CreateTime), rfc3339OrZero(destroy))
 				snap.Keys = append(snap.Keys, reducers.CloudKMSKey{
 					KeyID: version.Name, AlgorithmSpec: gcpKMSAlgorithm(version.Algorithm), Status: status,
-					RotationEnabled: key.RotationPeriod != "", NativeID: version.Name,
+					RotationEnabled: key.RotationPeriod != "", NativeID: version.Name, CreatedAt: created, DeletedAt: deletion,
 				})
 			}
 			return len(page.CryptoKeyVersions), nil
@@ -359,4 +370,13 @@ func lastPathSegment(name string) string {
 		return name[i+1:]
 	}
 	return name
+}
+
+// rfc3339OrZero reads a Cloud KMS timestamp; zero when absent or malformed.
+func rfc3339OrZero(value string) time.Time {
+	t, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(value))
+	if err != nil {
+		return time.Time{}
+	}
+	return t.UTC()
 }

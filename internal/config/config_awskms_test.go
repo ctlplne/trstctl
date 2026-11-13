@@ -41,7 +41,7 @@ func TestReconcileCloudKMSSourcesValidate(t *testing.T) {
 		"vault fields on kms": {func(k, _ *ReconcileAuthoritySource) { k.TokenFile = "/run/token" }, "awskms source takes"},
 		"provider on kms":     {func(k, _ *ReconcileAuthoritySource) { k.Provider = "aws-kms" }, "provider belongs to a managed_keys"},
 		"unknown provider":    {func(_, m *ReconcileAuthoritySource) { m.Provider = "oci-vault" }, "provider must be aws-kms, gcp-kms or azure-key-vault"},
-		"address on managed":  {func(_, m *ReconcileAuthoritySource) { m.Address = "https://kms.internal" }, "only provider belongs"},
+		"address on managed":  {func(_, m *ReconcileAuthoritySource) { m.Address = "https://kms.internal" }, "only provider and key_dates_since belong"},
 		"region on managed":   {func(_, m *ReconcileAuthoritySource) { m.Region = "us-east-1" }, "belong to an awskms source"},
 	} {
 		t.Run(name, func(t *testing.T) {

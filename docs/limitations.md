@@ -4931,7 +4931,10 @@ than sending an operator looking for a credential that was never there.
   `gcp-kms` or `azure-key-vault`; trstctl now labels or tags the keys it
   creates there with their tenant, and a round leaves another tenant's keys
   out. Proven against in-repository stand-ins of both APIs (a live ring and
-  vault are Track B). A `cloud-kms` id with no source block still fails
+  vault are Track B). Key creation and deletion dates are compared only for
+  keys the provider created at or after the round's `key_dates_since`
+  (A168-L3) — a key created earlier has no provider date in trstctl's record
+  and is compared without dates. A `cloud-kms` id with no source block still fails
   observation closed rather than fabricate an authority, and
   inventory rows with no captured DER cannot participate in the comparison
   (no issuer bytes to derive the shared identity from) until their bytes are

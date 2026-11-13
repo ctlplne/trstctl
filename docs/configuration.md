@@ -641,8 +641,18 @@ show: active and superseded keys enabled, revoked keys disabled, keys whose
 deletion trstctl scheduled as scheduled for deletion until the provider's
 longest waiting period has passed. A round then witnesses a key only the
 account holds, a key only trstctl's record holds, and a key whose state differs.
-Creation dates are not compared, because trstctl records when its operation
-completed, seconds after the provider created the key. `address` overrides the
+Creation and deletion dates are compared when every cloud KMS source and
+`managed_keys` authority in the round sets the same `"key_dates_since"` (an RFC
+3339 time; A168-L3): for each key the provider created at or after it, the source
+asserts the provider's own creation date and, once deletion is scheduled, its
+deletion date, and the `managed_keys` authority the provider dates trstctl's
+lifecycle results recorded (to the second on both sides) — so a deletion
+rescheduled at the provider, or a covered key whose record has no provider date, is
+witnessed as an attribute conflict. A key created before that moment is compared
+without dates. Set it no earlier than the upgrade that records provider dates;
+trstctl's own completion time is never compared, because it lags the provider's
+creation by seconds. Config validation refuses a round where only some of those
+authorities set it, or set different moments. `address` overrides the
 regional endpoint (a VPC endpoint); `allow_insecure_loopback` and
 `private_endpoint_cidrs` behave as they do for Vault. One account should hold
 one tenant's managed keys: a round is scoped to a tenant, so another tenant's
@@ -694,7 +704,10 @@ the Cloud KMS version's resource name, or `keys/{name}/{version}` relative to
 the vault — with its algorithm, its state (enabled, disabled, or awaiting
 destruction or purge; a destroyed Cloud KMS version is gone) and, for Cloud KMS,
 whether its key rotates on a schedule. The `managed_keys` authority asserts what
-trstctl's record says each provider should show, as for AWS.
+trstctl's record says each provider should show, as for AWS, and `key_dates_since`
+compares the version's creation time and its scheduled destruction (Cloud KMS
+`createTime`/`destroyTime`) or purge (Key Vault `created`/`scheduledPurgeDate`) the
+same way.
 
 ## Workload-held PCAS co-signers
 

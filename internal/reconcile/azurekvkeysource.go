@@ -70,6 +70,9 @@ type AzureKVKeySourceConfig struct {
 	PrivateEndpointCIDRs  []netip.Prefix
 	HTTPClient            *http.Client
 	Now                   func() time.Time
+	// KeyDatesSince, when set, asserts the creation and purge dates of key
+	// versions Key Vault created at or after it (A168-L3).
+	KeyDatesSince time.Time
 }
 
 var errAzureKVSourceConfig = errors.New("xrec azure key vault source: configuration")
@@ -172,7 +175,9 @@ func (s *azureKVKeySource) CloudKMSSnapshot(ctx context.Context, tenantID string
 				return reducers.CloudKMSSnapshot{}, err
 			}
 			id := "keys/" + name + "/" + vid
-			if err := add(reducers.CloudKMSKey{KeyID: id, AlgorithmSpec: bundle.Key.algorithm(), Status: status, NativeID: version.Kid}); err != nil {
+			created, deletion := bundle.dates(s.cfg.KeyDatesSince)
+			if err := add(reducers.CloudKMSKey{KeyID: id, AlgorithmSpec: bundle.Key.algorithm(), Status: status, NativeID: version.Kid,
+				CreatedAt: created, DeletedAt: deletion}); err != nil {
 				return reducers.CloudKMSSnapshot{}, err
 			}
 		}
@@ -200,8 +205,9 @@ func (s *azureKVKeySource) CloudKMSSnapshot(ctx context.Context, tenantID string
 		if bname != name || vid == "" {
 			continue
 		}
+		created, deletion := bundle.dates(s.cfg.KeyDatesSince)
 		if err := add(reducers.CloudKMSKey{KeyID: "keys/" + name + "/" + vid, AlgorithmSpec: bundle.Key.algorithm(),
-			Status: canon.StatusPendingDeletion, NativeID: bundle.Key.Kid}); err != nil {
+			Status: canon.StatusPendingDeletion, NativeID: bundle.Key.Kid, CreatedAt: created, DeletedAt: deletion}); err != nil {
 			return reducers.CloudKMSSnapshot{}, err
 		}
 	}
@@ -213,6 +219,24 @@ func (s *azureKVKeySource) CloudKMSSnapshot(ctx context.Context, tenantID string
 // source reads: the version's identifier and its public key's type.
 type azureKVKeyBundle struct {
 	Key azureKVJSONWebKey `json:"key"`
+	// A168-L3: the version's created attribute, and a deleted key's
+	// scheduled purge date.
+	Attributes struct {
+		Created int64 `json:"created"`
+	} `json:"attributes"`
+	ScheduledPurgeDate int64 `json:"scheduledPurgeDate"`
+}
+
+// dates are the bundle's asserted dates under since (A168-L3).
+func (b azureKVKeyBundle) dates(since time.Time) (time.Time, time.Time) {
+	var created, purge time.Time
+	if b.Attributes.Created > 0 {
+		created = time.Unix(b.Attributes.Created, 0).UTC()
+	}
+	if b.ScheduledPurgeDate > 0 {
+		purge = time.Unix(b.ScheduledPurgeDate, 0).UTC()
+	}
+	return cloudKMSKeyDates(since, created, purge)
 }
 
 type azureKVJSONWebKey struct {

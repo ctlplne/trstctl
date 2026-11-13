@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -28,6 +29,10 @@ type Key struct {
 	Manager  string // CUSTOMER (default) or AWS
 	Tags     map[string]string
 	Rotation bool
+	// Created and Deletes are the key's CreationDate and, for a key pending
+	// deletion, its DeletionDate (A168-L3). An unset Created reads as a
+	// fixed 2023 date.
+	Created, Deletes time.Time
 }
 
 // Server is the stand-in.
@@ -149,10 +154,17 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "NotFoundException")
 			return
 		}
-		writeJSON(w, map[string]any{"KeyMetadata": map[string]any{
+		metadata := map[string]any{
 			"KeyId": k.ID, "Arn": s.arn(k.ID), "KeyState": k.State, "KeySpec": k.Spec, "KeyManager": k.Manager,
 			"Enabled": k.State == "Enabled", "CreationDate": 1.7e9,
-		}})
+		}
+		if !k.Created.IsZero() {
+			metadata["CreationDate"] = float64(k.Created.UnixMilli()) / 1000
+		}
+		if !k.Deletes.IsZero() {
+			metadata["DeletionDate"] = float64(k.Deletes.UnixMilli()) / 1000
+		}
+		writeJSON(w, map[string]any{"KeyMetadata": metadata})
 	case "ListResourceTags":
 		k, ok := s.keys[in.KeyID]
 		if !ok {
