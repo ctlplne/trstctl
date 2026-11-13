@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A secret renderer on Windows can reload an application that runs as a service (A238-L3): `reload: { service: name }`
+  has the Service Control Manager send the service PARAMCHANGE after each write, or `service_control`, a code from 128
+  to 255 the service defines; a refused control is the write's reload error. Other platforms refuse a template naming
+  a service, and a template names one way to reload.
 - A secret renderer renews a lease to expire one renew increment after the renewal (A238-L5): it asked for the whole
   TTL on top of the lease's current expiry, so a lease could outlive a stopped agent by four thirds of its TTL, and a
   renewal that would pass the hard expiry was refused and the lease replaced early; it now asks only up to the hard

@@ -6120,7 +6120,8 @@ against a restricted environment. A volume's session ends when the pod's last vo
 call on itself); one the plugin can't end then (control plane out of reach, or a session from
 before a plugin restart) lapses at its expiry. The plugin is privileged (it mounts) and its node can
 read the volumes on it; a volume reports `injected` only; the kind proof is a lab run, not
-a CI job yet; on Windows the reload is a command (no signals), a rendered file's mode sets
+a CI job yet; on Windows the reload is a command or a service control (A238-L3: PARAMCHANGE or a
+code from 128 to 255 the service defines; no signals), a rendered file's mode sets
 its read-only attribute and an explicit, protected DACL (A238-L10: the agent's user and SYSTEM;
 the group bits add the agent's primary group, the other bits Authenticated Users; nothing is
 inherited from the directory), and a file an application keeps open can't be replaced: the renderer retries for two seconds, then

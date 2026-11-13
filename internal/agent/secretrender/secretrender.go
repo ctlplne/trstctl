@@ -121,12 +121,19 @@ func (t Template) renewIncrement() time.Duration {
 	return t.LeaseRenewIncrement
 }
 
-// Hook reloads the application after a write: an argv run with no shell, or a
-// signal to the process named by a pid file.
+// Hook reloads the application after a write: an argv run with no shell, a
+// signal to the process named by a pid file, or on Windows a control sent to a
+// service.
 type Hook struct {
 	Command []string `yaml:"command" json:"command"`
 	Signal  string   `yaml:"signal" json:"signal"`
 	PIDFile string   `yaml:"pid_file" json:"pid_file"`
+	// Service names a Windows service the Service Control Manager sends a
+	// reload control (A238-L3): PARAMCHANGE, which asks it to read its
+	// parameters again, or ServiceControl, a code from 128 to 255 that the
+	// service defines.
+	Service        string `yaml:"service" json:"service"`
+	ServiceControl uint32 `yaml:"service_control" json:"service_control"`
 }
 
 // Verify asks the application to prove it uses the rendered values: an HTTP GET
@@ -261,8 +268,11 @@ func (c *Config) Validate() error {
 		if t.LeaseRenewIncrement != 0 && (t.LeaseRenewIncrement < time.Second || t.LeaseRenewIncrement > t.leaseTTL()) {
 			return fmt.Errorf("secretrender: template %s lease_renew_increment is between a second and lease_ttl (%s)", t.Name, t.leaseTTL())
 		}
-		if len(t.Reload.Command) > 0 && t.Reload.Signal != "" {
-			return fmt.Errorf("secretrender: template %s reloads with a command or a signal, not both", t.Name)
+		if t.Reload.ways() > 1 {
+			return fmt.Errorf("secretrender: template %s reloads with one of a command, a signal or a service", t.Name)
+		}
+		if err := t.Reload.validService(); err != nil {
+			return fmt.Errorf("secretrender: template %s %w", t.Name, err)
 		}
 		if t.Reload.Signal != "" && (!signalKnown(t.Reload.Signal) || t.Reload.PIDFile == "") {
 			return fmt.Errorf("secretrender: template %s signal is HUP, USR1, USR2 or TERM with a pid_file", t.Name)
@@ -711,6 +721,8 @@ func (r *Renderer) reload(ctx context.Context, t Template) error {
 	switch {
 	case len(t.Reload.Command) > 0:
 		return runHook(ctx, t.Reload.Command)
+	case t.Reload.Service != "":
+		return controlService(t.Reload.Service, t.Reload.control())
 	case t.Reload.Signal != "":
 		raw, err := os.ReadFile(t.Reload.PIDFile) // #nosec G304 -- operator-configured pid file (CWE-22)
 		if err != nil {

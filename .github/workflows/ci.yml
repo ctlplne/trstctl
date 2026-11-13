@@ -838,6 +838,14 @@ jobs:
           $a238DaclOutput | ForEach-Object { Write-Output $_ }
           if ($LASTEXITCODE -ne 0) { throw 'Rendered secret file DACL proof failed' }
           if (($a238DaclOutput -join "`n") -notmatch '--- PASS: TestWindowsRenderedFileHasAnExplicitProtectedDACLA238L10') { throw 'Required rendered-file DACL proof missing' }
+      - name: A rendered file's reload controls a Windows service (A238-L3)
+        shell: pwsh
+        run: |
+          $env:TRSTCTL_A238L3_WINDOWS_SERVICE = '1'
+          $a238ServiceOutput = & go test ./internal/agent/secretrender -run '^TestWindowsReloadControlsAServiceA238L3$' -count=1 -v -timeout=5m 2>&1
+          $a238ServiceOutput | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'Rendered-file service reload proof failed' }
+          if (($a238ServiceOutput -join "`n") -notmatch 'A238L3_WINDOWS_SERVICE_RELOAD_OK') { throw 'Required service reload proof marker missing' }
 
 
 

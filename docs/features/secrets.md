@@ -1767,6 +1767,7 @@ templates:
     template: |
       app:{PLAIN}{{ secret "web/prod/password" }}
     reload: { command: ["nginx", "-s", "reload"] }   # or { signal: HUP, pid_file: /run/nginx.pid }
+                                                     # or, on Windows, { service: app-service }
     verify: { url: "http://127.0.0.1/", username: app, password_secret: web/prod/password }
     on_stale: remove           # or keep
 ```
@@ -1786,8 +1787,12 @@ can't run code. It's rendered over bytes: a value is never turned into a string,
 logged, and wiped once written. A changed version is written atomically: a private
 temporary file in the same directory is written, flushed and given its mode (never
 readable by others), then renamed over the old file, so a reader sees the old file or the
-new one, never part of either. Then the reload hook runs (an argv with no shell, or a
-signal to the process in a pid file), and the verify probe asks the application to prove it
+new one, never part of either. Then the reload hook runs (an argv with no shell, a signal
+to the process in a pid file, or, on Windows, where there are no signals, a control the
+Service Control Manager sends a named service: PARAMCHANGE, which asks it to read its
+parameters again, or `service_control`, a code from 128 to 255 the service defines; a
+service that doesn't take the control, or isn't running, refuses it and the reload reports
+that, A238-L3), and the verify probe asks the application to prove it
 uses the new value (on Windows a mode sets the file's read-only attribute and an explicit DACL that
 inherits nothing from the directory: the agent's user and SYSTEM, plus the agent's primary group for the
 group bits and Authenticated Users for the other bits; a file an application holds open is replaced once it
