@@ -183,8 +183,24 @@ describe("A237 scoped syncs", () => {
       key_transform: "path",
       delete_scope: "managed",
       adopt_existing: false,
+      reconcile_interval: "0s",
     });
     expect(screen.queryByRole("form", { name: "Replace this definition" })).not.toBeInTheDocument();
+  });
+
+  // A237-L7: a sync sets its own drift-check interval at definition, and its
+  // view names it.
+  it("defines a sync with its own drift-check interval and shows it", async () => {
+    apiMock.defineSecretScopedSync.mockResolvedValue({ ...sync, mode: "auto", reconcile_interval: "1h0m0s" });
+    const user = userEvent.setup();
+    render(<ScopedSyncsWorkflow targets={["vault"]} />);
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "payments-prod");
+    await user.type(screen.getByRole("textbox", { name: "Source prefix" }), "payments/prod/");
+    await user.selectOptions(screen.getByLabelText("Mode"), "auto");
+    await user.selectOptions(screen.getAllByLabelText("Drift check")[0], "1h0m0s");
+    await user.click(screen.getByRole("button", { name: "Define scoped sync" }));
+    expect(apiMock.defineSecretScopedSync).toHaveBeenCalledWith(expect.objectContaining({ mode: "auto", reconcile_interval: "1h0m0s" }));
+    expect(await screen.findByText("Drift check: Every hour.")).toBeInTheDocument();
   });
 
   it("offers no define, apply or mode switch without secrets:write", async () => {

@@ -40,6 +40,9 @@ type SecretScopedSyncDefined struct {
 	// Mode is manual, auto (A237 part b) or approved (A237-L1); absent reads
 	// as manual.
 	Mode string `json:"mode,omitempty"`
+	// ReconcileIntervalSeconds is the definition's drift-check interval
+	// (A237-L7); absent keeps the deployment's default.
+	ReconcileIntervalSeconds int `json:"reconcile_interval_seconds,omitempty"`
 }
 
 // SecretScopedSyncReplaced is the payload of secret.scoped_sync.replaced
@@ -60,6 +63,9 @@ type SecretScopedSyncReplaced struct {
 	Mode              string `json:"mode"`
 	ReplacedBy        string `json:"replaced_by"`
 	ReleaseKeys       bool   `json:"release_keys,omitempty"`
+	// ReconcileIntervalSeconds is the replaced definition's drift-check
+	// interval (A237-L7); absent keeps the deployment's default.
+	ReconcileIntervalSeconds int `json:"reconcile_interval_seconds,omitempty"`
 }
 
 // SecretScopedSyncRemoved is the payload of secret.scoped_sync.removed.
@@ -147,6 +153,7 @@ func (p *Projector) applySecretScopedSyncTx(ctx context.Context, tx pgx.Tx, e ev
 			ID: pl.ID, Name: pl.Name, SourcePrefix: pl.SourcePrefix, Target: pl.Target,
 			DestinationPrefix: pl.DestinationPrefix, KeyTransform: pl.KeyTransform, DeleteScope: pl.DeleteScope,
 			AdoptExisting: pl.AdoptExisting, DefinedBy: pl.DefinedBy, UpdatedAt: e.Time, Mode: pl.Mode,
+			ReconcileIntervalSeconds: pl.ReconcileIntervalSeconds,
 		}, e.Sequence)
 	case EventSecretScopedSyncReplaced:
 		var pl SecretScopedSyncReplaced
@@ -160,6 +167,7 @@ func (p *Projector) applySecretScopedSyncTx(ctx context.Context, tx pgx.Tx, e ev
 			ID: pl.ID, Name: pl.Name, SourcePrefix: pl.SourcePrefix, Target: pl.Target,
 			DestinationPrefix: pl.DestinationPrefix, KeyTransform: pl.KeyTransform, DeleteScope: pl.DeleteScope,
 			AdoptExisting: pl.AdoptExisting, DefinedBy: pl.ReplacedBy, UpdatedAt: e.Time, Mode: pl.Mode,
+			ReconcileIntervalSeconds: pl.ReconcileIntervalSeconds,
 		}, pl.ReleaseKeys, e.Sequence)
 	case EventSecretScopedSyncModeSet:
 		var pl SecretScopedSyncModeSet
@@ -248,12 +256,13 @@ func addSecretScopedSyncPrivacyPolicies(policies map[privacyEventPolicyKey]event
 		privacyRule("/id", opaque), privacyRule("/name", opaque), privacyRule("/source_prefix", token),
 		privacyRule("/target", opaque), privacyRule("/destination_prefix", token), privacyRule("/key_transform", opaque),
 		privacyRule("/delete_scope", opaque), privacyRule("/adopt_existing", opaque), privacyRule("/defined_by", exact),
-		privacyRule("/mode", opaque))
+		privacyRule("/mode", opaque), privacyRule("/reconcile_interval_seconds", opaque))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncReplaced, 1}] = privacyRules(
 		privacyRule("/id", opaque), privacyRule("/name", opaque), privacyRule("/source_prefix", token),
 		privacyRule("/target", opaque), privacyRule("/destination_prefix", token), privacyRule("/key_transform", opaque),
 		privacyRule("/delete_scope", opaque), privacyRule("/adopt_existing", opaque), privacyRule("/mode", opaque),
-		privacyRule("/replaced_by", exact), privacyRule("/release_keys", opaque))
+		privacyRule("/replaced_by", exact), privacyRule("/release_keys", opaque),
+		privacyRule("/reconcile_interval_seconds", opaque))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncModeSet, 1}] = privacyRules(
 		privacyRule("/id", opaque), privacyRule("/mode", opaque), privacyRule("/set_by", exact))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncReconciled, 1}] = privacyRules(

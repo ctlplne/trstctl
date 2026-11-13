@@ -6044,7 +6044,8 @@ take a scoped sync from their delivery receipts only (A237-L2): the definition s
 `adopt_existing` and keeps `delete_scope` at `none`, a key the sync didn't write can't be
 seen there and would be replaced, and a key whose source is gone stays. Continuous mode (A237 part b):
 an `auto` definition is re-planned on the leader when its source set or its author's
-grants change (checked every 30 seconds) or its 15-minute drift check is due, and applied
+grants change (checked every 30 seconds) or its drift check is due (every 15 minutes, or
+the definition's own `reconcile_interval` from 1m to 24h, A237-L7), and applied
 when nothing is blocked; it reads the source as its author (A237-L6), so it stops at a
 restricted environment the author loses; a blocked or failed plan is recorded on the
 definition and writes nothing. A

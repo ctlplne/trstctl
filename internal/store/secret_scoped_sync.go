@@ -57,6 +57,9 @@ type SecretScopedSync struct {
 	LastReconcileAt     *time.Time
 	LastReconcileStatus string
 	LastReconcileReason string
+	// ReconcileIntervalSeconds is the definition's own drift-check interval
+	// (A237-L7); 0 keeps the deployment's default.
+	ReconcileIntervalSeconds int
 }
 
 // SecretScopedSyncKey is one destination key a definition manages.
@@ -112,17 +115,18 @@ func (s *Store) ApplySecretScopedSyncDefinedTx(ctx context.Context, tx pgx.Tx, t
 	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO secret_scoped_syncs (tenant_id, id, name, source_prefix, target, destination_prefix, key_transform,
-		                                 delete_scope, adopt_existing, defined_by, created_at, updated_at, event_sequence, mode)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12, $13)
+		                                 delete_scope, adopt_existing, defined_by, created_at, updated_at, event_sequence, mode,
+		                                 reconcile_interval_seconds)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12, $13, $14)
 		ON CONFLICT (tenant_id, id) DO UPDATE
 		   SET name = excluded.name, source_prefix = excluded.source_prefix, target = excluded.target,
 		       destination_prefix = excluded.destination_prefix, key_transform = excluded.key_transform,
 		       delete_scope = excluded.delete_scope, adopt_existing = excluded.adopt_existing,
 		       defined_by = excluded.defined_by, updated_at = excluded.updated_at, event_sequence = excluded.event_sequence,
-		       mode = excluded.mode
+		       mode = excluded.mode, reconcile_interval_seconds = excluded.reconcile_interval_seconds
 		 WHERE secret_scoped_syncs.event_sequence < excluded.event_sequence`,
 		tenantID, d.ID, d.Name, d.SourcePrefix, d.Target, d.DestinationPrefix, d.KeyTransform, d.DeleteScope,
-		d.AdoptExisting, d.DefinedBy, d.UpdatedAt.UTC(), seq, mode)
+		d.AdoptExisting, d.DefinedBy, d.UpdatedAt.UTC(), seq, mode, d.ReconcileIntervalSeconds)
 	return err
 }
 
@@ -138,10 +142,11 @@ func (s *Store) ApplySecretScopedSyncReplacedTx(ctx context.Context, tx pgx.Tx, 
 	tag, err := tx.Exec(ctx, `
 		UPDATE secret_scoped_syncs
 		   SET name = $3, source_prefix = $4, target = $5, destination_prefix = $6, key_transform = $7,
-		       delete_scope = $8, adopt_existing = $9, defined_by = $10, mode = $11, updated_at = $12, event_sequence = $13
+		       delete_scope = $8, adopt_existing = $9, defined_by = $10, mode = $11, updated_at = $12, event_sequence = $13,
+		       reconcile_interval_seconds = $14
 		 WHERE tenant_id = $1 AND id = $2 AND event_sequence < $13`,
 		tenantID, d.ID, d.Name, d.SourcePrefix, d.Target, d.DestinationPrefix, d.KeyTransform, d.DeleteScope,
-		d.AdoptExisting, d.DefinedBy, d.Mode, d.UpdatedAt.UTC(), seq)
+		d.AdoptExisting, d.DefinedBy, d.Mode, d.UpdatedAt.UTC(), seq, d.ReconcileIntervalSeconds)
 	if err != nil || tag.RowsAffected() != 1 || !releaseKeys {
 		return err
 	}
@@ -430,13 +435,13 @@ func alertSecretScopedSyncDeliveryFailedTx(ctx context.Context, tx pgx.Tx, tenan
 // #nosec G101 -- SQL column list, no credential (CWE-798)
 const secretScopedSyncColumns = `id::text, name, source_prefix, target, destination_prefix, key_transform, delete_scope,
 	adopt_existing, defined_by, created_at, updated_at, last_plan_digest, last_applied_at, mode, source_digest,
-	last_reconcile_at, last_reconcile_status, last_reconcile_reason`
+	last_reconcile_at, last_reconcile_status, last_reconcile_reason, reconcile_interval_seconds`
 
 func scanSecretScopedSync(row pgx.Row) (SecretScopedSync, error) {
 	var d SecretScopedSync
 	err := row.Scan(&d.ID, &d.Name, &d.SourcePrefix, &d.Target, &d.DestinationPrefix, &d.KeyTransform, &d.DeleteScope,
 		&d.AdoptExisting, &d.DefinedBy, &d.CreatedAt, &d.UpdatedAt, &d.LastPlanDigest, &d.LastAppliedAt, &d.Mode,
-		&d.SourceDigest, &d.LastReconcileAt, &d.LastReconcileStatus, &d.LastReconcileReason)
+		&d.SourceDigest, &d.LastReconcileAt, &d.LastReconcileStatus, &d.LastReconcileReason, &d.ReconcileIntervalSeconds)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, ErrSecretScopedSyncNotFound
 	}

@@ -1,0 +1,1 @@
+import{m as s,t}from"./schemas-B8rGRCmc.js";function r(r){return s(t,r)}export{r as t};

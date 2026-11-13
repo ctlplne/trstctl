@@ -1970,7 +1970,9 @@ A definition is `manual` (it waits for a reviewed apply) or `auto`
 (`trstctl secrets scoped-syncs mode <id> -f mode.json` with `{"mode":"auto"}`, or
 `"mode":"auto"` at definition). On the leader, the control plane checks auto syncs every
 30 seconds. When a sync's source names or versions changed, or every 15 minutes for
-drift, it plans the sync again. A plan with changes and nothing blocked is applied exactly
+drift, it plans the sync again. A sync can set its own drift-check interval
+(`reconcile_interval`, `1m` to `24h`, A237-L7; `0s` or none keeps the default), and a
+replacement that leaves it out keeps it; the console's define and edit forms offer it. A plan with changes and nothing blocked is applied exactly
 as a reviewed apply would be, and the receipt names the reconciler. A blocked or failed
 plan is recorded on the definition (`reconcile_status`, `reconcile_reason`) and writes
 nothing until someone reviews it. The reconciler reads the source as the sync's author

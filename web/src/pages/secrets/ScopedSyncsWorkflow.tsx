@@ -51,7 +51,16 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
   const [nextMode, setNextMode] = useState<Mode>("manual");
   const [awaiting, setAwaiting] = useState<string | null>(null);
   // A237-L3: the replacement being edited for the selected definition.
-  const [editing, setEditing] = useState<{ name: string; source: string; target: string; destination: string; deleteScope: DeleteScope } | null>(null);
+  const [editing, setEditing] = useState<{
+    name: string;
+    source: string;
+    target: string;
+    destination: string;
+    deleteScope: DeleteScope;
+    interval: string;
+  } | null>(null);
+  // A237-L7: a sync's own drift-check interval; "" is the 15-minute default.
+  const [driftInterval, setDriftInterval] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -97,11 +106,13 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
         delete_scope: deleteScope,
         adopt_existing: adoptExisting || undefined,
         mode,
+        reconcile_interval: driftInterval || undefined,
       });
       setName("");
       setSource("");
       setDestination("");
       setAdoptExisting(false);
+      setDriftInterval("");
       setSelected(created);
       setNextMode(created.mode as Mode);
       setPlan(null);
@@ -177,6 +188,7 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
       target: selected.target,
       destination: selected.destination_prefix ?? "",
       deleteScope: selected.delete_scope as DeleteScope,
+      interval: selected.reconcile_interval ?? "",
     });
   }
 
@@ -193,6 +205,8 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
         key_transform: selected.key_transform as "path" | "env",
         delete_scope: editing.deleteScope,
         adopt_existing: selected.adopt_existing,
+        // A237-L7: the chosen interval, or 0s back to the default.
+        reconcile_interval: editing.interval || "0s",
       });
       setSelected(replaced);
       setEditing(null);
@@ -222,6 +236,18 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
       : value === "approved"
         ? t("secrets.scopedSyncs.mode.approved")
         : t("secrets.scopedSyncs.mode.manual");
+  const intervalLabels: Record<string, string> = {
+    "": t("secrets.scopedSyncs.interval.default"),
+    "5m0s": t("secrets.scopedSyncs.interval.5m"),
+    "1h0m0s": t("secrets.scopedSyncs.interval.1h"),
+    "6h0m0s": t("secrets.scopedSyncs.interval.6h"),
+    "24h0m0s": t("secrets.scopedSyncs.interval.24h"),
+  };
+  const intervalOptions = Object.entries(intervalLabels).map(([value, label]) => (
+    <option key={value || "default"} value={value}>
+      {label}
+    </option>
+  ));
   const modeOptions = (
     <>
       <option value="manual">{t("secrets.scopedSyncs.mode.manual")}</option>
@@ -268,6 +294,7 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
             {selected.name}
           </h4>
           <p>{t("secrets.scopedSyncs.modeIs", { mode: modeLabel(selected.mode) })}</p>
+          <p>{t("secrets.scopedSyncs.intervalIs", { interval: intervalLabels[selected.reconcile_interval ?? ""] ?? selected.reconcile_interval ?? "" })}</p>
           {selected.reconcile_status ? (
             <p
               className={
@@ -363,6 +390,13 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
                   </Select>
                 )}
               </Field>
+              <Field label={t("secrets.scopedSyncs.interval")} description={t("secrets.scopedSyncs.intervalHelp")}>
+                {(control) => (
+                  <Select {...control} value={editing.interval} onChange={(event) => setEditing({ ...editing, interval: event.target.value })}>
+                    {intervalOptions}
+                  </Select>
+                )}
+              </Field>
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={busy || !editing.name.trim() || !editing.source.trim() || !editing.target}>
                   {t("secrets.scopedSyncs.saveDefinition")}
@@ -437,6 +471,13 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
             {(control) => (
               <Select {...control} value={mode} onChange={(event) => setMode(event.target.value as Mode)}>
                 {modeOptions}
+              </Select>
+            )}
+          </Field>
+          <Field label={t("secrets.scopedSyncs.interval")} description={t("secrets.scopedSyncs.intervalHelp")}>
+            {(control) => (
+              <Select {...control} value={driftInterval} onChange={(event) => setDriftInterval(event.target.value)}>
+                {intervalOptions}
               </Select>
             )}
           </Field>

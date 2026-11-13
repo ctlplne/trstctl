@@ -12412,6 +12412,7 @@ export interface SecretScopedSync {
   last_reconcile_at?: string;
   mode: "manual" | "auto" | "approved";
   name: string;
+  reconcile_interval?: string;
   reconcile_reason?: string;
   reconcile_status?: "applied" | "unchanged" | "blocked" | "failed" | "awaiting_approval";
   source_prefix: string;
@@ -12456,6 +12457,7 @@ export interface SecretScopedSyncRequest {
   key_transform?: "path" | "env";
   mode?: "manual" | "auto" | "approved";
   name: string;
+  reconcile_interval?: string;
   source_prefix: string;
   target: string;
 }

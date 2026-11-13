@@ -6043,6 +6043,17 @@ export const messages = {
       "Take over a destination key this sync didn't write. A target that can't list its keys needs this: the sync then works from its delivery receipts, replaces a key of the same name it didn't write, and deletes nothing.",
     description: "A237-L2: what adopting existing keys means, including for a target that can't list its keys.",
   },
+  "secrets.scopedSyncs.interval": { defaultMessage: "Drift check", description: "A237-L7: a scoped sync's own drift-check interval field." },
+  "secrets.scopedSyncs.intervalHelp": {
+    defaultMessage: "How often an automatic sync reads its destination back when nothing it syncs has changed.",
+    description: "A237-L7: what the drift-check interval does.",
+  },
+  "secrets.scopedSyncs.interval.default": { defaultMessage: "Every 15 minutes (default)", description: "A237-L7: the default drift-check interval." },
+  "secrets.scopedSyncs.interval.5m": { defaultMessage: "Every 5 minutes", description: "A237-L7: a drift-check interval." },
+  "secrets.scopedSyncs.interval.1h": { defaultMessage: "Every hour", description: "A237-L7: a drift-check interval." },
+  "secrets.scopedSyncs.interval.6h": { defaultMessage: "Every 6 hours", description: "A237-L7: a drift-check interval." },
+  "secrets.scopedSyncs.interval.24h": { defaultMessage: "Every day", description: "A237-L7: a drift-check interval." },
+  "secrets.scopedSyncs.intervalIs": { defaultMessage: "Drift check: {interval}.", description: "A237-L7: a sync's drift-check interval in its view." },
   "secrets.scopedSyncs.deleteScope": {
     defaultMessage: "Delete scope",
     description: "Field: delete scope.",

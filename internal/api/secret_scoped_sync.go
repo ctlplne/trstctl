@@ -73,6 +73,9 @@ type secretScopedSyncRequest struct {
 	DeleteScope       string `json:"delete_scope,omitempty"`
 	AdoptExisting     bool   `json:"adopt_existing,omitempty"`
 	Mode              string `json:"mode,omitempty"`
+	// ReconcileInterval is the definition's own drift-check interval, a Go
+	// duration from 1m to 24h (A237-L7); empty or 0s keeps the default.
+	ReconcileInterval string `json:"reconcile_interval,omitempty"`
 }
 
 type secretScopedSyncModeRequest struct {
@@ -110,6 +113,7 @@ type secretScopedSyncResponse struct {
 	LastReconcileAt   *time.Time                    `json:"last_reconcile_at,omitempty"`
 	ReconcileStatus   string                        `json:"reconcile_status,omitempty"`
 	ReconcileReason   string                        `json:"reconcile_reason,omitempty"`
+	ReconcileInterval string                        `json:"reconcile_interval,omitempty"`
 	Keys              []secretScopedSyncKeyResponse `json:"keys,omitempty"`
 }
 
@@ -189,10 +193,11 @@ func secretScopedSyncSchemas() map[string]*Schema {
 	return map[string]*Schema{
 		"SecretScopedSyncRequest": object(map[string]*Schema{
 			"name": str(), "source_prefix": str(), "target": str(), "destination_prefix": str(),
-			"key_transform":  {Type: "string", Enum: []string{"path", "env"}},
-			"delete_scope":   {Type: "string", Enum: []string{"none", "managed", "prefix"}},
-			"adopt_existing": {Type: "boolean"},
-			"mode":           {Type: "string", Enum: []string{"manual", "auto", scopedSyncModeApproved}},
+			"key_transform":      {Type: "string", Enum: []string{"path", "env"}},
+			"delete_scope":       {Type: "string", Enum: []string{"none", "managed", "prefix"}},
+			"adopt_existing":     {Type: "boolean"},
+			"mode":               {Type: "string", Enum: []string{"manual", "auto", scopedSyncModeApproved}},
+			"reconcile_interval": {Type: "string", Description: "A237-L7: the definition's own drift-check interval, 1m to 24h (a Go duration); empty or 0s keeps the 15-minute default, and a replacement that leaves it out keeps it"},
 		}, "name", "source_prefix", "target"),
 		"SecretScopedSyncModeRequest": object(map[string]*Schema{
 			"mode": {Type: "string", Enum: []string{"manual", "auto", scopedSyncModeApproved}},
@@ -203,7 +208,8 @@ func secretScopedSyncSchemas() map[string]*Schema {
 			"created_at": timestamp(), "updated_at": timestamp(), "last_plan_digest": str(), "last_applied_at": timestamp(),
 			"mode": {Type: "string", Enum: []string{"manual", "auto", scopedSyncModeApproved}}, "last_reconcile_at": timestamp(),
 			"reconcile_status": {Type: "string", Enum: []string{"applied", "unchanged", "blocked", "failed", scopedSyncAwaitingApproval}}, "reconcile_reason": str(),
-			"keys": {Type: "array", Items: key},
+			"reconcile_interval": {Type: "string", Description: "A237-L7: the definition's own drift-check interval; absent is the 15-minute default"},
+			"keys":               {Type: "array", Items: key},
 		}, "id", "name", "source_prefix", "target", "key_transform", "delete_scope", "adopt_existing", "mode", "created_at", "updated_at"),
 		"SecretScopedSyncList": object(map[string]*Schema{
 			"items": {Type: "array", Items: ref("SecretScopedSync")}, "next_cursor": str(),
@@ -231,7 +237,40 @@ func scopedSyncView(d store.SecretScopedSync) secretScopedSyncResponse {
 		KeyTransform: d.KeyTransform, DeleteScope: d.DeleteScope, AdoptExisting: d.AdoptExisting, DefinedBy: d.DefinedBy,
 		CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt, LastPlanDigest: d.LastPlanDigest, LastAppliedAt: d.LastAppliedAt,
 		Mode: d.Mode, LastReconcileAt: d.LastReconcileAt, ReconcileStatus: d.LastReconcileStatus, ReconcileReason: d.LastReconcileReason,
+		ReconcileInterval: scopedSyncIntervalText(d.ReconcileIntervalSeconds),
 	}
+}
+
+// Drift-check interval bounds for one definition (A237-L7).
+const (
+	scopedSyncMinInterval = time.Minute
+	scopedSyncMaxInterval = 24 * time.Hour
+)
+
+// scopedSyncInterval parses a definition's drift-check interval: empty or 0s
+// is the deployment's default (0 seconds), else 1m to 24h in whole seconds.
+func scopedSyncInterval(text string) (int, error) {
+	if strings.TrimSpace(text) == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(strings.TrimSpace(text))
+	switch {
+	case err != nil:
+		return 0, errStatus(http.StatusBadRequest, "reconcile_interval is a duration such as 5m or 1h")
+	case d == 0:
+		return 0, nil
+	case d < scopedSyncMinInterval || d > scopedSyncMaxInterval || d%time.Second != 0:
+		return 0, errStatus(http.StatusBadRequest, "reconcile_interval is from 1m to 24h in whole seconds, or 0s for the default")
+	}
+	return int(d / time.Second), nil
+}
+
+// scopedSyncIntervalText shows a definition's interval; the default shows none.
+func scopedSyncIntervalText(seconds int) string {
+	if seconds <= 0 {
+		return ""
+	}
+	return (time.Duration(seconds) * time.Second).String()
 }
 
 // scopedSyncTarget is the definition's target with its scoped operations. A
@@ -276,6 +315,7 @@ func (a *API) defineSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 		if err := a.orch.DefineSecretScopedSync(ctx, tenantID, projections.SecretScopedSyncDefined{
 			ID: id, Name: def.Name, SourcePrefix: def.SourcePrefix, Target: def.Target, DestinationPrefix: def.DestinationPrefix,
 			KeyTransform: def.KeyTransform, DeleteScope: def.DeleteScope, AdoptExisting: def.AdoptExisting, DefinedBy: subject, Mode: req.Mode,
+			ReconcileIntervalSeconds: def.ReconcileIntervalSeconds,
 		}); err != nil {
 			return 0, nil, err
 		}
@@ -320,6 +360,10 @@ func (a *API) checkScopedSyncDefinition(ctx context.Context, tenantID string, re
 	if err != nil {
 		return store.SecretScopedSync{}, err
 	}
+	interval, err := scopedSyncInterval(req.ReconcileInterval)
+	if err != nil {
+		return store.SecretScopedSync{}, err
+	}
 	if !secretsync.ScopedListsKeys(scoped) && scope != "none" {
 		// A237-L2: a receipt-only destination can't delete keys.
 		return store.SecretScopedSync{}, errStatus(http.StatusBadRequest,
@@ -344,6 +388,7 @@ func (a *API) checkScopedSyncDefinition(ctx context.Context, tenantID string, re
 	return store.SecretScopedSync{
 		Name: req.Name, SourcePrefix: source + "/", Target: req.Target, DestinationPrefix: dest,
 		KeyTransform: transform, DeleteScope: scope, AdoptExisting: req.AdoptExisting, Mode: req.Mode,
+		ReconcileIntervalSeconds: interval,
 	}, nil
 }
 
@@ -377,6 +422,10 @@ func (a *API) replaceSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 		if next.Mode == "" {
 			next.Mode = current.Mode
 		}
+		if strings.TrimSpace(req.ReconcileInterval) == "" {
+			// A237-L7: an interval left out stays, as a mode does.
+			next.ReconcileIntervalSeconds = current.ReconcileIntervalSeconds
+		}
 		if current.Mode == scopedSyncModeApproved && next.Mode != scopedSyncModeApproved {
 			if err := requireScopedSyncGateAuthority(ctx, tenantID, "leaving approval-gated convergence"); err != nil {
 				return 0, nil, err
@@ -384,7 +433,8 @@ func (a *API) replaceSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 		}
 		if next.Name == current.Name && next.SourcePrefix == current.SourcePrefix && next.Target == current.Target &&
 			next.DestinationPrefix == current.DestinationPrefix && next.KeyTransform == current.KeyTransform &&
-			next.DeleteScope == current.DeleteScope && next.AdoptExisting == current.AdoptExisting && next.Mode == current.Mode {
+			next.DeleteScope == current.DeleteScope && next.AdoptExisting == current.AdoptExisting && next.Mode == current.Mode &&
+			next.ReconcileIntervalSeconds == current.ReconcileIntervalSeconds {
 			view, err := a.scopedSyncViewWithKeys(ctx, tenantID, current)
 			return http.StatusOK, view, err
 		}
@@ -398,6 +448,7 @@ func (a *API) replaceSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 			AdoptExisting: next.AdoptExisting, Mode: next.Mode, ReplacedBy: subject,
 			ReleaseKeys: next.Target != current.Target || next.DestinationPrefix != current.DestinationPrefix ||
 				next.KeyTransform != current.KeyTransform,
+			ReconcileIntervalSeconds: next.ReconcileIntervalSeconds,
 		}); err != nil {
 			return 0, nil, err
 		}
@@ -1053,7 +1104,12 @@ func (a *API) ReconcileScopedSecretSyncs(ctx context.Context, tenants []string, 
 			// A plan awaiting approval is looked at every pass, so an approval
 			// is acted on as soon as it is given.
 			awaiting := d.Mode == scopedSyncModeApproved && d.LastReconcileStatus == scopedSyncAwaitingApproval
-			if seen, ok := state[key]; ok && !awaiting && seen.SourceDigest == digest && now.Sub(seen.PlannedAt) < driftEvery {
+			// A237-L7: a definition can set its own drift-check interval.
+			every := driftEvery
+			if d.ReconcileIntervalSeconds > 0 {
+				every = time.Duration(d.ReconcileIntervalSeconds) * time.Second
+			}
+			if seen, ok := state[key]; ok && !awaiting && seen.SourceDigest == digest && now.Sub(seen.PlannedAt) < every {
 				continue
 			}
 			state[key] = ScopedSyncSeen{SourceDigest: digest, PlannedAt: now}

@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- A scoped sync sets its own drift-check interval (A237-L7): `reconcile_interval` (1m to 24h; `0s` or none keeps the
+  15-minute default) decides how often an automatic sync re-reads its destination when nothing it syncs changed; a
+  replacement that leaves it out keeps it, the view names it, and the console's define and edit forms offer it.
 - Revoking a RabbitMQ lease lists only that user's connections (A239-L9): the backend closes them from
   `GET /api/connections/username/{user}` instead of reading every connection on the broker, and falls back to
   filtering the full listing on a broker without the per-user listing.

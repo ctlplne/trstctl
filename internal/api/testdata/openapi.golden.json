@@ -57735,6 +57735,10 @@
           "name": {
             "type": "string"
           },
+          "reconcile_interval": {
+            "description": "A237-L7: the definition's own drift-check interval; absent is the 15-minute default",
+            "type": "string"
+          },
           "reconcile_reason": {
             "type": "string"
           },
@@ -57975,6 +57979,10 @@
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "reconcile_interval": {
+            "description": "A237-L7: the definition's own drift-check interval, 1m to 24h (a Go duration); empty or 0s keeps the 15-minute default, and a replacement that leaves it out keeps it",
             "type": "string"
           },
           "source_prefix": {

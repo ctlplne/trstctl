@@ -27987,6 +27987,8 @@ export interface components {
             /** @enum {string} */
             mode: "manual" | "auto" | "approved";
             name: string;
+            /** @description A237-L7: the definition's own drift-check interval; absent is the 15-minute default */
+            reconcile_interval?: string;
             reconcile_reason?: string;
             /** @enum {string} */
             reconcile_status?: "applied" | "unchanged" | "blocked" | "failed" | "awaiting_approval";
@@ -28046,6 +28048,8 @@ export interface components {
             /** @enum {string} */
             mode?: "manual" | "auto" | "approved";
             name: string;
+            /** @description A237-L7: the definition's own drift-check interval, 1m to 24h (a Go duration); empty or 0s keeps the 15-minute default, and a replacement that leaves it out keeps it */
+            reconcile_interval?: string;
             source_prefix: string;
             target: string;
         };
