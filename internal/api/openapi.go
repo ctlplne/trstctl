@@ -6604,6 +6604,10 @@ func componentSchemas() map[string]*Schema {
 		"key_provider":                {Type: "string", Enum: []string{"tpm2", "pkcs11", "software"}},
 		"pkcs11_attestation_chain_der": {Type: "array", Items: &Schema{Type: "string", Format: "byte"},
 			Description: "the PKCS#11 token's attestation of the CSR's key, leaf first"},
+		"smartcard_hsm_attestation": {Type: "object", Description: "A175-L3: a SmartCard-HSM's attestation of the CSR's key in card-verifiable certificates — the authenticated CV request it answered key generation with, and its device and device issuer CA CV certificates; instead of pkcs11_attestation_chain_der",
+			Properties: map[string]*Schema{
+				"authenticated_request": {Type: "string", Format: "byte"}, "device_cvc": {Type: "string", Format: "byte"}, "dica_cvc": {Type: "string", Format: "byte"},
+			}, Required: []string{"authenticated_request", "device_cvc", "dica_cvc"}},
 	}, "segment_id", "ca_id", "host", "csr_der", "attestation_credential_json")
 	edgeIssuanceSchema := object(map[string]*Schema{
 		"serial": str(), "subject": str(),

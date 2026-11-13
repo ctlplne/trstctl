@@ -18599,6 +18599,15 @@ export interface components {
             /** @description the PKCS#11 token's attestation of the CSR's key, leaf first */
             pkcs11_attestation_chain_der?: string[];
             segment_id: string;
+            /** @description A175-L3: a SmartCard-HSM's attestation of the CSR's key in card-verifiable certificates — the authenticated CV request it answered key generation with, and its device and device issuer CA CV certificates; instead of pkcs11_attestation_chain_der */
+            smartcard_hsm_attestation?: {
+                /** Format: byte */
+                authenticated_request: string;
+                /** Format: byte */
+                device_cvc: string;
+                /** Format: byte */
+                dica_cvc: string;
+            };
             ttl_seconds?: number;
         };
         EdgeDelegationRevokeInput: {

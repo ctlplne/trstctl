@@ -117,6 +117,22 @@ type EdgeDelegationMintRequest struct {
 	// CSR's key, leaf first (A175). It makes a PKCS#11 key hardware-attested
 	// when it reaches a vendor root the segment pinned.
 	PKCS11AttestationChainDER [][]byte `json:"pkcs11_attestation_chain_der,omitempty"`
+	// SmartCardHSMAttestation is a SmartCard-HSM's own attestation of the
+	// CSR's key (A175-L3), for a token that attests in card-verifiable
+	// certificates rather than X.509 objects. It makes a PKCS#11 key
+	// hardware-attested when its device chains to a CV root the segment
+	// pinned. A request carries this or the chain, not both.
+	SmartCardHSMAttestation *EdgeSmartCardHSMAttestation `json:"smartcard_hsm_attestation,omitempty"`
+}
+
+// EdgeSmartCardHSMAttestation is a SmartCard-HSM's attestation of a key it
+// generated (A175-L3): the authenticated CV request (tag 67) it answered key
+// generation with, and the device's and the device issuer CA's CV
+// certificates from its C_DevAut file.
+type EdgeSmartCardHSMAttestation struct {
+	AuthenticatedRequest []byte `json:"authenticated_request"`
+	DeviceCVC            []byte `json:"device_cvc"`
+	DICACVC              []byte `json:"dica_cvc"`
 }
 
 // EdgeTokenAttestation is what a verified PKCS#11 token attestation named

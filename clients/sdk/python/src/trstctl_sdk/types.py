@@ -6761,6 +6761,7 @@ EdgeDelegationMintInput = TypedDict(
         'key_provider': str,
         'pkcs11_attestation_chain_der': list[str],
         'segment_id': str,
+        'smartcard_hsm_attestation': dict[str, Any],
         'ttl_seconds': int,
     },
     total=False,

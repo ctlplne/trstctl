@@ -90,7 +90,7 @@ func (s *edgeDelegationService) SetSegmentPolicy(ctx context.Context, tenantID s
 					"they become the name constraints of every delegation minted for it", api.ErrEdgeDelegationInvalid)
 		}
 	}
-	if err := validateEdgePEMRoots("pkcs11_attestation_roots_pem", req.PKCS11AttestationRootsPEM); err != nil {
+	if err := validateEdgeTokenRoots("pkcs11_attestation_roots_pem", req.PKCS11AttestationRootsPEM); err != nil {
 		return api.EdgeSegmentPolicy{}, err
 	}
 	if req.RequirePKCS11Attestation && len(req.PKCS11AttestationRootsPEM) == 0 {
@@ -175,7 +175,7 @@ func (s *edgeDelegationService) MintDelegation(ctx context.Context, tenantID str
 	if err != nil {
 		return api.EdgeDelegation{}, edgeAttestationRefusal(err)
 	}
-	token, custody, err := edgeTokenCustody(provider, custody, policy, req.PKCS11AttestationChainDER, req.CSRDER, time.Now().UTC())
+	token, custody, err := edgeTokenCustody(provider, custody, policy, req.PKCS11AttestationChainDER, req.SmartCardHSMAttestation, req.CSRDER, time.Now().UTC())
 	if err != nil {
 		return api.EdgeDelegation{}, err
 	}

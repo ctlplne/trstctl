@@ -675,7 +675,10 @@ never live in the API process. What you can do end to end against the running bi
   The console's edge segment form takes the vendor roots and the requirement
   when PKCS#11 custody is allowed, and the segment table shows them.
   Proven against SoftHSM holding a stand-in vendor chain; a real token's
-  attestation is a hardware proof. Exportable software PEM custody exists only behind BOTH
+  attestation is a hardware proof. A SmartCard-HSM's card-verifiable
+  attestation (A175-L3) is verified on the same seam, but the agent does not
+  read it from the card yet: the operator adds `smartcard_hsm_attestation` to
+  the mint body (what comes next: `--edge-attest` reading it). Exportable software PEM custody exists only behind BOTH
   `--edge-key-provider software --edge-allow-software-key` and an explicit
   segment-policy allowlist entry. Its durable evidence says `file`,
   `key_exportable=true`, and `host_attested_software_exception`; the console

@@ -4869,6 +4869,7 @@ export interface EdgeDelegationMintInput {
   key_provider?: "tpm2" | "pkcs11" | "software";
   pkcs11_attestation_chain_der?: string[];
   segment_id: string;
+  smartcard_hsm_attestation?: { authenticated_request: string; device_cvc: string; dica_cvc: string };
   ttl_seconds?: number;
 }
 

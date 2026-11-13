@@ -235,6 +235,26 @@ refused; without it, such a request keeps `host_attested_operator_claim`. The
 local proof uses SoftHSM holding a stand-in vendor chain (SoftHSM has no
 attestation of its own); proof with a real token is a separate hardware step.
 
+Some tokens attest in their own format rather than X.509 certificate objects
+(A175-L3). A SmartCard-HSM (and the Nitrokey HSM 2 built on it) answers key
+generation with an authenticated card-verifiable certificate request — the new
+key's public key signed by the key itself and then by the device — and keeps
+the device's CV certificate and its device issuer CA's in its `C_DevAut` file;
+the format is BSI TR-03110 part 3. Pin the vendor's CV root in the same
+`pkcs11_attestation_roots_pem` list as a PEM block of type `CV CERTIFICATE`
+(it must be a self-signed CV certificate carrying its curve), and send the
+evidence in the mint body as `smartcard_hsm_attestation`: `authenticated_request`,
+`device_cvc` and `dica_cvc`, each base64. The control plane verifies the device
+issuer CA against a pinned root, the device against the DICA, the device's
+signature over the request and its reference, the request's own signature, the
+certificates' dates, and that the request's key is exactly the CSR's; then the
+custody is `hardware_key_attested` and `token_attestation` names the root's
+SHA-256 and the device serial. A request carries the X.509 chain or this, not
+both. Keys on P-256, P-384 and P-521 (and RSA of 2048 bits or more) are
+verified; a key on a brainpool curve is refused. The local proof uses a stand-in
+card built to TR-03110; a real SmartCard-HSM is a separate hardware step, and the
+agent does not yet read this evidence from the card for `--edge-attest`.
+
 ## Exportable software exception
 
 Software custody needs two independent choices:

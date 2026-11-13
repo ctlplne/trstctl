@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A SmartCard-HSM's own key attestation makes an edge CA key hardware-attested (A175-L3): a token that attests in
+  card-verifiable certificates (BSI TR-03110) rather than X.509 objects sends its authenticated CV request and its
+  device and device issuer CA CV certificates as `smartcard_hsm_attestation`; the segment pins the vendor's CV root as a
+  `CV CERTIFICATE` PEM block in `pkcs11_attestation_roots_pem`, and a request whose device chains to it and attests
+  exactly the CSR's key is recorded `hardware_key_attested` with the device serial and the root.
 - A retried Slack annotation never leaves two replies (A174-L4): a write whose request reached the provider and whose
   answer was lost is recorded `unconfirmed` on the finding; a Slack retry that cannot read the thread
   (`missing_scope`) after such a loss refuses, naming `channels:history` / `groups:history`, instead of posting again.

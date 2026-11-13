@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3230 annotated sites across 34 rules. Each row is
+3238 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -948,6 +948,12 @@ not this file.
 | `internal/crypto/windependents/task_events_windows.go:248` | validated GUID/fixed schema structured query, local channel only, used and closed on this OS thread (CWE-242) |
 | `internal/crypto/windependents/task_events_windows.go:265` | fixed 16-handle output array, zero wait and sized count; every returned native event is closed (CWE-242) |
 
+### G104 — CWE-? (unmapped rule) (1 sites)
+
+| Location | Reason |
+|---|---|
+| `internal/crypto/deviceattesttest/smartcardhsm.go:137` | a P-256 key the stand-in generated always encodes |
+
 ### G107 — CWE-88 Argument injection (variable URL request) (14 sites)
 
 | Location | Reason |
@@ -997,7 +1003,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (500 sites)
+### G115 — CWE-190 Integer overflow or wraparound (505 sites)
 
 | Location | Reason |
 |---|---|
@@ -1110,6 +1116,11 @@ not this file.
 | `internal/crypto/ctlog/sct.go:263` | RFC 6962 16-bit fields; callers bound v (CWE-190) |
 | `internal/crypto/ctlog/sct.go:267` | byte extraction from a fixed-width value (CWE-190) |
 | `internal/crypto/ctlog/sct.go:277` | bounded to 24 bits above (CWE-190) |
+| `internal/crypto/deviceattest/cvc.go:211` | oidLen is checked to be 1..127 above (CWE-190) |
+| `internal/crypto/deviceattesttest/smartcardhsm.go:167` | each value is one decimal digit (CWE-190) |
+| `internal/crypto/deviceattesttest/smartcardhsm.go:173` | a CV tag is at most two bytes (CWE-190) |
+| `internal/crypto/deviceattesttest/smartcardhsm.go:175` | a one-byte tag (CWE-190) |
+| `internal/crypto/deviceattesttest/smartcardhsm.go:183` | a stand-in element is under 64 KiB (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:53` | command strings are short (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:63` | SASL payloads are short (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:74` | a BSON int32 is its two's-complement bits (CWE-190) |
@@ -3150,11 +3161,12 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:101` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G401 — CWE-328 Use of weak hash (19 sites)
+### G401 — CWE-328 Use of weak hash (20 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:421` | display/lookup fingerprint in the industry-standard form; not a security control (CWE-328) |
+| `internal/crypto/deviceattest/cvc.go:370` | verifying a CV signature that names SHA-1 (CWE-327) |
 | `internal/crypto/jks/jceks.go:68` | the JCEKS integrity digest is SHA-1 by definition; verification only (CWE-328) |
 | `internal/crypto/leafca.go:743` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:379` | mysql_native_password, when the server demands it (CWE-327) |
@@ -3264,11 +3276,12 @@ not this file.
 | `internal/secretscan/repository_credential_test.go:11` | test-only stand-in host: serves the local git-http-backend; the toolchain is far past the CVE-2016-5386 fix (CWE-284) |
 | `internal/server/secret_repository_private_clone_served_test.go:14` | test-only stand-in host: serves the local git-http-backend; the toolchain is far past the CVE-2016-5386 fix (CWE-284) |
 
-### G505 — CWE-328 Weak hash import (SHA-1) (15 sites)
+### G505 — CWE-328 Weak hash import (SHA-1) (16 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:15` | SHA-1 only for the conventional certificate fingerprint identifier, never integrity (CWE-328) |
+| `internal/crypto/deviceattest/cvc.go:11` | a card-verifiable certificate may name ECDSA/RSA with SHA-1; verified only, never produced (CWE-327) |
 | `internal/crypto/jks/jceks.go:7` | a JCEKS keystore's integrity digest is defined over SHA-1; this only verifies existing files (CWE-328) |
 | `internal/crypto/leafca.go:7` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:17` | MySQL's mysql_native_password and the RSA-OAEP padding its servers use (CWE-327) |

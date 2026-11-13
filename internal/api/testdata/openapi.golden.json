@@ -23495,6 +23495,29 @@
           "segment_id": {
             "type": "string"
           },
+          "smartcard_hsm_attestation": {
+            "description": "A175-L3: a SmartCard-HSM's attestation of the CSR's key in card-verifiable certificates — the authenticated CV request it answered key generation with, and its device and device issuer CA CV certificates; instead of pkcs11_attestation_chain_der",
+            "properties": {
+              "authenticated_request": {
+                "format": "byte",
+                "type": "string"
+              },
+              "device_cvc": {
+                "format": "byte",
+                "type": "string"
+              },
+              "dica_cvc": {
+                "format": "byte",
+                "type": "string"
+              }
+            },
+            "required": [
+              "authenticated_request",
+              "device_cvc",
+              "dica_cvc"
+            ],
+            "type": "object"
+          },
           "ttl_seconds": {
             "type": "integer"
           }
