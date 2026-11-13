@@ -280,10 +280,13 @@ trstctl secrets projects restore apply payments -f apply.json       # the same b
 A restore never brings back a dead credential silently. A version whose credential a
 rotation retired at its provider, is retiring, revoked by rolling back, or whose lease
 has expired is `blocked` with the rotation named, and a blocked item blocks the restore.
-Every restored value's references must still resolve, as for a promotion. A folder
-restore doesn't bring back a secret deleted since; restore it by name from the deleted
-secrets while it's kept (A236-L4). The console offers both on a project's page
-(**Promote or restore**) for `secrets:write` holders.
+Every restored value's references must still resolve, as for a promotion. A secret of
+the folder deleted since that is still kept (A236-L4) comes back too (A236-L5): the plan
+lists it as `restore_deleted` with the version whose value it takes (`restore_version`)
+and the deletion it comes back from (`deleted_version`, `deleted_at`), and applying
+brings back its history and writes that value as its next version. One already purged,
+or created and deleted since, isn't restored. The console offers both on a project's
+page (**Promote or restore**) for `secrets:write` holders.
 
 ### Migrating from another system (A243)
 

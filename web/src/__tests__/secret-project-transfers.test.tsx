@@ -197,10 +197,18 @@ describe("A236 promote and restore", () => {
       at: "2026-11-01T10:00:00Z",
       plan_digest: "e".repeat(64),
       items: [
+        {
+          name: "orders/dev/db/old",
+          current_version: 0,
+          restore_version: 1,
+          action: "restore_deleted",
+          deleted_version: 3,
+          deleted_at: "2026-11-02T00:00:00Z",
+        },
         { name: "orders/dev/db/password", current_version: 3, restore_version: 1, action: "restore" },
         { name: "orders/dev/db/new", current_version: 1, action: "created_since" },
       ],
-      changes: 1,
+      changes: 2,
       blocked: 0,
     });
     apiMock.applySecretRestore.mockResolvedValue({ batch_id: "b2", operation: "restore", plan_digest: "e".repeat(64), items: [{}] });
@@ -212,6 +220,9 @@ describe("A236 promote and restore", () => {
     await user.selectOptions(screen.getByLabelText("Folder (optional)"), "db");
     await user.click(screen.getByRole("button", { name: "Preview the plan" }));
     expect(await screen.findByText("Created since — kept")).toBeInTheDocument();
+    // A236-L5: a secret deleted since that is still kept comes back.
+    expect(screen.getByText("Deleted since — brought back")).toBeInTheDocument();
+    expect(screen.getByText("deleted at v3; comes back with v1's value and its history")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Restore these secrets" }));
     expect(apiMock.applySecretRestore).toHaveBeenCalledWith(
       "orders",

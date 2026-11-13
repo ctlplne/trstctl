@@ -17,7 +17,8 @@ import { apiProblemMessage } from "@/lib/apiProblem";
 // and keeps the reviewed plan to apply again once it is approved. After a
 // batch is applied, the panel names the consumers that last reported an
 // earlier version of a changed secret, so the operator knows what to reload
-// (A236-L3).
+// (A236-L3). A restore also brings back a secret deleted since that is still
+// kept, with its history (A236-L5).
 
 type Mode = "promote" | "restore";
 
@@ -119,6 +120,7 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
     restore: t("secrets.transfers.action.restore"),
     unchanged: t("secrets.transfers.action.unchanged"),
     created_since: t("secrets.transfers.action.createdSince"),
+    restore_deleted: t("secrets.transfers.action.restoreDeleted"),
     blocked: t("secrets.transfers.action.blocked"),
   };
 
@@ -243,9 +245,14 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
                     <span className="font-mono text-xs">{item.name}</span>
                     <span className={item.action === "blocked" ? "font-semibold text-risk-high" : ""}>{actionLabel[item.action] ?? item.action}</span>
                     <span className="text-muted-foreground">
-                      {item.restore_version
-                        ? t("secrets.transfers.restoreVersions", { current: String(item.current_version), restore: String(item.restore_version) })
-                        : t("secrets.transfers.version", { version: String(item.current_version) })}
+                      {item.action === "restore_deleted"
+                        ? t("secrets.transfers.restoreDeletedVersions", {
+                            deleted: String(item.deleted_version ?? ""),
+                            restore: String(item.restore_version ?? ""),
+                          })
+                        : item.restore_version
+                          ? t("secrets.transfers.restoreVersions", { current: String(item.current_version), restore: String(item.restore_version) })
+                          : t("secrets.transfers.version", { version: String(item.current_version) })}
                     </span>
                     {item.reason ? <span className="text-risk-high">{item.reason}</span> : null}
                   </li>

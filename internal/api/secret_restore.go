@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
@@ -25,13 +27,18 @@ import (
 // or let expire is refused by name — a restore never silently brings back a
 // dead credential — and every restored value's references must still resolve
 // as the caller may read them, without a cycle. Like a promotion, the caller
-// previews a value-free plan and applies it by its digest.
+// previews a value-free plan and applies it by its digest. A secret deleted
+// since that is still kept (A236-L4) comes back with its history and the
+// value it had then as its next version (A236-L5).
 
 const (
 	secretRestoreRestore      = "restore"
 	secretRestoreUnchanged    = "unchanged"
 	secretRestoreCreatedSince = "created_since"
 	secretRestoreBlocked      = "blocked"
+	// secretRestoreDeleted brings back a secret deleted since the point in
+	// time, from its kept tombstone (A236-L5).
+	secretRestoreDeleted = "restore_deleted"
 )
 
 type secretRestoreRequest struct {
@@ -47,6 +54,11 @@ type secretRestoreItem struct {
 	RestoreVersion int    `json:"restore_version,omitempty"`
 	Action         string `json:"action"`
 	Reason         string `json:"reason,omitempty"`
+	// DeletedVersion and DeletedAt name the kept deletion a restore_deleted
+	// item brings back (A236-L5): the version the secret had when deleted and
+	// when. CurrentVersion is then 0: no live secret holds the name.
+	DeletedVersion int        `json:"deleted_version,omitempty"`
+	DeletedAt      *time.Time `json:"deleted_at,omitempty"`
 }
 
 type secretRestorePlan struct {
@@ -82,8 +94,10 @@ func secretRestoreSchemas() map[string]*Schema {
 		"SecretRestoreItem": object(map[string]*Schema{
 			"name": str(), "current_version": {Type: "integer"}, "restore_version": {Type: "integer"},
 			"action": {Type: "string", Enum: []string{secretRestoreRestore, secretRestoreUnchanged,
-				secretRestoreCreatedSince, secretRestoreBlocked}},
-			"reason": str(),
+				secretRestoreCreatedSince, secretRestoreBlocked, secretRestoreDeleted}},
+			"reason":          str(),
+			"deleted_version": {Type: "integer", Description: "A236-L5: the version a secret deleted since had when deleted; it comes back with its history"},
+			"deleted_at":      {Type: "string", Format: "date-time", Description: "A236-L5: when the secret this item brings back was deleted"},
 		}, "name", "current_version", "action"),
 		"SecretRestorePlan": object(map[string]*Schema{
 			"project": str(), "environment": str(), "folder": str(), "at": timestamp(), "plan_digest": str(),
@@ -156,18 +170,22 @@ func (a *API) applySecretRestore(w http.ResponseWriter, r *http.Request) {
 		if authorizedTenant != tenantID {
 			return 0, nil, errors.New("api: secret restore tenant changed")
 		}
-		receipt, err := a.executeSecretVersionBatch(ctx, tenantID, store.ApplicationSecretBatchRestore,
-			idempotencyKey, keyDigest, binding, req.PlanDigest,
-			func(ctx context.Context) ([]projections.ApplicationSecretBatchVersionItem, int, error) {
-				return a.sealSecretRestore(ctx, tenantID, project, req)
-			})
-		if err != nil {
-			return 0, nil, err
-		}
-		if receipt.BatchID == "" {
-			return http.StatusOK, receipt, nil
-		}
-		return http.StatusCreated, receipt, nil
+		// A236-L5: bringing back a deleted secret stores one again, so the
+		// restore takes the stored-secret creation fence like a promotion.
+		return withStoredSecretCreationFence(ctx, tenantID, func(work context.Context) (int, any, error) {
+			receipt, err := a.executeSecretVersionBatch(work, tenantID, store.ApplicationSecretBatchRestore,
+				idempotencyKey, keyDigest, binding, req.PlanDigest,
+				func(ctx context.Context) ([]projections.ApplicationSecretBatchVersionItem, int, error) {
+					return a.sealSecretRestore(ctx, tenantID, project, req)
+				})
+			if err != nil {
+				return 0, nil, err
+			}
+			if receipt.BatchID == "" {
+				return http.StatusOK, receipt, nil
+			}
+			return http.StatusCreated, receipt, nil
+		})
 	})
 }
 
@@ -216,7 +234,22 @@ func (a *API) planSecretRestore(ctx context.Context, tenantID, project string, r
 	if err != nil {
 		return nil, err
 	}
-	if len(current) > secretPromotionLimit {
+	// A236-L5: secrets deleted since the point in time that are still kept.
+	kept, err := a.store.ListDeletedSecretsUnder(ctx, tenantID, prefix, hidden, secretPromotionLimit+1)
+	if err != nil {
+		return nil, err
+	}
+	live := make(map[string]bool, len(current))
+	for _, rec := range current {
+		live[rec.Name] = true
+	}
+	deleted := kept[:0]
+	for _, d := range kept {
+		if !live[d.Name] && d.DeletedAt.After(req.At) {
+			deleted = append(deleted, d)
+		}
+	}
+	if len(current)+len(deleted) > secretPromotionLimit {
 		return nil, errStatus(http.StatusBadRequest, "a restore covers at most 100 secrets at once; narrow it with a folder")
 	}
 	planned := &secretRestorePlanned{
@@ -260,13 +293,41 @@ func (a *API) planSecretRestore(ctx context.Context, tenantID, project string, r
 		}
 		planned.plan.Items = append(planned.plan.Items, item)
 	}
+	for _, d := range deleted {
+		old, err := a.secrets.be.Store.GetDeletedSecretVersionAt(ctx, tenantID, d.Name, req.At)
+		if errors.Is(err, store.ErrSecretNotFound) {
+			continue // created and deleted since: there is nothing to bring back
+		}
+		if err != nil {
+			return nil, err
+		}
+		deletedAt := d.DeletedAt.UTC()
+		item := secretRestoreItem{Name: d.Name, RestoreVersion: old.Version, Action: secretRestoreDeleted,
+			DeletedVersion: d.Version, DeletedAt: &deletedAt}
+		state, err := a.secrets.be.Store.SecretVersionCredentialState(ctx, tenantID, d.Name, old.Version, now)
+		if err != nil {
+			return nil, err
+		}
+		if state.State != "" {
+			item.Action, item.Reason = secretRestoreBlocked, secretCredentialStateReason(state)
+		} else {
+			plain, err := a.secrets.open(ctx, tenantID, old.Sealed, sealAAD(tenantID, d.Name))
+			if err != nil {
+				return nil, err
+			}
+			values[d.Name] = plain
+			planned.sealed[d.Name] = old
+		}
+		planned.plan.Items = append(planned.plan.Items, item)
+	}
+	slices.SortFunc(planned.plan.Items, func(x, y secretRestoreItem) int { return strings.Compare(x.Name, y.Name) })
 	// Restored values must resolve as they will stand: a restored name reads
 	// its restored value, everything else its stored value as the caller may
 	// read it.
 	reached, resolved := map[string]int{}, map[string]bool{}
 	for i := range planned.plan.Items {
 		item := &planned.plan.Items[i]
-		if item.Action != secretRestoreRestore {
+		if item.Action != secretRestoreRestore && item.Action != secretRestoreDeleted {
 			continue
 		}
 		reason, err := a.promotionReferenceProblem(ctx, tenantID, item.Name, values, reached, resolved, nil)
@@ -280,7 +341,7 @@ func (a *API) planSecretRestore(ctx context.Context, tenantID, project string, r
 	}
 	for _, item := range planned.plan.Items {
 		switch item.Action {
-		case secretRestoreRestore:
+		case secretRestoreRestore, secretRestoreDeleted:
 			planned.plan.Changes++
 		case secretRestoreBlocked:
 			planned.plan.Blocked++
@@ -318,15 +379,25 @@ func (a *API) sealSecretRestore(
 			ext:    map[string]any{"code": "plan_blocked", "plan": planned.plan}}
 	}
 	var items []projections.ApplicationSecretBatchVersionItem
+	creates := 0
 	for _, item := range planned.plan.Items {
-		if item.Action != secretRestoreRestore {
-			continue
-		}
 		old := planned.sealed[item.Name]
-		items = append(items, projections.ApplicationSecretBatchVersionItem{
-			Name: item.Name, ExpectedVersion: item.CurrentVersion, ResultVersion: item.CurrentVersion + 1,
-			Sealed: old.Sealed, SourceName: item.Name, SourceVersion: old.Version,
-		})
+		switch item.Action {
+		case secretRestoreRestore:
+			items = append(items, projections.ApplicationSecretBatchVersionItem{
+				Name: item.Name, ExpectedVersion: item.CurrentVersion, ResultVersion: item.CurrentVersion + 1,
+				Sealed: old.Sealed, SourceName: item.Name, SourceVersion: old.Version,
+			})
+		case secretRestoreDeleted:
+			// A236-L5: back from its exact tombstone, then the value it had at
+			// the point in time as its next version.
+			items = append(items, projections.ApplicationSecretBatchVersionItem{
+				Name: item.Name, ResultVersion: item.DeletedVersion + 1,
+				Sealed: old.Sealed, SourceName: item.Name, SourceVersion: old.Version,
+				TombstoneVersion: item.DeletedVersion, TombstoneDeletedAt: item.DeletedAt.UTC().Format(time.RFC3339Nano),
+			})
+			creates++
+		}
 	}
-	return items, 0, nil
+	return items, creates, nil
 }

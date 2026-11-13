@@ -27709,8 +27709,15 @@ export interface components {
         };
         SecretRestoreItem: {
             /** @enum {string} */
-            action: "restore" | "unchanged" | "created_since" | "blocked";
+            action: "restore" | "unchanged" | "created_since" | "blocked" | "restore_deleted";
             current_version: number;
+            /**
+             * Format: date-time
+             * @description A236-L5: when the secret this item brings back was deleted
+             */
+            deleted_at?: string;
+            /** @description A236-L5: the version a secret deleted since had when deleted; it comes back with its history */
+            deleted_version?: number;
             name: string;
             reason?: string;
             restore_version?: number;

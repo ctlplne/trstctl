@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -36,6 +37,12 @@ type ApplicationSecretBatchVersionItem struct {
 	// source (A236-L2); absent on an update, a restore, a migration, and a
 	// batch recorded before it was carried.
 	OwnerID string `json:"owner_id,omitempty"`
+	// TombstoneVersion and TombstoneDeletedAt name the exact tombstone a
+	// restore brings a deleted secret back from (A236-L5): the version it had
+	// when deleted and the deletion time (RFC 3339, UTC). ExpectedVersion is
+	// then 0 and ResultVersion TombstoneVersion+1. Absent on every other item.
+	TombstoneVersion   int    `json:"tombstone_version,omitempty"`
+	TombstoneDeletedAt string `json:"tombstone_deleted_at,omitempty"`
 }
 
 // ApplicationSecretBatchVersion carries no plaintext and no raw
@@ -85,6 +92,8 @@ func init() {
 		{Path: "/items/*/source_name", Mode: events.PrivacyFieldOpaqueExact},
 		{Path: "/items/*/source_version", Mode: events.PrivacyFieldOpaqueExact},
 		{Path: "/items/*/owner_id", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/items/*/tombstone_version", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/items/*/tombstone_deleted_at", Mode: events.PrivacyFieldOpaqueExact},
 		{Path: "/approval/request_id", Mode: events.PrivacyFieldOpaqueExact},
 		{Path: "/approval/intent_digest", Mode: events.PrivacyFieldOpaqueExact},
 		{Path: "/approval/requester", Mode: events.PrivacyFieldIdentityExact},
@@ -156,8 +165,19 @@ func (p *Projector) applyApplicationSecretBatchVersionTx(ctx context.Context, tx
 	names := make([]string, 0, len(payload.Items))
 	items := make([]store.ApplicationSecretVersionItem, 0, len(payload.Items))
 	for _, item := range payload.Items {
+		next := item.ExpectedVersion + 1
+		var tombstone *store.ApplicationSecretTombstoneRef
+		if item.TombstoneVersion != 0 || item.TombstoneDeletedAt != "" {
+			deletedAt, err := time.Parse(time.RFC3339Nano, item.TombstoneDeletedAt)
+			if err != nil || item.TombstoneVersion < 1 || item.ExpectedVersion != 0 ||
+				payload.Operation != store.ApplicationSecretBatchRestore {
+				return true, errors.New("projections: only a restore brings a deleted secret back, from an exact tombstone")
+			}
+			tombstone = &store.ApplicationSecretTombstoneRef{Version: item.TombstoneVersion, DeletedAt: deletedAt}
+			next = item.TombstoneVersion + 1
+		}
 		if item.Name == "" || len(item.Sealed) == 0 || item.ExpectedVersion < 0 ||
-			item.ResultVersion != item.ExpectedVersion+1 || item.SourceName == "" || item.SourceVersion < 1 {
+			item.ResultVersion != next || item.SourceName == "" || item.SourceVersion < 1 {
 			return true, errors.New("projections: invalid versioned secret batch item")
 		}
 		if item.OwnerID != "" && (item.ExpectedVersion != 0 || payload.Operation != store.ApplicationSecretBatchPromotion ||
@@ -175,7 +195,7 @@ func (p *Projector) applyApplicationSecretBatchVersionTx(ctx context.Context, tx
 		names = append(names, item.Name)
 		items = append(items, store.ApplicationSecretVersionItem{
 			Name: item.Name, ExpectedVersion: item.ExpectedVersion, ResultVersion: item.ResultVersion,
-			Sealed: item.Sealed, RecoveredFrom: recovered, OwnerID: item.OwnerID,
+			Sealed: item.Sealed, RecoveredFrom: recovered, OwnerID: item.OwnerID, Tombstone: tombstone,
 		})
 	}
 	if !slices.IsSorted(names) {

@@ -805,7 +805,16 @@ func (a *API) executeApprovedSecretVersionBatch(
 	defer secret.Wipe(batch.Payload)
 	fences := make([]store.ApplicationSecretVersionFence, 0, len(payload.Items))
 	for _, item := range payload.Items {
-		fences = append(fences, store.ApplicationSecretVersionFence{Name: item.Name, ExpectedVersion: item.ExpectedVersion})
+		fence := store.ApplicationSecretVersionFence{Name: item.Name, ExpectedVersion: item.ExpectedVersion}
+		if item.TombstoneVersion > 0 {
+			// A236-L5: the reservation checks the exact kept deletion it brings back.
+			deletedAt, err := time.Parse(time.RFC3339Nano, item.TombstoneDeletedAt)
+			if err != nil {
+				return out, err
+			}
+			fence.Tombstone = &store.ApplicationSecretTombstoneRef{Version: item.TombstoneVersion, DeletedAt: deletedAt}
+		}
+		fences = append(fences, fence)
 	}
 	err = a.secrets.be.Store.RunApplicationSecretVersionBatchCommand(ctx, batch, fences,
 		func(barrierCtx context.Context, canonical store.ApplicationSecretImportBatch) error {
@@ -897,12 +906,15 @@ func (a *API) secretVersionBatchEvidence(
 		SourceVersion   int    `json:"source_version"`
 		SealedSHA256    string `json:"sealed_sha256"`
 		OwnerID         string `json:"owner_id,omitempty"`
+		// A236-L5: a deleted secret a restore brings back binds its tombstone.
+		TombstoneVersion   int    `json:"tombstone_version,omitempty"`
+		TombstoneDeletedAt string `json:"tombstone_deleted_at,omitempty"`
 	}
 	list := make([]evidenceItem, 0, len(items))
 	for _, item := range items {
 		list = append(list, evidenceItem{Name: item.Name, ExpectedVersion: item.ExpectedVersion,
 			SourceName: item.SourceName, SourceVersion: item.SourceVersion, SealedSHA256: crypto.SHA256Hex(item.Sealed),
-			OwnerID: item.OwnerID})
+			OwnerID: item.OwnerID, TombstoneVersion: item.TombstoneVersion, TombstoneDeletedAt: item.TombstoneDeletedAt})
 	}
 	material, err := json.Marshal(struct {
 		TenantID       string         `json:"tenant_id"`

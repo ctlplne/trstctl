@@ -12190,8 +12190,10 @@ export interface SecretRepositoryWebhookRequest {
 }
 
 export interface SecretRestoreItem {
-  action: "restore" | "unchanged" | "created_since" | "blocked";
+  action: "restore" | "unchanged" | "created_since" | "blocked" | "restore_deleted";
   current_version: number;
+  deleted_at?: string;
+  deleted_version?: number;
   name: string;
   reason?: string;
   restore_version?: number;

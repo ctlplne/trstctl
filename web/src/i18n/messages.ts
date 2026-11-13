@@ -6124,6 +6124,10 @@ export const messages = {
     defaultMessage: "v{current} \u2190 v{restore}",
     description: "Restore: the current version and the earlier version it brings back.",
   },
+  "secrets.transfers.restoreDeletedVersions": {
+    defaultMessage: "deleted at v{deleted}; comes back with v{restore}'s value and its history",
+    description: "A236-L5: a deleted secret a restore brings back: the version it had when deleted and the version whose value it takes.",
+  },
   "secrets.transfers.kept": {
     defaultMessage: "Left alone in the target: {names}",
     description: "Target secrets the promotion does not touch.",
@@ -6155,6 +6159,10 @@ export const messages = {
   "secrets.transfers.action.createdSince": {
     defaultMessage: "Created since \u2014 kept",
     description: "Plan action: created after the restore point, left alone.",
+  },
+  "secrets.transfers.action.restoreDeleted": {
+    defaultMessage: "Deleted since \u2014 brought back",
+    description: "A236-L5: plan action: deleted after the restore point and still kept, so the restore brings it back.",
   },
   "secrets.transfers.action.blocked": {
     defaultMessage: "Blocked",

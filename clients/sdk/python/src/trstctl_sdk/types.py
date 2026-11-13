@@ -16976,6 +16976,8 @@ SecretRestoreItem = TypedDict(
     {
         'action': str,
         'current_version': int,
+        'deleted_at': str,
+        'deleted_version': int,
         'name': str,
         'reason': str,
         'restore_version': int,

@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A folder restore brings back secrets deleted since (A236-L5): a secret of the folder deleted after the point in
+  time and still kept is planned as `restore_deleted` (with the version whose value it takes and the deletion it
+  comes back from) and comes back with its history, the value it had then written as its next version; a tombstone
+  purged after the preview makes the plan stale. The console's restore plan shows it.
 - A deleted secret can be restored (A236-L4): a deletion keeps the secret, sealed with its version history, for
   `secrets.deleted_retention` (default 30 days; `0s` keeps none). `GET /api/v1/secrets/deleted` lists what is kept,
   without values; `POST /api/v1/secrets/deleted/{name}` brings one back at the version it had, with its owner and

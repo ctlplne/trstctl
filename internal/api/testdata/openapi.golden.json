@@ -56799,11 +56799,21 @@
               "restore",
               "unchanged",
               "created_since",
-              "blocked"
+              "blocked",
+              "restore_deleted"
             ],
             "type": "string"
           },
           "current_version": {
+            "type": "integer"
+          },
+          "deleted_at": {
+            "description": "A236-L5: when the secret this item brings back was deleted",
+            "format": "date-time",
+            "type": "string"
+          },
+          "deleted_version": {
+            "description": "A236-L5: the version a secret deleted since had when deleted; it comes back with its history",
             "type": "integer"
           },
           "name": {

@@ -41,6 +41,9 @@ var ErrApplicationSecretBatchStale = errors.New("store: a secret changed after t
 type ApplicationSecretVersionFence struct {
 	Name            string
 	ExpectedVersion int
+	// Tombstone is the exact kept deletion a restore brings back (A236-L5);
+	// the reservation checks it under the name's lock.
+	Tombstone *ApplicationSecretTombstoneRef
 }
 
 // ApplicationSecretVersionItem is one projected item of a versioned batch.
@@ -53,6 +56,10 @@ type ApplicationSecretVersionItem struct {
 	RecoveredFrom *int
 	// OwnerID is the owner a created secret takes (a promotion's, A236-L2).
 	OwnerID string
+	// Tombstone brings a deleted secret back from exactly this tombstone
+	// before the restored value is written as its next version (a restore
+	// only, A236-L5). ExpectedVersion is then 0: no live secret holds the name.
+	Tombstone *ApplicationSecretTombstoneRef
 }
 
 func validApplicationSecretBatchOperation(operation string) bool {
@@ -138,6 +145,15 @@ func (s *Store) claimApplicationSecretVersionBatchUnbarriered(
 			if version != fence.ExpectedVersion {
 				return fmt.Errorf("%w: %s", ErrApplicationSecretBatchStale, fence.Name)
 			}
+			if fence.Tombstone != nil {
+				err := requireApplicationSecretTombstoneTx(ctx, tx, batch.TenantID, fence.Name, *fence.Tombstone)
+				if errors.Is(err, ErrSecretNotFound) || errors.Is(err, ErrApprovalDrifted) {
+					return fmt.Errorf("%w: %s", ErrApplicationSecretBatchStale, fence.Name)
+				}
+				if err != nil {
+					return err
+				}
+			}
 		}
 		actor, err := json.Marshal(batch.Actor)
 		if err != nil {
@@ -183,8 +199,16 @@ func (s *Store) ApplyApplicationSecretVersionBatchTx(
 		return errors.New("store: versioned secret batch projection binding is incomplete")
 	}
 	for index, item := range items {
+		next := item.ExpectedVersion + 1
+		if item.Tombstone != nil {
+			if item.ExpectedVersion != 0 || item.Tombstone.Version <= 0 || item.Tombstone.DeletedAt.IsZero() ||
+				batch.Operation != ApplicationSecretBatchRestore {
+				return errors.New("store: only a restore brings a deleted secret back, from an exact tombstone")
+			}
+			next = item.Tombstone.Version + 1
+		}
 		if item.Name != batch.Names[index] || len(item.Sealed) == 0 || item.ExpectedVersion < 0 ||
-			item.ResultVersion != item.ExpectedVersion+1 {
+			item.ResultVersion != next {
 			return errors.New("store: versioned secret batch items differ from their fences")
 		}
 	}
@@ -226,7 +250,12 @@ func (s *Store) ApplyApplicationSecretVersionBatchTx(
 	result := make([]ApplicationSecretImportItem, 0, len(items))
 	for _, item := range items {
 		var rec ApplicationSecretImportItem
-		if item.ExpectedVersion == 0 {
+		if item.Tombstone != nil {
+			rec, err = restoreApplicationSecretTombstoneTx(ctx, tx, batch.TenantID, item, at)
+			if err != nil {
+				return err
+			}
+		} else if item.ExpectedVersion == 0 {
 			err = tx.QueryRow(ctx, `
 				INSERT INTO secret_store (tenant_id, name, sealed, version, created_at, updated_at, owner_id)
 				VALUES ($1, $2, $3, 1, $4, $4, NULLIF($5, '')::uuid)
