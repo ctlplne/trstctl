@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- A leaked secret in a Jira CSV export is located to its issue (A174-L3): a third-party scan of a `.csv` Jira export
+  reads each row with the line it starts on, so a finding inside a field quoted over several lines belongs to its row,
+  and names the issue from the `Issue key` column — the finding can then be annotated with a comment on that issue.
 - An opt-in generic high-entropy rule for secret-store content inspection (A172-L4): a `cloud_secret` or `secret_store`
   provider with `inspect_content: true` may also set `generic_high_entropy: true`, and a value or field that is one
   random-looking token no specific rule names becomes a masked, fingerprinted `generic_high_entropy` finding. Off by

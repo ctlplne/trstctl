@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3226 annotated sites across 34 rules. Each row is
+3228 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (789 sites)
+### G101 — CWE-798 Use of hardcoded credentials (791 sites)
 
 | Location | Reason |
 |---|---|
@@ -619,6 +619,8 @@ not this file.
 | `internal/server/itsm_served_test.go:193` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/itsm_served_test.go:212` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/itsm_served_test.go:220` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/jira_csv_annotation_served_test.go:23` | fabricated fixture credential (CWE-798) |
+| `internal/server/jira_csv_annotation_served_test.go:37` | a credential reference to a fabricated fixture (CWE-798) |
 | `internal/server/journey_delivery_served_test.go:36` | fabricated test-only credential (CWE-798) |
 | `internal/server/journey_delivery_served_test.go:560` | fabricated test-only credential (CWE-798) |
 | `internal/server/journey_delivery_served_test.go:735` | fabricated test-only credential (CWE-798) |
@@ -2714,7 +2716,7 @@ not this file.
 | `internal/secretscan/installer_retry_test.go:107` | the test's own temporary file (CWE-22) |
 | `internal/secretscan/installer_retry_test.go:203` | the test's own temporary file (CWE-22) |
 | `internal/secretscan/installer_retry_test.go:215` | the test's own temporary file (CWE-22) |
-| `internal/secretscan/locate.go:228` | a file inside the operator's reviewed artifact path, checked by exportFile (CWE-22) |
+| `internal/secretscan/locate.go:285` | a file inside the operator's reviewed artifact path, checked by exportFile (CWE-22) |
 | `internal/secretscan/locate_test.go:14` | test fixture under t.TempDir (CWE-22) |
 | `internal/secretscan/repository_credential_test.go:144` | the test's own clone (CWE-22) |
 | `internal/secretscan/repository_credential_test.go:147` | the test's own clone (CWE-22) |

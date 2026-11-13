@@ -4,6 +4,7 @@ package secretscan
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"io"
 	"net/mail"
@@ -20,7 +21,8 @@ const maxLocateBytes = 64 << 20
 // LocateThirdPartyObject maps a finding's file and line in a provider export
 // to the provider object it sat in (A174): for a Slack export, the channel
 // (and its ID from channels.json) and the message's ts and thread_ts; for a
-// Jira export, the issue key; for a Teams export (OD-4), the team, channel
+// Jira export (JSON, JSON Lines or CSV), the issue key; for a Teams export
+// (OD-4), the team, channel
 // and message (and the message it replies to), with the poster's address
 // from users.json; for a Confluence export, the content's ID, type and
 // space. It reads only that one export file, inside the
@@ -75,6 +77,9 @@ func LocateThirdPartyObject(provider, artifactPath, file string, line int) (map[
 		}
 		return out, true
 	case ThirdPartyProviderJira:
+		if strings.EqualFold(filepath.Ext(full), ".csv") {
+			return locateJiraCSVIssue(data, line)
+		}
 		issue, ok := elementAtLine(data, line, "issues")
 		if !ok {
 			issue = lineAt(data, line)
@@ -109,6 +114,58 @@ var (
 	confluenceTypePattern = regexp.MustCompile(`^[a-z_]{1,32}$`)
 	confluenceKeyPattern  = regexp.MustCompile(`^~?[A-Za-z0-9_-]{1,255}$`)
 )
+
+// jiraIssueKeyPattern is a Jira issue key: a project key and a number.
+var jiraIssueKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,254}-[0-9]{1,18}$`)
+
+// locateJiraCSVIssue names the issue whose row of a Jira CSV export holds
+// the line (A174-L3). A row runs over several lines when a field is quoted
+// across them (a description, a comment), so rows are read with the line each
+// one starts on; the line belongs to the last row that starts at or before
+// it. The key comes from the column the header names "Issue key"; a header
+// line, an export without that column, or a value that is not an issue key
+// locates nothing.
+func locateJiraCSVIssue(data []byte, line int) (map[string]string, bool) {
+	r := csv.NewReader(bytes.NewReader(bytes.TrimPrefix(data, []byte("\ufeff"))))
+	r.FieldsPerRecord = -1
+	r.LazyQuotes = true
+	header, err := r.Read()
+	if err != nil {
+		return nil, false
+	}
+	keyColumn := -1
+	for i, name := range header {
+		if strings.EqualFold(strings.TrimSpace(name), "Issue key") {
+			keyColumn = i
+			break
+		}
+	}
+	if keyColumn < 0 {
+		return nil, false
+	}
+	var row []string
+	for {
+		record, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, false
+		}
+		if start, _ := r.FieldPos(0); line < start {
+			break
+		}
+		row = record
+	}
+	if keyColumn >= len(row) {
+		return nil, false
+	}
+	key := strings.TrimSpace(row[keyColumn])
+	if !jiraIssueKeyPattern.MatchString(key) {
+		return nil, false
+	}
+	return map[string]string{"kind": "jira_issue", "issue_key": key}, true
+}
 
 // locateTeamsMessage names the Microsoft Graph chatMessage at a line: its
 // team, channel and message IDs, the message it replies to, and the poster

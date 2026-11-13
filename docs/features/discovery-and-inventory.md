@@ -813,7 +813,9 @@ a registry whose token server takes a login (A174-L2: trstctl answers the regist
 challenge with a token from its realm, and on a registry without the OCI referrers API
 lists the referrer in the `sha256-<subject>` referrers tag index). Each
 finding then records where it sat (the Slack channel and message, the Jira issue, the
-commit, the image), and **Annotate at provider** on the finding (or `trstctl-cli
+commit, the image; a Jira export may be JSON, JSON Lines or the CSV Jira exports, whose
+row's `Issue key` column names the issue even when the leak sits in a field quoted over
+several lines, A174-L3), and **Annotate at provider** on the finding (or `trstctl-cli
 discovery findings annotate ID`, or `auto: true` on the ingest) writes one note there: a
 reply in the Slack thread, a comment on the Jira issue, a failed commit status, or an
 OCI referrer on the image. The note names the rule and the finding, never the secret,
