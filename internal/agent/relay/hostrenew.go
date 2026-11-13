@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
@@ -289,6 +290,7 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 	// plane can name it.
 	adopted := readAdoptablePredecessor(profile, hostRollback, true, intent)
 	defer adopted.wipe()
+	deployStarted := time.Now()
 	if _, err := ExecuteOnHost(ctx, profile, installIntent, material, client); err != nil {
 		// Reached only after a certificate was successfully issued. Naming that
 		// matters: the identity now has a live certificate the estate is not
@@ -331,6 +333,10 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 	// not serve is not a success, and the whole reason this pipeline reports
 	// three outcomes rather than two is so it can say which happened.
 	outcome, detail, evidence := postDeployVerificationWithNative(ctx, installIntent, material, profile.TLSProbeOpenSSL)
+	if outcome == transport.OutcomeVerified {
+		// A245-L2: the listener's sessions against the renewal's start.
+		detail, evidence = withListenerSessions(installIntent, detail, evidence, deployStarted)
+	}
 	record, err := HostRenewCustody(intent.Connector, "")
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "the installed key custody could not be classified")

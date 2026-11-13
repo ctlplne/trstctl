@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"trstctl.com/trstctl/internal/agent/listenersessions"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/agent/verify"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -110,6 +111,11 @@ type EndpointVerifyResult struct {
 	// right after a deploy (E2). Only a deploy's report carries it, never a
 	// sweep; nil when the family cannot be asked.
 	ApplianceReadback *ApplianceReadback `json:"appliance_readback,omitempty"`
+	// Sessions is a host's own count, right after a verified deploy or
+	// renewal, of the established connections on the listener's port and how
+	// many a process older than the deploy holds (A245-L2). Only a host
+	// deploy's report carries it; the signed evidence covers it.
+	Sessions *listenersessions.Observation `json:"sessions,omitempty"`
 }
 
 // ApplianceReadback is the device's answer beside the handshake: the verdict

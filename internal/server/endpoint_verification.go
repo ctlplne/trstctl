@@ -86,6 +86,22 @@ func (s *Server) recordDeployVerification(ctx context.Context, tenantID, agentNa
 	if err := s.appendEndpointVerificationWithEventID(ctx, tenantID, agentName, result.EndpointID, result.Transcript, result.Detail, eventID); err != nil {
 		return err
 	}
+	if count := result.Sessions; count != nil {
+		// A245-L2: the host's count of its listener's sessions, admitted with
+		// the signed evidence above, is the revocation report's session proof.
+		var identityID *string
+		if id := strings.TrimSpace(intent.IdentityID); id != "" {
+			identityID = &id
+		}
+		sessionsID := orchestrator.DiscoveryRelayEventID(tenantID, attemptKey, "listener-sessions:"+result.EndpointID)
+		if err := s.orch.RecordListenerSessionsWithEventID(ctx, tenantID, sessionsID, projections.ListenerSessionsObserved{
+			ID: sessionsID, IdentityID: identityID, TargetID: result.EndpointID, Target: intent.Target,
+			Fingerprint: result.Transcript.ExpectedFingerprint, Port: count.Port, Established: count.Established,
+			HeldByOlder: count.HeldByOlder, Unattributed: count.Unattributed, SinceUnix: count.SinceUnix, CheckedAtUnix: count.CheckedAtUnix,
+		}); err != nil {
+			return err
+		}
+	}
 	if tr := result.Transcript; tr.Reached && tr.Mismatch == certinfo.MismatchChain && req.Outcome == transport.JobOutcomeVerified {
 		// An accepted chain-only mismatch (B10-L1) stays visible as a posture
 		// finding after the next leaf-only sweep reads the endpoint as healthy.

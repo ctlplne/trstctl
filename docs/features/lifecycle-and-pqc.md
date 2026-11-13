@@ -603,6 +603,21 @@ chain without its issuer, or a responder that can't be read reads not observed, 
 why. A report asks at most ten responders, five seconds each, through the outbound client
 that refuses private addresses.
 
+### Revocation report: existing sessions (A245-L2)
+
+A session negotiated with a certificate keeps its keys for as long as its connection lives,
+after the listener serves a replacement. When a Linux host agent deploys or renews a
+certificate and its own handshake verifies the listener, it also counts the established
+connections on the listener's port and how many a process started before the deploy holds
+(a graceful reload keeps old workers draining theirs), read from `/proc`. The count rides
+in the deploy's signed receipt — the evidence digest covers it — and the control plane
+refuses one the receipt does not sign, one on another port, or counts that cannot hold
+together. The revocation report's existing-sessions facet then reads, on each destination
+that now serves a replacement, the newest count taken after that replacement's deploy:
+confirmed when no connection anywhere is held by an older process, pending (naming each
+destination and how many) while one is, and not observed when a destination was not
+counted or its holders could not be read. A containment stop still confirms it at once.
+
 What a change would reach is answered before it is made:
 `GET /api/v1/connectors/targets/{id}/impact` and
 `GET /api/v1/profiles/impact/{name}` (`trstctl connector target impact`,

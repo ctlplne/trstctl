@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3266 annotated sites across 35 rules. Each row is
+3274 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (799 sites)
+### G101 — CWE-798 Use of hardcoded credentials (800 sites)
 
 | Location | Reason |
 |---|---|
@@ -630,6 +630,7 @@ not this file.
 | `internal/server/journey_delivery_served_test.go:955` | fabricated test-only credential (CWE-798) |
 | `internal/server/key_vault_disable_served_test.go:78` | test-only environment variable names, no credential values (CWE-798) |
 | `internal/server/leaked_credential_correlation_served_test.go:107` | a credential reference to a fabricated fixture (CWE-798) |
+| `internal/server/listener_sessions_report_served_test.go:29` | fabricated test-only credential (CWE-798) |
 | `internal/server/load_balancer_tls_served_test.go:31` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/server/load_balancer_tls_served_test.go:32` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/server/load_balancer_tls_served_test.go:73` | credential references only; no credential value enters the config (CWE-798) |
@@ -1011,7 +1012,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (507 sites)
+### G115 — CWE-190 Integer overflow or wraparound (510 sites)
 
 | Location | Reason |
 |---|---|
@@ -1057,6 +1058,8 @@ not this file.
 | `internal/agent/decoy/watch_linux.go:187` | a file descriptor this process opened (CWE-190) |
 | `internal/agent/desktop/server.go:553` | k is at most chunk (4096) (CWE-190) |
 | `internal/agent/desktop/server.go:591` | the target's text is bounded by rdp.MaxClipboard (CWE-190) |
+| `internal/agent/listenersessions/proc.go:123` | parsed with a 16-bit bound |
+| `internal/agent/listenersessions/proc.go:201` | parsed with a 63-bit bound |
 | `internal/agent/observe/capture_linux.go:34` | snaplen is a small configured frame size |
 | `internal/agent/observe/capture_linux.go:39` | bounded by the check above; MaxWatchedPorts keeps it to tens (CWE-190) |
 | `internal/agent/observe/flows.go:236` | TCP sequence numbers wrap; the difference read as a signed 32-bit distance is RFC 1982 serial arithmetic (CWE-190) |
@@ -1251,10 +1254,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7563` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7580` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7593` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7627` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7566` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7583` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7596` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7630` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1425,6 +1428,7 @@ not this file.
 | `internal/store/incident_closures.go:39` | bounded above (CWE-190) |
 | `internal/store/key_compromise_retry.go:25` | bounded above by the MaxInt64 check; the column is a Postgres bigint (CWE-190) |
 | `internal/store/key_vault_disables.go:44` | bounded above (CWE-190) |
+| `internal/store/listener_sessions.go:45` | bounded by MaxInt64 above. |
 | `internal/store/mdm_check_ins.go:45` | bounded above (CWE-190) |
 | `internal/store/migration_run.go:52` | JetStream/PostgreSQL event sequence is bounded by bigint (CWE-190) |
 | `internal/store/migration_run.go:221` | positive bigint constrained by migration (CWE-190) |
@@ -1442,8 +1446,8 @@ not this file.
 | `internal/store/pam.go:136` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:740` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:820` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1074` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1088` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1076` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1090` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:191` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:247` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:276` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -1467,8 +1471,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:406` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:430` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:52` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:937` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:957` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:943` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:963` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -2198,7 +2202,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:238` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G302 — CWE-276 Incorrect default permissions (chmod) (54 sites)
+### G302 — CWE-276 Incorrect default permissions (chmod) (55 sites)
 
 | Location | Reason |
 |---|---|
@@ -2212,6 +2216,7 @@ not this file.
 | `internal/agent/destination/fs_unix_test.go:82` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:28` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:53` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
+| `internal/agent/listenersessions/listenersessions_test.go:69` | a test directory restored so TempDir can remove it |
 | `internal/agent/relay/selfupgrade.go:224` | the file IS the executable being installed; 0755 is its required mode (CWE-276) |
 | `internal/agent/secretrender/replace_windows_test.go:41` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/workloadapi/attest.go:123` | a DIRECTORY, not a file. 0700 is the tightest mode that |
@@ -2257,7 +2262,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (783 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (786 sites)
 
 | Location | Reason |
 |---|---|
@@ -2456,6 +2461,9 @@ not this file.
 | `internal/agent/drift/drift_test.go:184` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/drift/drift_test.go:209` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/drift/drift_test.go:244` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/agent/listenersessions/proc.go:101` | a fixed proc table under the agent's proc root |
+| `internal/agent/listenersessions/proc.go:158` | a fixed proc file under the agent's proc root |
+| `internal/agent/listenersessions/proc.go:184` | a fixed proc file under the agent's proc root |
 | `internal/agent/mcp_inventory.go:31` | the agent's own state file (CWE-22) |
 | `internal/agent/observe/udp_capture_test.go:17` | the test reads its own fixture (CWE-22) |
 | `internal/agent/relay/adcsdatabase_test.go:89` | test-owned temp file (CWE-22). |

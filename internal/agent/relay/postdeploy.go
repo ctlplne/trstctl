@@ -5,10 +5,16 @@ package relay
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
+	"strconv"
+	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/agent/listenersessions"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/agent/verify"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
@@ -187,4 +193,55 @@ func VerificationPasses(tr transport.ProbeTranscript, strictChain bool) bool {
 	default:
 		return false
 	}
+}
+
+// listenerSessionsDigestDomain separates a deploy's evidence digest that
+// covers a session count from a bare transcript digest (A245-L2).
+const listenerSessionsDigestDomain = "trstctl-deploy-listener-sessions/v1\n"
+
+// DeploymentEvidenceDigest is what a deploy's signed receipt commits to: the
+// handshake transcript's digest, or, when the host also counted the
+// listener's sessions (A245-L2), that digest and the count together, so a
+// count changed after signing no longer matches.
+func DeploymentEvidenceDigest(result EndpointVerifyResult) string {
+	digest := result.Transcript.Digest()
+	if result.Sessions == nil {
+		return digest
+	}
+	s := result.Sessions
+	return crypto.SHA256Hex([]byte(fmt.Sprintf("%s%s\n%d %d %d %d %d %d", listenerSessionsDigestDomain, digest,
+		s.Port, s.Established, s.HeldByOlder, s.Unattributed, s.SinceUnix, s.CheckedAtUnix)))
+}
+
+// observeListenerSessions is the host's session count; tests replace it.
+var observeListenerSessions = listenersessions.Observe
+
+// withListenerSessions adds the host's count of its listener's sessions to a
+// verified deploy's report (A245-L2): the established connections on the
+// verified address's port, and how many a process started before the deploy
+// began holds. A platform or listener it cannot count leaves the report as
+// it was — not observed, never an empty count.
+func withListenerSessions(intent DeployIntent, detail, evidence string, deployStarted time.Time) (string, string) {
+	_, portText, err := net.SplitHostPort(strings.TrimSpace(intent.VerifyAddress))
+	if err != nil {
+		return detail, evidence
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		return detail, evidence
+	}
+	var report EndpointVerifyReport
+	if err := json.Unmarshal([]byte(detail), &report); err != nil || len(report.Results) != 1 {
+		return detail, evidence
+	}
+	obs, err := observeListenerSessions(port, deployStarted)
+	if err != nil || !obs.Valid() {
+		return detail, evidence
+	}
+	report.Results[0].Sessions = &obs
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		return detail, evidence
+	}
+	return string(encoded), DeploymentEvidenceDigest(report.Results[0])
 }

@@ -8106,9 +8106,15 @@ approval standing (A245-L5). What it reads from, and what comes next:
   runs no KRL watcher reports nothing and is not counted, so a fleet with such
   hosts reads verified on the reporting ones alone; the KRL fleet view lists the
   hosts that report.
-- **Sessions are not observed.** Existing-session termination is confirmed only
-  by a containment stop or removal receipt after the revocation; trstctl does
-  not see the sessions themselves.
+- **Sessions are counted on Linux hosts only (A245-L2).** Existing sessions read
+  confirmed from a containment stop or removal receipt after the revocation, or
+  from a Linux host agent's own count, taken right after it deploys or renews a
+  replacement, of the established connections on the listener's port and which
+  a process older than that deploy holds. A destination without a host agent
+  (a cloud store, an appliance), a host on another platform, or an agent that
+  may not read other processes' open files is not counted, and reads not
+  observed. trstctl does not see which certificate a session used, only whether
+  its process predates the replacement.
 - **External CAs are read by OCSP only (A245-L3).** The CA facet reads the
   platform and hierarchy CAs' records, and asks an external CA's own OCSP
   responder; its CRL is not read, and a certificate naming no responder, or a

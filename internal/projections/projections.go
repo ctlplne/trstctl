@@ -5955,6 +5955,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 	if handled, err := p.applySSHCertificateRevocationTx(ctx, tx, e); handled {
 		return err
 	}
+	if handled, err := p.applyListenerSessionsTx(ctx, tx, e); handled {
+		return err
+	}
 	if handled, err := p.applyExternalCAHeldTx(ctx, tx, e); handled {
 		return err
 	}

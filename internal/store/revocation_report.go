@@ -58,12 +58,27 @@ type RevocationStop struct {
 	At     time.Time
 }
 
+// RevocationSessions is a host's newest count of one target's listener
+// sessions, taken right after the verified deploy of Fingerprint (A245-L2):
+// HeldByOlder connections are held by a process started before Since, the
+// deploy's start; Unattributed by one the agent could not read.
+type RevocationSessions struct {
+	Target       string
+	Fingerprint  string
+	Established  int
+	HeldByOlder  int
+	Unattributed int
+	Since        time.Time
+	CheckedAt    time.Time
+}
+
 // RevocationEvidence is everything the report reads for one certificate.
 type RevocationEvidence struct {
 	CA           RevocationCAEvidence
 	Deliveries   []RevocationDelivery
 	Observations []RevocationObservation
 	Stops        []RevocationStop
+	Sessions     []RevocationSessions
 }
 
 // CertificateRevocationEvidence reads the evidence for one certificate of an
@@ -150,13 +165,34 @@ func (s *Store) CertificateRevocationEvidence(ctx context.Context, tenantID, ide
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
 		for rows.Next() {
 			var st RevocationStop
 			if err := rows.Scan(&st.Target, &st.Status, &st.At); err != nil {
+				rows.Close()
 				return err
 			}
 			out.Stops = append(out.Stops, st)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		// A245-L2: each target's newest count of its listener's sessions.
+		rows, err = tx.Query(ctx, `
+			SELECT DISTINCT ON (target) target, fingerprint, established, held_by_older, unattributed, since, checked_at
+			  FROM listener_session_observations
+			 WHERE tenant_id = $1 AND identity_id = $2::uuid
+			 ORDER BY target, checked_at DESC, id DESC LIMIT 100`, tenantID, identityID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var s RevocationSessions
+			if err := rows.Scan(&s.Target, &s.Fingerprint, &s.Established, &s.HeldByOlder, &s.Unattributed, &s.Since, &s.CheckedAt); err != nil {
+				return err
+			}
+			out.Sessions = append(out.Sessions, s)
 		}
 		return rows.Err()
 	})

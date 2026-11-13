@@ -377,7 +377,10 @@ import (
 // (ssh_certificate_revocations): an older payload has none, and a restore from
 // it would drop the operations ledger's SSH revocations while its covered
 // offset skipped their events.
-const SnapshotFormatVersion = 135
+// Version 136 carries A245-L2's listener session counts
+// (listener_session_observations): an older payload has none, and a restore
+// from it would lose the revocation report's session evidence.
+const SnapshotFormatVersion = 136
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -469,6 +472,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"provider_doc_records",
 	// Format 135: A245-L1's SSH certificate revocations.
 	"ssh_certificate_revocations",
+	// Format 136: A245-L2's listener session counts.
+	"listener_session_observations",
 	// Format 81: N1's AD CS request decisions.
 	"adcs_request_decisions",
 	// Format 117: N1-L1's held external CA issuances.
@@ -930,7 +935,8 @@ SELECT jsonb_build_object(
   'provider_psa_tickets', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_psa_tickets t),
   'provider_rmm_devices', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_rmm_devices t),
   'provider_doc_records', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_doc_records t),
-  'ssh_certificate_revocations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM ssh_certificate_revocations t)
+  'ssh_certificate_revocations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM ssh_certificate_revocations t),
+  'listener_session_observations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM listener_session_observations t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL,

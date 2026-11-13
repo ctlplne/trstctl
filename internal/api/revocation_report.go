@@ -164,10 +164,60 @@ func buildRevocationCertificateReport(cert store.Certificate, ev store.Revocatio
 		out.ExistingSessions = revocationFacet{State: revocationConfirmed, At: &at,
 			Detail: "the listener holding it was stopped (" + ev.Stops[0].Status + " on " + ev.Stops[0].Target + "), ending the sessions it held"}
 	} else {
-		out.ExistingSessions = revocationFacet{State: revocationNotObserved,
-			Detail: "sessions opened before the revocation are not observed; a containment stop or a listener restart ends them"}
+		out.ExistingSessions = existingSessionsFacet(cert, ev)
 	}
 	return out
+}
+
+// existingSessionsFacet reads the hosts' own session counts (A245-L2): on each
+// destination that now serves a replacement, the newest count its host took
+// right after the replacement's verified deploy. A connection held by a
+// process started after that deploy began cannot carry a session opened with
+// the revoked certificate; one held by an older process might.
+func existingSessionsFacet(cert store.Certificate, ev store.RevocationEvidence) revocationFacet {
+	counts := map[string]store.RevocationSessions{}
+	for _, s := range ev.Sessions {
+		counts[s.Target] = s
+	}
+	replaced, ended := 0, 0
+	var older []string
+	var newest *time.Time
+	for _, d := range ev.Deliveries {
+		if d.LatestPrint == "" || d.LatestPrint == cert.Fingerprint ||
+			(d.LatestStatus != "delivered" && d.LatestStatus != "verified" && d.LatestStatus != "rolled_back") {
+			continue
+		}
+		replaced++
+		s, ok := counts[d.Target]
+		if !ok || s.Fingerprint != d.LatestPrint {
+			continue // not counted after the deploy the destination now serves
+		}
+		if newest == nil || s.CheckedAt.After(*newest) {
+			at := s.CheckedAt
+			newest = &at
+		}
+		switch {
+		case s.HeldByOlder > 0:
+			older = append(older, fmt.Sprintf("%d on %s", s.HeldByOlder, d.Target))
+		case s.Unattributed == 0:
+			ended++
+		}
+	}
+	switch {
+	case replaced == 0:
+		return revocationFacet{State: revocationNotObserved,
+			Detail: "sessions opened before the revocation are not observed; a containment stop or a listener restart ends them"}
+	case len(older) > 0:
+		return revocationFacet{State: revocationPending, At: newest,
+			Detail: "connections held by processes started before the replacement was deployed may still carry sessions opened with the revoked certificate: " +
+				strings.Join(older, ", ")}
+	case ended == replaced:
+		return revocationFacet{State: revocationConfirmed, At: newest,
+			Detail: fmt.Sprintf("on all %d destinations serving a replacement, every connection is held by a process started after the replacement was deployed, so sessions opened with the revoked certificate are gone", replaced)}
+	default:
+		return revocationFacet{State: revocationNotObserved, At: newest,
+			Detail: fmt.Sprintf("%d of %d destinations serving a replacement were counted after its deploy with no connection held by an older process; the others' hosts did not count their sessions or could not read who holds them", ended, replaced)}
+	}
 }
 
 func (a *API) getIdentityRevocationReport(w http.ResponseWriter, r *http.Request) {

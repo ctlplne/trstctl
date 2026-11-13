@@ -4,7 +4,10 @@ package server
 
 import (
 	"errors"
+	"net"
+	"strconv"
 	"strings"
+
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 
 	"trstctl.com/trstctl/internal/agent/relay"
@@ -159,8 +162,11 @@ func validateDeploymentVerificationReport(intent relay.DeployIntent, expected ce
 	if err := validateReceivedProbe(tr); err != nil {
 		return empty, err
 	}
-	if tr.Digest() != evidenceDigest {
+	if relay.DeploymentEvidenceDigest(result) != evidenceDigest {
 		return empty, errors.New("deployment verification digest differs from its signed evidence")
+	}
+	if err := validateListenerSessions(intent, result, outcome); err != nil {
+		return empty, err
 	}
 	if !relay.ValidApplianceReadback(result.ApplianceReadback) {
 		return empty, errors.New("deployment verification carries an invalid appliance readback")
@@ -174,4 +180,28 @@ func validateDeploymentVerificationReport(intent relay.DeployIntent, expected ce
 		return empty, errors.New("deployment outcome contradicts its verification observation")
 	}
 	return result, nil
+}
+
+// validateListenerSessions checks a host's count of its listener's sessions
+// (A245-L2): only a verified deploy carries one, on the verified address's
+// port, with counts that hold together, taken after the deploy began.
+func validateListenerSessions(intent relay.DeployIntent, result relay.EndpointVerifyResult, outcome string) error {
+	s := result.Sessions
+	if s == nil {
+		return nil
+	}
+	if outcome != transport.JobOutcomeVerified {
+		return errors.New("only a verified deployment counts its listener's sessions")
+	}
+	_, portText, err := net.SplitHostPort(strings.TrimSpace(intent.VerifyAddress))
+	if err != nil {
+		return errors.New("deployment verification has no listener port to count sessions on")
+	}
+	if port, err := strconv.Atoi(portText); err != nil || port != s.Port {
+		return errors.New("listener session count names another port")
+	}
+	if !s.Valid() {
+		return errors.New("listener session count does not hold together")
+	}
+	return nil
 }

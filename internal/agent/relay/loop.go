@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
@@ -539,6 +540,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	defer adopted.wipe()
 
 	var execErr error
+	var deployStarted time.Time
 	if pluginJob {
 		// The module runs under the operator's grant, on this machine, inside
 		// the customer's network. It never reads the redeemed credential
@@ -548,6 +550,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		// the sandbox a formality.
 		execErr = deployPlugin(ctx, plugins, job, PluginCall{Intent: intent, Material: material, Client: client})
 	} else if hostJob {
+		deployStarted = time.Now()
 		stats, execErr = ExecuteOnHost(ctx, hostProfile, intent, material, client)
 	} else {
 		stats, execErr = Execute(ctx, client, intent, material)
@@ -610,6 +613,12 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		nativeProbe = hostProfile.TLSProbeOpenSSL
 	}
 	outcome, detail, evidence := postDeployVerificationWithNative(ctx, intent, material, nativeProbe)
+	if hostJob && outcome == transport.OutcomeVerified {
+		// A245-L2: whether a process older than this deploy still holds
+		// connections on the listener, which may carry sessions opened with
+		// the certificate this deploy replaced.
+		detail, evidence = withListenerSessions(intent, detail, evidence, deployStarted)
+	}
 
 	// E2: and whether the APPLIANCE agrees. The handshake says what a client
 	// gets; this says what the device thinks it has, and the two together

@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- The revocation report reads existing sessions from the hosts (A245-L2): a Linux host agent counts, right after a
+  verified deploy or renewal, the established connections on the listener's port and how many a process older than the
+  deploy holds, inside the deploy's signed evidence; the existing-sessions facet reads confirmed when no destination
+  serving a replacement has a connection held by an older process, pending while one does, and not observed where no
+  count was taken (migration 0475).
 - The operations ledger reads SSH certificate revocations (A245-L1): each revocation by serial or key ID (the key ID
   never shown) reads delivered once the served KRL lists it and verified once every host agent that reports its KRL
   enforces the version that first listed it; the rows are a read model of the revocation events (migration 0474), and

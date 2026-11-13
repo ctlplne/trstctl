@@ -275,6 +275,8 @@ var TenantScopedTables = []string{
 	"provider_billing_sync_pushes",
 	// A245-L1: SSH certificate revocations; no foreign keys.
 	"ssh_certificate_revocations",
+	// A245-L2: listener session counts; no foreign keys.
+	"listener_session_observations",
 	// MSP-3: the customer's PSA tickets; no foreign keys.
 	"provider_psa_tickets",
 	// MSP-9: the customer's RMM devices; no foreign keys.

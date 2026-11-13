@@ -1359,6 +1359,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	addWindowsLocalRotationPrivacyPolicies(policies)
 	addPAMDiscoveryOutboxPrivacyPolicies(policies)
 	addADCSDecisionPrivacyPolicies(policies)
+	addListenerSessionsPrivacyPolicies(policies)
 	addADCSDatabasePrivacyPolicies(policies)
 	addExternalCAHeldPrivacyPolicies(policies)
 	addMDMCheckInPrivacyPolicies(policies)
@@ -1962,6 +1963,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 	addWindowsLocalRotationPrivacyShapes(shapes)
 	addPAMDiscoveryOutboxPrivacyShapes(shapes)
 	addADCSDecisionPrivacyShapes(shapes)
+	addListenerSessionsPrivacyShapes(shapes)
 	// N1-L2: the CA database read carries its pending requests' requested
 	// names and requesters, so it has an exact policy, not a closed shape.
 	shapes[privacyEventPolicyKey{EventADCSDatabaseIngested, 1}] = privacyPayloadShape[ADCSDatabaseIngested]()
