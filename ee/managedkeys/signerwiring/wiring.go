@@ -9,9 +9,12 @@ package signerwiring
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"strings"
 
@@ -167,10 +170,11 @@ func ProviderOption(path, journalDir string) (signing.ServerOption, error) {
 		return nil, fmt.Errorf("managed-key provider requires --keystore for a durable idempotency journal")
 	}
 	providers := map[string]crypto.RemoteKeyLifecycle{}
+	probes := map[string]signing.ManagedKeyReadinessProbe{}
 	for _, name := range enabledProviders(cfg) {
 		one := cfg
 		one.Provider = name
-		providerName, implementation, err := provider(one)
+		providerName, implementation, probe, err := provider(one)
 		if err != nil {
 			return nil, fmt.Errorf("managed-key provider %s: %w", name, err)
 		}
@@ -178,8 +182,14 @@ func ProviderOption(path, journalDir string) (signing.ServerOption, error) {
 			return nil, fmt.Errorf("managed-key config lists provider %s twice", providerName)
 		}
 		providers[providerName] = implementation
+		if probe != nil {
+			probes[providerName] = probe
+		}
 	}
-	return signing.WithManagedKeyProviders(journalDir, providers), nil
+	// A169-L2: each workload-identity provider exchanges its token as the
+	// signer starts, and Health reports whether it could.
+	return signing.CombineServerOptions(signing.WithManagedKeyProviders(journalDir, providers),
+		signing.WithManagedKeyReadinessProbes(probes)), nil
 }
 
 // enabledProviders is Providers when set, else Provider alone (AWS KMS when
@@ -238,7 +248,10 @@ func ensureConfigEOF(dec *json.Decoder) error {
 	return nil
 }
 
-func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
+// provider builds one managed-key provider and, for a provider whose
+// credential comes from a workload identity, the startup token exchange its
+// readiness reports (A169-L2); nil otherwise.
+func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, signing.ManagedKeyReadinessProbe, error) {
 	providerName := strings.ToLower(strings.TrimSpace(cfg.Provider))
 	if providerName == "" {
 		providerName = providerAWS
@@ -246,21 +259,21 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 	switch providerName {
 	case providerAWS:
 		if err := kmsconn.ValidateEndpoints("aws managed-key", cfg.AWS.AllowInsecureLoopback, cfg.AWS.Endpoint); err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		secretKey, wipeSecret, err := credential("aws secret access key", cfg.AWS.SecretAccessKey, cfg.AWS.SecretAccessKeyFile, true)
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		defer wipeSecret()
 		session, wipeSession, err := credential("aws session token", cfg.AWS.SessionToken, cfg.AWS.SessionTokenFile, false)
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		defer wipeSession()
 		httpClient, err := kmsconn.EgressClient(cfg.AWS.PrivateEgressCIDRs, cfg.AWS.Endpoint, cfg.AWS.AllowInsecureLoopback)
 		if err != nil {
-			return "", nil, fmt.Errorf("aws managed-key egress: %w", err)
+			return "", nil, nil, fmt.Errorf("aws managed-key egress: %w", err)
 		}
 		opts := []awskms.Option{awskms.WithHTTPClient(httpClient)}
 		if cfg.AWS.Endpoint != "" {
@@ -269,14 +282,14 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 		backend, err := awskms.NewSecure(cfg.AWS.Region, awskms.Credentials{
 			AccessKeyID: cfg.AWS.AccessKeyID, SecretAccessKey: secretKey, SessionToken: session,
 		}, opts...)
-		return "aws-kms", backend, err
+		return "aws-kms", backend, nil, err
 	case providerAzure:
 		if err := kmsconn.ValidateEndpoints("azure managed-key", cfg.Azure.AllowInsecureLoopback, cfg.Azure.VaultURL, cfg.Azure.Endpoint); err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		creds, wipe, err := azureCredentials(cfg.Azure)
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		defer wipe()
 		azureEndpoint := cfg.Azure.Endpoint
@@ -285,37 +298,45 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 		}
 		httpClient, err := kmsconn.EgressClient(cfg.Azure.PrivateEgressCIDRs, azureEndpoint, cfg.Azure.AllowInsecureLoopback)
 		if err != nil {
-			return "", nil, fmt.Errorf("azure managed-key egress: %w", err)
+			return "", nil, nil, fmt.Errorf("azure managed-key egress: %w", err)
 		}
 		opts := []azurekv.Option{azurekv.WithHTTPClient(httpClient)}
 		if cfg.Azure.Endpoint != "" {
 			opts = append(opts, azurekv.WithEndpoint(cfg.Azure.Endpoint))
 		}
 		backend, err := azurekv.NewSecure(cfg.Azure.VaultURL, creds, opts...)
-		return "azure-key-vault", backend, err
+		var probe signing.ManagedKeyReadinessProbe
+		if creds.TokenSource != nil && cfg.Azure.WorkloadIdentity != nil {
+			probe = workloadIdentityProbe(creds.TokenSource, cfg.Azure.WorkloadIdentity.FederatedTokenFile)
+		}
+		return "azure-key-vault", backend, probe, err
 	case providerGCP:
 		if err := kmsconn.ValidateEndpoints("gcp managed-key", cfg.GCP.AllowInsecureLoopback, cfg.GCP.Endpoint); err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		creds, wipe, err := gcpCredentials(cfg.GCP)
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		defer wipe()
 		httpClient, err := kmsconn.EgressClient(cfg.GCP.PrivateEgressCIDRs, cfg.GCP.Endpoint, cfg.GCP.AllowInsecureLoopback)
 		if err != nil {
-			return "", nil, fmt.Errorf("gcp managed-key egress: %w", err)
+			return "", nil, nil, fmt.Errorf("gcp managed-key egress: %w", err)
 		}
 		opts := []gcpkms.Option{gcpkms.WithHTTPClient(httpClient)}
 		if cfg.GCP.Endpoint != "" {
 			opts = append(opts, gcpkms.WithEndpoint(cfg.GCP.Endpoint))
 		}
 		backend, err := gcpkms.NewSecure(cfg.GCP.Parent, creds, opts...)
-		return "gcp-kms", backend, err
+		var probe signing.ManagedKeyReadinessProbe
+		if creds.TokenSource != nil && cfg.GCP.WorkloadIdentity != nil {
+			probe = workloadIdentityProbe(creds.TokenSource, cfg.GCP.WorkloadIdentity.SubjectTokenFile)
+		}
+		return "gcp-kms", backend, probe, err
 	case providerPKCS11:
 		pin, wipe, err := credential("pkcs11 user PIN", cfg.PKCS11.UserPIN, cfg.PKCS11.UserPINFile, true)
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		defer wipe()
 		session, err := pkcs11.OpenModuleSession(pkcs11.ModuleConfig{
@@ -323,18 +344,18 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 			UserPIN: pin, KeyLabelPrefix: cfg.PKCS11.KeyLabelPrefix,
 		})
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
-		return "pkcs11", pkcs11.New(session), nil
+		return "pkcs11", pkcs11.New(session), nil, nil
 	case providerTPM2:
 		owner, wipeOwner, err := credential("tpm2 owner auth", cfg.TPM2.OwnerAuth, cfg.TPM2.OwnerAuthFile, false)
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		defer wipeOwner()
 		keyAuth, wipeKey, err := credential("tpm2 key auth", cfg.TPM2.KeyAuth, cfg.TPM2.KeyAuthFile, false)
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		defer wipeKey()
 		device, err := tpm.OpenDevice(tpm.DeviceConfig{
@@ -342,13 +363,13 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 			PersistentHandleBase: cfg.TPM2.PersistentHandleBase,
 		})
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
-		return "tpm2", tpm.New(device), nil
+		return "tpm2", tpm.New(device), nil, nil
 	case providerYubiHSM:
 		pin, wipe, err := credential("yubihsm2 user PIN", cfg.YubiHSM2.UserPIN, cfg.YubiHSM2.UserPINFile, true)
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		defer wipe()
 		connector, err := yubihsm.OpenPKCS11Connector(yubihsm.PKCS11Config{
@@ -356,11 +377,11 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 			UserPIN: pin, KeyLabelPrefix: cfg.YubiHSM2.KeyLabelPrefix,
 		})
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
-		return "yubihsm2", yubihsm.New(connector), nil
+		return "yubihsm2", yubihsm.New(connector), nil, nil
 	default:
-		return "", nil, fmt.Errorf("unsupported signer managed-key provider %q", cfg.Provider)
+		return "", nil, nil, fmt.Errorf("unsupported signer managed-key provider %q", cfg.Provider)
 	}
 }
 
@@ -468,4 +489,35 @@ func azureKeyVaultScope(vaultURL string) string {
 		return "https://managedhsm.azure.net/.default"
 	}
 	return "https://vault.azure.net/.default"
+}
+
+// workloadIdentityProbe exchanges the platform token once through the
+// provider's own token source — warming its cache, so the first request does
+// not exchange again — and names a failure by closed code only: the token file
+// unreadable, the token endpoint refusing (an HTTP status), unreachable, or
+// otherwise failing. Provider text never leaves the signer (A169-L2).
+func workloadIdentityProbe(source interface {
+	Token(ctx context.Context) ([]byte, func(), error)
+}, tokenFile string) signing.ManagedKeyReadinessProbe {
+	return func(ctx context.Context) error {
+		if info, err := os.Stat(strings.TrimSpace(tokenFile)); err != nil || info.IsDir() || info.Size() == 0 {
+			return &signing.ManagedKeyReadinessError{Code: signing.ReadinessTokenUnreadable}
+		}
+		token, wipe, err := source.Token(ctx)
+		if err != nil {
+			var status *cloudhttp.StatusError
+			var netErr net.Error
+			switch {
+			case errors.As(err, &status):
+				return &signing.ManagedKeyReadinessError{Code: signing.ReadinessExchangeRefused}
+			case errors.As(err, &netErr), errors.Is(err, context.DeadlineExceeded):
+				return &signing.ManagedKeyReadinessError{Code: signing.ReadinessExchangeUnreachable}
+			default:
+				return &signing.ManagedKeyReadinessError{Code: signing.ReadinessExchangeFailed}
+			}
+		}
+		secret.Wipe(token)
+		wipe()
+		return nil
+	}
 }

@@ -18,7 +18,15 @@ to 503 and removes the pod from rotation, while `/healthz` (liveness) stays gree
 so a transient blip does not get the pod killed. For external NATS, readiness also
 checks the event stream's durability: fewer JetStream replicas than
 `TRSTCTL_NATS_REPLICAS` degrades `/readyz` rather than serve with a weaker RPO than
-configured. Projection readiness reads the persisted projection checkpoint. If
+configured. A managed-key provider whose credential comes from a workload identity
+(`managed_keys.azure.workload_identity`, `managed_keys.gcp.workload_identity`) is
+checked too (A169-L2): the signer exchanges the platform token as it starts and
+retries a failed exchange with backoff (15 seconds, doubling to 5 minutes) until one
+succeeds, and while one has not, `/readyz` answers `200` with `managed_key_providers`
+degraded, naming the provider and a closed reason — `federated_token_unreadable`,
+`token_exchange_refused`, `token_exchange_unreachable` or `token_exchange_failed`,
+never the identity provider's own words. CA signing and the other providers keep
+working, so it does not take the pod out of rotation. Projection readiness reads the persisted projection checkpoint. If
 the tail cannot apply a sequence, it records that failed sequence before it
 retries and `/readyz` returns 503. A normal short-lived positive lag does not flap
 readiness; an unresolved failed consumer sequence degrades it even when live

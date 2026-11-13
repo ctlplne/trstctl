@@ -2910,7 +2910,7 @@ func (s *Server) readinessChecks(ctx context.Context, d Deps) []observ.Check {
 			return errors.New("signer unreachable")
 		}
 		return nil
-	}})
+	}}, managedKeyProvidersCheck(d.Signer))
 	s.mSigner = observ.NewSignerMetrics(s.registry)
 	s.sampleSigner(ctx)
 	return checks

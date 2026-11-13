@@ -2392,7 +2392,7 @@ not this file.
 | `ee/managedkeys/signerwiring/tenantkek.go:80` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
 | `ee/managedkeys/signerwiring/tenantkek.go:222` | the signer operator's configured wrapped-key file, never remote input (CWE-22). |
 | `ee/managedkeys/signerwiring/tenantkek_kms_test.go:69` | the fixture adapter's log in the test tempdir (CWE-22) |
-| `ee/managedkeys/signerwiring/wiring.go:141` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
+| `ee/managedkeys/signerwiring/wiring.go:144` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
 | `internal/agent/csisecrets/driver_test.go:244` | the test's own temp file (CWE-22) |
 | `internal/agent/csisecrets/driver_test.go:273` | the test's own temp file (CWE-22) |
 | `internal/agent/csisecrets/driver_test.go:410` | the test's own temp file (CWE-22) |

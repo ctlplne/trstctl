@@ -48,6 +48,9 @@ type Server struct {
 	// authenticated signer transport; provider credentials and key operations
 	// therefore never enter the HTTP/control-plane address space (AN-4).
 	managedKeys *managedKeyRuntime
+	// readiness reports managed-key providers' workload identity exchanges
+	// (A169-L2).
+	readiness *managedKeyReadiness
 
 	// minter, when non-nil, is the attached generic successor-minting extension
 	// (WithSuccessionMinter). The core defines only the seam; the concrete
@@ -159,6 +162,7 @@ func NewServer(opts ...ServerOption) *Server {
 	}
 	s.bindMinterCustody()
 	s.bindIssuanceKeyOpCustody()
+	s.readiness.start()
 	return s
 }
 
@@ -180,6 +184,7 @@ func NewPersistentServer(store *KeyStore, opts ...ServerOption) (*Server, error)
 	s.keys = keys
 	s.bindMinterCustody()
 	s.bindIssuanceKeyOpCustody()
+	s.readiness.start()
 	return s, nil
 }
 
@@ -504,7 +509,7 @@ func (s *Server) Health(_ context.Context, _ *signerpb.HealthRequest) (*signerpb
 	if !serving {
 		st = signerpb.HealthResponse_STATUS_DRAINING
 	}
-	return &signerpb.HealthResponse{Status: st}, nil
+	return &signerpb.HealthResponse{Status: st, ManagedKeyProviders: s.readiness.snapshot()}, nil
 }
 
 // Shutdown marks the server draining and zeroizes every key it holds.
@@ -512,6 +517,7 @@ func (s *Server) Shutdown() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.serving = false
+	s.readiness.close()
 	for id, held := range s.keys {
 		held.signer.Destroy()
 		delete(s.keys, id)

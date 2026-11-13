@@ -292,6 +292,24 @@ func (c *Client) Healthy(ctx context.Context) bool {
 	return err == nil && resp.GetStatus() == signerpb.HealthResponse_STATUS_SERVING
 }
 
+// ManagedKeyProviderReadiness reports each workload-identity managed-key
+// provider's token exchange state from the signer's Health (A169-L2).
+func (c *Client) ManagedKeyProviderReadiness(ctx context.Context) ([]ManagedKeyProviderReadiness, error) {
+	resp, err := c.svc.Health(ctx, &signerpb.HealthRequest{})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ManagedKeyProviderReadiness, 0, len(resp.GetManagedKeyProviders()))
+	for _, p := range resp.GetManagedKeyProviders() {
+		item := ManagedKeyProviderReadiness{Provider: p.GetProvider(), Ready: p.GetReady(), Reason: p.GetReason()}
+		if p.GetCheckedUnix() > 0 {
+			item.Checked = time.Unix(p.GetCheckedUnix(), 0).UTC()
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
 // KeyPurpose is the signer-enforceable usage class for a key (SIGNER-002/003),
 // re-exported so the control plane can constrain a key at creation and assert a
 // purpose when signing without importing the generated proto package.

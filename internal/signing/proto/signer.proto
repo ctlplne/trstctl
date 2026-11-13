@@ -499,6 +499,22 @@ message HealthResponse {
     STATUS_DRAINING = 3;
   }
   Status status = 1;
+  // managed_key_providers reports, for each managed-key provider whose
+  // credential comes from a workload identity, whether the signer's token
+  // exchange has succeeded since it started (A169-L2). Sorted by provider.
+  repeated ManagedKeyProviderReadiness managed_key_providers = 2;
+}
+
+// ManagedKeyProviderReadiness is one provider's workload identity readiness.
+message ManagedKeyProviderReadiness {
+  string provider = 1;
+  bool ready = 2;
+  // reason is a closed code while not ready: pending (no exchange finished
+  // yet), federated_token_unreadable, token_exchange_refused,
+  // token_exchange_unreachable or token_exchange_failed. Never provider text.
+  string reason = 3;
+  // checked_unix is when the last exchange finished, in Unix seconds.
+  int64 checked_unix = 4;
 }
 
 // MintSuccessorRequest mirrors internal/signing.MintRequest (INT-01). It carries

@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- Workload-identity managed-key providers report readiness (A169-L2): the signer exchanges each Azure or GCP workload
+  identity token as it starts (warming the token cache), retries a failed exchange with backoff until one succeeds, and
+  reports each provider in its Health RPC; `/readyz` answers `200` with `managed_key_providers` degraded while one
+  cannot authenticate, naming the provider and a closed reason (`federated_token_unreadable`, `token_exchange_refused`,
+  `token_exchange_unreachable`, `token_exchange_failed`), instead of the failure surfacing only per request.
 - Reconciliation witnesses name the trstctl operation behind a key only the cloud KMS holds (A168-L4): when trstctl's
   own generate or rotate created a key at AWS KMS, Cloud KMS or Key Vault but its completion was never recorded (the
   operation is still queued, or failed after the provider acted), the presence entry carries a note naming the
