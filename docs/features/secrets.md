@@ -1811,10 +1811,14 @@ A template can also use a dynamic lease:
 `{{ lease "payments-db/readonly" "username" }}` and `{{ lease "payments-db/readonly" "password" }}`
 pick JSON fields of the lease's credential, and `{{ lease "provider/role" }}` takes all
 of it (`lease_ttl` sets the lifetime asked for; the token then needs `secrets:write`). A
-lease is renewed in place while it can be. When it can't be renewed far enough, or when
-the file must be written again for another reason (a credential is returned only at
-issue), a new lease is issued. The new credential is written and verified by the
-application, and only then is the replaced lease revoked: replacement before revocation.
+lease is renewed in place while it can be; when it can't be renewed far enough, a new
+lease is issued. A file written again for another reason (a static secret changed, or the
+file went) keeps its live leases: the agent holds each lease's credential in locked memory
+from its issue until the lease is replaced, the file goes, or the agent stops (A238-L4),
+and the state file never holds it. A restarted agent holds none, so the next time it must
+write the file it issues new leases (a credential is returned only at issue). A new
+credential is written and verified by the application, and only then is the replaced
+lease revoked: replacement before revocation.
 If the application doesn't verify, the old lease stays valid until it does. Each issue
 uses a key saved before the call, so a retry after a lost answer gets the same lease back
 instead of leaving an untracked one. Without the control plane, a file holding a lease

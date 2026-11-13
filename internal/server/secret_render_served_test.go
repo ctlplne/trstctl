@@ -291,9 +291,10 @@ func (b *renderLeaseBackend) accepts(password string) bool {
 	return false
 }
 
-// A238: a template that uses a dynamic lease gets a fresh lease when the file
-// must be written again; the new login is created, written and verified by the
-// application before the old login is revoked at the database.
+// A238: a template that uses a dynamic lease gets a fresh lease when a
+// restarted renderer must write the file again (a running one keeps its lease
+// through a rotation, A238-L4); the new login is created, written and verified
+// by the application before the old login is revoked at the database.
 func TestServedSecretRenderReplacesALeaseBeforeRevokingItA238(t *testing.T) {
 	backend := &renderLeaseBackend{active: map[string]string{}, revoked: map[string]bool{}}
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), withPreviewDynamicSecretProvider(backend))
@@ -346,23 +347,33 @@ func TestServedSecretRenderReplacesALeaseBeforeRevokingItA238(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := secretrender.New(secretrender.Config{
-		Server: h.ts.URL, TokenFile: tokenFile, Consumer: "reporting/app", StateDir: filepath.Join(t.TempDir(), "state"),
-		Templates: []secretrender.Template{{
-			Name: "db", Destination: file, LeaseTTL: 15 * time.Minute,
-			Text: "app={{ secret \"lease238/app/name\" }} user={{ lease \"payments-db/readonly-reporting\" \"username\" }} " +
-				"pass={{ lease \"payments-db/readonly-reporting\" \"password\" }}\n",
-			Verify: secretrender.Verify{URL: application.URL, Timeout: 5 * time.Second},
-		}},
-	}, client, client, nil)
-	if err != nil {
-		t.Fatal(err)
+	stateDir := filepath.Join(t.TempDir(), "state")
+	start := func() *secretrender.Renderer {
+		t.Helper()
+		r, err := secretrender.New(secretrender.Config{
+			Server: h.ts.URL, TokenFile: tokenFile, Consumer: "reporting/app", StateDir: stateDir,
+			Templates: []secretrender.Template{{
+				Name: "db", Destination: file, LeaseTTL: 15 * time.Minute,
+				Text: "app={{ secret \"lease238/app/name\" }} user={{ lease \"payments-db/readonly-reporting\" \"username\" }} " +
+					"pass={{ lease \"payments-db/readonly-reporting\" \"password\" }}\n",
+				Verify: secretrender.Verify{URL: application.URL, Timeout: 5 * time.Second},
+			}},
+		}, client, client, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.UseLeases(client)
+		return r
 	}
-	r.UseLeases(client)
+	r := start()
 	r.Once(t.Context())
 	if raw, _ := os.ReadFile(file); !strings.Contains(string(raw), "pass=lease-pw-1") { // #nosec G304 -- the test's own temp file (CWE-22)
 		t.Fatalf("first file %q", raw)
 	}
+	// The agent restarts: the new renderer holds no credential from before.
+	r.Close()
+	r = start()
+	t.Cleanup(r.Close)
 	if status, raw := secretsReqKey(t, h, http.MethodPut, "/api/v1/secrets/store/lease238/app/name", operator, "a238-lease-app-2",
 		map[string]any{"value": "reporting-v2"}); status != http.StatusOK {
 		t.Fatalf("rotate: HTTP %d %s", status, raw)

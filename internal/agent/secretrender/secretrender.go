@@ -301,6 +301,7 @@ type Renderer struct {
 	leases LeaseClient
 	logger *slog.Logger
 	now    func() time.Time
+	held   heldLeases
 }
 
 // UseLeases lets the renderer issue, renew and revoke dynamic leases.
@@ -326,8 +327,10 @@ func New(cfg Config, fetch Fetcher, report Reporter, logger *slog.Logger) (*Rend
 	return &Renderer{cfg: cfg, fetch: fetch, report: report, logger: logger, now: time.Now}, nil
 }
 
-// Run reconciles every template now and then on each interval until ctx ends.
+// Run reconciles every template now and then on each interval until ctx ends;
+// it destroys the lease credentials it holds when it returns.
 func (r *Renderer) Run(ctx context.Context) error {
+	defer r.Close()
 	ticker := time.NewTicker(r.cfg.Interval)
 	defer ticker.Stop()
 	for {
@@ -339,6 +342,10 @@ func (r *Renderer) Run(ctx context.Context) error {
 		}
 	}
 }
+
+// Close destroys the lease credentials the renderer holds in locked memory.
+// A renderer used after Close issues fresh leases when it next writes a file.
+func (r *Renderer) Close() { r.held.destroyAll() }
 
 // Once reconciles every template once.
 func (r *Renderer) Once(ctx context.Context) {
@@ -419,13 +426,17 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 		ttl = time.Hour
 	}
 	// A lease is renewed in place while it can be; one that can't be renewed
-	// far enough is replaced. A file that must be written again needs fresh
-	// credentials for every lease, since a credential is returned only once.
-	replace := false
+	// far enough is replaced. A file written again keeps every other lease: its
+	// credential is held in locked memory from its issue (A238-L4). A lease
+	// whose credential isn't held (a restarted renderer) is replaced when the
+	// file is written, since a credential is returned only at issue, and one
+	// whose issue answer was lost is issued again under its saved key.
+	r.held.keep(t.Name, leaseRefs)
+	replace := map[string]bool{}
 	for _, ref := range leaseRefs {
 		ls := st.Leases[ref]
-		if ls.ID == "" {
-			replace = true
+		if ls.ID == "" || ls.IssueKey != "" {
+			replace[ref] = true
 			continue
 		}
 		if ls.BootstrapName != "" && !st.Verified {
@@ -442,10 +453,10 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 			st.Leases[ref] = ls
 			continue
 		}
-		replace = true
+		replace[ref] = true
 	}
 	staticChanged := !maps.Equal(rendered, st.Versions) || statErr != nil || st.Removed
-	if !staticChanged && !replace {
+	if !staticChanged && len(replace) == 0 {
 		if !st.Verified && t.Verify.URL != "" && r.verify(ctx, t, values) == nil {
 			st.Verified = true
 			r.reportQuietly(ctx, t, "verified", rendered)
@@ -472,18 +483,30 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 		}
 		for _, ref := range leaseRefs {
 			ls := st.Leases[ref]
-			var lease Lease
-			var err error
 			if ls.BootstrapName != "" && (!st.Verified || ls.ExpiresAt.Sub(now) > ttl/3) {
-				lease, err = r.fetchReplacement(ctx, ls)
-			} else {
-				lease, err = r.issueLease(ctx, t, &st, ref, ttl)
-				if err == nil && ls.BootstrapName != "" {
-					delete(rendered, ls.BootstrapName)
+				lease, err := r.fetchReplacement(ctx, ls)
+				if err != nil {
+					return err
+				}
+				leaseValues[ref] = lease.Credential
+				continue
+			}
+			if !replace[ref] && ls.BootstrapName == "" {
+				if held := r.held.get(t.Name, ref, ls.ID); held != nil {
+					leaseValues[ref] = held
+					continue
 				}
 			}
+			lease, err := r.issueLease(ctx, t, &st, ref, ttl)
 			if err != nil {
 				return err
+			}
+			if ls.BootstrapName != "" {
+				delete(rendered, ls.BootstrapName)
+			}
+			if !r.held.put(t.Name, ref, lease.ID, lease.Credential) {
+				r.logger.Warn("a lease credential could not be held in locked memory; the next rewrite issues a new lease",
+					slog.String("template", t.Name), slog.String("lease", lease.ID))
 			}
 			leaseValues[ref] = lease.Credential
 		}
@@ -634,6 +657,8 @@ func (r *Renderer) stale(ctx context.Context, t Template, st templateState, caus
 	if err := os.Remove(t.Destination); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	// The file is gone: its held lease credentials go with it.
+	r.held.keep(t.Name, nil)
 	st.Removed, st.Verified = true, false
 	if err := r.saveState(t, st); err != nil {
 		return err

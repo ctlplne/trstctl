@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A secret renderer keeps its live leases when it writes a file again (A238-L4): each lease credential is held in
+  locked memory from its issue, so a static secret's rotation, or a removed file, rewrites the file with the same lease
+  instead of issuing new ones and revoking the old; a lease that can't be renewed is still replaced on its own, and a
+  restarted agent, which holds none, issues new leases the next time it writes the file.
 - A scoped sync sets its own drift-check interval (A237-L7): `reconcile_interval` (1m to 24h; `0s` or none keeps the
   15-minute default) decides how often an automatic sync re-reads its destination when nothing it syncs changed; a
   replacement that leaves it out keeps it, the view names it, and the console's define and edit forms offer it.
