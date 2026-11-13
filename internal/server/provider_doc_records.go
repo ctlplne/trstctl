@@ -11,6 +11,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/docsys"
+	"trstctl.com/trstctl/internal/docsys/hudu"
 	"trstctl.com/trstctl/internal/docsys/itglue"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -107,8 +108,11 @@ func (d *issuanceDispatcher) handleDocRecord(ctx context.Context, m orchestrator
 
 // docConsoleURL is the console base URL a record links back to.
 func docConsoleURL(target config.ProviderBillingTarget) string {
-	if target.ITGlue != nil {
+	switch {
+	case target.ITGlue != nil:
 		return target.ITGlue.ConsoleURL
+	case target.Hudu != nil:
+		return target.Hudu.ConsoleURL
 	}
 	return ""
 }
@@ -131,6 +135,20 @@ func (d *issuanceDispatcher) withDocClient(target config.ProviderBillingTarget, 
 		c, err := itglue.New(itglue.Config{BaseURL: target.Endpoint, FlexibleAssetTypeID: g.FlexibleAssetTypeID,
 			Traits: itglue.Traits{Title: g.Traits.Title, Inventory: g.Traits.Inventory, NextExpiry: g.Traits.NextExpiry, Count: g.Traits.Count,
 				Link: g.Traits.Link}}, client, itglue.Credentials{APIKey: key.Bytes()})
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return fn(c)
+	case target.Type == "hudu" && target.Hudu != nil:
+		hu := target.Hudu
+		key, err := resolveDeploymentCredentialRef(hu.APIKeyRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the hudu target's api_key_ref"))
+		}
+		defer key.Destroy()
+		c, err := hudu.New(hudu.Config{BaseURL: target.Endpoint, AssetLayoutID: hu.AssetLayoutID,
+			Fields: hudu.Fields{Inventory: hu.Fields.Inventory, NextExpiry: hu.Fields.NextExpiry, Count: hu.Fields.Count, Link: hu.Fields.Link}},
+			client, hudu.Credentials{APIKey: key.Bytes()})
 		if err != nil {
 			return orchestrator.DefiniteNoEffect(err)
 		}

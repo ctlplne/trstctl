@@ -368,6 +368,25 @@ describe("Provider billing systems (MSP-2)", () => {
     expect(within(rows[2]).getByText("Not written: itglue: POST /flexible_assets answered 422")).toBeInTheDocument();
   });
 
+  it("names a Hudu target and what its company is (MSP-15)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/provider/v1/tenants/alpha/billing-companies")
+          return json({ targets: [{ id: "hudu", name: "Hudu", type: "hudu", cadence: "monthly", documentation: true }], companies: [] });
+        if (url === "/provider/v1/tenants/alpha/billing-sync") return json({ pushes: [] });
+        if (url === "/provider/v1/tenants/alpha/doc-records") return json({ records: [] });
+        throw new Error("unexpected path " + url);
+      }),
+    );
+    renderPanel(true);
+    expect(await screen.findByText("Hudu, certificate records")).toBeInTheDocument();
+    expect(screen.getByText("The Hudu company ID, a number. The customer's certificate inventory is kept in one asset under it.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No record written yet: the customer's record is written within ten minutes of mapping its organization."),
+    ).toBeInTheDocument();
+  });
+
   it("installs, upgrades and removes the agent through the RMM with rmm:write (MSP-9)", async () => {
     const actions: { url: string; body: unknown; key: string }[] = [];
     let busy = false;

@@ -140,7 +140,7 @@ under the customer's organization; an install carries a one-time enrollment toke
 for the customer's own tenant, so the new agent enrolls there and nowhere else, and
 the device then maps to it as installed through the RMM.
 
-When a system keeps documentation (IT Glue), **Certificate records in documentation
+When a system keeps documentation (IT Glue, Hudu), **Certificate records in documentation
 systems** shows, per system, the record written for the customer (its ID and
 organization), how many certificates it lists, the next expiry and when it was last
 written, or why the last write failed. The record follows the customer's inventory

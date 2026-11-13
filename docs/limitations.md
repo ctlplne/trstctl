@@ -2207,8 +2207,9 @@ never live in the API process. What you can do end to end against the running bi
   instance) and live NinjaOne, Datto RMM, N-central, Kaseya VSA and Automate
   servers are what comes next. IT Glue (MSP-14) keeps each customer's
   certificate inventory and expiry dates in one flexible asset, against a
-  stand-in written from its public API reference; Hudu (MSP-15) and a live
-  IT Glue account are what comes next. The
+  stand-in written from its public API reference, and Hudu (MSP-15) in one
+  asset, against a stand-in written from the calls its published API clients
+  make; live IT Glue and Hudu accounts are what comes next. The
   sweep looks back three periods, so a period older than that is not pushed
   automatically.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts

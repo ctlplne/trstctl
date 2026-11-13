@@ -1817,6 +1817,14 @@ export const messages = {
     defaultMessage: "The IT Glue organization ID, a number. The customer's certificate inventory is kept in one record under it.",
     description: "MSP-14: what to enter as the company in an IT Glue target.",
   },
+  "provider.billingSync.type.hudu": {
+    defaultMessage: "Hudu, certificate records",
+    description: "MSP-15: a Hudu documentation target.",
+  },
+  "provider.billingSync.huduCompanyHint": {
+    defaultMessage: "The Hudu company ID, a number. The customer's certificate inventory is kept in one asset under it.",
+    description: "MSP-15: what to enter as the company in a Hudu target.",
+  },
   "provider.docRecords.caption": {
     defaultMessage: "Certificate records in documentation systems",
     description: "MSP-14: documentation records table caption.",

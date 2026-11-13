@@ -1981,6 +1981,38 @@ organization is reused instead of making another. A customer moved to another
 organization gets a new record there; the old one is left as it is.
 `GET /provider/v1/tenants/{id}/doc-records` reads a customer's records.
 
+A `hudu` target (MSP-15) keeps the same record as one asset under the customer's
+Hudu company:
+
+```json
+{
+  "id": "hudu",
+  "name": "Hudu",
+  "type": "hudu",
+  "endpoint": "https://msp.huducloud.com",
+  "hudu": {
+    "api_key_ref": "file:/run/secrets/hudu-api-key",
+    "asset_layout_id": 7,
+    "fields": {
+      "inventory": "certificates",
+      "next_expiry": "next_expiry",
+      "count": "certificate_count",
+      "link": "trstctl_link"
+    },
+    "console_url": "https://trstctl.msp.example"
+  }
+}
+```
+
+`endpoint` is your Hudu instance. Create an asset layout for these records and give
+trstctl its own: each update replaces the asset's fields. `fields` names the layout's
+fields by label in lowercase with underscores (a field labeled "Next expiry" is
+`next_expiry`): `inventory` (a rich-text field) is required; `next_expiry` (a date
+field), `count` (a number field) and `link` (a text field) are optional. The asset is
+named `trstctl certificates`. A customer's company in this target is its Hudu company
+ID. Syncs work as for IT Glue: written only when the inventory changed, updated in
+place, written again after a deletion, and reused after a lost answer.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

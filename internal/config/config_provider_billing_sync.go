@@ -108,6 +108,35 @@ type ProviderBillingTarget struct {
 	// regional API host: https://api.itglue.com, https://api.eu.itglue.com or
 	// https://api.au.itglue.com.
 	ITGlue *ITGlueTarget `json:"itglue,omitempty"`
+	// Hudu configures a "hudu" documentation target (MSP-15): the same in
+	// one asset of an asset layout under the customer's Hudu company.
+	// Endpoint is the instance, e.g. https://msp.huducloud.com.
+	Hudu *HuduTarget `json:"hudu,omitempty"`
+}
+
+// HuduTarget is a Hudu instance the Provider documents customers'
+// certificates in.
+type HuduTarget struct {
+	// APIKeyRef names the API key (file: or env:).
+	APIKeyRef string `json:"api_key_ref"`
+	// AssetLayoutID is the asset layout of the records; give trstctl a
+	// layout of its own, because each update replaces the asset's fields.
+	AssetLayoutID int64 `json:"asset_layout_id"`
+	// Fields are the layout's field labels in lowercase with underscores.
+	Fields HuduFields `json:"fields"`
+	// ConsoleURL is the trstctl console's https base URL the record links
+	// back to.
+	ConsoleURL string `json:"console_url"`
+}
+
+// HuduFields are the fields a record fills: inventory (a rich-text field)
+// is required; the next expiry (a date field), certificate count (a number
+// field) and link (a text field) are optional.
+type HuduFields struct {
+	Inventory  string `json:"inventory"`
+	NextExpiry string `json:"next_expiry,omitempty"`
+	Count      string `json:"count,omitempty"`
+	Link       string `json:"link,omitempty"`
 }
 
 // ITGlueTarget is an IT Glue account the Provider documents customers'
@@ -230,7 +259,7 @@ type NinjaOneTarget struct {
 
 // DocumentationTargetTypes are the target types that keep each customer's
 // certificate inventory in a documentation record (MSP-14 onward).
-var DocumentationTargetTypes = map[string]bool{"itglue": true}
+var DocumentationTargetTypes = map[string]bool{"itglue": true, "hudu": true}
 
 // IsDocumentation reports whether the target keeps customers' certificate
 // inventories in documentation records.
@@ -494,7 +523,7 @@ var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
 var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}, "gradient": {}, "pax8": {},
-	"ninjaone": {}, "datto": {}, "ncentral": {}, "kaseya": {}, "automate": {}, "itglue": {}}
+	"ninjaone": {}, "datto": {}, "ncentral": {}, "kaseya": {}, "automate": {}, "itglue": {}, "hudu": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -526,7 +555,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone, datto, ncentral, kaseya, automate, itglue)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone, datto, ncentral, kaseya, automate, itglue, hudu)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -567,6 +596,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 			errs = append(errs, validateAutomateTarget(where, t)...)
 		case "itglue":
 			errs = append(errs, validateITGlueTarget(where, t)...)
+		case "hudu":
+			errs = append(errs, validateHuduTarget(where, t)...)
+		}
+		if t.Type != "hudu" && t.Hudu != nil {
+			errs = append(errs, fmt.Errorf("%s.hudu applies to hudu targets only", where))
 		}
 		if t.Type != "itglue" && t.ITGlue != nil {
 			errs = append(errs, fmt.Errorf("%s.itglue applies to itglue targets only", where))
@@ -860,6 +894,49 @@ func validateITGlueTarget(where string, t ProviderBillingTarget) []error {
 		seen[trait.key] = trait.key != ""
 	}
 	if err := validateConsoleURL(where, g.ConsoleURL); err != nil {
+		errs = append(errs, err)
+	}
+	return errs
+}
+
+// huduFieldPattern is a Hudu field label in lowercase with underscores.
+var huduFieldPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_]{0,99}$`)
+
+func validateHuduTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; a hudu target uses its API key", where))
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	hu := t.Hudu
+	if hu == nil {
+		return append(errs, fmt.Errorf("%s.hudu is required for a hudu target", where))
+	}
+	where += ".hudu"
+	if err := validateDeploymentCredentialRef(hu.APIKeyRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.api_key_ref: %w", where, err))
+	}
+	if hu.AssetLayoutID <= 0 {
+		errs = append(errs, fmt.Errorf("%s.asset_layout_id must be the records' asset layout ID", where))
+	}
+	seen := map[string]bool{}
+	for _, field := range []struct {
+		name, key string
+		required  bool
+	}{{"inventory", hu.Fields.Inventory, true}, {"next_expiry", hu.Fields.NextExpiry, false}, {"count", hu.Fields.Count, false},
+		{"link", hu.Fields.Link, false}} {
+		switch {
+		case field.key == "" && !field.required:
+		case !huduFieldPattern.MatchString(field.key):
+			errs = append(errs, fmt.Errorf("%s.fields.%s must be a field label in lowercase with underscores", where, field.name))
+		case seen[field.key]:
+			errs = append(errs, fmt.Errorf("%s.fields.%s names a field another one already uses", where, field.name))
+		}
+		seen[field.key] = field.key != ""
+	}
+	if err := validateConsoleURL(where, hu.ConsoleURL); err != nil {
 		errs = append(errs, err)
 	}
 	return errs

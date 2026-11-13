@@ -482,6 +482,8 @@ function targetTypeLabel(type: string): string {
       return translateNow("provider.billingSync.type.automate");
     case "itglue":
       return translateNow("provider.billingSync.type.itglue");
+    case "hudu":
+      return translateNow("provider.billingSync.type.hudu");
     case "json":
       return translateNow("provider.billingSync.type.json");
     default:
@@ -516,6 +518,8 @@ function companyHint(type: string): string | undefined {
       return translateNow("provider.billingSync.automateCompanyHint");
     case "itglue":
       return translateNow("provider.billingSync.itglueCompanyHint");
+    case "hudu":
+      return translateNow("provider.billingSync.huduCompanyHint");
     default:
       return undefined;
   }

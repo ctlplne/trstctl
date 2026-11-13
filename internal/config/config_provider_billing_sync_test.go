@@ -619,3 +619,47 @@ func TestProviderBillingSyncITGlueTargetMSP14(t *testing.T) {
 		}
 	}
 }
+
+// MSP-15: a hudu target is a documentation target with an API key
+// reference, the asset layout, distinct field labels (inventory required) and
+// the console's https base URL.
+func TestProviderBillingSyncHuduTargetMSP15(t *testing.T) {
+	valid := func() ProviderBillingTarget {
+		return ProviderBillingTarget{ID: "hudu", Type: "hudu", Endpoint: "https://msp.huducloud.com",
+			Hudu: &HuduTarget{APIKeyRef: "env:HUDU_API_KEY", AssetLayoutID: 7, // #nosec G101 -- an env: reference, not a value (CWE-798)
+				Fields:     HuduFields{Inventory: "certificates", NextExpiry: "next_expiry", Count: "certificate_count", Link: "trstctl_link"},
+				ConsoleURL: "https://trstctl.msp.example"}}
+	}
+	ok := valid()
+	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{ok}}); len(errs) != 0 {
+		t.Fatalf("valid hudu target refused: %v", errs)
+	}
+	if !ok.IsDocumentation() || ok.IsRMM() || ok.PushesUsage() || ok.TicketKinds() != nil {
+		t.Fatalf("a hudu target: documentation=%v rmm=%v usage=%v kinds=%v", ok.IsDocumentation(), ok.IsRMM(), ok.PushesUsage(), ok.TicketKinds())
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*ProviderBillingTarget)
+		want   string
+	}{
+		"no block":      {func(t *ProviderBillingTarget) { t.Hudu = nil }, ".hudu is required"},
+		"signing key":   {func(t *ProviderBillingTarget) { t.SigningKeyRef = "env:X" }, "json targets only"},
+		"inline key":    {func(t *ProviderBillingTarget) { t.Hudu.APIKeyRef = "key-value" }, ".api_key_ref"},
+		"no layout":     {func(t *ProviderBillingTarget) { t.Hudu.AssetLayoutID = 0 }, ".asset_layout_id"},
+		"no inventory":  {func(t *ProviderBillingTarget) { t.Hudu.Fields.Inventory = "" }, ".fields.inventory"},
+		"label not key": {func(t *ProviderBillingTarget) { t.Hudu.Fields.Count = "Certificate Count" }, ".fields.count"},
+		"reused field":  {func(t *ProviderBillingTarget) { t.Hudu.Fields.Link = "certificates" }, ".fields.link"},
+		"console query": {func(t *ProviderBillingTarget) { t.Hudu.ConsoleURL = "https://trstctl.msp.example/?x=1" }, ".console_url"},
+		"block on json": {func(t *ProviderBillingTarget) { t.Type = "json"; t.SigningKeyRef = "env:K" }, "hudu targets only"},
+	} {
+		target := valid()
+		tc.mutate(&target)
+		errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{target}})
+		joined := ""
+		for _, err := range errs {
+			joined += err.Error() + "\n"
+		}
+		if !strings.Contains(joined, tc.want) {
+			t.Errorf("%s: errors %q, want one naming %q", name, joined, tc.want)
+		}
+	}
+}

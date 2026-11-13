@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3200 annotated sites across 34 rules. Each row is
+3203 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (770 sites)
+### G101 — CWE-798 Use of hardcoded credentials (773 sites)
 
 | Location | Reason |
 |---|---|
@@ -249,6 +249,7 @@ not this file.
 | `internal/config/config_provider_billing_sync_test.go:495` | an env: reference, not a value (CWE-798) |
 | `internal/config/config_provider_billing_sync_test.go:537` | an env: reference, not a value (CWE-798) |
 | `internal/config/config_provider_billing_sync_test.go:581` | an env: reference, not a value (CWE-798) |
+| `internal/config/config_provider_billing_sync_test.go:629` | an env: reference, not a value (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:416` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -358,6 +359,7 @@ not this file.
 | `internal/dns/ns1/ns1.go:47` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/dns/ns1/ns1_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/dns/ultradns/ultradns_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/docsys/hudu/hudu_test.go:18` | a test-only value (CWE-798) |
 | `internal/docsys/itglue/itglue_test.go:18` | a test-only value (CWE-798) |
 | `internal/dynsecret/access_test.go:142` | test fixture DSNs with a dummy password; the test asserts it never reaches the target ref (CWE-798) |
 | `internal/dynsecret/clickhouse_test.go:28` | fabricated lab administrator password (CWE-798) |
@@ -667,6 +669,7 @@ not this file.
 | `internal/server/provider_billing_halopsa_served_test.go:40` | a test-only value (CWE-798) |
 | `internal/server/provider_billing_pax8_served_test.go:24` | test-only values (CWE-798) |
 | `internal/server/provider_billing_syncro_served_test.go:40` | a test-only value (CWE-798) |
+| `internal/server/provider_doc_hudu_served_test.go:21` | a test-only value (CWE-798) |
 | `internal/server/provider_doc_itglue_served_test.go:55` | a test-only value (CWE-798) |
 | `internal/server/provider_rmm_automate_served_test.go:28` | a test-only value (CWE-798) |
 | `internal/server/provider_rmm_datto_served_test.go:66` | test-only values (CWE-798) |

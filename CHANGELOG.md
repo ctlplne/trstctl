@@ -8,6 +8,10 @@
   health written to the device's custom field when it changes. Devices are events (`provider.rmm_device.*`) projected
   into `provider_rmm_devices` (migration 0467, snapshot format 133), listed at `GET /provider/v1/tenants/{id}/rmm-devices`
   and in the Provider console. RMM targets take no usage periods.
+- Hudu certificate records (MSP-15): a `hudu` target (instance, API key reference, the records' asset layout and its
+  field labels, the console URL) keeps each mapped customer's certificate inventory and expiry dates in one asset under
+  the customer's Hudu company, written only when it changed, in place, again after a deletion, and without a second asset
+  after a lost answer.
 - IT Glue certificate records (MSP-14, part 1): documentation targets keep each mapped customer's certificate inventory
   and expiry dates in one record under the customer's own organization. An `itglue` target (regional API host, API key
   reference, the records' flexible-asset type and its fields' name-keys, the console URL to link back to) gets one sync
