@@ -106,11 +106,13 @@ recognized; any other value queues nothing. The listing shows each violation's
 set over one NHI inventory row's merged posture: `input.action == "nhi_posture"` and
 `input.nhi` carrying `inventory_id`, `kind`, `source`, `display_name`, `owner_id`,
 `owner_status`, `status`, `managed` (a managed identity row), `posture` (the families
-that fired: `overprivilege`, `stale`, `static_credentials`, `exposure`),
+that fired: `overprivilege`, `stale`, `static_credentials`, `exposure`, and
+`oauth_abuse` for a discovered OAuth grant the detector judged abusive),
 `finding_types`, `severity`, `risk_score`, `activity_age_days`, `credential_age_days`,
-`rotation_age_days`, and the `granted_scopes`, `unused_scopes` and
-`recommended_scopes` of usage-backed over-privilege. A rule may ask for one of two
-remediations:
+`rotation_age_days`, the `granted_scopes`, `unused_scopes` and
+`recommended_scopes` of usage-backed over-privilege, and `provider` (okta,
+microsoft, google, ...) on a discovered OAuth grant row. A rule may ask for one of
+four remediations:
 
 ```rego
 nhi_posture contains {"rule": "dormant-managed-revoke", "severity": "high",
@@ -133,11 +135,37 @@ them under the automation switch and maintenance-window deferral the renewals us
 most 25 actions per tenant per sweep. Each action is a remediation playbook run
 created by `system:nhi-posture` whose reason is `posture:<rule>` and whose evidence
 names the rule and the module digest. A gate refusal is recorded the same way (status
-`refused`) and retried after 24 hours. Any other remediation value is reported and
-never acted on. `GET /api/v1/nhi/posture/automation` (`trstctl-cli nhi posture
+`refused`) and retried after 24 hours.
+
+`"revoke_oauth_grant"` and `"block_oauth_app"` act at the identity or SaaS provider
+on a discovered OAuth grant (A170-L3), so a detection is answered without an operator:
+
+```rego
+nhi_posture contains {"rule": "abusive-oauth-revoke", "severity": "critical",
+	"reason": "abusive grants are revoked at the provider", "remediation": "revoke_oauth_grant"} if {
+	input.action == "nhi_posture"
+	"malicious_oauth_grant" in input.nhi.finding_types
+}
+```
+
+An `oauth_grant_abuse` detection is posture family `oauth_abuse`; its finding types
+are `malicious_oauth_grant` and the detector's reasons (`provider_threat_signal`,
+`dangerous_wildcard_scope`, ...), and its severity follows the detector's risk score.
+The sweep runs the operator's own checks first (the finding names an OAuth grant, the
+provider's admin API can take the action, the source that found it holds an admin
+connection) and reports a row that fails them as `not_applicable` with that reason —
+a Google application, for example, is blocked only in Google's admin console. It then
+queues the same durable request and control-plane outbox row as **Revoke grant at
+provider** or **Block app at provider**, and the finding records it with actor
+`system:nhi-posture` and a reason naming the rule and the module digest. The plan's
+`last_run` for such a match is the finding's latest provider action of that kind,
+whoever asked for it (`playbook_id` empty, `phase` `revoke_grant` or `block_app`): one
+queued, confirmed or already absent is left alone, and a failed one is asked again as a
+new request after 24 hours. Any other remediation value is reported and never acted
+on. `GET /api/v1/nhi/posture/automation` (`trstctl-cli nhi posture
 automation`, and the Risk page panel) shows each match's action (`revoke`,
-`right_size`, `report_only`, or `not_applicable` with the reason) and its latest
-automatic run, and `POST /api/v1/policy/dry-run` with
+`right_size`, `revoke_oauth_grant`, `block_oauth_app`, `report_only`, or
+`not_applicable` with the reason) and its latest automatic run, and `POST /api/v1/policy/dry-run` with
 `{"action": "nhi_posture", "tenant_id": ..., "nhi": {...}}` previews a candidate rule.
 
 The lifecycle `allow`/`reason` are not consulted for posture, so a module that

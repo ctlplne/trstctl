@@ -31,6 +31,13 @@ import (
 // the rule in its reason and the module digest in its evidence. A rule that
 // asks for nothing, or for anything else, is reported in the plan and never
 // acted on. GET /api/v1/nhi/posture/automation shows the plan.
+//
+// A rule may also ask to "revoke_oauth_grant" or "block_oauth_app" for a
+// discovered OAuth grant (A170-L3), so a detection is acted on without an
+// operator: the sweep queues the same durable request and control-plane
+// outbox row the operator's revoke or block queues, after the same checks,
+// and the finding records it with actor system:nhi-posture. An abusive grant
+// discovery detected (malicious_oauth_grant) is posture family oauth_abuse.
 
 const (
 	nhiPostureAutomationActor          = "system:nhi-posture"
@@ -39,10 +46,16 @@ const (
 	// under dual control is not re-evaluated (and re-audited) every sweep.
 	nhiPostureRefusalBackoff = 24 * time.Hour
 
-	nhiPostureActionRevoke        = "revoke"
-	nhiPostureActionRightSize     = "right_size"
-	nhiPostureActionReportOnly    = "report_only"
-	nhiPostureActionNotApplicable = "not_applicable"
+	nhiPostureActionRevoke           = "revoke"
+	nhiPostureActionRightSize        = "right_size"
+	nhiPostureActionRevokeOAuthGrant = "revoke_oauth_grant"
+	nhiPostureActionBlockOAuthApp    = "block_oauth_app"
+	nhiPostureActionReportOnly       = "report_only"
+	nhiPostureActionNotApplicable    = "not_applicable"
+
+	// nhiPostureOAuthAbuseDetection is the detection an abusive OAuth grant
+	// finding carries (CAP-ITDR-03).
+	nhiPostureOAuthAbuseDetection = "malicious_oauth_grant"
 )
 
 // NHIPosturePolicyEvaluator is the NHI half of the live engine's posture seam.
@@ -66,11 +79,13 @@ type nhiPostureAutomationResponse struct {
 }
 
 type nhiPostureAutomationSummary struct {
-	Violations    int `json:"violations"`
-	Revoke        int `json:"revoke"`
-	RightSize     int `json:"right_size"`
-	ReportOnly    int `json:"report_only"`
-	NotApplicable int `json:"not_applicable"`
+	Violations       int `json:"violations"`
+	Revoke           int `json:"revoke"`
+	RightSize        int `json:"right_size"`
+	RevokeOAuthGrant int `json:"revoke_oauth_grant"`
+	BlockOAuthApp    int `json:"block_oauth_app"`
+	ReportOnly       int `json:"report_only"`
+	NotApplicable    int `json:"not_applicable"`
 }
 
 type nhiPostureAutomationItem struct {
@@ -85,15 +100,19 @@ type nhiPostureAutomationItem struct {
 	// Remediation is what the rule asked for, from the closed set.
 	Remediation string `json:"remediation,omitempty"`
 	// Action is what the sweep does with it: revoke, right_size,
-	// report_only (the rule asks for nothing it recognizes) or
-	// not_applicable (the row cannot take the remediation; Detail says why).
+	// revoke_oauth_grant, block_oauth_app, report_only (the rule asks for
+	// nothing it recognizes) or not_applicable (the row cannot take the
+	// remediation; Detail says why).
 	Action  string                   `json:"action"`
 	Detail  string                   `json:"detail,omitempty"`
 	LastRun *nhiPostureAutomationRun `json:"last_run,omitempty"`
 }
 
 // nhiPostureAutomationRun is the latest automatic playbook run for one row
-// and rule.
+// and rule. For an OAuth remediation it is the finding's latest provider
+// action of that kind, whoever asked for it: ID is the request, Status its
+// queued/confirmed/already_absent/failed state and CreatedAt when that state
+// was recorded.
 type nhiPostureAutomationRun struct {
 	ID         string    `json:"id"`
 	PlaybookID string    `json:"playbook_id"`
@@ -111,8 +130,11 @@ type nhiPostureFamilies struct {
 type NHIPostureAutomationResult struct {
 	Revoked    int
 	RightSized int
-	Refused    int
-	Skipped    int
+	// OAuthQueued counts OAuth grant revokes and app blocks queued at the
+	// provider (A170-L3).
+	OAuthQueued int
+	Refused     int
+	Skipped     int
 }
 
 func (a *API) listNHIPostureAutomation(w http.ResponseWriter, r *http.Request) {
@@ -177,8 +199,57 @@ func nhiPostureFactsForItem(item nhiInventoryItem, now time.Time, attackPath *nh
 		nhiExposureApplyAttackPath(&f, attackPath)
 		merge("exposure", f.Severity, f.RiskScore, f.FindingTypes, f.OwnerStatus)
 	}
+	if findingTypes, ok := nhiOAuthAbuseForItem(item); ok {
+		merge("oauth_abuse", nhiOAuthAbuseSeverity(item.RiskScore), item.RiskScore, findingTypes, "")
+	}
+	if nhiPostureOAuthGrantRow(facts) {
+		facts.Provider = metadataString(decodeNHIInventoryMetadata(item.Metadata), "provider")
+	}
 	sort.Strings(facts.FindingTypes)
 	return facts, families, len(facts.Posture) > 0
+}
+
+// nhiOAuthAbuseForItem reports a discovered OAuth grant the detector judged
+// abusive (A170-L3): its finding types are the detection and its reasons, so
+// a rule can act when the detection lands.
+func nhiOAuthAbuseForItem(item nhiInventoryItem) ([]string, bool) {
+	if item.Source != "discovery_finding" {
+		return nil, false
+	}
+	meta := decodeNHIInventoryMetadata(item.Metadata)
+	if metadataString(meta, "detection_kind") != nhiPostureOAuthAbuseDetection {
+		return nil, false
+	}
+	return append([]string{nhiPostureOAuthAbuseDetection}, readNHIPostureStrings(meta["abuse_reasons"])...), true
+}
+
+// nhiOAuthAbuseSeverity grades an abusive grant by the detector's risk score.
+func nhiOAuthAbuseSeverity(risk int) string {
+	switch {
+	case risk >= 90:
+		return "critical"
+	case risk >= 70:
+		return "high"
+	case risk >= 45:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+// nhiPostureOAuthGrantRow is true for a discovery finding row that may name
+// an OAuth grant; the operator's own checks decide whether it does.
+func nhiPostureOAuthGrantRow(facts policy.NHIFacts) bool {
+	return strings.HasPrefix(facts.InventoryID, "finding/") && (facts.Kind == "oauth_app" || facts.Kind == "oauth_grant_abuse")
+}
+
+// nhiPostureOAuthProviderAction maps an OAuth remediation to the provider
+// action the operator's routes queue.
+func nhiPostureOAuthProviderAction(action string) string {
+	if action == nhiPostureActionBlockOAuthApp {
+		return orchestrator.OAuthActionBlockApp
+	}
+	return orchestrator.OAuthActionRevokeGrant
 }
 
 // nhiPostureActionFor decides what the sweep does with one violation.
@@ -197,6 +268,14 @@ func nhiPostureActionFor(remediation string, facts policy.NHIFacts, families nhi
 			return nhiPostureActionNotApplicable, "right_size needs usage-backed unused grants (CAP-POST-01)"
 		}
 		return nhiPostureActionRightSize, ""
+	case policy.PostureRemediationRevokeOAuthGrant, policy.PostureRemediationBlockOAuthApp:
+		if !nhiPostureOAuthGrantRow(facts) {
+			return nhiPostureActionNotApplicable, remediation + " acts only on a discovered OAuth grant (an oauth_grant or oauth_grant_abuse finding)"
+		}
+		if remediation == policy.PostureRemediationBlockOAuthApp {
+			return nhiPostureActionBlockOAuthApp, ""
+		}
+		return nhiPostureActionRevokeOAuthGrant, ""
 	default:
 		return nhiPostureActionReportOnly, ""
 	}
@@ -208,7 +287,7 @@ func nhiPostureActionFor(remediation string, facts policy.NHIFacts, families nhi
 func (a *API) nhiPostureAutomationPlan(ctx context.Context, tenantID string, now time.Time) (nhiPostureAutomationResponse, error) {
 	out := nhiPostureAutomationResponse{
 		Capability: "CAP-POST-06", GeneratedAt: now,
-		Coverage:            []string{"nhi_posture_rules", "revoke", "right_size", "lifecycle_gate", "playbook_evidence"},
+		Coverage:            []string{"nhi_posture_rules", "revoke", "right_size", "oauth_provider_action", "lifecycle_gate", "playbook_evidence"},
 		Items:               []nhiPostureAutomationItem{},
 		EvidenceRefs:        []string{"projection:nhi_inventory", "projection:remediation_playbook_runs"},
 		PerTenantSweepLimit: nhiPostureAutomationPerTenantLimit,
@@ -253,11 +332,17 @@ func (a *API) nhiPostureAutomationPlan(ctx context.Context, tenantID string, now
 		out.PolicyEvaluated++
 		for _, v := range violations {
 			action, detail := nhiPostureActionFor(v.Remediation, facts, families)
+			lastRun := lastRuns[nhiPostureRunKey(item.ID, v.Rule)]
+			if action == nhiPostureActionRevokeOAuthGrant || action == nhiPostureActionBlockOAuthApp {
+				action, detail, lastRun, err = a.nhiPostureOAuthPlan(ctx, tenantID, item, action)
+				if err != nil {
+					return nhiPostureAutomationResponse{}, err
+				}
+			}
 			planned := nhiPostureAutomationItem{
 				InventoryID: item.ID, DisplayName: item.DisplayName, Kind: item.Kind, Status: item.Status,
 				Posture: facts.Posture, Rule: v.Rule, Severity: v.Severity, Reason: v.Reason,
-				Remediation: v.Remediation, Action: action, Detail: detail,
-				LastRun: lastRuns[nhiPostureRunKey(item.ID, v.Rule)],
+				Remediation: v.Remediation, Action: action, Detail: detail, LastRun: lastRun,
 			}
 			out.Items = append(out.Items, planned)
 			out.Summary.Violations++
@@ -266,6 +351,10 @@ func (a *API) nhiPostureAutomationPlan(ctx context.Context, tenantID string, now
 				out.Summary.Revoke++
 			case nhiPostureActionRightSize:
 				out.Summary.RightSize++
+			case nhiPostureActionRevokeOAuthGrant:
+				out.Summary.RevokeOAuthGrant++
+			case nhiPostureActionBlockOAuthApp:
+				out.Summary.BlockOAuthApp++
 			case nhiPostureActionReportOnly:
 				out.Summary.ReportOnly++
 			default:
@@ -288,6 +377,47 @@ func (a *API) nhiPostureAutomationPlan(ctx context.Context, tenantID string, now
 }
 
 func nhiPostureRunKey(inventoryID, rule string) string { return inventoryID + "\x00" + rule }
+
+// nhiPostureOAuthPlan checks an OAuth remediation as the operator's own
+// revoke or block is checked (A170-L3) — the finding names an OAuth grant,
+// its provider has a served admin API that can take the action, and the
+// source that found it holds an admin connection — and reads the finding's
+// latest provider action of that kind. A row that cannot take it is
+// not_applicable with the operator's own reason.
+func (a *API) nhiPostureOAuthPlan(ctx context.Context, tenantID string, item nhiInventoryItem, action string) (string, string, *nhiPostureAutomationRun, error) {
+	providerAction := nhiPostureOAuthProviderAction(action)
+	if _, err := a.oauthProviderActionIntent(ctx, tenantID, strings.TrimPrefix(item.ID, "finding/"), providerAction, ""); err != nil {
+		if detail, refused := nhiPostureOAuthRefusal(err); refused {
+			return nhiPostureActionNotApplicable, detail, nil, nil
+		}
+		return "", "", nil, err
+	}
+	return action, "", nhiPostureOAuthLastRun(item, providerAction), nil
+}
+
+// nhiPostureOAuthRefusal reports the operator check that refused an OAuth
+// action (a conflict or a finding that is gone), as opposed to a failure.
+func nhiPostureOAuthRefusal(err error) (string, bool) {
+	var refused *apiError
+	if errors.As(err, &refused) && refused.cause == nil &&
+		(refused.status == http.StatusConflict || refused.status == http.StatusNotFound) {
+		return refused.detail, true
+	}
+	return "", false
+}
+
+// nhiPostureOAuthLastRun is the finding's latest provider action of one
+// kind, as the finding records it.
+func nhiPostureOAuthLastRun(item nhiInventoryItem, providerAction string) *nhiPostureAutomationRun {
+	actions, _ := decodeNHIInventoryMetadata(item.Metadata)["provider_actions"].(map[string]any)
+	state, _ := actions[providerAction].(map[string]any)
+	if state == nil {
+		return nil
+	}
+	at, _ := time.Parse(time.RFC3339Nano, metadataString(state, "updated_at"))
+	return &nhiPostureAutomationRun{ID: metadataString(state, "request_id"), Status: metadataString(state, "status"),
+		Phase: providerAction, CreatedAt: at}
+}
 
 // nhiPostureAutomaticRuns indexes the latest automatic run per row and rule.
 // The rule is carried in the run's evidence as nhi_posture_rule:<rule>.
@@ -345,7 +475,7 @@ func (a *API) RunNHIPostureAutomation(ctx context.Context, tenantID string, now 
 	}
 	var errs []error
 	for _, item := range plan.Items {
-		if result.Revoked+result.RightSized+result.Refused >= nhiPostureAutomationPerTenantLimit {
+		if result.Revoked+result.RightSized+result.OAuthQueued+result.Refused >= nhiPostureAutomationPerTenantLimit {
 			break
 		}
 		var err error
@@ -354,6 +484,8 @@ func (a *API) RunNHIPostureAutomation(ctx context.Context, tenantID string, now 
 			err = a.automaticNHIRevoke(ctx, tenantID, plan.PolicyModuleSHA256, item, now, &result)
 		case nhiPostureActionRightSize:
 			err = a.automaticNHIRightSize(ctx, tenantID, plan.PolicyModuleSHA256, item, plan.families[item.InventoryID], now, &result)
+		case nhiPostureActionRevokeOAuthGrant, nhiPostureActionBlockOAuthApp:
+			err = a.automaticNHIOAuthAction(ctx, tenantID, plan.PolicyModuleSHA256, item, now, &result)
 		default:
 			continue
 		}
@@ -474,5 +606,42 @@ func (a *API) automaticNHIRightSize(ctx context.Context, tenantID, moduleSHA str
 		return err
 	}
 	result.RightSized++
+	return nil
+}
+
+// automaticNHIOAuthAction queues at the provider the OAuth action a rule
+// asked for (A170-L3): the same durable request and control-plane outbox row
+// the operator's revoke or block queues, after the same checks, recorded on
+// the finding with actor system:nhi-posture and a reason naming the rule and
+// the module. A grant whose action is already queued or settled is left
+// alone, whoever asked; a failed one is asked again after the refusal
+// back-off, as a new request. The request key binds the finding, the action,
+// the rule, the module and the attempt, so a retried sweep converges.
+func (a *API) automaticNHIOAuthAction(ctx context.Context, tenantID, moduleSHA string, item nhiPostureAutomationItem, now time.Time, result *NHIPostureAutomationResult) error {
+	attempt := "first"
+	if last := item.LastRun; last != nil {
+		if last.Status != orchestrator.OAuthActionFailed || now.Sub(last.CreatedAt) < nhiPostureRefusalBackoff {
+			result.Skipped++
+			return nil
+		}
+		attempt = "after:" + last.ID
+	}
+	findingID := strings.TrimPrefix(item.InventoryID, "finding/")
+	providerAction := nhiPostureOAuthProviderAction(item.Action)
+	intent, err := a.oauthProviderActionIntent(ctx, tenantID, findingID, providerAction,
+		nhiPostureRunReason(item)+" ("+strings.Join(nhiPostureEvidence(item, moduleSHA), ", ")+")")
+	if err != nil {
+		if _, refused := nhiPostureOAuthRefusal(err); refused {
+			// The finding or its source changed since the plan was read.
+			result.Skipped++
+			return nil
+		}
+		return err
+	}
+	requestKey := "nhi-posture:oauth:" + crypto.SHA256Hex([]byte(findingID+"\x00"+providerAction+"\x00"+item.Rule+"\x00"+moduleSHA+"\x00"+attempt))
+	if _, err := a.orch.QueueOAuthProviderAction(ctx, tenantID, requestKey, nhiPostureAutomationActor, intent); err != nil {
+		return err
+	}
+	result.OAuthQueued++
 	return nil
 }

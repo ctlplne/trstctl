@@ -10947,9 +10947,11 @@ NHIPostureAutomationRun = TypedDict(
 NHIPostureAutomationSummary = TypedDict(
     'NHIPostureAutomationSummary',
     {
+        'block_oauth_app': int,
         'not_applicable': int,
         'report_only': int,
         'revoke': int,
+        'revoke_oauth_grant': int,
         'right_size': int,
         'violations': int,
     },

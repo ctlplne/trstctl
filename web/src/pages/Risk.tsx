@@ -1097,12 +1097,15 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
 const nhiAutomationActionKeys = {
   revoke: "risk.nhiAutomation.action.revoke",
   right_size: "risk.nhiAutomation.action.right_size",
+  revoke_oauth_grant: "risk.nhiAutomation.action.revoke_oauth_grant",
+  block_oauth_app: "risk.nhiAutomation.action.block_oauth_app",
   report_only: "risk.nhiAutomation.action.report_only",
   not_applicable: "risk.nhiAutomation.action.not_applicable",
 } as const;
 
 // A100: the actions the tenant's nhi_posture rules ask for, as the served plan
-// reads them, with the latest automatic playbook run for each.
+// reads them, with the latest automatic playbook run for each (for an OAuth
+// grant, A170-L3: the finding's latest provider action of that kind).
 function NHIAutomationPanel({ plan, loading, error }: { plan: NHIPostureAutomation | null; loading: boolean; error: string | null }) {
   const { t } = useTranslation();
   const items = plan?.items?.slice(0, 8) ?? [];
@@ -1118,6 +1121,8 @@ function NHIAutomationPanel({ plan, loading, error }: { plan: NHIPostureAutomati
               violations: plan.summary.violations,
               revoke: plan.summary.revoke,
               rightSize: plan.summary.right_size,
+              revokeOAuthGrant: plan.summary.revoke_oauth_grant,
+              blockOAuthApp: plan.summary.block_oauth_app,
               reportOnly: plan.summary.report_only,
               notApplicable: plan.summary.not_applicable,
               limit: plan.per_tenant_sweep_limit,

@@ -7872,7 +7872,7 @@ export interface NHIPostureAutomation {
 }
 
 export interface NHIPostureAutomationItem {
-  action: "revoke" | "right_size" | "report_only" | "not_applicable";
+  action: "revoke" | "right_size" | "revoke_oauth_grant" | "block_oauth_app" | "report_only" | "not_applicable";
   detail?: string;
   display_name: string;
   inventory_id: string;
@@ -7880,7 +7880,7 @@ export interface NHIPostureAutomationItem {
   last_run?: NHIPostureAutomationRun;
   posture: string[];
   reason?: string;
-  remediation?: "revoke" | "right_size";
+  remediation?: "revoke" | "right_size" | "revoke_oauth_grant" | "block_oauth_app";
   rule: string;
   severity?: string;
   status: string;
@@ -7895,9 +7895,11 @@ export interface NHIPostureAutomationRun {
 }
 
 export interface NHIPostureAutomationSummary {
+  block_oauth_app: number;
   not_applicable: number;
   report_only: number;
   revoke: number;
+  revoke_oauth_grant: number;
   right_size: number;
   violations: number;
 }

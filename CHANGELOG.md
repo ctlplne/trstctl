@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- Policy-driven response to an abusive OAuth grant (A170-L3): a tenant policy's `nhi_posture` rule may ask for
+  `revoke_oauth_grant` or `block_oauth_app`, and an `oauth_grant_abuse` detection is now posture family `oauth_abuse`
+  (finding types `malicious_oauth_grant` plus the detector's reasons, `provider` in the input), so the leader's sweep
+  revokes the grant or blocks the application at Okta, Microsoft Entra or Google Workspace when the detection lands —
+  the same checked request and outbox row as the operator's buttons, recorded on the finding by `system:nhi-posture`
+  with the rule and module digest. `GET /api/v1/nhi/posture/automation` and the Risk page show the new actions and the
+  finding's latest provider action; a failed one is asked again after 24 hours.
 - A rotated workload identity token takes effect at the next request (A169-L3): the Azure federated credential and GCP
   workload identity token sources remember which projected platform token their cached access token was minted from,
   and when the platform rotates the file, the next request exchanges the rotated token instead of reusing the old

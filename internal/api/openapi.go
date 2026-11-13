@@ -3230,18 +3230,20 @@ func componentSchemas() map[string]*Schema {
 	}, "owner_id", "items", "assigned_by", "assigned_at", "notice_queued")
 	nhiPostureAutomationSummary := object(map[string]*Schema{
 		"violations": {Type: "integer"}, "revoke": {Type: "integer"}, "right_size": {Type: "integer"},
+		"revoke_oauth_grant": {Type: "integer"}, "block_oauth_app": {Type: "integer"},
 		"report_only": {Type: "integer"}, "not_applicable": {Type: "integer"},
-	}, "violations", "revoke", "right_size", "report_only", "not_applicable")
+	}, "violations", "revoke", "right_size", "revoke_oauth_grant", "block_oauth_app", "report_only", "not_applicable")
 	nhiPostureAutomationRun := object(map[string]*Schema{
 		"id": uuid(), "playbook_id": str(), "status": str(), "phase": str(), "created_at": timestamp(),
 	}, "id", "playbook_id", "status", "phase", "created_at")
 	nhiPostureAutomationItem := object(map[string]*Schema{
 		"inventory_id": str(), "display_name": str(), "kind": str(), "status": str(),
 		"posture": {Type: "array", Items: str()}, "rule": str(), "severity": str(), "reason": str(),
-		"remediation": {Type: "string", Enum: []string{"revoke", "right_size"}},
-		"action":      {Type: "string", Enum: []string{"revoke", "right_size", "report_only", "not_applicable"}},
-		"detail":      str(),
-		"last_run":    ref("NHIPostureAutomationRun"),
+		"remediation": {Type: "string", Enum: []string{"revoke", "right_size", "revoke_oauth_grant", "block_oauth_app"}},
+		"action": {Type: "string", Enum: []string{"revoke", "right_size", "revoke_oauth_grant", "block_oauth_app",
+			"report_only", "not_applicable"}},
+		"detail":   str(),
+		"last_run": ref("NHIPostureAutomationRun"),
 	}, "inventory_id", "display_name", "kind", "status", "posture", "rule", "action")
 	nhiPostureAutomation := object(map[string]*Schema{
 		"capability": str(), "generated_at": timestamp(), "coverage": {Type: "array", Items: str()},

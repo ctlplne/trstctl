@@ -36901,6 +36901,8 @@
             "enum": [
               "revoke",
               "right_size",
+              "revoke_oauth_grant",
+              "block_oauth_app",
               "report_only",
               "not_applicable"
             ],
@@ -36933,7 +36935,9 @@
           "remediation": {
             "enum": [
               "revoke",
-              "right_size"
+              "right_size",
+              "revoke_oauth_grant",
+              "block_oauth_app"
             ],
             "type": "string"
           },
@@ -36989,6 +36993,9 @@
       },
       "NHIPostureAutomationSummary": {
         "properties": {
+          "block_oauth_app": {
+            "type": "integer"
+          },
           "not_applicable": {
             "type": "integer"
           },
@@ -36996,6 +37003,9 @@
             "type": "integer"
           },
           "revoke": {
+            "type": "integer"
+          },
+          "revoke_oauth_grant": {
             "type": "integer"
           },
           "right_size": {
@@ -37009,6 +37019,8 @@
           "violations",
           "revoke",
           "right_size",
+          "revoke_oauth_grant",
+          "block_oauth_app",
           "report_only",
           "not_applicable"
         ],

@@ -21074,7 +21074,7 @@ export const messages = {
   },
   "risk.nhiAutomation.summary": {
     defaultMessage:
-      "CAP-POST-06: {violations} rule matches; {revoke} to revoke, {rightSize} to right-size, {reportOnly} reported only, {notApplicable} not applicable. Up to {limit} actions per sweep.",
+      "CAP-POST-06: {violations} rule matches; {revoke} to revoke, {rightSize} to right-size, {revokeOAuthGrant} OAuth grants to revoke and {blockOAuthApp} apps to block at the provider, {reportOnly} reported only, {notApplicable} not applicable. Up to {limit} actions per sweep.",
     description: "Risk page summary of the automatic NHI posture actions plan.",
   },
   "risk.nhiAutomation.noRules": {
@@ -21120,6 +21120,14 @@ export const messages = {
   "risk.nhiAutomation.action.right_size": {
     defaultMessage: "Queue right-size of unused grants",
     description: "Automatic NHI posture action: queue the right-size connector intent.",
+  },
+  "risk.nhiAutomation.action.revoke_oauth_grant": {
+    defaultMessage: "Revoke the OAuth grant at the provider",
+    description: "Automatic NHI posture action: revoke a discovered OAuth grant at the identity or SaaS provider.",
+  },
+  "risk.nhiAutomation.action.block_oauth_app": {
+    defaultMessage: "Block the app at the provider",
+    description: "Automatic NHI posture action: block the application a discovered OAuth grant names at the provider.",
   },
   "risk.nhiAutomation.action.report_only": {
     defaultMessage: "Reported only",

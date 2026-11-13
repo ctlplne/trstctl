@@ -119,7 +119,7 @@ describe("operational console surface", () => {
       coverage: ["nhi_posture_rules"],
       policy_evaluated: 0,
       policy_evaluation_errors: 0,
-      summary: { violations: 0, revoke: 0, right_size: 0, report_only: 0, not_applicable: 0 },
+      summary: { violations: 0, revoke: 0, right_size: 0, revoke_oauth_grant: 0, block_oauth_app: 0, report_only: 0, not_applicable: 0 },
       items: [],
       evidence_refs: [],
       per_tenant_sweep_limit: 25,
@@ -1181,7 +1181,7 @@ describe("operational console surface", () => {
       policy_module_sha256: "a".repeat(64),
       policy_evaluated: 3,
       policy_evaluation_errors: 0,
-      summary: { violations: 2, revoke: 1, right_size: 1, report_only: 0, not_applicable: 0 },
+      summary: { violations: 3, revoke: 1, right_size: 1, revoke_oauth_grant: 1, block_oauth_app: 0, report_only: 0, not_applicable: 0 },
       items: [
         {
           inventory_id: "identity/dormant-1",
@@ -1212,6 +1212,24 @@ describe("operational console surface", () => {
           severity: "medium",
           remediation: "right_size",
           action: "right_size",
+        },
+        {
+          inventory_id: "finding/oauth-1",
+          display_name: "00u-alice",
+          kind: "oauth_grant_abuse",
+          status: "open",
+          posture: ["oauth_abuse"],
+          rule: "abusive-oauth-revoke",
+          severity: "critical",
+          remediation: "revoke_oauth_grant",
+          action: "revoke_oauth_grant",
+          last_run: {
+            id: "22222222-2222-2222-2222-222222222222",
+            playbook_id: "",
+            status: "confirmed",
+            phase: "revoke_grant",
+            created_at: "2026-06-30T00:00:00Z",
+          },
         },
       ],
       evidence_refs: ["projection:nhi_inventory"],
@@ -1374,13 +1392,18 @@ describe("operational console surface", () => {
     expect(screen.getByText("internet_exposed, insecure_transport, weak_authentication, wildcard_reachability")).toBeInTheDocument();
     expect(screen.getByText("internet / none / plaintext_http")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Automatic NHI posture actions" })).toBeInTheDocument();
-    expect(screen.getByText(/CAP-POST-06: 2 rule matches; 1 to revoke, 1 to right-size/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/CAP-POST-06: 3 rule matches; 1 to revoke, 1 to right-size, 1 OAuth grants to revoke and 0 apps to block at the provider/),
+    ).toBeInTheDocument();
     const automatic = screen.getByText("dormant-managed-revoke").closest("tr")!;
     expect(within(automatic).getByText("Revoke through the lifecycle gate")).toBeInTheDocument();
     expect(within(automatic).getByText("refused")).toBeInTheDocument();
     const rightSize = screen.getByText("unused-scopes-trim").closest("tr")!;
     expect(within(rightSize).getByText("Queue right-size of unused grants")).toBeInTheDocument();
     expect(within(rightSize).getByText("None yet")).toBeInTheDocument();
+    const oauthRevoke = screen.getByText("abusive-oauth-revoke").closest("tr")!;
+    expect(within(oauthRevoke).getByText("Revoke the OAuth grant at the provider")).toBeInTheDocument();
+    expect(within(oauthRevoke).getByText("confirmed")).toBeInTheDocument();
     expect(screen.getAllByTestId("risk-subject").map((cell) => cell.textContent)).toEqual(["root-ca.example.test", "old-leaf.example.test"]);
     expect(screen.queryByRole("heading", { name: "Risk band legend" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Risk bands" })).toHaveAccessibleDescription(/Critical 90-100/);

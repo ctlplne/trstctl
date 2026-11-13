@@ -788,6 +788,13 @@ instead (A170-L1): it deletes that admin consent and leaves each user's own gran
 The finding then shows what the provider confirmed, read back from the provider
 (A170-L2); a grant or app the provider still shows after confirming is recorded failed.
 
+The same actions can run without an operator when a detection lands (A170-L3): a tenant
+policy's `nhi_posture` rule may ask for `revoke_oauth_grant` or `block_oauth_app` on an
+`oauth_grant_abuse` detection (posture family `oauth_abuse`, with `provider` in its
+input), and the leader's sweep queues exactly the request the buttons queue, recorded on
+the finding by `system:nhi-posture` with the rule. See
+[Policy and governance](policy-and-governance.md) for the rules.
+
 ### Annotate a leaked credential where it was seen
 
 A third-party secret scan (CI logs, container images, Slack and Jira exports) can write

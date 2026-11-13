@@ -124,8 +124,10 @@ func (s *Server) remediateTenantPosture(ctx context.Context, tenantID string, no
 
 // runNHIPostureAutomationOnce acts on the tenants' nhi_posture rules that ask
 // for revoke or right_size (A100): through the lifecycle gate and the
-// right-size playbook, bounded per tenant, each action a playbook run. One
-// tenant's failure is logged and does not stall the others.
+// right-size playbook, bounded per tenant, each action a playbook run; and
+// revoke_oauth_grant or block_oauth_app (A170-L3): queued at the provider as
+// the operator's own action is. One tenant's failure is logged and does not
+// stall the others.
 func (s *Server) runNHIPostureAutomationOnce(ctx context.Context, now time.Time) (api.NHIPostureAutomationResult, error) {
 	var total api.NHIPostureAutomationResult
 	if s.api == nil || s.store == nil {
@@ -140,6 +142,7 @@ func (s *Server) runNHIPostureAutomationOnce(ctx context.Context, now time.Time)
 		r, err := s.api.RunNHIPostureAutomation(ctx, tenant.TenantID, now)
 		total.Revoked += r.Revoked
 		total.RightSized += r.RightSized
+		total.OAuthQueued += r.OAuthQueued
 		total.Refused += r.Refused
 		total.Skipped += r.Skipped
 		if err != nil {
@@ -148,9 +151,10 @@ func (s *Server) runNHIPostureAutomationOnce(ctx context.Context, now time.Time)
 				s.logger.Warn("NHI posture automation failed for a tenant", slog.String("tenant_id", tenant.TenantID), slog.String("error", err.Error()))
 			}
 		}
-		if s.logger != nil && r.Revoked+r.RightSized+r.Refused > 0 {
+		if s.logger != nil && r.Revoked+r.RightSized+r.OAuthQueued+r.Refused > 0 {
 			s.logger.Info("NHI posture automation acted", slog.String("tenant_id", tenant.TenantID),
-				slog.Int("revoked", r.Revoked), slog.Int("right_sized", r.RightSized), slog.Int("refused", r.Refused))
+				slog.Int("revoked", r.Revoked), slog.Int("right_sized", r.RightSized), slog.Int("oauth_queued", r.OAuthQueued),
+				slog.Int("refused", r.Refused))
 		}
 	}
 	return total, errors.Join(errs...)

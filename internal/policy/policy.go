@@ -96,7 +96,8 @@ type NHIFacts struct {
 	// the only rows an automatic revoke may act on.
 	Managed bool `json:"managed"`
 	// Posture names the families that fired: overprivilege, stale,
-	// static_credentials, exposure.
+	// static_credentials, exposure, oauth_abuse (a discovered OAuth grant
+	// detected as abusive, A170-L3).
 	Posture []string `json:"posture"`
 	// FindingTypes is the union of the families' finding types.
 	FindingTypes      []string `json:"finding_types"`
@@ -108,6 +109,10 @@ type NHIFacts struct {
 	GrantedScopes     []string `json:"granted_scopes,omitempty"`
 	UnusedScopes      []string `json:"unused_scopes,omitempty"`
 	RecommendedScopes []string `json:"recommended_scopes,omitempty"`
+	// Provider is the identity or SaaS provider a discovered OAuth grant row
+	// names (okta, microsoft, google, ...), so a rule can act on one
+	// provider's grants only (A170-L3).
+	Provider string `json:"provider,omitempty"`
 }
 
 // PostureViolation is one posture rule (certificate_posture or nhi_posture)
@@ -120,7 +125,9 @@ type PostureViolation struct {
 	// certificate_posture rule may ask "renew" for a managed identity whose
 	// served certificate fires it (A47); an nhi_posture rule may ask "revoke"
 	// for a managed identity or "right_size" for usage-backed unused grants
-	// (A100). Any other value is dropped, so a typo never queues work.
+	// (A100), or "revoke_oauth_grant" / "block_oauth_app" for a discovered
+	// OAuth grant (A170-L3). Any other value is dropped, so a typo never
+	// queues work.
 	Remediation string `json:"remediation,omitempty"`
 }
 
@@ -135,11 +142,20 @@ const (
 	// PostureRemediationRightSize asks the scheduler to queue the right-size
 	// playbook's connector intent for the row's usage-backed unused grants.
 	PostureRemediationRightSize = "right_size"
+	// PostureRemediationRevokeOAuthGrant asks the scheduler to revoke at the
+	// identity or SaaS provider the OAuth grant a discovery finding row
+	// names, as the operator's revoke does (A170-L3).
+	PostureRemediationRevokeOAuthGrant = "revoke_oauth_grant"
+	// PostureRemediationBlockOAuthApp asks the scheduler to block at the
+	// provider the application a discovery finding row's OAuth grant names,
+	// as the operator's block does (A170-L3).
+	PostureRemediationBlockOAuthApp = "block_oauth_app"
 )
 
 var (
 	certificatePostureRemediations = map[string]bool{PostureRemediationRenew: true}
-	nhiPostureRemediations         = map[string]bool{PostureRemediationRevoke: true, PostureRemediationRightSize: true}
+	nhiPostureRemediations         = map[string]bool{PostureRemediationRevoke: true, PostureRemediationRightSize: true,
+		PostureRemediationRevokeOAuthGrant: true, PostureRemediationBlockOAuthApp: true}
 )
 
 // Decision is the policy outcome.
