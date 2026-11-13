@@ -37,7 +37,10 @@ const (
 var operationStates = []string{opStateReviewed, opStateAwaitingApproval, opStateQueued, opStateExecuting,
 	opStateDelivered, opStateVerified, opStateFailed, opStateUncertain, opStateRecovered}
 
-var operationSources = []string{"certificate_rotation", "connector_delivery", "secret_rotation", "approval"}
+var operationSources = []string{"certificate_rotation", "connector_delivery", "secret_rotation", "approval",
+	// A245-L1: host and relay agent jobs, ended access and machine sessions,
+	// and managed-key operations.
+	"agent_job", "access_session_revocation", "machine_session_revocation", "managed_key_operation"}
 
 type operationSubject struct {
 	ID   string `json:"id,omitempty"`
@@ -177,6 +180,59 @@ func normalizeOperation(r store.OperationLedgerRow, adoption string) (string, st
 		default:
 			return opStateFailed, r.Status
 		}
+	case "agent_job":
+		// Done only on the agent's signed receipt; a closed claim without one
+		// is not taken as done.
+		switch r.Status {
+		case "receipt_verified":
+			return opStateVerified, "the agent's signed receipt reports the work verified"
+		case "receipt_executed":
+			return opStateDelivered, "the agent's signed receipt reports the work done; nothing has verified its effect"
+		case "receipt_failed", "receipt_verify_failed":
+			return opStateFailed, or(r.Detail, "the agent's signed receipt reports the work failed")
+		case "receipt_rejected":
+			return opStateUncertain, "the agent's report was refused (" + or(r.Detail, "rejected") + "); the work's outcome is unknown"
+		case "dead_lettered":
+			return opStateFailed, or(r.Detail, "the job ran out of attempts")
+		case "recalled":
+			return opStateFailed, "recalled before an agent finished it"
+		case "claimed":
+			return opStateExecuting, "an agent claimed it and is running it"
+		case "completed":
+			return opStateUncertain, "the agent's claim closed without a signed receipt"
+		default:
+			return inFlight()
+		}
+	case "access_session_revocation":
+		switch r.Status {
+		case "revoked":
+			return opStateVerified, "the session was ended"
+		case "revoked_unacknowledged":
+			return opStateUncertain, "terminated; its gateway has not reported the session closed yet"
+		case "revoking":
+			return opStateExecuting, "ending the session"
+		case "revocation_failed":
+			return opStateFailed, or(r.Detail, "ending the session failed")
+		case "expired":
+			return opStateVerified, "the session expired before its revocation completed"
+		default:
+			return opStateExecuting, "the revocation is asked for; the session is still open"
+		}
+	case "machine_session_revocation":
+		return opStateVerified, "the session's bearer no longer authenticates"
+	case "managed_key_operation":
+		action := strings.TrimPrefix(r.Origin, "requested ")
+		switch r.Status {
+		case "queued":
+			return inFlight()
+		case "completed":
+			if action == "verify_custody" {
+				return opStateVerified, "the provider confirmed the key's custody"
+			}
+			return opStateDelivered, "the provider completed the " + action + "; nothing has read the key back"
+		default:
+			return opStateFailed, or(r.Detail, "the provider refused the "+action)
+		}
 	}
 	return opStateUncertain, "unknown source"
 }
@@ -222,7 +278,9 @@ func decodeOperationCursor(cursor string) (*store.OperationLedgerCursor, error) 
 
 // operationVisible reports whether the caller may read the row's domain:
 // certificate rotations need lifecycle:read, deliveries connectors:read,
-// secret rotations secrets:read, approvals their review domain.
+// secret rotations secrets:read, approvals their review domain, agent jobs
+// agents:read, access sessions access:read, machine sessions secrets:read and
+// managed-key operations keys:read.
 func (a *API) operationVisible(r *http.Request, principal authz.Principal, tenantID string, row store.OperationLedgerRow) bool {
 	scope := authz.Scope{TenantID: tenantID}
 	switch row.Source {
@@ -235,6 +293,14 @@ func (a *API) operationVisible(r *http.Request, principal authz.Principal, tenan
 	case "approval":
 		permission, ok := approvalRecordPermission(row.SubjectKind, row.Detail)
 		return ok && a.approvalPermissionAuthorized(r, principal, tenantID, permission)
+	case "agent_job":
+		return principal.Can(authz.AgentsRead, scope)
+	case "access_session_revocation":
+		return principal.Can(authz.AccessRead, scope)
+	case "machine_session_revocation":
+		return principal.Can(authz.SecretsRead, scope)
+	case "managed_key_operation":
+		return principal.Can(authz.KeysRead, scope)
 	}
 	return false
 }
@@ -318,7 +384,7 @@ func (a *API) operationLedgerItem(r *http.Request, tenantID string, row store.Op
 func operationLedgerRoutes(a *API) []route {
 	return []route{
 		{method: "GET", path: "/api/v1/operations/ledger", opID: "listOperationLedger",
-			summary: "List rotations, deliveries, secret rotations and approvals in one normalized state, newest first: verified only on consumer evidence, never on an HTTP 200 or an outbox receipt alone",
+			summary: "List rotations, deliveries, secret rotations, approvals, agent jobs, session revocations and managed-key operations in one normalized state, newest first: verified only on consumer evidence, never on an HTTP 200 or an outbox receipt alone",
 			handler: a.listOperationLedger, query: operationLedgerQuery(), resSchema: "OperationLedgerPage", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/operations/ledger/{id}", opID: "getOperationLedgerItem",
 			summary: "Show one operation's causal chain (request, authority, external action, receipt, consumer observation, revocation) and the retry and rollback that apply to exactly it",

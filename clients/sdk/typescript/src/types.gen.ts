@@ -8126,7 +8126,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List rotations, deliveries, secret rotations and approvals in one normalized state, newest first: verified only on consumer evidence, never on an HTTP 200 or an outbox receipt alone */
+        /** List rotations, deliveries, secret rotations, approvals, agent jobs, session revocations and managed-key operations in one normalized state, newest first: verified only on consumer evidence, never on an HTTP 200 or an outbox receipt alone */
         get: operations["listOperationLedger"];
         put?: never;
         post?: never;
@@ -23056,7 +23056,7 @@ export interface components {
                 status: string;
             };
             /** @enum {string} */
-            source: "certificate_rotation" | "connector_delivery" | "secret_rotation" | "approval";
+            source: "certificate_rotation" | "connector_delivery" | "secret_rotation" | "approval" | "agent_job" | "access_session_revocation" | "machine_session_revocation" | "managed_key_operation";
             source_status: string;
             /** @enum {string} */
             state: "reviewed" | "awaiting_approval" | "queued" | "executing" | "delivered" | "verified" | "failed" | "uncertain" | "recovered";
@@ -23081,7 +23081,7 @@ export interface components {
                 status: string;
             };
             /** @enum {string} */
-            source: "certificate_rotation" | "connector_delivery" | "secret_rotation" | "approval";
+            source: "certificate_rotation" | "connector_delivery" | "secret_rotation" | "approval" | "agent_job" | "access_session_revocation" | "machine_session_revocation" | "managed_key_operation";
             source_status: string;
             /** @enum {string} */
             state: "reviewed" | "awaiting_approval" | "queued" | "executing" | "delivered" | "verified" | "failed" | "uncertain" | "recovered";

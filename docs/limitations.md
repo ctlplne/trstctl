@@ -8100,9 +8100,10 @@ version (A244 proved the destination), and by a subject key algorithm set on the
 same destination and issuer, while an ownership reassignment leaves a fresh
 approval standing (A245-L5). What it reads from, and what comes next:
 
-- **Four sources.** Host and relay job executions, SSH certificate and session
-  revocations, and managed-key operations are not in the ledger yet; adding them
-  is what comes next.
+- **Sources (A245-L1).** Host and relay agent jobs, ended access and machine
+  sessions, and managed-key operations are in the ledger. SSH certificate
+  revocations are not yet: they are kept only in the event log, so reading them
+  needs a read model of their own, which is what comes next.
 - **Sessions are not observed.** Existing-session termination is confirmed only
   by a containment stop or removal receipt after the revocation; trstctl does
   not see the sessions themselves.

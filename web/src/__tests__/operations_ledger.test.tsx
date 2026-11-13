@@ -48,6 +48,23 @@ describe("operations ledger (A245)", () => {
     dashboard.mockReset();
   });
 
+  it("names agent jobs, ended sessions and managed-key operations as their own sources (A245-L1)", async () => {
+    list.mockResolvedValue({
+      items: [
+        item("agent_job:41", "delivered", "agent_job"),
+        item("access_session_revocation:00000000-0000-4000-8000-00000000a245", "uncertain", "access_session_revocation"),
+        item("machine_session_revocation:ms-revoked-1", "verified", "machine_session_revocation"),
+        item("managed_key_operation:op-rotate-1", "queued", "managed_key_operation"),
+      ],
+    });
+    show(<OperationsLedgerPanel />);
+    const region = within(await screen.findByRole("region", { name: "Operations ledger" }));
+    await region.findByText("reason for uncertain");
+    for (const label of ["Agent job", "Access session ended", "Machine session ended", "Managed key operation"]) {
+      expect(region.getByText(label, { exact: false })).toBeInTheDocument();
+    }
+  });
+
   it("shows each operation in its normalized state and filters by state", async () => {
     list.mockResolvedValue({
       items: [item("connector_delivery:a", "delivered"), item("connector_delivery:b", "failed"), item("secret_rotation:c", "verified", "secret_rotation")],

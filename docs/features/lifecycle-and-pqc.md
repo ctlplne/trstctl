@@ -563,6 +563,26 @@ endpoint verification observed the active certificate), `revoked` or `retired`.
 `GET /api/v1/identities` returns it on every item as `inventory_state`, and a
 renewal's new certificate starts over at `delivered` until something sees it.
 
+### Operations ledger sources (A245-L1)
+
+The operations ledger (`GET /api/v1/operations/ledger`, `trstctl operations ledger`, the
+Operations page) reads, besides certificate rotations, connector deliveries, secret
+rotations and approvals:
+
+- **agent jobs** (`agent_job`): a host or relay agent's job, read from its command and
+  its agent's newest signed receipt — executed reads delivered, verified reads verified,
+  a failed or refused report reads failed or uncertain, and a claim that closed without
+  a receipt reads uncertain; a delivery's job stays a delivery;
+- **ended access sessions** (`access_session_revocation`): a gateway session reads
+  uncertain until its gateway reports it closed;
+- **ended machine sessions** (`machine_session_revocation`);
+- **managed-key operations** (`managed_key_operation`): a completed custody check reads
+  verified, another completed action delivered.
+
+Each shows only to a caller who may read its domain (`agents:read`, `access:read`,
+`secrets:read`, `keys:read`) and opens by its own id, such as `agent_job:<number>` or
+`managed_key_operation:<operation id>`.
+
 What a change would reach is answered before it is made:
 `GET /api/v1/connectors/targets/{id}/impact` and
 `GET /api/v1/profiles/impact/{name}` (`trstctl connector target impact`,

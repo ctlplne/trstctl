@@ -74,10 +74,44 @@ type operationDetail struct {
 
 func parseOperationID(id string) (source, sourceID string, ok bool) {
 	source, sourceID, found := strings.Cut(id, ":")
-	if !found || !slices.Contains(operationSources, source) || !validUUIDText(sourceID) {
+	if !found || !slices.Contains(operationSources, source) || !validOperationSourceID(source, sourceID) {
 		return "", "", false
 	}
 	return source, sourceID, true
+}
+
+// validOperationSourceID checks an id against its source's own form: an
+// agent job is its outbox command's number, a machine session or a managed-key
+// operation a short token, every other source a uuid (A245-L1).
+func validOperationSourceID(source, id string) bool {
+	switch source {
+	case "agent_job":
+		if len(id) == 0 || len(id) > 19 {
+			return false
+		}
+		for _, c := range id {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+		return true
+	case "machine_session_revocation", "managed_key_operation":
+		if len(id) == 0 || len(id) > 128 {
+			return false
+		}
+		for _, c := range id {
+			if !operationTokenRune(c) {
+				return false
+			}
+		}
+		return true
+	}
+	return validUUIDText(id)
+}
+
+// operationTokenRune reports whether c may appear in a token-shaped source id.
+func operationTokenRune(c rune) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune("-_.:", c)
 }
 
 func validUUIDText(s string) bool {
@@ -202,7 +236,7 @@ func (a *API) operationChain(r *http.Request, tenantID string, row store.Operati
 		observation.Detail = item.StateReason
 	}
 	chain = append(chain, observation)
-	if row.SubjectID != "" && row.Source != "secret_rotation" {
+	if row.SubjectID != "" && (row.Source == "certificate_rotation" || row.Source == "connector_delivery") {
 		identity, err := a.store.GetIdentity(r.Context(), tenantID, row.SubjectID)
 		if err == nil && (identity.Status == "revoked" || identity.Status == "retired") {
 			chain = append(chain, operationLink{Step: "revocation", State: linkDone, Detail: "the identity is " + identity.Status + "; its revocation report separates the CA, the deployed material, new connections and open sessions",

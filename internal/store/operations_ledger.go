@@ -13,12 +13,15 @@ import (
 // rotation and approval from the projections that already record them, with
 // the evidence a normalized state needs: the outbox command behind it, whether
 // that command is stranded or quarantined, and whether an endpoint was seen
-// presenting the certificate it carried. It writes nothing.
+// presenting the certificate it carried. A245-L1 adds host and relay agent
+// jobs (their outbox command and the agent's signed receipt), access and
+// machine session revocations, and managed-key operations. It writes nothing.
 
 // OperationLedgerRow is one operation as its own source records it.
 type OperationLedgerRow struct {
-	// Source is certificate_rotation, connector_delivery, secret_rotation or
-	// approval.
+	// Source is certificate_rotation, connector_delivery, secret_rotation,
+	// approval, agent_job, access_session_revocation,
+	// machine_session_revocation or managed_key_operation.
 	Source      string
 	ID          string
 	SubjectKind string
@@ -77,6 +80,9 @@ func (s *Store) GetOperationLedgerRow(ctx context.Context, tenantID, source, id 
 	return rows[0], nil
 }
 
+// A source whose id is a uuid casts the requested id only when it has the
+// shape of one: an agent job's, a machine session's or a managed-key
+// operation's id is not, and a cast the planner folds would fail the query.
 func (s *Store) operationLedgerRows(ctx context.Context, tenantID string, after *OperationLedgerCursor, limit int, source, id string) ([]OperationLedgerRow, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 200
@@ -98,7 +104,7 @@ func (s *Store) operationLedgerRows(ctx context.Context, tenantID string, after 
 			          r.identity_id AS identity_uuid, r.outbox_id, r.created_at, r.updated_at
 			     FROM lifecycle_rotation_runs r
 			     LEFT JOIN identities i ON i.tenant_id = r.tenant_id AND i.id = r.identity_id
-			    WHERE r.tenant_id = $1 AND $5 IN ('', 'certificate_rotation') AND (nullif($6, '') IS NULL OR r.id = nullif($6, '')::uuid)
+			    WHERE r.tenant_id = $1 AND $5 IN ('', 'certificate_rotation') AND (nullif($6, '') IS NULL OR r.id = CASE WHEN $6 ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN $6::uuid END)
 			      AND ($2::timestamptz IS NULL OR (r.updated_at, 'certificate_rotation:' || r.id::text) < ($2, $3))
 			    ORDER BY r.updated_at DESC, r.id DESC LIMIT $4)
 			  UNION ALL
@@ -107,7 +113,7 @@ func (s *Store) operationLedgerRows(ctx context.Context, tenantID string, after 
 			          d.identity_id, d.outbox_id, d.created_at, d.updated_at
 			     FROM connector_delivery_receipts d
 			     LEFT JOIN identities i ON i.tenant_id = d.tenant_id AND i.id = d.identity_id
-			    WHERE d.tenant_id = $1 AND $5 IN ('', 'connector_delivery') AND (nullif($6, '') IS NULL OR d.id = nullif($6, '')::uuid)
+			    WHERE d.tenant_id = $1 AND $5 IN ('', 'connector_delivery') AND (nullif($6, '') IS NULL OR d.id = CASE WHEN $6 ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN $6::uuid END)
 			      AND ($2::timestamptz IS NULL OR (d.updated_at, 'connector_delivery:' || d.id::text) < ($2, $3))
 			    ORDER BY d.updated_at DESC, d.id DESC LIMIT $4)
 			  UNION ALL
@@ -115,7 +121,7 @@ func (s *Store) operationLedgerRows(ctx context.Context, tenantID string, after 
 			          CASE WHEN c.schedule_id IS NULL THEN 'manual rotation' ELSE 'scheduled rotation' END, c.provider, '', '',
 			          NULL::uuid, nullif(c.outbox_id, 0), c.created_at, c.updated_at
 			     FROM secret_static_rotation_commands c
-			    WHERE c.tenant_id = $1 AND $5 IN ('', 'secret_rotation') AND (nullif($6, '') IS NULL OR c.id = nullif($6, '')::uuid)
+			    WHERE c.tenant_id = $1 AND $5 IN ('', 'secret_rotation') AND (nullif($6, '') IS NULL OR c.id = CASE WHEN $6 ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN $6::uuid END)
 			      AND ($2::timestamptz IS NULL OR (c.updated_at, 'secret_rotation:' || c.id::text) < ($2, $3))
 			    ORDER BY c.updated_at DESC, c.id DESC LIMIT $4)
 			  UNION ALL
@@ -124,9 +130,76 @@ func (s *Store) operationLedgerRows(ctx context.Context, tenantID string, after 
 			          NULL::uuid, NULL::bigint, a.created_at, a.updated_at
 			     FROM operation_approval_requests a
 			    WHERE a.tenant_id = $1 AND (a.status <> 'consumed' OR $6 <> '') AND $5 IN ('', 'approval')
-			      AND (nullif($6, '') IS NULL OR a.id = nullif($6, '')::uuid)
+			      AND (nullif($6, '') IS NULL OR a.id = CASE WHEN $6 ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN $6::uuid END)
 			      AND ($2::timestamptz IS NULL OR (a.updated_at, 'approval:' || a.id::text) < ($2, $3))
 			    ORDER BY a.updated_at DESC, a.id DESC LIMIT $4)
+			  UNION ALL
+			  -- A245-L1: a host or relay agent job is its outbox command; its
+			  -- state is the agent's newest signed receipt, else the claim and
+			  -- the command. A delivery's job is already a connector_delivery.
+			  (SELECT 'agent_job', o.id::text, 'agent_job', coalesce(o.claimed_by_agent_id::text, ''),
+			          coalesce(nullif(rc.agent, ''), o.claimed_by_agent_id::text, o.required_agent_role || ' agent'),
+			          CASE WHEN rc.outcome IS NOT NULL THEN 'receipt_' || rc.outcome
+			               WHEN o.status = 'failed' THEN 'dead_lettered'
+			               WHEN o.agent_recalled_at IS NOT NULL THEN 'recalled'
+			               WHEN rj.reason IS NOT NULL THEN 'receipt_rejected'
+			               WHEN o.claimed_by_agent_id IS NOT NULL AND o.claim_completed_at IS NULL THEN 'claimed'
+			               WHEN o.claim_completed_at IS NOT NULL THEN 'completed'
+			               ELSE o.status END,
+			          coalesce(nullif(rj.reason, ''), o.last_error, ''), 'agent job: ' || o.destination, o.destination, '', '',
+			          NULL::uuid, o.id, o.created_at,
+			          coalesce(o.agent_recalled_at, o.claim_completed_at, o.delivered_at, o.created_at) AS updated_at
+			     FROM outbox o
+			     LEFT JOIN LATERAL (SELECT r.outcome, r.agent FROM agent_job_receipts r
+			                         WHERE r.tenant_id = o.tenant_id AND r.job_id = o.id AND r.state = 'verified'
+			                         ORDER BY r.attempt DESC, r.observed_at DESC LIMIT 1) rc ON true
+			     LEFT JOIN LATERAL (SELECT r.reason FROM agent_job_receipts r
+			                         WHERE r.tenant_id = o.tenant_id AND r.job_id = o.id AND r.state = 'rejected'
+			                         ORDER BY r.attempt DESC, r.observed_at DESC LIMIT 1) rj ON true
+			    WHERE o.tenant_id = $1 AND $5 IN ('', 'agent_job') AND (nullif($6, '') IS NULL OR o.id::text = $6)
+			      AND (o.required_agent_role IN ('host', 'network') OR o.claimed_by_agent_id IS NOT NULL)
+			      AND NOT EXISTS (SELECT 1 FROM connector_delivery_receipts d WHERE d.tenant_id = o.tenant_id AND d.outbox_id = o.id)
+			      AND ($2::timestamptz IS NULL OR (coalesce(o.agent_recalled_at, o.claim_completed_at, o.delivered_at, o.created_at),
+			           'agent_job:' || o.id::text) < ($2, $3))
+			    ORDER BY updated_at DESC, 'agent_job:' || o.id::text DESC LIMIT $4)
+			  UNION ALL
+			  -- A245-L1: an access session someone ended; a gateway session's
+			  -- end is acknowledged only when its gateway reports it.
+			  (SELECT 'access_session_revocation', s.id::text, 'access_session', s.id::text,
+			          s.subject || ' on ' || s.target_type || ':' || s.target_id,
+			          CASE WHEN s.status = 'revoked' AND s.delivery = 'gateway' AND s.gateway_ended_at IS NULL THEN 'revoked_unacknowledged'
+			               ELSE s.status END,
+			          coalesce(nullif(s.revocation_failure, ''), s.revocation_reason),
+			          'revoked by ' || coalesce(nullif(s.revocation_requested_by, ''), 'the system'), s.target_type || ':' || s.target_id, '', '',
+			          NULL::uuid, NULL::bigint, coalesce(s.revocation_requested_at, s.started_at),
+			          coalesce(s.gateway_ended_at, s.revocation_failed_at, s.ended_at, s.revocation_requested_at, s.started_at) AS updated_at
+			     FROM pam_sessions s
+			    WHERE s.tenant_id = $1 AND $5 IN ('', 'access_session_revocation') AND (nullif($6, '') IS NULL OR s.id::text = $6)
+			      AND (s.revocation_requested_at IS NOT NULL OR s.status IN ('revoking', 'revoked', 'revocation_failed'))
+			      AND ($2::timestamptz IS NULL OR (coalesce(s.gateway_ended_at, s.revocation_failed_at, s.ended_at, s.revocation_requested_at, s.started_at),
+			           'access_session_revocation:' || s.id::text) < ($2, $3))
+			    ORDER BY updated_at DESC, 'access_session_revocation:' || s.id::text DESC LIMIT $4)
+			  UNION ALL
+			  -- A245-L1: a machine session someone ended.
+			  (SELECT 'machine_session_revocation', m.id, 'machine_session', m.id, m.principal || ' (' || m.method || ')', m.status,
+			          '', 'revoked by ' || coalesce(nullif(m.revoked_by, ''), 'the system'), m.method, '', '',
+			          NULL::uuid, NULL::bigint, m.issued_at, m.revoked_at AS updated_at
+			     FROM machine_sessions m
+			    WHERE m.tenant_id = $1 AND m.status = 'revoked' AND m.revoked_at IS NOT NULL
+			      AND $5 IN ('', 'machine_session_revocation') AND (nullif($6, '') IS NULL OR m.id = $6)
+			      AND ($2::timestamptz IS NULL OR (m.revoked_at, 'machine_session_revocation:' || m.id) < ($2, $3))
+			    ORDER BY m.revoked_at DESC, 'machine_session_revocation:' || m.id DESC LIMIT $4)
+			  UNION ALL
+			  -- A245-L1: a managed-key operation at its provider; origin names
+			  -- the action asked for.
+			  (SELECT 'managed_key_operation', k.operation_id, 'managed_key', coalesce(nullif(k.result_key_id, ''), k.key_id),
+			          k.provider || ':' || coalesce(nullif(coalesce(nullif(k.result_key_id, ''), k.key_id), ''), k.algorithm),
+			          k.status, coalesce(k.last_error, ''), 'requested ' || k.action, k.provider, '', '',
+			          NULL::uuid, k.outbox_id, k.created_at, k.updated_at
+			     FROM managed_key_operations k
+			    WHERE k.tenant_id = $1 AND $5 IN ('', 'managed_key_operation') AND (nullif($6, '') IS NULL OR k.operation_id = $6)
+			      AND ($2::timestamptz IS NULL OR (k.updated_at, 'managed_key_operation:' || k.operation_id) < ($2, $3))
+			    ORDER BY k.updated_at DESC, 'managed_key_operation:' || k.operation_id DESC LIMIT $4)
 			)
 			SELECT p.source, p.id, p.subject_kind, p.subject_id, p.subject_name, p.status, p.detail,
 			       p.origin, p.target, p.rollback_ref, p.fingerprint,

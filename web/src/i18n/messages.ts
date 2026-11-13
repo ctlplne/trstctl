@@ -37801,6 +37801,22 @@ export const messages = {
   "operations.ledger.source.connector_delivery": { defaultMessage: "Delivery", description: "Operations ledger on the Operations page (A245)." },
   "operations.ledger.source.secret_rotation": { defaultMessage: "Secret rotation", description: "Operations ledger on the Operations page (A245)." },
   "operations.ledger.source.approval": { defaultMessage: "Approval", description: "Operations ledger on the Operations page (A245)." },
+  "operations.ledger.source.agent_job": {
+    defaultMessage: "Agent job",
+    description: "Operations ledger on the Operations page (A245-L1): a host or relay agent job.",
+  },
+  "operations.ledger.source.access_session_revocation": {
+    defaultMessage: "Access session ended",
+    description: "Operations ledger on the Operations page (A245-L1): an access session someone ended.",
+  },
+  "operations.ledger.source.machine_session_revocation": {
+    defaultMessage: "Machine session ended",
+    description: "Operations ledger on the Operations page (A245-L1): a machine session someone ended.",
+  },
+  "operations.ledger.source.managed_key_operation": {
+    defaultMessage: "Managed key operation",
+    description: "Operations ledger on the Operations page (A245-L1): a key operation at a key provider.",
+  },
   "operations.ledger.updated": { defaultMessage: "Updated {at}", description: "Operations ledger on the Operations page (A245)." },
   "operations.ledger.chain": { defaultMessage: "Causal chain", description: "Operations ledger on the Operations page (A245)." },
   "operations.ledger.actions": { defaultMessage: "Actions", description: "Operations ledger on the Operations page (A245)." },

@@ -26,6 +26,10 @@ const sourceCopy = {
   connector_delivery: "operations.ledger.source.connector_delivery",
   secret_rotation: "operations.ledger.source.secret_rotation",
   approval: "operations.ledger.source.approval",
+  agent_job: "operations.ledger.source.agent_job",
+  access_session_revocation: "operations.ledger.source.access_session_revocation",
+  machine_session_revocation: "operations.ledger.source.machine_session_revocation",
+  managed_key_operation: "operations.ledger.source.managed_key_operation",
 } as const;
 
 const stepCopy = {

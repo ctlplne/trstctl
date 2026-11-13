@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The operations ledger reads agent jobs, ended sessions and managed-key operations (A245-L1): a host or relay agent's
+  job in the state its signed receipt reports (`agent_job`), ended access sessions (a gateway session uncertain until
+  its gateway reports it closed) and machine sessions, and managed-key operations, each shown only to a caller who may
+  read its domain and opened by its own id; the Operations page names each source.
 - An identity's Application view names how its certificates were enrolled (A244-L4): each certificate records the
   path that issued it (`api`, `agent`, `acme`, `est`, `scep`, `cmp`, `broker`, `attested`, `ephemeral`; migration
   0473, carried on `certificate.recorded`, the first recorded path kept), and the view's `enrollment` names the path

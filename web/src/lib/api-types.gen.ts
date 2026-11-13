@@ -8505,7 +8505,7 @@ export interface OperationLedgerDetail {
   id: string;
   observed_vantage?: string;
   outbox?: { attempts: number; id: number; status: string };
-  source: "certificate_rotation" | "connector_delivery" | "secret_rotation" | "approval";
+  source: "certificate_rotation" | "connector_delivery" | "secret_rotation" | "approval" | "agent_job" | "access_session_revocation" | "machine_session_revocation" | "managed_key_operation";
   source_status: string;
   state: "reviewed" | "awaiting_approval" | "queued" | "executing" | "delivered" | "verified" | "failed" | "uncertain" | "recovered";
   state_reason: string;
@@ -8520,7 +8520,7 @@ export interface OperationLedgerItem {
   id: string;
   observed_vantage?: string;
   outbox?: { attempts: number; id: number; status: string };
-  source: "certificate_rotation" | "connector_delivery" | "secret_rotation" | "approval";
+  source: "certificate_rotation" | "connector_delivery" | "secret_rotation" | "approval" | "agent_job" | "access_session_revocation" | "machine_session_revocation" | "managed_key_operation";
   source_status: string;
   state: "reviewed" | "awaiting_approval" | "queued" | "executing" | "delivered" | "verified" | "failed" | "uncertain" | "recovered";
   state_reason: string;
