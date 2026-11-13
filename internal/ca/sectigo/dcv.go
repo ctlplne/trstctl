@@ -21,10 +21,7 @@ func WithDCVPublisher(p ca.TXTPublisher) Option {
 	return func(b *backend) { b.dcv = p }
 }
 
-const (
-	dcvBase   = "/api/dcv/v1/validation"
-	dcvChecks = 10
-)
+const dcvBase = "/api/dcv/v1/validation"
 
 // validateDomains runs SCM's TXT validation for every requested name.
 func (b *backend) validateDomains(ctx context.Context, tenantID string, dnsNames []string) error {
@@ -79,7 +76,10 @@ func (b *backend) validateDomain(ctx context.Context, tenantID, domain string, w
 	if err := b.postJSON(ctx, b.cfg.BaseURL+dcvBase+"/submit/domain/txt", map[string]string{"domain": domain}, nil); err != nil {
 		return fmt.Errorf("sectigo: submit DCV for %s: %w", domain, err)
 	}
-	for attempt := 0; attempt < dcvChecks; attempt++ {
+	// A165-L4: asked until SCM reports the domain validated or the
+	// validation budget runs out, the checks spaced further apart as they go.
+	deadline := time.Now().Add(b.dcvTimeout)
+	for attempt := 0; ; attempt++ {
 		if err := b.postJSON(ctx, b.cfg.BaseURL+dcvBase+"/status", map[string]string{"domain": domain}, &status); err != nil {
 			return fmt.Errorf("sectigo: DCV status of %s: %w", domain, err)
 		}
@@ -87,11 +87,14 @@ func (b *backend) validateDomain(ctx context.Context, tenantID, domain string, w
 			ca.ObserveDomainValidation(ctx, b.dcv, tenantID, ca.DomainValidation{Identifier: domain, Method: ca.DomainValidationMethodDNSTXT})
 			return nil
 		}
+		wait := ca.DCVBackoff(b.poll, attempt)
+		if time.Now().Add(wait).After(deadline) {
+			return fmt.Errorf("sectigo: SCM has not validated %s within %s; domain validation did not complete", domain, b.dcvTimeout)
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(b.poll):
+		case <-time.After(wait):
 		}
 	}
-	return fmt.Errorf("sectigo: SCM has not validated %s; domain validation did not complete", domain)
 }

@@ -234,6 +234,15 @@ onboarding, verifies it through the same resolver used by served ACME, and remov
 That proves the real provider path before a 3 a.m. renewal. The validator **fails
 closed**: a lookup error, missing record, or mismatch is a failure, never a pass.
 
+A DigiCert or Sectigo validation record is waited for the same way (A165-L4): after the
+provider takes the record, trstctl asks its DNS view until the record shows, within the
+provider config's propagation budget (`config.propagation_timeout_seconds`, 1–3600,
+120 seconds when unset), and only then asks the vendor to check; a record that never
+shows is retracted and the issuance is not completed. The vendor is then checked with
+backoff (starting at the authority's `poll_interval`, doubling to 30 seconds) until it
+reports the domain validated or the authority's `dcv_timeout` runs out (10s–1h, 10
+minutes when unset).
+
 The served control plane has a tenant-scoped DNS-01 provider-config API:
 `POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs` stores provider metadata,
 zone/delegation policy, CAA issuer policy, allowed methods, wildcard policy, and

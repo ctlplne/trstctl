@@ -475,6 +475,9 @@ func (a *API) decodeACMEDNS01ProviderConfigRequest(r *http.Request) (dns01Provid
 	if err != nil {
 		return dns01ProviderConfigRequest{}, err
 	}
+	if err := validateDNS01PropagationBudget(cfg); err != nil {
+		return dns01ProviderConfigRequest{}, err
+	}
 	methods, err := normalizeDNS01Methods(req.AllowedMethods)
 	if err != nil {
 		return dns01ProviderConfigRequest{}, err
@@ -483,6 +486,25 @@ func (a *API) decodeACMEDNS01ProviderConfigRequest(r *http.Request) (dns01Provid
 	req.Config = cfg
 	req.AllowedMethods = methods
 	return req, nil
+}
+
+// validateDNS01PropagationBudget checks config.propagation_timeout_seconds,
+// how long a vendor validation waits for this provider's record to appear in
+// DNS (A165-L4).
+func validateDNS01PropagationBudget(raw json.RawMessage) error {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return errStatus(http.StatusBadRequest, "config must be a JSON object")
+	}
+	value, ok := obj["propagation_timeout_seconds"]
+	if !ok {
+		return nil
+	}
+	var seconds int
+	if err := json.Unmarshal(value, &seconds); err != nil || seconds < 1 || seconds > 3600 {
+		return errStatus(http.StatusBadRequest, "config.propagation_timeout_seconds must be a whole number of seconds from 1 to 3600")
+	}
+	return nil
 }
 
 func normalizeDNS01JSONObject(raw json.RawMessage, field string) (json.RawMessage, error) {

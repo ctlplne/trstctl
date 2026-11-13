@@ -2278,6 +2278,30 @@ describe("protocol surface", () => {
     expect(input.allow_upstream_dv).toBe(true);
   });
 
+  // A165-L4: the propagation budget a DigiCert or Sectigo validation waits for
+  // this provider's record has its own field, is checked before saving, and is
+  // saved into the provider's config beside its other settings.
+  it("saves the propagation budget into the provider config and refuses one out of range (A165-L4)", async () => {
+    const user = userEvent.setup();
+    await renderProtocols();
+
+    await user.click(screen.getByRole("button", { name: "Edit DNS-01 config prod-cloudflare" }));
+    const dialog = await screen.findByRole("dialog");
+    const budget = within(dialog).getByRole("textbox", { name: "Propagation budget (seconds)" });
+    expect(budget).toHaveValue("");
+    await user.type(budget, "5000");
+    await user.click(within(dialog).getByRole("button", { name: /save/i }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("The propagation budget is a whole number of seconds from 1 to 3600.");
+    expect(apiMock.updateACMEDNS01ProviderConfig).not.toHaveBeenCalled();
+
+    await user.clear(budget);
+    await user.type(budget, "300");
+    await user.click(within(dialog).getByRole("button", { name: /save/i }));
+    await waitFor(() => expect(apiMock.updateACMEDNS01ProviderConfig).toHaveBeenCalled());
+    const [, input] = apiMock.updateACMEDNS01ProviderConfig.mock.calls[0];
+    expect(input.config).toEqual({ zone_id: "zone-prod", propagation_timeout_seconds: 300 });
+  });
+
   // And turning it OFF must actually turn it off — a consent control that only
   // ever grants is not a control.
   it("revokes upstream-DV consent when the operator clears it", async () => {

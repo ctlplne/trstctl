@@ -5,6 +5,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidateExternalCAsAcceptsEveryCompiledProvider(t *testing.T) {
@@ -178,6 +179,32 @@ func TestUpstreamDNS01IsAcceptedForVendorsWithDNSValidation(t *testing.T) {
 		item.CAAIssuerDomain = ""
 		if err := ValidateExternalCAs([]ExternalCAConfig{item}); err == nil || !strings.Contains(err.Error(), "caa_issuer_domain") {
 			t.Errorf("%s with upstream_dns01 and no CAA identifier = %v; want caa_issuer_domain required", kind, err)
+		}
+	}
+}
+
+// A165-L4: dcv_timeout bounds a DigiCert or Sectigo authority's wait for
+// its DNS validation: a duration from 10s to 1h, only with upstream_dns01 on
+// those two.
+func TestDCVTimeoutIsBoundedAndScopedA165L4(t *testing.T) {
+	base := ExternalCAConfig{ID: "dc", Type: "digicert", Name: "DigiCert", Endpoint: "https://example.test", APIKeyRef: upstreamDVFixtureSecretRef,
+		UpstreamDNS01: true, CAAIssuerDomain: "digicert.com", DCVTimeout: "15m"}
+	if err := ValidateExternalCAs([]ExternalCAConfig{base}); err != nil {
+		t.Fatalf("a 15m dcv_timeout: %v", err)
+	}
+	if d, err := base.DCVTimeoutDuration(); err != nil || d != 15*time.Minute {
+		t.Fatalf("dcv_timeout = %s %v", d, err)
+	}
+	for name, mutate := range map[string]func(*ExternalCAConfig){
+		"too short":      func(c *ExternalCAConfig) { c.DCVTimeout = "5s" },
+		"too long":       func(c *ExternalCAConfig) { c.DCVTimeout = "2h" },
+		"not a duration": func(c *ExternalCAConfig) { c.DCVTimeout = "ten minutes" },
+		"no upstream":    func(c *ExternalCAConfig) { c.UpstreamDNS01, c.CAAIssuerDomain = false, "" },
+	} {
+		item := base
+		mutate(&item)
+		if err := ValidateExternalCAs([]ExternalCAConfig{item}); err == nil || !strings.Contains(err.Error(), "dcv_timeout") {
+			t.Errorf("%s = %v; want dcv_timeout refused", name, err)
 		}
 	}
 }

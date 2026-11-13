@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3209 annotated sites across 34 rules. Each row is
+3210 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (777 sites)
+### G101 — CWE-798 Use of hardcoded credentials (778 sites)
 
 | Location | Reason |
 |---|---|
@@ -172,7 +172,7 @@ not this file.
 | `internal/aimodel/redactor_test.go:157` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/aimodel/redactor_test.go:162` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/access_bundles.go:1059` | environment variable names and placeholder launch lines; no credential value present (CWE-798) |
-| `internal/api/acme_dns01.go:575` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/acme_dns01.go:597` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/agents.go:59` | source-kind label naming where key material was located; no credential value present (CWE-798) |
 | `internal/api/aisurface_contract_test.go:148` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/compliance_report_dispatch_test.go:17` | fabricated fixture reference; no value is real (CWE-798) |
@@ -260,26 +260,26 @@ not this file.
 | `internal/config/config_test.go:425` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:428` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:431` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:11` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:18` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:45` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:47` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:12` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:19` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:46` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:48` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:49` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:50` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:51` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:52` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:53` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
-| `internal/config/external_ca_test.go:54` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:57` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:59` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:60` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:53` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:54` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
+| `internal/config/external_ca_test.go:55` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:58` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:60` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:61` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:62` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
-| `internal/config/external_ca_test.go:63` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:67` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:84` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:108` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:62` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:63` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
+| `internal/config/external_ca_test.go:64` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:68` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:85` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:109` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/kerberos_test.go:8` | fabricated fixture paths and identifiers; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/ldap_test.go:8` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/managed_keys_azure_workload_test.go:15` | fixture tenant/client UUIDs and a token path, no credential value (CWE-798) |
@@ -806,8 +806,9 @@ not this file.
 | `internal/server/unvaulted_secret_posture_served_test.go:150` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:151` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:152` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/vendor_dcv_served_test.go:92` | secret reference, no credential value (CWE-798) |
-| `internal/server/vendor_dcv_served_test.go:214` | secret reference, no credential value (CWE-798) |
+| `internal/server/vendor_dcv_served_test.go:94` | secret reference, no credential value (CWE-798) |
+| `internal/server/vendor_dcv_served_test.go:216` | secret reference, no credential value (CWE-798) |
+| `internal/server/vendor_dcv_served_test.go:334` | secret reference, no credential value (CWE-798) |
 | `internal/sshcollection/command_test.go:12` | public host pin, restricted account and vault-reference fixtures contain no credential value (CWE-798). |
 | `internal/sshcollection/report_test.go:11` | public host pin, restricted account and vault-reference fixtures contain no credential value (CWE-798). |
 | `internal/store/agent_bootstrap_token_test.go:67` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |

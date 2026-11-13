@@ -60,6 +60,9 @@ type servedACMEDNS01Automation struct {
 	cnameResolver acme.CNAMEResolver
 	caaResolver   acme.CAAResolver
 	txtResolvers  []acme.Resolver
+	// dcvPropagationInterval spaces the propagation checks before a vendor
+	// validation (A165-L4); zero uses the checker's default.
+	dcvPropagationInterval time.Duration
 }
 
 type acmeDNS01OutboxPayload struct {

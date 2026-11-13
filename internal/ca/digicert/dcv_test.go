@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -81,5 +82,56 @@ func TestPluginCompletesCertCentralDCVUnattended(t *testing.T) {
 	if _, err := p.Issue(context.Background(), ca.IssueRequest{TenantID: "t1", CSR: digicertCSR(t, "other.digicert.test"), DNSNames: []string{"other.digicert.test"}, TTL: 24 * time.Hour}); err == nil ||
 		!strings.Contains(err.Error(), "no DNS-01 provider config") {
 		t.Fatalf("Issue with a publisher that cannot publish = %v; want the publisher's reason", err)
+	}
+}
+
+// A165-L4: CertCentral is asked until it sees the records or the validation
+// budget runs out — not a fixed ten times — so a record that appears only
+// after the tenth check still validates, and one that never appears fails
+// naming the budget.
+func TestPluginWaitsOutSlowDNSWithinTheDCVBudgetA165L4(t *testing.T) {
+	srv, err := digicertfake.NewServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.Close)
+	z := &zone{records: map[string][]string{}}
+	var checks atomic.Int32
+	srv.RequireDCV(func(name string) []string {
+		if checks.Add(1) <= 11 {
+			return nil
+		}
+		return z.resolve(name)
+	})
+	p := digicert.New("digicert", srv.URL(), []byte(srv.APIKey()), digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}),
+		digicert.WithDCVPublisher(z), digicert.WithPollInterval(time.Millisecond), digicert.WithDCVTimeout(30*time.Second))
+	if _, err := p.Issue(context.Background(), ca.IssueRequest{TenantID: "t1", CSR: digicertCSR(t, "slow.digicert.test"),
+		DNSNames: []string{"slow.digicert.test"}, TTL: 24 * time.Hour}); err != nil || checks.Load() <= 10 {
+		t.Fatalf("a record seen after the tenth check = %v (%d checks)", err, checks.Load())
+	}
+
+	never, err := digicertfake.NewServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(never.Close)
+	never.RequireDCV(func(string) []string { return nil })
+	q := digicert.New("digicert", never.URL(), []byte(never.APIKey()), digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}),
+		digicert.WithDCVPublisher(&zone{records: map[string][]string{}}), digicert.WithPollInterval(time.Millisecond), digicert.WithDCVTimeout(50*time.Millisecond))
+	if _, err := q.Issue(context.Background(), ca.IssueRequest{TenantID: "t1", CSR: digicertCSR(t, "never.digicert.test"),
+		DNSNames: []string{"never.digicert.test"}, TTL: 24 * time.Hour}); err == nil || !strings.Contains(err.Error(), "within 50ms") {
+		t.Fatalf("a record never seen = %v; want the budget named", err)
+	}
+}
+
+// A165-L4: the backoff starts at the poll interval and doubles to 30 seconds.
+func TestDCVBackoffDoublesToThirtySecondsA165L4(t *testing.T) {
+	for attempt, want := range []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 30 * time.Second, 30 * time.Second} {
+		if got := ca.DCVBackoff(time.Second, attempt); got != want {
+			t.Fatalf("attempt %d waits %s, want %s", attempt, got, want)
+		}
+	}
+	if got := ca.DCVBackoff(0, 0); got != 500*time.Millisecond {
+		t.Fatalf("an unset interval starts at %s, want 500ms", got)
 	}
 }

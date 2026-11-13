@@ -8,6 +8,12 @@
   health written to the device's custom field when it changes. Devices are events (`provider.rmm_device.*`) projected
   into `provider_rmm_devices` (migration 0467, snapshot format 133), listed at `GET /provider/v1/tenants/{id}/rmm-devices`
   and in the Provider console. RMM targets take no usage periods.
+- DigiCert and Sectigo validation waits for DNS (A165-L4): after the DNS provider takes a validation record, trstctl
+  waits until the record shows in its DNS view, within the DNS-01 provider config's `config.propagation_timeout_seconds`
+  (1–3600, 120 when unset; checked when the config is saved), before asking the vendor to check, and retracts a record
+  that never shows. The vendor is then checked with backoff from the authority's `poll_interval` to 30 seconds until
+  `dcv_timeout` (a new external CA setting, 10s–1h, 10 minutes when unset) instead of ten checks half a second apart.
+  DigiCert now honors `poll_interval` for order polling too.
 - Wildcard names in DigiCert and Sectigo validation (A165-L3): the vendors validate a wildcard's base name, and the
   publisher now knows the name was a wildcard, so the DNS-01 provider config's wildcard policy and CAA's `issuewild`
   apply as they do to an upstream ACME wildcard. Before, the base name was validated as if no wildcard were asked for:

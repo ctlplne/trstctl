@@ -5,7 +5,32 @@ package ca
 import (
 	"context"
 	"strings"
+	"time"
 )
+
+// DefaultDCVTimeout bounds how long a vendor's domain validation is waited
+// for once its records are published (A165-L4).
+const DefaultDCVTimeout = 10 * time.Minute
+
+// maxDCVBackoff caps the spacing between a vendor's validation checks.
+const maxDCVBackoff = 30 * time.Second
+
+// DCVBackoff is the wait before a vendor's next validation check (A165-L4):
+// it starts at first and doubles each check up to 30 seconds, so slow DNS
+// propagation is waited out without asking the vendor in a tight loop.
+func DCVBackoff(first time.Duration, attempt int) time.Duration {
+	if first <= 0 {
+		first = 500 * time.Millisecond
+	}
+	d := first
+	for i := 0; i < attempt && d < maxDCVBackoff; i++ {
+		d *= 2
+	}
+	if d > maxDCVBackoff {
+		d = maxDCVBackoff
+	}
+	return d
+}
 
 // DCVBaseNames turns an order's names into the base names a vendor
 // validates, in order and once each, and says which of them a wildcard asked

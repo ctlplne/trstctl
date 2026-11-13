@@ -158,6 +158,12 @@ type ExternalCAConfig struct {
 	// like a control.
 	CAAIssuerDomain string `json:"caa_issuer_domain,omitempty"`
 
+	// DCVTimeout bounds how long a DigiCert or Sectigo authority waits for
+	// the vendor to validate its published DNS records (A165-L4): a Go
+	// duration from 10s to 1h, 10m when unset. Checks start at the poll
+	// interval and back off to 30 seconds apart.
+	DCVTimeout string `json:"dcv_timeout,omitempty"`
+
 	// Sectigo SCM.
 	Login       string `json:"login,omitempty"`
 	CustomerURI string `json:"customer_uri,omitempty"`
@@ -232,6 +238,33 @@ func (n ExternalCANetworkConfig) PrivatePrefixes() ([]netip.Prefix, error) {
 }
 
 // PollIntervalDuration returns zero when a provider should use its own default.
+// DCVTimeoutDuration returns zero when the vendor's default validation
+// budget applies (A165-L4).
+func (c ExternalCAConfig) DCVTimeoutDuration() (time.Duration, error) {
+	if strings.TrimSpace(c.DCVTimeout) == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(strings.TrimSpace(c.DCVTimeout))
+	if err != nil || d < 10*time.Second || d > time.Hour {
+		return 0, errors.New("dcv_timeout must be a Go duration from 10s to 1h")
+	}
+	return d, nil
+}
+
+// validateExternalCADCVTimeout checks dcv_timeout (A165-L4).
+func validateExternalCADCVTimeout(where string, c ExternalCAConfig) error {
+	if strings.TrimSpace(c.DCVTimeout) == "" {
+		return nil
+	}
+	if (c.Type != "digicert" && c.Type != "sectigo") || !c.UpstreamDNS01 {
+		return fmt.Errorf("%s.dcv_timeout applies only to digicert and sectigo authorities with upstream_dns01 enabled", where)
+	}
+	if _, err := c.DCVTimeoutDuration(); err != nil {
+		return fmt.Errorf("%s.%w", where, err)
+	}
+	return nil
+}
+
 func (c ExternalCAConfig) PollIntervalDuration() (time.Duration, error) {
 	if strings.TrimSpace(c.PollInterval) == "" {
 		return 0, nil
@@ -482,6 +515,9 @@ func validateExternalCAFieldScope(where string, c ExternalCAConfig) []error {
 		errs = append(errs, fmt.Errorf(
 			"%s.caa_issuer_domain is required when upstream_dns01 is enabled: the CAA check "+
 				"must name the authority that will issue, and an empty issuer authorizes every CA", where))
+	}
+	if err := validateExternalCADCVTimeout(where, c); err != nil {
+		errs = append(errs, err)
 	}
 	if c.UpstreamDNSPersist && (c.Type != "letsencrypt" || !c.UpstreamDNS01) {
 		errs = append(errs, fmt.Errorf("%s.upstream_dns_persist applies only to ACME (letsencrypt) authorities with upstream_dns01 enabled", where))

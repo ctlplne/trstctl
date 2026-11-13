@@ -24146,6 +24146,19 @@ export const messages = {
     defaultMessage: "Allow upstream domain validation",
     description: "B7: consent for trstctl to publish challenge records into this zone for an external CA.",
   },
+  "protocols.dns01.propagationBudget": {
+    defaultMessage: "Propagation budget (seconds)",
+    description: "A165-L4: how long a DigiCert or Sectigo validation waits for this provider's record to appear in DNS.",
+  },
+  "protocols.dns01.propagationBudgetHelp": {
+    defaultMessage:
+      "How long a DigiCert or Sectigo validation waits for this provider's record to appear in DNS before the CA is asked to check. 1 to 3600; 120 when empty.",
+    description: "A165-L4: help for the propagation budget field.",
+  },
+  "protocols.dns01.propagationBudgetInvalid": {
+    defaultMessage: "The propagation budget is a whole number of seconds from 1 to 3600.",
+    description: "A165-L4: the propagation budget field holds something else.",
+  },
   "protocols.dns01.allowUpstreamDVHelp": {
     defaultMessage:
       "Lets trstctl publish _acme-challenge records in this zone on an external CA's behalf, unattended, on every validation cycle. Credentials added so trstctl could verify a challenge do not grant this.",

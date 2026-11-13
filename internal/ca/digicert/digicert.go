@@ -54,6 +54,29 @@ type backend struct {
 	// dcv completes CertCentral DNS TXT validation unattended (A165); nil
 	// leaves validation to the DigiCert console.
 	dcv ca.TXTPublisher
+	// poll spaces order and validation checks; dcvTimeout bounds the wait
+	// for validation (A165-L4).
+	poll       time.Duration
+	dcvTimeout time.Duration
+}
+
+// WithPollInterval sets the first spacing between checks (A165-L4).
+func WithPollInterval(d time.Duration) Option {
+	return func(b *backend) {
+		if d > 0 {
+			b.poll = d
+		}
+	}
+}
+
+// WithDCVTimeout bounds how long CertCentral's domain validation is waited
+// for (A165-L4); ca.DefaultDCVTimeout when unset.
+func WithDCVTimeout(d time.Duration) Option {
+	return func(b *backend) {
+		if d > 0 {
+			b.dcvTimeout = d
+		}
+	}
 }
 
 // Option configures the plugin.
@@ -94,7 +117,8 @@ func WithProduct(product string) Option {
 // https://www.digicert.com) authenticating with apiKey. The returned
 // *catemplate.Plugin is a ca.CA.
 func New(name, baseURL string, apiKey []byte, opts ...Option) *catemplate.Plugin {
-	b := &backend{name: name, baseURL: baseURL, apiKey: secrettext.Clone(apiKey), product: defaultProduct, client: ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{})}
+	b := &backend{name: name, baseURL: baseURL, apiKey: secrettext.Clone(apiKey), product: defaultProduct, client: ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{}),
+		poll: pollInterval, dcvTimeout: ca.DefaultDCVTimeout}
 	for _, o := range opts {
 		o(b)
 	}
@@ -216,7 +240,7 @@ func (b *backend) awaitIssued(ctx context.Context, orderID, certID int) (int, er
 		select {
 		case <-ctx.Done():
 			return 0, ctx.Err()
-		case <-time.After(pollInterval):
+		case <-time.After(b.poll):
 		}
 	}
 	return 0, errors.New("digicert: order was not issued within the polling window")

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/ca/digicert/digicertfake"
 	"trstctl.com/trstctl/internal/config"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // A165 Done-when: unattended domain validation works for more than the ACME
@@ -249,5 +251,152 @@ func TestServedDigiCertWildcardValidatesTheBaseNameUnderWildcardRulesA165L3(t *t
 	}
 	if values, _ := dns.LookupTXT(context.Background(), "_dnsauth.c.wild.dcv.test"); len(values) != 0 {
 		t.Fatalf("the DCV record is still published after issuance: %v", values)
+	}
+}
+
+// slowTXTView is a DNS view that does not show a record under hideUnder
+// until its lookups of that record exceed showAfter (never when negative).
+type slowTXTView struct {
+	inner     *servedDNSWebhookFixture
+	mu        sync.Mutex
+	lookups   map[string]int
+	hideUnder map[string]int
+}
+
+func (v *slowTXTView) LookupTXT(ctx context.Context, name string) ([]string, error) {
+	v.mu.Lock()
+	v.lookups[name]++
+	seen := v.lookups[name]
+	v.mu.Unlock()
+	for suffix, showAfter := range v.hideUnder {
+		if strings.HasSuffix(name, suffix) && (showAfter < 0 || seen <= showAfter) {
+			return nil, nil
+		}
+	}
+	return v.inner.LookupTXT(ctx, name)
+}
+
+// A165-L4 Done-when (served, DigiCert stand-in): a vendor validation waits
+// until its record shows in this install's DNS view before the vendor is
+// asked to check — within the provider config's propagation budget
+// (config.propagation_timeout_seconds) — and a record that never shows is
+// retracted and the order refused naming the budget; a budget outside 1-3600
+// seconds is refused when the config is saved.
+func TestServedVendorValidationWaitsForPropagationA165L4(t *testing.T) {
+	dns := newServedDNSWebhookFixture(t, "dcv-webhook-token")
+	dc, err := digicertfake.NewServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(dc.Close)
+	dc.RequireDCV(func(name string) []string {
+		values, _ := dns.LookupTXT(context.Background(), name)
+		return values
+	})
+	keyFile := filepath.Join(t.TempDir(), "digicert-api-key")
+	if err := os.WriteFile(keyFile, []byte(dc.APIKey()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	endpoint, err := url.Parse(dc.URL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := netip.MustParseAddr(endpoint.Hostname())
+	holder := &upstreamDVHolder{}
+	upstreams, err := externalCAsFromConfig(context.Background(), []config.ExternalCAConfig{{
+		ID: "corp-digicert", Type: "digicert", Name: "Corp DigiCert", Endpoint: dc.URL(), APIKeyRef: "file:" + keyFile,
+		UpstreamDNS01: true, CAAIssuerDomain: "digicert.com", PollInterval: "10ms", DCVTimeout: "30s",
+		Network: config.ExternalCANetworkConfig{AllowInsecureHTTP: true, AllowPrivateEndpoint: true,
+			PrivateEgressCIDRs: []string{netip.PrefixFrom(address, 32).String()}, Timeout: "10s"},
+	}}, nil, nil, nil, holder)
+	if err != nil {
+		t.Fatalf("configure the DigiCert authority: %v", err)
+	}
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
+		d.ExternalCAs = upstreams
+		d.UpstreamDV = holder
+	})
+	view := &slowTXTView{inner: dns, lookups: map[string]int{}, hideUnder: map[string]int{".slow.dcv.test": 3, ".never.dcv.test": -1}}
+	h.srv.acmeDNS01.caaResolver = dns
+	h.srv.acmeDNS01.txtResolvers = []acmesrv.Resolver{view}
+	h.srv.acmeDNS01.dcvPropagationInterval = 20 * time.Millisecond
+	startServedExternalCADispatcher(t, h)
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
+		"name": "dns/dcv/bearer-token", "value": "dcv-webhook-token",
+	}); status != http.StatusCreated {
+		t.Fatalf("store the DNS webhook token: %d %s", status, body)
+	}
+	providerConfig := func(name, zone string, budget any) (int, []byte) {
+		return secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
+			"name": name, "provider": "webhook", "zone": zone,
+			"credential_refs": map[string]any{"bearer_token_ref": "secret://dns/dcv/bearer-token"}, // #nosec G101 -- secret reference, no credential value (CWE-798)
+			"config":          map[string]any{"endpoint": dns.URL(), "propagation_timeout_seconds": budget},
+			"allowed_methods": []string{"dns-01"}, "allow_upstream_dv": true,
+		})
+	}
+	for _, bad := range []any{0, 3601, "120"} {
+		if status, body := providerConfig("a165l4-bad", "bad.dcv.test", bad); status != http.StatusBadRequest ||
+			!strings.Contains(string(body), "propagation_timeout_seconds") {
+			t.Fatalf("a propagation budget of %v = %d %s; want refused", bad, status, body)
+		}
+	}
+	for zone, budget := range map[string]int{"slow.dcv.test": 5, "never.dcv.test": 1} {
+		if status, body := providerConfig("a165l4-"+strings.Split(zone, ".")[0], zone, budget); status != http.StatusCreated {
+			t.Fatalf("create the provider config for %s: %d %s", zone, status, body)
+		}
+		dns.setCAA(zone, []acmesrv.CAARecord{{Tag: "issue", Value: "digicert.com"}})
+	}
+	issue := func(name, key string) (int, []byte) {
+		t.Helper()
+		csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: externalCACSR(t, name)})
+		return doExternalCARequest(t, h, http.MethodPost, "/api/v1/external-cas/corp-digicert/issue", key, map[string]any{
+			"csr_pem": string(csrPEM), "dns_names": []string{name}, "ttl_seconds": int64((24 * time.Hour).Seconds()),
+		})
+	}
+
+	// The record shows in the view on the fourth look: issuance waits for it.
+	if code, body := issue("app.slow.dcv.test", "a165l4-slow"); code != http.StatusCreated {
+		t.Fatalf("a record slow to propagate = %d %s; want issued after the wait", code, body)
+	}
+	view.mu.Lock()
+	looked := view.lookups["_dnsauth.app.slow.dcv.test"]
+	view.mu.Unlock()
+	if looked < 4 {
+		t.Fatalf("the view was asked %d times; want the wait to look until the record showed", looked)
+	}
+
+	// Never visible: not issued (the vendor is never asked to check), the view
+	// was polled for it, and the record is retracted.
+	if code, body := issue("app.never.dcv.test", "a165l4-never"); code == http.StatusCreated {
+		t.Fatalf("a record that never propagates = %d %s; want not issued", code, body)
+	}
+	view.mu.Lock()
+	looked = view.lookups["_dnsauth.app.never.dcv.test"]
+	view.mu.Unlock()
+	if looked < 2 {
+		t.Fatalf("the view was asked %d times for the record that never showed", looked)
+	}
+	if values, _ := dns.LookupTXT(context.Background(), "_dnsauth.app.never.dcv.test"); len(values) != 0 {
+		t.Fatalf("the unpropagated record was left behind: %v", values)
+	}
+}
+
+// A165-L4: the propagation wait reads the provider config's budget and, when
+// the record never shows, names the record and the budget.
+func TestAwaitDCVPropagationNamesTheBudgetA165L4(t *testing.T) {
+	view := &slowTXTView{inner: newServedDNSWebhookFixture(t, "unused"), lookups: map[string]int{}, hideUnder: map[string]int{".example.test": -1}}
+	solver := &upstreamACMEDNS01Solver{automation: &servedACMEDNS01Automation{txtResolvers: []acmesrv.Resolver{view}, dcvPropagationInterval: 10 * time.Millisecond}}
+	cfg := store.ACMEDNS01ProviderConfig{Config: json.RawMessage(`{"propagation_timeout_seconds":1}`)}
+	err := solver.awaitDCVPropagation(context.Background(), cfg, "_dnsauth.app.example.test", "value")
+	if err == nil || !strings.Contains(err.Error(), "_dnsauth.app.example.test did not appear in DNS within 1s") {
+		t.Fatalf("a record that never shows = %v; want the record and the 1s budget named", err)
+	}
+	if got := dns01PropagationBudget(store.ACMEDNS01ProviderConfig{Config: json.RawMessage(`{}`)}); got != 2*time.Minute {
+		t.Fatalf("a config with no budget waits %s, want 2m", got)
+	}
+	if err := (&upstreamACMEDNS01Solver{automation: &servedACMEDNS01Automation{}}).awaitDCVPropagation(context.Background(), cfg, "_dnsauth.app.example.test", "value"); err != nil {
+		t.Fatalf("with no DNS view configured there is nothing to wait on: %v", err)
 	}
 }

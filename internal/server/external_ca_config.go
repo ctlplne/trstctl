@@ -293,8 +293,14 @@ func buildCommercialExternalCA(item config.ExternalCAConfig, poll, defaultTTL ti
 		if item.Product != "" {
 			opts = append(opts, digicert.WithProduct(item.Product))
 		}
+		if poll > 0 {
+			opts = append(opts, digicert.WithPollInterval(poll))
+		}
 		if dcv != nil {
 			opts = append(opts, digicert.WithDCVPublisher(dcv))
+			if d, err := item.DCVTimeoutDuration(); err == nil && d > 0 {
+				opts = append(opts, digicert.WithDCVTimeout(d))
+			}
 		}
 		return digicert.New(item.Name, item.Endpoint, apiKey, opts...), nil
 	case "ejbca":
@@ -346,6 +352,9 @@ func buildCommercialExternalCA(item config.ExternalCAConfig, poll, defaultTTL ti
 		}
 		if dcv != nil {
 			opts = append(opts, sectigo.WithDCVPublisher(dcv))
+			if d, err := item.DCVTimeoutDuration(); err == nil && d > 0 {
+				opts = append(opts, sectigo.WithDCVTimeout(d))
+			}
 		}
 		return sectigo.New(sectigo.Config{
 			Name: item.Name, BaseURL: item.Endpoint, Login: item.Login, Password: password,

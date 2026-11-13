@@ -7850,7 +7850,11 @@ check against the authority's own identifier and the same retraction on every
 exit path. A wildcard name validates its base name, where both vendors want the
 record, and is held to the same rules as an upstream ACME wildcard (A165-L3): the
 provider config must allow wildcards (`allow_wildcards`) and CAA's `issuewild`
-must authorize the authority, or nothing is published and the order is refused. Each outcome is recorded like an upstream ACME authorization (A165-L2):
+must authorize the authority, or nothing is published and the order is refused.
+The vendor is asked to check only once the record shows in this install's DNS view
+(within the provider config's `propagation_timeout_seconds`, 120 seconds by
+default), then with backoff until the authority's `dcv_timeout` (10 minutes by
+default) instead of ten fixed checks (A165-L4). Each outcome is recorded like an upstream ACME authorization (A165-L2):
 a name validated through the published record as a `dns-txt` validation, and a
 name Sectigo already holds validated as a reuse, so the freshness panel below
 covers the vendors too. Proven against each vendor's protocol stand-in (the

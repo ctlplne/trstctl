@@ -68,6 +68,18 @@ type backend struct {
 	// dcv completes SCM's DNS TXT validation unattended (A165); nil leaves
 	// validation to Sectigo's console.
 	dcv ca.TXTPublisher
+	// dcvTimeout bounds the wait for SCM's validation (A165-L4).
+	dcvTimeout time.Duration
+}
+
+// WithDCVTimeout bounds how long SCM's domain validation is waited for
+// (A165-L4); ca.DefaultDCVTimeout when unset.
+func WithDCVTimeout(d time.Duration) Option {
+	return func(b *backend) {
+		if d > 0 {
+			b.dcvTimeout = d
+		}
+	}
 }
 
 // Option configures the plugin.
@@ -107,7 +119,7 @@ func WithPollInterval(d time.Duration) Option {
 // New builds the Sectigo plugin. The returned *catemplate.Plugin is a ca.CA.
 func New(cfg Config, opts ...Option) *catemplate.Plugin {
 	cfg.Password = secrettext.Clone(cfg.Password)
-	b := &backend{cfg: cfg, client: ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{}), poll: defaultPoll}
+	b := &backend{cfg: cfg, client: ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{}), poll: defaultPoll, dcvTimeout: ca.DefaultDCVTimeout}
 	for _, o := range opts {
 		o(b)
 	}

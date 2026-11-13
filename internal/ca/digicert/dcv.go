@@ -24,10 +24,6 @@ func WithDCVPublisher(p ca.TXTPublisher) Option {
 	return func(b *backend) { b.dcv = p }
 }
 
-// dcvChecks bounds how often check-dcv is asked while CertCentral has not yet
-// seen the records.
-const dcvChecks = 10
-
 // validateDomains publishes the order's DCV records, asks CertCentral to check
 // them, and retracts them before returning.
 func (b *backend) validateDomains(ctx context.Context, tenantID string, orderID int, dnsNames []string, randomValue string) (err error) {
@@ -61,7 +57,10 @@ func (b *backend) validateDomains(ctx context.Context, tenantID string, orderID 
 			retractions = append(retractions, retract)
 		}
 	}
-	for attempt := 0; attempt < dcvChecks; attempt++ {
+	// A165-L4: asked until CertCentral sees the records or the validation
+	// budget runs out, the checks spaced further apart as they go.
+	deadline := time.Now().Add(b.dcvTimeout)
+	for attempt := 0; ; attempt++ {
 		var checked struct {
 			DCVStatus   string `json:"dcv_status"`
 			OrderStatus string `json:"order_status"`
@@ -76,11 +75,14 @@ func (b *backend) validateDomains(ctx context.Context, tenantID string, orderID 
 			}
 			return nil
 		}
+		wait := ca.DCVBackoff(b.poll, attempt)
+		if time.Now().Add(wait).After(deadline) {
+			return fmt.Errorf("digicert: CertCentral has not seen the DCV records within %s; domain validation did not complete", b.dcvTimeout)
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(pollInterval):
+		case <-time.After(wait):
 		}
 	}
-	return errors.New("digicert: CertCentral has not seen the DCV records; domain validation did not complete")
 }

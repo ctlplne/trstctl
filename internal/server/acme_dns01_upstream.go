@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto/acmekey"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	acme "trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Unattended domain validation on the UPSTREAM client (epic B7).
@@ -146,7 +148,52 @@ func (s *upstreamACMEDNS01Solver) publishTXT(ctx context.Context, tenantID, iden
 	if err := s.enforceUpstreamCAA(ctx, identifier); err != nil {
 		return nil, err
 	}
-	return s.automation.presentRecord(ctx, tenantID, cfg, base, recordName, value)
+	retract, err := s.automation.presentRecord(ctx, tenantID, cfg, base, recordName, value)
+	if err != nil {
+		return nil, err
+	}
+	// A165-L4: the vendor checks DNS as soon as it is asked, so wait until
+	// the record is visible through this install's DNS view, within the
+	// provider config's propagation budget, before handing it back.
+	if err := s.awaitDCVPropagation(ctx, cfg, recordName, value); err != nil {
+		if retract != nil {
+			err = errors.Join(err, retract(context.WithoutCancel(ctx)))
+		}
+		return nil, err
+	}
+	return retract, nil
+}
+
+// dns01DefaultPropagation is the propagation budget of a provider config that
+// names none (A165-L4).
+const dns01DefaultPropagation = 120 * time.Second
+
+// dns01PropagationBudget is a provider config's propagation budget: its
+// config's propagation_timeout_seconds (1-3600), else the default.
+func dns01PropagationBudget(cfg store.ACMEDNS01ProviderConfig) time.Duration {
+	var settings struct {
+		PropagationTimeoutSeconds int `json:"propagation_timeout_seconds"`
+	}
+	if json.Unmarshal(cfg.Config, &settings) == nil && settings.PropagationTimeoutSeconds > 0 && settings.PropagationTimeoutSeconds <= 3600 {
+		return time.Duration(settings.PropagationTimeoutSeconds) * time.Second
+	}
+	return dns01DefaultPropagation
+}
+
+// awaitDCVPropagation waits until every configured TXT view shows the
+// record; with no view configured there is nothing to wait on.
+func (s *upstreamACMEDNS01Solver) awaitDCVPropagation(ctx context.Context, cfg store.ACMEDNS01ProviderConfig, recordName, value string) error {
+	if len(s.automation.txtResolvers) == 0 {
+		return nil
+	}
+	budget := dns01PropagationBudget(cfg)
+	checker := &acme.PropagationChecker{Resolvers: append([]acme.Resolver(nil), s.automation.txtResolvers...), Interval: s.automation.dcvPropagationInterval,
+		Timeout: budget}
+	if err := checker.Wait(ctx, recordName, value); err != nil {
+		return fmt.Errorf("server: the validation record %s did not appear in DNS within %s (the provider config's propagation budget): %w",
+			recordName, budget, err)
+	}
+	return nil
 }
 
 // enforceUpstreamCAA checks the domain's CAA authorizes the EXTERNAL issuer.

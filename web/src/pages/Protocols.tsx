@@ -11,6 +11,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
@@ -1682,7 +1684,17 @@ function DNS01ConfigDialog({
   // human nobody knew to expect.
   const [allowUpstreamDV, setAllowUpstreamDV] = useState(config?.allow_upstream_dv ?? false);
   const [allowedMethods, setAllowedMethods] = useState<ACMEChallengeMethod[]>(() => (config?.allowed_methods ?? []).filter(isACMEChallengeMethod));
-  const [configJSON, setConfigJSON] = useState(() => stringifyRecord(config?.config));
+  // A165-L4: the propagation budget has its own field; the JSON box holds the
+  // provider's other settings.
+  const [propagationSeconds, setPropagationSeconds] = useState(() => {
+    const value = config?.config?.propagation_timeout_seconds;
+    return typeof value === "number" ? String(value) : "";
+  });
+  const [configJSON, setConfigJSON] = useState(() => {
+    const rest = { ...(config?.config ?? {}) };
+    delete rest.propagation_timeout_seconds;
+    return stringifyRecord(rest);
+  });
   const [credentialRefsJSON, setCredentialRefsJSON] = useState(() => stringifyRecord(config?.credential_refs));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1715,6 +1727,15 @@ function DNS01ConfigDialog({
       setError(parsedRefs);
       return;
     }
+    let providerConfig = parsedConfig;
+    if (propagationSeconds.trim() !== "") {
+      const seconds = Number(propagationSeconds.trim());
+      if (!Number.isInteger(seconds) || seconds < 1 || seconds > 3600) {
+        setError(t("protocols.dns01.propagationBudgetInvalid"));
+        return;
+      }
+      providerConfig = { ...(providerConfig ?? {}), propagation_timeout_seconds: seconds };
+    }
     const input: ACMEDNS01ProviderConfigRequest = {
       name: name.trim(),
       provider: provider.trim(),
@@ -1726,7 +1747,7 @@ function DNS01ConfigDialog({
     if (delegationTarget.trim()) input.delegation_target = delegationTarget.trim();
     if (caaIssuerDomain.trim()) input.caa_issuer_domain = caaIssuerDomain.trim();
     if (allowedMethods.length > 0) input.allowed_methods = allowedMethods;
-    if (parsedConfig) input.config = parsedConfig;
+    if (providerConfig) input.config = providerConfig;
     if (parsedRefs) input.credential_refs = parsedRefs;
     setBusy(true);
     setError(null);
@@ -1848,6 +1869,18 @@ function DNS01ConfigDialog({
             <span className="mt-1 block text-caption font-normal text-muted-foreground">{t("protocols.dns01.allowUpstreamDVHelp")}</span>
           </span>
         </label>
+        <Field label={t("protocols.dns01.propagationBudget")} description={t("protocols.dns01.propagationBudgetHelp")}>
+          {(control) => (
+            <Input
+              {...control}
+              inputMode="numeric"
+              className="max-w-40"
+              value={propagationSeconds}
+              onChange={(event) => setPropagationSeconds(event.target.value)}
+              placeholder="120"
+            />
+          )}
+        </Field>
         <label className="grid gap-1 text-body font-medium">
           {t("parity.providerConfigJsonOptional_02753c")}
           <textarea
