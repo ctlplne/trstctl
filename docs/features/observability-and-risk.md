@@ -132,6 +132,17 @@ optionally one `rule` or one token (`credential_id`), each with its token and su
 network, hour, counts and whether it alerted; the Risk page's supporting details show
 them as Token misuse findings, including those an alert budget held back.
 
+The numbers above are the defaults; each tenant can set its own (M2-L2).
+`GET /api/v1/misuse/policy` (policy:read) answers the thresholds detection uses —
+`normal_days` (1-30, default 3), `burst_floor` (1-100000, default 64), `burst_factor`
+(2-100, default 4), `burst_lookback_days` (1-90, default 14) and `hourly_alert_cap`
+(1-1000, default 20) — with `custom` false until the tenant sets them, and who set them
+when it has. `PUT /api/v1/misuse/policy` (policy:write) sets all five, refusing one out
+of range; the change is the `misuse.policy.set` event, rebuilds with the findings, and
+applies from the next detection pass, including the days and window an alert names. The
+Risk page's Misuse detection thresholds section shows them and lets a policy writer
+change them.
+
 What the exposure posture reads from metadata can be checked live:
 `POST /api/v1/nhi/posture/exposure/probe` (`trstctl-cli nhi posture exposure probe`,
 discovery:write) asks a network relay to connect to the exposed records' public

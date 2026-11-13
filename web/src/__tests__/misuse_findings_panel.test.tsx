@@ -61,7 +61,7 @@ describe("Token misuse findings", () => {
     const table = await screen.findByRole("table", { name: "Misuse findings, newest first" });
     const first = within(table).getAllByRole("row")[1];
     expect(first).toHaveTextContent("reader");
-    expect(first).toHaveTextContent("Read secrets 64 times from 127.0.0.0/24 in one hour; its largest earlier hour in 14 days was 2.");
+    expect(first).toHaveTextContent("Read secrets 64 times from 127.0.0.0/24 in one hour; its largest earlier hour in the detection window was 2.");
     expect(first).toHaveTextContent("No alert: the hour's alert budget was spent");
     await user.click(screen.getByRole("button", { name: "Show older findings" }));
     expect(await within(table).findByText(/Requested a temporary credential from 10\.20\.30\.0\/24/)).toBeInTheDocument();

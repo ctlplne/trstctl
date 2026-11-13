@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 )
 
@@ -126,5 +128,78 @@ func TestMisuseFindingsRouteListsTheCallersOwnFindingsM2L1(t *testing.T) {
 	}
 	if code, _, body := get(bystander, ""); code != http.StatusForbidden {
 		t.Fatalf("a caller without audit:read = %d %s, want 403", code, body)
+	}
+}
+
+// M2-L2: GET /api/v1/misuse/policy answers the thresholds detection uses (the
+// defaults until the tenant sets its own), and PUT sets them for a caller who
+// may write policy, through the real router, its permission check and its
+// idempotency replay; a threshold out of range is a 400 and changes nothing.
+func TestMisusePolicyRoutesReadAndSetTheTenantsThresholdsM2L2(t *testing.T) {
+	ctx := context.Background()
+	st := newMisuseTestStore(t)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	reg, err := log.Append(ctx, events.Event{Type: projections.EventTenantRegistered, TenantID: misuseTenant, Data: []byte(`{"name":"misuse tenant"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).Apply(ctx, reg); err != nil {
+		t.Fatal(err)
+	}
+	reader := authz.Role{Name: "policy-reader", Permissions: []authz.Permission{authz.PolicyRead}}
+	writer := authz.Role{Name: "policy-writer", Permissions: []authz.Permission{authz.PolicyRead, authz.PolicyWrite}}
+	policies := misuse.PolicyStore{Store: st, Log: log, Defaults: misuse.DefaultPolicy(0)}
+	call := func(role authz.Role, method, body, key string) (int, misuse.PolicyView, string) {
+		t.Helper()
+		principal := authz.Principal{TenantID: misuseTenant, Subject: "sec-admin",
+			Grants: []authz.Grant{{Role: role, Scope: authz.Scope{TenantID: misuseTenant}}}}
+		a := api.New(st, orchestrator.NewIdempotency(st), nil,
+			api.WithLicensedRoutes(misuse.PolicyRoutes(policies)...),
+			api.WithRoles(reader, writer),
+			api.WithPrincipalResolver(func(*http.Request) (authz.Principal, error) { return principal, nil }),
+		)
+		req := httptest.NewRequest(method, "/api/v1/misuse/policy", strings.NewReader(body))
+		if key != "" {
+			req.Header.Set("Idempotency-Key", key)
+			req.Header.Set("Content-Type", "application/json")
+		}
+		rec := httptest.NewRecorder()
+		a.ServeHTTP(rec, req)
+		var view misuse.PolicyView
+		if rec.Code == http.StatusOK {
+			if err := json.Unmarshal(rec.Body.Bytes(), &view); err != nil {
+				t.Fatalf("decode %s: %v", rec.Body.String(), err)
+			}
+		}
+		return rec.Code, view, rec.Body.String()
+	}
+	if code, view, body := call(reader, http.MethodGet, "", ""); code != http.StatusOK || view.Custom || view.Policy != misuse.DefaultPolicy(0) {
+		t.Fatalf("defaults = %d %s", code, body)
+	}
+	set := `{"normal_days":5,"burst_floor":128,"burst_factor":6,"burst_lookback_days":30,"hourly_alert_cap":40}`
+	if code, _, body := call(reader, http.MethodPut, set, "m2l2-reader"); code != http.StatusForbidden {
+		t.Fatalf("a caller without policy:write = %d %s, want 403", code, body)
+	}
+	if code, _, body := call(writer, http.MethodPut, `{"normal_days":5,"burst_floor":128,"burst_factor":1,"burst_lookback_days":30,"hourly_alert_cap":40}`, "m2l2-bad"); code != http.StatusBadRequest || !strings.Contains(body, "burst_factor") {
+		t.Fatalf("a factor of 1 = %d %s, want 400 naming it", code, body)
+	}
+	want := misuse.Policy{NormalDays: 5, BurstFloor: 128, BurstFactor: 6, BurstLookbackDays: 30, HourlyAlertCap: 40}
+	code, view, body := call(writer, http.MethodPut, set, "m2l2-set")
+	if code != http.StatusOK || !view.Custom || view.Policy != want || view.SetBy != "sec-admin" {
+		t.Fatalf("set = %d %s", code, body)
+	}
+	if code, again, body := call(writer, http.MethodPut, set, "m2l2-set"); code != http.StatusOK || again.Policy != want {
+		t.Fatalf("an idempotent replay = %d %s", code, body)
+	}
+	var recorded int
+	if err := st.SystemPool().QueryRow(ctx, `SELECT count(*) FROM misuse_policies WHERE tenant_id = $1`, misuseTenant).Scan(&recorded); err != nil || recorded != 1 {
+		t.Fatalf("policy rows = %d, %v", recorded, err)
+	}
+	if code, view, body := call(reader, http.MethodGet, "", ""); code != http.StatusOK || view.Policy != want || !view.Custom {
+		t.Fatalf("read back = %d %s", code, body)
 	}
 }

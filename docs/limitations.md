@@ -1485,8 +1485,8 @@ never live in the API process. What you can do end to end against the running bi
   is projected later by the event tail, and the next pass writes its alert once, from
   the event, for findings up to six hours old.
   `GET /api/v1/misuse/findings` (audit:read) and the Risk page list every finding, newest
-  first. Rules and thresholds are fixed today, and a finding does not open an incident on
-  its own.
+  first. Each tenant sets the thresholds (M2-L2, `GET`/`PUT /api/v1/misuse/policy`); the
+  two rules themselves are fixed, and a finding does not open an incident on its own.
 - Access graph, step 2 (G2): what a dynamic-secret lease reaches is read from the
   target itself. The leader reads each active lease within a minute of issue and
   every six hours after, through the provider's own credentials, and changes

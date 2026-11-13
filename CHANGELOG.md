@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- Misuse detection thresholds are tenant policy (M2-L2, Enterprise governance): `GET`/`PUT /api/v1/misuse/policy`
+  read and set the new-network day count, the burst floor, factor and window, and the hourly alert cap
+  (`misuse.policy.set`, rebuilt from the log); detection and its alerts use them from the next pass, and the Risk page
+  shows and edits them.
 - A takedown of a certificate whose key the appliance generated removes that key too (ISE-O1): on F5, NetScaler and A10
   the relay deletes the certificate, the renewal job's key object and its CSR, named by the control plane from the
   certificate's issuance record (never from the request); a certificate that does not name its job is refused, and the

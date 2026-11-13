@@ -172,6 +172,7 @@ func fullBinaryProducerPrivacyCoordinates() []events.ProductionPrivacyEventSchem
 		{EventType: "kmip.object.attributes_changed", SchemaVersion: 1},
 		{EventType: silo.LaneProbeEventType, SchemaVersion: 1},
 		{EventType: misuse.EventFindingDetected, SchemaVersion: 1},
+		{EventType: misuse.EventPolicySet, SchemaVersion: 1},
 		{EventType: delegation.TypeDelegationRecorded, SchemaVersion: delegation.DelegationRecordedSchemaV1},
 		{EventType: delegation.TypeIssuanceRecorded, SchemaVersion: delegation.IssuanceRecordedSchemaV1},
 		{EventType: delegation.TypeRefusalRecorded, SchemaVersion: delegation.RefusalRecordedSchemaV1},

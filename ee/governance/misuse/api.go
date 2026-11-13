@@ -124,13 +124,106 @@ func Routes(reader FindingReader) []api.LicensedRoute {
 	}}
 }
 
-// NewAPIOptionsFactory mounts the findings route behind the Enterprise seam.
+// PolicyService reads and sets a tenant's misuse detection policy (M2-L2).
+type PolicyService interface {
+	Get(ctx context.Context, tenantID string) (PolicyView, error)
+	Set(ctx context.Context, tenantID string, pol Policy) (PolicyView, error)
+}
+
+// PolicyRoutes is the served policy surface (M2-L2): any caller who may read
+// policy sees the thresholds detection uses, and one who may write policy
+// sets them.
+func PolicyRoutes(policies PolicyService) []api.LicensedRoute {
+	return []api.LicensedRoute{{
+		Method:      http.MethodGet,
+		Path:        "/api/v1/misuse/policy",
+		OperationID: "getMisusePolicy",
+		Summary:     "The thresholds misuse detection uses for this tenant: its own, or the defaults",
+		Handler: func(a *api.API) http.HandlerFunc {
+			return func(w http.ResponseWriter, r *http.Request) { servePolicy(a, w, r, policies) }
+		},
+		ResponseSchema: "MisusePolicy",
+		SuccessCode:    "200",
+		Permission:     authz.PolicyRead,
+	}, {
+		Method:        http.MethodPut,
+		Path:          "/api/v1/misuse/policy",
+		OperationID:   "setMisusePolicy",
+		Summary:       "Set the thresholds misuse detection uses for this tenant",
+		RequestSchema: "MisusePolicyRequest",
+		Handler: func(a *api.API) http.HandlerFunc {
+			return func(w http.ResponseWriter, r *http.Request) { setPolicy(a, w, r, policies) }
+		},
+		ResponseSchema: "MisusePolicy",
+		SuccessCode:    "200",
+		Mutation:       true,
+		Permission:     authz.PolicyWrite,
+	}}
+}
+
+// NewAPIOptionsFactory mounts the findings and policy routes behind the
+// Enterprise seam.
 func NewAPIOptionsFactory(reader FindingReader) editionseam.LicensedAPIOptionsFactory {
-	return func(editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
+	return func(deps editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
+		policies := PolicyStore{Store: deps.Store, Log: deps.Log, Defaults: DefaultPolicy(0)}
 		return []api.Option{
-			api.WithLicensedRoutes(Routes(reader)...),
+			api.WithLicensedRoutes(append(Routes(reader), PolicyRoutes(policies)...)...),
 			api.WithLicensedSchemas(findingSchemas()),
+			api.WithLicensedSchemas(policySchemas()),
 		}, nil
+	}
+}
+
+func servePolicy(a *api.API, w http.ResponseWriter, r *http.Request, policies PolicyService) {
+	tenantID, ok := a.Tenant(r)
+	if !ok || strings.TrimSpace(tenantID) == "" {
+		a.WriteProblemUnauthorized(w)
+		return
+	}
+	view, err := policies.Get(r.Context(), tenantID)
+	if err != nil {
+		a.WriteError(w, err)
+		return
+	}
+	a.WriteJSON(w, http.StatusOK, view)
+}
+
+func setPolicy(a *api.API, w http.ResponseWriter, r *http.Request, policies PolicyService) {
+	a.Mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		var pol Policy
+		if err := api.DecodeJSONStrict(r, &pol); err != nil {
+			return 0, nil, api.ErrWithStatus(http.StatusBadRequest, err)
+		}
+		if err := pol.Validate(); err != nil {
+			return 0, nil, api.ErrWithStatus(http.StatusBadRequest, err)
+		}
+		view, err := policies.Set(ctx, tenantID, pol)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, view, nil
+	})
+}
+
+func policySchemas() map[string]*api.Schema {
+	integer := func(desc string) *api.Schema { return &api.Schema{Type: "integer", Description: desc} }
+	fields := map[string]*api.Schema{
+		"normal_days":         integer("a lease from a network the token has not used on this many different days is new (1-30; default 3)"),
+		"burst_floor":         integer("an hour of at least this many secret reads can be a burst (1-100000; default 64)"),
+		"burst_factor":        integer("and at least this many times the token's largest earlier hour (2-100; default 4)"),
+		"burst_lookback_days": integer("the earlier hours looked at, in days (1-90; default 14)"),
+		"hourly_alert_cap":    integer("at most this many findings an hour alert (1-1000; default 20)"),
+	}
+	required := []string{"normal_days", "burst_floor", "burst_factor", "burst_lookback_days", "hourly_alert_cap"}
+	view := map[string]*api.Schema{"custom": {Type: "boolean", Description: "false when the defaults apply"},
+		"set_by": {Type: "string"}, "updated_at": {Type: "string", Format: "date-time"}}
+	for k, v := range fields {
+		view[k] = v
+	}
+	return map[string]*api.Schema{
+		"MisusePolicyRequest": {Type: "object", Description: "M2-L2: a tenant's misuse detection thresholds.", Properties: fields, Required: required},
+		"MisusePolicy": {Type: "object", Description: "M2-L2: the thresholds misuse detection uses for this tenant.", Properties: view,
+			Required: append(append([]string{}, required...), "custom")},
 	}
 }
 

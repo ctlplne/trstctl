@@ -902,6 +902,21 @@ export interface MisuseFindingList {
   next_cursor: string;
 }
 
+// M2-L2: the thresholds misuse detection uses for this tenant (licensed).
+export interface MisusePolicyThresholds {
+  normal_days: number;
+  burst_floor: number;
+  burst_factor: number;
+  burst_lookback_days: number;
+  hourly_alert_cap: number;
+}
+
+export interface MisusePolicy extends MisusePolicyThresholds {
+  custom: boolean;
+  set_by?: string;
+  updated_at?: string;
+}
+
 export interface UsageEvidence {
   customer_id: string;
   period_start: string;
@@ -2324,6 +2339,10 @@ export interface Api {
   usageEvidence(periodStart: string, periodEnd: string): Promise<UsageEvidence>;
   /** M2-L1: misuse findings of this tenant's API tokens, newest first; licensed. */
   misuseFindings(options?: { rule?: MisuseFinding["rule"]; credentialId?: string; cursor?: string; limit?: number }): Promise<MisuseFindingList>;
+  /** M2-L2: this tenant's misuse detection thresholds; licensed. */
+  misusePolicy(): Promise<MisusePolicy>;
+  /** M2-L2: set this tenant's misuse detection thresholds (policy:write). */
+  setMisusePolicy(input: MisusePolicyThresholds, idempotencyKey?: string): Promise<MisusePolicy>;
   /** M2: crypto assets sequenced for migration by observed dependency, not severity alone. */
   cryptoReadiness(): Promise<CryptoReadiness>;
   cryptoReadinessExport(): Promise<CryptoReadinessExport>;
@@ -3259,6 +3278,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     const suffix = qs.toString();
     return req<MisuseFindingList>(`/api/v1/misuse/findings${suffix ? `?${suffix}` : ""}`);
   },
+  misusePolicy: () => req<MisusePolicy>("/api/v1/misuse/policy"),
+  setMisusePolicy: (input, idempotencyKey = newIdempotencyKey()) => mutate<MisusePolicy>("PUT", "/api/v1/misuse/policy", input, idempotencyKey),
   cryptoReadiness: () => req<CryptoReadiness>("/api/v1/graph/crypto-readiness"),
   cryptoReadinessExport: () => req<CryptoReadinessExport>("/api/v1/graph/crypto-readiness/export"),
   ownershipConflicts: () => req<OwnershipConflictList>("/api/v1/owners/ownership-conflicts"),

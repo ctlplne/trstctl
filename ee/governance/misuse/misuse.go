@@ -98,14 +98,18 @@ func (p *Projection) Reset(ctx context.Context) error {
 
 // ResetTx clears the read model inside a rebuild transaction.
 func (p *Projection) ResetTx(ctx context.Context, tx pgx.Tx) error {
-	//trstctl:system-query — cross-tenant full rebuild uses a system transaction to clear only the derived misuse findings; tenant-bound immutable events restore them under RLS.
-	_, err := tx.Exec(ctx, `DELETE FROM misuse_findings`)
+	//trstctl:system-query — cross-tenant full rebuild uses a system transaction to clear only the derived misuse findings and policies; tenant-bound immutable events restore them under RLS.
+	if _, err := tx.Exec(ctx, `DELETE FROM misuse_findings`); err != nil {
+		return err
+	}
+	//trstctl:system-query — the same rebuild clears the derived misuse policies (M2-L2).
+	_, err := tx.Exec(ctx, `DELETE FROM misuse_policies`)
 	return err
 }
 
 // Apply projects one event in its own tenant transaction.
 func (p *Projection) Apply(ctx context.Context, ev eventspec.Event) error {
-	if ev.Type != EventFindingDetected {
+	if ev.Type != EventFindingDetected && ev.Type != EventPolicySet {
 		return nil
 	}
 	return p.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error { return p.ApplyTx(ctx, tx, ev) })
@@ -114,6 +118,9 @@ func (p *Projection) Apply(ctx context.Context, ev eventspec.Event) error {
 // ApplyTx projects one event inside the caller's transaction. Applying the
 // same event twice changes nothing.
 func (p *Projection) ApplyTx(ctx context.Context, tx pgx.Tx, ev eventspec.Event) error {
+	if ev.Type == EventPolicySet {
+		return p.applyPolicySetTx(ctx, tx, ev)
+	}
 	if ev.Type != EventFindingDetected {
 		return nil
 	}
@@ -262,6 +269,13 @@ func (d *Detector) reconcileAlerts(ctx context.Context, tenantID string, now tim
 	if err != nil {
 		return err
 	}
+	if len(findings) == 0 {
+		return nil
+	}
+	policy, err := readPolicy(ctx, d.store, tenantID, DefaultPolicy(d.hourlyCap))
+	if err != nil {
+		return err
+	}
 	for _, m := range findings {
 		ev, ok, err := d.log.EventAtSequence(ctx, uint64(m.sequence)) // #nosec G115 -- a projected event sequence is positive (CWE-190)
 		if err != nil {
@@ -275,7 +289,7 @@ func (d *Detector) reconcileAlerts(ctx context.Context, tenantID string, now tim
 			return fmt.Errorf("misuse: decode finding %s: %w", m.id, err)
 		}
 		if err := d.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-			return enqueueAlert(ctx, tx, tenantID, m.id, f)
+			return enqueueAlert(ctx, tx, tenantID, m.id, f, policy.Policy)
 		}); err != nil {
 			return err
 		}
@@ -284,11 +298,17 @@ func (d *Detector) reconcileAlerts(ctx context.Context, tenantID string, now tim
 }
 
 func (d *Detector) detectTenant(ctx context.Context, tenantID string, since, now time.Time) error {
-	leases, err := d.store.NewSourceUses(ctx, tenantID, projections.CredentialActionLeaseRequest, since, normalDays, candidateLimit)
+	// M2-L2: the tenant's own thresholds, or the defaults.
+	policy, err := readPolicy(ctx, d.store, tenantID, DefaultPolicy(d.hourlyCap))
 	if err != nil {
 		return err
 	}
-	bursts, err := d.store.UsageBursts(ctx, tenantID, projections.CredentialActionSecretRead, since, burstFloor, burstFactor, burstLookback, candidateLimit)
+	leases, err := d.store.NewSourceUses(ctx, tenantID, projections.CredentialActionLeaseRequest, since, policy.NormalDays, candidateLimit)
+	if err != nil {
+		return err
+	}
+	bursts, err := d.store.UsageBursts(ctx, tenantID, projections.CredentialActionSecretRead, since, policy.BurstFloor, policy.BurstFactor,
+		time.Duration(policy.BurstLookbackDays)*24*time.Hour, candidateLimit)
 	if err != nil {
 		return err
 	}
@@ -308,7 +328,7 @@ func (d *Detector) detectTenant(ctx context.Context, tenantID string, since, now
 	if len(found) == 0 {
 		return nil
 	}
-	budget, err := d.alertBudget(ctx, tenantID, now)
+	budget, err := d.alertBudget(ctx, tenantID, now, policy.HourlyAlertCap)
 	if err != nil {
 		return err
 	}
@@ -322,7 +342,7 @@ func (d *Detector) detectTenant(ctx context.Context, tenantID string, since, now
 		if c.finding.Alerted {
 			budget--
 		}
-		if err := d.record(ctx, tenantID, c); err != nil {
+		if err := d.record(ctx, tenantID, c, policy.Policy); err != nil {
 			return err
 		}
 	}
@@ -337,18 +357,18 @@ func newCandidate(tenantID string, f FindingDetected) candidate {
 	return candidate{finding: f, id: id}
 }
 
-func (d *Detector) alertBudget(ctx context.Context, tenantID string, now time.Time) (int, error) {
+func (d *Detector) alertBudget(ctx context.Context, tenantID string, now time.Time, hourlyCap int) (int, error) {
 	var raised int
 	err := d.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT count(*) FROM misuse_findings WHERE tenant_id = $1 AND alerted AND detected_at > $2`,
 			tenantID, now.Add(-time.Hour)).Scan(&raised)
 	})
-	return d.hourlyCap - raised, err
+	return hourlyCap - raised, err
 }
 
 // record appends the finding, projects it and, when it alerts, enqueues the
 // alert in the same tenant transaction (AN-2, AN-6).
-func (d *Detector) record(ctx context.Context, tenantID string, c candidate) error {
+func (d *Detector) record(ctx context.Context, tenantID string, c candidate, policy Policy) error {
 	payload, err := json.Marshal(c.finding)
 	if err != nil {
 		return err
@@ -364,16 +384,16 @@ func (d *Detector) record(ctx context.Context, tenantID string, c candidate) err
 		if !c.finding.Alerted {
 			return nil
 		}
-		return enqueueAlert(ctx, tx, tenantID, c.id, c.finding)
+		return enqueueAlert(ctx, tx, tenantID, c.id, c.finding, policy)
 	})
 }
 
 // enqueueAlert writes one finding's alert to the outbox, keyed by the finding
 // so it is written at most once (AN-6).
-func enqueueAlert(ctx context.Context, tx pgx.Tx, tenantID, id string, f FindingDetected) error {
+func enqueueAlert(ctx context.Context, tx pgx.Tx, tenantID, id string, f FindingDetected, policy Policy) error {
 	alert, err := json.Marshal(map[string]any{
 		"kind": "credential.misuse", "tenant_id": tenantID, "operation_id": "misuse:" + id,
-		"subject": alertSubject(f), "detail": alertDetail(f), "severity": "high",
+		"subject": alertSubject(f), "detail": alertDetail(f, policy), "severity": "high",
 	})
 	if err != nil {
 		return err
@@ -387,13 +407,13 @@ func alertSubject(f FindingDetected) string {
 	return "API token " + f.CredentialID + " (" + f.Principal + ")"
 }
 
-func alertDetail(f FindingDetected) string {
+func alertDetail(f FindingDetected, policy Policy) string {
 	switch f.Rule {
 	case RuleNewSourceLease:
 		return fmt.Sprintf("requested a dynamic-secret lease from %s, a network it has not used on %d different days (its normal networks: %v), in the hour from %s",
-			f.Source, normalDays, f.NormalSources, f.WindowStart.UTC().Format(time.RFC3339))
+			f.Source, policy.NormalDays, f.NormalSources, f.WindowStart.UTC().Format(time.RFC3339))
 	default:
-		return fmt.Sprintf("read secrets %d times from %s in the hour from %s; its largest earlier hour in 14 days was %d",
-			f.ObservedCount, f.Source, f.WindowStart.UTC().Format(time.RFC3339), f.Baseline)
+		return fmt.Sprintf("read secrets %d times from %s in the hour from %s; its largest earlier hour in %d days was %d",
+			f.ObservedCount, f.Source, f.WindowStart.UTC().Format(time.RFC3339), policy.BurstLookbackDays, f.Baseline)
 	}
 }

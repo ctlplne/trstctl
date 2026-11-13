@@ -674,6 +674,9 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 			typedLicensedPrivacyPolicy[misuse.FindingDetected](
 				licensedPrivacyRule("/principal", events.PrivacyFieldIdentityExact),
 			)),
+		// M2-L2: a tenant's misuse detection thresholds; numbers only.
+		entry(misuse.EventPolicySet, 1,
+			rejectingTypedLicensedPrivacyPolicy[misuse.Policy]()),
 
 		entry(delegation.TypeDelegationRecorded, delegation.DelegationRecordedSchemaV1,
 			rejectingTypedLicensedPrivacyPolicy[delegation.DelegationRecordedV1]()),

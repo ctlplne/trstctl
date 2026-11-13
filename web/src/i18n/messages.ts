@@ -20388,9 +20388,38 @@ export const messages = {
     description: "M2-L1: a new_source_lease finding.",
   },
   "risk.misuse.secretReadBurst": {
-    defaultMessage: "Read secrets {count} times from {source} in one hour; its largest earlier hour in 14 days was {baseline}.",
-    description: "M2-L1: a secret_read_burst finding.",
+    defaultMessage: "Read secrets {count} times from {source} in one hour; its largest earlier hour in the detection window was {baseline}.",
+    description: "M2-L1: a secret_read_burst finding. The window is the tenant's detection policy (M2-L2).",
   },
+  "risk.misusePolicy.title": { defaultMessage: "Misuse detection thresholds", description: "M2-L2: heading of the misuse detection policy section." },
+  "risk.misusePolicy.description": {
+    defaultMessage: "The thresholds misuse detection uses for this tenant's API tokens. Changing them applies from the next detection pass.",
+    description: "M2-L2: what the misuse detection policy section sets.",
+  },
+  "risk.misusePolicy.defaults": { defaultMessage: "The defaults apply.", description: "M2-L2: the tenant has set no policy of its own." },
+  "risk.misusePolicy.custom": {
+    defaultMessage: "Set by {who} on {when}.",
+    description: "M2-L2: who set the tenant's policy, and when.",
+  },
+  "risk.misusePolicy.normalDays": {
+    defaultMessage: "Days a network must have been used on before it counts as known",
+    description: "M2-L2: label of normal_days.",
+  },
+  "risk.misusePolicy.burstFloor": { defaultMessage: "Secret reads in one hour before a burst is considered", description: "M2-L2: label of burst_floor." },
+  "risk.misusePolicy.burstFactor": {
+    defaultMessage: "Times the token's largest earlier hour that make a burst",
+    description: "M2-L2: label of burst_factor.",
+  },
+  "risk.misusePolicy.lookbackDays": { defaultMessage: "Detection window, in days", description: "M2-L2: label of burst_lookback_days." },
+  "risk.misusePolicy.alertCap": { defaultMessage: "Alerts at most per hour", description: "M2-L2: label of hourly_alert_cap." },
+  "risk.misusePolicy.save": { defaultMessage: "Save thresholds", description: "M2-L2: save the misuse detection policy." },
+  "risk.misusePolicy.saved": { defaultMessage: "Thresholds saved.", description: "M2-L2: the policy was saved." },
+  "risk.misusePolicy.readOnly": {
+    defaultMessage: "You can read these thresholds; changing them needs permission to write policy.",
+    description: "M2-L2: the caller lacks policy:write (403).",
+  },
+  "risk.misusePolicy.unavailable": { defaultMessage: "The thresholds could not be read", description: "M2-L2: the policy read failed." },
+  "risk.misusePolicy.saveFailed": { defaultMessage: "The thresholds were not saved: {reason}", description: "M2-L2: the policy write failed." },
   "risk.misuse.alerted": { defaultMessage: "Alert sent", description: "M2-L1: the finding raised an alert." },
   "risk.misuse.notAlerted": {
     defaultMessage: "No alert: the hour's alert budget was spent",
