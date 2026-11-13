@@ -4611,8 +4611,8 @@ than sending an operator looking for a credential that was never there.
   from one (registering its core tenant when needed), `.../template-drift` reads
   its drift, and a rollout applies a new version across customers after a
   preview whose fingerprint it must match. What a template can say is what core
-  holds: "roles" are role grants to named members, built-in or a custom role the
-  tenant has already defined (a template does not define custom roles); a CA
+  holds: "roles" are role grants to named members, built-in or a custom role
+  the template defines (`custom_roles`, A186-L2) or the tenant already has; a CA
   binding is an issuer record
   (a changed chain binds a new issuer and the old one stays for what it issued);
   connector defaults are deployment targets. A template's report schedule can

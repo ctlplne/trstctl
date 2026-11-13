@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/profile"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -40,8 +41,11 @@ type TenantBaseline struct {
 	Issuers              []BaselineIssuer              `json:"issuers,omitempty"`
 	DeploymentTargets    []BaselineDeploymentTarget    `json:"deployment_targets,omitempty"`
 	NotificationChannels []BaselineNotificationChannel `json:"notification_channels,omitempty"`
-	Members              []BaselineMember              `json:"members,omitempty"`
-	ReportSchedules      []BaselineReportSchedule      `json:"report_schedules,omitempty"`
+	// CustomRoles are tenant custom roles the template defines (A186-L2),
+	// applied before the members that may hold them.
+	CustomRoles     []BaselineCustomRole     `json:"custom_roles,omitempty"`
+	Members         []BaselineMember         `json:"members,omitempty"`
+	ReportSchedules []BaselineReportSchedule `json:"report_schedules,omitempty"`
 }
 
 // BaselineProfile is a certificate profile by name.
@@ -87,6 +91,14 @@ type BaselineNotificationChannel struct {
 }
 
 // BaselineMember grants built-in roles to one member subject.
+// BaselineCustomRole is a tenant custom role by name: what it grants and why
+// (A186-L2). Its permissions come from the custom role vocabulary.
+type BaselineCustomRole struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Permissions []string `json:"permissions"`
+}
+
 type BaselineMember struct {
 	Subject     string   `json:"subject"`
 	DisplayName string   `json:"display_name,omitempty"`
@@ -127,6 +139,7 @@ const (
 	BaselineKindDeploymentTarget    = "deployment_target"
 	BaselineKindNotificationChannel = "notification_channel"
 	BaselineKindMember              = "member"
+	BaselineKindCustomRole          = "custom_role"
 	BaselineKindReportSchedule      = "report_schedule"
 )
 
@@ -266,6 +279,18 @@ func (a *API) ValidateTenantBaseline(b TenantBaseline) error {
 	for _, x := range b.NotificationChannels {
 		if _, err := baselineChannel("", x); err != nil {
 			return fmt.Errorf("baseline notification channel %s: %w", x.ChannelType, err)
+		}
+	}
+	if err := distinctKeys("custom role", len(b.CustomRoles), func(i int) string { return b.CustomRoles[i].Name }); err != nil {
+		return err
+	}
+	for _, x := range b.CustomRoles {
+		name := strings.TrimSpace(x.Name)
+		if _, builtIn := a.roles.Role(name); builtIn {
+			return fmt.Errorf("baseline custom role %s: the name is a built-in role's", name)
+		}
+		if err := projections.ValidateTenantCustomRole(baselineCustomRole(x)); err != nil {
+			return fmt.Errorf("baseline custom role %s: %w", name, err)
 		}
 	}
 	if err := distinctKeys("member", len(b.Members), func(i int) string { return strings.TrimSpace(b.Members[i].Subject) }); err != nil {
@@ -442,6 +467,9 @@ func (a *API) baselineSteps(tenantID, scope string, b TenantBaseline) []baseline
 	}
 	for _, x := range b.NotificationChannels {
 		steps = append(steps, a.baselineChannelStep(tenantID, x))
+	}
+	for _, x := range b.CustomRoles {
+		steps = append(steps, a.baselineCustomRoleStep(tenantID, x))
 	}
 	for _, x := range b.Members {
 		steps = append(steps, a.baselineMemberStep(tenantID, origin, x))
@@ -734,6 +762,51 @@ func (a *API) baselineChannelStep(tenantID string, x BaselineNotificationChannel
 			}
 			if _, err := a.appendNotificationChannelUpsert(ctx, tenantID, want); err != nil {
 				return "", "", err
+			}
+			return createdOrUpdated(current), "", nil
+		},
+	}
+}
+
+// baselineCustomRole is the custom role definition a baseline names.
+func baselineCustomRole(x BaselineCustomRole) projections.TenantCustomRoleUpserted {
+	perms := make([]string, 0, len(x.Permissions))
+	for _, p := range x.Permissions {
+		perms = append(perms, strings.TrimSpace(p))
+	}
+	return projections.TenantCustomRoleUpserted{Name: strings.TrimSpace(x.Name), Description: strings.TrimSpace(x.Description), Permissions: perms}
+}
+
+func customRoleDigest(description string, permissions []string) string {
+	sorted := append([]string(nil), permissions...)
+	sort.Strings(sorted)
+	return baselineDigest(struct {
+		Description string   `json:"description"`
+		Permissions []string `json:"permissions"`
+	}{description, sorted})
+}
+
+// baselineCustomRoleStep defines a tenant custom role (A186-L2): the role's
+// description and permissions are compared with the tenant's own record, and
+// applying redefines it through the same command as the tenant's access page.
+func (a *API) baselineCustomRoleStep(tenantID string, x BaselineCustomRole) baselineStep {
+	want := baselineCustomRole(x)
+	expected := customRoleDigest(want.Description, want.Permissions)
+	return baselineStep{
+		read: func(ctx context.Context) (BaselineObjectState, any, error) {
+			got, err := a.store.GetTenantCustomRole(ctx, tenantID, want.Name)
+			missing, err := missingOrErr(err)
+			if err != nil {
+				return BaselineObjectState{}, nil, err
+			}
+			if missing {
+				return stateOf(BaselineKindCustomRole, want.Name, "", expected, "", true), nil, nil
+			}
+			return stateOf(BaselineKindCustomRole, want.Name, "", expected, customRoleDigest(got.Description, got.Permissions), false), &got, nil
+		},
+		apply: func(ctx context.Context, current any) (string, string, error) {
+			if _, err := a.orch.DefineTenantCustomRole(ctx, tenantID, want); err != nil {
+				return "", "", mapTenantCustomRoleError(err)
 			}
 			return createdOrUpdated(current), "", nil
 		},

@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- Provider tenant templates define tenant custom roles (A186-L2): a baseline's `custom_roles` (name, description,
+  permissions from the custom role vocabulary) are defined in the customer tenant before the members that hold them,
+  drift reads each role from the tenant's record (a customer's change shows drifted; applying again redefines it), and
+  a template whose custom role takes a built-in role's name or grants a permission outside the vocabulary is refused.
 - First-party GitHub repository scans write findings back through code scanning (A174-L5): a push sent to the GitHub
   repository webhook with an `annotation` block (and its `commit_sha` and `ref`) records each finding's file and line,
   and **Annotate at provider** (or `auto`) uploads it as a SARIF analysis of its own — rule, file and line, never the

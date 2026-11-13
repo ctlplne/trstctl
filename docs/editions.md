@@ -451,7 +451,8 @@ accepts for it:
 | `issuers` | CA bindings: the X.509 chain (or SSH CA key) its identities are issued under |
 | `deployment_targets` | connector targets it deploys to by default |
 | `notification_channels` | its channel of each type |
-| `members` | built-in role grants to named members |
+| `custom_roles` | tenant custom roles: name, description and permissions from the custom role vocabulary, defined before the members that hold them (A186-L2) |
+| `members` | role grants to named members: built-in roles, or custom roles the template or the tenant defines |
 | `report_schedules` | scheduled compliance reports |
 
 `POST /provider/v1/templates` records a version (`templates:write`): the
