@@ -97,14 +97,17 @@ func FuzzParseCVCertificate(f *testing.F) {
 	card, err := deviceattesttest.NewSmartCardHSM("DECC0175")
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	request, err := card.Attest(key)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	for _, seed := range [][]byte{card.RootCVC, card.DICACVC, card.DeviceCVC, request, {0x7F, 0x21, 0x00}, {0x67, 0x81}} {
 		f.Add(seed)
