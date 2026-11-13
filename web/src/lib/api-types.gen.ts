@@ -1477,7 +1477,7 @@ export interface AlertRecipient {
 }
 
 export interface Approval {
-  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
+  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "undelete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
   approval_count: number;
   approvals: number;
   approver: string;
@@ -1489,7 +1489,7 @@ export interface Approval {
 }
 
 export interface ApprovalDecision {
-  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
+  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "undelete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
   approval_count: number;
   approvals: number;
   approver: string;
@@ -4241,6 +4241,20 @@ export interface DecoySecretRegisterRequest {
   name: string;
   placement: string;
   secret_name: string;
+}
+
+export interface DeletedSecret {
+  created_at: string;
+  deleted_at: string;
+  name: string;
+  owner_id?: string;
+  purge_after: string;
+  version: number;
+  versions: number;
+}
+
+export interface DeletedSecretList {
+  items: DeletedSecret[];
 }
 
 export interface DeploymentEntitlementInfo {
@@ -10323,7 +10337,7 @@ export interface PQCPilotWaveRequest {
 }
 
 export interface PendingApprovalRequest {
-  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
+  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "undelete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
   approval_count: number;
   created_at: string;
   evidence_refs: string[];
@@ -11935,7 +11949,7 @@ export interface SecretAccessPreviewRequest {
 }
 
 export interface SecretApproval {
-  action: "rotate" | "recover" | "delete";
+  action: "rotate" | "recover" | "delete" | "undelete";
   approval_count: number;
   approvals: number;
   approver: string;
@@ -11947,7 +11961,7 @@ export interface SecretApproval {
 }
 
 export interface SecretApprovalRequest {
-  action: "rotate" | "recover" | "delete";
+  action: "rotate" | "recover" | "delete" | "undelete";
   intent_digest: string;
   request_id: string;
 }

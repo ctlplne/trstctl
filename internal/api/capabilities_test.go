@@ -210,7 +210,8 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 	if f63.RuntimeState != "unavailable" || len(f63.Actions.Allowed) != 0 {
 		t.Fatalf("operator F63 runtime=%q allowed=%v, want unavailable/none without the native secret store", f63.RuntimeState, f63.Actions.Allowed)
 	}
-	for _, operationID := range []string{"previewSecretCreate", "createSecret", "importSecrets", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret"} {
+	for _, operationID := range []string{"previewSecretCreate", "createSecret", "importSecrets", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret",
+		"listDeletedSecrets", "restoreDeletedSecret", "purgeDeletedSecret"} {
 		action := findUnavailableCapabilityAction(t, f63, operationID)
 		if action.Code != "dependency_not_configured" || !strings.Contains(action.Detail, "native secret store is turned off") {
 			t.Fatalf("F63 %s unavailable=%+v, want exact native-store dependency reason", operationID, action)

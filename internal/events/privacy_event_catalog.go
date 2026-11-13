@@ -513,6 +513,9 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		entry("secret.access.denied",
 			catalogPrivacyRule("/principal", exact), catalogPrivacyRule("/path", token),
 			catalogPrivacyRule("/reason", clear)),
+		// A236-L4: a deleted secret purged by an operator or the retention sweep.
+		entry("secret.deleted_purged",
+			catalogPrivacyRule("/name", token), catalogPrivacyRule("/reason", opaque)),
 		entry("secret.imported",
 			catalogPrivacyRule("/name", token), catalogPrivacyRule("/version", opaque)),
 		entry("secret.purged", catalogPrivacyRule("/path", token)),

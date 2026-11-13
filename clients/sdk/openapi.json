@@ -7902,6 +7902,7 @@
               "sign",
               "recover",
               "delete",
+              "undelete",
               "managedkey:rotate",
               "managedkey:revoke",
               "managedkey:zeroize",
@@ -7970,6 +7971,7 @@
               "sign",
               "recover",
               "delete",
+              "undelete",
               "managedkey:rotate",
               "managedkey:revoke",
               "managedkey:zeroize",
@@ -20618,6 +20620,60 @@
           "secret_name",
           "name",
           "placement"
+        ],
+        "type": "object"
+      },
+      "DeletedSecret": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deleted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "purge_after": {
+            "description": "when the retention sweep removes it",
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "description": "the version the secret had when deleted; a restore brings it back",
+            "type": "integer"
+          },
+          "versions": {
+            "description": "historical versions kept with it",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "versions",
+          "created_at",
+          "deleted_at",
+          "purge_after"
+        ],
+        "type": "object"
+      },
+      "DeletedSecretList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DeletedSecret"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
         ],
         "type": "object"
       },
@@ -47934,6 +47990,7 @@
               "sign",
               "recover",
               "delete",
+              "undelete",
               "managedkey:rotate",
               "managedkey:revoke",
               "managedkey:zeroize",
@@ -55363,7 +55420,8 @@
             "enum": [
               "rotate",
               "recover",
-              "delete"
+              "delete",
+              "undelete"
             ],
             "type": "string"
           },
@@ -55420,7 +55478,8 @@
             "enum": [
               "rotate",
               "recover",
-              "delete"
+              "delete",
+              "undelete"
             ],
             "type": "string"
           },
@@ -105959,6 +106018,188 @@
         ],
         "summary": "Report cloud secret-manager discovery and sync integration coverage",
         "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/deleted": {
+      "get": {
+        "operationId": "listDeletedSecrets",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletedSecretList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List deleted application secrets kept for restore until the retention window ends (no values)",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/deleted/{name}": {
+      "delete": {
+        "operationId": "purgeDeletedSecret",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "hierarchical secret name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Purge a deleted application secret and its version history before the retention window ends",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "post": {
+        "operationId": "restoreDeletedSecret",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "hierarchical secret name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMeta"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Restore a deleted application secret at the version it had, with its version history",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/deliveries": {

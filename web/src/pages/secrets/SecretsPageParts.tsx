@@ -963,6 +963,8 @@ export function secretApprovalActionLabel(action: SecretApprovalAction, t: Trans
       return t("secrets.approvals.actionRecover");
     case "delete":
       return t("secrets.approvals.actionDelete");
+    case "undelete":
+      return t("secrets.approvals.actionUndelete");
   }
 }
 

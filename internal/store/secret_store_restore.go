@@ -9,7 +9,8 @@ import (
 )
 
 // EachStoredSecretValue calls fn with every sealed application-secret value one
-// tenant holds — the current value of each secret and every retained version —
+// tenant holds — the current value of each secret, every retained version and
+// every version of a deleted secret still kept —
 // for a restored deployment's consistency check (A246). fn sees sealed bytes
 // only; opening them is the caller's. Tenant-scoped under RLS (AN-1).
 func (s *Store) EachStoredSecretValue(ctx context.Context, tenantID string, fn func(name string, version int, sealed []byte) error) error {
@@ -18,6 +19,10 @@ func (s *Store) EachStoredSecretValue(ctx context.Context, tenantID string, fn f
 			`SELECT name, version, sealed FROM secret_store
 			  WHERE tenant_id = $1 AND octet_length(sealed) > 0 ORDER BY name`,
 			`SELECT name, version, sealed FROM secret_store_versions
+			  WHERE tenant_id = $1 AND octet_length(sealed) > 0 ORDER BY name, version`,
+			// A236-L4: a deleted secret kept for the retention window must open
+			// too, or a restore of it would bring back a value nobody can read.
+			`SELECT name, version, sealed FROM secret_store_tombstone_versions
 			  WHERE tenant_id = $1 AND octet_length(sealed) > 0 ORDER BY name, version`,
 		} {
 			rows, err := tx.Query(ctx, query, tenantID)

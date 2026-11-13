@@ -662,6 +662,11 @@ type Deps struct {
 	// DecoyLoginWatchInterval is how often the leader checks decoy database
 	// logins for use (Q6). Zero uses the production default.
 	DecoyLoginWatchInterval time.Duration
+	// DeletedSecretRetention is how long a deleted application secret is kept
+	// for restore (A236-L4). Run fills it from secrets.deleted_retention
+	// (default 30 days); zero keeps none, so a deletion removes the value and
+	// its history at once.
+	DeletedSecretRetention time.Duration
 	// MigrationCloudStorePropagationWindow is how long a cloud-store
 	// migration member's load balancer may keep serving the old certificate
 	// after the store serves the new one before its gate fails (A166-L3);
@@ -965,6 +970,9 @@ type Server struct {
 	serviceNowBindings []api.ServiceNowBinding
 	// decoyLoginWatchInterval paces RunDecoyLoginWatch (Q6).
 	decoyLoginWatchInterval time.Duration
+	// deletedSecretRetention is how long RunDeletedSecretRetention keeps a
+	// deleted application secret (A236-L4).
+	deletedSecretRetention time.Duration
 	// decoyWatchGapGrace and decoyWatchFailures track decoy logins the watcher
 	// cannot read, until a monitoring gap is recorded (Q6-L10).
 	decoyWatchGapGrace time.Duration
@@ -1211,7 +1219,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		tenantCrypto:              d.TenantCrypto,
 		kek:                       d.KEK,
 		restoreDrillSigner:        d.AuditSigningKey, deploymentKEK: d.DeploymentKEK,
-		decoyLoginWatchInterval: d.DecoyLoginWatchInterval, decoyWatchGapGrace: d.DecoyLoginWatchGapGrace, dynamicSecretAccessInterval: d.DynamicSecretAccessInterval, secretMoveClosureInterval: d.SecretMoveClosureInterval, scopedSyncReconcileInterval: d.ScopedSyncReconcileInterval,
+		decoyLoginWatchInterval: d.DecoyLoginWatchInterval, deletedSecretRetention: d.DeletedSecretRetention, decoyWatchGapGrace: d.DecoyLoginWatchGapGrace, dynamicSecretAccessInterval: d.DynamicSecretAccessInterval, secretMoveClosureInterval: d.SecretMoveClosureInterval, scopedSyncReconcileInterval: d.ScopedSyncReconcileInterval,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
 	s.mAgentEnrollments = s.registry.CounterVec("trstctl_agent_enrollments_total",

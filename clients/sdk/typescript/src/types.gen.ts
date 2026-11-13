@@ -9820,6 +9820,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List deleted application secrets kept for restore until the retention window ends (no values) */
+        get: operations["listDeletedSecrets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/deleted/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a deleted application secret at the version it had, with its version history */
+        post: operations["restoreDeletedSecret"];
+        /** Purge a deleted application secret and its version history before the retention window ends */
+        delete: operations["purgeDeletedSecret"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/deliveries": {
         parameters: {
             query?: never;
@@ -14293,7 +14328,7 @@ export interface components {
         };
         Approval: {
             /** @enum {string} */
-            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
+            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "undelete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
             approval_count: number;
             approvals: number;
             approver: string;
@@ -14307,7 +14342,7 @@ export interface components {
         };
         ApprovalDecision: {
             /** @enum {string} */
-            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
+            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "undelete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
             approval_count: number;
             approvals: number;
             approver: string;
@@ -17835,6 +17870,26 @@ export interface components {
             placement: string;
             /** @description an existing application secret, written through the normal create path */
             secret_name: string;
+        };
+        DeletedSecret: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            deleted_at: string;
+            name: string;
+            owner_id?: string;
+            /**
+             * Format: date-time
+             * @description when the retention sweep removes it
+             */
+            purge_after: string;
+            /** @description the version the secret had when deleted; a restore brings it back */
+            version: number;
+            /** @description historical versions kept with it */
+            versions: number;
+        };
+        DeletedSecretList: {
+            items: components["schemas"]["DeletedSecret"][];
         };
         DeploymentEntitlementInfo: {
             bundled_non_production_deployments: number;
@@ -25309,7 +25364,7 @@ export interface components {
         };
         PendingApprovalRequest: {
             /** @enum {string} */
-            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
+            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "undelete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
             approval_count: number;
             /** Format: date-time */
             created_at: string;
@@ -27293,7 +27348,7 @@ export interface components {
         };
         SecretApproval: {
             /** @enum {string} */
-            action: "rotate" | "recover" | "delete";
+            action: "rotate" | "recover" | "delete" | "undelete";
             approval_count: number;
             approvals: number;
             approver: string;
@@ -27307,7 +27362,7 @@ export interface components {
         };
         SecretApprovalRequest: {
             /** @enum {string} */
-            action: "rotate" | "recover" | "delete";
+            action: "rotate" | "recover" | "delete" | "undelete";
             intent_digest: string;
             /** Format: uuid */
             request_id: string;
@@ -58141,6 +58196,133 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CloudSecretManagerIntegration"];
                 };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listDeletedSecrets: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletedSecretList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    restoreDeletedSecret: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description hierarchical secret name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMeta"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    purgeDeletedSecret: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description hierarchical secret name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description client error */
             "4XX": {

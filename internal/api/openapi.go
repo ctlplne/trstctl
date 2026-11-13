@@ -199,6 +199,9 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 	for name, schema := range secretVersionBatchSchemas() {
 		schemas[name] = schema
 	}
+	for name, schema := range deletedSecretSchemas() {
+		schemas[name] = schema
+	}
 	for name, schema := range secretRestoreSchemas() {
 		schemas[name] = schema
 	}
@@ -1267,7 +1270,7 @@ func componentSchemas() map[string]*Schema {
 	operationApprovalStatuses := []string{"pending", "approved", "denied", "expired", "superseded", "consumed"}
 	operationApprovalResourceKinds := []string{"identity", "secret", "managed_key", "code_signing", "ephemeral", "cloud_machine", "pam_service_reconcile"}
 	operationApprovalActions := []string{
-		"issue", "create", "rotate", "revoke", "sign", "recover", "delete",
+		"issue", "create", "rotate", "revoke", "sign", "recover", "delete", "undelete",
 		"managedkey:rotate", "managedkey:revoke", "managedkey:zeroize", "revoke_key", "tighten_policy", "replace_key", "reconcile",
 	}
 	approvalReq := object(map[string]*Schema{
@@ -1312,11 +1315,11 @@ func componentSchemas() map[string]*Schema {
 		"status": {Type: "string", Enum: operationApprovalStatuses},
 	}, "id", "intent_digest", "resource", "action", "approver", "approvals", "approval_count", "required_approvals", "status")
 	secretApprovalReq := object(map[string]*Schema{
-		"action":     {Type: "string", Enum: []string{"rotate", "recover", "delete"}},
+		"action":     {Type: "string", Enum: []string{"rotate", "recover", "delete", "undelete"}},
 		"request_id": uuid(), "intent_digest": str(),
 	}, "action", "request_id", "intent_digest")
 	secretApproval := object(map[string]*Schema{
-		"id": uuid(), "intent_digest": str(), "resource": str(), "action": {Type: "string", Enum: []string{"rotate", "recover", "delete"}},
+		"id": uuid(), "intent_digest": str(), "resource": str(), "action": {Type: "string", Enum: []string{"rotate", "recover", "delete", "undelete"}},
 		"approver": str(), "approvals": {Type: "integer"},
 		"approval_count": {Type: "integer"}, "required_approvals": {Type: "integer"},
 		"status": {Type: "string", Enum: operationApprovalStatuses},

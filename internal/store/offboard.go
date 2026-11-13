@@ -450,6 +450,9 @@ var TenantScopedTables = []string{
 	"application_secret_import_receipts",
 	"application_secret_tenant_epochs",
 	"application_secret_mutation_receipts",
+	// A236-L4: deleted secrets kept for the retention window (child first).
+	"secret_store_tombstone_versions",
+	"secret_store_tombstones",
 	"secret_store_versions",
 	"secret_store",
 	"read_model_snapshots",

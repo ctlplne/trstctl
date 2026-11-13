@@ -307,6 +307,7 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 		RevocationSink:             &secretRevocationSink{store: d.Store, log: s.log},
 		DynamicProviders:           s.attachSSHCertificateProviders(attachWindowsLocalRotationProviders(d.DynamicSecretProviders, d)),
 		DynamicLeaseWorkerInterval: d.DynamicLeaseWorkerInterval,
+		DeletedRetention:           d.DeletedSecretRetention,
 		SecretRotators:             d.SecretRotators,
 		SecretSyncTargets:          d.SecretSyncTargets,
 		SecretScanner:              secretScannerFromDeps(d),

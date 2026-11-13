@@ -125,6 +125,10 @@ func TestRejectProjectorPrivacyPayloadShapesCoverEveryVersionCoordinate(t *testi
 			externallyRegistered[privacyEventPolicyKey{EventType: eventType, Version: version}] = struct{}{}
 		}
 	}
+	// A236-L4: a restore of a deleted secret has no v1 legacy shape.
+	for _, version := range []int{ApplicationSecretMutationSchemaVersion, ApplicationSecretPrivacyDispositionSchemaVersion} {
+		externallyRegistered[privacyEventPolicyKey{EventType: EventApplicationSecretUndeleted, Version: version}] = struct{}{}
+	}
 	for _, version := range []int{ApplicationSecretBatchImportSchemaVersion,
 		ApplicationSecretBatchImportPrivacyTombstoneSchemaVersion} {
 		externallyRegistered[privacyEventPolicyKey{
@@ -358,6 +362,8 @@ func applicationSecretMutationAction(eventType string) string {
 		return "recover"
 	case EventApplicationSecretDeleted:
 		return "delete"
+	case EventApplicationSecretUndeleted:
+		return "undelete"
 	default:
 		return ""
 	}
@@ -366,7 +372,7 @@ func applicationSecretMutationAction(eventType string) string {
 func isApplicationSecretMutationEvent(eventType string) bool {
 	switch eventType {
 	case EventApplicationSecretCreated, EventApplicationSecretRotated,
-		EventApplicationSecretRecovered, EventApplicationSecretDeleted:
+		EventApplicationSecretRecovered, EventApplicationSecretDeleted, EventApplicationSecretUndeleted:
 		return true
 	default:
 		return false

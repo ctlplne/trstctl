@@ -5917,6 +5917,28 @@ DecoySecretRegisterRequest = TypedDict(
     total=False,
 )
 
+DeletedSecret = TypedDict(
+    'DeletedSecret',
+    {
+        'created_at': str,
+        'deleted_at': str,
+        'name': str,
+        'owner_id': str,
+        'purge_after': str,
+        'version': int,
+        'versions': int,
+    },
+    total=False,
+)
+
+DeletedSecretList = TypedDict(
+    'DeletedSecretList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 DeploymentEntitlementInfo = TypedDict(
     'DeploymentEntitlementInfo',
     {

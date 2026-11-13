@@ -101,9 +101,20 @@ PostgreSQL RLS and emits `secret.version.written` without plaintext.
 `GET /api/v1/secrets/store/history/{name}?version=N` reads a prior version, and
 `POST /api/v1/secrets/store/recover/{name}` with body `{"at":"2026-06-25T12:00:00Z"}`
 recovers whichever version was current then as the next monotonic version, keeping
-rollbacks auditable. `DELETE /api/v1/secrets/store/{name}` purges the current row and
-sealed history for that tenant; another tenant gets a 404 — both tables are
-RLS-scoped.
+rollbacks auditable. `DELETE /api/v1/secrets/store/{name}` removes the secret from reads
+and listings; another tenant gets a 404 — every table is RLS-scoped.
+
+A deleted secret is kept, sealed with its version history, for
+`secrets.deleted_retention` (default 30 days; `0s` keeps none) so it can be restored
+(A236-L4). `GET /api/v1/secrets/deleted` lists what is kept, without values
+(`trstctl secrets deleted list`). `POST /api/v1/secrets/deleted/{name}` brings one back
+at the version it had, with its owner and history (`trstctl secrets deleted restore`).
+`DELETE /api/v1/secrets/deleted/{name}` purges it now (`trstctl secrets deleted purge
+--force`). A restore is a secret change like any other: it's idempotent, takes dual
+control when the tenant requires it, and answers `409` while a live secret holds the
+name. Deleting a secret again replaces what was kept, and the leader's hourly sweep
+purges what is past the window; each purge is audited as `secret.deleted_purged`, name
+only. The console lists them under **Deleted secrets** on the secrets page.
 
 Values may contain `${secret.path}` placeholders: a normal read returns the literal
 value, while `GET /api/v1/secrets/store/{name}?resolve=true` expands references within
@@ -269,9 +280,10 @@ trstctl secrets projects restore apply payments -f apply.json       # the same b
 A restore never brings back a dead credential silently. A version whose credential a
 rotation retired at its provider, is retiring, revoked by rolling back, or whose lease
 has expired is `blocked` with the rotation named, and a blocked item blocks the restore.
-Every restored value's references must still resolve, as for a promotion. A deleted
-secret can't be restored, because deleting a secret removes its history. The console
-offers both on a project's page (**Promote or restore**) for `secrets:write` holders.
+Every restored value's references must still resolve, as for a promotion. A folder
+restore doesn't bring back a secret deleted since; restore it by name from the deleted
+secrets while it's kept (A236-L4). The console offers both on a project's page
+(**Promote or restore**) for `secrets:write` holders.
 
 ### Migrating from another system (A243)
 

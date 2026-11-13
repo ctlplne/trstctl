@@ -1443,7 +1443,8 @@ never live in the API process. What you can do end to end against the running bi
   restore) put an environment or folder back to a point in time as one reserved batch of
   new versions naming the restored version; secrets created since are kept and nothing
   outside the folder changes; a version whose credential a rotation retired, revoked or let
-  expire is refused by name; a deleted secret can't be restored (delete removes history).
+  expire is refused by name; a secret deleted since isn't brought back by a folder restore
+  (restore it by name while it's kept, A236-L4).
 - Moving a leaked secret into the vault (P6): `trstctl secrets scans move` re-finds a
   redacted repository finding's value in the operator's checkout with the pinned
   gitleaks, stores it as a native secret and links the finding

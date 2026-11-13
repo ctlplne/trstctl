@@ -152,7 +152,7 @@ func (a *secretSyncLifecycleAuthority) observe(event events.Event) (bool, error)
 		lifecycle.offboarded = true
 		lifecycle.offboardSequence = event.Sequence
 	case EventApplicationSecretCreated, EventApplicationSecretRotated,
-		EventApplicationSecretRecovered, EventApplicationSecretDeleted:
+		EventApplicationSecretRecovered, EventApplicationSecretDeleted, EventApplicationSecretUndeleted:
 		if schemaVersionOf(event) != ApplicationSecretMutationSchemaVersion {
 			break
 		}
@@ -381,7 +381,7 @@ func isSecretSyncLifecycleEvent(event events.Event) bool {
 	switch event.Type {
 	case EventTenantRegistered, EventTenantOffboarded,
 		EventApplicationSecretCreated, EventApplicationSecretRotated,
-		EventApplicationSecretRecovered, EventApplicationSecretDeleted,
+		EventApplicationSecretRecovered, EventApplicationSecretDeleted, EventApplicationSecretUndeleted,
 		EventSecretSyncQueued, EventSecretSyncDelivered, EventSecretSyncFailed:
 		return true
 	default:

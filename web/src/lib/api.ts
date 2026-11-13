@@ -966,6 +966,7 @@ export type { CertificateAssuranceRecord, AssuranceRecord } from "./api-types.ge
 export type { KMIPClient, KMIPClientEnrollment, KMIPClientList, KMIPClientRegisterRequest } from "./api-types.gen";
 export type { GraphAccessGrant, GraphAccessLink } from "./api-types.gen";
 export type { DecoySecret, DecoySecretList, DecoySecretRegisterRequest } from "./api-types.gen";
+export type { DeletedSecret, DeletedSecretList } from "./api-types.gen";
 export type { MigrationPlannedCohort } from "./api-types.gen";
 export type { SlackApp, SlackApprovalChannel, SlackChannelList, SlackInstallStart, SlackLinkCode } from "./api-types.gen";
 export type { IdentityApplicationView } from "./api-types.gen";
@@ -3029,6 +3030,12 @@ export interface Api {
   recoverSecret(name: string, input: SecretRecoverRequest): Promise<SecretMeta>;
   rotateSecret(name: string, input: SecretRotateRequest, idempotencyKey?: string): Promise<SecretMeta>;
   deleteSecret(name: string, idempotencyKey?: string): Promise<void>;
+  /** A236-L4: deleted secrets kept for restore until the retention window ends (no values). */
+  listDeletedSecrets(): Promise<import("./api-types.gen").DeletedSecretList>;
+  /** A236-L4: restore a deleted secret at the version it had, with its history. */
+  restoreDeletedSecret(name: string, idempotencyKey?: string): Promise<SecretMeta>;
+  /** A236-L4: purge a deleted secret and its history now. */
+  purgeDeletedSecret(name: string, idempotencyKey?: string): Promise<void>;
   approveSecretChange(name: string, input: SecretApprovalRequest): Promise<SecretApproval>;
   secretRepositoryScanning(): Promise<SecretRepositoryScanPosture>;
   receiveSecretRepositoryWebhook(provider: string, input: SecretRepositoryWebhookRequest): Promise<SecretRepositoryWebhookReceipt>;
@@ -4269,6 +4276,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   recoverSecret: (name, input) => mutate<SecretMeta>("POST", `/api/v1/secrets/store/recover/${encodeURIComponent(name)}`, input),
   rotateSecret: (name, input, idempotencyKey) => mutate<SecretMeta>("PUT", `/api/v1/secrets/store/${encodeURIComponent(name)}`, input, idempotencyKey),
   deleteSecret: (name, idempotencyKey) => mutate<void>("DELETE", `/api/v1/secrets/store/${encodeURIComponent(name)}`, undefined, idempotencyKey),
+  listDeletedSecrets: () => req<import("./api-types.gen").DeletedSecretList>("/api/v1/secrets/deleted?limit=100"),
+  restoreDeletedSecret: (name, idempotencyKey) => mutate<SecretMeta>("POST", `/api/v1/secrets/deleted/${encodeURIComponent(name)}`, undefined, idempotencyKey),
+  purgeDeletedSecret: (name, idempotencyKey) => mutate<void>("DELETE", `/api/v1/secrets/deleted/${encodeURIComponent(name)}`, undefined, idempotencyKey),
   approveSecretChange: (name, input) => mutate<SecretApproval>("POST", `/api/v1/secrets/store/approvals/${encodeURIComponent(name)}`, input),
   secretRepositoryScanning: () => req<SecretRepositoryScanPosture>("/api/v1/secrets/scans/repositories"),
   receiveSecretRepositoryWebhook: (provider, input) =>

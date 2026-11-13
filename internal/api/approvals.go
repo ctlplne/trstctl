@@ -466,7 +466,7 @@ func approvalRecordPermission(resourceKind, action string) (authz.Permission, bo
 	case "migration_run", "pqc_migration_run":
 		return authz.CertsIssue, action == "start"
 	case "secret":
-		return authz.SecretsWrite, action == "create" || action == "rotate" || action == "recover" || action == "delete"
+		return authz.SecretsWrite, action == "create" || action == "rotate" || action == "recover" || action == "delete" || action == "undelete"
 	case secretPromotionApprovalKind:
 		// A236-L1: a promotion into a restricted environment is reviewed by
 		// those who write secrets there.

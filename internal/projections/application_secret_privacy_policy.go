@@ -135,4 +135,15 @@ func init() {
 			panic(err)
 		}
 	}
+	// A236-L4: a restore of a deleted secret has no v1 legacy shape.
+	if err := events.RegisterPrivacyEventPolicy(
+		EventApplicationSecretUndeleted, ApplicationSecretMutationSchemaVersion, mutation,
+	); err != nil {
+		panic(err)
+	}
+	if err := events.RegisterPrivacyEventPolicy(
+		EventApplicationSecretUndeleted, ApplicationSecretPrivacyDispositionSchemaVersion, privacyDisposition,
+	); err != nil {
+		panic(err)
+	}
 }

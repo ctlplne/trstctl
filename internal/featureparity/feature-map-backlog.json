@@ -16389,7 +16389,10 @@
                 "getSecretVersion",
                 "recoverSecretAt",
                 "rotateSecret",
-                "deleteSecret"
+                "deleteSecret",
+                "listDeletedSecrets",
+                "restoreDeletedSecret",
+                "purgeDeletedSecret"
             ],
             "api_na": "",
             "cli_surface": [
@@ -16413,7 +16416,10 @@
                 "secrets store history",
                 "secrets store recover",
                 "secrets store update",
-                "secrets store delete"
+                "secrets store delete",
+                "secrets deleted list",
+                "secrets deleted restore",
+                "secrets deleted purge"
             ],
             "cli_na": "",
             "facet_evidence": {

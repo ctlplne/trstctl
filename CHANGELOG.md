@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- A deleted secret can be restored (A236-L4): a deletion keeps the secret, sealed with its version history, for
+  `secrets.deleted_retention` (default 30 days; `0s` keeps none). `GET /api/v1/secrets/deleted` lists what is kept,
+  without values; `POST /api/v1/secrets/deleted/{name}` brings one back at the version it had, with its owner and
+  history, as an event-sourced change that takes dual control like any other; `DELETE /api/v1/secrets/deleted/{name}`
+  purges it now, and the leader's hourly sweep purges what is past the window (`secret.deleted_purged`, audited). CLI
+  `trstctl secrets deleted list|restore|purge`; the console's secrets page lists **Deleted secrets**.
 - A promotion's or restore's receipt names the consumers to reload (A236-L3): each item's `reload` lists the
   consumers whose latest delivery report for that secret (injected or verified) is an earlier version, so whoever
   applied the batch knows which workloads still hold the replaced value; the console lists them under

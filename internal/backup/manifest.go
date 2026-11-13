@@ -179,6 +179,10 @@ var RecoveredFromPostgresBackup = []string{
 	"secret_static_rotation_commands",
 	"secret_store",
 	"secret_store_versions",
+	// A236-L4: deleted secrets kept, sealed, for the retention window; like the
+	// live store they are never derived from the event log.
+	"secret_store_tombstones",
+	"secret_store_tombstone_versions",
 	"ssh_keys",
 	// L3: white-label branding. RecoveredFromPostgresBackup — an operator's
 	// presentation choice, never derived from the event log, and a rebuild that

@@ -66,7 +66,7 @@ func secretApprovalResource(name string) string {
 
 func isSecretApprovalAction(action string) bool {
 	switch action {
-	case "rotate", "recover", "delete":
+	case "rotate", "recover", "delete", "undelete":
 		return true
 	default:
 		return false
@@ -204,7 +204,7 @@ func (a *API) approveSecretChange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !isSecretApprovalAction(req.Action) {
-		a.writeError(w, errStatus(http.StatusBadRequest, `action must be "rotate", "recover", or "delete"`))
+		a.writeError(w, errStatus(http.StatusBadRequest, `action must be "rotate", "recover", "delete", or "undelete"`))
 		return
 	}
 	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)

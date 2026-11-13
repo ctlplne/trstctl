@@ -2932,6 +2932,28 @@ func (s Secrets) KEKRotationSettleDuration() (time.Duration, error) {
 	return d, nil
 }
 
+// defaultDeletedSecretRetention is how long a deleted application secret is
+// kept for restore by default (A236-L4).
+const defaultDeletedSecretRetention = 30 * 24 * time.Hour
+
+// maxDeletedSecretRetention bounds secrets.deleted_retention at a year.
+const maxDeletedSecretRetention = 365 * 24 * time.Hour
+
+// DeletedRetentionDuration parses secrets.deleted_retention: how long a
+// deleted application secret is kept, sealed with its version history, so it
+// can be restored (default 720h, 30 days). 0s keeps none: a deletion removes
+// the value and its history at once.
+func (s Secrets) DeletedRetentionDuration() (time.Duration, error) {
+	if strings.TrimSpace(s.DeletedRetention) == "" {
+		return defaultDeletedSecretRetention, nil
+	}
+	d, err := time.ParseDuration(s.DeletedRetention)
+	if err != nil || d < 0 || d > maxDeletedSecretRetention {
+		return 0, errors.New("secrets.deleted_retention must be a duration from 0s to 8760h")
+	}
+	return d, nil
+}
+
 // Secrets configures credentials-at-rest (R3.1). KEKFile is the key-encryption
 // key that wraps every stored CA/connector credential (envelope encryption). It
 // is the root of trust for secrets at rest: back it up with the same care as the
@@ -2949,6 +2971,10 @@ type Secrets struct {
 	// request and delivery that sealed under the previous generation first
 	// finishes (default 2m; at most 24h).
 	KEKRotationSettle string `json:"kek_rotation_settle,omitempty"`
+	// DeletedRetention is how long a deleted application secret is kept,
+	// sealed with its version history, so it can be restored (A236-L4;
+	// default 720h, at most 8760h). 0s keeps none.
+	DeletedRetention string `json:"deleted_retention,omitempty"`
 	// TenantSealLocalWrappers are operator-provisioned local custody keys that may
 	// independently wrap tenant data-domain KEKs. The database stores only the
 	// stable ID; paths stay in operator configuration. Multiple entries are
@@ -3739,6 +3765,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
 	setString(getenv, "TRSTCTL_SECRETS_KEK_OPERATOR_TENANT_ID", &c.Secrets.KEKOperatorTenantID)
 	setString(getenv, "TRSTCTL_SECRETS_KEK_ROTATION_SETTLE", &c.Secrets.KEKRotationSettle)
+	setString(getenv, "TRSTCTL_SECRETS_DELETED_RETENTION", &c.Secrets.DeletedRetention)
 	setBool(getenv, "TRSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_TOKEN_TENANT_ID", &c.Secrets.AuthTokenTenantID)
@@ -5293,6 +5320,9 @@ func validateServedSurfaces(c *Config) []error {
 		}
 	}
 	if _, err := c.Secrets.KEKRotationSettleDuration(); err != nil {
+		errs = append(errs, err)
+	}
+	if _, err := c.Secrets.DeletedRetentionDuration(); err != nil {
 		errs = append(errs, err)
 	}
 	if c.Secrets.AuthSecretFile != "" {

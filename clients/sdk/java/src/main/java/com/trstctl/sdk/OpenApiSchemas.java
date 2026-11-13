@@ -431,6 +431,8 @@ public final class OpenApiSchemas {
       "DecoySecret",
       "DecoySecretList",
       "DecoySecretRegisterRequest",
+      "DeletedSecret",
+      "DeletedSecretList",
       "DeploymentEntitlementInfo",
       "DeploymentKEKRotateRequest",
       "DeploymentKEKRotation",

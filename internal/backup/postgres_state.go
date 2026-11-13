@@ -1347,6 +1347,9 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"secret_static_rotation_commands",
 		"secret_store",
 		"secret_store_versions",
+		// A236-L4: a tombstone restores before its sealed history (FK).
+		"secret_store_tombstones",
+		"secret_store_tombstone_versions",
 		"application_secret_mutation_receipts",
 		"application_secret_import_receipts",
 		"ssh_keys",

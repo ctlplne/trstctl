@@ -409,8 +409,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// OD-8 adds listing, granting and revoking an authority's SPIRE upstream
 	// standing approvals (830). OD-9 adds listing, granting and revoking an
 	// access bundle's standing approvals for its delegated accounts (833).
-	if len(out) != 833 {
-		t.Fatalf("OpenAPI operationIds = %d, want 833", len(out))
+	// A236-L4 adds listDeletedSecrets, restoreDeletedSecret and
+	// purgeDeletedSecret (836).
+	if len(out) != 836 {
+		t.Fatalf("OpenAPI operationIds = %d, want 836", len(out))
 	}
 	return out
 }

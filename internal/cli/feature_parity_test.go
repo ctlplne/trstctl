@@ -447,8 +447,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// and `report-audit-events` (894). OD-8 adds `ca authorities
 	// standing-approvals list`, `grant` and `revoke` (897). OD-9 adds
 	// `access bundles standing-approvals list`, `grant` and `revoke` (900).
-	if len(out) != 900 {
-		t.Fatalf("CLI commands = %d, want 900", len(out))
+	// A236-L4 adds `secrets deleted list`, `restore` and `purge` (903).
+	if len(out) != 903 {
+		t.Fatalf("CLI commands = %d, want 903", len(out))
 	}
 	return out
 }

@@ -246,6 +246,8 @@ func validateApplicationSecretMutationFence(
 		wantType = projections.EventApplicationSecretRecovered
 	case "delete":
 		wantType = projections.EventApplicationSecretDeleted
+	case "undelete":
+		wantType = projections.EventApplicationSecretUndeleted
 	default:
 		return projections.ApplicationSecretMutation{}, fmt.Errorf("%w: unsupported fenced application-secret action", store.ErrIdempotencyConflict)
 	}
@@ -312,12 +314,18 @@ func (a *API) claimApplicationSecretMutationFence(
 		}
 		requesterRef = privacy.SubjectRef(tenantID, principal.Subject)
 	}
-	canonical, err := a.secrets.be.Store.ClaimApplicationSecretMutationFence(ctx, store.ApplicationSecretMutationFence{
+	candidate := store.ApplicationSecretMutationFence{
 		TenantID: tenantID, Name: name, Operation: operation, EventID: eventID,
 		EventType: eventType, SchemaVersion: projections.ApplicationSecretMutationSchemaVersion,
 		ApprovalRequired: approvalRequired, RequesterSealed: requesterSealed, RequesterRef: requesterRef,
 		RequestBinding: requestBinding, Payload: raw, Actor: applicationSecretActorFromContext(ctx),
-	})
+	}
+	if payload.Action == "undelete" {
+		// A236-L4: the claim checks the exact kept deletion under the name's
+		// lock, so a purge cannot slip between the read and the fence.
+		candidate.Tombstone = &store.ApplicationSecretTombstoneRef{Version: payload.ExpectedVersion, DeletedAt: payload.SourceWrittenAt}
+	}
+	canonical, err := a.secrets.be.Store.ClaimApplicationSecretMutationFence(ctx, candidate)
 	if err != nil {
 		return store.ApplicationSecretMutationFence{}, projections.ApplicationSecretMutation{}, err
 	}

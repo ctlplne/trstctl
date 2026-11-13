@@ -393,6 +393,10 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// derived-table reset or tenant offboard. Verified bridge events enter
 		// tenant RLS; payload tenant and signed proof are checked before writes.
 		"internal/succession/store/federation_bridge_projection.go": 1,
+		// A236-L4: the deleted-secret retention sweep finds tombstones past the
+		// window across tenants — tenant ids and names only, at most one batch —
+		// and purges each in its own tenant's RLS transaction under the name's lock.
+		"internal/store/secret_tombstones.go": 1,
 	}
 	found := map[string]int{}
 

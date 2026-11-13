@@ -1034,6 +1034,8 @@ function actionSummaryKey(action: ApprovalQueueRow["action"]): MessageKey {
       return "approvals.design.action.recover";
     case "delete":
       return "approvals.design.action.delete";
+    case "undelete":
+      return "approvals.design.action.undelete";
     case "managedkey:zeroize":
       return "caHierarchy.custody.actions.zeroize.label";
   }
@@ -1064,6 +1066,8 @@ function consequenceKey(action: ApprovalQueueRow["action"]): MessageKey {
       return "approvals.design.consequence.recover";
     case "delete":
       return "approvals.design.consequence.delete";
+    case "undelete":
+      return "approvals.design.consequence.undelete";
     case "managedkey:zeroize":
       return "approvals.design.consequence.managedKeyDelete";
   }

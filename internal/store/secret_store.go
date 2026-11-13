@@ -222,6 +222,10 @@ type ApplicationSecretMutationFence struct {
 	Actor            *events.Actor
 	ActorSubjectRef  string
 	CreatedAt        time.Time
+	// Tombstone is the exact kept deletion a restore names (A236-L4). It is
+	// not stored: a first claim checks it under the name's lock, so a purge
+	// either happened before (the claim refuses) or waits behind the fence.
+	Tombstone *ApplicationSecretTombstoneRef
 }
 
 // ApplicationSecretFenceApproval is an exact approval capability with the one
@@ -419,6 +423,11 @@ func (s *Store) claimApplicationSecretMutationFenceUnbarriered(
 		}
 		if importReserved {
 			return fmt.Errorf("%w: application-secret name is reserved by a batch import", ErrApplicationSecretMutationInFlight)
+		}
+		if candidate.Tombstone != nil {
+			if err := requireApplicationSecretTombstoneTx(ctx, tx, candidate.TenantID, candidate.Name, *candidate.Tombstone); err != nil {
+				return err
+			}
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO application_secret_mutation_fences
@@ -1112,6 +1121,13 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 		if mutation.ResultVersion != 0 || len(mutation.Sealed) != 0 {
 			return errors.New("store: application-secret deletion result is invalid")
 		}
+	case "undelete":
+		// A236-L4: a deleted secret returns at the version it had, from the
+		// exact tombstone (its deletion time) and sealed value the command bound.
+		if mutation.ExpectedVersion <= 0 || mutation.ResultVersion != mutation.ExpectedVersion ||
+			mutation.SourceVersion != mutation.ExpectedVersion || mutation.SourceWrittenAt.IsZero() || len(mutation.Sealed) == 0 {
+			return errors.New("store: application-secret restore result is incomplete")
+		}
 	default:
 		return fmt.Errorf("store: unsupported application-secret action %q", mutation.Action)
 	}
@@ -1186,6 +1202,9 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 			return err
 		}
 	}
+	if mutation.Action == "undelete" {
+		return undeleteApplicationSecretTx(ctx, tx, mutation)
+	}
 
 	var current Secret
 	err := tx.QueryRow(ctx,
@@ -1230,6 +1249,9 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 	}
 	if mutation.Action == "delete" {
 		mutation.OwnerID = current.OwnerID
+		if err := tombstoneApplicationSecretTx(ctx, tx, mutation, current); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx,
 			`DELETE FROM secret_store WHERE tenant_id = $1 AND name = $2 AND version = $3`,
 			mutation.TenantID, mutation.Name, mutation.ExpectedVersion); err != nil {
@@ -1271,6 +1293,116 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 	}
 	mutation.OwnerID = current.OwnerID
 	if err := insertApplicationSecretMutationReceiptTx(ctx, tx, mutation, current.CreatedAt); err != nil {
+		return err
+	}
+	return deleteApplicationSecretMutationFenceTx(ctx, tx, mutation.TenantID, mutation.Name, mutation.EventID)
+}
+
+// tombstoneApplicationSecretTx keeps a secret being deleted, with its sealed
+// version history, as a tombstone until the deleted-secret retention sweep
+// removes it (A236-L4). There is one tombstone per name: deleting a secret
+// recreated under a deleted name replaces the older tombstone. The current
+// value is always kept, even for a row whose history predates migration 0046.
+func tombstoneApplicationSecretTx(ctx context.Context, tx pgx.Tx, mutation ApplicationSecretMutation, current Secret) error {
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM secret_store_tombstones WHERE tenant_id = $1 AND name = $2`,
+		mutation.TenantID, mutation.Name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO secret_store_tombstones
+		        (tenant_id, name, owner_id, version, created_at, deleted_at, deleted_event_id)
+		 VALUES ($1, $2, NULLIF($3, '')::uuid, $4, $5, $6, $7)`,
+		mutation.TenantID, mutation.Name, current.OwnerID, current.Version, current.CreatedAt.UTC(),
+		mutation.OccurredAt.UTC(), mutation.EventID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO secret_store_tombstone_versions
+		        (tenant_id, name, version, sealed, written_at, recovered_from_version)
+		 SELECT tenant_id, name, version, sealed, written_at, recovered_from_version
+		   FROM secret_store_versions
+		  WHERE tenant_id = $1 AND name = $2`,
+		mutation.TenantID, mutation.Name); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO secret_store_tombstone_versions (tenant_id, name, version, sealed, written_at)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (tenant_id, name, version) DO NOTHING`,
+		mutation.TenantID, mutation.Name, current.Version, current.Sealed, current.UpdatedAt.UTC())
+	return err
+}
+
+// undeleteApplicationSecretTx restores a deleted secret from its tombstone
+// (A236-L4): the secret returns at the version it had, with its owner, its
+// creation time and its sealed history, and the tombstone goes. The command
+// bound the tombstone's version, deletion time and sealed value; any drift
+// (a purge, a newer deletion, a live secret under the name) fails closed.
+func undeleteApplicationSecretTx(ctx context.Context, tx pgx.Tx, mutation ApplicationSecretMutation) error {
+	// The caller holds the name's lock already; taking it here again (it is
+	// re-entrant within the transaction) keeps the secret_store insert below
+	// visibly serialized on its arbiter (OPP-C01).
+	if err := lockApplicationSecretImportNameTx(ctx, tx, mutation.TenantID, mutation.Name); err != nil {
+		return err
+	}
+	var ownerID string
+	var version int
+	var createdAt, deletedAt time.Time
+	err := tx.QueryRow(ctx,
+		`SELECT coalesce(owner_id::text, ''), version, created_at, deleted_at
+		   FROM secret_store_tombstones
+		  WHERE tenant_id = $1 AND name = $2
+		  FOR UPDATE`, mutation.TenantID, mutation.Name).Scan(&ownerID, &version, &createdAt, &deletedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrSecretNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if version != mutation.ExpectedVersion || !deletedAt.Equal(mutation.SourceWrittenAt) {
+		return ErrApprovalDrifted
+	}
+	var sealed []byte
+	if err := tx.QueryRow(ctx,
+		`SELECT sealed FROM secret_store_tombstone_versions
+		  WHERE tenant_id = $1 AND name = $2 AND version = $3`,
+		mutation.TenantID, mutation.Name, version).Scan(&sealed); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrApprovalDrifted
+		}
+		return err
+	}
+	if !bytes.Equal(sealed, mutation.Sealed) {
+		return ErrApprovalDrifted
+	}
+	tag, err := tx.Exec(ctx,
+		`INSERT INTO secret_store (tenant_id, name, owner_id, sealed, version, created_at, updated_at)
+		 VALUES ($1, $2, NULLIF($3, '')::uuid, $4, $5, $6, $7)
+		 ON CONFLICT (tenant_id, name) DO NOTHING`,
+		mutation.TenantID, mutation.Name, ownerID, sealed, version, createdAt.UTC(), mutation.OccurredAt.UTC())
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		// A secret was created under the name since the deletion.
+		return ErrApprovalDrifted
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO secret_store_versions (tenant_id, name, version, sealed, written_at, recovered_from_version)
+		 SELECT tenant_id, name, version, sealed, written_at, recovered_from_version
+		   FROM secret_store_tombstone_versions
+		  WHERE tenant_id = $1 AND name = $2`,
+		mutation.TenantID, mutation.Name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM secret_store_tombstones WHERE tenant_id = $1 AND name = $2`,
+		mutation.TenantID, mutation.Name); err != nil {
+		return err
+	}
+	mutation.OwnerID = ownerID
+	if err := insertApplicationSecretMutationReceiptTx(ctx, tx, mutation, createdAt); err != nil {
 		return err
 	}
 	return deleteApplicationSecretMutationFenceTx(ctx, tx, mutation.TenantID, mutation.Name, mutation.EventID)

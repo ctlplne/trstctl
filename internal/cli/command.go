@@ -58,6 +58,11 @@ func (c Command) Destructive() bool {
 	if strings.HasPrefix(name, "identities approve ") {
 		return false
 	}
+	if name == "secrets deleted restore" {
+		// A236-L4: restoring a deleted secret brings it back and removes
+		// nothing; its group name only contains the "delete" marker.
+		return false
+	}
 	if name == "connector target contain" || name == "identities compromise" || name == "identities compromise-retry" ||
 		name == "discovery findings remove-distrusted-root" ||
 		name == "discovery findings revoke-oauth-grant" || name == "discovery findings block-oauth-app" ||
@@ -887,6 +892,9 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "store", "recover"}, Method: "POST", Path: "/api/v1/secrets/store/recover/{name}", Body: bodyFile, Summary: "Recover a stored secret to a point in time"},
 	{Name: []string{"secrets", "store", "update"}, Method: "PUT", Path: "/api/v1/secrets/store/{name}", Body: bodyFile, Summary: "Replace a stored secret"},
 	{Name: []string{"secrets", "store", "delete"}, Method: "DELETE", Path: "/api/v1/secrets/store/{name}", Summary: "Delete a stored secret"},
+	{Name: []string{"secrets", "deleted", "list"}, Method: "GET", Path: "/api/v1/secrets/deleted", Query: []string{"limit"}, Summary: "List deleted secrets kept for restore (no values)"},
+	{Name: []string{"secrets", "deleted", "restore"}, Method: "POST", Path: "/api/v1/secrets/deleted/{name}", Summary: "Restore a deleted secret at the version it had, with its history"},
+	{Name: []string{"secrets", "deleted", "purge"}, Method: "DELETE", Path: "/api/v1/secrets/deleted/{name}", Summary: "Purge a deleted secret and its history now"},
 	{Name: []string{"secrets", "approvals", "approve"}, Method: "POST", Path: "/api/v1/secrets/store/approvals/{name}", Body: bodyApprovalFile, Summary: "Approve an exact immutable secret-store change request"},
 	{Name: []string{"secrets", "leases", "providers"}, Method: "GET", Path: "/api/v1/secrets/leases/providers", Summary: "List configured dynamic-secret providers and safe setup requirements"},
 	{Name: []string{"secrets", "leases", "totp-seed"}, Method: "POST", Path: "/api/v1/secrets/leases/providers/{provider}/totp-seed", Body: bodyFile, Summary: "Replace a TOTP provider's seed with a newly enrolled one, proven by a current code from it"},

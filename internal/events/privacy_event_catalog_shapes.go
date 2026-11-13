@@ -478,6 +478,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"principal":"","path":"","action":"","decision":""}`), true
 	case "secret.access.denied":
 		return shape(`{"principal":"","path":"","reason":""}`), true
+	case "secret.deleted_purged":
+		return shape(`{"name":"","reason":""}`), true
 	case "secret.scan_hook.refused":
 		return shape(`{"hook_id":"","delivery":"","reason":""}`), true
 	case "secret.purged", "secretscli.fetch", "secretscli.set":

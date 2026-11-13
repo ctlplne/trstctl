@@ -5783,6 +5783,42 @@ export const messages = {
   "secrets.projects.health.ok": { defaultMessage: "OK", description: "Resource health: valid and not expiring soon." },
   "secrets.projects.health.expiring": { defaultMessage: "Expiring within 30 days", description: "Resource health: expiring soon." },
   "secrets.projects.health.expired": { defaultMessage: "Expired", description: "Resource health: expired." },
+  "secrets.deleted.heading": { defaultMessage: "Deleted secrets", description: "A236-L4: panel heading for deleted secrets kept for restore." },
+  "secrets.deleted.help": {
+    defaultMessage:
+      "A deleted secret is kept, sealed with its version history, until the retention window ends. Restore it at the version it had, or purge it now.",
+    description: "A236-L4: what the deleted secrets panel does.",
+  },
+  "secrets.deleted.listLabel": { defaultMessage: "Deleted secrets kept for restore", description: "A236-L4: list label." },
+  "secrets.deleted.empty": { defaultMessage: "No deleted secrets are kept.", description: "A236-L4: empty state." },
+  "secrets.deleted.kept": {
+    defaultMessage: "Version {version}, {versions} versions kept; deleted {deleted}; purged after {purge}.",
+    description: "A236-L4: one kept deleted secret.",
+  },
+  "secrets.deleted.restore": { defaultMessage: "Restore", description: "A236-L4: restore a deleted secret." },
+  "secrets.deleted.purge": { defaultMessage: "Purge", description: "A236-L4: start purging a deleted secret." },
+  "secrets.deleted.confirmPurge": {
+    defaultMessage: "Purge {name} for good",
+    description: "A236-L4: confirm purging a deleted secret and its history.",
+  },
+  "secrets.deleted.cancel": { defaultMessage: "Cancel", description: "A236-L4: cancel a purge." },
+  "secrets.deleted.restored": {
+    defaultMessage: "{name} is back at version {version}, with its history.",
+    description: "A236-L4: a deleted secret was restored.",
+  },
+  "secrets.deleted.purged": {
+    defaultMessage: "{name} and its history are purged.",
+    description: "A236-L4: a deleted secret was purged.",
+  },
+  "secrets.deleted.awaitingApproval": {
+    defaultMessage: "Restoring {name} waits for its approvers: request {request}. Restore it again once they approve it.",
+    description: "A236-L4: a restore under dual control needs approval.",
+  },
+  "secrets.deleted.openApprovals": { defaultMessage: "Open Approvals", description: "A236-L4: link to the approval queue." },
+  "secrets.deleted.error": { defaultMessage: "Deleted secrets", description: "A236-L4: error title." },
+  "secrets.deleted.loadFailed": { defaultMessage: "The deleted secrets could not be listed.", description: "A236-L4: list failure." },
+  "secrets.deleted.restoreFailed": { defaultMessage: "The secret could not be restored.", description: "A236-L4: restore failure." },
+  "secrets.deleted.purgeFailed": { defaultMessage: "The secret could not be purged.", description: "A236-L4: purge failure." },
   "secrets.transfers.heading": {
     defaultMessage: "Promote or restore",
     description: "Heading of the project's promote/restore panel.",
@@ -18554,7 +18590,11 @@ export const messages = {
   "approvals.design.action.revoke": { defaultMessage: "Revoke {resource}", description: "Human-readable generic revoke action." },
   "approvals.design.action.sign": { defaultMessage: "Sign the bound artifact with {resource}", description: "Human-readable code-signing action." },
   "approvals.design.action.recover": { defaultMessage: "Recover {resource}", description: "Human-readable recovery action." },
-  "approvals.design.action.delete": { defaultMessage: "Permanently remove {resource}", description: "Human-readable destructive action." },
+  "approvals.design.action.delete": { defaultMessage: "Delete {resource}", description: "Human-readable destructive action." },
+  "approvals.design.action.undelete": {
+    defaultMessage: "Restore deleted {resource}",
+    description: "A236-L4: human-readable restore of a deleted secret.",
+  },
   "approvals.design.consequence.issue": {
     defaultMessage: "This permits a separate issuance step. It does not mint a credential by itself.",
     description: "Issue approval consequence.",
@@ -18580,8 +18620,13 @@ export const messages = {
     description: "Recovery approval consequence.",
   },
   "approvals.design.consequence.delete": {
-    defaultMessage: "This permits a separate permanent removal. Review dependency and recovery evidence first.",
+    defaultMessage:
+      "This permits a separate deletion. A deleted secret stays restorable until its retention window ends, then it is gone. Review dependency and recovery evidence first.",
     description: "Delete approval consequence.",
+  },
+  "approvals.design.consequence.undelete": {
+    defaultMessage: "This permits a separate restore of a deleted secret at the version it had, with its version history.",
+    description: "A236-L4: restore approval consequence.",
   },
   "approvals.design.consequence.managedKeyDelete": {
     defaultMessage: "A later deletion command can stop signing while cloud providers retain the key until their deadline.",
@@ -26538,6 +26583,10 @@ export const messages = {
   "secrets.approvals.actionDelete": {
     defaultMessage: "Delete",
     description: "Secret-change approval action label for a deletion.",
+  },
+  "secrets.approvals.actionUndelete": {
+    defaultMessage: "Restore deleted",
+    description: "A236-L4: secret-change approval action label for restoring a deleted secret.",
   },
   "secrets.approvals.openedStatus": {
     defaultMessage: "Opened {openedAt} - {status}",

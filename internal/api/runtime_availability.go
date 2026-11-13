@@ -101,6 +101,7 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 			"Certificate Transparency submission is not configured in this deployment.")
 
 	case "previewSecretCreate", "previewSecretAccess", "createSecret", "importSecrets", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret",
+		"listDeletedSecrets", "restoreDeletedSecret", "purgeDeletedSecret",
 		"rotateStaticSecret", "createSecretRotationSchedule", "listSecretRotationSchedules", "runDueSecretRotationSchedules",
 		"previewSecretSync", "syncSecret", "receiveSecretRepositoryWebhook", "ingestThirdPartySecretScan", "scanSecrets", "approveSecretChange",
 		"listDynamicSecretProviders", "previewDynamicSecretLease", "issueDynamicSecretLease", "getDynamicSecretLease", "renewDynamicSecretLease", "revokeDynamicSecretLease",

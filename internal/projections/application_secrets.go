@@ -22,6 +22,9 @@ const (
 	EventApplicationSecretRotated   = "secret.rotated"
 	EventApplicationSecretRecovered = "secret.recovered"
 	EventApplicationSecretDeleted   = "secret.deleted"
+	// EventApplicationSecretUndeleted restores a deleted secret from its
+	// tombstone at the version it had (A236-L4).
+	EventApplicationSecretUndeleted = "secret.undeleted"
 
 	// ApplicationSecretMutationSchemaVersion replaces the old metadata-only audit
 	// shapes with a replayable sealed command carrying exact approval authority.
@@ -159,6 +162,11 @@ func init() {
 			ApplicationSecretPrivacyDispositionSchemaVersion: true,
 		}
 	}
+	// A236-L4: a restore of a deleted secret was never a v1 audit shape.
+	knownSchemaVersions[EventApplicationSecretUndeleted] = map[int]bool{
+		ApplicationSecretMutationSchemaVersion:           true,
+		ApplicationSecretPrivacyDispositionSchemaVersion: true,
+	}
 }
 
 // ApplicationSecretApprovalBinding is the exact state/result and evidence list
@@ -236,6 +244,22 @@ func applicationSecretApprovalBinding(
 		}
 		to = "deleted:command-hmac-sha256:" + payload.CommandEvidence
 		evidence = append(evidence, "result:deleted", "command-hmac-sha256:"+payload.CommandEvidence)
+	case "undelete":
+		// A236-L4: from the tombstone of the version the secret had when deleted
+		// back to that version. The deletion time names the exact tombstone, so
+		// an approval for one deletion never restores another.
+		if payload.ExpectedVersion <= 0 || payload.ResultVersion != payload.ExpectedVersion ||
+			payload.SourceVersion != payload.ExpectedVersion || payload.SourceWrittenAt.IsZero() || len(payload.Sealed) == 0 {
+			return "", "", nil, fmt.Errorf("projections: application-secret restore result is incomplete")
+		}
+		deletedAt := payload.SourceWrittenAt.UTC().Format(time.RFC3339Nano)
+		from = "deleted:version:" + strconv.Itoa(payload.ExpectedVersion)
+		evidence[len(evidence)-1] = "deleted-version:" + strconv.Itoa(payload.ExpectedVersion)
+		to = "version:" + strconv.Itoa(payload.ResultVersion) + ":undelete:" + deletedAt + ":command-hmac-sha256:" + payload.CommandEvidence
+		evidence = append(evidence,
+			"result-version:"+strconv.Itoa(payload.ResultVersion),
+			"deleted-at:"+deletedAt,
+			"command-hmac-sha256:"+payload.CommandEvidence)
 	default:
 		return "", "", nil, fmt.Errorf("projections: unsupported application-secret action %q", payload.Action)
 	}
@@ -253,6 +277,8 @@ func (p *Projector) applyApplicationSecretTx(ctx context.Context, tx pgx.Tx, eve
 		action = "recover"
 	case EventApplicationSecretDeleted:
 		action = "delete"
+	case EventApplicationSecretUndeleted:
+		action = "undelete"
 	default:
 		return false, nil
 	}

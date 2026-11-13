@@ -76,6 +76,10 @@ type SecretsBackend struct {
 	// Store is the relational backing for the secret store (sealed rows) and the
 	// pkisecret revocation records, all under RLS (AN-1). Required.
 	Store *store.Store
+	// DeletedRetention is how long a deleted secret is kept, sealed with its
+	// version history, so it can be restored (A236-L4). Zero keeps none: a
+	// deletion purges the tombstone it leaves at once.
+	DeletedRetention time.Duration
 	// EventLog is the source of truth for served application-secret mutations.
 	// The projector consumes exact approval authority beside the sealed store
 	// update; nil keeps bare embedders on the legacy non-approval path only.
@@ -1543,7 +1547,7 @@ func (a *API) executeSecretDelete(ctx context.Context, tenantID, name, idempoten
 		ctx, tenantID, eventID, requestBinding, name, "delete"); receiptErr != nil {
 		return 0, applicationSecretMutationError(receiptErr)
 	} else if ok {
-		return http.StatusNoContent, nil
+		return a.deletedSecretKept(ctx, tenantID, name)
 	}
 	fence, payload, prepared, err := a.applicationSecretMutationFence(
 		ctx, tenantID, name, "delete", eventID, requestBinding)
@@ -1588,9 +1592,22 @@ func (a *API) executeSecretDelete(ctx context.Context, tenantID, name, idempoten
 			ctx, tenantID, eventID, requestBinding, name, "delete", err); retiredErr != nil {
 			return 0, retiredErr
 		} else if ok {
-			return http.StatusNoContent, nil
+			return a.deletedSecretKept(ctx, tenantID, name)
 		}
 		return 0, applicationSecretMutationError(err)
+	}
+	return a.deletedSecretKept(ctx, tenantID, name)
+}
+
+// deletedSecretKept answers a completed deletion. With no deleted-secret
+// retention (A236-L4) the tombstone the deletion left is purged at once, so
+// the value and its history are gone when the call returns; otherwise it is
+// kept for restore until the retention sweep removes it.
+func (a *API) deletedSecretKept(ctx context.Context, tenantID, name string) (int, error) {
+	if a.secrets.be.DeletedRetention <= 0 {
+		if _, err := a.secrets.be.Store.PurgeDeletedSecret(ctx, tenantID, name); err != nil {
+			return 0, err
+		}
 	}
 	return http.StatusNoContent, nil
 }

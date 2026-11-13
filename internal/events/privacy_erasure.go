@@ -39,6 +39,9 @@ var privacyApplicationSecretMutationActions = map[string]string{
 	"secret.rotated":   "rotate",
 	"secret.recovered": "recover",
 	"secret.deleted":   "delete",
+	// A236-L4: restoring a deleted secret carries its name and sealed value
+	// like a recovery, so an erased subject in the name tombstones it too.
+	"secret.undeleted": "undelete",
 }
 
 type privacyApplicationSecretMutationCoordinates struct {

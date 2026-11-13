@@ -833,6 +833,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		TenantKeyDomains:            tenantKeyDomains,
 		SecretsAuthSecret:           sec.authSecret,
 		SecretsAuthTokenTenantID:    cfg.Secrets.AuthTokenTenantID,
+		DeletedSecretRetention:      deletedSecretRetentionFromConfig(cfg),
 		SecretsAuthTokenScopes:      append([]string(nil), cfg.Secrets.AuthTokenScopes...),
 		MachineAuthMethods:          withMachineCredentialReplayGuard(machineAuthMethods, st),
 		SecretScanWebhooks:          cfg.Secrets.ScanWebhooks,
@@ -1521,6 +1522,8 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunApplicationSecretMutationReconciler),
 			startRuntimeWorker(workCtx, srv.RunIdempotencyGC),
 			startRuntimeWorker(workCtx, srv.RunOutboxGC),
+			// A236-L4: deleted secrets kept past secrets.deleted_retention go.
+			startRuntimeWorker(workCtx, srv.RunDeletedSecretRetention),
 			startRuntimeWorker(workCtx, srv.RunProjectionTail),
 			startRuntimeWorker(workCtx, srv.RunFederation),
 			startRuntimeWorker(workCtx, srv.RunOTLPAuditStream),

@@ -989,6 +989,9 @@ func seedRecoveredFromPostgresTables(
 				}},
 			{`INSERT INTO secret_store (id, tenant_id, name, sealed, version) VALUES ($1, $2, $3, $4, $5)`, []any{"00000000-0000-0000-0000-00000000a010", tenantA, "app/db", []byte{0xcc, 0xdd}, 1}},
 			{`INSERT INTO secret_store_versions (tenant_id, name, version, sealed, written_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "app/db", 1, []byte{0xcc, 0xdd}, now}},
+			// A236-L4: a deleted secret kept for restore crosses a full restore too.
+			{`INSERT INTO secret_store_tombstones (tenant_id, name, version, created_at, deleted_at, deleted_event_id) VALUES ($1, $2, $3, $4, $5, $6)`, []any{tenantA, "app/old", 1, now, now, "00000000-0000-0000-0000-00000000a0b1"}},
+			{`INSERT INTO secret_store_tombstone_versions (tenant_id, name, version, sealed, written_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "app/old", 1, []byte{0xcc, 0xde}, now}},
 			{`INSERT INTO application_secret_mutation_receipts
 			        (tenant_id, event_id, semantic_sha256, request_binding,
 			         secret_name, action, result_version, result_created_at,

@@ -254,6 +254,8 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 				identityVersion   uint64
 				secretVersion     int
 				secretExists      bool
+				deletedVersion    int
+				deletedExists     bool
 				secretShapeValid  = true
 				varCommandAction  store.PAMCommandAction
 				commandShapeValid = true
@@ -283,6 +285,13 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 				if secretShapeValid {
 					var lockErr error
 					secretVersion, secretExists, lockErr = o.store.ApplicationSecretApprovalTargetTx(
+						ctx, tx, tenantID, name,
+					)
+					if lockErr != nil {
+						return lockErr
+					}
+					// A236-L4: a restore decides on the deleted secret's tombstone.
+					deletedVersion, deletedExists, lockErr = o.store.ApplicationSecretTombstoneApprovalTargetTx(
 						ctx, tx, tenantID, name,
 					)
 					if lockErr != nil {
@@ -424,6 +433,12 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 				case "rotate", "recover", "delete":
 					targetDrifted = !secretShapeValid || !secretExists || uint64(secretVersion) != request.TargetVersion ||
 						request.FromState != fmt.Sprintf("version:%d", request.TargetVersion)
+				case "undelete":
+					// A live secret under the name, a purge or a newer deletion
+					// drifts a restore's approval.
+					targetDrifted = !secretShapeValid || secretExists || !deletedExists ||
+						uint64(deletedVersion) != request.TargetVersion || // #nosec G115 -- a tombstone version is positive (CHECK version > 0) (CWE-190).
+						request.FromState != fmt.Sprintf("deleted:version:%d", request.TargetVersion)
 				default:
 					targetDrifted = true
 				}

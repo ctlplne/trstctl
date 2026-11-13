@@ -79,6 +79,7 @@ const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWork
 const HoneyTokenWorkflow = lazy(() => import("./secrets/HoneyTokenWorkflow").then((module) => ({ default: module.HoneyTokenWorkflow })));
 const AWSHoneyTokenWorkflow = lazy(() => import("./secrets/AWSHoneyTokenWorkflow").then((module) => ({ default: module.AWSHoneyTokenWorkflow })));
 const DecoySecretWorkflow = lazy(() => import("./secrets/DecoySecretWorkflow").then((module) => ({ default: module.DecoySecretWorkflow })));
+const DeletedSecrets = lazy(() => import("./secrets/DeletedSecrets").then((module) => ({ default: module.DeletedSecrets })));
 const SecretProjectsWorkflow = lazy(() => import("./secrets/SecretProjectsWorkflow").then((module) => ({ default: module.SecretProjectsWorkflow })));
 const DecoyDatabaseWorkflow = lazy(() => import("./secrets/DecoyDatabaseWorkflow").then((module) => ({ default: module.DecoyDatabaseWorkflow })));
 const DecoyFileWorkflow = lazy(() => import("./secrets/DecoyFileWorkflow").then((module) => ({ default: module.DecoyFileWorkflow })));
@@ -203,6 +204,8 @@ export function Secrets() {
   const routeUX = secretsRouteUX[tab];
   const legacyTab = location.pathname === "/secrets" ? secretsTabFromSearchParam(searchParams.get("tab")) : "store";
   const [items, setItems] = useState<SecretMeta[]>([]);
+  // A236-L4: bumped after a deletion so the deleted secrets panel lists it.
+  const [deletedRefresh, setDeletedRefresh] = useState(0);
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -734,6 +737,7 @@ export function Secrets() {
         }
         await api.deleteSecret(item.name, item.idempotencyKey);
         setItems((current) => current.filter((secret) => secret.name !== item.name));
+        setDeletedRefresh((n) => n + 1);
         setDeleteName("");
         setDeleteConfirm("");
         setDeleteError(null);
@@ -861,6 +865,7 @@ export function Secrets() {
     try {
       await api.deleteSecret(pendingName, idempotencyKey);
       setItems((current) => current.filter((item) => item.name !== pendingName));
+      setDeletedRefresh((n) => n + 1);
       setNotice(`Secret ${pendingName} deleted from the native store.`);
       setDeleteName("");
       setDeleteConfirm("");
@@ -1531,6 +1536,11 @@ export function Secrets() {
               <Button type="button" variant="outline" onClick={() => void load(nextCursor)} disabled={loading}>
                 {translateNow("source.load.next.metadata.page.8cd7685eed")}
               </Button>
+            )}
+            {!loadError && (
+              <Suspense fallback={<SecretsWorkflowFallback />}>
+                <DeletedSecrets refreshKey={deletedRefresh} onRestored={() => void load()} />
+              </Suspense>
             )}
             {revealError && <ErrorState title={translateNow("source.reveal.failed.f00b1b5ba6")}>{revealError}</ErrorState>}
             {revealed && (
