@@ -32,6 +32,13 @@ describe("G1 who can reach", () => {
     expect(graphNodeKindLabel("ai-agent")).toBe("AI agent");
   });
 
+  // G1-L4: who may read a secret scope, and the secrets a scope holds.
+  it("names the secret store's read and containment links", () => {
+    expect(graphEdgeTypeLabel("CAN_READ")).toBe("Can read");
+    expect(graphEdgeTypeLabel("CONTAINS")).toBe("Contains");
+    expect(canonicalGraphEdgeTypes).toEqual(expect.arrayContaining(["CAN_READ", "CONTAINS"]));
+  });
+
   // A172-L3: a private key found in a secret store links to its certificate.
   it("names the link from a stored private key to its certificate", () => {
     expect(graphEdgeTypeLabel("KEY_OF")).toBe("Key of");

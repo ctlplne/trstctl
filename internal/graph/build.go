@@ -54,6 +54,11 @@ type BuildOptions struct {
 	// Who holds what is access:read data, so a reader holding graph:read
 	// without access:read gets the graph without it (G1-L2).
 	OmitAccess bool
+	// IncludeSecrets adds the secret store to the access side (G1-L4): one
+	// scope per secrets-project environment (and the store's root for names
+	// in no project), the names in the open ones, and who may read each
+	// scope. Names are secrets:read data, so only a reader holding it asks.
+	IncludeSecrets bool
 	// PAMTargets are the PAM targets the deployment configures statically
 	// (G1-L5): they are not in the store, so the caller names them, each
 	// with the dynamic-secret provider it signs in through.
@@ -337,7 +342,7 @@ func BuildWith(ctx context.Context, st *store.Store, tenantID string, opts Build
 	}
 
 	if !opts.OmitAccess {
-		if err := addAccessSources(ctx, st, tenantID, g, certs, time.Now().UTC(), opts.PAMTargets); err != nil {
+		if err := addAccessSources(ctx, st, tenantID, g, certs, time.Now().UTC(), opts.PAMTargets, opts.IncludeSecrets); err != nil {
 			return nil, err
 		}
 	}

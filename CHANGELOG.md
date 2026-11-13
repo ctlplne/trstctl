@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The access graph shows the secret store and who may read it (G1-L4): for a reader holding `secrets:read`, a scope per
+  secrets-project environment and the store's root, each open scope's secrets (`CONTAINS`), and `CAN_READ` from every
+  held role, API token and machine session that grants `secrets:read`; a restricted environment is read only by its
+  granted members and its names are never listed. The graph view names both links.
 - The revocation report reads existing sessions from the hosts (A245-L2): a Linux host agent counts, right after a
   verified deploy or renewal, the established connections on the listener's port and how many a process older than the
   deploy holds, inside the deploy's signed evidence; the existing-sessions facet reads confirmed when no destination

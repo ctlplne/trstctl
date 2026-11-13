@@ -49,6 +49,8 @@ const edgeLabels: Record<string, string> = {
   APPROVED: "Approved",
   DELEGATED: "Delegated to",
   KEY_OF: "Key of",
+  CAN_READ: "Can read",
+  CONTAINS: "Contains",
 };
 
 export const canonicalGraphNodeKinds = ["person", "ai-agent", "workload", "role", "credential", "resource", "issuer", "crypto-asset", "attestation"];
@@ -64,6 +66,8 @@ export const canonicalGraphEdgeTypes = [
   "CONNECTS_TO",
   "EXHIBITS",
   "KEY_OF",
+  "CAN_READ",
+  "CONTAINS",
 ];
 
 export function graphNodeKindLabel(kind: string): string {

@@ -87,6 +87,12 @@ const (
 	// EdgeDelegated is person, workload or AI agent → AI agent it delegated
 	// authority to (G1; populated from recorded delegations).
 	EdgeDelegated EdgeType = "DELEGATED"
+	// EdgeCanRead is role, person, workload or API token → secret scope whose
+	// secrets it may read (G1-L4): a role or token holding secrets:read reads
+	// the open scopes, and a restricted environment only its granted members.
+	EdgeCanRead EdgeType = "CAN_READ"
+	// EdgeContains is secret scope → stored secret in it (G1-L4).
+	EdgeContains EdgeType = "CONTAINS"
 )
 
 // Node is a vertex in the credential graph. ID is the stable, unique key;

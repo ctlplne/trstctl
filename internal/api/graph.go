@@ -121,7 +121,8 @@ func (a *API) buildGraph(w http.ResponseWriter, r *http.Request) (*graph.Graph, 
 		a.writeProblem(w, problemUnauthorized())
 		return nil, false
 	}
-	g, err := graph.BuildWith(r.Context(), a.store, tenantID, a.graphOptions(tenantID, graph.BuildOptions{OmitAccess: graphOmitsAccess(r, tenantID)}))
+	g, err := graph.BuildWith(r.Context(), a.store, tenantID, a.graphOptions(tenantID, graph.BuildOptions{
+		OmitAccess: graphOmitsAccess(r, tenantID), IncludeSecrets: graphIncludesSecrets(r, tenantID)}))
 	if err != nil {
 		a.writeError(w, err)
 		return nil, false
@@ -138,6 +139,13 @@ func (a *API) buildGraph(w http.ResponseWriter, r *http.Request) (*graph.Graph, 
 func graphOmitsAccess(r *http.Request, tenantID string) bool {
 	principal, ok := r.Context().Value(principalCtxKey).(authz.Principal)
 	return !ok || !principal.Can(authz.AccessRead, authz.Scope{TenantID: tenantID})
+}
+
+// graphIncludesSecrets reports whether the reader may see the secret store in
+// the graph (G1-L4): its names are secrets:read data, as listing them is.
+func graphIncludesSecrets(r *http.Request, tenantID string) bool {
+	principal, ok := r.Context().Value(principalCtxKey).(authz.Principal)
+	return ok && principal.Can(authz.SecretsRead, authz.Scope{TenantID: tenantID})
 }
 
 // trustStoresResponse answers "who trusts this CA" (epic H1).

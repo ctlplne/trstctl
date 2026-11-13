@@ -474,6 +474,10 @@ function edgeExplanation(type: string): string {
       return "The person approved issuing or activating the target credential.";
     case "DELEGATED":
       return "The source delegated authority to the target AI agent.";
+    case "CAN_READ":
+      return "The role, person or credential may read the secrets in this scope: it holds secrets:read, and a restricted environment also grants it membership.";
+    case "CONTAINS":
+      return "The secret scope holds this stored secret.";
     default:
       return "Served graph relationship from the backend.";
   }

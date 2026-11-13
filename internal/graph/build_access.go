@@ -57,7 +57,7 @@ func (p principalIndex) node(g *Graph, subject string) string {
 	return id
 }
 
-func addAccessSources(ctx context.Context, st *store.Store, tenantID string, g *Graph, certs []store.Certificate, now time.Time, staticPAMTargets []PAMTargetRef) error {
+func addAccessSources(ctx context.Context, st *store.Store, tenantID string, g *Graph, certs []store.Certificate, now time.Time, staticPAMTargets []PAMTargetRef, includeSecrets bool) error {
 	principals := principalIndex{}
 	if err := addPeopleAndRoles(ctx, st, tenantID, g, principals); err != nil {
 		return err
@@ -71,6 +71,13 @@ func addAccessSources(ctx context.Context, st *store.Store, tenantID string, g *
 		}
 	}
 	addStaticPAMTargets(g, staticPAMTargets)
+	if includeSecrets {
+		in, err := loadSecretReaders(ctx, st, tenantID, now)
+		if err != nil {
+			return err
+		}
+		addSecretScopes(g, principals, in)
+	}
 	return nil
 }
 
