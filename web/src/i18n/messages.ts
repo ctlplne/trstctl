@@ -1809,6 +1809,35 @@ export const messages = {
     defaultMessage: "The VSA organization ID, a number. The organization's agents are listed and matched to this customer's trstctl agents.",
     description: "MSP-13: what to enter as the company in a Kaseya VSA target.",
   },
+  "provider.billingSync.type.itglue": {
+    defaultMessage: "IT Glue, certificate records",
+    description: "MSP-14: an IT Glue documentation target.",
+  },
+  "provider.billingSync.itglueCompanyHint": {
+    defaultMessage: "The IT Glue organization ID, a number. The customer's certificate inventory is kept in one record under it.",
+    description: "MSP-14: what to enter as the company in an IT Glue target.",
+  },
+  "provider.docRecords.caption": {
+    defaultMessage: "Certificate records in documentation systems",
+    description: "MSP-14: documentation records table caption.",
+  },
+  "provider.docRecords.system": { defaultMessage: "System", description: "MSP-14: documentation records table column." },
+  "provider.docRecords.status": { defaultMessage: "Record", description: "MSP-14: documentation records table column." },
+  "provider.docRecords.certificates": { defaultMessage: "Certificates", description: "MSP-14: documentation records table column." },
+  "provider.docRecords.nextExpiry": { defaultMessage: "Next expiry", description: "MSP-14: documentation records table column." },
+  "provider.docRecords.synced": { defaultMessage: "Last written", description: "MSP-14: documentation records table column." },
+  "provider.docRecords.empty": {
+    defaultMessage: "No record written yet: the customer's record is written within ten minutes of mapping its organization.",
+    description: "MSP-14: no documentation records yet.",
+  },
+  "provider.docRecords.ok": {
+    defaultMessage: "Record {record} in organization {org}",
+    description: "MSP-14: a record that was written.",
+  },
+  "provider.docRecords.failed": {
+    defaultMessage: "Not written: {reason}",
+    description: "MSP-14: why the last write failed.",
+  },
   "provider.billingSync.type.automate": {
     defaultMessage: "ConnectWise Automate, devices and agents",
     description: "MSP-11: a ConnectWise Automate target.",

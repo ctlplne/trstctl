@@ -571,3 +571,51 @@ func TestProviderBillingSyncAutomateTargetMSP11(t *testing.T) {
 		}
 	}
 }
+
+// MSP-14: an itglue target is a documentation target with an API key
+// reference, the flexible-asset type, distinct field name-keys (title and
+// inventory required) and the console's https base URL.
+func TestProviderBillingSyncITGlueTargetMSP14(t *testing.T) {
+	valid := func() ProviderBillingTarget {
+		return ProviderBillingTarget{ID: "itglue", Type: "itglue", Endpoint: "https://api.itglue.com",
+			ITGlue: &ITGlueTarget{APIKeyRef: "env:ITGLUE_API_KEY", FlexibleAssetTypeID: 33, // #nosec G101 -- an env: reference, not a value (CWE-798)
+				Traits:     ITGlueTraits{Title: "name", Inventory: "certificates", NextExpiry: "next-expiry", Count: "certificate-count", Link: "trstctl-link"},
+				ConsoleURL: "https://trstctl.msp.example"}}
+	}
+	ok := valid()
+	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{ok}}); len(errs) != 0 {
+		t.Fatalf("valid itglue target refused: %v", errs)
+	}
+	if !ok.IsDocumentation() || ok.IsRMM() || ok.PushesUsage() || ok.TicketKinds() != nil {
+		t.Fatalf("an itglue target: documentation=%v rmm=%v usage=%v kinds=%v", ok.IsDocumentation(), ok.IsRMM(), ok.PushesUsage(), ok.TicketKinds())
+	}
+	if (ProviderBillingTarget{Type: "ninjaone"}).IsDocumentation() {
+		t.Fatal("an RMM target is treated as documentation")
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*ProviderBillingTarget)
+		want   string
+	}{
+		"no block":      {func(t *ProviderBillingTarget) { t.ITGlue = nil }, ".itglue is required"},
+		"token ref":     {func(t *ProviderBillingTarget) { t.TokenRef = "env:X" }, "json targets only"},
+		"inline key":    {func(t *ProviderBillingTarget) { t.ITGlue.APIKeyRef = "ITG.key" }, ".api_key_ref"},
+		"no type":       {func(t *ProviderBillingTarget) { t.ITGlue.FlexibleAssetTypeID = 0 }, ".flexible_asset_type_id"},
+		"no title":      {func(t *ProviderBillingTarget) { t.ITGlue.Traits.Title = "" }, ".traits.title"},
+		"bad inventory": {func(t *ProviderBillingTarget) { t.ITGlue.Traits.Inventory = "Certificates List" }, ".traits.inventory"},
+		"reused field":  {func(t *ProviderBillingTarget) { t.ITGlue.Traits.Link = "name" }, ".traits.link"},
+		"http console":  {func(t *ProviderBillingTarget) { t.ITGlue.ConsoleURL = "http://trstctl.msp.example" }, ".console_url"},
+		"no console":    {func(t *ProviderBillingTarget) { t.ITGlue.ConsoleURL = "" }, ".console_url"},
+		"block on hudu": {func(t *ProviderBillingTarget) { t.Type = "json"; t.SigningKeyRef = "env:K" }, "itglue targets only"},
+	} {
+		target := valid()
+		tc.mutate(&target)
+		errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{target}})
+		joined := ""
+		for _, err := range errs {
+			joined += err.Error() + "\n"
+		}
+		if !strings.Contains(joined, tc.want) {
+			t.Errorf("%s: errors %q, want one naming %q", name, joined, tc.want)
+		}
+	}
+}

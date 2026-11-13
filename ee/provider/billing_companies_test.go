@@ -428,3 +428,51 @@ func TestProviderRMMActionsMSP9(t *testing.T) {
 		t.Fatal("the console offers RMM actions without the command spine")
 	}
 }
+
+// MSP-14: a delegated customer's documentation records are read through the
+// plane with their status, count and next expiry; an operator without the
+// customer's delegation is refused; documentation targets say so.
+func TestProviderDocRecordsMSP14(t *testing.T) {
+	ctx := context.Background()
+	st := openProviderStore(t)
+	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:10]
+	customer, other := CustomerID("doc-a-"+suffix), CustomerID("doc-b-"+suffix)
+	if _, err := st.SystemPool().Exec(ctx, `INSERT INTO provider_doc_records (tenant_id, target_id, org_id, record_id, digest, certificates, next_expiry,
+		status, reason, synced_at, event_sequence, updated_at)
+		VALUES ($1, 'itglue', '11', '9001', repeat('a', 64), 2, now() + interval '20 days', 'synced', '', now(), 1, now())`, customer); err != nil {
+		t.Fatal(err)
+	}
+	h := NewHandler(Config{
+		License:        providerLicense(t, 10),
+		Store:          NewPGStore(st),
+		Authenticator:  billingOperatorAuth{},
+		Delegations:    fullyDelegated("op-billing", customer),
+		BillingTargets: []BillingTarget{{ID: "itglue", Type: "itglue", Cadence: "monthly", Documentation: true}},
+		DocRecords:     st,
+	})
+	get := func(id string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/provider/v1/tenants/"+id+"/doc-records", nil)
+		req.Header.Set("Authorization", "Bearer billing-admin")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := get(customer)
+	var out struct {
+		Records []DocRecord `json:"records"`
+	}
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &out) != nil || len(out.Records) != 1 || out.Records[0].Status != "synced" ||
+		out.Records[0].Certificates != 2 || out.Records[0].NextExpiry == nil || out.Records[0].RecordID != "9001" || out.Records[0].OrgID != "11" {
+		t.Fatalf("records = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := get(other); rec.Code != http.StatusForbidden && rec.Code != http.StatusNotFound {
+		t.Fatalf("an undelegated customer's records = %d %s", rec.Code, rec.Body.String())
+	}
+	req := httptest.NewRequest(http.MethodGet, "/provider/v1/tenants/"+customer+"/billing-companies", nil)
+	req.Header.Set("Authorization", "Bearer billing-admin")
+	listing := httptest.NewRecorder()
+	h.ServeHTTP(listing, req)
+	if !strings.Contains(listing.Body.String(), `"documentation":true`) {
+		t.Fatalf("the documentation target is not marked: %s", listing.Body.String())
+	}
+}

@@ -69,6 +69,7 @@ const (
 	EventRMMDeviceObserved                        = "provider.rmm_device.observed"
 	EventRMMDeviceActionRequested                 = "provider.rmm_device.action_requested"
 	EventRMMDeviceActionRecorded                  = "provider.rmm_device.action_recorded"
+	EventDocRecordRecorded                        = "provider.doc_record.recorded"
 	EventBreakglassIssued                         = "breakglass.issued"
 	EventBreakglassCARotated                      = "breakglass.ca.rotated"
 	EventBreakglassCACrossSigned                  = "breakglass.ca.cross_signed"

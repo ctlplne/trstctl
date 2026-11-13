@@ -49,6 +49,7 @@ var providerOperations = []providerOperation{
 	{"GET", "/provider/v1/tenants/{id}/billing-sync", "listProviderTenantBillingSyncPushes", "Read a customer's usage pushes to its billing systems", "200", "", "ProviderBillingSyncPushes", false, false, false},
 	{"GET", "/provider/v1/tenants/{id}/psa-tickets", "listProviderTenantPSATickets", "Read the PSA tickets a customer's alerts opened", "200", "", "ProviderPSATickets", false, false, false},
 	{"GET", "/provider/v1/tenants/{id}/rmm-devices", "listProviderTenantRMMDevices", "Read a customer's RMM devices and the agents they map to", "200", "", "ProviderRMMDevices", false, false, false},
+	{"GET", "/provider/v1/tenants/{id}/doc-records", "listProviderTenantDocRecords", "Read a customer's certificate records in documentation systems", "200", "", "ProviderDocRecords", false, false, false},
 	{"POST", "/provider/v1/tenants/{id}/rmm-devices/{target}/{device}/actions", "requestProviderTenantRMMAction", "Install, upgrade or remove the agent on a customer's device through its RMM", "202", "ProviderRMMActionRequest", "ProviderRMMAction", false, false, false},
 	{"PUT", "/provider/v1/tenants/{id}/brand", "setProviderTenantBrand", "Replace a customer brand using its current ETag", "204", "ProviderBrandRequest", "", false, false, false},
 	{"GET", "/provider/v1/tenants/{id}/brand", "getProviderTenantBrand", "Read saved customer brand and revision ETag", "200", "", "ProviderBrand", false, false, false},
@@ -283,13 +284,19 @@ func providerOpenAPISchemas() map[string]any {
 		"ProviderOffboardRequest":   object(map[string]any{"request_event_id": str}),
 		"ProviderQuota":             object(map[string]any{"tenant_id": str, "max_agents": integer, "max_certificates_stored": certificateCap, "max_secrets_stored": integer, "updated_by": str}),
 		"ProviderQuotaRequest":      object(map[string]any{"max_agents": integer, "max_certificates_stored": certificateCap, "max_secrets_stored": integer}),
-		"ProviderBillingTarget":     object(map[string]any{"id": str, "name": str, "type": str, "cadence": str, "tickets": boolean, "rmm": boolean}, "id", "type", "cadence"),
+		"ProviderBillingTarget":     object(map[string]any{"id": str, "name": str, "type": str, "cadence": str, "tickets": boolean, "rmm": boolean, "documentation": boolean}, "id", "type", "cadence"),
 		"ProviderBillingCompany":    object(map[string]any{"tenant_id": str, "target_id": str, "external_company_id": str, "mapped_by": str, "mapped_at": time}, "tenant_id", "target_id", "external_company_id"),
 		"ProviderBillingCompanies": object(map[string]any{
 			"targets":   map[string]any{"type": "array", "items": providerSchemaRef("ProviderBillingTarget")},
 			"companies": map[string]any{"type": "array", "items": providerSchemaRef("ProviderBillingCompany")},
 		}, "targets", "companies"),
 		"ProviderBillingCompanyRequest": object(map[string]any{"external_company_id": str}, "external_company_id"),
+		"ProviderDocRecord": object(map[string]any{"target_id": str, "org_id": str, "record_id": str, "certificates": integer,
+			"next_expiry": time, "status": map[string]any{"type": "string", "enum": []string{"synced", "failed"}}, "reason": str,
+			"synced_at": time, "updated_at": time}, "target_id", "certificates", "status", "updated_at"),
+		"ProviderDocRecords": object(map[string]any{
+			"records": map[string]any{"type": "array", "items": providerSchemaRef("ProviderDocRecord")},
+		}, "records"),
 		"ProviderRMMActionRequest": object(map[string]any{
 			"action": map[string]any{"type": "string", "enum": []string{"install", "upgrade", "remove"}},
 		}, "action"),

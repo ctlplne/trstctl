@@ -142,6 +142,8 @@ type Config struct {
 	// core (MSP-9); production supplies the orchestrator once the spine is
 	// assembled. Nil leaves the action route refusing.
 	RMMActions RMMActionQueuer
+	// DocRecords reads each customer's documentation records (MSP-14).
+	DocRecords DocRecordReader
 	// Reports reads customers' signed assurance reports from core (A187). Nil
 	// leaves the report routes refusing.
 	Reports          api.TenantReportReader
@@ -245,6 +247,7 @@ type Service struct {
 	psaTickets        PSATicketReader
 	rmmDevices        RMMDeviceReader
 	rmmActions        RMMActionQueuer
+	docRecords        DocRecordReader
 	reports           api.TenantReportReader
 	clock             func() time.Time
 	maxBreakGlassTTL  time.Duration
@@ -287,7 +290,7 @@ func NewService(cfg Config) *Service {
 		delegations: cfg.Delegations, access: cfg.Access, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
 		drills: cfg.Drills, tenantConsent: cfg.TenantConsent, auditStreams: cfg.AuditStreams, templates: cfg.Templates, reports: cfg.Reports, clock: clock, maxBreakGlassTTL: maxTTL,
 		billingTargets: append([]BillingTarget(nil), cfg.BillingTargets...), billingCompanies: cfg.BillingCompanies,
-		billingSyncPushes: cfg.BillingSyncPushes, psaTickets: cfg.PSATickets, rmmDevices: cfg.RMMDevices, rmmActions: cfg.RMMActions}
+		billingSyncPushes: cfg.BillingSyncPushes, psaTickets: cfg.PSATickets, rmmDevices: cfg.RMMDevices, rmmActions: cfg.RMMActions, docRecords: cfg.DocRecords}
 }
 
 // ListActivity returns newest-first immutable Provider authority evidence,

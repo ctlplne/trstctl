@@ -320,6 +320,54 @@ describe("Provider billing systems (MSP-2)", () => {
     expect(screen.getByText("The Automate client ID, a number. The client's computers are listed and matched to this customer's agents.")).toBeInTheDocument();
   });
 
+  it("lists the customer's certificate records in IT Glue with their state (MSP-14)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/provider/v1/tenants/alpha/billing-companies")
+          return json({
+            targets: [
+              { id: "itglue", name: "IT Glue", type: "itglue", cadence: "monthly", documentation: true },
+              { id: "itglue-eu", name: "IT Glue EU", type: "itglue", cadence: "monthly", documentation: true },
+            ],
+            companies: [{ tenant_id: "alpha", target_id: "itglue", external_company_id: "11" }],
+          });
+        if (url === "/provider/v1/tenants/alpha/billing-sync") return json({ pushes: [] });
+        if (url === "/provider/v1/tenants/alpha/doc-records")
+          return json({
+            records: [
+              {
+                target_id: "itglue",
+                org_id: "11",
+                record_id: "9001",
+                certificates: 2,
+                next_expiry: "2026-12-03T00:00:00Z",
+                status: "synced",
+                synced_at: "2026-11-13T09:40:00Z",
+                updated_at: "2026-11-13T09:40:00Z",
+              },
+              {
+                target_id: "itglue-eu",
+                certificates: 0,
+                status: "failed",
+                reason: "itglue: POST /flexible_assets answered 422",
+                updated_at: "2026-11-13T09:41:00Z",
+              },
+            ],
+          });
+        throw new Error("unexpected path " + url);
+      }),
+    );
+    renderPanel(true);
+    expect(await screen.findAllByText("IT Glue, certificate records")).toHaveLength(2);
+    const table = await screen.findByRole("table", { name: "Certificate records in documentation systems" });
+    const rows = within(table).getAllByRole("row");
+    expect(rows).toHaveLength(3);
+    expect(within(rows[1]).getByText("Record 9001 in organization 11")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("2026-12-03")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("Not written: itglue: POST /flexible_assets answered 422")).toBeInTheDocument();
+  });
+
   it("installs, upgrades and removes the agent through the RMM with rmm:write (MSP-9)", async () => {
     const actions: { url: string; body: unknown; key: string }[] = [];
     let busy = false;

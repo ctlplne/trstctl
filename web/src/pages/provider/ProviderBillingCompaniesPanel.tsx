@@ -12,6 +12,7 @@ import {
   providerApi,
   type ProviderBillingCompanies as BillingView,
   type ProviderBillingSyncPush,
+  type ProviderDocRecord,
   type ProviderPSATicket,
   type ProviderRMMDevice,
 } from "@/lib/providerApi";
@@ -36,6 +37,7 @@ export function ProviderBillingCompanies({
   const [pushes, setPushes] = useState<ProviderBillingSyncPush[]>([]);
   const [tickets, setTickets] = useState<ProviderPSATicket[]>([]);
   const [devices, setDevices] = useState<ProviderRMMDevice[]>([]);
+  const [docRecords, setDocRecords] = useState<ProviderDocRecord[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export function ProviderBillingCompanies({
       setPushes([]);
       setTickets([]);
       setDevices([]);
+      setDocRecords([]);
       setError(null);
       if (!id) return;
       try {
@@ -72,6 +75,10 @@ export function ProviderBillingCompanies({
         if (out.targets.some((target) => target.tickets)) {
           const opened = await providerApi.psaTickets(id);
           setTickets(opened.tickets ?? []);
+        }
+        if (out.targets.some((target) => target.documentation)) {
+          const records = await providerApi.docRecords(id);
+          setDocRecords(records.records ?? []);
         }
         if (out.targets.some((target) => target.rmm)) {
           const listed = await providerApi.rmmDevices(id);
@@ -346,6 +353,45 @@ export function ProviderBillingCompanies({
           </table>
         </div>
       ) : null}
+      {view && view.targets.some((target) => target.documentation) ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-caption">
+            <caption className="py-1 text-left font-medium">{translateNow("provider.docRecords.caption")}</caption>
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="py-1">{translateNow("provider.docRecords.system")}</th>
+                <th className="py-1">{translateNow("provider.docRecords.status")}</th>
+                <th className="py-1">{translateNow("provider.docRecords.certificates")}</th>
+                <th className="py-1">{translateNow("provider.docRecords.nextExpiry")}</th>
+                <th className="py-1">{translateNow("provider.docRecords.synced")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {docRecords.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-1 text-muted-foreground">
+                    {translateNow("provider.docRecords.empty")}
+                  </td>
+                </tr>
+              ) : (
+                docRecords.map((record) => (
+                  <tr key={record.target_id} className="border-t border-border/60">
+                    <td className="py-1 font-mono">{record.target_id}</td>
+                    <td className={record.status === "failed" ? "py-1 text-status-warning" : "py-1 text-status-success"}>
+                      {record.status === "failed"
+                        ? translateNow("provider.docRecords.failed", { reason: record.reason ?? "" })
+                        : translateNow("provider.docRecords.ok", { record: record.record_id ?? "", org: record.org_id ?? "" })}
+                    </td>
+                    <td className="py-1 tabular-nums">{record.certificates}</td>
+                    <td className="py-1 tabular-nums">{record.next_expiry ? record.next_expiry.slice(0, 10) : "—"}</td>
+                    <td className="py-1 tabular-nums">{record.synced_at ? record.synced_at.slice(0, 16).replace("T", " ") : "—"}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
       {view && view.targets.some((target) => target.tickets) ? (
         <div className="overflow-x-auto">
           <table className="w-full text-caption">
@@ -434,6 +480,8 @@ function targetTypeLabel(type: string): string {
       return translateNow("provider.billingSync.type.kaseya");
     case "automate":
       return translateNow("provider.billingSync.type.automate");
+    case "itglue":
+      return translateNow("provider.billingSync.type.itglue");
     case "json":
       return translateNow("provider.billingSync.type.json");
     default:
@@ -466,6 +514,8 @@ function companyHint(type: string): string | undefined {
       return translateNow("provider.billingSync.kaseyaCompanyHint");
     case "automate":
       return translateNow("provider.billingSync.automateCompanyHint");
+    case "itglue":
+      return translateNow("provider.billingSync.itglueCompanyHint");
     default:
       return undefined;
   }

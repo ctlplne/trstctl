@@ -8,6 +8,14 @@
   health written to the device's custom field when it changes. Devices are events (`provider.rmm_device.*`) projected
   into `provider_rmm_devices` (migration 0467, snapshot format 133), listed at `GET /provider/v1/tenants/{id}/rmm-devices`
   and in the Provider console. RMM targets take no usage periods.
+- IT Glue certificate records (MSP-14, part 1): documentation targets keep each mapped customer's certificate inventory
+  and expiry dates in one record under the customer's own organization. An `itglue` target (regional API host, API key
+  reference, the records' flexible-asset type and its fields' name-keys, the console URL to link back to) gets one sync
+  per mapped customer every 10 minutes on the leader; the customer's active certificates are rendered (at most 500, with
+  the count, next expiry and a link to the console) and written only when they changed — in place, again after a deletion
+  in IT Glue, and without a second record after a lost answer. Syncs are events (`provider.doc_record.recorded`) projected
+  into `provider_doc_records` (migration 0468, snapshot format 134), listed at
+  `GET /provider/v1/tenants/{id}/doc-records` and in the Provider console.
 - ConnectWise Automate (MSP-11): an `automate` target (server, the integrator user and password reference, the
   integration's client ID, Automate's execute command and the install, upgrade and remove shell lines) lists each mapped
   customer's computers under its Automate client, maps them to its agents and runs the lines through the execute command;

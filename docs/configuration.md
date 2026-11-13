@@ -1938,6 +1938,49 @@ module uses) on the computer; an install appends `-Server "…" -ServerName "…
 -Identity "…" -Token "…"`, so the one-time token appears in that computer's command
 history (it enrolls once, within an hour).
 
+The list also holds documentation targets, which keep each mapped customer's
+certificate inventory and expiry dates in one documentation record under the
+customer's own organization. An `itglue` target (MSP-14):
+
+```json
+{
+  "id": "itglue",
+  "name": "IT Glue",
+  "type": "itglue",
+  "endpoint": "https://api.itglue.com",
+  "itglue": {
+    "api_key_ref": "file:/run/secrets/itglue-api-key",
+    "flexible_asset_type_id": 33,
+    "traits": {
+      "title": "name",
+      "inventory": "certificates",
+      "next_expiry": "next-expiry",
+      "count": "certificate-count",
+      "link": "trstctl-link"
+    },
+    "console_url": "https://trstctl.msp.example"
+  }
+}
+```
+
+`endpoint` is your region's API host (`https://api.itglue.com`,
+`https://api.eu.itglue.com` or `https://api.au.itglue.com`). Create a flexible-asset
+type for these records and give trstctl its own: each update replaces the record's
+fields and clears any field it does not write. `traits` names that type's fields by
+name-key: `title` (the field used for the asset's name) and `inventory` (a text or
+rich-text field) are required; `next_expiry` (a date field), `count` (a number
+field) and `link` (a text field) are optional. A customer's company in this target
+is its IT Glue organization ID. On the leader, every 10 minutes, one sync per mapped
+customer renders the customer's active certificates (soonest expiry first, at most
+500 listed, with the subject, names, issuer, serial, expiry date and location),
+their count, the next expiry and a link to `<console_url>/certificates`, and writes
+it only when it changed: a renewal shows within one interval, and an unchanged
+inventory writes nothing. The record is updated in place; a record deleted in IT
+Glue is written again; after a lost answer the record of the same title under that
+organization is reused instead of making another. A customer moved to another
+organization gets a new record there; the old one is left as it is.
+`GET /provider/v1/tenants/{id}/doc-records` reads a customer's records.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

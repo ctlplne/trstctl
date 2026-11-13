@@ -48,6 +48,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventRMMDeviceObserved:                        "EventRMMDeviceObserved",
 	projections.EventRMMDeviceActionRequested:                 "EventRMMDeviceActionRequested",
 	projections.EventRMMDeviceActionRecorded:                  "EventRMMDeviceActionRecorded",
+	projections.EventDocRecordRecorded:                        "EventDocRecordRecorded",
 	projections.EventCAEndEntityIssued:                        "EventCAEndEntityIssued",
 	projections.EventBreakglassIssued:                         "EventBreakglassIssued",
 	projections.EventBreakglassCARotated:                      "EventBreakglassCARotated",

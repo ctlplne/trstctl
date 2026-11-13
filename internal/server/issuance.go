@@ -421,6 +421,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleRMMInventory(ctx, m)
 	case orchestrator.DestinationRMMAction:
 		return d.handleRMMAction(ctx, m)
+	case orchestrator.DestinationDocRecord:
+		return d.handleDocRecord(ctx, m)
 	case orchestrator.DestinationITSMServiceNowClose:
 		return d.handleServiceNowClose(ctx, m)
 	case orchestrator.DestinationResponseSplunk:

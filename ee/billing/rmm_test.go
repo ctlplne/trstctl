@@ -63,3 +63,52 @@ func TestRMMSweepQueuesOneInventoryPerMappedCustomerMSP9(t *testing.T) {
 		t.Fatalf("the billing sweep on an RMM target = %+v %v", res, err)
 	}
 }
+
+type docQueuer struct {
+	mu     sync.Mutex
+	queued []string
+}
+
+func (q *docQueuer) QueueDocRecord(_ context.Context, tenantID, targetID string, bucket time.Time) (bool, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.queued = append(q.queued, tenantID[len(tenantID)-2:]+"/"+targetID+"/"+bucket.Format("15:04"))
+	return true, nil
+}
+
+// MSP-14: the documentation sweep queues one record sync per mapped
+// customer of every documentation target for the current interval (nothing
+// before Bind, nothing for a billing or RMM target), and the billing sweep
+// pushes no usage to a documentation target.
+func TestDocSweepQueuesOneSyncPerMappedCustomerMSP14(t *testing.T) {
+	ctx := context.Background()
+	_, cs := newBillingStoreOn(t, "billing_doc_sweep_msp14")
+	const customerA, customerB = "1a2b3c4d-0000-4000-8000-0000000014aa", "1a2b3c4d-0000-4000-8000-0000000014bb"
+	if _, err := cs.SystemPool().Exec(ctx, `INSERT INTO provider_billing_companies (tenant_id, target_id, external_company_id, mapped_by, mapped_at)
+		VALUES ($1, 'itglue', '11', 'op', now()), ($2, 'itglue', '22', 'op', now()), ($1, 'ninja', '11', 'op', now())`, customerA, customerB); err != nil {
+		t.Fatal(err)
+	}
+	targets := []config.ProviderBillingTarget{{ID: "itglue", Type: "itglue"}, {ID: "ninja", Type: "ninjaone"}, {ID: "psa", Type: "json"}}
+	if got := billing.DocTargets(config.ProviderBillingSync{Targets: targets}); len(got) != 1 || got[0].ID != "itglue" {
+		t.Fatalf("documentation targets = %+v", got)
+	}
+	now := time.Date(2026, time.November, 13, 9, 37, 0, 0, time.UTC)
+	sweeper := &billing.DocSweeper{Store: cs, Targets: targets, Now: func() time.Time { return now }}
+	if n, err := sweeper.Sweep(ctx); n != 0 || err != nil {
+		t.Fatalf("an unbound sweep = %d %v", n, err)
+	}
+	q := &docQueuer{}
+	sweeper.Bind(q)
+	n, err := sweeper.Sweep(ctx)
+	sort.Strings(q.queued)
+	if err != nil || n != 2 || strings.Join(q.queued, ",") != "aa/itglue/09:30,bb/itglue/09:30" {
+		t.Fatalf("sweep = %d %v, queued %v", n, err, q.queued)
+	}
+	usage := &syncQueuer{}
+	billingSweeper := &billing.SyncSweeper{Store: cs, Evidence: billing.EvidenceDeps{Reader: syncReader{durable: map[string]bool{customerA: true}, asOf: now}},
+		Targets: []config.ProviderBillingTarget{{ID: "itglue", Type: "itglue"}}, Now: func() time.Time { return now }}
+	billingSweeper.Bind(usage)
+	if res, err := billingSweeper.Sweep(ctx); err != nil || res != (billing.SweepResult{}) || len(usage.queued)+len(usage.held) != 0 {
+		t.Fatalf("the billing sweep on a documentation target = %+v %v", res, err)
+	}
+}

@@ -243,6 +243,8 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.listPSATickets(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/rmm-devices"):
 		h.listRMMDevices(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/doc-records"):
+		h.listDocRecords(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") &&
 		strings.Contains(r.URL.Path, "/rmm-devices/") && strings.HasSuffix(r.URL.Path, "/actions"):
 		h.requestRMMAction(w, r)
@@ -963,6 +965,23 @@ func (h *handler) listRMMDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"devices": out})
+}
+
+// listDocRecords reads a delegated customer's documentation records
+// (MSP-14).
+func (h *handler) listDocRecords(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	customerID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), "/doc-records")
+	out, err := h.svc.ListTenantDocRecords(r.Context(), op, customerID)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"records": out})
 }
 
 // requestRMMAction asks the RMM to install, upgrade or remove the agent on

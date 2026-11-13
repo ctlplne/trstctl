@@ -62,6 +62,21 @@ export interface ProviderBillingTarget {
   tickets?: boolean;
   /** MSP-9: the target runs the agent through an RMM. */
   rmm?: boolean;
+  /** MSP-14: the target keeps the customer's certificate inventory in a documentation record. */
+  documentation?: boolean;
+}
+
+/** MSP-14: the customer's record in one documentation system. */
+export interface ProviderDocRecord {
+  target_id: string;
+  org_id?: string;
+  record_id?: string;
+  certificates: number;
+  next_expiry?: string;
+  status: "synced" | "failed";
+  reason?: string;
+  synced_at?: string;
+  updated_at: string;
 }
 
 /** MSP-2: one customer's company in one billing system. */
@@ -669,6 +684,8 @@ export const providerApi = {
     providerReq<{ tickets: ProviderPSATicket[] }>(`/provider/v1/tenants/${encodeURIComponent(id)}/psa-tickets`),
   rmmDevices: (id: string): Promise<{ devices: ProviderRMMDevice[] }> =>
     providerReq<{ devices: ProviderRMMDevice[] }>(`/provider/v1/tenants/${encodeURIComponent(id)}/rmm-devices`),
+  docRecords: (id: string): Promise<{ records: ProviderDocRecord[] }> =>
+    providerReq<{ records: ProviderDocRecord[] }>(`/provider/v1/tenants/${encodeURIComponent(id)}/doc-records`),
   rmmAction: (id: string, target: string, device: string, action: "install" | "upgrade" | "remove"): Promise<ProviderRMMActionResult> =>
     providerReq<ProviderRMMActionResult>(
       `/provider/v1/tenants/${encodeURIComponent(id)}/rmm-devices/${encodeURIComponent(target)}/${encodeURIComponent(device)}/actions`,

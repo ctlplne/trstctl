@@ -2033,6 +2033,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventRMMDeviceObserved, 1}:        privacyPayloadShape[RMMDeviceEvent](),
 		{EventRMMDeviceActionRequested, 1}: privacyPayloadShape[RMMDeviceEvent](),
 		{EventRMMDeviceActionRecorded, 1}:  privacyPayloadShape[RMMDeviceEvent](),
+		{EventDocRecordRecorded, 1}:        privacyPayloadShape[DocRecordEvent](),
 		{EventWorkloadJWTKeyRotated, 1}:    privacyPayloadShape[WorkloadJWTKeyRotated](),
 		// A211: issuer certificates a scan saw served with a leaf: public PKI
 		// material and digests.

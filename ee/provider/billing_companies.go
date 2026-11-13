@@ -54,6 +54,9 @@ type BillingTarget struct {
 	Tickets bool `json:"tickets,omitempty"`
 	// RMM says the target runs the agent through an RMM (MSP-9).
 	RMM bool `json:"rmm,omitempty"`
+	// Documentation says the target keeps each customer's certificate
+	// inventory in a documentation record (MSP-14).
+	Documentation bool `json:"documentation,omitempty"`
 }
 
 // BillingCompany is one customer's company in one billing target.
@@ -385,6 +388,47 @@ type RMMDevice struct {
 // RMMDeviceReader reads a customer's RMM devices.
 type RMMDeviceReader interface {
 	RMMDevices(ctx context.Context, tenantID string, limit int) ([]corestore.RMMDevice, error)
+}
+
+// DocRecord is one customer's record in one documentation target.
+type DocRecord struct {
+	TargetID     string     `json:"target_id"`
+	OrgID        string     `json:"org_id,omitempty"`
+	RecordID     string     `json:"record_id,omitempty"`
+	Certificates int        `json:"certificates"`
+	NextExpiry   *time.Time `json:"next_expiry,omitempty"`
+	Status       string     `json:"status"`
+	Reason       string     `json:"reason,omitempty"`
+	SyncedAt     *time.Time `json:"synced_at,omitempty"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
+// DocRecordReader reads a customer's documentation records.
+type DocRecordReader interface {
+	DocRecords(ctx context.Context, tenantID string, limit int) ([]corestore.DocRecord, error)
+}
+
+// ListTenantDocRecords reads a delegated customer's documentation records.
+func (s *Service) ListTenantDocRecords(ctx context.Context, actor Operator, customerID string) ([]DocRecord, error) {
+	if err := s.requireOperator(actor); err != nil {
+		return nil, err
+	}
+	if err := s.authorize(ctx, actor, customerID, OpRead); err != nil {
+		return nil, err
+	}
+	out := []DocRecord{}
+	if s.docRecords == nil {
+		return out, nil
+	}
+	rows, err := s.docRecords.DocRecords(ctx, customerID, 100)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out = append(out, DocRecord{TargetID: r.TargetID, OrgID: r.OrgID, RecordID: r.RecordID, Certificates: r.Certificates, NextExpiry: r.NextExpiry,
+			Status: r.Status, Reason: r.Reason, SyncedAt: r.SyncedAt, UpdatedAt: r.UpdatedAt})
+	}
+	return out, nil
 }
 
 // RMMActionQueuer queues an agent action on one of a customer's RMM devices

@@ -5432,6 +5432,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventRMMDeviceObserved:                        {1: true},
 	EventRMMDeviceActionRequested:                 {1: true},
 	EventRMMDeviceActionRecorded:                  {1: true},
+	EventDocRecordRecorded:                        {1: true},
 	EventWorkloadJWTKeyRotated:                    {1: true},
 	EventComplianceReportLegalHoldPlaced:          {1: true},
 	EventComplianceReportLegalHoldReleased:        {1: true},
@@ -6000,6 +6001,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyRMMDeviceTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyDocRecordTx(ctx, tx, e); handled {
 		return err
 	}
 	if handled, err := p.applyWorkloadJWTKeyTx(ctx, tx, e); handled {

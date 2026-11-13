@@ -101,6 +101,41 @@ type ProviderBillingTarget struct {
 	// shell lines. Health is not written back to Automate yet. Endpoint is
 	// the server, e.g. https://automate.example.com.
 	Automate *AutomateTarget `json:"automate,omitempty"`
+	// ITGlue configures an "itglue" documentation target (MSP-14): each
+	// mapped customer's certificate inventory and expiry dates are kept in
+	// one flexible asset under the customer's IT Glue organization, written
+	// when the inventory changes and linking back to trstctl. Endpoint is the
+	// regional API host: https://api.itglue.com, https://api.eu.itglue.com or
+	// https://api.au.itglue.com.
+	ITGlue *ITGlueTarget `json:"itglue,omitempty"`
+}
+
+// ITGlueTarget is an IT Glue account the Provider documents customers'
+// certificates in.
+type ITGlueTarget struct {
+	// APIKeyRef names the API key (file: or env:).
+	APIKeyRef string `json:"api_key_ref"`
+	// FlexibleAssetTypeID is the flexible-asset type of the records; give
+	// trstctl a type of its own, because each update clears the fields it
+	// does not write.
+	FlexibleAssetTypeID int64 `json:"flexible_asset_type_id"`
+	// Traits are the name-keys of the type's fields.
+	Traits ITGlueTraits `json:"traits"`
+	// ConsoleURL is the trstctl console's https base URL the record links
+	// back to.
+	ConsoleURL string `json:"console_url"`
+}
+
+// ITGlueTraits are the name-keys of the fields a record fills: title (the
+// field used for the asset's name) and inventory (a text or rich-text field)
+// are required; the next expiry (a date field), certificate count (a number
+// field) and link (a text field) are optional.
+type ITGlueTraits struct {
+	Title      string `json:"title"`
+	Inventory  string `json:"inventory"`
+	NextExpiry string `json:"next_expiry,omitempty"`
+	Count      string `json:"count,omitempty"`
+	Link       string `json:"link,omitempty"`
 }
 
 // AutomateTarget is a ConnectWise Automate server the Provider runs agents
@@ -193,6 +228,14 @@ type NinjaOneTarget struct {
 	HealthField string `json:"health_field,omitempty"`
 }
 
+// DocumentationTargetTypes are the target types that keep each customer's
+// certificate inventory in a documentation record (MSP-14 onward).
+var DocumentationTargetTypes = map[string]bool{"itglue": true}
+
+// IsDocumentation reports whether the target keeps customers' certificate
+// inventories in documentation records.
+func (t ProviderBillingTarget) IsDocumentation() bool { return DocumentationTargetTypes[t.Type] }
+
 // RMMTargetTypes are the target types that run the agent through an RMM.
 var RMMTargetTypes = map[string]bool{"ninjaone": true, "datto": true, "ncentral": true, "kaseya": true, "automate": true}
 
@@ -202,7 +245,7 @@ func (t ProviderBillingTarget) IsRMM() bool { return RMMTargetTypes[t.Type] }
 
 // PushesUsage reports whether the billing sweep pushes usage periods to
 // the target.
-func (t ProviderBillingTarget) PushesUsage() bool { return !t.IsRMM() }
+func (t ProviderBillingTarget) PushesUsage() bool { return !t.IsRMM() && !t.IsDocumentation() }
 
 // Pax8DefaultAudience is the audience of Pax8's client-credentials tokens.
 const Pax8DefaultAudience = "api://p8p.client"
@@ -451,7 +494,7 @@ var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
 var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}, "gradient": {}, "pax8": {},
-	"ninjaone": {}, "datto": {}, "ncentral": {}, "kaseya": {}, "automate": {}}
+	"ninjaone": {}, "datto": {}, "ncentral": {}, "kaseya": {}, "automate": {}, "itglue": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -483,7 +526,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone, datto, ncentral, kaseya, automate)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone, datto, ncentral, kaseya, automate, itglue)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -522,6 +565,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 			errs = append(errs, validateKaseyaTarget(where, t)...)
 		case "automate":
 			errs = append(errs, validateAutomateTarget(where, t)...)
+		case "itglue":
+			errs = append(errs, validateITGlueTarget(where, t)...)
+		}
+		if t.Type != "itglue" && t.ITGlue != nil {
+			errs = append(errs, fmt.Errorf("%s.itglue applies to itglue targets only", where))
 		}
 		if t.Type != "automate" && t.Automate != nil {
 			errs = append(errs, fmt.Errorf("%s.automate applies to automate targets only", where))
@@ -761,6 +809,58 @@ func validateAutomateTarget(where string, t ProviderBillingTarget) []error {
 		if !strings.Contains(v, "!!! ") || len(v) > 1000 || strings.IndexFunc(v, unicode.IsControl) >= 0 {
 			errs = append(errs, fmt.Errorf("%s.%s must be a shell line in Automate's \"<shell>!!! <arguments>\" form (at most 1000 characters)", where, line.name))
 		}
+	}
+	return errs
+}
+
+// itglueNameKeyPattern is an IT Glue field name-key.
+var itglueNameKeyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,99}$`)
+
+// validateConsoleURL checks a documentation target's console_url.
+func validateConsoleURL(where, raw string) error {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("%s.console_url must be the trstctl console's https base URL", where)
+	}
+	return nil
+}
+
+func validateITGlueTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; an itglue target uses its API key", where))
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	g := t.ITGlue
+	if g == nil {
+		return append(errs, fmt.Errorf("%s.itglue is required for an itglue target", where))
+	}
+	where += ".itglue"
+	if err := validateDeploymentCredentialRef(g.APIKeyRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.api_key_ref: %w", where, err))
+	}
+	if g.FlexibleAssetTypeID <= 0 {
+		errs = append(errs, fmt.Errorf("%s.flexible_asset_type_id must be the records' flexible-asset type ID", where))
+	}
+	seen := map[string]bool{}
+	for _, trait := range []struct {
+		name, key string
+		required  bool
+	}{{"title", g.Traits.Title, true}, {"inventory", g.Traits.Inventory, true}, {"next_expiry", g.Traits.NextExpiry, false},
+		{"count", g.Traits.Count, false}, {"link", g.Traits.Link, false}} {
+		switch {
+		case trait.key == "" && !trait.required:
+		case !itglueNameKeyPattern.MatchString(trait.key):
+			errs = append(errs, fmt.Errorf("%s.traits.%s must be a field name-key (lowercase letters, digits, dashes or underscores)", where, trait.name))
+		case seen[trait.key]:
+			errs = append(errs, fmt.Errorf("%s.traits.%s names a field another trait already uses", where, trait.name))
+		}
+		seen[trait.key] = trait.key != ""
+	}
+	if err := validateConsoleURL(where, g.ConsoleURL); err != nil {
+		errs = append(errs, err)
 	}
 	return errs
 }

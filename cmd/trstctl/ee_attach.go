@@ -307,6 +307,7 @@ func attachEEProviderAPI(
 		BillingSyncPushes:        deps.Store,
 		PSATickets:               deps.Store,
 		RMMDevices:               deps.Store,
+		DocRecords:               deps.Store,
 	}
 	// MSP-2: the billing-sync sweep runs on the leader once metering and at
 	// least one billing target are attached; it queues through the
@@ -337,6 +338,14 @@ func attachEEProviderAPI(
 		rmmSweeper = &eebilling.RMMSweeper{Store: deps.Store, Targets: rmmTargets, Log: log}
 		deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, rmmSweeper)
 	}
+	// MSP-14: documentation targets get one record sync per interval for
+	// each mapped customer, queued by a leader worker bound to the
+	// orchestrator with the sweeps.
+	var docSweeper *eebilling.DocSweeper
+	if docTargets := eebilling.DocTargets(cfg.Provider.BillingSync); len(docTargets) > 0 {
+		docSweeper = &eebilling.DocSweeper{Store: deps.Store, Targets: docTargets, Log: log}
+		deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, docSweeper)
+	}
 	// Preserve the authenticated surface during assembly, but keep destructive
 	// commands unavailable until core supplies its fully assembled projector.
 	deps.ProviderHandler = eeprovider.NewHandler(providerConfig)
@@ -353,6 +362,9 @@ func attachEEProviderAPI(
 		}
 		if rmmSweeper != nil {
 			rmmSweeper.Bind(orch)
+		}
+		if docSweeper != nil {
+			docSweeper.Bind(orch)
 		}
 		configured := providerConfig
 		configured.Offboarding = eeprovider.NewTenantOffboarder(deps.Store, deps.Log, orch, authorityRuntime.Mutations)
@@ -727,7 +739,7 @@ func providerBillingTargets(sync config.ProviderBillingSync) []eeprovider.Billin
 	out := make([]eeprovider.BillingTarget, 0, len(sync.Targets))
 	for _, t := range sync.Targets {
 		out = append(out, eeprovider.BillingTarget{ID: t.ID, Name: t.Name, Type: t.Type, Cadence: t.EffectiveCadence(),
-			Tickets: len(t.TicketKinds()) > 0, RMM: t.IsRMM()})
+			Tickets: len(t.TicketKinds()) > 0, RMM: t.IsRMM(), Documentation: t.IsDocumentation()})
 	}
 	return out
 }

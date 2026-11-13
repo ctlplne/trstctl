@@ -305,3 +305,24 @@ func TestAttachEEProviderAttachesRMMSweepMSP9(t *testing.T) {
 		t.Fatalf("Provider view of the RMM target = %+v", targets)
 	}
 }
+
+// MSP-14: a documentation target attaches the documentation record sweep
+// and is marked as documentation (not an RMM, no tickets) for the console.
+func TestAttachEEProviderAttachesDocRecordSweepMSP14(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Provider.BillingSync.Targets = []config.ProviderBillingTarget{{ID: "itglue", Type: "itglue", ITGlue: &config.ITGlueTarget{}}}
+	deps := &server.Deps{}
+	if err := attachEE(context.Background(), cfg, nil, commercialLicense(t, license.TierProvider), deps); err != nil {
+		t.Fatalf("provider attachEE: %v", err)
+	}
+	sweep := false
+	for _, worker := range deps.LicensedBackgroundWorkers {
+		sweep = sweep || worker.Name() == "provider.doc_record.sweep"
+	}
+	if !sweep {
+		t.Fatal("the documentation record sweep is not a licensed background worker")
+	}
+	if targets := providerBillingTargets(cfg.Provider.BillingSync); len(targets) != 1 || !targets[0].Documentation || targets[0].RMM || targets[0].Tickets {
+		t.Fatalf("Provider view of the documentation target = %+v", targets)
+	}
+}
