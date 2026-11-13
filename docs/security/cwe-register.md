@@ -382,7 +382,7 @@ not this file.
 | `internal/dynsecret/oauth_client_credentials_test.go:190` | fabricated fixture secret; the case fails on its scope (CWE-798) |
 | `internal/dynsecret/postgres_decoy_test.go:15` | placeholder test DSNs, not credentials (CWE-798) |
 | `internal/dynsecret/postgres_decoy_test.go:19` | placeholder test DSNs, not credentials (CWE-798) |
-| `internal/dynsecret/rabbitmq_test.go:29` | fabricated lab administrator password (CWE-798) |
+| `internal/dynsecret/rabbitmq_test.go:34` | fabricated lab administrator password (CWE-798) |
 | `internal/dynsecret/tailscale_test.go:30` | fabricated stand-in API token (CWE-798) |
 | `internal/dynsecret/totp_test.go:13` | the RFC 6238 test-vector seed, not a credential (CWE-798) |
 | `internal/kms/gcpkms/gcpkms_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -3567,8 +3567,8 @@ not this file.
 | `internal/dynsecret/network_api.go:158` | the operator's configured device endpoint through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/oauth_client_credentials.go:315` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/providers_real.go:1758` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/rabbitmq.go:212` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/rabbitmq.go:260` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/rabbitmq.go:240` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/rabbitmq.go:284` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/redfish.go:130` | the operator's configured controller through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/signin_check.go:255` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/snowflake.go:315` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |

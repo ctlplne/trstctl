@@ -571,8 +571,10 @@ API, as `admin_user`, with a generated password and only its role's permissions 
 one virtual host: the binding `"read on orders in /"` grants read on exactly the
 named queues or exchanges (configure and write match nothing). Revocation deletes
 the user and closes its open connections, since RabbitMQ keeps established
-connections of a deleted user open; RabbitMQ then refuses its login. A retry after
-an uncertain attempt replaces the same user's password.
+connections of a deleted user open; RabbitMQ then refuses its login. It lists only that
+user's connections (`/api/connections/username/{user}`, A239-L9), so a broker with very
+many connections isn't read whole; a broker without that listing falls back to filtering
+the full one. A retry after an uncertain attempt replaces the same user's password.
 
 The Tailscale backend creates one auth key per lease through Tailscale's API, with
 `bearer_token_ref` as the API token: single-use, ephemeral, preauthorized, carrying

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -20,6 +21,10 @@ type rabbitmqLab struct {
 	connections []map[string]string
 	closed      []string
 	failPerms   bool
+	// noPerUser is a broker without GET /api/connections/username/{user};
+	// listedAll counts reads of the whole connection listing (A239-L9).
+	noPerUser bool
+	listedAll int
 }
 
 func newRabbitMQLab(t *testing.T) (*rabbitmqLab, *httptest.Server) {
@@ -65,7 +70,17 @@ func newRabbitMQLab(t *testing.T) (*rabbitmqLab, *httptest.Server) {
 			}
 			delete(lab.users, user)
 			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodGet && strings.HasPrefix(path, "/api/connections/username/") && !lab.noPerUser:
+			user, _ := url.PathUnescape(strings.TrimPrefix(path, "/api/connections/username/"))
+			mine := []map[string]string{}
+			for _, c := range lab.connections {
+				if c["user"] == user {
+					mine = append(mine, map[string]string{"name": c["name"]})
+				}
+			}
+			_ = json.NewEncoder(w).Encode(mine)
 		case r.Method == http.MethodGet && path == "/api/connections":
+			lab.listedAll++
 			_ = json.NewEncoder(w).Encode(lab.connections)
 		case r.Method == http.MethodDelete && strings.HasPrefix(path, "/api/connections/"):
 			lab.closed = append(lab.closed, strings.TrimPrefix(path, "/api/connections/"))
@@ -154,6 +169,37 @@ func TestRabbitMQGrantGrammarA239(t *testing.T) {
 	for _, bad := range []string{"read on orders", "read in /", "admin on orders in /", "read on .* in /", "read on orders in /a b", "read on a|b in /"} {
 		if _, err := ParseRabbitMQGrant(bad); err == nil {
 			t.Errorf("accepted %q", bad)
+		}
+	}
+}
+
+// A239-L9: revoking a user closes its connections from a listing of that
+// user's connections only; a broker without the per-user listing (404) falls
+// back to filtering the whole listing. Either way another user's connection
+// stays open.
+func TestRabbitMQRevokeListsOnlyTheUsersConnectionsA239L9(t *testing.T) {
+	for _, perUser := range []bool{true, false} {
+		lab, srv := newRabbitMQLab(t)
+		lab.noPerUser = !perUser
+		b := newLabRabbitMQ(t, srv)
+		user, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-l9"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		lab.connections = []map[string]string{
+			{"name": "10.0.0.1:5000 -> 10.0.0.2:5672", "user": user},
+			{"name": "10.0.0.3:6000 -> 10.0.0.2:5672", "user": "app"},
+			{"name": "10.0.0.4:7000 -> 10.0.0.2:5672", "user": user},
+		}
+		if err := b.Revoke(context.Background(), user); err != nil {
+			t.Fatal(err)
+		}
+		wantAll := 0
+		if !perUser {
+			wantAll = 1
+		}
+		if len(lab.closed) != 2 || strings.Contains(strings.Join(lab.closed, " "), "6000") || lab.listedAll != wantAll {
+			t.Fatalf("per-user listing %v: closed %v, whole listing read %d times (want %d)", perUser, lab.closed, lab.listedAll, wantAll)
 		}
 	}
 }

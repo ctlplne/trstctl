@@ -203,29 +203,22 @@ func (b *RabbitMQBackend) Revoke(ctx context.Context, ref string) error {
 }
 
 // closeConnections closes the user's open connections: deleting a RabbitMQ
-// user refuses new connections but leaves established ones open.
+// user refuses new connections but leaves established ones open. It lists the
+// user's connections only (GET /api/connections/username/{user}, A239-L9), so a
+// broker with very many connections isn't read whole; a broker without that
+// endpoint answers 404 and the whole listing is filtered by user instead.
 func (b *RabbitMQBackend) closeConnections(ctx context.Context, user string) error {
-	req, err := b.request(ctx, http.MethodGet, "/api/connections?columns=name,user", nil)
+	names, listed, err := b.connectionNames(ctx, "/api/connections/username/"+url.PathEscape(user)+"?columns=name", "")
 	if err != nil {
 		return err
 	}
-	resp, err := b.client.Do(req) // #nosec G704 -- the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918)
-	if err != nil {
-		return fmt.Errorf("dynsecret rabbitmq: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	var connections []struct {
-		Name string `json:"name"`
-		User string `json:"user"`
-	}
-	if resp.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&connections) != nil {
-		return fmt.Errorf("dynsecret rabbitmq: list connections: HTTP %d", resp.StatusCode)
-	}
-	for _, c := range connections {
-		if c.User != user {
-			continue
+	if !listed {
+		if names, _, err = b.connectionNames(ctx, "/api/connections?columns=name,user", user); err != nil {
+			return err
 		}
-		status, err := b.call(ctx, http.MethodDelete, "/api/connections/"+url.PathEscape(c.Name), nil)
+	}
+	for _, name := range names {
+		status, err := b.call(ctx, http.MethodDelete, "/api/connections/"+url.PathEscape(name), nil)
 		if err != nil {
 			return err
 		}
@@ -234,6 +227,37 @@ func (b *RabbitMQBackend) closeConnections(ctx context.Context, user string) err
 		}
 	}
 	return nil
+}
+
+// connectionNames reads a connection listing; with user set it keeps only
+// that user's connections. A 404 is a listing the broker doesn't offer
+// (listed false), so the caller can fall back to another.
+func (b *RabbitMQBackend) connectionNames(ctx context.Context, path, user string) (names []string, listed bool, err error) {
+	req, err := b.request(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	resp, err := b.client.Do(req) // #nosec G704 -- the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918)
+	if err != nil {
+		return nil, false, fmt.Errorf("dynsecret rabbitmq: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, false, nil
+	}
+	var connections []struct {
+		Name string `json:"name"`
+		User string `json:"user"`
+	}
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&connections) != nil {
+		return nil, false, fmt.Errorf("dynsecret rabbitmq: list connections: HTTP %d", resp.StatusCode)
+	}
+	for _, c := range connections {
+		if user == "" || c.User == user {
+			names = append(names, c.Name)
+		}
+	}
+	return names, true, nil
 }
 
 func (b *RabbitMQBackend) request(ctx context.Context, method, path string, body []byte) (*http.Request, error) {

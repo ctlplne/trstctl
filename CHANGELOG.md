@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- Revoking a RabbitMQ lease lists only that user's connections (A239-L9): the backend closes them from
+  `GET /api/connections/username/{user}` instead of reading every connection on the broker, and falls back to
+  filtering the full listing on a broker without the per-user listing.
 - A secret renderer can sign in as its workload (A238-L1): `login_method` and `login_credential_file` replace
   `token_file`, and the renderer exchanges the workload's own credential at `POST /api/v1/secrets/login` for a
   machine session — re-reading the credential at each sign-in, signing in again before the session expires or when
