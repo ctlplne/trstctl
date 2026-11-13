@@ -43289,7 +43289,7 @@ export interface operations {
                 distrust_entry?: string;
                 /** @description weak: return only findings whose reader rated the key weak */
                 key_strength?: string;
-                /** @description return only findings that name this certificate or key fingerprint, whatever their kind; colon-separated hex is accepted */
+                /** @description return only findings that name this certificate or key fingerprint, whatever their kind, and leaked secrets that hold the stored credential with this fingerprint (metadata.credential_fingerprint); colon-separated hex is accepted */
                 fingerprint?: string;
             };
             header?: never;

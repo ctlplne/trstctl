@@ -26,6 +26,12 @@ type Finding struct {
 	Line          int
 	Fingerprint   string
 	CredentialRef string
+	// Column, EndLine and EndColumn are where the scanner's match lies, as
+	// gitleaks reports them (A172-L1); zero when the scanner reports no
+	// columns. A match on a later line than Line ran over several lines.
+	Column    int
+	EndLine   int
+	EndColumn int
 }
 
 // ParseGitleaks parses a gitleaks JSON report, deliberately dropping the matched
@@ -35,6 +41,9 @@ func ParseGitleaks(b []byte) ([]Finding, error) {
 		RuleID      string `json:"RuleID"`
 		File        string `json:"File"`
 		StartLine   int    `json:"StartLine"`
+		EndLine     int    `json:"EndLine"`
+		StartColumn int    `json:"StartColumn"`
+		EndColumn   int    `json:"EndColumn"`
 		Fingerprint string `json:"Fingerprint"`
 	}
 	if err := json.Unmarshal(b, &raw); err != nil {
@@ -42,7 +51,8 @@ func ParseGitleaks(b []byte) ([]Finding, error) {
 	}
 	out := make([]Finding, 0, len(raw))
 	for _, r := range raw {
-		out = append(out, Finding{Scanner: "gitleaks", RuleID: r.RuleID, File: r.File, Line: r.StartLine, Fingerprint: r.Fingerprint, CredentialRef: r.RuleID + "@" + r.File})
+		out = append(out, Finding{Scanner: "gitleaks", RuleID: r.RuleID, File: r.File, Line: r.StartLine, Fingerprint: r.Fingerprint,
+			CredentialRef: r.RuleID + "@" + r.File, Column: r.StartColumn, EndLine: r.EndLine, EndColumn: r.EndColumn})
 	}
 	return out, nil
 }

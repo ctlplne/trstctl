@@ -620,6 +620,40 @@ describe("discovery control-plane surface", () => {
     await waitFor(() => expect(apiMock.discoveryFindings).toHaveBeenLastCalledWith({ limit: 50 }));
   });
 
+  // A172-L1: a leaked secret that holds a stored credential lists, from its
+  // detail, every finding with that credential's fingerprint.
+  it("lists where a leaked credential is stored from the leak's detail", async () => {
+    const seeded = await apiMock.discoveryFindings();
+    const credentialFingerprint = "a172l1".padEnd(64, "0");
+    const leak = {
+      ...seeded.items[0],
+      id: "finding-leak",
+      kind: "leaked_secret",
+      ref: "gitlab-pat@ci/deploy.env",
+      fingerprint: "c0ffee:ci/deploy.env:gitlab-pat:4",
+      metadata: { rule_id: "gitlab-pat", file: "ci/deploy.env", line: 4, credential_fingerprint: credentialFingerprint, credential_rule: "gitlab_token" },
+    };
+    const stored = {
+      ...seeded.items[0],
+      id: "finding-stored",
+      kind: "secret_store_api_key",
+      ref: "vault://ci/gitlab#token",
+      fingerprint: credentialFingerprint,
+      metadata: {},
+    };
+    apiMock.discoveryFindings.mockReset().mockImplementation(async (options?: { fingerprint?: string }) => ({
+      items: options?.fingerprint === credentialFingerprint ? [leak, stored] : [leak, ...seeded.items],
+    }));
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    const row = (await screen.findByText("gitlab-pat@ci/deploy.env")).closest("tr");
+    await user.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Review finding" }));
+    await user.click(screen.getByRole("button", { name: "Show where this credential is stored" }));
+    await waitFor(() => expect(apiMock.discoveryFindings).toHaveBeenLastCalledWith({ limit: 50, fingerprint: credentialFingerprint }));
+    expect(await screen.findByText("vault://ci/gitlab#token")).toBeInTheDocument();
+  });
+
   it("queues removal of a distrusted root from the host trust store it was found in", async () => {
     const seeded = await apiMock.discoveryFindings();
     const root = {

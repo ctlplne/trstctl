@@ -15361,6 +15361,10 @@ export const messages = {
     defaultMessage: "Show every finding with this fingerprint",
     description: "A172-L2: action on a finding's detail that lists every finding naming the same fingerprint.",
   },
+  "discovery.findings.showStoredCredential": {
+    defaultMessage: "Show where this credential is stored",
+    description: "A172-L1: action on a leaked secret's detail that lists the secret-store findings holding the same credential, and the leak.",
+  },
   "discovery.findings.clearRunScope": {
     defaultMessage: "Show all findings",
     description: "Action that removes an exact discovery-run deep-link filter.",

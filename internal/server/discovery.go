@@ -1486,6 +1486,10 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 		if checked := d.secretValidity(ctx, target.Path, f); checked != nil {
 			repoFields["validity"] = checked
 		}
+		// A172-L1: the same credential stored in a secret store shares this.
+		if c, ok := leakedCredential(target.Path, f); ok {
+			repoFields["credential_fingerprint"], repoFields["credential_rule"] = c.Fingerprint, c.Rule
+		}
 		risk := 95
 		if decoy, ok := secretscan.MatchKnownValue(target.Path, f.File, f.Line, known); ok {
 			repoFields["known_decoy"] = map[string]string{"id": decoy.ID, "name": decoy.Name}
@@ -1611,6 +1615,10 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 		}
 		if checked := d.secretValidity(ctx, target.Path, f); checked != nil {
 			fields["validity"] = checked
+		}
+		// A172-L1: the same credential stored in a secret store shares this.
+		if c, ok := leakedCredential(target.Path, f); ok {
+			fields["credential_fingerprint"], fields["credential_rule"] = c.Fingerprint, c.Rule
 		}
 		risk := 95
 		if decoy, ok := secretscan.MatchKnownValue(target.Path, f.File, f.Line, known); ok {

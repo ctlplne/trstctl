@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3221 annotated sites across 34 rules. Each row is
+3222 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (787 sites)
+### G101 — CWE-798 Use of hardcoded credentials (788 sites)
 
 | Location | Reason |
 |---|---|
@@ -348,7 +348,7 @@ not this file.
 | `internal/discovery/apikey/apikey_test.go:20` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:25` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/cloudkeys/awsiamkeys/awsiamkeys_test.go:80` | fabricated fixture credential; no value is real (CWE-798) |
-| `internal/discovery/cloudsecret/apikeys.go:26` | a hash domain-separation tag, not a credential (CWE-798) |
+| `internal/discovery/cloudsecret/apikeys.go:27` | a hash domain-separation tag, not a credential (CWE-798) |
 | `internal/discovery/cloudsecret/outcomes_test.go:35` | fabricated fixture secret name; the test needs the shape, no value is real (CWE-798) |
 | `internal/discovery/cloudsecret/secretstoretest/conjur.go:33` | a stand-in's fixed fake access token, not a credential (CWE-798) |
 | `internal/discovery/lbtls/awselb/awselb_test.go:41` | fabricated fixture credential; no value is real (CWE-798) |
@@ -624,6 +624,7 @@ not this file.
 | `internal/server/journey_delivery_served_test.go:735` | fabricated test-only credential (CWE-798) |
 | `internal/server/journey_delivery_served_test.go:955` | fabricated test-only credential (CWE-798) |
 | `internal/server/key_vault_disable_served_test.go:78` | test-only environment variable names, no credential values (CWE-798) |
+| `internal/server/leaked_credential_correlation_served_test.go:107` | a credential reference to a fabricated fixture (CWE-798) |
 | `internal/server/load_balancer_tls_served_test.go:31` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/server/load_balancer_tls_served_test.go:32` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/server/load_balancer_tls_served_test.go:73` | credential references only; no credential value enters the config (CWE-798) |

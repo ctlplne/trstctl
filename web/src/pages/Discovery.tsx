@@ -85,6 +85,14 @@ function distrustedRootRemoval(finding: DiscoveryFinding): DistrustedRootRemoval
   return { anchorPath: finding.ref.slice("os/".length), fingerprint: finding.fingerprint, entry: text("distrust_entry"), host: text("host") };
 }
 
+// A172-L1: a leaked secret that holds a credential a secret store also holds
+// names that credential's fingerprint; the fingerprint filter lists the
+// stored copies beside the leak.
+function leakedCredentialFingerprint(finding: DiscoveryFinding): string {
+  const value = (finding.metadata ?? {})["credential_fingerprint"];
+  return typeof value === "string" ? value.trim() : "";
+}
+
 const remediationPlaybookRevokeIdentity = "identity-revoke";
 const remediationPlaybookRotateIdentity = "credential-rotate";
 const identityKinds: Identity["kind"][] = ["x509_certificate", "ssh_certificate", "ssh_key", "secret", "api_key", "workload_identity"];
@@ -2747,6 +2755,25 @@ function FindingTable({
                 }
               >
                 {t("discovery.findings.showFingerprintFindings")}
+              </Button>
+            </div>
+          ) : null}
+          {leakedCredentialFingerprint(selected) ? (
+            <div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setFindingSearchParams((current) => {
+                    const next = new URLSearchParams(current);
+                    next.set("tab", "findings");
+                    next.set("fingerprint", leakedCredentialFingerprint(selected));
+                    return next;
+                  })
+                }
+              >
+                {t("discovery.findings.showStoredCredential")}
               </Button>
             </div>
           ) : null}

@@ -34,7 +34,8 @@ type DiscoveryFindingFilter struct {
 	// KeyVerdict selects every finding a reader rated distrusted or weak.
 	KeyVerdict bool
 	// Fingerprint selects every finding that names one certificate or key,
-	// whatever its kind (A172-L2).
+	// whatever its kind (A172-L2), and every leaked secret that holds the
+	// stored credential it fingerprints (A172-L1).
 	Fingerprint string
 }
 
@@ -81,8 +82,11 @@ func (f DiscoveryFindingFilter) where(args []any) (string, []any) {
 		fmt.Fprintf(&b, " AND f.metadata->>'key_strength' = $%d", len(args))
 	}
 	if f.Fingerprint != "" {
+		// A172-L1: a leaked secret names the stored credential it holds by
+		// metadata.credential_fingerprint; its own fingerprint is the
+		// scanner's location.
 		args = append(args, f.Fingerprint)
-		fmt.Fprintf(&b, " AND f.fingerprint = $%d", len(args))
+		fmt.Fprintf(&b, " AND (f.fingerprint = $%d OR f.metadata->>'credential_fingerprint' = $%d)", len(args), len(args))
 	}
 	if f.KeyVerdict {
 		b.WriteString(" AND (COALESCE(f.metadata->>'distrust_entry', '') <> '' OR f.metadata->>'key_strength' = 'weak')")

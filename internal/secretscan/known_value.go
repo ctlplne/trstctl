@@ -69,6 +69,28 @@ func MatchKnownValue(root, file string, line int, known []KnownValue) (KnownValu
 // in or under root. The file is opened through root, so neither a relative
 // path nor a link leads out of the scanned tree.
 func readFindingContext(root, file string, line, span int) ([]byte, error) {
+	data, err := readScannedFile(root, file)
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(data)
+	lines := bytes.Split(data, []byte("\n"))
+	from, to := line-1-span, line+span
+	if from < 0 {
+		from = 0
+	}
+	if to > len(lines) {
+		to = len(lines)
+	}
+	if from >= to {
+		return nil, errors.New("secretscan: the finding's line is not in the file")
+	}
+	return append([]byte(nil), bytes.Join(lines[from:to], []byte("\n"))...), nil
+}
+
+// readScannedFile reads file, a path in or under root, through root (at most
+// maxFindingContextFile bytes). The caller wipes the bytes.
+func readScannedFile(root, file string) ([]byte, error) {
 	root = filepath.Clean(root)
 	rel := filepath.Clean(file)
 	if filepath.IsAbs(rel) {
@@ -96,17 +118,5 @@ func readFindingContext(root, file string, line, span int) ([]byte, error) {
 		secret.Wipe(data)
 		return nil, err
 	}
-	defer secret.Wipe(data)
-	lines := bytes.Split(data, []byte("\n"))
-	from, to := line-1-span, line+span
-	if from < 0 {
-		from = 0
-	}
-	if to > len(lines) {
-		to = len(lines)
-	}
-	if from >= to {
-		return nil, errors.New("secretscan: the finding's line is not in the file")
-	}
-	return append([]byte(nil), bytes.Join(lines[from:to], []byte("\n"))...), nil
+	return data, nil
 }

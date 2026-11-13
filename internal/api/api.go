@@ -1186,7 +1186,7 @@ func (a *API) routes() []route {
 		{name: "triage_status", typ: "string", desc: "return only findings in this triage status: unmanaged (including never triaged), investigating, managed or dismissed"},
 		{name: "distrust_entry", typ: "string", desc: "return only findings whose reader matched this distrust-list entry"},
 		{name: "key_strength", typ: "string", desc: "weak: return only findings whose reader rated the key weak"},
-		{name: "fingerprint", typ: "string", desc: "return only findings that name this certificate or key fingerprint, whatever their kind; colon-separated hex is accepted"},
+		{name: "fingerprint", typ: "string", desc: "return only findings that name this certificate or key fingerprint, whatever their kind, and leaked secrets that hold the stored credential with this fingerprint (metadata.credential_fingerprint); colon-separated hex is accepted"},
 	}
 	discoveryDashboardQuery := []param{
 		{name: "limit", typ: "integer", desc: "maximum findings per page (1-100, default 50); the summary counts every finding"},

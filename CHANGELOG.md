@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- A leaked credential lines up with its stored copies (A172-L1): a `leaked_secret` finding whose line holds an API key,
+  token or private key the secret-store rules recognize records `credential_fingerprint` (the same fingerprint the
+  `secret_store_api_key` finding carries) and `credential_rule`, read from the scanned tree in memory and wiped, using
+  the scanner's columns (now kept from gitleaks reports) to pick the credential its match covers.
+  `GET /api/v1/discovery/findings?fingerprint=` lists those leaks beside the stored copies (migration 0470 indexes
+  `metadata->>'credential_fingerprint'` online), and a leak's detail in Discover has **Show where this credential is
+  stored**.
 - Policy-driven response to an abusive OAuth grant (A170-L3): a tenant policy's `nhi_posture` rule may ask for
   `revoke_oauth_grant` or `block_oauth_app`, and an `oauth_grant_abuse` detection is now posture family `oauth_abuse`
   (finding types `malicious_oauth_grant` plus the detector's reasons, `provider` in the input), so the leader's sweep

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -154,6 +155,48 @@ func inspectCredentials(provider string, s Secret) []Found {
 			Kind: FindingKindAPIKey, Provider: provider, ResourceID: nonempty(s.ResourceID, s.Name),
 			SecretName: s.Name, Location: s.Location, Provenance: s.Provenance, Metadata: meta, Credential: &c,
 		})
+	}
+	return out
+}
+
+// LocatedCredential is a credential and where its match lies in the text it
+// was found in, as a half-open byte range [Start, End).
+type LocatedCredential struct {
+	Credential
+	Start, End int
+}
+
+// CredentialsStartingIn matches text with the rules a secret-store value is
+// matched with and returns the credentials whose match starts in
+// text[from:to] (A172-L1): a leaked secret's line, read from a scanned tree,
+// is fingerprinted exactly as a stored copy of the same credential is, so the
+// two line up. text may run past to, so a PEM block that starts on the line
+// is matched whole. At most maxCredentialsPerSecret are returned.
+func CredentialsStartingIn(text []byte, from, to int) []LocatedCredential {
+	if from < 0 {
+		from = 0
+	}
+	if to > len(text) {
+		to = len(text)
+	}
+	var out []LocatedCredential
+	seen := map[string]bool{}
+	for _, rule := range credentialRules {
+		for _, m := range rule.pattern.FindAllSubmatchIndex(text, -1) {
+			if len(m) < 4 || m[2] < from || m[2] >= to {
+				continue
+			}
+			c := newCredential(rule.id, rule.kind, rule.risk, rule.prefixes, "", text[m[2]:m[3]])
+			key := c.Fingerprint + "\x00" + strconv.Itoa(m[2])
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, LocatedCredential{Credential: c, Start: m[2], End: m[3]})
+			if len(out) == maxCredentialsPerSecret {
+				return out
+			}
+		}
 	}
 	return out
 }

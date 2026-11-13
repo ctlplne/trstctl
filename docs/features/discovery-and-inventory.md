@@ -420,7 +420,9 @@ from these and the rated certificate inventory. `?fingerprint=<SHA-256>` (A172-L
 kind, source or run — a certificate seen on a listener, its private key on a host, the
 root in a trust store — and accepts the colon-separated hex certificate viewers show.
 A finding's detail in Discover has **Show every finding with this fingerprint**, and
-the list says while it is narrowed.
+the list says while it is narrowed. The same filter also lists every leaked secret that
+holds the stored credential with that fingerprint (A172-L1, below), and a leak's detail
+has **Show where this credential is stored**.
 
 **Removing a distrusted root.** When the control plane's distrust list names a
 trust-store anchor itself (for example emSign ECC Root CA - G3, by key), the finding
@@ -897,6 +899,18 @@ with that public key (`KEY_OF`), so the certificate's blast radius starts at the
 store that holds its key. The value is wiped after inspection and never stored, logged
 or shown. There is no generic high-entropy rule: a string that matches no rule is not
 reported.
+
+A credential leaked in a repository, a CI log, a chat or a wiki page lines up with its
+stored copies (A172-L1). The scanners report where a leaked secret is, never what it is,
+so trstctl reads the finding's line back from the scanned tree, matches it in memory with
+the same rules, fingerprints the credential the scanner's match covers (gitleaks reports
+its columns; a scanner without columns counts only when the line holds one credential)
+and wipes the line. The `leaked_secret` finding records `credential_fingerprint` and
+`credential_rule`; its own fingerprint stays the scanner's location. `?fingerprint=` with
+a stored credential's fingerprint then lists its secret-store copies and every leak that
+holds it. A leak found only in history (the line no longer holds it), a line holding
+several credentials the scanner's position cannot tell apart, or a credential the rules
+do not recognize records none.
 
 ### Cloud network paths
 

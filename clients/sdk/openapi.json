@@ -84298,7 +84298,7 @@
             }
           },
           {
-            "description": "return only findings that name this certificate or key fingerprint, whatever their kind; colon-separated hex is accepted",
+            "description": "return only findings that name this certificate or key fingerprint, whatever their kind, and leaked secrets that hold the stored credential with this fingerprint (metadata.credential_fingerprint); colon-separated hex is accepted",
             "in": "query",
             "name": "fingerprint",
             "schema": {
