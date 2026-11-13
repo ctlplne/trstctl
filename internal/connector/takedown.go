@@ -30,6 +30,11 @@ type Takedown struct {
 	Target string
 	// Fingerprint identifies the installed object, as the deploy named it.
 	Fingerprint string
+	// KeyObject names the appliance object the certificate's key was
+	// generated into (A122), from ApplianceKeyObjectName; empty for a key
+	// trstctl delivered. A family that keeps such objects removes it, and
+	// its request, with the certificate (ISE-O1).
+	KeyObject string
 	// Reason is operator-facing context for the transcript. It never reaches
 	// the appliance.
 	Reason string

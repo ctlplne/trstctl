@@ -328,6 +328,22 @@ func (c *Connector) Takedown(ctx context.Context, sb connector.Sandbox, td conne
 	if err != nil {
 		return fmt.Errorf("f5: remove key object %q: %w", keyName, err)
 	}
+	// ISE-O1: a key the BIG-IP generated lives in the job's own key object,
+	// with the CSR it made; both go with the certificate.
+	if object := strings.TrimSpace(td.KeyObject); object != "" {
+		if !connector.IsApplianceKeyObjectName(object) {
+			return fmt.Errorf("f5: %q is not a job's key object", object)
+		}
+		jobKeyFound, err := c.deleteObject(ctx, sb, "/mgmt/tm/sys/crypto/key/"+url.PathEscape(object+".key"))
+		if err != nil {
+			return fmt.Errorf("f5: remove the appliance key object %q: %w", object+".key", err)
+		}
+		csrFound, err := c.deleteObject(ctx, sb, "/mgmt/tm/sys/crypto/csr/"+url.PathEscape(object))
+		if err != nil {
+			return fmt.Errorf("f5: remove the appliance CSR %q: %w", object, err)
+		}
+		keyFound = keyFound || jobKeyFound || csrFound
+	}
 	if !certFound && !keyFound {
 		return connector.ErrTakedownNotInstalled
 	}

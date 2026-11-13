@@ -437,8 +437,17 @@ func (c *Connector) Takedown(ctx context.Context, sb connector.Sandbox, td conne
 	defer func() { _ = c.logout(ctx, sb, token) }()
 
 	base := connector.RollbackObjectName(td.Target, td.Fingerprint)
+	files := []string{base + ".key", base + ".crt"}
+	// ISE-O1: a key the appliance generated lives in the job's own key file,
+	// beside the CSR it wrote; both go with the certificate, after it.
+	if object := strings.TrimSpace(td.KeyObject); object != "" {
+		if !connector.IsApplianceKeyObjectName(object) {
+			return fmt.Errorf("netscaler: %q is not a job's key object", object)
+		}
+		files = append(files, object+".key", object+".csr")
+	}
 	found := false
-	for _, filename := range []string{base + ".key", base + ".crt"} {
+	for _, filename := range files {
 		path := "/nitro/v1/config/systemfile?args=filename:" + url.PathEscape(filename) +
 			",filelocation:" + url.PathEscape(c.fileLocation)
 		data, err := c.call(ctx, sb, http.MethodDelete, path, token, nil)

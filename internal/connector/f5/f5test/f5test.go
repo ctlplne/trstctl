@@ -79,6 +79,14 @@ func (s *Server) Close() {
 	}
 }
 
+// CSR reports whether the BIG-IP holds a CSR object of that name (ISE-O1).
+func (s *Server) CSR(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.csrs[name]
+	return ok
+}
+
 // DeviceKey reports whether the BIG-IP generated the key object name itself.
 func (s *Server) DeviceKey(name string) bool {
 	s.mu.Lock()
@@ -260,6 +268,18 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	// delete an object a profile still references; the double does the same so
 	// a takedown that would pull the rug from under a virtual server is refused
 	// rather than modeled as success.
+	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/csr/"):
+		// ISE-O1: a CSR object the BIG-IP generated with a key.
+		name := strings.TrimPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/csr/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if _, ok := s.csrs[name]; !ok {
+			http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+			return
+		}
+		delete(s.csrs, name)
+		s.ok(w, map[string]any{"name": name})
+
 	case r.Method == http.MethodDelete && (strings.HasPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/cert/") || strings.HasPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/key/")):
 		isKey := strings.HasPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/key/")
 		name := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/cert/"), "/mgmt/tm/sys/crypto/key/")
@@ -281,6 +301,10 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		delete(objects, name)
 		delete(s.uploads, name)
+		if key, ok := s.deviceKeys[name]; ok && isKey {
+			key.Destroy()
+			delete(s.deviceKeys, name)
+		}
 		s.ok(w, map[string]any{"name": name})
 
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/mgmt/tm/ltm/profile/client-ssl/"):

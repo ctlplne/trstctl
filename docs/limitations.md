@@ -822,8 +822,10 @@ never live in the API process. What you can do end to end against the running bi
   (under the tenant's control-plane key-generation switch), seals it to the deploy
   job, and the relay redeems and installs it. The appliance operations are proven
   against the management-API doubles, not hardware, and the PAN-OS certificate
-  generate and CSR export shapes need a firewall to confirm; each renewal's key
-  object stays on the appliance and nothing prunes them yet. A PAN-OS renewal picked
+  generate and CSR export shapes need a firewall to confirm. Each renewal's key
+  object stays on the appliance until its certificate is taken down: on F5,
+  NetScaler and A10 a takedown removes the job's key object and CSR with it
+  (ISE-O1); PAN-OS and Cisco ISE have no takedown, so theirs stay. A PAN-OS renewal picked
   up again after its certificate import finishes (PANOS-O1): the relay names the
   certificate the job's object holds, the control plane hands back the job's own
   signed result only when it is exactly that certificate, and the relay binds,

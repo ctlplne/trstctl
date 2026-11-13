@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/pem"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -134,5 +135,56 @@ func TestF5ApplianceKeyInstallRefusesAMismatchedCertificate(t *testing.T) {
 	dep.KeyPEM = []byte("-----BEGIN PRIVATE KEY-----")
 	if _, err := connector.RunApplianceInstall(ctx, c, ops, dep, key); err == nil {
 		t.Fatal("an appliance-key install carrying a private key was accepted")
+	}
+}
+
+// ISE-O1: taking down a certificate whose key the BIG-IP generated removes
+// the certificate, the job's key object and the CSR the BIG-IP made with it;
+// the bound certificate is refused with its key and CSR left in place; a key
+// object that is not a job's is refused before any deletion.
+func TestF5TakedownRemovesTheJobsKeyAndCSRISEO1(t *testing.T) {
+	srv := f5test.New(user, pass)
+	defer srv.Close()
+	c := f5.New(srv.URL(), profile, f5.WithBasicAuthBytes(user, []byte(pass)))
+	ops := connector.NewHTTPOps(srv.Client())
+	ctx := context.Background()
+	install := func(jobID int64) (string, string) {
+		t.Helper()
+		req := connector.ApplianceKeyRequest{ObjectName: connector.ApplianceKeyObjectName(f5TargetID, jobID),
+			CommonName: "app.example.test", DNSNames: []string{"app.example.test"}}
+		key, _, err := connector.RunApplianceKey(ctx, c, ops, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		certPEM := signF5CSR(t, key.CSRPEM)
+		fp := connector.CertificateFingerprint(certPEM)
+		if _, err := connector.RunApplianceInstall(ctx, c, ops, connector.Deployment{Target: profile, CertPEM: certPEM, Fingerprint: fp}, key); err != nil {
+			t.Fatal(err)
+		}
+		return key.ObjectName, fp
+	}
+	firstObject, firstFP := install(51)
+	secondObject, secondFP := install(52)
+
+	if _, err := connector.RunTakedown(ctx, c, ops, connector.Takedown{Target: profile, Fingerprint: secondFP, KeyObject: secondObject}); !errors.Is(err, connector.ErrTakedownObjectBound) {
+		t.Fatalf("takedown of the bound certificate = %v", err)
+	}
+	if !srv.DeviceKey(secondObject+".key") || !srv.CSR(secondObject) {
+		t.Fatal("a refused takedown removed the bound certificate's key or CSR")
+	}
+	if _, err := connector.RunTakedown(ctx, c, ops, connector.Takedown{Target: profile, Fingerprint: firstFP, KeyObject: "app-key"}); err == nil {
+		t.Fatal("a key object that is not a job's was accepted")
+	}
+	if !srv.DeviceKey(firstObject + ".key") {
+		t.Fatal("a refused takedown removed something")
+	}
+	if _, err := connector.RunTakedown(ctx, c, ops, connector.Takedown{Target: profile, Fingerprint: firstFP, KeyObject: firstObject}); err != nil {
+		t.Fatalf("takedown of the replaced certificate: %v", err)
+	}
+	if srv.DeviceKey(firstObject+".key") || srv.CSR(firstObject) {
+		t.Fatal("the replaced certificate's job key or CSR is still on the BIG-IP")
+	}
+	if _, err := connector.RunTakedown(ctx, c, ops, connector.Takedown{Target: profile, Fingerprint: firstFP, KeyObject: firstObject}); !errors.Is(err, connector.ErrTakedownNotInstalled) {
+		t.Fatalf("a second takedown = %v, want not installed", err)
 	}
 }

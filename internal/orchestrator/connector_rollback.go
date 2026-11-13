@@ -101,7 +101,7 @@ func (o *Orchestrator) applianceKeyObjectFor(ctx context.Context, tenantID, targ
 		return "", nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("orchestrator: read the rollback predecessor: %w", err)
+		return "", fmt.Errorf("orchestrator: read the certificate whose appliance key is named: %w", err)
 	}
 	if cert.KeyOrigin != string(custody.OriginAppliance) {
 		return "", nil
@@ -109,7 +109,7 @@ func (o *Orchestrator) applianceKeyObjectFor(ctx context.Context, tenantID, targ
 	jobID, ok := store.AgentCSRJobID(cert.IssuanceIdempotencyKey)
 	object := connector.ApplianceKeyObjectName(targetID, jobID)
 	if !ok || object == "" {
-		return "", errors.New("orchestrator: the predecessor's key was generated on the appliance, but its certificate does not name the renewal job and destination that hold it; no rollback was queued")
+		return "", errors.New("orchestrator: the certificate's key was generated on the appliance, but its certificate does not name the renewal job and destination that hold it; nothing was queued")
 	}
 	return object, nil
 }

@@ -211,6 +211,10 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			delete(s.files, name)
+			if key, ok := s.deviceKeys[name]; ok {
+				key.Destroy()
+				delete(s.deviceKeys, name)
+			}
 			s.ok(w)
 		})
 	// E2: what a certkey resolves to and which SSL vservers use it, the

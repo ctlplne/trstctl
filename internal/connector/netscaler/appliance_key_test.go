@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/pem"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -134,5 +135,59 @@ func TestNetScalerApplianceKeyInstallRefusesAMismatchedCertificate(t *testing.T)
 	dep.KeyPEM = []byte("-----BEGIN PRIVATE KEY-----")
 	if _, err := connector.RunApplianceInstall(ctx, c, ops, dep, key); err == nil {
 		t.Fatal("an appliance-key install carrying a private key was accepted")
+	}
+}
+
+// ISE-O1: taking down a certificate whose key the appliance generated
+// removes the certificate file, the job's key file and the CSR beside it;
+// the certkey's current files are refused and stay; a key object that is not
+// a job's is refused before any deletion.
+func TestNetScalerTakedownRemovesTheJobsKeyAndCSRISEO1(t *testing.T) {
+	srv := netscalertest.New(user, pass)
+	defer srv.Close()
+	c := netscaler.New(srv.URL(), user, []byte(pass))
+	ops := connector.NewHTTPOps(srv.Client())
+	ctx := context.Background()
+	install := func(jobID int64) (string, string) {
+		t.Helper()
+		key, _, err := connector.RunApplianceKey(ctx, c, ops, connector.ApplianceKeyRequest{
+			ObjectName: connector.ApplianceKeyObjectName(nsTargetID, jobID), CommonName: "vip.example.test",
+			DNSNames: []string{"vip.example.test"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		certPEM := signApplianceCSR(t, key.CSRPEM)
+		fp := connector.CertificateFingerprint(certPEM)
+		if _, err := connector.RunApplianceInstall(ctx, c, ops, connector.Deployment{Target: certkey, CertPEM: certPEM, Fingerprint: fp}, key); err != nil {
+			t.Fatal(err)
+		}
+		return key.ObjectName, fp
+	}
+	firstObject, firstFP := install(51)
+	secondObject, secondFP := install(52)
+
+	if _, err := connector.RunTakedown(ctx, c, ops, connector.Takedown{Target: certkey, Fingerprint: secondFP, KeyObject: secondObject}); !errors.Is(err, connector.ErrTakedownObjectBound) {
+		t.Fatalf("takedown of the bound certificate = %v", err)
+	}
+	if !srv.DeviceKey(secondObject + ".key") {
+		t.Fatal("a refused takedown removed the bound certificate's key")
+	}
+	if _, err := connector.RunTakedown(ctx, c, ops, connector.Takedown{Target: certkey, Fingerprint: firstFP, KeyObject: "vip-key"}); err == nil {
+		t.Fatal("a key object that is not a job's was accepted")
+	}
+	if _, err := connector.RunTakedown(ctx, c, ops, connector.Takedown{Target: certkey, Fingerprint: firstFP, KeyObject: firstObject}); err != nil {
+		t.Fatalf("takedown of the replaced certificate: %v", err)
+	}
+	for _, name := range []string{firstObject + ".key", firstObject + ".csr", connector.DeployedObjectName(certkey, firstFP) + ".crt"} {
+		if _, left := srv.File(name); left {
+			t.Fatalf("%s is still on the appliance", name)
+		}
+	}
+	if srv.DeviceKey(firstObject + ".key") {
+		t.Fatal("the replaced certificate's job key is still on the appliance")
+	}
+	if srv.OpenSessions() != 0 {
+		t.Fatalf("%d NITRO sessions left open", srv.OpenSessions())
 	}
 }

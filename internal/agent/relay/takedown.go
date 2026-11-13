@@ -30,12 +30,16 @@ const KindConnectorTakedown = "connector.takedown"
 // TakedownIntent names the object to remove. It carries no certificate and no
 // key: the fingerprint names an object already on the appliance.
 type TakedownIntent struct {
-	Connector      string          `json:"connector"`
-	Target         string          `json:"target"`
-	TargetID       string          `json:"target_id,omitempty"`
-	TargetRevision string          `json:"target_revision,omitempty"`
-	IdentityID     string          `json:"identity_id,omitempty"`
-	Fingerprint    string          `json:"fingerprint"`
+	Connector      string `json:"connector"`
+	Target         string `json:"target"`
+	TargetID       string `json:"target_id,omitempty"`
+	TargetRevision string `json:"target_revision,omitempty"`
+	IdentityID     string `json:"identity_id,omitempty"`
+	Fingerprint    string `json:"fingerprint"`
+	// KeyObject names the appliance object the certificate's key was
+	// generated into (A122), from the control plane's issuance record; the
+	// takedown removes it and its request with the certificate (ISE-O1).
+	KeyObject      string          `json:"key_object,omitempty"`
 	TargetConfig   json.RawMessage `json:"target_config,omitempty"`
 	CredentialRefs []string        `json:"credential_refs,omitempty"`
 	Reason         string          `json:"reason,omitempty"`
@@ -126,7 +130,7 @@ func Takedown(ctx context.Context, client *http.Client, intent TakedownIntent, m
 		return connector.Stats{}, err
 	}
 	return connector.RunTakedown(ctx, built, connector.NewHTTPOps(client), connector.Takedown{
-		Target: intent.Target, Fingerprint: intent.Fingerprint, Reason: intent.Reason,
+		Target: intent.Target, Fingerprint: intent.Fingerprint, KeyObject: intent.KeyObject, Reason: intent.Reason,
 	})
 }
 

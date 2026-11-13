@@ -146,3 +146,51 @@ func TestA10ApplianceKeyInstallRefusesAMismatchedCertificate(t *testing.T) {
 		t.Fatal("an appliance-key install carrying a private key was accepted")
 	}
 }
+
+// ISE-O1: taking down a certificate whose key the A10 generated removes the
+// certificate file, the job's key file and its CSR; the template's current
+// files are refused and stay; a key object that is not a job's is refused
+// before any deletion.
+func TestA10TakedownRemovesTheJobsKeyAndCSRISEO1(t *testing.T) {
+	srv := a10test.New("admin", "s3cret")
+	defer srv.Close()
+	c := a10.New(srv.URL(), "admin", []byte("s3cret"))
+	const template = "ssl-web"
+	ops := connector.NewHTTPOps(srv.Client())
+	ctx := context.Background()
+	install := func(jobID int64) (string, string) {
+		t.Helper()
+		key, _, err := connector.RunApplianceKey(ctx, c, ops, connector.ApplianceKeyRequest{
+			ObjectName: connector.ApplianceKeyObjectName(a10TargetID, jobID), CommonName: "vip.example.test",
+			DNSNames: []string{"vip.example.test"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		certPEM := signA10CSR(t, key.CSRPEM)
+		fp := connector.CertificateFingerprint(certPEM)
+		if _, err := connector.RunApplianceInstall(ctx, c, ops, connector.Deployment{Target: template, CertPEM: certPEM, Fingerprint: fp}, key); err != nil {
+			t.Fatal(err)
+		}
+		return key.ObjectName, fp
+	}
+	firstObject, firstFP := install(51)
+	secondObject, secondFP := install(52)
+
+	if _, err := connector.RunTakedown(ctx, c, ops, connector.Takedown{Target: template, Fingerprint: secondFP, KeyObject: secondObject}); !errors.Is(err, connector.ErrTakedownObjectBound) {
+		t.Fatalf("takedown of the bound certificate = %v", err)
+	}
+	if !srv.DeviceKey(secondObject+".key") || !srv.HasCSR(secondObject+".csr") {
+		t.Fatal("a refused takedown removed the bound certificate's key or CSR")
+	}
+	if _, err := connector.RunTakedown(ctx, c, ops, connector.Takedown{Target: template, Fingerprint: firstFP, KeyObject: "vip-key"}); err == nil {
+		t.Fatal("a key object that is not a job's was accepted")
+	}
+	if _, err := connector.RunTakedown(ctx, c, ops, connector.Takedown{Target: template, Fingerprint: firstFP, KeyObject: firstObject}); err != nil {
+		t.Fatalf("takedown of the replaced certificate: %v", err)
+	}
+	if srv.DeviceKey(firstObject+".key") || srv.HasFile("ssl-key", firstObject+".key") || srv.HasCSR(firstObject+".csr") ||
+		srv.HasFile("ssl-cert", connector.DeployedObjectName(template, firstFP)+".crt") {
+		t.Fatal("the replaced certificate, its job key or its CSR is still on the A10")
+	}
+}

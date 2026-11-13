@@ -302,8 +302,17 @@ func (c *Connector) Takedown(ctx context.Context, sb connector.Sandbox, td conne
 	defer secret.Wipe(token)
 
 	base := connector.RollbackObjectName(td.Target, td.Fingerprint)
+	files := []struct{ kind, name string }{{"ssl-key", base + ".key"}, {"ssl-cert", base + ".crt"}}
+	// ISE-O1: a key the A10 generated lives in the job's own key file,
+	// beside the CSR it wrote; both go with the certificate, after it.
+	if object := strings.TrimSpace(td.KeyObject); object != "" {
+		if !connector.IsApplianceKeyObjectName(object) {
+			return fmt.Errorf("a10: %q is not a job's key object", object)
+		}
+		files = append(files, struct{ kind, name string }{"ssl-key", object + ".key"}, struct{ kind, name string }{"csr", object + ".csr"})
+	}
 	found := false
-	for _, file := range []struct{ kind, name string }{{"ssl-key", base + ".key"}, {"ssl-cert", base + ".crt"}} {
+	for _, file := range files {
 		data, err := c.call(ctx, sb, http.MethodDelete,
 			"/axapi/v3/file/"+file.kind+"/"+url.PathEscape(file.name), token, nil)
 		secret.Wipe(data)

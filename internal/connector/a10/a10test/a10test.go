@@ -105,6 +105,14 @@ func (s *Server) RemoveCSR(name string) {
 	s.mu.Unlock()
 }
 
+// HasCSR reports whether the A10 holds a CSR file of that name (ISE-O1).
+func (s *Server) HasCSR(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.csrs[name]
+	return ok
+}
+
 // HasFile reports whether an uploaded ssl-cert or ssl-key file of that name exists.
 func (s *Server) HasFile(kind, name string) bool {
 	s.mu.Lock()
@@ -191,6 +199,16 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
+			if parts[0] == "csr" {
+				// ISE-O1: a CSR file the A10 wrote with a generated key.
+				if _, exists := s.csrs[name]; !exists {
+					http.Error(w, `{"response":{"status":"fail"}}`, http.StatusNotFound)
+					return
+				}
+				delete(s.csrs, name)
+				s.ok(w, map[string]any{"file": name})
+				return
+			}
 			files := s.certs
 			if parts[0] == "ssl-key" {
 				files = s.keys
@@ -200,6 +218,10 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			delete(files, name)
+			if key, ok := s.deviceKeys[name]; ok && parts[0] == "ssl-key" {
+				key.Destroy()
+				delete(s.deviceKeys, name)
+			}
 			s.ok(w, map[string]any{"file": name})
 		})
 	// E2: the certificate a client-SSL template names, the readback a relay

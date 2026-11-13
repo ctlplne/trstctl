@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A takedown of a certificate whose key the appliance generated removes that key too (ISE-O1): on F5, NetScaler and A10
+  the relay deletes the certificate, the renewal job's key object and its CSR, named by the control plane from the
+  certificate's issuance record (never from the request); a certificate that does not name its job is refused, and the
+  appliance refuses while the certificate is bound.
 - An AWS STS lease's role is read statement by statement (G2-L1): each managed policy's default version and each
   inline policy's document is read from IAM, every statement shows what it allows or denies, on what and under which
   condition keys, and the statements are weighed as IAM decides a request (deny wins): the graph says when a role is a

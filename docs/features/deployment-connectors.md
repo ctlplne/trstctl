@@ -1418,8 +1418,13 @@ register|list|update`, `trstctl observations record|list`.
   credentials.
 - **Appliance-generated keys:** each renewal leaves its job-named key object (and,
   except on PAN-OS, its CSR) on the appliance, so predecessors stay available for
-  rollback; nothing prunes them yet. The appliance operations are proven against
-  the management-API doubles, not hardware.
+  rollback. A takedown of such a certificate on F5, NetScaler or A10 removes the
+  certificate, the renewal job's key object and its CSR together (ISE-O1): the control
+  plane names the object from the certificate's issuance record, never from the
+  request, refuses one whose certificate does not name its job, and the appliance
+  refuses while the certificate is bound. PAN-OS and Cisco ISE have no takedown, so
+  their job objects stay until removed on the appliance. The appliance operations are
+  proven against the management-API doubles, not hardware.
 - Idempotency is keyed on the fingerprint: redeploying the same certificate is a safe
   no-op, but a connector must converge to the same state.
 

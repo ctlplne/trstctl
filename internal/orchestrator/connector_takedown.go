@@ -37,12 +37,15 @@ const (
 // may be empty: a rogue certificate found in inventory need not belong to a
 // managed identity.
 type ConnectorTakedownRequest struct {
-	Connector      string          `json:"connector"`
-	Target         string          `json:"target"`
-	TargetID       string          `json:"target_id"`
-	TargetRevision string          `json:"target_revision"`
-	IdentityID     string          `json:"identity_id,omitempty"`
-	Fingerprint    string          `json:"fingerprint"`
+	Connector      string `json:"connector"`
+	Target         string `json:"target"`
+	TargetID       string `json:"target_id"`
+	TargetRevision string `json:"target_revision"`
+	IdentityID     string `json:"identity_id,omitempty"`
+	Fingerprint    string `json:"fingerprint"`
+	// KeyObject is derived here, never taken from the caller: the appliance
+	// object the certificate's key was generated into (ISE-O1).
+	KeyObject      string          `json:"key_object,omitempty"`
 	TargetConfig   json.RawMessage `json:"target_config,omitempty"`
 	Reason         string          `json:"-"`
 	RequestedBy    string          `json:"-"`
@@ -108,6 +111,15 @@ func (o *Orchestrator) RequestConnectorTakedown(ctx context.Context, tenantID st
 	}
 	if decoded, err := hex.DecodeString(req.Fingerprint); err != nil || len(decoded) != 32 {
 		return store.ConnectorDeliveryReceipt{}, errors.New("orchestrator: takedown needs the exact SHA-256 leaf fingerprint")
+	}
+	if connector.ApplianceKeyFamily(req.Connector) {
+		// ISE-O1: a certificate whose key the appliance generated keeps that
+		// key in the renewal job's own object; the takedown removes it too.
+		object, err := o.applianceKeyObjectFor(ctx, tenantID, req.TargetID, req.Fingerprint)
+		if err != nil {
+			return store.ConnectorDeliveryReceipt{}, err
+		}
+		req.KeyObject = object
 	}
 	if req.RequestedBy == "" {
 		if actor, ok := events.ActorFromContext(ctx); ok {
