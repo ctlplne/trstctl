@@ -13,6 +13,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/kms/awskms"
@@ -102,10 +103,12 @@ func TestOperationAwareLifecycleReconcilesAmbiguousProviderEffects(t *testing.T)
 }
 
 type operationKMSKey struct {
-	signer *crypto.LockedSigner
-	spec   string
-	tags   map[string]string
-	state  string
+	signer  *crypto.LockedSigner
+	spec    string
+	tags    map[string]string
+	state   string
+	created time.Time
+	deletes time.Time
 }
 
 type operationKMS struct {
@@ -228,7 +231,8 @@ func (f *operationKMS) create(w http.ResponseWriter, in struct {
 	for _, tag := range in.Tags {
 		tags[tag.Key] = tag.Value
 	}
-	f.keys[id] = &operationKMSKey{signer: signer, spec: in.KeySpec, tags: tags, state: "Enabled"}
+	f.keys[id] = &operationKMSKey{signer: signer, spec: in.KeySpec, tags: tags, state: "Enabled",
+		created: time.Date(2026, 11, 13, 4, 0, f.n, 0, time.UTC)}
 	lose := f.loseCreateResponse
 	f.loseCreateResponse = false
 	f.mu.Unlock()
@@ -247,9 +251,14 @@ func (f *operationKMS) describe(w http.ResponseWriter, id string) {
 		http.Error(w, `{"__type":"NotFoundException"}`, http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, map[string]any{"KeyMetadata": map[string]any{
+	meta := map[string]any{
 		"KeyId": id, "KeySpec": key.spec, "KeyUsage": "SIGN_VERIFY", "KeyState": key.state, "Enabled": key.state == "Enabled",
-	}})
+		"CreationDate": float64(key.created.Unix()),
+	}
+	if !key.deletes.IsZero() {
+		meta["DeletionDate"] = float64(key.deletes.Unix())
+	}
+	writeJSON(w, map[string]any{"KeyMetadata": meta})
 }
 
 func (f *operationKMS) publicKey(w http.ResponseWriter, id string) {
@@ -289,6 +298,7 @@ func (f *operationKMS) delete(w http.ResponseWriter, id string) {
 	key := f.keys[id]
 	if key != nil {
 		key.state = "PendingDeletion"
+		key.deletes = key.created.Add(30 * 24 * time.Hour)
 		f.deleteEffects++
 	}
 	lose := f.loseDeleteResponse
@@ -374,5 +384,34 @@ func TestTenantScopedLifecycleTagsTheKeysTenantA168L2(t *testing.T) {
 	f.mu.Unlock()
 	if disabled != 1 {
 		t.Fatalf("DisableKey effects = %d, want 1", disabled)
+	}
+}
+
+// A168-L3: the backend reports a key's own dates — when KMS created it, and
+// when KMS will delete it once deletion is scheduled.
+func TestKeyDatesAreTheProvidersOwnA168L3(t *testing.T) {
+	f := newOperationKMS(t)
+	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: []byte(testSK)},
+		awskms.WithEndpoint(f.srv.URL), awskms.WithHTTPClient(f.srv.Client()), awskms.WithOpTimeout(0))
+	var dater crypto.RemoteKeyDater = b
+	ctx := context.Background()
+	_, ref, err := b.GenerateManagedKeyForOperation(ctx, "a168l3-generate", crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dates, err := dater.KeyDates(ctx, ref)
+	created := time.Date(2026, 11, 13, 4, 0, 1, 0, time.UTC)
+	if err != nil || !dates.Created.Equal(created) || !dates.DeletionScheduled.IsZero() {
+		t.Fatalf("dates of an active key = %+v %v, want created %s and no deletion", dates, err, created)
+	}
+	if err := b.ZeroizeKeyForOperation(ctx, "a168l3-zeroize", ref); err != nil {
+		t.Fatal(err)
+	}
+	dates, err = dater.KeyDates(ctx, ref)
+	if err != nil || !dates.Created.Equal(created) || !dates.DeletionScheduled.Equal(created.Add(30*24*time.Hour)) {
+		t.Fatalf("dates of a key pending deletion = %+v %v", dates, err)
+	}
+	if _, err := dater.KeyDates(ctx, crypto.KeyRef{ID: "missing-key"}); err == nil {
+		t.Fatal("a missing key reported dates")
 	}
 }

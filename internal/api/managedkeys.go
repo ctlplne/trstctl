@@ -516,6 +516,10 @@ type managedKeyRecordResponse struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 	CustodyStatus    string     `json:"custody_status"`
 	CustodyCheckedAt *time.Time `json:"custody_checked_at,omitempty"`
+	// ProviderCreatedAt and ProviderDeletionAt are the provider's own dates
+	// for the key (A168-L3), when it reported them.
+	ProviderCreatedAt  *time.Time `json:"provider_created_at,omitempty"`
+	ProviderDeletionAt *time.Time `json:"provider_deletion_at,omitempty"`
 }
 
 type managedKeyRecordListResponse struct {
@@ -529,6 +533,7 @@ func toManagedKeyRecordResponse(key store.ManagedKey) managedKeyRecordResponse {
 		Version: key.Version, State: managedkeystate.PublicState(key.Provider, key.State), PublicDER: key.PublicDER,
 		Extractable: false, CreatedAt: key.CreatedAt, UpdatedAt: key.UpdatedAt,
 		CustodyStatus: key.CustodyStatus, CustodyCheckedAt: key.CustodyCheckedAt,
+		ProviderCreatedAt: key.ProviderCreatedAt, ProviderDeletionAt: key.ProviderDeletionAt,
 	}
 }
 

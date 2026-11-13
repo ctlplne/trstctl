@@ -7243,6 +7243,8 @@ export interface ManagedKeyRecord {
   extractable: boolean;
   key_id: string;
   provider: string;
+  provider_created_at?: string;
+  provider_deletion_at?: string;
   public_der?: string;
   state: string;
   updated_at: string;

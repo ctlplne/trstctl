@@ -453,6 +453,12 @@ message ManageKeyResponse {
   // replayed is true when the signer returned a durable completed operation
   // rather than touching the provider again.
   bool replayed = 6;
+  // provider_created_unix and provider_deletion_unix are the provider's own
+  // dates for the key the result names (A168-L3): when the provider created
+  // it, and when the provider will destroy it once destruction is scheduled,
+  // in Unix seconds; 0 when the provider reports no such date.
+  int64 provider_created_unix = 7;
+  int64 provider_deletion_unix = 8;
 }
 
 message SignManagedKeyRequest {

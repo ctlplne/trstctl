@@ -606,6 +606,8 @@ func (h *durableOutboxHandler) DeliverLicensed(ctx context.Context, message orch
 	payload, err := json.Marshal(projections.ManagedKeyCommandCompleted{
 		ManagedKeyCommand: command, ResultKeyID: result.KeyID,
 		PublicDER: result.PublicDER, State: result.State,
+		// A168-L3: the provider's own dates for the key, as the signer read them.
+		ProviderCreatedAt: providerDate(result.ProviderCreatedAt), ProviderDeletionAt: providerDate(result.ProviderDeletionAt),
 	})
 	if err != nil {
 		return true, err
@@ -632,4 +634,14 @@ func (h *durableOutboxHandler) DeliverLicensed(ctx context.Context, message orch
 		return true, err
 	}
 	return true, nil
+}
+
+// providerDate is a provider date for an event payload: absent when the
+// provider reported none.
+func providerDate(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	utc := t.UTC()
+	return &utc
 }

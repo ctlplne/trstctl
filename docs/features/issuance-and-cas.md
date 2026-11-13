@@ -1123,7 +1123,18 @@ the control plane exposes:
   (`extractable: false`; no private material returned);
 - `GET /api/v1/managed-keys` — read the tenant's event-projected key inventory with
   bounded cursor pagination, including keys from providers used before a deployment
-  configuration change;
+  configuration change. A cloud KMS key (AWS KMS, Azure Key Vault/Managed HSM, GCP
+  Cloud KMS) carries the provider's own dates (A168-L3): `provider_created_at`, when
+  the provider created the key, and `provider_deletion_at`, when it will destroy the
+  key's material once deletion is scheduled. The isolated signer reads them from the
+  provider after each lifecycle action (DescribeKey; the key version's `createTime` and
+  `destroyTime`; the key's `created` attribute and the deleted key's
+  `scheduledPurgeDate`) and records them with the result — a provider that cannot be
+  read leaves the action to be retried — so trstctl's record holds the provider's dates
+  rather than the moment its own operation completed (`created_at`). A custody proof
+  records the creation date of a key created before this release; a result that
+  reports no dates never erases recorded ones. The console's managed-key inventory
+  shows both;
 - `GET /api/v1/managed-keys/{provider}/{key_id}` — read the current state and public
   material of one exact provider/handle pair after a lost response or restart;
 - `GET /api/v1/managed-keys/operations/{operation_id}` — read a tenant-scoped

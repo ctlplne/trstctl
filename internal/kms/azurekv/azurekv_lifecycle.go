@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
@@ -17,6 +18,7 @@ import (
 var _ crypto.RemoteKeyLifecycle = (*Backend)(nil)
 var _ crypto.OperationAwareRemoteKeyLifecycle = (*Backend)(nil)
 var _ crypto.RemoteKeyDigestSigner = (*Backend)(nil)
+var _ crypto.RemoteKeyDater = (*Backend)(nil)
 
 // GenerateManagedKey creates an Azure Key Vault / Managed HSM signing key and
 // returns the opaque provider key id. The private key never leaves Azure; only the
@@ -272,6 +274,40 @@ func (b *Backend) ZeroizeKeyForOperation(ctx context.Context, operationID string
 		return fmt.Errorf("azure-key-vault: key %q remained active after zeroize", ref.ID)
 	}
 	return nil
+}
+
+// KeyDates reads the key version's own creation time (attributes.created) and,
+// once the key is deleted, the time Key Vault will purge it — the deleted
+// key's scheduledPurgeDate, read from deletedkeys, where a soft-deleted key is
+// kept until then (A168-L3).
+func (b *Backend) KeyDates(ctx context.Context, ref crypto.KeyRef) (crypto.KeyDates, error) {
+	name, version, err := parseRef(ref)
+	if err != nil {
+		return crypto.KeyDates{}, err
+	}
+	ctx, cancel := b.opContext(ctx)
+	defer cancel()
+	var resource struct {
+		Attributes struct {
+			Created int64 `json:"created"`
+		} `json:"attributes"`
+		ScheduledPurgeDate int64 `json:"scheduledPurgeDate"`
+	}
+	err = b.call(ctx, http.MethodGet, keyPath(name, version), nil, &resource)
+	if isAzureStatus(err, http.StatusNotFound) {
+		err = b.call(ctx, http.MethodGet, "/deletedkeys/"+name, nil, &resource)
+	}
+	if err != nil {
+		return crypto.KeyDates{}, fmt.Errorf("azure-key-vault: read key dates: %w", err)
+	}
+	var dates crypto.KeyDates
+	if resource.Attributes.Created > 0 {
+		dates.Created = time.Unix(resource.Attributes.Created, 0).UTC()
+	}
+	if resource.ScheduledPurgeDate > 0 {
+		dates.DeletionScheduled = time.Unix(resource.ScheduledPurgeDate, 0).UTC()
+	}
+	return dates, nil
 }
 
 func (b *Backend) azureKeyState(ctx context.Context, name, version string) (exists, enabled bool, err error) {

@@ -34278,6 +34278,16 @@
           "provider": {
             "type": "string"
           },
+          "provider_created_at": {
+            "description": "When the provider itself created the key, as a lifecycle result reported it (cloud KMS providers); absent until one does.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "provider_deletion_at": {
+            "description": "When the provider will destroy the key's material, once destruction is scheduled (cloud KMS providers).",
+            "format": "date-time",
+            "type": "string"
+          },
           "public_der": {
             "format": "byte",
             "type": "string"

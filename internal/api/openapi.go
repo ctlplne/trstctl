@@ -8344,6 +8344,10 @@ func componentSchemas() map[string]*Schema {
 		"extractable": {Type: "boolean"}, "created_at": timestamp(), "updated_at": timestamp(),
 		"custody_status":     {Type: "string", Enum: []string{"not_checked", "pending", "verified", "unavailable"}},
 		"custody_checked_at": timestamp(),
+		"provider_created_at": {Type: "string", Format: "date-time",
+			Description: "When the provider itself created the key, as a lifecycle result reported it (cloud KMS providers); absent until one does."},
+		"provider_deletion_at": {Type: "string", Format: "date-time",
+			Description: "When the provider will destroy the key's material, once destruction is scheduled (cloud KMS providers)."},
 	}, "provider", "key_id", "algorithm", "version", "state", "extractable", "created_at", "updated_at", "custody_status")
 	managedKeyRecordList := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("ManagedKeyRecord")}, "next_cursor": str(),

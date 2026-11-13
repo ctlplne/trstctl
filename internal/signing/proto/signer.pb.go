@@ -1669,9 +1669,15 @@ type ManageKeyResponse struct {
 	State string `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
 	// replayed is true when the signer returned a durable completed operation
 	// rather than touching the provider again.
-	Replayed      bool `protobuf:"varint,6,opt,name=replayed,proto3" json:"replayed,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Replayed bool `protobuf:"varint,6,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	// provider_created_unix and provider_deletion_unix are the provider's own
+	// dates for the key the result names (A168-L3): when the provider created
+	// it, and when the provider will destroy it once destruction is scheduled,
+	// in Unix seconds; 0 when the provider reports no such date.
+	ProviderCreatedUnix  int64 `protobuf:"varint,7,opt,name=provider_created_unix,json=providerCreatedUnix,proto3" json:"provider_created_unix,omitempty"`
+	ProviderDeletionUnix int64 `protobuf:"varint,8,opt,name=provider_deletion_unix,json=providerDeletionUnix,proto3" json:"provider_deletion_unix,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *ManageKeyResponse) Reset() {
@@ -1744,6 +1750,20 @@ func (x *ManageKeyResponse) GetReplayed() bool {
 		return x.Replayed
 	}
 	return false
+}
+
+func (x *ManageKeyResponse) GetProviderCreatedUnix() int64 {
+	if x != nil {
+		return x.ProviderCreatedUnix
+	}
+	return 0
+}
+
+func (x *ManageKeyResponse) GetProviderDeletionUnix() int64 {
+	if x != nil {
+		return x.ProviderDeletionUnix
+	}
+	return 0
 }
 
 type SignManagedKeyRequest struct {
@@ -4765,7 +4785,7 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\foperation_id\x18\x03 \x01(\tR\voperationId\x12<\n" +
 	"\x06action\x18\x04 \x01(\x0e2$.trstctl.signing.v1.ManagedKeyActionR\x06action\x12\x15\n" +
 	"\x06key_id\x18\x05 \x01(\tR\x05keyId\x12;\n" +
-	"\talgorithm\x18\x06 \x01(\x0e2\x1d.trstctl.signing.v1.AlgorithmR\talgorithm\"\xd4\x01\n" +
+	"\talgorithm\x18\x06 \x01(\x0e2\x1d.trstctl.signing.v1.AlgorithmR\talgorithm\"\xbe\x02\n" +
 	"\x11ManageKeyResponse\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x15\n" +
 	"\x06key_id\x18\x02 \x01(\tR\x05keyId\x12;\n" +
@@ -4773,7 +4793,9 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\n" +
 	"public_key\x18\x04 \x01(\fR\tpublicKey\x12\x14\n" +
 	"\x05state\x18\x05 \x01(\tR\x05state\x12\x1a\n" +
-	"\breplayed\x18\x06 \x01(\bR\breplayed\"\xa8\x04\n" +
+	"\breplayed\x18\x06 \x01(\bR\breplayed\x122\n" +
+	"\x15provider_created_unix\x18\a \x01(\x03R\x13providerCreatedUnix\x124\n" +
+	"\x16provider_deletion_unix\x18\b \x01(\x03R\x14providerDeletionUnix\"\xa8\x04\n" +
 	"\x15SignManagedKeyRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1a\n" +
 	"\bprovider\x18\x02 \x01(\tR\bprovider\x12\x15\n" +

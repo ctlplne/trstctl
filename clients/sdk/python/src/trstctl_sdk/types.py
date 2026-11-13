@@ -10055,6 +10055,8 @@ ManagedKeyRecord = TypedDict(
         'extractable': bool,
         'key_id': str,
         'provider': str,
+        'provider_created_at': str,
+        'provider_deletion_at': str,
         'public_der': str,
         'state': str,
         'updated_at': str,

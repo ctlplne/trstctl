@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -152,6 +153,7 @@ type lifecycleKey struct {
 	disabled  bool
 	destroyed bool
 	labels    map[string]string
+	created   time.Time
 }
 
 func newLifecycleDoer(t *testing.T, token string) *lifecycleDoer {
@@ -230,7 +232,7 @@ func (d *lifecycleDoer) create(req *http.Request, path string, body []byte) *htt
 	cryptoKey := path + "/" + keyID
 	versionName := cryptoKey + "/cryptoKeyVersions/1"
 	d.mu.Lock()
-	d.keys[versionName] = &lifecycleKey{signer: signer, labels: in.Labels}
+	d.keys[versionName] = &lifecycleKey{signer: signer, labels: in.Labels, created: time.Date(2026, 11, 13, 5, 0, d.createEffects+1, 0, time.UTC)}
 	d.lastVersion = versionName
 	d.createEffects++
 	d.mu.Unlock()
@@ -258,10 +260,12 @@ func (d *lifecycleDoer) versionState(req *http.Request, path string) *http.Respo
 	if key.disabled {
 		state = "DISABLED"
 	}
+	resource := map[string]string{"name": path, "state": state, "createTime": key.created.Format(time.RFC3339Nano)}
 	if key.destroyed {
-		state = "DESTROY_SCHEDULED"
+		resource["state"] = "DESTROY_SCHEDULED"
+		resource["destroyTime"] = key.created.Add(24 * time.Hour).Format(time.RFC3339Nano)
 	}
-	return jsonResponse(req, http.StatusOK, map[string]string{"name": path, "state": state})
+	return jsonResponse(req, http.StatusOK, resource)
 }
 
 func (d *lifecycleDoer) publicKey(req *http.Request, path string) *http.Response {
@@ -467,5 +471,32 @@ func TestTokenSourceAuthorizesEachRequestA169L1(t *testing.T) {
 	}
 	if _, err := NewSecure("projects/p/locations/us/keyRings/trstctl", Credentials{}); err == nil {
 		t.Fatal("no credential was accepted")
+	}
+}
+
+// A168-L3: the backend reports the key version's own dates — Cloud KMS's
+// createTime, and its destroyTime once destruction is scheduled.
+func TestKeyDatesAreTheProvidersOwnA168L3(t *testing.T) {
+	doer := newLifecycleDoer(t, "gcp-token")
+	b := New("projects/p/locations/us/keyRings/trstctl", Credentials{BearerToken: []byte("gcp-token")},
+		WithEndpoint("https://cloudkms.test/v1"), WithHTTPClient(doer), WithOpTimeout(0))
+	var dater crypto.RemoteKeyDater = b
+	ctx := context.Background()
+	_, ref, err := b.GenerateManagedKeyForOperation(ctx, "a168l3-generate", crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := time.Date(2026, 11, 13, 5, 0, 1, 0, time.UTC)
+	if dates, err := dater.KeyDates(ctx, ref); err != nil || !dates.Created.Equal(created) || !dates.DeletionScheduled.IsZero() {
+		t.Fatalf("dates of an enabled version = %+v %v, want created %s", dates, err, created)
+	}
+	if err := b.ZeroizeKeyForOperation(ctx, "a168l3-zeroize", ref); err != nil {
+		t.Fatal(err)
+	}
+	if dates, err := dater.KeyDates(ctx, ref); err != nil || !dates.Created.Equal(created) || !dates.DeletionScheduled.Equal(created.Add(24*time.Hour)) {
+		t.Fatalf("dates of a version scheduled for destruction = %+v %v", dates, err)
+	}
+	if _, err := dater.KeyDates(ctx, crypto.KeyRef{ID: "projects/p/locations/us/keyRings/trstctl/cryptoKeys/missing/cryptoKeyVersions/1"}); err == nil {
+		t.Fatal("a missing version reported dates")
 	}
 }

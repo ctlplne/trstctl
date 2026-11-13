@@ -175,6 +175,10 @@ type ManagedKeyResult struct {
 	PublicDER []byte
 	State     string
 	Replayed  bool
+	// ProviderCreatedAt and ProviderDeletionAt are the provider's own dates
+	// for the key (A168-L3); zero when the provider reports none.
+	ProviderCreatedAt  time.Time
+	ProviderDeletionAt time.Time
 }
 
 // ManageKey drives one provider lifecycle command over the authenticated
@@ -199,6 +203,7 @@ func (c *Client) ManageKey(ctx context.Context, command ManagedKeyCommand) (Mana
 	return ManagedKeyResult{
 		Provider: resp.GetProvider(), KeyID: resp.GetKeyId(), Algorithm: alg,
 		PublicDER: bytes.Clone(resp.GetPublicKey()), State: resp.GetState(), Replayed: resp.GetReplayed(),
+		ProviderCreatedAt: unixTime(resp.GetProviderCreatedUnix()), ProviderDeletionAt: unixTime(resp.GetProviderDeletionUnix()),
 	}, nil
 }
 
@@ -217,4 +222,12 @@ func managedKeyActionToProto(action ManagedKeyAction) (signerpb.ManagedKeyAction
 	default:
 		return signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_UNSPECIFIED, fmt.Errorf("signing: unsupported managed-key action %q", action)
 	}
+}
+
+// unixTime turns a protocol date in Unix seconds into a time; 0 is none.
+func unixTime(seconds int64) time.Time {
+	if seconds <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(seconds, 0).UTC()
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -52,6 +53,12 @@ type ManagedKeyCommandCompleted struct {
 	ResultKeyID string `json:"result_key_id"`
 	PublicDER   []byte `json:"public_der"`
 	State       string `json:"state"`
+	// ProviderCreatedAt and ProviderDeletionAt are the provider's own dates
+	// for the result key (A168-L3): when it created the key, and when it will
+	// destroy it once destruction is scheduled. Absent when the provider
+	// reports none (or the event predates them).
+	ProviderCreatedAt  *time.Time `json:"provider_created_at,omitempty"`
+	ProviderDeletionAt *time.Time `json:"provider_deletion_at,omitempty"`
 }
 
 type ManagedKeyCommandFailed struct {
@@ -257,6 +264,7 @@ func (p *Projector) applyManagedKeyTx(ctx context.Context, tx pgx.Tx, event even
 			Action: payload.Action, KeyID: payload.KeyID, Algorithm: payload.Algorithm, RequestBinding: payload.RequestBinding,
 			Status: "completed", ResultKeyID: payload.ResultKeyID, PublicDER: payload.PublicDER,
 			ResultState: payload.State, UpdatedAt: event.Time,
+			ProviderCreatedAt: payload.ProviderCreatedAt, ProviderDeletionAt: payload.ProviderDeletionAt,
 		})
 	case EventManagedKeyCommandFailed:
 		var payload ManagedKeyCommandFailed

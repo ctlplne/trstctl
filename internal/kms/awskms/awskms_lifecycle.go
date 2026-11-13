@@ -337,6 +337,28 @@ func (b *Backend) ZeroizeKeyForOperation(ctx context.Context, operationID string
 	return nil
 }
 
+// KeyDates reads the key's own creation date and, once deletion is scheduled,
+// its deletion date from DescribeKey (A168-L3).
+func (b *Backend) KeyDates(ctx context.Context, ref crypto.KeyRef) (crypto.KeyDates, error) {
+	if strings.TrimSpace(ref.ID) == "" {
+		return crypto.KeyDates{}, fmt.Errorf("aws-kms: key dates require a key ref")
+	}
+	ctx, cancel := b.opContext(ctx)
+	defer cancel()
+	meta, err := b.describeKey(ctx, ref.ID)
+	if err != nil {
+		return crypto.KeyDates{}, err
+	}
+	var dates crypto.KeyDates
+	if meta.CreationDate != nil {
+		dates.Created = meta.CreationDate.UTC()
+	}
+	if meta.DeletionDate != nil {
+		dates.DeletionScheduled = meta.DeletionDate.UTC()
+	}
+	return dates, nil
+}
+
 func (b *Backend) describeKey(ctx context.Context, keyID string) (*types.KeyMetadata, error) {
 	out, err := b.client.DescribeKey(ctx, &awskmssdk.DescribeKeyInput{KeyId: awssdk.String(keyID)})
 	if err != nil {

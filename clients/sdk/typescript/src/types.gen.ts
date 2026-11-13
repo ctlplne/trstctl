@@ -21551,6 +21551,16 @@ export interface components {
             extractable: boolean;
             key_id: string;
             provider: string;
+            /**
+             * Format: date-time
+             * @description When the provider itself created the key, as a lifecycle result reported it (cloud KMS providers); absent until one does.
+             */
+            provider_created_at?: string;
+            /**
+             * Format: date-time
+             * @description When the provider will destroy the key's material, once destruction is scheduled (cloud KMS providers).
+             */
+            provider_deletion_at?: string;
             /** Format: byte */
             public_der?: string;
             /** @description States: active, superseded, revoked, deletion_pending, zeroized. deletion_pending means the provider accepted deletion and signing is blocked, but provider-held key material may remain during its retention window; zeroized means local device destruction was confirmed. */

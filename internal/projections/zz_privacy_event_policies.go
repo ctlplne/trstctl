@@ -1698,6 +1698,9 @@ type privacyManagedKeyCommandCompletedV1 struct {
 	ResultKeyID string `json:"result_key_id"`
 	PublicDER   []byte `json:"public_der"`
 	State       string `json:"state"`
+	// A168-L3: the provider's own key dates.
+	ProviderCreatedAt  *time.Time `json:"provider_created_at,omitempty"`
+	ProviderDeletionAt *time.Time `json:"provider_deletion_at,omitempty"`
 }
 
 type privacyManagedKeyCommandCompletedV2 struct {
@@ -1705,6 +1708,9 @@ type privacyManagedKeyCommandCompletedV2 struct {
 	ResultKeyID string `json:"result_key_id"`
 	PublicDER   []byte `json:"public_der"`
 	State       string `json:"state"`
+	// A168-L3: the provider's own key dates.
+	ProviderCreatedAt  *time.Time `json:"provider_created_at,omitempty"`
+	ProviderDeletionAt *time.Time `json:"provider_deletion_at,omitempty"`
 }
 
 type privacySecretSyncQueuedV1 struct {

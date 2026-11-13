@@ -18,6 +18,9 @@ type ManagedKeyOperation struct {
 	PublicDER                                                                 []byte
 	OutboxID                                                                  int64
 	CreatedAt, UpdatedAt                                                      time.Time
+	// ProviderCreatedAt and ProviderDeletionAt carry a completion's provider
+	// dates to the managed key (A168-L3); nil when the provider reports none.
+	ProviderCreatedAt, ProviderDeletionAt *time.Time
 }
 
 type ManagedKey struct {
@@ -27,6 +30,10 @@ type ManagedKey struct {
 	PublicDER                                   []byte
 	CreatedAt, UpdatedAt                        time.Time
 	CustodyCheckedAt                            *time.Time
+	// ProviderCreatedAt and ProviderDeletionAt are the provider's own dates for
+	// the key (A168-L3), recorded from lifecycle results; nil until one
+	// reports them.
+	ProviderCreatedAt, ProviderDeletionAt *time.Time
 }
 
 const managedKeyOutboxDestination = "managedkey.command"
@@ -184,11 +191,12 @@ func (s *Store) ApplyManagedKeyCompletedTx(ctx context.Context, tx pgx.Tx, op Ma
 			return fmt.Errorf("store: managed-key custody proof is invalid")
 		}
 		tag, err := tx.Exec(ctx,
-			`UPDATE managed_keys SET custody_status = 'verified', custody_checked_at = $6
+			`UPDATE managed_keys SET custody_status = 'verified', custody_checked_at = $6,
+			        provider_created_at = COALESCE($7, provider_created_at)
 			  WHERE tenant_id = $1 AND provider = $2 AND key_id = $3
 			    AND algorithm = $4 AND public_der = $5 AND state = 'active'
 			    AND (custody_checked_at IS NULL OR custody_checked_at <= $6)`,
-			op.TenantID, op.Provider, op.KeyID, op.Algorithm, op.PublicDER, op.UpdatedAt)
+			op.TenantID, op.Provider, op.KeyID, op.Algorithm, op.PublicDER, op.UpdatedAt, op.ProviderCreatedAt)
 		if err != nil {
 			return err
 		}
@@ -201,7 +209,7 @@ func (s *Store) ApplyManagedKeyCompletedTx(ctx context.Context, tx pgx.Tx, op Ma
 			TenantID: op.TenantID, Provider: op.Provider, KeyID: op.ResultKeyID,
 			Algorithm: op.Algorithm, Version: 1, State: op.ResultState,
 			PublicDER: op.PublicDER, CreatedAt: op.UpdatedAt, UpdatedAt: op.UpdatedAt,
-			CustodyStatus: "not_checked",
+			CustodyStatus: "not_checked", ProviderCreatedAt: op.ProviderCreatedAt, ProviderDeletionAt: op.ProviderDeletionAt,
 		})
 	case "rotate":
 		var version int
@@ -221,14 +229,17 @@ func (s *Store) ApplyManagedKeyCompletedTx(ctx context.Context, tx pgx.Tx, op Ma
 			TenantID: op.TenantID, Provider: op.Provider, KeyID: op.ResultKeyID,
 			Algorithm: op.Algorithm, Version: version + 1, State: op.ResultState,
 			PublicDER: op.PublicDER, CreatedAt: op.UpdatedAt, UpdatedAt: op.UpdatedAt,
-			CustodyStatus: "not_checked",
+			CustodyStatus: "not_checked", ProviderCreatedAt: op.ProviderCreatedAt, ProviderDeletionAt: op.ProviderDeletionAt,
 		})
 	case "revoke", "zeroize":
 		tag, err := tx.Exec(ctx,
 			`UPDATE managed_keys
-			    SET state = $4, public_der = $5, updated_at = $6
+			    SET state = $4, public_der = $5, updated_at = $6,
+			        provider_created_at = COALESCE($7, provider_created_at),
+			        provider_deletion_at = COALESCE($8, provider_deletion_at)
 			  WHERE tenant_id = $1 AND provider = $2 AND key_id = $3`,
-			op.TenantID, op.Provider, op.ResultKeyID, op.ResultState, op.PublicDER, op.UpdatedAt)
+			op.TenantID, op.Provider, op.ResultKeyID, op.ResultState, op.PublicDER, op.UpdatedAt,
+			op.ProviderCreatedAt, op.ProviderDeletionAt)
 		if err != nil {
 			return err
 		}
@@ -244,18 +255,22 @@ func (s *Store) ApplyManagedKeyCompletedTx(ctx context.Context, tx pgx.Tx, op Ma
 func (s *Store) upsertManagedKeyTx(ctx context.Context, tx pgx.Tx, key ManagedKey) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO managed_keys
-		        (tenant_id, provider, key_id, algorithm, version, state, public_der, created_at, updated_at, custody_status, custody_checked_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		        (tenant_id, provider, key_id, algorithm, version, state, public_der, created_at, updated_at, custody_status, custody_checked_at,
+		         provider_created_at, provider_deletion_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		 ON CONFLICT (tenant_id, provider, key_id) DO UPDATE
 		    SET algorithm = EXCLUDED.algorithm, version = EXCLUDED.version,
 		        state = EXCLUDED.state, public_der = EXCLUDED.public_der,
 		        updated_at = GREATEST(managed_keys.updated_at, EXCLUDED.updated_at),
+		        provider_created_at = COALESCE(EXCLUDED.provider_created_at, managed_keys.provider_created_at),
+		        provider_deletion_at = COALESCE(EXCLUDED.provider_deletion_at, managed_keys.provider_deletion_at),
 		        custody_status = CASE
 		  WHEN EXCLUDED.custody_checked_at IS NULL OR managed_keys.custody_checked_at >= EXCLUDED.custody_checked_at
 		          THEN managed_keys.custody_status ELSE EXCLUDED.custody_status END,
 		        custody_checked_at = GREATEST(managed_keys.custody_checked_at, EXCLUDED.custody_checked_at)`,
 		key.TenantID, key.Provider, key.KeyID, key.Algorithm, key.Version,
-		key.State, key.PublicDER, key.CreatedAt, key.UpdatedAt, key.CustodyStatus, key.CustodyCheckedAt)
+		key.State, key.PublicDER, key.CreatedAt, key.UpdatedAt, key.CustodyStatus, key.CustodyCheckedAt,
+		key.ProviderCreatedAt, key.ProviderDeletionAt)
 	return err
 }
 
@@ -329,7 +344,8 @@ func (s *Store) ListManagedKeysPage(ctx context.Context, tenantID, afterProvider
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT tenant_id, provider, key_id, algorithm, version, state,
-			        public_der, created_at, updated_at, custody_status, custody_checked_at
+			        public_der, created_at, updated_at, custody_status, custody_checked_at,
+			        provider_created_at, provider_deletion_at
 			   FROM managed_keys
 			  WHERE tenant_id = $1
 			    AND ($2 = '' OR (provider, key_id) > ($2, $3))
@@ -343,7 +359,8 @@ func (s *Store) ListManagedKeysPage(ctx context.Context, tenantID, afterProvider
 			var key ManagedKey
 			if err := rows.Scan(&key.TenantID, &key.Provider, &key.KeyID,
 				&key.Algorithm, &key.Version, &key.State, &key.PublicDER,
-				&key.CreatedAt, &key.UpdatedAt, &key.CustodyStatus, &key.CustodyCheckedAt); err != nil {
+				&key.CreatedAt, &key.UpdatedAt, &key.CustodyStatus, &key.CustodyCheckedAt,
+				&key.ProviderCreatedAt, &key.ProviderDeletionAt); err != nil {
 				return err
 			}
 			items = append(items, key)
@@ -364,12 +381,14 @@ func (s *Store) ManagedKeyApprovalTargetTx(ctx context.Context, tx pgx.Tx, tenan
 	var key ManagedKey
 	err := tx.QueryRow(ctx,
 		`SELECT tenant_id, provider, key_id, algorithm, version, state,
-		        public_der, created_at, updated_at, custody_status, custody_checked_at
+		        public_der, created_at, updated_at, custody_status, custody_checked_at,
+		        provider_created_at, provider_deletion_at
 		   FROM managed_keys
 		  WHERE tenant_id = $1 AND provider = $2 AND key_id = $3`+locking,
 		tenantID, provider, keyID).Scan(
 		&key.TenantID, &key.Provider, &key.KeyID, &key.Algorithm, &key.Version,
-		&key.State, &key.PublicDER, &key.CreatedAt, &key.UpdatedAt, &key.CustodyStatus, &key.CustodyCheckedAt)
+		&key.State, &key.PublicDER, &key.CreatedAt, &key.UpdatedAt, &key.CustodyStatus, &key.CustodyCheckedAt,
+		&key.ProviderCreatedAt, &key.ProviderDeletionAt)
 	if err != nil {
 		return ManagedKey{}, err
 	}

@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- Managed keys record the provider's own dates (A168-L3, part 1): after each lifecycle action on a cloud KMS key (AWS
+  KMS, Azure Key Vault/Managed HSM, GCP Cloud KMS), the isolated signer reads the provider's creation date and, once
+  deletion is scheduled, its deletion date, and returns them with the result (signer protocol fields
+  `provider_created_unix`/`provider_deletion_unix`; a provider that cannot be read leaves the action to be retried).
+  The managed-key record keeps them (migration 0469), the inventory API returns `provider_created_at` and
+  `provider_deletion_at`, and the console shows both on each inventory row. A custody proof fills in the creation date
+  of a key created earlier; a result without dates never erases recorded ones.
 - IPv6 and split routes in cloud attack paths (A167-L5): AWS paths are judged a block of the internet at a time — each
   half of the IPv4 space and IPv6 global unicast (`2000::/3`). A route or rule counts when its range holds the whole
   block, so a security group or network ACL rule for `2000::/3` admits the IPv6 internet as `::/0` does (it was read as

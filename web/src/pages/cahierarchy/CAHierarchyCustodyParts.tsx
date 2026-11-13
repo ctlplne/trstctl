@@ -57,7 +57,7 @@ function pendingManagedKeyApproval(error: unknown): PendingManagedKeyApproval | 
  * remain startup configuration read by the control plane and isolated signer;
  * this component never accepts, stores, or sends those values. */
 export function ManagedKeyCustodyWorkspace() {
-  const { t } = useTranslation();
+  const { t, locale, timeZone } = useTranslation();
   const { user } = useAuth();
   const [plan, setPlan] = useState<ManagedKeyCustodyPlan | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
@@ -331,6 +331,12 @@ export function ManagedKeyCustodyWorkspace() {
                           <CredentialChip value={key.key_id} label={t("caHierarchy.custody.keyID")} /> · {key.provider} · {t("caHierarchy.custody.state")}:{" "}
                           {key.state === "deletion_pending" ? t("caHierarchy.custody.deletionPending") : key.state} · {t("caHierarchy.custody.custodyStatus")}:{" "}
                           {t(`caHierarchy.custody.status.${key.custody_status ?? "not_checked"}`)}
+                          {key.provider_created_at ? (
+                            <> · {t("caHierarchy.custody.providerCreated", { at: formatDateTime(key.provider_created_at, { locale, timeZone }) })}</>
+                          ) : null}
+                          {key.provider_deletion_at ? (
+                            <> · {t("caHierarchy.custody.providerDeletion", { at: formatDateTime(key.provider_deletion_at, { locale, timeZone }) })}</>
+                          ) : null}
                         </span>
                         <Button type="button" size="sm" variant="outline" disabled={keyBusy} onClick={() => void selectManagedKey(key)}>
                           {t("caHierarchy.custody.inspectKey")}

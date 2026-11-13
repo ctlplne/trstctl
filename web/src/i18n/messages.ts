@@ -3382,6 +3382,14 @@ export const messages = {
     description: "Queue a fresh signer-isolated signature proof for the selected provider key.",
   },
   "caHierarchy.custody.custodyStatus": { defaultMessage: "Last custody proof", description: "Historical status of the last provider challenge signature." },
+  "caHierarchy.custody.providerCreated": {
+    defaultMessage: "Created at the provider {at}",
+    description: "A168-L3: when the cloud KMS itself created the managed key, as the provider reported it.",
+  },
+  "caHierarchy.custody.providerDeletion": {
+    defaultMessage: "Provider deletes it {at}",
+    description: "A168-L3: when the cloud KMS will destroy the key's material, once deletion is scheduled.",
+  },
   "caHierarchy.custody.status.not_checked": { defaultMessage: "Not checked", description: "No provider proof has been recorded." },
   "caHierarchy.custody.status.pending": { defaultMessage: "Checking provider", description: "The signer proof is queued or running." },
   "caHierarchy.custody.status.verified": {

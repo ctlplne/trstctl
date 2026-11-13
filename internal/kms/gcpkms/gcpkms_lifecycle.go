@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
@@ -17,6 +18,7 @@ import (
 var _ crypto.RemoteKeyLifecycle = (*Backend)(nil)
 var _ crypto.OperationAwareRemoteKeyLifecycle = (*Backend)(nil)
 var _ crypto.RemoteKeyDigestSigner = (*Backend)(nil)
+var _ crypto.RemoteKeyDater = (*Backend)(nil)
 
 // GenerateManagedKey creates an asymmetric signing key version in Cloud KMS and
 // returns the opaque cryptoKeyVersion resource name. The private key never leaves
@@ -283,6 +285,50 @@ func (b *Backend) ZeroizeKeyForOperation(ctx context.Context, operationID string
 		return fmt.Errorf("gcp-kms: key version %q state is %q after zeroize, want DESTROY_SCHEDULED or DESTROYED", ref.ID, state)
 	}
 	return nil
+}
+
+// KeyDates reads the key version's own creation time and, once destruction is
+// scheduled, the time Cloud KMS will destroy its material (destroyTime; for a
+// version already destroyed, destroyEventTime) (A168-L3).
+func (b *Backend) KeyDates(ctx context.Context, ref crypto.KeyRef) (crypto.KeyDates, error) {
+	if strings.TrimSpace(ref.ID) == "" {
+		return crypto.KeyDates{}, fmt.Errorf("gcp-kms: key dates require a key ref")
+	}
+	ctx, cancel := b.opContext(ctx)
+	defer cancel()
+	var resource struct {
+		CreateTime       string `json:"createTime"`
+		DestroyTime      string `json:"destroyTime"`
+		DestroyEventTime string `json:"destroyEventTime"`
+	}
+	if err := b.call(ctx, http.MethodGet, ref.ID, nil, &resource); err != nil {
+		return crypto.KeyDates{}, fmt.Errorf("gcp-kms: read key version dates: %w", err)
+	}
+	var dates crypto.KeyDates
+	var err error
+	if dates.Created, err = gcpTime(resource.CreateTime); err != nil {
+		return crypto.KeyDates{}, err
+	}
+	deletion := resource.DestroyTime
+	if deletion == "" {
+		deletion = resource.DestroyEventTime
+	}
+	if dates.DeletionScheduled, err = gcpTime(deletion); err != nil {
+		return crypto.KeyDates{}, err
+	}
+	return dates, nil
+}
+
+// gcpTime parses a Cloud KMS timestamp (RFC 3339); empty is zero.
+func gcpTime(value string) (time.Time, error) {
+	if strings.TrimSpace(value) == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("gcp-kms: key version returned a bad timestamp")
+	}
+	return t.UTC(), nil
 }
 
 func (b *Backend) keyVersionState(ctx context.Context, versionName string) (state string, exists bool, err error) {

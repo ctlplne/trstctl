@@ -116,6 +116,11 @@ type managedKeyJournalResult struct {
 	Algorithm crypto.Algorithm `json:"algorithm"`
 	PublicDER []byte           `json:"public_der,omitempty"`
 	State     string           `json:"state"`
+	// ProviderCreated and ProviderDeletion are the provider's own dates for
+	// the key, in Unix seconds (A168-L3); 0 when not reported. A replay
+	// returns the journaled dates.
+	ProviderCreated  int64 `json:"provider_created_unix,omitempty"`
+	ProviderDeletion int64 `json:"provider_deletion_unix,omitempty"`
 }
 
 func newManagedKeyRuntime(root string, providers map[string]crypto.RemoteKeyLifecycle) *managedKeyRuntime {
@@ -166,6 +171,7 @@ func (s *Server) ManageKey(ctx context.Context, req *signerpb.ManageKeyRequest) 
 		Provider: result.Provider, KeyId: result.KeyID,
 		Algorithm: algorithmToProto(result.Algorithm), PublicKey: bytes.Clone(result.PublicDER),
 		State: result.State, Replayed: replayed,
+		ProviderCreatedUnix: result.ProviderCreated, ProviderDeletionUnix: result.ProviderDeletion,
 	}, nil
 }
 
@@ -525,6 +531,32 @@ func validateManagedKeyRequest(req *signerpb.ManageKeyRequest) (managedKeyJourna
 }
 
 func (r *managedKeyRuntime) apply(ctx context.Context, provider crypto.RemoteKeyLifecycle, req managedKeyJournalRequest) (managedKeyJournalResult, error) {
+	result, err := r.applyAction(ctx, provider, req)
+	if err != nil {
+		return managedKeyJournalResult{}, err
+	}
+	// A168-L3: the provider's own dates for the key the result names, read
+	// after the action so a scheduled deletion shows. A provider that cannot
+	// be read leaves the operation to be retried, like any provider failure:
+	// an operation-aware provider reconciles the action it already took.
+	if dater, ok := provider.(crypto.RemoteKeyDater); ok {
+		dates, err := dater.KeyDates(ctx, crypto.KeyRef{ID: result.KeyID, Algorithm: result.Algorithm})
+		if err != nil {
+			return managedKeyJournalResult{}, fmt.Errorf("read the provider's key dates: %w", err)
+		}
+		result.ProviderCreated, result.ProviderDeletion = unixSeconds(dates.Created), unixSeconds(dates.DeletionScheduled)
+	}
+	return result, nil
+}
+
+func unixSeconds(t time.Time) int64 {
+	if t.IsZero() || t.Unix() <= 0 {
+		return 0
+	}
+	return t.Unix()
+}
+
+func (r *managedKeyRuntime) applyAction(ctx context.Context, provider crypto.RemoteKeyLifecycle, req managedKeyJournalRequest) (managedKeyJournalResult, error) {
 	ref := crypto.KeyRef{ID: req.KeyID, Algorithm: req.Algorithm}
 	operationProvider, operationAware := provider.(crypto.OperationAwareRemoteKeyLifecycle)
 	if scoper, ok := provider.(crypto.KeyTenantScoper); ok && operationAware && req.TenantID != "" {

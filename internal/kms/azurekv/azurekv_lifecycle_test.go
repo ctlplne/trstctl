@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -153,6 +154,7 @@ type lifecycleKey struct {
 	disabled bool
 	deleted  bool
 	tags     map[string]string
+	created  time.Time
 }
 
 func newLifecycleDoer(t *testing.T, token string) *lifecycleDoer {
@@ -189,6 +191,8 @@ func (d *lifecycleDoer) Do(req *http.Request) (*http.Response, error) {
 		return response, nil
 	case req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/keys/"):
 		return d.get(req), nil
+	case req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/deletedkeys/"):
+		return d.deletedKey(req), nil
 	case req.Method == http.MethodPatch && strings.HasPrefix(req.URL.Path, "/keys/"):
 		response := d.disable(req, body)
 		if response.StatusCode/100 == 2 && d.consumeLostDisableResponse() {
@@ -224,7 +228,7 @@ func (d *lifecycleDoer) create(req *http.Request, body []byte) *http.Response {
 	d.n++
 	d.createEffects++
 	version := fmt.Sprintf("v%d", d.n)
-	key := &lifecycleKey{signer: signer, name: name, version: version, tags: in.Tags}
+	key := &lifecycleKey{signer: signer, name: name, version: version, tags: in.Tags, created: time.Date(2026, 11, 13, 6, 0, d.n, 0, time.UTC)}
 	d.keys[name+"/"+version] = key
 	d.keys[name] = key
 	d.mu.Unlock()
@@ -248,7 +252,25 @@ func (d *lifecycleDoer) get(req *http.Request) *http.Response {
 			"key_ops": []string{"sign"},
 		},
 		"der":        base64.StdEncoding.EncodeToString(key.signer.Public().DER),
-		"attributes": map[string]bool{"enabled": !key.disabled},
+		"attributes": map[string]any{"enabled": !key.disabled, "created": key.created.Unix()},
+	})
+}
+
+// deletedKey answers GET /deletedkeys/{name}: a soft-deleted key is kept,
+// with its purge date, until then.
+func (d *lifecycleDoer) deletedKey(req *http.Request) *http.Response {
+	name := strings.TrimPrefix(req.URL.Path, "/deletedkeys/")
+	d.mu.Lock()
+	key := d.keys[name]
+	d.mu.Unlock()
+	if key == nil || !key.deleted {
+		return jsonResponse(req, http.StatusNotFound, map[string]any{"error": map[string]string{"code": "KeyNotFound"}})
+	}
+	return jsonResponse(req, http.StatusOK, map[string]any{
+		"recoveryId":         "https://trstctl-test.managedhsm.azure.net/deletedkeys/" + name,
+		"scheduledPurgeDate": key.created.Add(90 * 24 * time.Hour).Unix(),
+		"deletedDate":        key.created.Add(time.Hour).Unix(),
+		"attributes":         map[string]any{"enabled": !key.disabled, "created": key.created.Unix()},
 	})
 }
 
@@ -398,5 +420,32 @@ func TestTenantScopedLifecycleTagsTheKeysTenantA168L1(t *testing.T) {
 	}
 	if doer.disableEffects != 1 {
 		t.Fatalf("disable effects = %d, want 1", doer.disableEffects)
+	}
+}
+
+// A168-L3: the backend reports the key's own dates — Key Vault's created
+// attribute, and once deleted, the deleted key's scheduled purge date.
+func TestKeyDatesAreTheProvidersOwnA168L3(t *testing.T) {
+	doer := newLifecycleDoer(t, "azure-token")
+	b := New("https://trstctl-test.managedhsm.azure.net", Credentials{BearerToken: []byte("azure-token")},
+		WithEndpoint("https://azure.test"), WithHTTPClient(doer), WithOpTimeout(0))
+	var dater crypto.RemoteKeyDater = b
+	ctx := context.Background()
+	_, ref, err := b.GenerateManagedKeyForOperation(ctx, "a168l3-generate", crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := time.Date(2026, 11, 13, 6, 0, 1, 0, time.UTC)
+	if dates, err := dater.KeyDates(ctx, ref); err != nil || !dates.Created.Equal(created) || !dates.DeletionScheduled.IsZero() {
+		t.Fatalf("dates of an enabled key = %+v %v, want created %s", dates, err, created)
+	}
+	if err := b.ZeroizeKeyForOperation(ctx, "a168l3-zeroize", ref); err != nil {
+		t.Fatal(err)
+	}
+	if dates, err := dater.KeyDates(ctx, ref); err != nil || !dates.Created.Equal(created) || !dates.DeletionScheduled.Equal(created.Add(90*24*time.Hour)) {
+		t.Fatalf("dates of a deleted key = %+v %v", dates, err)
+	}
+	if _, err := dater.KeyDates(ctx, crypto.KeyRef{ID: "https://trstctl-test.managedhsm.azure.net/keys/missing/v9"}); err == nil {
+		t.Fatal("a missing key reported dates")
 	}
 }

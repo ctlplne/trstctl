@@ -1627,6 +1627,34 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getByRole("button", { name: "Verify key" })).toBeEnabled();
   });
 
+  // A168-L3: an inventory row names the provider's own dates for the key —
+  // when the cloud KMS created it and, once deletion is scheduled, when it
+  // will delete it — and a key without them shows neither.
+  it("shows the provider's own creation and deletion dates in the managed-key inventory", async () => {
+    const dated = {
+      provider: "aws-kms",
+      key_id: "kms/dated",
+      algorithm: "ECDSA-P256",
+      version: 1,
+      state: "deletion_pending",
+      extractable: false,
+      custody_status: "verified",
+      created_at: "2026-11-13T09:00:07Z",
+      updated_at: "2026-11-13T09:00:07Z",
+      provider_created_at: "2026-11-13T09:00:01Z",
+      provider_deletion_at: "2026-12-13T09:00:01Z",
+    };
+    const undated = { ...dated, key_id: "kms/undated", state: "active", provider_created_at: undefined, provider_deletion_at: undefined };
+    apiMock.listManagedKeys.mockResolvedValue({ items: [dated, undated], next_cursor: "" });
+    renderCAHierarchy("/ca-hierarchy?tab=custody");
+    const inventory = await screen.findByRole("list", { name: "Managed keys" });
+    const rows = within(inventory).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByText(/Created at the provider /)).toBeInTheDocument();
+    expect(within(rows[0]).getByText(/Provider deletes it /)).toBeInTheDocument();
+    expect(within(rows[1]).queryByText(/Created at the provider|Provider deletes it/)).not.toBeInTheDocument();
+  });
+
   it("refreshes the selected managed-key detail when a queued proof fails", async () => {
     const user = userEvent.setup();
     const pending = {

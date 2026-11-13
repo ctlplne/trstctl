@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
 )
 
 // S9.1 — the KMS/HSM backend template. A Backend is a key-management backend behind
@@ -101,6 +102,22 @@ type KeyTenantScoper interface {
 	// ForKeyTenant returns the provider's operation lifecycle that records
 	// tenantID on every key it creates.
 	ForKeyTenant(tenantID string) OperationAwareRemoteKeyLifecycle
+}
+
+// KeyDates are a provider key's own dates (A168-L3): when the provider created
+// the key (or key version), and when it will destroy it once destruction is
+// scheduled. A zero time is a date the provider does not report.
+type KeyDates struct {
+	Created           time.Time
+	DeletionScheduled time.Time
+}
+
+// RemoteKeyDater reads a provider key's own dates (A168-L3). The isolated
+// signer records them with each lifecycle result, so trstctl's record of a
+// cloud key carries the provider's dates rather than the moment trstctl's
+// operation completed.
+type RemoteKeyDater interface {
+	KeyDates(ctx context.Context, ref KeyRef) (KeyDates, error)
 }
 
 // RemoteKeyDigestSigner is the signer-process-only operation for an existing

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3214 annotated sites across 34 rules. Each row is
+3215 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -986,7 +986,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (499 sites)
+### G115 — CWE-190 Integer overflow or wraparound (500 sites)
 
 | Location | Reason |
 |---|---|
@@ -1000,6 +1000,7 @@ not this file.
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
 | `ee/governance/misuse/misuse.go:136` | event sequences fit int64 (CWE-190) |
 | `ee/governance/misuse/misuse.go:266` | a projected event sequence is positive (CWE-190) |
+| `ee/managedkeys/provider_dates_e2e_test.go:269` | port is checked to be 1..65535 above (CWE-190) |
 | `ee/silo/lanedrill_test.go:96` | bounds-checked to [1, MaxUint16] above (CWE-190) |
 | `internal/agent/accessgateway/kubernetes.go:230` | bounded by len(p) (CWE-190) |
 | `internal/agent/accessgateway/kubernetes.go:238` | take is non-negative (CWE-190) |
@@ -2857,9 +2858,9 @@ not this file.
 | `internal/signing/keystore_test.go:139` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/keystore_test.go:229` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/legacy_migration.go:32` | signer operator supplies the one legacy migration path |
-| `internal/signing/managedkeys.go:353` | the signer's own journal directory from its config (CWE-22) |
-| `internal/signing/managedkeys.go:722` | the signer's own keystore/journal directory from its config (CWE-22) |
-| `internal/signing/managedkeys.go:865` | the signer's own keystore/journal directory from its config (CWE-22) |
+| `internal/signing/managedkeys.go:359` | the signer's own journal directory from its config (CWE-22) |
+| `internal/signing/managedkeys.go:754` | the signer's own keystore/journal directory from its config (CWE-22) |
+| `internal/signing/managedkeys.go:897` | the signer's own keystore/journal directory from its config (CWE-22) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/offline_breakglass.go:290` | path is the signer-owned offline vault journal or kit (CWE-22) |
 | `internal/signing/offline_lock_unix.go:14` | fixed lock name under dedicated operator-selected offline vault (CWE-22) |
