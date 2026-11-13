@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3219 annotated sites across 34 rules. Each row is
+3220 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -2227,7 +2227,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (766 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (767 sites)
 
 | Location | Reason |
 |---|---|
@@ -2579,8 +2579,9 @@ not this file.
 | `internal/cli/switching_import.go:42` | the operator names the export file to read (CWE-22 not applicable) |
 | `internal/cloudauth/aws_credential_chain.go:164` | operator- or platform-configured projected token path (CWE-22) |
 | `internal/cloudauth/aws_credential_chain.go:223` | platform-configured Pod Identity token path (CWE-22) |
-| `internal/cloudauth/azure_token_source.go:77` | operator-configured projected token path (CWE-22) |
-| `internal/cloudauth/gcp_token_source.go:109` | operator-configured projected token path (CWE-22) |
+| `internal/cloudauth/azure_token_source.go:83` | operator-configured projected token path (CWE-22) |
+| `internal/cloudauth/cloudauth.go:398` | operator-configured projected token path (CWE-22) |
+| `internal/cloudauth/gcp_token_source.go:115` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:3670` | the config loader reading the operator's own config file (CWE-22) |
 | `internal/config/config.go:5028` | operator-configured local file path from deployment config (CWE-22) |

@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A rotated workload identity token takes effect at the next request (A169-L3): the Azure federated credential and GCP
+  workload identity token sources remember which projected platform token their cached access token was minted from,
+  and when the platform rotates the file, the next request exchanges the rotated token instead of reusing the old
+  access token until it nears expiry (a file that disappears keeps the cached token serving).
 - Workload-identity managed-key providers report readiness (A169-L2): the signer exchanges each Azure or GCP workload
   identity token as it starts (warming the token cache), retries a failed exchange with backoff until one succeeds, and
   reports each provider in its Health RPC; `/readyz` answers `200` with `managed_key_providers` degraded while one

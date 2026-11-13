@@ -27,6 +27,9 @@ type AzureFederatedTokenSource struct {
 	cfg    AzureFederatedTokenSourceConfig
 	minter *Minter
 	key    string
+	// rotation forgets the cached token when the federated token file is
+	// rotated (A169-L3).
+	rotation tokenFileRotation
 }
 
 // AzureFederatedTokenSourceConfig names the Entra application and the token
@@ -73,6 +76,9 @@ func NewAzureFederatedTokenSource(cfg AzureFederatedTokenSourceConfig) (*AzureFe
 // Token returns a current access token. The bytes are valid until wipe is
 // called; the caller wipes them once the request is authorized.
 func (s *AzureFederatedTokenSource) Token(ctx context.Context) ([]byte, func(), error) {
+	if s.rotation.rotated(s.cfg.FederatedTokenFile) {
+		s.minter.Forget(s.key)
+	}
 	cred, _, err := s.minter.Mint(ctx, s.key, func(ctx context.Context) (Material, error) {
 		assertion, err := os.ReadFile(s.cfg.FederatedTokenFile) // #nosec G304 -- operator-configured projected token path (CWE-22)
 		if err != nil {
@@ -83,10 +89,14 @@ func (s *AzureFederatedTokenSource) Token(ctx context.Context) ([]byte, func(), 
 		if len(trimmed) == 0 {
 			return Material{}, errors.New("cloudauth: the federated token file is empty")
 		}
-		return ExchangeAzureFederatedCredential(ctx, s.cfg.Doer, AzureExchangeRequest{
+		material, err := ExchangeAzureFederatedCredential(ctx, s.cfg.Doer, AzureExchangeRequest{
 			Endpoint: s.cfg.AuthorityHost + "/" + url.PathEscape(s.cfg.TenantID) + "/oauth2/v2.0/token",
 			ClientID: s.cfg.ClientID, Scope: s.cfg.Scope, SubjectToken: trimmed,
 		})
+		if err == nil {
+			s.rotation.minted(trimmed)
+		}
+		return material, err
 	})
 	if err != nil {
 		return nil, func() {}, err

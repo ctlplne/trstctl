@@ -29,6 +29,9 @@ type GCPWorkloadIdentityTokenSource struct {
 	cfg    GCPWorkloadIdentityTokenSourceConfig
 	minter *Minter
 	key    string
+	// rotation forgets the cached token when the subject token file is
+	// rotated (A169-L3).
+	rotation tokenFileRotation
 }
 
 // GCPWorkloadIdentityTokenSourceConfig names the workload identity pool
@@ -105,6 +108,9 @@ func NewGCPWorkloadIdentityTokenSource(cfg GCPWorkloadIdentityTokenSourceConfig)
 // Token returns a current access token. The bytes are valid until wipe is
 // called; the caller wipes them once the request is authorized.
 func (s *GCPWorkloadIdentityTokenSource) Token(ctx context.Context) ([]byte, func(), error) {
+	if s.rotation.rotated(s.cfg.SubjectTokenFile) {
+		s.minter.Forget(s.key)
+	}
 	cred, _, err := s.minter.Mint(ctx, s.key, func(ctx context.Context) (Material, error) {
 		subject, err := os.ReadFile(s.cfg.SubjectTokenFile) // #nosec G304 -- operator-configured projected token path (CWE-22)
 		if err != nil {
@@ -115,11 +121,15 @@ func (s *GCPWorkloadIdentityTokenSource) Token(ctx context.Context) ([]byte, fun
 		if len(trimmed) == 0 {
 			return Material{}, errors.New("cloudauth: the subject token file is empty")
 		}
-		return ExchangeGCPWorkloadIdentity(ctx, s.cfg.Doer, GCPExchangeRequest{
+		material, err := ExchangeGCPWorkloadIdentity(ctx, s.cfg.Doer, GCPExchangeRequest{
 			STSEndpoint: s.cfg.STSEndpoint, Audience: s.cfg.Audience, SubjectToken: trimmed,
 			ServiceAccount: s.cfg.ServiceAccount, ImpersonationEndpoint: s.cfg.ImpersonationEndpoint,
 			ImpersonationDoer: s.cfg.ImpersonationDoer,
 		})
+		if err == nil {
+			s.rotation.minted(trimmed)
+		}
+		return material, err
 	})
 	if err != nil {
 		return nil, func() {}, err

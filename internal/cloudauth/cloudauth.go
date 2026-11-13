@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -348,4 +349,63 @@ func audienceContains(raw json.RawMessage, expected string) bool {
 		}
 	}
 	return false
+}
+
+// Forget destroys key's cached credential, so the next Mint exchanges again
+// (A169-L3: the platform token it was minted from has been rotated).
+func (m *Minter) Forget(key string) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	entry := m.entries[key]
+	m.mu.Unlock()
+	if entry == nil {
+		return
+	}
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	if entry.expiry != nil {
+		entry.expiry.Stop()
+		entry.expiry = nil
+	}
+	entry.credential.destroy()
+	entry.credential = nil
+}
+
+// tokenFileRotation remembers which projected platform token a cached access
+// token was minted from (A169-L3). The platform rotates the file on its own
+// schedule; when its content no longer matches, the cached token is
+// forgotten, so the next request exchanges the rotated token instead of
+// riding the old one until it nears expiry.
+type tokenFileRotation struct {
+	mu     sync.Mutex
+	digest string
+}
+
+// minted records the token a successful exchange used.
+func (r *tokenFileRotation) minted(token []byte) {
+	digest := crypto.SHA256Hex(token)
+	r.mu.Lock()
+	r.digest = digest
+	r.mu.Unlock()
+}
+
+// rotated reports whether the file now holds another token than the cached
+// access token was minted from. A file that cannot be read is not rotation:
+// the cached token stays until the exchange itself needs the file.
+func (r *tokenFileRotation) rotated(path string) bool {
+	raw, err := os.ReadFile(path) // #nosec G304 -- operator-configured projected token path (CWE-22)
+	if err != nil {
+		return false
+	}
+	defer secret.Wipe(raw)
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return false
+	}
+	digest := crypto.SHA256Hex(trimmed)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.digest != "" && r.digest != digest
 }
