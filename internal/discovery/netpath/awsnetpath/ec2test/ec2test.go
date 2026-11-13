@@ -406,12 +406,15 @@ type xmlPortRange struct {
 	To   int `xml:"to"`
 }
 
+// xmlACLEntry carries an IPv6 entry's range in ipv6CidrBlock, as EC2 does
+// (A167-L5).
 type xmlACLEntry struct {
 	Number    int           `xml:"ruleNumber"`
 	Protocol  string        `xml:"protocol"`
 	Action    string        `xml:"ruleAction"`
 	Egress    bool          `xml:"egress"`
-	CIDR      string        `xml:"cidrBlock"`
+	CIDR      string        `xml:"cidrBlock,omitempty"`
+	IPv6CIDR  string        `xml:"ipv6CidrBlock,omitempty"`
 	PortRange *xmlPortRange `xml:"portRange,omitempty"`
 }
 
@@ -431,6 +434,9 @@ func (s *Server) describeACLs(filters map[string]string) any {
 		item := xmlACL{ID: acl.ID}
 		for _, e := range acl.Entries {
 			entry := xmlACLEntry{Number: e.Number, Protocol: e.Protocol, Egress: e.Egress, CIDR: e.CIDR, Action: "deny"}
+			if strings.Contains(e.CIDR, ":") {
+				entry.CIDR, entry.IPv6CIDR = "", e.CIDR
+			}
 			if e.Allow {
 				entry.Action = "allow"
 			}

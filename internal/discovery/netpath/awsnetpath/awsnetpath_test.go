@@ -208,3 +208,84 @@ func TestReaderFollowsLoadBalancersNATAndGatewayRoutesA167L2(t *testing.T) {
 		t.Fatalf("non-describe calls %d, refused signatures %d", stand.NonDescribeCalls(), stand.Refused())
 	}
 }
+
+// A167-L5: IPv6 addresses against the stand-in — found by the interface's
+// IPv6 address, judged by the IPv6 entries EC2 reports in ipv6CidrBlock and
+// ipv6Ranges, routed by the IPv6 route that holds global unicast, and, on a
+// dual-stack load balancer, by its listeners as over IPv4.
+func TestReaderJudgesIPv6PathsA167L5(t *testing.T) {
+	stand := ec2test.New(testAccessKey, testSecretKey)
+	t.Cleanup(stand.Close)
+	SeedA167(stand)
+	stand.Seed(
+		[]ec2test.Interface{
+			{ID: "eni-v6", SubnetID: "subnet-v6", VPCID: "vpc-1", IPv6: "2001:db8:1200::10", Groups: []string{"sg-v6"}, PrivateIP: "10.0.6.10"},
+			{ID: "eni-v6-legacy", SubnetID: "subnet-v6", VPCID: "vpc-1", IPv6: "2001:db8:1200::11", Groups: []string{"sg-web"}, PrivateIP: "10.0.6.11"},
+			{ID: "eni-v6-private", SubnetID: "subnet-v6-private", VPCID: "vpc-1", IPv6: "2001:db8:1201::10", Groups: []string{"sg-v6"}, PrivateIP: "10.0.7.10"},
+			{ID: "eni-v6-alb", SubnetID: "subnet-v6", VPCID: "vpc-1", IPv6: "2001:db8:1200::20", Groups: []string{"sg-v6"},
+				RequesterManaged: true, Description: "ELB app/dual/9e8d7c6b5a4f3e2d", PrivateIP: "10.0.6.20"},
+		},
+		[]ec2test.SecurityGroup{
+			{ID: "sg-v6", Inbound: []ec2test.Permission{{Protocol: "tcp", FromPort: 443, ToPort: 443, CIDRs: []string{"0.0.0.0/0", "2000::/3"}}}},
+		},
+		[]ec2test.RouteTable{
+			{ID: "rtb-v6", VPCID: "vpc-1", Subnets: []string{"subnet-v6"}, Routes: []ec2test.Route{
+				{Destination: "10.0.0.0/16", Target: "local"}, {Destination: "2001:db8:1200::/56", Target: "local"},
+				{Destination: "0.0.0.0/0", Target: "igw-1"}, {Destination: "::/0", Target: "igw-1"}}},
+			{ID: "rtb-v6-private", VPCID: "vpc-1", Subnets: []string{"subnet-v6-private"}, Routes: []ec2test.Route{
+				{Destination: "10.0.0.0/16", Target: "local"}, {Destination: "::/0", Target: "eigw-1"}}},
+		},
+		[]ec2test.NetworkACL{{ID: "acl-v6", Subnets: []string{"subnet-v6", "subnet-v6-private"}, Entries: []ec2test.ACLEntry{
+			{Number: 100, Allow: true, Protocol: "6", CIDR: "0.0.0.0/0", FromPort: 443, ToPort: 443},
+			{Number: 101, Allow: true, Protocol: "6", CIDR: "::/0", FromPort: 443, ToPort: 443},
+			{Number: 32767, Protocol: "-1", CIDR: "0.0.0.0/0"},
+			{Number: 32768, Protocol: "-1", CIDR: "::/0"},
+			{Number: 100, Egress: true, Allow: true, Protocol: "-1", CIDR: "0.0.0.0/0"},
+			{Number: 101, Egress: true, Allow: true, Protocol: "-1", CIDR: "::/0"},
+		}}},
+	)
+	stand.SeedLoadBalancers(ec2test.LoadBalancer{ARN: "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/dual/9e8d7c6b5a4f3e2d",
+		Name: "dual", Type: "application", Scheme: "internet-facing", SecurityGroups: []string{"sg-v6"},
+		Listeners: []ec2test.Listener{{Port: 443, Protocol: "HTTPS"}}})
+	reader, err := awsnetpath.New(awsnetpath.Config{Region: "us-east-1", Endpoint: stand.URL(), AccessKeyID: testAccessKey,
+		SecretAccessKey: testSecretKey, HTTPClient: stand.Client(), ELBEndpoint: stand.URL()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	judge := func(ip string, port int) netpath.Result {
+		t.Helper()
+		addr := netip.MustParseAddr(ip)
+		cfg, found, err := reader.Path(ctx, addr)
+		if err != nil {
+			t.Fatalf("read path to %s: %v", ip, err)
+		}
+		if !found {
+			return netpath.Result{Verdict: netpath.NotInAccount}
+		}
+		return netpath.Evaluate(addr, port, cfg)
+	}
+	if got := judge("2001:db8:1200::10", 443); got.Verdict != netpath.Open || strings.Join(got.Path, ">") != "eni-v6>sg-v6>acl-v6>rtb-v6>igw-1" ||
+		!strings.Contains(got.Reason, "from 2000::/3") {
+		t.Fatalf("IPv6 host = %+v", got)
+	}
+	if got := judge("2001:db8:1200::11", 443); got.Verdict != netpath.Blocked || got.BlockedBy != netpath.StageSecurityGroup || got.Resource != "sg-web" {
+		t.Fatalf("IPv6 host whose group admits IPv4 only = %+v", got)
+	}
+	if got := judge("2001:db8:1201::10", 443); got.Verdict != netpath.Blocked || got.BlockedBy != netpath.StageRoute || got.Resource != "rtb-v6-private" ||
+		!strings.Contains(got.Reason, "eigw-1") {
+		t.Fatalf("IPv6 host behind an egress-only gateway = %+v", got)
+	}
+	if got := judge("2001:db8:1200::20", 443); got.Verdict != netpath.Open || got.Path[1] != "app/dual/9e8d7c6b5a4f3e2d" {
+		t.Fatalf("dual-stack load balancer over IPv6 = %+v", got)
+	}
+	if got := judge("2001:db8:1200::99", 443); got.Verdict != netpath.NotInAccount {
+		t.Fatalf("an IPv6 address no interface holds = %+v", got)
+	}
+	if got := judge("::ffff:203.0.113.10", 443); got.Verdict != netpath.Open || got.Resource != "sg-web" {
+		t.Fatalf("an IPv4-mapped address is looked up as IPv4: %+v", got)
+	}
+	if stand.NonDescribeCalls() != 0 || stand.Refused() != 0 {
+		t.Fatalf("non-describe calls %d, refused signatures %d", stand.NonDescribeCalls(), stand.Refused())
+	}
+}

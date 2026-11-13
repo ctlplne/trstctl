@@ -1822,8 +1822,11 @@ never live in the API process. What you can do end to end against the running bi
     group, load balancer listener or NAT gateway (A167-L2), not in the account,
     or unknown with the reason (a path through a transit gateway, an inspection
     endpoint or an appliance is unknown with that resource named). A rule that admits a
-    partner range does not make an endpoint internet-reachable; only the
-    internet-wide range decides. The exposure posture shows the latest verdict
+    partner range does not make an endpoint internet-reachable; only a range
+    holding a whole block of the internet decides — each half of the IPv4
+    space, or IPv6 global unicast `2000::/3` — with the most specific route
+    holding the block deciding it, and IPv6 addresses judged by IPv6 rules and
+    routes only (A167-L5). The exposure posture shows the latest verdict
     per record (`attack_path`) and counts validated and open records; a
     full or scheduled run of the source re-validates the posture's endpoints
     (at most 50 a run, never-validated and longest-unchecked first), and a

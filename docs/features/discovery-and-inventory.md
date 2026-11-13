@@ -908,7 +908,15 @@ plane finds the network interface that holds it, then follows the path a packet 
 internet would take: the subnet's route table must send `0.0.0.0/0` (or `::/0`) to an
 internet gateway, the network ACL's first internet-wide rule for the port must allow it
 in and the reply out, and a security group on the interface must admit the port from the
-internet. The verdict names the resource that decided it.
+internet. The verdict names the resource that decided it. "The internet" is judged a
+block at a time (A167-L5): each half of the IPv4 space, and IPv6 global unicast
+(`2000::/3`, where every public IPv6 address is allocated). A route or rule counts for a
+block when its range holds the whole block, so `::/0` and `2000::/3` both stand for the
+IPv6 internet and an IPv6 address is judged by IPv6 rules and routes only; the most
+specific route holding a block decides it, so a split default (`0.0.0.0/1` and
+`128.0.0.0/1`) overrides `0.0.0.0/0` and a `2000::/3` route overrides `::/0`; and a rule
+for half the IPv4 internet admits that half. The path is open when any block passes
+every stage.
 
 What holds the address changes the path (A167-L2). An interface Elastic Load Balancing
 manages for an application, network or classic load balancer is judged as that load

@@ -161,3 +161,106 @@ func TestEvaluateFollowsLoadBalancersNATAndTransitPathsA167L2(t *testing.T) {
 		t.Fatalf("an ingress route to a deleted endpoint = %+v", got)
 	}
 }
+
+func ipv6Config() netpath.Config {
+	return netpath.Config{
+		Interface: netpath.Interface{ID: "eni-6", SubnetID: "subnet-6", VPCID: "vpc-1", SecurityGroups: []string{"sg-6"}},
+		RouteTable: &netpath.RouteTable{ID: "rtb-6", Routes: []netpath.Route{
+			{Destination: "10.0.0.0/16", Target: "local", Active: true}, {Destination: "2001:db8:1200::/56", Target: "local", Active: true},
+			{Destination: "0.0.0.0/0", Target: "igw-1", Active: true}, {Destination: "::/0", Target: "igw-1", Active: true}}},
+		NetworkACL: &netpath.NetworkACL{ID: "acl-6", Entries: []netpath.ACLEntry{
+			{Number: 100, Protocol: "6", Allow: true, CIDR: "0.0.0.0/0", FromPort: 443, ToPort: 443},
+			{Number: 101, Protocol: "6", Allow: true, CIDR: "::/0", FromPort: 443, ToPort: 443},
+			{Number: 32767, Protocol: "-1", CIDR: "0.0.0.0/0"},
+			{Number: 32768, Protocol: "-1", CIDR: "::/0"},
+			{Number: 100, Egress: true, Protocol: "-1", Allow: true, CIDR: "0.0.0.0/0"},
+			{Number: 101, Egress: true, Protocol: "-1", Allow: true, CIDR: "::/0"},
+		}},
+		SecurityGroups: []netpath.SecurityGroup{{ID: "sg-6", Inbound: []netpath.Permission{
+			{Protocol: "tcp", FromPort: 443, ToPort: 443, CIDRs: []string{"0.0.0.0/0", "::/0"}}}}},
+	}
+}
+
+// A167-L5: an IPv6 address is judged by IPv6 rules and routes only, a range
+// that holds all of IPv6 global unicast (2000::/3) speaks for the IPv6
+// internet as ::/0 does, the most specific route holding it decides, and the
+// IPv4 internet is judged a half at a time, so a split default overrides
+// 0.0.0.0/0 and a rule for half the internet admits half the internet.
+func TestEvaluateJudgesIPv6AndTheInternetsCoreBlocksA167L5(t *testing.T) {
+	ip6 := netip.MustParseAddr("2001:db8:1200::10")
+	got := netpath.Evaluate(ip6, 443, ipv6Config())
+	if got.Verdict != netpath.Open || strings.Join(got.Path, ">") != "eni-6>sg-6>acl-6>rtb-6>igw-1" || !strings.Contains(got.Reason, "from ::/0") {
+		t.Fatalf("IPv6 open path = %+v", got)
+	}
+	for name, tc := range map[string]struct {
+		mutate     func(*netpath.Config)
+		verdict    netpath.Verdict
+		stage      netpath.Stage
+		inReason   string
+		pathSuffix string
+	}{
+		"an IPv4 rule never admits IPv6": {func(c *netpath.Config) { c.SecurityGroups[0].Inbound[0].CIDRs = []string{"0.0.0.0/0"} },
+			netpath.Blocked, netpath.StageSecurityGroup, "from ::/0", ""},
+		"global unicast speaks for the IPv6 internet": {func(c *netpath.Config) { c.SecurityGroups[0].Inbound[0].CIDRs = []string{"2000::/3"} },
+			netpath.Open, "", "from 2000::/3", "igw-1"},
+		"a narrower IPv6 range is a partner, not the internet": {func(c *netpath.Config) { c.SecurityGroups[0].Inbound[0].CIDRs = []string{"2001:db8::/32"} },
+			netpath.Blocked, netpath.StageSecurityGroup, "", ""},
+		"an ACL with IPv4 rules only": {func(c *netpath.Config) {
+			c.NetworkACL.Entries = []netpath.ACLEntry{c.NetworkACL.Entries[0], c.NetworkACL.Entries[2], c.NetworkACL.Entries[4]}
+		}, netpath.Blocked, netpath.StageNetworkACL, "from ::/0", ""},
+		"an IPv6 ACL deny first": {func(c *netpath.Config) {
+			c.NetworkACL.Entries = append(c.NetworkACL.Entries, netpath.ACLEntry{Number: 90, Protocol: "6", CIDR: "::/0", FromPort: 443, ToPort: 443})
+		}, netpath.Blocked, netpath.StageNetworkACL, "", ""},
+		"replies through an egress-only gateway": {func(c *netpath.Config) { c.RouteTable.Routes[3].Target = "eigw-1" },
+			netpath.Blocked, netpath.StageRoute, "egress-only internet gateway eigw-1", ""},
+		"a global unicast route overrides ::/0": {func(c *netpath.Config) {
+			c.RouteTable.Routes = append(c.RouteTable.Routes, netpath.Route{Destination: "2000::/3", Target: "eigw-1", Active: true})
+		}, netpath.Blocked, netpath.StageRoute, "replies for 2000::/3", ""},
+		"a global unicast route alone reaches the gateway": {func(c *netpath.Config) {
+			c.RouteTable.Routes[3].Destination = "2000::/3"
+		}, netpath.Open, "", "", "igw-1"},
+		"no IPv6 internet route": {func(c *netpath.Config) { c.RouteTable.Routes = c.RouteTable.Routes[:3] },
+			netpath.Blocked, netpath.StageRoute, "no route from ::/0", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := ipv6Config()
+			tc.mutate(&cfg)
+			got := netpath.Evaluate(ip6, 443, cfg)
+			if got.Verdict != tc.verdict || got.BlockedBy != tc.stage || !strings.Contains(got.Reason, tc.inReason) ||
+				(tc.pathSuffix != "" && got.Path[len(got.Path)-1] != tc.pathSuffix) {
+				t.Fatalf("verdict = %+v, want %s %s", got, tc.verdict, tc.stage)
+			}
+		})
+	}
+	if got := netpath.Evaluate(netip.MustParseAddr("::ffff:203.0.113.10"), 443, openConfig()); got.Verdict != netpath.Open || !strings.Contains(got.Reason, "from 0.0.0.0/0") {
+		t.Fatalf("an IPv4-mapped address is judged as IPv4: %+v", got)
+	}
+
+	ip4 := netip.MustParseAddr("203.0.113.10")
+	split := openConfig()
+	split.RouteTable.Routes = append(split.RouteTable.Routes, netpath.Route{Destination: "0.0.0.0/1", Target: "vgw-1", Active: true},
+		netpath.Route{Destination: "128.0.0.0/1", Target: "vgw-1", Active: true})
+	if got := netpath.Evaluate(ip4, 443, split); got.Verdict != netpath.Blocked || got.BlockedBy != netpath.StageRoute ||
+		!strings.Contains(got.Reason, "replies for 0.0.0.0/1 to virtual private gateway vgw-1") {
+		t.Fatalf("a split default through a VPN = %+v", got)
+	}
+	half := openConfig()
+	half.RouteTable.Routes = append(half.RouteTable.Routes, netpath.Route{Destination: "0.0.0.0/1", Target: "vgw-1", Active: true})
+	if got := netpath.Evaluate(ip4, 443, half); got.Verdict != netpath.Open || got.Path[len(got.Path)-1] != "igw-1" {
+		t.Fatalf("half the internet still replies through the gateway: %+v", got)
+	}
+	halfRule := openConfig()
+	halfRule.SecurityGroups[0].Inbound[1].CIDRs = []string{"128.0.0.0/1"}
+	if got := netpath.Evaluate(ip4, 443, halfRule); got.Verdict != netpath.Open || !strings.Contains(got.Reason, "from 128.0.0.0/1") {
+		t.Fatalf("a rule for half the internet = %+v", got)
+	}
+	halfDeny := openConfig()
+	halfDeny.NetworkACL.Entries = append(halfDeny.NetworkACL.Entries, netpath.ACLEntry{Number: 50, Protocol: "6", CIDR: "0.0.0.0/1", FromPort: 443, ToPort: 443})
+	if got := netpath.Evaluate(ip4, 443, halfDeny); got.Verdict != netpath.Open {
+		t.Fatalf("a deny for half the internet leaves the other half open: %+v", got)
+	}
+	halfDeny.NetworkACL.Entries = append(halfDeny.NetworkACL.Entries, netpath.ACLEntry{Number: 60, Protocol: "6", CIDR: "128.0.0.0/1", FromPort: 443, ToPort: 443})
+	if got := netpath.Evaluate(ip4, 443, halfDeny); got.Verdict != netpath.Blocked || got.BlockedBy != netpath.StageNetworkACL || got.Rule != "50" {
+		t.Fatalf("denies for both halves = %+v", got)
+	}
+}

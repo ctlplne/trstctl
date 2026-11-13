@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- IPv6 and split routes in cloud attack paths (A167-L5): AWS paths are judged a block of the internet at a time — each
+  half of the IPv4 space and IPv6 global unicast (`2000::/3`). A route or rule counts when its range holds the whole
+  block, so a security group or network ACL rule for `2000::/3` admits the IPv6 internet as `::/0` does (it was read as
+  a partner range), the most specific route decides (a `2000::/3` route overrides `::/0`, and a split default
+  `0.0.0.0/1` + `128.0.0.0/1` overrides `0.0.0.0/0`, where only `0.0.0.0/0` was read), and a rule for half the IPv4
+  internet admits that half. The EC2 stand-in reports IPv6 network ACL entries in `ipv6CidrBlock`, as EC2 does.
 - Cloud attack paths through AWS load balancers, NAT and transit gateways (A167-L2): an address on an application,
   network or classic load balancer is judged by the load balancer's own listeners and security groups (read with
   `elasticloadbalancing:DescribeLoadBalancers` and `DescribeListeners`; a new optional `elb_endpoint`), so a port it does

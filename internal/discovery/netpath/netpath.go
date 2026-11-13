@@ -11,6 +11,15 @@
 // rule that admits 0.0.0.0/0 does, whatever narrower rules sit beside it. The
 // verdict names the resource that decided it so an operator can go straight to
 // the rule.
+//
+// A167-L5: "the internet at large" is the internet's core blocks, judged one
+// at a time — the two halves of the IPv4 space, and IPv6 global unicast
+// (2000::/3, where every public IPv6 address is allocated). A route or rule
+// counts for a block when its destination holds the whole block, so ::/0 and
+// 2000::/3 both speak for the IPv6 internet, a split default (0.0.0.0/1 and
+// 128.0.0.0/1) overrides 0.0.0.0/0 as routing does, and a rule for half the
+// internet admits half the internet. The path is open when any block passes
+// every stage.
 package netpath
 
 import (
@@ -169,14 +178,11 @@ type Config struct {
 const ephemeralReturnPort = 49152
 
 // Evaluate decides whether the internet reaches ip:port over TCP through the
-// reported configuration. Stages are checked in the order a packet meets them.
+// reported configuration. Stages are checked in the order a packet meets them,
+// for each of the internet's core blocks (A167-L5): open when any block gets
+// through, else unknown when any block's path leaves these tables, else the
+// first block's block.
 func Evaluate(ip netip.Addr, port int, cfg Config) Result {
-	internet := "0.0.0.0/0"
-	inside := cfg.Interface.PrivateIP
-	if ip.Is6() && !ip.Is4In6() {
-		internet, inside = "::/0", ip
-	}
-	tcp := "tcp/" + strconv.Itoa(port)
 	if cfg.NATGateway != "" {
 		return Result{Verdict: Blocked, BlockedBy: StageNATGateway, Resource: cfg.NATGateway,
 			Reason: "the address belongs to a NAT gateway (" + cfg.NATGateway + "), which admits only replies to connections opened from inside the VPC"}
@@ -184,7 +190,93 @@ func Evaluate(ip netip.Addr, port int, cfg Config) Result {
 	if cfg.RouteTable == nil || cfg.NetworkACL == nil {
 		return Result{Verdict: Unknown, Reason: "the provider did not report the subnet's route table and network ACL"}
 	}
-	out, stop := internetExit(cfg.RouteTable, internet)
+	var blocked, unknown *Result
+	for _, block := range coreBlocks(ip) {
+		result := evaluateBlock(ip, port, cfg, block)
+		switch result.Verdict {
+		case Open:
+			return result
+		case Unknown:
+			if unknown == nil {
+				unknown = &result
+			}
+		default:
+			if blocked == nil {
+				blocked = &result
+			}
+		}
+	}
+	if unknown != nil {
+		return *unknown
+	}
+	return *blocked
+}
+
+var (
+	ipv4Core = []netip.Prefix{netip.MustParsePrefix("0.0.0.0/1"), netip.MustParsePrefix("128.0.0.0/1")}
+	ipv6Core = []netip.Prefix{netip.MustParsePrefix("2000::/3")}
+)
+
+// coreBlocks are the blocks a client on the internet at large is in
+// (A167-L5).
+func coreBlocks(ip netip.Addr) []netip.Prefix {
+	if ip.Is6() && !ip.Is4In6() {
+		return ipv6Core
+	}
+	return ipv4Core
+}
+
+// covers reports whether the CIDR holds the whole block.
+func covers(cidr string, block netip.Prefix) bool {
+	prefix, err := netip.ParsePrefix(strings.TrimSpace(cidr))
+	if err != nil {
+		return false
+	}
+	prefix = prefix.Masked()
+	return prefix.Addr().Is4() == block.Addr().Is4() && prefix.Bits() <= block.Bits() && prefix.Contains(block.Addr())
+}
+
+// InternetGateway returns the internet gateway the route table sends replies
+// to the internet at large to, if any (A167-L5: by longest prefix over the
+// internet's core blocks).
+func InternetGateway(table *RouteTable, ip netip.Addr) string {
+	if table == nil {
+		return ""
+	}
+	for _, block := range coreBlocks(ip) {
+		if route := decisiveRoute(table, block); route != nil && route.Active && strings.HasPrefix(route.Target, "igw-") {
+			return route.Target
+		}
+	}
+	return ""
+}
+
+// decisiveRoute is the most specific route whose destination holds the whole
+// block, the route longest-prefix routing takes for every address in it.
+func decisiveRoute(table *RouteTable, block netip.Prefix) *Route {
+	var best *Route
+	bits := -1
+	for i := range table.Routes {
+		route := &table.Routes[i]
+		if strings.TrimSpace(route.Target) == "" || !covers(route.Destination, block) {
+			continue
+		}
+		if prefix, _ := netip.ParsePrefix(strings.TrimSpace(route.Destination)); prefix.Bits() > bits {
+			best, bits = route, prefix.Bits()
+		}
+	}
+	return best
+}
+
+// evaluateBlock follows the packet for clients in one core block.
+func evaluateBlock(ip netip.Addr, port int, cfg Config, block netip.Prefix) Result {
+	internet := "0.0.0.0/0"
+	inside := cfg.Interface.PrivateIP
+	if ip.Is6() && !ip.Is4In6() {
+		internet, inside = "::/0", ip
+	}
+	tcp := "tcp/" + strconv.Itoa(port)
+	out, stop := internetExit(cfg.RouteTable, block, internet)
 	if stop != nil {
 		return *stop
 	}
@@ -193,11 +285,11 @@ func Evaluate(ip netip.Addr, port int, cfg Config) Result {
 		return Result{Verdict: Blocked, BlockedBy: StageRoute, Resource: cfg.GatewayRouteTable.ID,
 			Reason: "the internet gateway's route table " + cfg.GatewayRouteTable.ID + " sends traffic for this subnet to " + hop + ", which no longer exists"}
 	}
-	if rule, allowed, found := firstACLDecision(cfg.NetworkACL.Entries, false, internet, port); !found || !allowed {
+	if rule, allowed, found := firstACLDecision(cfg.NetworkACL.Entries, false, block, port); !found || !allowed {
 		return Result{Verdict: Blocked, BlockedBy: StageNetworkACL, Resource: cfg.NetworkACL.ID, Rule: rule,
 			Reason: "the subnet's network ACL denies inbound " + tcp + " from " + internet}
 	}
-	if rule, allowed, found := firstACLDecision(cfg.NetworkACL.Entries, true, internet, ephemeralReturnPort); !found || !allowed {
+	if rule, allowed, found := firstACLDecision(cfg.NetworkACL.Entries, true, block, ephemeralReturnPort); !found || !allowed {
 		return Result{Verdict: Blocked, BlockedBy: StageNetworkACLOut, Resource: cfg.NetworkACL.ID, Rule: rule,
 			Reason: "the subnet's network ACL denies the return traffic to " + internet + " on ephemeral ports"}
 	}
@@ -209,7 +301,7 @@ func Evaluate(ip netip.Addr, port int, cfg Config) Result {
 	result := Result{Verdict: Open, Path: []string{cfg.Interface.ID}}
 	admits := ""
 	if lb == nil || !lb.Unfiltered {
-		group, rule, ok := admittingGroup(cfg.SecurityGroups, internet, port)
+		group, rule, cidr, ok := admittingGroup(cfg.SecurityGroups, block, port)
 		if !ok {
 			ids := make([]string, 0, len(cfg.SecurityGroups))
 			for _, g := range cfg.SecurityGroups {
@@ -220,7 +312,7 @@ func Evaluate(ip netip.Addr, port int, cfg Config) Result {
 				Reason: "no security group on " + holder + " admits " + tcp + " from " + internet}
 		}
 		result.Resource, result.Rule = group, rule
-		admits = "security group " + group + " admits " + tcp + " from " + internet
+		admits = "security group " + group + " admits " + tcp + " from " + cidr
 	}
 	if lb != nil {
 		listener, ok := lb.listener(port)
@@ -251,7 +343,7 @@ func Evaluate(ip netip.Addr, port int, cfg Config) Result {
 		why = "the internet gateway's route table " + cfg.GatewayRouteTable.ID + " sends traffic for this subnet through " + describeTarget(hop) + ", " + consequence(hop)
 	case out.via != "":
 		beyond = out.via
-		why = "replies for " + internet + " leave the subnet through " + describeTarget(out.via) + ", " + consequence(out.via)
+		why = "replies for " + out.destination + " leave the subnet through " + describeTarget(out.via) + ", " + consequence(out.via)
 	}
 	if beyond != "" {
 		result.Path = append(result.Path, beyond)
@@ -268,8 +360,9 @@ func Evaluate(ip netip.Addr, port int, cfg Config) Result {
 
 // exit is where the subnet's route table sends replies to the internet.
 type exit struct {
-	gateway string // the internet gateway
-	via     string // a target whose own routes or rules decide
+	gateway     string // the internet gateway
+	via         string // a target whose own routes or rules decide
+	destination string // the route's destination
 }
 
 // internetExit reads the subnet's route for the internet-wide range. A reply
@@ -278,27 +371,22 @@ type exit struct {
 // internet gateway, a peering connection or a virtual private gateway cannot
 // carry it there, and a transit gateway, an endpoint or an appliance carries
 // it somewhere this account's tables do not show.
-func internetExit(table *RouteTable, internet string) (exit, *Result) {
+func internetExit(table *RouteTable, block netip.Prefix, internet string) (exit, *Result) {
 	blocked := func(reason string) *Result {
 		return &Result{Verdict: Blocked, BlockedBy: StageRoute, Resource: table.ID, Reason: reason}
 	}
-	var route *Route
-	for i := range table.Routes {
-		if table.Routes[i].Destination == internet && strings.TrimSpace(table.Routes[i].Target) != "" {
-			route = &table.Routes[i]
-		}
-	}
+	route := decisiveRoute(table, block)
 	if route == nil {
 		return exit{}, blocked("the subnet's route table has no route from " + internet + " to an internet gateway")
 	}
-	target := route.Target
+	target, destination := route.Target, strings.TrimSpace(route.Destination)
 	if !route.Active {
-		return exit{}, blocked("the subnet's route for " + internet + " is a blackhole: its target " + target + " no longer exists")
+		return exit{}, blocked("the subnet's route for " + destination + " is a blackhole: its target " + target + " no longer exists")
 	}
-	replies := "the subnet's route table sends replies for " + internet + " to "
+	replies := "the subnet's route table sends replies for " + destination + " to "
 	switch {
 	case strings.HasPrefix(target, "igw-"):
-		return exit{gateway: target}, nil
+		return exit{gateway: target, destination: destination}, nil
 	case strings.HasPrefix(target, "nat-"):
 		return exit{}, blocked(replies + "NAT gateway " + target + ", which rewrites them to its own address, so no connection from the internet to this address completes")
 	case strings.HasPrefix(target, "eigw-"):
@@ -310,7 +398,7 @@ func internetExit(table *RouteTable, internet string) (exit, *Result) {
 	case target == "local":
 		return exit{}, blocked("the subnet's route table has no route from " + internet + " to an internet gateway")
 	default:
-		return exit{via: target}, nil
+		return exit{via: target, destination: destination}, nil
 	}
 }
 
@@ -369,17 +457,17 @@ func consequence(target string) string {
 	}
 }
 
-// admittingGroup returns the first group and rule that admits the internet to
-// the port.
-func admittingGroup(groups []SecurityGroup, internet string, port int) (group, rule string, ok bool) {
+// admittingGroup returns the first group, rule and range that admit the block
+// to the port.
+func admittingGroup(groups []SecurityGroup, block netip.Prefix, port int) (group, rule, cidr string, ok bool) {
 	for _, g := range groups {
 		for i, permission := range g.Inbound {
-			if permits(permission, internet, port) {
-				return g.ID, "inbound[" + strconv.Itoa(i) + "]", true
+			if cidr, ok := permits(permission, block, port); ok {
+				return g.ID, "inbound[" + strconv.Itoa(i) + "]", cidr, true
 			}
 		}
 	}
-	return "", "", false
+	return "", "", "", false
 }
 
 // listener returns the load balancer's TCP listener on the port.
@@ -422,13 +510,13 @@ func tcpListener(protocol string) bool {
 }
 
 // firstACLDecision returns the first rule, in rule-number order, that matches
-// the direction, port and the internet-wide range, as network ACLs evaluate.
-// Narrower ranges never decide for the internet at large.
-func firstACLDecision(entries []ACLEntry, egress bool, internet string, port int) (rule string, allowed, found bool) {
+// the direction, port and a range holding the whole block, as network ACLs
+// evaluate. Narrower ranges never decide for the internet at large.
+func firstACLDecision(entries []ACLEntry, egress bool, block netip.Prefix, port int) (rule string, allowed, found bool) {
 	ordered := append([]ACLEntry(nil), entries...)
 	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].Number < ordered[j].Number })
 	for _, entry := range ordered {
-		if entry.Egress != egress || entry.CIDR != internet {
+		if entry.Egress != egress || !covers(entry.CIDR, block) {
 			continue
 		}
 		switch entry.Protocol {
@@ -445,20 +533,22 @@ func firstACLDecision(entries []ACLEntry, egress bool, internet string, port int
 	return "", false, false
 }
 
-func permits(p Permission, internet string, port int) bool {
+// permits returns the range of the permission that admits the whole block to
+// the port.
+func permits(p Permission, block netip.Prefix, port int) (string, bool) {
 	switch p.Protocol {
 	case "-1":
 	case "tcp", "6":
 		if port < p.FromPort || port > p.ToPort {
-			return false
+			return "", false
 		}
 	default:
-		return false
+		return "", false
 	}
 	for _, cidr := range p.CIDRs {
-		if cidr == internet {
-			return true
+		if covers(cidr, block) {
+			return strings.TrimSpace(cidr), true
 		}
 	}
-	return false
+	return "", false
 }

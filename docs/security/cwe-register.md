@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3212 annotated sites across 34 rules. Each row is
+3214 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (780 sites)
+### G101 — CWE-798 Use of hardcoded credentials (782 sites)
 
 | Location | Reason |
 |---|---|
@@ -507,6 +507,8 @@ not this file.
 | `internal/server/attack_path_azure_served_test.go:72` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/attack_path_gcp_served_test.go:26` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/attack_path_gcp_served_test.go:57` | token_ref is a non-secret environment locator (CWE-798) |
+| `internal/server/attack_path_ipv6_served_test.go:27` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/attack_path_ipv6_served_test.go:81` | credential references only (CWE-798) |
 | `internal/server/attack_path_lb_served_test.go:31` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/attack_path_lb_served_test.go:92` | credential references only (CWE-798) |
 | `internal/server/attack_path_scheduled_served_test.go:24` | a stand-in fixture value, not a credential (CWE-798) |

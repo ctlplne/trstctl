@@ -158,11 +158,7 @@ func (r *Reader) Path(ctx context.Context, ip netip.Addr) (cfg netpath.Config, f
 	if cfg.NetworkACL, err = r.networkACL(ctx, eni.SubnetID); err != nil {
 		return netpath.Config{}, true, err
 	}
-	internet := "0.0.0.0/0"
-	if ip.Is6() && !ip.Is4In6() {
-		internet = "::/0"
-	}
-	if gateway := internetGatewayRoute(cfg.RouteTable, internet); gateway != "" {
+	if gateway := netpath.InternetGateway(cfg.RouteTable, ip); gateway != "" {
 		if cfg.GatewayRouteTable, err = r.gatewayRouteTable(ctx, gateway); err != nil {
 			return netpath.Config{}, true, err
 		}
@@ -265,20 +261,6 @@ func (r *Reader) loadBalancer(ctx context.Context, ref lbRef) (*netpath.LoadBala
 		return balancer, lb.SecurityGroups, nil
 	}
 	return nil, nil, fmt.Errorf("awsnetpath: load balancer %s holding the address was not found", ref.id)
-}
-
-// internetGatewayRoute returns the internet gateway the subnet's active
-// internet-wide route leads to.
-func internetGatewayRoute(table *netpath.RouteTable, internet string) string {
-	if table == nil {
-		return ""
-	}
-	for _, route := range table.Routes {
-		if route.Active && route.Destination == internet && strings.HasPrefix(route.Target, "igw-") {
-			return route.Target
-		}
-	}
-	return ""
 }
 
 // gatewayRouteTable reads the route table associated with the internet
