@@ -28,6 +28,9 @@ type witnessEmitter struct {
 	recorder   *witness.Recorder
 	quarantine *quarantine.Manager
 	now        func() time.Time
+	// operations, when set, names the unfinished trstctl operation behind a
+	// key only a provider holds (A168-L4).
+	operations unfinishedOperations
 }
 
 func (e *witnessEmitter) RecordDisagreement(ctx context.Context, d rounds.Disagreement) error {
@@ -49,6 +52,7 @@ func (e *witnessEmitter) RecordDisagreement(ctx context.Context, d rounds.Disagr
 		Left:        left,
 		Right:       right,
 		GeneratedAt: e.now().Unix(),
+		Notes:       explainPresence(ctx, e.operations, d.TenantID, d.Left.Set, d.Right.Set),
 	})
 	if err != nil {
 		return fmt.Errorf("xrec runtime: build witness: %w", err)

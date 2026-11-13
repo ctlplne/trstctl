@@ -69,7 +69,9 @@ func TestAWSKMSSourceAssertsTheAccountsTrstctlKeys(t *testing.T) {
 		got[key.KeyID] = key
 	}
 	if len(got) != 3 || got["k1-active"].Status != canon.StatusActive || got["k2-disabled"].Status != canon.StatusDisabled ||
-		got["k3-deleting"].Status != canon.StatusPendingDeletion || !strings.HasSuffix(got["k1-active"].NativeID, ":key/k1-active") ||
+		got["k3-deleting"].Status != canon.StatusPendingDeletion ||
+		// A168-L4: a tagged key's native id carries the operation stamp after its ARN.
+		got["k1-active"].NativeID != "arn:aws:kms:us-east-1:111122223333:key/k1-active trstctl-operation:op" ||
 		!got["k1-active"].CreatedAt.IsZero() {
 		t.Fatalf("managed-only snapshot = %+v", snap.Keys)
 	}

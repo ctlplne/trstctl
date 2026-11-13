@@ -43,6 +43,11 @@ func Build(req BuildRequest) (Body, error) {
 	if err != nil {
 		return Body{}, err
 	}
+	for i := range entries {
+		if entries[i].Class == ClassPresence {
+			entries[i].Note = strings.TrimSpace(req.Notes[entries[i].RecordKey.StableID])
+		}
+	}
 	for _, pv := range req.PolicyViolations {
 		entry, err := policyEntry(pv, left, right)
 		if err != nil {

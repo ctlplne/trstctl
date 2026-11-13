@@ -428,3 +428,37 @@ func sameManagedKeyApprovalEvidence(left, right []string) bool {
 	}
 	return true
 }
+
+// ListUnfinishedManagedKeyOperations returns the tenant's generate and rotate
+// operations that never completed — still queued, or failed after the
+// provider may already have acted — most recently updated first, at most
+// limit (A168-L4: reconciliation names them beside a key only the provider
+// holds).
+func (s *Store) ListUnfinishedManagedKeyOperations(ctx context.Context, tenantID string, limit int) ([]ManagedKeyOperation, error) {
+	if limit < 1 || limit > 1000 {
+		return nil, fmt.Errorf("store: unfinished managed-key operation limit must be between 1 and 1000")
+	}
+	var out []ManagedKeyOperation
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT tenant_id, operation_id, provider, action, key_id, algorithm, status, created_at, updated_at
+			   FROM managed_key_operations
+			  WHERE tenant_id = $1 AND action IN ('generate', 'rotate') AND status IN ('queued', 'failed')
+			  ORDER BY updated_at DESC, operation_id
+			  LIMIT $2`, tenantID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var op ManagedKeyOperation
+			if err := rows.Scan(&op.TenantID, &op.OperationID, &op.Provider, &op.Action, &op.KeyID, &op.Algorithm,
+				&op.Status, &op.CreatedAt, &op.UpdatedAt); err != nil {
+				return err
+			}
+			out = append(out, op)
+		}
+		return rows.Err()
+	})
+	return out, err
+}

@@ -13,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/managedkeystate"
 )
 
 var _ crypto.RemoteKeyLifecycle = (*Backend)(nil)
@@ -155,14 +156,13 @@ func (b *Backend) managedKeyForOperation(ctx context.Context, kind, operationID,
 }
 
 func gcpOperationKeyID(kind, operationID, source string, alg crypto.Algorithm) string {
-	digest := crypto.SHA256Hex([]byte(kind + "\x00" + operationID + "\x00" + source + "\x00" + string(alg)))
 	prefix := "trstctl-g-"
 	if kind == "rotate" {
 		prefix = "trstctl-r-"
 	}
 	// Cloud KMS limits cryptoKeyId to 63 characters. This keeps 192 digest bits
 	// and uses only its accepted letters, digits, and hyphens.
-	return prefix + digest[:48]
+	return prefix + managedkeystate.OperationFingerprint(kind, operationID, source, string(alg))
 }
 
 func (b *Backend) findCryptoKey(ctx context.Context, resourceName string) (string, bool, error) {

@@ -232,9 +232,16 @@ func (s *awsKMSSource) describe(ctx context.Context, sb *reducers.ObservationSan
 	// after key_dates_since (the managed-key authority asserts the same
 	// provider dates trstctl recorded).
 	created, deletion := cloudKMSKeyDates(s.cfg.KeyDatesSince, epochSeconds(md.CreationDate), epochSeconds(md.DeletionDate))
+	native := md.Arn
+	if tags.operation != "" {
+		// A168-L4: the operation stamp rides in the provenance — disclosed in
+		// a witness, never compared — so a key only the account holds can be
+		// traced to the trstctl operation that created it.
+		native += awsOperationMarker + tags.operation
+	}
 	return reducers.CloudKMSKey{
 		KeyID: md.KeyID, AlgorithmSpec: md.KeySpec, Status: awsKMSKeyStatus(md.KeyState),
-		RotationEnabled: rotation, NativeID: md.Arn, CreatedAt: created, DeletedAt: deletion,
+		RotationEnabled: rotation, NativeID: native, CreatedAt: created, DeletedAt: deletion,
 	}, true, nil
 }
 
@@ -243,6 +250,9 @@ func (s *awsKMSSource) describe(ctx context.Context, sb *reducers.ObservationSan
 type awsKMSKeyTags struct {
 	managed bool
 	tenant  string
+	// operation is the stamp of the trstctl operation that created the key
+	// (A168-L4).
+	operation string
 }
 
 func (s *awsKMSSource) trstctlTags(ctx context.Context, creds awsKMSCredentials, id string) (awsKMSKeyTags, error) {
@@ -268,6 +278,7 @@ func (s *awsKMSSource) trstctlTags(ctx context.Context, creds awsKMSCredentials,
 			switch tag.TagKey {
 			case awsKMSManagedTag:
 				tags.managed = true
+				tags.operation = strings.TrimSpace(tag.TagValue)
 			case awsKMSTenantTag:
 				tags.tenant = strings.TrimSpace(tag.TagValue)
 			}

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3218 annotated sites across 34 rules. Each row is
+3219 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (785 sites)
+### G101 — CWE-798 Use of hardcoded credentials (786 sites)
 
 | Location | Reason |
 |---|---|
@@ -471,6 +471,7 @@ not this file.
 | `internal/reconcile/conformance/cloud_kms_e2e_test.go:34` | fabricated fixture credential (CWE-798) |
 | `internal/reconcile/conformance/cloud_kms_e2e_test.go:154` | fabricated fixture credential (CWE-798) |
 | `internal/reconcile/conformance/cloud_kms_gcp_azure_e2e_test.go:33` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/reconcile/conformance/cloud_kms_operation_note_e2e_test.go:33` | fabricated fixture credential (CWE-798) |
 | `internal/rehearsal/rehearsal.go:27` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/revocationhealth/contract_test.go:91` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/risk/contextual_test.go:192` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -2689,7 +2690,7 @@ not this file.
 | `internal/protocols/scep/sscep_client_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/scep/sscep_client_test.go:233` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/ssh/krl_binary_test.go:315` | test-owned file under t.TempDir |
-| `internal/reconcile/awskmssource.go:332` | operator-configured credential file path (CWE-22) |
+| `internal/reconcile/awskmssource.go:343` | operator-configured credential file path (CWE-22) |
 | `internal/reconcile/casource.go:61` | operator-configured CA certificate bundle path (CWE-22) |
 | `internal/reconcile/conformance/ca_ledgers_e2e_test.go:283` | a certificate this test copied out of its own container (CWE-22) |
 | `internal/reconcile/conformance/ca_ledgers_e2e_test.go:409` | the test's own copied config (CWE-22) |

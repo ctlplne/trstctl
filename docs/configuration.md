@@ -652,7 +652,15 @@ witnessed as an attribute conflict. A key created before that moment is compared
 without dates. Set it no earlier than the upgrade that records provider dates;
 trstctl's own completion time is never compared, because it lags the provider's
 creation by seconds. Config validation refuses a round where only some of those
-authorities set it, or set different moments. `address` overrides the
+authorities set it, or set different moments. A key only the account holds that
+trstctl's own managed-key operation created — a generate or rotate still queued, or
+failed after the provider acted, so trstctl never recorded the key — is witnessed
+with a note naming that operation, its action and state, and
+`GET /api/v1/managed-keys/operations/{operation_id}` to read it (A168-L4): every
+provider adapter stamps the keys it creates with one digest of the operation (the
+AWS `trstctl-managed-key-operation` tag, carried in the record's provenance; the
+GCP and Azure key name), and the witness matches it against the tenant's
+unfinished operations. `address` overrides the
 regional endpoint (a VPC endpoint); `allow_insecure_loopback` and
 `private_endpoint_cidrs` behave as they do for Vault. One account should hold
 one tenant's managed keys: a round is scoped to a tenant, so another tenant's

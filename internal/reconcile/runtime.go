@@ -345,6 +345,7 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 				recorder:   witnessRecorder,
 				quarantine: quarantineManager,
 				now:        func() time.Time { return time.Now().UTC() },
+				operations: storeUnfinishedOperations(cfg.Store),
 			},
 			Logger: cfg.Logger,
 		}),

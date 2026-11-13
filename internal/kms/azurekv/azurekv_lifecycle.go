@@ -13,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/managedkeystate"
 )
 
 var _ crypto.RemoteKeyLifecycle = (*Backend)(nil)
@@ -139,10 +140,9 @@ func (b *Backend) managedKeyForOperation(ctx context.Context, kind, operationID,
 }
 
 func azureOperationKeyName(kind, operationID, source string, alg crypto.Algorithm) string {
-	digest := crypto.SHA256Hex([]byte(kind + "\x00" + operationID + "\x00" + source + "\x00" + string(alg)))
 	// The fixed alphabet is a subset of Azure Key Vault's [A-Za-z0-9-]
 	// grammar, and 48 digest characters retain 192 bits while staying short.
-	return "trstctl-" + kind + "-" + digest[:48]
+	return "trstctl-" + kind + "-" + managedkeystate.OperationFingerprint(kind, operationID, source, string(alg))
 }
 
 func (b *Backend) findManagedKey(ctx context.Context, name string, alg crypto.Algorithm) (crypto.Signer, crypto.KeyRef, bool, error) {

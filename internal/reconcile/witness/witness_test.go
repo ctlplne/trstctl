@@ -344,3 +344,29 @@ func waitReady(t *testing.T, socket string, served <-chan error) *signing.Client
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+// A168-L4: a note the emitter supplies for a record one plane alone holds is
+// carried on that presence entry and covered by the witness hash; a note for
+// a record both planes hold is ignored.
+func TestWitness_PresenceEntryCarriesItsNoteA168L4(t *testing.T) {
+	left := mustPlane(t, "tenant-a", "kms", []observedKey{{id: "a", label: "shared-a"}, {id: "b", label: "kms-only"}})
+	right := mustPlane(t, "tenant-a", "managed-keys", []observedKey{{id: "a", label: "shared-a"}})
+	build := func(notes map[string]string) witness.Body {
+		t.Helper()
+		body, err := witness.Build(witness.BuildRequest{RoundID: "round-1", TenantID: "tenant-a", SpecVersion: canon.SpecVersionV1,
+			Left: left.State, Right: right.State, GeneratedAt: 1800000000, Notes: notes})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return body
+	}
+	plain := build(nil)
+	stableB, stableA := "b", "a"
+	noted := build(map[string]string{stableB: "created by trstctl managed-key operation op-1", stableA: "never shown"})
+	if len(noted.Entries) != 1 || noted.Entries[0].Note != "created by trstctl managed-key operation op-1" {
+		t.Fatalf("entries = %+v", noted.Entries)
+	}
+	if plain.Entries[0].Note != "" || plain.WitnessID == noted.WitnessID || !noted.VerifyWitnessID() {
+		t.Fatal("the note is not covered by the witness hash")
+	}
+}

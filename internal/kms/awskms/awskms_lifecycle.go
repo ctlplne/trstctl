@@ -24,6 +24,7 @@ import (
 	"github.com/aws/smithy-go"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/managedkeystate"
 )
 
 var _ crypto.RemoteKeyLifecycle = (*Backend)(nil)
@@ -136,7 +137,7 @@ func (b *Backend) managedKeyForOperation(ctx context.Context, kind, operationID,
 	}
 	ctx, cancel := b.opContext(ctx)
 	defer cancel()
-	tagValue := crypto.SHA256Hex([]byte(kind + "\x00" + operationID + "\x00" + source + "\x00" + string(alg)))
+	tagValue := managedkeystate.OperationStamp(kind, operationID, source, string(alg))
 	keyID, found, err := b.findKeyByOperationTag(ctx, tagValue)
 	if err != nil {
 		return nil, crypto.KeyRef{}, err

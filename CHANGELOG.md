@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- Reconciliation witnesses name the trstctl operation behind a key only the cloud KMS holds (A168-L4): when trstctl's
+  own generate or rotate created a key at AWS KMS, Cloud KMS or Key Vault but its completion was never recorded (the
+  operation is still queued, or failed after the provider acted), the presence entry carries a note naming the
+  operation, its action and state, and where to read it. Every provider adapter now stamps keys through one shared
+  digest (`managedkeystate.OperationStamp`), and an AWS key's stamp rides in its asserted provenance.
 - Cloud KMS reconciliation compares key dates (A168-L3, part 2): with the same `key_dates_since` (RFC 3339) on every
   cloud KMS source (`awskms`, `gcpkms`, `azurekv`) and `managed_keys` authority in a round, each key the provider
   created at or after it is asserted with the provider's own creation date and scheduled deletion date — by the source

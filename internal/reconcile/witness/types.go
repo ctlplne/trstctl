@@ -35,6 +35,11 @@ type BuildRequest struct {
 
 	PolicyViolations []PolicyViolation
 	Staleness        []Staleness
+	// Notes explains, by record stable id, a presence divergence the emitter
+	// can account for (A168-L4): the note is carried on that record's
+	// presence entry and covered by the witness hash. A note for a record
+	// both planes hold is ignored.
+	Notes map[string]string
 }
 
 type PolicyViolation struct {
@@ -80,6 +85,9 @@ type Entry struct {
 	DisclosedRecords []DisclosedRecord   `json:"disclosed_records,omitempty"`
 	Policy           *PolicyEvidence     `json:"policy,omitempty"`
 	Staleness        *StalenessEvidence  `json:"staleness,omitempty"`
+	// Note explains a presence divergence (A168-L4), e.g. the trstctl
+	// operation that created a key only the provider holds.
+	Note string `json:"note,omitempty"`
 }
 
 type InclusionProofRef struct {
