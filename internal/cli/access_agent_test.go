@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -195,5 +196,38 @@ func TestAccessAgentRefusesUndelegatedAndDirectAccounts(t *testing.T) {
 	if code, _, _ := run(t, []string{"access", "agent", "--account", "postgres", "--reason", "r", "--method", "m", "--payload-file", payload, "--", shPath},
 		cli.Env{Server: "http://127.0.0.1:1", Token: agentTestToken}, ""); code != 2 {
 		t.Fatalf("a malformed --account exit = %d, want 2", code)
+	}
+}
+
+// A257-L2: --confine-network needs Linux; elsewhere the launcher refuses it
+// before it asks for any session or runs the command.
+func TestAccessAgentConfinedNetworkNeedsLinuxA257L2(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		t.Skip("on Linux the launcher confines the command: TestAccessAgentConfinesTheCommandsNetworkA257L2")
+	}
+	shPath, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("sh not available")
+	}
+	dir := t.TempDir()
+	payload := filepath.Join(dir, "attestation")
+	if err := os.WriteFile(payload, []byte("genuine"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ran := filepath.Join(dir, "ran")
+	fake := &accessAgentServer{}
+	srv := httptest.NewServer(fake.handler(t))
+	defer srv.Close()
+	code, _, stderr := run(t, []string{"access", "agent", "--account", "postgres/orders-db:readonly", "--reason", "r", "--method", "stub_pam",
+		"--payload-file", payload, "--confine-network", "--", shPath, "-c", `touch "$0"`, ran},
+		cli.Env{Server: srv.URL, Token: agentTestToken, HTTPClient: srv.Client()}, "")
+	if code != 2 || !strings.Contains(stderr, "--confine-network needs Linux") {
+		t.Fatalf("confined off Linux: exit %d, stderr=%s", code, stderr)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("a session was requested for a command that could not be confined: %v", fake.calls)
+	}
+	if _, err := os.Stat(ran); err == nil {
+		t.Fatal("the command ran unconfined")
 	}
 }

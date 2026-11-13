@@ -24,6 +24,7 @@ import (
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netconfine"
 	"trstctl.com/trstctl/internal/secretscli"
 )
 
@@ -56,7 +57,8 @@ func (a agentAccount) String() string { return a.TargetType + "/" + a.TargetID +
 
 func accessAgentUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "Usage: trstctl access agent --account TYPE/ID:ROLE [--account ...] --reason TEXT --method METHOD --payload-file FILE")
-	_, _ = fmt.Fprintln(w, "         [--ttl 15m] [--ssh-principal NAME] [--approval-wait 30m] [--instructions FILE] [--keep] -- <cmd> [args]")
+	_, _ = fmt.Fprintln(w, "         [--ttl 15m] [--ssh-principal NAME] [--approval-wait 30m] [--instructions FILE] [--keep]")
+	_, _ = fmt.Fprintln(w, "         [--confine-network] -- <cmd> [args]")
 	_, _ = fmt.Fprintln(w, "\nRequests a reviewed session for each account with your token (in CI, an access bundle run's token that acts as the")
 	_, _ = fmt.Fprintln(w, "agent: a run may reach only the accounts its bundles delegate), waits for the approvals, and runs the command with a")
 	_, _ = fmt.Fprintln(w, "loopback tunnel to each session's gateway and instructions for reaching them (TRSTCTL_ACCESS_INSTRUCTIONS). The")
@@ -68,16 +70,24 @@ func accessAgentUsage(w io.Writer) {
 
 // agentSession is one opened gateway session and its local tunnel.
 type agentSession struct {
-	account    agentAccount
-	id         string
-	expiresAt  time.Time
-	direct     bool // delivered with its credential, not through a gateway: always revoked
-	delivery   gatewayDelivery
-	ticket     string
-	listener   net.Listener
+	account   agentAccount
+	id        string
+	expiresAt time.Time
+	direct    bool // delivered with its credential, not through a gateway: always revoked
+	delivery  gatewayDelivery
+	ticket    string
+	listener  net.Listener
+	// addr is the address the command dials: the listener's own, or, in a
+	// confined network, the loopback address its helper forwards to socket.
+	addr       *net.TCPAddr
+	socket     string
 	line       string
 	kubeconfig string
 }
+
+// confinedPortBase numbers the loopback ports of a confined command's
+// tunnels (A257-L2): its network is empty, so any port is free.
+const confinedPortBase = 30000
 
 func runAccessAgent(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, stderr io.Writer, server, token, tenant, caFile string) int {
 	fs := flag.NewFlagSet("trstctl-cli access agent", flag.ContinueOnError)
@@ -92,6 +102,7 @@ func runAccessAgent(ctx context.Context, args []string, env Env, stdin io.Reader
 	approvalWait := fs.Duration("approval-wait", 30*time.Minute, "how long to wait for the approvals")
 	instructionsPath := fs.String("instructions", "", "write the instructions here (default: a private directory removed at exit)")
 	keep := fs.Bool("keep", false, "leave the sessions open when the command exits (they still expire)")
+	confine := fs.Bool("confine-network", false, "run the command in a network of its own that reaches only its tunnels (Linux)")
 	fs.Usage = func() { accessAgentUsage(stderr) }
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -103,6 +114,10 @@ func runAccessAgent(ctx context.Context, args []string, env Env, stdin io.Reader
 	}
 	if server == "" || token == "" {
 		_, _ = fmt.Fprintln(stderr, "error: --server and --token (or TRSTCTL_SERVER and TRSTCTL_TOKEN) are required")
+		return 2
+	}
+	if *confine && !netconfine.Supported {
+		_, _ = fmt.Fprintln(stderr, "error: --confine-network needs Linux (a user and network namespace); the command was not run")
 		return 2
 	}
 	if *ttl <= 0 || *ttl%time.Second != 0 || *approvalWait <= 0 {
@@ -188,7 +203,7 @@ func runAccessAgent(ctx context.Context, args []string, env Env, stdin io.Reader
 		}
 	}
 	for i, s := range sessions {
-		if err := l.serve(tunnels, &wg, s, dir, i+1); err != nil {
+		if err := l.serve(tunnels, &wg, s, dir, i+1, *confine); err != nil {
 			_, _ = fmt.Fprintf(stderr, "error: %s: %v\n", s.account, err)
 			return 1
 		}
@@ -203,8 +218,23 @@ func runAccessAgent(ctx context.Context, args []string, env Env, stdin io.Reader
 	}
 	_, _ = fmt.Fprintf(stderr, "access agent: %d session(s) ready; instructions in %s\n", len(sessions), instructions)
 
-	runErr := secretscli.New(tenant, nil, auditsink.Nop{}).WithoutEnv(agentDropsEnv).
-		InjectIO(ctx, agentVariables(sessions, instructions), argv, stdin, stdout, stderr)
+	run := secretscli.New(tenant, nil, auditsink.Nop{}).WithoutEnv(agentDropsEnv)
+	if *confine {
+		// A257-L2: the command runs, through this binary as its helper, in a
+		// network of its own that reaches only its tunnels.
+		self, err := os.Executable()
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, "error: find this program to confine the command:", err)
+			return 1
+		}
+		var forwards []netconfine.Forward
+		for _, s := range sessions {
+			forwards = append(forwards, netconfine.Forward{Listen: s.addr.String(), Socket: s.socket})
+		}
+		argv = netconfine.Wrap(self, forwards, argv)
+		run = run.WithCommand(netconfine.Isolate)
+	}
+	runErr := run.InjectIO(ctx, agentVariables(sessions, instructions), argv, stdin, stdout, stderr)
 	var exitErr *exec.ExitError
 	switch {
 	case runErr == nil:
@@ -233,15 +263,15 @@ func agentVariables(sessions []*agentSession, instructions string) map[string][]
 	for i, s := range sessions {
 		prefix := fmt.Sprintf("TRSTCTL_ACCESS_%d_", i+1)
 		out[prefix+"TYPE"], out[prefix+"TARGET"], out[prefix+"ROLE"] = []byte(s.account.TargetType), []byte(s.account.TargetID), []byte(s.account.Role)
-		out[prefix+"ADDR"] = []byte(s.listener.Addr().String())
+		out[prefix+"ADDR"] = []byte(s.addr.String())
 		byType[s.account.TargetType] = append(byType[s.account.TargetType], s)
 	}
 	if only := byType["postgres"]; len(only) == 1 {
-		local := only[0].listener.Addr().(*net.TCPAddr)
+		local := only[0].addr
 		out["PGHOST"], out["PGPORT"], out["PGSSLMODE"] = []byte(local.IP.String()), []byte(strconv.Itoa(local.Port)), []byte("disable")
 	}
 	if only := byType["mysql"]; len(only) == 1 {
-		local := only[0].listener.Addr().(*net.TCPAddr)
+		local := only[0].addr
 		out["MYSQL_HOST"], out["MYSQL_TCP_PORT"] = []byte(local.IP.String()), []byte(strconv.Itoa(local.Port))
 	}
 	if only := byType["kubernetes"]; len(only) == 1 {
@@ -260,7 +290,7 @@ func agentInstructions(sessions []*agentSession) string {
 	for i, s := range sessions {
 		fmt.Fprintf(&b, "\n%d. %s %s as %s, until %s\n", i+1, s.account.TargetType, s.account.TargetID, s.account.Role,
 			s.expiresAt.UTC().Format(time.RFC3339))
-		fmt.Fprintf(&b, "   address: %s (environment TRSTCTL_ACCESS_%d_ADDR)\n", s.listener.Addr(), i+1)
+		fmt.Fprintf(&b, "   address: %s (environment TRSTCTL_ACCESS_%d_ADDR)\n", s.addr, i+1)
 		if s.line != "" {
 			fmt.Fprintf(&b, "   client: %s\n", s.line)
 		}
@@ -386,7 +416,7 @@ func (l *agentLauncher) open(p agentPending) (*agentSession, error) {
 
 // serve listens on a loopback address for the session and carries each
 // connection to its gateway, as access sessions connect does.
-func (l *agentLauncher) serve(ctx context.Context, wg *sync.WaitGroup, s *agentSession, dir string, n int) error {
+func (l *agentLauncher) serve(ctx context.Context, wg *sync.WaitGroup, s *agentSession, dir string, n int, confined bool) error {
 	var hostKey string
 	if s.account.TargetType == "ssh" {
 		var err error
@@ -394,14 +424,27 @@ func (l *agentLauncher) serve(ctx context.Context, wg *sync.WaitGroup, s *agentS
 			return err
 		}
 	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return err
+	prefix := filepath.Join(dir, fmt.Sprintf("account-%d", n))
+	var ln net.Listener
+	var err error
+	if confined {
+		// A257-L2: the tunnel is a Unix socket in the launcher's private
+		// directory; the confined command dials a loopback address its
+		// helper carries here.
+		s.socket = prefix + ".sock"
+		if ln, err = net.Listen("unix", s.socket); err != nil {
+			return err
+		}
+		s.addr = &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: confinedPortBase + n}
+	} else {
+		if ln, err = net.Listen("tcp", "127.0.0.1:0"); err != nil {
+			return err
+		}
+		s.addr = ln.Addr().(*net.TCPAddr)
 	}
 	s.listener = ln
-	prefix := filepath.Join(dir, fmt.Sprintf("account-%d", n))
 	s.kubeconfig = prefix + ".kubeconfig"
-	if s.line, err = gatewayClientLine(s.account.TargetType, ln.Addr().(*net.TCPAddr), hostKey, prefix+".known_hosts", s.kubeconfig); err != nil {
+	if s.line, err = gatewayClientLine(s.account.TargetType, s.addr, hostKey, prefix+".known_hosts", s.kubeconfig); err != nil {
 		return err
 	}
 	wg.Add(1)

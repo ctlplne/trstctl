@@ -858,6 +858,15 @@ environment has no control-plane token, and the gateway signs in for it. A run i
 any account its bundles do not name. Revoking the agent's broker identity revokes its runs and
 ends its live sessions in the same call.
 
+On Linux, `--confine-network` (A257-L2) runs the command in a network of its own that reaches
+only its tunnels: a new user and network namespace, made without privileges, with nothing in it
+but loopback. Each tunnel is a Unix socket in the launcher's private directory, and inside the
+command's network its account's address (`127.0.0.1:30001` for the first, `30002` for the
+second, in `TRSTCTL_ACCESS_<n>_ADDR`, the stock clients' variables and the instructions alike)
+is carried to that socket. Every other address, the host's own included, is unreachable, and the
+command runs with no capability. Without the namespaces the launcher refuses rather than run the
+command unconfined.
+
 By default each of those sessions waits for its reviewers. A bundle may hold a standing
 approval for one of its delegated accounts (OD-9), and nothing is approved in advance until
 one is granted: an administrator who may approve access (`access:approve` as well as

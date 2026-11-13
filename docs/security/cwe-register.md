@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3260 annotated sites across 35 rules. Each row is
+3265 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -218,7 +218,7 @@ not this file.
 | `internal/cbom/coverage/envelope.go:57` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cbom/coverage/envelope.go:60` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cbom/coverage/envelope.go:61` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
-| `internal/cli/access_agent_test.go:21` | a fake run token the test's fake control plane expects (CWE-798) |
+| `internal/cli/access_agent_test.go:22` | a fake run token the test's fake control plane expects (CWE-798) |
 | `internal/cli/agent_delegation_command_test.go:14` | API route names are public identifiers, not credential values (CWE-798) |
 | `internal/cli/ci_templates_test.go:116` | a stand-in's test token, not a credential (CWE-798) |
 | `internal/cloudauth/aws_credential_chain.go:31` | a link-local endpoint address, not a credential (CWE-798) |
@@ -862,12 +862,14 @@ not this file.
 | `tools/trstctllint/keymaterial/keymaterial_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `tools/trstctllint/keymaterial/keymaterial_test.go:87` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 
-### G102 — CWE-? (unmapped rule) (3 sites)
+### G102 — CWE-? (unmapped rule) (5 sites)
 
 | Location | Reason |
 |---|---|
+| `internal/cli/access_agent_confine_linux_test.go:52` | the outside listener answers on every address so the test proves the confined command reaches none of them |
 | `internal/kmip/pykmip_client_test.go:108` | a test listener the PyKMIP container dials through the Docker host gateway; mutual TLS still applies (CWE-200) |
 | `internal/kmip/pykmip_tenants_test.go:114` | a test listener the PyKMIP container dials through the Docker host gateway; mutual TLS still applies (CWE-200) |
+| `internal/netconfine/netconfine_linux_test.go:100` | the outside listener answers on every address so the test proves the confined command reaches none of them |
 | `internal/server/spire_jwt_authorities_container_test.go:258` | the test's containers reach the served API through the Docker host gateway (CWE-200) |
 
 ### G103 — CWE-? (unmapped rule) (79 sites)
@@ -1712,7 +1714,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (412 sites)
+### G204 — CWE-78 OS command injection (414 sites)
 
 | Location | Reason |
 |---|---|
@@ -1852,6 +1854,8 @@ not this file.
 | `internal/kms/wrapadapter/localstack_signer_test.go:215` | builds the repository's own command (CWE-78) |
 | `internal/kms/wrapadapter/softhsm_signer_container_test.go:30` | fixed docker invocation for the acceptance test (CWE-78) |
 | `internal/kms/wrapadapter/softhsm_signer_real_test.go:114` | fixed SoftHSM tool inside the test container (CWE-78) |
+| `internal/netconfine/netconfine_linux.go:70` | runs the launcher's own command line verbatim, without a shell, inside the confined network (CWE-78) |
+| `internal/netconfine/netconfine_linux_test.go:126` | the test re-runs its own binary through Wrap |
 | `internal/objectstore/minio_lock_test.go:43` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:48` | test removes the container it started (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:49` | test inspects the container it started (CWE-78) |
@@ -1902,7 +1906,7 @@ not this file.
 | `internal/secretscan/repository.go:247` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscan/repository_credential_test.go:44` | the local git (CWE-78) |
 | `internal/secretscan/repository_credential_test.go:84` | the local git over the test's own repository (CWE-78) |
-| `internal/secretscli/secretscli.go:97` | runs the operator's own command line verbatim; injecting secrets into their process is the feature (CWE-78) |
+| `internal/secretscli/secretscli.go:108` | runs the operator's own command line verbatim; injecting secrets into their process is the feature (CWE-78) |
 | `internal/server/agent_workload_api_darwin_path_test.go:42` | test builds a fixed local fixture (CWE-78) |
 | `internal/server/agent_workload_api_darwin_path_test.go:96` | test runs the client it built (CWE-78) |
 | `internal/server/agent_workload_api_gospiffe_test.go:215` | test executes a fixed local fixture (CWE-78) |
@@ -2575,8 +2579,8 @@ not this file.
 | `internal/cbom/sourcescan/sourcescan.go:148` | a repository the operator named; reading its files is the product function (CWE-22) |
 | `internal/cbom/sourcescan/sourcescan.go:680` | a repository the operator named; reading its files is the product function (CWE-22) |
 | `internal/cbom/tlssource/tlssource_key_verdict_test.go:19` | a fixed test fixture, named by the test itself (CWE-22) |
-| `internal/cli/access_agent.go:121` | the operator names their own attestation payload file (CWE-22) |
-| `internal/cli/access_agent_test.go:128` | the file the test's own child wrote in the test's temp dir (CWE-22) |
+| `internal/cli/access_agent.go:136` | the operator names their own attestation payload file (CWE-22) |
+| `internal/cli/access_agent_test.go:129` | the file the test's own child wrote in the test's temp dir (CWE-22) |
 | `internal/cli/access_connect.go:61` | the operator names their own ticket file (CWE-22) |
 | `internal/cli/assurance_verify.go:41` | operator-named local file (CWE-22) |
 | `internal/cli/assurance_verify.go:46` | operator-named local file (CWE-22) |
@@ -3330,7 +3334,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (49 sites)
+### G702 — CWE-78 OS command injection (taint) (50 sites)
 
 | Location | Reason |
 |---|---|
@@ -3340,6 +3344,7 @@ not this file.
 | `internal/agent/sessionobserve/observer_linux_test.go:101` | the proof's own traffic script, named by the proof runner (CWE-78) |
 | `internal/crypto/ssh_signin_report_windows_test.go:33` | the fixed report script this test proves, run on the test host (CWE-78) |
 | `internal/crypto/windependents/rotation_native_windows_test.go:279` | exact compiler-output digest verified by the parent; absolute regular lab binary, fixed argv, no shell or credential argument (CWE-78) |
+| `internal/netconfine/netconfine_linux.go:70` | runs the launcher's own command line verbatim, without a shell, inside the confined network (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:43` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/protocols/est/differential_test.go:101` | test executes a fixed local tool or fixture it built itself (CWE-78) (-g: get cacerts) |
 | `internal/server/archive_minio_served_test.go:45` | test runs a fixed local tool with the image the operator named (CWE-78) |
@@ -3553,7 +3558,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G704 — CWE-918 Server-side request forgery (taint) (48 sites)
+### G704 — CWE-918 Server-side request forgery (taint) (49 sites)
 
 | Location | Reason |
 |---|---|
@@ -3589,6 +3594,7 @@ not this file.
 | `internal/dynsecret/tailscale.go:197` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/vcenter_sso.go:222` | the operator's configured appliance through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/vcenter_sso.go:239` | same configured appliance (CWE-918) |
+| `internal/netconfine/netconfine_linux_test.go:36` | the probe dials the test's own listeners to show which the confinement lets through |
 | `internal/scanannotate/registry_stock_test.go:35` | the loopback stock registry the operator names in TRSTCTL_A174L2_REGISTRY for this env-gated test (CWE-918) |
 | `internal/scanannotate/registry_stock_test.go:43` | the loopback stock registry the operator names in TRSTCTL_A174L2_REGISTRY for this env-gated test (CWE-918) |
 | `internal/scanannotate/registry_stock_test.go:66` | the loopback stock registry the operator names in TRSTCTL_A174L2_REGISTRY for this env-gated test (CWE-918) |

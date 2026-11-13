@@ -33,6 +33,9 @@ type CLI struct {
 	client   Client
 	audit    auditsink.Auditor
 	dropEnv  func(name string) bool
+	// command adjusts the command before it starts (A257-L2: its
+	// namespaces).
+	command func(*exec.Cmd) error
 }
 
 // New constructs a CLI.
@@ -49,6 +52,14 @@ func New(tenantID string, client Client, audit auditsink.Auditor) *CLI {
 func (c *CLI) WithoutEnv(drop func(name string) bool) *CLI {
 	out := *c
 	out.dropEnv = drop
+	return &out
+}
+
+// WithCommand returns a copy whose injected command is adjusted by f before it
+// starts; an error from f stops it.
+func (c *CLI) WithCommand(f func(*exec.Cmd) error) *CLI {
+	out := *c
+	out.command = f
 	return &out
 }
 
@@ -114,6 +125,11 @@ func (c *CLI) InjectIO(ctx context.Context, secrets map[string][]byte, argv []st
 	}
 	cmd.Env = env
 	cmd.Stdin = stdin
+	if c.command != nil {
+		if err := c.command(cmd); err != nil {
+			return err
+		}
+	}
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	err := cmd.Run()

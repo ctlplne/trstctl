@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- `trstctl-cli access agent --confine-network` runs the launched command in a network of its own that reaches only
+  its tunnels (A257-L2, Linux): an unprivileged user and network namespace with loopback alone, each account's
+  loopback address carried to the launcher's tunnel over a private Unix socket, no capability for the command, and a
+  refusal rather than an unconfined run where the namespaces are not available.
 - The revocation report reads an external CA's own status (A245-L3): for a certificate an external CA issued, the CA
   facet asks that CA's OCSP responder named in the certificate, with the issuer kept in its chain, and reads confirmed
   on a signed revoked answer, pending on good and failed on unknown, with the answer's time; at most ten responders per

@@ -12,10 +12,16 @@ import (
 	"syscall"
 
 	"trstctl.com/trstctl/internal/cli"
+	"trstctl.com/trstctl/internal/netconfine"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
 func main() {
+	// A257-L2: run as the helper that confines a launched command's network
+	// (trstctl access agent --confine-network re-runs this binary for it).
+	if len(os.Args) > 1 && os.Args[1] == netconfine.HelperArg {
+		os.Exit(netconfine.RunHelper(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	}
 	// The runtime distrust list guards the process default transport too (eMudhra, Part 2).
 	netsec.HardenProcessDefaults()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

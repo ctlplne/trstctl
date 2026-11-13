@@ -9497,9 +9497,13 @@ without a reviewer while one is in force; none exists unless an administrator gr
 Revoking one ends the live sessions it approved; a session that was being opened at that
 moment is not among them and is revoked like any other.
 
-What comes next:
-- Confining the command's network to its tunnels (namespaces or a sandbox); today it holds no
-  credential for its accounts, but it can reach whatever its host can.
+Network confinement (`--confine-network`, A257-L2):
+- It is Linux only and needs unprivileged user namespaces; Ubuntu 24.04 restricts them through
+  AppArmor unless a profile or `kernel.apparmor_restrict_unprivileged_userns=0` allows them. Where
+  the namespaces are not available the launcher refuses to run the command rather than run it
+  unconfined, and without the flag the command can reach whatever its host can.
+- It confines the network only: Unix sockets on the filesystem (a container runtime's socket,
+  say) and files stay reachable to the command.
 
 ## Credential health, access templates and emergency access (A258) — served
 
