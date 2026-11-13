@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A promotion's or restore's receipt names the consumers to reload (A236-L3): each item's `reload` lists the
+  consumers whose latest delivery report for that secret (injected or verified) is an earlier version, so whoever
+  applied the batch knows which workloads still hold the replaced value; the console lists them under
+  **Consumers to reload**.
 - A secrets project's application view joins by the owner's CMDB application (A235-L5): when the project's owner names
   an `application_id`, the view counts and lists the certificates and identities of every owner of that application,
   and `owner_resources` says which application (`application_id`) and how many owners (`owners`) it spans; the console

@@ -90,6 +90,10 @@ type secretVersionBatchItemResponse struct {
 	Name      string    `json:"name"`
 	Version   int       `json:"version"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// Reload names the consumers whose latest delivery report (A238) is an
+	// older version of this secret: they still hold the value the batch
+	// replaced and need to reload (A236-L3).
+	Reload []string `json:"reload,omitempty"`
 }
 
 // secretVersionBatchReceipt answers an applied promotion or restore. A plan
@@ -116,7 +120,8 @@ func (a *API) secretPromotionRoutes() []route {
 }
 
 func secretVersionBatchSchemas() map[string]*Schema {
-	item := object(map[string]*Schema{"name": str(), "version": {Type: "integer"}, "updated_at": timestamp()},
+	item := object(map[string]*Schema{"name": str(), "version": {Type: "integer"}, "updated_at": timestamp(),
+		"reload": {Type: "array", Items: str(), Description: "A236-L3: consumers whose latest delivery report is an older version of this secret; they still hold the value the batch replaced"}},
 		"name", "version", "updated_at")
 	return map[string]*Schema{
 		"SecretPromotionRequest": object(map[string]*Schema{
@@ -726,7 +731,7 @@ func (a *API) executeApprovedSecretVersionBatch(
 		if !crypto.ConstantTimeEqual([]byte(receipt.RequestBinding), []byte(binding)) {
 			return out, applicationSecretMutationError(store.ErrIdempotencyConflict)
 		}
-		return secretVersionBatchResult(out, eventID, receipt.Items), nil
+		return a.withConsumersToReload(ctx, tenantID, secretVersionBatchResult(out, eventID, receipt.Items))
 	} else if !store.IsNotFound(err) {
 		return out, err
 	}
@@ -839,7 +844,27 @@ func (a *API) executeApprovedSecretVersionBatch(
 		a.auditSecretVersion(ctx, tenantID, store.Secret{Name: item.Name, Version: item.ResultVersion,
 			Sealed: item.Sealed, UpdatedAt: written[item.Name].UpdatedAt}, recovered)
 	}
-	return secretVersionBatchResult(out, eventID, receipt.Items), nil
+	return a.withConsumersToReload(ctx, tenantID, secretVersionBatchResult(out, eventID, receipt.Items))
+}
+
+// withConsumersToReload names, on each item of a batch receipt, the
+// consumers that last reported an older version of that secret (A236-L3), so
+// whoever promoted or restored knows which applications to reload. A
+// consumer that never reported a secret is not named: trstctl does not know
+// it reads it.
+func (a *API) withConsumersToReload(ctx context.Context, tenantID string, receipt secretVersionBatchReceipt) (secretVersionBatchReceipt, error) {
+	versions := make(map[string]int, len(receipt.Items))
+	for _, item := range receipt.Items {
+		versions[item.Name] = item.Version
+	}
+	behind, err := a.store.SecretConsumersBehind(ctx, tenantID, versions)
+	if err != nil {
+		return receipt, err
+	}
+	for i := range receipt.Items {
+		receipt.Items[i].Reload = behind[receipt.Items[i].Name]
+	}
+	return receipt, nil
 }
 
 func secretVersionBatchResult(out secretVersionBatchReceipt, eventID string, items []store.ApplicationSecretImportItem) secretVersionBatchReceipt {

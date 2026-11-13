@@ -232,6 +232,14 @@ secrets with no source are never touched or deleted. A plan with nothing to chan
 first receipt. You need read access to the source environment and write access to the
 target. Every new version is audited like a single write.
 
+The receipt names the consumers to reload (A236-L3). Each item's `reload` lists the
+consumers whose latest delivery report for that secret (injected or verified, sent to
+`POST /api/v1/secrets/deliveries`) is an earlier version: they still hold the value the
+batch replaced. A consumer that never reported the secret isn't named, because trstctl
+doesn't know it reads it, and one that already reports the new version isn't either. A
+restore's receipt names them the same way, and the console lists them under **Consumers
+to reload** once a batch is applied.
+
 A promotion into a **restricted** environment needs four-eyes approval (A236-L1). The
 first apply writes nothing and answers `403` naming the approval request
 (`dual control: approval_required:<project>/<environment> request_id=…`). Other members

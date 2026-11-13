@@ -14,7 +14,10 @@ import { apiProblemMessage } from "@/lib/apiProblem";
 // digest; a blocked item blocks the whole batch, and a plan that went stale
 // is previewed again before anything is written. A promotion into a restricted
 // environment waits for its approvers (A236-L1): the panel names the request
-// and keeps the reviewed plan to apply again once it is approved.
+// and keeps the reviewed plan to apply again once it is approved. After a
+// batch is applied, the panel names the consumers that last reported an
+// earlier version of a changed secret, so the operator knows what to reload
+// (A236-L3).
 
 type Mode = "promote" | "restore";
 
@@ -42,6 +45,7 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
   const [promotion, setPromotion] = useState<SecretPromotionPlan | null>(null);
   const [restore, setRestore] = useState<SecretRestorePlan | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [reload, setReload] = useState<{ name: string; consumers: string[] }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [awaiting, setAwaiting] = useState<string | null>(null);
@@ -54,6 +58,7 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
     setAwaiting(null);
     setBusy(true);
     setMessage(null);
+    setReload([]);
     try {
       if (mode === "promote") {
         setPromotion(await api.previewSecretPromotion(project.slug, { from, to, folder: folder.trim() || undefined }));
@@ -83,6 +88,7 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
               })
             : null;
       setMessage(receipt ? t("secrets.transfers.applied", { count: String(receipt.items.length) }) : null);
+      setReload((receipt?.items ?? []).filter((item) => (item.reload ?? []).length > 0).map((item) => ({ name: item.name, consumers: item.reload ?? [] })));
       setAwaiting(null);
       setPromotion(null);
       setRestore(null);
@@ -200,6 +206,19 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
         </p>
       ) : null}
       {message ? <p role="status">{message}</p> : null}
+      {reload.length > 0 ? (
+        <div className="grid gap-1">
+          <p>{t("secrets.transfers.reloadHeading")}</p>
+          <ul className="grid gap-1" aria-label={t("secrets.transfers.reloadLabel")}>
+            {reload.map((item) => (
+              <li key={item.name} className="flex flex-wrap gap-2">
+                <span className="font-mono text-xs">{item.name}</span>
+                <span>{item.consumers.join(", ")}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {plan ? (
         <div className="grid gap-2">
           <p>{t("secrets.transfers.summary", { changes: String(plan.changes), blocked: String(plan.blocked) })}</p>

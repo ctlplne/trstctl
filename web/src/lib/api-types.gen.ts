@@ -12652,7 +12652,7 @@ export interface SecretValue {
 
 export interface SecretVersionBatchReceipt {
   batch_id?: string;
-  items: { name: string; updated_at: string; version: number }[];
+  items: { name: string; reload?: string[]; updated_at: string; version: number }[];
   operation: "promotion" | "restore";
   plan_digest: string;
 }

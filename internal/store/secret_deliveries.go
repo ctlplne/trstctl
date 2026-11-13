@@ -83,3 +83,40 @@ func (s *Store) ListSecretDeliveries(ctx context.Context, tenantID, name string)
 	})
 	return out, err
 }
+
+// SecretConsumersBehind returns, for each named secret, the consumers whose
+// latest report (injected or verified) is older than the version given for
+// it (A236-L3): they hold a value a newer version replaced. Consumers are
+// sorted; a secret no consumer is behind on is absent.
+func (s *Store) SecretConsumersBehind(ctx context.Context, tenantID string, versions map[string]int) (map[string][]string, error) {
+	out := map[string][]string{}
+	if len(versions) == 0 {
+		return out, nil
+	}
+	names := make([]string, 0, len(versions))
+	for name := range versions {
+		names = append(names, name)
+	}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT name, consumer, GREATEST(injected_version, verified_version)
+			  FROM secret_deliveries WHERE tenant_id = $1 AND name = ANY($2)
+			 ORDER BY name, consumer`, tenantID, names)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var name, consumer string
+			var reported int
+			if err := rows.Scan(&name, &consumer, &reported); err != nil {
+				return err
+			}
+			if reported > 0 && reported < versions[name] {
+				out[name] = append(out[name], consumer)
+			}
+		}
+		return rows.Err()
+	})
+	return out, err
+}

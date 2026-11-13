@@ -28252,6 +28252,8 @@ export interface components {
             batch_id?: string;
             items: {
                 name: string;
+                /** @description A236-L3: consumers whose latest delivery report is an older version of this secret; they still hold the value the batch replaced */
+                reload?: string[];
                 /** Format: date-time */
                 updated_at: string;
                 version: number;

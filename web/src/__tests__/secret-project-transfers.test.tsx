@@ -77,7 +77,16 @@ describe("A236 promote and restore", () => {
 
   it("previews a value-free promotion and applies it by its digest", async () => {
     apiMock.previewSecretPromotion.mockResolvedValue(promotionPlan);
-    apiMock.applySecretPromotion.mockResolvedValue({ batch_id: "b1", operation: "promotion", plan_digest: promotionPlan.plan_digest, items: [{}, {}] });
+    // A236-L3: the receipt names the consumers that still hold an earlier version.
+    apiMock.applySecretPromotion.mockResolvedValue({
+      batch_id: "b1",
+      operation: "promotion",
+      plan_digest: promotionPlan.plan_digest,
+      items: [
+        { name: "orders/stage/db/password", version: 2, updated_at: "2026-11-13T00:00:00Z", reload: ["orders-api", "orders-worker"] },
+        { name: "orders/stage/db/url", version: 1, updated_at: "2026-11-13T00:00:00Z" },
+      ],
+    });
     const onApplied = vi.fn();
     const user = userEvent.setup();
     render(<SecretProjectTransfers project={project} onApplied={onApplied} />);
@@ -98,6 +107,10 @@ describe("A236 promote and restore", () => {
       plan_digest: promotionPlan.plan_digest,
     });
     expect(await screen.findByText("2 secrets got a new version.")).toBeInTheDocument();
+    const toReload = screen.getByRole("list", { name: "Consumers to reload" });
+    expect(within(toReload).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(toReload).getByText("orders/stage/db/password")).toBeInTheDocument();
+    expect(within(toReload).getByText("orders-api, orders-worker")).toBeInTheDocument();
     expect(onApplied).toHaveBeenCalled();
   });
 
@@ -204,5 +217,8 @@ describe("A236 promote and restore", () => {
       "orders",
       expect.objectContaining({ environment: "dev", folder: "db", plan_digest: "e".repeat(64) }),
     );
+    // No consumer reported an earlier version: nothing to reload.
+    expect(await screen.findByText("1 secrets got a new version.")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Consumers to reload" })).not.toBeInTheDocument();
   });
 });

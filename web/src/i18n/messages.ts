@@ -5847,6 +5847,11 @@ export const messages = {
     defaultMessage: "{count} secrets got a new version.",
     description: "Applied result.",
   },
+  "secrets.transfers.reloadHeading": {
+    defaultMessage: "Reload these consumers: they last reported an earlier version of a secret that changed.",
+    description: "A236-L3: after a promotion or restore, the consumers that hold an earlier version of a changed secret.",
+  },
+  "secrets.transfers.reloadLabel": { defaultMessage: "Consumers to reload", description: "A236-L3: list of changed secrets and the consumers to reload." },
   "secrets.transfers.awaitingApproval": {
     defaultMessage: "This promotion into a restricted environment waits for its approvers: request {request}. Apply it again once they approve it.",
     description: "A236-L1: a promotion into a restricted environment needs approval by members who write there.",

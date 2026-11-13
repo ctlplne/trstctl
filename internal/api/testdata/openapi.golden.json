@@ -58851,6 +58851,13 @@
                 "name": {
                   "type": "string"
                 },
+                "reload": {
+                  "description": "A236-L3: consumers whose latest delivery report is an older version of this secret; they still hold the value the batch replaced",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
                 "updated_at": {
                   "format": "date-time",
                   "type": "string"
