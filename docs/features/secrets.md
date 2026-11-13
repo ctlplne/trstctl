@@ -194,8 +194,11 @@ shows its key, version and owner, and the page lists the members, with grant and
 for `access:write` holders and for the project's admins within their own grant. When the project has an owner, the **application view** also
 shows how many certificates and identities that owner holds. It lists the soonest-expiring
 of each with its health (ok, expiring within 30 days, expired), so an application's
-certificates, workload identities and secrets read as one inventory. With no owner,
-the page says to set one instead of guessing.
+certificates, workload identities and secrets read as one inventory. When the owner
+record names a CMDB application (`application_id`, set by hand or by the CMDB
+reconcile), the view spans every owner of that application, not only the project's
+own (A235-L5), and says which application and how many owners. With no owner, the
+page says to set one instead of guessing.
 
 ### Promoting between environments (A236)
 

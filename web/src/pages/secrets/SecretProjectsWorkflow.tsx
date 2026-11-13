@@ -242,6 +242,14 @@ export function SecretProjectsWorkflow() {
           </p>
           {selected.owner_resources ? (
             <div className="grid gap-1" aria-label={t("secrets.projects.applicationLabel")}>
+              {selected.owner_resources.application_id ? (
+                <p className="text-muted-foreground">
+                  {t("secrets.projects.applicationOf", {
+                    application: selected.owner_resources.application_id,
+                    owners: String(selected.owner_resources.owners),
+                  })}
+                </p>
+              ) : null}
               <p>
                 {t("secrets.projects.application", {
                   certificates: String(selected.owner_resources.certificates),

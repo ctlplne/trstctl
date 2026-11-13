@@ -27479,9 +27479,13 @@ export interface components {
             owner: string;
             owner_id?: string;
             owner_resources?: {
+                /** @description A235-L5: the CMDB application the project's owner belongs to; the view then spans every owner of it */
+                application_id?: string;
                 certificates: number;
                 certificates_needing_work: number;
                 identities: number;
+                /** @description how many owners the view spans: 1, or every owner of the application */
+                owners: number;
                 soonest_certificates: {
                     /** @enum {string} */
                     health: "ok" | "expiring" | "expired";

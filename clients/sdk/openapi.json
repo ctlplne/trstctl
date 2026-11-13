@@ -56076,6 +56076,10 @@
           },
           "owner_resources": {
             "properties": {
+              "application_id": {
+                "description": "A235-L5: the CMDB application the project's owner belongs to; the view then spans every owner of it",
+                "type": "string"
+              },
               "certificates": {
                 "type": "integer"
               },
@@ -56083,6 +56087,10 @@
                 "type": "integer"
               },
               "identities": {
+                "type": "integer"
+              },
+              "owners": {
+                "description": "how many owners the view spans: 1, or every owner of the application",
                 "type": "integer"
               },
               "soonest_certificates": {
@@ -56167,7 +56175,8 @@
               "identities",
               "certificates_needing_work",
               "soonest_certificates",
-              "soonest_identities"
+              "soonest_identities",
+              "owners"
             ],
             "type": "object"
           },

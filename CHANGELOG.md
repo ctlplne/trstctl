@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A secrets project's application view joins by the owner's CMDB application (A235-L5): when the project's owner names
+  an `application_id`, the view counts and lists the certificates and identities of every owner of that application,
+  and `owner_resources` says which application (`application_id`) and how many owners (`owners`) it spans; the console
+  names them.
 - The SCIM writeback bearer rotates without a restart (A207-L1): `auth.scim.tokens[].writeback_token_file` is checked
   as the inbound token files are, and a rewritten file's bearer replaces the one in locked memory for the next
   write-back; an unreadable or empty rewrite keeps the last good bearer, and a reload never wipes a bearer a request

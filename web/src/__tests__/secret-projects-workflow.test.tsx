@@ -68,6 +68,8 @@ describe("A235 secrets projects", () => {
         certificates: 3,
         identities: 1,
         certificates_needing_work: 1,
+        application_id: "APP-PAY",
+        owners: 2,
         soonest_certificates: [{ id: "c1", kind: "certificate", name: "CN=api.payments", health: "expiring", not_after: "2026-11-20T00:00:00Z" }],
         soonest_identities: [{ id: "i1", kind: "spiffe", name: "payments-api", health: "ok" }],
       },
@@ -76,6 +78,8 @@ describe("A235 secrets projects", () => {
     render(<SecretProjectsWorkflow />);
     await user.click(await screen.findByRole("button", { name: "Open" }));
     expect(await screen.findByText(/holds 3 certificates and 1 identities; 1 certificates need attention/)).toBeInTheDocument();
+    // A235-L5: the view spans every owner of the owner's CMDB application.
+    expect(screen.getByText("Application APP-PAY: across its 2 owners in the CMDB.")).toBeInTheDocument();
     expect(screen.getByText("Expiring within 30 days")).toBeInTheDocument();
     expect(screen.getByText("CN=api.payments")).toBeInTheDocument();
   });

@@ -7601,7 +7601,9 @@ func componentSchemas() map[string]*Schema {
 	secretProjectOwnerResources := object(map[string]*Schema{
 		"certificates": {Type: "integer"}, "identities": {Type: "integer"}, "certificates_needing_work": {Type: "integer"},
 		"soonest_certificates": {Type: "array", Items: secretProjectResource}, "soonest_identities": {Type: "array", Items: secretProjectResource},
-	}, "certificates", "identities", "certificates_needing_work", "soonest_certificates", "soonest_identities")
+		"application_id": {Type: "string", Description: "A235-L5: the CMDB application the project's owner belongs to; the view then spans every owner of it"},
+		"owners":         {Type: "integer", Description: "how many owners the view spans: 1, or every owner of the application"},
+	}, "certificates", "identities", "certificates_needing_work", "soonest_certificates", "soonest_identities", "owners")
 	secretProject := object(map[string]*Schema{
 		"slug": str(), "name": str(), "owner_id": str(), "owner": str(), "created_by": str(), "created_at": timestamp(),
 		"environments": {Type: "array", Items: secretProjectEnvironment}, "members": {Type: "array", Items: secretProjectMember},

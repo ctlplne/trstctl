@@ -102,6 +102,10 @@ type secretProjectOwnerResources struct {
 	SoonestCertificates     []secretProjectResourceResponse `json:"soonest_certificates"`
 	SoonestIdentities       []secretProjectResourceResponse `json:"soonest_identities"`
 	CertificatesNeedingWork int                             `json:"certificates_needing_work"`
+	// ApplicationID is the CMDB application the owner belongs to; the view
+	// then spans every owner of it (A235-L5). Owners counts them.
+	ApplicationID string `json:"application_id,omitempty"`
+	Owners        int    `json:"owners"`
 }
 
 type secretProjectResponse struct {
@@ -715,7 +719,8 @@ func (a *API) writeSecretScopeError(w http.ResponseWriter, err error) bool {
 
 func ownerResourcesView(inv store.OwnerInventory, now time.Time) *secretProjectOwnerResources {
 	out := &secretProjectOwnerResources{Certificates: inv.Certificates, Identities: inv.Identities,
-		SoonestCertificates: []secretProjectResourceResponse{}, SoonestIdentities: []secretProjectResourceResponse{}}
+		SoonestCertificates: []secretProjectResourceResponse{}, SoonestIdentities: []secretProjectResourceResponse{},
+		ApplicationID: inv.ApplicationID, Owners: max(inv.Owners, 1)}
 	health := func(notAfter *time.Time) string {
 		switch {
 		case notAfter == nil:

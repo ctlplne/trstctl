@@ -5772,6 +5772,10 @@ export const messages = {
     defaultMessage: "The owner also holds {certificates} certificates and {identities} identities; {attention} certificates need attention.",
     description: "The project's owner's certificate and identity counts.",
   },
+  "secrets.projects.applicationOf": {
+    defaultMessage: "Application {application}: across its {owners} owners in the CMDB.",
+    description: "A235-L5: the view spans every owner of the project owner's CMDB application.",
+  },
   "secrets.projects.applicationUnknown": {
     defaultMessage: "Set an owner to see this application's certificates and identities here.",
     description: "Shown when the project owner is unknown.",

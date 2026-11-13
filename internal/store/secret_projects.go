@@ -382,24 +382,61 @@ type OwnerInventory struct {
 	Identities         int
 	SoonestCertificate []OwnerInventoryItem
 	SoonestIdentities  []OwnerInventoryItem
+	// ApplicationID is the CMDB application the owner belongs to, when the
+	// owner record names one (A235-L5); the inventory then spans every owner
+	// of that application, not only this one.
+	ApplicationID string
+	// Owners is how many owners the inventory spans.
+	Owners int
 }
 
 // OwnerApplicationInventory returns the certificates and identities owned by
-// ownerID, counted, with up to limit of each, soonest-expiring first.
+// ownerID — or, when the owner names a CMDB application, by every owner of
+// that application (A235-L5) — counted, with up to limit of each,
+// soonest-expiring first.
 func (s *Store) OwnerApplicationInventory(ctx context.Context, tenantID, ownerID string, limit int) (OwnerInventory, error) {
 	var inv OwnerInventory
 	if ownerID == "" || limit <= 0 {
 		return inv, nil
 	}
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		owners := []string{ownerID}
+		var application string
+		err := tx.QueryRow(ctx, `SELECT COALESCE(btrim(application_id), '') FROM owners WHERE tenant_id = $1 AND id::text = $2`,
+			tenantID, ownerID).Scan(&application)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if application != "" {
+			rows, err := tx.Query(ctx, `SELECT id::text FROM owners WHERE tenant_id = $1 AND btrim(application_id) = $2 ORDER BY id`,
+				tenantID, application)
+			if err != nil {
+				return err
+			}
+			owners = owners[:0]
+			for rows.Next() {
+				var id string
+				if err := rows.Scan(&id); err != nil {
+					rows.Close()
+					return err
+				}
+				owners = append(owners, id)
+			}
+			rows.Close()
+			if err := rows.Err(); err != nil {
+				return err
+			}
+			inv.ApplicationID = application
+		}
+		inv.Owners = len(owners)
 		if err := tx.QueryRow(ctx, `SELECT
-			  (SELECT count(*) FROM certificates WHERE tenant_id = $1 AND owner_id::text = $2),
-			  (SELECT count(*) FROM identities WHERE tenant_id = $1 AND owner_id::text = $2)`,
-			tenantID, ownerID).Scan(&inv.Certificates, &inv.Identities); err != nil {
+			  (SELECT count(*) FROM certificates WHERE tenant_id = $1 AND owner_id::text = ANY($2)),
+			  (SELECT count(*) FROM identities WHERE tenant_id = $1 AND owner_id::text = ANY($2))`,
+			tenantID, owners).Scan(&inv.Certificates, &inv.Identities); err != nil {
 			return err
 		}
 		rows, err := tx.Query(ctx, `SELECT id::text, 'certificate', subject, '', not_after FROM certificates
-			WHERE tenant_id = $1 AND owner_id::text = $2 ORDER BY not_after NULLS LAST, id LIMIT $3`, tenantID, ownerID, limit)
+			WHERE tenant_id = $1 AND owner_id::text = ANY($2) ORDER BY not_after NULLS LAST, id LIMIT $3`, tenantID, owners, limit)
 		if err != nil {
 			return err
 		}
@@ -408,7 +445,7 @@ func (s *Store) OwnerApplicationInventory(ctx context.Context, tenantID, ownerID
 			return err
 		}
 		rows, err = tx.Query(ctx, `SELECT id::text, kind, name, status, not_after FROM identities
-			WHERE tenant_id = $1 AND owner_id::text = $2 ORDER BY not_after NULLS LAST, id LIMIT $3`, tenantID, ownerID, limit)
+			WHERE tenant_id = $1 AND owner_id::text = ANY($2) ORDER BY not_after NULLS LAST, id LIMIT $3`, tenantID, owners, limit)
 		if err != nil {
 			return err
 		}
