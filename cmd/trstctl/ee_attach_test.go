@@ -283,3 +283,25 @@ func TestAttachEEProviderAttachesPSATicketsMSP3(t *testing.T) {
 		t.Fatal("a deployment with no ticket target attached a ticket observer")
 	}
 }
+
+// MSP-9: a Provider deployment with an RMM target attaches the inventory
+// sweep as a licensed leader worker, and the Provider view marks the target
+// as an RMM.
+func TestAttachEEProviderAttachesRMMSweepMSP9(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Provider.BillingSync.Targets = []config.ProviderBillingTarget{{ID: "ninja", Type: "ninjaone", NinjaOne: &config.NinjaOneTarget{}}}
+	deps := &server.Deps{}
+	if err := attachEE(context.Background(), cfg, nil, commercialLicense(t, license.TierProvider), deps); err != nil {
+		t.Fatalf("provider attachEE: %v", err)
+	}
+	sweep := false
+	for _, worker := range deps.LicensedBackgroundWorkers {
+		sweep = sweep || worker.Name() == "provider.rmm.inventory_sweep"
+	}
+	if !sweep {
+		t.Fatal("the RMM inventory sweep is not a licensed background worker")
+	}
+	if targets := providerBillingTargets(cfg.Provider.BillingSync); len(targets) != 1 || !targets[0].RMM || targets[0].Tickets {
+		t.Fatalf("Provider view of the RMM target = %+v", targets)
+	}
+}

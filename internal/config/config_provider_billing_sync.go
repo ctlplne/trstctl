@@ -71,7 +71,43 @@ type ProviderBillingTarget struct {
 	// uploaded as usage lines of its Pax8 subscription. Endpoint is the API
 	// root, https://api.pax8.com.
 	Pax8 *Pax8BillingTarget `json:"pax8,omitempty"`
+	// NinjaOne configures a "ninjaone" RMM target (MSP-9): the Provider lists
+	// each mapped customer's devices under its NinjaOne organization, maps
+	// them to the customer's agents, reports agent health to a device custom
+	// field, and runs the agent's install, upgrade and remove scripts.
+	// Endpoint is the regional host, e.g. https://app.ninjarmm.com. An RMM
+	// target receives no usage periods and opens no tickets.
+	NinjaOne *NinjaOneTarget `json:"ninjaone,omitempty"`
 }
+
+// NinjaOneTarget is a NinjaOne instance the Provider runs agents through.
+type NinjaOneTarget struct {
+	// ClientID is the API client's ID; ClientSecretRef names its secret
+	// (file: or env:).
+	ClientID        string `json:"client_id"`
+	ClientSecretRef string `json:"client_secret_ref"`
+	// InstallScriptID, UpgradeScriptID and RemoveScriptID are the
+	// automation-library scripts of each agent action.
+	InstallScriptID int64 `json:"install_script_id"`
+	UpgradeScriptID int64 `json:"upgrade_script_id"`
+	RemoveScriptID  int64 `json:"remove_script_id"`
+	// RunAs is the scripts' credential role ("system" when empty).
+	RunAs string `json:"run_as,omitempty"`
+	// HealthField is the device custom field the agent's health is written
+	// to; empty reports none.
+	HealthField string `json:"health_field,omitempty"`
+}
+
+// RMMTargetTypes are the target types that run the agent through an RMM.
+var RMMTargetTypes = map[string]bool{"ninjaone": true}
+
+// IsRMM reports whether the target runs the agent's lifecycle through an
+// RMM (MSP-9 onward).
+func (t ProviderBillingTarget) IsRMM() bool { return RMMTargetTypes[t.Type] }
+
+// PushesUsage reports whether the billing sweep pushes usage periods to
+// the target.
+func (t ProviderBillingTarget) PushesUsage() bool { return !t.IsRMM() }
 
 // Pax8DefaultAudience is the audience of Pax8's client-credentials tokens.
 const Pax8DefaultAudience = "api://p8p.client"
@@ -319,7 +355,8 @@ var (
 var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
-var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}, "gradient": {}, "pax8": {}}
+var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}, "gradient": {}, "pax8": {},
+	"ninjaone": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -351,7 +388,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json, connectwise, autotask, syncro, halopsa, gradient, pax8)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -380,6 +417,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 			errs = append(errs, validateGradientBillingTarget(where, t)...)
 		case "pax8":
 			errs = append(errs, validatePax8BillingTarget(where, t)...)
+		case "ninjaone":
+			errs = append(errs, validateNinjaOneTarget(where, t)...)
+		}
+		if t.Type != "ninjaone" && t.NinjaOne != nil {
+			errs = append(errs, fmt.Errorf("%s.ninjaone applies to ninjaone targets only", where))
 		}
 		if t.Type != "pax8" && t.Pax8 != nil {
 			errs = append(errs, fmt.Errorf("%s.pax8 applies to pax8 targets only", where))
@@ -427,6 +469,45 @@ func validateJSONBillingTarget(where string, t ProviderBillingTarget) []error {
 }
 
 var haloTenantPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
+
+// rmmFieldPattern is an RMM custom field name.
+var rmmFieldPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,63}$`)
+
+func validateNinjaOneTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; a ninjaone target signs in with its client credentials", where))
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	n := t.NinjaOne
+	if n == nil {
+		return append(errs, fmt.Errorf("%s.ninjaone is required for a ninjaone target", where))
+	}
+	where += ".ninjaone"
+	if !validConnectWiseName(n.ClientID) {
+		errs = append(errs, fmt.Errorf("%s.client_id must be the API client's ID (1-100 characters)", where))
+	}
+	if err := validateDeploymentCredentialRef(n.ClientSecretRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.client_secret_ref: %w", where, err))
+	}
+	for _, script := range []struct {
+		name string
+		id   int64
+	}{{"install_script_id", n.InstallScriptID}, {"upgrade_script_id", n.UpgradeScriptID}, {"remove_script_id", n.RemoveScriptID}} {
+		if script.id <= 0 {
+			errs = append(errs, fmt.Errorf("%s.%s must be an automation-library script ID", where, script.name))
+		}
+	}
+	if n.RunAs != "" && !validConnectWiseName(n.RunAs) {
+		errs = append(errs, fmt.Errorf("%s.run_as must be a credential role (1-100 characters)", where))
+	}
+	if n.HealthField != "" && !rmmFieldPattern.MatchString(n.HealthField) {
+		errs = append(errs, fmt.Errorf("%s.health_field must be a custom field name (a letter, then letters, digits or underscores)", where))
+	}
+	return errs
+}
 
 // pax8IDPattern is a Pax8 product or subscription ID.
 var pax8IDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)

@@ -136,6 +136,8 @@ type Config struct {
 	BillingSyncPushes BillingSyncPushReader
 	// PSATickets reads each customer's PSA tickets (MSP-3).
 	PSATickets PSATicketReader
+	// RMMDevices reads each customer's RMM devices (MSP-9).
+	RMMDevices RMMDeviceReader
 	// Reports reads customers' signed assurance reports from core (A187). Nil
 	// leaves the report routes refusing.
 	Reports          api.TenantReportReader
@@ -237,6 +239,7 @@ type Service struct {
 	billingCompanies  BillingCompanyStore
 	billingSyncPushes BillingSyncPushReader
 	psaTickets        PSATicketReader
+	rmmDevices        RMMDeviceReader
 	reports           api.TenantReportReader
 	clock             func() time.Time
 	maxBreakGlassTTL  time.Duration
@@ -279,7 +282,7 @@ func NewService(cfg Config) *Service {
 		delegations: cfg.Delegations, access: cfg.Access, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
 		drills: cfg.Drills, tenantConsent: cfg.TenantConsent, auditStreams: cfg.AuditStreams, templates: cfg.Templates, reports: cfg.Reports, clock: clock, maxBreakGlassTTL: maxTTL,
 		billingTargets: append([]BillingTarget(nil), cfg.BillingTargets...), billingCompanies: cfg.BillingCompanies,
-		billingSyncPushes: cfg.BillingSyncPushes, psaTickets: cfg.PSATickets}
+		billingSyncPushes: cfg.BillingSyncPushes, psaTickets: cfg.PSATickets, rmmDevices: cfg.RMMDevices}
 }
 
 // ListActivity returns newest-first immutable Provider authority evidence,

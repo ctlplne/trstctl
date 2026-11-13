@@ -410,6 +410,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleBillingSync(ctx, m)
 	case orchestrator.DestinationPSATicket:
 		return d.handlePSATicket(ctx, m)
+	case orchestrator.DestinationRMMInventory:
+		return d.handleRMMInventory(ctx, m)
 	case orchestrator.DestinationITSMServiceNowClose:
 		return d.handleServiceNowClose(ctx, m)
 	case orchestrator.DestinationResponseSplunk:

@@ -52,6 +52,8 @@ type BillingTarget struct {
 	// Tickets says the target opens service tickets for customers' alerts
 	// (MSP-3).
 	Tickets bool `json:"tickets,omitempty"`
+	// RMM says the target runs the agent through an RMM (MSP-9).
+	RMM bool `json:"rmm,omitempty"`
 }
 
 // BillingCompany is one customer's company in one billing target.
@@ -357,6 +359,54 @@ func (s *Service) ListTenantPSATickets(ctx context.Context, actor Operator, cust
 		out = append(out, PSATicket{TargetID: r.TargetID, AlertKind: kind, Subject: subject, Generation: r.Generation, Status: r.Status,
 			ExternalCompanyID: r.ExternalCompanyID, ExternalTicketID: r.ExternalTicketID, Summary: r.Summary, Notes: r.Notes,
 			Reason: r.Reason, OpenedAt: r.OpenedAt, ClosedAt: r.ClosedAt, UpdatedAt: r.UpdatedAt})
+	}
+	return out, nil
+}
+
+// RMMDevice is one device an RMM lists under a customer's organization, as
+// the plane shows it (MSP-9): its agent (and how it matched), the health
+// last reported back, and the agent action last run through the RMM.
+type RMMDevice struct {
+	TargetID     string    `json:"target_id"`
+	DeviceID     string    `json:"device_id"`
+	DeviceName   string    `json:"device_name,omitempty"`
+	OrgID        string    `json:"org_id,omitempty"`
+	Present      bool      `json:"present"`
+	AgentID      string    `json:"agent_id,omitempty"`
+	AgentMatch   string    `json:"agent_match,omitempty"`
+	Health       string    `json:"health,omitempty"`
+	Action       string    `json:"action,omitempty"`
+	ActionStatus string    `json:"action_status,omitempty"`
+	ActionReason string    `json:"action_reason,omitempty"`
+	ActionBy     string    `json:"action_by,omitempty"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// RMMDeviceReader reads a customer's RMM devices.
+type RMMDeviceReader interface {
+	RMMDevices(ctx context.Context, tenantID string, limit int) ([]corestore.RMMDevice, error)
+}
+
+// ListTenantRMMDevices reads a delegated customer's RMM devices.
+func (s *Service) ListTenantRMMDevices(ctx context.Context, actor Operator, customerID string) ([]RMMDevice, error) {
+	if err := s.requireOperator(actor); err != nil {
+		return nil, err
+	}
+	if err := s.authorize(ctx, actor, customerID, OpRead); err != nil {
+		return nil, err
+	}
+	out := []RMMDevice{}
+	if s.rmmDevices == nil {
+		return out, nil
+	}
+	rows, err := s.rmmDevices.RMMDevices(ctx, customerID, 2000)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out = append(out, RMMDevice{TargetID: r.TargetID, DeviceID: r.DeviceID, DeviceName: r.DeviceName, OrgID: r.OrgID, Present: r.Present,
+			AgentID: r.AgentID, AgentMatch: r.AgentMatch, Health: r.Health, Action: r.Action, ActionStatus: r.ActionStatus,
+			ActionReason: r.ActionReason, ActionBy: r.ActionBy, UpdatedAt: r.UpdatedAt})
 	}
 	return out, nil
 }

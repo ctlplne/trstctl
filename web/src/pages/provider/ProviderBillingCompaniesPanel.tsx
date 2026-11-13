@@ -13,6 +13,7 @@ import {
   type ProviderBillingCompanies as BillingView,
   type ProviderBillingSyncPush,
   type ProviderPSATicket,
+  type ProviderRMMDevice,
 } from "@/lib/providerApi";
 
 /** MSP-2: the selected customer's company in every configured billing
@@ -23,6 +24,7 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
   const [view, setView] = useState<BillingView | null>(null);
   const [pushes, setPushes] = useState<ProviderBillingSyncPush[]>([]);
   const [tickets, setTickets] = useState<ProviderPSATicket[]>([]);
+  const [devices, setDevices] = useState<ProviderRMMDevice[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -48,6 +50,7 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
       setView(null);
       setPushes([]);
       setTickets([]);
+      setDevices([]);
       setError(null);
       if (!id) return;
       try {
@@ -57,6 +60,10 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
         if (out.targets.some((target) => target.tickets)) {
           const opened = await providerApi.psaTickets(id);
           setTickets(opened.tickets ?? []);
+        }
+        if (out.targets.some((target) => target.rmm)) {
+          const listed = await providerApi.rmmDevices(id);
+          setDevices(listed.devices ?? []);
         }
         setDrafts(Object.fromEntries(out.companies.map((company) => [company.target_id, company.external_company_id])));
       } catch (err) {
@@ -213,6 +220,56 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
           </table>
         </div>
       ) : null}
+      {view && view.targets.some((target) => target.rmm) ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-caption">
+            <caption className="py-1 text-left font-medium">{translateNow("provider.rmmDevices.caption")}</caption>
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="py-1">{translateNow("provider.rmmDevices.device")}</th>
+                <th className="py-1">{translateNow("provider.rmmDevices.agent")}</th>
+                <th className="py-1">{translateNow("provider.rmmDevices.health")}</th>
+                <th className="py-1">{translateNow("provider.rmmDevices.lastAction")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {devices.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-1 text-muted-foreground">
+                    {translateNow("provider.rmmDevices.empty")}
+                  </td>
+                </tr>
+              ) : (
+                devices.map((device) => (
+                  <tr
+                    key={`${device.target_id}:${device.device_id}`}
+                    className={device.present ? "border-t border-border/60" : "border-t border-border/60 text-muted-foreground"}
+                  >
+                    <td className="py-1">
+                      <span className="font-mono">{device.device_name || device.device_id}</span>
+                      {device.present ? null : <span className="ms-2">{translateNow("provider.rmmDevices.gone")}</span>}
+                    </td>
+                    <td className="py-1">
+                      {device.agent_match === "installed"
+                        ? translateNow("provider.rmmDevices.match.installed")
+                        : device.agent_match === "hostname"
+                          ? translateNow("provider.rmmDevices.match.hostname")
+                          : translateNow("provider.rmmDevices.match.none")}
+                    </td>
+                    <td className="py-1">{device.health ?? ""}</td>
+                    <td className={device.action_status === "failed" ? "py-1 text-status-warning" : "py-1 text-muted-foreground"}>
+                      {device.action
+                        ? translateNow("provider.rmmDevices.action", { action: device.action, status: device.action_status ?? "" }) +
+                          (device.action_reason ? ` (${device.action_reason})` : "")
+                        : ""}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
       {view && view.targets.some((target) => target.tickets) ? (
         <div className="overflow-x-auto">
           <table className="w-full text-caption">
@@ -291,6 +348,8 @@ function targetTypeLabel(type: string): string {
       return translateNow("provider.billingSync.type.gradient");
     case "pax8":
       return translateNow("provider.billingSync.type.pax8");
+    case "ninjaone":
+      return translateNow("provider.billingSync.type.ninjaone");
     case "json":
       return translateNow("provider.billingSync.type.json");
     default:
@@ -313,6 +372,8 @@ function companyHint(type: string): string | undefined {
       return translateNow("provider.billingSync.gradientCompanyHint");
     case "pax8":
       return translateNow("provider.billingSync.pax8CompanyHint");
+    case "ninjaone":
+      return translateNow("provider.billingSync.ninjaoneCompanyHint");
     default:
       return undefined;
   }

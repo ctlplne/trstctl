@@ -350,3 +350,49 @@ func TestProviderBillingSyncPax8TargetMSP8(t *testing.T) {
 		}
 	}
 }
+
+// MSP-9: a ninjaone target names its API client and secret reference and
+// the three agent scripts; it is an RMM target that takes no usage and opens
+// no tickets; json and connectwise fields are refused on it, and its block on
+// other types.
+func TestProviderBillingSyncNinjaOneTargetMSP9(t *testing.T) {
+	valid := func() ProviderBillingTarget {
+		return ProviderBillingTarget{ID: "ninja", Type: "ninjaone", Endpoint: "https://app.ninjarmm.com",
+			NinjaOne: &NinjaOneTarget{ClientID: "trstctl-ninja", ClientSecretRef: "file:/run/secrets/ninja-secret", // #nosec G101 -- a file: reference to a test-only value (CWE-798)
+				InstallScriptID: 31, UpgradeScriptID: 32, RemoveScriptID: 33, HealthField: "trstctlAgent"}}
+	}
+	ok := valid()
+	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{ok}}); len(errs) != 0 {
+		t.Fatalf("valid ninjaone target refused: %v", errs)
+	}
+	if !ok.IsRMM() || ok.PushesUsage() || ok.TicketKinds() != nil {
+		t.Fatalf("a ninjaone target: rmm=%v usage=%v kinds=%v", ok.IsRMM(), ok.PushesUsage(), ok.TicketKinds())
+	}
+	if json := (ProviderBillingTarget{Type: "json"}); json.IsRMM() || !json.PushesUsage() {
+		t.Fatal("a json target is treated as an RMM")
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*ProviderBillingTarget)
+		want   string
+	}{
+		"no block":          {func(t *ProviderBillingTarget) { t.NinjaOne = nil }, ".ninjaone is required"},
+		"signing key":       {func(t *ProviderBillingTarget) { t.SigningKeyRef = "env:X" }, "json targets only"},
+		"no client id":      {func(t *ProviderBillingTarget) { t.NinjaOne.ClientID = "" }, ".client_id"},
+		"inline secret":     {func(t *ProviderBillingTarget) { t.NinjaOne.ClientSecretRef = "s3cret" }, ".client_secret_ref"},
+		"no install script": {func(t *ProviderBillingTarget) { t.NinjaOne.InstallScriptID = 0 }, ".install_script_id"},
+		"no remove script":  {func(t *ProviderBillingTarget) { t.NinjaOne.RemoveScriptID = -1 }, ".remove_script_id"},
+		"bad health field":  {func(t *ProviderBillingTarget) { t.NinjaOne.HealthField = "1st field" }, ".health_field"},
+		"block on pax8":     {func(t *ProviderBillingTarget) { t.Type = "pax8" }, "ninjaone targets only"},
+	} {
+		target := valid()
+		tc.mutate(&target)
+		errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{target}})
+		joined := ""
+		for _, err := range errs {
+			joined += err.Error() + "\n"
+		}
+		if !strings.Contains(joined, tc.want) {
+			t.Errorf("%s: errors %q, want one naming %q", name, joined, tc.want)
+		}
+	}
+}

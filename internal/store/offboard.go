@@ -275,6 +275,8 @@ var TenantScopedTables = []string{
 	"provider_billing_sync_pushes",
 	// MSP-3: the customer's PSA tickets; no foreign keys.
 	"provider_psa_tickets",
+	// MSP-9: the customer's RMM devices; no foreign keys.
+	"provider_rmm_devices",
 	// A265: wave rows, then waves (which reference their import), then the
 	// import's rows, then imports.
 	"switching_wave_rows", "switching_waves", "switching_import_rows", "switching_imports",

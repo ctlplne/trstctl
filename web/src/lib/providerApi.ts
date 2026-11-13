@@ -60,6 +60,8 @@ export interface ProviderBillingTarget {
   cadence: string;
   /** MSP-3: the target opens service tickets for the customer's alerts. */
   tickets?: boolean;
+  /** MSP-9: the target runs the agent through an RMM. */
+  rmm?: boolean;
 }
 
 /** MSP-2: one customer's company in one billing system. */
@@ -86,6 +88,23 @@ export interface ProviderBillingSyncPush {
   evidence_digest?: string;
   reason?: string;
   response_status?: number;
+  updated_at: string;
+}
+
+/** MSP-9: one device an RMM lists under the customer's organization. */
+export interface ProviderRMMDevice {
+  target_id: string;
+  device_id: string;
+  device_name?: string;
+  org_id?: string;
+  present: boolean;
+  agent_id?: string;
+  agent_match?: "installed" | "hostname";
+  health?: string;
+  action?: "install" | "upgrade" | "remove";
+  action_status?: "requested" | "done" | "failed";
+  action_reason?: string;
+  action_by?: string;
   updated_at: string;
 }
 
@@ -640,6 +659,8 @@ export const providerApi = {
     providerReq<{ pushes: ProviderBillingSyncPush[] }>(`/provider/v1/tenants/${encodeURIComponent(id)}/billing-sync`),
   psaTickets: (id: string): Promise<{ tickets: ProviderPSATicket[] }> =>
     providerReq<{ tickets: ProviderPSATicket[] }>(`/provider/v1/tenants/${encodeURIComponent(id)}/psa-tickets`),
+  rmmDevices: (id: string): Promise<{ devices: ProviderRMMDevice[] }> =>
+    providerReq<{ devices: ProviderRMMDevice[] }>(`/provider/v1/tenants/${encodeURIComponent(id)}/rmm-devices`),
   clearBillingCompany: (id: string, target: string): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/billing-companies/${encodeURIComponent(target)}`, { method: "DELETE" }),
   getBrand: async (id: string): Promise<ProviderBrandSnapshot> => {

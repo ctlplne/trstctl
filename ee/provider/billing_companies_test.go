@@ -263,3 +263,43 @@ func TestProviderPSATicketHistoryMSP3(t *testing.T) {
 		t.Fatalf("an undelegated customer's tickets = %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+// MSP-9: a delegated customer's RMM devices read with their agent mapping,
+// health and last action; an undelegated customer's are refused.
+func TestProviderRMMDevicesMSP9(t *testing.T) {
+	ctx := context.Background()
+	st := openProviderStore(t)
+	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:10]
+	customer, other := CustomerID("rmm-a-"+suffix), CustomerID("rmm-b-"+suffix)
+	if _, err := st.SystemPool().Exec(ctx, `INSERT INTO provider_rmm_devices (tenant_id, target_id, device_id, device_name, org_id, present,
+		agent_id, agent_match, health, action, action_status, event_sequence, updated_at)
+		VALUES ($1, 'ninja', '1001', 'ALPHA-DC01', '11', true, 'agent-1', 'hostname', 'trstctl agent healthy (version 1.4.2)', 'upgrade', 'done', 1, now())`,
+		customer); err != nil {
+		t.Fatal(err)
+	}
+	h := NewHandler(Config{
+		License:       providerLicense(t, 10),
+		Store:         NewPGStore(st),
+		Authenticator: billingOperatorAuth{},
+		Delegations:   fullyDelegated("op-billing", customer),
+		RMMDevices:    st,
+	})
+	get := func(id string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/provider/v1/tenants/"+id+"/rmm-devices", nil)
+		req.Header.Set("Authorization", "Bearer billing-admin")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := get(customer)
+	var out struct {
+		Devices []RMMDevice `json:"devices"`
+	}
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &out) != nil || len(out.Devices) != 1 || out.Devices[0].AgentMatch != "hostname" ||
+		out.Devices[0].Health != "trstctl agent healthy (version 1.4.2)" || out.Devices[0].ActionStatus != "done" || !out.Devices[0].Present {
+		t.Fatalf("devices = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := get(other); rec.Code != http.StatusForbidden && rec.Code != http.StatusNotFound {
+		t.Fatalf("an undelegated customer's devices = %d %s", rec.Code, rec.Body.String())
+	}
+}

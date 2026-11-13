@@ -1777,6 +1777,31 @@ export const messages = {
     defaultMessage: "The customer's Pax8 subscription ID (a UUID). Usage is uploaded as lines of that subscription.",
     description: "MSP-8: what to enter as the company in a Pax8 target.",
   },
+  "provider.billingSync.type.ninjaone": {
+    defaultMessage: "NinjaOne RMM, devices and agents",
+    description: "MSP-9: a NinjaOne RMM target.",
+  },
+  "provider.billingSync.ninjaoneCompanyHint": {
+    defaultMessage: "The NinjaOne organization ID, a number. Its devices are listed and matched to this customer's agents.",
+    description: "MSP-9: what to enter as the company in a NinjaOne target.",
+  },
+  "provider.rmmDevices.caption": {
+    defaultMessage: "Devices in the RMM and the customer's agents on them",
+    description: "MSP-9: RMM device table caption.",
+  },
+  "provider.rmmDevices.device": { defaultMessage: "Device", description: "MSP-9: RMM device table column." },
+  "provider.rmmDevices.agent": { defaultMessage: "Agent", description: "MSP-9: RMM device table column." },
+  "provider.rmmDevices.health": { defaultMessage: "Health reported to the RMM", description: "MSP-9: RMM device table column." },
+  "provider.rmmDevices.lastAction": { defaultMessage: "Last agent action", description: "MSP-9: RMM device table column." },
+  "provider.rmmDevices.empty": {
+    defaultMessage: "No device listed yet: devices appear after the next inventory of the customer's organization.",
+    description: "MSP-9: no RMM devices yet.",
+  },
+  "provider.rmmDevices.gone": { defaultMessage: "no longer in the RMM", description: "MSP-9: a device the RMM no longer lists." },
+  "provider.rmmDevices.match.installed": { defaultMessage: "Installed through the RMM", description: "MSP-9: agent installed through the RMM." },
+  "provider.rmmDevices.match.hostname": { defaultMessage: "Matched by host name", description: "MSP-9: agent matched by host name." },
+  "provider.rmmDevices.match.none": { defaultMessage: "No agent", description: "MSP-9: no agent on the device." },
+  "provider.rmmDevices.action": { defaultMessage: "{action}: {status}", description: "MSP-9: the last agent action and its status." },
   "provider.billingSync.connectwiseCompanyHint": {
     defaultMessage: "The ConnectWise company record ID or its identifier. Usage lands on that company's one active agreement of the configured type.",
     description: "MSP-3: what to enter as the company in a ConnectWise target.",

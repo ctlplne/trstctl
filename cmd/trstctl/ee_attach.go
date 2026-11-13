@@ -306,6 +306,7 @@ func attachEEProviderAPI(
 		BillingCompanies:         eeprovider.NewPGBillingCompanyStore(deps.Store),
 		BillingSyncPushes:        deps.Store,
 		PSATickets:               deps.Store,
+		RMMDevices:               deps.Store,
 	}
 	// MSP-2: the billing-sync sweep runs on the leader once metering and at
 	// least one billing target are attached; it queues through the
@@ -328,6 +329,14 @@ func attachEEProviderAPI(
 		deps.AlertObservers = append(deps.AlertObservers, ticketObserver)
 		deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, ticketCloser)
 	}
+	// MSP-9: RMM targets get one inventory per interval for each mapped
+	// customer (devices, agent mapping, health), queued by a leader worker
+	// bound to the orchestrator with the sweep.
+	var rmmSweeper *eebilling.RMMSweeper
+	if rmmTargets := eebilling.RMMTargets(cfg.Provider.BillingSync); len(rmmTargets) > 0 {
+		rmmSweeper = &eebilling.RMMSweeper{Store: deps.Store, Targets: rmmTargets, Log: log}
+		deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, rmmSweeper)
+	}
 	// Preserve the authenticated surface during assembly, but keep destructive
 	// commands unavailable until core supplies its fully assembled projector.
 	deps.ProviderHandler = eeprovider.NewHandler(providerConfig)
@@ -341,6 +350,9 @@ func attachEEProviderAPI(
 		if ticketObserver != nil {
 			ticketObserver.Bind(orch)
 			ticketCloser.Bind(orch)
+		}
+		if rmmSweeper != nil {
+			rmmSweeper.Bind(orch)
 		}
 		configured := providerConfig
 		configured.Offboarding = eeprovider.NewTenantOffboarder(deps.Store, deps.Log, orch, authorityRuntime.Mutations)
@@ -713,7 +725,7 @@ func providerBillingTargets(sync config.ProviderBillingSync) []eeprovider.Billin
 	out := make([]eeprovider.BillingTarget, 0, len(sync.Targets))
 	for _, t := range sync.Targets {
 		out = append(out, eeprovider.BillingTarget{ID: t.ID, Name: t.Name, Type: t.Type, Cadence: t.EffectiveCadence(),
-			Tickets: len(t.TicketKinds()) > 0})
+			Tickets: len(t.TicketKinds()) > 0, RMM: t.IsRMM()})
 	}
 	return out
 }

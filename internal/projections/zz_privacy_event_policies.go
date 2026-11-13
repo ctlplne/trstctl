@@ -2024,13 +2024,16 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		// target, the period, the company identifier in the operator's own
 		// billing system, metered counts, the signed evidence and its digest,
 		// and a machine reason or response status; no personal data.
-		{EventBillingSyncQueued, 1}:     privacyPayloadShape[BillingSyncPushEvent](),
-		{EventBillingSyncHeld, 1}:       privacyPayloadShape[BillingSyncPushEvent](),
-		{EventBillingSyncDelivered, 1}:  privacyPayloadShape[BillingSyncPushEvent](),
-		{EventBillingSyncFailed, 1}:     privacyPayloadShape[BillingSyncPushEvent](),
-		{EventPSATicketRequested, 1}:    privacyPayloadShape[PSATicketEvent](),
-		{EventPSATicketRecorded, 1}:     privacyPayloadShape[PSATicketEvent](),
-		{EventWorkloadJWTKeyRotated, 1}: privacyPayloadShape[WorkloadJWTKeyRotated](),
+		{EventBillingSyncQueued, 1}:        privacyPayloadShape[BillingSyncPushEvent](),
+		{EventBillingSyncHeld, 1}:          privacyPayloadShape[BillingSyncPushEvent](),
+		{EventBillingSyncDelivered, 1}:     privacyPayloadShape[BillingSyncPushEvent](),
+		{EventBillingSyncFailed, 1}:        privacyPayloadShape[BillingSyncPushEvent](),
+		{EventPSATicketRequested, 1}:       privacyPayloadShape[PSATicketEvent](),
+		{EventPSATicketRecorded, 1}:        privacyPayloadShape[PSATicketEvent](),
+		{EventRMMDeviceObserved, 1}:        privacyPayloadShape[RMMDeviceEvent](),
+		{EventRMMDeviceActionRequested, 1}: privacyPayloadShape[RMMDeviceEvent](),
+		{EventRMMDeviceActionRecorded, 1}:  privacyPayloadShape[RMMDeviceEvent](),
+		{EventWorkloadJWTKeyRotated, 1}:    privacyPayloadShape[WorkloadJWTKeyRotated](),
 		// A211: issuer certificates a scan saw served with a leaf: public PKI
 		// material and digests.
 		{EventScannedCertificateChainObserved, 1}: privacyPayloadShape[ScannedCertificateChainObserved](),

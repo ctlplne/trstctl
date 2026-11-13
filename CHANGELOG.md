@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- NinjaOne RMM devices and agent health (MSP-9, part 1): a `ninjaone` target (the region host, the API client's ID and
+  secret reference, the agent's install, upgrade and remove script IDs, a health custom field) gets one inventory per
+  mapped customer every 10 minutes on the leader: the devices under the customer's NinjaOne organization (and only
+  those), each mapped to the customer's own agent installed through the RMM or of the same host name, with the agent's
+  health written to the device's custom field when it changes. Devices are events (`provider.rmm_device.*`) projected
+  into `provider_rmm_devices` (migration 0467, snapshot format 133), listed at `GET /provider/v1/tenants/{id}/rmm-devices`
+  and in the Provider console. RMM targets take no usage periods.
 - Pax8 Usage API as a billing target (MSP-8): a `pax8` target (the token URL and audience Pax8 issues at vendor
   onboarding, the client ID and secret reference, and a product and unit per meter) signs in with client credentials
   for each delivery and uploads each customer's signed period as usage lines of its Pax8 subscription for the period's

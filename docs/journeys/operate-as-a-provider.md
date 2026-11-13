@@ -129,6 +129,10 @@ whole units of its Recurring Service contract services; or ConnectWise PSA, wher
 and the period's figures become the quantities of that company's agreement
 additions (one per configured product, set rather than added to, newest period
 last).
+When a system is an RMM (NinjaOne), **Devices in the RMM and the customer's agents on
+them** lists each device under the customer's organization: the agent on it (installed
+through the RMM, or matched by host name), the health last written back to the RMM,
+and the last agent action; a device the RMM no longer lists stays, marked as gone.
 When a system opens tickets, **Tickets opened in the PSA for this customer's alerts**
 lists each one: the alert it follows (certificate expiry, renewal failed, revocation
 endpoint, credential drift), its subject, its status (opening, open, closing, closed,

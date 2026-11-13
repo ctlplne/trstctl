@@ -1754,6 +1754,40 @@ the period's figure and its summary key stable per meter, so a retry the same da
 overwrites rather than adds. An unknown subscription or a refused sign-in is refused
 with nothing stored. Pax8 carries usage only; it opens no tickets.
 
+The same list also holds the Provider's RMM targets, which run the trstctl agent on
+customers' devices instead of receiving usage. A `ninjaone` target (MSP-9):
+
+```json
+{
+  "id": "ninja",
+  "name": "NinjaOne",
+  "type": "ninjaone",
+  "endpoint": "https://app.ninjarmm.com",
+  "ninjaone": {
+    "client_id": "trstctl-integration",
+    "client_secret_ref": "file:/run/secrets/ninjaone-client-secret",
+    "install_script_id": 31,
+    "upgrade_script_id": 32,
+    "remove_script_id": 33,
+    "health_field": "trstctlAgent"
+  }
+}
+```
+
+`endpoint` is your NinjaOne region's host; delivery signs in with the API client's
+credentials (scopes `monitoring management control`) and keeps the token only for that
+delivery. A customer's company in this target is its NinjaOne organization ID. On the
+leader, every 10 minutes, one inventory per mapped customer lists the devices under
+its organization (only those: a device of another organization is never recorded or
+written to) and maps each to the customer's own agents: the agent installed through
+this target on that device (it enrolls as `rmm-<target>-<device>`), else the one agent
+whose name is the device's host name (a host name two agents share maps neither). The
+agent's health (healthy with its version, not seen since a date, or not yet connected)
+is written to the device custom field `health_field` when it changes, and the devices,
+their agents and health are recorded per customer, including a device the RMM no
+longer lists. An RMM target receives no usage periods and opens no tickets. `GET
+/provider/v1/tenants/{id}/rmm-devices` lists a customer's devices.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

@@ -108,6 +108,9 @@ func (s *SyncSweeper) Sweep(ctx context.Context) (SweepResult, error) {
 	work := 0
 	var firstErr error
 	for _, target := range s.Targets {
+		if !target.PushesUsage() {
+			continue
+		}
 		mappings, err := s.Store.BillingCompanyMappings(ctx, target.ID)
 		if err != nil {
 			return out, err

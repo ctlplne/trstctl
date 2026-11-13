@@ -210,4 +210,44 @@ describe("Provider billing systems (MSP-2)", () => {
     expect(within(rows[2]).getByText("Closed")).toBeInTheDocument();
     expect(within(rows[2]).getByText("a renewal succeeded")).toBeInTheDocument();
   });
+
+  it("lists the customer's RMM devices with their agent and health (MSP-9)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/provider/v1/tenants/alpha/billing-companies")
+          return json({
+            targets: [{ id: "ninja", name: "NinjaOne", type: "ninjaone", cadence: "monthly", rmm: true }],
+            companies: [{ tenant_id: "alpha", target_id: "ninja", external_company_id: "11" }],
+          });
+        if (url === "/provider/v1/tenants/alpha/billing-sync") return json({ pushes: [] });
+        if (url === "/provider/v1/tenants/alpha/rmm-devices")
+          return json({
+            devices: [
+              {
+                target_id: "ninja",
+                device_id: "1001",
+                device_name: "ALPHA-DC01",
+                present: true,
+                agent_id: "a1",
+                agent_match: "hostname",
+                health: "trstctl agent healthy (version 1.4.2)",
+                updated_at: "2026-11-13T00:00:00Z",
+              },
+              { target_id: "ninja", device_id: "1003", device_name: "ALPHA-OLD01", present: false, updated_at: "2026-11-12T00:00:00Z" },
+            ],
+          });
+        throw new Error("unexpected path " + url);
+      }),
+    );
+    renderPanel(false);
+    expect(await screen.findByText("NinjaOne RMM, devices and agents")).toBeInTheDocument();
+    const table = await screen.findByRole("table", { name: "Devices in the RMM and the customer's agents on them" });
+    const rows = within(table).getAllByRole("row");
+    expect(rows).toHaveLength(3);
+    expect(within(rows[1]).getByText("Matched by host name")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("trstctl agent healthy (version 1.4.2)")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("no longer in the RMM")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("No agent")).toBeInTheDocument();
+  });
 });
