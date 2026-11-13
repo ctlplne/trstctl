@@ -71,3 +71,59 @@ func TestVaultKVV2ScopedListsReadsBackAndDeletesA237(t *testing.T) {
 type pushOnly struct{}
 
 func (pushOnly) Push(context.Context, string, []byte) error { return nil }
+
+type a237l2PushOnly struct{}
+
+func (a237l2PushOnly) Push(context.Context, string, []byte) error { return nil }
+
+type a237l2FlatPushOnly struct{ a237l2PushOnly }
+
+func (a237l2FlatPushOnly) FlatKeys() bool { return true }
+func (a237l2FlatPushOnly) ValidKey(key string) error {
+	if key == "bad" {
+		return errors.New("not a variable name")
+	}
+	return nil
+}
+
+// A237-L2: a target that can't list its keys has no scoped view of its own;
+// its receipt-only view lists nothing, refuses read-backs and deletes, says it
+// lists no keys and reads nothing back, and keeps the target's key rules.
+func TestScopedFromReceiptsListsNothingAndKeepsKeyRulesA237L2(t *testing.T) {
+	ctx := context.Background()
+	plain := NewTarget("hook", a237l2PushOnly{})
+	if _, ok := plain.Scoped(); ok {
+		t.Fatal("a push-only target offered a listing scoped view")
+	}
+	view := plain.ScopedFromReceipts()
+	if keys, err := view.ListKeys(ctx, "", 10); err != nil || len(keys) != 0 {
+		t.Fatalf("receipt-only ListKeys = %v, %v", keys, err)
+	}
+	if _, _, err := view.ReadDigest(ctx, "k"); !errors.Is(err, ErrScopedReceiptOnly) {
+		t.Fatalf("receipt-only ReadDigest = %v", err)
+	}
+	if err := view.Delete(ctx, "k"); !errors.Is(err, ErrScopedReceiptOnly) {
+		t.Fatalf("receipt-only Delete = %v", err)
+	}
+	if ScopedListsKeys(view) || ScopedReadsBack(view) || ScopedFlatKeys(view) || ScopedValidKey(view, "bad") != nil {
+		t.Fatal("a plain receipt-only view claims a listing, a read-back or key rules")
+	}
+	flat := NewTarget("ci", a237l2FlatPushOnly{}).ScopedFromReceipts()
+	if !ScopedFlatKeys(flat) || ScopedValidKey(flat, "bad") == nil || ScopedValidKey(flat, "GOOD") != nil {
+		t.Fatal("the receipt-only view dropped the target's key rules")
+	}
+	if !ScopedListsKeys(newScopedListingDouble()) {
+		t.Fatal("a listing scoped target reads as receipt-only")
+	}
+}
+
+type scopedListingDouble struct{}
+
+func newScopedListingDouble() ScopedTarget { return scopedListingDouble{} }
+func (scopedListingDouble) ListKeys(context.Context, string, int) ([]string, error) {
+	return nil, nil
+}
+func (scopedListingDouble) ReadDigest(context.Context, string) (bool, string, error) {
+	return false, "", nil
+}
+func (scopedListingDouble) Delete(context.Context, string) error { return nil }

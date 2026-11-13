@@ -111,6 +111,20 @@ describe("A237 scoped syncs", () => {
     expect(apiMock.setSecretScopedSyncMode).toHaveBeenCalledWith("s1", { mode: "manual" });
   });
 
+  // A237-L2: a target that can't list its keys takes a scoped sync only with
+  // adopt existing; the define form sends it.
+  it("defines a sync that adopts existing keys", async () => {
+    apiMock.defineSecretScopedSync.mockResolvedValue({ ...sync, adopt_existing: true });
+    const user = userEvent.setup();
+    render(<ScopedSyncsWorkflow targets={["ci-hook"]} />);
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "ci-prod");
+    await user.type(screen.getByRole("textbox", { name: "Source prefix" }), "ci/prod/");
+    await user.click(screen.getByRole("checkbox", { name: /Adopt existing keys/ }));
+    await user.click(screen.getByRole("button", { name: "Define scoped sync" }));
+    expect(apiMock.defineSecretScopedSync).toHaveBeenCalledWith(expect.objectContaining({ target: "ci-hook", adopt_existing: true, delete_scope: "none" }));
+    expect(screen.getByRole("checkbox", { name: /Adopt existing keys/ })).not.toBeChecked();
+  });
+
   // A237-L1: an approval-gated sync names the request its plan waits for,
   // from the reconciler's reason and from a refused apply, and links the
   // approval queue.

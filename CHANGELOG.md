@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A scoped sync can target a destination that can't list its keys (A237-L2): it works from its delivery receipts
+  only, so the definition sets `adopt_existing` (a key the sync didn't write can't be seen and would be replaced;
+  each `create` says so) and keeps `delete_scope` at `none` (a key whose source is gone stays, `orphaned`); updates
+  and unchanged keys come from the receipts. The console's define form offers **Adopt existing keys**.
 - A folder restore brings back secrets deleted since (A236-L5): a secret of the folder deleted after the point in
   time and still kept is planned as `restore_deleted` (with the version whose value it takes and the deletion it
   comes back from) and comes back with its history, the value it had then written as its next version; a tombstone

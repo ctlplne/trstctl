@@ -6034,6 +6034,15 @@ export const messages = {
     defaultMessage: "Destination prefix (optional)",
     description: "Field: destination prefix.",
   },
+  "secrets.scopedSyncs.adoptExisting": {
+    defaultMessage: "Adopt existing keys",
+    description: "A237-L2: the define form's checkbox to take over destination keys the sync didn't write.",
+  },
+  "secrets.scopedSyncs.adoptExistingHelp": {
+    defaultMessage:
+      "Take over a destination key this sync didn't write. A target that can't list its keys needs this: the sync then works from its delivery receipts, replaces a key of the same name it didn't write, and deletes nothing.",
+    description: "A237-L2: what adopting existing keys means, including for a target that can't list its keys.",
+  },
   "secrets.scopedSyncs.deleteScope": {
     defaultMessage: "Delete scope",
     description: "Field: delete scope.",

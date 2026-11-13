@@ -73,6 +73,47 @@ func ScopedDigestOf(t ScopedTarget, value []byte) string {
 // plan reads; the operator narrows the scope.
 var ErrScopedListLimit = errors.New("secretsync: the destination holds more keys under the prefix than a plan reads")
 
+// ErrScopedReceiptOnly is a read-back or delete asked of a destination that
+// can't list its keys: a scoped sync to it works from its own delivery
+// receipts only (A237-L2).
+var ErrScopedReceiptOnly = errors.New("secretsync: the destination can't list, read back or delete its keys; the sync works from its delivery receipts")
+
+// receiptScoped is the scoped view of a target that can't list its keys
+// (A237-L2). It lists nothing, reads nothing back and deletes nothing: a
+// scoped sync to it plans from the keys it delivered, writes through the
+// target's ordinary sync jobs, and treats any key it didn't write as unseen.
+type receiptScoped struct{ pusher Pusher }
+
+func (r receiptScoped) ListKeys(context.Context, string, int) ([]string, error) { return nil, nil }
+func (r receiptScoped) ReadDigest(context.Context, string) (bool, string, error) {
+	return false, "", ErrScopedReceiptOnly
+}
+func (r receiptScoped) Delete(context.Context, string) error { return ErrScopedReceiptOnly }
+func (r receiptScoped) ReadsBack() bool                      { return false }
+func (r receiptScoped) DigestOf(value []byte) string         { return crypto.SHA256Hex(value) }
+func (r receiptScoped) ListsKeys() bool                      { return false }
+func (r receiptScoped) FlatKeys() bool {
+	rules, ok := r.pusher.(scopedKeyRules)
+	return ok && rules.FlatKeys()
+}
+func (r receiptScoped) ValidKey(key string) error {
+	if rules, ok := r.pusher.(scopedKeyRules); ok {
+		return rules.ValidKey(key)
+	}
+	return nil
+}
+
+// ScopedFromReceipts is the receipt-only scoped view of a target that can't
+// list its keys (A237-L2).
+func (t *Target) ScopedFromReceipts() ScopedTarget { return receiptScoped{pusher: t.pusher} }
+
+// ScopedListsKeys reports whether t lists its keys; false is a receipt-only
+// destination whose plan knows only the keys the sync delivered (A237-L2).
+func ScopedListsKeys(t ScopedTarget) bool {
+	lister, ok := t.(interface{ ListsKeys() bool })
+	return !ok || lister.ListsKeys()
+}
+
 // Scoped returns the target's scoped operations when its destination exposes
 // its keys. A pusher may implement the methods but decline by type.
 func (t *Target) Scoped() (ScopedTarget, bool) {

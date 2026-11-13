@@ -1912,8 +1912,13 @@ source prefix (a project environment such as `payments/prod/`, a folder, any nam
 prefix) goes to a configured KV v2 or hosted target under a destination prefix. A
 hosted target holds variable names, so its destination prefix is a name prefix
 (`APP_`) and `key_transform: env` names nested secrets (`db/password` becomes
-`DB_PASSWORD`); a key the target can't hold is blocked in the plan. Define it once,
-then preview and apply:
+`DB_PASSWORD`); a key the target can't hold is blocked in the plan. A target that
+can't list its keys takes a scoped sync from its delivery receipts only (A237-L2): the
+plan knows the keys the sync delivered and nothing else, so the definition must set
+`adopt_existing` (a key of the same name the sync didn't write can't be seen and would be
+replaced, and each `create` says so) and keeps `delete_scope` at `none` (the target can't
+delete keys, so one whose source is gone stays, `orphaned`). Define it once, then preview
+and apply:
 
 ```
 trstctl secrets scoped-syncs define -f sync.json   # {"name":"payments-prod","source_prefix":"payments/prod/","target":"vault","destination_prefix":"payments","delete_scope":"managed"}

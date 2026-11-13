@@ -234,17 +234,23 @@ func scopedSyncView(d store.SecretScopedSync) secretScopedSyncResponse {
 	}
 }
 
-// scopedSyncTarget is the definition's target with its scoped operations.
-func (a *API) scopedSyncTarget(tenantID, name string) (secretsync.ScopedTarget, error) {
+// scopedSyncTarget is the definition's target with its scoped operations. A
+// target that can't list its keys takes a scoped sync from its delivery
+// receipts only (A237-L2): a key the sync didn't write can't be seen there and
+// would be replaced, so the definition must say adopt_existing.
+func (a *API) scopedSyncTarget(tenantID, name string, adoptExisting bool) (secretsync.ScopedTarget, error) {
 	target := a.secrets.syncTargets(tenantID)[name]
 	if target == nil {
 		return nil, errStatus(http.StatusBadRequest, "target "+name+" is not a configured secret-sync target")
 	}
-	scoped, ok := target.Scoped()
-	if !ok {
-		return nil, errStatus(http.StatusBadRequest, "target "+name+" does not list its keys, so it can't take a scoped sync (the target catalog's scoped_sync says which can)")
+	if scoped, ok := target.Scoped(); ok {
+		return scoped, nil
 	}
-	return scoped, nil
+	if !adoptExisting {
+		return nil, errStatus(http.StatusBadRequest, "target "+name+" can't list its keys, so a scoped sync to it works from its delivery receipts only: "+
+			"a key this sync didn't write can't be seen and would be replaced. Set adopt_existing to accept that (delete_scope stays none)")
+	}
+	return target.ScopedFromReceipts(), nil
 }
 
 //trstctl:mutation
@@ -310,8 +316,14 @@ func (a *API) checkScopedSyncDefinition(ctx context.Context, tenantID string, re
 	case scope != "none" && scope != "managed" && scope != "prefix":
 		return store.SecretScopedSync{}, errStatus(http.StatusBadRequest, "delete_scope is none, managed (keys this sync wrote) or prefix (every key under the destination prefix)")
 	}
-	if _, err := a.scopedSyncTarget(tenantID, req.Target); err != nil {
+	scoped, err := a.scopedSyncTarget(tenantID, req.Target, req.AdoptExisting)
+	if err != nil {
 		return store.SecretScopedSync{}, err
+	}
+	if !secretsync.ScopedListsKeys(scoped) && scope != "none" {
+		// A237-L2: a receipt-only destination can't delete keys.
+		return store.SecretScopedSync{}, errStatus(http.StatusBadRequest,
+			"target "+req.Target+" can't list or delete its keys, so delete_scope is none: a key whose source is gone is kept")
 	}
 	// A235: a definition reads its source; a restricted environment the
 	// caller isn't granted can't be synced out.
@@ -594,10 +606,11 @@ func scopedSyncDestinationKey(d store.SecretScopedSync, rel string, flat bool) s
 // only to compare digests with the destination and are wiped at once.
 func (a *API) planSecretScopedSync(ctx context.Context, tenantID string, d store.SecretScopedSync) (secretScopedSyncPlan, error) {
 	plan := secretScopedSyncPlan{SyncID: d.ID, Name: d.Name, Target: d.Target, Items: []secretScopedSyncItem{}}
-	scoped, err := a.scopedSyncTarget(tenantID, d.Target)
+	scoped, err := a.scopedSyncTarget(tenantID, d.Target, d.AdoptExisting)
 	if err != nil {
 		return plan, err
 	}
+	receiptOnly := !secretsync.ScopedListsKeys(scoped)
 	if ok, err := a.secretScopeAllows(ctx, tenantID, d.SourcePrefix, false); err != nil {
 		return plan, err
 	} else if !ok {
@@ -628,6 +641,14 @@ func (a *API) planSecretScopedSync(ctx context.Context, tenantID string, d store
 	managed := map[string]store.SecretScopedSyncKey{}
 	for _, k := range managedRows {
 		managed[k.RemoteKey] = k
+		if receiptOnly {
+			// A237-L2: the destination's known keys are the ones this sync
+			// delivered; its other keys can't be listed.
+			existing = append(existing, k.RemoteKey)
+		}
+	}
+	if receiptOnly {
+		slices.Sort(existing)
 	}
 	onDestination := map[string]bool{}
 	for _, k := range existing {
@@ -667,6 +688,8 @@ func (a *API) planSecretScopedSync(ctx context.Context, tenantID string, d store
 			}
 			item.Action = action
 			switch {
+			case action == "create" && receiptOnly:
+				item.Reason = "receipt-only: the target can't list its keys, so a key of this name this sync didn't write would be replaced (adopt_existing)"
 			case action == "update" && managed[key].RemoteKey == "":
 				item.Reason = "adopted: the destination key was not written by this sync"
 			case action == "update" && !secretsync.ScopedReadsBack(scoped):
@@ -687,6 +710,8 @@ func (a *API) planSecretScopedSync(ctx context.Context, tenantID string, d store
 		switch {
 		case k.State == store.SecretScopedSyncKeyDeleteQueued:
 			item.Action, item.Reason = "deleting", "a delete is queued"
+		case receiptOnly:
+			item.Action, item.Reason = "orphaned", "its source is gone; the target can't delete keys, so it stays"
 		case d.DeleteScope == "managed" || d.DeleteScope == "prefix":
 			item.Action, item.Reason = "delete", "its source is gone and the delete scope includes it"
 		default:

@@ -6040,7 +6040,9 @@ collisions blocked, a stale plan refused, and a crash after the remote write set
 readback without a second write — proven against OpenBao 2.0.0. KV v2 and the hosted
 targets of A241 list their keys; the earlier built-in targets (AWS, GCP, Azure, GitHub,
 GitLab, Vercel, Netlify, Kubernetes, Terraform Cloud, the webhook and generic CI JSON)
-take single syncs only. Continuous mode (A237 part b):
+take a scoped sync from their delivery receipts only (A237-L2): the definition sets
+`adopt_existing` and keeps `delete_scope` at `none`, a key the sync didn't write can't be
+seen there and would be replaced, and a key whose source is gone stays. Continuous mode (A237 part b):
 an `auto` definition is re-planned on the leader when its source set changes (checked
 every 30 seconds) or its 15-minute drift check is due, and applied when nothing is
 blocked; a blocked or failed plan is recorded on the definition and writes nothing. A

@@ -28230,7 +28230,7 @@ export interface components {
              * @enum {string}
              */
             readback?: "value" | "digest" | "receipt-only";
-            /** @description A scoped sync can target it: the destination lists, reads back (or is receipt-only) and deletes keys. */
+            /** @description A scoped sync plans against its keys: the destination lists, reads back (or is receipt-only) and deletes them. Any other configured target takes a scoped sync from its delivery receipts only, with adopt_existing and delete_scope none (A237-L2). */
             scoped_sync: boolean;
             secret_handling: string;
             wire_format: string;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -43,6 +44,9 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
   const [target, setTarget] = useState(targets[0] ?? "");
   const [destination, setDestination] = useState("");
   const [deleteScope, setDeleteScope] = useState<DeleteScope>("none");
+  // A237-L2: take over keys the sync didn't write; a target that can't list
+  // its keys takes a scoped sync only with this, from its delivery receipts.
+  const [adoptExisting, setAdoptExisting] = useState(false);
   const [mode, setMode] = useState<Mode>("manual");
   const [nextMode, setNextMode] = useState<Mode>("manual");
   const [awaiting, setAwaiting] = useState<string | null>(null);
@@ -91,11 +95,13 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
         target,
         destination_prefix: destination.trim() || undefined,
         delete_scope: deleteScope,
+        adopt_existing: adoptExisting || undefined,
         mode,
       });
       setName("");
       setSource("");
       setDestination("");
+      setAdoptExisting(false);
       setSelected(created);
       setNextMode(created.mode as Mode);
       setPlan(null);
@@ -420,6 +426,13 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
               </Select>
             )}
           </Field>
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox checked={adoptExisting} onChange={(event) => setAdoptExisting(event.target.checked)} />
+            <span>
+              {t("secrets.scopedSyncs.adoptExisting")}
+              <span className="block text-muted-foreground">{t("secrets.scopedSyncs.adoptExistingHelp")}</span>
+            </span>
+          </label>
           <Field label={t("secrets.scopedSyncs.modeLabel")} description={t("secrets.scopedSyncs.modeHelp")}>
             {(control) => (
               <Select {...control} value={mode} onChange={(event) => setMode(event.target.value as Mode)}>
