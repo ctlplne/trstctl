@@ -1846,6 +1846,35 @@ define those variables on it. Identities are `rmm-<target>-<device UID>`, so kee
 target ID short enough for a 64-character certificate name (up to 23 characters; the
 configuration refuses a longer one).
 
+An `ncentral` target (MSP-12) does the same through an N-able N-central server:
+
+```json
+{
+  "id": "ncentral",
+  "name": "N-central",
+  "type": "ncentral",
+  "endpoint": "https://ncentral.example.com",
+  "ncentral": {
+    "user_jwt_ref": "file:/run/secrets/ncentral-api-jwt",
+    "install_script_id": 701,
+    "upgrade_script_id": 702,
+    "remove_script_id": 703,
+    "health_property_id": 88
+  }
+}
+```
+
+`user_jwt_ref` names the JWT of an API-only user; delivery exchanges it for an access
+token at `/api/auth/authenticate` and keeps that only for the delivery. A customer's
+company in this target is its N-central customer ID. The inventory lists the
+customer's devices through its org unit (probes skipped) and writes each mapped
+agent's health to the device custom property `health_property_id` (0 writes none).
+Each action runs its repository script, with its API toggle on, as a direct scheduled
+task under the device's own customer with `credential_type` (`LocalSystem` when
+empty); the install script receives the parameters `TrstctlServer`,
+`TrstctlServerName`, `TrstctlIdentity` and `TrstctlToken`. N-central's device
+listing and custom-property calls are marked preview in its API reference.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

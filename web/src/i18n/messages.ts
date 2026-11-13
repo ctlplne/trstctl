@@ -1793,6 +1793,14 @@ export const messages = {
     defaultMessage: "The Datto RMM site UID. The site's devices are listed and matched to this customer's agents.",
     description: "MSP-10: what to enter as the company in a Datto RMM target.",
   },
+  "provider.billingSync.type.ncentral": {
+    defaultMessage: "N-able N-central, devices and agents",
+    description: "MSP-12: an N-central RMM target.",
+  },
+  "provider.billingSync.ncentralCompanyHint": {
+    defaultMessage: "The N-central customer ID, a number. The customer's devices are listed and matched to this customer's agents.",
+    description: "MSP-12: what to enter as the company in an N-central target.",
+  },
   "provider.rmmDevices.caption": {
     defaultMessage: "Devices in the RMM and the customer's agents on them",
     description: "MSP-9: RMM device table caption.",

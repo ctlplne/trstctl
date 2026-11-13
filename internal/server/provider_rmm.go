@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/rmm"
 	"trstctl.com/trstctl/internal/rmm/datto"
+	"trstctl.com/trstctl/internal/rmm/ncentral"
 	"trstctl.com/trstctl/internal/rmm/ninjaone"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -275,6 +276,20 @@ func (d *issuanceDispatcher) withRMMClient(target config.ProviderBillingTarget, 
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: RMM target endpoint rejected: %w", err))
 	}
 	switch {
+	case target.Type == "ncentral" && target.NCentral != nil:
+		nc := target.NCentral
+		jwt, err := resolveDeploymentCredentialRef(nc.UserJWTRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the ncentral target's user_jwt_ref"))
+		}
+		defer jwt.Destroy()
+		c, err := ncentral.New(ncentral.Config{BaseURL: target.Endpoint, CredentialType: nc.CredentialType, HealthPropertyID: nc.HealthPropertyID,
+			Scripts: map[rmm.Action]int64{rmm.ActionInstall: nc.InstallScriptID, rmm.ActionUpgrade: nc.UpgradeScriptID, rmm.ActionRemove: nc.RemoveScriptID}},
+			client, ncentral.Credentials{UserJWT: jwt.Bytes()})
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return fn(c)
 	case target.Type == "datto" && target.Datto != nil:
 		dt := target.Datto
 		keyValue, err := resolveDeploymentCredentialRef(dt.APIKeyRef)

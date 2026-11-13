@@ -2194,9 +2194,12 @@ never live in the API process. What you can do end to end against the running bi
   token for the customer's own tenant, against a stand-in written from
   NinjaOne's public API description; Datto RMM (MSP-10) does the same
   through site devices, user-defined fields and component quick jobs,
-  against a stand-in written from its public API description; the other
-  RMMs (MSP-11 to MSP-13) and live NinjaOne and Datto RMM instances are
-  what comes next. The
+  against a stand-in written from its public API description; N-central
+  (MSP-12) through customer devices, a device custom property and direct
+  scheduled tasks of API-enabled scripts, against a stand-in written from
+  its public API reference; ConnectWise Automate (MSP-11), Kaseya VSA
+  (MSP-13) and live NinjaOne, Datto RMM and N-central instances are what
+  comes next. The
   sweep looks back three periods, so a period older than that is not pushed
   automatically.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts

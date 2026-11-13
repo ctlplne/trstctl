@@ -129,7 +129,7 @@ whole units of its Recurring Service contract services; or ConnectWise PSA, wher
 and the period's figures become the quantities of that company's agreement
 additions (one per configured product, set rather than added to, newest period
 last).
-When a system is an RMM (NinjaOne, Datto RMM), **Devices in the RMM and the customer's agents on
+When a system is an RMM (NinjaOne, Datto RMM, N-central), **Devices in the RMM and the customer's agents on
 them** lists each device under the customer's organization: the agent on it (installed
 through the RMM, or matched by host name), the health last written back to the RMM,
 and the last agent action; a device the RMM no longer lists stays, marked as gone. An

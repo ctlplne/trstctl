@@ -8,6 +8,11 @@
   health written to the device's custom field when it changes. Devices are events (`provider.rmm_device.*`) projected
   into `provider_rmm_devices` (migration 0467, snapshot format 133), listed at `GET /provider/v1/tenants/{id}/rmm-devices`
   and in the Provider console. RMM targets take no usage periods.
+- N-able N-central (MSP-12): an `ncentral` target (server, the API user's JWT reference, the install, upgrade and
+  remove repository script IDs, an optional task credential type and health custom property) lists each mapped
+  customer's devices, maps them to its agents, writes their health to the device custom property, and runs install,
+  upgrade and remove as direct scheduled tasks under the device's own customer; an install's script receives the server,
+  identity and one-time enrollment token for the customer's own tenant as parameters.
 - Datto RMM (MSP-10): a `datto` target (platform API host, the API user's key and secret references, the install,
   upgrade and remove component UIDs, a health user-defined field) lists each mapped customer's devices under its Datto
   site, maps them to its agents, writes their health to the user-defined field, and runs install, upgrade and remove as

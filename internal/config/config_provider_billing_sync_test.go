@@ -443,3 +443,45 @@ func TestProviderBillingSyncDattoTargetMSP10(t *testing.T) {
 		}
 	}
 }
+
+// MSP-12: an ncentral target is an RMM target with the API user's JWT
+// reference, three script IDs, an optional credential type and an optional
+// health custom property.
+func TestProviderBillingSyncNCentralTargetMSP12(t *testing.T) {
+	valid := func() ProviderBillingTarget {
+		return ProviderBillingTarget{ID: "ncentral", Type: "ncentral", Endpoint: "https://ncentral.example.com",
+			NCentral: &NCentralTarget{UserJWTRef: "file:/run/secrets/ncentral-jwt", // #nosec G101 -- a file: reference, not a value (CWE-798)
+				InstallScriptID: 701, UpgradeScriptID: 702, RemoveScriptID: 703, HealthPropertyID: 88}}
+	}
+	ok := valid()
+	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{ok}}); len(errs) != 0 {
+		t.Fatalf("valid ncentral target refused: %v", errs)
+	}
+	if !ok.IsRMM() || ok.PushesUsage() || ok.TicketKinds() != nil {
+		t.Fatalf("an ncentral target: rmm=%v usage=%v kinds=%v", ok.IsRMM(), ok.PushesUsage(), ok.TicketKinds())
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*ProviderBillingTarget)
+		want   string
+	}{
+		"no block":          {func(t *ProviderBillingTarget) { t.NCentral = nil }, ".ncentral is required"},
+		"signing key":       {func(t *ProviderBillingTarget) { t.SigningKeyRef = "env:X" }, "json targets only"},
+		"inline jwt":        {func(t *ProviderBillingTarget) { t.NCentral.UserJWTRef = "eyJ.x.y" }, ".user_jwt_ref"},
+		"no install script": {func(t *ProviderBillingTarget) { t.NCentral.InstallScriptID = 0 }, ".install_script_id"},
+		"no upgrade script": {func(t *ProviderBillingTarget) { t.NCentral.UpgradeScriptID = -2 }, ".upgrade_script_id"},
+		"bad credential":    {func(t *ProviderBillingTarget) { t.NCentral.CredentialType = "line\nbreak" }, ".credential_type"},
+		"negative property": {func(t *ProviderBillingTarget) { t.NCentral.HealthPropertyID = -1 }, ".health_property_id"},
+		"block on datto":    {func(t *ProviderBillingTarget) { t.Type = "datto" }, "ncentral targets only"},
+	} {
+		target := valid()
+		tc.mutate(&target)
+		errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{target}})
+		joined := ""
+		for _, err := range errs {
+			joined += err.Error() + "\n"
+		}
+		if !strings.Contains(joined, tc.want) {
+			t.Errorf("%s: errors %q, want one naming %q", name, joined, tc.want)
+		}
+	}
+}

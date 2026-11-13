@@ -84,6 +84,29 @@ type ProviderBillingTarget struct {
 	// quick jobs. Endpoint is the platform's API host, e.g.
 	// https://pinotage-api.centrastage.net.
 	Datto *DattoTarget `json:"datto,omitempty"`
+	// NCentral configures an "ncentral" RMM target (MSP-12): the same for an
+	// N-able N-central server, whose customers are the organizations and
+	// whose API-enabled repository scripts run the agent's install, upgrade
+	// and remove as direct scheduled tasks. Endpoint is the server, e.g.
+	// https://ncentral.example.com.
+	NCentral *NCentralTarget `json:"ncentral,omitempty"`
+}
+
+// NCentralTarget is an N-able N-central server the Provider runs agents
+// through.
+type NCentralTarget struct {
+	// UserJWTRef names the API-only user's JWT (file: or env:).
+	UserJWTRef string `json:"user_jwt_ref"`
+	// InstallScriptID, UpgradeScriptID and RemoveScriptID are the script
+	// repository items (each with its API toggle on) of each agent action.
+	InstallScriptID int64 `json:"install_script_id"`
+	UpgradeScriptID int64 `json:"upgrade_script_id"`
+	RemoveScriptID  int64 `json:"remove_script_id"`
+	// CredentialType is the tasks' credential ("LocalSystem" when empty).
+	CredentialType string `json:"credential_type,omitempty"`
+	// HealthPropertyID is the device custom property the agent's health is
+	// written to; 0 reports none.
+	HealthPropertyID int64 `json:"health_property_id,omitempty"`
 }
 
 // DattoTarget is a Datto RMM platform the Provider runs agents through.
@@ -121,7 +144,7 @@ type NinjaOneTarget struct {
 }
 
 // RMMTargetTypes are the target types that run the agent through an RMM.
-var RMMTargetTypes = map[string]bool{"ninjaone": true, "datto": true}
+var RMMTargetTypes = map[string]bool{"ninjaone": true, "datto": true, "ncentral": true}
 
 // IsRMM reports whether the target runs the agent's lifecycle through an
 // RMM (MSP-9 onward).
@@ -378,7 +401,7 @@ var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
 var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}, "gradient": {}, "pax8": {},
-	"ninjaone": {}, "datto": {}}
+	"ninjaone": {}, "datto": {}, "ncentral": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -410,7 +433,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone, datto)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone, datto, ncentral)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -443,6 +466,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 			errs = append(errs, validateNinjaOneTarget(where, t)...)
 		case "datto":
 			errs = append(errs, validateDattoTarget(where, t)...)
+		case "ncentral":
+			errs = append(errs, validateNCentralTarget(where, t)...)
+		}
+		if t.Type != "ncentral" && t.NCentral != nil {
+			errs = append(errs, fmt.Errorf("%s.ncentral applies to ncentral targets only", where))
 		}
 		if t.Type != "datto" && t.Datto != nil {
 			errs = append(errs, fmt.Errorf("%s.datto applies to datto targets only", where))
@@ -570,6 +598,39 @@ func validateDattoTarget(where string, t ProviderBillingTarget) []error {
 	}
 	if d.HealthUDF < 0 || d.HealthUDF > 30 {
 		errs = append(errs, fmt.Errorf("%s.health_udf must be a user-defined field from 1 to 30 (0 for none)", where))
+	}
+	return errs
+}
+
+func validateNCentralTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; an ncentral target authenticates with its API user's JWT", where))
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	n := t.NCentral
+	if n == nil {
+		return append(errs, fmt.Errorf("%s.ncentral is required for an ncentral target", where))
+	}
+	where += ".ncentral"
+	if err := validateDeploymentCredentialRef(n.UserJWTRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.user_jwt_ref: %w", where, err))
+	}
+	for _, script := range []struct {
+		name string
+		id   int64
+	}{{"install_script_id", n.InstallScriptID}, {"upgrade_script_id", n.UpgradeScriptID}, {"remove_script_id", n.RemoveScriptID}} {
+		if script.id <= 0 {
+			errs = append(errs, fmt.Errorf("%s.%s must be a script repository item ID", where, script.name))
+		}
+	}
+	if n.CredentialType != "" && !validConnectWiseName(n.CredentialType) {
+		errs = append(errs, fmt.Errorf("%s.credential_type must be a task credential type (1-100 characters)", where))
+	}
+	if n.HealthPropertyID < 0 {
+		errs = append(errs, fmt.Errorf("%s.health_property_id must be a device custom property ID (0 for none)", where))
 	}
 	return errs
 }
