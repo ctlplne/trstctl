@@ -141,8 +141,10 @@ type Driver struct {
 
 	mu      sync.Mutex
 	volumes map[string]*volume
-	// sessionUsers counts the volumes using each control-plane session.
+	// sessionUsers counts the volumes using each control-plane session, by its
+	// key; liveIDs counts them by the session's ID.
 	sessionUsers map[string]int
+	liveIDs      map[string]int
 }
 
 // volume is one published volume's in-memory session. Its lock serializes
@@ -155,6 +157,9 @@ type volume struct {
 type session struct {
 	client  *secretrender.HTTPClient
 	expires time.Time
+	// id is the control-plane session's ID (not a credential), kept in the
+	// volume's state so a restarted plugin can end the session (A238-L9).
+	id string
 	// key names the control-plane session (a digest of its token). The
 	// volumes of one pod that log in within one window get the same session
 	// back, so it ends only when the last of them goes (A238-L7).
@@ -168,6 +173,10 @@ type volumeState struct {
 	FetchedAt time.Time      `json:"fetched_at"`
 	Versions  map[string]int `json:"versions,omitempty"`
 	Reported  map[string]int `json:"reported,omitempty"`
+	// SessionID names the session the volume last logged in to, never its
+	// token: after a restart the plugin's memory and the token are gone, and
+	// its next login for the volume ends that session (A238-L9).
+	SessionID string `json:"session_id,omitempty"`
 }
 
 type volumeItem struct{ file, name string }
@@ -196,7 +205,7 @@ func NewDriver(cfg Config, client *http.Client, mounter Mounter, log *slog.Logge
 	}
 	cfg.Server = strings.TrimRight(cfg.Server, "/")
 	return &Driver{cfg: cfg, client: client, mounter: mounter, log: log, nodeID: nodeID, version: version,
-		now: time.Now, volumes: map[string]*volume{}, sessionUsers: map[string]int{}}, nil
+		now: time.Now, volumes: map[string]*volume{}, sessionUsers: map[string]int{}, liveIDs: map[string]int{}}, nil
 }
 
 // GetPluginInfo names the driver.
@@ -299,7 +308,14 @@ func final(err error) bool {
 func (d *Driver) refresh(ctx context.Context, v *volume, st *volumeState, id string, spec volumeSpec, target string, gid int, podToken []byte, consumer string) error {
 	now := d.now()
 	if v.session == nil || !now.Before(v.session.expires.Add(-sessionMargin)) {
-		s, err := d.login(ctx, podToken, now)
+		// A volume with no session in memory whose state names one: the plugin
+		// restarted (or the session went), so that session's token is gone and
+		// the login ends it, unless a volume here still uses it.
+		replaces := ""
+		if v.session == nil && st.SessionID != "" && !d.sessionLive(st.SessionID) {
+			replaces = st.SessionID
+		}
+		s, replaced, err := d.login(ctx, podToken, now, replaces)
 		if errors.Is(err, errRefused) {
 			d.stale(st, id, spec, target, now)
 			return status.Error(codes.PermissionDenied, "the pod's service account could not log in to trstctl")
@@ -311,6 +327,13 @@ func (d *Driver) refresh(ctx context.Context, v *volume, st *volumeState, id str
 		d.forget(ctx, v, id, false)
 		v.session = s
 		d.adopt(s)
+		if replaced {
+			d.log.Info("ended the volume's session from before the plugin restarted", "volume", id)
+		}
+		if s.id != "" && s.id != st.SessionID {
+			st.SessionID = s.id
+			d.saveState(id, st)
+		}
 	}
 	values := map[string][]byte{}
 	defer func() {
@@ -429,6 +452,16 @@ func (d *Driver) adopt(s *session) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.sessionUsers[s.key]++
+	if s.id != "" {
+		d.liveIDs[s.id]++
+	}
+}
+
+// sessionLive reports whether a volume here uses the session with this ID.
+func (d *Driver) sessionLive(id string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.liveIDs[id] > 0
 }
 
 // forget detaches the volume's session and wipes its token. When end is set
@@ -449,6 +482,13 @@ func (d *Driver) forget(ctx context.Context, v *volume, id string, end bool) {
 		delete(d.sessionUsers, s.key)
 	} else {
 		d.sessionUsers[s.key]--
+	}
+	if s.id != "" {
+		if d.liveIDs[s.id] <= 1 {
+			delete(d.liveIDs, s.id)
+		} else {
+			d.liveIDs[s.id]--
+		}
 	}
 	d.mu.Unlock()
 	if end && last {
@@ -495,47 +535,60 @@ func (d *Driver) ensureMount(target string, gid int) error {
 // token's digest and a ten-minute window, so a retry or a restarted plugin
 // within the window gets the same session back rather than another one, and a
 // later login gets a fresh session even when the kubelet still holds the token.
-func (d *Driver) login(ctx context.Context, podToken []byte, now time.Time) (*session, error) {
+// replaces names an earlier session of the pod's that the plugin can no longer
+// end itself; the control plane ends it once the login succeeds (A238-L9), and
+// login reports whether it did.
+func (d *Driver) login(ctx context.Context, podToken []byte, now time.Time, replaces string) (*session, bool, error) {
 	body, err := json.Marshal(struct {
 		Method     string           `json:"method"`
 		Credential secret.JSONBytes `json:"credential"`
-	}{d.cfg.LoginMethod, secret.JSONBytes(podToken)})
+		Replaces   string           `json:"replaces,omitempty"`
+	}{d.cfg.LoginMethod, secret.JSONBytes(podToken), replaces})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer secret.Wipe(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.cfg.Server+"/api/v1/secrets/login", bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Tenant-ID", d.cfg.Tenant)
-	req.Header.Set("Idempotency-Key", "csi-secrets-login-"+crypto.SHA256Hex(podToken)[:32]+"-"+strconv.FormatInt(now.Unix()/600, 10))
+	key := "csi-secrets-login-" + crypto.SHA256Hex(podToken)[:32] + "-" + strconv.FormatInt(now.Unix()/600, 10)
+	if replaces != "" {
+		// A login that ends a session is its own command: volumes naming the
+		// same session share its answer, and one naming another session is
+		// never refused as a mismatched replay.
+		key += "-" + crypto.SHA256Hex([]byte(replaces))[:16]
+	}
+	req.Header.Set("Idempotency-Key", key)
 	resp, err := d.client.Do(req)
 	if err != nil {
-		return nil, errors.New("the control plane could not be reached")
+		return nil, false, errors.New("the control plane could not be reached")
 	}
 	defer func() { _ = resp.Body.Close() }()
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return nil, errRefused
+		return nil, false, errRefused
 	case resp.StatusCode != http.StatusOK:
-		return nil, fmt.Errorf("the control plane answered %d to the login", resp.StatusCode)
+		return nil, false, fmt.Errorf("the control plane answered %d to the login", resp.StatusCode)
 	}
 	var out struct {
+		SessionID string           `json:"session_id"`
 		Token     secret.JSONBytes `json:"token"`
 		ExpiresAt time.Time        `json:"expires_at"`
+		Replaced  bool             `json:"replaced"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&out); err != nil || len(out.Token) == 0 {
 		secret.Wipe(out.Token)
-		return nil, errors.New("the control plane's login answer could not be read")
+		return nil, false, errors.New("the control plane's login answer could not be read")
 	}
 	client, err := secretrender.NewSessionHTTPClient(d.cfg.Server, d.cfg.Tenant, out.Token, d.client)
 	if err != nil {
 		secret.Wipe(out.Token)
-		return nil, err
+		return nil, false, err
 	}
-	return &session{client: client, expires: out.ExpiresAt, key: crypto.SHA256Hex(out.Token)[:32]}, nil
+	return &session{client: client, expires: out.ExpiresAt, key: crypto.SHA256Hex(out.Token)[:32], id: out.SessionID}, out.Replaced, nil
 }
 
 // podToken returns the pod's service-account token for the configured

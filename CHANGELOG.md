@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A restarted CSI secrets plugin ends the session its volume used before the restart (A238-L9): the volume's
+  value-free state keeps the session's ID (never its token), and the plugin's next login for the volume names it in
+  `replaces` on `POST /api/v1/secrets/login`, which ends it once the pod's token proves the same principal and method
+  (recorded as ended by that principal; the answer's `replaced` says so). Another principal's session, or one already
+  ended, is left as it is.
 - A secret renderer on Windows can reload an application that runs as a service (A238-L3): `reload: { service: name }`
   has the Service Control Manager send the service PARAMCHANGE after each write, or `service_control`, a code from 128
   to 255 the service defines; a refused control is the write's reload error. Other platforms refuse a template naming

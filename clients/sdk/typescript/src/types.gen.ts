@@ -21439,12 +21439,16 @@ export interface components {
             method?: string;
             /** @description Optional tenant- and method-bound fingerprint from the authenticated preview route. When supplied, login fails closed if method configuration, enabled state, or session lifetime changed. */
             preview_fingerprint?: string;
+            /** @description Optional ID of an earlier session of the same principal and method, ended once this login succeeds: for a client that kept a session's ID but lost its token, such as a restarted CSI plugin. Another principal's session, or one already ended, is left as it is. */
+            replaces?: string;
         };
         MachineLoginResponse: {
             /** Format: date-time */
             expires_at: string;
             method: string;
             principal: string;
+            /** @description The earlier session the request named in replaces was ended. */
+            replaced?: boolean;
             scopes: string[];
             session_id: string;
             /** @description One-time opaque bearer for this scoped machine session. The server stores only its hash; copy it before dismissing the response. */

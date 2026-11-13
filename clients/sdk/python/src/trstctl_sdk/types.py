@@ -9863,6 +9863,7 @@ MachineLoginRequest = TypedDict(
         'credential': str,
         'method': str,
         'preview_fingerprint': str,
+        'replaces': str,
     },
     total=False,
 )
@@ -9873,6 +9874,7 @@ MachineLoginResponse = TypedDict(
         'expires_at': str,
         'method': str,
         'principal': str,
+        'replaced': bool,
         'scopes': list[str],
         'session_id': str,
         'token': str,

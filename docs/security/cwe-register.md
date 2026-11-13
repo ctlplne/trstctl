@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3257 annotated sites across 35 rules. Each row is
+3260 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -111,7 +111,7 @@ not this file.
 | `internal/accessrules/risk.go:22` | a risk category's name matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/accessrules/risk.go:30` | a risk category's name matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/csisecrets/driver.go:64` | the kubelet's request key name, not a credential (CWE-798) |
-| `internal/agent/csisecrets/driver_test.go:443` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/agent/csisecrets/driver_test.go:458` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/discovery/keystore.go:41` | the published Java keystore default, tried as a default; not a credential of this deployment (CWE-798) |
 | `internal/agent/discovery/keystore_jceks_test.go:18` | fixture file paths, not credentials (CWE-798) |
 | `internal/agent/discovery/kubernetes.go:90` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
@@ -2252,7 +2252,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (780 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (783 sites)
 
 | Location | Reason |
 |---|---|
@@ -2418,9 +2418,10 @@ not this file.
 | `ee/managedkeys/signerwiring/tenantkek.go:222` | the signer operator's configured wrapped-key file, never remote input (CWE-22). |
 | `ee/managedkeys/signerwiring/tenantkek_kms_test.go:69` | the fixture adapter's log in the test tempdir (CWE-22) |
 | `ee/managedkeys/signerwiring/wiring.go:144` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
-| `internal/agent/csisecrets/driver_test.go:244` | the test's own temp file (CWE-22) |
-| `internal/agent/csisecrets/driver_test.go:273` | the test's own temp file (CWE-22) |
-| `internal/agent/csisecrets/driver_test.go:410` | the test's own temp file (CWE-22) |
+| `internal/agent/csisecrets/driver_test.go:259` | the test's own temp file (CWE-22) |
+| `internal/agent/csisecrets/driver_test.go:288` | the test's own temp file (CWE-22) |
+| `internal/agent/csisecrets/driver_test.go:425` | the test's own temp file (CWE-22) |
+| `internal/agent/csisecrets/driver_test.go:660` | the test's own temp file (CWE-22) |
 | `internal/agent/csitrust/driver.go:151` | path is the kubelet's target directory joined with a validated file name (CWE-22) |
 | `internal/agent/csitrust/driver_test.go:120` | the file the driver wrote under this test's temp dir (CWE-22) |
 | `internal/agent/decoy/decoy.go:90` | the agent's own decoy state file (CWE-22) |
@@ -2863,6 +2864,8 @@ not this file.
 | `internal/server/sdk_registry_install_served_test.go:330` | the test reads what it downloaded under its own temp dir (CWE-22) |
 | `internal/server/sdk_registry_install_served_test.go:348` | the test reads what it installed under its own temp dir (CWE-22) |
 | `internal/server/sdk_registry_install_served_test.go:352` | the test reads what it installed under its own temp dir (CWE-22) |
+| `internal/server/secret_csi_restart_served_test.go:143` | the test's own temp file (CWE-22) |
+| `internal/server/secret_csi_restart_served_test.go:153` | the test's own temp file (CWE-22) |
 | `internal/server/secret_integrations.go:476` | the operator's own administrator DSN names this root file on the control plane's host (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:82` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:105` | the test's own temp file (CWE-22) |

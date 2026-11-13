@@ -1916,7 +1916,10 @@ volume goes. When the pod's last volume goes, the plugin ends that session (A238
 token stops working at once rather than at its expiry. Volumes of one pod published within
 one ten-minute login window share a session, which ends with the last of them. If the
 control plane can't be reached then, the unpublish still succeeds and the session lapses at
-its expiry, as does a session from before a plugin restart (the plugin keeps no tokens). Mounting needs `CAP_SYS_ADMIN` and bidirectional mount propagation, so the
+its expiry. A session from before a plugin restart is ended by the restarted plugin's next
+login for the volume (A238-L9): the volume's value-free state names the session (its ID,
+never its token), the login names it in `replaces`, and the control plane ends it once the
+pod's token proves the same principal. Mounting needs `CAP_SYS_ADMIN` and bidirectional mount propagation, so the
 plugin's container is privileged. Whoever controls that container, or the node, can read
 the volumes of the pods on that node, as with any node-local secret delivery. The kubelet
 reaches the plugin over a node-local Unix socket, as with every CSI driver. The control
@@ -2042,6 +2045,11 @@ The request trstctl sends to STS is rebuilt from the configured endpoint, the ro
 and the signed STS parameters alone (`Action`, `Version` and the SigV4 `X-Amz-*` query
 parameters, each in the shape AWS signs); a submitted request with any other parameter,
 a repeated or malformed one, or another path is refused before anything is sent.
+A login may name an earlier session of the same principal and method in `replaces`
+(A238-L9): once the login succeeds that session ends, recorded as ended by the principal,
+for a client that kept a session's ID but lost its token, such as a restarted CSI plugin.
+Another principal's session, or one already ended, is left as it is; the answer's
+`replaced` says whether it ended.
 
 ```yaml
 secrets:

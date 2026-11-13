@@ -6117,8 +6117,9 @@ versions on the kubelet's republish reported as `injected`, the freshness bound 
 plugin restarts, and a file removed once its pod may no longer read it; proven on kind
 against a restricted environment. A volume's session ends when the pod's last volume is unpublished
 (A238-L7, through `POST /api/v1/secrets/sessions/self/revoke`, which any machine session may
-call on itself); one the plugin can't end then (control plane out of reach, or a session from
-before a plugin restart) lapses at its expiry. The plugin is privileged (it mounts) and its node can
+call on itself); one the plugin can't end then (control plane out of reach) lapses at its
+expiry, and one from before a plugin restart ends at the restarted plugin's next login for that
+volume (A238-L9: the login names it in `replaces`). The plugin is privileged (it mounts) and its node can
 read the volumes on it; a volume reports `injected` only; the kind proof is a lab run, not
 a CI job yet; on Windows the reload is a command or a service control (A238-L3: PARAMCHANGE or a
 code from 128 to 255 the service defines; no signals), a rendered file's mode sets

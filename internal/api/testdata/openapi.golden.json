@@ -33679,6 +33679,10 @@
           "preview_fingerprint": {
             "description": "Optional tenant- and method-bound fingerprint from the authenticated preview route. When supplied, login fails closed if method configuration, enabled state, or session lifetime changed.",
             "type": "string"
+          },
+          "replaces": {
+            "description": "Optional ID of an earlier session of the same principal and method, ended once this login succeeds: for a client that kept a session's ID but lost its token, such as a restarted CSI plugin. Another principal's session, or one already ended, is left as it is.",
+            "type": "string"
           }
         },
         "required": [
@@ -33697,6 +33701,10 @@
           },
           "principal": {
             "type": "string"
+          },
+          "replaced": {
+            "description": "The earlier session the request named in replaces was ended.",
+            "type": "boolean"
           },
           "scopes": {
             "items": {

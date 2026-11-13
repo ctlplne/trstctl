@@ -84,11 +84,17 @@ type controlPlane struct {
 	replays    map[string]string
 	// ended lists the sessions that ended themselves (A238-L7).
 	ended []string
+	// ids maps each session's ID to its token; replaced lists the sessions a
+	// login ended by naming them in replaces (A238-L9), and asked every
+	// replaces a login sent.
+	ids      map[string]string
+	replaced []string
+	asked    []string
 }
 
 func newControlPlane(t *testing.T) *controlPlane {
 	cp := &controlPlane{tokens: map[string]string{}, readable: map[string]map[string]bool{},
-		values: map[string]string{}, versions: map[string]int{}, sessions: map[string]string{}, replays: map[string]string{},
+		values: map[string]string{}, versions: map[string]int{}, sessions: map[string]string{}, replays: map[string]string{}, ids: map[string]string{},
 		expires: time.Date(2026, 11, 2, 1, 0, 0, 0, time.UTC)}
 	cp.srv = httptest.NewServer(http.HandlerFunc(cp.serve))
 	t.Cleanup(cp.srv.Close)
@@ -115,7 +121,7 @@ func (cp *controlPlane) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/secrets/login":
-		var body struct{ Method, Credential string }
+		var body struct{ Method, Credential, Replaces string }
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		principal, ok := cp.tokens[body.Credential]
 		if !ok || body.Method != "kubernetes" {
@@ -127,14 +133,23 @@ func (cp *controlPlane) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if session, ok := cp.replays[r.Header.Get("Idempotency-Key")]; ok && cp.idempotent {
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": session, "expires_at": cp.expires})
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": session, "expires_at": cp.expires, "session_id": "sid-" + strings.TrimPrefix(session, "session-")})
 			return
 		}
 		cp.logins++
 		session := "session-" + strconv.Itoa(cp.logins)
 		cp.sessions[session] = principal
+		cp.ids["sid-"+strconv.Itoa(cp.logins)] = session
 		cp.replays[r.Header.Get("Idempotency-Key")] = session
-		_ = json.NewEncoder(w).Encode(map[string]any{"token": session, "expires_at": cp.expires})
+		cp.asked = append(cp.asked, body.Replaces)
+		replaced := false
+		if earlier, ok := cp.ids[body.Replaces]; ok && cp.sessions[earlier] == principal {
+			delete(cp.sessions, earlier)
+			cp.replaced = append(cp.replaced, body.Replaces)
+			replaced = true
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"token": session, "expires_at": cp.expires,
+			"session_id": "sid-" + strconv.Itoa(cp.logins), "replaced": replaced})
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/secrets/sessions/self/revoke":
 		session := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if _, ok := cp.sessions[session]; !ok || r.Header.Get("Idempotency-Key") == "" {
@@ -615,4 +630,103 @@ func TestDriverEndsAVolumesSessionWhenItsLastVolumeGoesA238L7(t *testing.T) {
 		t.Fatalf("sessions ended while the control plane was down: %v", got)
 	}
 	t.Log("A238L7_SESSION_ENDED_AT_UNPUBLISH_OK")
+}
+
+// A238-L9 Done-when: a restarted plugin ends the session its volume used
+// before the restart. The volume's value-free state names the session (its
+// ID, never its token); the restarted plugin's next login for the volume names
+// it in replaces, and the control plane ends it once the pod's token proves
+// the same principal. A volume here that still uses the session is never made
+// to end it, and a restart within the login window gets a session of its own.
+func TestDriverEndsItsSessionFromBeforeARestartA238L9(t *testing.T) {
+	cp := newControlPlane(t)
+	cp.idempotent = true
+	cp.tokens["pod-token-1"] = "system:serviceaccount:payments:api"
+	cp.readable["system:serviceaccount:payments:api"] = map[string]bool{"payments/prod/db-password": true}
+	cp.set("payments/prod/db-password", "pw-one")
+	stateDir := filepath.Join(t.TempDir(), "state")
+	mounter := &fakeMounter{mounted: map[string]bool{}}
+	now := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
+	target := filepath.Join(t.TempDir(), "csi-r", "mount")
+	publish := publishRequest(target, "pod-token-1", "", map[string]string{"secrets": "password=payments/prod/db-password"})
+	publish.VolumeId = "csi-r"
+	var logs bytes.Buffer
+	start := func() *Driver {
+		d := newTestDriver(t, cp, mounter, stateDir, &logs)
+		d.now = func() time.Time { return now }
+		return d
+	}
+	state := func() string {
+		raw, err := os.ReadFile(volumeStatePath(stateDir, "csi-r")) // #nosec G304 -- the test's own temp file (CWE-22)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(raw)
+	}
+	live := func(session string) bool {
+		cp.mu.Lock()
+		defer cp.mu.Unlock()
+		_, ok := cp.sessions[session]
+		return ok
+	}
+	asked := func() string {
+		cp.mu.Lock()
+		defer cp.mu.Unlock()
+		out := strings.Join(cp.asked, ",")
+		cp.asked = nil
+		return out
+	}
+
+	d := start()
+	if _, err := d.NodePublishVolume(t.Context(), publish); err != nil {
+		t.Fatal(err)
+	}
+	if got := state(); !strings.Contains(got, `"session_id":"sid-1"`) || strings.Contains(got, "session-1") {
+		t.Fatalf("the volume's state %s: want the session's ID and never its token", got)
+	}
+	// A republish by the same plugin keeps its session and names none.
+	now = now.Add(time.Minute)
+	if _, err := d.NodePublishVolume(t.Context(), publish); err != nil {
+		t.Fatal(err)
+	}
+	if got := asked(); got != "" {
+		t.Fatalf("a running plugin's logins named %q", got)
+	}
+
+	// The plugin restarts; the next republish, in a later login window, ends
+	// the session from before the restart.
+	now = now.Add(15 * time.Minute)
+	d = start()
+	if _, err := d.NodePublishVolume(t.Context(), publish); err != nil {
+		t.Fatal(err)
+	}
+	if got := asked(); got != "sid-1" || live("session-1") || !live("session-2") {
+		t.Fatalf("after the restart the login named %q; session-1 live %v, session-2 live %v", got, live("session-1"), live("session-2"))
+	}
+	if !strings.Contains(state(), `"session_id":"sid-2"`) || !strings.Contains(logs.String(), "ended the volume's session from before the plugin restarted") {
+		t.Fatalf("state %s, logs:\n%s", state(), logs.String())
+	}
+
+	// A second restart within the same login window: its login is a command
+	// of its own (it names sid-2), so it gets session-3 rather than a replay.
+	now = now.Add(time.Minute)
+	d = start()
+	if _, err := d.NodePublishVolume(t.Context(), publish); err != nil {
+		t.Fatal(err)
+	}
+	if got := asked(); got != "sid-2" || live("session-2") || !live("session-3") {
+		t.Fatalf("a restart within the window named %q; session-2 live %v, session-3 live %v", got, live("session-2"), live("session-3"))
+	}
+	cp.mu.Lock()
+	replaced := strings.Join(cp.replaced, ",")
+	cp.mu.Unlock()
+	if replaced != "sid-1,sid-2" {
+		t.Fatalf("the control plane ended %q, want sid-1,sid-2", replaced)
+	}
+	t.Log("A238L9_RESTART_ENDS_EARLIER_SESSION_OK")
+}
+
+// volumeStatePath is where a driver keeps volume id's value-free state.
+func volumeStatePath(stateDir, id string) string {
+	return (&Driver{cfg: Config{StateDir: stateDir}}).statePath(id)
 }

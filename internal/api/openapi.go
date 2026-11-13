@@ -8449,6 +8449,7 @@ func componentSchemas() map[string]*Schema {
 	machineLoginReq := object(map[string]*Schema{
 		"method": str(), "credential": str(),
 		"preview_fingerprint": {Type: "string", Description: "Optional tenant- and method-bound fingerprint from the authenticated preview route. When supplied, login fails closed if method configuration, enabled state, or session lifetime changed."},
+		"replaces":            {Type: "string", Description: "Optional ID of an earlier session of the same principal and method, ended once this login succeeds: for a client that kept a session's ID but lost its token, such as a restarted CSI plugin. Another principal's session, or one already ended, is left as it is."},
 	}, "credential")
 	machineLoginPreviewReq := object(map[string]*Schema{
 		"method": {Type: "string", Description: "Exact configured machine-auth method name. Empty selects the builtin token method for compatibility."},
@@ -8479,6 +8480,7 @@ func componentSchemas() map[string]*Schema {
 		"scopes":     {Type: "array", Items: str()},
 		"expires_at": timestamp(),
 		"token":      {Type: "string", Description: "One-time opaque bearer for this scoped machine session. The server stores only its hash; copy it before dismissing the response."},
+		"replaced":   {Type: "boolean", Description: "The earlier session the request named in replaces was ended."},
 	}, "session_id", "principal", "method", "scopes", "expires_at", "token")
 
 	// Served AI / RCA / NL-query / MCP surface (SURFACE-003). Every request is

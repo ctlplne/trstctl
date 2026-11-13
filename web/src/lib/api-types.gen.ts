@@ -7107,12 +7107,14 @@ export interface MachineLoginRequest {
   credential: string;
   method?: string;
   preview_fingerprint?: string;
+  replaces?: string;
 }
 
 export interface MachineLoginResponse {
   expires_at: string;
   method: string;
   principal: string;
+  replaced?: boolean;
   scopes: string[];
   session_id: string;
   token: string;

@@ -459,6 +459,10 @@ type machineLoginRequest struct {
 	Method             string          `json:"method"`
 	Credential         secretJSONBytes `json:"credential"`
 	PreviewFingerprint string          `json:"preview_fingerprint,omitempty"`
+	// Replaces names an earlier session of the same principal and method that
+	// the login ends once it succeeds (A238-L9): a client that kept a
+	// session's ID but lost its token, such as a restarted CSI plugin.
+	Replaces string `json:"replaces,omitempty"`
 }
 
 // machineLoginResponse is the usable scoped session the framework yields. Token
@@ -471,6 +475,8 @@ type machineLoginResponse struct {
 	Scopes    []string        `json:"scopes"`
 	ExpiresAt time.Time       `json:"expires_at"`
 	Token     secretJSONBytes `json:"token"`
+	// Replaced reports that the session the request named was ended.
+	Replaced bool `json:"replaced,omitempty"`
 }
 
 func (r *machineLoginResponse) wipeSecrets() { r.Token.wipe() }
@@ -481,7 +487,7 @@ const machineLoginIdempotencyDomain = "trstctl.api.machine-login-idempotency.f58
 // tenant, method, credential, and reviewed plan using the server's secret-keyed
 // digest. Only the digest reaches the recorder; the presented credential is
 // wiped by machineLoginForTenant and never enters durable evidence (AN-5/AN-8).
-func (a *API) machineLoginIdempotencyBinding(tenantID, method string, credential []byte, previewFingerprint string) (string, error) {
+func (a *API) machineLoginIdempotencyBinding(tenantID, method string, credential []byte, previewFingerprint, replaces string) (string, error) {
 	if a.secrets == nil || a.secrets.be.CommandMAC == nil {
 		return "", errors.New("api: server-keyed machine-login idempotency is unavailable")
 	}
@@ -496,6 +502,11 @@ func (a *API) machineLoginIdempotencyBinding(tenantID, method string, credential
 	appendPart([]byte(method))
 	appendPart(credential)
 	appendPart([]byte(previewFingerprint))
+	if replaces != "" {
+		// Only a login that names a session binds it, so every other
+		// login's binding reads as it did before A238-L9.
+		appendPart([]byte(replaces))
+	}
 	defer secret.Wipe(material)
 
 	mac, err := a.secrets.be.CommandMAC([]byte(machineLoginIdempotencyDomain), material)
@@ -568,7 +579,7 @@ func (a *API) machineLoginForTenant(w http.ResponseWriter, r *http.Request, tena
 	if method == "" {
 		method = "token"
 	}
-	binding, err := a.machineLoginIdempotencyBinding(tenantID, method, req.Credential, req.PreviewFingerprint)
+	binding, err := a.machineLoginIdempotencyBinding(tenantID, method, req.Credential, req.PreviewFingerprint, req.Replaces)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -650,11 +661,38 @@ func (a *API) machineLoginForTenant(w http.ResponseWriter, r *http.Request, tena
 			secret.Wipe(rawToken)
 			return 0, nil, err
 		}
-		return http.StatusOK, &machineLoginResponse{
+		response := &machineLoginResponse{
 			SessionID: sess.ID, Principal: sess.Principal, Method: sess.Method,
 			Scopes: sess.Scopes, ExpiresAt: sess.ExpiresAt, Token: secretJSONBytes(rawToken),
-		}, nil
+		}
+		if req.Replaces != "" && req.Replaces != sess.ID {
+			response.Replaced = a.replaceEarlierMachineSession(ctx, resolvedTenantID, req.Replaces, sess.Principal, sess.Method)
+		}
+		return http.StatusOK, response, nil
 	})
+}
+
+// replaceEarlierMachineSession ends an earlier session of the principal a
+// login has just authenticated (A238-L9). A client that kept a session's ID
+// but lost its token, such as a restarted CSI plugin whose memory went, names
+// it on its next login, and that fresh proof of the same principal stands in
+// for the lost bearer: like ending itself, it gives up only that principal's
+// own authority. A session of another principal or method, one already ended
+// or expired, or one that isn't there is left as it is. Ending is best effort:
+// the login has already succeeded, and its token is returned either way.
+func (a *API) replaceEarlierMachineSession(ctx context.Context, tenantID, id, principal, method string) bool {
+	earlier, err := a.secrets.be.Store.GetMachineSession(ctx, tenantID, id)
+	if err != nil || earlier.Principal != principal || earlier.Method != method || earlier.Status == store.MachineSessionStatusRevoked {
+		return false
+	}
+	if !earlier.ExpiresAt.IsZero() && !time.Now().Before(earlier.ExpiresAt) {
+		return false
+	}
+	// The principal ends its own session, as a self-end does: the ledger
+	// names it as the one that revoked the session.
+	ctx = events.ContextWithActor(ctx, events.Actor{Subject: principal})
+	_, _, err = a.endMachineSession(ctx, tenantID, id, "machine session replaced by a new login of its principal", "machine session not found")
+	return err == nil
 }
 
 var errMachineLoginNotConfigured = errors.New("machine login is not configured")
