@@ -9,8 +9,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/mdm"
@@ -211,5 +214,126 @@ func TestRelayMDMSyncExchangesTheClientSecretForAGraphToken(t *testing.T) {
 	if detail != "the identity platform refused the client ID or client secret" ||
 		strings.Contains(detail, "wrong secret") || strings.Contains(detail, exchanged) {
 		t.Fatalf("refusal detail = %q; want the named refusal with no secret or token", detail)
+	}
+}
+
+// A156-L2: the relay keeps an exchanged Graph token across mdm.sync jobs —
+// two reads of the same app registration make one exchange; a rotated
+// client secret makes another; a token near its expiry is not reused; a
+// kept token the MDM refuses is forgotten and exchanged once more for that
+// job; and the same holds for a Jamf Pro API client's token.
+func TestRelayMDMSyncKeepsTheExchangedTokenAcrossJobsA156L2(t *testing.T) {
+	const (
+		directory = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
+		clientID  = "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e"
+		secretRef = "secret://mdm/intune/client-secret" // #nosec G101 -- credential reference, no credential value present (CWE-798)
+		firstKey  = "stand-in client secret one"        // #nosec G101 -- a stand-in fixture value, not a credential (CWE-798)
+		secondKey = "stand-in client secret two"        // #nosec G101 -- a stand-in fixture value, not a credential (CWE-798)
+	)
+	var mu sync.Mutex
+	exchanges, revoked := 0, map[string]bool{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/"+directory+"/oauth2/v2.0/token":
+			if err := r.ParseForm(); err != nil || r.PostForm.Get("client_id") != clientID ||
+				(r.PostForm.Get("client_secret") != firstKey && r.PostForm.Get("client_secret") != secondKey) {
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"invalid_client"}`))
+				return
+			}
+			exchanges++
+			_, _ = w.Write([]byte(`{"token_type":"Bearer","expires_in":3599,"access_token":"graph-token-` + strconv.Itoa(exchanges) + `"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/oauth/token":
+			if err := r.ParseForm(); err != nil || r.PostForm.Get("client_secret") != firstKey {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			exchanges++
+			_, _ = w.Write([]byte(`{"token_type":"Bearer","expires_in":1199,"access_token":"jamf-token-` + strconv.Itoa(exchanges) + `"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1.0/deviceManagement/managedDevices":
+			bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+			if !strings.HasPrefix(bearer, "graph-token-") || revoked[bearer] {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			_, _ = w.Write([]byte(`{"value":[{"id":"dev-1","deviceName":"laptop-9","serialNumber":"SER9","managedDeviceOwnerType":"company"}]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/computers-inventory":
+			if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer jamf-token-") {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			_, _ = w.Write([]byte(`{"totalCount":0,"results":[]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	now := time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)
+	restore, kept := relay.SetMDMTokenClockForTest(func() time.Time { return now })
+	defer restore()
+	intune := mdm.SyncIntent{MDM: mdm.MDMIntune, BaseURL: srv.URL, TokenRef: secretRef,
+		ClientCredentials: &mdm.ClientCredentials{Authority: srv.URL, DirectoryTenantID: directory, ClientID: clientID}}
+	run := func(intent mdm.SyncIntent, clientSecret string) {
+		t.Helper()
+		ch := &fakeChannel{jobs: []relay.Job{mdmJob(t, intent)}, material: map[string][]byte{secretRef: []byte(clientSecret)}}
+		if executed, err := relay.RunOnce(t.Context(), ch, srv.Client(), 4, 30); err != nil || executed != 1 {
+			t.Fatalf("executed = %d, %v; reports %+v", executed, err, ch.reports)
+		}
+	}
+	count := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return exchanges
+	}
+
+	run(intune, firstKey)
+	run(intune, firstKey)
+	if got := count(); got != 1 || kept() != 1 {
+		t.Fatalf("two reads made %d exchanges and keep %d tokens, want one", got, kept())
+	}
+	run(intune, secondKey)
+	if got := count(); got != 2 {
+		t.Fatalf("a rotated secret made %d exchanges in all, want a second", got)
+	}
+	now = now.Add(59 * time.Minute)
+	run(intune, secondKey)
+	if got := count(); got != 3 {
+		t.Fatalf("a token near its expiry was reused (%d exchanges)", got)
+	}
+	mu.Lock()
+	revoked["graph-token-3"] = true
+	mu.Unlock()
+	run(intune, secondKey)
+	if got := count(); got != 4 {
+		t.Fatalf("a refused kept token made %d exchanges, want one more", got)
+	}
+
+	jamf := mdm.SyncIntent{MDM: mdm.MDMJamf, BaseURL: srv.URL, TokenRef: secretRef, JamfAPIClient: &mdm.JamfAPIClient{ClientID: "00000000-0000-4000-8000-0000000a156f"}}
+	run(jamf, firstKey)
+	run(jamf, firstKey)
+	if got := count(); got != 5 {
+		t.Fatalf("two Jamf reads made %d exchanges in all, want one more", got-4)
+	}
+
+	// Check-ins keep the token the same way: two blank pushes, one exchange.
+	jamfSrv, calls := jamfAPIStandIn(t)
+	checkIn := relay.MDMCheckInIntent{ID: "check-in-a156l2", MDM: mdm.MDMJamf, BaseURL: jamfSrv.URL, TokenRef: jamfSecretRef,
+		JamfAPIClient: &mdm.JamfAPIClient{ClientID: jamfAPIClientID}, DeviceID: "417", RequiredAgentID: "agent-1"}
+	for i := 0; i < 2; i++ {
+		ch := &fakeChannel{jobs: []relay.Job{checkInJob(t, checkIn)}, material: map[string][]byte{jamfSecretRef: []byte(jamfClientSecret)}}
+		if executed, err := relay.RunOnce(t.Context(), ch, jamfSrv.Client(), 1, 60); err != nil || executed != 1 {
+			t.Fatalf("check-in %d executed = %d, %v; reports %+v", i+1, executed, err, ch.reports)
+		}
+	}
+	exchanged := 0
+	for _, call := range calls() {
+		if call == "POST /api/oauth/token" {
+			exchanged++
+		}
+	}
+	if exchanged != 1 {
+		t.Fatalf("two check-ins made %d exchanges, want one; calls %v", exchanged, calls())
 	}
 }

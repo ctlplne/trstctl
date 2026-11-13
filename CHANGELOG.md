@@ -8,6 +8,11 @@
   health written to the device's custom field when it changes. Devices are events (`provider.rmm_device.*`) projected
   into `provider_rmm_devices` (migration 0467, snapshot format 133), listed at `GET /provider/v1/tenants/{id}/rmm-devices`
   and in the Provider console. RMM targets take no usage periods.
+- MDM tokens kept across relay jobs (A156-L2): a relay that exchanges an Intune app registration's or a Jamf Pro API
+  client's secret for an access token now keeps the token in locked memory, keyed by the token endpoint, the client and
+  a digest of the secret, and reuses it for later reads and check-ins until two minutes before it expires (at most an
+  hour). A changed secret never reuses the old secret's token, and a token the MDM refuses is dropped and exchanged once
+  more for that job.
 - Hudu certificate records (MSP-15): a `hudu` target (instance, API key reference, the records' asset layout and its
   field labels, the console URL) keeps each mapped customer's certificate inventory and expiry dates in one asset under
   the customer's Hudu company, written only when it changed, in place, again after a deletion, and without a second asset

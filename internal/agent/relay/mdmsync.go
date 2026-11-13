@@ -12,7 +12,6 @@ import (
 	"os"
 	"time"
 
-	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/mdm"
 	"trstctl.com/trstctl/internal/secrettext"
 )
@@ -94,50 +93,51 @@ func runMDMSync(ctx context.Context, ch Channel, client *http.Client, job Job) b
 		report(ctx, ch, job, OutcomeFailed, "this agent has no http client for mdm reads")
 		return false
 	}
-	if intent.ClientCredentials != nil {
-		// A156: the redeemed material is the app registration's client secret;
-		// exchange it for a Graph token that lives only for this job.
-		if intent.MDM != mdm.MDMIntune {
-			report(ctx, ch, job, OutcomeFailed, "client credentials are only valid for an Intune read")
-			return false
-		}
-		access, err := mdm.ExchangeClientCredentials(ctx, client, *intent.ClientCredentials, token)
-		if err != nil {
-			report(ctx, ch, job, OutcomeFailed, clientCredentialsFailure(err))
-			return false
-		}
-		defer secret.Wipe(access)
-		token = access
-	}
-	if intent.JamfAPIClient != nil {
-		// A156-L1: the redeemed material is the Jamf Pro API client's secret;
-		// exchange it at the same server for a token that lives only for this
-		// job.
-		if intent.MDM != mdm.MDMJamf {
-			report(ctx, ch, job, OutcomeFailed, "a Jamf Pro API client is only valid for a Jamf read")
-			return false
-		}
-		access, err := mdm.ExchangeJamfClientCredentials(ctx, client, intent.BaseURL, *intent.JamfAPIClient, token)
-		if err != nil {
-			report(ctx, ch, job, OutcomeFailed, jamfClientFailure(err))
-			return false
-		}
-		defer secret.Wipe(access)
-		token = access
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		report(ctx, ch, job, OutcomeFailed, "mdm request could not be built")
+	// A156 / A156-L1: the redeemed material is the app registration's or the
+	// Jamf Pro API client's secret, exchanged for an access token. A156-L2:
+	// the relay keeps that token across jobs and exchanges again only when
+	// it nears expiry, the secret changed, or the MDM refused it.
+	bearer, refusal := newMDMBearer(ctx, client, intent.MDM, intent.BaseURL, intent.ClientCredentials, intent.JamfAPIClient, token)
+	if refusal != "" {
+		report(ctx, ch, job, OutcomeFailed, refusal)
 		return false
 	}
-	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
-	req.Header.Set("Accept", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "trstctl-agent: mdm sync:", err)
-		report(ctx, ch, job, OutcomeFailed, "mdm read failed from this relay's vantage")
+	defer bearer.close()
+	read := func() (*http.Response, bool) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			report(ctx, ch, job, OutcomeFailed, "mdm request could not be built")
+			return nil, false
+		}
+		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", bearer.token))
+		req.Header.Set("Accept", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: mdm sync:", err)
+			report(ctx, ch, job, OutcomeFailed, "mdm read failed from this relay's vantage")
+			return nil, false
+		}
+		return resp, true
+	}
+	resp, ok := read()
+	if !ok {
 		return false
 	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		again, refusal := bearer.refused()
+		if refusal != "" {
+			_ = resp.Body.Close()
+			report(ctx, ch, job, OutcomeFailed, refusal)
+			return false
+		}
+		if again {
+			_ = resp.Body.Close()
+			if resp, ok = read(); !ok {
+				return false
+			}
+		}
+	}
+	token = bearer.token
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		report(ctx, ch, job, OutcomeFailed, fmt.Sprintf("mdm read failed with status %d", resp.StatusCode))

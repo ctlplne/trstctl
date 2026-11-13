@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3203 annotated sites across 34 rules. Each row is
+3206 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (773 sites)
+### G101 — CWE-798 Use of hardcoded credentials (776 sites)
 
 | Location | Reason |
 |---|---|
@@ -122,9 +122,12 @@ not this file.
 | `internal/agent/relay/mdm_jamf_client_test.go:20` | credential reference, no credential value present (CWE-798) |
 | `internal/agent/relay/mdm_jamf_client_test.go:21` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/agent/relay/mdmcheckin_test.go:26` | credential reference (secret store pointer), no credential value present (CWE-798) |
-| `internal/agent/relay/mdmsync_test.go:23` | credential reference (secret store pointer), no credential value present (CWE-798) |
-| `internal/agent/relay/mdmsync_test.go:159` | credential reference, no credential value present (CWE-798) |
-| `internal/agent/relay/mdmsync_test.go:160` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/agent/relay/mdmsync_test.go:26` | credential reference (secret store pointer), no credential value present (CWE-798) |
+| `internal/agent/relay/mdmsync_test.go:162` | credential reference, no credential value present (CWE-798) |
+| `internal/agent/relay/mdmsync_test.go:163` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/agent/relay/mdmsync_test.go:229` | credential reference, no credential value present (CWE-798) |
+| `internal/agent/relay/mdmsync_test.go:230` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/agent/relay/mdmsync_test.go:231` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/agent/relay/plugin_call_test.go:65` | a reference name (CWE-798) |
 | `internal/agent/relay/readback_families_test.go:37` | a credential reference name, not a credential (CWE-798) |
 | `internal/agent/relay/readback_families_test.go:45` | a credential reference name, not a credential (CWE-798) |

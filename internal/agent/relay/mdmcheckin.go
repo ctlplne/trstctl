@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/mdm"
 	"trstctl.com/trstctl/internal/secrettext"
 )
@@ -193,34 +192,23 @@ func runMDMCheckIn(ctx context.Context, ch Channel, client *http.Client, job Job
 		report(ctx, ch, job, OutcomeFailed, "redemption did not include the mdm token reference")
 		return false
 	}
-	if intent.ClientCredentials != nil {
-		access, err := mdm.ExchangeClientCredentials(ctx, client, *intent.ClientCredentials, token)
-		if err != nil {
-			report(ctx, ch, job, OutcomeFailed, clientCredentialsFailure(err))
-			return false
-		}
-		defer secret.Wipe(access)
-		token = access
+	// A156-L1 / A156-L2: an exchanged access token, kept across jobs.
+	bearer, refusal := newMDMBearer(ctx, client, intent.MDM, intent.BaseURL, intent.ClientCredentials, intent.JamfAPIClient, token)
+	if refusal != "" {
+		report(ctx, ch, job, OutcomeFailed, refusal)
+		return false
 	}
-	if intent.JamfAPIClient != nil {
-		// A156-L1: the redeemed material is the Jamf Pro API client's secret.
-		access, err := mdm.ExchangeJamfClientCredentials(ctx, client, intent.BaseURL, *intent.JamfAPIClient, token)
-		if err != nil {
-			report(ctx, ch, job, OutcomeFailed, jamfClientFailure(err))
-			return false
-		}
-		defer secret.Wipe(access)
-		token = access
-	}
+	defer bearer.close()
 	var status int
 	var waited time.Duration
+	reexchanged := false
 	for attempt := 1; ; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, MDMCheckInEndpoint(intent), nil)
 		if err != nil {
 			report(ctx, ch, job, OutcomeFailed, "the check-in request could not be built")
 			return false
 		}
-		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
+		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", bearer.token))
 		req.Header.Set("Accept", "application/json")
 		resp, err := client.Do(req)
 		if err != nil {
@@ -232,6 +220,20 @@ func runMDMCheckIn(ctx context.Context, ch Channel, client *http.Client, job Job
 		status = resp.StatusCode
 		if status >= 200 && status <= 299 {
 			break
+		}
+		if status == http.StatusUnauthorized && !reexchanged {
+			// A kept token the MDM refused: exchange once more and ask again,
+			// outside the throttling budget.
+			again, refusal := bearer.refused()
+			if refusal != "" {
+				report(ctx, ch, job, OutcomeFailed, refusal)
+				return false
+			}
+			if again {
+				reexchanged = true
+				attempt--
+				continue
+			}
 		}
 		wait := mdmRetryWait(resp.Header.Get("Retry-After"), attempt, time.Now())
 		if !mdmRetryable(status) || attempt >= mdmCheckInAttempts || waited+wait > mdmCheckInBudget {

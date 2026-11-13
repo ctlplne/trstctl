@@ -83,19 +83,26 @@ func JamfTokenEndpoint(base string) (string, error) {
 // token is the caller's to wipe; the request body that carried the secret is
 // wiped here. Errors never contain the secret or the token.
 func ExchangeJamfClientCredentials(ctx context.Context, client *http.Client, base string, c JamfAPIClient, clientSecret []byte) ([]byte, error) {
+	grant, err := ExchangeJamfClientCredentialsGrant(ctx, client, base, c, clientSecret)
+	return grant.Token, err
+}
+
+// ExchangeJamfClientCredentialsGrant is ExchangeJamfClientCredentials with
+// the token's lifetime (A156-L2).
+func ExchangeJamfClientCredentialsGrant(ctx context.Context, client *http.Client, base string, c JamfAPIClient, clientSecret []byte) (Grant, error) {
 	if client == nil {
-		return nil, fmt.Errorf("%w: no http client", ErrTokenExchangeFailed)
+		return Grant{}, fmt.Errorf("%w: no http client", ErrTokenExchangeFailed)
 	}
 	if len(clientSecret) == 0 {
-		return nil, ErrJamfClientRefused
+		return Grant{}, ErrJamfClientRefused
 	}
 	n := c.Normalize()
 	if err := n.Validate(); err != nil {
-		return nil, err
+		return Grant{}, err
 	}
 	endpoint, err := JamfTokenEndpoint(base)
 	if err != nil {
-		return nil, err
+		return Grant{}, err
 	}
 	body := make([]byte, 0, 128+3*len(clientSecret))
 	body = append(body, "grant_type=client_credentials&client_id="...)
@@ -105,18 +112,18 @@ func ExchangeJamfClientCredentials(ctx context.Context, client *http.Client, bas
 	defer secret.Wipe(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("%w: build request", ErrTokenExchangeFailed)
+		return Grant{}, fmt.Errorf("%w: build request", ErrTokenExchangeFailed)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: the Jamf Pro token endpoint is unreachable from this relay", ErrTokenExchangeFailed)
+		return Grant{}, fmt.Errorf("%w: the Jamf Pro token endpoint is unreachable from this relay", ErrTokenExchangeFailed)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := secret.ReadBounded(resp.Body, maxTokenResponseBytes)
 	if err != nil {
-		return nil, fmt.Errorf("%w: unreadable token response", ErrTokenExchangeFailed)
+		return Grant{}, fmt.Errorf("%w: unreadable token response", ErrTokenExchangeFailed)
 	}
 	defer secret.Wipe(raw)
 	switch {
@@ -127,20 +134,21 @@ func ExchangeJamfClientCredentials(ctx context.Context, client *http.Client, bas
 			Error string `json:"error"`
 		}
 		if json.Unmarshal(raw, &refusal) != nil || refusal.Error == "" || refusal.Error == "invalid_client" {
-			return nil, ErrJamfClientRefused
+			return Grant{}, ErrJamfClientRefused
 		}
-		return nil, fmt.Errorf("%w: status %d", ErrTokenExchangeFailed, resp.StatusCode)
+		return Grant{}, fmt.Errorf("%w: status %d", ErrTokenExchangeFailed, resp.StatusCode)
 	case resp.StatusCode != http.StatusOK:
-		return nil, fmt.Errorf("%w: status %d", ErrTokenExchangeFailed, resp.StatusCode)
+		return Grant{}, fmt.Errorf("%w: status %d", ErrTokenExchangeFailed, resp.StatusCode)
 	}
 	var grant struct {
 		TokenType   string                 `json:"token_type"`
 		AccessToken secretjson.StringBytes `json:"access_token"`
+		ExpiresIn   int64                  `json:"expires_in"`
 	}
 	// Closure: the field is nil until decoded, so a bare defer would wipe nothing.
 	defer func() { secret.Wipe(grant.AccessToken) }()
 	if err := json.Unmarshal(raw, &grant); err != nil || !strings.EqualFold(grant.TokenType, "Bearer") || len(grant.AccessToken) == 0 {
-		return nil, fmt.Errorf("%w: the response is not a bearer token grant", ErrTokenExchangeFailed)
+		return Grant{}, fmt.Errorf("%w: the response is not a bearer token grant", ErrTokenExchangeFailed)
 	}
-	return append([]byte(nil), grant.AccessToken...), nil
+	return Grant{Token: append([]byte(nil), grant.AccessToken...), Lifetime: grantLifetime(grant.ExpiresIn)}, nil
 }

@@ -4397,13 +4397,15 @@ than sending an operator looking for a credential that was never there.
   the schedule sets `renewal_window_days`. Scope, stated exactly: an Intune schedule can name an Entra
   app registration (`client_credentials`: directory and application (client)
   ID); `token_ref` then holds the app's client secret, and the relay exchanges
-  it for a Microsoft Graph token on each read (OAuth client-credentials grant;
-  the token lives only in memory for that read). Proven against stand-in token
+  it for a Microsoft Graph token (OAuth client-credentials grant) and keeps
+  that token in locked memory across reads until two minutes before it
+  expires, at most an hour (a changed secret or a refused token exchanges
+  again). Proven against stand-in token
   and Graph endpoints; a live Entra tenant is not yet proven. A Jamf schedule
   can name a Jamf Pro API client (`jamf_api_client`: its client ID); `token_ref`
   then holds the client secret, and the relay exchanges it at the same Jamf Pro
-  server's `/api/oauth/token` for an access token on each read and each device
-  check-in (the base URL must be https). Proven against a stand-in Jamf Pro
+  server's `/api/oauth/token` for an access token, kept across reads and device
+  check-ins the same way (the base URL must be https). Proven against a stand-in Jamf Pro
   server written from Jamf's documented API client grant; a live Jamf Pro server
   is not yet proven. Without an app registration or an API client the token
   reference must resolve to a bearer the MDM accepts, rotated by the operator's

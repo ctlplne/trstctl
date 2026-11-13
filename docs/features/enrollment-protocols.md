@@ -357,8 +357,12 @@ Intune's fixed `CertificatesByRAPolicy` report or Jamf's `CERTIFICATES`
 inventory. For Intune the schedule can instead name an Entra app registration
 (`client_credentials` with the directory and the application (client) ID): the
 reference then holds the app's client secret, and the relay exchanges it for a
-Microsoft Graph token on each read, so no operator pipeline has to rotate a
-bearer. The app needs Graph application permissions for managed-device reads and
+Microsoft Graph token, so no operator pipeline has to rotate a bearer. The relay
+keeps the token in locked memory across reads and check-ins until two minutes
+before it expires (at most an hour), so polling every few minutes makes one
+exchange per token lifetime; a changed secret, or the MDM refusing the token,
+makes it exchange again at once. A Jamf Pro API client's token is kept the same
+way. The app needs Graph application permissions for managed-device reads and
 report export. Only its bounded typed, signed observation returns to the control
 plane, which binds it to the exact job payload before correlation and completes
 the claim plus outbox row atomically after projection. There is no control-plane
