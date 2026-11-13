@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- A retried Slack annotation never leaves two replies (A174-L4): a write whose request reached the provider and whose
+  answer was lost is recorded `unconfirmed` on the finding; a Slack retry that cannot read the thread
+  (`missing_scope`) after such a loss refuses, naming `channels:history` / `groups:history`, instead of posting again.
 - A leaked secret in a Jira CSV export is located to its issue (A174-L3): a third-party scan of a `.csv` Jira export
   reads each row with the line it starts on, so a finding inside a field quoted over several lines belongs to its row,
   and names the issue from the `Issue key` column — the finding can then be annotated with a comment on that issue.

@@ -11,10 +11,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -72,13 +74,27 @@ func (h *httpClient) do(ctx context.Context, r request) (*http.Response, []byte,
 	if r.auth != nil {
 		r.auth(req)
 	}
+	// A174-L4: a write whose request reached the provider and whose answer
+	// was lost may have taken effect; it is told apart from one that never
+	// left, so a retry knows whether to look before writing again.
+	var wrote atomic.Bool
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+		WroteRequest: func(info httptrace.WroteRequestInfo) { wrote.Store(info.Err == nil) },
+	}))
+	write := r.method != http.MethodGet && r.method != http.MethodHead
 	resp, err := h.doer.Do(req)
 	if err != nil {
+		if write && wrote.Load() {
+			return nil, nil, fmt.Errorf("%s: %w: %w", r.op, ErrOutcomeUnknown, err)
+		}
 		return nil, nil, fmt.Errorf("%s: %w", r.op, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
+		if write {
+			return nil, nil, fmt.Errorf("%s: read response: %w: %w", r.op, ErrOutcomeUnknown, err)
+		}
 		return nil, nil, fmt.Errorf("%s: read response: %w", r.op, err)
 	}
 	if resp.StatusCode/100 != 2 {
@@ -123,8 +139,20 @@ func (s slack) Annotate(ctx context.Context, a Annotation) (Result, error) {
 		return Result{}, invalid("the finding names no Slack channel and message")
 	}
 	if a.Retry {
-		if ts, found := s.findReply(ctx, channel, thread, a.FindingID); found {
+		ts, found, unreadable, err := s.findReply(ctx, channel, thread, a.FindingID)
+		if err != nil {
+			return Result{}, err
+		}
+		if found {
 			return Result{Status: AlreadyPresent, ProviderRef: ts, Detail: "Slack already has the reply in the thread (ts " + ts + ")"}, nil
+		}
+		// A174-L4: an earlier post reached Slack and its answer was lost, and
+		// the token cannot read the thread to see whether it landed: posting
+		// again could leave two replies, so the retry stops and says why.
+		if unreadable != "" && a.EarlierOutcomeUnknown {
+			return Result{}, &RefusalError{Op: "slack chat.postMessage", Reason: "an earlier post reached Slack but its answer was lost, " +
+				"and the token cannot read the thread to check for that reply (conversations.replies: " + unreadable + "); " +
+				"grant channels:history (groups:history for a private channel) so a retry can check, or look in the thread, then annotate again"}
 		}
 	}
 	var resp struct {
@@ -147,9 +175,14 @@ func (s slack) Annotate(ctx context.Context, a Annotation) (Result, error) {
 	return Result{Status: Confirmed, ProviderRef: resp.TS, Detail: "Slack posted a reply in the thread (ts " + resp.TS + ")"}, nil
 }
 
-func (s slack) findReply(ctx context.Context, channel, thread, findingID string) (string, bool) {
+// findReply looks in the thread for the reply an earlier attempt posted. It
+// reports the reply's ts when found; unreadable names why Slack refused the
+// read (a token without the history scope answers missing_scope); err is a
+// failure worth retrying (the network, Slack's own errors, throttling).
+func (s slack) findReply(ctx context.Context, channel, thread, findingID string) (ts string, found bool, unreadable string, err error) {
 	var resp struct {
-		OK       bool `json:"ok"`
+		OK       bool   `json:"ok"`
+		Error    string `json:"error"`
 		Messages []struct {
 			TS   string `json:"ts"`
 			Text string `json:"text"`
@@ -157,15 +190,24 @@ func (s slack) findReply(ctx context.Context, channel, thread, findingID string)
 	}
 	q := url.Values{"channel": {channel}, "ts": {thread}, "limit": {"200"}}
 	if _, _, err := s.h.do(ctx, request{op: "slack conversations.replies", method: http.MethodGet, path: "/api/conversations.replies?" + q.Encode(),
-		auth: s.h.bearer, out: &resp}); err != nil || !resp.OK {
-		return "", false
+		auth: s.h.bearer, out: &resp}); err != nil {
+		if Retryable(err) {
+			return "", false, "", err
+		}
+		return "", false, err.Error(), nil
+	}
+	if !resp.OK {
+		if resp.Error == "ratelimited" {
+			return "", false, "", fmt.Errorf("slack conversations.replies: %w", ErrRetryable)
+		}
+		return "", false, first(resp.Error, "not ok"), nil
 	}
 	for _, m := range resp.Messages {
 		if strings.Contains(m.Text, Marker(findingID)) {
-			return m.TS, true
+			return m.TS, true, "", nil
 		}
 	}
-	return "", false
+	return "", false, "", nil
 }
 
 type jira struct{ h *httpClient }

@@ -48,6 +48,12 @@ type Stand struct {
 	uploads      int
 	unauthorized int
 	slackLimited int
+	// A174-L4: slackReadRefusal makes conversations.replies answer ok:false
+	// with it (a token without the history scope answers missing_scope);
+	// slackLoseAnswers makes the next n chat.postMessage calls post the
+	// reply and then drop the connection without answering.
+	slackReadRefusal string
+	slackLoseAnswers int
 	// A174-L2: noReferrersAPI makes the registry answer manifest puts without
 	// OCI-Subject, as a registry without the referrers API does; tokenUser,
 	// when set, puts the registry behind a token server that takes tokenUser
@@ -159,6 +165,23 @@ func (s *Stand) SeedImage(repo string, manifest []byte) string {
 	defer s.mu.Unlock()
 	s.images[repo+"@"+digest] = imageManifest{mediaType: "application/vnd.oci.image.manifest.v1+json", body: manifest}
 	return digest
+}
+
+// SlackRefuseReads makes conversations.replies answer ok:false with reason,
+// as Slack does for a token without the history scope ("missing_scope");
+// "" reads again (A174-L4).
+func (s *Stand) SlackRefuseReads(reason string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.slackReadRefusal = reason
+}
+
+// SlackLoseNextAnswers makes the next n chat.postMessage calls post their
+// reply and then drop the connection without answering (A174-L4).
+func (s *Stand) SlackLoseNextAnswers(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.slackLoseAnswers = n
 }
 
 // SlackLimitNext makes the next n chat.postMessage calls answer ratelimited.
@@ -291,6 +314,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func (s *Stand) slack(w http.ResponseWriter, r *http.Request, path string, body []byte) {
 	if strings.HasPrefix(path, "/api/conversations.replies") {
+		if s.slackReadRefusal != "" {
+			writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": s.slackReadRefusal})
+			return
+		}
 		key := r.URL.Query().Get("channel") + "/" + r.URL.Query().Get("ts")
 		replies, ok := s.slackThreads[key]
 		if !ok {
@@ -342,6 +369,15 @@ func (s *Stand) slack(w http.ResponseWriter, r *http.Request, path string, body 
 		return
 	}
 	s.slackThreads[key] = append(s.slackThreads[key], req.Text)
+	if s.slackLoseAnswers > 0 {
+		s.slackLoseAnswers--
+		if hijacker, ok := w.(http.Hijacker); ok {
+			if conn, _, err := hijacker.Hijack(); err == nil {
+				_ = conn.Close()
+				return
+			}
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "channel": req.Channel, "ts": req.ThreadTS + "-reply-" + strconv.Itoa(len(s.slackThreads[key]))})
 }
 

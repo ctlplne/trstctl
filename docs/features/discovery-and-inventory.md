@@ -821,6 +821,16 @@ reply in the Slack thread, a comment on the Jira issue, a failed commit status, 
 OCI referrer on the image. The note names the rule and the finding, never the secret,
 and the finding shows what the provider confirmed.
 
+A note is written once even when a delivery is retried (A174-L4). When a write reached
+the provider and its answer was lost, the finding records the note `unconfirmed` and the
+retry looks before writing again. A Slack retry reads the thread (`conversations.replies`)
+for its reply; if Slack refuses that read (a bot token without `channels:history`, or
+`groups:history` for a private channel, answers `missing_scope`) after such a lost answer,
+the retry stops and records `failed` naming the scope, rather than risk a second reply.
+A retry after an attempt that never reached Slack posts as usual. Settling a Slack note whose
+reply was never recorded likewise needs to read the thread: one Slack refuses to read is
+recorded failed with the scope, not reported as already gone.
+
 When the finding is resolved (recorded remediated or dismissed), its note is settled at
 the same provider so it stops telling people to rotate a credential that is already
 handled: the Slack reply is deleted, the Jira comment is rewritten to say the finding was

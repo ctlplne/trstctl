@@ -67,6 +67,10 @@ type Annotation struct {
 	// Retry reports that an earlier attempt may have reached the provider, so
 	// a provider without a natural key looks for its marker first.
 	Retry bool
+	// EarlierOutcomeUnknown reports that an earlier attempt's write reached
+	// the provider and its answer was lost (A174-L4). A retry that cannot
+	// look for what it wrote then refuses rather than write a second time.
+	EarlierOutcomeUnknown bool
 }
 
 // Result is what the provider confirmed.
@@ -112,6 +116,12 @@ func (e *StatusError) Error() string {
 
 // ErrRetryable marks a refusal that may succeed later (Slack's ratelimited).
 var ErrRetryable = errors.New("scanannotate: the provider asked to retry later")
+
+// ErrOutcomeUnknown is a write whose request reached the provider but whose
+// answer was lost (A174-L4): the provider may have acted. It stays
+// retryable; the retry looks for what the earlier attempt wrote before
+// writing again.
+var ErrOutcomeUnknown = errors.New("scanannotate: the request reached the provider but its answer was lost")
 
 // Retryable reports whether a failure may succeed if the row is delivered
 // again: throttling, the provider's own failures, and the network.

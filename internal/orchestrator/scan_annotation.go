@@ -45,6 +45,9 @@ const (
 	AnnotationConfirmed      = "confirmed"
 	AnnotationAlreadyPresent = "already_present"
 	AnnotationFailed         = "failed"
+	// AnnotationUnconfirmed is a write that reached the provider whose answer
+	// was lost (A174-L4); the next attempt settles it.
+	AnnotationUnconfirmed = "unconfirmed"
 	// A174-L1: a settled annotation.
 	AnnotationResolved        = "resolved"
 	AnnotationAlreadyResolved = "already_resolved"
@@ -125,6 +128,22 @@ func (o *Orchestrator) QueueFindingAnnotation(ctx context.Context, tenantID, req
 
 // RecordFindingAnnotation records what the provider confirmed, under an id
 // derived from the request so a redelivered row converges.
+// RecordFindingAnnotationUnconfirmed records that an attempt's write reached
+// the provider and its answer was lost (A174-L4), under an id of its own, so
+// the retry that settles it can tell and the final result still converges.
+func (o *Orchestrator) RecordFindingAnnotationUnconfirmed(ctx context.Context, tenantID string, in FindingAnnotationIntent, detail string) error {
+	payload, err := json.Marshal(projections.DiscoveryFindingProviderAction{
+		FindingID: in.FindingID, Action: in.action(), Status: AnnotationUnconfirmed, Provider: in.Provider,
+		Detail: detail, RequestID: in.RequestID,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = o.emitPrepared(ctx, events.Event{ID: DiscoveryRelayEventID(tenantID, in.RequestID, "scan-annotation-unconfirmed"),
+		Type: projections.EventDiscoveryFindingProviderAction, TenantID: tenantID, Data: payload})
+	return err
+}
+
 func (o *Orchestrator) RecordFindingAnnotation(ctx context.Context, tenantID string, in FindingAnnotationIntent, status, providerRef, detail string) error {
 	payload, err := json.Marshal(projections.DiscoveryFindingProviderAction{
 		FindingID: in.FindingID, Action: in.action(), Status: status, Provider: in.Provider,

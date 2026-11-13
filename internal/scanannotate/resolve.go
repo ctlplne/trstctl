@@ -60,8 +60,17 @@ func (s slack) Resolve(ctx context.Context, a Annotation, ref string) (Result, e
 	}
 	ts := strings.TrimSpace(ref)
 	if ts == "" {
-		found, ok := s.findReply(ctx, channel, thread, a.FindingID)
+		found, ok, unreadable, err := s.findReply(ctx, channel, thread, a.FindingID)
+		if err != nil {
+			return Result{}, err
+		}
 		if !ok {
+			// A174-L4: a thread the token cannot read is not a thread without
+			// the reply.
+			if unreadable != "" {
+				return Result{}, &RefusalError{Op: "slack conversations.replies", Reason: "the reply's ts was never recorded and the token cannot read " +
+					"the thread to find it (" + unreadable + "); grant channels:history (groups:history for a private channel), or delete the reply by hand"}
+			}
 			return Result{Status: AlreadyResolved, Detail: "Slack has no reply for this finding in the thread"}, nil
 		}
 		ts = found

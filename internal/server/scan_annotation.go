@@ -69,12 +69,21 @@ func (d *issuanceDispatcher) handleScanAnnotation(ctx context.Context, m orchest
 		FindingID: in.FindingID, Rule: in.Rule, Location: in.Location, DetectedAt: in.DetectedAt,
 		Object: annotationObject(in.Object), Retry: m.Attempts > 0,
 	}
+	if annotation.Retry && in.Action != orchestrator.FindingActionResolveAnnotation {
+		annotation.EarlierOutcomeUnknown = d.annotationOutcomeUnknown(ctx, m.TenantID, in)
+	}
 	if in.Action == orchestrator.FindingActionResolveAnnotation {
 		return d.resolveScanAnnotation(ctx, m, in, annotator, annotation, fail)
 	}
 	result, err := annotator.Annotate(ctx, annotation)
 	if err != nil {
 		if scanannotate.Retryable(err) {
+			if errors.Is(err, scanannotate.ErrOutcomeUnknown) {
+				if recErr := d.orch.RecordFindingAnnotationUnconfirmed(ctx, m.TenantID, in,
+					"the note reached the provider but its answer was lost; the next attempt looks for it before writing again"); recErr != nil {
+					return recErr
+				}
+			}
 			return fmt.Errorf("server: scan annotation: %w", err)
 		}
 		return fail(err.Error())
@@ -84,6 +93,28 @@ func (d *issuanceDispatcher) handleScanAnnotation(ctx context.Context, m orchest
 		status = orchestrator.AnnotationAlreadyPresent
 	}
 	return d.orch.RecordFindingAnnotation(ctx, m.TenantID, in, status, result.ProviderRef, result.Detail)
+}
+
+// annotationOutcomeUnknown reports whether this request's earlier attempt
+// left its annotation unconfirmed: its write reached the provider and the
+// answer was lost (A174-L4). A finding that cannot be read counts as unknown,
+// so a retry errs toward not writing twice.
+func (d *issuanceDispatcher) annotationOutcomeUnknown(ctx context.Context, tenantID string, in orchestrator.FindingAnnotationIntent) bool {
+	finding, err := d.store.GetDiscoveryFinding(ctx, tenantID, in.FindingID)
+	if err != nil {
+		return true
+	}
+	var meta struct {
+		ProviderActions map[string]struct {
+			Status    string `json:"status"`
+			RequestID string `json:"request_id"`
+		} `json:"provider_actions"`
+	}
+	if json.Unmarshal(finding.Metadata, &meta) != nil {
+		return true
+	}
+	state, ok := meta.ProviderActions[orchestrator.FindingActionAnnotate]
+	return ok && state.Status == orchestrator.AnnotationUnconfirmed && state.RequestID == in.RequestID
 }
 
 // resolveScanAnnotation settles a resolved finding's annotation at its
