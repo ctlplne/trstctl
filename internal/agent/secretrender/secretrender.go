@@ -99,6 +99,26 @@ type Template struct {
 	// LeaseTTL is the lifetime asked for each dynamic lease the template uses;
 	// one hour when zero.
 	LeaseTTL time.Duration `yaml:"lease_ttl" json:"lease_ttl"`
+	// LeaseRenewIncrement is how far each renewal reaches: once a third of it
+	// is left, a lease is renewed to expire this long after the renewal, never
+	// past its hard expiry (A238-L5). LeaseTTL when zero; at most LeaseTTL.
+	LeaseRenewIncrement time.Duration `yaml:"lease_renew_increment" json:"lease_renew_increment"`
+}
+
+// leaseTTL is the lifetime asked for at issue.
+func (t Template) leaseTTL() time.Duration {
+	if t.LeaseTTL <= 0 {
+		return time.Hour
+	}
+	return t.LeaseTTL
+}
+
+// renewIncrement is how long a renewed lease lives past its renewal.
+func (t Template) renewIncrement() time.Duration {
+	if t.LeaseRenewIncrement <= 0 {
+		return t.leaseTTL()
+	}
+	return t.LeaseRenewIncrement
 }
 
 // Hook reloads the application after a write: an argv run with no shell, or a
@@ -237,6 +257,9 @@ func (c *Config) Validate() error {
 		}
 		if t.OnStale != "" && t.OnStale != stateRemove && t.OnStale != stateKeep {
 			return fmt.Errorf("secretrender: template %s on_stale is remove or keep", t.Name)
+		}
+		if t.LeaseRenewIncrement != 0 && (t.LeaseRenewIncrement < time.Second || t.LeaseRenewIncrement > t.leaseTTL()) {
+			return fmt.Errorf("secretrender: template %s lease_renew_increment is between a second and lease_ttl (%s)", t.Name, t.leaseTTL())
 		}
 		if len(t.Reload.Command) > 0 && t.Reload.Signal != "" {
 			return fmt.Errorf("secretrender: template %s reloads with a command or a signal, not both", t.Name)
@@ -421,10 +444,7 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 			rendered[ls.BootstrapName] = ls.BootstrapVersion
 		}
 	}
-	ttl := t.LeaseTTL
-	if ttl <= 0 {
-		ttl = time.Hour
-	}
+	ttl, increment := t.leaseTTL(), t.renewIncrement()
 	// A lease is renewed in place while it can be; one that can't be renewed
 	// far enough is replaced. A file written again keeps every other lease: its
 	// credential is held in locked memory from its issue (A238-L4). A lease
@@ -445,13 +465,15 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 			}
 			continue
 		}
-		if ls.ExpiresAt.Sub(now) > ttl/3 {
+		if ls.ExpiresAt.Sub(now) > increment/3 {
 			continue
 		}
-		if exp, err := r.leases.RenewLease(ctx, ls.ID, ttl, ls.ID+"/renew/"+now.UTC().Format(time.RFC3339)); err == nil && exp.Sub(now) > ttl/3 {
-			ls.ExpiresAt = exp
-			st.Leases[ref] = ls
-			continue
+		if extend := renewExtension(ls, now, increment); extend > 0 {
+			if exp, err := r.leases.RenewLease(ctx, ls.ID, extend, ls.ID+"/renew/"+now.UTC().Format(time.RFC3339)); err == nil && exp.Sub(now) > increment/3 {
+				ls.ExpiresAt = exp
+				st.Leases[ref] = ls
+				continue
+			}
 		}
 		replace[ref] = true
 	}
@@ -483,7 +505,7 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 		}
 		for _, ref := range leaseRefs {
 			ls := st.Leases[ref]
-			if ls.BootstrapName != "" && (!st.Verified || ls.ExpiresAt.Sub(now) > ttl/3) {
+			if ls.BootstrapName != "" && (!st.Verified || ls.ExpiresAt.Sub(now) > increment/3) {
 				lease, err := r.fetchReplacement(ctx, ls)
 				if err != nil {
 					return err
@@ -563,6 +585,24 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 	}
 	r.logger.Info("secret template written", slog.String("template", t.Name), slog.String("destination", t.Destination))
 	return nil
+}
+
+// renewExtension is how far to extend a lease so that it expires increment
+// after now, never past its hard expiry: the control plane adds an extension
+// to the current expiry and refuses one past the hard expiry outright. Asking
+// for the whole TTL each time let a lease outlive its agent by four thirds of
+// it, and one near its hard expiry was replaced early (A238-L5). Zero means
+// the lease can't be extended.
+func renewExtension(ls leaseState, now time.Time, increment time.Duration) time.Duration {
+	target := now.Add(increment)
+	if !ls.HardExpiresAt.IsZero() && target.After(ls.HardExpiresAt) {
+		target = ls.HardExpiresAt
+	}
+	extend := target.Sub(ls.ExpiresAt).Truncate(time.Second)
+	if extend < time.Second {
+		return 0
+	}
+	return extend
 }
 
 // issueLease issues a lease for ref under a key persisted first, and queues

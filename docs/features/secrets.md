@@ -1811,8 +1811,11 @@ A template can also use a dynamic lease:
 `{{ lease "payments-db/readonly" "username" }}` and `{{ lease "payments-db/readonly" "password" }}`
 pick JSON fields of the lease's credential, and `{{ lease "provider/role" }}` takes all
 of it (`lease_ttl` sets the lifetime asked for; the token then needs `secrets:write`). A
-lease is renewed in place while it can be; when it can't be renewed far enough, a new
-lease is issued. A file written again for another reason (a static secret changed, or the
+lease is renewed in place while it can be: once a third of its renew increment is left,
+it is renewed to expire that long after the renewal, never past its hard expiry
+(`lease_renew_increment`, A238-L5: the TTL when unset, at most the TTL), so a lease
+outlives a stopped agent by one increment at most. When it can't be renewed far enough,
+or its hard expiry is near, a new lease is issued. A file written again for another reason (a static secret changed, or the
 file went) keeps its live leases: the agent holds each lease's credential in locked memory
 from its issue until the lease is replaced, the file goes, or the agent stops (A238-L4),
 and the state file never holds it. A restarted agent holds none, so the next time it must

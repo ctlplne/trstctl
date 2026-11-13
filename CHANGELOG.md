@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A secret renderer renews a lease to expire one renew increment after the renewal (A238-L5): it asked for the whole
+  TTL on top of the lease's current expiry, so a lease could outlive a stopped agent by four thirds of its TTL, and a
+  renewal that would pass the hard expiry was refused and the lease replaced early; it now asks only up to the hard
+  expiry and replaces the lease once that is near. `lease_renew_increment` (a second up to `lease_ttl`, the TTL when
+  unset) sets how far each renewal reaches.
 - A secret renderer keeps its live leases when it writes a file again (A238-L4): each lease credential is held in
   locked memory from its issue, so a static secret's rotation, or a removed file, rewrites the file with the same lease
   instead of issuing new ones and revoking the old; a lease that can't be renewed is still replaced on its own, and a
