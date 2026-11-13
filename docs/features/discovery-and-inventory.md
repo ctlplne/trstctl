@@ -1054,13 +1054,19 @@ user's keys and each key's last use, and records one `cloud_access_key` finding 
 | Metadata | Meaning |
 |---|---|
 | `user`, `access_key_id`, `status` | The key's owner, its ID and `Active` or `Inactive` |
+| `user_arn` | The owner's ARN, as `ListUsers` reports it (M3-L3) |
 | `created_at`, `age_days` | When the key was created and how old it is |
 | `last_used_at`, `last_used_service`, `last_used_region` | Its last use, as IAM records it; `never_used: true` when it has none |
 | `unused_days`, `stale` | Days since its last use (or since creation when never used); `stale` is true for an **active** key unused for 90 days or more |
 
 A stale key carries risk score 80, any other key 30. A finding holds no secret access key
 (IAM never returns one after creation) and nothing else from the account. The keys show
-in the NHI inventory as `api_key` rows, and an inactive key is never flagged. The source
+in the NHI inventory as `api_key` rows, and an inactive key is never flagged. In the access
+graph each key `GRANTS_ACCESS` the principal it acts as (M3-L3): an AWS key its IAM user
+(`res:aws_iam_user:<ARN>`), a Google Cloud key its service account and an Entra secret its
+application (by the application's object id, `app_object_id`), named as the graph names a
+dynamic-secret lease's target, so a key and a lease reaching the same principal meet there.
+A key whose finding does not name its principal exactly gets no link. The source
 reaches only its endpoint: a private endpoint needs `allow_private_endpoint` with
 `private_egress_cidrs`, and with the air-gap guard on (`air_gap.enabled`) a run reaches
 only hosts the guard allows, so an account outside them fails the run and records

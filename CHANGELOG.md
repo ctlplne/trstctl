@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- The access graph links each discovered cloud access key to the principal it acts as (M3-L3): an AWS key to its IAM
+  user by ARN (now recorded from `ListUsers` as `user_arn`), a Google Cloud key to its service account and an Entra
+  secret to its application (by object id, `app_object_id`), on the same nodes a dynamic-secret lease reaches.
 - A misuse finding opens an incident for its API token (M2-L3, Enterprise governance): one open incident per token,
   later findings counting toward it; `GET /api/v1/misuse/incidents` lists them and `POST
   /api/v1/misuse/incidents/{id}/close` closes one with a resolution (token revoked, expected use, other) and who closed

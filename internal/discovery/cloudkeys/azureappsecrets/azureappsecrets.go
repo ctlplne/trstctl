@@ -51,10 +51,13 @@ type Config struct {
 type Secret struct {
 	Application string
 	AppID       string
-	KeyID       string
-	Name        string
-	Created     time.Time
-	Expires     *time.Time
+	// ObjectID is the application's directory object id (M3-L3), the id the
+	// access graph names an Azure application by.
+	ObjectID string
+	KeyID    string
+	Name     string
+	Created  time.Time
+	Expires  *time.Time
 	// LastSignIn is the secret's last sign-in Entra recorded; nil when it
 	// recorded none. LastUseKnown is false when the sign-in activity could
 	// not be read, so a missing use is not taken for non-use.
@@ -179,7 +182,7 @@ func (r *Reader) Secrets(ctx context.Context) (Result, error) {
 				if c.KeyID == "" {
 					continue
 				}
-				s := Secret{Application: app.DisplayName, AppID: app.AppID, KeyID: c.KeyID, Name: c.DisplayName, Created: c.StartDateTime.UTC()}
+				s := Secret{Application: app.DisplayName, AppID: app.AppID, ObjectID: app.ID, KeyID: c.KeyID, Name: c.DisplayName, Created: c.StartDateTime.UTC()}
 				if !c.EndDateTime.IsZero() {
 					expires := c.EndDateTime.UTC()
 					s.Expires = &expires

@@ -225,10 +225,10 @@ func (s *m3l1IAMStandIn) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch form.Get("Action") {
 	case "ListUsers":
 		if form.Get("Marker") == "" {
-			_, _ = io.WriteString(w, `<ListUsersResponse><ListUsersResult><Users><member><UserName>m3-ci-deployer</UserName></member></Users><IsTruncated>true</IsTruncated><Marker>page-2</Marker></ListUsersResult></ListUsersResponse>`)
+			_, _ = io.WriteString(w, `<ListUsersResponse><ListUsersResult><Users><member><UserName>m3-ci-deployer</UserName><Arn>arn:aws:iam::123456789012:user/ci/m3-ci-deployer</Arn></member></Users><IsTruncated>true</IsTruncated><Marker>page-2</Marker></ListUsersResult></ListUsersResponse>`)
 			return
 		}
-		_, _ = io.WriteString(w, `<ListUsersResponse><ListUsersResult><Users><member><UserName>m3-backup-job</UserName></member></Users><IsTruncated>false</IsTruncated></ListUsersResult></ListUsersResponse>`)
+		_, _ = io.WriteString(w, `<ListUsersResponse><ListUsersResult><Users><member><UserName>m3-backup-job</UserName><Arn>arn:aws:iam::123456789012:user/m3-backup-job</Arn></member></Users><IsTruncated>false</IsTruncated></ListUsersResult></ListUsersResponse>`)
 	case "ListAccessKeys":
 		var keys string
 		switch form.Get("UserName") {
@@ -360,4 +360,80 @@ func TestServedCloudAccessKeyDiscoveryReadsAWSKeysOnAnIAMStandInM3L1(t *testing.
 			t.Fatal("the secret access key travelled in a request")
 		}
 	}
+}
+
+// M3-L3 Done-when (served): after an aws-iam cloud access key discovery run
+// against the IAM stand-in (ListUsers reports each user's ARN, as IAM's
+// documented response carries it), the graph links each discovered key to
+// its IAM user: key GRANTS_ACCESS res:aws_iam_user:<ARN>, so whoever holds
+// the key is shown acting as that user.
+func TestServedCloudAccessKeyActsAsItsIAMUserInTheGraphM3L3(t *testing.T) {
+	iam := &m3l1IAMStandIn{now: time.Now().UTC()}
+	srv := httptest.NewServer(iam)
+	t.Cleanup(srv.Close)
+	const signingSecret = "m3l3-standin-signing-value"        // #nosec G101 -- the test's own stand-in signing value, not a credential (CWE-798)
+	t.Setenv("TRSTCTL_M3L3_IAM_ACCESS_KEY_ID", "m3l1-reader") // the stand-in admits this access key ID
+	t.Setenv("TRSTCTL_M3L3_IAM_SECRET_ACCESS_KEY", signingSecret)
+	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+		"env:TRSTCTL_M3L3_IAM_ACCESS_KEY_ID", "env:TRSTCTL_M3L3_IAM_SECRET_ACCESS_KEY"))
+	ctx := t.Context()
+	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "graph:read", string(authz.PrivateEgress))
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", writer, map[string]any{
+		"name": "aws-iam-keys-graph", "kind": "cloud_access_key", "config": map[string]any{"providers": []map[string]any{{ // #nosec G101 -- credential references only; no credential value enters the config (CWE-798)
+			"provider": "aws-iam", "endpoint": srv.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, srv.URL)},
+			"access_key_id_ref": "env:TRSTCTL_M3L3_IAM_ACCESS_KEY_ID", "secret_access_key_ref": "env:TRSTCTL_M3L3_IAM_SECRET_ACCESS_KEY",
+		}}},
+	})
+	var source struct {
+		ID string `json:"id"`
+	}
+	if status != http.StatusCreated || json.Unmarshal(body, &source) != nil || source.ID == "" {
+		t.Fatalf("create the source: %d %s", status, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/runs", writer, "m3l3-run", map[string]any{"source_id": source.ID})
+	if status != http.StatusCreated {
+		t.Fatalf("queue the run: %d %s", status, body)
+	}
+	if err := h.srv.Drain(ctx); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/graph", writer, nil)
+	var g struct {
+		Nodes []struct {
+			ID    string            `json:"id"`
+			Attrs map[string]string `json:"attrs"`
+		} `json:"nodes"`
+		Edges []struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+			Type string `json:"type"`
+		} `json:"edges"`
+	}
+	if status != http.StatusOK || json.Unmarshal(body, &g) != nil {
+		t.Fatalf("graph: %d %s", status, body)
+	}
+	keyNodes := map[string]string{} // discovery ref -> node id
+	for _, n := range g.Nodes {
+		if n.Attrs["credential_kind"] == "cloud_access_key" {
+			keyNodes[n.Attrs["discovery_ref"]] = n.ID
+		}
+	}
+	edges := map[string]bool{}
+	for _, e := range g.Edges {
+		edges[e.From+" "+e.Type+" "+e.To] = true
+	}
+	for ref, arn := range map[string]string{
+		"aws-iam:m3-ci-deployer:m3l1-key-used": "arn:aws:iam::123456789012:user/ci/m3-ci-deployer",
+		"aws-iam:m3-backup-job:m3l1-key-never": "arn:aws:iam::123456789012:user/m3-backup-job",
+		"aws-iam:m3-backup-job:m3l1-key-off":   "arn:aws:iam::123456789012:user/m3-backup-job",
+	} {
+		node, ok := keyNodes[ref]
+		if !ok {
+			t.Fatalf("no graph node for the key %s: %s", ref, body)
+		}
+		if want := node + " GRANTS_ACCESS res:aws_iam_user:" + arn; !edges[want] {
+			t.Fatalf("missing %q", want)
+		}
+	}
+	t.Logf("M3L3_KEY_PRINCIPAL_OK keys=%d", len(keyNodes))
 }

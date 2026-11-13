@@ -36,10 +36,10 @@ func (d *iamDouble) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch form.Get("Action") {
 	case "ListUsers":
 		if form.Get("Marker") == "" {
-			_, _ = io.WriteString(w, `<ListUsersResponse><ListUsersResult><Users><member><UserName>deploy-bot</UserName></member></Users><IsTruncated>true</IsTruncated><Marker>page-2</Marker></ListUsersResult></ListUsersResponse>`)
+			_, _ = io.WriteString(w, `<ListUsersResponse><ListUsersResult><Users><member><UserName>deploy-bot</UserName><Arn>arn:aws:iam::123456789012:user/deploy-bot</Arn></member></Users><IsTruncated>true</IsTruncated><Marker>page-2</Marker></ListUsersResult></ListUsersResponse>`)
 			return
 		}
-		_, _ = io.WriteString(w, `<ListUsersResponse><ListUsersResult><Users><member><UserName>backup-job</UserName></member></Users><IsTruncated>false</IsTruncated></ListUsersResult></ListUsersResponse>`)
+		_, _ = io.WriteString(w, `<ListUsersResponse><ListUsersResult><Users><member><UserName>backup-job</UserName><Arn>arn:aws:iam::123456789012:user/backup-job</Arn></member></Users><IsTruncated>false</IsTruncated></ListUsersResult></ListUsersResponse>`)
 	case "ListAccessKeys":
 		switch form.Get("UserName") {
 		case "backup-job":
@@ -107,6 +107,10 @@ func TestKeysReadsAgeAndLastUseAndFlagsNinetyDaysUnusedM3(t *testing.T) {
 	}
 	if fresh.User != "deploy-bot" || fresh.Stale(now) || fresh.LastUsedService != "s3" {
 		t.Fatalf("a key used two days ago = %+v stale=%v", fresh, fresh.Stale(now))
+	}
+	// M3-L3: each key names its user's ARN as ListUsers reported it.
+	if old.UserARN != "arn:aws:iam::123456789012:user/backup-job" || fresh.UserARN != "arn:aws:iam::123456789012:user/deploy-bot" {
+		t.Fatalf("user ARNs = %q, %q", old.UserARN, fresh.UserARN)
 	}
 	// Exactly 90 days unused is the threshold; a day short of it is not.
 	if !old.Stale(old.LastUsed.Add(StaleAfter)) || old.Stale(old.LastUsed.Add(StaleAfter-24*time.Hour)) {

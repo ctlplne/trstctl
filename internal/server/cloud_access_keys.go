@@ -134,7 +134,7 @@ func readCloudAccessKeys(ctx context.Context, p cloudCertificateProviderConfig, 
 		for _, k := range keys {
 			out = append(out, cloudAccessKey{provider: cloudkeys.ProviderAWSIAM, owner: k.User, keyID: k.AccessKeyID, status: k.Status,
 				created: k.Created, lastUsed: k.LastUsed, lastUseKnown: true, stale: k.Stale(now), unused: k.Unused(now),
-				extra: map[string]any{"last_used_service": k.LastUsedService, "last_used_region": k.LastUsedRegion}})
+				extra: map[string]any{"last_used_service": k.LastUsedService, "last_used_region": k.LastUsedRegion, "user_arn": k.UserARN}})
 		}
 		return cloudAccessKeyRead{keys: out, host: host}, err
 	case cloudkeys.ProviderGCPIAM:
@@ -225,7 +225,7 @@ func readAzureAppSecrets(ctx context.Context, p cloudCertificateProviderConfig, 
 	for _, s := range res.Secrets {
 		out = append(out, cloudAccessKey{provider: cloudkeys.ProviderAzureEntra, owner: s.Application, keyID: s.KeyID, status: s.Status(now),
 			created: s.Created, expires: s.Expires, lastUsed: s.LastSignIn, lastUseKnown: s.LastUseKnown,
-			stale: s.Stale(now), unused: s.Unused(now), extra: map[string]any{"app_id": s.AppID, "secret_name": s.Name}})
+			stale: s.Stale(now), unused: s.Unused(now), extra: map[string]any{"app_id": s.AppID, "app_object_id": s.ObjectID, "secret_name": s.Name}})
 	}
 	return cloudAccessKeyRead{keys: out, host: u.Host, lastUseErr: res.LastUseError}, nil
 }

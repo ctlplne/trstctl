@@ -334,6 +334,8 @@ func BuildWith(ctx context.Context, st *store.Store, tenantID string, opts Build
 				Confidence: "observed",
 			})
 		}
+		// M3-L3: a cloud access key acts as its principal.
+		addCloudKeyPrincipal(g, f, nid)
 		if spki := storedPrivateKeySPKI(f); spki != "" {
 			for _, cert := range certificatesForKey(spki) {
 				g.AddEdge(Edge{From: nid, To: cert, Type: EdgeKeyOf, Source: "stored private key matches the certificate's public key", Confidence: "observed"})

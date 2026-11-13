@@ -51,7 +51,10 @@ type Config struct {
 
 // Key is one IAM user access key.
 type Key struct {
-	User            string
+	User string
+	// UserARN is the IAM user's ARN as ListUsers reports it (M3-L3), so the
+	// key can be tied to exactly that principal.
+	UserARN         string
 	AccessKeyID     string
 	Status          string
 	Created         time.Time
@@ -109,6 +112,7 @@ func New(cfg Config) (*Reader, error) {
 // order, at most MaxKeys.
 func (r *Reader) Keys(ctx context.Context) ([]Key, error) {
 	var users []string
+	arns := map[string]string{}
 	marker := ""
 	for {
 		params := url.Values{"Action": {"ListUsers"}, "MaxItems": {"1000"}}
@@ -121,6 +125,7 @@ func (r *Reader) Keys(ctx context.Context) ([]Key, error) {
 		}
 		for _, u := range page.Users {
 			users = append(users, u.UserName)
+			arns[u.UserName] = u.Arn
 		}
 		if !page.IsTruncated || page.Marker == "" {
 			break
@@ -136,7 +141,7 @@ func (r *Reader) Keys(ctx context.Context) ([]Key, error) {
 		}
 		for _, m := range listed.Keys {
 			created, _ := time.Parse(time.RFC3339, m.CreateDate)
-			key := Key{User: user, AccessKeyID: m.AccessKeyID, Status: m.Status, Created: created.UTC()}
+			key := Key{User: user, UserARN: arns[user], AccessKeyID: m.AccessKeyID, Status: m.Status, Created: created.UTC()}
 			var used getAccessKeyLastUsedResponse
 			if err := r.call(ctx, url.Values{"Action": {"GetAccessKeyLastUsed"}, "AccessKeyId": {m.AccessKeyID}}, &used); err != nil {
 				return nil, err
@@ -163,6 +168,7 @@ func (r *Reader) Keys(ctx context.Context) ([]Key, error) {
 type listUsersResponse struct {
 	Users []struct {
 		UserName string `xml:"UserName"`
+		Arn      string `xml:"Arn"`
 	} `xml:"ListUsersResult>Users>member"`
 	IsTruncated bool   `xml:"ListUsersResult>IsTruncated"`
 	Marker      string `xml:"ListUsersResult>Marker"`

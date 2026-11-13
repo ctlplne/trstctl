@@ -9294,9 +9294,8 @@ it, and with the air-gap guard enforcing the run reaches nothing.
 What comes next:
 - Against a real AWS account (IAM's own last-used tracking, a production account's
   scale) — a live proof, Track B.
-- The access graph does not yet link a key to its IAM user as a cloud principal, and
-  remediation does not yet offer to replace a stale key with a dynamic AWS credential
-  from the finding.
+- Remediation does not yet offer to replace a stale key with a dynamic AWS credential
+  from the finding. (The access graph links each key to its principal, M3-L3.)
 
 ## Cloud KMS keys and load-balancer TLS policies (X4) — served
 
