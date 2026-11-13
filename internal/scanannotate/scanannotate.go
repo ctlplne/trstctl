@@ -55,6 +55,13 @@ type Object struct {
 	// OCI registry.
 	Repository string `json:"repository,omitempty"`
 	Digest     string `json:"digest,omitempty"`
+	// A file in a repository at a commit (A174-L5): Kind is
+	// ObjectKindRepositoryFile, Repo and CommitSHA name the commit, Ref the
+	// branch or tag the push was to, Path and Line the place in the file.
+	Kind string `json:"kind,omitempty"`
+	Ref  string `json:"ref,omitempty"`
+	Path string `json:"path,omitempty"`
+	Line string `json:"line,omitempty"`
 }
 
 // Annotation is what the provider is told about one finding.

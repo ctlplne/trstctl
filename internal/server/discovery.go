@@ -1501,11 +1501,17 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 			repoFields["known_decoy"] = map[string]string{"id": decoy.ID, "name": decoy.Name}
 			risk = secretscan.KnownDecoyRiskScore
 		}
+		// A174-L5: a scan with an annotation connection records where the
+		// credential sits, so it can be written back through code scanning.
+		object := repositoryFileObject(cfg, target.Path, f)
+		if object != nil {
+			repoFields["provider_object"], repoFields["annotation_provider"] = object, cfg.AnnotationProvider()
+		}
 		meta, err := json.Marshal(repoFields)
 		if err != nil {
 			return rep, "", "", err
 		}
-		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
+		recorded, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
 			RunID:       run.ID,
 			SourceID:    src.ID,
 			Kind:        "leaked_secret",
@@ -1514,7 +1520,11 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 			Fingerprint: firstNonEmpty(f.Fingerprint, ref),
 			RiskScore:   risk,
 			Metadata:    json.RawMessage(meta),
-		}); err != nil {
+		})
+		if err != nil {
+			return rep, "", "", err
+		}
+		if err := d.autoAnnotateAt(ctx, tenantID, cfg.Annotation, cfg.AnnotationProvider(), recorded, f.RuleID, object); err != nil {
 			return rep, "", "", err
 		}
 		rep.Discovered++

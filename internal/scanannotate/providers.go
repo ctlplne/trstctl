@@ -262,6 +262,9 @@ func (j jira) Annotate(ctx context.Context, a Annotation) (Result, error) {
 type github struct{ h *httpClient }
 
 func (g github) Annotate(ctx context.Context, a Annotation) (Result, error) {
+	if a.Object.Kind == ObjectKindRepositoryFile {
+		return g.uploadCodeScanning(ctx, a, false)
+	}
 	repo, sha := strings.Trim(strings.TrimSpace(a.Object.Repo), "/"), strings.TrimSpace(a.Object.CommitSHA)
 	parts := strings.Split(repo, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || sha == "" {

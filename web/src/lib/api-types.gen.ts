@@ -12164,6 +12164,7 @@ export interface SecretRepositoryWebhookReceipt {
 }
 
 export interface SecretRepositoryWebhookRequest {
+  annotation?: { allow_private_endpoint?: boolean; auto?: boolean; base_url: string; private_egress_cidrs?: string[]; token_ref: string };
   checkout_path?: string;
   clone_url?: string;
   commit_sha?: string;

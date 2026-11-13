@@ -66,6 +66,19 @@ type RepositoryScanConfig struct {
 	// CredentialUsername is the user name credential_ref's token clones
 	// with; empty uses the provider's (DefaultRepositoryUsername).
 	CredentialUsername string `json:"credential_username,omitempty"`
+	// Annotation writes each finding back through GitHub code scanning
+	// (A174-L5): the connection only; the repository, commit and ref are the
+	// scan's own.
+	Annotation *AnnotationConfig `json:"annotation,omitempty"`
+}
+
+// AnnotationProvider names the provider API a repository scan's findings
+// are annotated at: github (code scanning), or "" without an annotation.
+func (c RepositoryScanConfig) AnnotationProvider() string {
+	if c.Annotation == nil || strings.ToLower(strings.TrimSpace(c.Provider)) != "github" {
+		return ""
+	}
+	return "github"
 }
 
 // RepositoryTarget is the local path a worker can pass to Gitleaks.

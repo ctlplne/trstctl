@@ -38,6 +38,41 @@ describe("finding annotation at the provider", () => {
     expect(onAnnotate).toHaveBeenCalledTimes(1);
   });
 
+  // A174-L5: a first-party GitHub repository scan's finding names its file
+  // and commit and annotates through code scanning.
+  it("annotates a repository finding through GitHub code scanning", async () => {
+    const user = userEvent.setup();
+    const onAnnotate = vi.fn().mockResolvedValue(undefined);
+    render(
+      <FindingAnnotation
+        finding={
+          {
+            id: "finding-2",
+            kind: "leaked_secret",
+            ref: "generic-api-key@config/deploy.env",
+            metadata: {
+              rule_id: "generic-api-key",
+              annotation_provider: "github",
+              provider_object: {
+                kind: "repository_file",
+                repo: "acme/payments",
+                commit_sha: "c174c174",
+                ref: "refs/heads/main",
+                path: "config/deploy.env",
+                line: "2",
+              },
+            },
+          } as unknown as DiscoveryFinding
+        }
+        busy={false}
+        onAnnotate={onAnnotate}
+      />,
+    );
+    expect(screen.getByText("At github: config/deploy.env:2 acme/payments@c174c174")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Annotate at github" }));
+    expect(onAnnotate).toHaveBeenCalledTimes(1);
+  });
+
   it("explains a finding with no known place and ignores other findings", () => {
     const { rerender } = render(<FindingAnnotation finding={finding()} busy={false} onAnnotate={vi.fn()} />);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();

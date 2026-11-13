@@ -142,6 +142,9 @@ func (j jira) Resolve(ctx context.Context, a Annotation, ref string) (Result, er
 
 // Resolve turns the commit status to success under the same context.
 func (g github) Resolve(ctx context.Context, a Annotation, _ string) (Result, error) {
+	if a.Object.Kind == ObjectKindRepositoryFile {
+		return g.uploadCodeScanning(ctx, a, true)
+	}
 	repo, sha := strings.Trim(strings.TrimSpace(a.Object.Repo), "/"), strings.TrimSpace(a.Object.CommitSHA)
 	parts := strings.Split(repo, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || sha == "" {

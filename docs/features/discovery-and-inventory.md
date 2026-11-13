@@ -831,11 +831,22 @@ A retry after an attempt that never reached Slack posts as usual. Settling a Sla
 reply was never recorded likewise needs to read the thread: one Slack refuses to read is
 recorded failed with the scope, not reported as already gone.
 
+A first-party GitHub repository scan can write back too (A174-L5): send the push to
+`POST /api/v1/secrets/scans/repositories/github/webhook` with the same `annotation` block
+(`base_url` `https://api.github.com`, a token reference with code scanning write access,
+optionally `auto`) and the push's `commit_sha` and `ref`. Each finding then records the
+file and line in the repository, and **Annotate at provider** uploads it to GitHub code
+scanning as an analysis of its own (category `trstctl/leaked-secret/<finding>`): an
+alert naming the rule, the file and the line, never the secret. A GitLab or Bitbucket
+push asking for an annotation is refused: they take scan reports only from their own
+pipelines.
+
 When the finding is resolved (recorded remediated or dismissed), its note is settled at
 the same provider so it stops telling people to rotate a credential that is already
 handled: the Slack reply is deleted, the Jira comment is rewritten to say the finding was
 resolved, the commit status turns to success under the same context, and the image
-referrer is deleted. The finding shows the settlement under `provider_actions.resolve_annotation`.
+referrer is deleted, and a code scanning analysis is uploaded again with no result, which
+closes its alert. The finding shows the settlement under `provider_actions.resolve_annotation`.
 
 ### Cloud secret managers
 

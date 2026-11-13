@@ -8072,6 +8072,12 @@ func componentSchemas() map[string]*Schema {
 		"commit_sha": str(), "event": str(),
 		"credential_ref":      {Type: "string", Description: "OD-1: a private repository's clone credential, a file: or tenant secret:// reference opened for the clone alone and sent only to the https clone_url's origin"},
 		"credential_username": {Type: "string", Description: "the user name the credential_ref token clones with; default by provider: x-access-token (GitHub), oauth2 (GitLab), x-token-auth (Bitbucket)"},
+		"annotation": {Type: "object", Description: "A174-L5: GitHub only — write each finding back as a code scanning analysis of its own for the push's commit_sha and ref (refs/...), with a token reference that may upload code scanning results.",
+			Properties: map[string]*Schema{
+				"base_url": str(), "token_ref": str(),
+				"allow_private_endpoint": {Type: "boolean"}, "private_egress_cidrs": {Type: "array", Items: str()},
+				"auto": {Type: "boolean", Description: "Upload each new finding without an operator."},
+			}, Required: []string{"base_url", "token_ref"}},
 	}, "repository")
 	secretRepoWebhookReceipt := object(map[string]*Schema{
 		"capability": str(), "provider": str(), "repository": str(), "source_id": uuid(),

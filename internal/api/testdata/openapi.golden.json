@@ -56663,6 +56663,35 @@
       },
       "SecretRepositoryWebhookRequest": {
         "properties": {
+          "annotation": {
+            "description": "A174-L5: GitHub only — write each finding back as a code scanning analysis of its own for the push's commit_sha and ref (refs/...), with a token reference that may upload code scanning results.",
+            "properties": {
+              "allow_private_endpoint": {
+                "type": "boolean"
+              },
+              "auto": {
+                "description": "Upload each new finding without an operator.",
+                "type": "boolean"
+              },
+              "base_url": {
+                "type": "string"
+              },
+              "private_egress_cidrs": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "token_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "base_url",
+              "token_ref"
+            ],
+            "type": "object"
+          },
           "checkout_path": {
             "type": "string"
           },

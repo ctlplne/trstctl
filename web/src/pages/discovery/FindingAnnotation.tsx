@@ -16,12 +16,19 @@ function text(value: unknown): string {
 export function FindingAnnotation({ finding, busy, onAnnotate }: { finding: DiscoveryFinding; busy: boolean; onAnnotate: () => Promise<void> }) {
   const { t } = useTranslation();
   const meta = (finding.metadata ?? {}) as Record<string, unknown>;
-  if (finding.kind !== "leaked_secret" || meta.capability !== "CAP-SCAN-04") return null;
   const object = (meta.provider_object ?? {}) as Record<string, unknown>;
+  // A174-L5: a first-party GitHub repository scan writes back through code scanning.
+  const repositoryFile = text(object.kind) === "repository_file";
+  if (finding.kind !== "leaked_secret" || (meta.capability !== "CAP-SCAN-04" && !repositoryFile)) return null;
   const provider = text(meta.annotation_provider);
   const actions = (meta.provider_actions ?? {}) as Record<string, AnnotationState>;
   const state = actions.annotate;
   const place =
+    (repositoryFile
+      ? [[text(object.path), text(object.line)].filter(Boolean).join(":"), [text(object.repo), text(object.commit_sha)].filter(Boolean).join("@")]
+          .filter(Boolean)
+          .join(" ")
+      : "") ||
     text(object.issue_key) ||
     [text(object.channel), text(object.message_ts)].filter(Boolean).join(" ") ||
     [text(object.repo), text(object.commit_sha)].filter(Boolean).join("@") ||

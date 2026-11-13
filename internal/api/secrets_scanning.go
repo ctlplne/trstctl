@@ -68,6 +68,9 @@ type secretRepoScanWebhookRequest struct {
 	// CredentialUsername goes with credential_ref's token (OD-1); empty uses
 	// the provider's: x-access-token, oauth2 or x-token-auth.
 	CredentialUsername string `json:"credential_username,omitempty"`
+	// Annotation writes each finding back through GitHub code scanning
+	// (A174-L5).
+	Annotation *secretscan.AnnotationConfig `json:"annotation,omitempty"`
 }
 
 type secretRepoScanWebhookResponse struct {
@@ -619,6 +622,9 @@ func (a *API) receiveSecretRepoWebhook(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
+		if err := a.requireAnnotationAllowed(ctx, tenantID, req.Annotation); err != nil {
+			return 0, nil, err
+		}
 		return a.queueSecretRepoScan(ctx, tenantID, provider, req)
 	})
 }
@@ -896,7 +902,7 @@ func secretRepoScanConfig(provider string, req secretRepoScanWebhookRequest) (se
 	if credentialUser != "" && (credentialRef == "" || len(credentialUser) > 128 || strings.ContainsAny(credentialUser, ":\r\n")) {
 		return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "credential_username goes with a credential_ref and is a user name of at most 128 characters")
 	}
-	return secretscan.RepositoryScanConfig{
+	cfg := secretscan.RepositoryScanConfig{
 		Provider:           provider,
 		Repository:         repo,
 		CloneURL:           cloneURL,
@@ -906,7 +912,13 @@ func secretRepoScanConfig(provider string, req secretRepoScanWebhookRequest) (se
 		Event:              strings.TrimSpace(req.Event),
 		CredentialRef:      credentialRef,
 		CredentialUsername: credentialUser,
-	}, nil
+		Annotation:         req.Annotation,
+	}
+	// A174-L5: GitHub code scanning takes the findings back.
+	if err := secretscan.ValidateRepositoryAnnotation(cfg); err != nil {
+		return secretscan.RepositoryScanConfig{}, errStatusFrom(http.StatusBadRequest, err)
+	}
+	return cfg, nil
 }
 
 func thirdPartySecretScanConfig(provider string, req thirdPartySecretScanIngestRequest) (secretscan.ThirdPartyScanConfig, error) {

@@ -27628,6 +27628,15 @@ export interface components {
             status: string;
         };
         SecretRepositoryWebhookRequest: {
+            /** @description A174-L5: GitHub only — write each finding back as a code scanning analysis of its own for the push's commit_sha and ref (refs/...), with a token reference that may upload code scanning results. */
+            annotation?: {
+                allow_private_endpoint?: boolean;
+                /** @description Upload each new finding without an operator. */
+                auto?: boolean;
+                base_url: string;
+                private_egress_cidrs?: string[];
+                token_ref: string;
+            };
             checkout_path?: string;
             clone_url?: string;
             commit_sha?: string;

@@ -10,6 +10,8 @@
 package scanannotatetest
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -21,6 +23,14 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 )
+
+// CodeScanningResult is one alert a code scanning analysis carries.
+type CodeScanningResult struct {
+	Rule    string
+	Path    string
+	Line    int
+	Message string
+}
 
 // Status is one commit status written to GitHub or GitLab.
 type Status struct {
@@ -47,6 +57,10 @@ type Stand struct {
 	referrerRefs map[string][]string
 	uploads      int
 	unauthorized int
+	// codeScanning is the latest analysis per repository and category
+	// (A174-L5), as GitHub keeps it.
+	codeScanning map[string][]CodeScanningResult
+	sarifUploads int
 	slackLimited int
 	// A174-L4: slackReadRefusal makes conversations.replies answer ok:false
 	// with it (a token without the history scope answers missing_scope);
@@ -123,7 +137,7 @@ type imageManifest struct {
 func New(token, jiraUser string) *Stand {
 	s := &Stand{token: token, jiraUser: jiraUser, slackThreads: map[string][]string{}, jiraIssues: map[string][]string{},
 		statuses: map[string][]Status{}, commits: map[string]bool{}, images: map[string]imageManifest{}, blobs: map[string]bool{},
-		referrers: map[string][]map[string]string{}, referrerRefs: map[string][]string{}}
+		referrers: map[string][]map[string]string{}, referrerRefs: map[string][]string{}, codeScanning: map[string][]CodeScanningResult{}}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.handle))
 	return s
 }
@@ -211,6 +225,22 @@ func (s *Stand) JiraComments(key string) []string {
 	return append([]string(nil), s.jiraIssues[key]...)
 }
 
+// CodeScanning returns the results of the latest analysis uploaded for a
+// repository under category (A174-L5), and whether one was uploaded.
+func (s *Stand) CodeScanning(repo, category string) ([]CodeScanningResult, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	results, ok := s.codeScanning[repo+"#"+category]
+	return append([]CodeScanningResult(nil), results...), ok
+}
+
+// SARIFUploads counts the code scanning uploads taken.
+func (s *Stand) SARIFUploads() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sarifUploads
+}
+
 // Statuses returns the commit statuses written at "github" or "gitlab".
 func (s *Stand) Statuses(host, repo, sha string) []Status {
 	s.mu.Lock()
@@ -280,6 +310,8 @@ func (s *Stand) handle(w http.ResponseWriter, r *http.Request) {
 		s.slack(w, r, path, body)
 	case strings.HasPrefix(path, "/rest/api/3/issue/"):
 		s.jira(w, r, path, body)
+	case strings.HasPrefix(path, "/repos/") && strings.HasSuffix(path, "/code-scanning/sarifs") && r.Method == http.MethodPost:
+		s.codeScanningUpload(w, strings.TrimSuffix(strings.TrimPrefix(path, "/repos/"), "/code-scanning/sarifs"), body)
 	case strings.HasPrefix(path, "/repos/") && strings.Contains(path, "/statuses/"):
 		s.status(w, "github", strings.TrimPrefix(path, "/repos/"), body, "context", "failure")
 	case strings.HasPrefix(path, "/api/v4/projects/") && strings.Contains(path, "/statuses/"):
@@ -420,6 +452,82 @@ func (s *Stand) jira(w http.ResponseWriter, r *http.Request, path string, body [
 	}
 	s.jiraIssues[key] = append(comments, string(req.Body))
 	writeJSON(w, http.StatusCreated, map[string]any{"id": strconv.Itoa(10000 + len(comments))})
+}
+
+// codeScanningUpload takes a SARIF upload the way GitHub code scanning does
+// (A174-L5): gzipped, base64-encoded SARIF 2.1.0 for a commit and ref of the
+// repository; the latest analysis under a category replaces the one before.
+func (s *Stand) codeScanningUpload(w http.ResponseWriter, rest string, body []byte) {
+	repo := strings.ReplaceAll(rest, "%2F", "/")
+	var req struct {
+		CommitSHA string `json:"commit_sha"`
+		Ref       string `json:"ref"`
+		SARIF     string `json:"sarif"`
+		ToolName  string `json:"tool_name"`
+	}
+	if json.Unmarshal(body, &req) != nil || !strings.HasPrefix(req.Ref, "refs/") || req.SARIF == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Invalid request: commit_sha, ref and sarif are required"})
+		return
+	}
+	if !s.commits["github:"+repo+"@"+req.CommitSHA] {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "No commit found for SHA: " + req.CommitSHA})
+		return
+	}
+	compressed, err := base64.StdEncoding.DecodeString(req.SARIF)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"message": "sarif is not base64"})
+		return
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(compressed))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"message": "sarif is not gzipped"})
+		return
+	}
+	raw, err := io.ReadAll(io.LimitReader(zr, 10<<20))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"message": "sarif is not gzipped"})
+		return
+	}
+	var doc struct {
+		Version string `json:"version"`
+		Runs    []struct {
+			AutomationDetails struct {
+				ID string `json:"id"`
+			} `json:"automationDetails"`
+			Results []struct {
+				RuleID  string `json:"ruleId"`
+				Message struct {
+					Text string `json:"text"`
+				} `json:"message"`
+				Locations []struct {
+					PhysicalLocation struct {
+						ArtifactLocation struct {
+							URI string `json:"uri"`
+						} `json:"artifactLocation"`
+						Region struct {
+							StartLine int `json:"startLine"`
+						} `json:"region"`
+					} `json:"physicalLocation"`
+				} `json:"locations"`
+			} `json:"results"`
+		} `json:"runs"`
+	}
+	if json.Unmarshal(raw, &doc) != nil || doc.Version != "2.1.0" || len(doc.Runs) != 1 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"message": "sarif must be one SARIF 2.1.0 run"})
+		return
+	}
+	results := []CodeScanningResult{}
+	for _, r := range doc.Runs[0].Results {
+		out := CodeScanningResult{Rule: r.RuleID, Message: r.Message.Text}
+		if len(r.Locations) > 0 {
+			out.Path, out.Line = r.Locations[0].PhysicalLocation.ArtifactLocation.URI, r.Locations[0].PhysicalLocation.Region.StartLine
+		}
+		results = append(results, out)
+	}
+	s.codeScanning[repo+"#"+strings.TrimSuffix(doc.Runs[0].AutomationDetails.ID, "/")] = results
+	s.sarifUploads++
+	id := "sarif-" + strconv.Itoa(s.sarifUploads)
+	writeJSON(w, http.StatusAccepted, map[string]any{"id": id, "url": s.srv.URL + "/repos/" + repo + "/code-scanning/sarifs/" + id})
 }
 
 func (s *Stand) status(w http.ResponseWriter, host, rest string, body []byte, nameField, failedState string) {

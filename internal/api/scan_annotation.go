@@ -110,24 +110,40 @@ func (a *API) findingAnnotationIntent(ctx context.Context, tenantID, findingID, 
 		ProviderObject map[string]string `json:"provider_object"`
 	}
 	_ = json.Unmarshal(finding.Metadata, &meta)
-	if finding.Kind != "leaked_secret" || meta.Capability != "CAP-SCAN-04" {
-		return orchestrator.FindingAnnotationIntent{}, errStatus(http.StatusConflict, "only third-party scan findings are annotated at their provider")
+	if finding.Kind != "leaked_secret" {
+		return orchestrator.FindingAnnotationIntent{}, errStatus(http.StatusConflict, "only leaked secret findings are annotated at their provider")
 	}
 	source, err := a.store.GetDiscoverySource(ctx, tenantID, finding.SourceID)
 	if err != nil {
 		return orchestrator.FindingAnnotationIntent{}, errStatus(http.StatusConflict, "the scan source that found this credential is gone")
 	}
-	var cfg secretscan.ThirdPartyScanConfig
-	if err := json.Unmarshal(source.Config, &cfg); err != nil || cfg.Annotation == nil {
-		return orchestrator.FindingAnnotationIntent{}, errStatus(http.StatusConflict,
-			"the scan that found this credential has no annotation connection; ingest it with annotation.base_url and annotation.token_ref")
+	provider := ""
+	switch {
+	case source.Kind == secretscan.RepositorySourceKind:
+		// A174-L5: a first-party repository scan annotates through GitHub
+		// code scanning.
+		var cfg secretscan.RepositoryScanConfig
+		if err := json.Unmarshal(source.Config, &cfg); err != nil || cfg.AnnotationProvider() == "" {
+			return orchestrator.FindingAnnotationIntent{}, errStatus(http.StatusConflict,
+				"the repository scan that found this credential has no annotation connection; send the GitHub push with annotation.base_url and annotation.token_ref")
+		}
+		provider = cfg.AnnotationProvider()
+	case meta.Capability == "CAP-SCAN-04":
+		var cfg secretscan.ThirdPartyScanConfig
+		if err := json.Unmarshal(source.Config, &cfg); err != nil || cfg.Annotation == nil {
+			return orchestrator.FindingAnnotationIntent{}, errStatus(http.StatusConflict,
+				"the scan that found this credential has no annotation connection; ingest it with annotation.base_url and annotation.token_ref")
+		}
+		provider = cfg.AnnotationProvider()
+	default:
+		return orchestrator.FindingAnnotationIntent{}, errStatus(http.StatusConflict, "only third-party and repository scan findings are annotated at their provider")
 	}
 	if len(meta.ProviderObject) == 0 {
 		return orchestrator.FindingAnnotationIntent{}, errStatus(http.StatusConflict,
 			"trstctl could not tell which message, issue, commit or image this credential was seen in, so there is nowhere to annotate")
 	}
 	return orchestrator.FindingAnnotationIntent{
-		FindingID: finding.ID, SourceID: finding.SourceID, Provider: cfg.AnnotationProvider(), Rule: meta.RuleID,
+		FindingID: finding.ID, SourceID: finding.SourceID, Provider: provider, Rule: meta.RuleID,
 		Location: finding.Ref, DetectedAt: finding.DiscoveredAt.UTC().Format(time.RFC3339), Object: meta.ProviderObject, Reason: reason,
 	}, nil
 }

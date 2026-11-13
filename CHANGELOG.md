@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- First-party GitHub repository scans write findings back through code scanning (A174-L5): a push sent to the GitHub
+  repository webhook with an `annotation` block (and its `commit_sha` and `ref`) records each finding's file and line,
+  and **Annotate at provider** (or `auto`) uploads it as a SARIF analysis of its own — rule, file and line, never the
+  secret; resolving the finding uploads that analysis with no result, which closes the alert. GitLab and Bitbucket
+  pushes asking for an annotation are refused.
 - A SmartCard-HSM's own key attestation makes an edge CA key hardware-attested (A175-L3): a token that attests in
   card-verifiable certificates (BSI TR-03110) rather than X.509 objects sends its authenticated CV request and its
   device and device issuer CA CV certificates as `smartcard_hsm_attestation`; the segment pins the vendor's CV root as a

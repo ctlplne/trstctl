@@ -144,6 +144,7 @@ func annotationObject(o map[string]string) scanannotate.Object {
 	return scanannotate.Object{
 		Channel: o["channel"], ChannelID: o["channel_id"], MessageTS: o["message_ts"], ThreadTS: o["thread_ts"],
 		IssueKey: o["issue_key"], Repo: o["repo"], CommitSHA: o["commit_sha"], Repository: o["repository"], Digest: o["digest"],
+		Kind: o["kind"], Ref: o["ref"], Path: o["path"], Line: o["line"],
 	}
 }
 
@@ -162,11 +163,17 @@ func thirdPartyFindingObject(cfg secretscan.ThirdPartyScanConfig, artifactPath s
 // for it. The request key is the finding, so a run that records the same
 // finding again does not annotate twice.
 func (d *issuanceDispatcher) autoAnnotate(ctx context.Context, tenantID string, cfg secretscan.ThirdPartyScanConfig, finding store.DiscoveryFinding, rule string, object map[string]string) error {
-	if cfg.Annotation == nil || !cfg.Annotation.Auto || len(object) == 0 {
+	return d.autoAnnotateAt(ctx, tenantID, cfg.Annotation, cfg.AnnotationProvider(), finding, rule, object)
+}
+
+// autoAnnotateAt queues a finding's annotation at provider when its scan's
+// annotation connection asks for it without an operator (auto).
+func (d *issuanceDispatcher) autoAnnotateAt(ctx context.Context, tenantID string, ann *secretscan.AnnotationConfig, provider string, finding store.DiscoveryFinding, rule string, object map[string]string) error {
+	if ann == nil || !ann.Auto || len(object) == 0 || provider == "" {
 		return nil
 	}
 	_, err := d.orch.QueueFindingAnnotation(ctx, tenantID, "auto:"+finding.ID, "system:discovery", orchestrator.FindingAnnotationIntent{
-		FindingID: finding.ID, SourceID: finding.SourceID, Provider: cfg.AnnotationProvider(), Rule: rule,
+		FindingID: finding.ID, SourceID: finding.SourceID, Provider: provider, Rule: rule,
 		Location: finding.Ref, DetectedAt: finding.DiscoveredAt.UTC().Format(time.RFC3339), Object: object,
 	})
 	return err

@@ -65,6 +65,28 @@ func ValidateCollectedAnnotation(provider string, a *AnnotationConfig, c *Collec
 	return validateAnnotationConnection(a)
 }
 
+// ValidateRepositoryAnnotation checks a first-party repository scan's
+// annotation block (A174-L5): GitHub code scanning takes uploads; GitLab and
+// Bitbucket take scan reports only from their own pipelines. The block names
+// only the connection, and the scan must name the commit and the ref the
+// analysis belongs to.
+func ValidateRepositoryAnnotation(cfg RepositoryScanConfig) error {
+	a := cfg.Annotation
+	if a == nil {
+		return nil
+	}
+	if strings.ToLower(strings.TrimSpace(cfg.Provider)) != "github" {
+		return errors.New("only GitHub repository scans are annotated (code scanning takes uploads); GitLab and Bitbucket take scan reports only from their own pipelines")
+	}
+	if a.System != "" || a.Repo != "" || a.CommitSHA != "" || a.Repository != "" || a.Digest != "" || a.UsernameRef != "" {
+		return errors.New("a repository scan's annotation names only its connection: the repository, commit and ref are the scan's")
+	}
+	if !commitSHAPattern.MatchString(strings.TrimSpace(cfg.CommitSHA)) || !strings.HasPrefix(strings.TrimSpace(cfg.Ref), "refs/") {
+		return errors.New("a code scanning upload needs the scan's commit_sha (hex) and ref (refs/heads/... or refs/tags/...)")
+	}
+	return validateAnnotationConnection(a)
+}
+
 // ValidateAnnotation checks an annotation block for a third-party provider.
 func ValidateAnnotation(provider string, a *AnnotationConfig) error {
 	if a == nil {
