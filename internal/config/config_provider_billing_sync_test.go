@@ -396,3 +396,50 @@ func TestProviderBillingSyncNinjaOneTargetMSP9(t *testing.T) {
 		}
 	}
 }
+
+// MSP-10: a datto target is an RMM target with its API key, a file: or env:
+// secret reference, three component UIDs and an optional user-defined field
+// from 1 to 30.
+func TestProviderBillingSyncDattoTargetMSP10(t *testing.T) {
+	valid := func() ProviderBillingTarget {
+		return ProviderBillingTarget{ID: "datto", Type: "datto", Endpoint: "https://pinotage-api.centrastage.net",
+			Datto: &DattoTarget{APIKeyRef: "env:DATTO_API_KEY", APISecretRef: "env:DATTO_API_SECRET", // #nosec G101 -- env: references, not values (CWE-798)
+				InstallComponentUID: "c0c0c0c0-0000-4000-8000-0000000000c1", UpgradeComponentUID: "c0c0c0c0-0000-4000-8000-0000000000c2",
+				RemoveComponentUID: "c0c0c0c0-0000-4000-8000-0000000000c3", HealthUDF: 12}}
+	}
+	ok := valid()
+	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{ok}}); len(errs) != 0 {
+		t.Fatalf("valid datto target refused: %v", errs)
+	}
+	if !ok.IsRMM() || ok.PushesUsage() || ok.TicketKinds() != nil {
+		t.Fatalf("a datto target: rmm=%v usage=%v kinds=%v", ok.IsRMM(), ok.PushesUsage(), ok.TicketKinds())
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*ProviderBillingTarget)
+		want   string
+	}{
+		"no block":            {func(t *ProviderBillingTarget) { t.Datto = nil }, ".datto is required"},
+		"token ref":           {func(t *ProviderBillingTarget) { t.TokenRef = "env:X" }, "json targets only"},
+		"no api key":          {func(t *ProviderBillingTarget) { t.Datto.APIKeyRef = "" }, ".api_key_ref"},
+		"inline api key":      {func(t *ProviderBillingTarget) { t.Datto.APIKeyRef = "TRSTCTL-API-KEY" }, ".api_key_ref"},
+		"inline secret":       {func(t *ProviderBillingTarget) { t.Datto.APISecretRef = "s3cret" }, ".api_secret_ref"},
+		"bad install":         {func(t *ProviderBillingTarget) { t.Datto.InstallComponentUID = "install-me" }, ".install_component_uid"},
+		"no remove":           {func(t *ProviderBillingTarget) { t.Datto.RemoveComponentUID = "" }, ".remove_component_uid"},
+		"udf out of range":    {func(t *ProviderBillingTarget) { t.Datto.HealthUDF = 31 }, ".health_udf"},
+		"block on ninjaone":   {func(t *ProviderBillingTarget) { t.Type = "ninjaone" }, "datto targets only"},
+		"negative udf":        {func(t *ProviderBillingTarget) { t.Datto.HealthUDF = -1 }, ".health_udf"},
+		"component not a UID": {func(t *ProviderBillingTarget) { t.Datto.UpgradeComponentUID = "c0c0c0c0" }, ".upgrade_component_uid"},
+		"id too long":         {func(t *ProviderBillingTarget) { t.ID = strings.Repeat("d", 24) }, "at most 23 characters"},
+	} {
+		target := valid()
+		tc.mutate(&target)
+		errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{target}})
+		joined := ""
+		for _, err := range errs {
+			joined += err.Error() + "\n"
+		}
+		if !strings.Contains(joined, tc.want) {
+			t.Errorf("%s: errors %q, want one naming %q", name, joined, tc.want)
+		}
+	}
+}

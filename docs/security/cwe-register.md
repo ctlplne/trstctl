@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3184 annotated sites across 34 rules. Each row is
+3187 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (755 sites)
+### G101 — CWE-798 Use of hardcoded credentials (758 sites)
 
 | Location | Reason |
 |---|---|
@@ -244,6 +244,7 @@ not this file.
 | `internal/config/config_provider_billing_sync_test.go:268` | an env: reference to a test-only value (CWE-798) |
 | `internal/config/config_provider_billing_sync_test.go:311` | a file: reference to a test-only value (CWE-798) |
 | `internal/config/config_provider_billing_sync_test.go:361` | a file: reference to a test-only value (CWE-798) |
+| `internal/config/config_provider_billing_sync_test.go:406` | env: references, not values (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:416` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -461,6 +462,7 @@ not this file.
 | `internal/revocationhealth/contract_test.go:91` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/risk/contextual_test.go:192` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/risk/contextual_test.go:214` | fabricated identifier, not credential material (CWE-798) |
+| `internal/rmm/datto/datto_test.go:19` | a test-only value with characters JSON and forms must escape (CWE-798) |
 | `internal/rmm/ninjaone/ninjaone_test.go:19` | a test-only value with characters JSON and forms must escape (CWE-798) |
 | `internal/scanannotate/scanannotate_test.go:14` | fabricated fixture credential (CWE-798) |
 | `internal/schedulerhistory/history_test.go:12` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
@@ -657,6 +659,7 @@ not this file.
 | `internal/server/provider_billing_halopsa_served_test.go:40` | a test-only value (CWE-798) |
 | `internal/server/provider_billing_pax8_served_test.go:24` | test-only values (CWE-798) |
 | `internal/server/provider_billing_syncro_served_test.go:40` | a test-only value (CWE-798) |
+| `internal/server/provider_rmm_datto_served_test.go:66` | test-only values (CWE-798) |
 | `internal/server/provider_rmm_ninjaone_served_test.go:36` | test-only values (CWE-798) |
 | `internal/server/redfish_mockup_served_test.go:191` | fabricated test-only password for the mockup (CWE-798) |
 | `internal/server/response_integrations_served_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |

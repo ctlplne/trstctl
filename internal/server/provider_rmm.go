@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/rmm"
+	"trstctl.com/trstctl/internal/rmm/datto"
 	"trstctl.com/trstctl/internal/rmm/ninjaone"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -140,7 +141,7 @@ func (d *issuanceDispatcher) handleRMMInventory(ctx context.Context, m orchestra
 		}
 		own := devices[:0]
 		for _, dev := range devices {
-			if dev.OrgID == org {
+			if strings.EqualFold(dev.OrgID, org) {
 				own = append(own, dev)
 			}
 		}
@@ -227,7 +228,7 @@ func (d *issuanceDispatcher) handleRMMAction(ctx context.Context, m orchestrator
 		if !listed {
 			return rmmActionRefusal{"the RMM no longer lists the device"}
 		}
-		if dev.OrgID != org {
+		if !strings.EqualFold(dev.OrgID, org) {
 			return rmmActionRefusal{"the RMM lists the device under another organization than the customer's"}
 		}
 		var params *rmm.InstallParams
@@ -274,6 +275,26 @@ func (d *issuanceDispatcher) withRMMClient(target config.ProviderBillingTarget, 
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: RMM target endpoint rejected: %w", err))
 	}
 	switch {
+	case target.Type == "datto" && target.Datto != nil:
+		dt := target.Datto
+		keyValue, err := resolveDeploymentCredentialRef(dt.APIKeyRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the datto target's api_key_ref"))
+		}
+		defer keyValue.Destroy()
+		secretValue, err := resolveDeploymentCredentialRef(dt.APISecretRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the datto target's api_secret_ref"))
+		}
+		defer secretValue.Destroy()
+		c, err := datto.New(datto.Config{BaseURL: target.Endpoint, HealthUDF: dt.HealthUDF,
+			Components: map[rmm.Action]string{rmm.ActionInstall: dt.InstallComponentUID, rmm.ActionUpgrade: dt.UpgradeComponentUID,
+				rmm.ActionRemove: dt.RemoveComponentUID}},
+			client, datto.Credentials{APIKey: keyValue.Bytes(), APISecret: secretValue.Bytes()})
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return fn(c)
 	case target.Type == "ninjaone" && target.NinjaOne != nil:
 		n := target.NinjaOne
 		secretValue, err := resolveDeploymentCredentialRef(n.ClientSecretRef)

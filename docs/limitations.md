@@ -2192,8 +2192,11 @@ never live in the API process. What you can do end to end against the running bi
   devices under its organization, maps them to its agents, writes their
   health back, and installs, upgrades and removes the agent with a one-time
   token for the customer's own tenant, against a stand-in written from
-  NinjaOne's public API description; the other RMMs (MSP-10 to MSP-13) and a
-  live NinjaOne instance are what comes next. The
+  NinjaOne's public API description; Datto RMM (MSP-10) does the same
+  through site devices, user-defined fields and component quick jobs,
+  against a stand-in written from its public API description; the other
+  RMMs (MSP-11 to MSP-13) and live NinjaOne and Datto RMM instances are
+  what comes next. The
   sweep looks back three periods, so a period older than that is not pushed
   automatically.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts

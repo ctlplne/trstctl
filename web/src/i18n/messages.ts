@@ -1785,6 +1785,14 @@ export const messages = {
     defaultMessage: "The NinjaOne organization ID, a number. Its devices are listed and matched to this customer's agents.",
     description: "MSP-9: what to enter as the company in a NinjaOne target.",
   },
+  "provider.billingSync.type.datto": {
+    defaultMessage: "Datto RMM, devices and agents",
+    description: "MSP-10: a Datto RMM target.",
+  },
+  "provider.billingSync.dattoCompanyHint": {
+    defaultMessage: "The Datto RMM site UID. The site's devices are listed and matched to this customer's agents.",
+    description: "MSP-10: what to enter as the company in a Datto RMM target.",
+  },
   "provider.rmmDevices.caption": {
     defaultMessage: "Devices in the RMM and the customer's agents on them",
     description: "MSP-9: RMM device table caption.",

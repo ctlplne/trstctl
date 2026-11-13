@@ -252,6 +252,22 @@ describe("Provider billing systems (MSP-2)", () => {
     expect(within(table).queryByRole("button")).toBeNull();
   });
 
+  it("names a Datto RMM target and what its company is (MSP-10)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/provider/v1/tenants/alpha/billing-companies")
+          return json({ targets: [{ id: "datto", name: "Datto", type: "datto", cadence: "monthly", rmm: true }], companies: [] });
+        if (url === "/provider/v1/tenants/alpha/billing-sync") return json({ pushes: [] });
+        if (url === "/provider/v1/tenants/alpha/rmm-devices") return json({ devices: [] });
+        throw new Error("unexpected path " + url);
+      }),
+    );
+    renderPanel(true);
+    expect(await screen.findByText("Datto RMM, devices and agents")).toBeInTheDocument();
+    expect(screen.getByText("The Datto RMM site UID. The site's devices are listed and matched to this customer's agents.")).toBeInTheDocument();
+  });
+
   it("installs, upgrades and removes the agent through the RMM with rmm:write (MSP-9)", async () => {
     const actions: { url: string; body: unknown; key: string }[] = [];
     let busy = false;

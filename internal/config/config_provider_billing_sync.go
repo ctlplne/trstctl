@@ -78,6 +78,28 @@ type ProviderBillingTarget struct {
 	// Endpoint is the regional host, e.g. https://app.ninjarmm.com. An RMM
 	// target receives no usage periods and opens no tickets.
 	NinjaOne *NinjaOneTarget `json:"ninjaone,omitempty"`
+	// Datto configures a "datto" RMM target (MSP-10): the same for a Datto
+	// RMM platform, whose sites are the customers' organizations and whose
+	// ComStore components run the agent's install, upgrade and remove as
+	// quick jobs. Endpoint is the platform's API host, e.g.
+	// https://pinotage-api.centrastage.net.
+	Datto *DattoTarget `json:"datto,omitempty"`
+}
+
+// DattoTarget is a Datto RMM platform the Provider runs agents through.
+type DattoTarget struct {
+	// APIKeyRef and APISecretRef name the API user's key and secret (file:
+	// or env:); both are handled as credentials.
+	APIKeyRef    string `json:"api_key_ref"`
+	APISecretRef string `json:"api_secret_ref"`
+	// InstallComponentUID, UpgradeComponentUID and RemoveComponentUID are
+	// the components each agent action runs as a quick job.
+	InstallComponentUID string `json:"install_component_uid"`
+	UpgradeComponentUID string `json:"upgrade_component_uid"`
+	RemoveComponentUID  string `json:"remove_component_uid"`
+	// HealthUDF is the user-defined field (1-30) the agent's health is
+	// written to; 0 reports none.
+	HealthUDF int `json:"health_udf,omitempty"`
 }
 
 // NinjaOneTarget is a NinjaOne instance the Provider runs agents through.
@@ -99,7 +121,7 @@ type NinjaOneTarget struct {
 }
 
 // RMMTargetTypes are the target types that run the agent through an RMM.
-var RMMTargetTypes = map[string]bool{"ninjaone": true}
+var RMMTargetTypes = map[string]bool{"ninjaone": true, "datto": true}
 
 // IsRMM reports whether the target runs the agent's lifecycle through an
 // RMM (MSP-9 onward).
@@ -356,7 +378,7 @@ var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
 var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}, "gradient": {}, "pax8": {},
-	"ninjaone": {}}
+	"ninjaone": {}, "datto": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -388,7 +410,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a target type this build connects to (json, connectwise, autotask, syncro, halopsa, gradient, pax8, ninjaone, datto)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -419,6 +441,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 			errs = append(errs, validatePax8BillingTarget(where, t)...)
 		case "ninjaone":
 			errs = append(errs, validateNinjaOneTarget(where, t)...)
+		case "datto":
+			errs = append(errs, validateDattoTarget(where, t)...)
+		}
+		if t.Type != "datto" && t.Datto != nil {
+			errs = append(errs, fmt.Errorf("%s.datto applies to datto targets only", where))
 		}
 		if t.Type != "ninjaone" && t.NinjaOne != nil {
 			errs = append(errs, fmt.Errorf("%s.ninjaone applies to ninjaone targets only", where))
@@ -505,6 +532,44 @@ func validateNinjaOneTarget(where string, t ProviderBillingTarget) []error {
 	}
 	if n.HealthField != "" && !rmmFieldPattern.MatchString(n.HealthField) {
 		errs = append(errs, fmt.Errorf("%s.health_field must be a custom field name (a letter, then letters, digits or underscores)", where))
+	}
+	return errs
+}
+
+// dattoTargetIDMax keeps rmm-<id>-<36-character device UID> within a
+// 64-character certificate name.
+const dattoTargetIDMax = 64 - len("rmm-") - len("-") - 36
+
+func validateDattoTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; a datto target signs in with its API key and secret", where))
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	if len(t.ID) > dattoTargetIDMax {
+		errs = append(errs, fmt.Errorf("%s.id must be at most %d characters for a datto target: an installed agent enrolls as rmm-<id>-<device UID>, and a certificate name holds 64", where, dattoTargetIDMax))
+	}
+	d := t.Datto
+	if d == nil {
+		return append(errs, fmt.Errorf("%s.datto is required for a datto target", where))
+	}
+	where += ".datto"
+	if err := validateDeploymentCredentialRef(d.APIKeyRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.api_key_ref: %w", where, err))
+	}
+	if err := validateDeploymentCredentialRef(d.APISecretRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.api_secret_ref: %w", where, err))
+	}
+	for _, component := range []struct{ name, uid string }{{"install_component_uid", d.InstallComponentUID},
+		{"upgrade_component_uid", d.UpgradeComponentUID}, {"remove_component_uid", d.RemoveComponentUID}} {
+		if !pax8IDPattern.MatchString(component.uid) {
+			errs = append(errs, fmt.Errorf("%s.%s must be a component UID", where, component.name))
+		}
+	}
+	if d.HealthUDF < 0 || d.HealthUDF > 30 {
+		errs = append(errs, fmt.Errorf("%s.health_udf must be a user-defined field from 1 to 30 (0 for none)", where))
 	}
 	return errs
 }

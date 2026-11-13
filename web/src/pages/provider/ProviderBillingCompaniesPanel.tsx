@@ -426,6 +426,8 @@ function targetTypeLabel(type: string): string {
       return translateNow("provider.billingSync.type.pax8");
     case "ninjaone":
       return translateNow("provider.billingSync.type.ninjaone");
+    case "datto":
+      return translateNow("provider.billingSync.type.datto");
     case "json":
       return translateNow("provider.billingSync.type.json");
     default:
@@ -450,6 +452,8 @@ function companyHint(type: string): string | undefined {
       return translateNow("provider.billingSync.pax8CompanyHint");
     case "ninjaone":
       return translateNow("provider.billingSync.ninjaoneCompanyHint");
+    case "datto":
+      return translateNow("provider.billingSync.dattoCompanyHint");
     default:
       return undefined;
   }

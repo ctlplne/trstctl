@@ -1814,6 +1814,38 @@ failed). Write the install script to be safe to run again: a lost answer from
 NinjaOne retries the run with a new token. Upgrade and remove run their scripts with
 no parameters. Each action's outcome (or why it failed) shows on the device.
 
+A `datto` target (MSP-10) does the same through a Datto RMM platform:
+
+```json
+{
+  "id": "datto",
+  "name": "Datto RMM",
+  "type": "datto",
+  "endpoint": "https://pinotage-api.centrastage.net",
+  "datto": {
+    "api_key_ref": "file:/run/secrets/datto-api-key",
+    "api_secret_ref": "file:/run/secrets/datto-api-secret",
+    "install_component_uid": "c0c0c0c0-0000-4000-8000-0000000000c1",
+    "upgrade_component_uid": "c0c0c0c0-0000-4000-8000-0000000000c2",
+    "remove_component_uid": "c0c0c0c0-0000-4000-8000-0000000000c3",
+    "health_udf": 12
+  }
+}
+```
+
+`endpoint` is your platform's API host (pinotage, merlot, concord, vidal, zinfandel or
+syrah). Delivery signs in through Datto's public OAuth client with the API user's key
+and secret (both read from their references and handled as credentials), and keeps the
+token only for that delivery. A customer's company in this
+target is its Datto site UID (any letter case). The inventory lists the site's devices
+only and writes each mapped agent's health to the user-defined field
+`udf<health_udf>` (0 writes none). Each action runs its component as a quick job on
+the device; the install component receives the variables `TrstctlServer`,
+`TrstctlServerName`, `TrstctlIdentity` and `TrstctlToken` (the one-time token), so
+define those variables on it. Identities are `rmm-<target>-<device UID>`, so keep the
+target ID short enough for a 64-character certificate name (up to 23 characters; the
+configuration refuses a longer one).
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.
