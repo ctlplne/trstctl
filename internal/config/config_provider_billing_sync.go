@@ -58,6 +58,36 @@ type ProviderBillingTarget struct {
 	// schedule. Endpoint is the account's API root,
 	// https://{subdomain}.syncromsp.com/api/v1.
 	Syncro *SyncroBillingTarget `json:"syncro,omitempty"`
+	// HaloPSA configures a "halopsa" target (MSP-5): each customer's
+	// figures become the line quantities of its client's recurring invoice.
+	// Endpoint is the instance root, https://{instance}.halopsa.com.
+	HaloPSA *HaloPSABillingTarget `json:"halopsa,omitempty"`
+}
+
+// HaloPSABillingTarget is a HaloPSA instance the Provider pushes usage to.
+type HaloPSABillingTarget struct {
+	// Tenant is the hosted tenant name of the token request; empty for a
+	// self-hosted instance.
+	Tenant string `json:"tenant,omitempty"`
+	// ClientID is the API application's client ID; ClientSecretRef names
+	// its client secret (file: or env:), resolved for each delivery.
+	ClientID        string `json:"client_id"`
+	ClientSecretRef string `json:"client_secret_ref"`
+	// RecurringInvoiceName, when set, picks the recurring invoice among a
+	// client's recurring invoices.
+	RecurringInvoiceName string `json:"recurring_invoice_name,omitempty"`
+	// Items maps a meter to the HaloPSA item ID whose line carries it.
+	Items map[string]int64 `json:"items"`
+	// Tickets, when set, opens a ticket for the customer's alerts (MSP-5).
+	Tickets *HaloPSATickets `json:"tickets,omitempty"`
+}
+
+// HaloPSATickets is the ticket type and status IDs of alert tickets.
+type HaloPSATickets struct {
+	TicketTypeID   int64    `json:"ticket_type_id"`
+	StatusNewID    int64    `json:"status_new_id,omitempty"`
+	StatusClosedID int64    `json:"status_closed_id"`
+	Kinds          []string `json:"kinds,omitempty"`
 }
 
 // SyncroBillingTarget is a Syncro account the Provider pushes usage to.
@@ -162,6 +192,11 @@ func (t ProviderBillingTarget) TicketKinds() []string {
 			return append([]string(nil), PSATicketAlertKinds...)
 		}
 		return append([]string(nil), t.Syncro.Tickets.Kinds...)
+	case t.HaloPSA != nil && t.HaloPSA.Tickets != nil:
+		if len(t.HaloPSA.Tickets.Kinds) == 0 {
+			return append([]string(nil), PSATicketAlertKinds...)
+		}
+		return append([]string(nil), t.HaloPSA.Tickets.Kinds...)
 	}
 	return nil
 }
@@ -234,7 +269,7 @@ var (
 var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
-var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}}
+var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}, "syncro": {}, "halopsa": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -266,7 +301,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json, connectwise, autotask, syncro)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json, connectwise, autotask, syncro, halopsa)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -289,6 +324,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 			errs = append(errs, validateAutotaskBillingTarget(where, t)...)
 		case "syncro":
 			errs = append(errs, validateSyncroBillingTarget(where, t)...)
+		case "halopsa":
+			errs = append(errs, validateHaloPSABillingTarget(where, t)...)
+		}
+		if t.Type != "halopsa" && t.HaloPSA != nil {
+			errs = append(errs, fmt.Errorf("%s.halopsa applies to halopsa targets only", where))
 		}
 		if t.Type != "autotask" && t.Autotask != nil {
 			errs = append(errs, fmt.Errorf("%s.autotask applies to autotask targets only", where))
@@ -322,6 +362,60 @@ func validateJSONBillingTarget(where string, t ProviderBillingTarget) []error {
 	}
 	if t.ConnectWise != nil {
 		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	return errs
+}
+
+var haloTenantPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
+
+func validateHaloPSABillingTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; a halopsa target signs in with its client credentials", where))
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	hp := t.HaloPSA
+	if hp == nil {
+		return append(errs, fmt.Errorf("%s.halopsa is required for a halopsa target", where))
+	}
+	where += ".halopsa"
+	if hp.Tenant != "" && !haloTenantPattern.MatchString(hp.Tenant) {
+		errs = append(errs, fmt.Errorf("%s.tenant must be the hosted tenant name (letters, digits, dots, dashes or underscores)", where))
+	}
+	if !validConnectWiseName(hp.ClientID) {
+		errs = append(errs, fmt.Errorf("%s.client_id must be the API application's client ID (1-100 characters)", where))
+	}
+	if err := validateDeploymentCredentialRef(hp.ClientSecretRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.client_secret_ref: %w", where, err))
+	}
+	if hp.RecurringInvoiceName != "" && !validConnectWiseName(hp.RecurringInvoiceName) {
+		errs = append(errs, fmt.Errorf("%s.recurring_invoice_name must be 1-100 characters", where))
+	}
+	if len(hp.Items) == 0 {
+		errs = append(errs, fmt.Errorf("%s.items must map at least one meter (%s) to a HaloPSA item ID", where, strings.Join(BillingSyncMeters, ", ")))
+	}
+	for _, meter := range slices.Sorted(maps.Keys(hp.Items)) {
+		if !slices.Contains(BillingSyncMeters, meter) {
+			errs = append(errs, fmt.Errorf("%s.items names %q, which is not a pushed meter (%s)", where, meter, strings.Join(BillingSyncMeters, ", ")))
+		}
+		if hp.Items[meter] <= 0 {
+			errs = append(errs, fmt.Errorf("%s.items.%s must be a HaloPSA item ID", where, meter))
+		}
+	}
+	if tk := hp.Tickets; tk != nil {
+		if tk.TicketTypeID <= 0 {
+			errs = append(errs, fmt.Errorf("%s.tickets.ticket_type_id must be a ticket type ID", where))
+		}
+		if tk.StatusClosedID <= 0 || tk.StatusNewID < 0 || tk.StatusNewID == tk.StatusClosedID {
+			errs = append(errs, fmt.Errorf("%s.tickets.status_closed_id must be a status ID, different from status_new_id", where))
+		}
+		for _, kind := range tk.Kinds {
+			if !slices.Contains(PSATicketAlertKinds, kind) {
+				errs = append(errs, fmt.Errorf("%s.tickets.kinds names %q, which is not a ticketed alert kind (%s)", where, kind, strings.Join(PSATicketAlertKinds, ", ")))
+			}
+		}
 	}
 	return errs
 }

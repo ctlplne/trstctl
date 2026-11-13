@@ -1665,6 +1665,41 @@ described above with `problem_type`, `status_new` (default `New`) and
 Syncro tickets have no external reference field, so a ticket's reference ends its
 subject in brackets and a retry finds it with Syncro's ticket search.
 
+A `halopsa` target (MSP-5) puts a customer's figures into HaloPSA as the line
+quantities (`qty_order`) of its client's recurring invoice:
+
+```json
+{
+  "id": "halo",
+  "name": "HaloPSA",
+  "type": "halopsa",
+  "endpoint": "https://your-instance.halopsa.com",
+  "halopsa": {
+    "tenant": "yourtenant",
+    "client_id": "trstctl-integration",
+    "client_secret_ref": "file:/run/secrets/halopsa-client-secret",
+    "recurring_invoice_name": "Managed PKI",
+    "items": {"certificates_current": 901, "agents": 902},
+    "tickets": {"ticket_type_id": 21, "status_new_id": 1, "status_closed_id": 9}
+  }
+}
+```
+
+`endpoint` is the instance root; delivery signs in with the API application's client
+credentials at `/auth/token` (`tenant` adds `?tenant=` for a hosted instance; scope
+`all`) and keeps the access token only for that delivery. A customer's company in
+this target is its HaloPSA client ID (a number); the client must be active. Delivery
+resolves the client's one recurring invoice (`recurring_invoice_name` picks one when
+it has several) and each item's line before writing anything, then saves one line
+change at a time (Halo applies one line change per save): a new line for a missing
+item, or the line's `qty_order` set. With `tickets`, alerts open tickets as described
+above with `ticket_type_id`, `status_new_id` (optional) and `status_closed_id`; notes
+are private actions. HaloPSA tickets have no published external reference field, so
+a ticket's reference ends its summary in brackets and a retry finds it with the
+ticket search. Halo's public API reference is thin: the request shapes follow the
+published HaloAPI client and Halo's conventions, and a live instance is what comes
+next.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

@@ -2178,8 +2178,12 @@ never live in the API process. What you can do end to end against the running bi
   units and tickets, proven against a stand-in written from Autotask's public
   REST entity reference, and Syncro (MSP-6) through recurring invoice lines and
   tickets, proven against a stand-in written from Syncro's public OpenAPI
-  description. Live ConnectWise, Autotask and Syncro accounts and the other PSA
-  and RMM connectors (MSP-5, MSP-7 to MSP-15) are what comes next. The
+  description, and HaloPSA (MSP-5) through recurring invoice lines and
+  tickets, against a stand-in written from Halo's public descriptions (the
+  published HaloAPI client and Halo's conventions, as Halo's own API
+  reference pages are not public). Live ConnectWise, Autotask, Syncro and
+  HaloPSA accounts and the other connectors (MSP-7 to MSP-15) are what comes
+  next. The
   sweep looks back three periods, so a period older than that is not pushed
   automatically.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts

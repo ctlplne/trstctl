@@ -209,3 +209,52 @@ func TestProviderBillingSyncSyncroTargetMSP6(t *testing.T) {
 		}
 	}
 }
+
+// MSP-5: a halopsa target names the API application's client ID and secret
+// reference, an optional hosted tenant, and at least one meter's item ID;
+// tickets need a ticket type and a closed status different from the new one;
+// json and connectwise fields are refused on it, and its block on other
+// types.
+func TestProviderBillingSyncHaloPSATargetMSP5(t *testing.T) {
+	valid := func() ProviderBillingTarget {
+		return ProviderBillingTarget{ID: "halo", Type: "halopsa", Endpoint: "https://alpha.halopsa.com",
+			HaloPSA: &HaloPSABillingTarget{Tenant: "alphamsp", ClientID: "trstctl-integration",
+				ClientSecretRef: "env:TRSTCTL_HALO_SECRET", Items: map[string]int64{"certificates_current": 901}, // #nosec G101 -- an env: reference to a test-only value (CWE-798)
+				Tickets: &HaloPSATickets{TicketTypeID: 21, StatusNewID: 1, StatusClosedID: 9}}}
+	}
+	ok := valid()
+	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{ok}}); len(errs) != 0 {
+		t.Fatalf("valid halopsa target refused: %v", errs)
+	}
+	if len(ok.TicketKinds()) != 4 {
+		t.Fatalf("ticket kinds = %v", ok.TicketKinds())
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*ProviderBillingTarget)
+		want   string
+	}{
+		"no block":          {func(t *ProviderBillingTarget) { t.HaloPSA = nil }, ".halopsa is required"},
+		"signing key":       {func(t *ProviderBillingTarget) { t.SigningKeyRef = "env:X" }, "json targets only"},
+		"bad tenant":        {func(t *ProviderBillingTarget) { t.HaloPSA.Tenant = "a b" }, ".tenant"},
+		"no client id":      {func(t *ProviderBillingTarget) { t.HaloPSA.ClientID = "" }, ".client_id"},
+		"inline secret":     {func(t *ProviderBillingTarget) { t.HaloPSA.ClientSecretRef = "s3cret" }, ".client_secret_ref"},
+		"no items":          {func(t *ProviderBillingTarget) { t.HaloPSA.Items = nil }, ".items must map"},
+		"zero item":         {func(t *ProviderBillingTarget) { t.HaloPSA.Items["agents"] = 0 }, ".items.agents"},
+		"no ticket type":    {func(t *ProviderBillingTarget) { t.HaloPSA.Tickets.TicketTypeID = 0 }, ".tickets.ticket_type_id"},
+		"same statuses":     {func(t *ProviderBillingTarget) { t.HaloPSA.Tickets.StatusClosedID = 1 }, ".tickets.status_closed_id"},
+		"unknown kind":      {func(t *ProviderBillingTarget) { t.HaloPSA.Tickets.Kinds = []string{"x"} }, "not a ticketed alert kind"},
+		"block on syncro":   {func(t *ProviderBillingTarget) { t.Type = "syncro" }, "halopsa targets only"},
+		"connectwise block": {func(t *ProviderBillingTarget) { t.ConnectWise = &ConnectWiseBillingTarget{} }, "connectwise targets only"},
+	} {
+		target := valid()
+		tc.mutate(&target)
+		errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{target}})
+		joined := ""
+		for _, err := range errs {
+			joined += err.Error() + "\n"
+		}
+		if !strings.Contains(joined, tc.want) {
+			t.Errorf("%s: errors %q, want one naming %q", name, joined, tc.want)
+		}
+	}
+}

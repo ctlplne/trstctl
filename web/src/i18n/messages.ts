@@ -1753,6 +1753,14 @@ export const messages = {
     defaultMessage: "The Syncro customer ID, a number. Usage sets the line quantities of that customer's one active recurring invoice schedule.",
     description: "MSP-6: what to enter as the company in a Syncro target.",
   },
+  "provider.billingSync.type.halopsa": {
+    defaultMessage: "HaloPSA, recurring invoice lines",
+    description: "MSP-5: a HaloPSA billing target.",
+  },
+  "provider.billingSync.halopsaCompanyHint": {
+    defaultMessage: "The HaloPSA client ID, a number. Usage sets the line quantities of that client's recurring invoice.",
+    description: "MSP-5: what to enter as the company in a HaloPSA target.",
+  },
   "provider.billingSync.connectwiseCompanyHint": {
     defaultMessage: "The ConnectWise company record ID or its identifier. Usage lands on that company's one active agreement of the configured type.",
     description: "MSP-3: what to enter as the company in a ConnectWise target.",

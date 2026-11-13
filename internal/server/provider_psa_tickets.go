@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/psa"
 	"trstctl.com/trstctl/internal/psa/autotask"
 	"trstctl.com/trstctl/internal/psa/connectwise"
+	"trstctl.com/trstctl/internal/psa/halopsa"
 	"trstctl.com/trstctl/internal/psa/syncro"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -245,6 +246,23 @@ func (d *issuanceDispatcher) withPSAClient(target config.ProviderBillingTarget, 
 			cfg.Tickets = &syncro.TicketConfig{ProblemType: tk.ProblemType, StatusNew: tk.EffectiveStatusNew(), StatusClosed: tk.EffectiveStatusClosed()}
 		}
 		psaClient, err := syncro.New(cfg, client, syncro.Credentials{APIToken: token.Bytes()})
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return fn(psaClient)
+	case target.Type == "halopsa" && target.HaloPSA != nil:
+		hp := target.HaloPSA
+		secretValue, err := resolveDeploymentCredentialRef(hp.ClientSecretRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the halopsa target's client_secret_ref"))
+		}
+		defer secretValue.Destroy()
+		cfg := halopsa.Config{BaseURL: target.Endpoint, Tenant: hp.Tenant, ClientID: hp.ClientID,
+			RecurringInvoiceName: hp.RecurringInvoiceName, Items: hp.Items}
+		if tk := hp.Tickets; tk != nil {
+			cfg.Tickets = &halopsa.TicketConfig{TicketTypeID: tk.TicketTypeID, StatusNewID: tk.StatusNewID, StatusClosedID: tk.StatusClosedID}
+		}
+		psaClient, err := halopsa.New(cfg, client, halopsa.Credentials{ClientSecret: secretValue.Bytes()})
 		if err != nil {
 			return orchestrator.DefiniteNoEffect(err)
 		}

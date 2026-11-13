@@ -115,6 +115,7 @@ describe("Provider billing systems (MSP-2)", () => {
             targets: [
               { id: "at", name: "Autotask", type: "autotask", cadence: "monthly" },
               { id: "cw", name: "ConnectWise", type: "connectwise", cadence: "monthly" },
+              { id: "halo", name: "HaloPSA", type: "halopsa", cadence: "monthly" },
               { id: "psa", name: "Main PSA", type: "json", cadence: "daily" },
               { id: "syncro", name: "Syncro", type: "syncro", cadence: "monthly" },
             ],
@@ -126,7 +127,11 @@ describe("Provider billing systems (MSP-2)", () => {
     );
     renderPanel(true);
     const list = await screen.findByRole("list", { name: "Configured billing systems" });
-    const [autotaskItem, connectwise, generic, syncroItem] = within(list).getAllByRole("listitem");
+    const [autotaskItem, connectwise, haloItem, generic, syncroItem] = within(list).getAllByRole("listitem");
+    expect(within(haloItem).getByText("HaloPSA, recurring invoice lines")).toBeInTheDocument();
+    expect(within(haloItem).getByRole("textbox", { name: "Company ID in HaloPSA" })).toHaveAccessibleDescription(
+      "The HaloPSA client ID, a number. Usage sets the line quantities of that client's recurring invoice.",
+    );
     expect(within(syncroItem).getByText("Syncro, recurring invoice lines")).toBeInTheDocument();
     expect(within(syncroItem).getByRole("textbox", { name: "Company ID in Syncro" })).toHaveAccessibleDescription(
       "The Syncro customer ID, a number. Usage sets the line quantities of that customer's one active recurring invoice schedule.",

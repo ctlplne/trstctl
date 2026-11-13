@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- HaloPSA as a billing target (MSP-5): a `halopsa` target (the instance root, an optional hosted tenant, the API
+  application's client ID and client secret reference, an item ID per meter, an optional recurring invoice name and
+  ticket type and status IDs) signs in with client credentials for each delivery, sets each customer's signed period
+  as the line quantities (`qty_order`) of its client's recurring invoice one line per save (a retry cannot double a
+  line), and opens, notes (private actions) and closes tickets for its alerts.
 - Syncro as a billing target (MSP-6): a `syncro` target (the account's API root, an API token reference, a product ID
   per meter, an optional schedule name and ticket problem type and statuses) sets each customer's signed period as the
   line quantities of its one active recurring invoice schedule (a missing line is added, an existing one set, so a

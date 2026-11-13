@@ -203,3 +203,15 @@ func TestTicketTargetsIncludeSyncroMSP6(t *testing.T) {
 		t.Fatalf("ticket targets = %+v", targets)
 	}
 }
+
+// MSP-5: a HaloPSA target with ticket settings is a ticket target too.
+func TestTicketTargetsIncludeHaloPSAMSP5(t *testing.T) {
+	targets := billing.TicketTargets(config.ProviderBillingSync{Targets: []config.ProviderBillingTarget{
+		{ID: "halo", Type: "halopsa", HaloPSA: &config.HaloPSABillingTarget{Tickets: &config.HaloPSATickets{TicketTypeID: 21, StatusClosedID: 9,
+			Kinds: []string{"certificate.expiry"}}}},
+		{ID: "halo-usage-only", Type: "halopsa", HaloPSA: &config.HaloPSABillingTarget{}},
+	}})
+	if len(targets) != 1 || targets[0].ID != "halo" || len(targets[0].TicketKinds()) != 1 {
+		t.Fatalf("ticket targets = %+v", targets)
+	}
+}

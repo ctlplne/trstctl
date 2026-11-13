@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3171 annotated sites across 34 rules. Each row is
+3174 annotated sites across 34 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (743 sites)
+### G101 — CWE-798 Use of hardcoded credentials (746 sites)
 
 | Location | Reason |
 |---|---|
@@ -240,6 +240,7 @@ not this file.
 | `internal/config/config_provider_billing_sync_test.go:73` | env: and file: references to test-only values (CWE-798) |
 | `internal/config/config_provider_billing_sync_test.go:122` | file: and env: references to test-only values (CWE-798) |
 | `internal/config/config_provider_billing_sync_test.go:174` | a file: reference to a test-only value (CWE-798) |
+| `internal/config/config_provider_billing_sync_test.go:222` | an env: reference to a test-only value (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:416` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -444,6 +445,7 @@ not this file.
 | `internal/protocols/acme/eab.go:265` | an event type name, not credential material (CWE-798) |
 | `internal/protocols/acme/eab_rotation_test.go:34` | fabricated fixture reference, not secret material (CWE-798) |
 | `internal/protocols/acme/email_reply_test.go:23` | RFC 8823 test token and digest, not a credential (CWE-798) |
+| `internal/psa/halopsa/halopsa_test.go:21` | a test-only value, with characters a form must escape (CWE-798) |
 | `internal/psa/syncro/syncro_test.go:19` | a test-only value (CWE-798) |
 | `internal/reconcile/awskmssource_test.go:20` | fabricated fixture credential (CWE-798) |
 | `internal/reconcile/cloudkms_gcp_azure_test.go:19` | a stand-in fixture value, not a credential (CWE-798) |
@@ -645,6 +647,7 @@ not this file.
 | `internal/server/protocols_served_test.go:1011` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/protocols_served_test.go:1088` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/protocols_served_test.go:1288` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/provider_billing_halopsa_served_test.go:40` | a test-only value (CWE-798) |
 | `internal/server/provider_billing_syncro_served_test.go:40` | a test-only value (CWE-798) |
 | `internal/server/redfish_mockup_served_test.go:191` | fabricated test-only password for the mockup (CWE-798) |
 | `internal/server/response_integrations_served_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
