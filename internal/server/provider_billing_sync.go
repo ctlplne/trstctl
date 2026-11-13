@@ -21,7 +21,6 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/psa"
-	"trstctl.com/trstctl/internal/psa/connectwise"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/secrettext"
 )
@@ -76,8 +75,8 @@ func (d *issuanceDispatcher) handleBillingSync(ctx context.Context, m orchestrat
 	if !mapped || company != push.ExternalCompanyID {
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: customer is no longer mapped to company %q in billing target %q", push.ExternalCompanyID, push.TargetID))
 	}
-	if target.Type == "connectwise" {
-		return d.pushBillingConnectWise(ctx, m, target, push)
+	if target.Type != "json" {
+		return d.pushBillingVendor(ctx, m, target, push)
 	}
 	return d.pushBillingJSON(ctx, m, target, push)
 }
@@ -145,16 +144,12 @@ func (d *issuanceDispatcher) pushBillingJSON(ctx context.Context, m orchestrator
 	}
 }
 
-// pushBillingConnectWise sets one customer's period as additions of its
-// company's agreement (MSP-3). A quantity there is absolute, so one
-// customer's periods go to the target oldest first, and an older period
+// pushBillingVendor sets one customer's period in a PSA (MSP-3: agreement
+// additions; MSP-4: contract service units). Its quantities are absolute, so
+// one customer's periods go to the target oldest first, and an older period
 // never overwrites the figures a newer one already set: it is recorded as
 // handled with that reason and nothing is written.
-func (d *issuanceDispatcher) pushBillingConnectWise(ctx context.Context, m orchestrator.Message, target config.ProviderBillingTarget, push projections.BillingSyncPushEvent) error {
-	cw := target.ConnectWise
-	if cw == nil {
-		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: billing target %q has no connectwise settings", target.ID))
-	}
+func (d *issuanceDispatcher) pushBillingVendor(ctx context.Context, m orchestrator.Message, target config.ProviderBillingTarget, push projections.BillingSyncPushEvent) error {
 	earlierQueued, laterDelivered, err := d.store.BillingSyncNeighbors(ctx, m.TenantID, push.TargetID, push.PeriodStart)
 	if err != nil {
 		return err
@@ -172,7 +167,7 @@ func (d *issuanceDispatcher) pushBillingConnectWise(ctx context.Context, m orche
 		lines = append(lines, psa.UsageLine{Meter: line.Meter, Value: line.Value})
 	}
 	var out psa.UsageOutcome
-	err = d.withConnectWise(target, func(client *connectwise.Client) error {
+	err = d.withPSAClient(target, func(client psa.Client) error {
 		var err error
 		out, err = client.PushUsage(ctx, psa.UsagePeriod{CustomerID: m.TenantID, ExternalCompanyID: push.ExternalCompanyID,
 			PeriodStart: push.PeriodStart, PeriodEnd: push.PeriodEnd, Lines: lines, EvidenceDigest: push.EvidenceDigest})

@@ -174,3 +174,21 @@ func TestTicketCloserClosesClearedConditionsMSP3(t *testing.T) {
 		t.Fatalf("a ticket that must stay open was closed:\n%s", joined)
 	}
 }
+
+// MSP-4: ticket targets are every vendor target whose settings open tickets,
+// with that vendor's kinds; a target without ticket settings is not one.
+func TestTicketTargetsFollowEveryVendorMSP4(t *testing.T) {
+	targets := billing.TicketTargets(config.ProviderBillingSync{Targets: []config.ProviderBillingTarget{
+		ticketTarget("cw"),
+		{ID: "at", Type: "autotask", Autotask: &config.AutotaskBillingTarget{Tickets: &config.AutotaskTickets{StatusNew: 1, StatusComplete: 5,
+			Priority: 2, Kinds: []string{"credential.drift"}}}},
+		{ID: "at-usage-only", Type: "autotask", Autotask: &config.AutotaskBillingTarget{}},
+		{ID: "json", Type: "json"},
+	}})
+	if len(targets) != 2 || targets[0].ID != "cw" || targets[1].ID != "at" {
+		t.Fatalf("ticket targets = %+v", targets)
+	}
+	if kinds := targets[1].TicketKinds(); len(kinds) != 1 || kinds[0] != "credential.drift" {
+		t.Fatalf("autotask kinds = %v", kinds)
+	}
+}

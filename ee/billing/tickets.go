@@ -36,18 +36,11 @@ type ticketQueuerBox struct{ q TicketQueuer }
 func TicketTargets(sync config.ProviderBillingSync) []config.ProviderBillingTarget {
 	var out []config.ProviderBillingTarget
 	for _, t := range sync.Targets {
-		if t.ConnectWise != nil && t.ConnectWise.Tickets != nil {
+		if len(t.TicketKinds()) > 0 {
 			out = append(out, t)
 		}
 	}
 	return out
-}
-
-func ticketKinds(t config.ProviderBillingTarget) []string {
-	if t.ConnectWise == nil || t.ConnectWise.Tickets == nil {
-		return nil
-	}
-	return t.ConnectWise.Tickets.EffectiveKinds()
 }
 
 // TicketAlertKey names the subject an alert is about, or "" for an alert no
@@ -135,7 +128,7 @@ func (o *TicketObserver) ObserveAlert(ctx context.Context, tenantID, alertRef st
 	}
 	summary, note := TicketText(alert)
 	for _, target := range o.Targets {
-		if !slices.Contains(ticketKinds(target), alert.Kind) {
+		if !slices.Contains(target.TicketKinds(), alert.Kind) {
 			continue
 		}
 		company, mapped, err := o.Store.BillingCompanyFor(ctx, tenantID, target.ID)

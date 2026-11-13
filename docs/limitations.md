@@ -2174,8 +2174,10 @@ never live in the API process. What you can do end to end against the running bi
   proven against a stand-in written from ConnectWise's public REST
   descriptions, and opens, notes and closes a service ticket under the
   customer's company for its expiry, failed-renewal, revocation-endpoint and
-  drift alerts. A live ConnectWise site and the other PSA and RMM connectors
-  (MSP-4 to MSP-15) are what comes next. The
+  drift alerts. Autotask PSA (MSP-4) does the same through contract service
+  units and tickets, proven against a stand-in written from Autotask's public
+  REST entity reference. Live ConnectWise and Autotask sites and the other PSA
+  and RMM connectors (MSP-5 to MSP-15) are what comes next. The
   sweep looks back three periods, so a period older than that is not pushed
   automatically.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts

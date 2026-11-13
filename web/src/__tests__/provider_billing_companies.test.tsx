@@ -113,6 +113,7 @@ describe("Provider billing systems (MSP-2)", () => {
         if (url === "/provider/v1/tenants/alpha/billing-companies")
           return json({
             targets: [
+              { id: "at", name: "Autotask", type: "autotask", cadence: "monthly" },
               { id: "cw", name: "ConnectWise", type: "connectwise", cadence: "monthly" },
               { id: "psa", name: "Main PSA", type: "json", cadence: "daily" },
             ],
@@ -124,7 +125,11 @@ describe("Provider billing systems (MSP-2)", () => {
     );
     renderPanel(true);
     const list = await screen.findByRole("list", { name: "Configured billing systems" });
-    const [connectwise, generic] = within(list).getAllByRole("listitem");
+    const [autotaskItem, connectwise, generic] = within(list).getAllByRole("listitem");
+    expect(within(autotaskItem).getByText("Autotask PSA, contract services")).toBeInTheDocument();
+    expect(within(autotaskItem).getByRole("textbox", { name: "Company ID in Autotask" })).toHaveAccessibleDescription(
+      "The Autotask company ID, a number. Usage sets the units of that company's Recurring Service contract services.",
+    );
     expect(within(connectwise).getByText("ConnectWise PSA, agreement additions")).toBeInTheDocument();
     expect(within(generic).getByText("Signed JSON push")).toBeInTheDocument();
     expect(within(connectwise).getByRole("textbox", { name: "Company ID in ConnectWise" })).toHaveAccessibleDescription(

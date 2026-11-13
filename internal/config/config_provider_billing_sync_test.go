@@ -111,3 +111,55 @@ func TestProviderBillingSyncConnectWiseTargetMSP3(t *testing.T) {
 		}
 	}
 }
+
+// MSP-4: an autotask target names the API user, its secret and tracking
+// identifier as deployment references, at least one meter's service ID, and
+// for tickets two different status values and a priority; json and
+// connectwise fields are refused on it, and its block on other types.
+func TestProviderBillingSyncAutotaskTargetMSP4(t *testing.T) {
+	valid := func() ProviderBillingTarget {
+		return ProviderBillingTarget{ID: "at", Type: "autotask", Endpoint: "https://webservices3.autotask.net/atservicesrest/v1.0",
+			Autotask: &AutotaskBillingTarget{Username: "trstctl-api@msp.example", SecretRef: "file:/run/secrets/at-secret", // #nosec G101 -- file: and env: references to test-only values (CWE-798)
+				IntegrationCodeRef: "env:TRSTCTL_AT_CODE", Services: map[string]int64{"certificates_current": 29683501},
+				Tickets: &AutotaskTickets{StatusNew: 1, StatusComplete: 5, Priority: 2}}}
+	}
+	ok := valid()
+	if errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{ok}}); len(errs) != 0 {
+		t.Fatalf("valid autotask target refused: %v", errs)
+	}
+	if kinds := ok.TicketKinds(); len(kinds) != len(PSATicketAlertKinds) {
+		t.Fatalf("ticket kinds = %v, want all", kinds)
+	}
+	if ok.Autotask.Tickets.EffectiveNoteType() != 1 || ok.Autotask.Tickets.EffectiveNotePublish() != 1 {
+		t.Fatal("note picklists do not default to 1")
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*ProviderBillingTarget)
+		want   string
+	}{
+		"no block":           {func(t *ProviderBillingTarget) { t.Autotask = nil }, ".autotask is required"},
+		"signing key":        {func(t *ProviderBillingTarget) { t.SigningKeyRef = "env:X" }, "json targets only"},
+		"connectwise block":  {func(t *ProviderBillingTarget) { t.ConnectWise = &ConnectWiseBillingTarget{} }, "connectwise targets only"},
+		"no user":            {func(t *ProviderBillingTarget) { t.Autotask.Username = "" }, ".username"},
+		"inline secret":      {func(t *ProviderBillingTarget) { t.Autotask.SecretRef = "hunter2" }, ".secret_ref"},
+		"tenant code":        {func(t *ProviderBillingTarget) { t.Autotask.IntegrationCodeRef = "secret://at/code" }, ".integration_code_ref"},
+		"no services":        {func(t *ProviderBillingTarget) { t.Autotask.Services = nil }, ".services must map"},
+		"unknown meter":      {func(t *ProviderBillingTarget) { t.Autotask.Services["certificates_issued"] = 1 }, "not a pushed meter"},
+		"zero service":       {func(t *ProviderBillingTarget) { t.Autotask.Services["agents"] = 0 }, ".services.agents"},
+		"same statuses":      {func(t *ProviderBillingTarget) { t.Autotask.Tickets.StatusComplete = 1 }, "two different"},
+		"no priority":        {func(t *ProviderBillingTarget) { t.Autotask.Tickets.Priority = 0 }, ".tickets.priority"},
+		"unknown kind":       {func(t *ProviderBillingTarget) { t.Autotask.Tickets.Kinds = []string{"ca.horizon"} }, "not a ticketed alert kind"},
+		"block on json type": {func(t *ProviderBillingTarget) { t.Type, t.SigningKeyRef = "json", "env:X" }, "autotask targets only"},
+	} {
+		target := valid()
+		tc.mutate(&target)
+		errs := validateProviderBillingSync(ProviderBillingSync{Targets: []ProviderBillingTarget{target}})
+		joined := ""
+		for _, err := range errs {
+			joined += err.Error() + "\n"
+		}
+		if !strings.Contains(joined, tc.want) {
+			t.Errorf("%s: errors %q, want one naming %q", name, joined, tc.want)
+		}
+	}
+}

@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/psa"
+	"trstctl.com/trstctl/internal/psa/autotask"
 	"trstctl.com/trstctl/internal/psa/connectwise"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -82,7 +83,7 @@ func (d *issuanceDispatcher) handlePSATicket(ctx context.Context, m orchestrator
 		return orchestrator.DefiniteNoEffect(errors.New("server: PSA ticket key does not name its operation"))
 	}
 	target, ok := d.billingSync.Target(t.TargetID)
-	if !ok || target.Type != "connectwise" || target.ConnectWise == nil || target.ConnectWise.Tickets == nil {
+	if !ok || len(target.TicketKinds()) == 0 {
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: target %q no longer opens tickets", t.TargetID))
 	}
 	if d.store == nil {
@@ -133,7 +134,7 @@ func (d *issuanceDispatcher) handlePSATicket(ctx context.Context, m orchestrator
 			return nil
 		}
 	}
-	err = d.withConnectWise(target, func(cw *connectwise.Client) error {
+	err = d.withPSAClient(target, func(cw psa.Client) error {
 		switch t.Op {
 		case store.PSATicketOpOpen:
 			id, err := cw.OpenTicket(ctx, psa.TicketOpen{ExternalCompanyID: t.ExternalCompanyID, Reference: psaTicketReference(m.TenantID, t),
@@ -179,35 +180,59 @@ func (d *issuanceDispatcher) failPSATicketTerminal(ctx context.Context, m orches
 		Generation: t.Generation, Op: t.Op, ExternalCompanyID: t.ExternalCompanyID, Reason: reason})
 }
 
-// withConnectWise resolves a connectwise target's keys for one delivery,
-// hands fn a client, and wipes the keys afterwards.
-func (d *issuanceDispatcher) withConnectWise(target config.ProviderBillingTarget, fn func(*connectwise.Client) error) error {
-	cw := target.ConnectWise
-	if cw == nil {
-		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: billing target %q has no connectwise settings", target.ID))
-	}
+// withPSAClient resolves a vendor target's credentials for one delivery,
+// hands fn its client, and wipes the credentials afterwards.
+func (d *issuanceDispatcher) withPSAClient(target config.ProviderBillingTarget, fn func(psa.Client) error) error {
 	client, err := d.billingSyncHTTPClient(target)
 	if err != nil {
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: billing target endpoint rejected: %w", err))
 	}
-	publicKey, err := resolveDeploymentCredentialRef(cw.PublicKeyRef)
-	if err != nil {
-		return orchestrator.DefiniteNoEffect(errors.New("server: resolve the connectwise target's public_key_ref"))
+	switch {
+	case target.Type == "connectwise" && target.ConnectWise != nil:
+		cw := target.ConnectWise
+		publicKey, err := resolveDeploymentCredentialRef(cw.PublicKeyRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the connectwise target's public_key_ref"))
+		}
+		defer publicKey.Destroy()
+		privateKey, err := resolveDeploymentCredentialRef(cw.PrivateKeyRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the connectwise target's private_key_ref"))
+		}
+		defer privateKey.Destroy()
+		cfg := connectwise.Config{BaseURL: target.Endpoint, CompanyID: cw.CompanyID, ClientID: cw.ClientID,
+			AgreementType: cw.AgreementType, Products: cw.Products}
+		if cw.Tickets != nil {
+			cfg.Tickets = &connectwise.TicketConfig{Board: cw.Tickets.Board, NewStatus: cw.Tickets.NewStatus, ClosedStatus: cw.Tickets.ClosedStatus}
+		}
+		psaClient, err := connectwise.New(cfg, client, connectwise.Credentials{PublicKey: publicKey.Bytes(), PrivateKey: privateKey.Bytes()})
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return fn(psaClient)
+	case target.Type == "autotask" && target.Autotask != nil:
+		at := target.Autotask
+		secretValue, err := resolveDeploymentCredentialRef(at.SecretRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the autotask target's secret_ref"))
+		}
+		defer secretValue.Destroy()
+		code, err := resolveDeploymentCredentialRef(at.IntegrationCodeRef)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: resolve the autotask target's integration_code_ref"))
+		}
+		defer code.Destroy()
+		cfg := autotask.Config{BaseURL: target.Endpoint, Username: at.Username, ContractName: at.ContractName, Services: at.Services}
+		if tk := at.Tickets; tk != nil {
+			cfg.Tickets = &autotask.TicketConfig{QueueID: tk.QueueID, StatusNew: tk.StatusNew, StatusComplete: tk.StatusComplete,
+				Priority: tk.Priority, NoteType: tk.EffectiveNoteType(), NotePublish: tk.EffectiveNotePublish()}
+		}
+		psaClient, err := autotask.New(cfg, client, autotask.Credentials{Secret: secretValue.Bytes(), IntegrationCode: code.Bytes()})
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return fn(psaClient)
+	default:
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: billing target %q has no %s settings", target.ID, target.Type))
 	}
-	defer publicKey.Destroy()
-	privateKey, err := resolveDeploymentCredentialRef(cw.PrivateKeyRef)
-	if err != nil {
-		return orchestrator.DefiniteNoEffect(errors.New("server: resolve the connectwise target's private_key_ref"))
-	}
-	defer privateKey.Destroy()
-	cfg := connectwise.Config{BaseURL: target.Endpoint, CompanyID: cw.CompanyID, ClientID: cw.ClientID,
-		AgreementType: cw.AgreementType, Products: cw.Products}
-	if cw.Tickets != nil {
-		cfg.Tickets = &connectwise.TicketConfig{Board: cw.Tickets.Board, NewStatus: cw.Tickets.NewStatus, ClosedStatus: cw.Tickets.ClosedStatus}
-	}
-	psaClient, err := connectwise.New(cfg, client, connectwise.Credentials{PublicKey: publicKey.Bytes(), PrivateKey: privateKey.Bytes()})
-	if err != nil {
-		return orchestrator.DefiniteNoEffect(err)
-	}
-	return fn(psaClient)
 }

@@ -143,7 +143,7 @@ export function ProviderBillingCompanies({ customerId, canWrite, onAuthError }: 
                   <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(event) => void save(event, target.id)}>
                     <Field
                       label={translateNow("provider.billingSync.companyLabel", { target: target.name || target.id })}
-                      description={target.type === "connectwise" ? translateNow("provider.billingSync.connectwiseCompanyHint") : undefined}
+                      description={companyHint(target.type)}
                     >
                       {(control) => (
                         <Input
@@ -281,9 +281,23 @@ function targetTypeLabel(type: string): string {
   switch (type) {
     case "connectwise":
       return translateNow("provider.billingSync.type.connectwise");
+    case "autotask":
+      return translateNow("provider.billingSync.type.autotask");
     case "json":
       return translateNow("provider.billingSync.type.json");
     default:
       return type;
+  }
+}
+
+// companyHint says what a system's company ID is (MSP-3, MSP-4).
+function companyHint(type: string): string | undefined {
+  switch (type) {
+    case "connectwise":
+      return translateNow("provider.billingSync.connectwiseCompanyHint");
+    case "autotask":
+      return translateNow("provider.billingSync.autotaskCompanyHint");
+    default:
+      return undefined;
   }
 }

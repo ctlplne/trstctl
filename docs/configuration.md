@@ -1598,6 +1598,43 @@ they are. An operation that fails for good is recorded with its reason and raise
 `psa_ticket.failed` alert. `GET /provider/v1/tenants/{id}/psa-tickets` lists a
 customer's tickets.
 
+An `autotask` target (MSP-4) puts a customer's figures into Autotask PSA as the whole
+units of its company's Recurring Service contract services:
+
+```json
+{
+  "id": "at",
+  "name": "Autotask",
+  "type": "autotask",
+  "endpoint": "https://webservices3.autotask.net/atservicesrest/v1.0",
+  "autotask": {
+    "username": "trstctl-api@your-msp.example",
+    "secret_ref": "file:/run/secrets/autotask-secret",
+    "integration_code_ref": "env:TRSTCTL_AUTOTASK_TRACKING_ID",
+    "contract_name": "Managed PKI",
+    "services": {"certificates_current": 29683501, "agents": 29683502},
+    "tickets": {"queue_id": 29682833, "status_new": 1, "status_complete": 5, "priority": 2,
+                "note_type": 1, "note_publish": 1}
+  }
+}
+```
+
+`endpoint` is your zone's REST root (the `url` the public `zoneInformation` lookup
+returns for the API user, followed by `v1.0`); `username` is the API user;
+`secret_ref` and `integration_code_ref` name its secret and the integration's
+tracking identifier (`file:` or `env:`). A customer's company in this target is its
+Autotask company ID (a number); the company must be active. `services` maps meters to
+Autotask service IDs, each added once to the customer's Recurring Service contract
+(contract type 7) in force on the effective date (`contract_name` picks one when a
+company has several). For each signable period, delivery resolves the company, its
+contract and each service's contract service before writing anything, reads the
+units in force at the period's end (the first day the next invoice bills), and
+creates one adjustment of the difference; a figure already in force writes nothing,
+so a retry after a lost answer cannot double a line. Quantities are whole units. With
+`tickets`, alerts open tickets as described above: `status_new`, `status_complete`,
+`priority`, `queue_id`, `note_type` and `note_publish` are your zone's picklist
+values (the last two default to 1); a ticket's `externalID` carries its reference.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

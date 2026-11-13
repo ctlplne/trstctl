@@ -713,7 +713,7 @@ func providerBillingTargets(sync config.ProviderBillingSync) []eeprovider.Billin
 	out := make([]eeprovider.BillingTarget, 0, len(sync.Targets))
 	for _, t := range sync.Targets {
 		out = append(out, eeprovider.BillingTarget{ID: t.ID, Name: t.Name, Type: t.Type, Cadence: t.EffectiveCadence(),
-			Tickets: t.ConnectWise != nil && t.ConnectWise.Tickets != nil})
+			Tickets: len(t.TicketKinds()) > 0})
 	}
 	return out
 }

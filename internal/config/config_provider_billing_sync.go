@@ -48,6 +48,73 @@ type ProviderBillingTarget struct {
 	// AgreementType. Endpoint is the site's REST root,
 	// https://{host}/{codebase}/apis/3.0.
 	ConnectWise *ConnectWiseBillingTarget `json:"connectwise,omitempty"`
+	// Autotask configures an "autotask" target (MSP-4): each customer's
+	// figures become the whole units of its company's Recurring Service
+	// contract services. Endpoint is the zone's REST root,
+	// https://webservicesN.autotask.net/atservicesrest/v1.0.
+	Autotask *AutotaskBillingTarget `json:"autotask,omitempty"`
+}
+
+// AutotaskBillingTarget is an Autotask PSA zone the Provider pushes usage to.
+type AutotaskBillingTarget struct {
+	// Username is the API user.
+	Username string `json:"username"`
+	// SecretRef names the API user's secret and IntegrationCodeRef the
+	// integration's tracking identifier (file: or env:), resolved for each
+	// delivery.
+	SecretRef          string `json:"secret_ref"`
+	IntegrationCodeRef string `json:"integration_code_ref"`
+	// ContractName, when set, picks the contract among a company's current
+	// Recurring Service contracts.
+	ContractName string `json:"contract_name,omitempty"`
+	// Services maps a meter to the Autotask service ID whose units carry
+	// it. A meter without a service is not pushed.
+	Services map[string]int64 `json:"services"`
+	// Tickets, when set, opens a ticket under the customer's company for
+	// its alerts (MSP-4).
+	Tickets *AutotaskTickets `json:"tickets,omitempty"`
+}
+
+// AutotaskTickets holds the zone's picklist values for alert tickets.
+type AutotaskTickets struct {
+	QueueID        int64    `json:"queue_id,omitempty"`
+	StatusNew      int64    `json:"status_new"`
+	StatusComplete int64    `json:"status_complete"`
+	Priority       int64    `json:"priority"`
+	NoteType       int64    `json:"note_type,omitempty"`
+	NotePublish    int64    `json:"note_publish,omitempty"`
+	Kinds          []string `json:"kinds,omitempty"`
+}
+
+// EffectiveNoteType and EffectiveNotePublish default the note picklists to 1.
+func (t AutotaskTickets) EffectiveNoteType() int64 {
+	if t.NoteType > 0 {
+		return t.NoteType
+	}
+	return 1
+}
+
+// EffectiveNotePublish is the note publish picklist value, 1 when unset.
+func (t AutotaskTickets) EffectiveNotePublish() int64 {
+	if t.NotePublish > 0 {
+		return t.NotePublish
+	}
+	return 1
+}
+
+// TicketKinds is the alert kinds this target opens tickets for; nil when it
+// opens none.
+func (t ProviderBillingTarget) TicketKinds() []string {
+	switch {
+	case t.ConnectWise != nil && t.ConnectWise.Tickets != nil:
+		return t.ConnectWise.Tickets.EffectiveKinds()
+	case t.Autotask != nil && t.Autotask.Tickets != nil:
+		if len(t.Autotask.Tickets.Kinds) == 0 {
+			return append([]string(nil), PSATicketAlertKinds...)
+		}
+		return append([]string(nil), t.Autotask.Tickets.Kinds...)
+	}
+	return nil
 }
 
 // ConnectWiseBillingTarget is a ConnectWise PSA site the Provider pushes
@@ -118,7 +185,7 @@ var (
 var BillingTargetIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // ProviderBillingTargetTypes are the target types this build can push to.
-var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}}
+var ProviderBillingTargetTypes = map[string]struct{}{"json": {}, "connectwise": {}, "autotask": {}}
 
 // EffectiveCadence is the target's cadence, monthly when unset.
 func (t ProviderBillingTarget) EffectiveCadence() string {
@@ -150,7 +217,7 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 		}
 		seen[t.ID] = true
 		if _, ok := ProviderBillingTargetTypes[t.Type]; !ok {
-			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json, connectwise)", where, t.Type))
+			errs = append(errs, fmt.Errorf("%s.type %q is not a billing target type this build pushes to (json, connectwise, autotask)", where, t.Type))
 		}
 		if len(t.Name) > 128 {
 			errs = append(errs, fmt.Errorf("%s.name is longer than 128 characters", where))
@@ -169,6 +236,11 @@ func validateProviderBillingSync(b ProviderBillingSync) []error {
 			errs = append(errs, validateJSONBillingTarget(where, t)...)
 		case "connectwise":
 			errs = append(errs, validateConnectWiseBillingTarget(where, t)...)
+		case "autotask":
+			errs = append(errs, validateAutotaskBillingTarget(where, t)...)
+		}
+		if t.Type != "autotask" && t.Autotask != nil {
+			errs = append(errs, fmt.Errorf("%s.autotask applies to autotask targets only", where))
 		}
 		switch t.EffectiveCadence() {
 		case "monthly", "daily":
@@ -196,6 +268,60 @@ func validateJSONBillingTarget(where string, t ProviderBillingTarget) []error {
 	}
 	if t.ConnectWise != nil {
 		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	return errs
+}
+
+func validateAutotaskBillingTarget(where string, t ProviderBillingTarget) []error {
+	var errs []error
+	if strings.TrimSpace(t.SigningKeyRef) != "" || strings.TrimSpace(t.TokenRef) != "" {
+		errs = append(errs, fmt.Errorf("%s.signing_key_ref and token_ref apply to json targets only; an autotask target authenticates with its API user", where))
+	}
+	if t.ConnectWise != nil {
+		errs = append(errs, fmt.Errorf("%s.connectwise applies to connectwise targets only", where))
+	}
+	at := t.Autotask
+	if at == nil {
+		return append(errs, fmt.Errorf("%s.autotask is required for an autotask target", where))
+	}
+	where += ".autotask"
+	if !validConnectWiseName(at.Username) {
+		errs = append(errs, fmt.Errorf("%s.username must be the API user (1-100 characters)", where))
+	}
+	for _, ref := range []struct{ name, value string }{{"secret_ref", at.SecretRef}, {"integration_code_ref", at.IntegrationCodeRef}} {
+		if err := validateDeploymentCredentialRef(ref.value); err != nil {
+			errs = append(errs, fmt.Errorf("%s.%s: %w", where, ref.name, err))
+		}
+	}
+	if at.ContractName != "" && !validConnectWiseName(at.ContractName) {
+		errs = append(errs, fmt.Errorf("%s.contract_name must be 1-100 characters", where))
+	}
+	if len(at.Services) == 0 {
+		errs = append(errs, fmt.Errorf("%s.services must map at least one meter (%s) to an Autotask service ID", where, strings.Join(BillingSyncMeters, ", ")))
+	}
+	for _, meter := range slices.Sorted(maps.Keys(at.Services)) {
+		if !slices.Contains(BillingSyncMeters, meter) {
+			errs = append(errs, fmt.Errorf("%s.services names %q, which is not a pushed meter (%s)", where, meter, strings.Join(BillingSyncMeters, ", ")))
+		}
+		if at.Services[meter] <= 0 {
+			errs = append(errs, fmt.Errorf("%s.services.%s must be an Autotask service ID", where, meter))
+		}
+	}
+	if tk := at.Tickets; tk != nil {
+		if tk.StatusNew <= 0 || tk.StatusComplete <= 0 || tk.StatusNew == tk.StatusComplete {
+			errs = append(errs, fmt.Errorf("%s.tickets.status_new and status_complete must be two different ticket status picklist values", where))
+		}
+		if tk.Priority <= 0 {
+			errs = append(errs, fmt.Errorf("%s.tickets.priority must be a ticket priority picklist value", where))
+		}
+		if tk.QueueID < 0 || tk.NoteType < 0 || tk.NotePublish < 0 {
+			errs = append(errs, fmt.Errorf("%s.tickets.queue_id, note_type and note_publish cannot be negative", where))
+		}
+		for _, kind := range tk.Kinds {
+			if !slices.Contains(PSATicketAlertKinds, kind) {
+				errs = append(errs, fmt.Errorf("%s.tickets.kinds names %q, which is not a ticketed alert kind (%s)", where, kind, strings.Join(PSATicketAlertKinds, ", ")))
+			}
+		}
 	}
 	return errs
 }

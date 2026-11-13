@@ -28,6 +28,7 @@ import (
 type servedTicketObserver struct {
 	orch      atomic.Pointer[orchestrator.Orchestrator]
 	companies map[string]string
+	target    string
 	seen      atomic.Int32
 }
 
@@ -41,7 +42,11 @@ func (o *servedTicketObserver) ObserveAlert(ctx context.Context, tenantID, alert
 	if alert.Kind != notify.KindRenewalFailed || !mapped {
 		return nil
 	}
-	_, err := orch.QueuePSATicketAlert(ctx, tenantID, orchestrator.PSATicketAlert{TargetID: "cw", AlertKey: "identity.renewal_failed:" + alert.IdentityID,
+	target := o.target
+	if target == "" {
+		target = "cw"
+	}
+	_, err := orch.QueuePSATicketAlert(ctx, tenantID, orchestrator.PSATicketAlert{TargetID: target, AlertKey: "identity.renewal_failed:" + alert.IdentityID,
 		Kind: alert.Kind, ExternalCompanyID: company, Summary: "Renewal failed: " + alert.Subject, Note: alert.Detail, AlertRef: alertRef})
 	return err
 }

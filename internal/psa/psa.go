@@ -9,6 +9,7 @@
 package psa
 
 import (
+	"context"
 	"errors"
 	"time"
 )
@@ -74,6 +75,15 @@ type TicketClose struct {
 	TicketID   string
 	Reference  string
 	Resolution string
+}
+
+// Client is what the billing sync needs from a PSA: usage as the customer's
+// quantities, and alert tickets under the customer's company.
+type Client interface {
+	PushUsage(ctx context.Context, p UsagePeriod) (UsageOutcome, error)
+	OpenTicket(ctx context.Context, t TicketOpen) (string, error)
+	AddNote(ctx context.Context, n TicketNote) error
+	CloseTicket(ctx context.Context, cl TicketClose) error
 }
 
 // NoteMarker is the line a note carries so a retry can find it.

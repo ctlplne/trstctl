@@ -1737,6 +1737,14 @@ export const messages = {
     defaultMessage: "ConnectWise PSA, agreement additions",
     description: "MSP-3: a ConnectWise PSA billing target.",
   },
+  "provider.billingSync.type.autotask": {
+    defaultMessage: "Autotask PSA, contract services",
+    description: "MSP-4: an Autotask PSA billing target.",
+  },
+  "provider.billingSync.autotaskCompanyHint": {
+    defaultMessage: "The Autotask company ID, a number. Usage sets the units of that company's Recurring Service contract services.",
+    description: "MSP-4: what to enter as the company in an Autotask target.",
+  },
   "provider.billingSync.connectwiseCompanyHint": {
     defaultMessage: "The ConnectWise company record ID or its identifier. Usage lands on that company's one active agreement of the configured type.",
     description: "MSP-3: what to enter as the company in a ConnectWise target.",

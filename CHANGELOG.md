@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- Autotask PSA as a billing target (MSP-4): an `autotask` target (the zone's REST root, the API user, secret and
+  tracking identifier references, a service ID per meter, optional contract name and ticket picklist values) sets each
+  customer's signed period as the whole units of its company's Recurring Service contract services, effective from
+  the period's end, by reading the units in force and adjusting only the difference (a retry cannot double a line),
+  and opens, notes and completes tickets for the customer's alerts like ConnectWise. Billing-sync delivery and tickets
+  now speak to every PSA through one client interface.
 - Alert tickets in ConnectWise PSA (MSP-3, part 2): a `connectwise` target with a `tickets` block (board, new and
   closed status, ticketed kinds) opens one service ticket under the customer's company for each subject of its
   certificate expiry, failed renewal, unhealthy revocation endpoint and credential drift alerts, before the alert
