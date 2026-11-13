@@ -234,21 +234,24 @@ func (p *Projector) applySecretScopedSyncTx(ctx context.Context, tx pgx.Tx, e ev
 	}
 }
 
-// addSecretScopedSyncPrivacyPolicies: the actors are identities; names, keys,
-// prefixes and digests are opaque.
+// addSecretScopedSyncPrivacyPolicies: the actors are identities; the secret
+// names — source and destination prefixes, managed keys and their source
+// names — are structured paths whose segments an erasure rewrites (A237-L5);
+// the definition's name (a slug), targets and digests are opaque.
 func addSecretScopedSyncPrivacyPolicies(policies map[privacyEventPolicyKey]events.PrivacyEventPolicy) {
 	const (
 		exact  = events.PrivacyFieldIdentityExact
 		opaque = events.PrivacyFieldOpaqueExact
+		token  = events.PrivacyFieldSubjectToken
 	)
 	policies[privacyEventPolicyKey{EventSecretScopedSyncDefined, 1}] = privacyRules(
-		privacyRule("/id", opaque), privacyRule("/name", opaque), privacyRule("/source_prefix", opaque),
-		privacyRule("/target", opaque), privacyRule("/destination_prefix", opaque), privacyRule("/key_transform", opaque),
+		privacyRule("/id", opaque), privacyRule("/name", opaque), privacyRule("/source_prefix", token),
+		privacyRule("/target", opaque), privacyRule("/destination_prefix", token), privacyRule("/key_transform", opaque),
 		privacyRule("/delete_scope", opaque), privacyRule("/adopt_existing", opaque), privacyRule("/defined_by", exact),
 		privacyRule("/mode", opaque))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncReplaced, 1}] = privacyRules(
-		privacyRule("/id", opaque), privacyRule("/name", opaque), privacyRule("/source_prefix", opaque),
-		privacyRule("/target", opaque), privacyRule("/destination_prefix", opaque), privacyRule("/key_transform", opaque),
+		privacyRule("/id", opaque), privacyRule("/name", opaque), privacyRule("/source_prefix", token),
+		privacyRule("/target", opaque), privacyRule("/destination_prefix", token), privacyRule("/key_transform", opaque),
 		privacyRule("/delete_scope", opaque), privacyRule("/adopt_existing", opaque), privacyRule("/mode", opaque),
 		privacyRule("/replaced_by", exact), privacyRule("/release_keys", opaque))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncModeSet, 1}] = privacyRules(
@@ -263,7 +266,7 @@ func addSecretScopedSyncPrivacyPolicies(policies map[privacyEventPolicyKey]event
 	policies[privacyEventPolicyKey{EventSecretScopedSyncApplied, 1}] = privacyRules(
 		privacyRule("/tenant_epoch", opaque), privacyRule("/id", opaque), privacyRule("/target", opaque),
 		privacyRule("/plan_digest", opaque), privacyRule("/applied_by", exact),
-		privacyRule("/items/*/remote_key", opaque), privacyRule("/items/*/source_name", opaque),
+		privacyRule("/items/*/remote_key", token), privacyRule("/items/*/source_name", token),
 		privacyRule("/items/*/source_version", opaque), privacyRule("/items/*/action", opaque),
 		privacyRule("/items/*/job_id", opaque), privacyRule("/items/*/delete_id", opaque),
 		privacyRule("/approval/request_id", opaque), privacyRule("/approval/intent_digest", opaque),

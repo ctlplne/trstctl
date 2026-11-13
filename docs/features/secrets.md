@@ -1947,7 +1947,12 @@ managed key that fails for good also raises a warning on the notification surfac
 (`secret.scoped_sync.delivery_failed`, routed like other trust-operations alerts): it
 names the sync, the destination key, the target and the reason, never a value, and a
 failed delete keeps the key managed so the next plan proposes deleting it again.
-Removing a definition leaves its destination keys where they are.
+Removing a definition leaves its destination keys where they are. A subject erasure
+rewrites a segment of a sync's secret names that is exactly the erased subject — its
+source and destination prefixes, each managed key and its source name, each queued
+delete — to the subject's placeholder, in the scoped-sync events and in the sync's
+records alike, so a rebuild reaches the same names (A237-L5). The definition's name, a
+slug, stays as written, and the subject's export lists each sync that names them.
 
 A definition is `manual` (it waits for a reviewed apply) or `auto`
 (`trstctl secrets scoped-syncs mode <id> -f mode.json` with `{"mode":"auto"}`, or

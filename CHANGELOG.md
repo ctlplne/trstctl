@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A subject erasure rewrites the subject in scoped syncs' secret names (A237-L5): a segment of a sync's source or
+  destination prefix, a managed key or its source name, or a queued delete that is exactly the erased subject becomes
+  the subject's placeholder in the scoped-sync events and in the sync's records alike; the subject's export lists
+  each sync that names them.
 - A scoped sync can target a destination that can't list its keys (A237-L2): it works from its delivery receipts
   only, so the definition sets `adopt_existing` (a key the sync didn't write can't be seen and would be replaced;
   each `create` says so) and keeps `delete_scope` at `none` (a key whose source is gone stays, `orphaned`); updates

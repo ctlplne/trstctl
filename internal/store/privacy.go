@@ -74,6 +74,8 @@ var privacyReadModelSelectorTables = map[string]struct{}{
 	"remediation_playbook_runs": {}, "compliance_report_schedules": {},
 	"honey_tokens":                   {},
 	"incident_fleet_reissuance_runs": {}, "ownership_readiness_exceptions": {},
+	// A237-L5: a scoped sync whose secret names hold the subject.
+	"secret_scoped_syncs": {},
 }
 
 // ValidatePrivacyErasureSelectorsV3 proves that every selector emitted by the
@@ -2716,6 +2718,7 @@ func erasePrivacyReadModelRows(ctx context.Context, tx pgx.Tx, tenantID, subject
 		eraseAttesterTrustReceiptPrivacyRows,
 		eraseServiceDependentActorPrivacyRows,
 		eraseDecoySecretPrivacyRows,
+		eraseScopedSyncPrivacyRows,
 	} {
 		if err := fn(ctx, tx, tenantID, subjectRef, placeholder, selectors); err != nil {
 			return err
