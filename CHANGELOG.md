@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The revocation report reads an external CA's own status (A245-L3): for a certificate an external CA issued, the CA
+  facet asks that CA's OCSP responder named in the certificate, with the issuer kept in its chain, and reads confirmed
+  on a signed revoked answer, pending on good and failed on unknown, with the answer's time; at most ten responders per
+  report, through the outbound client that refuses private addresses.
 - Privileged account discovery reads a host's sudo rights through a non-root administrator (A260-L3): when a sudoers
   file is unreadable and sudo lets the administrator list other users' rights (`admin ALL = (ALL) NOPASSWD: list`),
   the scan asks `sudo -n -l -U` for each login account and stages `sudo:ALL` or `sudo:commands` from what sudo prints,

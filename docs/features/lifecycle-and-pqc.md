@@ -583,6 +583,17 @@ Each shows only to a caller who may read its domain (`agents:read`, `access:read
 `secrets:read`, `keys:read`) and opens by its own id, such as `agent_job:<number>` or
 `managed_key_operation:<operation id>`.
 
+### Revocation report: an external CA's own status (A245-L3)
+
+For a certificate an external CA issued, the revocation report's CA facet asks that CA's
+own OCSP responder, named in the certificate, with the issuer kept in its chain. Only an
+answer the issuer signed, about that serial and not past its next update, counts: revoked
+reads confirmed, good reads pending (the CA has not published the revocation yet), and
+unknown reads failed, each with the answer's time. A certificate naming no responder, a
+chain without its issuer, or a responder that can't be read reads not observed, saying
+why. A report asks at most ten responders, five seconds each, through the outbound client
+that refuses private addresses.
+
 What a change would reach is answered before it is made:
 `GET /api/v1/connectors/targets/{id}/impact` and
 `GET /api/v1/profiles/impact/{name}` (`trstctl connector target impact`,

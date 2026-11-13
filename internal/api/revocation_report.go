@@ -187,6 +187,7 @@ func (a *API) getIdentityRevocationReport(w http.ResponseWriter, r *http.Request
 		return
 	}
 	report := revocationReport{IdentityID: id, Certificates: []revocationCertificateReport{}}
+	readbacks := 0
 	for _, cert := range certs {
 		if cert.Status != "revoked" || cert.RevokedAt == nil {
 			continue
@@ -202,7 +203,18 @@ func (a *API) getIdentityRevocationReport(w http.ResponseWriter, r *http.Request
 			a.writeError(w, err)
 			return
 		}
-		report.Certificates = append(report.Certificates, buildRevocationCertificateReport(cert, ev))
+		entry := buildRevocationCertificateReport(cert, ev)
+		if cert.IssuingExternalCAID != "" {
+			// A245-L3: ask the external CA's own responder, a bounded number
+			// of times per report.
+			if readbacks < maxExternalOCSPReadbacks {
+				readbacks++
+				entry.CAStatus = a.externalCAStatus(r.Context(), cert)
+			} else {
+				entry.CAStatus.Detail = fmt.Sprintf("revoked in trstctl's inventory; a report asks at most %d external CA responders, and this one was not asked", maxExternalOCSPReadbacks)
+			}
+		}
+		report.Certificates = append(report.Certificates, entry)
 	}
 	a.writeJSON(w, http.StatusOK, report)
 }
@@ -211,6 +223,12 @@ func (a *API) getIdentityRevocationReport(w http.ResponseWriter, r *http.Request
 // platform-issued leaf's revocation is recorded under.
 func WithPlatformIssuingCAID(id string) Option {
 	return func(c *config) { c.platformIssuingCAID = id }
+}
+
+// WithExternalOCSPClient sets the client the revocation report asks external
+// CAs' OCSP responders with (A245-L3); netsec's SSRF-safe client when unset.
+func WithExternalOCSPClient(client *http.Client) Option {
+	return func(c *config) { c.externalOCSPClient = client }
 }
 
 func revocationReportRoutes(a *API) []route {

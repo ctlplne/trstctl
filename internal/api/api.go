@@ -215,30 +215,32 @@ type API struct {
 	acmeOperatorPlan                   ACMEOperatorPlanProvider
 	lifecycleAutomationPlan            LifecycleAutomationPlanProvider
 	platformIssuingCAID                string
-	operationsHealth                   OperationsHealthProvider
-	validityReadiness                  ValidityReadinessProvider
-	assurance                          *assurance.Assembler
-	firstIssuanceRetry                 FirstIssuanceRetryService
-	agentJobPosture                    AgentJobPostureProvider
-	agentJobClaimable                  func(string) bool
-	enqueueConnectorTest               ConnectorTestEnqueuer
-	adcsPosture                        ADCSPostureProvider
-	adcsDrift                          ADCSDriftProvider
-	acmeEABDisable                     ACMEEABDisabler
-	acmeEABPolicy                      ACMEEABPolicyUpdater
-	acmeEABRotate                      ACMEEABRotator
-	acmeAccounts                       ACMEAccountsProvider
-	acmeOrders                         ACMEOrdersProvider
-	acmeDeactivateAccount              ACMEAccountDeactivator
-	privacyRetentionPolicy             privacy.RetentionPolicy
-	privacyRetentionSource             privacy.RetentionPolicySource
-	kubernetesCSRPosture               KubernetesPostureReader
-	kubernetesCMPosture                KubernetesPostureReader
-	kubernetesTrustPosture             KubernetesPostureReader
-	kubernetesTrustRollouts            KubernetesTrustRolloutStore
-	auditAnchoringRuntime              func() AuditAnchoringRuntime
-	auditAnchorReader                  AuditAnchorReader
-	tsaCertificates                    TSACertificateManager
+	// externalOCSPClient asks external CAs' own OCSP responders (A245-L3).
+	externalOCSPClient      *http.Client
+	operationsHealth        OperationsHealthProvider
+	validityReadiness       ValidityReadinessProvider
+	assurance               *assurance.Assembler
+	firstIssuanceRetry      FirstIssuanceRetryService
+	agentJobPosture         AgentJobPostureProvider
+	agentJobClaimable       func(string) bool
+	enqueueConnectorTest    ConnectorTestEnqueuer
+	adcsPosture             ADCSPostureProvider
+	adcsDrift               ADCSDriftProvider
+	acmeEABDisable          ACMEEABDisabler
+	acmeEABPolicy           ACMEEABPolicyUpdater
+	acmeEABRotate           ACMEEABRotator
+	acmeAccounts            ACMEAccountsProvider
+	acmeOrders              ACMEOrdersProvider
+	acmeDeactivateAccount   ACMEAccountDeactivator
+	privacyRetentionPolicy  privacy.RetentionPolicy
+	privacyRetentionSource  privacy.RetentionPolicySource
+	kubernetesCSRPosture    KubernetesPostureReader
+	kubernetesCMPosture     KubernetesPostureReader
+	kubernetesTrustPosture  KubernetesPostureReader
+	kubernetesTrustRollouts KubernetesTrustRolloutStore
+	auditAnchoringRuntime   func() AuditAnchoringRuntime
+	auditAnchorReader       AuditAnchorReader
+	tsaCertificates         TSACertificateManager
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
 	// only closed-set, non-sensitive labels (feature, action, outcome) and the
 	// duration — never tenant or credential data. nil disables per-feature telemetry.
@@ -277,113 +279,115 @@ type config struct {
 	// real authenticated resolver (so test servers still accept bearer tokens and
 	// sessions). It is referenced only from WithInsecureHeaderResolver, so it is
 	// not linked into the production build. See WithInsecureHeaderResolver.
-	principalFromReg            func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
-	audit                       *audit.Service
-	auditAnchor                 AuditAnchorFunc
-	retirementChecklist         RetirementChecklistSource
-	auth                        *AuthConfig
-	providerPlaneAvailable      bool
-	scim                        *SCIMConfig
-	agentTokens                 BootstrapTokenIssuer
-	agentConnection             agentEnrollmentConnection
-	agentRenewalReady           bool
-	agentHeartbeatInterval      time.Duration
-	agentClockSkewWarning       time.Duration
-	agentClaimQuota             int
-	agentUpgradePublisherKey    []byte
-	agentEnroller               BootstrapEnroller
-	agentEnrollmentObserver     func(result string)
-	rateLimiter                 RateLimiter
-	specialAbuseLimits          SpecialRouteAbuseLimits
-	gate                        MutationGate
-	abac                        ABACDenyEvaluator
-	abacEnvironment             map[string]string
-	abacNow                     func() time.Time
-	dependentRotationNow        func() time.Time
-	approvals                   ApprovalRecorder
-	breakglass                  BreakglassReconciler
-	breakglassIssuer            BreakglassIssuer
-	breakglassCeremonies        BreakglassCeremonyService
-	breakglassRotation          BreakglassRotationService
-	breakglassAdmin             *breakglass.AdminService
-	caHierarchy                 CAHierarchyService
-	edgeDelegations             EdgeDelegationService
-	eventProtection             EventProtectionService
-	auditArchives               AuditArchiveService
-	externalCAs                 ExternalCAService
-	certRevocationAuthority     CertificateRevocationAuthorityResolver
-	attestedIssuer              AttestedIssuerService
-	attestationPrincipals       AttestationPrincipalResolver
-	cmdbRunNow                  CMDBRunNow
-	sshWorkflow                 SSHWorkflowService
-	sshTrustFleet               SSHTrustFleetService
-	adcsDecisions               ADCSDecisionService
-	mdmCheckIns                 MDMCheckInService
-	factoryBatches              FactoryBatchService
-	keyVaultDisable             KeyVaultDisableService
-	pkiSecretLeafRecovery       PKISecretLeafRecoveryService
-	oidcIssuer                  OIDCIssuerSource
-	workloadJWTKeys             WorkloadJWTKeySource
-	slackApp                    SlackAppService
-	managedCALeafRecovery       ManagedCALeafRecoveryService
-	broker                      BrokerService
-	ephemeral                   EphemeralIssuerService
-	commandMAC                  func(domain, material []byte) ([]byte, error)
-	cloudChanges                CloudMachineChangeService
-	pam                         PAMService
-	managedKeys                 ManagedKeyService
-	managedKeyCustody           ManagedKeyCustodyConfiguration
-	transit                     TransitService
-	transitPosture              TransitPostureProvider
-	kmipClientRegistrations     func() bool
-	protocolProfile             ProtocolProfileControl
-	cmpQualificationPosture     CMPQualificationPosture
-	tsaQualificationPosture     TSAQualificationPosture
-	spiffeQualificationPosture  SPIFFEQualificationPosture
-	codeSigning                 CodeSigningService
-	ctSubmission                CTSubmissionService
-	secrets                     *secretsService
-	ai                          *aiSurface
-	cbom                        CBOMService
-	pqcCampaignSigner           PQCCampaignClosureSigner
-	licensedRoutes              []LicensedRoute
-	coreRoutes                  []LicensedRoute
-	licensedSchemas             map[string]*Schema
-	complianceEvidence          ComplianceEvidenceService
-	complianceReportArchive     reportarchive.Archive
-	license                     *license.Manager
-	fipsRequired                bool
-	remediation                 bool
-	notificationChannels        []string
-	notificationEgress          func(string, string) error
-	cmdbExports                 CMDBCertificateExports
-	notificationOutbox          *orchestrator.Outbox
-	outboxCircuits              func() []orchestrator.CircuitSnapshot
-	bulkheadStats               func() []bulkhead.Stats
-	upgradePreflight            func(context.Context) (any, error)
-	systemReadout               SystemReadoutProvider
-	idemProtection              IdempotencyResultProtectionProvider
-	tenantKeyDomains            TenantKeyDomainLifecycle
-	deploymentKEK               DeploymentKEKService
-	tenantCrypto                tenantseal.Access
-	connectorRegistry           *connector.Registry
-	connectorGrantCensus        func(name string) []string
-	caLeafValidity              time.Duration
-	sshFleet                    SSHFleetProvider
-	sshHostTrust                SSHHostTrustProvider
-	codeSigningIdentities       CodeSigningIdentityProvider
-	codeSigningRekorBundles     CodeSigningRekorBundleProvider
-	serviceNowBindings          []ServiceNowBinding
-	outboundEnvCredentialRefs   map[string]struct{}
-	acmeDNS01Providers          []ACMEDNS01ProviderCatalogItem
-	acmeDNS01Qualification      ACMEDNS01QualificationService
-	acmeCAAResolver             acmesrv.CAAResolver
-	acmeTXTResolver             acmesrv.Resolver
-	acmeARIPosture              ACMEARIPostureProvider
-	acmeEAB                     ACMEEABProvider
-	acmeOperatorPlan            ACMEOperatorPlanProvider
-	lifecycleAutomationPlan     LifecycleAutomationPlanProvider
-	platformIssuingCAID         string
+	principalFromReg           func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
+	audit                      *audit.Service
+	auditAnchor                AuditAnchorFunc
+	retirementChecklist        RetirementChecklistSource
+	auth                       *AuthConfig
+	providerPlaneAvailable     bool
+	scim                       *SCIMConfig
+	agentTokens                BootstrapTokenIssuer
+	agentConnection            agentEnrollmentConnection
+	agentRenewalReady          bool
+	agentHeartbeatInterval     time.Duration
+	agentClockSkewWarning      time.Duration
+	agentClaimQuota            int
+	agentUpgradePublisherKey   []byte
+	agentEnroller              BootstrapEnroller
+	agentEnrollmentObserver    func(result string)
+	rateLimiter                RateLimiter
+	specialAbuseLimits         SpecialRouteAbuseLimits
+	gate                       MutationGate
+	abac                       ABACDenyEvaluator
+	abacEnvironment            map[string]string
+	abacNow                    func() time.Time
+	dependentRotationNow       func() time.Time
+	approvals                  ApprovalRecorder
+	breakglass                 BreakglassReconciler
+	breakglassIssuer           BreakglassIssuer
+	breakglassCeremonies       BreakglassCeremonyService
+	breakglassRotation         BreakglassRotationService
+	breakglassAdmin            *breakglass.AdminService
+	caHierarchy                CAHierarchyService
+	edgeDelegations            EdgeDelegationService
+	eventProtection            EventProtectionService
+	auditArchives              AuditArchiveService
+	externalCAs                ExternalCAService
+	certRevocationAuthority    CertificateRevocationAuthorityResolver
+	attestedIssuer             AttestedIssuerService
+	attestationPrincipals      AttestationPrincipalResolver
+	cmdbRunNow                 CMDBRunNow
+	sshWorkflow                SSHWorkflowService
+	sshTrustFleet              SSHTrustFleetService
+	adcsDecisions              ADCSDecisionService
+	mdmCheckIns                MDMCheckInService
+	factoryBatches             FactoryBatchService
+	keyVaultDisable            KeyVaultDisableService
+	pkiSecretLeafRecovery      PKISecretLeafRecoveryService
+	oidcIssuer                 OIDCIssuerSource
+	workloadJWTKeys            WorkloadJWTKeySource
+	slackApp                   SlackAppService
+	managedCALeafRecovery      ManagedCALeafRecoveryService
+	broker                     BrokerService
+	ephemeral                  EphemeralIssuerService
+	commandMAC                 func(domain, material []byte) ([]byte, error)
+	cloudChanges               CloudMachineChangeService
+	pam                        PAMService
+	managedKeys                ManagedKeyService
+	managedKeyCustody          ManagedKeyCustodyConfiguration
+	transit                    TransitService
+	transitPosture             TransitPostureProvider
+	kmipClientRegistrations    func() bool
+	protocolProfile            ProtocolProfileControl
+	cmpQualificationPosture    CMPQualificationPosture
+	tsaQualificationPosture    TSAQualificationPosture
+	spiffeQualificationPosture SPIFFEQualificationPosture
+	codeSigning                CodeSigningService
+	ctSubmission               CTSubmissionService
+	secrets                    *secretsService
+	ai                         *aiSurface
+	cbom                       CBOMService
+	pqcCampaignSigner          PQCCampaignClosureSigner
+	licensedRoutes             []LicensedRoute
+	coreRoutes                 []LicensedRoute
+	licensedSchemas            map[string]*Schema
+	complianceEvidence         ComplianceEvidenceService
+	complianceReportArchive    reportarchive.Archive
+	license                    *license.Manager
+	fipsRequired               bool
+	remediation                bool
+	notificationChannels       []string
+	notificationEgress         func(string, string) error
+	cmdbExports                CMDBCertificateExports
+	notificationOutbox         *orchestrator.Outbox
+	outboxCircuits             func() []orchestrator.CircuitSnapshot
+	bulkheadStats              func() []bulkhead.Stats
+	upgradePreflight           func(context.Context) (any, error)
+	systemReadout              SystemReadoutProvider
+	idemProtection             IdempotencyResultProtectionProvider
+	tenantKeyDomains           TenantKeyDomainLifecycle
+	deploymentKEK              DeploymentKEKService
+	tenantCrypto               tenantseal.Access
+	connectorRegistry          *connector.Registry
+	connectorGrantCensus       func(name string) []string
+	caLeafValidity             time.Duration
+	sshFleet                   SSHFleetProvider
+	sshHostTrust               SSHHostTrustProvider
+	codeSigningIdentities      CodeSigningIdentityProvider
+	codeSigningRekorBundles    CodeSigningRekorBundleProvider
+	serviceNowBindings         []ServiceNowBinding
+	outboundEnvCredentialRefs  map[string]struct{}
+	acmeDNS01Providers         []ACMEDNS01ProviderCatalogItem
+	acmeDNS01Qualification     ACMEDNS01QualificationService
+	acmeCAAResolver            acmesrv.CAAResolver
+	acmeTXTResolver            acmesrv.Resolver
+	acmeARIPosture             ACMEARIPostureProvider
+	acmeEAB                    ACMEEABProvider
+	acmeOperatorPlan           ACMEOperatorPlanProvider
+	lifecycleAutomationPlan    LifecycleAutomationPlanProvider
+	platformIssuingCAID        string
+	// externalOCSPClient asks external CAs' own OCSP responders (A245-L3).
+	externalOCSPClient          *http.Client
 	operationsHealth            OperationsHealthProvider
 	validityReadiness           ValidityReadinessProvider
 	assurance                   *assurance.Assembler
@@ -742,6 +746,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeOperatorPlan:            cfg.acmeOperatorPlan,
 		lifecycleAutomationPlan:     cfg.lifecycleAutomationPlan,
 		platformIssuingCAID:         cfg.platformIssuingCAID,
+		externalOCSPClient:          cfg.externalOCSPClient,
 		operationsHealth:            cfg.operationsHealth,
 		validityReadiness:           cfg.validityReadiness,
 		assurance:                   cfg.assurance,

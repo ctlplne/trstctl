@@ -8107,9 +8107,11 @@ approval standing (A245-L5). What it reads from, and what comes next:
 - **Sessions are not observed.** Existing-session termination is confirmed only
   by a containment stop or removal receipt after the revocation; trstctl does
   not see the sessions themselves.
-- **External CAs are not read back.** The CA facet reads the platform and
-  hierarchy CAs' records; an external CA's own status is reported as not
-  observed.
+- **External CAs are read by OCSP only (A245-L3).** The CA facet reads the
+  platform and hierarchy CAs' records, and asks an external CA's own OCSP
+  responder; its CRL is not read, and a certificate naming no responder, or a
+  chain kept without its issuer, stays not observed. A report asks at most ten
+  responders.
 - **Actions run in place (A245-L4).** Each available retry and rollback carries
   the exact request it sends and, when its route has one, the preview that
   reviews that request; the Operations page reviews and then runs it there,
