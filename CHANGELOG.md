@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- A remote desktop target's vaulted Active Directory account has a lockout-aware credential health check (A258-L1):
+  before the check signs in, the provider's administrator reads the account's failed sign-ins and the lockout
+  threshold that applies to it (its resultant password settings, else the domain's); one short of the threshold the
+  target reads `lockout_risk` and no password is sent, and locked, disabled and expired accounts are read from their
+  state. Migration 0483 admits the new status. The console's targets table shows each target's credential health and
+  a Check now action.
 - The first archived audit segment after a legacy (v1) segment lists the record it really starts at (A234-L2): the
   list reads it from that segment's own verified bundle instead of reporting 0.
 - A tenant still downloads its archived audit segments after the audit key rotates (A234-L1): each archive event

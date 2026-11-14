@@ -9264,7 +9264,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		switch pl.Status {
-		case "healthy", "rejected", "expired", "locked", "unreachable", "error", "not_supported":
+		case "healthy", "rejected", "expired", "locked", "unreachable", "error", "not_supported", "lockout_risk":
 		default:
 			return fmt.Errorf("projections: %s has an unknown status", e.Type)
 		}

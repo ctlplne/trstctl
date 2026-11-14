@@ -8462,6 +8462,49 @@ export const messages = {
   },
   "admin.access.disableReason": { defaultMessage: "Reason for disabling", description: "PAM target disable audit reason." },
   "admin.access.targetDisabled": { defaultMessage: "Target {id} disabled for new requests.", description: "PAM target disable success." },
+  "admin.access.health.healthy": { defaultMessage: "Credential signs in", description: "PAM target credential health: the last check signed in (A258)." },
+  "admin.access.health.rejected": {
+    defaultMessage: "Credential refused",
+    description: "PAM target credential health: the server refused the stored credential (A258).",
+  },
+  "admin.access.health.expired": {
+    defaultMessage: "Credential expired",
+    description: "PAM target credential health: the server says the credential expired or must change (A258).",
+  },
+  "admin.access.health.locked": { defaultMessage: "Account locked", description: "PAM target credential health: the account is locked (A258)." },
+  "admin.access.health.unreachable": {
+    defaultMessage: "Server unreachable",
+    description: "PAM target credential health: the check never reached a sign-in (A258).",
+  },
+  "admin.access.health.error": { defaultMessage: "Check failed", description: "PAM target credential health: the check failed for another reason (A258)." },
+  "admin.access.health.notSupported": {
+    defaultMessage: "No sign-in check for this provider",
+    description: "PAM target credential health: the provider has no read-only sign-in check (A258).",
+  },
+  "admin.access.health.lockoutRisk": {
+    defaultMessage: "Not checked: one more failed sign-in would lock the account",
+    description: "PAM target credential health: a directory account one short of its lockout threshold, so the check signed in with nothing (A258-L1).",
+  },
+  "admin.access.health.lockoutRiskHelp": {
+    defaultMessage:
+      "The directory counts everyone's failed sign-ins. This account is one short of its lockout threshold, so no password was sent; the next check reads the count again.",
+    description: "Explains a lockout-risk credential health status (A258-L1).",
+  },
+  "admin.access.health.notRetried": {
+    defaultMessage: "Not tried again until the credential changes or someone checks it now.",
+    description: "PAM target credential health: a refused credential is not retried by scheduled checks (A258).",
+  },
+  "admin.access.health.checkedAt": { defaultMessage: "Checked {at}", description: "When a PAM target's credential was last checked (A258)." },
+  "admin.access.checkHealth": { defaultMessage: "Check now", description: "Action: check a PAM target's stored credential now (A258)." },
+  "admin.access.checkHealthFor": { defaultMessage: "Check {id}'s credential now", description: "Accessible name of a PAM target's check-now action (A258)." },
+  "admin.access.healthChecked": {
+    defaultMessage: "Checked {id}: {status}.",
+    description: "Notice after an operator's credential check of a PAM target (A258).",
+  },
+  "admin.access.healthCheckFailed": {
+    defaultMessage: "The credential check could not run",
+    description: "Error title when an operator's credential check of a PAM target fails (A258).",
+  },
   "admin.access.postgresql": { defaultMessage: "PostgreSQL", description: "PostgreSQL target type; product noun stays literal." },
   "admin.access.ssh": { defaultMessage: "SSH", description: "SSH target type; protocol acronym stays literal." },
   "admin.access.kubernetes": { defaultMessage: "Kubernetes", description: "Kubernetes target type; product noun stays literal (A259)." },

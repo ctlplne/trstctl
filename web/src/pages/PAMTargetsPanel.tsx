@@ -1,11 +1,13 @@
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- The named table overflow region needs keyboard focus for horizontal scrolling. */
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { api, type PAMTarget, type PAMTargetRequest } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import { formatDateTime, type FormatPolicy } from "@/i18n/format";
+import type { MessageKey } from "@/i18n/messages";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
@@ -120,6 +122,20 @@ const CHECKOUT_PROVIDER_TYPES: Record<string, string[]> = {
   // A272: released only through emergency access.
   breakglass: ["okta-user", "entra-user", "google-workspace-user"],
 };
+// A258: each status of a brokered account's last credential check. A258-L1:
+// lockout_risk is a directory account one short of its lockout threshold,
+// which the check signed in with nothing.
+type HealthStatus = NonNullable<PAMTarget["health"]>["status"];
+const healthKey: Record<HealthStatus, MessageKey> = {
+  healthy: "admin.access.health.healthy",
+  rejected: "admin.access.health.rejected",
+  expired: "admin.access.health.expired",
+  locked: "admin.access.health.locked",
+  unreachable: "admin.access.health.unreachable",
+  error: "admin.access.health.error",
+  not_supported: "admin.access.health.notSupported",
+  lockout_risk: "admin.access.health.lockoutRisk",
+};
 function isCheckoutAccount(targetType: string): boolean {
   return targetType in CHECKOUT_PROVIDER_TYPES;
 }
@@ -136,7 +152,8 @@ function errorMessage(err: unknown): string {
 /** Tenant target registration is separate from the requester form. A caller
  * with access:write can request a session but cannot change its destination. */
 export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canManage: boolean; canAssignOwner?: boolean }) {
-  const { t } = useTranslation();
+  const { locale, timeZone, t } = useTranslation();
+  const policy = useMemo<FormatPolicy>(() => ({ locale, timeZone }), [locale, timeZone]);
   const [formOpen, setFormOpen] = useState(false);
   const query = useApiQuery(["pam-targets"], api.pamTargets, { retry: false });
   // A276: every brokered account has an accountable owner, assigned to its
@@ -153,6 +170,8 @@ export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canMana
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [checking, setChecking] = useState<string | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
   const submitKey = useRef(crypto.randomUUID());
   const disableKey = useRef(crypto.randomUUID());
   const {
@@ -230,6 +249,23 @@ export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canMana
     }
   }
 
+  // A258: an operator's check signs in once now with the stored credential;
+  // a directory account one short of lockout is still never signed in.
+  async function checkHealth(target: PAMTarget) {
+    const key = `${target.target_type}:${target.id}`;
+    setChecking(key);
+    setCheckError(null);
+    try {
+      const checked = await api.checkPAMTargetHealth(target.target_type, target.id, crypto.randomUUID());
+      await queryClient.invalidateQueries({ queryKey: ["pam-targets"] });
+      setNotice(t("admin.access.healthChecked", { id: checked.id, status: checked.health ? t(healthKey[checked.health.status]) : "" }));
+    } catch (err) {
+      setCheckError(errorMessage(err));
+    } finally {
+      setChecking(null);
+    }
+  }
+
   async function disable() {
     if (!disableTarget || !disableReason.trim()) return;
     setBusy(true);
@@ -274,6 +310,11 @@ export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canMana
           {notice}
         </p>
       ) : null}
+      {checkError ? (
+        <ErrorState title={t("admin.access.healthCheckFailed")}>
+          <p>{checkError}</p>
+        </ErrorState>
+      ) : null}
       {query.loading ? <LoadingState>{t("admin.access.targetsHeading")}</LoadingState> : null}
       {query.error ? (
         <ErrorState title={t("admin.access.targetsLoadFailed")}>
@@ -308,7 +349,21 @@ export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canMana
                   </td>
                   <td>{target.target_type === "ssh" ? target.principals?.join(", ") : target.allowed_roles?.join(", ")}</td>
                   <td>{target.source === "tenant" ? t("admin.access.sourceTenant") : t("admin.access.sourceOperator")}</td>
-                  <td>{target.enabled ? t("admin.access.targetEnabled") : t("admin.access.targetDisabledStatus")}</td>
+                  <td>
+                    {target.enabled ? t("admin.access.targetEnabled") : t("admin.access.targetDisabledStatus")}
+                    {target.health ? (
+                      <p className={`text-caption ${target.health.status === "healthy" ? "text-muted-foreground" : "text-status-warning"}`}>
+                        {t(healthKey[target.health.status])}
+                        <span className="block text-muted-foreground">
+                          {t("admin.access.health.checkedAt", { at: formatDateTime(target.health.checked_at, policy) })}
+                        </span>
+                        {target.health.status === "lockout_risk" ? (
+                          <span className="block text-muted-foreground">{t("admin.access.health.lockoutRiskHelp")}</span>
+                        ) : null}
+                        {target.health.not_retried ? <span className="block text-muted-foreground">{t("admin.access.health.notRetried")}</span> : null}
+                      </p>
+                    ) : null}
+                  </td>
                   <td>{target.owner_id ? ownerName(target.owner_id) : <span className="text-status-warning">{t("admin.access.targetNoOwner")}</span>}</td>
                   <td className="flex flex-wrap gap-2">
                     {canAssignOwner ? (
@@ -324,6 +379,18 @@ export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canMana
                         }}
                       >
                         {t("admin.access.assignTargetOwner")}
+                      </Button>
+                    ) : null}
+                    {canManage && target.enabled && target.target_type !== "ssh" && target.provider_id ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={checking === `${target.target_type}:${target.id}`}
+                        aria-label={t("admin.access.checkHealthFor", { id: target.id })}
+                        onClick={() => void checkHealth(target)}
+                      >
+                        {t("admin.access.checkHealth")}
                       </Button>
                     ) : null}
                     {canManage && target.source === "tenant" && target.enabled ? (

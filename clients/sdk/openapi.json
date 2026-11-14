@@ -46582,7 +46582,7 @@
                 "type": "boolean"
               },
               "status": {
-                "description": "the last read-only sign-in check of the credential the target's provider holds (A258)",
+                "description": "the last read-only sign-in check of the credential the target's provider holds (A258). lockout_risk (A258-L1): a vaulted Active Directory account's failed sign-ins are one short of its lockout threshold, so the check signed in with nothing",
                 "enum": [
                   "healthy",
                   "rejected",
@@ -46590,7 +46590,8 @@
                   "locked",
                   "unreachable",
                   "error",
-                  "not_supported"
+                  "not_supported",
+                  "lockout_risk"
                 ],
                 "type": "string"
               }

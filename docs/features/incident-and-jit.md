@@ -892,7 +892,19 @@ trstctl-cli access agent --account postgres/orders-db:readonly --reason "nightly
 Each provider-backed target's stored credential is checked once an hour (A258,
 `pam.health_check_interval`), read-only; a refused credential is not tried again until it
 changes or an operator runs `trstctl-cli access targets health-check`, so checks never lock
-an account out. Access templates set a request's reason, approvals and maximum length (name
+an account out. A remote desktop target whose vaulted account is an Active Directory account
+(A258-L1) is checked through its provider so that no password ever risks a lockout: the
+provider's administrator first reads, at the domain controller the check then signs in at,
+the account's failed sign-ins (`badPwdCount`) and the lockout threshold that applies to it
+(its resultant password settings object's, else the domain's), and the check signs in only
+when a refused password would leave the account below that threshold. One short of it the
+target reads `lockout_risk`, no password is sent, and the next check reads the count again; a
+locked, disabled or expired account is read from its state without a sign-in. The
+administrator reads the account's `msDS-ResultantPSO` and the settings object it names, as
+Domain Admins can; where the resultant settings are not visible to it the domain's threshold
+is used, and a settings object it cannot read reads `error` with nothing sent. The console's
+targets table shows each target's credential health, with **Check now** for an operator's
+check. Access templates set a request's reason, approvals and maximum length (name
 one with `template_id`). When the reviewers cannot be reached, a named emergency responder
 opens access at once (`trstctl-cli access emergency open`): every approver is notified, the
 session lasts at most an hour, and its post-incident review stays open until another

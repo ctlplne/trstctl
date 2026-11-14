@@ -25002,10 +25002,10 @@ export interface components {
                 /** @description the server judged and refused the credential: it is not tried again until it changes or an operator checks it now */
                 not_retried: boolean;
                 /**
-                 * @description the last read-only sign-in check of the credential the target's provider holds (A258)
+                 * @description the last read-only sign-in check of the credential the target's provider holds (A258). lockout_risk (A258-L1): a vaulted Active Directory account's failed sign-ins are one short of its lockout threshold, so the check signed in with nothing
                  * @enum {string}
                  */
-                status: "healthy" | "rejected" | "expired" | "locked" | "unreachable" | "error" | "not_supported";
+                status: "healthy" | "rejected" | "expired" | "locked" | "unreachable" | "error" | "not_supported" | "lockout_risk";
             };
             host?: string;
             host_key_fingerprints?: string[];

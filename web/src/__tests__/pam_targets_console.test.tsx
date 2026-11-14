@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     pamTargets: vi.fn(),
     registerPAMTarget: vi.fn(),
     disablePAMTarget: vi.fn(),
+    checkPAMTargetHealth: vi.fn(),
   },
 }));
 vi.mock("@/lib/api", async (original) => {
@@ -525,4 +526,54 @@ it("registers a break-glass identity provider administrator with its provider an
       expect.any(String),
     ),
   );
+});
+
+// A258-L1: a directory account one short of its lockout threshold reads as not
+// checked, with why; an operator's check now reports its new status, and a
+// refused credential says it is not tried again.
+it("shows a directory account's lockout risk and checks it now", async () => {
+  const user = userEvent.setup();
+  const desktop = {
+    id: "finance-desktop",
+    target_type: "rdp",
+    provider_id: "corp-ad",
+    allowed_roles: ["desktop/finance"],
+    account_secret: "desktop/finance",
+    source: "tenant",
+    enabled: true,
+    health: { status: "lockout_risk", attempts: 0, checked_at: "2026-11-14T10:00:00Z", not_retried: false },
+  };
+  let items: Array<Record<string, unknown>> = [desktop];
+  apiMock.pamTargets.mockImplementation(async () => ({ items }));
+  apiMock.checkPAMTargetHealth.mockImplementation(async () => {
+    items = [{ ...desktop, health: { status: "rejected", attempts: 1, checked_at: "2026-11-14T10:05:00Z", not_retried: true } }];
+    return items[0];
+  });
+  mount(true);
+  expect(await screen.findByText(/Not checked: one more failed sign-in would lock the account/)).toBeInTheDocument();
+  expect(screen.getByText(/This account is one short of its lockout threshold, so no password was sent/)).toBeInTheDocument();
+  expect(screen.queryByText(/Not tried again until the credential changes/)).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Check finance-desktop's credential now" }));
+  await waitFor(() => expect(apiMock.checkPAMTargetHealth).toHaveBeenCalledWith("rdp", "finance-desktop", expect.any(String)));
+  expect(await screen.findByText("Checked finance-desktop: Credential refused.")).toBeInTheDocument();
+  expect(await screen.findByText(/Not tried again until the credential changes or someone checks it now/)).toBeInTheDocument();
+});
+
+it("offers no credential check to a reader", async () => {
+  apiMock.pamTargets.mockResolvedValue({
+    items: [
+      {
+        id: "finance-desktop",
+        target_type: "rdp",
+        provider_id: "corp-ad",
+        allowed_roles: ["desktop/finance"],
+        source: "tenant",
+        enabled: true,
+        health: { status: "healthy", attempts: 1, checked_at: "2026-11-14T10:00:00Z", not_retried: false },
+      },
+    ],
+  });
+  mount(false);
+  expect(await screen.findByText(/Credential signs in/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /credential now/ })).not.toBeInTheDocument();
 });

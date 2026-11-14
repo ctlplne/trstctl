@@ -2816,6 +2816,7 @@ export interface Api {
   pamTarget(targetType: string, id: string): Promise<PAMTarget>;
   registerPAMTarget(input: PAMTargetRequest, idempotencyKey?: string): Promise<PAMTarget>;
   disablePAMTarget(targetType: string, id: string, reason: string, idempotencyKey?: string): Promise<PAMTarget>;
+  checkPAMTargetHealth(targetType: string, id: string, idempotencyKey?: string): Promise<PAMTarget>;
   pamDiscoverySources(): Promise<PAMDiscoverySourceList>;
   savePAMDiscoverySource(providerID: string, intervalSeconds: number, idempotencyKey?: string): Promise<PAMDiscoverySource>;
   runPAMDiscovery(providerID: string, idempotencyKey?: string): Promise<PAMDiscoveryRun>;
@@ -3907,6 +3908,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   registerPAMTarget: (input, idempotencyKey) => mutate<PAMTarget>("POST", "/api/v1/access/targets", input, idempotencyKey),
   disablePAMTarget: (targetType, id, reason, idempotencyKey) =>
     mutate<PAMTarget>("POST", `/api/v1/access/targets/${encodeURIComponent(targetType)}/${encodeURIComponent(id)}/disable`, { reason }, idempotencyKey),
+  checkPAMTargetHealth: (targetType, id, idempotencyKey) =>
+    mutate<PAMTarget>("POST", `/api/v1/access/targets/${encodeURIComponent(targetType)}/${encodeURIComponent(id)}/health-check`, undefined, idempotencyKey),
   pamDiscoverySources: () => req<PAMDiscoverySourceList>("/api/v1/access/discovery/sources"),
   savePAMDiscoverySource: (providerID, intervalSeconds, idempotencyKey) =>
     mutate<PAMDiscoverySource>(

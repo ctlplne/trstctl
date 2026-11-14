@@ -30,6 +30,12 @@ import (
 // again, so no check counts toward a lockout twice. A check that never
 // reached a sign-in exchange (dial, TLS, a timeout) is retried twice in its
 // slot. Checks run one at a time, at most pamHealthBatch per pass.
+//
+// A258-L1: a remote desktop target's vaulted Active Directory account is
+// checked through its provider, which first reads the account's failed
+// sign-ins and the lockout threshold that applies to it and signs in only
+// when a refusal could not lock the account; one short of lockout reads
+// lockout_risk, which judged nothing, so the next slot reads the count again.
 
 const (
 	pamHealthBatch        = 32
@@ -129,7 +135,7 @@ func (s *pamService) healthAccounts(ctx context.Context) ([]pamHealthAccount, er
 	seen := map[pamHealthAccount]bool{}
 	var out []pamHealthAccount
 	for key, target := range s.databases {
-		a := pamHealthAccount{key.tenantID, key.targetType, key.id, target.cfg.ProviderID, ""}
+		a := pamHealthAccount{key.tenantID, key.targetType, key.id, target.cfg.ProviderID, healthAccountSecret(key.targetType, target.cfg.AccountSecret)}
 		if !seen[a] {
 			seen[a] = true
 			out = append(out, a)
@@ -152,7 +158,7 @@ func (s *pamService) healthAccounts(ctx context.Context) ([]pamHealthAccount, er
 		if !isPAMDatabaseType(rec.TargetType) {
 			continue
 		}
-		a := pamHealthAccount{rec.TenantID, rec.TargetType, rec.ID, rec.ProviderID, ""}
+		a := pamHealthAccount{rec.TenantID, rec.TargetType, rec.ID, rec.ProviderID, healthAccountSecret(rec.TargetType, rec.AccountSecret)}
 		if !seen[a] {
 			seen[a] = true
 			out = append(out, a)
@@ -232,6 +238,24 @@ func (s *pamService) primeHealth(ctx context.Context, accounts []pamHealthAccoun
 	return nil
 }
 
+// healthAccountSecret is the vaulted secret an account's check signs in with:
+// a break-glass account's (A272) and a remote desktop account's (A258-L1,
+// checked so when its provider is an Active Directory one). Other targets'
+// checks use their provider's own credential.
+func healthAccountSecret(targetType, accountSecret string) string {
+	if targetType == pamTargetBreakGlass || targetType == pamTargetRDP {
+		return accountSecret
+	}
+	return ""
+}
+
+// pamDirectoryAccountChecker is a provider whose vaulted accounts have a
+// lockout-aware sign-in check (A258-L1: an Active Directory provider's).
+type pamDirectoryAccountChecker interface {
+	DynamicSecretChecksDirectoryAccounts() bool
+	DynamicSecretCheckAccountSignIn(ctx context.Context, credential []byte) string
+}
+
 func (s *pamService) healthChecker(a pamHealthAccount) pamCredentialChecker {
 	for _, provider := range s.providers.ForTenant(a.tenantID) {
 		if provider != nil && provider.Name() == a.providerID && a.targetType == pamTargetBreakGlass {
@@ -242,6 +266,10 @@ func (s *pamService) healthChecker(a pamHealthAccount) pamCredentialChecker {
 			return breakGlassHealthChecker{s: s, tenantID: a.tenantID, secretName: a.accountSecret, verifier: verifier}
 		}
 		if provider != nil && provider.Name() == a.providerID {
+			if directory, ok := provider.(pamDirectoryAccountChecker); ok && a.targetType == pamTargetRDP && a.accountSecret != "" &&
+				s.secretReader != nil && directory.DynamicSecretChecksDirectoryAccounts() {
+				return directoryAccountHealthChecker{s: s, tenantID: a.tenantID, secretName: a.accountSecret, directory: directory}
+			}
 			checker, _ := provider.(pamCredentialChecker)
 			return checker
 		}
@@ -369,7 +397,7 @@ func (s *pamService) CheckPAMAccountHealth(ctx context.Context, tenantID, target
 		if err != nil {
 			return api.PAMTarget{}, err
 		}
-		a = pamHealthAccount{tenantID, targetType, strings.TrimSpace(id), target.cfg.ProviderID, ""}
+		a = pamHealthAccount{tenantID, targetType, strings.TrimSpace(id), target.cfg.ProviderID, healthAccountSecret(targetType, target.cfg.AccountSecret)}
 	default:
 		return api.PAMTarget{}, fmt.Errorf("%w: only a provider-backed or break-glass target has a stored credential to check", api.ErrPAMInvalid)
 	}
@@ -441,6 +469,36 @@ func (p *configuredDynamicProvider) DynamicSecretCredentialDigest(ctx context.Co
 	return out, nil
 }
 
+// DynamicSecretChecksDirectoryAccounts reports whether the provider's vaulted
+// accounts have a lockout-aware check (A258-L1): an Active Directory
+// provider's.
+func (p *configuredDynamicProvider) DynamicSecretChecksDirectoryAccounts() bool {
+	return strings.TrimSpace(p.cfg.Type) == "ldap" && p.cfg.DirectoryMode == "active_directory"
+}
+
+// DynamicSecretCheckAccountSignIn checks a vaulted account's credential through
+// the provider's backend, opened with its own credentials read now: the
+// administrator reads the account's failed sign-ins and lockout threshold,
+// and the backend signs in with the vaulted password only when a refusal
+// could not lock the account (A258-L1).
+func (p *configuredDynamicProvider) DynamicSecretCheckAccountSignIn(ctx context.Context, credential []byte) string {
+	if !p.DynamicSecretChecksDirectoryAccounts() {
+		return pamHealthNotSupported
+	}
+	backend, closeBackend, err := p.openBackend(ctx)
+	if err != nil {
+		return dynsecret.SignInStatusOf(err)
+	}
+	defer closeBackend()
+	checker, ok := backend.(interface {
+		CheckADAccountSignIn(context.Context, []byte) error
+	})
+	if !ok {
+		return pamHealthNotSupported
+	}
+	return dynsecret.SignInStatusOf(checker.CheckADAccountSignIn(ctx, credential))
+}
+
 // DynamicSecretCheckSignIn opens the provider's backend with its credentials
 // read now and signs in once, changing nothing. Opening a MySQL or MongoDB
 // backend is itself the sign-in.
@@ -469,7 +527,13 @@ type breakGlassHealthChecker struct {
 }
 
 func (c breakGlassHealthChecker) DynamicSecretCredentialDigest(ctx context.Context, key []byte) ([32]byte, error) {
-	value, _, err := c.s.secretReader(ctx, c.tenantID, c.secretName)
+	return c.s.vaultedCredentialDigest(ctx, c.tenantID, c.secretName, key)
+}
+
+// vaultedCredentialDigest is a keyed digest of a vaulted secret's value read
+// now, so a check knows when the vaulted credential changed.
+func (s *pamService) vaultedCredentialDigest(ctx context.Context, tenantID, secretName string, key []byte) ([32]byte, error) {
+	value, _, err := s.secretReader(ctx, tenantID, secretName)
 	if err != nil {
 		return [32]byte{}, err
 	}
@@ -490,4 +554,29 @@ func (c breakGlassHealthChecker) DynamicSecretCheckSignIn(ctx context.Context) s
 		return pamHealthNotSupported
 	}
 	return dynsecret.SignInStatusOf(err)
+}
+
+// directoryAccountHealthChecker checks a remote desktop target's vaulted Active
+// Directory account (A258-L1; the A263 desktop's directory account) through
+// its provider's lockout-aware check: the provider reads the account's failed
+// sign-ins and lockout threshold first, and a check one short of lockout
+// reads lockout_risk and signs in with nothing.
+type directoryAccountHealthChecker struct {
+	s          *pamService
+	tenantID   string
+	secretName string
+	directory  pamDirectoryAccountChecker
+}
+
+func (c directoryAccountHealthChecker) DynamicSecretCredentialDigest(ctx context.Context, key []byte) ([32]byte, error) {
+	return c.s.vaultedCredentialDigest(ctx, c.tenantID, c.secretName, key)
+}
+
+func (c directoryAccountHealthChecker) DynamicSecretCheckSignIn(ctx context.Context) string {
+	value, _, err := c.s.secretReader(ctx, c.tenantID, c.secretName)
+	if err != nil {
+		return dynsecret.SignInError
+	}
+	defer secret.Wipe(value)
+	return c.directory.DynamicSecretCheckAccountSignIn(ctx, value)
 }

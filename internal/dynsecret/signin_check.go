@@ -32,6 +32,11 @@ const (
 	SignInLocked      = "locked"      // the server says the account is locked
 	SignInUnreachable = "unreachable" // no sign-in exchange took place: dial, TLS or a timeout
 	SignInError       = "error"       // anything else
+	// SignInLockoutRisk (A258-L1) is a check that signed in with nothing: the
+	// account's failed sign-ins are one short of the lockout threshold its
+	// directory applies, so a refused password would lock it. The server
+	// judged nothing; the next scheduled check reads the count again.
+	SignInLockoutRisk = "lockout_risk"
 )
 
 var (
@@ -39,6 +44,7 @@ var (
 	ErrSignInExpired     = errors.New("dynsecret: the server says the credential has expired")
 	ErrSignInLocked      = errors.New("dynsecret: the server says the account is locked")
 	ErrSignInUnreachable = errors.New("dynsecret: the server could not be reached")
+	ErrSignInLockoutRisk = errors.New("dynsecret: one more refused sign-in would lock the account")
 )
 
 // SignInChecker is a backend that can prove its stored credential still signs
@@ -60,6 +66,8 @@ func SignInStatusOf(err error) string {
 		return SignInLocked
 	case errors.Is(err, ErrSignInUnreachable):
 		return SignInUnreachable
+	case errors.Is(err, ErrSignInLockoutRisk):
+		return SignInLockoutRisk
 	}
 	return SignInError
 }

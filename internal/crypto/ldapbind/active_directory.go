@@ -18,6 +18,10 @@ type PinnedTLS struct {
 	CAPEM               []byte
 }
 
+// ErrConnect is a DialPinned that never reached a bind: the TCP connection or
+// the verified TLS handshake failed, so no password was sent.
+var ErrConnect = errors.New("LDAP verified TLS connection failed")
+
 // DialPinned performs exactly one byte-backed bind after certificate validation.
 // The returned bounded connection belongs to the caller; it follows no referrals.
 func DialPinned(ctx context.Context, route PinnedTLS, dn string, password []byte) (net.Conn, error) {
@@ -30,7 +34,7 @@ func DialPinned(ctx context.Context, route PinnedTLS, dn string, password []byte
 	defer packet.Destroy()
 	raw, err := mtls.DialVerifiedTCP(bounded, route.Address, route.ServerName, route.CAPEM)
 	if err != nil {
-		return nil, errors.New("LDAP verified TLS connection failed")
+		return nil, ErrConnect
 	}
 	accepted := false
 	defer func() {

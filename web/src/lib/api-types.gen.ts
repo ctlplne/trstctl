@@ -9962,7 +9962,7 @@ export interface PAMTarget {
   gateway_address?: string;
   gateway_agent_id?: string;
   hardware_key_holders?: string[];
-  health?: { attempts: number; checked_at: string; failing_since?: string; not_retried: boolean; status: "healthy" | "rejected" | "expired" | "locked" | "unreachable" | "error" | "not_supported" };
+  health?: { attempts: number; checked_at: string; failing_since?: string; not_retried: boolean; status: "healthy" | "rejected" | "expired" | "locked" | "unreachable" | "error" | "not_supported" | "lockout_risk" };
   host?: string;
   host_key_fingerprints?: string[];
   id: string;

@@ -6084,8 +6084,8 @@ func componentSchemas() map[string]*Schema {
 		"owner_id":             {Type: "string", Format: "uuid", Description: "the brokered account's accountable owner (A276): the ownership assignment of its inventory record pam-account/<target_type>/<id>"},
 		"web":                  ref("PAMWebConsoleRoute"),
 		"health": object(map[string]*Schema{
-			"status": {Type: "string", Enum: []string{"healthy", "rejected", "expired", "locked", "unreachable", "error", "not_supported"},
-				Description: "the last read-only sign-in check of the credential the target's provider holds (A258)"},
+			"status": {Type: "string", Enum: []string{"healthy", "rejected", "expired", "locked", "unreachable", "error", "not_supported", "lockout_risk"},
+				Description: "the last read-only sign-in check of the credential the target's provider holds (A258). lockout_risk (A258-L1): a vaulted Active Directory account's failed sign-ins are one short of its lockout threshold, so the check signed in with nothing"},
 			"attempts":      {Type: "integer", Description: "sign-ins the check took (more than one only when no sign-in exchange took place)"},
 			"checked_at":    timestamp(),
 			"failing_since": timestamp(),

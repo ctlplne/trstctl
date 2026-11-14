@@ -9586,7 +9586,6 @@ opens an emergency session from the session dialog (after a confirmation that ev
 is notified) and records post-incident reviews.
 
 What comes next:
-- Lockout-aware checks of directory accounts (with the Active Directory account type, A263).
 - Notifying approvers by name; today the notice goes to the approval channels they watch.
 - Brokered-account policy rules, folders and templates are served with the limits below.
 

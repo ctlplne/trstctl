@@ -156,10 +156,15 @@ func parseLDAPResult(raw []byte, messageID, operation byte) error {
 	if err != nil || tag != 0x0a || len(code) != 1 {
 		return errors.New("LDAP authentication result code is invalid")
 	}
-	for range 2 {
-		tag, _, next, err = takeTLV(next)
+	var diagnostic []byte
+	for field := range 2 {
+		var value []byte
+		tag, value, next, err = takeTLV(next)
 		if err != nil || tag != 0x04 {
 			return errors.New("LDAP authentication result is truncated")
+		}
+		if field == 1 {
+			diagnostic = value
 		}
 	}
 	// RFC4511 permits trailing extension components. Bound their TLVs without
@@ -171,7 +176,62 @@ func parseLDAPResult(raw []byte, messageID, operation byte) error {
 		}
 	}
 	if code[0] != 0 {
-		return fmt.Errorf("LDAP operation was refused (result %d)", code[0])
+		return &RefusalError{Result: code[0], ADData: adSubStatus(diagnostic)}
 	}
 	return nil
+}
+
+// RefusalError is an operation the directory answered with a result other
+// than success. ADData is Active Directory's sub-status from the diagnostic
+// message ("AcceptSecurityContext error, data 52e"; Microsoft's LDAP error
+// reference), 0 when there is none; nothing else of the server's text is kept.
+type RefusalError struct {
+	Result byte
+	ADData uint32
+}
+
+func (e *RefusalError) Error() string {
+	return fmt.Sprintf("LDAP operation was refused (result %d)", e.Result)
+}
+
+// adSubStatus reads the hexadecimal sub-status after "data " in an Active
+// Directory diagnostic message: at most eight digits, ended by a comma, a
+// space or the message's end. Anything else is 0.
+func adSubStatus(diagnostic []byte) uint32 {
+	const marker = "data "
+	for i := 0; i+len(marker) <= len(diagnostic); i++ {
+		if string(diagnostic[i:i+len(marker)]) != marker || (i > 0 && diagnostic[i-1] != ' ') {
+			continue
+		}
+		var value uint32
+		digits := 0
+		for _, c := range diagnostic[i+len(marker):] {
+			var d byte
+			switch {
+			case c >= '0' && c <= '9':
+				d = c - '0'
+			case c >= 'a' && c <= 'f':
+				d = c - 'a' + 10
+			case c >= 'A' && c <= 'F':
+				d = c - 'A' + 10
+			case c == ',' || c == ' ':
+				if digits == 0 {
+					return 0
+				}
+				return value
+			default:
+				return 0
+			}
+			if digits == 8 {
+				return 0
+			}
+			value = value<<4 | uint32(d)
+			digits++
+		}
+		if digits == 0 {
+			return 0
+		}
+		return value
+	}
+	return 0
 }
