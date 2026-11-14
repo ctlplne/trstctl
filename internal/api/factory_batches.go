@@ -4,12 +4,14 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto/deviceattest"
 )
 
 // Factory provisioning for devices (P12). A factory batch is a quota of birth
@@ -51,6 +53,10 @@ type FactoryBatchRequest struct {
 	Quota              int    `json:"quota"`
 	BirthTTLSeconds    int    `json:"birth_ttl_seconds"`
 	OperationalProfile string `json:"operational_profile,omitempty"`
+	// DeviceAttestationRootsPEM (P12-L1): with roots, each device attests its
+	// own key against one of them at birth, and only an attested birth
+	// enrolls.
+	DeviceAttestationRootsPEM []string `json:"device_attestation_roots_pem,omitempty"`
 }
 
 // FactoryBatch is one batch with what its journals have reconciled.
@@ -66,6 +72,10 @@ type FactoryBatch struct {
 	Recorded           int       `json:"recorded"`
 	OverQuota          int       `json:"over_quota"`
 	Enrolled           int       `json:"enrolled"`
+	// P12-L1: the batch's device attestation roots, and its births that
+	// carried no verified attestation (they cannot enroll).
+	DeviceAttestationRootsPEM []string `json:"device_attestation_roots_pem,omitempty"`
+	Unattested                int      `json:"unattested"`
 }
 
 // FactoryBirth is one reconciled birth certificate and its device's enrollment.
@@ -79,6 +89,9 @@ type FactoryBirth struct {
 	EnrolledAt        *time.Time `json:"enrolled_at,omitempty"`
 	OperationalSerial string     `json:"operational_serial,omitempty"`
 	Renewals          int        `json:"renewals"`
+	// Attestation (P12-L1) is, in a batch with device attestation roots,
+	// verified, missing or refused.
+	Attestation string `json:"attestation,omitempty"`
 }
 
 // FactoryBatchDetail is a batch with its birth certificates.
@@ -98,6 +111,9 @@ type FactoryManifest struct {
 	Quota                 int    `json:"quota"`
 	BirthTTLSeconds       int    `json:"birth_ttl_seconds"`
 	ESTPath               string `json:"est_path"`
+	// DeviceAttestationRootsPEM (P12-L1): the station verifies each device's
+	// attestation of its own key against these before it signs.
+	DeviceAttestationRootsPEM []string `json:"device_attestation_roots_pem,omitempty"`
 }
 
 // FactoryReconcileRequest is a station's batch journal.
@@ -105,6 +121,17 @@ type FactoryReconcileRequest struct {
 	Host            string   `json:"host"`
 	BatchID         string   `json:"batch_id,omitempty"`
 	CertificatesPEM []string `json:"certificates_pem"`
+	// Attestations (P12-L1) carry each attested birth's device attestation
+	// and CSR, matched to its certificate by SHA-256.
+	Attestations []FactoryAttestation `json:"attestations,omitempty"`
+}
+
+// FactoryAttestation is one device's attestation of its own key at birth, as
+// the station journals it (P12-L1).
+type FactoryAttestation struct {
+	CertificateSHA256 string          `json:"certificate_sha256"`
+	CSRPEM            string          `json:"csr_pem"`
+	Credential        json.RawMessage `json:"credential"`
 }
 
 // FactoryReconcileResult counts what a reconcile recorded.
@@ -113,6 +140,9 @@ type FactoryReconcileResult struct {
 	OverQuota int `json:"over_quota"`
 	Already   int `json:"already"`
 	Rejected  int `json:"rejected"`
+	// Unattested (P12-L1) counts births recorded in a batch with device
+	// attestation roots without a verified attestation.
+	Unattested int `json:"unattested"`
 }
 
 const maxFactoryQuota = 1_000_000
@@ -160,6 +190,8 @@ func (a *API) createFactoryBatch(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest, "quota must be between 1 and 1000000 birth certificates")
 		case req.BirthTTLSeconds <= 0:
 			return 0, nil, errStatus(http.StatusBadRequest, "birth_ttl_seconds must be positive")
+		case deviceattest.ParseFactoryAttestationRoots(req.DeviceAttestationRootsPEM) != nil:
+			return 0, nil, errStatus(http.StatusBadRequest, "device_attestation_roots_pem: "+deviceattest.ParseFactoryAttestationRoots(req.DeviceAttestationRootsPEM).Error())
 		}
 		creator, err := requestPrincipalSubject(ctx)
 		if err != nil {
@@ -258,27 +290,32 @@ func factoryBatchSchemas() map[string]*Schema {
 	batchProps := func() map[string]*Schema {
 		return map[string]*Schema{"id": str(), "delegation_id": str(), "label": str(), "quota": integer(), "birth_ttl_seconds": integer(),
 			"operational_profile": str(), "created_by": str(), "created_at": ts(), "recorded": integer(), "over_quota": integer(),
-			"enrolled": integer()}
+			"enrolled": integer(), "device_attestation_roots_pem": {Type: "array", Items: str()}, "unattested": integer()}
 	}
 	batchRequired := []string{"id", "delegation_id", "label", "quota", "birth_ttl_seconds", "created_by", "created_at", "recorded", "over_quota", "enrolled"}
 	batch := object(batchProps(), batchRequired...)
 	birth := object(map[string]*Schema{"serial": str(), "device_name": str(), "fingerprint": str(), "not_after": ts(),
-		"over_quota": boolean(), "enrolled": boolean(), "enrolled_at": ts(), "operational_serial": str(), "renewals": integer()},
+		"over_quota": boolean(), "enrolled": boolean(), "enrolled_at": ts(), "operational_serial": str(), "renewals": integer(),
+		"attestation": {Type: "string", Enum: []string{"verified", "missing", "refused"}}},
 		"serial", "device_name", "fingerprint", "not_after", "over_quota", "enrolled", "renewals")
 	detailProps := batchProps()
 	detailProps["births"] = &Schema{Type: "array", Items: birth}
 	return map[string]*Schema{
 		"FactoryBatchRequest": object(map[string]*Schema{"delegation_id": str(), "label": str(), "quota": integer(),
-			"birth_ttl_seconds": integer(), "operational_profile": str()}, "delegation_id", "label", "quota", "birth_ttl_seconds"),
+			"birth_ttl_seconds": integer(), "operational_profile": str(), "device_attestation_roots_pem": {Type: "array", Items: str()}},
+			"delegation_id", "label", "quota", "birth_ttl_seconds"),
 		"FactoryBatch":       batch,
 		"FactoryBatchList":   object(map[string]*Schema{"items": {Type: "array", Items: batch}}, "items"),
 		"FactoryBatchDetail": object(detailProps, append(batchRequired, "births")...),
 		"FactoryManifest": object(map[string]*Schema{"batch_id": str(), "tenant_id": str(), "delegation_id": str(),
-			"delegation_fingerprint": str(), "label": str(), "quota": integer(), "birth_ttl_seconds": integer(), "est_path": str()},
+			"delegation_fingerprint": str(), "label": str(), "quota": integer(), "birth_ttl_seconds": integer(), "est_path": str(),
+			"device_attestation_roots_pem": {Type: "array", Items: str()}},
 			"batch_id", "tenant_id", "delegation_id", "delegation_fingerprint", "label", "quota", "birth_ttl_seconds", "est_path"),
 		"FactoryReconcileRequest": object(map[string]*Schema{"host": str(), "batch_id": str(),
-			"certificates_pem": {Type: "array", Items: str()}}, "certificates_pem"),
+			"certificates_pem": {Type: "array", Items: str()},
+			"attestations": {Type: "array", Items: object(map[string]*Schema{"certificate_sha256": str(), "csr_pem": str(),
+				"credential": {Type: "object"}}, "certificate_sha256", "csr_pem", "credential")}}, "certificates_pem"),
 		"FactoryReconcileResult": object(map[string]*Schema{"recorded": integer(), "over_quota": integer(), "already": integer(),
-			"rejected": integer()}, "recorded", "over_quota", "already", "rejected"),
+			"rejected": integer(), "unattested": integer()}, "recorded", "over_quota", "already", "rejected", "unattested"),
 	}
 }

@@ -413,3 +413,17 @@ certificate on its first boot.
 `trstctl edge factory-batches show <batch>` lists each birth certificate with
 whether it is over the quota, enrolled, its current operational serial and its
 renewals.
+
+**Device attestation at birth (P12-L1).** A batch created with
+`device_attestation_roots_pem` (the roots of the device TPMs' attestation keys,
+at most 16) has each device prove its own key before it is born. On the line,
+the device's TPM attests its key with `trstctl-agent --edge-attest` for tenant
+`<tenant>` and segment `factory/<batch>/<device name>` over the device's CSR;
+the station then runs `--factory-issue` with `--factory-attestation <file>` and
+signs only when that attestation verifies against the manifest's roots, names
+this batch and device, covers the CSR's key and shows the key cannot leave the
+TPM. The journal keeps each attestation with its CSR. At reconcile trstctl
+checks every attestation again against the batch's roots rather than taking the
+station's word, and records each birth as `verified`, `missing` or `refused`;
+only a verified birth enrolls on first boot. The batch view counts the births
+without a verified attestation.

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3322 annotated sites across 35 rules. Each row is
+3323 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1042,7 +1042,7 @@ not this file.
 | `clients/signing/ksp/module.go:364` | RSA and P-256 key sizes fit 32 bits |
 | `clients/signing/ksp/module.go:626` | RSA sizes fit 32 bits |
 | `clients/signing/ksp/module.go:717` | a signature length fits 32 bits |
-| `cmd/trstctl-agent/main.go:632` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
+| `cmd/trstctl-agent/main.go:633` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1778` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
@@ -1447,7 +1447,7 @@ not this file.
 | `internal/store/external_observation.go:101` | event sequences fit int64 (CWE-190) |
 | `internal/store/external_observation.go:112` | non-negative by constraint (CWE-190) |
 | `internal/store/external_observation.go:159` | non-negative by constraint (CWE-190) |
-| `internal/store/factory_batches.go:59` | bounded above (CWE-190) |
+| `internal/store/factory_batches.go:66` | bounded above (CWE-190) |
 | `internal/store/federation.go:58` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/incident_closures.go:39` | bounded above (CWE-190) |
 | `internal/store/key_compromise_retry.go:25` | bounded above by the MaxInt64 check; the column is a Postgres bigint (CWE-190) |
@@ -1726,7 +1726,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4228` | closed test table list above |
+| `internal/store/migration_content_test.go:4229` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
@@ -2233,7 +2233,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:114` | deliberately loose, to prove it is tightened (CWE-276) |
-| `cmd/trstctl-agent/main.go:760` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:761` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `cmd/trstctl-agent/tomcat_reload_test.go:80` | deliberately public disposable password fixture must be rejected before any request (CWE-276). |
 | `cmd/trstctl-license/main_test.go:147` | regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276) |
 | `cmd/trstctl/ssh_request_file_test.go:49` | deliberately public test fixture must be rejected by the private-file gate |
@@ -2288,7 +2288,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (786 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (787 sites)
 
 | Location | Reason |
 |---|---|
@@ -2302,14 +2302,14 @@ not this file.
 | `cmd/trstctl-agent/csisecrets.go:30` | the operator's --csi-secrets-config (CWE-22) |
 | `cmd/trstctl-agent/csisecrets.go:45` | operator-configured CA bundle (CWE-22) |
 | `cmd/trstctl-agent/distrust.go:23` | operator-supplied agent flag naming a local distrust list (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:137` | explicit operator file path |
-| `cmd/trstctl-agent/edgeca.go:149` | explicit operator file path |
-| `cmd/trstctl-agent/edgeca.go:211` | explicit operator file path |
-| `cmd/trstctl-agent/edgeca.go:333` | operator-configured local path from the agent's own flags (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:411` | operator-configured journal path on the agent's own host (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:454` | directory of the operator-selected output, synced after an atomic rename |
-| `cmd/trstctl-agent/edgeca.go:477` | operator-configured local path from the agent's own flags (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:487` | operator-configured local handle path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/edgeca.go:140` | explicit operator file path |
+| `cmd/trstctl-agent/edgeca.go:152` | explicit operator file path |
+| `cmd/trstctl-agent/edgeca.go:214` | explicit operator file path |
+| `cmd/trstctl-agent/edgeca.go:336` | operator-configured local path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/edgeca.go:414` | operator-configured journal path on the agent's own host (CWE-22) |
+| `cmd/trstctl-agent/edgeca.go:457` | directory of the operator-selected output, synced after an atomic rename |
+| `cmd/trstctl-agent/edgeca.go:480` | operator-configured local path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/edgeca.go:490` | operator-configured local handle path from the agent's own flags (CWE-22) |
 | `cmd/trstctl-agent/edgeca_pkcs11_attest_test.go:43` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_pkcs11_attest_test.go:77` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_pkcs11_softhsm_real_test.go:53` | t.TempDir path (CWE-22) |
@@ -2328,16 +2328,17 @@ not this file.
 | `cmd/trstctl-agent/edgerenew.go:161` | explicit operator file path |
 | `cmd/trstctl-agent/edgerenew_test.go:104` | the test's own temp file (CWE-22) |
 | `cmd/trstctl-agent/edgerenew_test.go:133` | the test's own temp file (CWE-22) |
-| `cmd/trstctl-agent/factory.go:55` | operator-configured local path from the agent's own flags (CWE-22) |
-| `cmd/trstctl-agent/factory.go:70` | operator-configured local path from the agent's own flags (CWE-22) |
-| `cmd/trstctl-agent/factory.go:87` | operator-configured local path from the agent's own flags (CWE-22) |
-| `cmd/trstctl-agent/factory.go:104` | derived from the operator-configured journal path (CWE-22) |
-| `cmd/trstctl-agent/factory.go:147` | operator-configured local path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/factory.go:69` | operator-configured local path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/factory.go:84` | operator-configured local path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/factory.go:101` | operator-configured local path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/factory.go:118` | derived from the operator-configured journal path (CWE-22) |
+| `cmd/trstctl-agent/factory.go:161` | operator-configured local path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/factory.go:240` | operator-configured local path from the agent's own flags (CWE-22) |
 | `cmd/trstctl-agent/factory_test.go:32` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
 | `cmd/trstctl-agent/inventory_hostcrypto.go:76` | operator-configured keystore password file (CWE-22) |
-| `cmd/trstctl-agent/main.go:1386` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:2056` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1387` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:2057` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/observe.go:92` | the operator names the capture file on the command line (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:477` | operator-supplied runtime configuration path (CWE-22) |
@@ -3286,7 +3287,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:940` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:941` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |

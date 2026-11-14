@@ -7836,6 +7836,7 @@ FactoryBatch = TypedDict(
         'created_at': str,
         'created_by': str,
         'delegation_id': str,
+        'device_attestation_roots_pem': list[str],
         'enrolled': int,
         'id': str,
         'label': str,
@@ -7843,6 +7844,7 @@ FactoryBatch = TypedDict(
         'over_quota': int,
         'quota': int,
         'recorded': int,
+        'unattested': int,
     },
     total=False,
 )
@@ -7855,6 +7857,7 @@ FactoryBatchDetail = TypedDict(
         'created_at': str,
         'created_by': str,
         'delegation_id': str,
+        'device_attestation_roots_pem': list[str],
         'enrolled': int,
         'id': str,
         'label': str,
@@ -7862,6 +7865,7 @@ FactoryBatchDetail = TypedDict(
         'over_quota': int,
         'quota': int,
         'recorded': int,
+        'unattested': int,
     },
     total=False,
 )
@@ -7879,6 +7883,7 @@ FactoryBatchRequest = TypedDict(
     {
         'birth_ttl_seconds': int,
         'delegation_id': str,
+        'device_attestation_roots_pem': list[str],
         'label': str,
         'operational_profile': str,
         'quota': int,
@@ -7893,6 +7898,7 @@ FactoryManifest = TypedDict(
         'birth_ttl_seconds': int,
         'delegation_fingerprint': str,
         'delegation_id': str,
+        'device_attestation_roots_pem': list[str],
         'est_path': str,
         'label': str,
         'quota': int,
@@ -7904,6 +7910,7 @@ FactoryManifest = TypedDict(
 FactoryReconcileRequest = TypedDict(
     'FactoryReconcileRequest',
     {
+        'attestations': list[dict[str, Any]],
         'batch_id': str,
         'certificates_pem': list[str],
         'host': str,
@@ -7918,6 +7925,7 @@ FactoryReconcileResult = TypedDict(
         'over_quota': int,
         'recorded': int,
         'rejected': int,
+        'unattested': int,
     },
     total=False,
 )

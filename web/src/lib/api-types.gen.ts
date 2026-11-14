@@ -5660,6 +5660,7 @@ export interface FactoryBatch {
   created_at: string;
   created_by: string;
   delegation_id: string;
+  device_attestation_roots_pem?: string[];
   enrolled: number;
   id: string;
   label: string;
@@ -5667,14 +5668,16 @@ export interface FactoryBatch {
   over_quota: number;
   quota: number;
   recorded: number;
+  unattested?: number;
 }
 
 export interface FactoryBatchDetail {
   birth_ttl_seconds: number;
-  births: { device_name: string; enrolled: boolean; enrolled_at?: string; fingerprint: string; not_after: string; operational_serial?: string; over_quota: boolean; renewals: number; serial: string }[];
+  births: ({ attestation?: "verified" | "missing" | "refused"; device_name: string; enrolled: boolean; enrolled_at?: string; fingerprint: string; not_after: string; operational_serial?: string; over_quota: boolean; renewals: number; serial: string })[];
   created_at: string;
   created_by: string;
   delegation_id: string;
+  device_attestation_roots_pem?: string[];
   enrolled: number;
   id: string;
   label: string;
@@ -5682,15 +5685,17 @@ export interface FactoryBatchDetail {
   over_quota: number;
   quota: number;
   recorded: number;
+  unattested?: number;
 }
 
 export interface FactoryBatchList {
-  items: { birth_ttl_seconds: number; created_at: string; created_by: string; delegation_id: string; enrolled: number; id: string; label: string; operational_profile?: string; over_quota: number; quota: number; recorded: number }[];
+  items: { birth_ttl_seconds: number; created_at: string; created_by: string; delegation_id: string; device_attestation_roots_pem?: string[]; enrolled: number; id: string; label: string; operational_profile?: string; over_quota: number; quota: number; recorded: number; unattested?: number }[];
 }
 
 export interface FactoryBatchRequest {
   birth_ttl_seconds: number;
   delegation_id: string;
+  device_attestation_roots_pem?: string[];
   label: string;
   operational_profile?: string;
   quota: number;
@@ -5701,6 +5706,7 @@ export interface FactoryManifest {
   birth_ttl_seconds: number;
   delegation_fingerprint: string;
   delegation_id: string;
+  device_attestation_roots_pem?: string[];
   est_path: string;
   label: string;
   quota: number;
@@ -5708,6 +5714,7 @@ export interface FactoryManifest {
 }
 
 export interface FactoryReconcileRequest {
+  attestations?: { certificate_sha256: string; credential: Record<string, unknown>; csr_pem: string }[];
   batch_id?: string;
   certificates_pem: string[];
   host?: string;
@@ -5718,6 +5725,7 @@ export interface FactoryReconcileResult {
   over_quota: number;
   recorded: number;
   rejected: number;
+  unattested: number;
 }
 
 export interface FindingAnnotationRequest {

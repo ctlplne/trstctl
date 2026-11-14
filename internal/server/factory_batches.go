@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/deviceattest"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -56,7 +57,7 @@ func (f *factoryBatchService) CreateFactoryBatch(ctx context.Context, tenantID, 
 	id := uuid.NewString()
 	if err := f.orch.CreateFactoryBatch(ctx, tenantID, projections.FactoryBatchCreated{ID: id, DelegationID: req.DelegationID,
 		Label: req.Label, Quota: req.Quota, BirthTTLSeconds: req.BirthTTLSeconds, OperationalProfile: req.OperationalProfile,
-		CreatedBy: creator}); err != nil {
+		CreatedBy: creator, DeviceAttestationRootsPEM: req.DeviceAttestationRootsPEM}); err != nil {
 		return api.FactoryBatch{}, err
 	}
 	detail, err := f.GetFactoryBatch(ctx, tenantID, id)
@@ -66,7 +67,7 @@ func (f *factoryBatchService) CreateFactoryBatch(ctx context.Context, tenantID, 
 func factoryBatchView(b store.FactoryBatch, enrolled int) api.FactoryBatch {
 	return api.FactoryBatch{ID: b.ID, DelegationID: b.DelegationID, Label: b.Label, Quota: b.Quota, BirthTTLSeconds: b.BirthTTLSeconds,
 		OperationalProfile: b.OperationalProfile, CreatedBy: b.CreatedBy, CreatedAt: b.CreatedAt, Recorded: b.Recorded,
-		OverQuota: b.OverQuota, Enrolled: enrolled}
+		OverQuota: b.OverQuota, Enrolled: enrolled, DeviceAttestationRootsPEM: b.DeviceAttestationRootsPEM, Unattested: b.Unattested}
 }
 
 // ListFactoryBatches lists the tenant's batches.
@@ -115,7 +116,7 @@ func (f *factoryBatchService) GetFactoryBatch(ctx context.Context, tenantID, id 
 	for _, birth := range births {
 		detail.Births = append(detail.Births, api.FactoryBirth{Serial: birth.Serial, DeviceName: birth.DeviceName,
 			Fingerprint: birth.Fingerprint, NotAfter: birth.NotAfter, OverQuota: birth.OverQuota, Enrolled: birth.Enrolled,
-			EnrolledAt: birth.EnrolledAt, OperationalSerial: birth.OperationalSerial, Renewals: birth.Renewals})
+			EnrolledAt: birth.EnrolledAt, OperationalSerial: birth.OperationalSerial, Renewals: birth.Renewals, Attestation: birth.Attestation})
 	}
 	return detail, nil
 }
@@ -135,7 +136,7 @@ func (f *factoryBatchService) FactoryBatchManifest(ctx context.Context, tenantID
 	}
 	return api.FactoryManifest{BatchID: b.ID, TenantID: tenantID, DelegationID: b.DelegationID,
 		DelegationFingerprint: crypto.SHA256Hex(der), Label: b.Label, Quota: b.Quota, BirthTTLSeconds: b.BirthTTLSeconds,
-		ESTPath: factoryESTPath}, nil
+		ESTPath: factoryESTPath, DeviceAttestationRootsPEM: b.DeviceAttestationRootsPEM}, nil
 }
 
 // ReconcileFactoryBatch records a station's journal: each birth certificate
@@ -161,6 +162,10 @@ func (f *factoryBatchService) ReconcileFactoryBatch(ctx context.Context, tenantI
 	if err != nil {
 		return out, err
 	}
+	attestations := make(map[string]api.FactoryAttestation, len(req.Attestations))
+	for _, a := range req.Attestations {
+		attestations[strings.ToLower(strings.TrimSpace(a.CertificateSHA256))] = a
+	}
 	for _, reportPEM := range req.CertificatesPEM {
 		block, _ := pem.Decode([]byte(reportPEM))
 		if block == nil || block.Type != "CERTIFICATE" {
@@ -180,9 +185,10 @@ func (f *factoryBatchService) ReconcileFactoryBatch(ctx context.Context, tenantI
 			CertificatesPEM: []string{reportPEM}}); err != nil {
 			return out, err
 		}
+		attestation := factoryBirthAttestation(tenantID, b, info.CommonName, block.Bytes, attestations)
 		over, err := f.orch.RecordFactoryBirth(ctx, tenantID, projections.FactoryBirthRecorded{BatchID: b.ID,
 			Serial: strings.ToLower(info.SerialNumber), DeviceName: info.CommonName, Fingerprint: strings.ToLower(info.SHA256Fingerprint),
-			CertificateDER: block.Bytes, NotAfter: info.NotAfter})
+			CertificateDER: block.Bytes, NotAfter: info.NotAfter, Attestation: attestation})
 		switch {
 		case errors.Is(err, orchestrator.ErrFactoryBirthRecorded):
 			out.Already++
@@ -193,6 +199,38 @@ func (f *factoryBatchService) ReconcileFactoryBatch(ctx context.Context, tenantI
 		default:
 			out.Recorded++
 		}
+		if err == nil && (attestation == store.FactoryAttestationMissing || attestation == store.FactoryAttestationRefused) {
+			out.Unattested++
+		}
 	}
 	return out, nil
+}
+
+// factoryBirthAttestation checks a birth's device attestation again at
+// reconcile (P12-L1), in a batch with device attestation roots: the station's
+// word is not taken. Verified only when the journal carries the device's
+// attestation and CSR for this exact certificate, bound to the tenant, the
+// batch and the device's name, device-bound, against the batch's roots, and
+// the certificate certifies the attested key; missing when the journal
+// carries none; refused otherwise. A batch with no roots records nothing.
+func factoryBirthAttestation(tenantID string, b store.FactoryBatch, device string, certificateDER []byte, attestations map[string]api.FactoryAttestation) string {
+	if len(b.DeviceAttestationRootsPEM) == 0 {
+		return ""
+	}
+	a, ok := attestations[strings.ToLower(crypto.SHA256Hex(certificateDER))]
+	if !ok || len(a.Credential) == 0 {
+		return store.FactoryAttestationMissing
+	}
+	block, _ := pem.Decode([]byte(a.CSRPEM))
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		return store.FactoryAttestationRefused
+	}
+	roots := make([][]byte, 0, len(b.DeviceAttestationRootsPEM))
+	for _, root := range b.DeviceAttestationRootsPEM {
+		roots = append(roots, []byte(root))
+	}
+	if err := deviceattest.VerifyFactoryDeviceAttestation(a.Credential, tenantID, b.ID, device, block.Bytes, certificateDER, roots, time.Now().UTC()); err != nil {
+		return store.FactoryAttestationRefused
+	}
+	return store.FactoryAttestationVerified
 }

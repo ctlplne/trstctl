@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/deviceattest"
 )
 
 // Factory station (P12). `trstctl-agent --factory-issue` certifies one device
@@ -37,6 +38,9 @@ type factoryManifest struct {
 	Quota                 int    `json:"quota"`
 	BirthTTLSeconds       int    `json:"birth_ttl_seconds"`
 	ESTPath               string `json:"est_path"`
+	// DeviceAttestationRootsPEM (P12-L1): when set, each device must attest
+	// its own key against one of these roots before the station signs.
+	DeviceAttestationRootsPEM []string `json:"device_attestation_roots_pem,omitempty"`
 }
 
 // factoryJournal is the batch journal, in the shape
@@ -45,6 +49,16 @@ type factoryJournal struct {
 	Host            string   `json:"host"`
 	BatchID         string   `json:"batch_id"`
 	CertificatesPEM []string `json:"certificates_pem"`
+	// Attestations (P12-L1) carry each attested birth certificate's device
+	// attestation and CSR, so the control plane can check them again.
+	Attestations []factoryAttestation `json:"attestations,omitempty"`
+}
+
+// factoryAttestation is one device's attestation of its own key at birth.
+type factoryAttestation struct {
+	CertificateSHA256 string          `json:"certificate_sha256"`
+	CSRPEM            string          `json:"csr_pem"`
+	Credential        json.RawMessage `json:"credential"`
 }
 
 // errFactoryQuota is the refusal past the batch's quota.
@@ -173,6 +187,10 @@ func runFactoryIssue(opts edgeCAOptions, host string) error {
 	if err != nil {
 		return err
 	}
+	credential, err := factoryDeviceAttestation(opts, manifest, csrDER)
+	if err != nil {
+		return err
+	}
 	leaf, err := issueEdgeLeafFromOptions(opts, certPEM, crypto.EdgeLeafRequest{
 		CommonName: strings.TrimSpace(opts.factoryDevice), TTL: time.Duration(manifest.BirthTTLSeconds) * time.Second,
 		CSRDER: csrDER, ClientAuthOnly: true,
@@ -191,6 +209,10 @@ func runFactoryIssue(opts edgeCAOptions, host string) error {
 		journal.Host = host
 	}
 	journal.CertificatesPEM = append(journal.CertificatesPEM, string(leaf.CertificatePEM))
+	if credential != nil {
+		journal.Attestations = append(journal.Attestations, factoryAttestation{CertificateSHA256: crypto.SHA256Hex(leaf.CertificateDER),
+			CSRPEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})), Credential: credential})
+	}
 	if err := writeFactoryJournal(journalPath, journal); err != nil {
 		return fmt.Errorf("record the birth certificate in the journal: %w", err)
 	}
@@ -199,4 +221,36 @@ func runFactoryIssue(opts edgeCAOptions, host string) error {
 	fmt.Printf("certificate: %s  journal: %s\n", certOut, journalPath)
 	fmt.Println("reconcile the journal when the station reconnects: trstctl edge factory-batches reconcile " + manifest.BatchID + " -f " + journalPath)
 	return nil
+}
+
+// factoryDeviceAttestation reads and checks the device's attestation of its
+// own key (P12-L1) when the batch pins device attestation roots: bound to the
+// tenant, the batch, the device's name and its CSR, device-bound, against
+// those roots. A batch with no roots takes none.
+func factoryDeviceAttestation(opts edgeCAOptions, manifest factoryManifest, csrDER []byte) (json.RawMessage, error) {
+	if len(manifest.DeviceAttestationRootsPEM) == 0 {
+		if opts.factoryAttestation != "" {
+			return nil, fmt.Errorf("batch %s pins no device attestation roots, so --factory-attestation has nothing to verify against", manifest.BatchID)
+		}
+		return nil, nil
+	}
+	if opts.factoryAttestation == "" {
+		return nil, fmt.Errorf("batch %s requires each device to attest its own key: pass --factory-attestation", manifest.BatchID)
+	}
+	credential, err := os.ReadFile(opts.factoryAttestation) // #nosec G304 -- operator-configured local path from the agent's own flags (CWE-22)
+	if err != nil {
+		return nil, err
+	}
+	roots := make([][]byte, 0, len(manifest.DeviceAttestationRootsPEM))
+	for _, root := range manifest.DeviceAttestationRootsPEM {
+		roots = append(roots, []byte(root))
+	}
+	if err := deviceattest.VerifyFactoryDeviceAttestation(credential, manifest.TenantID, manifest.BatchID, strings.TrimSpace(opts.factoryDevice),
+		csrDER, nil, roots, time.Now().UTC()); err != nil {
+		return nil, fmt.Errorf("the device's attestation of its own key is refused, so no birth certificate was issued: %w", err)
+	}
+	if !json.Valid(credential) {
+		return nil, errors.New("the device attestation is not JSON")
+	}
+	return json.RawMessage(credential), nil
 }

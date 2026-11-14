@@ -1173,6 +1173,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	444: true, // TestMigration0444KeepsMDMPollSchedulesAndStartsWithNoJamfAPIClient
 	478: true, // TestMigration0478KeepsMDMPollSchedulesReadingComputersOnly
 	479: true, // TestMigration0479KeepsDNS01ProviderConfigsWithNoPersistTarget
+	480: true, // TestMigration0480KeepsFactoryBatchesWithoutDeviceAttestation
 	442: true, // TestMigration0442KeepsSlackInstallsWithNoScopes
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod
 	383: true, // TestMigration0383KeepsDecoyUsesAsFoundByLookup

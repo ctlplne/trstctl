@@ -204,6 +204,15 @@ func NewTPMIdentity(now time.Time) (*TPMIdentity, error) {
 	}, nil
 }
 
+// CSRDERFor is a PKCS#10 request for the fixture credential's key that names
+// commonName, as a device's line tooling makes it (P12-L1); the attested key
+// is the same.
+func (i *TPMIdentity) CSRDERFor(commonName string) ([]byte, error) {
+	return x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
+		Subject: pkix.Name{CommonName: commonName}, DNSNames: []string{commonName},
+	}, i.credentialKey)
+}
+
 // CSRDER returns a copy of the fixture credential's PKCS#10 request.
 func (i *TPMIdentity) CSRDER() []byte {
 	return append([]byte(nil), i.csrDER...)

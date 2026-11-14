@@ -34,6 +34,9 @@ type FactoryBatchCreated struct {
 	BirthTTLSeconds    int    `json:"birth_ttl_seconds"`
 	OperationalProfile string `json:"operational_profile,omitempty"`
 	CreatedBy          string `json:"created_by"`
+	// DeviceAttestationRootsPEM (P12-L1): each device attests its own key
+	// against one of these at birth.
+	DeviceAttestationRootsPEM []string `json:"device_attestation_roots_pem,omitempty"`
 }
 
 // FactoryBirthRecorded is the payload of edge.factory_birth.recorded.
@@ -45,6 +48,9 @@ type FactoryBirthRecorded struct {
 	CertificateDER []byte    `json:"certificate_der"`
 	NotAfter       time.Time `json:"not_after"`
 	OverQuota      bool      `json:"over_quota"`
+	// Attestation (P12-L1), in a batch with device attestation roots:
+	// verified, missing or refused.
+	Attestation string `json:"attestation,omitempty"`
 }
 
 // FactoryDeviceEnrolled is the payload of edge.factory_device.enrolled: a first
@@ -85,7 +91,7 @@ func (p *Projector) applyFactoryTx(ctx context.Context, tx pgx.Tx, e events.Even
 		}
 		return true, p.store.ApplyFactoryBatchCreatedTx(ctx, tx, e.TenantID, store.FactoryBatch{ID: b.ID, DelegationID: b.DelegationID,
 			Label: b.Label, Quota: b.Quota, BirthTTLSeconds: b.BirthTTLSeconds, OperationalProfile: b.OperationalProfile,
-			CreatedBy: b.CreatedBy, CreatedAt: e.Time}, e.Sequence)
+			CreatedBy: b.CreatedBy, CreatedAt: e.Time, DeviceAttestationRootsPEM: b.DeviceAttestationRootsPEM}, e.Sequence)
 	case EventFactoryBirthRecorded:
 		var b FactoryBirthRecorded
 		if err := json.Unmarshal(e.Data, &b); err != nil {
@@ -96,7 +102,7 @@ func (p *Projector) applyFactoryTx(ctx context.Context, tx pgx.Tx, e events.Even
 		}
 		return true, p.store.ApplyFactoryBirthRecordedTx(ctx, tx, e.TenantID, store.FactoryBirth{BatchID: b.BatchID, Serial: b.Serial,
 			DeviceName: b.DeviceName, Fingerprint: b.Fingerprint, CertificateDER: b.CertificateDER, NotAfter: b.NotAfter,
-			OverQuota: b.OverQuota, RecordedAt: e.Time}, e.Sequence)
+			OverQuota: b.OverQuota, RecordedAt: e.Time, Attestation: b.Attestation}, e.Sequence)
 	case EventFactoryDeviceEnrolled:
 		var d FactoryDeviceEnrolled
 		if err := json.Unmarshal(e.Data, &d); err != nil {
@@ -120,11 +126,11 @@ func addFactoryPrivacyPolicies(policies map[privacyEventPolicyKey]events.Privacy
 	policies[privacyEventPolicyKey{EventFactoryBatchCreated, 1}] = privacyRules(
 		privacyRule("/id", opaque), privacyRule("/delegation_id", opaque), privacyRule("/label", clear),
 		privacyRule("/quota", opaque), privacyRule("/birth_ttl_seconds", opaque), privacyRule("/operational_profile", opaque),
-		privacyRule("/created_by", exact))
+		privacyRule("/created_by", exact), privacyRule("/device_attestation_roots_pem/*", opaque))
 	policies[privacyEventPolicyKey{EventFactoryBirthRecorded, 1}] = privacyRules(
 		privacyRule("/batch_id", opaque), privacyRule("/serial", opaque), privacyRule("/device_name", opaque),
 		privacyRule("/fingerprint", opaque), privacyRule("/certificate_der", opaque), privacyRule("/not_after", opaque),
-		privacyRule("/over_quota", opaque))
+		privacyRule("/over_quota", opaque), privacyRule("/attestation", opaque))
 	policies[privacyEventPolicyKey{EventFactoryDeviceEnrolled, 1}] = privacyRules(
 		privacyRule("/batch_id", opaque), privacyRule("/serial", opaque), privacyRule("/csr_sha256", opaque),
 		privacyRule("/operational_serial", opaque), privacyRule("/operational_fingerprint", opaque),

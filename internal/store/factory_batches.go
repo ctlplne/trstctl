@@ -30,6 +30,10 @@ type FactoryBatch struct {
 	CreatedAt          time.Time
 	Recorded           int
 	OverQuota          int
+	// P12-L1: the device attestation roots, and births recorded without a
+	// verified attestation.
+	DeviceAttestationRootsPEM []string
+	Unattested                int
 }
 
 // FactoryBirth is one birth certificate a station issued and a reconcile
@@ -50,6 +54,9 @@ type FactoryBirth struct {
 	OperationalFingerprint string
 	OperationalDER         []byte
 	Renewals               int
+	// Attestation (P12-L1): verified, missing or refused in a batch with
+	// device attestation roots; empty otherwise.
+	Attestation string
 }
 
 func factorySequence(sequence uint64) (int64, error) {
@@ -67,10 +74,11 @@ func (s *Store) ApplyFactoryBatchCreatedTx(ctx context.Context, tx pgx.Tx, tenan
 	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO factory_batches (tenant_id, id, delegation_id, label, quota, birth_ttl_seconds, operational_profile,
-		                             created_by, created_at, event_sequence)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		                             created_by, created_at, event_sequence, device_attestation_roots)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (tenant_id, id) DO NOTHING`,
-		tenantID, b.ID, b.DelegationID, b.Label, b.Quota, b.BirthTTLSeconds, b.OperationalProfile, b.CreatedBy, b.CreatedAt.UTC(), seq)
+		tenantID, b.ID, b.DelegationID, b.Label, b.Quota, b.BirthTTLSeconds, b.OperationalProfile, b.CreatedBy, b.CreatedAt.UTC(), seq,
+		factoryRoots(b.DeviceAttestationRootsPEM))
 	return err
 }
 
@@ -91,19 +99,24 @@ func (s *Store) ApplyFactoryBirthRecordedTx(ctx context.Context, tx pgx.Tx, tena
 	}
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO factory_birth_certificates (tenant_id, batch_id, serial, device_name, fingerprint, certificate_der, not_after,
-		                                        over_quota, recorded_at, event_sequence)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		                                        over_quota, recorded_at, event_sequence, attestation)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (tenant_id, batch_id, serial) DO NOTHING`,
-		tenantID, b.BatchID, b.Serial, b.DeviceName, b.Fingerprint, b.CertificateDER, b.NotAfter.UTC(), b.OverQuota, b.RecordedAt.UTC(), seq)
+		tenantID, b.BatchID, b.Serial, b.DeviceName, b.Fingerprint, b.CertificateDER, b.NotAfter.UTC(), b.OverQuota, b.RecordedAt.UTC(), seq,
+		b.Attestation)
 	if err != nil || tag.RowsAffected() == 0 {
 		return err
 	}
-	over := 0
+	over, unattested := 0, 0
 	if b.OverQuota {
 		over = 1
 	}
-	_, err = tx.Exec(ctx, `UPDATE factory_batches SET recorded = recorded + 1, over_quota = over_quota + $3, event_sequence = $4
-		WHERE tenant_id = $1 AND id = $2`, tenantID, b.BatchID, over, seq)
+	if b.Attestation == FactoryAttestationMissing || b.Attestation == FactoryAttestationRefused {
+		unattested = 1
+	}
+	_, err = tx.Exec(ctx, `UPDATE factory_batches SET recorded = recorded + 1, over_quota = over_quota + $3, event_sequence = $4,
+		unattested = unattested + $5
+		WHERE tenant_id = $1 AND id = $2`, tenantID, b.BatchID, over, seq, unattested)
 	return err
 }
 
@@ -128,12 +141,15 @@ func (s *Store) ApplyFactoryDeviceEnrolledTx(ctx context.Context, tx pgx.Tx, ten
 }
 
 const factoryBatchColumns = `id::text, delegation_id, label, quota, birth_ttl_seconds, operational_profile, created_by, created_at,
-	recorded, over_quota`
+	recorded, over_quota, device_attestation_roots, unattested`
 
 func scanFactoryBatch(row pgx.Row) (FactoryBatch, error) {
 	var b FactoryBatch
 	err := row.Scan(&b.ID, &b.DelegationID, &b.Label, &b.Quota, &b.BirthTTLSeconds, &b.OperationalProfile, &b.CreatedBy,
-		&b.CreatedAt, &b.Recorded, &b.OverQuota)
+		&b.CreatedAt, &b.Recorded, &b.OverQuota, &b.DeviceAttestationRootsPEM, &b.Unattested)
+	if len(b.DeviceAttestationRootsPEM) == 0 {
+		b.DeviceAttestationRootsPEM = nil
+	}
 	return b, err
 }
 
@@ -186,13 +202,14 @@ func (s *Store) ListFactoryBatches(ctx context.Context, tenantID string) ([]Fact
 }
 
 const factoryBirthColumns = `batch_id::text, serial, device_name, fingerprint, certificate_der, not_after, over_quota, recorded_at,
-	enrolled, enrolled_at, csr_sha256, operational_serial, operational_fingerprint, coalesce(operational_der, ''::bytea), renewals`
+	enrolled, enrolled_at, csr_sha256, operational_serial, operational_fingerprint, coalesce(operational_der, ''::bytea), renewals,
+	attestation`
 
 func scanFactoryBirth(row pgx.Row) (FactoryBirth, error) {
 	var b FactoryBirth
 	err := row.Scan(&b.BatchID, &b.Serial, &b.DeviceName, &b.Fingerprint, &b.CertificateDER, &b.NotAfter, &b.OverQuota,
 		&b.RecordedAt, &b.Enrolled, &b.EnrolledAt, &b.CSRSHA256, &b.OperationalSerial, &b.OperationalFingerprint,
-		&b.OperationalDER, &b.Renewals)
+		&b.OperationalDER, &b.Renewals, &b.Attestation)
 	return b, err
 }
 
@@ -246,4 +263,20 @@ func (s *Store) ListFactoryBirths(ctx context.Context, tenantID, batchID string,
 		return rows.Err()
 	})
 	return out, err
+}
+
+// A birth's device attestation in a batch with device attestation roots
+// (P12-L1). Only a verified one enrolls.
+const (
+	FactoryAttestationVerified = "verified"
+	FactoryAttestationMissing  = "missing"
+	FactoryAttestationRefused  = "refused"
+)
+
+// factoryRoots stores a batch's roots as a non-null array.
+func factoryRoots(roots []string) []string {
+	if roots == nil {
+		return []string{}
+	}
+	return roots
 }

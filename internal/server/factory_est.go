@@ -170,6 +170,11 @@ func (s *Server) verifyFactoryProof(r *http.Request, tenantID string, renewal bo
 		if !birth.NotAfter.After(now) {
 			return factoryProof{}, http.StatusForbidden, errors.New("the birth certificate has expired")
 		}
+		// P12-L1: a batch with device attestation roots enrolls only births
+		// whose device attestation the reconcile verified.
+		if len(batch.DeviceAttestationRootsPEM) > 0 && birth.Attestation != store.FactoryAttestationVerified {
+			return factoryProof{}, http.StatusForbidden, errors.New("the batch requires a verified device attestation of the birth key, and this birth has none")
+		}
 		d, found, err := s.store.GetEdgeDelegation(ctx, tenantID, batch.DelegationID)
 		if err != nil || !found || d.RevokedAt != nil || d.Status == "revoked" {
 			return factoryProof{}, http.StatusForbidden, errors.New("the batch's station delegation is revoked")

@@ -26876,6 +26876,12 @@
           "delegation_id": {
             "type": "string"
           },
+          "device_attestation_roots_pem": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "enrolled": {
             "type": "integer"
           },
@@ -26895,6 +26901,9 @@
             "type": "integer"
           },
           "recorded": {
+            "type": "integer"
+          },
+          "unattested": {
             "type": "integer"
           }
         },
@@ -26920,6 +26929,14 @@
           "births": {
             "items": {
               "properties": {
+                "attestation": {
+                  "enum": [
+                    "verified",
+                    "missing",
+                    "refused"
+                  ],
+                  "type": "string"
+                },
                 "device_name": {
                   "type": "string"
                 },
@@ -26973,6 +26990,12 @@
           "delegation_id": {
             "type": "string"
           },
+          "device_attestation_roots_pem": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "enrolled": {
             "type": "integer"
           },
@@ -26992,6 +27015,9 @@
             "type": "integer"
           },
           "recorded": {
+            "type": "integer"
+          },
+          "unattested": {
             "type": "integer"
           }
         },
@@ -27028,6 +27054,12 @@
                 "delegation_id": {
                   "type": "string"
                 },
+                "device_attestation_roots_pem": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
                 "enrolled": {
                   "type": "integer"
                 },
@@ -27047,6 +27079,9 @@
                   "type": "integer"
                 },
                 "recorded": {
+                  "type": "integer"
+                },
+                "unattested": {
                   "type": "integer"
                 }
               },
@@ -27080,6 +27115,12 @@
           "delegation_id": {
             "type": "string"
           },
+          "device_attestation_roots_pem": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "label": {
             "type": "string"
           },
@@ -27112,6 +27153,12 @@
           "delegation_id": {
             "type": "string"
           },
+          "device_attestation_roots_pem": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "est_path": {
             "type": "string"
           },
@@ -27139,6 +27186,28 @@
       },
       "FactoryReconcileRequest": {
         "properties": {
+          "attestations": {
+            "items": {
+              "properties": {
+                "certificate_sha256": {
+                  "type": "string"
+                },
+                "credential": {
+                  "type": "object"
+                },
+                "csr_pem": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "certificate_sha256",
+                "csr_pem",
+                "credential"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "batch_id": {
             "type": "string"
           },
@@ -27170,13 +27239,17 @@
           },
           "rejected": {
             "type": "integer"
+          },
+          "unattested": {
+            "type": "integer"
           }
         },
         "required": [
           "recorded",
           "over_quota",
           "already",
-          "rejected"
+          "rejected",
+          "unattested"
         ],
         "type": "object"
       },

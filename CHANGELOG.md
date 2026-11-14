@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A factory batch can require each device to attest its own key at birth (P12-L1): with `device_attestation_roots_pem`
+  the station signs a birth certificate only after the device's TPM attests the CSR's key (bound to the tenant, batch
+  and device, device-bound) against those roots (`trstctl-agent --factory-attestation`), the journal carries the
+  attestation, reconcile verifies it again and records each birth as verified, missing or refused, and only verified
+  births enroll on first boot. The console takes the roots and shows each birth's attestation. Migration 0480.
 - A delegated DNS-01 provider config can delegate its `_validation-persist` names apart from `_acme-challenge`
   (P1-L4): `persist_delegation_target` (console: **Persist record delegation target**) is the CNAME target the standing
   dns-persist-01 record is written at; without it the record follows `delegation_target` as before, and a persist name

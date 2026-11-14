@@ -8491,8 +8491,9 @@ station's quota, journal and lock with a software key by explicit exception; and
 a software TPM in the swtpm container harness. A real device's TPM or secure element is a Track B row. The CA
 hierarchy page's Device first-boot batches panel lists batches with their reconciled births, shows each device's
 enrollment, creates a batch under an active delegation, saves the station manifest and reconciles a journal pasted as
-PEM. What comes next: device attestation of the device's own key at birth (the station certifies the CSR's key today)
-and ACME as a first-boot path.
+PEM or as the station's journal file. A batch with device attestation roots enrolls only devices whose TPM attested
+their own key at birth (P12-L1), checked by the station and again at reconcile; proven with the TPM fixture, a real
+device TPM is a Track B row. What comes next: ACME as a first-boot path.
 
 ## ServiceNow two-way sync (P13) — served
 

@@ -148,6 +148,68 @@ describe("Device first-boot batches", () => {
     expect(await screen.findByText("Recorded 2, over quota 0, already recorded 0, rejected 0.")).toBeInTheDocument();
   });
 
+  it("creates a batch that requires device attestation and reconciles a journal file with its attestations (P12-L1)", async () => {
+    const rootPEM = "-----BEGIN CERTIFICATE-----\nQA-TPM-ROOT\n-----END CERTIFICATE-----";
+    const attestedBatch = { ...batch, id: "b-3", label: "attested-run", device_attestation_roots_pem: [rootPEM], unattested: 1 };
+    apiMock.factoryBatches.mockResolvedValue({ items: [attestedBatch] });
+    apiMock.factoryBatch.mockResolvedValue({
+      ...attestedBatch,
+      births: [
+        {
+          serial: "0b01",
+          device_name: "sensor-0101",
+          fingerprint: "sha256:a1",
+          not_after: "2026-11-15T08:00:00Z",
+          over_quota: false,
+          enrolled: false,
+          renewals: 0,
+          attestation: "verified",
+        },
+        {
+          serial: "0b02",
+          device_name: "sensor-0102",
+          fingerprint: "sha256:a2",
+          not_after: "2026-11-15T08:00:00Z",
+          over_quota: false,
+          enrolled: false,
+          renewals: 0,
+          attestation: "missing",
+        },
+      ],
+    });
+    apiMock.createFactoryBatch.mockResolvedValue({ ...attestedBatch, id: "b-4", label: "next-run" });
+    apiMock.reconcileFactoryBatch.mockResolvedValue({ recorded: 1, over_quota: 0, already: 0, rejected: 0, unattested: 0 });
+    const user = userEvent.setup();
+    renderPanel();
+    const table = await screen.findByRole("table", { name: "First-boot batches" });
+    expect(within(table).getByText("Device keys attested at birth; 1 without a verified attestation")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Batch label"), "next-run");
+    fireEvent.change(screen.getByLabelText("Device attestation roots (PEM, optional)"), { target: { value: `${rootPEM}\n` } });
+    await user.click(screen.getByRole("button", { name: "Create batch" }));
+    expect(apiMock.createFactoryBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ label: "next-run", device_attestation_roots_pem: [rootPEM] }),
+      expect.any(String),
+    );
+
+    await user.click(within(table).getByRole("button", { name: "attested-run" }));
+    const births = await screen.findByRole("table", { name: "Births in attested-run" });
+    const rows = within(births).getAllByRole("row");
+    expect(rows[1]).toHaveTextContent("Device key attested");
+    expect(rows[2]).toHaveTextContent("No device attestation: cannot enroll");
+
+    const attestations = [{ certificate_sha256: "a1", csr_pem: "-----BEGIN CERTIFICATE REQUEST-----", credential: { id: "tpm" } }];
+    const journalFile = JSON.stringify({ host: "factory-line-1", batch_id: "b-3", certificates_pem: [pemA], attestations });
+    await user.type(screen.getByLabelText("Station host"), "factory-line-1");
+    fireEvent.change(screen.getByLabelText("Birth certificates from the journal (PEM)"), { target: { value: journalFile } });
+    await user.click(screen.getByRole("button", { name: "Reconcile journal" }));
+    expect(apiMock.reconcileFactoryBatch).toHaveBeenCalledWith(
+      "b-3",
+      { host: "factory-line-1", batch_id: "b-3", certificates_pem: [pemA], attestations },
+      expect.any(String),
+    );
+  });
+
   it("offers no create or reconcile without issuers:write", async () => {
     principal.permissions = ["issuers:read"];
     const user = userEvent.setup();

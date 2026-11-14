@@ -19595,6 +19595,7 @@ export interface components {
             created_at: string;
             created_by: string;
             delegation_id: string;
+            device_attestation_roots_pem?: string[];
             enrolled: number;
             id: string;
             label: string;
@@ -19602,10 +19603,13 @@ export interface components {
             over_quota: number;
             quota: number;
             recorded: number;
+            unattested?: number;
         };
         FactoryBatchDetail: {
             birth_ttl_seconds: number;
             births: {
+                /** @enum {string} */
+                attestation?: "verified" | "missing" | "refused";
                 device_name: string;
                 enrolled: boolean;
                 /** Format: date-time */
@@ -19622,6 +19626,7 @@ export interface components {
             created_at: string;
             created_by: string;
             delegation_id: string;
+            device_attestation_roots_pem?: string[];
             enrolled: number;
             id: string;
             label: string;
@@ -19629,6 +19634,7 @@ export interface components {
             over_quota: number;
             quota: number;
             recorded: number;
+            unattested?: number;
         };
         FactoryBatchList: {
             items: {
@@ -19637,6 +19643,7 @@ export interface components {
                 created_at: string;
                 created_by: string;
                 delegation_id: string;
+                device_attestation_roots_pem?: string[];
                 enrolled: number;
                 id: string;
                 label: string;
@@ -19644,11 +19651,13 @@ export interface components {
                 over_quota: number;
                 quota: number;
                 recorded: number;
+                unattested?: number;
             }[];
         };
         FactoryBatchRequest: {
             birth_ttl_seconds: number;
             delegation_id: string;
+            device_attestation_roots_pem?: string[];
             label: string;
             operational_profile?: string;
             quota: number;
@@ -19658,12 +19667,18 @@ export interface components {
             birth_ttl_seconds: number;
             delegation_fingerprint: string;
             delegation_id: string;
+            device_attestation_roots_pem?: string[];
             est_path: string;
             label: string;
             quota: number;
             tenant_id: string;
         };
         FactoryReconcileRequest: {
+            attestations?: {
+                certificate_sha256: string;
+                credential: Record<string, never>;
+                csr_pem: string;
+            }[];
             batch_id?: string;
             certificates_pem: string[];
             host?: string;
@@ -19673,6 +19688,7 @@ export interface components {
             over_quota: number;
             recorded: number;
             rejected: number;
+            unattested: number;
         };
         FindingAnnotationRequest: {
             reason?: string;

@@ -86,6 +86,9 @@ type edgeCAOptions struct {
 	factoryCSR      string
 	factoryDevice   string
 	factoryJournal  string
+	// P12-L1: the device's TPM attestation of its own key, required by a
+	// batch that pins device attestation roots.
+	factoryAttestation string
 }
 
 // edgeJournal is the reconcile request body, maintained on disk in exactly the

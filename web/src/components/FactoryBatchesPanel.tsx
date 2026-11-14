@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api } from "@/lib/api";
-import type { FactoryReconcileResult } from "@/lib/api-types.gen";
+import type { FactoryReconcileRequest, FactoryReconcileResult } from "@/lib/api-types.gen";
 import { hasPermission } from "@/lib/access";
 import { newIdempotencyKey } from "@/lib/apiTransport";
 import { useApiQuery, useQueryClient } from "@/lib/query";
@@ -41,7 +41,7 @@ export function FactoryBatchesPanel() {
   const delegations = useApiQuery(["edge-delegations"], api.edgeDelegations);
   const [selected, setSelected] = useState("");
   const detail = useApiQuery(["factory-batch", selected], () => api.factoryBatch(selected), { enabled: Boolean(selected) });
-  const [draft, setDraft] = useState({ delegation: "", label: "", quota: "100", ttlHours: "24", profile: "" });
+  const [draft, setDraft] = useState({ delegation: "", label: "", quota: "100", ttlHours: "24", profile: "", roots: "" });
   // A retried request keeps its key, so a lost response never creates a second batch.
   const [createKey, setCreateKey] = useState(() => newIdempotencyKey());
   const [journal, setJournal] = useState({ host: "", pem: "" });
@@ -65,6 +65,7 @@ export function FactoryBatchesPanel() {
     }
   };
 
+  const rootsPEM = (draft.roots.match(certificatePEM) ?? []).map((pem) => pem.trim());
   const createBatch = () =>
     act(async () => {
       const created = await api.createFactoryBatch(
@@ -74,11 +75,13 @@ export function FactoryBatchesPanel() {
           quota: Number(draft.quota),
           birth_ttl_seconds: Math.round(Number(draft.ttlHours) * 3600),
           ...(draft.profile.trim() ? { operational_profile: draft.profile.trim() } : {}),
+          // P12-L1: roots each device attests its own key against at birth.
+          ...(rootsPEM.length > 0 ? { device_attestation_roots_pem: rootsPEM } : {}),
         },
         createKey,
       );
       setCreateKey(newIdempotencyKey());
-      setDraft({ ...draft, label: "" });
+      setDraft({ ...draft, label: "", roots: "" });
       setSelected(created.id);
       void queryClient.invalidateQueries({ queryKey: ["factory-batches"] });
     });
@@ -92,9 +95,25 @@ export function FactoryBatchesPanel() {
   const reconcile = () =>
     act(async () => {
       if (!batch) return;
-      const certificates = (journal.pem.match(certificatePEM) ?? []).map((pem) => pem.trim());
+      let certificates = (journal.pem.match(certificatePEM) ?? []).map((pem) => pem.trim());
+      // P12-L1: the station's journal file carries each device's attestation
+      // beside its certificate; pasted as JSON, it is posted as the station wrote it.
+      let attestations: FactoryReconcileRequest["attestations"];
+      try {
+        const parsed = JSON.parse(journal.pem) as Partial<FactoryReconcileRequest>;
+        if (Array.isArray(parsed.certificates_pem)) certificates = parsed.certificates_pem.map((pem) => pem.trim());
+        attestations = parsed.attestations;
+      } catch {
+        attestations = undefined;
+      }
       if (certificates.length === 0) throw new Error(t("edge.factory.reconcile.empty"));
-      setResult(await api.reconcileFactoryBatch(batch.id, { host: journal.host.trim(), batch_id: batch.id, certificates_pem: certificates }, reconcileKey));
+      setResult(
+        await api.reconcileFactoryBatch(
+          batch.id,
+          { host: journal.host.trim(), batch_id: batch.id, certificates_pem: certificates, ...(attestations?.length ? { attestations } : {}) },
+          reconcileKey,
+        ),
+      );
       setReconcileKey(newIdempotencyKey());
       setJournal({ ...journal, pem: "" });
       void queryClient.invalidateQueries({ queryKey: ["factory-batches"] });
@@ -135,7 +154,12 @@ export function FactoryBatchesPanel() {
                     </Button>
                   </td>
                   <td>{t("edge.factory.quota", { quota: item.quota, hours: Math.round(item.birth_ttl_seconds / 3600) })}</td>
-                  <td>{t("edge.factory.births", { recorded: item.recorded, enrolled: item.enrolled, over: item.over_quota })}</td>
+                  <td>
+                    {t("edge.factory.births", { recorded: item.recorded, enrolled: item.enrolled, over: item.over_quota })}
+                    {item.device_attestation_roots_pem?.length ? (
+                      <span className="block text-caption text-muted-foreground">{t("edge.factory.attested", { unattested: item.unattested ?? 0 })}</span>
+                    ) : null}
+                  </td>
                   <td>{t("edge.factory.created", { by: item.created_by, at: formatDateTime(item.created_at) })}</td>
                 </tr>
               ))}
@@ -180,6 +204,9 @@ export function FactoryBatchesPanel() {
               <Field label={t("edge.factory.profileLabel")} controlId="factory-profile">
                 {(control) => <Input {...control} value={draft.profile} onChange={(event) => setDraft({ ...draft, profile: event.target.value })} />}
               </Field>
+              <Field label={t("edge.factory.rootsLabel")} controlId="factory-roots" description={t("edge.factory.rootsHelp")} className="md:col-span-2">
+                {(control) => <Textarea {...control} rows={3} value={draft.roots} onChange={(event) => setDraft({ ...draft, roots: event.target.value })} />}
+              </Field>
               <div className="self-end">
                 <Button type="button" disabled={busy || !delegationID || !draft.label.trim() || Number(draft.quota) < 1} onClick={() => void createBatch()}>
                   {t("edge.factory.create")}
@@ -223,6 +250,10 @@ export function FactoryBatchesPanel() {
                       <td>
                         {t("edge.factory.birthUntil", { at: formatDateTime(birth.not_after) })}
                         {birth.over_quota ? <span className="block text-status-warning">{t("edge.factory.overQuota")}</span> : null}
+                        {birth.attestation === "verified" ? <span className="block">{t("edge.factory.attestation.verified")}</span> : null}
+                        {birth.attestation === "missing" || birth.attestation === "refused" ? (
+                          <span className="block text-status-warning">{t(`edge.factory.attestation.${birth.attestation}`)}</span>
+                        ) : null}
                       </td>
                       <td>
                         {birth.enrolled

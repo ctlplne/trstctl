@@ -251,6 +251,7 @@ func main() {
 	factoryCSR := flag.String("factory-csr", "", "factory-issue: the device's certificate request (DER or PEM), made with the device's own key")
 	factoryDevice := flag.String("factory-device", "", "factory-issue: the device's name, inside the delegation's name constraints; the CSR must name it")
 	factoryJournal := flag.String("factory-journal", "factory-journal.json", "factory-issue: the batch journal, in the shape `trstctl edge factory-batches reconcile -f` posts")
+	factoryAttestation := flag.String("factory-attestation", "", "factory-issue (P12-L1): the device's TPM attestation of its own key (trstctl-agent --edge-attest on the device, segment factory/<batch>/<device>); required when the batch pins device attestation roots")
 	edgeRenew := flag.Bool("edge-renew", false, "renew the delegated edge CA in --edge-ca-cert over the agent channel with a fresh TPM attestation when it nears expiry; uses the --edge-* TPM handle, AIK, tenant and segment flags")
 	edgeRenewBefore := flag.Duration("edge-renew-before", 7*24*time.Hour, "with --edge-renew, how long before the delegation expires the agent asks to renew it")
 	flag.Parse()
@@ -286,7 +287,7 @@ func main() {
 		leafCN: *edgeIssueCN, leafDNS: *edgeIssueDNS, leafTTL: *edgeIssueTTL,
 		certOut: *edgeCertOut, leafKeyOut: *edgeLeafKeyOut, journal: *edgeJournalPath,
 		factoryMode: *factoryIssueMode, factoryManifest: *factoryManifest, factoryCSR: *factoryCSR,
-		factoryDevice: *factoryDevice, factoryJournal: *factoryJournal,
+		factoryDevice: *factoryDevice, factoryJournal: *factoryJournal, factoryAttestation: *factoryAttestation,
 	}
 	if handled, err := runEdgeCAOps(edgeOpts, *commonName); handled {
 		if err != nil {

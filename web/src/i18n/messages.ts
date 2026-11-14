@@ -25080,8 +25080,34 @@ export const messages = {
   "edge.factory.reconcile.host": { defaultMessage: "Station host", description: "P12-L3: the factory station's host name." },
   "edge.factory.reconcile.pem": { defaultMessage: "Birth certificates from the journal (PEM)", description: "P12-L3: pasted journal certificates." },
   "edge.factory.reconcile.help": {
-    defaultMessage: "Paste the certificates the station's journal recorded; each is checked against this batch and its delegation.",
-    description: "P12-L3: what reconcile checks.",
+    defaultMessage:
+      "Paste the station's journal file, or the certificates it recorded; each is checked against this batch and its delegation. A batch with device attestation roots needs the journal file: it carries each device's attestation.",
+    description: "P12-L3, P12-L1: what reconcile checks and what an attested batch needs.",
+  },
+  "edge.factory.rootsLabel": {
+    defaultMessage: "Device attestation roots (PEM, optional)",
+    description: "P12-L1: the roots each device attests its own key against at birth.",
+  },
+  "edge.factory.rootsHelp": {
+    defaultMessage:
+      "With roots, the station signs a device's birth certificate only after its TPM attests its own key against one of them, the journal reconcile checks that again, and only attested births enroll.",
+    description: "P12-L1: what device attestation roots do.",
+  },
+  "edge.factory.attested": {
+    defaultMessage: "Device keys attested at birth; {unattested} without a verified attestation",
+    description: "P12-L1: a batch that requires device attestation, and its unattested births.",
+  },
+  "edge.factory.attestation.verified": {
+    defaultMessage: "Device key attested",
+    description: "P12-L1: the birth's device attestation verified.",
+  },
+  "edge.factory.attestation.missing": {
+    defaultMessage: "No device attestation: cannot enroll",
+    description: "P12-L1: the journal carried no attestation for this birth.",
+  },
+  "edge.factory.attestation.refused": {
+    defaultMessage: "Device attestation refused: cannot enroll",
+    description: "P12-L1: the birth's device attestation did not verify.",
   },
   "edge.factory.reconcile.submit": { defaultMessage: "Reconcile journal", description: "P12-L3: reconcile button." },
   "edge.factory.reconcile.result": {
