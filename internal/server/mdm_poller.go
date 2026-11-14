@@ -194,6 +194,8 @@ func (s *Server) dispatchMDMSyncJob(ctx context.Context, tenantID string, sched 
 		// Jamf Pro server for an access token.
 		intent.JamfAPIClient = &mdm.JamfAPIClient{ClientID: sched.JamfClientID}
 	}
+	// N9-L1: the schedule asked for Jamf's mobile devices too.
+	intent.JamfMobileDevices = sched.MDM == mdm.MDMJamf && sched.JamfMobileDevices
 	payload, err := json.Marshal(intent)
 	if err != nil {
 		return

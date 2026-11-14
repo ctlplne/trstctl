@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A Jamf poll schedule can read Jamf Pro's mobile device inventory too (N9-L1): `jamf_mobile_devices` (console:
+  **Read mobile devices too**) has the relay read the first 100 mobile devices after the computers, with the same
+  token. Each is listed as `mobile-<id>`, correlated by serial and watched for renewal; its install state stays
+  unknown (Jamf lists its certificates without serial numbers) and a check-in asked for it is refused. Migration 0478
+  adds the setting, off for every existing schedule.
 - Native image collection for secret scanning reads zstd layers (N6-L2): an OCI `tar+zstd` layer's files are
   collected and scanned as a gzip layer's are, its digest checked; a zstd window over 128 MiB, or any compressed
   layer expanding past 16 GiB, fails the run with the reason.

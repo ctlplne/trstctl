@@ -6543,6 +6543,7 @@ func componentSchemas() map[string]*Schema {
 		"renewal_window_days": {Type: "integer"},
 		"client_credentials":  ref("MDMEntraAppRegistration"),
 		"jamf_api_client":     ref("MDMJamfAPIClient"),
+		"jamf_mobile_devices": {Type: "boolean", Description: "Jamf only: the relay reads the mobile device inventory as well as the computers (N9-L1)"},
 		"last_run_at":         str(), "last_error": str(), "guidance": str(),
 	}, "configured", "enabled", "guidance")
 	mdmPollScheduleInput := object(map[string]*Schema{
@@ -6553,6 +6554,7 @@ func componentSchemas() map[string]*Schema {
 		"renewal_window_days": {Type: "integer"},
 		"client_credentials":  ref("MDMEntraAppRegistration"),
 		"jamf_api_client":     ref("MDMJamfAPIClient"),
+		"jamf_mobile_devices": {Type: "boolean", Description: "Jamf only: the relay reads the mobile device inventory as well as the computers; the API role needs Read Mobile Devices (N9-L1)"},
 	}, "mdm", "base_url", "token_ref", "interval_seconds")
 	mdmJamfAPIClient := object(map[string]*Schema{
 		"client_id": {Type: "string", Format: "uuid", Description: "the Jamf Pro API client's client ID; token_ref then holds its client secret"},

@@ -1,1 +1,0 @@
-import{m as s,t}from"./schemas-y6WLIxwz.js";function r(r){return s(t,r)}export{r as t};

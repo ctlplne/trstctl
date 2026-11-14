@@ -4366,8 +4366,9 @@ than sending an operator looking for a credential that was never there.
   with an active/valid status; a completed read with a different serial is an
   actionable failure, while no certificate-specific read remains `unknown`.
   READ-ONLY IS STRUCTURAL — inventory uses fixed GET paths
-  (`/v1.0/deviceManagement/managedDevices` and
-  `/api/v1/computers-inventory`). The one non-GET provider operation is
+  (`/v1.0/deviceManagement/managedDevices`, `/api/v1/computers-inventory`
+  and, for a Jamf schedule that asks for them (N9-L1),
+  `/api/v2/mobile-devices/detail`). The one non-GET provider operation is
   Microsoft's fixed `POST /v1.0/deviceManagement/reports/exportJobs` for the
   `CertificatesByRAPolicy` READ artifact; it cannot name a policy, assignment,
   or device mutation path, and the Graph bearer is never forwarded to the
@@ -8454,8 +8455,10 @@ answer (`checked_in` with its status, or `failed` with the relay's reason). It i
 sends no body. A check-in the MDM throttles (429) or fails on its side (5xx) is asked again in the same job under the
 same approval, within four posts and a minute of waits (N9-L3); any other failure is not retried on its own. Proven against Intune Graph and Jamf Pro stand-ins over
 TLS with the production relay; a live Intune tenant and Jamf Pro server are a Track B row. A renewal wave checks in
-at most 200 devices, each one trstctl has read from that MDM, under one approval (N9-L2). What comes next: Jamf
-mobile devices (the device read today covers computers only).
+at most 200 devices, each one trstctl has read from that MDM, under one approval (N9-L2). Jamf mobile devices
+are read when the schedule sets `jamf_mobile_devices` (N9-L1, the first 100 of Jamf's mobile device inventory), but
+they are not checked in (Jamf's Classic API lists the blank push for mobile devices only as deprecated), and their
+install state stays `unknown`: Jamf lists a mobile device's certificates without serial numbers.
 
 ## ACME revocation of a certificate trstctl doesn't hold (N10) — served
 

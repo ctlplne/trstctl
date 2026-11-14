@@ -228,6 +228,46 @@ describe("MDM device evidence trace", () => {
     expect(apiMock.putMDMPollSchedule.mock.calls[1][0]).not.toHaveProperty("client_credentials");
   });
 
+  it("has the relay read Jamf mobile devices when asked (N9-L1)", async () => {
+    apiMock.mdmDevices.mockResolvedValue({ items: [], failed: 0, unobserved: 0, renewal_at_risk: 0, guidance: "" });
+    apiMock.mdmPollSchedules.mockResolvedValue({ items: [], guidance: "Relay-only read." });
+    const savedSchedule = {
+      configured: true,
+      mdm: "jamf",
+      base_url: "https://jamf.example.test",
+      token_ref: "secret://mdm/jamf",
+      required_agent_id: "44444444-4444-4444-8444-44444444a101",
+      interval_seconds: 3600,
+      enabled: true,
+      execution: "relay",
+      guidance: "",
+    };
+    apiMock.putMDMPollSchedule.mockResolvedValueOnce({ ...savedSchedule }).mockResolvedValueOnce({ ...savedSchedule, jamf_mobile_devices: true });
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <MDMDevicesPanel />
+      </AppQueryProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "MDM device correlation" })).toBeInTheDocument();
+    await user.click(screen.getByText("Configure MDM read schedule"));
+    expect(screen.queryByLabelText("Read mobile devices too")).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("MDM provider"), "jamf");
+    await user.type(screen.getByLabelText("MDM API base URL"), "https://jamf.example.test");
+    await user.type(screen.getByLabelText("Bearer token secret reference"), "secret://mdm/jamf");
+    await user.selectOptions(screen.getByLabelText("Network relay for this MDM"), "44444444-4444-4444-8444-44444444a101");
+    await user.click(screen.getByLabelText("Read mobile devices too"));
+    await user.click(screen.getByRole("button", { name: "Review schedule" }));
+    expect(screen.getByText("Mobile devices: the relay reads Jamf's mobile device inventory with the computers.")).toBeInTheDocument();
+    // A readback that dropped the setting is not taken as saved.
+    await user.click(screen.getByRole("button", { name: "Save reviewed schedule" }));
+    expect(await screen.findByText("The server did not confirm the exact relay schedule. Check the saved schedule before retrying.")).toBeInTheDocument();
+    expect(apiMock.putMDMPollSchedule).toHaveBeenLastCalledWith(expect.objectContaining({ mdm: "jamf", jamf_mobile_devices: true }));
+    await user.click(screen.getByRole("button", { name: "Save reviewed schedule" }));
+    expect(apiMock.putMDMPollSchedule).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps read-only operators from configuring a relay schedule", async () => {
     apiMock.mdmDevices.mockResolvedValue({ items: [], failed: 0, unobserved: 0, renewal_at_risk: 0, guidance: "" });
     apiMock.mdmPollSchedules.mockResolvedValue({ items: [], guidance: "Relay-only read." });

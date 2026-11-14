@@ -21279,6 +21279,8 @@ export interface components {
             guidance: string;
             interval_seconds?: number;
             jamf_api_client?: components["schemas"]["MDMJamfAPIClient"];
+            /** @description Jamf only: the relay reads the mobile device inventory as well as the computers (N9-L1) */
+            jamf_mobile_devices?: boolean;
             last_error?: string;
             last_run_at?: string;
             /** @enum {string} */
@@ -21297,6 +21299,8 @@ export interface components {
             filter?: string;
             interval_seconds: number;
             jamf_api_client?: components["schemas"]["MDMJamfAPIClient"];
+            /** @description Jamf only: the relay reads the mobile device inventory as well as the computers; the API role needs Read Mobile Devices (N9-L1) */
+            jamf_mobile_devices?: boolean;
             /** @enum {string} */
             mdm: "intune" | "jamf";
             renewal_window_days?: number;

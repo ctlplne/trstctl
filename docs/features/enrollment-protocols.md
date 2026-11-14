@@ -397,6 +397,17 @@ schedule, last run and last error. A saved schedule is configuration, not a
 completed relay read or proof that any certificate was installed. Check the last
 run and each device trace before treating the MDM estate as observed.
 
+**Jamf mobile devices (N9-L1).** A Jamf schedule can set `jamf_mobile_devices` (in the
+console, **Read mobile devices too**): the relay then reads Jamf Pro's mobile device
+inventory (`GET /api/v2/mobile-devices/detail`, the first 100 devices, with the
+`GENERAL` and `HARDWARE` sections) after the computers, with the same token, so the
+API role needs read access to mobile devices; a refused read fails the run with the
+reason. Jamf numbers mobile devices apart from computers, so a mobile device is listed
+as `mobile-<id>`. It is correlated by serial and watched for renewal like a computer,
+but Jamf names a mobile device's certificates without serial numbers, so its install
+state stays `unknown`, and a check-in asked for it is refused (409). The setting is off
+unless a schedule sets it, so an API role that reads only computers keeps working.
+
 **Device check-in behind approval (N9).** When a device has a new or renewed SCEP
 profile waiting, trstctl can ask its MDM to have the device check in now instead of
 at its next scheduled check-in: Intune's `syncDevice` action on one managed device,

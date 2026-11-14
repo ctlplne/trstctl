@@ -302,4 +302,78 @@ type SyncIntent struct {
 	// secret: the relay exchanges it per attempt at the same server for an
 	// access token.
 	JamfAPIClient *JamfAPIClient `json:"jamf_api_client,omitempty"`
+	// JamfMobileDevices (Jamf, N9-L1) has the relay read the mobile device
+	// inventory as well as the computers.
+	JamfMobileDevices bool `json:"jamf_mobile_devices,omitempty"`
+}
+
+// JamfMobileDeviceIDPrefix marks a Jamf mobile device's ID (N9-L1). Jamf
+// numbers computers and mobile devices apart, so mobile device 12 and
+// computer 12 are different devices.
+const JamfMobileDeviceIDPrefix = "mobile-"
+
+// IsJamfMobileDeviceID says a Jamf device ID names a mobile device.
+func IsJamfMobileDeviceID(id string) bool {
+	return strings.HasPrefix(id, JamfMobileDeviceIDPrefix)
+}
+
+// JamfMobileDevicesEndpoint builds the Jamf Pro mobile device inventory read
+// URL (N9-L1): the first page of 100 devices with the fixed GENERAL and
+// HARDWARE sections correlation needs. Jamf's certificate items for a mobile
+// device name no serial number, so CERTIFICATES is not read.
+func JamfMobileDevicesEndpoint(base string) (string, error) {
+	u, err := parseAbsolute(base)
+	if err != nil {
+		return "", err
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/api/v2/mobile-devices/detail"
+	q := url.Values{}
+	q.Add("section", "GENERAL")
+	q.Add("section", "HARDWARE")
+	q.Set("page", "0")
+	q.Set("page-size", "100")
+	u.RawQuery = q.Encode()
+	u.Fragment = ""
+	return u.String(), nil
+}
+
+// ParseJamfMobileDevices maps a Jamf Pro mobile device inventory page
+// (N9-L1). Each ID carries JamfMobileDeviceIDPrefix. Jamf names a mobile
+// device's certificates by common name and expiry only, so the issued
+// certificate's presence is never observed from this inventory.
+func ParseJamfMobileDevices(r io.Reader) ([]Device, error) {
+	var resp struct {
+		Results []struct {
+			ID         string `json:"mobileDeviceId"`
+			DeviceType string `json:"deviceType"`
+			General    struct {
+				DisplayName string `json:"displayName"`
+				// The device's last contact, as for a computer; its last
+				// inventory update when Jamf names no contact.
+				LastContactDate         string `json:"lastContactDate"`
+				LastInventoryUpdateDate string `json:"lastInventoryUpdateDate"`
+			} `json:"general"`
+			Hardware struct {
+				SerialNumber string `json:"serialNumber"`
+			} `json:"hardware"`
+		} `json:"results"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r, responseLimit)).Decode(&resp); err != nil {
+		return nil, fmt.Errorf("mdm: parse Jamf mobile device inventory: %w", err)
+	}
+	out := make([]Device, 0, len(resp.Results))
+	for _, d := range resp.Results {
+		id := strings.TrimSpace(d.ID)
+		if id == "" {
+			continue
+		}
+		out = append(out, Device{
+			MDM: MDMJamf, MDMDeviceID: JamfMobileDeviceIDPrefix + id, Name: d.General.DisplayName,
+			SerialNumber: d.Hardware.SerialNumber, InstallState: OutcomeUnknown,
+			InstallDetail: "Jamf's mobile device inventory names this " + firstNonempty(d.DeviceType, "mobile") +
+				" device's certificates without their serial numbers, so the issued certificate's presence cannot be observed from it.",
+			ObservedAt: parseMDMTime(firstNonempty(d.General.LastContactDate, d.General.LastInventoryUpdateDate)),
+		})
+	}
+	return out, nil
 }

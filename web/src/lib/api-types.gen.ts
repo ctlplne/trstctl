@@ -6916,6 +6916,7 @@ export interface MDMPollSchedule {
   guidance: string;
   interval_seconds?: number;
   jamf_api_client?: MDMJamfAPIClient;
+  jamf_mobile_devices?: boolean;
   last_error?: string;
   last_run_at?: string;
   mdm?: "intune" | "jamf";
@@ -6932,6 +6933,7 @@ export interface MDMPollScheduleInput {
   filter?: string;
   interval_seconds: number;
   jamf_api_client?: MDMJamfAPIClient;
+  jamf_mobile_devices?: boolean;
   mdm: "intune" | "jamf";
   renewal_window_days?: number;
   required_agent_id?: string;

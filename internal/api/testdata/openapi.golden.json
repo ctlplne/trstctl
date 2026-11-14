@@ -32917,6 +32917,10 @@
           "jamf_api_client": {
             "$ref": "#/components/schemas/MDMJamfAPIClient"
           },
+          "jamf_mobile_devices": {
+            "description": "Jamf only: the relay reads the mobile device inventory as well as the computers (N9-L1)",
+            "type": "boolean"
+          },
           "last_error": {
             "type": "string"
           },
@@ -32974,6 +32978,10 @@
           },
           "jamf_api_client": {
             "$ref": "#/components/schemas/MDMJamfAPIClient"
+          },
+          "jamf_mobile_devices": {
+            "description": "Jamf only: the relay reads the mobile device inventory as well as the computers; the API role needs Read Mobile Devices (N9-L1)",
+            "type": "boolean"
           },
           "mdm": {
             "enum": [

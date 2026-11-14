@@ -47,6 +47,7 @@ const scheduleSchema = z
     entra_directory_tenant_id: z.string().trim(),
     entra_client_id: z.string().trim(),
     jamf_client_id: z.string().trim(),
+    jamf_mobile_devices: z.boolean(),
     filter: z.string().trim(),
     interval_seconds: z
       .string()
@@ -92,6 +93,7 @@ const emptySchedule: ScheduleForm = {
   entra_directory_tenant_id: "",
   entra_client_id: "",
   jamf_client_id: "",
+  jamf_mobile_devices: false,
   filter: "",
   interval_seconds: "3600",
   renewal_window_days: "0",
@@ -136,6 +138,7 @@ export function MDMDevicesPanel() {
       entra_directory_tenant_id: schedule?.client_credentials?.directory_tenant_id ?? "",
       entra_client_id: schedule?.client_credentials?.client_id ?? "",
       jamf_client_id: schedule?.jamf_api_client?.client_id ?? "",
+      jamf_mobile_devices: schedule?.jamf_mobile_devices ?? false,
       filter: schedule?.filter ?? "",
       interval_seconds: String(schedule?.interval_seconds ?? 3600),
       renewal_window_days: String(schedule?.renewal_window_days ?? 0),
@@ -169,6 +172,7 @@ export function MDMDevicesPanel() {
         ? { client_credentials: { directory_tenant_id: values.entra_directory_tenant_id, client_id: values.entra_client_id } }
         : {}),
       ...(values.mdm === "jamf" && values.jamf_client_id ? { jamf_api_client: { client_id: values.jamf_client_id } } : {}),
+      ...(values.mdm === "jamf" && values.jamf_mobile_devices ? { jamf_mobile_devices: true } : {}),
     });
     setFormError("");
   });
@@ -191,6 +195,7 @@ export function MDMDevicesPanel() {
         (result.renewal_window_days ?? 0) !== reviewed.renewal_window_days ||
         (result.client_credentials?.client_id ?? "") !== (reviewed.client_credentials?.client_id ?? "") ||
         (result.jamf_api_client?.client_id ?? "") !== (reviewed.jamf_api_client?.client_id ?? "") ||
+        (result.jamf_mobile_devices ?? false) !== (reviewed.jamf_mobile_devices ?? false) ||
         result.enabled !== reviewed.enabled
       ) {
         throw new Error(translateNow("mdm.poll.unconfirmed"));
@@ -333,6 +338,11 @@ export function MDMDevicesPanel() {
                         ) : null}
                       </label>
                       <p className="text-caption text-muted-foreground sm:col-span-2">{translateNow("mdm.poll.jamfClientHelp")}</p>
+                      <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                        <input type="checkbox" {...form.register("jamf_mobile_devices", { onChange: () => setReviewed(null) })} />
+                        {translateNow("mdm.poll.jamfMobileDevices")}
+                      </label>
+                      <p className="text-caption text-muted-foreground sm:col-span-2">{translateNow("mdm.poll.jamfMobileDevicesHelp")}</p>
                     </>
                   )}
                   <label className="grid gap-1 text-sm">
@@ -421,6 +431,7 @@ export function MDMDevicesPanel() {
                     </p>
                   ) : null}
                   {reviewed.jamf_api_client ? <p>{translateNow("mdm.poll.reviewJamfClient", { client: reviewed.jamf_api_client.client_id })}</p> : null}
+                  {reviewed.jamf_mobile_devices ? <p>{translateNow("mdm.poll.reviewJamfMobileDevices")}</p> : null}
                   <p>{translateNow("mdm.poll.reviewFilter", { filter: reviewed.filter || "—" })}</p>
                   <p>{translateNow("mdm.poll.reviewWindow", { days: reviewed.renewal_window_days ?? 0 })}</p>
                   <p>{translateNow("mdm.poll.reviewExecution")}</p>

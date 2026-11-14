@@ -48,6 +48,9 @@ func (s *Server) mdmCheckInRoute(ctx context.Context, tenantID, provider string)
 
 // mdmCheckInDevice is the device as trstctl last read it from that MDM.
 func (s *Server) mdmCheckInDevice(ctx context.Context, tenantID, provider, deviceID string) (store.MDMDeviceCorrelation, error) {
+	if provider == mdm.MDMJamf && mdm.IsJamfMobileDeviceID(deviceID) {
+		return store.MDMDeviceCorrelation{}, api.ErrMDMMobileDeviceCheckIn
+	}
 	if !relay.ValidMDMCheckInDevice(provider, deviceID) {
 		return store.MDMDeviceCorrelation{}, api.ErrMDMDeviceUnknown
 	}

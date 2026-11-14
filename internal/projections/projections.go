@@ -770,6 +770,9 @@ type MDMPollConfigured struct {
 	// JamfAPIClient names the Jamf Pro API client whose client secret
 	// TokenRef holds (A156-L1): the client ID only, never the secret.
 	JamfAPIClient *MDMPollJamfAPIClient `json:"jamf_api_client,omitempty"`
+	// JamfMobileDevices has the relay read Jamf Pro's mobile device
+	// inventory as well as its computers (N9-L1).
+	JamfMobileDevices bool `json:"jamf_mobile_devices,omitempty"`
 }
 
 // MDMPollJamfAPIClient is a Jamf Pro API client's identifier (A156-L1).
@@ -6494,6 +6497,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if jc := pl.JamfAPIClient; jc != nil {
 			schedule.JamfClientID = jc.ClientID
 		}
+		schedule.JamfMobileDevices = pl.JamfMobileDevices && pl.MDM == "jamf"
 		return p.store.ApplyMDMPollConfiguredTx(ctx, tx, e.TenantID, schedule)
 	case EventMDMDeviceCorrelated:
 		var pl MDMDeviceCorrelated

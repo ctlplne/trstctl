@@ -33749,6 +33749,19 @@ export const messages = {
     defaultMessage: "Jamf Pro API client {client}: the relay exchanges the client secret for an access token on each read and check-in.",
     description: "A156-L1: review line for a Jamf Pro API client.",
   },
+  "mdm.poll.jamfMobileDevices": {
+    defaultMessage: "Read mobile devices too",
+    description: "N9-L1: checkbox that has the relay read Jamf's mobile device inventory as well as its computers.",
+  },
+  "mdm.poll.jamfMobileDevicesHelp": {
+    defaultMessage:
+      "The relay also reads Jamf's mobile device inventory, so phones and tablets are correlated and watched for renewal. Give the API role read access to mobile devices. Jamf lists a mobile device's certificates without serial numbers, so their installation is not confirmed, and mobile devices are not checked in.",
+    description: "N9-L1: what reading Jamf mobile devices does and needs.",
+  },
+  "mdm.poll.reviewJamfMobileDevices": {
+    defaultMessage: "Mobile devices: the relay reads Jamf's mobile device inventory with the computers.",
+    description: "N9-L1: review line when the schedule reads Jamf mobile devices.",
+  },
   "mdm.poll.tokenRef": { defaultMessage: "Bearer token secret reference", description: "Reference to the bearer redeemed only by the network relay." },
   "mdm.poll.tokenRefExample": { defaultMessage: "secret://mdm/provider", description: "Reference example, never an inline bearer." },
   "mdm.poll.relay": { defaultMessage: "Network relay for this MDM", description: "Bind the MDM bearer to one enrolled network agent." },

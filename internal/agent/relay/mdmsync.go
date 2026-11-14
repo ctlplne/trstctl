@@ -103,7 +103,7 @@ func runMDMSync(ctx context.Context, ch Channel, client *http.Client, job Job) b
 		return false
 	}
 	defer bearer.close()
-	read := func() (*http.Response, bool) {
+	readAt := func(endpoint string) (*http.Response, bool) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
 			report(ctx, ch, job, OutcomeFailed, "mdm request could not be built")
@@ -119,6 +119,7 @@ func runMDMSync(ctx context.Context, ch Channel, client *http.Client, job Job) b
 		}
 		return resp, true
 	}
+	read := func() (*http.Response, bool) { return readAt(endpoint) }
 	resp, ok := read()
 	if !ok {
 		return false
@@ -155,6 +156,17 @@ func runMDMSync(ctx context.Context, ch Channel, client *http.Client, job Job) b
 		report(ctx, ch, job, OutcomeFailed, "mdm response could not be parsed")
 		return false
 	}
+	if intent.MDM == mdm.MDMJamf && intent.JamfMobileDevices {
+		// N9-L1: the mobile device inventory, with the same token. The
+		// schedule asked for it, so a refusal fails the read rather than
+		// leaving the mobile devices silently out.
+		mobile, refusal := readJamfMobileDevices(intent.BaseURL, readAt)
+		if refusal != "" {
+			report(ctx, ch, job, OutcomeFailed, refusal)
+			return false
+		}
+		devices = append(devices, mobile...)
+	}
 	if intent.MDM == mdm.MDMIntune && len(intent.SCEPProfileIDs) > 0 {
 		evidence, reportErr := mdm.ReadIntuneCertificateEvidence(ctx, client, intent.BaseURL, token, intent.SCEPProfileIDs)
 		if reportErr != nil {
@@ -174,4 +186,29 @@ func runMDMSync(ctx context.Context, ch Channel, client *http.Client, job Job) b
 	}
 	report(ctx, ch, job, OutcomeExecuted, string(detail))
 	return true
+}
+
+// readJamfMobileDevices reads the first page of Jamf Pro's mobile device
+// inventory (N9-L1) and says why when it cannot.
+func readJamfMobileDevices(base string, readAt func(string) (*http.Response, bool)) ([]mdm.Device, string) {
+	endpoint, err := mdm.JamfMobileDevicesEndpoint(base)
+	if err != nil {
+		return nil, "mdm base URL is not usable"
+	}
+	resp, ok := readAt(endpoint)
+	if !ok {
+		return nil, "the Jamf mobile device inventory read failed from this relay's vantage"
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return nil, fmt.Sprintf("Jamf refused the mobile device inventory read with status %d: the API role needs Read Mobile Devices", resp.StatusCode)
+	case resp.StatusCode < 200 || resp.StatusCode > 299:
+		return nil, fmt.Sprintf("the Jamf mobile device inventory read failed with status %d", resp.StatusCode)
+	}
+	devices, err := mdm.ParseJamfMobileDevices(io.LimitReader(resp.Body, maxCMDBResponseBytes))
+	if err != nil {
+		return nil, "the Jamf mobile device inventory could not be parsed"
+	}
+	return devices, ""
 }

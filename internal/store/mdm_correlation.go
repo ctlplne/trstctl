@@ -152,6 +152,9 @@ type MDMPollSchedule struct {
 	JamfClientID string
 	LastRunAt    *time.Time
 	LastError    string
+	// JamfMobileDevices (Jamf, N9-L1) has the relay read the mobile device
+	// inventory as well as the computers.
+	JamfMobileDevices bool
 }
 
 // GetMDMPollSchedule returns one (tenant, mdm) schedule.
@@ -163,12 +166,13 @@ func (s *Store) GetMDMPollSchedule(ctx context.Context, tenantID, mdm string) (M
 			`SELECT tenant_id::text, mdm, base_url, token_ref, filter, interval_seconds, enabled,
 			        allow_private_endpoint, coalesce(private_egress_cidrs, '{}'),
 			        coalesce(execution, ''), coalesce(renewal_window_days, 0), coalesce(required_agent_id::text, ''), last_run_at, last_error,
-			        entra_authority, entra_directory_tenant_id, entra_client_id, jamf_client_id
+			        entra_authority, entra_directory_tenant_id, entra_client_id, jamf_client_id, jamf_mobile_devices
 			   FROM mdm_poll_schedules WHERE tenant_id = $1 AND mdm = $2`, tenantID, mdm)
 		switch err := row.Scan(&out.TenantID, &out.MDM, &out.BaseURL, &out.TokenRef, &out.Filter,
 			&out.IntervalSeconds, &out.Enabled, &out.AllowPrivateEndpoint, &out.PrivateEgressCIDRs,
 			&out.Execution, &out.RenewalWindowDays, &out.RequiredAgentID,
-			&out.LastRunAt, &out.LastError, &out.EntraAuthority, &out.EntraDirectoryTenantID, &out.EntraClientID, &out.JamfClientID); {
+			&out.LastRunAt, &out.LastError, &out.EntraAuthority, &out.EntraDirectoryTenantID, &out.EntraClientID, &out.JamfClientID,
+			&out.JamfMobileDevices); {
 		case err == nil:
 			found = true
 			return nil
@@ -189,7 +193,7 @@ func (s *Store) ListMDMPollSchedules(ctx context.Context, tenantID string) ([]MD
 			`SELECT tenant_id::text, mdm, base_url, token_ref, filter, interval_seconds, enabled,
 			        allow_private_endpoint, coalesce(private_egress_cidrs, '{}'),
 			        coalesce(execution, ''), coalesce(renewal_window_days, 0), coalesce(required_agent_id::text, ''), last_run_at, last_error,
-			        entra_authority, entra_directory_tenant_id, entra_client_id, jamf_client_id
+			        entra_authority, entra_directory_tenant_id, entra_client_id, jamf_client_id, jamf_mobile_devices
 			   FROM mdm_poll_schedules WHERE tenant_id = $1 ORDER BY mdm`, tenantID)
 		if err != nil {
 			return err
@@ -200,7 +204,8 @@ func (s *Store) ListMDMPollSchedules(ctx context.Context, tenantID string) ([]MD
 			if err := rows.Scan(&sch.TenantID, &sch.MDM, &sch.BaseURL, &sch.TokenRef, &sch.Filter,
 				&sch.IntervalSeconds, &sch.Enabled, &sch.AllowPrivateEndpoint, &sch.PrivateEgressCIDRs,
 				&sch.Execution, &sch.RenewalWindowDays, &sch.RequiredAgentID,
-				&sch.LastRunAt, &sch.LastError, &sch.EntraAuthority, &sch.EntraDirectoryTenantID, &sch.EntraClientID, &sch.JamfClientID); err != nil {
+				&sch.LastRunAt, &sch.LastError, &sch.EntraAuthority, &sch.EntraDirectoryTenantID, &sch.EntraClientID, &sch.JamfClientID,
+				&sch.JamfMobileDevices); err != nil {
 				return err
 			}
 			out = append(out, sch)
@@ -267,10 +272,10 @@ func (s *Store) MarkMDMPollRun(ctx context.Context, tenantID, mdm string, at tim
 func (s *Store) ApplyMDMPollConfiguredTx(ctx context.Context, tx pgx.Tx, tenantID string, in MDMPollSchedule) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO mdm_poll_schedules (tenant_id, mdm, base_url, token_ref, filter, interval_seconds, enabled, allow_private_endpoint, private_egress_cidrs, execution, renewal_window_days, required_agent_id, last_error,
-		                                 entra_authority, entra_directory_tenant_id, entra_client_id, jamf_client_id)
+		                                 entra_authority, entra_directory_tenant_id, entra_client_id, jamf_client_id, jamf_mobile_devices)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7 AND $12 <> '', $8, $9, nullif($10, ''), nullif($11, 0), nullif($12, '')::uuid,
 		         CASE WHEN $7 AND $12 = '' THEN 'Disabled during exact-relay upgrade: select one enrolled network relay and re-enable.' ELSE '' END,
-		         $13, $14, $15, $16)
+		         $13, $14, $15, $16, $17)
 		 ON CONFLICT (tenant_id, mdm) DO UPDATE SET
 		   base_url = EXCLUDED.base_url, token_ref = EXCLUDED.token_ref,
 		   filter = EXCLUDED.filter, interval_seconds = EXCLUDED.interval_seconds,
@@ -284,6 +289,7 @@ func (s *Store) ApplyMDMPollConfiguredTx(ctx context.Context, tx pgx.Tx, tenantI
 		   entra_directory_tenant_id = EXCLUDED.entra_directory_tenant_id,
 		   entra_client_id = EXCLUDED.entra_client_id,
 		   jamf_client_id = EXCLUDED.jamf_client_id,
+		   jamf_mobile_devices = EXCLUDED.jamf_mobile_devices,
 		   last_error = CASE
 		     WHEN EXCLUDED.required_agent_id IS NULL AND EXCLUDED.enabled = false AND $7 THEN EXCLUDED.last_error
 		     WHEN mdm_poll_schedules.required_agent_id IS DISTINCT FROM EXCLUDED.required_agent_id THEN ''
@@ -291,7 +297,7 @@ func (s *Store) ApplyMDMPollConfiguredTx(ctx context.Context, tx pgx.Tx, tenantI
 		   updated_at = now()`,
 		tenantID, in.MDM, in.BaseURL, in.TokenRef, in.Filter, in.IntervalSeconds,
 		in.Enabled, false, nil, "relay", in.RenewalWindowDays, in.RequiredAgentID,
-		in.EntraAuthority, in.EntraDirectoryTenantID, in.EntraClientID, in.JamfClientID)
+		in.EntraAuthority, in.EntraDirectoryTenantID, in.EntraClientID, in.JamfClientID, in.JamfMobileDevices)
 	return err
 }
 

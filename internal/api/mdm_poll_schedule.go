@@ -41,6 +41,9 @@ type mdmPollScheduleBody struct {
 	// token_ref then holds its client secret, which the relay exchanges per
 	// attempt at the same Jamf Pro server for an access token.
 	JamfAPIClient *mdm.JamfAPIClient `json:"jamf_api_client,omitempty"`
+	// JamfMobileDevices (Jamf only, N9-L1) has the relay read the mobile
+	// device inventory as well as the computers.
+	JamfMobileDevices bool `json:"jamf_mobile_devices,omitempty"`
 	// Legacy control-plane egress fields remain only for clear rejection.
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
@@ -68,6 +71,9 @@ type mdmPollScheduleResponse struct {
 	// otherwise looks identical to one with nothing to do.
 	LastError string `json:"last_error,omitempty"`
 	Guidance  string `json:"guidance"`
+	// JamfMobileDevices says the relay reads the Jamf mobile device
+	// inventory too (N9-L1).
+	JamfMobileDevices bool `json:"jamf_mobile_devices,omitempty"`
 }
 
 type mdmPollScheduleList struct {
@@ -86,7 +92,9 @@ const mdmPollGuidance = "The poll re-reads the MDM on the tenant's own interval 
 	"jamf_api_client (client_id of a Jamf Pro API client whose API role can read computers) makes " +
 	"token_ref the API client's secret: the relay exchanges it per attempt at the same Jamf Pro " +
 	"server for an access token that lives only in memory for that read or check-in. Otherwise the " +
-	"reference must resolve to a bearer the MDM accepts, rotated by the operator's own pipeline."
+	"reference must resolve to a bearer the MDM accepts, rotated by the operator's own pipeline. For " +
+	"Jamf, jamf_mobile_devices also reads the mobile device inventory (the API role needs Read Mobile " +
+	"Devices); a mobile device is correlated and watched for renewal but not checked in."
 
 // minMDMPollInterval floors the poll, same reasoning as the CMDB's: device
 // check-in state changes on the order of hours, and a tight poll buys rate
@@ -186,6 +194,9 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 			}
 			jamfClient = &normalized
 		}
+		if body.JamfMobileDevices && which != mdm.MDMJamf {
+			return 0, nil, errStatus(http.StatusBadRequest, "jamf_mobile_devices is only valid for a Jamf schedule")
+		}
 		saved := store.MDMPollSchedule{
 			TenantID: tenantID, MDM: which,
 			BaseURL:         strings.TrimSpace(body.BaseURL),
@@ -196,6 +207,7 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 			AllowPrivateEndpoint: false,
 			PrivateEgressCIDRs:   nil,
 			Execution:            execution, RenewalWindowDays: body.RenewalWindowDays,
+			JamfMobileDevices: body.JamfMobileDevices,
 		}
 		var event *projections.MDMPollClientCredentials
 		if app != nil {
@@ -214,6 +226,7 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 			AllowPrivate: saved.AllowPrivateEndpoint, PrivateCIDRs: saved.PrivateEgressCIDRs,
 			Execution: saved.Execution, RenewalWindowDays: saved.RenewalWindowDays,
 			ClientCredentials: event, JamfAPIClient: jamfEvent,
+			JamfMobileDevices: saved.JamfMobileDevices,
 		}); err != nil {
 			return 0, nil, err
 		}
@@ -246,6 +259,7 @@ func mdmPollScheduleFrom(s store.MDMPollSchedule, found bool) mdmPollScheduleRes
 		IntervalSeconds: s.IntervalSeconds, Enabled: s.Enabled, Execution: s.Execution,
 		AllowPrivateEndpoint: s.AllowPrivateEndpoint, PrivateEgressCIDRs: s.PrivateEgressCIDRs,
 		RenewalWindowDays: s.RenewalWindowDays, LastError: s.LastError, Guidance: mdmPollGuidance,
+		JamfMobileDevices: s.JamfMobileDevices,
 	}
 	if s.EntraClientID != "" {
 		out.ClientCredentials = &mdm.ClientCredentials{Authority: s.EntraAuthority, DirectoryTenantID: s.EntraDirectoryTenantID, ClientID: s.EntraClientID}

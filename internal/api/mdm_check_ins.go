@@ -44,6 +44,10 @@ var (
 	ErrMDMCheckInUnavailable = errors.New("this MDM has no check-in route: its poll schedule needs an https base URL and one exact network relay")
 	// ErrMDMDeviceUnknown is a device trstctl has not read from that MDM.
 	ErrMDMDeviceUnknown = errors.New("trstctl has not read this device from that MDM")
+	// ErrMDMMobileDeviceCheckIn is a Jamf mobile device (N9-L1): it is read
+	// for correlation and renewal, and a check-in goes to a Jamf computer or
+	// an Intune managed device.
+	ErrMDMMobileDeviceCheckIn = errors.New("a Jamf mobile device is read for correlation and renewal, not checked in: a check-in goes to a Jamf computer or an Intune managed device")
 )
 
 // MDMCheckInRequest asks for approval of one device check-in.
@@ -94,6 +98,8 @@ func mdmCheckInAPIError(err error) error {
 		return errStatusFrom(http.StatusConflict, err)
 	case errors.Is(err, ErrMDMDeviceUnknown):
 		return errStatusFrom(http.StatusNotFound, err)
+	case errors.Is(err, ErrMDMMobileDeviceCheckIn):
+		return errStatusFrom(http.StatusConflict, err)
 	case errors.Is(err, store.ErrApprovalRequestNotFound):
 		return errStatus(http.StatusNotFound, "approval request not found")
 	case errors.Is(err, store.ErrApprovalDigestMismatch):
