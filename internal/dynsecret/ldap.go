@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/go-ldap/ldap/v3"
 
@@ -54,6 +55,10 @@ type LDAPConfig struct {
 	// consumers are not using and retires the other by setting one nobody
 	// holds; both keep their group memberships.
 	RotationAccounts map[string][2]string
+	// DynamicEntries (A239-L2) makes each lease's entry an RFC 2589 dynamic
+	// object with the lease's time to live, refreshed on renewal, so the
+	// directory deletes it when the lease ends. Generic LDAP leases only.
+	DynamicEntries bool
 }
 
 // The active_directory mode instead rotates existing named AD user accounts
@@ -85,6 +90,7 @@ type LDAPBackend struct {
 	roleGroups       map[string]string
 	usernamePrefix   string
 	rotationAccounts map[string][2]string
+	dynamicEntries   bool
 	dial             func(ctx context.Context) (ldapConn, error)
 }
 
@@ -104,6 +110,10 @@ func NewLDAPBackend(cfg LDAPConfig) (*LDAPBackend, error) {
 	if b.activeDirectory && (cfg.AllowPlaintext || cfg.StartTLS) {
 		return nil, errors.New("dynsecret AD: verified LDAPS is required")
 	}
+	if b.activeDirectory && cfg.DynamicEntries {
+		return nil, errors.New("dynsecret ldap: dynamic_entries applies to generic LDAP leases, not active_directory accounts")
+	}
+	b.dynamicEntries = cfg.DynamicEntries
 	if cfg.StartTLS && cfg.AllowPlaintext {
 		return nil, errors.New("dynsecret ldap: start_tls and allow_plaintext are exclusive")
 	}
@@ -300,13 +310,33 @@ func (b *LDAPBackend) CreateCredential(ctx context.Context, req GenerateRequest)
 		}
 	}
 	add := ldap.NewAddRequest(dn, nil)
-	add.Attribute("objectClass", []string{"top", "person", "organizationalPerson", "inetOrgPerson"})
+	classes := []string{"top", "person", "organizationalPerson", "inetOrgPerson"}
+	if b.dynamicEntries {
+		classes = append(classes, "dynamicObject")
+	}
+	add.Attribute("objectClass", classes)
 	add.Attribute("uid", []string{name})
 	add.Attribute("cn", []string{name})
 	add.Attribute("sn", []string{name})
 	add.Attribute("description", []string{"trstctl dynamic lease"})
 	if err := conn.Add(add); err != nil {
 		return "", nil, errors.New("dynsecret ldap: create the entry failed")
+	}
+	if b.dynamicEntries {
+		// A239-L2: the directory keeps the entry for the lease's time and no
+		// longer; a directory that grants less would end the lease early.
+		ttl := req.TTL
+		if ttl <= 0 {
+			ttl = time.Hour
+		}
+		granted, err := refreshEntry(conn, dn, ttl)
+		if err == nil && granted < ttl.Truncate(time.Second) {
+			err = fmt.Errorf("%w (granted %s of %s)", ErrLDAPDynamicTTLShortened, granted, ttl.Truncate(time.Second))
+		}
+		if err != nil {
+			_ = b.remove(conn, dn)
+			return "", nil, err
+		}
 	}
 	password, err := randomSecretHex(24)
 	if err != nil {

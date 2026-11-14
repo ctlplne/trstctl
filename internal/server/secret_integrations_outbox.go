@@ -528,6 +528,14 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 	case "kubernetes", "aws-iam", "aws-sts", "oauth-client-credentials", "github-app":
 		nativeTTL = record.ExpiresAt.Sub(record.IssuedAt)
 	}
+	// A credential that expires in its backend with the lease (A239-L2: an
+	// ldap provider with dynamic_entries) is kept there until the lease's own
+	// expiry, not the renewal ceiling; each renewal moves it
+	// (refreshNativeExpiry), so the backend ends it with the lease even when
+	// trstctl does not.
+	if expiring, ok := provider.(interface{ DynamicSecretBackendExpiry() string }); ok && expiring.DynamicSecretBackendExpiry() != "" {
+		nativeTTL = time.Until(record.ExpiresAt)
+	}
 	if (providerType == "aws-iam" || providerType == "aws-sts") && nativeTTL+time.Second <= 15*time.Minute {
 		return d.appendAndProjectID(ctx, dynamicSecretEventID(m.TenantID, command.TenantEpoch, "provider-issue-failed", command.ID), m.TenantID, projections.EventDynamicSecretLeaseIssuanceFailed, projections.DynamicSecretLeaseIssuanceFailure{
 			TenantEpoch: record.TenantEpoch, ID: record.ID,

@@ -2149,6 +2149,37 @@ describe("secrets surface", () => {
     expect(await screen.findByText(/attaches a deny policy that refuses the credential before it expires/)).toBeInTheDocument();
   });
 
+  // A239-L2: an LDAP provider whose directory expires each lease's entry on
+  // its own says so; a provider without that says nothing about it.
+  it("says the directory itself ends an LDAP provider's leases (A239-L2)", async () => {
+    const base = await apiMock.dynamicSecretProviders();
+    apiMock.dynamicSecretProviders.mockResolvedValue({
+      ...base,
+      configured_providers: [
+        { ...base.configured_providers[0], revocation: "confirmed" },
+        {
+          id: "lab-directory",
+          type: "ldap",
+          label: "LDAP directory and AD accounts",
+          allowed_roles: ["readonly"],
+          maximum_ttl_seconds: 3600,
+          ready: true,
+          configuration_revision: "runtime-revision-d",
+          revocation: "confirmed",
+          backend_expiry: "directory",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderSecrets("/secrets/engines");
+    await user.click(await screen.findByRole("button", { name: "Open temporary credential" }));
+    expect(await screen.findByText("When a lease is revoked")).toBeInTheDocument();
+    expect(screen.queryByText("When a lease's time runs out")).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Connected provider"), "lab-directory");
+    expect(await screen.findByText("When a lease's time runs out")).toBeInTheDocument();
+    expect(screen.getByText(/The directory deletes the lease's entry itself, even if trstctl is down/)).toBeInTheDocument();
+  });
+
   it("issues ephemeral API keys, runs secret scans, and drives leases", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();

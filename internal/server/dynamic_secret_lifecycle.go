@@ -291,6 +291,27 @@ func dynamicSecretPreparationAAD(tenantID, leaseID, provider string) []byte {
 	return []byte(tenantID + "/dynamic-secret-lease-preparation/" + leaseID + "/" + provider)
 }
 
+// nativeExpiryRefresher is a provider whose lease credential expires in its
+// backend and moves with the lease (A239-L2: an LDAP dynamic entry).
+type nativeExpiryRefresher interface {
+	RefreshLeaseCredential(ctx context.Context, backendRef string, ttl time.Duration) error
+}
+
+// refreshNativeExpiry moves a lease credential's expiry in its backend to
+// until before the renewal is recorded; a refusal fails the renewal, so the
+// lease never outlives what the backend keeps. A retried renewal refreshes
+// again, which only sets the same expiry.
+func (l *durableDynamicSecretLifecycle) refreshNativeExpiry(ctx context.Context, record store.DynamicSecretLease, until time.Time) error {
+	refresher, ok := l.providers[record.Provider].(nativeExpiryRefresher)
+	if !ok {
+		return nil
+	}
+	if err := refresher.RefreshLeaseCredential(ctx, record.BackendRef, time.Until(until)); err != nil {
+		return fmt.Errorf("dynsecret: move the lease's expiry in its backend: %w", err)
+	}
+	return nil
+}
+
 func (l *durableDynamicSecretLifecycle) Renew(ctx context.Context, leaseID string, extend time.Duration) (dynsecret.Lease, error) {
 	if extend <= 0 {
 		return dynsecret.Lease{}, errors.New("dynsecret: positive renewal duration required")
@@ -305,6 +326,9 @@ func (l *durableDynamicSecretLifecycle) Renew(ctx context.Context, leaseID strin
 	next := record.ExpiresAt.Add(extend)
 	if next.After(record.HardExpiresAt) {
 		return dynsecret.Lease{}, fmt.Errorf("%w %s", dynsecret.ErrLeaseHardExpiry, record.HardExpiresAt.Format(time.RFC3339))
+	}
+	if err := l.refreshNativeExpiry(ctx, record, next); err != nil {
+		return dynsecret.Lease{}, err
 	}
 	operationID := "legacy-renew:" + leaseID + ":" + next.UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano)
 	if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, record.TenantEpoch, "lease-renewed", operationID), projections.EventDynamicSecretLeaseRenewed, projections.DynamicSecretLeaseRenewed{
@@ -515,6 +539,9 @@ func (l *durableDynamicSecretLifecycle) resumeRenewal(ctx context.Context, op st
 		return dynsecret.Lease{}, errors.New("dynsecret: durable renewal result exceeds provider hard expiry")
 	}
 	if record.ExpiresAt.Before(response.ExpiresAt) {
+		if err := l.refreshNativeExpiry(ctx, record, response.ExpiresAt); err != nil {
+			return dynsecret.Lease{}, err
+		}
 		if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, op.TenantEpoch, "lease-renewed", op.OperationID), projections.EventDynamicSecretLeaseRenewed, projections.DynamicSecretLeaseRenewed{
 			TenantEpoch: op.TenantEpoch, OperationID: op.OperationID,
 			ID: op.LeaseID, ExpiresAt: response.ExpiresAt,

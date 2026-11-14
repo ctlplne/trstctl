@@ -916,6 +916,7 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 			DirectoryMode: cfg.DirectoryMode, Addr: cfg.Addr, TLSServerName: cfg.TLSServerName, TLSCAPEM: caPEM, AllowPlaintext: cfg.AllowPlaintext, StartTLS: cfg.StartTLS,
 			BindDN: cfg.BindDN, BindPassword: password, UsersDN: cfg.UsersDN, RoleGroups: cfg.RoleBindings,
 			UsernamePrefix: cfg.UsernamePrefix, RotationAccounts: o.provider.rotationAccountPairs(),
+			DynamicEntries: cfg.DynamicEntries,
 		})
 		if err != nil {
 			return o.fail(err)
@@ -2221,4 +2222,35 @@ func (p *configuredDynamicProvider) DynamicSecretGatewayDesktop(role string) (ac
 		}
 	}
 	return binding, binding.Validate()
+}
+
+// DynamicSecretBackendExpiry is "directory" for an ldap provider with
+// dynamic_entries: its directory deletes each lease's entry when the lease's
+// time runs out, on its own (A239-L2).
+func (p *configuredDynamicProvider) DynamicSecretBackendExpiry() string {
+	if strings.TrimSpace(p.cfg.Type) == "ldap" && p.cfg.DynamicEntries {
+		return "directory"
+	}
+	return ""
+}
+
+// RefreshLeaseCredential moves a lease credential's expiry in its backend
+// with the lease (A239-L2): an ldap provider with dynamic_entries refreshes
+// the lease entry's time to live. Every other provider has nothing to move.
+func (p *configuredDynamicProvider) RefreshLeaseCredential(ctx context.Context, backendRef string, ttl time.Duration) error {
+	if strings.TrimSpace(p.cfg.Type) != "ldap" || !p.cfg.DynamicEntries {
+		return nil
+	}
+	backend, closeBackend, err := p.openBackend(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeBackend()
+	refresher, ok := backend.(interface {
+		RefreshCredential(context.Context, string, time.Duration) error
+	})
+	if !ok {
+		return fmt.Errorf("dynamic-secret provider %q cannot refresh a lease entry", p.id)
+	}
+	return refresher.RefreshCredential(ctx, backendRef, ttl)
 }

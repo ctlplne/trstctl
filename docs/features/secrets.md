@@ -527,6 +527,18 @@ role is bound to, and deletes it at revocation; the directory then refuses its b
 It speaks LDAPS verified against the configured server name (plain LDAP only to a
 private address with an explicit opt-in), and a retry after an uncertain issue
 replaces the same entry. See [configuration](../configuration.md) for its fields.
+With `dynamic_entries` (A239-L2), each lease's entry is an RFC 2589 dynamic object
+that the directory itself keeps for the lease's time and deletes when that time
+runs out, so the lease ends on time even if trstctl is down or its revocation never
+runs; every renewal first moves that expiry with the lease (the Refresh operation),
+and a directory that would keep an entry for less than its lease refuses the lease
+or the renewal instead of ending it early. When trstctl's lease worker runs again,
+its revocation of the expired lease completes against the entry the directory
+already removed. The console's connected-provider panel says so for such a
+provider. Proven served on the pinned OpenLDAP 2.4 with its stock dds overlay and
+on OpenLDAP 2.6 (Alpine's dds overlay package): with nothing from trstctl, the
+directory deleted the entry once the renewed lease's time ran out, and its password
+stopped binding.
 
 The TOTP backend hands out the current RFC 6238 code of a seed the control plane
 holds (the base32 secret an authenticator app enrolls) with `valid_until`, the end

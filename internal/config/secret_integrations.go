@@ -316,6 +316,11 @@ type DynamicSecretProviderConfig struct {
 	// jsonlog with the logging collector on, and the admin role must be a
 	// superuser or hold pg_monitor and EXECUTE on pg_read_file.
 	DecoyAuthLog bool `json:"decoy_auth_log,omitempty"`
+	// DynamicEntries (A239-L2) makes an ldap provider's lease entries RFC 2589
+	// dynamic objects with the lease's time to live, refreshed on renewal, so
+	// the directory itself deletes an entry when its lease ends (OpenLDAP's
+	// dds overlay). Generic LDAP only, not directory_mode active_directory.
+	DynamicEntries bool `json:"dynamic_entries,omitempty"`
 	// RotationAccounts makes a role's static rotation two-user (A240): the role
 	// alternates between these two existing accounts, which the database's
 	// owner provisions with the role's grants. A rotation sets a new password
@@ -1350,6 +1355,9 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	var errs []error
 	if c.AllowWildcardAccountHost && c.Type != "mysql" {
 		errs = append(errs, fmt.Errorf("%s allow_wildcard_account_host is only valid for mysql", where))
+	}
+	if c.DynamicEntries && (c.Type != "ldap" || c.DirectoryMode != "") {
+		errs = append(errs, fmt.Errorf("%s dynamic_entries is only valid for an ldap provider without directory_mode", where))
 	}
 	if c.DecoyAuthLog && (c.Type != "postgresql" || !slices.Contains(c.AllowedRoles, postgresDecoyRole)) {
 		errs = append(errs, fmt.Errorf("%s decoy_auth_log is only valid for a postgresql provider whose allowed_roles include %q", where, postgresDecoyRole))

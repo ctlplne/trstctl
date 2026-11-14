@@ -31,8 +31,9 @@ type labOpenLDAP struct {
 
 // labOpenLDAPOptions shapes the lab directory. startTLS also publishes the
 // plain LDAP port and makes the directory refuse anything not over TLS
-// (A239-L3).
-type labOpenLDAPOptions struct{ startTLS bool }
+// (A239-L3). dds loads the image's stock dds overlay, so entries made
+// dynamicObject expire in the directory (A239-L2).
+type labOpenLDAPOptions struct{ startTLS, dds bool }
 
 // startLabOpenLDAP runs the pinned image for one test, or skips when docker or
 // the image is not available.
@@ -131,7 +132,47 @@ func startLabOpenLDAPWith(t *testing.T, opts labOpenLDAPOptions) labOpenLDAP {
 			"-H", "ldaps://ldap.lab.test", "-D", lab.admin, "-w", lab.adminPassword, "-b", lab.base, "-s", "base", "-LLL", "dn")
 		return err == nil && strings.Contains(out, "dn: "+lab.base)
 	})
+	if opts.dds {
+		lab.enableDDS(t)
+	}
 	return lab
+}
+
+// enableDDS loads the image's stock dds overlay (RFC 2589 dynamic objects)
+// into the running directory through cn=config: an entry made dynamicObject
+// lives for the time a Refresh grants it (at most a day), and the overlay
+// deletes each entry whose time ran out, checking every 5 seconds.
+func (lab labOpenLDAP) enableDDS(t *testing.T) {
+	t.Helper()
+	ldif := `dn: cn=module{0},cn=config
+changetype: modify
+add: olcModuleLoad
+olcModuleLoad: dds
+
+dn: olcDatabase={1}mdb,cn=config
+changetype: modify
+add: olcDbIndex
+olcDbIndex: entryExpireTimestamp eq
+
+dn: olcOverlay=dds,olcDatabase={1}mdb,cn=config
+changetype: add
+objectClass: olcOverlayConfig
+objectClass: olcDdsConfig
+olcOverlay: dds
+olcDdsMaxTtl: 1d
+olcDdsDefaultTtl: 1h
+olcDdsInterval: 5s
+`
+	file := filepath.Join(t.TempDir(), "dds.ldif")
+	if err := os.WriteFile(file, []byte(ldif), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("docker", "cp", file, lab.id+":/tmp/dds.ldif").CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+		t.Fatalf("copy the dds configuration: %v %s", err, out)
+	}
+	if out, err := a201Exec(lab.id, "ldapmodify", "-Q", "-Y", "EXTERNAL", "-H", "ldapi:///", "-f", "/tmp/dds.ldif"); err != nil {
+		t.Fatalf("enable the dds overlay: %v %s", err, out)
+	}
 }
 
 // tool runs an OpenLDAP client inside the container against its own plain

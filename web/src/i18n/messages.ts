@@ -9246,6 +9246,14 @@ export const messages = {
     defaultMessage: "The provider attaches a deny policy that refuses the credential before it expires; the credential itself lapses at its expiry.",
     description: "A239-L6: an AWS STS provider configured to revoke with a deny policy.",
   },
+  "secrets.dynamic.backendExpiry": {
+    defaultMessage: "When a lease's time runs out",
+    description: "A239-L2: label for what the provider's backend does on its own when a lease's time runs out.",
+  },
+  "secrets.dynamic.backendExpiryDirectory": {
+    defaultMessage: "The directory deletes the lease's entry itself, even if trstctl is down; each renewal moves that expiry with the lease.",
+    description: "A239-L2: an LDAP provider whose lease entries are RFC 2589 dynamic objects that the directory expires on its own.",
+  },
   "secrets.dynamic.requirements": { defaultMessage: "Safe setup checklist", description: "Dynamic provider prerequisites heading." },
   "secrets.dynamic.requiredLabel": { defaultMessage: "Required", description: "Required provider prerequisite marker." },
   "secrets.dynamic.optionalLabel": { defaultMessage: "Optional", description: "Optional provider prerequisite marker." },

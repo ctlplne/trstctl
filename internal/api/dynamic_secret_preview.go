@@ -54,6 +54,11 @@ type dynamicSecretConfiguredProvider struct {
 	// Environment is the secrets environment the provider is placed in,
 	// "<project>/<environment>" (A235-L2); empty when it is the tenant's.
 	Environment string `json:"environment,omitempty"`
+	// BackendExpiry is "directory" when the provider's lease credentials also
+	// expire in the backend on their own (A239-L2: an ldap provider with
+	// dynamic_entries, whose directory deletes each lease's entry when its
+	// time runs out); empty otherwise.
+	BackendExpiry string `json:"backend_expiry,omitempty"`
 }
 
 type dynamicSecretProviderCatalogResponse struct {
@@ -251,6 +256,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("tls_ca_ref", "Directory TLS CA reference", "Optional private CA of the directory's certificate; system roots when omitted.", false),
 			value("tls_server_name", "Directory TLS name", "Certificate name to verify; required when addr is an IP address, else addr's host.", false),
 			value("allow_plaintext", "Local plaintext exception", "Explicitly permit ldap:// to a literal loopback or private IP only; use only in a protected lab.", false),
+			value("dynamic_entries", "Expiry in the directory", "Optional, generic LDAP only. Each lease's entry is an RFC 2589 dynamic object (objectClass dynamicObject) that the directory keeps for the lease's time, refreshed with each renewal, and deletes when that time runs out, even if trstctl is down. Needs a directory that serves the RFC 2589 Refresh operation (OpenLDAP's dds overlay) with a maximum time to live (dds-max-ttl) of at least max_ttl; a directory that would keep an entry for less than its lease refuses the lease or the renewal.", false),
 			roles("Each allowed role maps to the DN of one groupOfNames group; keep one permanent member in it, since a groupOfNames can't be empty."),
 		)},
 		{Type: "totp", Label: "TOTP codes", Purpose: "Issues the current RFC 6238 one-time code of a configured seed with the instant it stops being valid; a code can't be withdrawn or renewed, so it lapses at the end of its time step.", Requirements: dynamicSecretProviderRequirements(
@@ -766,6 +772,9 @@ func dynamicSecretConfiguredProviderFrom(provider dynsecret.Provider) dynamicSec
 	}
 	if placed, ok := provider.(interface{ DynamicSecretEnvironment() string }); ok {
 		configured.Environment = strings.TrimSpace(placed.DynamicSecretEnvironment())
+	}
+	if expiring, ok := provider.(interface{ DynamicSecretBackendExpiry() string }); ok {
+		configured.BackendExpiry = strings.TrimSpace(expiring.DynamicSecretBackendExpiry())
 	}
 	return configured
 }

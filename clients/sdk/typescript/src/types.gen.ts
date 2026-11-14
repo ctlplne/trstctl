@@ -18623,6 +18623,11 @@ export interface components {
         };
         DynamicSecretConfiguredProvider: {
             allowed_roles: string[];
+            /**
+             * @description directory when the provider's lease credentials also expire in the backend on their own (A239-L2: an ldap provider with dynamic_entries, whose directory deletes each lease's entry when its time runs out, even if trstctl is down); absent otherwise.
+             * @enum {string}
+             */
+            backend_expiry?: "directory";
             configuration_revision: string;
             /** @description the secrets environment the provider is placed in, <project>/<environment> (A235-L2); absent when it is the tenant's. In a restricted environment only its members see and use the provider. */
             environment?: string;

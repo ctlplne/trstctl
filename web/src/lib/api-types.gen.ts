@@ -4819,6 +4819,7 @@ export interface DynamicLeaseRequest {
 
 export interface DynamicSecretConfiguredProvider {
   allowed_roles: string[];
+  backend_expiry?: "directory";
   configuration_revision: string;
   environment?: string;
   id: string;

@@ -407,6 +407,12 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
                           <dd className="text-foreground">{t(revocationMessages[selectedProvider.revocation])}</dd>
                         </div>
                       ) : null}
+                      {selectedProvider.backend_expiry === "directory" ? (
+                        <div className="sm:col-span-2">
+                          <dt>{t("secrets.dynamic.backendExpiry")}</dt>
+                          <dd className="text-foreground">{t("secrets.dynamic.backendExpiryDirectory")}</dd>
+                        </div>
+                      ) : null}
                     </dl>
                   ) : null}
                 </CardContent>

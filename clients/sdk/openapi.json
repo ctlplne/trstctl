@@ -23195,6 +23195,13 @@
             },
             "type": "array"
           },
+          "backend_expiry": {
+            "description": "directory when the provider's lease credentials also expire in the backend on their own (A239-L2: an ldap provider with dynamic_entries, whose directory deletes each lease's entry when its time runs out, even if trstctl is down); absent otherwise.",
+            "enum": [
+              "directory"
+            ],
+            "type": "string"
+          },
           "configuration_revision": {
             "type": "string"
           },

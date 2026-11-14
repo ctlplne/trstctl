@@ -3443,7 +3443,12 @@ ends the connection: it never falls back to plaintext, and leases carry an `ldap
 URL with `start_tls` set, so a client upgrades as well. `start_tls` is for generic
 LDAP; `active_directory` keeps verified LDAPS. `allow_plaintext: true` permits plain
 LDAP only to a literal loopback or private IP and forbids the TLS settings and
-`start_tls`. A
+`start_tls`. With `dynamic_entries: true` (A239-L2, generic LDAP only), each lease's
+entry also carries `objectClass: dynamicObject` and the directory keeps it for the
+lease's time (the RFC 2589 Refresh operation, repeated at each renewal), then
+deletes it on its own; the directory must serve Refresh (OpenLDAP's `dds` overlay)
+with a maximum time to live (`dds-max-ttl`) of at least `max_ttl`, or the lease or
+renewal is refused. A
 lease's entry name derives from its lease ID, so a retry after an uncertain issue
 replaces that one entry instead of leaving another.
 

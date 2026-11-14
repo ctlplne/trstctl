@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- LDAP leases can expire in the directory itself (A239-L2): with `dynamic_entries`, an `ldap` provider creates each
+  lease's entry as an RFC 2589 dynamic object kept for the lease's time and moved with each renewal, so the directory
+  deletes it when the lease ends even if trstctl is down; a directory that would keep it for less refuses the lease or
+  renewal. The provider catalog names such a provider (`backend_expiry: directory`) and the console's
+  connected-provider panel says the directory ends its leases.
 - A statistics reset that could hide a decoy login's use is recorded (Q6-L7): the decoy watcher reads
   `pg_stat_database.stats_reset` with the session counter, and a reset during the decoy's life records a monitoring
   gap since the reset, naming it, with one warning alert; the next check closes it and the reset is not recorded again.
