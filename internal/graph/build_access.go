@@ -171,25 +171,30 @@ func addAIAgents(g *Graph, certs []store.Certificate, principals principalIndex,
 			continue
 		}
 		for _, scope := range issuance.Scopes {
-			resource := agentScopeResource(g, scope)
-			g.AddEdge(Edge{From: cert, To: resource, Type: EdgeGrantsAccess, Source: "agent broker scope", Confidence: confidenceAuthority})
+			resource, action := agentScopeResource(g, scope)
+			grant := Edge{From: cert, To: resource, Type: EdgeGrantsAccess, Source: "agent broker scope", Confidence: confidenceAuthority}
+			if action != "" {
+				grant.Actions = []string{action}
+			}
+			g.AddEdge(grant)
 		}
 	}
 }
 
-// agentScopeResource is the resource a broker scope names: "tool:inventory.read"
-// reaches the tool "tool:inventory" (the action stays an attribute of the
-// scope). A scope without an action names itself.
-func agentScopeResource(g *Graph, scope string) string {
-	target := scope
+// agentScopeResource is the resource a broker scope names and the action it
+// allows there: "tool:inventory.read" reaches the tool "tool:inventory" for
+// read (Q4-L3), which the access grant carries. A scope without an action
+// names itself and allows whatever the tool does.
+func agentScopeResource(g *Graph, scope string) (string, string) {
+	target, action := scope, ""
 	if dot := strings.LastIndexByte(scope, '.'); dot > strings.IndexByte(scope, ':') && dot > 0 {
-		target = scope[:dot]
+		target, action = scope[:dot], scope[dot+1:]
 	}
 	id := resourceID("agent-scope:" + target)
 	if _, ok := g.Node(id); !ok {
 		g.AddNode(Node{ID: id, Kind: KindResource, Name: target, Attrs: map[string]string{"resource_kind": "agent_scope"}})
 	}
-	return id
+	return id, action
 }
 
 func ensureTrstctlAPI(g *Graph) {

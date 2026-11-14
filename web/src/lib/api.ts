@@ -2794,7 +2794,7 @@ export interface Api {
   caKeyReprotectionPlan(keyId: string, jobId: string): Promise<CAReprotectionPlan>;
   startCAKeyReprotection(keyId: string): Promise<CAReprotectionStartReceipt>;
   graphReachable(id: string): Promise<GraphReachable>;
-  graphReachers(id: string): Promise<GraphReachers>;
+  graphReachers(id: string, action?: string): Promise<GraphReachers>;
   graphPath(from: string, to: string): Promise<GraphPath>;
   coverageCandidates(): Promise<CoverageCandidates>;
   graphQuery(query: string): Promise<GraphQueryResult>;

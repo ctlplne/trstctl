@@ -4,6 +4,7 @@ package api
 
 import (
 	"net/http"
+	"regexp"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/graph"
@@ -31,6 +32,8 @@ func (a *API) graphAccessRoutes() []route {
 		{method: "GET", path: "/api/v1/graph/reachers/{id}", opID: "graphReachers",
 			summary: "Who can reach a node: holders, credentials and approvers, each with its evidence",
 			handler: a.graphReachers, pathParams: []param{pathString("id", "credential graph node id")},
+			query: []param{{name: "action", typ: "string", desc: "Answer for one action, for example write: an access grant that " +
+				"names its actions (an agent broker scope's) reaches only for those, and one that names none is kept (Q4-L3)"}},
 			resSchema: "GraphReachers", successCode: "200", perm: authz.GraphRead},
 	}
 }
@@ -70,5 +73,14 @@ func (a *API) graphReachers(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusNotFound, "graph node not found"))
 		return
 	}
-	a.writeJSON(w, http.StatusOK, g.WhoCanReach(id))
+	action := r.URL.Query().Get("action")
+	if !graphActionPattern.MatchString(action) {
+		a.writeError(w, errStatus(http.StatusBadRequest, "action must be a scope action such as read or write: printable ASCII without spaces, at most 128 characters"))
+		return
+	}
+	a.writeJSON(w, http.StatusOK, g.WhoCanReachFor(id, action))
 }
+
+// graphActionPattern bounds the action a reachers answer is asked for: empty,
+// or a scope action, the text after a broker scope's last dot (Q4-L3).
+var graphActionPattern = regexp.MustCompile(`^[!-~]{0,128}$`)

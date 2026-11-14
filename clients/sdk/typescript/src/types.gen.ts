@@ -19857,6 +19857,8 @@ export interface components {
             node: components["schemas"]["GraphNode"];
         };
         GraphEdge: {
+            /** @description what an access grant allows on its target when its record names it (an agent broker scope's action, Q4-L3); absent when the record names no action, which is not the same as allowing none */
+            actions?: string[];
             confidence?: string;
             from: string;
             source?: string;
@@ -19900,6 +19902,8 @@ export interface components {
         GraphReachers: {
             /** @description credentials reaching the target through an access grant, with holders and approvers */
             access: components["schemas"]["GraphAccessGrant"][];
+            /** @description the action the answer is for, when one was asked (Q4-L3) */
+            action?: string;
             by_kind: {
                 [key: string]: components["schemas"]["GraphNode"][];
             };
@@ -46444,7 +46448,10 @@ export interface operations {
     };
     graphReachers: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Answer for one action, for example write: an access grant that names its actions (an agent broker scope's) reaches only for those, and one that names none is kept (Q4-L3) */
+                action?: string;
+            };
             header?: never;
             path: {
                 /** @description credential graph node id */

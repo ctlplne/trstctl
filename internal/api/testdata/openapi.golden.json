@@ -27887,6 +27887,13 @@
       },
       "GraphEdge": {
         "properties": {
+          "actions": {
+            "description": "what an access grant allows on its target when its record names it (an agent broker scope's action, Q4-L3); absent when the record names no action, which is not the same as allowing none",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "confidence": {
             "type": "string"
           },
@@ -28065,6 +28072,10 @@
               "$ref": "#/components/schemas/GraphAccessGrant"
             },
             "type": "array"
+          },
+          "action": {
+            "description": "the action the answer is for, when one was asked (Q4-L3)",
+            "type": "string"
           },
           "by_kind": {
             "additionalProperties": {
@@ -89065,6 +89076,14 @@
             "in": "path",
             "name": "id",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Answer for one action, for example write: an access grant that names its actions (an agent broker scope's) reaches only for those, and one that names none is kept (Q4-L3)",
+            "in": "query",
+            "name": "action",
             "schema": {
               "type": "string"
             }

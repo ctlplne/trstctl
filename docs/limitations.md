@@ -1385,7 +1385,9 @@ never live in the API process. What you can do end to end against the running bi
   (`holder_recorded: true`), and privacy export, erasure and retention cover the
   record; leases opened before G1-L1 name no requester. Since Q4 the person who asked the agent broker for an
   identity DELEGATED to the agent, and a live agent credential reaches the tools
-  its scopes name; issuances recorded before Q4 name no requester.
+  its scopes name; issuances recorded before Q4 name no requester. Only an agent
+  scope's grant names its action (Q4-L3), so an answer for one action keeps every
+  other grant, whose record names none.
 - Usage-based posture (M1): trstctl records API-token use from its own activity —
   each authenticated request's client network (/24 or /64 of the connection's peer
   address, or behind a load balancer in `server.trusted_proxies` of the client it

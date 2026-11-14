@@ -2,7 +2,10 @@
 
 package graph
 
-import "sort"
+import (
+	"slices"
+	"sort"
+)
 
 // Access questions over the built graph (G1): "who can reach this database?"
 // and "how does this person reach it?". Both read the same edges as blast
@@ -42,6 +45,8 @@ type AccessCoverage struct {
 // ReachersResult answers "who can reach this node?".
 type ReachersResult struct {
 	Target Node `json:"target"`
+	// Action is the action the answer is for, when one was asked (Q4-L3).
+	Action string `json:"action,omitempty"`
 	// Reachers is every node whose compromise reaches Target along the graph's
 	// impact edges: the reverse of blast radius.
 	Reachers []Node              `json:"reachers"`
@@ -64,7 +69,7 @@ func Coverage() AccessCoverage {
 			"PAM sessions to databases and hosts, with the approvals they consumed",
 			"dynamic-secret leases and who requested each (G1-L1)",
 			"the grants, roles or policies a lease's login holds inside PostgreSQL, MySQL, MongoDB, Redis, Kubernetes, GCP, Azure and AWS targets, as the leader last read them (G2)",
-			"AI agents issued identities by the agent broker, who asked for each identity, and the tools its scopes name",
+			"AI agents issued identities by the agent broker, who asked for each identity, and the tools its scopes name with each scope's action (Q4-L3)",
 			"certificate issuance requests and who approved them",
 			"the certificate, SSH key, deployment and discovery inventory",
 			"selected AWS workload IAM policy models from verified native discovery runs, with imported evidence provenance",
@@ -76,6 +81,7 @@ func Coverage() AccessCoverage {
 			"who requested a lease opened before requesters were recorded (G1-L1)",
 			"access granted outside trstctl except explicitly captured AWS permission checks",
 			"native AWS enforcement, unmodeled permissions, current session state and complete cloud logging coverage",
+			"the action of an access grant other than an agent broker scope's: an answer for one action keeps every grant that names none",
 		},
 		Note: "An empty or partial answer is not proof that nobody has access: it covers only access trstctl granted or observed.",
 	}
@@ -86,6 +92,12 @@ func Coverage() AccessCoverage {
 // walk, so equal-length alternatives are stable across rebuilds. The type
 // filter works as in EvidencePaths.
 func (g *Graph) ReverseEvidencePaths(to string, types ...EdgeType) []EvidencePath {
+	return g.reverseEvidencePaths(to, "", types...)
+}
+
+// reverseEvidencePaths walks backward from to; with an action it crosses only
+// the access grants that allow it (grantsAction).
+func (g *Graph) reverseEvidencePaths(to, action string, types ...EdgeType) []EvidencePath {
 	paths := make([]EvidencePath, 0)
 	target, ok := g.nodes[to]
 	if !ok {
@@ -100,7 +112,7 @@ func (g *Graph) ReverseEvidencePaths(to string, types ...EdgeType) []EvidencePat
 		incoming := append([]Edge(nil), g.in[cur]...)
 		sort.Slice(incoming, func(i, j int) bool { return edgeLess(incoming[i], incoming[j]) })
 		for _, e := range incoming {
-			if !allows(types, e.Type) || visited[e.From] {
+			if !allows(types, e.Type) || visited[e.From] || !grantsAction(e, action) {
 				continue
 			}
 			if _, ok := g.nodes[e.From]; !ok {
@@ -130,6 +142,13 @@ func (g *Graph) ReverseEvidencePaths(to string, types ...EdgeType) []EvidencePat
 	return paths
 }
 
+// grantsAction says whether an edge counts toward an answer for action: an
+// access grant that names its actions must name this one, and one that names
+// none is kept, because trstctl cannot tell it is narrower (Q4-L3).
+func grantsAction(e Edge, action string) bool {
+	return action == "" || e.Type != EdgeGrantsAccess || len(e.Actions) == 0 || slices.Contains(e.Actions, action)
+}
+
 // edgeLess orders edges by their far endpoints, type and evidence so
 // traversals choose among equal-length alternatives deterministically.
 func edgeLess(a, b Edge) bool {
@@ -145,7 +164,10 @@ func edgeLess(a, b Edge) bool {
 	if a.Source != b.Source {
 		return a.Source < b.Source
 	}
-	return a.Confidence < b.Confidence
+	if a.Confidence != b.Confidence {
+		return a.Confidence < b.Confidence
+	}
+	return slices.Compare(a.Actions, b.Actions) < 0
 }
 
 // PathBetween returns the shortest evidence path from from to to along the
@@ -167,8 +189,15 @@ func (g *Graph) PathBetween(from, to string) (EvidencePath, bool) {
 // principals holding it and the people who approved it. Every link carries the
 // source and confidence of the record that produced it.
 func (g *Graph) WhoCanReach(id string) ReachersResult {
+	return g.WhoCanReachFor(id, "")
+}
+
+// WhoCanReachFor answers who can reach a node for one action (Q4-L3): an
+// access grant that names its actions reaches only for those, and one that
+// names none is kept. An empty action answers for any action.
+func (g *Graph) WhoCanReachFor(id, action string) ReachersResult {
 	out := ReachersResult{
-		ByKind: map[NodeKind][]Node{}, Reachers: []Node{}, Access: []AccessGrant{}, Coverage: Coverage(),
+		Action: action, ByKind: map[NodeKind][]Node{}, Reachers: []Node{}, Access: []AccessGrant{}, Coverage: Coverage(),
 	}
 	target, ok := g.nodes[id]
 	if !ok {
@@ -176,7 +205,7 @@ func (g *Graph) WhoCanReach(id string) ReachersResult {
 		return out
 	}
 	out.Target = target
-	out.Paths = g.ReverseEvidencePaths(id)
+	out.Paths = g.reverseEvidencePaths(id, action)
 	for _, path := range out.Paths {
 		reacher := path.Nodes[0]
 		out.Reachers = append(out.Reachers, reacher)

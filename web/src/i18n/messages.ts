@@ -17592,6 +17592,13 @@ export const messages = {
   "graph.access.target": { defaultMessage: "Database, host or node", description: "Label of the who-can-reach target picker." },
   "graph.access.choose": { defaultMessage: "Choose a node", description: "Empty option of a graph node picker." },
   "graph.access.run": { defaultMessage: "Show who can reach it", description: "Button that runs the who-can-reach query." },
+  "graph.access.action": { defaultMessage: "Action (optional)", description: "Q4-L3: label of the who-can-reach action filter." },
+  "graph.access.actionPlaceholder": { defaultMessage: "for example write", description: "Q4-L3: placeholder of the who-can-reach action filter." },
+  "graph.access.forAction": {
+    defaultMessage: "For {action}: grants that allow it, and grants whose record names no action.",
+    description: "Q4-L3: says the who-can-reach answer is for one action and which grants it keeps.",
+  },
+  "graph.access.actions": { defaultMessage: "Allows: {actions}", description: "Q4-L3: the actions an access grant allows, as its record names them." },
   "graph.access.failed": { defaultMessage: "Could not compute who can reach this node", description: "Fallback error for the who-can-reach query." },
   "graph.access.result": {
     defaultMessage:

@@ -2,7 +2,10 @@
 
 package graph
 
-import "sort"
+import (
+	"slices"
+	"sort"
+)
 
 // NodeKind classifies a graph node. The inventory is modeled as workloads, the
 // identities/credentials issued to them, the issuers that signed those
@@ -116,6 +119,11 @@ type Edge struct {
 	Type       EdgeType `json:"type"`
 	Source     string   `json:"source,omitempty"`
 	Confidence string   `json:"confidence,omitempty"`
+	// Actions are what an access grant allows on its target when the record
+	// that produced it names them: an agent broker scope's action (Q4-L3),
+	// so "tool:inventory.read" grants read. Empty means the record names no
+	// action, which is not the same as allowing none.
+	Actions []string `json:"actions,omitempty"`
 }
 
 // EvidencePath is one deterministic, shortest, server-owned explanation for
@@ -137,7 +145,7 @@ type Graph struct {
 	out   map[string][]Edge // adjacency by source node ID
 	in    map[string][]Edge // reverse adjacency by destination node ID
 	edges []Edge            // insertion-deduplicated edge list
-	seen  map[string]bool   // dedup key "From|Type|To"
+	seen  map[string]int    // dedup key "From|Type|To" → index in edges
 }
 
 // New returns an empty graph.
@@ -146,7 +154,7 @@ func New() *Graph {
 		nodes: map[string]Node{},
 		out:   map[string][]Edge{},
 		in:    map[string][]Edge{},
-		seen:  map[string]bool{},
+		seen:  map[string]int{},
 	}
 }
 
@@ -155,15 +163,49 @@ func (g *Graph) AddNode(n Node) { g.nodes[n.ID] = n }
 
 // AddEdge inserts a directed edge. Duplicate (From,Type,To) edges are ignored,
 // so building from an inventory that mentions a relationship twice is safe.
+// A duplicate's actions join the edge's (Q4-L3): two scopes on one tool grant
+// both actions, and a grant that names no action keeps the edge unnarrowed.
 func (g *Graph) AddEdge(e Edge) {
 	key := e.From + "|" + string(e.Type) + "|" + e.To
-	if g.seen[key] {
+	e.Actions = joinActions(nil, e.Actions)
+	if at, ok := g.seen[key]; ok {
+		existing := g.edges[at].Actions
+		if len(existing) == 0 {
+			return // already names no action: nothing narrows it
+		}
+		merged := joinActions(existing, e.Actions)
+		if len(e.Actions) == 0 {
+			merged = nil
+		}
+		g.setActions(e, merged)
 		return
 	}
-	g.seen[key] = true
+	g.seen[key] = len(g.edges)
 	g.edges = append(g.edges, e)
 	g.out[e.From] = append(g.out[e.From], e)
 	g.in[e.To] = append(g.in[e.To], e)
+}
+
+// setActions replaces the actions of the (From,Type,To) edge everywhere the
+// graph keeps a copy of it.
+func (g *Graph) setActions(e Edge, actions []string) {
+	for _, list := range [][]Edge{g.edges, g.out[e.From], g.in[e.To]} {
+		for i := range list {
+			if list[i].From == e.From && list[i].Type == e.Type && list[i].To == e.To {
+				list[i].Actions = actions
+			}
+		}
+	}
+}
+
+// joinActions returns the sorted union of two action lists, nil when empty.
+func joinActions(a, b []string) []string {
+	if len(a)+len(b) == 0 {
+		return nil
+	}
+	out := append(append(make([]string, 0, len(a)+len(b)), a...), b...)
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 // Node returns the node with the given ID.

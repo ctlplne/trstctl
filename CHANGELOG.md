@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An agent broker scope's action is on its access grant in the graph (Q4-L3): `tool:inventory.read` grants read on
+  `res:agent-scope:tool:inventory` (`"actions": ["read"]`), two scopes on one tool join on one grant, and
+  `GET /api/v1/graph/reachers/{id}?action=write` answers for one action, keeping grants whose record names none. The
+  console's who-can-reach panel takes the action and shows what each grant allows.
 - A CycloneDX CBOM export carries its own enveloped JSF signature (Q3-L1): RS256 by the audit evidence key, with its
   `keyId` and `publicKey`, over the BOM's RFC 8785 canonical form, made in the isolated signer. The BOM alone verifies
   after reformatting: `trstctl-cli cbom verify-cyclonedx --bom` checks it against the pinned keys, and `--export`

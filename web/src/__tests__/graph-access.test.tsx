@@ -116,4 +116,30 @@ describe("G1 who can reach", () => {
     await user.click(screen.getByRole("button", { name: "Show the path" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not find a path: no path from person:bob to res:pam:postgres:pg-main");
   });
+
+  // Q4-L3: an agent broker scope's action is on its grant, and the answer can
+  // be asked for one action.
+  it("asks who can reach a tool for one action and shows what each grant allows", async () => {
+    const tool = { id: "res:agent-scope:tool:inventory", kind: "resource", name: "tool:inventory" };
+    const writer = { id: "cert:w1", kind: "credential", name: "agent writer" };
+    const grant = { ...edge(writer.id, tool.id, "GRANTS_ACCESS", "agent broker scope"), actions: ["read", "write"] };
+    apiMock.graphReachers.mockResolvedValue({
+      target: tool,
+      action: "write",
+      reachers: [writer],
+      by_kind: {},
+      paths: [],
+      access: [{ credential: writer, grant, path: { target: tool, nodes: [writer, tool], edges: [grant] }, holders: [], approvers: [] }],
+      coverage,
+    });
+    const user = userEvent.setup();
+    render(<WhoCanReach nodes={[tool]} />);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Database, host or node" }), tool.id);
+    await user.type(screen.getByRole("textbox", { name: "Action (optional)" }), " write ");
+    await user.click(screen.getByRole("button", { name: "Show who can reach it" }));
+    expect(apiMock.graphReachers).toHaveBeenLastCalledWith(tool.id, "write");
+    const answer = within((await screen.findByRole("heading", { name: "1 credential reaches tool:inventory" })).parentElement!);
+    expect(answer.getByText("For write: grants that allow it, and grants whose record names no action.")).toBeInTheDocument();
+    expect(answer.getByText("Allows: read, write")).toBeInTheDocument();
+  });
 });

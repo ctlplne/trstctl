@@ -39,7 +39,8 @@ export const coverageCandidates = () => req<CoverageCandidates>("/api/v1/discove
 export const graphReachable = (id: string) => req<GraphReachable>(`/api/v1/graph/reachable/${encodeURIComponent(id)}`);
 
 /** G1: who can reach a node — the credentials, their holders and approvers. */
-export const graphReachers = (id: string) => req<GraphReachers>(`/api/v1/graph/reachers/${encodeURIComponent(id)}`);
+export const graphReachers = (id: string, action?: string) =>
+  req<GraphReachers>(`/api/v1/graph/reachers/${encodeURIComponent(id)}${action ? `?${new URLSearchParams({ action }).toString()}` : ""}`);
 
 /** G1: the shortest evidence path from one node to another. */
 export const graphPath = (from: string, to: string) => req<GraphPath>(`/api/v1/graph/path?${new URLSearchParams({ from, to }).toString()}`);

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { graphEdgeTypeLabel, graphNodeKindLabel } from "@/components/GraphView";
 import { useTranslation } from "@/i18n/I18nProvider";
@@ -23,6 +24,16 @@ function nodeLabel(node: GraphNode) {
   return `${node.name || node.id} · ${graphNodeKindLabel(node.kind)}`;
 }
 
+type GraphEdge = GraphAccessLink["edge"];
+
+// Q4-L3: what an access grant allows, when its record names it (an agent
+// broker scope's action).
+function GrantActions({ edge }: { edge: GraphEdge }) {
+  const { t } = useTranslation();
+  if (!edge.actions?.length) return null;
+  return <span className="block text-caption text-muted-foreground">{t("graph.access.actions", { actions: edge.actions.join(", ") })}</span>;
+}
+
 function Evidence({ link }: { link: GraphAccessLink }) {
   const { t } = useTranslation();
   return (
@@ -39,6 +50,7 @@ export function WhoCanReach({ nodes }: { nodes: GraphNode[] }) {
   const { t } = useTranslation();
   const choices = useMemo(() => [...nodes].sort(byKindThenName), [nodes]);
   const [target, setTarget] = useState("");
+  const [action, setAction] = useState("");
   const [result, setResult] = useState<GraphReachers | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,7 +61,8 @@ export function WhoCanReach({ nodes }: { nodes: GraphNode[] }) {
     setError(null);
     setResult(null);
     try {
-      setResult(await api.graphReachers(target));
+      const wanted = action.trim();
+      setResult(await (wanted ? api.graphReachers(target, wanted) : api.graphReachers(target)));
     } catch (reason) {
       setError(apiProblemMessage(reason, t("graph.access.failed")));
     } finally {
@@ -77,6 +90,11 @@ export function WhoCanReach({ nodes }: { nodes: GraphNode[] }) {
             </Select>
           )}
         </Field>
+        <Field label={t("graph.access.action")} controlId="graph-access-action" className="min-w-0 max-w-full">
+          {(control) => (
+            <Input {...control} value={action} placeholder={t("graph.access.actionPlaceholder")} onChange={(event) => setAction(event.target.value)} />
+          )}
+        </Field>
         <Button type="button" loading={busy} disabled={!target} onClick={() => void run()}>
           {t("graph.access.run")}
         </Button>
@@ -85,6 +103,7 @@ export function WhoCanReach({ nodes }: { nodes: GraphNode[] }) {
       {result ? (
         <div className="grid gap-3" aria-live="polite">
           <h3 className="font-semibold">{t("graph.access.result", { name: targetName, count: result.access.length })}</h3>
+          {result.action ? <p className="text-sm text-muted-foreground">{t("graph.access.forAction", { action: result.action })}</p> : null}
           <ul className="grid gap-3">
             {result.access.map((grant) => (
               <li key={grant.credential.id} className="grid gap-2 rounded-panel border border-border p-3 text-sm">
@@ -97,6 +116,7 @@ export function WhoCanReach({ nodes }: { nodes: GraphNode[] }) {
                       confidence: grant.grant.confidence || "—",
                     })}
                   </p>
+                  <GrantActions edge={grant.grant} />
                 </div>
                 <div className="grid gap-1">
                   <p className="font-medium">{t("graph.access.holders")}</p>
@@ -199,6 +219,7 @@ export function PathFinder({ nodes }: { nodes: GraphNode[] }) {
                     {t("graph.access.evidence", { relation: graphEdgeTypeLabel(edge.type), source: edge.source || "—", confidence: edge.confidence || "—" })}
                   </span>
                 ) : null}
+                {edge ? <GrantActions edge={edge} /> : null}
                 <span className="font-medium">{nodeLabel(node)}</span>
               </li>
             );

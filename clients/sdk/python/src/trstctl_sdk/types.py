@@ -8127,6 +8127,7 @@ GraphAccessLink = TypedDict(
 GraphEdge = TypedDict(
     'GraphEdge',
     {
+        'actions': list[str],
         'confidence': str,
         'from': str,
         'source': str,
@@ -8208,6 +8209,7 @@ GraphReachers = TypedDict(
     'GraphReachers',
     {
         'access': list[dict[str, Any]],
+        'action': str,
         'by_kind': dict[str, Any],
         'coverage': dict[str, Any],
         'paths': list[dict[str, Any]],

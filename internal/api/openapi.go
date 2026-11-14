@@ -6183,6 +6183,8 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "kind", "name")
 	graphEdge := object(map[string]*Schema{
 		"from": str(), "to": str(), "type": str(), "source": str(), "confidence": str(),
+		"actions": {Type: "array", Items: str(), Description: "what an access grant allows on its target when its record names it " +
+			"(an agent broker scope's action, Q4-L3); absent when the record names no action, which is not the same as allowing none"},
 	}, "from", "to", "type")
 	graphEvidencePath := object(map[string]*Schema{
 		"target": ref("GraphNode"),
@@ -6212,6 +6214,7 @@ func componentSchemas() map[string]*Schema {
 	}, "credential", "grant", "path", "holders", "approvers")
 	graphReachers := object(map[string]*Schema{
 		"target":   ref("GraphNode"),
+		"action":   {Type: "string", Description: "the action the answer is for, when one was asked (Q4-L3)"},
 		"reachers": {Type: "array", Items: ref("GraphNode"), Description: "every node whose compromise reaches the target: the reverse of blast radius"},
 		"by_kind":  {Type: "object", AdditionalProperties: &Schema{Type: "array", Items: ref("GraphNode")}},
 		"paths":    {Type: "array", Items: ref("GraphEvidencePath"), Description: "one shortest path per reacher, starting at the reacher"},

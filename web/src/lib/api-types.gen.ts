@@ -5867,6 +5867,7 @@ export interface GraphAccessLink {
 }
 
 export interface GraphEdge {
+  actions?: string[];
   confidence?: string;
   from: string;
   source?: string;
@@ -5916,6 +5917,7 @@ export interface GraphReachable {
 
 export interface GraphReachers {
   access: GraphAccessGrant[];
+  action?: string;
   by_kind: Record<string, unknown>;
   coverage: { not_covered: string[]; note: string; sources: string[] };
   paths: GraphEvidencePath[];
