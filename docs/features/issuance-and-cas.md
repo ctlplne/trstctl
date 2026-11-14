@@ -459,6 +459,11 @@ stores, so a member whose target is one omits both `agent_id` and
 { "identity_id": "44444444-4444-4444-8444-444444444444" }
 ```
 
+The binding is frozen when the run starts: a network relay enrolled while the run
+is under way does not take the member (A166-L5). The control plane still installs the
+successor, reads the store back for the live gate and executes and reads back a
+rollback; only a new run must name the relay.
+
 The control plane issues the successor under the new authority with the
 predecessor's exact identifiers, creates its fingerprint-named certificate and
 points the target's certificate map entry at it, then reads the entry back: the

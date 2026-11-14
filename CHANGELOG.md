@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- A network relay enrolled while a migration run is under way does not take a cloud-store member the run bound to the
+  control plane (A166-L5): the control plane still installs the successor, closes the live gate on the store's
+  readback and executes a rollback, and no row of the run is queued for the relay; only a new run must name it.
 - Sectigo's unattended DNS TXT domain validation is proven through the assembled server, as DigiCert's is (A165-L1):
   refused with nothing published without a consenting DNS-01 provider config; with one, SCM's record is published,
   validated and retracted, the issue completes with no human step and the validation is recorded as an upstream

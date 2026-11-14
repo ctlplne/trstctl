@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3375 annotated sites across 35 rules. Each row is
+3376 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (841 sites)
+### G101 — CWE-798 Use of hardcoded credentials (842 sites)
 
 | Location | Reason |
 |---|---|
@@ -673,6 +673,7 @@ not this file.
 | `internal/server/mdm_scep_dynamic_served_test.go:120` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
 | `internal/server/mdm_scep_dynamic_served_test.go:215` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
 | `internal/server/migration_cloud_store_lb_served_test.go:61` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/migration_cloud_store_relay_midrun_served_test.go:35` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/migration_cloud_store_served_test.go:41` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/native_connectors_served_test.go:46` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/native_connectors_served_test.go:48` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
