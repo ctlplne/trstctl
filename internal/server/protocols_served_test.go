@@ -2123,6 +2123,11 @@ func TestACMEProtocolQuotaIsIndependentFromAPIRateLimit(t *testing.T) {
 			},
 		},
 	)
+	// P15-L7: nonces live in PostgreSQL, shared by every replica and so by
+	// every served test on this tenant; this one-nonce quota starts from none.
+	if _, err := h.store.SystemPool().Exec(t.Context(), `DELETE FROM acme_nonces WHERE tenant_id = $1`, servedTestTenant); err != nil {
+		t.Fatal(err)
+	}
 
 	resp, err := http.Get(h.ts.URL + "/acme/new-nonce")
 	if err != nil {

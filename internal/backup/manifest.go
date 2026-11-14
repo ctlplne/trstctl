@@ -300,6 +300,11 @@ var RecoveredFromPostgresBackup = []string{
 // Ephemeral state is not required for a correct restore (it regenerates).
 var Ephemeral = []string{
 	"rate_limits",
+	// P15-L7: ACME nonces and finalize claims replicas share. A restore without
+	// them only makes a client fetch a new nonce, or lets an order's finalize
+	// be claimed again; they expire on their own.
+	"acme_nonces",
+	"acme_finalize_claims",
 	// Browser-session rows are shared runtime revocation/idle-time authority so
 	// normal replica changes and rolling restarts do not log an operator out.
 	// Disaster recovery may safely discard them: every restored browser must

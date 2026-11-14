@@ -6427,9 +6427,9 @@ This is a deliberate, documented trust boundary, not an accident.
   ACME server matches it; refusals bounce with a 5xx reason and are recorded as
   `acme.email_reply.refused` audit events (P15-L9). Every replica serves ACME
   from the shared event log, catching up before each request and reply (P15-L1),
-  so a reply may reach any replica's intake. Nonces are still per replica: a
-  request carrying another replica's nonce gets `badNonce` and a fresh one, and two
-  replicas finalizing one order at the same moment are not yet kept to one issuance. Proven in the lab with
+  so a reply may reach any replica's intake. Nonces and finalize claims are shared in
+  PostgreSQL (P15-L7), so ACME needs no affinity to a replica and one order issues
+  once. Proven in the lab with
   stock software: an RFC 8823 client library (acme4j-smime 5.1.0) ordered a certificate
   for a mailbox through a real mail server (maddy 0.9.6) that DKIM-signed both
   directions — replies from another mailbox and with another token-part1 were refused

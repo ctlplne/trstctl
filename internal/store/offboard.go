@@ -336,6 +336,9 @@ var TenantScopedTables = []string{
 	"certificate_key_vault_disables",
 	// M4: single-use records of machine login tokens.
 	"machine_credential_replays",
+	// P15-L7: shared ACME nonces and finalize claims (tenant rows, no
+	// foreign keys).
+	"acme_nonces", "acme_finalize_claims",
 	// N8: the Slack app's messages, user links, one-time codes and install;
 	// no foreign keys.
 	"slack_approval_messages", "slack_user_links", "slack_one_time_codes", "slack_installs",

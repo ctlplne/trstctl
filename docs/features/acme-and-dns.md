@@ -645,8 +645,12 @@ at the log's head reads nothing more). An account registered on one replica orde
 another; a challenge one replica created is validated by whichever replica's intake the
 reply reaches; the certificate one replica issued is served by every other. The IDs a
 served mount mints carry a random part, so two replicas never give two objects one
-name. Nonces are still each replica's own: a request carrying another replica's nonce
-is refused `badNonce` with a fresh one, which ACME clients retry.
+name. Nonces and finalize claims are shared too (P15-L7), so ACME needs no affinity to
+a replica: every nonce is minted into PostgreSQL by its SHA-256 digest and taken once by
+whichever replica it reaches, within the mount's nonce quota, and an order's finalize
+is claimed there for the replica that runs it, leased for two minutes so a replica that
+stops mid-finalize does not wedge the order; a second finalize meanwhile is refused as
+in progress, and a finalize that does not issue releases the claim.
 
 A stock RFC 8823 client library and a stock mail client have been run against this in
 the lab, through a real mail server that DKIM-signs both directions: the certificate

@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- ACME needs no affinity to a control-plane replica (P15-L7): nonces are minted into and redeemed from PostgreSQL by
+  digest, so any replica takes a nonce another minted, once; an order's finalize is claimed there, leased, so two
+  replicas never issue twice for one order (migration 0481).
 - The RFC 8823 reply intake can require SPF (P15-L6): with `protocols.acme_email.require_spf`, a reply whose
   envelope sender's SPF result for the delivering address is not pass is refused with the RFC 7372 codes and recorded
   as an spf refusal; `spf_records` pins records for domains not in DNS. DMARC is met by the aligned DKIM signature the

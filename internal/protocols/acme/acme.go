@@ -340,6 +340,9 @@ type Server struct {
 	stateThrough uint64
 	stateHead    uint64
 	ownApplied   map[uint64]bool
+	// shared keeps nonces and finalize claims where every replica sees them
+	// (P15-L7); nil keeps them this process's own.
+	shared SharedState
 
 	revokeHook              RevocationHook
 	accountLimiter          AccountOrderLimiter
@@ -770,6 +773,41 @@ func (s *Server) nextID() string {
 	return fmt.Sprintf("%d", s.seq)
 }
 
+// SharedState keeps the ACME state replicas must agree on at the moment they
+// act (P15-L7): nonces any replica may redeem once, and the one finalize of
+// an order, leased so a stopped replica's claim lapses.
+type SharedState interface {
+	MintNonce(ctx context.Context, nonce string, expires time.Time) error
+	RedeemNonce(ctx context.Context, nonce string) (bool, error)
+	ClaimFinalize(ctx context.Context, orderID string, until time.Time) (bool, error)
+	ReleaseFinalize(ctx context.Context, orderID string) error
+}
+
+// WithSharedState keeps nonces and finalize claims in state every replica
+// shares (P15-L7), so a client needs no affinity to one replica.
+func (s *Server) WithSharedState(state SharedState) *Server {
+	s.shared = state
+	return s
+}
+
+// NonceLimit is how many live nonces this mount holds at most (its quota),
+// which a shared nonce state enforces across replicas.
+func (s *Server) NonceLimit() int { return s.quota.MaxNonces }
+
+// finalizeClaimTTL bounds how long a finalize may hold its order before
+// another replica may take it over.
+const finalizeClaimTTL = 2 * time.Minute
+
+// mintSharedNonce mints a nonce in the shared state (P15-L7).
+func (s *Server) mintSharedNonce(ctx context.Context, now time.Time) (string, bool) {
+	b, _ := crypto.RandomBytes(16)
+	n := base64.RawURLEncoding.EncodeToString(b)
+	if err := s.shared.MintNonce(ctx, n, now.Add(s.quota.NonceTTL)); err != nil {
+		return "", false
+	}
+	return n, true
+}
+
 func (s *Server) mintNonce(now time.Time) (string, bool) {
 	if len(s.nonces) >= s.quota.MaxNonces {
 		return "", false
@@ -841,14 +879,20 @@ func (s *Server) newNonce(w http.ResponseWriter, r *http.Request) {
 		s.rateLimited(w, r, "too many ACME newNonce requests from this source")
 		return
 	}
-	nonce, ok := s.mintNonce(now)
-	if !ok {
+	var nonce string
+	var ok bool
+	if s.shared == nil {
+		nonce, ok = s.mintNonce(now)
 		s.mu.Unlock()
+	} else {
+		s.mu.Unlock()
+		nonce, ok = s.mintSharedNonce(r.Context(), now)
+	}
+	if !ok {
 		s.rateLimited(w, r, "too many outstanding ACME nonces")
 		return
 	}
 	w.Header().Set("Replay-Nonce", nonce)
-	s.mu.Unlock()
 	w.Header().Set("Cache-Control", "no-store")
 	addIndexLink(w, r)
 	w.WriteHeader(http.StatusNoContent)
@@ -890,15 +934,29 @@ func (s *Server) jwsWithAccountLock(h jwsHandler, exclusive bool) http.HandlerFu
 			return
 		}
 
+		if s.shared != nil {
+			// P15-L7: a nonce any replica minted is taken once, here or there.
+			redeemed, err := s.shared.RedeemNonce(r.Context(), msg.Protected.Nonce)
+			if err != nil {
+				s.problem(w, r, http.StatusServiceUnavailable, "serverInternal", "the shared ACME nonce state is unavailable")
+				return
+			}
+			if !redeemed {
+				s.problem(w, r, http.StatusBadRequest, "badNonce", "unknown or used nonce")
+				return
+			}
+		}
 		s.mu.Lock()
 		now := time.Now()
 		s.pruneExpiredLocked(now)
-		if _, ok := s.nonces[msg.Protected.Nonce]; !ok {
-			s.mu.Unlock()
-			s.problem(w, r, http.StatusBadRequest, "badNonce", "unknown or used nonce")
-			return
+		if s.shared == nil {
+			if _, ok := s.nonces[msg.Protected.Nonce]; !ok {
+				s.mu.Unlock()
+				s.problem(w, r, http.StatusBadRequest, "badNonce", "unknown or used nonce")
+				return
+			}
+			delete(s.nonces, msg.Protected.Nonce)
 		}
-		delete(s.nonces, msg.Protected.Nonce)
 
 		var acct *account
 		var key *jose.ACMEKey
@@ -967,17 +1025,22 @@ func (s *Server) jwsWithAccountLock(h jwsHandler, exclusive bool) http.HandlerFu
 		}
 
 		// Every ACME response carries a fresh nonce.
-		s.mu.Lock()
-		now = time.Now()
-		s.pruneExpiredLocked(now)
-		nonce, ok := s.mintNonce(now)
-		if !ok {
+		var nonce string
+		var ok bool
+		if s.shared == nil {
+			s.mu.Lock()
+			now = time.Now()
+			s.pruneExpiredLocked(now)
+			nonce, ok = s.mintNonce(now)
 			s.mu.Unlock()
+		} else {
+			nonce, ok = s.mintSharedNonce(r.Context(), time.Now())
+		}
+		if !ok {
 			s.rateLimited(w, r, "too many outstanding ACME nonces")
 			return
 		}
 		w.Header().Set("Replay-Nonce", nonce)
-		s.mu.Unlock()
 		addIndexLink(w, r)
 		h(w, r, msg, acct)
 	}
@@ -1594,6 +1657,24 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		}
 		s.problem(w, r, http.StatusForbidden, "orderNotReady", "order is not ready to finalize")
 		return
+	}
+	if s.shared != nil {
+		// P15-L7: the claim above is this process's; replicas sharing the state
+		// also claim the order where all of them see it, so only one issues.
+		held, err := s.shared.ClaimFinalize(r.Context(), o.id, time.Now().Add(finalizeClaimTTL))
+		if err != nil {
+			s.problem(w, r, http.StatusServiceUnavailable, "serverInternal", "the shared ACME finalize claim is unavailable")
+			return
+		}
+		if !held {
+			s.problem(w, r, http.StatusForbidden, "orderNotReady", "order finalization is already in progress")
+			return
+		}
+		defer func() {
+			if !issued {
+				_ = s.shared.ReleaseFinalize(context.WithoutCancel(r.Context()), o.id)
+			}
+		}()
 	}
 	if o.authMode == profile.ACMEAuthModeTrustAuthenticated {
 		// Re-read the profile THIS order was selected under (A55/A56), not the

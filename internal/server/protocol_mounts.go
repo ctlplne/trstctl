@@ -360,6 +360,9 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 	if err != nil {
 		return nil, fmt.Errorf("build served ACME state: %w", err)
 	}
+	// P15-L7: nonces and finalize claims every replica shares, so ACME needs
+	// no affinity to one replica.
+	acmeSrv = acmeSrv.WithSharedState(newACMESharedState(s.store, acmeTenant, acmeSrv.NonceLimit()))
 	return acmeSrv.WithRevocationHook(func(ctx context.Context, req acme.RevocationRequest) error {
 		err := issuer.RevokeProtocolLeaf(ctx, acmeTenant, "acme", req.Fingerprint, req.Serial, req.Reason, req.CertDER)
 		if errors.Is(err, orchestrator.ErrCertificateRevocationUnsupported) {
