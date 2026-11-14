@@ -65,9 +65,12 @@ func (p *Projector) applyCredentialUsageTx(ctx context.Context, tx pgx.Tx, e eve
 		if err := decode(e, &pl); err != nil {
 			return true, err
 		}
+		// M1-L4: a person's sign-in may be seeded from the session store.
+		seeded := pl.Kind == store.CredentialUsageBrowserSession && pl.SourceKind == store.CredentialUsageSourceSeeded &&
+			pl.Source == store.CredentialUsageSeedSessionStore
 		switch {
 		case (pl.Kind != store.CredentialUsageAPIToken && pl.Kind != store.CredentialUsageBrowserSession) || pl.CredentialID == "" ||
-			pl.SourceKind != store.CredentialUsageSourceNetwork || pl.Source == "" || pl.UsedAt.IsZero() || pl.WindowStart.IsZero() || pl.Count < 1:
+			(pl.SourceKind != store.CredentialUsageSourceNetwork && !seeded) || pl.Source == "" || pl.UsedAt.IsZero() || pl.WindowStart.IsZero() || pl.Count < 1:
 			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
 		case pl.Kind == store.CredentialUsageBrowserSession && pl.Action != CredentialActionSignIn:
 			return true, fmt.Errorf("projections: %s browser session action %q is unknown", e.Type, pl.Action)

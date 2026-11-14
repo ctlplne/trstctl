@@ -842,6 +842,9 @@ export function AdminAccess() {
                                 {t("admin.access.lastSignInFrom", { network: member.last_sign_in_network })}
                               </span>
                             ) : null}
+                            {member.last_sign_in_seeded ? (
+                              <span className="mt-1 block text-xs text-muted-foreground">{t("admin.access.lastSignInSeeded")}</span>
+                            ) : null}
                           </>
                         ) : (
                           <span className="text-muted-foreground">{t("admin.access.lastSignInNone")}</span>

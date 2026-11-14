@@ -24,6 +24,11 @@ const (
 
 	CredentialUsageSourceNetwork     = "network"
 	CredentialUsageSourceAttestation = "attestation"
+	// CredentialUsageSourceSeeded (M1-L4) is a use read from what trstctl
+	// already held at upgrade rather than observed: a person's sign-in from
+	// the browser session store (source CredentialUsageSeedSessionStore).
+	CredentialUsageSourceSeeded     = "seeded"
+	CredentialUsageSeedSessionStore = "session_store"
 )
 
 // CredentialUse is one recorded use, as the projection folds it. Action,
@@ -416,6 +421,53 @@ func (s *Store) CredentialUsageGapsOverlapping(ctx context.Context, tenantID str
 				return err
 			}
 			out = append(out, g)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// BrowserSignInSeed is an active member's latest browser sign-in that the
+// session store still holds, for a member whose sign-ins usage has not
+// recorded yet (M1-L4).
+type BrowserSignInSeed struct {
+	Subject, SubjectRef string
+	SignedInAt          time.Time
+}
+
+// BrowserSignInSeeds reads, for up to limit active members with no recorded
+// browser sign-in, the latest sign-in the session store holds. Browser
+// sessions are keyed by the same tenant-bound subject reference the members
+// carry, so the session store is read without any subject.
+func (s *Store) BrowserSignInSeeds(ctx context.Context, tenantID string, limit int) ([]BrowserSignInSeed, error) {
+	if tenantID == "" {
+		return nil, fmt.Errorf("store: BrowserSignInSeeds requires a tenant id (AN-1)")
+	}
+	if limit <= 0 || limit > 10000 {
+		limit = 10000
+	}
+	var out []BrowserSignInSeed
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT m.subject, m.subject_ref, max(b.created_at)
+			  FROM tenant_members AS m
+			  JOIN browser_sessions AS b ON b.tenant_id = m.tenant_id AND b.subject_hash = m.subject_ref
+			 WHERE m.tenant_id = $1 AND m.status = 'active' AND m.subject_ref <> ''
+			   AND NOT EXISTS (SELECT 1 FROM credential_usage AS u
+			                    WHERE u.tenant_id = m.tenant_id AND u.kind = $2 AND u.credential_id = m.subject_ref)
+			 GROUP BY m.subject, m.subject_ref
+			 ORDER BY m.subject
+			 LIMIT $3`, tenantID, CredentialUsageBrowserSession, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var seed BrowserSignInSeed
+			if err := rows.Scan(&seed.Subject, &seed.SubjectRef, &seed.SignedInAt); err != nil {
+				return err
+			}
+			out = append(out, seed)
 		}
 		return rows.Err()
 	})

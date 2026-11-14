@@ -1434,7 +1434,7 @@ not this file.
 | `internal/store/connector_lifecycle.go:468` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190) |
 | `internal/store/connector_lifecycle.go:522` | constrained positive PostgreSQL bigint (CWE-190) |
 | `internal/store/connector_lifecycle.go:525` | constrained positive PostgreSQL bigint (CWE-190) |
-| `internal/store/credential_usage.go:82` | bounded to int64 above (CWE-190) |
+| `internal/store/credential_usage.go:87` | bounded to int64 above (CWE-190) |
 | `internal/store/cryptoasset_migration_test.go:73` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/store/deployment_kek_domain.go:153` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/deployment_kek_domain.go:188` | the column holds a non-negative event sequence (CWE-190) |

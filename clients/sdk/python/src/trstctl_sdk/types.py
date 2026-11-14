@@ -10202,6 +10202,7 @@ Member = TypedDict(
         'email': str,
         'last_sign_in_at': str,
         'last_sign_in_network': str,
+        'last_sign_in_seeded': bool,
         'offboard_reason': str,
         'offboarded_at': str,
         'offboarded_by': str,

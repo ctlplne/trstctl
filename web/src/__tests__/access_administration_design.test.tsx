@@ -463,6 +463,16 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     expect(within(table).getByText("None recorded")).toBeInTheDocument();
   });
 
+  // M1-L4: a sign-in seeded from the session store says where it came from.
+  it("says a seeded sign-in came from the session store (M1-L4)", async () => {
+    apiMock.members.mockResolvedValue({ items: [{ ...member, last_sign_in_at: "2026-11-01T08:00:00Z", last_sign_in_seeded: true }] });
+    renderPage();
+    const header = await screen.findByRole("columnheader", { name: "Last sign-in" });
+    const table = header.closest("table") as HTMLTableElement;
+    expect(within(table).getByText("From the session store, before usage began")).toBeInTheDocument();
+    expect(within(table).queryByText(/^from /)).not.toBeInTheDocument();
+  });
+
   it("adds a person in a focused dialog and reads the roster back", async () => {
     const user = userEvent.setup();
     renderPage();

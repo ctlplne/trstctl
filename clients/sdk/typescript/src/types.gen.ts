@@ -21806,6 +21806,8 @@ export interface components {
             last_sign_in_at?: string;
             /** @description the client network (/24 or /64) of that sign-in (M1-L2) */
             last_sign_in_network?: string;
+            /** @description the last sign-in was read once from the browser session store when usage began, not observed from a network (M1-L4) */
+            last_sign_in_seeded?: boolean;
             offboard_reason?: string;
             /** Format: date-time */
             offboarded_at?: string;

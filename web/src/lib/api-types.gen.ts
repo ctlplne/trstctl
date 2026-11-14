@@ -7354,6 +7354,7 @@ export interface Member {
   email?: string;
   last_sign_in_at?: string;
   last_sign_in_network?: string;
+  last_sign_in_seeded?: boolean;
   offboard_reason?: string;
   offboarded_at?: string;
   offboarded_by?: string;

@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -63,6 +64,9 @@ type memberResponse struct {
 	// recorded browser sign-in and the client network it came from.
 	LastSignInAt      *time.Time `json:"last_sign_in_at,omitempty"`
 	LastSignInNetwork string     `json:"last_sign_in_network,omitempty"`
+	// LastSignInSeeded (M1-L4) says the last sign-in was read from the
+	// session store when usage began, not observed from a network.
+	LastSignInSeeded bool `json:"last_sign_in_seeded,omitempty"`
 }
 
 type memberListResponse struct {
@@ -207,7 +211,12 @@ func (a *API) listMembers(w http.ResponseWriter, r *http.Request) {
 		item := toMemberResponse(m)
 		if use, ok := signIns[refs[i]]; ok && !use.LastUsedAt.IsZero() {
 			at := use.LastUsedAt.UTC()
-			item.LastSignInAt, item.LastSignInNetwork = &at, use.LastSource
+			item.LastSignInAt = &at
+			// A sign-in seeded from the session store (M1-L4) has no network.
+			if _, err := netip.ParsePrefix(use.LastSource); err == nil {
+				item.LastSignInNetwork = use.LastSource
+			}
+			item.LastSignInSeeded = use.LastSource == store.CredentialUsageSeedSessionStore
 		}
 		items = append(items, item)
 	}

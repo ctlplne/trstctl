@@ -108,7 +108,11 @@ use of kind `browser_session`, action `sign_in`, from the client's network (M1-L
 credential id is the tenant-bound subject reference, never the subject, which is the
 principal and erased with it. NHI posture never reads a person's sign-ins; the members
 list (`GET /api/v1/access/members`) carries each member's `last_sign_in_at` and
-`last_sign_in_network`, and the console's people roster shows them. `?unused_days=N` (CLI `--unused-days`, 1-3650, default 90) flags a token or
+`last_sign_in_network`, and the console's people roster shows them. When usage begins,
+each active member's latest sign-in that the browser session store still holds is seeded
+once (M1-L4: source kind `seeded`, source `session_store`, no network; the member reads
+`last_sign_in_seeded`); a member whose sign-in is already recorded is never seeded, and a
+seeded sign-in never outranks a recorded one. `?unused_days=N` (CLI `--unused-days`, 1-3650, default 90) flags a token or
 login method with no recorded use for N days as `unused_no_activity`; a source not yet
 used on three different days is `new_source` while the credential also has a normal
 source, and the flag clears once it has been. Missing telemetry never counts as non-use:

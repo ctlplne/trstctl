@@ -255,11 +255,65 @@ func credentialUseAction(r *http.Request) string {
 	}
 }
 
+// browserSignInSeedPage bounds one read of the sign-in seeds (AN-7).
+const browserSignInSeedPage = 500
+
+// SeedBrowserSignIns (M1-L4) records, once, each active member's latest
+// browser sign-in that the session store held when usage began, for members
+// whose sign-ins usage has not recorded: a credential.used of kind
+// browser_session, source_kind seeded, source session_store, under the
+// subject reference. Its event id is fixed per member, so replicas and
+// restarts record it once, and a member with a recorded sign-in is never
+// seeded. API-token use before M1 cannot be seeded: no per-token record of
+// it was kept (an event's actor is its subject and roles only).
+func (a *API) SeedBrowserSignIns(ctx context.Context) error {
+	if a.orch == nil || a.store == nil {
+		return nil
+	}
+	tenants, err := a.store.ListTenants(ctx)
+	if err != nil {
+		return err
+	}
+	for _, t := range tenants {
+		seen := map[string]bool{}
+		for {
+			seeds, err := a.store.BrowserSignInSeeds(ctx, t.TenantID, browserSignInSeedPage)
+			if err != nil {
+				return err
+			}
+			fresh := 0
+			for _, seed := range seeds {
+				if seen[seed.SubjectRef] {
+					continue
+				}
+				seen[seed.SubjectRef] = true
+				fresh++
+				at := seed.SignedInAt.UTC()
+				used := projections.CredentialUsed{Kind: store.CredentialUsageBrowserSession, CredentialID: seed.SubjectRef, Principal: seed.Subject,
+					SourceKind: store.CredentialUsageSourceSeeded, Source: store.CredentialUsageSeedSessionStore,
+					Action: projections.CredentialActionSignIn, WindowStart: at.Truncate(time.Hour), UsedAt: at, Count: 1}
+				id := googleuuid.NewSHA1(credentialUsageNamespace, []byte(t.TenantID+"\x00seed\x00"+store.CredentialUsageSeedSessionStore+"\x00"+seed.SubjectRef)).String()
+				if err := a.orch.RecordCredentialUse(ctx, t.TenantID, id, used); err != nil {
+					return err
+				}
+			}
+			if len(seeds) < browserSignInSeedPage || fresh == 0 {
+				break
+			}
+		}
+	}
+	return nil
+}
+
 // RunCredentialUsageRecorder records noted API-token uses until ctx ends, then
-// drains once more.
+// drains once more. It first seeds people's sign-ins from the session store
+// (M1-L4).
 func (a *API) RunCredentialUsageRecorder(ctx context.Context) {
 	if a.usage == nil || a.orch == nil {
 		return
+	}
+	if err := a.SeedBrowserSignIns(ctx); err != nil {
+		slog.Warn("credential usage could not seed sign-ins from the session store; it tries again at the next start", slog.String("error", err.Error()))
 	}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()

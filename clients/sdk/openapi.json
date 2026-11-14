@@ -34808,6 +34808,10 @@
             "description": "the client network (/24 or /64) of that sign-in (M1-L2)",
             "type": "string"
           },
+          "last_sign_in_seeded": {
+            "description": "the last sign-in was read once from the browser session store when usage began, not observed from a network (M1-L4)",
+            "type": "boolean"
+          },
           "offboard_reason": {
             "type": "string"
           },

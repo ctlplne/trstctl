@@ -8472,6 +8472,10 @@ export const messages = {
   },
   "admin.access.lastSignIn": { defaultMessage: "Last sign-in", description: "Members table column: the member's last recorded browser sign-in (M1-L2)." },
   "admin.access.lastSignInFrom": { defaultMessage: "from {network}", description: "The client network of a member's last browser sign-in (M1-L2)." },
+  "admin.access.lastSignInSeeded": {
+    defaultMessage: "From the session store, before usage began",
+    description: "Members table: the last sign-in was read once from the browser session store when usage began, not observed from a network (M1-L4).",
+  },
   "admin.access.lastSignInNone": { defaultMessage: "None recorded", description: "Members table: no browser sign-in is recorded for the member (M1-L2)." },
   "admin.access.health.healthy": { defaultMessage: "Credential signs in", description: "PAM target credential health: the last check signed in (A258)." },
   "admin.access.health.rejected": {

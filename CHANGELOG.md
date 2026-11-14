@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- People's sign-ins before usage began are seeded from the browser session store (M1-L4): once per active member
+  whose sign-in usage has not recorded, the latest sign-in the store holds is recorded as a use with source kind
+  `seeded` (source `session_store`, no network); the members list marks it `last_sign_in_seeded` and the console's
+  roster says so. A recorded sign-in is never seeded over. API-token use before usage began stays unrecoverable: no
+  per-token record of it was kept. Migration 0486.
 - A person's browser sign-in is recorded in credential usage (M1-L2): kind `browser_session`, action `sign_in`, from
   the client's network, under the tenant-bound subject reference (never the subject) and at most once an hour per
   network plus doubling counts. The members list carries each member's `last_sign_in_at` and

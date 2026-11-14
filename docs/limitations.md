@@ -1401,8 +1401,13 @@ never live in the API process. What you can do end to end against the running bi
   three different days (`new_source`, cleared once it has been), with no operator input.
   Missing telemetry is never non-use: nothing is unused before the tenant's first
   recorded use, expired tokens are not idle, and a recorded gap (full recorder queue,
-  event log unavailable) suspends the verdict. Usage starts at upgrade; a full rebuild
-  also folds earlier machine logins, and the rebuilt usage read model is identical.
+  event log unavailable) suspends the verdict. API-token usage starts at upgrade: no
+  per-token record of earlier use was ever kept (an event's actor is its subject and roles,
+  `internal/eventspec/eventspec.go`; idempotency bindings are one-way digests, migration
+  0077), and crediting a subject's activity to its tokens would hide a stale token, so none
+  is inferred. People's sign-ins are seeded once from the browser session store (M1-L4),
+  and a full rebuild also folds earlier machine logins; the rebuilt usage read model is
+  identical.
   Behind a load balancer every request has the balancer's address, so new-network
   detection needs clients that reach trstctl directly.
 - Native secret-scan webhooks (P6, OD-3): `POST /api/v1/secrets/scans/hooks/{id}`

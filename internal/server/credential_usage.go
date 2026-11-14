@@ -19,3 +19,12 @@ func (s *Server) DrainCredentialUsage(ctx context.Context) error {
 	}
 	return s.api.DrainCredentialUsage(ctx)
 }
+
+// SeedBrowserSignIns seeds people's sign-ins from the session store, once per
+// member (M1-L4); the usage recorder runs it at every start.
+func (s *Server) SeedBrowserSignIns(ctx context.Context) error {
+	if s.api == nil {
+		return nil
+	}
+	return s.api.SeedBrowserSignIns(ctx)
+}
