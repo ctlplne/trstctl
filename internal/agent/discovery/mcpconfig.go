@@ -56,6 +56,9 @@ type MCPServerFound struct {
 	// literal rather than a reference; CredentialFields names where.
 	StaticCredential bool
 	CredentialFields []string
+	// CredentialValidity is each checked credential field's verdict (P14-L2),
+	// when the source has a credential checker; never the value.
+	CredentialValidity []CredentialVerdict
 	// Fingerprint is over the non-secret description, so a rescan of an
 	// unchanged configuration finds the same server.
 	Fingerprint string
@@ -65,11 +68,34 @@ type MCPServerFound struct {
 type MCPClientConfigSource struct {
 	roots   []string
 	maxSize int64
+	checker CredentialChecker
+}
+
+// CredentialChecker checks a static credential where the agent found it
+// (P14-L2): it names the provider and the verdict, or reports false when no
+// check covers the value or its provider is not enabled. It must not keep the
+// value.
+type CredentialChecker interface {
+	CheckCredential(ctx context.Context, value []byte) (provider, state, detail string, ok bool)
+}
+
+// CredentialVerdict is one checked credential field's verdict: the field as
+// reported, the provider, valid, invalid, unknown or unchecked, and the
+// provider's detail (a user or workspace, never the value).
+type CredentialVerdict struct {
+	Field, Provider, State, Detail string
 }
 
 // NewMCPClientConfigSource discovers MCP client configuration under roots.
 func NewMCPClientConfigSource(roots ...string) *MCPClientConfigSource {
 	return &MCPClientConfigSource{roots: roots, maxSize: maxMCPConfigFileSize}
+}
+
+// WithCredentialChecker checks each static credential found with c while the
+// file's bytes are still held (P14-L2); only the verdict is kept.
+func (s *MCPClientConfigSource) WithCredentialChecker(c CredentialChecker) *MCPClientConfigSource {
+	s.checker = c
+	return s
 }
 
 // Kind names the source.
@@ -109,7 +135,7 @@ func (s *MCPClientConfigSource) Discover(ctx context.Context) ([]MCPServerFound,
 			if rerr != nil {
 				return nil
 			}
-			out = append(out, parseMCPClientConfig(path, data)...)
+			out = append(out, parseMCPClientConfig(ctx, path, data, s.checker)...)
 			secret.Wipe(data)
 			return nil
 		})
@@ -156,8 +182,9 @@ func (e *mcpServerEntry) wipe() {
 }
 
 // parseMCPClientConfig reads one file's servers; a file in another format,
-// or one that does not parse, names none.
-func parseMCPClientConfig(path string, data []byte) []MCPServerFound {
+// or one that does not parse, names none. With a checker (P14-L2), each
+// server's static credentials are checked before the entry is wiped.
+func parseMCPClientConfig(ctx context.Context, path string, data []byte, checker CredentialChecker) []MCPServerFound {
 	clean := stripJSONC(data)
 	defer secret.Wipe(clean)
 	var top map[string]json.RawMessage
@@ -179,6 +206,9 @@ func parseMCPClientConfig(path string, data []byte) []MCPServerFound {
 			var entry mcpServerEntry
 			if json.Unmarshal(entryRaw, &entry) == nil {
 				if f, ok := describeMCPServer(path, format, name, &entry); ok {
+					if checker != nil && f.StaticCredential {
+						f.CredentialValidity = checkMCPCredentials(ctx, checker, &entry)
+					}
 					out = append(out, f)
 				}
 				entry.wipe()
@@ -267,6 +297,51 @@ func describeMCPServer(path, format, name string, e *mcpServerEntry) (MCPServerF
 	f.Fingerprint = cryptoboundary.SHA256Hex([]byte(strings.Join([]string{path, format, name, f.Transport, f.Command,
 		strconv.Itoa(f.Args), f.URLHost, strconv.FormatBool(f.StaticCredential), strings.Join(fields, ",")}, "\x00")))
 	return f, true
+}
+
+// checkMCPCredentials checks the literal credentials describeMCPServer names
+// (environment entries, headers and arguments; a URL's query is not a token
+// a provider can check), each under the same field name, in field order.
+func checkMCPCredentials(ctx context.Context, checker CredentialChecker, e *mcpServerEntry) []CredentialVerdict {
+	var out []CredentialVerdict
+	check := func(field string, value []byte) {
+		if provider, state, detail, ok := checker.CheckCredential(ctx, value); ok {
+			out = append(out, CredentialVerdict{Field: field, Provider: provider, State: state, Detail: detail})
+		}
+	}
+	for envName, raw := range e.Env {
+		if value, ok := rawJSONBytes(raw); ok && literalCredential(envName, value) {
+			check("env:"+fieldName(envName), value)
+		}
+	}
+	for header, raw := range e.Headers {
+		if value, ok := rawJSONBytes(raw); ok && credentialHeader(header) && literalValue(value) {
+			check("header:"+fieldName(header), value)
+		}
+	}
+	for i := 0; i < len(e.Args); i++ {
+		arg, ok := rawJSONBytes(e.Args[i])
+		if !ok {
+			continue
+		}
+		flagPart, valuePart, hasEq := bytes.Cut(arg, []byte("="))
+		name := string(flagPart)
+		switch {
+		case credentialFlag.MatchString(name) && hasEq:
+			if literalValue(valuePart) {
+				check("arg:"+fieldName(name), valuePart)
+			}
+		case credentialFlag.MatchString(name) && i+1 < len(e.Args):
+			if next, ok := rawJSONBytes(e.Args[i+1]); ok && literalValue(next) && !bytes.HasPrefix(next, []byte("-")) {
+				check("arg:"+fieldName(name), next)
+				i++
+			}
+		case tokenShaped(arg):
+			check("arg:#"+strconv.Itoa(i), arg)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Field < out[j].Field })
+	return out
 }
 
 // rawJSONString reads a JSON string that is not a secret (a command, a type).
@@ -537,6 +612,14 @@ func MCPInventoryFindings(found []MCPServerFound) []MCPInventoryFinding {
 		if f.StaticCredential {
 			risk = 80
 		}
+		// P14-L2: the verdicts are reported beside the fields; the risk stays
+		// the static credential's, so a later verdict does not re-rate the
+		// finding.
+		var states, details []string
+		for _, v := range f.CredentialValidity {
+			states = append(states, v.Field+"="+v.Provider+":"+v.State)
+			details = append(details, v.Field+": "+v.Detail)
+		}
 		meta := map[string]string{
 			"config_path": f.ConfigPath, "format": f.Format, "server_name": f.Name, "transport": f.Transport,
 			"args": strconv.Itoa(f.Args), "static_credential": strconv.FormatBool(f.StaticCredential),
@@ -551,18 +634,47 @@ func MCPInventoryFindings(found []MCPServerFound) []MCPInventoryFinding {
 		if len(f.CredentialFields) > 0 {
 			meta["credential_fields"] = strings.Join(f.CredentialFields, ",")
 		}
+		if v := joinWithin(states, ",", 512); v != "" {
+			meta["credential_validity"] = v
+		}
+		if v := joinWithin(details, "; ", 512); v != "" {
+			meta["credential_validity_detail"] = v
+		}
 		out = append(out, MCPInventoryFinding{Ref: f.ConfigPath + "#" + f.Name,
 			Provenance: SourceMCPClientConfig + ":" + f.ConfigPath, Fingerprint: f.Fingerprint, RiskScore: risk, Metadata: meta})
 	}
 	return out
 }
 
-// MCPInventoryDigest is over every server found, so an unchanged rescan has
-// the same digest and the agent sends nothing.
+// joinWithin joins whole parts while they fit the 512 characters a metadata
+// value may hold at the control plane; parts past the limit are left out
+// rather than cut.
+func joinWithin(parts []string, sep string, limit int) string {
+	out := ""
+	for _, p := range parts {
+		next := p
+		if out != "" {
+			next = out + sep + p
+		}
+		if len(next) > limit {
+			break
+		}
+		out = next
+	}
+	return out
+}
+
+// MCPInventoryDigest is over every server found and each checked credential's
+// verdict, so an unchanged rescan has the same digest and the agent sends
+// nothing, and a token revoked since the last report is reported again.
 func MCPInventoryDigest(found []MCPServerFound) string {
 	parts := make([]string, 0, len(found))
 	for _, f := range found {
-		parts = append(parts, f.ConfigPath+"#"+f.Name+"="+f.Fingerprint)
+		part := f.ConfigPath + "#" + f.Name + "=" + f.Fingerprint
+		for _, v := range f.CredentialValidity {
+			part += "|" + v.Field + "=" + v.Provider + ":" + v.State
+		}
+		parts = append(parts, part)
 	}
 	sort.Strings(parts)
 	return cryptoboundary.SHA256Hex([]byte(strings.Join(parts, "\n")))

@@ -19,9 +19,15 @@ import (
 // gone (P7-L2); when the last configuration is removed after an earlier
 // report, the agent sends an empty report once. It reports whether it sent a
 // report. Credential values never leave the host: findings carry where a
-// static credential is, never what it is.
-func (a *Agent) ReportMCPInventory(ctx context.Context, ch ChannelClient, roots []string, statePath string) (*InventoryResponse, bool, error) {
-	found, err := discovery.NewMCPClientConfigSource(roots...).Discover(ctx)
+// static credential is, never what it is. With a checker (P14-L2), each
+// static GitHub, GitLab or Slack token is checked from this host at its own
+// provider, and only the verdict is reported.
+func (a *Agent) ReportMCPInventory(ctx context.Context, ch ChannelClient, roots []string, statePath string, checker ...discovery.CredentialChecker) (*InventoryResponse, bool, error) {
+	source := discovery.NewMCPClientConfigSource(roots...)
+	if len(checker) > 0 && checker[0] != nil {
+		source.WithCredentialChecker(checker[0])
+	}
+	found, err := source.Discover(ctx)
 	if err != nil {
 		return nil, false, err
 	}

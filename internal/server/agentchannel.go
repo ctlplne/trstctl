@@ -1350,11 +1350,17 @@ func validateAgentServiceDependencyFinding(sourceKind string, finding transport.
 }
 
 // agentMCPServerMetadata is everything an MCP server finding (P7) may carry:
-// where its configuration is and what it names, never a credential's value.
+// where its configuration is and what it names, never a credential's value,
+// and (P14-L2) the verdict of each static credential the agent checked.
 var agentMCPServerMetadata = map[string]bool{"config_path": true, "format": true, "server_name": true, "transport": true,
-	"command": true, "args": true, "url_host": true, "static_credential": true, "credential_fields": true, "credential_values": true}
+	"command": true, "args": true, "url_host": true, "static_credential": true, "credential_fields": true, "credential_values": true,
+	"credential_validity": true, "credential_validity_detail": true}
 
 var agentMCPCredentialField = regexp.MustCompile(`^(env|header|arg|url):[A-Za-z0-9_.:#-]{1,80}$`)
+
+// agentMCPCredentialVerdict is one checked field's verdict (P14-L2):
+// field=provider:state.
+var agentMCPCredentialVerdict = regexp.MustCompile(`^((?:env|header|arg|url):[A-Za-z0-9_.:#-]{1,80})=(github|gitlab|slack):(valid|invalid|unknown|unchecked)$`)
 
 // validateAgentMCPServerFinding holds MCP client configuration reports to
 // their closed shape: MCP server findings come only from that source and it
@@ -1381,12 +1387,24 @@ func validateAgentMCPServerFinding(sourceKind string, f transport.InventoryFindi
 	if v := f.Metadata["credential_values"]; v != "" && v != "not_collected" {
 		return errors.New("credential values are never collected")
 	}
+	reported := map[string]bool{}
 	if fields := f.Metadata["credential_fields"]; fields != "" {
 		for _, field := range strings.Split(fields, ",") {
 			if !agentMCPCredentialField.MatchString(field) {
 				return fmt.Errorf("credential field %q is not a field name", field)
 			}
+			reported[field] = true
 		}
+	}
+	if verdicts := f.Metadata["credential_validity"]; verdicts != "" {
+		for _, verdict := range strings.Split(verdicts, ",") {
+			m := agentMCPCredentialVerdict.FindStringSubmatch(verdict)
+			if m == nil || !reported[m[1]] {
+				return fmt.Errorf("credential verdict %q must be a reported field's provider:state", verdict)
+			}
+		}
+	} else if f.Metadata["credential_validity_detail"] != "" {
+		return errors.New("credential_validity_detail needs credential_validity")
 	}
 	if host := f.Metadata["url_host"]; host != "" {
 		scheme, rest, ok := strings.Cut(host, "://")

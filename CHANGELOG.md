@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- The agent checks static GitHub, GitLab and Slack tokens it finds in MCP client configuration from its own host
+  (P14-L2): `--inventory-mcp-validity-providers` opts in, and the `mcp_server` finding carries each field's verdict
+  (`credential_validity`) while the value stays on the host.
 - Leaked-secret validity checks for GitHub, GitLab and Slack tokens, Microsoft Entra ID client secrets and Google
   service-account keys (P14-L1): `secrets.validity_checks.providers` names them beside AWS, each checked at its own
   provider's identity endpoint (a Google key by a signed assertion alone), opt-in so an existing configuration still

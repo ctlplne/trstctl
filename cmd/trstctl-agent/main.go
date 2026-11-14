@@ -263,6 +263,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 		os.Exit(2)
 	}
+	if err := setupMCPValidity(); err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+		os.Exit(2)
+	}
 	if err := installAgentDistrust(*distrustFile); err != nil {
 		fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 		os.Exit(1)

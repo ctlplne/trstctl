@@ -8397,6 +8397,8 @@ The agent's `--inventory-mcp-config-roots` source finds MCP client configuration
 object, or `servers` at the top level or under `mcp`) in `.json` files, with comments and trailing commas
 tolerated, and reports each configured server with its transport, program or host, and the fields that hold a
 static credential — never a value. Formats other than JSON (TOML or YAML client configuration) are not read yet.
+With `--inventory-mcp-validity-providers` (P14-L2) the agent checks static GitHub, GitLab and Slack tokens from the
+host itself and reports `credential_validity` per field; other providers' tokens and passwords are not checked.
 A server whose configuration is removed from the host reads removed (`removed_at`) once the host's next report no
 longer lists it, and leaves the open shadow NHI posture; its triage is kept. An unchanged rescan sends nothing because the agent keeps the last report's digest beside its key; an
 agent that loses that file reports the same servers again as a new run. Finding MCP endpoints on approved network
@@ -8525,8 +8527,10 @@ provider's limits, recording the rest unchecked. A secret found in a collected S
 from the poster's profile email, the tenant owner. Proven against an STS stand-in that verifies SigV4 signatures, a
 Slack stand-in, GitHub, GitLab and Slack identity stand-ins, and Entra and Google token-endpoint stand-ins (the Google one
 verifies the assertion's signature); a live AWS test key, a test Slack workspace and live GitHub, GitLab, Entra and
-Google test credentials are a Track B row. What comes next: checks run on a relay or agent for content found there, and
-the engine decision (stay on Gitleaks for patches, evaluate its successor, or add a second engine behind the same
+Google test credentials are a Track B row. An agent checks the static GitHub, GitLab and Slack tokens it finds in MCP
+client configuration from its own host (P14-L2). Checks on the control plane and on an agent reach public addresses
+only (the egress guard refuses private ones), so a GitHub Enterprise Server or self-managed GitLab on a private network
+is not checked. What comes next: the engine decision (stay on Gitleaks for patches, evaluate its successor, or add a second engine behind the same
 interface).
 
 ## Edition and qualification ledger (A253) — served

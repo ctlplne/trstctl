@@ -527,3 +527,40 @@ func (c *Checker) CheckGCP(ctx context.Context, email, keyID string, keyPEM []by
 		return c.answered(ProviderGCP, status, why)
 	}
 }
+
+// bareTokenProviders are the providers a bare token can be checked with, in
+// the order a value is matched against them.
+var bareTokenProviders = []string{ProviderGitHub, ProviderGitLab, ProviderSlack}
+
+// CheckCredential checks one static credential where an agent found it
+// (P14-L2): a GitHub, GitLab or Slack token, alone or after "Bearer " or
+// "token ", whose provider is enabled. It reports false, calling nothing,
+// for any other value. The value is not kept.
+func (c *Checker) CheckCredential(ctx context.Context, value []byte) (provider, state, detail string, ok bool) {
+	v := bytes.TrimSpace(value)
+	for _, scheme := range []string{"Bearer ", "bearer ", "token ", "Token "} {
+		if bytes.HasPrefix(v, []byte(scheme)) {
+			v = bytes.TrimSpace(v[len(scheme):])
+			break
+		}
+	}
+	for _, p := range bareTokenProviders {
+		loc := tokenPatterns[p].FindIndex(v)
+		if loc == nil || loc[0] != 0 || loc[1] != len(v) || !c.Enabled(p) {
+			continue
+		}
+		token := append([]byte(nil), v...)
+		defer secret.Wipe(token)
+		var r Result
+		switch p {
+		case ProviderGitHub:
+			r = c.CheckGitHub(ctx, token)
+		case ProviderGitLab:
+			r = c.CheckGitLab(ctx, token)
+		default:
+			r = c.CheckSlack(ctx, token)
+		}
+		return r.Provider, r.State, r.Detail, true
+	}
+	return "", "", "", false
+}

@@ -584,6 +584,28 @@ configuration is removed, the agent sends one empty report saying so. Finding MC
 network ranges is what comes next (P7's network probe, after P8's design). Status:
 served (host detectors).
 
+**Is the token in that file still live? (P14-L2).** With
+`--inventory-mcp-validity-providers` naming `github`, `gitlab` or `slack`, the agent
+checks each static token it finds in MCP client configuration from its own host,
+while it holds the file's bytes: an environment value, a header (after `Bearer ` or
+`token `) or an argument that is a GitHub, GitLab or Slack token goes to that
+provider's identity endpoint (GitHub `GET /user`, GitLab `GET
+/api/v4/personal_access_tokens/self`, Slack `auth.test`) and nowhere else, with no
+redirect followed. The finding then carries `credential_validity`, one
+`field=provider:state` entry per checked field (`valid`, `invalid`, `unknown` or
+`unchecked`), and `credential_validity_detail` with the user or workspace the provider
+named; the value is still never reported, and the finding's risk is unchanged. A
+password or a token of another provider is not checked. `--inventory-mcp-validity-endpoints`
+points a provider at a GitHub Enterprise Server's `https://host/api/v3` or a
+self-managed GitLab, and `--inventory-mcp-validity-allowlist` declares the
+destinations (by default each named provider's public endpoint); the agent refuses
+other providers, plain HTTP and paths at startup. Checks go through the egress guard, as
+the control plane's do, so they reach public addresses only: a GitHub Enterprise Server
+or self-managed GitLab on a private network is not checked. A verdict that changes — a token
+revoked since the last report — changes the agent's digest, so the next rescan reports
+the host again. The control plane accepts a verdict only for a field the finding
+reports, from a known provider and state.
+
 **Disabling a certificate in Azure Key Vault — not a revocation (N2).** Key Vault
 cannot revoke a certificate; only its issuing CA can. For a certificate the inventory
 found in Key Vault (source `cloud-azure-keyvault`), `POST

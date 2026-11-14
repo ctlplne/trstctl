@@ -1609,7 +1609,11 @@ each can negotiate X25519MLKEM768.
 client configuration files the agent reads (P7): each configured MCP server, its
 transport, the program it starts or the host it calls, and which fields hold a static
 credential. Values never leave the host, and a rescan that finds nothing new sends
-nothing.
+nothing. `--inventory-mcp-validity-providers` (`github`, `gitlab`, `slack`; P14-L2)
+checks each static token of those providers from this host at the provider's identity
+endpoint and reports only the verdict (`credential_validity`);
+`--inventory-mcp-validity-endpoints` (`provider=https://base`) and
+`--inventory-mcp-validity-allowlist` (`https://host[:port]`) set where the checks go.
 `--observe-interface` (Linux, observer role) watches an interface's handshakes and
 reports what each connection negotiated, never payload (TLS, SSH and plaintext over TCP;
 QUIC and DTLS over UDP); `--observe-ports` (TCP and UDP),
