@@ -19,7 +19,8 @@ import (
 // the rotation without seeing the leak. A failed scan or a provider error is
 // no evidence, so the finding stays open; so does a finding a later scan still
 // sees (the old value still in the file). The history commits that held the
-// value stay listed on the finding after it closes.
+// value stay listed on the finding after it closes, and become their own
+// open finding (P6-L6) until a scan finds none.
 
 const (
 	defaultSecretMoveClosureInterval = time.Minute
@@ -70,7 +71,7 @@ func (s *Server) CloseMovedSecretFindingsOnce(ctx context.Context) (int, error) 
 			continue
 		}
 		for _, m := range moves {
-			reason, evidence, ok, err := s.secretMoveClosureEvidence(ctx, tenantID, m)
+			reason, evidence, runID, ok, err := s.secretMoveClosureEvidence(ctx, tenantID, m)
 			if err != nil {
 				note(fmt.Errorf("finding %s: %w", m.FindingID, err))
 				continue
@@ -83,34 +84,54 @@ func (s *Server) CloseMovedSecretFindingsOnce(ctx context.Context) (int, error) 
 				continue
 			}
 			closed++
+			// P6-L6: the commits that still hold the rotated value become
+			// their own open finding.
+			if len(m.Residue) > 0 {
+				if err := s.raiseSecretHistoryResidue(ctx, tenantID, m, runID); err != nil {
+					note(fmt.Errorf("finding %s history residue: %w", m.FindingID, err))
+				}
+			}
 		}
 	}
 	return closed, firstErr
 }
 
-// secretMoveClosureEvidence returns the reason and evidence that close a moved
-// finding, or false while any of the evidence is missing.
-func (s *Server) secretMoveClosureEvidence(ctx context.Context, tenantID string, m store.OpenSecretMove) (string, string, bool, error) {
+// raiseSecretHistoryResidue records a just-closed moved finding's history
+// residue as its own finding (P6-L6), by the scan run that closed it.
+func (s *Server) raiseSecretHistoryResidue(ctx context.Context, tenantID string, m store.OpenSecretMove, runID string) error {
+	f, err := s.store.GetDiscoveryFinding(ctx, tenantID, m.FindingID)
+	if err != nil {
+		return err
+	}
+	return reconcileSecretHistoryResidueFinding(ctx, s.orch, s.store, tenantID, residueSubject{
+		FindingID: m.FindingID, SourceID: m.SourceID, Ref: f.Ref, Provenance: f.Provenance,
+		SecretName: m.SecretName, SecretVersion: m.SecretVersion,
+	}, runID, m.Residue)
+}
+
+// secretMoveClosureEvidence returns the reason, evidence and scan run that
+// close a moved finding, or false while any of the evidence is missing.
+func (s *Server) secretMoveClosureEvidence(ctx context.Context, tenantID string, m store.OpenSecretMove) (string, string, string, bool, error) {
 	current, err := s.store.GetSecret(ctx, tenantID, m.SecretName)
 	if errors.Is(err, store.ErrSecretNotFound) {
-		return "", "", false, nil // the secret is gone: nothing says the leak was rotated
+		return "", "", "", false, nil // the secret is gone: nothing says the leak was rotated
 	}
 	if err != nil {
-		return "", "", false, err
+		return "", "", "", false, err
 	}
 	if current.Version <= m.SecretVersion || m.ConsumerReadAt == nil || m.ConsumerReadVersion <= m.SecretVersion || m.SourceID == "" {
-		return "", "", false, nil
+		return "", "", "", false, nil
 	}
 	rotatedAt := current.UpdatedAt
 	if rotation, err := s.store.GetSecretVersion(ctx, tenantID, m.SecretName, m.SecretVersion+1); err == nil {
 		rotatedAt = rotation.WrittenAt
 	} else if !errors.Is(err, store.ErrSecretNotFound) {
-		return "", "", false, err
+		return "", "", "", false, err
 	}
 	runID, completedAt, found, err := s.store.LatestCompletedDiscoveryRunAfter(ctx, tenantID, m.SourceID, rotatedAt)
 	if err != nil || !found || runID == m.RunID {
 		// No completed scan since the rotation, or the latest one still saw the leak.
-		return "", "", false, err
+		return "", "", "", false, err
 	}
 	reason := fmt.Sprintf("moved into %s and rotated past v%d; a consumer read v%d; scan run %s completed %s without seeing the leak",
 		m.SecretName, m.SecretVersion, m.ConsumerReadVersion, runID, completedAt.UTC().Format(time.RFC3339))
@@ -118,5 +139,5 @@ func (s *Server) secretMoveClosureEvidence(ctx context.Context, tenantID string,
 		reason += fmt.Sprintf("; %d history commit(s) still hold the rotated value", n)
 	}
 	evidence := fmt.Sprintf("secret:%s@v%d;read:v%d;scan:%s", m.SecretName, current.Version, m.ConsumerReadVersion, runID)
-	return reason, evidence, true, nil
+	return reason, evidence, runID, true, nil
 }

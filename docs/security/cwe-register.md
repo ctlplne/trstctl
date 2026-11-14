@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3350 annotated sites across 35 rules. Each row is
+3351 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1763,7 +1763,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (419 sites)
+### G204 — CWE-78 OS command injection (420 sites)
 
 | Location | Reason |
 |---|---|
@@ -2099,6 +2099,7 @@ not this file.
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:52` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:60` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:90` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_move_residue_finding_served_test.go:81` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_move_residue_served_test.go:56` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_move_served_test.go:104` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_repository_private_clone_served_test.go:39` | the local git over the test's own repository (CWE-78) |

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"trstctl.com/trstctl/internal/discovery"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secretscan"
 	"trstctl.com/trstctl/internal/store"
@@ -51,7 +52,11 @@ func (d *issuanceDispatcher) recheckMovedSecretResidue(ctx context.Context, tena
 	if len(moves) == 0 {
 		return
 	}
-	known, err := d.movedSecretValues(ctx, tenantID, moves)
+	plain := make([]store.DiscoveryFindingSecretMove, len(moves))
+	for i, m := range moves {
+		plain[i] = m.DiscoveryFindingSecretMove
+	}
+	known, err := d.movedSecretValues(ctx, tenantID, plain)
 	if err != nil {
 		warn("values", err)
 		return
@@ -76,7 +81,7 @@ func (d *issuanceDispatcher) recheckMovedSecretResidue(ctx context.Context, tena
 		warn("scan", err)
 		return
 	}
-	byFinding := make(map[string]store.DiscoveryFindingSecretMove, len(moves))
+	byFinding := make(map[string]store.SourceSecretMove, len(moves))
 	for _, m := range moves {
 		byFinding[m.FindingID] = m
 	}
@@ -95,6 +100,17 @@ func (d *issuanceDispatcher) recheckMovedSecretResidue(ctx context.Context, tena
 			RunID: runID, CheckedAt: checkedAt, Residue: residue,
 		}); err != nil {
 			warn("record", err)
+			continue
+		}
+		// P6-L6: once the moved finding closed, its residue is its own finding.
+		if m.TriageStatus != string(discovery.TriageRemediated) {
+			continue
+		}
+		if err := reconcileSecretHistoryResidueFinding(ctx, d.orch, d.store, tenantID, residueSubject{
+			FindingID: m.FindingID, SourceID: sourceID, Ref: m.Ref, Provenance: m.Provenance,
+			SecretName: m.SecretName, SecretVersion: m.SecretVersion,
+		}, runID, residue); err != nil {
+			warn("residue finding", err)
 		}
 	}
 }

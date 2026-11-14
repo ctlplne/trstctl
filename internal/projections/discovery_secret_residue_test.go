@@ -58,7 +58,7 @@ func TestSecretResidueChecksReplaceTheMovesResidueP6L5(t *testing.T) {
 		if err != nil || len(moves) != 1 {
 			t.Fatalf("%s: moves %+v %v", step, moves, err)
 		}
-		return moves[0]
+		return moves[0].DiscoveryFindingSecretMove
 	}
 	commits := func(m store.DiscoveryFindingSecretMove) []string {
 		var out []string

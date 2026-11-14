@@ -158,16 +158,26 @@ func (s *Store) ApplyDiscoveryFindingSecretResidueCheckedTx(ctx context.Context,
 	return err
 }
 
+// SourceSecretMove is a move of one of a source's findings with what a scan
+// of that source needs from the finding: its ref, provenance and triage
+// status (P6-L5, P6-L6).
+type SourceSecretMove struct {
+	DiscoveryFindingSecretMove
+	Ref          string
+	Provenance   string
+	TriageStatus string
+}
+
 // SecretMovesForSource returns up to limit of the moves of a source's
 // findings, open or closed, for a scan of that source to re-check their
 // history residue (P6-L5).
-func (s *Store) SecretMovesForSource(ctx context.Context, tenantID, sourceID string, limit int) ([]DiscoveryFindingSecretMove, error) {
+func (s *Store) SecretMovesForSource(ctx context.Context, tenantID, sourceID string, limit int) ([]SourceSecretMove, error) {
 	if limit <= 0 {
 		return nil, errors.New("store: SecretMovesForSource requires a positive limit")
 	}
-	var out []DiscoveryFindingSecretMove
+	var out []SourceSecretMove
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT `+secretMoveColumns+`
+		rows, err := tx.Query(ctx, `SELECT `+secretMoveColumns+`, f.ref, f.provenance, f.triage_status
 			  FROM discovery_finding_secret_moves m
 			  JOIN discovery_findings f ON f.tenant_id = m.tenant_id AND f.id = m.finding_id
 			 WHERE m.tenant_id = $1 AND f.source_id::text = $2
@@ -177,8 +187,8 @@ func (s *Store) SecretMovesForSource(ctx context.Context, tenantID, sourceID str
 		}
 		defer rows.Close()
 		for rows.Next() {
-			m := DiscoveryFindingSecretMove{TenantID: tenantID}
-			if err := scanSecretMove(rows, &m); err != nil {
+			m := SourceSecretMove{DiscoveryFindingSecretMove: DiscoveryFindingSecretMove{TenantID: tenantID}}
+			if err := scanSecretMove(rows, &m.DiscoveryFindingSecretMove, &m.Ref, &m.Provenance, &m.TriageStatus); err != nil {
 				return err
 			}
 			out = append(out, m)

@@ -2618,6 +2618,15 @@ has, they are absent and the residue is as the move found it. A re-check that ca
 last check as they were and never fails the scan. The Discovery console shows the commits
 and the last check on the finding.
 
+Once the moved finding closes, its residue is its own open finding (P6-L6). The closure
+records the commits that still hold the rotated value as a `secret_history_residue`
+finding on the same source and ref (risk 35: the value no longer works, but the history
+is still the repository's to clean), whose metadata names the moved finding, the secret
+and the commits. Each later re-check keeps it current: a scan that finds no commit still
+holding the value closes it as `remediated` by `system:leaked-secret-closure`, with
+evidence `history:none;scan:<run>`, and a commit that brings the value back records it
+again, shown as regressed. The Discovery console shows the commits and what closes it.
+
 Reads through the native store's own routes and through the KV-compatible `/v1` surface
 count as consumer reads, recorded with the reader's subject. A secret-sync delivery of a
 rotated version counts too: the target's consumers read the secret there, so the delivery

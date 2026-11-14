@@ -29,6 +29,7 @@ var (
 	secretConsumerReadNamespace = uuid.MustParse("b955ccea-7b7d-4a1c-b9e1-a7f8a06e9b4b")
 	secretMoveClosureNamespace  = uuid.MustParse("c7e2a9d4-41f0-5b3e-8d26-6e1f0b9a2c57")
 	secretResidueCheckNamespace = uuid.MustParse("5d0b8e61-2f4a-4c7e-9a13-b8e2c6f0d947")
+	secretResidueCloseNamespace = uuid.MustParse("e3a91f27-6c58-4d0b-8f42-17b9d5c3a6e8")
 )
 
 // RecordDiscoveryFindingSecretMoved links a finding to the native secret its
@@ -99,5 +100,23 @@ func (o *Orchestrator) RecordSecretResidueChecked(ctx context.Context, tenantID 
 		return err
 	}
 	_, err = o.emitPrepared(ctx, events.Event{ID: id, Type: projections.EventDiscoveryFindingSecretResidueChecked, TenantID: tenantID, Data: payload})
+	return err
+}
+
+// CloseSecretHistoryResidueFinding records a moved leak's history-residue
+// finding remediated (P6-L6), by SecretMoveClosureActor, once a scan run found
+// no history commit still holding the value. The event ID names the finding
+// and the run, so two leaders or a retried run record it once.
+func (o *Orchestrator) CloseSecretHistoryResidueFinding(ctx context.Context, tenantID, findingID, runID string) error {
+	payload, err := json.Marshal(projections.DiscoveryFindingTriageChanged{
+		ID: findingID, Status: string(discovery.TriageRemediated), Actor: SecretMoveClosureActor,
+		Reason:      "scan run " + runID + " found no history commit still holding the rotated value",
+		EvidenceRef: "history:none;scan:" + runID,
+	})
+	if err != nil {
+		return err
+	}
+	id := uuid.NewSHA1(secretResidueCloseNamespace, []byte(tenantID+"\x00"+findingID+"\x00"+runID)).String()
+	_, err = o.emitPrepared(ctx, events.Event{ID: id, Type: projections.EventDiscoveryFindingTriageChanged, TenantID: tenantID, Data: payload})
 	return err
 }

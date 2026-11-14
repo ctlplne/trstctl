@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A closed moved leak's history residue is its own open finding (P6-L6): the closure records the commits that still
+  hold the rotated value as a `secret_history_residue` finding (risk 35) naming the moved finding and the commits; a
+  later scan that finds none closes it with that run as evidence, and one that finds the value again records it again,
+  regressed. The Discovery console shows it.
 - A moved leaked secret's history residue is re-checked by every later completed scan of its repository (P6-L5): the
   clone is deepened to every branch's full history, a commit a rewrite removed drops off and one that brings the value
   back is added, and the finding names the scan run and time of the last check (`secret_move.history_residue_checked_at`,

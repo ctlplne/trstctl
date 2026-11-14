@@ -17867,6 +17867,18 @@ export const messages = {
     defaultMessage: "No scan has re-checked the history since the move; the commits are as the move found them.",
     description: "P6-L5: the history residue was recorded at the move and no later scan has looked again yet.",
   },
+  "discovery.findings.historyResidue.heading": {
+    defaultMessage: "History that still holds a rotated leak",
+    description: "P6-L6: heading of a finding for the history commits that still hold a moved, rotated leaked value.",
+  },
+  "discovery.findings.historyResidue.what": {
+    defaultMessage: "The value moved into {secret} and was rotated, closing finding {finding}. These history commits still hold the old value:",
+    description: "P6-L6: what a history-residue finding stands for: the secret the value moved into and the moved finding it came from.",
+  },
+  "discovery.findings.historyResidue.closes": {
+    defaultMessage: "Rewrite the history to remove them. A scan of the repository that finds no commit still holding the value closes this finding.",
+    description: "P6-L6: what closes a history-residue finding.",
+  },
   "discovery.findings.annotation.heading": {
     defaultMessage: "Tell the people where it leaked",
     description: "Heading of the finding section that writes a leaked credential back at the provider where it was seen.",

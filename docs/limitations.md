@@ -1454,7 +1454,9 @@ never live in the API process. What you can do end to end against the running bi
   event or log. The leader closes the finding only on a rotation, a consumer's read of
   the rotated version and a completed scan that no longer sees the leak; failed scans
   never close it and the history commits holding the value stay listed, re-checked by
-  every later completed scan of the repository (P6-L5). Consumer reads
+  every later completed scan of the repository (P6-L5); once the finding closes they are
+  their own open `secret_history_residue` finding until a scan finds none (P6-L6).
+  Consumer reads
   count through the native store's routes, the KV-compatible `/v1` surface, and
   secret-sync deliveries (as `secret-sync:<target>`, P6-L4); image-layer residue belongs
   to registry scanning (N6).
