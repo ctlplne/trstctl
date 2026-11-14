@@ -583,8 +583,17 @@ reply, and `550 5.7.1` for no matching challenge or a wrong response. A signatur
 part of the body (`l=`) or `rsa-sha1` is never accepted. Every refused reply is also an
 `acme.email_reply.refused` audit event: the step that refused it (`malformed`, `dkim`,
 `unmatched`, `wrong_response` or `error`), the From domain and, for a wrong response,
-the challenge it invalidated. The event never carries the mailbox or the message. Like
-every ACME request, a reply must reach the control-plane process that created the order.
+the challenge it invalidated. The event never carries the mailbox or the message.
+
+**Several replicas (P15-L1).** ACME state is the event log's, and every replica serves
+it: before each ACME request, and before the reply intake matches a reply, a replica
+applies the state events the others appended since it last caught up (a replica already
+at the log's head reads nothing more). An account registered on one replica orders on
+another; a challenge one replica created is validated by whichever replica's intake the
+reply reaches; the certificate one replica issued is served by every other. The IDs a
+served mount mints carry a random part, so two replicas never give two objects one
+name. Nonces are still each replica's own: a request carrying another replica's nonce
+is refused `badNonce` with a fresh one, which ACME clients retry.
 
 A stock RFC 8823 client library and a stock mail client have been run against this in
 the lab, through a real mail server that DKIM-signs both directions: the certificate

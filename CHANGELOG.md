@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- Several control-plane replicas serve one ACME state (P15-L1): each catches up from the shared event log before an
+  ACME request or an email reply, so an order, challenge or certificate made on one replica is served by every other
+  and an email-reply-00 reply may reach any replica's intake; served ACME IDs carry a random part.
 - The agent checks static GitHub, GitLab and Slack tokens it finds in MCP client configuration from its own host
   (P14-L2): `--inventory-mcp-validity-providers` opts in, and the `mcp_server` finding carries each field's verdict
   (`credential_validity`) while the value stays on the host.

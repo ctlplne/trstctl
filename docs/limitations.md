@@ -6425,8 +6425,11 @@ This is a deliberate, documented trust boundary, not an accident.
   (`protocols.acme_email.smtp_listen`) that verifies each reply's DKIM signature for its
   From domain (rsa-sha256, ed25519-sha256; keys from DNS or `dkim_keys`) before the
   ACME server matches it; refusals bounce with a 5xx reason and are recorded as
-  `acme.email_reply.refused` audit events (P15-L9). ACME state is per process,
-  so replies must reach the process that created the order. Proven in the lab with
+  `acme.email_reply.refused` audit events (P15-L9). Every replica serves ACME
+  from the shared event log, catching up before each request and reply (P15-L1),
+  so a reply may reach any replica's intake. Nonces are still per replica: a
+  request carrying another replica's nonce gets `badNonce` and a fresh one, and two
+  replicas finalizing one order at the same moment are not yet kept to one issuance. Proven in the lab with
   stock software: an RFC 8823 client library (acme4j-smime 5.1.0) ordered a certificate
   for a mailbox through a real mail server (maddy 0.9.6) that DKIM-signed both
   directions — replies from another mailbox and with another token-part1 were refused

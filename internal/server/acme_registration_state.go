@@ -63,6 +63,12 @@ func (l acmeRegistrationLog) scope(ctx context.Context) (acme.StateScope, error)
 	return acme.StateScope{Identity: a.EventID, FirstSequence: a.EventSequence}, err
 }
 
+// LastSequence is the shared log's head, so an ACME view that already caught
+// up to it reads nothing more before serving a request (P15-L1).
+func (l acmeRegistrationLog) LastSequence(ctx context.Context) (uint64, error) {
+	return l.log.LastSequence(ctx)
+}
+
 func (l acmeRegistrationLog) Replay(ctx context.Context, from uint64, apply func(events.Event) error) error {
 	expected, ok := acme.RequestStateScope(ctx)
 	if !ok || expected.Identity == "" || from < expected.FirstSequence {

@@ -5,6 +5,7 @@ package acme
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -55,7 +56,17 @@ func (s *Server) beginStateScope(ctx context.Context) (context.Context, func(), 
 			return ctx, nil, err
 		}
 		if scope == s.stateScope {
-			return context.WithValue(ctx, stateScopeContextKey{}, scope), s.stateScopeMu.RUnlock, nil
+			scoped := context.WithValue(ctx, stateScopeContextKey{}, scope)
+			// P15-L1: another replica may have appended state since this view
+			// last caught up; serve what the shared log holds.
+			s.mu.Lock()
+			err := s.catchUpLocked(scoped)
+			s.mu.Unlock()
+			if err != nil {
+				s.stateScopeMu.RUnlock()
+				return ctx, nil, err
+			}
+			return scoped, s.stateScopeMu.RUnlock, nil
 		}
 		s.stateScopeMu.RUnlock()
 		// Only registration changes need an exclusive lock. Ordinary requests
@@ -96,6 +107,9 @@ func (s *Server) replayStateScopeLocked(ctx context.Context) error {
 		return errors.New("acme: scoped state requires an event log")
 	}
 	apply := func(ev events.Event) error {
+		if ev.Sequence > s.stateThrough {
+			s.stateThrough = ev.Sequence
+		}
 		if ev.TenantID != s.stateTenantID || !strings.HasPrefix(ev.Type, acmeEventPrefix) {
 			return nil
 		}
@@ -119,6 +133,61 @@ func (s *Server) replayStateScopeLocked(ctx context.Context) error {
 	return s.stateLog.Replay(ctx, from, apply)
 }
 
+// catchUpLocked applies the state events appended since this view last
+// caught up, by this or another process sharing the log (P15-L1): every
+// replica then serves the accounts, orders, authorizations, challenges and
+// certificates the others created, and an email reply is matched on whichever
+// replica receives it. Events this process appended and applied itself are
+// skipped. When the log can say its head cheaply and nothing was appended
+// since the last catch-up, nothing is read.
+func (s *Server) catchUpLocked(ctx context.Context) error {
+	if s.stateLog == nil || s.stateTenantID == "" {
+		return nil
+	}
+	headLog, hasHead := s.stateLog.(interface {
+		LastSequence(context.Context) (uint64, error)
+	})
+	head := uint64(0)
+	if hasHead {
+		var err error
+		if head, err = headLog.LastSequence(ctx); err != nil {
+			return fmt.Errorf("acme: state log head: %w", err)
+		}
+		if head <= s.stateHead {
+			return nil
+		}
+	}
+	from := s.stateThrough + 1
+	if s.stateScopeSource != nil && from < s.stateScope.FirstSequence {
+		from = s.stateScope.FirstSequence
+	}
+	err := s.stateLog.Replay(ctx, from, func(ev events.Event) error {
+		if ev.Sequence > s.stateThrough {
+			s.stateThrough = ev.Sequence
+		}
+		if s.ownApplied[ev.Sequence] {
+			delete(s.ownApplied, ev.Sequence)
+			return nil
+		}
+		if ev.TenantID != s.stateTenantID || !strings.HasPrefix(ev.Type, acmeEventPrefix) {
+			return nil
+		}
+		return s.applyStateEventLocked(ev)
+	})
+	if err != nil {
+		return fmt.Errorf("acme: catch up state: %w", err)
+	}
+	for seq := range s.ownApplied {
+		if seq <= s.stateThrough {
+			delete(s.ownApplied, seq)
+		}
+	}
+	if head > s.stateHead {
+		s.stateHead = head
+	}
+	return nil
+}
+
 func (s *Server) resetStateScopeLocked() {
 	s.nonces = map[string]time.Time{}
 	s.accounts = map[string]*account{}
@@ -133,6 +202,8 @@ func (s *Server) resetStateScopeLocked() {
 	s.ariWindows = map[string]ariWindow{}
 	s.earlyRenew = map[string]bool{}
 	s.seq = 0
+	s.stateThrough, s.stateHead = 0, 0
+	s.ownApplied = map[uint64]bool{}
 	// Preserve configured EAB controls and abuse budgets. Account URLs include
 	// the registration identity, so per-account limits cannot alias old accounts.
 }

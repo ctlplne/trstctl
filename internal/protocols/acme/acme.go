@@ -16,6 +16,7 @@ package acme
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -332,6 +333,13 @@ type Server struct {
 	earlyRenew map[string]bool       // ARI: certIDs flagged for proactive renewal
 	sources    map[string]*sourceBudget
 	seq        int
+	// stateThrough is the last state event sequence this view has applied,
+	// stateHead the log's head when it last caught up, and ownApplied the
+	// sequences this process appended and applied itself after stateThrough:
+	// catching up from the shared log (P15-L1) skips them.
+	stateThrough uint64
+	stateHead    uint64
+	ownApplied   map[uint64]bool
 
 	revokeHook              RevocationHook
 	accountLimiter          AccountOrderLimiter
@@ -374,6 +382,7 @@ func New(ca ca.CA, validator Validator) *Server {
 		certOwner:  map[string]string{},
 		ariWindows: map[string]ariWindow{}, earlyRenew: map[string]bool{},
 		sources:         map[string]*sourceBudget{},
+		ownApplied:      map[uint64]bool{},
 		accountLimiter:  newMemoryAccountOrderLimiter(),
 		deviceAttestNow: time.Now,
 	}
@@ -746,7 +755,11 @@ func addIndexLink(w http.ResponseWriter, r *http.Request) {
 func (s *Server) nextID() string {
 	s.seq++
 	if s.stateScope.Identity != "" {
-		return crypto.SHA256Hex([]byte(s.stateScope.Identity)) + "-" + fmt.Sprintf("%d", s.seq)
+		// P15-L1: replicas share one state log, so a served ID also carries a
+		// random part; two replicas minting the same counter value at once
+		// still name different objects.
+		part, _ := crypto.RandomBytes(8)
+		return crypto.SHA256Hex([]byte(s.stateScope.Identity)) + "-" + fmt.Sprintf("%d", s.seq) + "-" + hex.EncodeToString(part)
 	}
 	return fmt.Sprintf("%d", s.seq)
 }

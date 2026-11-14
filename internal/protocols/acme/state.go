@@ -229,8 +229,13 @@ func (s *Server) appendStateEventLocked(ctx context.Context, typ string, payload
 	if err != nil {
 		return fmt.Errorf("acme: encode %s event: %w", typ, err)
 	}
-	if _, err := s.stateLog.Append(ctx, events.Event{Type: typ, TenantID: s.stateTenantID, Data: data}); err != nil {
+	appended, err := s.stateLog.Append(ctx, events.Event{Type: typ, TenantID: s.stateTenantID, Data: data})
+	if err != nil {
 		return fmt.Errorf("acme: append %s event: %w", typ, err)
+	}
+	// The caller applies this event to the view itself; catching up skips it.
+	if appended.Sequence > s.stateThrough {
+		s.ownApplied[appended.Sequence] = true
 	}
 	return nil
 }
