@@ -159,7 +159,9 @@ func (c ThirdPartyScanConfig) AnnotationProvider() string {
 // from, as the annotation names it. Slack and Jira objects come from the
 // export (LocateThirdPartyObject), so they have none here.
 func (c ThirdPartyScanConfig) ConfiguredObject() map[string]string {
-	if c.Annotation == nil {
+	// A collected scan's annotation names only its connection: the image, or
+	// the CI run or job, is the one the collection read (N6-L3).
+	if c.Annotation == nil || c.Collect != nil {
 		return nil
 	}
 	switch NormalizeThirdPartyProvider(c.Provider) {

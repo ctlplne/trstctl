@@ -1708,6 +1708,9 @@
 
 ### Fixed
 
+- An automatic or requested annotation on a collected image now lands on the image the collection read (N6-L3): the
+  finding took its image from the annotation connection, which a collected scan leaves unnamed, so the annotation had
+  no image to write to.
 - A push to a branch other than the default one now scans that branch (OD-3): the repository scan cloned the default
   branch and then could not check out the pushed commit. A ref or commit that git could read as an option is refused
   before it reaches git's command line.

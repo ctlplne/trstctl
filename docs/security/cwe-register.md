@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3313 annotated sites across 35 rules. Each row is
+3317 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (814 sites)
+### G101 — CWE-798 Use of hardcoded credentials (817 sites)
 
 | Location | Reason |
 |---|---|
@@ -492,6 +492,8 @@ not this file.
 | `internal/scanannotate/scanannotate_test.go:14` | fabricated fixture credential (CWE-798) |
 | `internal/schedulerhistory/history_test.go:12` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
 | `internal/schedulerhistory/history_test.go:81` | deliberately toxic fixture proves closed parsing without echo (CWE-798). |
+| `internal/secretscan/collected_annotation_test.go:16` | an env: reference name, no credential value (CWE-798) |
+| `internal/secretscan/collected_annotation_test.go:21` | an env: reference name, no credential value (CWE-798) |
 | `internal/secretscan/known_value_test.go:17` | fabricated decoy fixture; no value is real (CWE-798) |
 | `internal/secretscan/repository_annotation_test.go:14` | a credential reference to a fabricated fixture (CWE-798) |
 | `internal/secretscan/repository_credential_test.go:108` | fabricated fixture token for the stand-in host (CWE-798) |
@@ -708,6 +710,7 @@ not this file.
 | `internal/server/provider_rmm_ncentral_served_test.go:22` | a test-only value (CWE-798) |
 | `internal/server/provider_rmm_ninjaone_served_test.go:36` | test-only values (CWE-798) |
 | `internal/server/redfish_mockup_served_test.go:191` | fabricated test-only password for the mockup (CWE-798) |
+| `internal/server/registry_annotation_collect_served_test.go:61` | an env: reference to a test-only token, no credential value (CWE-798) |
 | `internal/server/repository_code_scanning_served_test.go:31` | fabricated fixture credential (CWE-798) |
 | `internal/server/repository_code_scanning_served_test.go:62` | a credential reference to a fabricated fixture (CWE-798) |
 | `internal/server/response_integrations_served_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1735,7 +1738,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (415 sites)
+### G204 — CWE-78 OS command injection (416 sites)
 
 | Location | Reason |
 |---|---|
@@ -2054,6 +2057,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:73` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/python_sdk_served_test.go:82` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/redfish_mockup_served_test.go:79` | the interpreter and checkout the CI lab names, fixed arguments (CWE-78) |
+| `internal/server/registry_annotation_collect_served_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/registry_zstd_collect_served_test.go:33` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/revocation_openssl_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/sdk_registry_install_served_test.go:239` | test executes a fixed local tool or fixture it built itself (CWE-78) |

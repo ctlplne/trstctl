@@ -2679,7 +2679,8 @@ archives; with `system: gitlab` and `repo` (a project ID or path), the newest jo
 traces (a `PRIVATE-TOKEN` reference). Each run or job lands in a folder named by its
 repository and commit, so its findings name the system, repository, commit and run or
 job; an annotation on a collected CI log or image names only its connection (and a CI
-log's `system`), because the object comes from the collection.
+log's `system`), because the object comes from the collection: a collected image's
+finding is annotated as a referrer on the image the collection read (N6-L3).
 
 Microsoft Teams and Confluence are two more sources (OD-4), for an export's
 `artifact_path` or a native `collect`:
