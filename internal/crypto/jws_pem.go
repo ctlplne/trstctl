@@ -85,3 +85,21 @@ func SignJWTWithPEMKeyBytes(privateKeyPEM []byte, kid string, claims any) ([]byt
 	defer signer.Destroy()
 	return SignJWTBytes(signer, kid, claims)
 }
+
+// WithPEMKeySigner hands use a locked signer for a private key given as one
+// unencrypted PEM block and destroys it afterwards, so a caller signs with a
+// key it reads from a reference without holding it (P15-L2: trstctl
+// DKIM-signs its own ACME challenge mail).
+func WithPEMKeySigner(privateKeyPEM []byte, use func(DigestSigner) error) error {
+	block, rest := pem.Decode(bytes.TrimSpace(privateKeyPEM))
+	if block == nil || len(bytes.TrimSpace(rest)) != 0 || len(block.Headers) != 0 {
+		return errors.New("crypto: the signing key must be one unencrypted PEM block")
+	}
+	defer secret.Wipe(block.Bytes)
+	signer, err := lockedRetainedHostSigner(block)
+	if err != nil {
+		return err
+	}
+	defer signer.Destroy()
+	return use(signer)
+}

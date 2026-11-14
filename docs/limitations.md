@@ -6437,9 +6437,11 @@ This is a deliberate, documented trust boundary, not an accident.
   issued for a CSR naming the mailbox as its common name — and a stock mail client
   (s-nail 14.9.24) signed a message with it, sent it through the mail server and
   verified it, as did `openssl smime`; a tampered copy failed. That proof runs in the
-  lab, not in CI: the client library stays outside the repository. SPF/DMARC checks,
-  trstctl signing its own challenge mail (the relay signs), internationalized addresses,
-  quoted local parts and EAB credentials scoped to mail domains are not supported.
+  lab, not in CI: the client library stays outside the repository. trstctl signs its
+  own challenge mail with a configured RSA key (P15-L2, rsa-sha256; ed25519-sha256
+  signing is not offered), or the relay signs. SPF/DMARC checks, internationalized
+  addresses, quoted local parts and EAB credentials scoped to mail domains are not
+  supported.
 - Persistent DNS validation, dns-persist-01 (P1): the ACME server offers the
   challenge from the IETF draft draft-ietf-acme-dns-persist (allowed by
   CA/Browser Forum Ballot SC-088v3) when

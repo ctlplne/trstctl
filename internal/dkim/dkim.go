@@ -406,8 +406,9 @@ func collapseWSP(line string) string {
 
 // Sign adds a DKIM-Signature (rsa-sha256, relaxed/relaxed) to msg for domain
 // and selector, covering headers (which must include From), signed by an RSA
-// key in the crypto boundary. A lab or test mail system signs with it;
-// trstctl's own challenge mail is signed by its relay.
+// key in the crypto boundary. trstctl signs its own ACME challenge mail with
+// it when a signing key is configured (P15-L2); a lab or test mail system
+// signs with it too.
 func Sign(msg []byte, domain, selector string, headers []string, signer crypto.DigestSigner, now time.Time) ([]byte, error) {
 	switch signer.Algorithm() {
 	case crypto.RSA2048, crypto.RSA3072, crypto.RSA4096:

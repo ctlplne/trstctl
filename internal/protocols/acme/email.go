@@ -56,8 +56,9 @@ type EmailChallengeMail struct {
 }
 
 // RFC5322 renders the mail: 7-bit US-ASCII text with the headers RFC 8823
-// requires (Auto-Submitted: auto-generated; type=acme). The relay that sends
-// it must DKIM-sign it for the From domain (RFC 8823 §3.1 item 6).
+// requires (Auto-Submitted: auto-generated; type=acme). It must be
+// DKIM-signed for the From domain (RFC 8823 §3.1 item 6): by trstctl when a
+// signing key is configured (P15-L2), otherwise by the relay that sends it.
 func (m EmailChallengeMail) RFC5322() []byte {
 	var b bytes.Buffer
 	for _, h := range [][2]string{

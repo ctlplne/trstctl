@@ -8,10 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/dkim"
 	"trstctl.com/trstctl/internal/notify/email"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/protocols/acme"
@@ -78,8 +81,18 @@ func (m *servedACMEEmailMailer) Deliver(ctx context.Context, msg orchestrator.Me
 	if payload.From == "" || payload.To == "" || len(payload.Message) == 0 {
 		return orchestrator.DefiniteNoEffect(errors.New("server: acme email challenge payload is incomplete"))
 	}
+	message := payload.Message
+	if strings.TrimSpace(m.cfg.DKIMKeyRef) != "" {
+		signed, err := m.dkimSign(ctx, msg.TenantID, payload.From, message)
+		if err != nil {
+			// A mail meant to be signed never leaves unsigned: the delivery
+			// retries until the key can be read.
+			return fmt.Errorf("server: DKIM-sign the challenge mail: %w", err)
+		}
+		message = signed
+	}
 	if m.send != nil {
-		return m.send(ctx, payload.From, []string{payload.To}, payload.Message)
+		return m.send(ctx, payload.From, []string{payload.To}, message)
 	}
 	var password []byte
 	if ref := strings.TrimSpace(m.cfg.RelayPasswordRef); ref != "" {
@@ -91,7 +104,35 @@ func (m *servedACMEEmailMailer) Deliver(ctx context.Context, msg orchestrator.Me
 		password = buf.Bytes()
 	}
 	return email.NewRelaySender(strings.TrimSpace(m.cfg.RelayAddr), strings.TrimSpace(m.cfg.RelayUsername), password).
-		Send(ctx, payload.From, []string{payload.To}, payload.Message)
+		Send(ctx, payload.From, []string{payload.To}, message)
+}
+
+// acmeChallengeMailSignedHeaders are the challenge mail's header fields a
+// DKIM signature covers (P15-L2).
+var acmeChallengeMailSignedHeaders = []string{"From", "To", "Subject", "Date", "Message-ID", "Auto-Submitted", "MIME-Version",
+	"Content-Type", "Content-Transfer-Encoding"}
+
+// dkimSign adds trstctl's own DKIM-Signature to a challenge mail (P15-L2):
+// rsa-sha256 for the from address's domain under the configured selector,
+// with the key read from its reference for this one mail and destroyed after.
+func (m *servedACMEEmailMailer) dkimSign(ctx context.Context, tenantID, from string, message []byte) ([]byte, error) {
+	at := strings.LastIndexByte(from, '@')
+	if at <= 0 || at == len(from)-1 {
+		return nil, errors.New("the from address has no domain")
+	}
+	key, err := m.resolver.resolve(ctx, tenantID, strings.TrimSpace(m.cfg.DKIMKeyRef))
+	if err != nil {
+		return nil, fmt.Errorf("resolve the DKIM key: %w", err)
+	}
+	defer key.Destroy()
+	var signed []byte
+	err = crypto.WithPEMKeySigner(key.Bytes(), func(signer crypto.DigestSigner) error {
+		var signErr error
+		signed, signErr = dkim.Sign(message, strings.ToLower(from[at+1:]), strings.TrimSpace(m.cfg.DKIMSelector),
+			acmeChallengeMailSignedHeaders, signer, time.Now())
+		return signErr
+	})
+	return signed, err
 }
 
 func (d *issuanceDispatcher) deliverACMEEmailChallenge(ctx context.Context, m orchestrator.Message) error {

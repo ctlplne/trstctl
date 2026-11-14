@@ -533,10 +533,22 @@ protocols:
     from: acme@ca.example.com          # sends the challenge mail; replies come back here
     domains: [example.com]             # mail domains this server issues for
     profile: smime-signing             # allowed_ekus: [emailProtection]
-    relay_addr: smtp.example.com:587   # must DKIM-sign mail for the from domain
+    relay_addr: smtp.example.com:587   # DKIM-signs mail for the from domain, unless trstctl does
     relay_username: acme               # optional, with relay_password_ref
     relay_password_ref: file:/run/secrets/smtp-relay
+    dkim_selector: trstctl             # optional, with dkim_key_ref: trstctl signs (P15-L2)
+    dkim_key_ref: secret://dkim/acme-challenge
 ```
+
+The challenge mail must carry a DKIM signature for the `from` domain (RFC 8823). With
+`dkim_selector` and `dkim_key_ref` set, trstctl signs it itself before it reaches the
+relay (P15-L2): `rsa-sha256`, `relaxed/relaxed`, `d=` the `from` address's domain,
+`s=` the selector, over From, To, Subject, Date, Message-ID, Auto-Submitted,
+MIME-Version, Content-Type and Content-Transfer-Encoding. The key is an RSA private key
+in one unencrypted PEM block behind a `file:` or `secret://` reference; it is read for
+each mail and destroyed after signing, and a mail whose key cannot be read is retried,
+never sent unsigned. Publish the public key at `<selector>._domainkey.<from domain>`.
+Without them the relay signs.
 
 A client orders an `email` identifier. The authorization's one challenge is
 `email-reply-00`: its `token` is token-part2 and its `from` is the address above. The

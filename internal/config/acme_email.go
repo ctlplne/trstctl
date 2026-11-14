@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 )
 
@@ -32,7 +33,17 @@ type ACMEEmail struct {
 	// ("<selector>._domainkey.<domain>") for mail domains whose keys are not
 	// in DNS; other keys are read from DNS.
 	DKIMKeys map[string]string `json:"dkim_keys,omitempty"`
+	// DKIMSelector and DKIMKeyRef make trstctl DKIM-sign its own challenge
+	// mail (P15-L2): rsa-sha256, relaxed/relaxed, d= the from address's
+	// domain, s= the selector, with the RSA private key the reference holds
+	// (file: or secret://, one unencrypted PEM block), read for each mail.
+	// Empty leaves signing to the relay.
+	DKIMSelector string `json:"dkim_selector,omitempty"`
+	DKIMKeyRef   string `json:"dkim_key_ref,omitempty"`
 }
+
+// dkimSelectorPattern is a DKIM selector: dot-separated DNS labels.
+var dkimSelectorPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$`)
 
 func validateACMEEmail(p ACMEEmail) []error {
 	if p.From == "" && len(p.Domains) == 0 && p.Profile == "" && p.RelayAddr == "" && p.RelayUsername == "" && p.RelayPasswordRef == "" {
@@ -70,6 +81,16 @@ func validateACMEEmail(p ACMEEmail) []error {
 	if listen := strings.TrimSpace(p.SMTPListen); listen != "" {
 		if _, port, err := net.SplitHostPort(listen); err != nil || port == "" {
 			errs = append(errs, fmt.Errorf("protocols.acme_email.smtp_listen %q is not host:port", p.SMTPListen))
+		}
+	}
+	if (strings.TrimSpace(p.DKIMSelector) == "") != (strings.TrimSpace(p.DKIMKeyRef) == "") {
+		errs = append(errs, fmt.Errorf("protocols.acme_email.dkim_selector and dkim_key_ref are set together"))
+	} else if sel := strings.TrimSpace(p.DKIMSelector); sel != "" {
+		if len(sel) > 253 || !dkimSelectorPattern.MatchString(sel) {
+			errs = append(errs, fmt.Errorf("protocols.acme_email.dkim_selector %q is not a lowercase DKIM selector", p.DKIMSelector))
+		}
+		if ref := strings.TrimSpace(p.DKIMKeyRef); !strings.HasPrefix(ref, "file:") && !strings.HasPrefix(ref, "secret://") {
+			errs = append(errs, fmt.Errorf("protocols.acme_email.dkim_key_ref must be a file: or secret:// reference"))
 		}
 	}
 	for name, record := range p.DKIMKeys {

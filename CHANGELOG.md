@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- trstctl can DKIM-sign its own ACME challenge mail (P15-L2): `protocols.acme_email.dkim_selector` and `dkim_key_ref`
+  sign each RFC 8823 challenge mail (rsa-sha256, d= the from domain) before it reaches the relay, with the key read
+  from its reference for each mail; a mail whose key cannot be read is retried, never sent unsigned.
 - Several control-plane replicas serve one ACME state (P15-L1): each catches up from the shared event log before an
   ACME request or an email reply, so an order, challenge or certificate made on one replica is served by every other
   and an email-reply-00 reply may reach any replica's intake; served ACME IDs carry a random part.
