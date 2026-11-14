@@ -47,6 +47,12 @@ type ACMEEmail struct {
 	// SPFRecords pins SPF records ("v=spf1 ...") by domain for mail domains
 	// whose records are not in DNS; other domains are read from DNS.
 	SPFRecords map[string]string `json:"spf_records,omitempty"`
+	// IntakeSessionsPerSource and IntakeRepliesPerMinute hold each source of
+	// the reply intake (an IPv4 address or IPv6 /64) to sessions at once
+	// (default 4, at most 16) and replies a minute (default 20, at most 600),
+	// beyond its cap on sessions overall (P15-L8).
+	IntakeSessionsPerSource int `json:"intake_sessions_per_source,omitempty"`
+	IntakeRepliesPerMinute  int `json:"intake_replies_per_minute,omitempty"`
 }
 
 // dkimSelectorPattern is a DKIM selector: dot-separated DNS labels.
@@ -99,6 +105,12 @@ func validateACMEEmail(p ACMEEmail) []error {
 		if ref := strings.TrimSpace(p.DKIMKeyRef); !strings.HasPrefix(ref, "file:") && !strings.HasPrefix(ref, "secret://") {
 			errs = append(errs, fmt.Errorf("protocols.acme_email.dkim_key_ref must be a file: or secret:// reference"))
 		}
+	}
+	if p.IntakeSessionsPerSource < 0 || p.IntakeSessionsPerSource > 16 {
+		errs = append(errs, fmt.Errorf("protocols.acme_email.intake_sessions_per_source must be 0 (the default, 4) to 16"))
+	}
+	if p.IntakeRepliesPerMinute < 0 || p.IntakeRepliesPerMinute > 600 {
+		errs = append(errs, fmt.Errorf("protocols.acme_email.intake_replies_per_minute must be 0 (the default, 20) to 600"))
 	}
 	for domain, record := range p.SPFRecords {
 		lower := strings.ToLower(strings.TrimSpace(record))

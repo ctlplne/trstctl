@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The RFC 8823 reply intake holds each source to its sessions and replies (P15-L8): an IPv4 address or IPv6 /64 holds
+  at most `protocols.acme_email.intake_sessions_per_source` sessions at once (default 4) and sends at most
+  `intake_replies_per_minute` replies a minute (default 20); a source over either is told to try again later,
+  421 4.7.0 at connect or 451 4.7.1 at DATA before its message is read.
 - ACME needs no affinity to a control-plane replica (P15-L7): nonces are minted into and redeemed from PostgreSQL by
   digest, so any replica takes a nonce another minted, once; an order's finalize is claimed there, leased, so two
   replicas never issue twice for one order (migration 0481).

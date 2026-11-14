@@ -606,12 +606,22 @@ protocols:
     require_spf: false                 # optional: also require SPF to pass (P15-L6)
     spf_records:                       # optional: SPF records for domains not in DNS
       example.com: "v=spf1 ip4:192.0.2.0/24 -all"
+    intake_sessions_per_source: 4      # optional: sessions at once per source (P15-L8)
+    intake_replies_per_minute: 20      # optional: replies a minute per source (P15-L8)
 ```
 
 Point the mail system at it: an MX for the `from` domain, or a transport rule that
 delivers the `from` address to this host and port. The intake offers STARTTLS when the
 control plane has a TLS certificate. It accepts one recipient (the `from` address),
-never relays, and bounds message size (256 KiB), sessions and commands. Each reply is
+never relays, and bounds message size (256 KiB), sessions (16 at once) and commands.
+Each source, an IPv4 address or an IPv6 /64, holds at most `intake_sessions_per_source`
+sessions at once (default 4, at most 16) and sends at most `intake_replies_per_minute`
+replies a minute (default 20, at most 600), refilled continuously (P15-L8). A source over
+its sessions is turned away at connect with `421 4.7.0`; one over its replies is told
+`451 4.7.1` at DATA, before its message is read. Both are temporary, so the sender's
+mail system tries again later. The intake tracks up to 4,096 sources and drops idle ones
+to make room; while every tracked source is busy, a new source is turned away the same
+way. Each reply is
 parsed (one From mailbox, the token after `ACME:` in the Subject, no `List-*` fields, a
 `text/plain` body or `multipart/alternative` with a `text/plain` part). Its DKIM
 signature must verify for its From domain: `d=` equal to that domain, `rsa-sha256` or

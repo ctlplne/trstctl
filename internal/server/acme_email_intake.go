@@ -26,9 +26,10 @@ import (
 // matches it to a pending challenge by mailbox and token-part1 digest. A reply
 // that fails a step is refused with a 5xx code naming the reason, so the
 // sender's mail system bounces it to the user. It never relays, takes one
-// recipient, bounds message size, sessions and commands, and offers STARTTLS
-// when the control plane has a TLS certificate. Like every ACME request, a
-// reply must reach the process that created the order.
+// recipient, bounds message size, sessions and commands, holds each source to
+// a few sessions and a budget of replies a minute (P15-L8), and offers
+// STARTTLS when the control plane has a TLS certificate. Any replica's intake
+// matches a reply, whichever replica created the order (P15-L1).
 
 const (
 	acmeEmailIntakeMaxSessions    = 16
@@ -47,6 +48,8 @@ type acmeEmailIntake struct {
 	// and requireSPF refuses a reply it does not pass (P15-L6).
 	spf        spf.Checker
 	requireSPF bool
+	// limits holds each source to its sessions and replies (P15-L8).
+	limits *acmeIntakeSources
 }
 
 // smtpEnvelope is what a session learned before DATA: who delivered the
@@ -68,6 +71,7 @@ func newACMEEmailIntake(cfg config.ACMEEmail) *acmeEmailIntake {
 		verifier:   dkim.Verifier{Lookup: net.DefaultResolver.LookupTXT, Pinned: cfg.DKIMKeys},
 		spf:        spf.Checker{Resolver: net.DefaultResolver, Pinned: cfg.SPFRecords},
 		requireSPF: cfg.RequireSPF,
+		limits:     newACMEIntakeSources(cfg.IntakeSessionsPerSource, cfg.IntakeRepliesPerMinute),
 	}
 }
 
@@ -135,12 +139,18 @@ func (s *Server) acmeEmailIntakeSession(ctx context.Context, conn net.Conn, tlsC
 		}
 		_ = w.Flush()
 	}
-	reply("220 " + intake.host + " ESMTP trstctl ACME reply intake")
-	recipient, secured := false, false
 	envelope := smtpEnvelope{}
 	if tcp, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
 		envelope.ip = tcp.IP
 	}
+	release, admitted := intake.limits.open(envelope.ip)
+	if !admitted {
+		reply("421 4.7.0 too many sessions from your address, try again later")
+		return
+	}
+	defer release()
+	reply("220 " + intake.host + " ESMTP trstctl ACME reply intake")
+	recipient, secured := false, false
 	for range acmeEmailIntakeMaxCommands {
 		line, err := readSMTPLine(r)
 		if err != nil {
@@ -182,6 +192,10 @@ func (s *Server) acmeEmailIntakeSession(ctx context.Context, conn net.Conn, tlsC
 		case "DATA":
 			if !recipient {
 				reply("503 5.5.1 RCPT first")
+				continue
+			}
+			if !intake.limits.take(envelope.ip) {
+				reply("451 4.7.1 too many replies from your address, try again later")
 				continue
 			}
 			reply("354 end with <CRLF>.<CRLF>")
