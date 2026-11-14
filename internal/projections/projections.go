@@ -6530,8 +6530,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyIssuanceRequestDecidedTx(ctx, tx, e.TenantID, pl.ID, pl.Status,
-			pl.DecidedBy, pl.Reason, pl.IdentityID, pl.DecidedAt)
+		if err := p.store.ApplyIssuanceRequestDecidedTx(ctx, tx, e.TenantID, pl.ID, pl.Status,
+			pl.DecidedBy, pl.Reason, pl.IdentityID, pl.DecidedAt); err != nil {
+			return err
+		}
+		// P13-L1: the decision goes back to a ServiceNow ticket as a work note.
+		return p.queueTicketNoteTx(ctx, tx, e.TenantID, pl.ID, pl.Status)
 	case EventIssuanceRequestPrepared:
 		var pl IssuanceRequestPrepared
 		if err := decode(e, &pl); err != nil {
@@ -6552,7 +6556,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyIssuanceRequestIssuedTx(ctx, tx, e.TenantID, pl.ID, pl.IdentityID, pl.IssuedBy, pl.IssuedAt)
+		if err := p.store.ApplyIssuanceRequestIssuedTx(ctx, tx, e.TenantID, pl.ID, pl.IdentityID, pl.IssuedBy, pl.IssuedAt); err != nil {
+			return err
+		}
+		return p.queueTicketNoteTx(ctx, tx, e.TenantID, pl.ID, "issued")
 	case EventOwnershipReconciled:
 		var pl OwnershipReconciled
 		if err := decode(e, &pl); err != nil {

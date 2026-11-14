@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- Every trstctl decision on a request ServiceNow intake opened goes back to its ticket as a work note (P13-L1):
+  approved, denied, canceled, expired and issued each queue one `ticket.note` relay job with the decision, the decider
+  and the reason; the relay adds it through the intake schedule's token once, reading the ticket's notes first.
 - A factory device can take its first operational certificate over ACME (P12-L2): `device-attest-01` is offered for
   a reconciled device's name, and the device answers with its birth certificate and its birth key's signature over the
   challenge binding (format `trstctl-factory-birth`); the EST first-boot checks apply and the certificate is recorded

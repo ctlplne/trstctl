@@ -117,6 +117,8 @@ func ClaimableKinds() []string {
 		KindTicketSync,
 		// P13: ServiceNow change-request approvals for intake-opened requests.
 		KindTicketStatus,
+		// P13-L1: trstctl's decisions written back to the ticket as work notes.
+		KindTicketNote,
 		KindTrustDistribute,
 		// A71: the post-upgrade functional check; every polling agent answers
 		// the one pinned to it.
@@ -400,6 +402,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// plane opens requests through its event-sourced lifecycle.
 	if job.Kind == KindTicketStatus {
 		return runTicketStatus(ctx, ch, client, job)
+	}
+	if job.Kind == KindTicketNote {
+		return runTicketNote(ctx, ch, client, job)
 	}
 	if job.Kind == KindTicketSync {
 		return runTicketSync(ctx, ch, client, job)

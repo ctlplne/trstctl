@@ -125,6 +125,8 @@ var agentJobKindAllowlist = map[string]bool{
 	agentJobKindTicketSync: true,
 	// P13: ServiceNow change-request approvals for intake-opened requests.
 	relay.KindTicketStatus: true,
+	// P13-L1: trstctl's decisions written back to the ticket as work notes.
+	relay.KindTicketNote: true,
 	// A162: relay-executed AD CS CA database read. Counts return; rows stay
 	// on the domain-joined relay.
 	relay.KindADCSDatabase: true,
@@ -1053,6 +1055,12 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("ticket status result needs a terminal executed report")
 		}
 		return a.recordTicketStatus(ctx, info.TenantID, claim.Payload, req.Detail)
+	case relay.KindTicketNote:
+		// P13-L1: a work note is done only when its report matches it.
+		if req.Outcome != transport.JobOutcomeExecuted {
+			return nil
+		}
+		return recordTicketNote(claim.Payload, req.Detail)
 	case agentJobKindTicketSync:
 		if a.recordTicketSync == nil {
 			return errors.New("ticket result receiver is not configured")

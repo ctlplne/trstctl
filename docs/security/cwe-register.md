@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3323 annotated sites across 35 rules. Each row is
+3328 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (822 sites)
+### G101 — CWE-798 Use of hardcoded credentials (827 sites)
 
 | Location | Reason |
 |---|---|
@@ -157,6 +157,8 @@ not this file.
 | `internal/agent/relay/revocation_ldap_test.go:146` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/agent/relay/rightsize_job.go:49` | a credential REFERENCE NAME, not a credential (CWE-798) |
 | `internal/agent/relay/takedown_test.go:80` | a secret:// reference name, not a credential (CWE-798) |
+| `internal/agent/relay/ticketnote_test.go:22` | credential reference, no credential value present (CWE-798) |
+| `internal/agent/relay/ticketnote_test.go:23` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
 | `internal/agent/secretrender/secretrender_test.go:126` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/transport/agentservice.go:941` | an RPC method name, not a credential. The material this |
@@ -822,6 +824,7 @@ not this file.
 | `internal/server/servicenow_two_way_served_test.go:204` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:221` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:235` | an env: reference to a test-only value (CWE-798) |
+| `internal/server/servicenow_work_notes_served_test.go:70` | the name of a test-only secret, not a credential (CWE-798) |
 | `internal/server/slack_annotation_retry_served_test.go:25` | fabricated fixture credential (CWE-798) |
 | `internal/server/slack_annotation_retry_served_test.go:84` | a credential reference to a fabricated fixture (CWE-798) |
 | `internal/server/slack_app_lost_answer_served_test.go:31` | env: references to test-only values, no credential (CWE-798) |
@@ -880,6 +883,8 @@ not this file.
 | `internal/store/upsert_arbiter_race_test.go:239` | an env reference name in a fixture, not a credential (CWE-798) |
 | `internal/ticketintake/intake_test.go:103` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
 | `internal/ticketintake/intake_test.go:163` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
+| `internal/ticketintake/note_test.go:19` | credential reference, no credential value present (CWE-798) |
+| `internal/ticketintake/note_test.go:50` | a refused non-reference, not a credential (CWE-798) |
 | `tools/dodcensus/claims.go:165` | developer-tool constant matching the secret-name heuristic; no credential value (CWE-798) |
 | `tools/dodcensus/runtime.go:40` | developer-tool constant matching the secret-name heuristic; no credential value (CWE-798) |
 | `tools/trstctllint/keymaterial/keymaterial_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1278,10 +1283,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7573` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7590` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7603` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7637` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7580` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7597` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7610` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7644` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |

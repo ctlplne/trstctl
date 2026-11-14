@@ -1431,6 +1431,15 @@ a rejected change denies it. Separation of duties still applies, other approval
 values change nothing, and reading the same approvals again records nothing new.
 The relay job kind is `ticket.status`; enable it beside `ticket.sync`.
 
+**trstctl's decisions as work notes (P13-L1).** Every decision trstctl records on a
+request ServiceNow intake opened — approved, denied, canceled, expired, issued — goes
+back to its ticket as a work note, with the request, the subject, who decided and the
+reason. The note is queued with the decision itself and added by the network relay
+through the intake schedule's token (the enabled schedule reading the ticket's table),
+which reads the ticket's work notes first and adds the note only when its marker is
+not already there, so a replayed job adds nothing. Enable the relay job kind
+`ticket.note` beside `ticket.status`.
+
 `TestServedNamedTicketIntakesKeepTheirSourcesAndMapTenantOwners` covers two tables
 and two Jira projects with independent jobs, owner mapping and cross-schedule
 report refusal. The named lifecycle test covers removal idempotency, active-sweep

@@ -126,6 +126,9 @@ func (r *relayCredentialResolver) resolveJobCredential(
 	case "ticket.status":
 		// P13: the same intake token, for one approval read.
 		return r.resolveJobReferences(ctx, tenantID, job)
+	case relay.KindTicketNote:
+		// P13-L1: the same intake token, for one work note.
+		return r.resolveJobReferences(ctx, tenantID, job)
 	case "ticket.sync":
 		// I3: the ServiceNow ticket token is redeemed for one relay attempt.
 		return r.resolveJobReferences(ctx, tenantID, job)
