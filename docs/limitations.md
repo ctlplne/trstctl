@@ -1464,9 +1464,9 @@ never live in the API process. What you can do end to end against the running bi
   key in the isolated signer and verifiable offline against `GET /oauth2/jwks`. Each
   subject token is single-use (a replay is `invalid_grant`); every exchange is recorded
   as `token.exchanged`. Proven with a pod-bound token minted by a real Kubernetes API
-  server (kind). Needs the SPIFFE surface enabled for the tenant; JWT is the only issued
-  token type; a pod exchanging more than once per kubelet rotation needs a fresh token
-  per exchange.
+  server (kind). Needs the SPIFFE surface enabled for the tenant; access tokens are
+  JWTs (RFC 9068, M4-L3; opaque access tokens are not issued); a pod exchanging more
+  than once per kubelet rotation needs a fresh token per exchange.
 - Single-use machine login tokens (M4's prerequisite; A238-L8): an `oidc`, `jwt`,
   `kubernetes`, `gcp` or `azure` machine login token logs in once; trstctl records a
   digest of it (issuer + `jti`, else the whole token) in PostgreSQL until it expires

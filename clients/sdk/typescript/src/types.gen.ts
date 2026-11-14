@@ -22956,6 +22956,8 @@ export interface components {
             /** @description the signing algorithms of the issuer's keys */
             algorithms: string[];
             discovery_url: string;
+            /** @description the RFC 8693 token types a workload may request: urn:ietf:params:oauth:token-type:jwt (a JWT-SVID) and urn:ietf:params:oauth:token-type:access_token (an RFC 9068 JWT access token, typ at+jwt) */
+            issued_token_types: string[];
             /** @description the issuer URL a cloud registers; exchanged tokens carry it as iss */
             issuer: string;
             jwks_uri: string;

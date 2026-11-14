@@ -20,6 +20,9 @@ type OIDCIssuerInfo struct {
 	Algorithms           []string `json:"algorithms"`
 	TokenEndpoint        string   `json:"token_endpoint"`
 	TokenLifetimeSeconds int      `json:"token_lifetime_seconds"`
+	// IssuedTokenTypes are the RFC 8693 token types the exchange issues for
+	// this issuer: JWT-SVIDs and RFC 9068 JWT access tokens (M4-L3).
+	IssuedTokenTypes []string `json:"issued_token_types"`
 }
 
 // OIDCIssuerSource reports the tenant's published issuer; ok is false when the
@@ -66,6 +69,7 @@ func oidcIssuerSchemas() map[string]*Schema {
 			"algorithms":             {Type: "array", Items: str(), Description: "the signing algorithms of the issuer's keys"},
 			"token_endpoint":         {Type: "string", Description: "where a workload exchanges its platform token (RFC 8693) for one this issuer signs"},
 			"token_lifetime_seconds": {Type: "integer"},
-		}, Required: []string{"issuer", "discovery_url", "jwks_uri", "algorithms", "token_endpoint", "token_lifetime_seconds"}},
+			"issued_token_types":     {Type: "array", Items: str(), Description: "the RFC 8693 token types a workload may request: urn:ietf:params:oauth:token-type:jwt (a JWT-SVID) and urn:ietf:params:oauth:token-type:access_token (an RFC 9068 JWT access token, typ at+jwt)"},
+		}, Required: []string{"issuer", "discovery_url", "jwks_uri", "algorithms", "token_endpoint", "token_lifetime_seconds", "issued_token_types"}},
 	}
 }

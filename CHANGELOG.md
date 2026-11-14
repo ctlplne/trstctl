@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The token exchange issues RFC 9068 JWT access tokens (M4-L3): `requested_token_type`
+  `urn:ietf:params:oauth:token-type:access_token` returns a token typed `at+jwt` with the tenant's published issuer
+  as `iss` and the workload's SPIFFE ID as `sub` and `client_id`, signed by the same signer-held key as JWT-SVIDs;
+  the OIDC issuer view lists the issued token types.
 - Each tenant holds at most `secrets.machine_auth_single_use_limit` live single-use machine-login records (M4-L2;
   default 100,000): a machine login or token exchange whose token would be one more answers 429 with a
   `Retry-After` until the oldest record expires, without using the token up; a replay is still refused as one.

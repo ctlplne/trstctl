@@ -21,6 +21,12 @@ const keyStateLabel: Record<string, MessageKey> = {
 
 const hour = 3600;
 
+// M4-L3: the token types the exchange issues for this issuer.
+const tokenTypeLabel: Record<string, MessageKey> = {
+  "urn:ietf:params:oauth:token-type:jwt": "workloads.oidcIssuer.tokenType.jwt",
+  "urn:ietf:params:oauth:token-type:access_token": "workloads.oidcIssuer.tokenType.accessToken",
+};
+
 // N5 / N5-L3: the tenant's published OpenID issuer that clouds register, and
 // the JWT signing keys behind it. A rotation publishes the next key ahead of
 // signing with it and keeps the replaced key published for a retain window,
@@ -94,6 +100,12 @@ export function OIDCIssuerPanel() {
           <dd>{issuer.data.algorithms.join(", ")}</dd>
           <dt className="font-medium">{t("workloads.oidcIssuer.tokenEndpoint")}</dt>
           <dd className="break-all font-mono text-xs">{issuer.data.token_endpoint}</dd>
+          {issuer.data.issued_token_types?.length ? (
+            <>
+              <dt className="font-medium">{t("workloads.oidcIssuer.tokenTypes")}</dt>
+              <dd>{issuer.data.issued_token_types.map((type) => (tokenTypeLabel[type] ? t(tokenTypeLabel[type]) : type)).join(", ")}</dd>
+            </>
+          ) : null}
         </dl>
       ) : null}
       {issuer.data && !issuer.data.algorithms.includes("RS256") ? (

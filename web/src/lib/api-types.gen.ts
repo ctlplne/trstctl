@@ -8424,6 +8424,7 @@ export interface OAuthProviderActionResult {
 export interface OIDCIssuer {
   algorithms: string[];
   discovery_url: string;
+  issued_token_types: string[];
   issuer: string;
   jwks_uri: string;
   token_endpoint: string;

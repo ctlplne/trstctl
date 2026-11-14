@@ -40,6 +40,8 @@ const (
 	tokenTypeIDToken     = "urn:ietf:params:oauth:token-type:id_token"       // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	tokenExchangeTTL     = 5 * time.Minute
 	tokenExchangeMaxBody = 64 << 10
+	// tokenTypeAccessToken asks for an RFC 9068 JWT access token (M4-L3).
+	tokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 )
 
 type oauthError struct {
@@ -131,8 +133,15 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 	if t := form.Get("subject_token_type"); t != tokenTypeJWT && t != tokenTypeIDToken {
 		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_request", "subject_token_type must be a JWT or an id_token")
 	}
-	if t := form.Get("requested_token_type"); t != "" && t != tokenTypeJWT {
-		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_request", "only a JWT can be issued")
+	issued := tokenTypeJWT
+	switch t := form.Get("requested_token_type"); t {
+	case "", tokenTypeJWT:
+	case tokenTypeAccessToken:
+		// M4-L3: an RFC 9068 JWT access token, for a resource server that
+		// accepts OAuth access tokens rather than JWT-SVIDs.
+		issued = tokenTypeAccessToken
+	default:
+		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_request", "requested_token_type must be a JWT or an access token")
 	}
 	audience := form["audience"]
 	if len(audience) == 0 {
@@ -144,6 +153,12 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 	sp := s.spiffeForExchange()
 	if sp == nil || sp.tenantID != tenantID || methods == nil || s.store == nil || s.orch == nil {
 		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_request", "token exchange is not configured for this tenant")
+	}
+	// An access token names its issuer (RFC 9068 requires iss), and a relying
+	// party finds the issuer's keys from its published metadata.
+	if issued == tokenTypeAccessToken && sp.oidcIssuer(tenantID) == "" {
+		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_request",
+			"access tokens need this tenant's published issuer: set protocols.spiffe.oidc_issuer_url")
 	}
 	method, issuer := exchangeMethodFor(methods(tenantID), []byte(subject))
 	if method == nil {
@@ -197,18 +212,25 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 		// N5: the tenant's published OpenID issuer, which a cloud trusts.
 		claims["iss"] = published
 	}
-	token, err := sp.issuer.SignJWTSVIDWithClaims(r.Context(), spiffeID, audience, tokenExchangeTTL, claims)
+	var token string
+	if issued == tokenTypeAccessToken {
+		// RFC 9068: the client is the workload itself, named by its SPIFFE ID.
+		claims["client_id"] = spiffeID
+		token, err = sp.issuer.SignJWTAccessToken(r.Context(), spiffeID, audience, tokenExchangeTTL, claims)
+	} else {
+		token, err = sp.issuer.SignJWTSVIDWithClaims(r.Context(), spiffeID, audience, tokenExchangeTTL, claims)
+	}
 	if err != nil {
 		return tokenExchangeResponse{}, err
 	}
 	if err := s.orch.RecordTokenExchange(r.Context(), tenantID, projections.TokenExchanged{
 		Method: method.Name(), Principal: principal, SPIFFEID: spiffeID, Audience: audience, Scopes: scopes,
-		JTI: jti, ExpiresAt: expires, SubjectTokenDigest: crypto.SHA256Hex([]byte(subject)),
+		JTI: jti, ExpiresAt: expires, SubjectTokenDigest: crypto.SHA256Hex([]byte(subject)), IssuedTokenType: issued,
 	}); err != nil {
 		return tokenExchangeResponse{}, err
 	}
 	return tokenExchangeResponse{
-		AccessToken: token, IssuedTokenType: tokenTypeJWT, TokenType: "Bearer",
+		AccessToken: token, IssuedTokenType: issued, TokenType: "Bearer",
 		ExpiresIn: int(tokenExchangeTTL / time.Second), Scope: strings.Join(scopes, " "),
 	}, nil
 }

@@ -512,16 +512,26 @@ service-account token, a CI provider's id_token — swaps it for a JWT-SVID with
 any stored secret. `POST /oauth2/token` (form-encoded, `X-Tenant-ID` header) takes
 `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`, `subject_token`,
 `subject_token_type` (`urn:ietf:params:oauth:token-type:jwt` or `…:id_token`),
-`audience` (or `resource`) and an optional space-separated `scope`. trstctl picks
-the tenant's machine-login method whose `issuer` the token names, verifies the token
-with it, and answers with a JWT-SVID (`issued_token_type` JWT, `expires_in` 300):
+`audience` (or `resource`), an optional space-separated `scope` and an optional
+`requested_token_type`. trstctl picks the tenant's machine-login method whose `issuer`
+the token names, verifies the token with it, and answers with a JWT-SVID
+(`issued_token_type` JWT, `expires_in` 300):
 `sub` is the workload's SPIFFE ID (`spiffe://<trust domain>/ns/<namespace>/sa/<name>`
 for a Kubernetes service account, `…/machine/<method>/<principal>` otherwise), `aud`
 the requested audience, `scope` the requested scopes the method grants (all of them
 when none is asked for), `act` the subject token's issuer and subject, and a fresh
 `jti`. It is signed by the SPIFFE JWT key in the isolated signer; relying parties
 verify it offline against `GET /oauth2/jwks`, so the exchange and the verification
-work with no internet. Each subject token is single-use: trstctl records it (as a
+work with no internet. A resource server that accepts OAuth access tokens instead
+gets one when the workload asks for `requested_token_type`
+`urn:ietf:params:oauth:token-type:access_token` (M4-L3): an RFC 9068 JWT access token
+(header `typ` `at+jwt`, `issued_token_type` access_token) with the same claims plus
+`iss` (the tenant's published issuer, below, which an access token requires) and
+`client_id` (the workload's SPIFFE ID), signed by the same key, so it verifies against
+the same key set and the resource server tells it from a JWT-SVID by its type. A tenant
+without a published issuer is refused with `invalid_request`, as is a type the
+exchange does not issue. `GET /api/v1/workloads/oidc-issuer` lists the types
+(`issued_token_types`), and the console's issuer panel shows them. Each subject token is single-use: trstctl records it (as a
 digest) only after the whole request has been checked, and refuses it again with
 `invalid_grant`; errors follow RFC 6749 (`invalid_request`, `invalid_grant`,
 `invalid_target`, `invalid_scope`, `unsupported_grant_type`). Every exchange is

@@ -24,6 +24,11 @@ type TokenExchanged struct {
 	JTI                string    `json:"jti"`
 	ExpiresAt          time.Time `json:"expires_at"`
 	SubjectTokenDigest string    `json:"subject_token_digest"`
+	// IssuedTokenType is the RFC 8693 type issued: a JWT-SVID
+	// (urn:ietf:params:oauth:token-type:jwt) or an RFC 9068 JWT access token
+	// (…:access_token, M4-L3). Empty in exchanges recorded before M4-L3,
+	// which issued JWT-SVIDs only.
+	IssuedTokenType string `json:"issued_token_type,omitempty"`
 }
 
 func init() {

@@ -50,13 +50,32 @@ func SignJWT(signer DigestSigner, kid string, claims any) (string, error) {
 	return string(token), nil
 }
 
+// SignJWTTyped is SignJWT with the JOSE "typ" header set to typ, such as
+// RFC 9068's "at+jwt" for a JWT access token (M4-L3). typ is a media type
+// name: letters, digits and "+.-" only.
+func SignJWTTyped(signer DigestSigner, kid, typ string, claims any) (string, error) {
+	if typ == "" || len(typ) > 64 || strings.Trim(typ, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+.-") != "" {
+		return "", fmt.Errorf("crypto: JWT typ %q is not a media type name", typ)
+	}
+	token, err := signJWTBytes(signer, kid, typ, claims)
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(token)
+	return string(token), nil
+}
+
 // SignJWTBytes returns a wipeable compact JWT for byte-backed credential paths.
 func SignJWTBytes(signer DigestSigner, kid string, claims any) ([]byte, error) {
+	return signJWTBytes(signer, kid, "JWT", claims)
+}
+
+func signJWTBytes(signer DigestSigner, kid, typ string, claims any) ([]byte, error) {
 	alg, hash, coord, err := joseParams(signer.Algorithm())
 	if err != nil {
 		return nil, err
 	}
-	header := map[string]string{"alg": alg, "typ": "JWT"}
+	header := map[string]string{"alg": alg, "typ": typ}
 	if kid != "" {
 		header["kid"] = kid
 	}

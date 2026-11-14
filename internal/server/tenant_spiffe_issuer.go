@@ -71,3 +71,26 @@ func (i tenantSPIFFEIssuer) SignJWTSVID(ctx context.Context, id string, audience
 	}
 	return i.Issuer.SignJWTSVID(ctx, id, audience, ttl)
 }
+
+// SignJWTAccessToken signs an RFC 9068 JWT access token (M4-L3) under the
+// same tenant service checks.
+func (i tenantSPIFFEIssuer) SignJWTAccessToken(ctx context.Context, id string, audience []string, ttl time.Duration, extra map[string]any) (string, error) {
+	signer, ok := i.Issuer.(jwtAccessTokenSigner)
+	if !ok {
+		return "", errors.New("server: the SPIFFE issuer cannot sign JWT access tokens")
+	}
+	ctx, release, err := i.work.Begin(ctx, i.tenantID)
+	if err != nil {
+		return "", err
+	}
+	defer release()
+	if err := i.check.Check(ctx, i.tenantID); err != nil {
+		return "", err
+	}
+	return signer.SignJWTAccessToken(ctx, id, audience, ttl, extra)
+}
+
+// jwtAccessTokenSigner signs RFC 9068 JWT access tokens (M4-L3).
+type jwtAccessTokenSigner interface {
+	SignJWTAccessToken(context.Context, string, []string, time.Duration, map[string]any) (string, error)
+}

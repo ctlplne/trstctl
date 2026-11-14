@@ -180,6 +180,8 @@ func TestServedTokenExchangeIssuesAFiveMinuteJWTSVIDM4(t *testing.T) {
 		"ungranted scope":  {form(projected("payments", "api"), "scope", "keys:write"), "invalid_scope"},
 		"other grant type": {form(projected("payments", "api"), "grant_type", "client_credentials"), "unsupported_grant_type"},
 		"unknown issuer":   {form(unknownIssuer), "invalid_grant"},
+		// M4-L3: an access token names its issuer, and this tenant publishes none.
+		"access token, no issuer": {form(projected("payments", "api"), "requested_token_type", tokenTypeAccessToken), "invalid_request"},
 	} {
 		if status, out := exchange(tc.form); status != http.StatusBadRequest || out["error"] != tc.code {
 			t.Fatalf("%s: HTTP %d %v, want %s", name, status, out, tc.code)

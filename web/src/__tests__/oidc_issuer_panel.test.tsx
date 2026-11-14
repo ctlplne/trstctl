@@ -29,6 +29,7 @@ const issuer = {
   algorithms: ["ES256"],
   token_endpoint: "https://issuer.example.test/oauth2/token",
   token_lifetime_seconds: 300,
+  issued_token_types: ["urn:ietf:params:oauth:token-type:jwt", "urn:ietf:params:oauth:token-type:access_token"],
 };
 const firstKey = { key_id: "spiffe-jwt", generation: 1, state: "active" };
 const rotatedKeys = {
@@ -71,6 +72,8 @@ describe("OpenID issuer and signing keys", () => {
     renderPanel();
     expect(await screen.findByText(issuer.issuer)).toBeInTheDocument();
     expect(screen.getByText(issuer.jwks_uri)).toBeInTheDocument();
+    // M4-L3: the exchange issues JWT-SVIDs and RFC 9068 JWT access tokens.
+    expect(screen.getByText("JWT-SVID, JWT access token (RFC 9068)")).toBeInTheDocument();
     const table = await screen.findByRole("table", { name: "Workload JWT signing keys" });
     expect(within(table).getAllByRole("row")[1]).toHaveTextContent(/spiffe-jwt.*Signing.*First key/);
 

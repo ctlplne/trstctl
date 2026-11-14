@@ -28117,6 +28117,12 @@ export const messages = {
     description: "OD-6: how to get an RS256 issuer for a relying party that accepts only RS256.",
   },
   "workloads.oidcIssuer.tokenEndpoint": { defaultMessage: "Token exchange", description: "N5: where workloads exchange a platform token." },
+  "workloads.oidcIssuer.tokenTypes": { defaultMessage: "Token types", description: "M4-L3: the token types a workload may request from the exchange." },
+  "workloads.oidcIssuer.tokenType.jwt": { defaultMessage: "JWT-SVID", description: "M4-L3: the JWT-SVID token type." },
+  "workloads.oidcIssuer.tokenType.accessToken": {
+    defaultMessage: "JWT access token (RFC 9068)",
+    description: "M4-L3: the RFC 9068 JWT access token type (typ at+jwt).",
+  },
   "workloads.jwtKeys.heading": { defaultMessage: "Signing keys", description: "N5-L3: heading of the JWT signing key list." },
   "workloads.jwtKeys.caption": { defaultMessage: "Workload JWT signing keys", description: "N5-L3: table caption." },
   "workloads.jwtKeys.col.key": { defaultMessage: "Key ID", description: "N5-L3: column." },

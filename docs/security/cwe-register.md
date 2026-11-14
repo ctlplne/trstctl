@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3283 annotated sites across 35 rules. Each row is
+3284 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (805 sites)
+### G101 — CWE-798 Use of hardcoded credentials (806 sites)
 
 | Location | Reason |
 |---|---|
@@ -826,6 +826,7 @@ not this file.
 | `internal/server/token_exchange.go:38` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/token_exchange.go:39` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/token_exchange.go:40` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/token_exchange.go:44` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/totp_seed_replace_served_test.go:33` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/totp_seed_replace_served_test.go:34` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:28` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1609,7 +1610,7 @@ not this file.
 | `internal/server/service_account_ad_rollback_served_test.go:179` | byte-backed owned bootstrap sent to the existing sealed-vault API; not logged (CWE-200) |
 | `internal/server/service_account_ad_rollback_served_test.go:259` | synthetic byte-backed Unicode predecessor in the owned native fixture, never logged (CWE-200) |
 | `internal/server/ssh_certificate_provider.go:111` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/server/token_exchange.go:80` | the token endpoint's response is the issued token, returned once to the caller that proved the subject token (CWE-200) |
+| `internal/server/token_exchange.go:82` | the token endpoint's response is the issued token, returned once to the caller that proved the subject token (CWE-200) |
 
 ### G118 — CWE-664 Improper lifetime control (goroutine context) (3 sites)
 

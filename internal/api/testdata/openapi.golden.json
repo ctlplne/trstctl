@@ -39168,6 +39168,13 @@
           "discovery_url": {
             "type": "string"
           },
+          "issued_token_types": {
+            "description": "the RFC 8693 token types a workload may request: urn:ietf:params:oauth:token-type:jwt (a JWT-SVID) and urn:ietf:params:oauth:token-type:access_token (an RFC 9068 JWT access token, typ at+jwt)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "issuer": {
             "description": "the issuer URL a cloud registers; exchanged tokens carry it as iss",
             "type": "string"
@@ -39189,7 +39196,8 @@
           "jwks_uri",
           "algorithms",
           "token_endpoint",
-          "token_lifetime_seconds"
+          "token_lifetime_seconds",
+          "issued_token_types"
         ],
         "type": "object"
       },

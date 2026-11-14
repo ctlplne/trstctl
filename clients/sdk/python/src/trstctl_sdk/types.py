@@ -11660,6 +11660,7 @@ OIDCIssuer = TypedDict(
     {
         'algorithms': list[str],
         'discovery_url': str,
+        'issued_token_types': list[str],
         'issuer': str,
         'jwks_uri': str,
         'token_endpoint': str,

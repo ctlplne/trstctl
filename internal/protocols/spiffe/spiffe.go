@@ -105,6 +105,19 @@ func (c *CAIssuer) SignJWTSVID(ctx context.Context, spiffeID string, audience []
 // exchange adds scope, jti and act). The registered claims sub, aud, iat and
 // exp are the SVID's own and cannot be replaced.
 func (c *CAIssuer) SignJWTSVIDWithClaims(ctx context.Context, spiffeID string, audience []string, ttl time.Duration, extra map[string]any) (string, error) {
+	return c.signJWTClaims(ctx, "JWT", spiffeID, audience, ttl, extra)
+}
+
+// SignJWTAccessToken signs an RFC 9068 JWT access token (header typ
+// "at+jwt") for spiffeID with the same SPIFFE JWT key (M4-L3), so a relying
+// party verifies it against the same key set and tells it from a JWT-SVID by
+// its type. sub, aud, iat and exp are its own; extra carries iss, client_id,
+// jti and scope.
+func (c *CAIssuer) SignJWTAccessToken(ctx context.Context, spiffeID string, audience []string, ttl time.Duration, extra map[string]any) (string, error) {
+	return c.signJWTClaims(ctx, "at+jwt", spiffeID, audience, ttl, extra)
+}
+
+func (c *CAIssuer) signJWTClaims(ctx context.Context, typ, spiffeID string, audience []string, ttl time.Duration, extra map[string]any) (string, error) {
 	if len(audience) == 0 {
 		return "", fmt.Errorf("spiffe: JWT-SVID requires at least one audience")
 	}
@@ -122,7 +135,10 @@ func (c *CAIssuer) SignJWTSVIDWithClaims(ctx context.Context, spiffeID string, a
 		claims[name] = value
 	}
 	claims["sub"], claims["aud"], claims["iat"], claims["exp"] = spiffeID, audience, now.Unix(), now.Add(ttl).Unix()
-	return crypto.SignJWT(key.Signer, key.KeyID, claims)
+	if typ == "JWT" {
+		return crypto.SignJWT(key.Signer, key.KeyID, claims)
+	}
+	return crypto.SignJWTTyped(key.Signer, key.KeyID, typ, claims)
 }
 
 // X509Bundle implements Issuer.
