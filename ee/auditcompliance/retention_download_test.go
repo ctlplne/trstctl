@@ -91,3 +91,68 @@ func TestCoreReaderServesTheRetentionWorkersSegmentsPerTenant(t *testing.T) {
 		t.Fatalf("tampered segment = %v; want unavailable", err)
 	}
 }
+
+// A234-L1: the retention worker records the public key that signed each
+// segment on its archive event, so the core reader still serves the segment
+// after the audit key is rotated: verified with that retained key, and a
+// changed segment is still refused.
+func TestCoreReaderServesSegmentsAfterTheAuditKeyRotatesA234L1(t *testing.T) {
+	ctx := context.Background()
+	st := newAuditTestStore(t)
+	log := openTestLog(t)
+	old := time.Now().Add(-48 * time.Hour)
+	if _, err := log.Append(ctx, events.Event{Type: projections.EventTenantRegistered, TenantID: tenantA, Time: old, Data: tenantRegistered("rotation tenant")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(ctx, events.Event{Type: projections.EventOwnerCreated, TenantID: tenantA, Time: old.Add(time.Second),
+		Data: ownerCreated("00000000-0000-0000-0000-0000000000c1", "rotated-owner")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).Project(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	earlier, err := jose.GenerateRSASigningKey("audit-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := audit.NewService(log, earlier, audit.WithCheckpoints(st))
+	dir := t.TempDir()
+	if _, err := auditcompliance.NewRetentionWorker(service, log, auditcompliance.DirArchiver{Dir: dir}, st, time.Hour, earlier).RunOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rotated, err := jose.GenerateRSASigningKey("audit-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := auditarchive.Reader{Log: log, Keys: rotated.JWKS, Dir: dir}
+	segments, err := reader.List(ctx, tenantA)
+	if err != nil || len(segments) != 1 {
+		t.Fatalf("segments = %+v %v", segments, err)
+	}
+	release, err := reader.Read(ctx, tenantA, segments[0].ID)
+	if err != nil {
+		t.Fatalf("a segment the earlier key signed, read after the rotation: %v", err)
+	}
+	if _, err := audit.VerifyRetentionBundle(release.Signed, earlier.JWKS()); err != nil {
+		t.Fatalf("the released segment does not verify with the key that signed it: %v", err)
+	}
+	if _, err := audit.VerifyRetentionBundle(release.Signed, rotated.JWKS()); err == nil {
+		t.Fatal("the segment verified with the rotated key: the test did not rotate")
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, tenantA))
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("archive layout: %v", err)
+	}
+	stored := filepath.Join(dir, tenantA, entries[0].Name())
+	raw, err := os.ReadFile(stored) // #nosec G304 -- the test's own archive (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw[len(raw)-5] ^= 0x01
+	if err := os.WriteFile(stored, raw, 0o600); err != nil { // #nosec G703 -- the test's own archive under its t.TempDir (CWE-22)
+		t.Fatal(err)
+	}
+	if _, err := reader.Read(ctx, tenantA, segments[0].ID); !errors.Is(err, auditarchive.ErrUnavailable) {
+		t.Fatalf("a changed segment after the rotation = %v; want unavailable", err)
+	}
+}

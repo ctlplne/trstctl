@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -72,6 +73,10 @@ type AuditArchiveDownload struct {
 	LastRecord  int    `json:"last_record"`
 	PrevHash    string `json:"prev_hash"`
 	ChainHead   string `json:"chain_head"`
+	// SignerJWKS is the earlier audit key's public JWK Set that verified the
+	// segment, when the audit key has rotated since it was archived
+	// (A234-L1): verify the segment offline with it.
+	SignerJWKS json.RawMessage `json:"signer_jwks,omitempty"`
 }
 
 // AuditArchiveService lists and releases a tenant's archived segments. The

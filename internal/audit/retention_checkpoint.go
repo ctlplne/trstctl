@@ -31,6 +31,12 @@ type ArchivedEvent struct {
 	BoundaryHash          string `json:"boundary_hash"`
 	ArchiveURI            string `json:"archive_uri"`
 	SourceHistoryRetained bool   `json:"source_history_retained"`
+	// SignerJWKS is the public JWK Set of the audit key that signed the
+	// archived segment, recorded when it was archived (A234-L1). After the
+	// audit key is rotated, the tenant's download verifies the segment with
+	// this retained public key from the immutable event log; a segment
+	// archived before it was recorded verifies only with the current key.
+	SignerJWKS string `json:"signer_jwks,omitempty"`
 }
 
 // Summary reports what a retention run did — surfaced as metrics by the server.

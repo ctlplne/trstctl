@@ -197,7 +197,9 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 			if err := audit.VerifyCheckpointSourceRetained(ctx, w.log, checkpoint); err != nil {
 				return 0, err
 			}
-			if err := w.ensureArchivedEvent(ctx, checkpoint); err != nil {
+			// A recovery may run after the audit key rotated, so it records
+			// no key: a retained event already names the key that signed it.
+			if err := w.ensureArchivedEvent(ctx, checkpoint, ""); err != nil {
 				return 0, err
 			}
 		}
@@ -283,9 +285,16 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 			return 0, fmt.Errorf("audit: record %d missing stream sequence", r.Sequence)
 		}
 	}
+	// A234-L1: the public key that signed the segment rides with its event,
+	// read in the run that signed it, so a download after the audit key
+	// rotates still verifies the segment.
+	signerJWKS, err := w.svc.PublicVerificationJWKS()
+	if err != nil {
+		return 0, fmt.Errorf("audit retention: read the archive's verification key: %w", err)
+	}
 	// 3) Append the replayable checkpoint event first. If PostgreSQL fails next,
 	// projection/retry can reconstruct the row from this deterministic event.
-	if err := w.ensureArchivedEvent(ctx, checkpoint); err != nil {
+	if err := w.ensureArchivedEvent(ctx, checkpoint, string(signerJWKS)); err != nil {
 		return 0, err
 	}
 	// 4) Seal the logical audit-query boundary. SaveAuditCheckpoint takes the
@@ -297,13 +306,18 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 	return len(segment), nil
 }
 
-func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint audit.Checkpoint) error {
+// ensureArchivedEvent appends the checkpoint's archived event once. signerJWKS
+// is the public key that signed the segment (A234-L1), empty when unknown (a
+// recovery). The key is evidence carried with the event, not its identity: a
+// retained event matches its checkpoint whatever key it names.
+func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint audit.Checkpoint, signerJWKS string) error {
 	payload := audit.ArchivedEvent{
 		Count:                 checkpoint.RecordCount,
 		BoundarySeq:           checkpoint.BoundarySeq,
 		BoundaryHash:          checkpoint.BoundaryHash,
 		ArchiveURI:            checkpoint.ArchiveURI,
 		SourceHistoryRetained: true,
+		SignerJWKS:            signerJWKS,
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -323,9 +337,16 @@ func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint au
 	}
 	if found {
 		var prior audit.ArchivedEvent
+		// The identity is the checkpoint, not the key: an event written before
+		// archive events named their signing key, or one naming the key the
+		// audit key rotated from, still matches (A234-L1).
 		if retained.TenantID != checkpoint.TenantID || retained.Type != audit.EventTypeArchived ||
-			retained.SchemaVersion != audit.ArchivedEventSchemaVersion ||
-			json.Unmarshal(retained.Data, &prior) != nil || prior != payload {
+			retained.SchemaVersion != audit.ArchivedEventSchemaVersion || json.Unmarshal(retained.Data, &prior) != nil {
+			return errors.New("audit retention: retained archive event conflicts with its checkpoint")
+		}
+		identity := payload
+		identity.SignerJWKS, prior.SignerJWKS = "", ""
+		if prior != identity {
 			return errors.New("audit retention: retained archive event conflicts with its checkpoint")
 		}
 		return nil

@@ -5368,6 +5368,8 @@ func componentSchemas() map[string]*Schema {
 		"last_record":  {Type: "integer"},
 		"prev_hash":    str(),
 		"chain_head":   str(),
+		"signer_jwks": {Type: "object", AdditionalProperties: &Schema{}, Description: "the earlier audit key's public JWK Set that " +
+			"verified the segment, present when the audit key has rotated since it was archived (A234-L1); verify the segment offline with it"},
 	}, "segment_id", "format", "bundle", "sha256", "first_record", "last_record", "prev_hash", "chain_head")
 	eventProtectionReq := object(map[string]*Schema{
 		"registration_identity": str(),

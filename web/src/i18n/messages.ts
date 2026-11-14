@@ -29622,6 +29622,11 @@ export const messages = {
     defaultMessage: "Record archive removal evidence",
     description: "Plain-language archive attestation dialog title.",
   },
+  "audit.archives.retainedKey": {
+    defaultMessage:
+      "An earlier audit key signed this segment; the key has rotated since. Its public key was saved beside the segment: verify the segment offline with it.",
+    description: "A234-L1: notice after downloading a segment that the retained earlier audit key verified.",
+  },
   "audit.archives.heading": {
     defaultMessage: "Archived segments",
     description: "A234: heading of the tenant's archived audit segments panel.",

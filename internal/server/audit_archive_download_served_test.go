@@ -30,6 +30,19 @@ import (
 // is proven against the core reader in ee/auditcompliance.
 func seedTenantAuditSegment(t *testing.T, log *events.Log, st *store.Store, key *jose.SigningKey, service *audit.Service, tenantID, dir string) string {
 	t.Helper()
+	// The worker records the public key that signed the segment (A234-L1).
+	jwks, err := key.PublicJWKS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return seedTenantAuditSegmentSignedBy(t, log, st, key, service, tenantID, dir, string(jwks))
+}
+
+// seedTenantAuditSegmentSignedBy archives as seedTenantAuditSegment does, with
+// the archive event naming signerJWKS as the key that signed the segment ("" is
+// an event written before events named it).
+func seedTenantAuditSegmentSignedBy(t *testing.T, log *events.Log, st *store.Store, key *jose.SigningKey, service *audit.Service, tenantID, dir, signerJWKS string) string {
+	t.Helper()
 	ctx := context.Background()
 	records, seed, err := service.SearchWithSeed(ctx, audit.Query{TenantID: tenantID})
 	if err != nil || len(records) == 0 {
@@ -53,7 +66,7 @@ func seedTenantAuditSegment(t *testing.T, log *events.Log, st *store.Store, key 
 		t.Fatal(err)
 	}
 	checkpoint := audit.Checkpoint{TenantID: tenantID, BoundarySeq: boundary.StreamSequence, BoundaryHash: boundary.Hash, RecordCount: int(boundary.Sequence), ArchiveURI: uri} // #nosec G115 -- a test fixture count (CWE-190)
-	archived, err := json.Marshal(audit.ArchivedEvent{Count: checkpoint.RecordCount, BoundarySeq: checkpoint.BoundarySeq, BoundaryHash: checkpoint.BoundaryHash, ArchiveURI: uri, SourceHistoryRetained: true})
+	archived, err := json.Marshal(audit.ArchivedEvent{Count: checkpoint.RecordCount, BoundarySeq: checkpoint.BoundarySeq, BoundaryHash: checkpoint.BoundaryHash, ArchiveURI: uri, SourceHistoryRetained: true, SignerJWKS: signerJWKS})
 	if err != nil {
 		t.Fatal(err)
 	}

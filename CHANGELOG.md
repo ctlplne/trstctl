@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- A tenant still downloads its archived audit segments after the audit key rotates (A234-L1): each archive event
+  records the public key that signed its segment, the server verifies a segment with that retained key when the
+  current one does not, and the download names the key (`signer_jwks`), which the console saves beside the segment.
 - The event-protection status route shares and bounds its key checks (A233-L4): concurrent reads of one tenant share
   one opening of its key, at most four tenant keys are opened at once, and a read that finds them all busy answers
   503 "key checks are busy" (the console offers **Check again**) instead of opening one more.

@@ -684,8 +684,13 @@ verifies the bytes as the tenant's own signed retention segment, appends an
 path or object locator, and limits downloads to six a minute per caller and thirty a
 minute per tenant. A download
 verifies offline with `trstctl audit verify --format retention-jws --audit-jwks ...
---expected-tenant ...`. Legacy segments and the deployment-wide archives stay
-custodian-only. See [Compliance](../compliance.md).
+--expected-tenant ...`. Each segment's `audit.archived` event records the public key
+that signed it (A234-L1), so after the audit key is rotated a tenant still downloads an
+older segment: the server verifies it with that retained key from the immutable event
+log, never unverified, and the download carries the key as `signer_jwks` (the console
+saves it beside the segment) for offline verification. A segment archived before its
+event named a key verifies only with the current key. Legacy segments and the
+deployment-wide archives stay custodian-only. See [Compliance](../compliance.md).
 
 Both endpoints accept `tool` in addition to `feature_id`, `action`, event type,
 text and time filters. The tool predicate is server-owned and applied before the

@@ -2535,6 +2535,7 @@ AuditArchiveDownload = TypedDict(
         'prev_hash': str,
         'segment_id': str,
         'sha256': str,
+        'signer_jwks': dict[str, Any],
     },
     total=False,
 )

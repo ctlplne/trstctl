@@ -9338,6 +9338,11 @@
           },
           "sha256": {
             "type": "string"
+          },
+          "signer_jwks": {
+            "additionalProperties": {},
+            "description": "the earlier audit key's public JWK Set that verified the segment, present when the audit key has rotated since it was archived (A234-L1); verify the segment offline with it",
+            "type": "object"
           }
         },
         "required": [

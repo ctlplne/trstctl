@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3356 annotated sites across 35 rules. Each row is
+3358 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1063,7 +1063,7 @@ not this file.
 | `cmd/trstctl-agent/main.go:637` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1778` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
+| `ee/auditcompliance/retention.go:281` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
 | `ee/governance/misuse/incident.go:100` | bounded by MaxInt64 above. |
 | `ee/governance/misuse/misuse.go:150` | event sequences fit int64 (CWE-190) |
 | `ee/governance/misuse/misuse.go:287` | a projected event sequence is positive (CWE-190) |
@@ -1140,8 +1140,8 @@ not this file.
 | `internal/api/secretjson.go:173` | rune already range-checked below 0x20 before hex packing (CWE-190) |
 | `internal/api/vault_compat_complete.go:815` | DER length of a public key, far under the uint32 bound (CWE-190) |
 | `internal/audit/audit.go:172` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
-| `internal/auditarchive/reader.go:104` | positive count checked first (CWE-190) |
-| `internal/auditarchive/reader.go:110` | bounded by the int count above (CWE-190) |
+| `internal/auditarchive/reader.go:121` | positive count checked first (CWE-190) |
+| `internal/auditarchive/reader.go:127` | bounded by the int count above (CWE-190) |
 | `internal/backup/backup.go:175` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
 | `internal/backup/backup.go:722` | receiptIndex starts at zero and is bounded by len(affectedOrder) above (CWE-190). |
 | `internal/backup/backup.go:1005` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
@@ -1323,7 +1323,7 @@ not this file.
 | `internal/secretmigrate/assess.go:354` | bounded by MaxValueBytes (CWE-190) |
 | `internal/server/agentchannel_served_test.go:837` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/aud65_test.go:37` | fixture sequences are single-digit seconds (CWE-190). |
-| `internal/server/audit_archive_download_served_test.go:55` | a test fixture count (CWE-190) |
+| `internal/server/audit_archive_download_served_test.go:68` | a test fixture count (CWE-190) |
 | `internal/server/backup.go:223` | record counts bounded by the event log (CWE-190) |
 | `internal/server/backup.go:390` | record counts bounded by the event log (CWE-190) |
 | `internal/server/bundled_pg.go:95` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
@@ -2312,7 +2312,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (794 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (795 sites)
 
 | Location | Reason |
 |---|---|
@@ -2472,6 +2472,7 @@ not this file.
 | `docs/sdk_registry_claims_test.go:44` | a page in this checkout (CWE-22) |
 | `ee/auditcompliance/retention.go:56` | the archive path built above under the operator's archive dir (CWE-22) |
 | `ee/auditcompliance/retention_download_test.go:82` | the test's own archive (CWE-22) |
+| `ee/auditcompliance/retention_download_test.go:147` | the test's own archive (CWE-22) |
 | `ee/auditcompliance/retention_test.go:357` | glob is restricted to this test's private temporary archive directory. |
 | `ee/billing/evidence_test.go:150` | test reads repo source files it names itself (CWE-22) |
 | `ee/enterpriseauth/scim_config.go:63` | the operator's own configured CA file (CWE-22) |
@@ -2607,7 +2608,7 @@ not this file.
 | `internal/api/rogue_certificates_weak_key_test.go:18` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/api/sdk_spec_pinned_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/api/vault_compat_contract_test.go:255` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/auditarchive/reader.go:181` | rebuilt from the configured archive dir, tenant and boundary (CWE-22) |
+| `internal/auditarchive/reader.go:198` | rebuilt from the configured archive dir, tenant and boundary (CWE-22) |
 | `internal/auditsink/discard_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/backup/encrypted_artifact.go:62` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/backup/encrypted_artifact.go:194` | operator-invoked backup/restore over its own configured directory (CWE-22) |
@@ -2823,7 +2824,7 @@ not this file.
 | `internal/server/agent_roles_served_test.go:539` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
 | `internal/server/agentchannel.go:147` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
-| `internal/server/audit_archive_download_served_test.go:167` | the test's own archive (CWE-22) |
+| `internal/server/audit_archive_download_served_test.go:180` | the test's own archive (CWE-22) |
 | `internal/server/audit_feed_index_template_lab_test.go:50` | the repository's own shipped content (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:35` | the runner's lab CA (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:106` | the runner's mounted rsyslog output (CWE-22) |
@@ -3456,7 +3457,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (168 sites)
+### G703 — CWE-22 Path traversal (taint) (169 sites)
 
 | Location | Reason |
 |---|---|
@@ -3472,6 +3473,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:222` | receiver is a private test directory and name ranges over two fixed archive basenames. |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `ee/auditcompliance/retention_download_test.go:87` | the test's own archive under its t.TempDir (CWE-22) |
+| `ee/auditcompliance/retention_download_test.go:152` | the test's own archive under its t.TempDir (CWE-22) |
 | `internal/agent/discovery/keystore_bcfks_test.go:22` | the test writes its fixture into its own t.TempDir() (CWE-22) |
 | `internal/agent/discovery/keystore_jceks_test.go:30` | the test writes its fixture into its own t.TempDir() (CWE-22) |
 | `internal/agent/discovery/keystore_multikey_test.go:23` | the test writes its fixture into its own t.TempDir() (CWE-22) |
@@ -3532,8 +3534,8 @@ not this file.
 | `internal/secretscan/thirdparty_signature_test.go:49` | test-owned temp path |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
 | `internal/server/agent_workload_api_darwin_path_test.go:56` | test copies its own executable fixture (CWE-22) |
-| `internal/server/audit_archive_download_served_test.go:173` | the test's own archive under its t.TempDir (CWE-22) |
-| `internal/server/audit_archive_download_served_test.go:179` | the test's own archive under its t.TempDir (CWE-22) |
+| `internal/server/audit_archive_download_served_test.go:186` | the test's own archive under its t.TempDir (CWE-22) |
+| `internal/server/audit_archive_download_served_test.go:192` | the test's own archive under its t.TempDir (CWE-22) |
 | `internal/server/audit_feed_index_template_lab_test.go:50` | the repository's own shipped content (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:35` | the runner's lab CA (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:106` | the runner's mounted rsyslog output (CWE-22) |

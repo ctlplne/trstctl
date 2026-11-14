@@ -1811,6 +1811,7 @@ export interface AuditArchiveDownload {
   prev_hash: string;
   segment_id: string;
   sha256: string;
+  signer_jwks?: Record<string, unknown>;
 }
 
 export interface AuditArchiveSegment {

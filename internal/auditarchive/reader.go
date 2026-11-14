@@ -52,6 +52,10 @@ type Release struct {
 	Segment
 	Signed string
 	Bundle audit.Bundle
+	// SignerJWKS is the retained public key that verified the segment when
+	// the audit key has rotated since it was archived (A234-L1); empty when
+	// the current key verified it.
+	SignerJWKS string
 }
 
 // Reader reads one deployment's archive. Dir and Objects are the configured
@@ -97,14 +101,27 @@ func (r Reader) Read(ctx context.Context, tenantID, segmentID string) (Release, 
 		return Release{}, errors.Join(ErrUnavailable, errors.New("no audit verification keys"))
 	}
 	bundle, err := audit.VerifyRetentionBundle(signed, r.Keys())
-	if err != nil {
+	retainedKey := ""
+	if err != nil && payload.SignerJWKS != "" {
+		// A234-L1: after the audit key rotates, the segment verifies with the
+		// public key its archive event retained in the immutable log. It is
+		// never served unverified.
+		retained, parseErr := jose.ParseJWKSet([]byte(payload.SignerJWKS))
+		if parseErr != nil {
+			return Release{}, errors.Join(ErrUnavailable, err, parseErr)
+		}
+		if bundle, err = audit.VerifyRetentionBundle(signed, retained); err != nil {
+			return Release{}, errors.Join(ErrUnavailable, err)
+		}
+		retainedKey = payload.SignerJWKS
+	} else if err != nil {
 		return Release{}, errors.Join(ErrUnavailable, err)
 	}
 	if bundle.TenantID != tenantID || bundle.ChainHead != payload.BoundaryHash || len(bundle.Records) == 0 || payload.Count <= 0 ||
 		bundle.Records[len(bundle.Records)-1].Sequence != uint64(payload.Count) { // #nosec G115 -- positive count checked first (CWE-190)
 		return Release{}, errors.Join(ErrUnavailable, errors.New("stored segment is not this tenant's archived segment"))
 	}
-	release := Release{Segment: *hit, Signed: signed, Bundle: bundle}
+	release := Release{Segment: *hit, Signed: signed, Bundle: bundle, SignerJWKS: retainedKey}
 	// The verified bundle is contiguous and ends at the positive int count, so
 	// its first record fits an int.
 	release.FirstRecord = int(bundle.Records[0].Sequence) // #nosec G115 -- bounded by the int count above (CWE-190)

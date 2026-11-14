@@ -31,7 +31,7 @@ func TestArchivedEventRecoveryUsesExactIdentityAcrossColdRestart(t *testing.T) {
 		RecordCount: 1, ArchiveURI: "local://signed-segment",
 	}
 	worker := &RetentionWorker{log: log}
-	if err := worker.ensureArchivedEvent(ctx, checkpoint); err != nil {
+	if err := worker.ensureArchivedEvent(ctx, checkpoint, ""); err != nil {
 		t.Fatal(err)
 	}
 	var archived events.Event
@@ -52,7 +52,7 @@ func TestArchivedEventRecoveryUsesExactIdentityAcrossColdRestart(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = reopened.Close() })
 	worker.log = reopened
-	if err := worker.ensureArchivedEvent(ctx, checkpoint); err != nil {
+	if err := worker.ensureArchivedEvent(ctx, checkpoint, ""); err != nil {
 		t.Fatalf("cold recovery appended duplicate: %v", err)
 	}
 	if head, err := reopened.LastSequence(ctx); err != nil || head != archived.Sequence {
@@ -74,7 +74,7 @@ func TestArchivedEventRecoveryUsesExactIdentityAcrossColdRestart(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := worker.ensureArchivedEvent(ctx, checkpoint); !errors.Is(err, events.ErrConflictingEventIdentity) {
+	if err := worker.ensureArchivedEvent(ctx, checkpoint, ""); !errors.Is(err, events.ErrConflictingEventIdentity) {
 		t.Fatalf("conflicting retained archive identity was accepted: %v", err)
 	}
 }

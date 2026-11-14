@@ -14,19 +14,29 @@ export function AuditArchivePanel() {
   const query = useApiQuery(["audit", "archives"], () => api.auditArchives(), { retry: false });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function download(segment: AuditArchiveSegment) {
     setBusy(segment.id);
     setError(null);
+    setNotice(null);
     try {
       const release = await api.downloadAuditArchive(segment.id);
-      const blob = new Blob([release.bundle], { type: "application/jose" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `audit-segment-${release.first_record}-${release.last_record}.jws`;
-      link.click();
-      URL.revokeObjectURL(url);
+      const save = (body: string, type: string, name: string) => {
+        const url = URL.createObjectURL(new Blob([body], { type }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = name;
+        link.click();
+        URL.revokeObjectURL(url);
+      };
+      const base = `audit-segment-${release.first_record}-${release.last_record}`;
+      save(release.bundle, "application/jose", `${base}.jws`);
+      // A234-L1: a segment an earlier audit key signed comes with that key.
+      if (release.signer_jwks) {
+        save(JSON.stringify(release.signer_jwks, null, 2), "application/json", `${base}.signer-jwks.json`);
+        setNotice(t("audit.archives.retainedKey"));
+      }
     } catch (err) {
       setError(apiProblemMessage(err, t("audit.archives.downloadFailed")));
     } finally {
@@ -45,6 +55,11 @@ export function AuditArchivePanel() {
         <ErrorState title={t("audit.archives.unavailable")}>{apiProblemMessage(query.errorValue, t("audit.archives.unavailable"))}</ErrorState>
       ) : null}
       {error ? <ErrorState title={t("audit.archives.downloadFailed")}>{error}</ErrorState> : null}
+      {notice ? (
+        <p role="status" className="mt-2 text-muted-foreground">
+          {notice}
+        </p>
+      ) : null}
       {query.data && segments.length === 0 ? <p className="mt-2 text-muted-foreground">{t("audit.archives.empty")}</p> : null}
       {segments.length > 0 ? (
         <table className="mt-3 w-full text-left" aria-label={t("audit.archives.heading")}>

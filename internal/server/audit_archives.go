@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 
@@ -66,8 +67,12 @@ func (s *auditArchiveService) Download(ctx context.Context, tenantID, segmentID 
 	}); err != nil {
 		return api.AuditArchiveDownload{}, err
 	}
-	return api.AuditArchiveDownload{
+	out := api.AuditArchiveDownload{
 		SegmentID: segmentID, Format: "jws", Bundle: release.Signed, SHA256: digest,
 		FirstRecord: release.FirstRecord, LastRecord: release.LastRecord, PrevHash: release.Bundle.PrevHash, ChainHead: release.Bundle.ChainHead,
-	}, nil
+	}
+	if release.SignerJWKS != "" {
+		out.SignerJWKS = json.RawMessage(release.SignerJWKS)
+	}
+	return out, nil
 }

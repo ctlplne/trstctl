@@ -84,4 +84,39 @@ describe("A234 archived audit segments panel", () => {
     expect(await screen.findByText("Archived segments are unavailable")).toBeInTheDocument();
     expect(screen.queryByText("No segments have been archived for this tenant.")).toBeNull();
   });
+
+  // A234-L1: a segment an earlier audit key signed is saved with that key.
+  it("saves the earlier key beside a segment signed before the audit key rotated", async () => {
+    apiMock.auditArchives.mockResolvedValue({ items: [segment] });
+    const signerJWKS = { keys: [{ kty: "RSA", kid: "audit-export", n: "AQAB", e: "AQAB" }] };
+    apiMock.downloadAuditArchive.mockResolvedValue({
+      segment_id: segment.id,
+      format: "jws",
+      bundle: "header.payload.signature",
+      sha256: "0".repeat(64),
+      first_record: 1,
+      last_record: 42,
+      prev_hash: "",
+      chain_head: segment.chain_head,
+      signer_jwks: signerJWKS,
+    });
+    const created: Blob[] = [];
+    vi.stubGlobal("URL", { ...URL, createObjectURL: vi.fn((blob: Blob) => (created.push(blob), "blob:segment")), revokeObjectURL: vi.fn() });
+    try {
+      const user = userEvent.setup();
+      renderPanel();
+      await user.click(await screen.findByRole("button", { name: "Download" }));
+      expect(await screen.findByRole("status")).toHaveTextContent("An earlier audit key signed this segment");
+      await waitFor(() => expect(created).toHaveLength(2));
+      const savedKey = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = () => resolve(String(reader.result));
+        reader.readAsText(created[1]);
+      });
+      expect(JSON.parse(savedKey)).toEqual(signerJWKS);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

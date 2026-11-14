@@ -14755,6 +14755,10 @@ export interface components {
             prev_hash: string;
             segment_id: string;
             sha256: string;
+            /** @description the earlier audit key's public JWK Set that verified the segment, present when the audit key has rotated since it was archived (A234-L1); verify the segment offline with it */
+            signer_jwks?: {
+                [key: string]: unknown;
+            };
         };
         AuditArchiveSegment: {
             /** Format: date-time */
