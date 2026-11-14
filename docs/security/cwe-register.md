@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3304 annotated sites across 35 rules. Each row is
+3311 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (810 sites)
+### G101 — CWE-798 Use of hardcoded credentials (813 sites)
 
 | Location | Reason |
 |---|---|
@@ -236,6 +236,8 @@ not this file.
 | `internal/config/audit_test.go:66` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/aws_honey_trail_queue_test.go:14` | test-only file reference paths, no credential values (CWE-798) |
+| `internal/config/aws_honey_trail_queue_test.go:21` | test-only file reference path (CWE-798) |
 | `internal/config/config.go:3645` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config.go:4451` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
@@ -551,6 +553,7 @@ not this file.
 | `internal/server/auth_unit_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/aws_acm_listener_rollback_served_test.go:31` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/aws_honeytoken_served_test.go:140` | the fixture's fake decoy secret, not a credential (CWE-798) |
+| `internal/server/aws_honeytoken_trail_queue_served_test.go:127` | the test's own stand-in session values, not credentials (CWE-798) |
 | `internal/server/azure_keyvault_rollback_served_test.go:32` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/azure_workload_identity_served_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/cloud_access_keys_azure_served_test.go:75` | a credential reference only; no credential value enters the config (CWE-798) |
@@ -3633,7 +3636,7 @@ not this file.
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |
 | `tools/dodcensus/proof/launched.go:1770` | developer tool calling the endpoint it was pointed at (CWE-918) |
 
-### G705 — CWE-79 Cross-site scripting (taint) (35 sites)
+### G705 — CWE-79 Cross-site scripting (taint) (39 sites)
 
 | Location | Reason |
 |---|---|
@@ -3646,6 +3649,8 @@ not this file.
 | `internal/dns/akamai/akamai_test.go:131` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/dynsecret/access_test.go:83` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/dynsecret/access_test.go:91` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/dynsecret/aws_honeytoken_trail_queue_test.go:88` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/dynsecret/aws_honeytoken_trail_queue_test.go:102` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/dynsecret/aws_sts_deny_cutoff_test.go:49` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/dynsecret/aws_sts_deny_cutoff_test.go:70` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/dynsecret/aws_sts_deny_cutoff_test.go:77` | test writes fixture bytes to its own local server (CWE-79) |
@@ -3657,6 +3662,8 @@ not this file.
 | `internal/secretstore/access.go:86` | the secret read API returns the secret by contract; served as octet-stream with nosniff, never an HTML context (CWE-79) |
 | `internal/secretstore/access.go:97` | fixed-shape JSON carrying only an integer version, served as application/json with nosniff (CWE-79) |
 | `internal/secretstore/access.go:113` | fixed-shape JSON carrying only an integer version, served as application/json with nosniff (CWE-79) |
+| `internal/server/aws_honeytoken_trail_queue_served_test.go:56` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/server/aws_honeytoken_trail_queue_served_test.go:65` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/server/dynamic_secret_access_served_test.go:60` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/server/secrets_sync_served_test.go:1101` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/server/secrets_sync_served_test.go:1172` | test writes fixture bytes to its own recorder/local server (CWE-79) |

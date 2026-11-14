@@ -81,6 +81,14 @@ type AWSHoneyTrailConfig struct {
 	S3Endpoint     string `json:"s3_endpoint,omitempty"`
 	PathStyle      bool   `json:"path_style,omitempty"`
 	CredentialsRef string `json:"credentials_ref"`
+	// NotificationsQueueURL (N4-L1) is an SQS queue receiving the bucket's
+	// object-created notifications (S3 event notifications, through
+	// EventBridge, or the trail's own SNS topic): the monitor reads the files
+	// they name instead of listing every account, Region and day folder, and
+	// lists the bucket in full only on its first pass and once a day after,
+	// for a notification that never came. The credentials then also need
+	// sqs:ReceiveMessage and sqs:DeleteMessage on the queue.
+	NotificationsQueueURL string `json:"notifications_queue_url,omitempty"`
 }
 
 func (c AWSHoneyAccountConfig) MaxTTLDuration() (time.Duration, error) {
@@ -634,6 +642,7 @@ func validateAWSHoneyAccount(where string, item AWSHoneyAccountConfig) []error {
 
 var (
 	awsHoneyBucket       = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
+	awsHoneyQueuePath    = regexp.MustCompile(`^/[0-9]{12}/[A-Za-z0-9_-]{1,80}(\.fifo)?$`)
 	awsHoneyOrganization = regexp.MustCompile(`^o-[a-z0-9]{10,32}$`)
 	awsHoneyKeyPrefix    = regexp.MustCompile(`^[A-Za-z0-9!_.*'()-]+(/[A-Za-z0-9!_.*'()-]+)*$`)
 )
@@ -668,6 +677,22 @@ func validateAWSHoneyTrail(where string, trail AWSHoneyTrailConfig, allowInsecur
 	}
 	if err := validateCredentialRef(trail.CredentialsRef); err != nil {
 		errs = append(errs, fmt.Errorf("%s credentials_ref: %w", where, err))
+	}
+	if queue := trail.NotificationsQueueURL; queue != "" {
+		parsed, err := url.Parse(queue)
+		switch {
+		case err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || !awsHoneyQueuePath.MatchString(parsed.Path):
+			errs = append(errs, fmt.Errorf("%s notifications_queue_url must be an SQS queue URL (https://sqs.<region>.amazonaws.com/<account>/<queue>)", where))
+		default:
+			if err := validateSecretIntegrationEndpoint(parsed.Scheme+"://"+parsed.Host, allowInsecureLoopback); err != nil {
+				errs = append(errs, fmt.Errorf("%s notifications_queue_url: %w", where, err))
+			}
+			host := parsed.Hostname()
+			address := net.ParseIP(host)
+			if !allowPrivate && (netsec.IsLoopbackHost(host) || (address != nil && (address.IsPrivate() || address.IsLinkLocalUnicast()))) {
+				errs = append(errs, fmt.Errorf("%s private notifications_queue_url requires allow_private_endpoint and a CIDR allowlist", where))
+			}
+		}
 	}
 	if trail.S3Endpoint != "" {
 		if err := validateSecretIntegrationEndpoint(trail.S3Endpoint, allowInsecureLoopback); err != nil {

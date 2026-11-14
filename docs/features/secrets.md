@@ -2443,6 +2443,24 @@ shows the files read, decoy records found and files refused in the last four day
 Records of keys that are not decoys are read and dropped; nothing from them is
 kept.
 
+**Trail notifications instead of listing (N4-L1).** A large organization's bucket
+(hundreds of accounts in every Region) makes each pass list every account's day
+folders. Set `trail.notifications_queue_url` to an SQS queue that receives the
+bucket's object-created notifications, whichever way they reach it: S3 event
+notifications, an EventBridge rule for S3's `Object Created`, or the trail's own SNS
+topic (CloudTrail publishes each delivered file's key), each optionally wrapped in an
+SNS envelope. The monitor then reads that queue at every 30-second tick (an empty
+queue costs one request), reads the log files its messages name, and deletes a
+message once every file it names is read, recorded or gone; a message whose file the
+store could not return stays and comes back after five minutes. A message that names
+no log file of the trail (S3's test event, another bucket, a digest file) is deleted
+unread. The bucket is listed in full only on the first pass and once a day after,
+for a notification that never came, and a listing stopped by a pass's bounds goes on
+at the next pass until it has read the bucket once. The trail's credentials then also
+need `sqs:ReceiveMessage` and `sqs:DeleteMessage` on the queue; a private or loopback
+queue needs `allow_private_endpoint`, as the S3 endpoint does. The account catalog's
+`trail.notifications_queue_url` and the detection scope name the queue.
+
 The scanning bridge runs the pinned Gitleaks scanner from the served control plane,
 recording redacted findings into [discovery](discovery-and-inventory.md), the
 [credential graph](graph-query-ai.md), and the risk view. `TRSTCTL_SECRETS_GITLEAKS_BIN`

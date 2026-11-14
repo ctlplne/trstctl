@@ -53,7 +53,7 @@ func (r AWSHoneyAccountRegistry) PublicForTenant(tenantID string) []api.AWSHoney
 		}
 		if trail := provider.cfg.Trail; trail != nil {
 			account.Trail = &api.AWSHoneyTrail{Bucket: trail.Bucket, OrganizationID: trail.OrganizationID,
-				Accounts: append([]string{}, trail.Accounts...)}
+				Accounts: append([]string{}, trail.Accounts...), NotificationsQueueURL: trail.NotificationsQueueURL}
 		}
 		out = append(out, account)
 	}
@@ -187,6 +187,28 @@ func (p *awsHoneyProvider) openTrail(ctx context.Context) (*objectstore.S3, erro
 		Endpoint: endpoint, Region: trail.BucketRegion, Bucket: trail.Bucket, Prefix: trail.KeyPrefix,
 		PathStyle: trail.PathStyle, AccessKeyID: caller.AccessKeyID, SecretAccessKey: caller.SecretAccessKey,
 		SessionToken: caller.SessionToken, AllowInsecureLoopback: p.cfg.AllowInsecureLoopback,
+	})
+}
+
+// openTrailQueue opens the trail's notifications queue (N4-L1) with the
+// trail's own credentials; requests reach only the queue's host.
+func (p *awsHoneyProvider) openTrailQueue(ctx context.Context) (*dynsecret.AWSTrailQueue, error) {
+	trail := p.cfg.Trail
+	if trail == nil || trail.NotificationsQueueURL == "" {
+		return nil, errors.New("aws honeytoken: the trail names no notifications queue")
+	}
+	caller, err := p.loadCaller(ctx, trail.CredentialsRef)
+	if err != nil {
+		return nil, err
+	}
+	defer caller.wipe()
+	client, err := secretIntegrationHTTPClient(trail.NotificationsQueueURL, p.cfg.AllowPrivate, p.cfg.AllowInsecureLoopback, p.cfg.PrivateEgressCIDRs, p.guard)
+	if err != nil {
+		return nil, err
+	}
+	return dynsecret.NewAWSTrailQueue(dynsecret.AWSTrailQueueConfig{
+		QueueURL: trail.NotificationsQueueURL, Region: dynsecret.AWSSQSQueueRegion(trail.NotificationsQueueURL, trail.BucketRegion),
+		HTTPClient: client, AccessKeyID: caller.AccessKeyID, SecretAccessKey: caller.SecretAccessKey, SessionToken: caller.SessionToken,
 	})
 }
 

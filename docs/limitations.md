@@ -9175,12 +9175,9 @@ a new delivery is read, and so is a file delivered three days earlier.
 
 What comes next:
 - Community LocalStack does not deliver trails, so the proof writes the files;
-  AWS writing an organization trail's files, with real data-event selectors, is a
-  live proof with an AWS account (Track B).
-- Push instead of polling: EventBridge rules or S3 event notifications, so a use
-  is seen when the file lands rather than at the next pass; a large organization
-  (hundreds of accounts in every Region) makes each pass list every account's
-  day folders.
+  AWS writing an organization trail's files, with real data-event selectors, and S3,
+  EventBridge or the trail's SNS topic notifying a real queue (N4-L1), is a live proof
+  with an AWS account (Track B).
 
 ## trstctl as the OpenID issuer for cloud workload federation (N5) — served
 

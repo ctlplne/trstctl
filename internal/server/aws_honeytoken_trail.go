@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -42,6 +43,12 @@ const (
 	// awsHoneyTrailMaxDays is how far back a trail is read: from the day the
 	// oldest watched decoy was created, at most this many days (N4-L2).
 	awsHoneyTrailMaxDays = 90
+	// awsHoneyTrailMaxQueueRounds bounds a pass's receives from a trail's
+	// notifications queue, ten messages each (N4-L1).
+	awsHoneyTrailMaxQueueRounds = 200
+	// awsHoneyTrailReconcileEvery is how often a trail with a notifications
+	// queue is also listed in full (N4-L1).
+	awsHoneyTrailReconcileEvery = 24 * time.Hour
 )
 
 // awsHoneyTrailDays remembers, per trail, account and Region, the last day
@@ -98,6 +105,13 @@ type awsHoneyTrailClock struct {
 	last map[string]time.Time
 }
 
+// forget makes key due at its next check.
+func (c *awsHoneyTrailClock) forget(key string) {
+	c.mu.Lock()
+	delete(c.last, key)
+	c.mu.Unlock()
+}
+
 func (c *awsHoneyTrailClock) due(key string, now time.Time, every time.Duration) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -141,7 +155,13 @@ func (s *Server) ReadAWSHoneyTrailsOnce(ctx context.Context) (int, error) {
 	var errs []error
 	for _, tenantID := range s.awsHoneyAccounts.tenants() {
 		for _, account := range s.awsHoneyAccounts.trailAccounts(tenantID) {
-			if !s.awsHoneyTrailClock.due(tenantID+"\x00"+account.cfg.ID, now, account.interval) {
+			every := account.interval
+			if account.cfg.Trail.NotificationsQueueURL != "" {
+				// N4-L1: an empty queue costs one request, so it is read at
+				// every tick and a use is seen soon after its file lands.
+				every = awsHoneyTrailTick
+			}
+			if !s.awsHoneyTrailClock.due(tenantID+"\x00"+account.cfg.ID, now, every) {
 				continue
 			}
 			n, err := s.readAWSHoneyTrail(ctx, tenantID, account, now)
@@ -154,40 +174,65 @@ func (s *Server) ReadAWSHoneyTrailsOnce(ctx context.Context) (int, error) {
 	return total, errors.Join(errs...)
 }
 
-// readAWSHoneyTrail reads one trail's unread log files from the day folders
-// (UTC) of every account and Region it holds, from the day its oldest watched
-// decoy was created through today (N4-L2: not only today and yesterday, so
-// files delivered while the control plane was down are read when it is back).
+// readAWSHoneyTrail reads one trail's unread log files. A trail with a
+// notifications queue (N4-L1) reads the files its notifications name, and
+// lists the bucket in full only on its first pass and once a day after, for a
+// notification that never came; a listing that stops at a pass's bounds goes
+// on at the next pass until it has read the bucket once. A trail without one
+// lists the day folders on every pass.
 func (s *Server) readAWSHoneyTrail(ctx context.Context, tenantID string, account *awsHoneyProvider, now time.Time) (int, error) {
 	decoys, err := s.store.AWSHoneyTrailDecoyKeys(ctx, tenantID)
 	if err != nil || len(decoys) == 0 {
 		return 0, err
 	}
-	since, err := s.store.AWSHoneyTrailWatchedSince(ctx, tenantID)
-	if err != nil {
-		return 0, err
-	}
-	days := awsHoneyTrailDayRange(since, now)
-	yesterday := now.UTC().Truncate(24*time.Hour).AddDate(0, 0, -1)
-	folders := 0
 	keys := make(map[string]bool, len(decoys))
 	for key := range decoys {
 		keys[key] = true
 	}
-	trail := account.cfg.Trail
 	bucket, err := account.openTrail(ctx)
 	if err != nil {
 		return 0, err
 	}
 	defer bucket.Destroy()
+	if account.cfg.Trail.NotificationsQueueURL == "" {
+		read, _, err := s.listAWSHoneyTrail(ctx, tenantID, account, bucket, decoys, keys, now, awsHoneyTrailMaxReadsPerPass)
+		return read, err
+	}
+	read, err := s.readAWSHoneyTrailQueue(ctx, tenantID, account, bucket, decoys, keys)
+	reconcile := tenantID + "\x00" + account.cfg.ID + "\x00reconcile"
+	if err != nil || read >= awsHoneyTrailMaxReadsPerPass || !s.awsHoneyTrailClock.due(reconcile, now, awsHoneyTrailReconcileEvery) {
+		return read, err
+	}
+	listed, complete, err := s.listAWSHoneyTrail(ctx, tenantID, account, bucket, decoys, keys, now, awsHoneyTrailMaxReadsPerPass-read)
+	if !complete {
+		s.awsHoneyTrailClock.forget(reconcile)
+	}
+	return read + listed, err
+}
+
+// listAWSHoneyTrail reads unread log files from the day folders (UTC) of
+// every account and Region the trail holds, from the day its oldest watched
+// decoy was created through today (N4-L2: not only today and yesterday, so
+// files delivered while the control plane was down are read when it is back),
+// up to budget files, and reports whether it listed everything.
+func (s *Server) listAWSHoneyTrail(ctx context.Context, tenantID string, account *awsHoneyProvider, bucket *objectstore.S3,
+	decoys map[string]string, keys map[string]bool, now time.Time, budget int) (int, bool, error) {
+	since, err := s.store.AWSHoneyTrailWatchedSince(ctx, tenantID)
+	if err != nil {
+		return 0, false, err
+	}
+	days := awsHoneyTrailDayRange(since, now)
+	yesterday := now.UTC().Truncate(24*time.Hour).AddDate(0, 0, -1)
+	folders := 0
+	trail := account.cfg.Trail
 	accountsPrefix, err := dynsecret.AWSTrailAccountsPrefix(trail.OrganizationID)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	accounts := append([]string(nil), trail.Accounts...)
 	if len(accounts) == 0 {
 		if accounts, err = bucket.ListDirs(ctx, accountsPrefix, awsHoneyTrailMaxAccounts); err != nil {
-			return 0, err
+			return 0, false, err
 		}
 	}
 	sort.Strings(accounts)
@@ -201,7 +246,7 @@ func (s *Server) readAWSHoneyTrail(ctx context.Context, tenantID string, account
 			continue
 		}
 		if err != nil {
-			return read, err
+			return read, false, err
 		}
 		for _, region := range regions {
 			if !dynsecret.ValidAWSTrailRegion(region) {
@@ -214,28 +259,110 @@ func (s *Server) readAWSHoneyTrail(ctx context.Context, tenantID string, account
 					continue
 				}
 				if folders >= awsHoneyTrailMaxFoldersPerPass {
-					return read, nil
+					return read, false, nil
 				}
 				folders++
 				folder, err := dynsecret.AWSTrailDayFolder(accountsPrefix, accountID, region, day)
 				if err != nil {
-					return read, err
+					return read, false, err
 				}
-				n, complete, err := s.readAWSHoneyTrailFolder(ctx, tenantID, account.cfg.ID, bucket, folder, decoys, keys, awsHoneyTrailMaxReadsPerPass-read)
+				n, complete, err := s.readAWSHoneyTrailFolder(ctx, tenantID, account.cfg.ID, bucket, folder, decoys, keys, budget-read)
 				read += n
 				if err != nil {
-					return read, err
+					return read, false, err
 				}
 				if complete && day.Before(yesterday) {
 					s.awsHoneyTrailDays.record(daysKey, day)
 				}
-				if read >= awsHoneyTrailMaxReadsPerPass {
-					return read, nil
+				if read >= budget {
+					return read, false, nil
 				}
 			}
 		}
 	}
+	return read, true, nil
+}
+
+// readAWSHoneyTrailQueue reads the files the trail's notifications name
+// (N4-L1), at most awsHoneyTrailMaxQueueRounds receives of ten messages a
+// pass. A message is deleted once every file it names is read, recorded, or
+// gone; one whose file could not be fetched stays and comes back. A message
+// that names no file of the trail (S3's test event, another bucket, a digest
+// file) is deleted unread.
+func (s *Server) readAWSHoneyTrailQueue(ctx context.Context, tenantID string, account *awsHoneyProvider, bucket *objectstore.S3,
+	decoys map[string]string, keys map[string]bool) (int, error) {
+	queue, err := account.openTrailQueue(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer queue.Close()
+	trail := account.cfg.Trail
+	read := 0
+	for round := 0; round < awsHoneyTrailMaxQueueRounds && read < awsHoneyTrailMaxReadsPerPass; round++ {
+		messages, err := queue.Receive(ctx, 10)
+		if err != nil {
+			return read, err
+		}
+		if len(messages) == 0 {
+			return read, nil
+		}
+		handled := make([]string, 0, len(messages))
+		for _, message := range messages {
+			names := awsHoneyTrailNotifiedNames(trail.Bucket, trail.KeyPrefix, message)
+			done, err := s.store.AWSHoneyTrailObjectsRead(ctx, tenantID, account.cfg.ID, names)
+			if err != nil {
+				return read, err
+			}
+			complete := true
+			for _, name := range names {
+				if done[name] {
+					continue
+				}
+				scan, err := s.scanAWSHoneyTrailObject(ctx, bucket, account.cfg.ID, name, decoys, keys)
+				if errors.Is(err, objectstore.ErrNotFound) {
+					continue
+				}
+				if err != nil {
+					complete = false // the message comes back for the file
+					break
+				}
+				if err := s.orch.RecordAWSHoneyTrailObject(ctx, tenantID, scan); err != nil {
+					return read, err
+				}
+				read++
+			}
+			if complete {
+				handled = append(handled, message.Receipt)
+			}
+		}
+		if err := queue.Delete(ctx, handled); err != nil {
+			return read, err
+		}
+	}
 	return read, nil
+}
+
+// awsHoneyTrailNotifiedNames are the log files of the trail a notification
+// names, relative to the trail's key prefix as the bucket client reads them.
+func awsHoneyTrailNotifiedNames(bucketName, keyPrefix string, message dynsecret.AWSTrailMessage) []string {
+	if message.Bucket != bucketName {
+		return nil
+	}
+	names := make([]string, 0, len(message.Keys))
+	for _, key := range message.Keys {
+		name := key
+		if keyPrefix != "" {
+			rest, ok := strings.CutPrefix(key, keyPrefix+"/")
+			if !ok {
+				continue
+			}
+			name = rest
+		}
+		if strings.HasPrefix(name, "AWSLogs/") && dynsecret.AWSTrailLogFileName(name) {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // readAWSHoneyTrailFolder records up to budget unread log files of one day

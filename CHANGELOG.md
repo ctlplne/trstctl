@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An AWS decoy trail can be read from its bucket's notifications instead of listing it (N4-L1):
+  `trail.notifications_queue_url` names an SQS queue receiving S3 event notifications, EventBridge `Object Created`
+  events or the trail's SNS notifications; it is read every 30 seconds, the files its messages name are read and the
+  messages deleted, and the bucket is listed in full only on the first pass and once a day after.
 - AWS STS revocation falls back to a cutoff when a role's inline policies are full (N3-L2):
   `deny_quota_fallback: token_issue_time` attaches a managed policy denying every session of the role issued before the
   revocation (`aws:TokenIssueTime`), read back before completion; earlier cutoffs and the per-session denials it covers

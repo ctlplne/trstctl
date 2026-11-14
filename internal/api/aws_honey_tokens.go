@@ -41,6 +41,9 @@ type AWSHoneyTrail struct {
 	OrganizationID string                      `json:"organization_id,omitempty"`
 	Accounts       []string                    `json:"accounts"`
 	Read           *store.AWSHoneyTrailSummary `json:"read,omitempty"`
+	// NotificationsQueueURL is the queue of the bucket's notifications the
+	// monitor reads instead of listing the bucket (N4-L1).
+	NotificationsQueueURL string `json:"notifications_queue_url,omitempty"`
 }
 
 // awsHoneyDetectionScope says what the monitor reads for one account.
@@ -48,8 +51,12 @@ func awsHoneyDetectionScope(account AWSHoneyAccount) string {
 	if account.Trail == nil {
 		return "CloudTrail LookupEvents management events in the configured account and Regions; delivery is delayed and data events are not covered"
 	}
-	return "CloudTrail LookupEvents management events in the configured account and Regions, and the log files of trail bucket " + account.Trail.Bucket +
-		" — every account it holds, with data events when the trail logs them; delivery is delayed"
+	how := " — every account it holds, with data events when the trail logs them; delivery is delayed"
+	if account.Trail.NotificationsQueueURL != "" {
+		// N4-L1: the files its notifications name, and the bucket in full once a day.
+		how = " named by the notifications on " + account.Trail.NotificationsQueueURL + ", with the bucket listed in full once a day — every account it holds, with data events when the trail logs them; delivery is delayed"
+	}
+	return "CloudTrail LookupEvents management events in the configured account and Regions, and the log files of trail bucket " + account.Trail.Bucket + how
 }
 
 type awsHoneyCreateRequest struct {
