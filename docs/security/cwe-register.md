@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3328 annotated sites across 35 rules. Each row is
+3331 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (827 sites)
+### G101 — CWE-798 Use of hardcoded credentials (830 sites)
 
 | Location | Reason |
 |---|---|
@@ -820,6 +820,7 @@ not this file.
 | `internal/server/service_account_reconciliation_native_test.go:34` | protected owned lab credential-file reference only (CWE-798) |
 | `internal/server/service_account_reconciliation_native_test.go:74` | separate protected owned lab reference only (CWE-798) |
 | `internal/server/service_account_rotation_native_ad_test.go:37` | protected lab credential-file reference only, never a credential value (CWE-798) |
+| `internal/server/servicenow_catalog_approvals_served_test.go:63` | the name of a test-only secret, not a credential (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:103` | the name of a test-only secret, not a credential (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:204` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:221` | an env: reference to a test-only value (CWE-798) |
@@ -885,6 +886,8 @@ not this file.
 | `internal/ticketintake/intake_test.go:163` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
 | `internal/ticketintake/note_test.go:19` | credential reference, no credential value present (CWE-798) |
 | `internal/ticketintake/note_test.go:50` | a refused non-reference, not a credential (CWE-798) |
+| `internal/ticketintake/status_catalog_test.go:16` | credential reference, no credential value present (CWE-798) |
+| `internal/ticketintake/status_catalog_test.go:30` | credential reference, no credential value present (CWE-798) |
 | `tools/dodcensus/claims.go:165` | developer-tool constant matching the secret-name heuristic; no credential value (CWE-798) |
 | `tools/dodcensus/runtime.go:40` | developer-tool constant matching the secret-name heuristic; no credential value (CWE-798) |
 | `tools/trstctllint/keymaterial/keymaterial_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |

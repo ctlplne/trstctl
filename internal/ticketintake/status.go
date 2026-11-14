@@ -25,8 +25,26 @@ import (
 // MaxStatusTickets bounds one status read.
 const MaxStatusTickets = 100
 
-// StatusTable is the one ServiceNow table whose approval decides a request.
+// StatusTable is the change request table, whose approval decides a request
+// (P13).
 const StatusTable = "change_request"
+
+// StatusTables are the ServiceNow tables whose approval decides a request
+// intake opened from them: change requests (P13), and catalog requested items
+// and requests (P13-L2).
+var StatusTables = map[string]bool{StatusTable: true, "sc_req_item": true, "sc_request": true}
+
+// StatusTicketNoun is how a decision's reason names a ticket of table.
+func StatusTicketNoun(table string) string {
+	switch table {
+	case "sc_req_item":
+		return "requested item"
+	case "sc_request":
+		return "request"
+	default:
+		return "change"
+	}
+}
 
 // ServiceNow approval values the control plane acts on.
 const (
@@ -72,8 +90,8 @@ func validateStatusIntent(intent StatusIntent) error {
 	if parsed, err := uuid.Parse(intent.StatusID); err != nil || parsed == uuid.Nil {
 		return errors.New("ticket status: status_id must be a non-zero UUID")
 	}
-	if intent.SNTable != StatusTable {
-		return errors.New("ticket status: only change_request approvals decide requests")
+	if !StatusTables[intent.SNTable] {
+		return errors.New("ticket status: only change_request, sc_req_item and sc_request approvals decide requests")
 	}
 	if !strings.HasPrefix(strings.TrimSpace(intent.TokenRef), "secret://") {
 		return errors.New("ticket status: token_ref must be a secret:// reference")
@@ -101,7 +119,7 @@ func StatusEndpoint(intent StatusIntent) (string, error) {
 	if err != nil || base.Scheme == "" || base.Host == "" {
 		return "", errors.New("ticket status: instance URL must be absolute")
 	}
-	base.Path = strings.TrimRight(base.Path, "/") + "/api/now/table/" + StatusTable
+	base.Path = strings.TrimRight(base.Path, "/") + "/api/now/table/" + intent.SNTable
 	q := url.Values{}
 	q.Set("sysparm_query", "sys_idIN"+strings.Join(intent.SourceRefs, ","))
 	q.Set("sysparm_fields", "sys_id,number,approval,state")

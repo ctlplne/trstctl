@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- Catalog requested items and requests approve or deny the trstctl requests ServiceNow intake opened from them
+  (P13-L2): a `sc_req_item` or `sc_request` intake schedule's approval read decides its requests as a change request's
+  does, attributed to the item's or request's own table and number.
 - Every trstctl decision on a request ServiceNow intake opened goes back to its ticket as a work note (P13-L1):
   approved, denied, canceled, expired and issued each queue one `ticket.note` relay job with the decision, the decider
   and the reason; the relay adds it through the intake schedule's token once, reading the ticket's notes first.

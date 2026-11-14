@@ -29,22 +29,23 @@ import (
 // cannot be mistaken for a reviewer in trstctl.
 
 // dispatchTicketStatusJob queues one approval read for a ServiceNow
-// change_request schedule, one in flight per schedule.
+// change_request, sc_req_item or sc_request schedule (P13, P13-L2), one in
+// flight per schedule.
 func (s *Server) dispatchTicketStatusJob(ctx context.Context, tenantID string, sched store.TicketIntakeSchedule) {
-	if sched.System != ticketintake.SystemServiceNow || sched.SNTable != ticketintake.StatusTable || !sched.Enabled {
+	if sched.System != ticketintake.SystemServiceNow || !ticketintake.StatusTables[sched.SNTable] || !sched.Enabled {
 		return
 	}
 	pending, err := s.store.HasPendingTicketStatusJob(ctx, tenantID, sched.Name)
 	if err != nil || pending {
 		return
 	}
-	waiting, err := s.store.IssuanceRequestsAwaitingTicket(ctx, tenantID, ticketintake.StatusTable, ticketintake.MaxStatusTickets)
+	waiting, err := s.store.IssuanceRequestsAwaitingTicket(ctx, tenantID, sched.SNTable, ticketintake.MaxStatusTickets)
 	if err != nil || len(waiting) == 0 {
 		return
 	}
 	refs := make([]string, 0, len(waiting))
 	for _, r := range waiting {
-		refs = append(refs, strings.TrimPrefix(r.TicketRef, ticketintake.StatusTable+":"))
+		refs = append(refs, strings.TrimPrefix(r.TicketRef, sched.SNTable+":"))
 	}
 	intent := ticketintake.StatusIntent{Schedule: ticketintake.ScheduleName(sched.Name), StatusID: uuid.NewString(),
 		InstanceURL: sched.InstanceURL, TokenRef: sched.TokenRef, SNTable: sched.SNTable, SourceRefs: refs}
@@ -97,19 +98,21 @@ func (a *agentService) recordTicketStatus(ctx context.Context, tenantID string, 
 		default:
 			continue
 		}
-		request, found, err := a.store.IssuanceRequestByTicket(ctx, tenantID, ticketintake.StatusTable+":"+ticket.SourceRef)
+		request, found, err := a.store.IssuanceRequestByTicket(ctx, tenantID, intent.SNTable+":"+ticket.SourceRef)
 		if err != nil {
 			return err
 		}
 		if !found || request.Origin != ticketintake.SystemServiceNow {
 			continue
 		}
-		change := ticket.Number
-		if change == "" {
-			change = ticket.SourceRef
+		number := ticket.Number
+		if number == "" {
+			number = ticket.SourceRef
 		}
+		// P13-L2: a catalog requested item or request decides as a change does,
+		// attributed to its own table and number.
 		if _, err := a.orch.DecideIssuanceRequestFromTicket(ctx, tenantID, request.ID, to,
-			"servicenow:change_request:"+change, "change "+change+" was "+verb+" in ServiceNow"); err != nil {
+			"servicenow:"+intent.SNTable+":"+number, ticketintake.StatusTicketNoun(intent.SNTable)+" "+number+" was "+verb+" in ServiceNow"); err != nil {
 			return err
 		}
 	}

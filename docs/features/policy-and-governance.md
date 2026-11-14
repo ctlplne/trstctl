@@ -1429,6 +1429,10 @@ approved in ServiceNow approves the matching request once, attributed to the cha
 (`servicenow:change_request:<number>`, "change <number> was approved in ServiceNow");
 a rejected change denies it. Separation of duties still applies, other approval
 values change nothing, and reading the same approvals again records nothing new.
+Catalog requested items (`sc_req_item`) and requests (`sc_request`) decide the
+requests intake opened from them the same way (P13-L2), each schedule's read on its
+own table, attributed `servicenow:sc_req_item:<number>` ("requested item <number> was
+approved in ServiceNow") or `servicenow:sc_request:<number>`.
 The relay job kind is `ticket.status`; enable it beside `ticket.sync`.
 
 **trstctl's decisions as work notes (P13-L1).** Every decision trstctl records on a

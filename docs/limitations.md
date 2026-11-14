@@ -8500,7 +8500,7 @@ on EST.
 ## ServiceNow two-way sync (P13) — served
 
 Approving a change request in ServiceNow approves the matching trstctl request once: for an intake schedule on the
-`change_request` table, the network relay reads the approval of the changes whose requests still wait (`ticket.status`
+`change_request` table (and, since P13-L2, `sc_req_item` and `sc_request`), the network relay reads the approval of the changes whose requests still wait (`ticket.status`
 jobs, at most 100 tickets each, the schedule's token redeemed per attempt), and an approved or rejected change decides
 its request once under an event id derived from the request, attributed to the change. Closing a trstctl incident
 (`POST /api/v1/incidents/executions/{id}/close`) resolves the ServiceNow incident its response dispatch opened, found
@@ -8508,8 +8508,8 @@ by the correlation `trstctl:incident:<id>`; the job reads first and patches only
 closure's notes, so a replayed update changes nothing. Proven against a ServiceNow Table API stand-in with the
 production relay; a ServiceNow developer instance is a Track B row. A trstctl decision on an intake-opened request
 goes back to its ticket as a work note (P13-L1) only through an enabled intake schedule reading that ticket's table
-(the first by name when two do). What comes next: approvals from `sc_req_item` and `sc_request`, and a ServiceNow
-Store app or a connector for ServiceNow's certificate module (through ServiceNow's certification).
+(the first by name when two do). What comes next: a ServiceNow Store app or a connector for ServiceNow's certificate
+module (through ServiceNow's certification).
 
 ## Live checks and chat scanning for leaked secrets (P14) — served
 
