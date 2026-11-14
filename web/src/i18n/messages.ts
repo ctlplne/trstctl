@@ -30022,6 +30022,15 @@ export const messages = {
     defaultMessage: "Delegation target (optional)",
     description: "CLI-parity console flow copy.",
   },
+  "acme.dns01.persistDelegationTarget": {
+    defaultMessage: "Persist record delegation target (optional)",
+    description: "P1-L4: the CNAME target of a delegated config's _validation-persist names.",
+  },
+  "acme.dns01.persistDelegationTargetHelp": {
+    defaultMessage:
+      "Where this config's _validation-persist names point, when not at the delegation target. Leave empty to publish standing records at the delegation target, as challenge records are.",
+    description: "P1-L4: when to set the persist delegation target.",
+  },
   "parity.deleteOwner_b5f9bd": {
     defaultMessage: "Delete owner",
     description: "CLI-parity console flow copy.",

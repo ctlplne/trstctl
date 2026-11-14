@@ -687,6 +687,10 @@
           "name": {
             "type": "string"
           },
+          "persist_delegation_target": {
+            "description": "the CNAME target of the config's _validation-persist names, when it is not delegation_target (P1-L4)",
+            "type": "string"
+          },
           "provider": {
             "type": "string"
           },
@@ -769,6 +773,10 @@
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "persist_delegation_target": {
+            "description": "with delegation_target: the CNAME target of the config's _validation-persist names, when it is not delegation_target (P1-L4)",
             "type": "string"
           },
           "provider": {

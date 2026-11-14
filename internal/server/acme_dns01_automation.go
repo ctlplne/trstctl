@@ -83,6 +83,9 @@ type acmeDNS01OutboxPayload struct {
 	FailureStage        string          `json:"failure_stage,omitempty"`
 	ErrorCategory       string          `json:"error_category,omitempty"`
 	RecoveryOf          string          `json:"recovery_of,omitempty"`
+	// PersistDelegationTarget (P1-L4) is the CNAME target the config's
+	// _validation-persist names point at, when it is not DelegationTarget.
+	PersistDelegationTarget string `json:"persist_delegation_target,omitempty"`
 }
 
 type acmeDNS01RecordEvent struct {
@@ -152,6 +155,7 @@ func (a *servedACMEDNS01Automation) presentRecord(ctx context.Context, tenantID 
 		CredentialRefs:   cfg.CredentialRefs,
 		Config:           cfg.Config,
 	}
+	payload.PersistDelegationTarget = cfg.PersistDelegationTarget
 	// The key carries a per-publish nonce, and it has to.
 	//
 	// Keyed on (config, record, value) alone, a SECOND solve of the same
@@ -914,6 +918,13 @@ func (a *servedACMEDNS01Automation) wrapDelegatedDNS01Provider(payload acmeDNS01
 	target := strings.TrimSuffix(strings.TrimSpace(payload.DelegationTarget), ".")
 	if target == "" {
 		return provider, nil
+	}
+	// P1-L4: a _validation-persist name points at the config's persist
+	// delegation target when it names one; otherwise at the same target as
+	// _acme-challenge.
+	persist := strings.TrimSuffix(strings.TrimSpace(payload.PersistDelegationTarget), ".")
+	if persist != "" && strings.HasPrefix(strings.ToLower(payload.RecordName), "_validation-persist.") {
+		target = persist
 	}
 	resolver := a.cnameResolver
 	if resolver == nil {

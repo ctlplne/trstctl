@@ -3535,6 +3535,7 @@ func componentSchemas() map[string]*Schema {
 		"config": {Type: "object"}, "caa_issuer_domain": str(),
 		"allowed_methods": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"http-01", "dns-01", "tls-alpn-01", "dns-persist-01"}}},
 		"allow_wildcards": {Type: "boolean"}, "allow_upstream_dv": {Type: "boolean"},
+		"persist_delegation_target": {Type: "string", Description: "with delegation_target: the CNAME target of the config's _validation-persist names, when it is not delegation_target (P1-L4)"},
 	}, "name", "provider")
 	acmeDNS01ProviderConfig := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "name": str(), "provider": str(), "zone": str(),
@@ -3543,6 +3544,7 @@ func componentSchemas() map[string]*Schema {
 		"allowed_methods": {Type: "array", Items: str()}, "allow_wildcards": {Type: "boolean"},
 		"allow_upstream_dv": {Type: "boolean"},
 		"secret_handling":   str(), "created_at": timestamp(), "updated_at": timestamp(),
+		"persist_delegation_target": {Type: "string", Description: "the CNAME target of the config's _validation-persist names, when it is not delegation_target (P1-L4)"},
 	}, "id", "tenant_id", "name", "provider", "credential_refs", "config", "allowed_methods", "secret_handling", "created_at", "updated_at")
 	acmeDNS01ProviderConfigList := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("ACMEDNS01ProviderConfig")},

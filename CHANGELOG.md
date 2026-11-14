@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A delegated DNS-01 provider config can delegate its `_validation-persist` names apart from `_acme-challenge`
+  (P1-L4): `persist_delegation_target` (console: **Persist record delegation target**) is the CNAME target the standing
+  dns-persist-01 record is written at; without it the record follows `delegation_target` as before, and a persist name
+  delegated anywhere else is refused before any write. Migration 0479 adds the field, empty for every existing config.
 - A Jamf poll schedule can read Jamf Pro's mobile device inventory too (N9-L1): `jamf_mobile_devices` (console:
   **Read mobile devices too**) has the relay read the first 100 mobile devices after the computers, with the same
   token. Each is listed as `mobile-<id>`, correlated by serial and watched for renewal; its install state stays

@@ -1675,6 +1675,7 @@ function DNS01ConfigDialog({
   const [zone, setZone] = useState(config?.zone ?? "");
   const [challengeDomain, setChallengeDomain] = useState(config?.challenge_domain ?? "");
   const [delegationTarget, setDelegationTarget] = useState(config?.delegation_target ?? "");
+  const [persistDelegationTarget, setPersistDelegationTarget] = useState(config?.persist_delegation_target ?? "");
   const [caaIssuerDomain, setCAAIssuerDomain] = useState(config?.caa_issuer_domain ?? "");
   const [allowWildcards, setAllowWildcards] = useState(config?.allow_wildcards ?? false);
   // B7 consent. Seeded from the saved config because this dialog does a PUT
@@ -1745,6 +1746,7 @@ function DNS01ConfigDialog({
     if (zone.trim()) input.zone = zone.trim();
     if (challengeDomain.trim()) input.challenge_domain = challengeDomain.trim();
     if (delegationTarget.trim()) input.delegation_target = delegationTarget.trim();
+    if (persistDelegationTarget.trim()) input.persist_delegation_target = persistDelegationTarget.trim();
     if (caaIssuerDomain.trim()) input.caa_issuer_domain = caaIssuerDomain.trim();
     if (allowedMethods.length > 0) input.allowed_methods = allowedMethods;
     if (providerConfig) input.config = providerConfig;
@@ -1832,6 +1834,15 @@ function DNS01ConfigDialog({
               onChange={(event) => setDelegationTarget(event.target.value)}
               className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
             />
+          </label>
+          <label className="grid gap-1 text-body font-medium">
+            {t("acme.dns01.persistDelegationTarget")}
+            <input
+              value={persistDelegationTarget}
+              onChange={(event) => setPersistDelegationTarget(event.target.value)}
+              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+            />
+            <span className="text-caption font-normal text-muted-foreground">{t("acme.dns01.persistDelegationTargetHelp")}</span>
           </label>
           <label className="grid gap-1 text-body font-medium">
             {t("parity.caaIssuerDomainOptional_8c2f53")}

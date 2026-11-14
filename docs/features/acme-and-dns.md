@@ -304,7 +304,12 @@ served DNS-01 path checks authoritative live CAA before enqueueing provider writ
 fails closed if the governing CAA set denies that issuer or cannot be read. When the
 provider config sets `delegation_target`, the outbox worker verifies the live
 `_acme-challenge` CNAME against that configured target and publishes/cleans up the TXT
-only at the delegated validation name.
+only at the delegated validation name. A delegated config's `_validation-persist` names
+(the standing dns-persist-01 records) follow the same target unless the config sets
+`persist_delegation_target` (P1-L4): then `_validation-persist.<name>` must point
+(CNAME) at that target and the standing record is written there, so the persist names
+can be delegated to a validation name of their own, apart from the challenge records.
+A persist name delegated anywhere else is refused before any write.
 
 ### Any DNS provider: the plugin framework (F70)
 

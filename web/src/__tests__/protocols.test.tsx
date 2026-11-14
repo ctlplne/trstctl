@@ -2052,6 +2052,50 @@ describe("protocol surface", () => {
     );
   });
 
+  it("saves a persist record delegation target beside the delegation target (P1-L4)", async () => {
+    const user = userEvent.setup();
+    apiMock.acmeDNS01ProviderConfigs.mockResolvedValueOnce({ items: [] });
+    apiMock.createACMEDNS01ProviderConfig.mockResolvedValue({
+      id: "01900000-0000-7000-8000-000000000174",
+      tenant_id: "11111111-1111-1111-1111-111111111111",
+      name: "delegated-persist",
+      provider: "cloudflare",
+      zone: "example.test",
+      delegation_target: "p1l4.auth.acme-dns.example.net",
+      persist_delegation_target: "p1l4-persist.auth.acme-dns.example.net",
+      credential_refs: { api_token_ref: "secret://dns/cloudflare/delegated" },
+      config: {},
+      allowed_methods: ["dns-persist-01"],
+      allow_wildcards: false,
+      allow_upstream_dv: true,
+      secret_handling: "credential_refs_only",
+      created_at: "2026-11-14T00:00:00Z",
+      updated_at: "2026-11-14T00:00:00Z",
+    });
+    await renderProtocols();
+
+    await user.click(screen.getByRole("button", { name: "Add DNS-01 provider" }));
+    const dialog = screen.getByRole("dialog", { name: "Add DNS-01 provider config" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Config name" }), "delegated-persist");
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Provider" }), "cloudflare");
+    await user.type(within(dialog).getByRole("textbox", { name: "Zone (optional)" }), "example.test");
+    await user.type(within(dialog).getByRole("textbox", { name: "Delegation target (optional)" }), "p1l4.auth.acme-dns.example.net");
+    await user.type(within(dialog).getByRole("textbox", { name: /Persist record delegation target/ }), "p1l4-persist.auth.acme-dns.example.net");
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /Credential references JSON \(optional\)/ }), {
+      target: { value: '{"api_token_ref":"secret://dns/cloudflare/delegated"}' },
+    });
+    await user.click(within(dialog).getByRole("checkbox", { name: "dns-persist-01" }));
+    await user.click(within(dialog).getByRole("button", { name: "Add provider" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add DNS-01 provider config" })).not.toBeInTheDocument());
+    expect(apiMock.createACMEDNS01ProviderConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        delegation_target: "p1l4.auth.acme-dns.example.net",
+        persist_delegation_target: "p1l4-persist.auth.acme-dns.example.net",
+      }),
+    );
+  });
+
   it("validates and saves the served DNS-01 config form without accepting raw non-object JSON", async () => {
     const user = userEvent.setup();
     await renderProtocols();

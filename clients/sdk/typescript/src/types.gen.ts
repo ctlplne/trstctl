@@ -12497,6 +12497,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            /** @description the CNAME target of the config's _validation-persist names, when it is not delegation_target (P1-L4) */
+            persist_delegation_target?: string;
             provider: string;
             secret_handling: string;
             /** Format: uuid */
@@ -12518,6 +12520,8 @@ export interface components {
             credential_refs?: Record<string, never>;
             delegation_target?: string;
             name: string;
+            /** @description with delegation_target: the CNAME target of the config's _validation-persist names, when it is not delegation_target (P1-L4) */
+            persist_delegation_target?: string;
             provider: string;
             zone?: string;
         };

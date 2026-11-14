@@ -166,6 +166,7 @@ export interface ACMEDNS01ProviderConfig {
   delegation_target?: string;
   id: string;
   name: string;
+  persist_delegation_target?: string;
   provider: string;
   secret_handling: string;
   tenant_id: string;
@@ -187,6 +188,7 @@ export interface ACMEDNS01ProviderConfigRequest {
   credential_refs?: Record<string, unknown>;
   delegation_target?: string;
   name: string;
+  persist_delegation_target?: string;
   provider: string;
   zone?: string;
 }

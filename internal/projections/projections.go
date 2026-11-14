@@ -3088,6 +3088,9 @@ type ACMEDNS01ProviderConfigUpserted struct {
 	// operator who configured this before upstream DV existed cannot have
 	// consented to it.
 	AllowUpstreamDV bool `json:"allow_upstream_dv,omitempty"`
+	// PersistDelegationTarget (P1-L4) is the CNAME target of a delegated
+	// config's _validation-persist names, when it is not DelegationTarget.
+	PersistDelegationTarget string `json:"persist_delegation_target,omitempty"`
 }
 
 // ACMEDNS01ProviderConfigDeleted is the payload of
@@ -7946,6 +7949,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			AllowedMethods: pl.AllowedMethods, AllowWildcards: pl.AllowWildcards,
 			AllowUpstreamDV: pl.AllowUpstreamDV,
 			CreatedAt:       e.Time, UpdatedAt: e.Time,
+			PersistDelegationTarget: pl.PersistDelegationTarget,
 		})
 	case EventACMEDNS01ProviderConfigDeleted:
 		var pl ACMEDNS01ProviderConfigDeleted

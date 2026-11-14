@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -57,6 +58,10 @@ type dns01ProviderConfigRequest struct {
 	// behalf, and as validation windows compress that publishing becomes
 	// frequent and unattended.
 	AllowUpstreamDV bool `json:"allow_upstream_dv,omitempty"`
+	// PersistDelegationTarget (P1-L4) is, with DelegationTarget, the CNAME
+	// target of the config's _validation-persist names when they are not
+	// delegated to DelegationTarget.
+	PersistDelegationTarget string `json:"persist_delegation_target,omitempty"`
 }
 
 type dns01ProviderConfigResponse struct {
@@ -76,6 +81,9 @@ type dns01ProviderConfigResponse struct {
 	SecretHandling   string          `json:"secret_handling"`
 	CreatedAt        string          `json:"created_at"`
 	UpdatedAt        string          `json:"updated_at"`
+	// PersistDelegationTarget is where the config's _validation-persist names
+	// point, when not at DelegationTarget (P1-L4).
+	PersistDelegationTarget string `json:"persist_delegation_target,omitempty"`
 }
 
 type dns01ProviderConfigListResponse struct {
@@ -398,7 +406,7 @@ func (a *API) preflightACMEDNS01(w http.ResponseWriter, r *http.Request) {
 func (a *API) emitACMEDNS01ProviderConfig(ctx context.Context, tenantID, id string, req dns01ProviderConfigRequest) error {
 	payload, err := json.Marshal(projections.ACMEDNS01ProviderConfigUpserted{
 		ID: id, Name: req.Name, Provider: req.Provider, Zone: req.Zone,
-		ChallengeDomain: req.ChallengeDomain, DelegationTarget: req.DelegationTarget,
+		ChallengeDomain: req.ChallengeDomain, DelegationTarget: req.DelegationTarget, PersistDelegationTarget: req.PersistDelegationTarget,
 		CredentialRefs: req.CredentialRefs, Config: req.Config, CAAIssuerDomain: req.CAAIssuerDomain,
 		AllowedMethods: req.AllowedMethods, AllowWildcards: req.AllowWildcards,
 		AllowUpstreamDV: req.AllowUpstreamDV,
@@ -457,12 +465,16 @@ func (a *API) decodeACMEDNS01ProviderConfigRequest(r *http.Request) (dns01Provid
 	req.Zone = strings.TrimSpace(req.Zone)
 	req.ChallengeDomain = strings.TrimSpace(req.ChallengeDomain)
 	req.DelegationTarget = strings.TrimSpace(req.DelegationTarget)
+	req.PersistDelegationTarget = strings.TrimSuffix(strings.TrimSpace(req.PersistDelegationTarget), ".")
 	req.CAAIssuerDomain = strings.TrimSpace(req.CAAIssuerDomain)
 	if req.Name == "" || req.Provider == "" {
 		return dns01ProviderConfigRequest{}, errStatus(http.StatusBadRequest, "name and provider are required")
 	}
 	if !a.servedDNS01ProviderName(req.Provider) {
 		return dns01ProviderConfigRequest{}, errStatus(http.StatusBadRequest, "provider must name a served DNS-01 provider")
+	}
+	if err := validateDNS01PersistDelegationTarget(req.DelegationTarget, req.PersistDelegationTarget); err != nil {
+		return dns01ProviderConfigRequest{}, err
 	}
 	refs, err := normalizeDNS01JSONObject(req.CredentialRefs, "credential_refs")
 	if err != nil {
@@ -596,7 +608,7 @@ func toDNS01ProviderConfigResponse(rec store.ACMEDNS01ProviderConfig) dns01Provi
 	}
 	return dns01ProviderConfigResponse{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 		ID: rec.ID, TenantID: rec.TenantID, Name: rec.Name, Provider: rec.Provider,
-		Zone: rec.Zone, ChallengeDomain: rec.ChallengeDomain, DelegationTarget: rec.DelegationTarget,
+		Zone: rec.Zone, ChallengeDomain: rec.ChallengeDomain, DelegationTarget: rec.DelegationTarget, PersistDelegationTarget: rec.PersistDelegationTarget,
 		CredentialRefs: refs, Config: cfg, CAAIssuerDomain: rec.CAAIssuerDomain,
 		AllowedMethods: methods, AllowWildcards: rec.AllowWildcards,
 		AllowUpstreamDV: rec.AllowUpstreamDV,
@@ -926,4 +938,25 @@ func (a *API) listACMEUpstreamAuthorizations(w http.ResponseWriter, r *http.Requ
 		out.Items = append(out.Items, item)
 	}
 	a.writeJSON(w, http.StatusOK, out)
+}
+
+// dns01DelegationName is a CNAME target a delegated config writes at: DNS
+// labels of letters, digits, hyphens and underscores (an acme-dns name or an
+// _acme-challenge label).
+var dns01DelegationName = regexp.MustCompile(`^([A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
+
+// validateDNS01PersistDelegationTarget checks a config's
+// persist_delegation_target (P1-L4): only beside delegation_target (a direct
+// config publishes _validation-persist records in its own zone), and a DNS
+// name.
+func validateDNS01PersistDelegationTarget(delegation, persist string) error {
+	switch {
+	case persist == "":
+		return nil
+	case delegation == "":
+		return errStatus(http.StatusBadRequest, "persist_delegation_target needs delegation_target: a direct config publishes _validation-persist records in its own zone")
+	case len(persist) > 253 || !dns01DelegationName.MatchString(persist):
+		return errStatus(http.StatusBadRequest, "persist_delegation_target must be a DNS name (the CNAME target of the _validation-persist names)")
+	}
+	return nil
 }

@@ -45,6 +45,10 @@ type ACMEDNS01ProviderConfig struct {
 	AllowUpstreamDV bool
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	// PersistDelegationTarget (P1-L4) is where a delegated config's
+	// _validation-persist names point (their CNAME target); empty means they
+	// point at DelegationTarget, as _acme-challenge does.
+	PersistDelegationTarget string
 }
 
 // ApplyACMEDNS01ProviderConfigUpsertedTx projects an
@@ -103,8 +107,8 @@ func (s *Store) ApplyACMEDNS01ProviderConfigUpsertedTx(ctx context.Context, tx p
 		        (id, tenant_id, name, provider, zone, challenge_domain, delegation_target,
 		         credential_refs, config, caa_issuer_domain, allowed_methods, allow_wildcards,
 		         allow_upstream_dv,
-		         created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		         created_at, updated_at, persist_delegation_target)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		 ON CONFLICT (tenant_id, id) DO UPDATE SET
 		     name = EXCLUDED.name,
 		     provider = EXCLUDED.provider,
@@ -117,11 +121,12 @@ func (s *Store) ApplyACMEDNS01ProviderConfigUpsertedTx(ctx context.Context, tx p
 		     allowed_methods = EXCLUDED.allowed_methods,
 		     allow_wildcards = EXCLUDED.allow_wildcards,
 		     allow_upstream_dv = EXCLUDED.allow_upstream_dv,
+		     persist_delegation_target = EXCLUDED.persist_delegation_target,
 		     created_at = acme_dns01_provider_configs.created_at,
 		     updated_at = EXCLUDED.updated_at`,
 		c.ID, c.TenantID, c.Name, c.Provider, c.Zone, c.ChallengeDomain, c.DelegationTarget,
 		jsonbOrEmpty(c.CredentialRefs), jsonbOrEmpty(c.Config), c.CAAIssuerDomain,
-		c.AllowedMethods, c.AllowWildcards, c.AllowUpstreamDV, c.CreatedAt, c.UpdatedAt)
+		c.AllowedMethods, c.AllowWildcards, c.AllowUpstreamDV, c.CreatedAt, c.UpdatedAt, c.PersistDelegationTarget)
 	return err
 }
 
@@ -141,7 +146,8 @@ func (s *Store) GetACMEDNS01ProviderConfig(ctx context.Context, tenantID, id str
 		return scanACMEDNS01ProviderConfig(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, name, provider, zone, challenge_domain,
 			        delegation_target, credential_refs, config, caa_issuer_domain,
-			        allowed_methods, allow_wildcards, allow_upstream_dv, created_at, updated_at
+			        allowed_methods, allow_wildcards, allow_upstream_dv, created_at, updated_at,
+			        persist_delegation_target
 			   FROM acme_dns01_provider_configs
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id), &out)
@@ -181,7 +187,8 @@ func (s *Store) ListACMEDNS01ProviderConfigs(ctx context.Context, tenantID strin
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, name, provider, zone, challenge_domain,
 			        delegation_target, credential_refs, config, caa_issuer_domain,
-			        allowed_methods, allow_wildcards, allow_upstream_dv, created_at, updated_at
+			        allowed_methods, allow_wildcards, allow_upstream_dv, created_at, updated_at,
+			        persist_delegation_target
 			   FROM acme_dns01_provider_configs
 			  WHERE tenant_id = $1
 			  ORDER BY name, id`,
@@ -205,7 +212,8 @@ func (s *Store) ListACMEDNS01ProviderConfigs(ctx context.Context, tenantID strin
 func scanACMEDNS01ProviderConfig(row pgx.Row, c *ACMEDNS01ProviderConfig) error {
 	return row.Scan(&c.ID, &c.TenantID, &c.Name, &c.Provider, &c.Zone, &c.ChallengeDomain,
 		&c.DelegationTarget, &c.CredentialRefs, &c.Config, &c.CAAIssuerDomain,
-		&c.AllowedMethods, &c.AllowWildcards, &c.AllowUpstreamDV, &c.CreatedAt, &c.UpdatedAt)
+		&c.AllowedMethods, &c.AllowWildcards, &c.AllowUpstreamDV, &c.CreatedAt, &c.UpdatedAt,
+		&c.PersistDelegationTarget)
 }
 
 // Upstream authorization staleness (epic B7).

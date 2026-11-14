@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3321 annotated sites across 35 rules. Each row is
+3322 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (821 sites)
+### G101 — CWE-798 Use of hardcoded credentials (822 sites)
 
 | Location | Reason |
 |---|---|
@@ -176,7 +176,7 @@ not this file.
 | `internal/aimodel/redactor_test.go:157` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/aimodel/redactor_test.go:162` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/access_bundles.go:1059` | environment variable names and placeholder launch lines; no credential value present (CWE-798) |
-| `internal/api/acme_dns01.go:597` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/acme_dns01.go:609` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/agents.go:59` | source-kind label naming where key material was located; no credential value present (CWE-798) |
 | `internal/api/aisurface_contract_test.go:148` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/compliance_report_dispatch_test.go:17` | fabricated fixture reference; no value is real (CWE-798) |
@@ -503,6 +503,7 @@ not this file.
 | `internal/server/acme_adcs_upstream_served_test.go:182` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/acme_dns01_live_txt_served_test.go:28` | fabricated fixture reference, no value is real (CWE-798) |
 | `internal/server/acme_dns01_qualification.go:23` | this is an operator-facing disclosure sentence, not credential material. |
+| `internal/server/acme_dns_persist_delegated_served_test.go:48` | a secret:// reference, no credential value (CWE-798) |
 | `internal/server/acme_dns_persist_policy_served_test.go:41` | fabricated fixture reference, no value is real (CWE-798) |
 | `internal/server/acme_eab_rotation_served_test.go:40` | logical fixture name, not secret material (CWE-798) |
 | `internal/server/acme_eab_rotation_served_test.go:41` | a reference, not secret material (CWE-798) |
@@ -1277,10 +1278,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7570` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7587` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7600` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7634` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7573` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7590` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7603` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7637` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1350,8 +1351,8 @@ not this file.
 | `internal/slackapp/socket.go:234` | a length is non-negative (CWE-190) |
 | `internal/store/access_bundle_standing_approvals.go:144` | positive by constraint (CWE-190) |
 | `internal/store/access_bundles.go:142` | bounded above (CWE-190) |
-| `internal/store/acme_dns01.go:292` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/acme_dns01.go:337` | non-negative by construction (CWE-190) |
+| `internal/store/acme_dns01.go:300` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/acme_dns01.go:345` | non-negative by construction (CWE-190) |
 | `internal/store/acme_upstream_ari.go:312` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
 | `internal/store/acme_upstream_ari.go:361` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
 | `internal/store/acme_upstream_ari.go:388` | DB CHECK keeps event_sequence positive (CWE-190) |
@@ -1725,7 +1726,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4227` | closed test table list above |
+| `internal/store/migration_content_test.go:4228` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
