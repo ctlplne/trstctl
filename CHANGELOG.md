@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A relay checks a CA host against its egress policy before certutil reaches it (A229-L1): the AD CS enrollment
+  agent restrictions read and the CA database read run certutil outside the Go dialer's guard, so a metadata or
+  link-local host, or one outside the egress allowlist, is refused without running certutil (`egress_refused`,
+  which the Posture page explains).
 - A relay keeps a job lease by the server's remaining time, not by comparing wall clocks (A227-L1): claims and
   extensions carry `lease_remaining_ms`, which the agent counts down on its own monotonic clock, so a host clock
   minutes off the server's neither drops fresh authority early nor renews after the lease lapsed.

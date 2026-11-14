@@ -187,6 +187,12 @@ func runADCSDatabase(ctx context.Context, ch Channel, job Job) bool {
 		report(ctx, ch, job, OutcomeFailed, "this relay has no certutil; CA database reads need a domain-joined Windows relay")
 		return false
 	}
+	// A229-L1: certutil reaches the CA outside the Go egress guard, so the CA
+	// host is checked against this agent's egress policy first.
+	if host, _, _ := strings.Cut(intent.CAConfig, `\`); externalToolEgress(ctx, host, certutilRPCPort) != nil {
+		report(ctx, ch, job, OutcomeFailed, "the CA host is outside this relay's egress policy; certutil was not run")
+		return false
+	}
 	rows, err := readCertutilView(ctx, CertutilPath, intent.CAConfig)
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "certutil could not read the CA database from this relay")

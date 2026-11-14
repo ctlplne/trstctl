@@ -2808,7 +2808,11 @@ is never mislabeled as proof that legacy `/certsrv` or NDES exists or is absent.
 On Windows relays, `certutil.exe` queries each publishing CA's
 `CA\\EnrollmentAgentRights`: a present policy is `enabled`, Microsoft's stable
 missing-value result is `disabled`, and access/transport/tool failures are
-`unobserved`. A non-Windows relay reports `requires_windows_relay`. Missing
+`unobserved`. A non-Windows relay reports `requires_windows_relay`. Before certutil
+runs, the CA host is checked against the relay's egress policy as a dial is (A229-L1); a
+refused host is not queried and reads `unobserved` with source `egress_refused`. The check
+resolves the name itself, and certutil resolves it again; a name the relay cannot resolve
+(a NetBIOS name) passes only when no egress allowlist is set. Missing
 evidence therefore produces an explicit visibility finding instead of becoming
 either a vulnerable or hardened guess.
 

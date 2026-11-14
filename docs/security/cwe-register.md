@@ -1847,9 +1847,9 @@ not this file.
 | `internal/agent/desktop/stock_served_test.go:92` | test-built public keyboard/window arguments, fixed tool with no shell or upstream credential (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_container_test.go:189` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
-| `internal/agent/relay/adcs_restrictions_windows.go:42` | CWE-78: the Windows SDK supplies System32, certutil.exe and command switches are fixed, and the bounded validated CA selector is one argv value; no shell or credentials are used. |
-| `internal/agent/relay/adcsdatabase.go:308` | reviewed SEC-005 argv: fixed action flags built here; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
-| `internal/agent/relay/adcsdatabase.go:316` | reviewed SEC-005 argv: fixed flags built by this package; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
+| `internal/agent/relay/adcs_restrictions_windows.go:46` | CWE-78: the Windows SDK supplies System32, certutil.exe and command switches are fixed, and the bounded validated CA selector is one argv value; no shell or credentials are used. |
+| `internal/agent/relay/adcsdatabase.go:314` | reviewed SEC-005 argv: fixed action flags built here; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
+| `internal/agent/relay/adcsdatabase.go:322` | reviewed SEC-005 argv: fixed flags built by this package; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
 | `internal/agent/relay/native_probe_host_test.go:81` | fixed stock command against owned loopback fixtures. |
 | `internal/agent/reportstate/local_account_rotation_test.go:290` | current Go test executable with one fixed test selector and an owned public temp root; no shell or credentials (CWE-78) |
@@ -2517,8 +2517,8 @@ not this file.
 | `internal/agent/listenersessions/proc.go:184` | a fixed proc file under the agent's proc root |
 | `internal/agent/mcp_inventory.go:37` | the agent's own state file (CWE-22) |
 | `internal/agent/observe/udp_capture_test.go:17` | the test reads its own fixture (CWE-22) |
-| `internal/agent/relay/adcsdatabase_test.go:89` | test-owned temp file (CWE-22). |
-| `internal/agent/relay/adcsdatabase_test.go:297` | test-owned temp file (CWE-22). |
+| `internal/agent/relay/adcsdatabase_test.go:90` | test-owned temp file (CWE-22). |
+| `internal/agent/relay/adcsdatabase_test.go:298` | test-owned temp file (CWE-22). |
 | `internal/agent/relay/adcsrevoke_test.go:67` | test-owned temp file (CWE-22). |
 | `internal/agent/relay/deploy_failure_log.go:84` | the operator's own flag (CWE-22) |
 | `internal/agent/relay/deploy_failure_log.go:148` | the operator's own flag (CWE-22) |
@@ -3149,8 +3149,8 @@ not this file.
 | `internal/agent/drift/drift_test.go:169` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/drift/drift_test.go:226` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:81` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) (world-readable) |
-| `internal/agent/relay/adcsdatabase_test.go:52` | a test-owned executable stand-in (CWE-276). |
-| `internal/agent/relay/adcsdatabase_test.go:259` | a test-owned executable stand-in (CWE-276). |
+| `internal/agent/relay/adcsdatabase_test.go:53` | a test-owned executable stand-in (CWE-276). |
+| `internal/agent/relay/adcsdatabase_test.go:260` | a test-owned executable stand-in (CWE-276). |
 | `internal/agent/relay/adcsdecide_test.go:47` | a test-owned executable stand-in (CWE-276). |
 | `internal/agent/relay/adcsrevoke_test.go:46` | a test-owned executable stand-in (CWE-276). |
 | `internal/agent/relay/recovery_check_test.go:31` | the fixture IS an executable; 0755 is its required mode (CWE-276) |

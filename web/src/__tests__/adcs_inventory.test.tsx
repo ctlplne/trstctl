@@ -173,6 +173,27 @@ describe("AD CS inventory posture", () => {
     expect(within(section!).getByText(/NDES administration endpoint = anonymous_access HTTP 200/)).toBeInTheDocument();
   });
 
+  // A229-L1: a CA the relay's egress policy refused is not read, and says so.
+  it("explains CA restriction evidence the relay's egress policy kept it from reading", async () => {
+    const posture = await apiMock.adcsPosture();
+    apiMock.adcsPosture.mockResolvedValue({
+      ...posture,
+      enrollment_services: posture.enrollment_services.map((service: Record<string, unknown>) => ({
+        ...service,
+        agent_restriction_source: "egress_refused",
+      })),
+    });
+    render(
+      <AppQueryProvider>
+        <ADCSTemplatePanel />
+      </AppQueryProvider>,
+    );
+    const heading = await screen.findByRole("heading", { name: "Enrollment services and IIS exposure" });
+    const section = heading.closest("section");
+    expect(within(section!).getByText("egress_refused", { exact: false })).toBeInTheDocument();
+    expect(within(section!).getByText("Not read: the CA is outside this relay's egress allowlist, or at an address no job may reach.")).toBeInTheDocument();
+  });
+
   it("shows source failure lifecycle and enrollment trustees in the shared data grid", async () => {
     render(
       <AppQueryProvider>

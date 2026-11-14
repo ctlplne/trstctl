@@ -35,6 +35,10 @@ func observeCAAgentRestrictions(ctx context.Context, service adcs.EnrollmentServ
 	if !ok {
 		return adcs.EnrollmentAgentRestrictions{State: adcs.EvidenceUnobserved, Source: "ca_identity_unobserved"}
 	}
+	// A229-L1: certutil reaches the CA outside the Go egress guard.
+	if refused, allowed := caRestrictionsEgress(ctx, service); !allowed {
+		return refused
+	}
 	systemDirectory, err := windows.GetSystemDirectory()
 	if err != nil {
 		return adcs.EnrollmentAgentRestrictions{State: adcs.EvidenceUnobserved, Source: "native_tool_unavailable"}

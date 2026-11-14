@@ -206,6 +206,9 @@ function ADCSEnrollmentServices({ services }: { services: ADCSEnrollmentService[
                 <dt className="text-muted-foreground">{translateNow("source.adcs.restrictions.aud370006")}</dt>
                 <dd>
                   <span className="font-mono">{service.agent_restriction_state}</span> · {service.agent_restriction_source}
+                  {service.agent_restriction_source === "egress_refused" ? (
+                    <span className="block text-muted-foreground">{translateNow("adcs.restrictions.egressRefused")}</span>
+                  ) : null}
                 </dd>
               </div>
               <div>

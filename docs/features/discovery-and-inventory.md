@@ -1531,7 +1531,10 @@ for a manager's approval, each one's request id, template, requested name and
 requester (the newest 500, N1-L2). No certificate, and no issued, revoked, denied or
 failed row's subject or requester, leaves it. A database too large for one certutil
 read (64 MiB of output) is read in pages of request ids and summarized the same way, up to
-a million rows. The panel lists recent reads with their status (queued,
+a million rows. certutil connects to the CA on its own, outside the relay's Go egress guard,
+so the relay first checks the CA host against its egress policy (A229-L1): a host that
+resolves to a cloud metadata or link-local address, or one outside `--relay-egress-allow`
+when that is set, fails the read without running certutil. The panel lists recent reads with their status (queued,
 running, collected, failed) and a failed read's reason; a failed read keeps the
 previous counts. Run the relay on a domain-joined Windows host with
 `--relay-claim` (certutil is `certutil.exe` unless `--adcs-certutil` names

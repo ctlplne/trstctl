@@ -36690,6 +36690,10 @@ export const messages = {
     defaultMessage: "No enrollment service has been observed yet.",
     description: "AUD-37: empty enrollment service posture.",
   },
+  "adcs.restrictions.egressRefused": {
+    defaultMessage: "Not read: the CA is outside this relay's egress allowlist, or at an address no job may reach.",
+    description: "A229-L1: why a CA's enrollment agent restrictions were not read: the relay's egress policy refused the CA host.",
+  },
   "source.adcs.restrictions.aud370006": {
     defaultMessage: "Enrollment Agent Restrictions",
     description: "AUD-37: CA-side restriction evidence label.",

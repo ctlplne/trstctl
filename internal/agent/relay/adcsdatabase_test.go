@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/adcsdb"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // A162: the relay half of the CA database read. certutil runs with a fixed
@@ -328,5 +329,44 @@ func TestRelayADCSDatabaseReadsALargeDatabaseInPagesA162L1(t *testing.T) {
 	}
 	if strings.Join(restricts(calls), " ") != "RequestID>0,RequestID<=21 RequestID>0,RequestID<=15 RequestID>15,RequestID<=21" {
 		t.Fatalf("halved certutil restrictions = %q", restricts(calls))
+	}
+}
+
+// A229-L1: certutil reaches the CA outside the Go egress guard, so a CA
+// database read checks the CA host against this agent's egress policy before
+// it runs certutil. A cloud metadata host is refused always; with an
+// allowlist, a CA outside it is refused and one inside it is read.
+func TestRelayADCSDatabaseReadChecksTheEgressPolicyA229L1(t *testing.T) {
+	t.Cleanup(func() { relay.SetEgressPolicy(nil) })
+	allowlist, err := netsec.ParseRelayEgress([]string{"10.20.0.0/16"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		policy *netsec.RelayEgress
+		ca     string
+		ran    bool
+	}{
+		"metadata host":         {nil, `169.254.169.254\CORP-CA`, false},
+		"outside the allowlist": {allowlist, `10.30.0.5\CORP-CA`, false},
+		"inside the allowlist":  {allowlist, `10.20.0.5\CORP-CA`, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			script, argsFile := certutilStandIn(t, certutilCSV, 0)
+			useCertutil(t, script)
+			relay.SetEgressPolicy(tc.policy)
+			ch := &fakeChannel{jobs: []relay.Job{adcsDatabaseJob(t, tc.ca)}}
+			if _, err := relay.RunOnce(t.Context(), ch, nil, 1, 60); err != nil {
+				t.Fatal(err)
+			}
+			_, statErr := os.Stat(argsFile)
+			if ran := statErr == nil; ran != tc.ran {
+				t.Fatalf("certutil ran = %t, want %t (reports %+v)", ran, tc.ran, ch.reports)
+			}
+			if !tc.ran && (len(ch.reports) != 1 || ch.reports[0].outcome != transport.JobOutcomeFailed ||
+				!strings.Contains(ch.reports[0].detail, "outside this relay's egress policy")) {
+				t.Fatalf("reports = %+v", ch.reports)
+			}
+		})
 	}
 }
