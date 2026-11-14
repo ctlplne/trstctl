@@ -55,6 +55,13 @@ type AWSSTSConfig struct {
 	// AWSSTSChainedSessionMaxDuration past the session's expiry, and it can't
 	// be combined with RevokeWithDenyPolicy.
 	AllowRoleChaining bool
+	// DenyAccessKeyID, DenySecretAccessKey and DenySessionToken (N3-L1) sign
+	// the denial writes, their read back and pruning when set; the issuing
+	// credential then needs no IAM write permission. Empty uses the issuing
+	// credential.
+	DenyAccessKeyID     string
+	DenySecretAccessKey []byte
+	DenySessionToken    []byte
 }
 
 // AWSSTSChainedSessionMaxDuration is the longest a role session chained from
@@ -72,8 +79,10 @@ const awsSTSNoChainingSessionPolicy = `{"Version":"2012-10-17","Statement":[` +
 	`{"Sid":"TrstctlLeaseCannotChainRoles","Effect":"Deny","Action":"sts:AssumeRole","Resource":"*"}]}`
 
 type AWSSTSBackend struct {
-	query        *AWSIAMBackend
-	iam          *AWSIAMBackend
+	query *AWSIAMBackend
+	iam   *AWSIAMBackend
+	// deny signs the denials (N3-L1): its own credential, or iam's.
+	deny         *AWSIAMBackend
 	roleARNs     map[string]string
 	denyPolicy   bool
 	roleChaining bool
@@ -130,7 +139,25 @@ func NewAWSSTSBackend(cfg AWSSTSConfig) (*AWSSTSBackend, error) {
 		query.Close()
 		return nil, fmt.Errorf("dynsecret aws-sts: initialize IAM read client: %w", err)
 	}
-	return &AWSSTSBackend{query: query, iam: iam, roleARNs: cloneStringMap(cfg.RoleARNs),
+	deny := iam
+	if cfg.DenyAccessKeyID != "" {
+		if !cfg.RevokeWithDenyPolicy {
+			query.Close()
+			iam.Close()
+			return nil, errors.New("dynsecret aws-sts: a denial credential needs revoke_with_deny_policy")
+		}
+		deny, err = NewAWSIAMBackend(AWSIAMConfig{
+			Endpoint: iamEndpoint, HTTPClient: iamClient, Region: iamRegion,
+			AccessKeyID: cfg.DenyAccessKeyID, SecretAccessKey: cfg.DenySecretAccessKey,
+			SessionToken: cfg.DenySessionToken, UsernamePrefix: cfg.SessionPrefix,
+		})
+		if err != nil {
+			query.Close()
+			iam.Close()
+			return nil, fmt.Errorf("dynsecret aws-sts: initialize the denial client: %w", err)
+		}
+	}
+	return &AWSSTSBackend{query: query, iam: iam, deny: deny, roleARNs: cloneStringMap(cfg.RoleARNs),
 		denyPolicy: cfg.RevokeWithDenyPolicy, roleChaining: cfg.AllowRoleChaining}, nil
 }
 
@@ -263,5 +290,8 @@ func (b *AWSSTSBackend) Close() {
 	b.query.Close()
 	if b.iam != nil {
 		b.iam.Close()
+	}
+	if b.deny != nil && b.deny != b.iam {
+		b.deny.Close()
 	}
 }

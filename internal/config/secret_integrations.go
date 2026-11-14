@@ -177,6 +177,13 @@ type DynamicSecretProviderConfig struct {
 	// longest a chained session runs), and it can't be combined with
 	// revoke_with_deny_policy.
 	AllowRoleChaining bool `json:"allow_role_chaining,omitempty"`
+	// DenyAccessKeyID, DenySecretAccessRef and DenySessionTokenRef (aws-sts,
+	// N3-L1) are a second IAM credential used only to write, read back and
+	// prune the revoke_with_deny_policy denials, so the credential that issues
+	// sessions needs no IAM write permission. Empty uses the provider's own.
+	DenyAccessKeyID     string `json:"deny_access_key_id,omitempty"`
+	DenySecretAccessRef string `json:"deny_secret_access_key_ref,omitempty"`
+	DenySessionTokenRef string `json:"deny_session_token_ref,omitempty"`
 
 	PasswordRef             string `json:"password_ref,omitempty"`
 	SecretAccessRef         string `json:"secret_access_key_ref,omitempty"`
@@ -978,6 +985,23 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 	}
 	if c.AllowRoleChaining && c.RevokeWithDenyPolicy {
 		errs = append(errs, fmt.Errorf("%s allow_role_chaining can't be combined with revoke_with_deny_policy: a denial on the lease's role does not reach a session chained into another role", where))
+	}
+	if c.DenyAccessKeyID != "" || c.DenySecretAccessRef != "" || c.DenySessionTokenRef != "" {
+		switch {
+		case !c.RevokeWithDenyPolicy || (c.Type != "aws-iam" && c.Type != "aws-sts"):
+			errs = append(errs, fmt.Errorf("%s deny_access_key_id, deny_secret_access_key_ref and deny_session_token_ref are only valid for aws-sts with revoke_with_deny_policy", where))
+		case strings.TrimSpace(c.DenyAccessKeyID) == "" || strings.TrimSpace(c.DenySecretAccessRef) == "":
+			errs = append(errs, fmt.Errorf("%s the denial credential needs both deny_access_key_id and deny_secret_access_key_ref", where))
+		default:
+			if err := validateCredentialRef(c.DenySecretAccessRef); err != nil {
+				errs = append(errs, fmt.Errorf("%s deny_secret_access_key_ref: %w", where, err))
+			}
+			if c.DenySessionTokenRef != "" {
+				if err := validateCredentialRef(c.DenySessionTokenRef); err != nil {
+					errs = append(errs, fmt.Errorf("%s deny_session_token_ref: %w", where, err))
+				}
+			}
+		}
 	}
 	if c.IAMEndpoint != "" {
 		if c.Type != "aws-iam" && c.Type != "aws-sts" && c.Type != "gcp-iam" {

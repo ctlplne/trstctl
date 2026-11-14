@@ -971,12 +971,22 @@ func openConfiguredCloudBackend(o *configuredDynamicBackendOpener) (requestDynam
 		if err != nil {
 			return o.fail(err)
 		}
+		// N3-L1: the denial credential, when the provider has one.
+		denySecret, err := o.resolve(cfg.DenySecretAccessRef)
+		if err != nil {
+			return o.fail(err)
+		}
+		denySession, err := o.resolve(cfg.DenySessionTokenRef)
+		if err != nil {
+			return o.fail(err)
+		}
 		backend, err := dynsecret.NewAWSSTSBackend(dynsecret.AWSSTSConfig{
 			Endpoint: cfg.Endpoint, HTTPClient: client, Region: cfg.Region,
 			AccessKeyID: cfg.AccessKeyID, SecretAccessKey: secretKey, SessionToken: session,
 			SessionPrefix: cfg.UsernamePrefix, RoleARNs: cfg.RoleBindings,
 			IAMEndpoint: iamEndpoint, IAMHTTPClient: iamClient,
 			RevokeWithDenyPolicy: cfg.RevokeWithDenyPolicy, AllowRoleChaining: cfg.AllowRoleChaining,
+			DenyAccessKeyID: cfg.DenyAccessKeyID, DenySecretAccessKey: denySecret, DenySessionToken: denySession,
 		})
 		if err != nil {
 			return o.fail(err)

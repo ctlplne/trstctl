@@ -150,6 +150,12 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 	// N3: the AWS STS issuer's opt-in to end a revoked session early.
 	awsDenyPolicy := value("revoke_with_deny_policy", "Deny revoked sessions",
 		"Optional. Revoking a lease writes an inline policy on the role that denies that one session (aws:userid) until it expires, read back before the revocation counts; the caller then also needs iam:PutRolePolicy, iam:GetRolePolicy, iam:ListRolePolicies and iam:DeleteRolePolicy on the bound roles. Without it a revoked session lapses at its expiry.", false)
+	// N3-L1: a separate credential for the denials.
+	awsDenyCredential := []dynamicSecretProviderRequirement{
+		value("deny_access_key_id", "Denial access key ID", "Optional, with revoke_with_deny_policy: a second IAM identity used only to write, read back and prune the denials, so the caller that assumes roles needs no IAM write permission. Without it the caller's own credential writes them.", false),
+		credential("deny_secret_access_key_ref", "Denial secret access key reference", "Required with deny_access_key_id; resolved only when a revocation writes a denial.", false),
+		credential("deny_session_token_ref", "Denial session token reference", "Optional; when the denial identity uses temporary AWS credentials.", false),
+	}
 	// N3-L3: a lease's session can't chain into another role unless allowed.
 	awsRoleChaining := value("allow_role_chaining", "Allow role chaining",
 		"Optional. A lease's session may assume other roles. Without it each lease is issued with a session policy that denies sts:AssumeRole, so no session chained from it outlives its revocation. With it a revocation stays pending an hour past the session's expiry, the longest a chained session runs, and revoke_with_deny_policy can't be set.", false)
@@ -183,7 +189,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("secret_access_key_ref", "Caller secret access key reference", "AWS caller secret reference, resolved only during issuance.", true),
 			credential("session_token_ref", "Caller session token reference", "Required when the caller itself uses temporary AWS credentials.", false),
 			roles("Each allowed role maps to one full IAM role ARN trusted to allow sts:AssumeRole."),
-			awsDenyPolicy, awsRoleChaining,
+			awsDenyPolicy, awsDenyCredential[0], awsDenyCredential[1], awsDenyCredential[2], awsRoleChaining,
 			awsConsole, awsGateway,
 		)},
 		{Type: "aws-iam", Label: "AWS STS (legacy aws-iam name)", Purpose: "Compatibility name for the same expiring AssumeRole session issuer; IAM user access keys are not created.", Requirements: dynamicSecretAWSRequirements(
@@ -193,7 +199,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("secret_access_key_ref", "Caller secret access key reference", "AWS caller secret reference, resolved only during issuance.", true),
 			credential("session_token_ref", "Caller session token reference", "Required when the caller itself uses temporary AWS credentials.", false),
 			roles("Each allowed role maps to one full IAM role ARN trusted to allow sts:AssumeRole."),
-			awsDenyPolicy, awsRoleChaining,
+			awsDenyPolicy, awsDenyCredential[0], awsDenyCredential[1], awsDenyCredential[2], awsRoleChaining,
 		)},
 		{Type: "gcp-iam", Label: "Google Cloud IAM", Purpose: "Creates and deletes a service-account key with a stable retry identity. A static rotation is two-phase: the successor is a new key of the service account beside the predecessor (an account holds ten), and retirement deletes the predecessor; only keys of the bound service account are ever deleted. A new key can take a minute to work and has no side-effect-free check, so verification reports not available and retirement waits for consumer evidence or the approved deadline.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "IAM endpoint", "HTTPS Google IAM API endpoint.", true),

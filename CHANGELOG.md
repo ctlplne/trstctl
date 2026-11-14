@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- An AWS STS provider's denials can be written by their own IAM identity (N3-L1): `deny_access_key_id` and
+  `deny_secret_access_key_ref` (with `revoke_with_deny_policy`) sign every denial write, read back and pruning, so the
+  identity that calls `AssumeRole` needs no IAM write permission; the provider catalog lists the fields.
 - `POST /oauth2/token` limits each client address (M4-L6): `protocols.spiffe.exchange_requests_per_minute` (default
   120) requests a minute in a bounded per-client token bucket; more answer 429 `temporarily_unavailable` with a
   `Retry-After` before the subject token is read.

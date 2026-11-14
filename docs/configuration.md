@@ -3073,7 +3073,13 @@ session's role, through the same `iam_endpoint`, that denies that one session
 (`aws:userid`), reads it back, and deletes the role's denials of expired sessions. Its
 credentials then also need `iam:PutRolePolicy`, `iam:GetRolePolicy` and
 `iam:DeleteRolePolicy` on the bound roles. The setting is refused on any other
-provider type; without it a revoked session stays valid until it expires.
+provider type; without it a revoked session stays valid until it expires. A second
+identity can write the denials instead (N3-L1): `deny_access_key_id` with
+`deny_secret_access_key_ref` (and `deny_session_token_ref` when that identity uses
+temporary credentials) sign every denial write, read back and pruning, so the identity
+that calls `AssumeRole` needs no IAM write permission; the IAM permissions above then
+belong to the denial identity. They are valid only with `revoke_with_deny_policy`, and
+both the key ID and the secret reference are required.
 
 A lease's session can't assume other roles (N3-L3): every `AssumeRole` passes a
 session policy that keeps what the role allows and denies `sts:AssumeRole`, so no

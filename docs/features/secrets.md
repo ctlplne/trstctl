@@ -791,7 +791,10 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   every revocation first deletes the role's denials of sessions more than five
   minutes past expiry. The provider's credentials then also need
   `iam:PutRolePolicy`, `iam:GetRolePolicy`, `iam:ListRolePolicies` and
-  `iam:DeleteRolePolicy` on the bound roles; a refused write or a readback without
+  `iam:DeleteRolePolicy` on the bound roles, unless a separate denial credential
+  (`deny_access_key_id` and `deny_secret_access_key_ref`, N3-L1) signs every denial
+  call, so the identity that calls `AssumeRole` holds no IAM write permission; a
+  refused write or a readback without
   the statement is a retried, then failed, revocation, never a completed one. A
   role's inline policies share a 10,240-character quota, which bounds how many of its
   sessions can be denied at once. Sessions the revoked session started by assuming

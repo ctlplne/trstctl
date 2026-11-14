@@ -130,13 +130,13 @@ func (b *AWSSTSBackend) RevokeMethod(ctx context.Context, ref string) (string, e
 	if err != nil {
 		return "", err
 	}
-	if _, err := b.iam.call(ctx, map[string]string{
+	if _, err := b.denyClient().call(ctx, map[string]string{
 		"Action": "PutRolePolicy", "Version": awsIAMVersion, "RoleName": roleName,
 		"PolicyName": name, "PolicyDocument": doc,
 	}); err != nil {
 		return "", fmt.Errorf("dynsecret aws-sts: write the session's deny policy on role %s: %w", roleName, err)
 	}
-	raw, err := b.iam.call(ctx, map[string]string{
+	raw, err := b.denyClient().call(ctx, map[string]string{
 		"Action": "GetRolePolicy", "Version": awsIAMVersion, "RoleName": roleName, "PolicyName": name,
 	})
 	if err != nil {
@@ -158,7 +158,7 @@ func (b *AWSSTSBackend) pruneDenyPolicies(ctx context.Context, roleName string, 
 		if marker != "" {
 			params["Marker"] = marker
 		}
-		raw, err := b.iam.call(ctx, params)
+		raw, err := b.denyClient().call(ctx, params)
 		if err != nil {
 			return
 		}
@@ -183,7 +183,7 @@ func (b *AWSSTSBackend) pruneDenyPolicies(ctx context.Context, roleName string, 
 		marker = page.Result.Marker
 	}
 	for _, name := range expired {
-		if _, err := b.iam.call(ctx, map[string]string{
+		if _, err := b.denyClient().call(ctx, map[string]string{
 			"Action": "DeleteRolePolicy", "Version": awsIAMVersion, "RoleName": roleName, "PolicyName": name,
 		}); err != nil && !errors.Is(err, errAWSIAMMissing) {
 			return
@@ -256,4 +256,13 @@ func awsPolicyValuesAre(raw json.RawMessage, want string) bool {
 	}
 	var list []string
 	return json.Unmarshal(raw, &list) == nil && len(list) == 1 && list[0] == want
+}
+
+// denyClient signs the denials: the denial credential when one is set
+// (N3-L1), else the issuing credential.
+func (b *AWSSTSBackend) denyClient() *AWSIAMBackend {
+	if b.deny != nil {
+		return b.deny
+	}
+	return b.iam
 }

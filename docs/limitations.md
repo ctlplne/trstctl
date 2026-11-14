@@ -9134,8 +9134,6 @@ action.
 What comes next:
 - LocalStack stores IAM policies but does not enforce them, so AWS refusing the
   denied session's next request is a live proof with an AWS account (Track B).
-- The denial uses the provider's own credentials; a separate IAM credential for
-  writing denials, kept apart from the one that calls `AssumeRole`, is a lead.
 - A role's inline policies share a 10,240-character quota (about forty denials
   beside small existing policies); a revocation that hits it fails and is retried,
   and the session still lapses at its expiry. A managed-policy or
