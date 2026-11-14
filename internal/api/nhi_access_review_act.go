@@ -23,9 +23,11 @@ import (
 // decision renews the owner's attestation when the item names an owner; it
 // changes no right upstream.
 
-// nhiReviewActGrace keeps the reconcile from acting on a decision whose own
-// request may still be acting on it.
-const nhiReviewActGrace = 2 * time.Minute
+// A decision request holds the item's in-flight act claim from before its
+// decision is recorded until what it did is recorded, and the reconcile acts
+// on a decided item only under that claim (Q1-L10): never while the
+// decision's own request still acts, and on the first pass after a request
+// that died, with no fixed wait.
 
 // nhiReviewTarget states read from the reviewed credential.
 const (
@@ -441,15 +443,32 @@ func (a *API) ReconcileNHIReviewRevocations(ctx context.Context, tenantID string
 			return closed, err
 		}
 		if item.RevocationStatus == "" {
-			if item.DecidedAt != nil && now.Sub(*item.DecidedAt) < nhiReviewActGrace {
-				continue
-			}
-			status, detail := a.RevokeReviewedCredential(ctx, tenantID, item.CampaignID, item)
-			if _, err := a.orch.RecordNHIReviewRevocation(ctx, tenantID, item.CampaignID, item.ItemID, status, detail); err != nil {
+			// Q1-L10: act only under the item's act claim. A held claim is
+			// the decision's own request still acting; the next pass reads
+			// what it recorded. Under the claim the item is read again, since
+			// that request may have recorded its act since the list was read.
+			acquired, err := a.store.WithNHIReviewActClaim(ctx, tenantID, item.CampaignID, item.ItemID, func(ctx context.Context) error {
+				current, err := a.store.GetNHIReviewItem(ctx, tenantID, item.CampaignID, item.ItemID)
+				if err != nil {
+					return err
+				}
+				if current.RevocationStatus == "" {
+					status, detail := a.RevokeReviewedCredential(ctx, tenantID, current.CampaignID, current)
+					if _, err := a.orch.RecordNHIReviewRevocation(ctx, tenantID, current.CampaignID, current.ItemID, status, detail); err != nil {
+						return err
+					}
+					current.RevocationStatus = status
+				}
+				item = current
+				return nil
+			})
+			if err != nil {
 				note(err)
 				continue
 			}
-			item.RevocationStatus = status
+			if !acquired {
+				continue
+			}
 		}
 		state, detail, err := a.nhiReviewTargetState(ctx, tenantID, item.NHIID, now)
 		if err != nil {

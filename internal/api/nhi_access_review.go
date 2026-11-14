@@ -164,8 +164,29 @@ func (a *API) decideNHIReviewItem(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, err
 			}
 		}
-		campaign, err := a.orch.DecideNHIReviewItem(ctx, tenantID, campaignID, itemID, req)
+		// Q1-L10: the request holds the item's act claim from before its
+		// decision is recorded until what it did is recorded, so the reconcile
+		// never acts on the decision while this request does, and acts on the
+		// next pass if this request dies.
+		var campaign store.NHIReviewCampaign
+		var decideErr error
+		acquired, err := a.store.WithNHIReviewActClaim(ctx, tenantID, campaignID, itemID, func(ctx context.Context) error {
+			if campaign, decideErr = a.orch.DecideNHIReviewItem(ctx, tenantID, campaignID, itemID, req); decideErr != nil {
+				return nil
+			}
+			// Q1: the decision acts. A revoke runs the credential's own revoke
+			// once; a keep renews the named owner's attestation.
+			var err error
+			campaign, err = a.actOnNHIReviewDecision(ctx, tenantID, campaign, itemID)
+			return err
+		})
 		if err != nil {
+			return 0, nil, err
+		}
+		if !acquired {
+			return 0, nil, errStatus(http.StatusConflict, "this review item is being acted on now; read it again")
+		}
+		if err := decideErr; err != nil {
 			if errors.Is(err, store.ErrNHIReviewReviewerUnauthorized) {
 				return 0, nil, errStatusFrom(http.StatusForbidden, err)
 			}
@@ -176,11 +197,6 @@ func (a *API) decideNHIReviewItem(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, errStatus(http.StatusNotFound, "NHI access review item not found")
 			}
 			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
-		}
-		// Q1: the decision acts. A revoke runs the credential's own revoke
-		// once; a keep renews the named owner's attestation.
-		if campaign, err = a.actOnNHIReviewDecision(ctx, tenantID, campaign, itemID); err != nil {
-			return 0, nil, err
 		}
 		return http.StatusOK, toNHIReviewCampaignResponse(campaign, true), nil
 	})

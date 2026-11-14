@@ -986,7 +986,13 @@ reconcile carries no reviewer, so a certificate or identity it would revoke afte
 interrupted decision is `manual` as well. The item records what happened (`requested`, `manual`, `failed` with the
 reason) and closes only when the credential reads revoked, with that evidence
 (`closing_evidence`); a request alone never closes it. Each minute the leader
-re-checks open items and finishes a decision whose act was interrupted. A failed
+re-checks open items and finishes a decision whose act was interrupted. A decision
+request holds the item's act claim (a PostgreSQL session lock) from before its
+decision is recorded until what it did is recorded, and the reconcile acts on a
+decision only under that claim (Q1-L10): never while the deciding request still
+acts, and at its next pass after that request died, since the claim ends with the
+request's database session; there is no fixed wait. A second decision request on an
+item whose claim is held answers 409. A failed
 revoke stays visible and is not retried on its own. A keep (`certified`) decision
 records a next review date (`next_review_days`, default 90) and, when the item
 names an owner (`owner_ref` `wl:<owner id>`), renews that owner's attestation as the

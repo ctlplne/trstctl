@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An access review decision whose request died is finished at the reconcile's next pass, not two minutes later
+  (Q1-L10): a decision request holds the item's act claim (a PostgreSQL session lock) from before its decision is
+  recorded until what it did is recorded, and the reconcile acts only under that claim, so it never acts while the
+  deciding request still does and never acts twice; a decision request on an item whose claim is held answers 409.
 - LDAP leases can expire in the directory itself (A239-L2): with `dynamic_entries`, an `ldap` provider creates each
   lease's entry as an RFC 2589 dynamic object kept for the lease's time and moved with each renewal, so the directory
   deletes it when the lease ends even if trstctl is down; a directory that would keep it for less refuses the lease or
