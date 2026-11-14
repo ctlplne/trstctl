@@ -1529,6 +1529,9 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 		}
 		rep.Discovered++
 	}
+	// P6-L5: every leak moved out of this source has its history residue
+	// re-checked against this clone.
+	d.recheckMovedSecretResidue(ctx, tenantID, src.ID, run.ID, cfg, cred, target)
 	status := "succeeded"
 	msg := ""
 	if rep.Failed > 0 {

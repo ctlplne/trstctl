@@ -2605,6 +2605,19 @@ run; after it closes, the history commits stay listed on the finding, because cl
 the latest file does not remove the value from history (rotation is what ends the
 exposure). A finding seen again after it closed shows as regressed.
 
+The history residue is not frozen at the move (P6-L5). Every later completed scan of a
+repository source re-checks it: the worker deepens its shallow clone to every branch's
+full history, runs the pinned gitleaks over that history unredacted (its report read from
+a pipe into memory) and looks for each moved value, read from the version the leak moved
+into; only locations are recorded, and the values are wiped. What it finds replaces
+`secret_move.history_residue`: a commit a history rewrite removed drops off, and a commit
+on any branch that brings the value back is added. `secret_move.history_residue_checked_at`
+and `history_residue_run_id` say when, and by which scan run, it last looked; until a scan
+has, they are absent and the residue is as the move found it. A re-check that cannot run
+(the history could not be fetched, the moved version is gone) leaves the residue and its
+last check as they were and never fails the scan. The Discovery console shows the commits
+and the last check on the finding.
+
 Reads through the native store's own routes and through the KV-compatible `/v1` surface
 count as consumer reads, recorded with the reader's subject. A secret-sync delivery of a
 rotated version counts too: the target's consumers read the secret there, so the delivery

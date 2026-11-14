@@ -47,6 +47,7 @@ func addCredentialActivityPrivacyPolicies(policies map[privacyEventPolicyKey]eve
 	policies[privacyEventPolicyKey{EventTokenExchanged, 1}] = tokenExchangedPrivacyPolicy()
 	policies[privacyEventPolicyKey{EventDiscoveryFindingSecretMoved, 1}] = discoverySecretMovedPrivacyPolicy()
 	policies[privacyEventPolicyKey{EventDiscoveryFindingSecretConsumerRead, 1}] = discoverySecretConsumerReadPrivacyPolicy()
+	policies[privacyEventPolicyKey{EventDiscoveryFindingSecretResidueChecked, 1}] = discoverySecretResidueCheckedPrivacyPolicy()
 }
 
 // addCredentialActivityPrivacyShapes registers the same events' payload shapes.
@@ -55,4 +56,5 @@ func addCredentialActivityPrivacyShapes(shapes map[privacyEventPolicyKey]events.
 	shapes[privacyEventPolicyKey{EventTokenExchanged, 1}] = privacyPayloadShape[TokenExchanged]()
 	shapes[privacyEventPolicyKey{EventDiscoveryFindingSecretMoved, 1}] = privacyPayloadShape[DiscoveryFindingSecretMoved]()
 	shapes[privacyEventPolicyKey{EventDiscoveryFindingSecretConsumerRead, 1}] = privacyPayloadShape[DiscoveryFindingSecretConsumerRead]()
+	shapes[privacyEventPolicyKey{EventDiscoveryFindingSecretResidueChecked, 1}] = privacyPayloadShape[DiscoveryFindingSecretResidueChecked]()
 }

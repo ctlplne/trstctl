@@ -21485,6 +21485,16 @@
                 },
                 "type": "array"
               },
+              "history_residue_checked_at": {
+                "description": "when a later completed scan of the repository last re-checked the history residue (P6-L5); absent until one has",
+                "format": "date-time",
+                "type": "string"
+              },
+              "history_residue_run_id": {
+                "description": "the scan run that last re-checked the history residue",
+                "format": "uuid",
+                "type": "string"
+              },
               "moved_at": {
                 "format": "date-time",
                 "type": "string"

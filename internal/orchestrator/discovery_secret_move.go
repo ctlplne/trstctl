@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 
 	"github.com/google/uuid"
 
@@ -27,6 +28,7 @@ const SecretMoveClosureActor = "system:leaked-secret-closure"
 var (
 	secretConsumerReadNamespace = uuid.MustParse("b955ccea-7b7d-4a1c-b9e1-a7f8a06e9b4b")
 	secretMoveClosureNamespace  = uuid.MustParse("c7e2a9d4-41f0-5b3e-8d26-6e1f0b9a2c57")
+	secretResidueCheckNamespace = uuid.MustParse("5d0b8e61-2f4a-4c7e-9a13-b8e2c6f0d947")
 )
 
 // RecordDiscoveryFindingSecretMoved links a finding to the native secret its
@@ -77,5 +79,25 @@ func (o *Orchestrator) CloseMovedSecretFinding(ctx context.Context, tenantID str
 	}
 	id := uuid.NewSHA1(secretMoveClosureNamespace, []byte(tenantID+"\x00"+f.FindingID+"\x00"+evidenceRef)).String()
 	_, err = o.emitPrepared(ctx, events.Event{ID: id, Type: projections.EventDiscoveryFindingTriageChanged, TenantID: tenantID, Data: payload})
+	return err
+}
+
+// RecordSecretResidueChecked records a scan run's re-check of a moved
+// secret's history residue (P6-L5). The event ID names the finding, the move
+// and the run, so a retried run records it once.
+func (o *Orchestrator) RecordSecretResidueChecked(ctx context.Context, tenantID string, checked projections.DiscoveryFindingSecretResidueChecked) error {
+	if checked.Residue == nil {
+		checked.Residue = []store.SecretResidueLocation{}
+	}
+	payload, err := json.Marshal(checked)
+	if err != nil {
+		return err
+	}
+	id := uuid.NewSHA1(secretResidueCheckNamespace, []byte(tenantID+"\x00"+checked.FindingID+"\x00"+checked.SecretName+"\x00"+
+		strconv.Itoa(checked.SecretVersion)+"\x00"+checked.RunID)).String()
+	if _, found, err := o.log.EventByID(ctx, id); err != nil || found {
+		return err
+	}
+	_, err = o.emitPrepared(ctx, events.Event{ID: id, Type: projections.EventDiscoveryFindingSecretResidueChecked, TenantID: tenantID, Data: payload})
 	return err
 }

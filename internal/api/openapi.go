@@ -2454,6 +2454,8 @@ func componentSchemas() map[string]*Schema {
 		"secret_name": str(), "secret_version": {Type: "integer"}, "reference": str(),
 		"moved_by": str(), "moved_at": timestamp(), "history_residue": {Type: "array", Items: secretResidueLocation},
 		"consumer_read_version": {Type: "integer"}, "consumer_reader": str(), "consumer_read_at": timestamp(),
+		"history_residue_checked_at": {Type: "string", Format: "date-time", Description: "when a later completed scan of the repository last re-checked the history residue (P6-L5); absent until one has"},
+		"history_residue_run_id":     {Type: "string", Format: "uuid", Description: "the scan run that last re-checked the history residue"},
 	}, "secret_name", "secret_version", "reference", "moved_at", "history_residue")
 	discoveryFinding := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "run_id": uuid(), "source_id": uuid(),

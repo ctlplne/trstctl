@@ -71,6 +71,18 @@ func discoverySecretMovedPrivacyPolicy() events.PrivacyEventPolicy {
 	)
 }
 
+// discoverySecretResidueCheckedPrivacyPolicy classifies a later scan's
+// re-check of a moved secret's history residue (P6-L5): locations only.
+func discoverySecretResidueCheckedPrivacyPolicy() events.PrivacyEventPolicy {
+	const opaque = events.PrivacyFieldOpaqueExact
+	return privacyRules(
+		privacyRule("/finding_id", opaque), privacyRule("/secret_name", opaque),
+		privacyRule("/secret_version", opaque), privacyRule("/run_id", opaque), privacyRule("/checked_at", opaque),
+		privacyRule("/residue/*/rule_id", opaque), privacyRule("/residue/*/file", opaque),
+		privacyRule("/residue/*/line", opaque), privacyRule("/residue/*/commit", opaque),
+	)
+}
+
 // discoverySecretConsumerReadPrivacyPolicy classifies the first read of a
 // moved secret's rotated version (P6): the reader is an identity.
 func discoverySecretConsumerReadPrivacyPolicy() events.PrivacyEventPolicy {

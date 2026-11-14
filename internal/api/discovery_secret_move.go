@@ -25,7 +25,8 @@ import (
 // The finding then closes on evidence alone (the leader's closure worker): a
 // rotation of the secret, a consumer reading the rotated version, and a
 // completed scan that no longer sees the leak. History residue stays listed
-// on the finding after it closes.
+// on the finding after it closes, and every later completed scan of a
+// repository source re-checks it (P6-L5).
 
 const leakedSecretFindingKind = "leaked_secret" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 
@@ -51,6 +52,9 @@ type discoveryFindingSecretMoveResponse struct {
 	ConsumerReadVersion int                           `json:"consumer_read_version,omitempty"`
 	ConsumerReader      string                        `json:"consumer_reader,omitempty"`
 	ConsumerReadAt      *time.Time                    `json:"consumer_read_at,omitempty"`
+	// P6-L5: when a scan last re-checked the history residue, and which run.
+	HistoryResidueCheckedAt *time.Time `json:"history_residue_checked_at,omitempty"`
+	HistoryResidueRunID     string     `json:"history_residue_run_id,omitempty"`
 }
 
 func toSecretMoveResponse(m store.DiscoveryFindingSecretMove) *discoveryFindingSecretMoveResponse {
@@ -62,6 +66,7 @@ func toSecretMoveResponse(m store.DiscoveryFindingSecretMove) *discoveryFindingS
 		SecretName: m.SecretName, SecretVersion: m.SecretVersion, Reference: "${secret." + m.SecretName + "}",
 		MovedBy: m.MovedBy, MovedAt: m.MovedAt, HistoryResidue: residue,
 		ConsumerReadVersion: m.ConsumerReadVersion, ConsumerReader: m.ConsumerReader, ConsumerReadAt: m.ConsumerReadAt,
+		HistoryResidueCheckedAt: m.ResidueCheckedAt, HistoryResidueRunID: m.ResidueRunID,
 	}
 }
 

@@ -17839,6 +17839,34 @@ export const messages = {
     defaultMessage: "Choose a host agent",
     description: "Empty migration agent option.",
   },
+  "discovery.findings.secretMove.heading": {
+    defaultMessage: "Moved into the vault",
+    description: "P6: heading of the finding section for a leaked secret whose value moved into the native secret store.",
+  },
+  "discovery.findings.secretMove.where": {
+    defaultMessage: "The value now lives in {reference}, version {version}.",
+    description: "P6: where a moved leaked secret's value lives; reference is a ${secret.name} reference.",
+  },
+  "discovery.findings.secretMove.residue": {
+    defaultMessage: "History commits that still hold the value: {count}",
+    description: "P6-L5: how many history commits still hold a moved leaked secret's value.",
+  },
+  "discovery.findings.secretMove.residueList": {
+    defaultMessage: "History commits that still hold the value",
+    description: "P6-L5: accessible name of the list of history commits that still hold a moved value.",
+  },
+  "discovery.findings.secretMove.residueItem": {
+    defaultMessage: "{commit} {file}:{line}",
+    description: "P6-L5: one history commit (abbreviated) that still holds a moved value, with the file and line.",
+  },
+  "discovery.findings.secretMove.checked": {
+    defaultMessage: "A scan last re-checked the history on {time} (run {run}).",
+    description: "P6-L5: when a later scan of the repository last re-checked the history, and which scan run.",
+  },
+  "discovery.findings.secretMove.notChecked": {
+    defaultMessage: "No scan has re-checked the history since the move; the commits are as the move found them.",
+    description: "P6-L5: the history residue was recorded at the move and no later scan has looked again yet.",
+  },
   "discovery.findings.annotation.heading": {
     defaultMessage: "Tell the people where it leaked",
     description: "Heading of the finding section that writes a leaked credential back at the provider where it was seen.",

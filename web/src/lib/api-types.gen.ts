@@ -4438,7 +4438,7 @@ export interface DiscoveryFinding {
   risk_accepted_until?: string;
   risk_score?: number;
   run_id: string;
-  secret_move?: { consumer_read_at?: string; consumer_read_version?: number; consumer_reader?: string; history_residue: { commit: string; file: string; line: number; rule_id: string }[]; moved_at: string; moved_by?: string; reference: string; secret_name: string; secret_version: number };
+  secret_move?: { consumer_read_at?: string; consumer_read_version?: number; consumer_reader?: string; history_residue: { commit: string; file: string; line: number; rule_id: string }[]; history_residue_checked_at?: string; history_residue_run_id?: string; moved_at: string; moved_by?: string; reference: string; secret_name: string; secret_version: number };
   seen_count: number;
   source_id: string;
   tenant_id: string;

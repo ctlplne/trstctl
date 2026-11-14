@@ -18153,6 +18153,16 @@ export interface components {
                     line: number;
                     rule_id: string;
                 }[];
+                /**
+                 * Format: date-time
+                 * @description when a later completed scan of the repository last re-checked the history residue (P6-L5); absent until one has
+                 */
+                history_residue_checked_at?: string;
+                /**
+                 * Format: uuid
+                 * @description the scan run that last re-checked the history residue
+                 */
+                history_residue_run_id?: string;
                 /** Format: date-time */
                 moved_at: string;
                 moved_by?: string;

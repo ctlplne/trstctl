@@ -141,6 +141,36 @@ func (a *API) DecoySecretValues(ctx context.Context, tenantID string) ([]secrets
 	}
 }
 
+// MovedSecretValues are the values of moves, each read from the version the
+// leak moved into, for a scan of their source to re-check their history
+// residue (P6-L5). Each KnownValue's ID is the finding. A move whose secret or
+// version is gone is left out: there is nothing to look for. It is not a
+// read anyone made, so it counts as no consumer's read; the caller compares
+// the values in memory and wipes them (secretscan.WipeKnownValues).
+func (a *API) MovedSecretValues(ctx context.Context, tenantID string, moves []store.DiscoveryFindingSecretMove) ([]secretscan.KnownValue, error) {
+	if a == nil || a.secrets == nil {
+		return nil, nil
+	}
+	var out []secretscan.KnownValue
+	for _, m := range moves {
+		rec, err := a.secrets.be.Store.GetSecretVersion(ctx, tenantID, m.SecretName, m.SecretVersion)
+		if errors.Is(err, store.ErrSecretNotFound) {
+			continue
+		}
+		if err != nil {
+			secretscan.WipeKnownValues(out)
+			return nil, err
+		}
+		plain, err := a.secrets.open(ctx, tenantID, rec.Sealed, sealAAD(tenantID, m.SecretName))
+		if err != nil {
+			secretscan.WipeKnownValues(out)
+			return nil, err
+		}
+		out = append(out, secretscan.KnownValue{ID: m.FindingID, Name: m.SecretName, Value: plain})
+	}
+	return out, nil
+}
+
 func (a *API) listDecoySecrets(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := a.tenant(r)
 	if !ok {

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3345 annotated sites across 35 rules. Each row is
+3350 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (839 sites)
+### G101 — CWE-798 Use of hardcoded credentials (840 sites)
 
 | Location | Reason |
 |---|---|
@@ -183,7 +183,7 @@ not this file.
 | `internal/api/aisurface_contract_test.go:148` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/compliance_report_dispatch_test.go:17` | fabricated fixture reference; no value is real (CWE-798) |
 | `internal/api/decoy_kubernetes.go:42` | a Kubernetes user name, not a credential (CWE-798) |
-| `internal/api/discovery_secret_move.go:30` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/discovery_secret_move.go:31` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/dynamic_secret_preview.go:19` | public MAC domain, not a credential |
 | `internal/api/idempotency_binding_test.go:21` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/itsm_test.go:11` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -445,6 +445,7 @@ not this file.
 | `internal/projections/credential_usage.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/discovery_secret_move.go:20` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/discovery_secret_move.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/discovery_secret_move.go:26` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/projections.go:332` | an event type name, not a credential (CWE-798) |
 | `internal/projections/secret_deliveries.go:16` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_integrations.go:228` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -873,8 +874,8 @@ not this file.
 | `internal/store/approved_target_fences.go:230` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/decoy_secret_privacy_test.go:33` | a decoy names a fabricated test secret, no credential value (CWE-798) |
 | `internal/store/decoy_secret_privacy_test.go:123` | a decoy names a fabricated test secret, no credential value (CWE-798) |
-| `internal/store/discovery_secret_move.go:53` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/store/discovery_secret_move.go:56` | SQL column list, no credential (CWE-798) */ `m.finding_id::text, m.secret_name, m.secret_version, m.moved_by, m.moved_at, m.residue, |
+| `internal/store/discovery_secret_move.go:58` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/store/discovery_secret_move.go:61` | SQL column list, no credential (CWE-798) */ `m.finding_id::text, m.secret_name, m.secret_version, m.moved_by, m.moved_at, m.residue, |
 | `internal/store/dynamic_secret_lease.go:671` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
 | `internal/store/honey_token.go:73` | SQL column names only; this string contains no credential material. |
 | `internal/store/migration_0359_content_test.go:50` | a query naming the hash column; no credential value (CWE-798) |
@@ -1051,7 +1052,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (512 sites)
+### G115 — CWE-190 Integer overflow or wraparound (513 sites)
 
 | Location | Reason |
 |---|---|
@@ -1440,8 +1441,9 @@ not this file.
 | `internal/store/discovery_coverage.go:37` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:57` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:81` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/discovery_secret_move.go:103` | bounded to int64 above (CWE-190) |
-| `internal/store/discovery_secret_move.go:118` | bounded to int64 above (CWE-190) |
+| `internal/store/discovery_secret_move.go:110` | bounded to int64 above (CWE-190) |
+| `internal/store/discovery_secret_move.go:125` | bounded to int64 above (CWE-190) |
+| `internal/store/discovery_secret_move.go:157` | bounded to int64 above (CWE-190) |
 | `internal/store/discovery_segments.go:74` | JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/store/discovery_segments.go:107` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/discovery_segments.go:138` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
@@ -1744,7 +1746,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4230` | closed test table list above |
+| `internal/store/migration_content_test.go:4231` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
@@ -1761,7 +1763,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (416 sites)
+### G204 — CWE-78 OS command injection (419 sites)
 
 | Location | Reason |
 |---|---|
@@ -1953,6 +1955,8 @@ not this file.
 | `internal/secretscan/repository.go:247` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscan/repository_credential_test.go:44` | the local git (CWE-78) |
 | `internal/secretscan/repository_credential_test.go:84` | the local git over the test's own repository (CWE-78) |
+| `internal/secretscan/residue_test.go:83` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/secretscan/residue_test.go:87` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/secretscli/secretscli.go:108` | runs the operator's own command line verbatim; injecting secrets into their process is the feature (CWE-78) |
 | `internal/server/agent_workload_api_darwin_path_test.go:42` | test builds a fixed local fixture (CWE-78) |
 | `internal/server/agent_workload_api_darwin_path_test.go:96` | test runs the client it built (CWE-78) |
@@ -2095,6 +2099,7 @@ not this file.
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:52` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:60` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:90` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_move_residue_served_test.go:56` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_move_served_test.go:104` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_repository_private_clone_served_test.go:39` | the local git over the test's own repository (CWE-78) |
 | `internal/server/secret_repository_private_clone_served_test.go:46` | the local git (CWE-78) |

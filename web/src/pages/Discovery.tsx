@@ -18,6 +18,7 @@ import { CloudKeyReplacement, isAWSKeyFinding } from "./discovery/CloudKeyReplac
 import { GCPMachineFindingParts } from "./discovery/GCPMachineFindingParts";
 import { CloudMachineFindingParts } from "./discovery/CloudMachineFindingParts";
 import { FindingAnnotation } from "./discovery/FindingAnnotation";
+import { FindingSecretMove } from "./discovery/FindingSecretMove";
 import { CoverageCandidatesPanel } from "./discovery/CoverageCandidatesPanel";
 import { DiscoveryScheduleTable } from "./discovery/DiscoveryScheduleTableParts";
 import { RunTable } from "./discovery/DiscoveryRunTableParts";
@@ -2651,6 +2652,7 @@ function FindingTable({
           <GCPMachineFindingParts finding={selected} />
           <AzureMachineFindingParts finding={selected} />
           <FindingAnnotation finding={selected} busy={actionBusy} onAnnotate={() => annotateAtProvider(selected)} />
+          <FindingSecretMove finding={selected} />
 
           {(() => {
             const removal = distrustedRootRemoval(selected);

@@ -16,8 +16,11 @@ import (
 // secret store (P6): the secret's name and the version that holds the moved
 // value, the history commits that still held it (locations only), and the
 // first read of a newer version — a consumer picked up the rotated value. A
-// projection of discovery.finding.secret_moved and
-// discovery.finding.secret_consumer_read; no value is ever kept.
+// later completed scan of the repository re-checks the residue (P6-L5):
+// ResidueCheckedAt and ResidueRunID name the run that last looked, nil and ""
+// until one has. A projection of discovery.finding.secret_moved,
+// discovery.finding.secret_consumer_read and
+// discovery.finding.secret_residue_checked; no value is ever kept.
 type DiscoveryFindingSecretMove struct {
 	TenantID            string
 	FindingID           string
@@ -29,6 +32,8 @@ type DiscoveryFindingSecretMove struct {
 	ConsumerReadVersion int
 	ConsumerReader      string
 	ConsumerReadAt      *time.Time
+	ResidueCheckedAt    *time.Time
+	ResidueRunID        string
 }
 
 // SecretResidueLocation is a history commit that held a moved value.
@@ -54,13 +59,13 @@ const secretMoveOpen = `f.triage_status NOT IN ('remediated', 'dismissed', 'mana
 
 // secretMoveColumns is the move columns every read selects.
 const secretMoveColumns = /* #nosec G101 -- SQL column list, no credential (CWE-798) */ `m.finding_id::text, m.secret_name, m.secret_version, m.moved_by, m.moved_at, m.residue,
-	       m.consumer_read_version, m.consumer_reader, m.consumer_read_at`
+	       m.consumer_read_version, m.consumer_reader, m.consumer_read_at, m.residue_checked_at, coalesce(m.residue_run_id::text, '')`
 
 func scanSecretMove(row pgx.Row, m *DiscoveryFindingSecretMove, extra ...any) error {
 	var residue []byte
 	var readVersion *int
 	dest := append([]any{&m.FindingID, &m.SecretName, &m.SecretVersion, &m.MovedBy, &m.MovedAt, &residue,
-		&readVersion, &m.ConsumerReader, &m.ConsumerReadAt}, extra...)
+		&readVersion, &m.ConsumerReader, &m.ConsumerReadAt, &m.ResidueCheckedAt, &m.ResidueRunID}, extra...)
 	if err := row.Scan(dest...); err != nil {
 		return err
 	}
@@ -74,7 +79,8 @@ func scanSecretMove(row pgx.Row, m *DiscoveryFindingSecretMove, extra ...any) er
 }
 
 // ApplyDiscoveryFindingSecretMovedTx projects one move. A later event for the
-// same finding replaces it (and forgets any consumer read of the old secret).
+// same finding replaces it (and forgets any consumer read of the old secret
+// and any re-check of the old residue).
 func (s *Store) ApplyDiscoveryFindingSecretMovedTx(ctx context.Context, tx pgx.Tx, m DiscoveryFindingSecretMove, sequence uint64) error {
 	if m.TenantID == "" || m.FindingID == "" || m.SecretName == "" || m.SecretVersion < 1 || m.MovedAt.IsZero() {
 		return errors.New("store: leaked-secret move is incomplete")
@@ -98,6 +104,7 @@ func (s *Store) ApplyDiscoveryFindingSecretMovedTx(ctx context.Context, tx pgx.T
 		   SET secret_name = EXCLUDED.secret_name, secret_version = EXCLUDED.secret_version,
 		       moved_by = EXCLUDED.moved_by, moved_at = EXCLUDED.moved_at, residue = EXCLUDED.residue,
 		       consumer_read_version = NULL, consumer_reader = '', consumer_read_at = NULL,
+		       residue_checked_at = NULL, residue_run_id = NULL,
 		       event_sequence = EXCLUDED.event_sequence
 		 WHERE discovery_finding_secret_moves.event_sequence < EXCLUDED.event_sequence`,
 		m.TenantID, m.FindingID, m.SecretName, m.SecretVersion, m.MovedBy, m.MovedAt.UTC(), encoded, int64(sequence)) // #nosec G115 -- bounded to int64 above (CWE-190)
@@ -117,6 +124,68 @@ func (s *Store) ApplyDiscoveryFindingSecretConsumerReadTx(ctx context.Context, t
 		 WHERE tenant_id = $1 AND finding_id = $2 AND consumer_read_at IS NULL AND secret_version < $3`,
 		tenantID, findingID, version, reader, at.UTC(), int64(sequence)) // #nosec G115 -- bounded to int64 above (CWE-190)
 	return err
+}
+
+// ApplyDiscoveryFindingSecretResidueCheckedTx projects a re-check of a moved
+// secret's history residue (P6-L5): the residue the scan run found replaces
+// the recorded one. A check of another move of the finding (another secret or
+// version) or one older than the last applied changes nothing.
+func (s *Store) ApplyDiscoveryFindingSecretResidueCheckedTx(ctx context.Context, tx pgx.Tx, tenantID, findingID, secretName string,
+	secretVersion int, runID string, residue []SecretResidueLocation, checkedAt time.Time, sequence uint64) error {
+	if tenantID == "" || findingID == "" || secretName == "" || secretVersion < 1 || runID == "" || checkedAt.IsZero() {
+		return errors.New("store: a moved secret's residue check is incomplete")
+	}
+	if len(residue) > 100 {
+		return errors.New("store: a moved secret's residue holds at most 100 locations")
+	}
+	if sequence == 0 || sequence > uint64(1<<63-1) {
+		return errors.New("store: a moved secret's residue check requires a positive int64 event sequence")
+	}
+	if residue == nil {
+		residue = []SecretResidueLocation{}
+	}
+	encoded, err := json.Marshal(residue)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		UPDATE discovery_finding_secret_moves
+		   SET residue = $6, residue_checked_at = $7, residue_run_id = $5::uuid,
+		       event_sequence = GREATEST(event_sequence, $8)
+		 WHERE tenant_id = $1 AND finding_id = $2 AND secret_name = $3 AND secret_version = $4
+		   AND (residue_checked_at IS NULL OR residue_checked_at <= $7)`,
+		tenantID, findingID, secretName, secretVersion, runID, encoded, checkedAt.UTC(), int64(sequence)) // #nosec G115 -- bounded to int64 above (CWE-190)
+	return err
+}
+
+// SecretMovesForSource returns up to limit of the moves of a source's
+// findings, open or closed, for a scan of that source to re-check their
+// history residue (P6-L5).
+func (s *Store) SecretMovesForSource(ctx context.Context, tenantID, sourceID string, limit int) ([]DiscoveryFindingSecretMove, error) {
+	if limit <= 0 {
+		return nil, errors.New("store: SecretMovesForSource requires a positive limit")
+	}
+	var out []DiscoveryFindingSecretMove
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT `+secretMoveColumns+`
+			  FROM discovery_finding_secret_moves m
+			  JOIN discovery_findings f ON f.tenant_id = m.tenant_id AND f.id = m.finding_id
+			 WHERE m.tenant_id = $1 AND f.source_id::text = $2
+			 ORDER BY m.finding_id LIMIT $3`, tenantID, sourceID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			m := DiscoveryFindingSecretMove{TenantID: tenantID}
+			if err := scanSecretMove(rows, &m); err != nil {
+				return err
+			}
+			out = append(out, m)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 // DiscoveryFindingSecretMovesFor returns the moves of the named findings.

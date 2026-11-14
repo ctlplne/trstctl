@@ -1175,6 +1175,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	479: true, // TestMigration0479KeepsDNS01ProviderConfigsWithNoPersistTarget
 	480: true, // TestMigration0480KeepsFactoryBatchesWithoutDeviceAttestation
 	481: true, // TestMigration0481AddsIsolatedACMEReplicaStateOnly
+	482: true, // TestMigration0482KeepsSecretMovesUnchecked
 	442: true, // TestMigration0442KeepsSlackInstallsWithNoScopes
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod
 	383: true, // TestMigration0383KeepsDecoyUsesAsFoundByLookup

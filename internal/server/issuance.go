@@ -139,7 +139,10 @@ type issuanceDispatcher struct {
 	cloudStorePropagationWindow time.Duration
 	// decoyValues are a tenant's live decoy secrets, for a secret scan to
 	// recognize a planted decoy (Q6-L4).
-	decoyValues             func(ctx context.Context, tenantID string) ([]secretscan.KnownValue, error)
+	decoyValues func(ctx context.Context, tenantID string) ([]secretscan.KnownValue, error)
+	// movedSecretValues are moved leaks' values, for a repository scan to
+	// re-check their history residue (P6-L5).
+	movedSecretValues       func(ctx context.Context, tenantID string, moves []store.DiscoveryFindingSecretMove) ([]secretscan.KnownValue, error)
 	archiveHolds            *archiveLegalHoldDelivery
 	parseSubjectCSR         LicensedCSRParser
 	inspectHybridSubjectCSR LicensedCSRInspector

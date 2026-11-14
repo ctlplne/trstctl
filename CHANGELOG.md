@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A moved leaked secret's history residue is re-checked by every later completed scan of its repository (P6-L5): the
+  clone is deepened to every branch's full history, a commit a rewrite removed drops off and one that brings the value
+  back is added, and the finding names the scan run and time of the last check (`secret_move.history_residue_checked_at`,
+  `history_residue_run_id`; migration 0482). The Discovery console shows the commits and the last check.
 - A syslog audit feed can deliver over RELP (P5-L3): an endpoint of `relp+tls://host:port` sends each RFC 5424 message
   as a RELP command on the verified TLS connection, and a batch counts as delivered only when the receiver has
   acknowledged every message; a refused message or a closed session retries the batch. The rsyslog content pack
