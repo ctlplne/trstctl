@@ -1448,7 +1448,8 @@ never live in the API process. What you can do end to end against the running bi
   expire is refused by name; a secret deleted since comes back only while it's kept
   (`secrets.deleted_retention`, A236-L5).
 - Moving a leaked secret into the vault (P6): `trstctl secrets scans move` re-finds a
-  redacted repository finding's value in the operator's checkout with the pinned
+  redacted repository finding's value in the operator's checkout, or a third-party
+  finding's in the operator's copy of the export (P6-L7), with the pinned
   gitleaks, stores it as a native secret and links the finding
   (`POST /api/v1/discovery/findings/{id}/secret-move`); no value reaches a finding,
   event or log. The leader closes the finding only on a rotation, a consumer's read of
@@ -1459,7 +1460,8 @@ never live in the API process. What you can do end to end against the running bi
   Consumer reads
   count through the native store's routes, the KV-compatible `/v1` surface, and
   secret-sync deliveries (as `secret-sync:<target>`, P6-L4); image-layer residue belongs
-  to registry scanning (N6).
+  to registry scanning (N6). A finding trstctl collected from a provider itself has no
+  export to re-find the value in, so it cannot be moved (P6-L7).
 - Token exchange (M4, RFC 8693): `POST /oauth2/token` swaps a platform JWT (a
   Kubernetes projected service-account token, a CI id_token) verified by the tenant's
   machine-login method for its issuer into a five-minute JWT-SVID for the workload's

@@ -2593,6 +2593,22 @@ those locations (commit, file, line, rule — no value) are kept on the finding 
 (`${secret.payments/slack-bot-token}`, or `trstctl run --secret ENV=payments/slack-bot-token`).
 The value appears in no finding, event or log.
 
+A leak a third-party scan found (in a Slack or Jira export, a CI log or a registry
+export) moves the same way from your copy of that export (P6-L7):
+
+```
+trstctl secrets scans move <finding-id> --export ./slack-export --name deploys/slack-bot-token
+```
+
+The finding names the file inside the export and the line; the CLI re-finds the value in
+your copy (the directory or the one file the scan read) with the pinned gitleaks and moves
+it, with no history residue, since an export has none. A copy that does not hold the value
+at that line is refused, as is `--repo` for a third-party finding (and `--export` for a
+repository's). It closes by the same rule: rotated, the new version read, and a completed
+scan of a new export that no longer sees it. A finding trstctl collected from the provider
+itself (`collect`) has no export to re-find the value in, so the CLI refuses it; rotate it
+at its issuer and store the new value as a native secret.
+
 Moving does not close the finding: the leaked value still works until it is rotated. The
 leader closes a moved finding as `remediated` (actor `system:leaked-secret-closure`) only
 when all three hold: the secret was rotated (a version newer than the moved one exists),

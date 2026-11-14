@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- A leak a third-party scan found moves into the vault from the operator's copy of the export (P6-L7): `trstctl
+  secrets scans move <finding> --export <path>` re-finds the value in the export directory or file the scan read and
+  closes by the same evidence as a repository's leak; a natively collected finding is refused with the reason.
 - A closed moved leak's history residue is its own open finding (P6-L6): the closure records the commits that still
   hold the rotated value as a `secret_history_residue` finding (risk 35) naming the moved finding and the commits; a
   later scan that finds none closes it with that run as evidence, and one that finds the value again records it again,

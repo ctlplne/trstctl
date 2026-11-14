@@ -146,6 +146,9 @@ func (r *GitleaksRunner) unredactedReport(ctx context.Context, bin, target, comm
 	args = append(args, target)
 	cmd := exec.CommandContext(ctx, bin, args...) // #nosec G204 -- the pinned gitleaks binary over the operator's own checkout (CWE-78)
 	cmd.Dir = target
+	if info, err := os.Stat(target); err == nil && !info.IsDir() {
+		cmd.Dir = filepath.Dir(target) // one export file (P6-L7)
+	}
 	cmd.Env = sanitizedGitleaksEnv(os.Environ())
 	var out wipingBuffer
 	defer out.wipe()
