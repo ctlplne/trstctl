@@ -5856,6 +5856,7 @@ export interface FleetReissuanceRunList {
 export interface GraphAccessGrant {
   approvers: GraphAccessLink[];
   credential: GraphNode;
+  delegations?: GraphAccessLink[];
   grant: GraphEdge;
   holders: GraphAccessLink[];
   path: GraphEvidencePath;

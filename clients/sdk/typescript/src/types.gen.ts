@@ -19847,6 +19847,8 @@ export interface components {
             /** @description people who approved it */
             approvers: components["schemas"]["GraphAccessLink"][];
             credential: components["schemas"]["GraphNode"];
+            /** @description the DELEGATED links that handed authority to the holders, nearest first, up to whoever started the chain: a broker agent's requester, an AGID chain-bound credential's delegation chain (Q4-L4) */
+            delegations?: components["schemas"]["GraphAccessLink"][];
             grant: components["schemas"]["GraphEdge"];
             /** @description principals holding the credential */
             holders: components["schemas"]["GraphAccessLink"][];

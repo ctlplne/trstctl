@@ -63,6 +63,9 @@ type BuildOptions struct {
 	// (G1-L5): they are not in the store, so the caller names them, each
 	// with the dynamic-secret provider it signs in through.
 	PAMTargets []PAMTargetRef
+	// AgentChains lists the AGID chain-bound credentials and their
+	// delegation chains (Q4-L4); nil leaves them out.
+	AgentChains AgentChainSource
 }
 
 // PAMTargetRef is a PAM target from static configuration.
@@ -344,7 +347,7 @@ func BuildWith(ctx context.Context, st *store.Store, tenantID string, opts Build
 	}
 
 	if !opts.OmitAccess {
-		if err := addAccessSources(ctx, st, tenantID, g, certs, time.Now().UTC(), opts.PAMTargets, opts.IncludeSecrets); err != nil {
+		if err := addAccessSources(ctx, st, tenantID, g, certs, time.Now().UTC(), opts); err != nil {
 			return nil, err
 		}
 	}

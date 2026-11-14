@@ -17611,6 +17611,10 @@ export const messages = {
     description: "One graph link's relationship, the record that produced it and its confidence.",
   },
   "graph.access.holders": { defaultMessage: "Held by", description: "Heading of a credential's holders." },
+  "graph.access.delegations": {
+    defaultMessage: "Delegated by",
+    description: "Q4-L4: heading of the delegation chain that handed authority to a credential's holders, nearest first.",
+  },
   "graph.access.noHolder": {
     defaultMessage: "Holder not recorded by trstctl",
     description: "Shown when trstctl's records do not name who holds the credential.",

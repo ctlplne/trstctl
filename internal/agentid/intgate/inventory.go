@@ -169,6 +169,7 @@ var Inventory = []Constructor{
 	{Pkg: "internal/agentid/api", Name: "NewAPIOptionsFactory", File: "internal/agentid/api/api.go", Tier: TierRequired, SeededVia: "cmd/trstctl ee_attach (FeatureAgentDelegation API attach)"},
 	{Pkg: "internal/agentid/api", Name: "NewService", File: "internal/agentid/api/service.go", Tier: TierRequired, SeededVia: "api.NewAPIOptionsFactory (built by the attach seam)"},
 	{Pkg: "internal/agentid/api", Name: "NewServiceWithSignerFloors", File: "internal/agentid/api/service.go", Tier: TierRequired, SeededVia: "api.NewAPIOptionsFactory (AGID root-anchor and attestor provisioning)"},
+	{Pkg: "internal/agentid/api", Name: "NewGraphSource", File: "internal/agentid/api/graphsource.go", Tier: TierRequired, SeededVia: "api.NewAPIOptionsFactory (the access graph's reader of AGID delegation chains)"},
 
 	// ---- orchestrator (licensed-outbox worker: the production caller) ------------
 	{Pkg: "internal/agentid/orchestrator", Name: "NewLicensedOutboxFactory", File: "internal/agentid/orchestrator/orchestrator.go", Tier: TierRequired, SeededVia: "cmd/trstctl ee_attach (FeatureAgentDelegation outbox attach)"},

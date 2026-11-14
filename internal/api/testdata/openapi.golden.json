@@ -27847,6 +27847,13 @@
           "credential": {
             "$ref": "#/components/schemas/GraphNode"
           },
+          "delegations": {
+            "description": "the DELEGATED links that handed authority to the holders, nearest first, up to whoever started the chain: a broker agent's requester, an AGID chain-bound credential's delegation chain (Q4-L4)",
+            "items": {
+              "$ref": "#/components/schemas/GraphAccessLink"
+            },
+            "type": "array"
+          },
           "grant": {
             "$ref": "#/components/schemas/GraphEdge"
           },

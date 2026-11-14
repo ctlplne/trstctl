@@ -81,7 +81,10 @@ one grant, and a scope without an action leaves the grant unnarrowed.
 `GET /api/v1/graph/reachers/{id}?action=write` answers for one action: a grant that names
 its actions reaches only for those, and a grant whose record names no action (a PAM
 session, a lease) stays in the answer, because trstctl cannot tell it is narrower. The
-console's who-can-reach panel takes the action and shows what each grant allows.
+console's who-can-reach panel takes the action and shows what each grant allows. Each
+credential in the answer also carries `delegations` (Q4-L4): the `DELEGATED` links up
+from its holders, nearest first, to whoever started the chain, which the console lists
+under "Delegated by".
 
 The sources, each read in tenant-scoped pages:
 
@@ -90,6 +93,7 @@ The sources, each read in tenant-scoped pages:
 | Tenant members | Person nodes and their roles |
 | Enrolled host agents | A workload node (`agent:<agent id>`, `workload_kind: host_agent`, with its `status`, `version` and `last_seen_at`) that `HAS_ROLE` each agent role its certificate carries (`agent-role:<role>`, `role_scope: agent`). A role grant the agent's next renewal has not signed yet grants nothing, so it is the node's `pending_roles`, not an edge. An offboarded agent keeps its node and holds no role |
 | Agent-broker issuance | The AI agent behind each broker-issued certificate, `HOLDS` that certificate; the requester `DELEGATED` to it; the tools its scopes name, with each scope's action on the grant (Q4-L3) |
+| AGID chain-bound credentials | Each credential (`agid:<credential id>`) `HOLDS`'d by the subject it was issued to; each live record of the signed delegation chain it was issued under a `DELEGATED` edge from delegator to delegate; while the credential and every record are live and no revocation covers it, `GRANTS_ACCESS` to each tool its leaf record passes on (`fs.read` reaches `res:agent-scope:tool:fs` for read) and each resource (`res:agent-resource:<kind>:<value>`, the leaf's scopes as the actions) (Q4-L4). A revoked or expired credential is shown held and grants nothing |
 | API tokens, machine sessions | A credential `HOLDS`'d by its subject that `GRANTS_ACCESS` to the trstctl API |
 | PAM sessions | A credential `GRANTS_ACCESS` to the database or host, `HOLDS`'d by the requester and the attested workload, `APPROVED` by each person who approved the activation |
 | PAM targets | The database or host (`res:pam:<type>:<id>`); a registered PostgreSQL target `CONNECTS_TO` its dynamic-secret backend, and so does each database target from static configuration that names its provider (`configured: static`, G1-L5) |

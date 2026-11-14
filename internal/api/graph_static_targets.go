@@ -17,5 +17,6 @@ func (a *API) graphOptions(tenantID string, opts graph.BuildOptions) graph.Build
 	if source, ok := a.pam.(StaticPAMTargetSource); ok {
 		opts.PAMTargets = source.StaticPAMTargets(tenantID)
 	}
+	opts.AgentChains = a.agentChains
 	return opts
 }

@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/privacy"
@@ -178,6 +179,7 @@ type API struct {
 	ai                                 *aiSurface  // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
 	cbom                               CBOMService // served CBOM scanner and crypto inventory
 	pqcCampaignSigner                  PQCCampaignClosureSigner
+	agentChains                        graph.AgentChainSource // AGID chains for the access graph (Q4-L4); nil = none
 	licensedRoutes                     []LicensedRoute
 	coreRoutes                         []LicensedRoute
 	licensedSchemas                    map[string]*Schema
@@ -350,6 +352,7 @@ type config struct {
 	ai                         *aiSurface
 	cbom                       CBOMService
 	pqcCampaignSigner          PQCCampaignClosureSigner
+	agentChains                graph.AgentChainSource
 	licensedRoutes             []LicensedRoute
 	coreRoutes                 []LicensedRoute
 	licensedSchemas            map[string]*Schema
@@ -711,6 +714,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		ai:                          cfg.ai,
 		cbom:                        cfg.cbom,
 		pqcCampaignSigner:           cfg.pqcCampaignSigner,
+		agentChains:                 cfg.agentChains,
 		licensedRoutes:              append([]LicensedRoute(nil), cfg.licensedRoutes...),
 		coreRoutes:                  append([]LicensedRoute(nil), cfg.coreRoutes...),
 		licensedSchemas:             copySchemaMap(cfg.licensedSchemas),

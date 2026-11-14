@@ -57,12 +57,19 @@ func (p principalIndex) node(g *Graph, subject string) string {
 	return id
 }
 
-func addAccessSources(ctx context.Context, st *store.Store, tenantID string, g *Graph, certs []store.Certificate, now time.Time, staticPAMTargets []PAMTargetRef, includeSecrets bool) error {
+func addAccessSources(ctx context.Context, st *store.Store, tenantID string, g *Graph, certs []store.Certificate, now time.Time, opts BuildOptions) error {
 	principals := principalIndex{}
 	if err := addPeopleAndRoles(ctx, st, tenantID, g, principals); err != nil {
 		return err
 	}
 	addAIAgents(g, certs, principals, now)
+	if opts.AgentChains != nil {
+		chains, more, err := opts.AgentChains.AgentChains(ctx, tenantID, MaxAgentChains)
+		if err != nil {
+			return err
+		}
+		addAgentChains(g, chains, more, principals, now)
+	}
 	for _, add := range []func(context.Context, *store.Store, string, *Graph, principalIndex, time.Time) error{
 		addAPITokens, addMachineSessions, addPAMAccess, addDynamicSecretLeases, addIssuanceApprovals, addHostAgents,
 	} {
@@ -70,8 +77,8 @@ func addAccessSources(ctx context.Context, st *store.Store, tenantID string, g *
 			return err
 		}
 	}
-	addStaticPAMTargets(g, staticPAMTargets)
-	if includeSecrets {
+	addStaticPAMTargets(g, opts.PAMTargets)
+	if opts.IncludeSecrets {
 		in, err := loadSecretReaders(ctx, st, tenantID, now)
 		if err != nil {
 			return err

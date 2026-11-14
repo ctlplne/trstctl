@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/store"
 
 	"trstctl.com/trstctl/internal/audit"
@@ -96,6 +97,13 @@ func tenantCryptoExemptOperation(operationID string) bool {
 // campaign closure evidence independently verifiable offline.
 func WithPQCCampaignClosureSigner(signer PQCCampaignClosureSigner) Option {
 	return func(c *config) { c.pqcCampaignSigner = signer }
+}
+
+// WithAgentChainGraphSource lets the access graph read AGID chain-bound
+// credentials and their delegation chains (Q4-L4). The AGID family attaches
+// it; without it the graph leaves them out.
+func WithAgentChainGraphSource(source graph.AgentChainSource) Option {
+	return func(c *config) { c.agentChains = source }
 }
 
 // WithAgentEnrollment wires the agent bootstrap-token issuer that backs

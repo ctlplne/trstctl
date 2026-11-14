@@ -1387,7 +1387,9 @@ never live in the API process. What you can do end to end against the running bi
   identity DELEGATED to the agent, and a live agent credential reaches the tools
   its scopes name; issuances recorded before Q4 name no requester. Only an agent
   scope's grant names its action (Q4-L3), so an answer for one action keeps every
-  other grant, whose record names none.
+  other grant, whose record names none. AGID chain-bound credentials and their
+  delegation chains are read too (Q4-L4), at most 10,000 credentials a build; a cut
+  is named on the credentials (`list_cut_at`).
 - Usage-based posture (M1): trstctl records API-token use from its own activity —
   each authenticated request's client network (/24 or /64 of the connection's peer
   address, or behind a load balancer in `server.trusted_proxies` of the client it

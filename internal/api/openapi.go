@@ -6211,6 +6211,8 @@ func componentSchemas() map[string]*Schema {
 		"credential": ref("GraphNode"), "grant": ref("GraphEdge"), "path": ref("GraphEvidencePath"),
 		"holders":   {Type: "array", Items: ref("GraphAccessLink"), Description: "principals holding the credential"},
 		"approvers": {Type: "array", Items: ref("GraphAccessLink"), Description: "people who approved it"},
+		"delegations": {Type: "array", Items: ref("GraphAccessLink"), Description: "the DELEGATED links that handed authority to the " +
+			"holders, nearest first, up to whoever started the chain: a broker agent's requester, an AGID chain-bound credential's delegation chain (Q4-L4)"},
 	}, "credential", "grant", "path", "holders", "approvers")
 	graphReachers := object(map[string]*Schema{
 		"target":   ref("GraphNode"),

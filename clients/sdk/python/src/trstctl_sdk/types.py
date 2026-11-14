@@ -8108,6 +8108,7 @@ GraphAccessGrant = TypedDict(
     {
         'approvers': list[dict[str, Any]],
         'credential': dict[str, Any],
+        'delegations': list[dict[str, Any]],
         'grant': dict[str, Any],
         'holders': list[dict[str, Any]],
         'path': dict[str, Any],

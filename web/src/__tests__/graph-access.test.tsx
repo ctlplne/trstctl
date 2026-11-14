@@ -142,4 +142,44 @@ describe("G1 who can reach", () => {
     expect(answer.getByText("For write: grants that allow it, and grants whose record names no action.")).toBeInTheDocument();
     expect(answer.getByText("Allows: read, write")).toBeInTheDocument();
   });
+
+  // Q4-L4: a chain-bound credential shows the delegation chain behind its
+  // holder, nearest first.
+  it("shows who delegated authority to a credential's holder", async () => {
+    const tool = { id: "res:agent-scope:tool:fs", kind: "resource", name: "tool:fs" };
+    const credential = { id: "agid:c1", kind: "credential", name: "chain-bound credential for worker" };
+    const worker = { id: "principal:worker", kind: "workload", name: "worker" };
+    const planner = { id: "principal:planner", kind: "workload", name: "planner" };
+    const grant = { ...edge(credential.id, tool.id, "GRANTS_ACCESS", "agent delegation tool"), actions: ["read"] };
+    apiMock.graphReachers.mockResolvedValue({
+      target: tool,
+      reachers: [credential, worker, planner, alice],
+      by_kind: {},
+      paths: [],
+      access: [
+        {
+          credential,
+          grant,
+          path: { target: tool, nodes: [credential, tool], edges: [grant] },
+          holders: [{ node: worker, edge: edge(worker.id, credential.id, "HOLDS", "agent chain-bound issuance") }],
+          approvers: [],
+          delegations: [
+            { node: planner, edge: edge(planner.id, worker.id, "DELEGATED", "agent delegation record") },
+            { node: alice, edge: edge(alice.id, planner.id, "DELEGATED", "agent delegation record") },
+          ],
+        },
+      ],
+      coverage,
+    });
+    const user = userEvent.setup();
+    render(<WhoCanReach nodes={[tool]} />);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Database, host or node" }), tool.id);
+    await user.click(screen.getByRole("button", { name: "Show who can reach it" }));
+    const answer = within((await screen.findByRole("heading", { name: "1 credential reaches tool:fs" })).parentElement!);
+    expect(answer.getByText("Delegated by")).toBeInTheDocument();
+    const chain = answer.getAllByText(/Delegated to · agent delegation record · authoritative/);
+    expect(chain).toHaveLength(2);
+    expect(answer.getByText("planner · Workload")).toBeInTheDocument();
+    expect(answer.getByText("Alice Example · Person")).toBeInTheDocument();
+  });
 });

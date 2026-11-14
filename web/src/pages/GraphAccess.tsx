@@ -130,6 +130,16 @@ export function WhoCanReach({ nodes }: { nodes: GraphNode[] }) {
                     <p className="text-caption text-muted-foreground">{t("graph.access.noHolder")}</p>
                   )}
                 </div>
+                {grant.delegations?.length ? (
+                  <div className="grid gap-1">
+                    <p className="font-medium">{t("graph.access.delegations")}</p>
+                    <ul className="grid gap-1">
+                      {grant.delegations.map((link) => (
+                        <Evidence key={`${link.edge.from}-${link.edge.to}`} link={link} />
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <div className="grid gap-1">
                   <p className="font-medium">{t("graph.access.approvers")}</p>
                   {grant.approvers.length ? (

@@ -31,7 +31,14 @@ type AccessGrant struct {
 	Path      EvidencePath `json:"path"`
 	Holders   []AccessLink `json:"holders"`
 	Approvers []AccessLink `json:"approvers"`
+	// Delegations are the DELEGATED links that handed authority to the
+	// holders, nearest first, up to whoever started the chain (Q4, Q4-L4):
+	// the person an agent or a chain-bound credential acts for.
+	Delegations []AccessLink `json:"delegations"`
 }
+
+// maxDelegationDepth bounds how far up a delegation chain an answer walks.
+const maxDelegationDepth = 16
 
 // AccessCoverage states which of trstctl's records the access answer is built
 // from and what it cannot see, so an empty answer is never read as proof that
@@ -70,6 +77,7 @@ func Coverage() AccessCoverage {
 			"dynamic-secret leases and who requested each (G1-L1)",
 			"the grants, roles or policies a lease's login holds inside PostgreSQL, MySQL, MongoDB, Redis, Kubernetes, GCP, Azure and AWS targets, as the leader last read them (G2)",
 			"AI agents issued identities by the agent broker, who asked for each identity, and the tools its scopes name with each scope's action (Q4-L3)",
+			"AGID chain-bound credentials, the signed delegation chain each was issued under, and the tools and resources its leaf record passes on (Q4-L4)",
 			"certificate issuance requests and who approved them",
 			"the certificate, SSH key, deployment and discovery inventory",
 			"selected AWS workload IAM policy models from verified native discovery runs, with imported evidence provenance",
@@ -213,11 +221,40 @@ func (g *Graph) WhoCanReachFor(id, action string) ReachersResult {
 		if reacher.Kind != KindCredential || len(path.Edges) == 0 || path.Edges[0].Type != EdgeGrantsAccess {
 			continue
 		}
+		holders := g.incomingLinks(reacher.ID, EdgeHolds, EdgeOwns)
 		out.Access = append(out.Access, AccessGrant{
 			Credential: reacher, Grant: path.Edges[0], Path: path,
-			Holders:   g.incomingLinks(reacher.ID, EdgeHolds, EdgeOwns),
-			Approvers: g.incomingLinks(reacher.ID, EdgeApproved),
+			Holders:     holders,
+			Approvers:   g.incomingLinks(reacher.ID, EdgeApproved),
+			Delegations: g.delegationLinks(holders),
 		})
+	}
+	return out
+}
+
+// delegationLinks walks DELEGATED edges up from the holders, nearest first,
+// each link once, at most maxDelegationDepth hops.
+func (g *Graph) delegationLinks(holders []AccessLink) []AccessLink {
+	out := []AccessLink{}
+	seen := map[string]bool{}
+	frontier := make([]string, 0, len(holders))
+	for _, h := range holders {
+		frontier = append(frontier, h.Node.ID)
+	}
+	for depth := 0; depth < maxDelegationDepth && len(frontier) > 0; depth++ {
+		var next []string
+		for _, id := range frontier {
+			for _, link := range g.incomingLinks(id, EdgeDelegated) {
+				key := link.Edge.From + "\x00" + link.Edge.To
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				out = append(out, link)
+				next = append(next, link.Node.ID)
+			}
+		}
+		frontier = next
 	}
 	return out
 }

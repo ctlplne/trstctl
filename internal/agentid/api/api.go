@@ -283,6 +283,9 @@ func NewAPIOptionsFactory() editionseam.LicensedAPIOptionsFactory {
 		return []api.Option{
 			api.WithLicensedRoutes(Routes(svc)...),
 			api.WithLicensedSchemas(schemas()),
+			// Q4-L4: the access graph shows chain-bound credentials and their
+			// delegation chains.
+			api.WithAgentChainGraphSource(NewGraphSource(d.Store)),
 		}, nil
 	}
 }

@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- AGID chain-bound credentials and their delegation chains are in the access graph (Q4-L4): each credential is held by
+  the subject it was issued to, each live record of its signed chain is a `DELEGATED` edge, and while it is live and
+  unrevoked it reaches the tools and resources its leaf record passes on. Who-can-reach answers carry `delegations`,
+  the chain up from each credential's holders, and the console lists them under "Delegated by".
 - An agent broker scope's action is on its access grant in the graph (Q4-L3): `tool:inventory.read` grants read on
   `res:agent-scope:tool:inventory` (`"actions": ["read"]`), two scopes on one tool join on one grant, and
   `GET /api/v1/graph/reachers/{id}?action=write` answers for one action, keeping grants whose record names none. The
