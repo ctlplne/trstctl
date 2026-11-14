@@ -47,6 +47,9 @@ type HoneyToken struct {
 	// why. Nil while it is watched.
 	WatchGapSince  *time.Time `json:"watch_gap_since,omitempty"`
 	WatchGapReason string     `json:"watch_gap_reason,omitempty"`
+	// StatsResetSeen (Q6-L7) is the latest statistics reset of a decoy
+	// login's database that the watcher recorded as a monitoring gap.
+	StatsResetSeen *time.Time `json:"stats_reset_seen,omitempty"`
 	// Readers, Reads and LastReadAt summarize a secret decoy's reads (Q6-L1):
 	// how many distinct readers read its value, how many reads they made in
 	// all, and when the latest was. Each reader alerts once.
@@ -82,7 +85,7 @@ const honeyTokenColumns = `id::text, tenant_id::text, kind, name, placement, tok
     (SELECT COALESCE(sum(r.reads), 0) FROM honey_token_readers r WHERE r.tenant_id = honey_tokens.tenant_id AND r.honey_token_id = honey_tokens.id),
     (SELECT max(r.last_read_at) FROM honey_token_readers r WHERE r.tenant_id = honey_tokens.tenant_id AND r.honey_token_id = honey_tokens.id),
     COALESCE(file_host, ''), COALESCE(file_path, ''), COALESCE(file_key_fingerprint, ''),
-    COALESCE(k8s_cluster, ''), COALESCE(k8s_namespace, ''), COALESCE(k8s_service_account, ''), COALESCE(k8s_secret, '')`
+    COALESCE(k8s_cluster, ''), COALESCE(k8s_namespace, ''), COALESCE(k8s_service_account, ''), COALESCE(k8s_secret, ''), stats_reset_seen`
 
 func scanHoneyToken(row pgx.Row) (HoneyToken, error) {
 	var h HoneyToken
@@ -93,7 +96,7 @@ func scanHoneyToken(row pgx.Row) (HoneyToken, error) {
 		&h.SecretName, &h.TriggerSubject, &h.DBProviderID, &h.DBLeaseID, &h.DBRole,
 		&h.WatchGapSince, &h.WatchGapReason, &h.Readers, &h.Reads, &h.LastReadAt,
 		&h.FileHost, &h.FilePath, &h.FileKeyFingerprint,
-		&h.K8sCluster, &h.K8sNamespace, &h.K8sServiceAccount, &h.K8sSecret)
+		&h.K8sCluster, &h.K8sNamespace, &h.K8sServiceAccount, &h.K8sSecret, &h.StatsResetSeen)
 	return h, err
 }
 

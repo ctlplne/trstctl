@@ -62,7 +62,9 @@ func (l *decoyWatchFailureLog) read(id string) {
 }
 
 type decoySessionReader interface {
-	DecoySessions(ctx context.Context, role string) (int64, bool, error)
+	// DecoyCounter reads the decoy database's session counter with its last
+	// statistics reset (Q6-L7).
+	DecoyCounter(ctx context.Context, role string) (dynsecret.DecoyCounter, bool, error)
 	// DecoyElsewhere names the other databases the decoy login has a live
 	// session in (Q6-L8).
 	DecoyElsewhere(ctx context.Context, role string) ([]string, error)
@@ -178,22 +180,25 @@ func (s *Server) watchDecoyAuthLogs(ctx context.Context, tenantID string, decoys
 	return triggered, failed
 }
 
-// DecoySessions reads a decoy login's database session counter through the
-// provider's admin connection, opened for this one read.
-func (p *configuredDynamicProvider) DecoySessions(ctx context.Context, role string) (int64, bool, error) {
+// DecoyCounter reads a decoy login's database session counter and its last
+// statistics reset through the provider's admin connection, opened for this
+// one read.
+func (p *configuredDynamicProvider) DecoyCounter(ctx context.Context, role string) (dynsecret.DecoyCounter, bool, error) {
 	if p.cfg.Type != "postgresql" {
-		return 0, false, fmt.Errorf("dynamic-secret provider %q cannot hold decoy logins", p.id)
+		return dynsecret.DecoyCounter{}, false, fmt.Errorf("dynamic-secret provider %q cannot hold decoy logins", p.id)
 	}
 	backend, closeBackend, err := p.openBackend(ctx)
 	if err != nil {
-		return 0, false, err
+		return dynsecret.DecoyCounter{}, false, err
 	}
 	defer closeBackend()
-	reader, ok := backend.(decoySessionReader)
+	reader, ok := backend.(interface {
+		DecoyCounter(context.Context, string) (dynsecret.DecoyCounter, bool, error)
+	})
 	if !ok {
-		return 0, false, fmt.Errorf("dynamic-secret provider %q cannot report decoy logins", p.id)
+		return dynsecret.DecoyCounter{}, false, fmt.Errorf("dynamic-secret provider %q cannot report decoy logins", p.id)
 	}
-	return reader.DecoySessions(ctx, role)
+	return reader.DecoyCounter(ctx, role)
 }
 
 // DecoyElsewhere reads the decoy login's live sessions in other databases
@@ -326,7 +331,7 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 				unwatched(fmt.Errorf("provider %q is not configured for decoy logins", decoy.DBProviderID))
 				continue
 			}
-			sessions, exists, err := reader.DecoySessions(ctx, decoy.DBRole)
+			counter, exists, err := reader.DecoyCounter(ctx, decoy.DBRole)
 			if err != nil {
 				if ended {
 					retire()
@@ -334,6 +339,16 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 				}
 				unwatched(err)
 				continue
+			}
+			sessions := counter.Sessions
+			// Q6-L7: a statistics reset during the decoy's life zeroed its
+			// counter, so a use before it is not counted: recorded once as a
+			// monitoring gap (one warning alert), which the next read closes.
+			if exists && counter.StatsReset != nil && counter.StatsReset.After(decoy.CreatedAt) && decoy.WatchGapSince == nil &&
+				(decoy.StatsResetSeen == nil || counter.StatsReset.After(*decoy.StatsResetSeen)) {
+				if err := s.orch.RecordDecoyStatsReset(ctx, tenantID, decoy.ID, *counter.StatsReset); err != nil {
+					note(fmt.Errorf("decoy %s: record its statistics reset: %w", decoy.ID, err))
+				}
 			}
 			database := dynsecret.DecoyDatabaseName(decoy.DBRole)
 			if !exists || sessions == 0 {

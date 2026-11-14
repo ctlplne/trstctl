@@ -16,11 +16,17 @@ import (
 // decoy login (Q6-L10) and enqueues one warning for the gap: until it is
 // read again, a use of the bait is not seen. A gap already open keeps its
 // start, and a decoy that is no longer active records none.
-func (s *Store) ApplyHoneyTokenWatchGapOpenedTx(ctx context.Context, tx pgx.Tx, tenantID, id, reason string, since time.Time) error {
+func (s *Store) ApplyHoneyTokenWatchGapOpenedTx(ctx context.Context, tx pgx.Tx, tenantID, id, reason string, since time.Time, statsResetAt *time.Time) error {
+	// Q6-L7: a gap for a statistics reset also records the reset as seen.
+	var reset *time.Time
+	if statsResetAt != nil {
+		at := statsResetAt.UTC()
+		reset = &at
+	}
 	tag, err := tx.Exec(ctx,
-		`UPDATE honey_tokens SET watch_gap_since = $3, watch_gap_reason = $4
+		`UPDATE honey_tokens SET watch_gap_since = $3, watch_gap_reason = $4, stats_reset_seen = COALESCE($5, stats_reset_seen)
 		  WHERE tenant_id = $1 AND id = $2 AND state = 'active' AND watch_gap_since IS NULL`,
-		tenantID, id, since.UTC(), reason)
+		tenantID, id, since.UTC(), reason, reset)
 	if err != nil || tag.RowsAffected() == 0 {
 		return err
 	}

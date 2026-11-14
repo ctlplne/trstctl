@@ -4502,6 +4502,10 @@ type HoneyTokenWatchGapOpened struct {
 	ID     string    `json:"id"`
 	Reason string    `json:"reason"`
 	Since  time.Time `json:"since"`
+	// StatsResetAt (Q6-L7) is the statistics reset of the decoy database
+	// this gap records: a use before it is not counted. Set, it is the reset
+	// the watcher has now acknowledged.
+	StatsResetAt *time.Time `json:"stats_reset_at,omitempty"`
 }
 
 // HoneyTokenWatchGapClosed records that the watcher reads the decoy again.
@@ -9101,7 +9105,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.ID == "" || pl.Reason == "" || len(pl.Reason) > maxHoneyTokenWatchGapReason || pl.Since.IsZero() {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
-		return p.store.ApplyHoneyTokenWatchGapOpenedTx(ctx, tx, e.TenantID, pl.ID, pl.Reason, pl.Since)
+		return p.store.ApplyHoneyTokenWatchGapOpenedTx(ctx, tx, e.TenantID, pl.ID, pl.Reason, pl.Since, pl.StatsResetAt)
 	case EventHoneyTokenWatchGapClosed:
 		var pl HoneyTokenWatchGapClosed
 		if err := decode(e, &pl); err != nil {

@@ -6702,6 +6702,10 @@ export const messages = {
   },
   "secrets.decoyLogins.empty": { defaultMessage: "No decoy logins minted.", description: "Empty decoy login list." },
   "secrets.decoyLogins.used": { defaultMessage: "Used at {at}", description: "When a decoy login was first used." },
+  "secrets.decoyLogins.gap": {
+    defaultMessage: "Not fully watched since {since}: {reason}",
+    description: "A decoy login's open monitoring gap: since when and why a use of it may not be seen (Q6-L10; a statistics reset, Q6-L7).",
+  },
   "secrets.decoyLogins.refused": {
     defaultMessage: "Tried with a wrong password at {at} ({where})",
     description: "A decoy login's first use was a sign-in its server refused, read from the server's log (Q6-L6); where is the database and client.",

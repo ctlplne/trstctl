@@ -5919,7 +5919,8 @@ when off, requiring a KEK when on):
   warning alert; reading it again closes the gap. A failed login with a
   wrong password is detected only with `decoy_auth_log` (Q6-L6: the server writes
   `jsonlog` and the admin role may read it), and not in a log the server rotated away
-  while trstctl was down; a statistics reset hides earlier uses, and only
+  while trstctl was down; a statistics reset is recorded as a monitoring gap (Q6-L7)
+  but a use before it is still not counted, and only
   PostgreSQL providers can mint decoys. Decoy files on hosts (Q6-O1): a host agent
   started with `--decoy-ssh-keys` plants decoy SSH private keys and each program that
   opens one alerts once; the watch needs Linux, inotify names an opener only while it

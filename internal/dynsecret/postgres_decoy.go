@@ -125,24 +125,42 @@ func dropDecoyDatabase(ctx context.Context, conn *pgx.Conn, role string) error {
 	return nil
 }
 
+// DecoyCounter is a decoy database's session counter and when the server's
+// statistics for that database were last reset (Q6-L7); nil when never.
+type DecoyCounter struct {
+	Sessions   int64
+	StatsReset *time.Time
+}
+
 // DecoySessions returns how many sessions were ever established to the
 // decoy's own database (since the server's statistics were last reset) and
 // whether that database still exists.
 func (b *PostgresBackend) DecoySessions(ctx context.Context, role string) (int64, bool, error) {
+	counter, exists, err := b.DecoyCounter(ctx, role)
+	return counter.Sessions, exists, err
+}
+
+// DecoyCounter reads the decoy database's session counter with its last
+// statistics reset, in one read (Q6-L7), and whether the database exists.
+func (b *PostgresBackend) DecoyCounter(ctx context.Context, role string) (DecoyCounter, bool, error) {
 	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
 	if err != nil {
-		return 0, false, err
+		return DecoyCounter{}, false, err
 	}
 	defer func() { _ = conn.Close(ctx) }()
-	var sessions int64
-	err = conn.QueryRow(ctx, `SELECT sessions FROM pg_stat_database WHERE datname = $1`, DecoyDatabaseName(role)).Scan(&sessions)
+	var counter DecoyCounter
+	err = conn.QueryRow(ctx, `SELECT sessions, stats_reset FROM pg_stat_database WHERE datname = $1`, DecoyDatabaseName(role)).Scan(&counter.Sessions, &counter.StatsReset)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, false, nil
+		return DecoyCounter{}, false, nil
 	}
 	if err != nil {
-		return 0, false, fmt.Errorf("dynsecret postgres: read decoy sessions: %w", err)
+		return DecoyCounter{}, false, fmt.Errorf("dynsecret postgres: read decoy sessions: %w", err)
 	}
-	return sessions, true, nil
+	if counter.StatsReset != nil {
+		at := counter.StatsReset.UTC()
+		counter.StatsReset = &at
+	}
+	return counter, true, nil
 }
 
 // DecoyElsewhere returns the other databases the decoy login has a session in

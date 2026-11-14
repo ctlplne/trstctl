@@ -682,7 +682,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/path", clear), privacyRule("/reader", exact),
 	)
 	honeyTokenRevoked := privacyRules(privacyRule("/id", opaque))
-	honeyTokenWatchGapOpened := privacyRules(privacyRule("/id", opaque), privacyRule("/reason", opaque), privacyRule("/since", opaque))
+	honeyTokenWatchGapOpened := privacyRules(privacyRule("/id", opaque), privacyRule("/reason", opaque), privacyRule("/since", opaque),
+		privacyRule("/stats_reset_at", opaque))
 	honeyTokenWatchGapClosed := privacyRules(privacyRule("/id", opaque))
 	awsHoneyTokenCreated := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/name", clear),

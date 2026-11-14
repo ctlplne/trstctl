@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A statistics reset that could hide a decoy login's use is recorded (Q6-L7): the decoy watcher reads
+  `pg_stat_database.stats_reset` with the session counter, and a reset during the decoy's life records a monitoring
+  gap since the reset, naming it, with one warning alert; the next check closes it and the reset is not recorded again.
+  The console's decoy logins list shows an open gap and its reason. Migration 0487.
 - A decoy database login tried with a wrong password alerts (Q6-L6): with `decoy_auth_log` on a PostgreSQL provider,
   the decoy watcher reads the server's own record of each refused sign-in from its `jsonlog` through the admin
   connection (`pg_current_logfile`, `pg_read_file`, a bounded chunk at a time); a refusal by a decoy login (SQLSTATE

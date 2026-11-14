@@ -107,6 +107,31 @@ describe("Q6 decoy database logins", () => {
     expect(screen.queryByText(/^Used at /)).not.toBeInTheDocument();
   });
 
+  // Q6-L7: a decoy's open monitoring gap — here a statistics reset — shows
+  // since when and why.
+  it("shows a decoy's monitoring gap and its reason (Q6-L7)", async () => {
+    apiMock.listDatabaseDecoys.mockResolvedValue({
+      items: [
+        {
+          id: "d3",
+          kind: "database",
+          name: "reports bait",
+          placement: "ops wiki",
+          db_provider_id: "warehouse-pg",
+          db_lease_id: "l3",
+          db_role: "trstctl_app_5555555555",
+          state: "active",
+          created_at: "2026-11-01T00:00:00Z",
+          watch_gap_since: "2026-11-02T04:00:00Z",
+          watch_gap_reason: "the server's statistics for the decoy's database were reset at 2026-11-02T04:00:00Z; a use of the bait before then is not counted",
+        },
+      ],
+      next_cursor: "",
+    });
+    render(<DecoyDatabaseWorkflow />);
+    expect(await screen.findByText(/Not fully watched since .*: the server's statistics for the decoy's database were reset/)).toBeInTheDocument();
+  });
+
   it("is hidden from anyone who cannot plant decoys", () => {
     can.value = false;
     const { container } = render(<DecoyDatabaseWorkflow />);

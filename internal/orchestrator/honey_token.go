@@ -65,6 +65,22 @@ func (o *Orchestrator) OpenHoneyTokenWatchGap(ctx context.Context, tenantID, id,
 	return err
 }
 
+// RecordDecoyStatsReset records a statistics reset of a decoy login's
+// database during its life as a monitoring gap since the reset (Q6-L7): the
+// reset zeroed the counter, so a use before it is not counted. The gap names
+// the reset, which is then acknowledged, and closes at the next read.
+func (o *Orchestrator) RecordDecoyStatsReset(ctx context.Context, tenantID, id string, resetAt time.Time) error {
+	at := resetAt.UTC()
+	payload, err := json.Marshal(projections.HoneyTokenWatchGapOpened{ID: id, Since: at, StatsResetAt: &at,
+		Reason: "the server's statistics for the decoy's database were reset at " + at.Format(time.RFC3339) +
+			"; a use of the bait before then is not counted"})
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, projections.EventHoneyTokenWatchGapOpened, tenantID, payload)
+	return err
+}
+
 // CloseHoneyTokenWatchGap records that the watcher reads the decoy again.
 func (o *Orchestrator) CloseHoneyTokenWatchGap(ctx context.Context, tenantID, id string) error {
 	payload, err := json.Marshal(projections.HoneyTokenWatchGapClosed{ID: id})

@@ -144,6 +144,11 @@ export function DecoyDatabaseWorkflow() {
               <p>
                 {item.name} · {item.placement} · {item.db_provider_id}
               </p>
+              {item.watch_gap_since ? (
+                <p className="text-status-warning">
+                  {t("secrets.decoyLogins.gap", { since: formatDateTime(item.watch_gap_since), reason: item.watch_gap_reason ?? "" })}
+                </p>
+              ) : null}
               {item.triggered_at ? (
                 <p>
                   {item.trigger_method === "FAILED_LOGIN"

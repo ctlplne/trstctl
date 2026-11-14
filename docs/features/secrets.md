@@ -2266,7 +2266,11 @@ and the watcher itself never establish a session on the decoy database, so they 
 alert. The first session marks the decoy `triggered` (method `LOGIN`, path
 `postgres/<database>`) and queues one critical alert; later logins do not re-alert.
 The counter persists in PostgreSQL, so a login while trstctl is down is seen at the
-next check; a statistics reset reads zero and alerts nothing. A failed login with a
+next check. A statistics reset zeroes it, so a use before the reset would not be counted:
+the watcher reads `pg_stat_database.stats_reset` with the counter, and a reset during the
+decoy's life records a monitoring gap since the reset, naming it, with one warning alert
+(Q6-L7); the next check closes the gap and the reset is not recorded again. The console's
+decoy logins list shows an open gap and why. A failed login with a
 wrong password creates no session, so the counter never sees it; a provider with
 `decoy_auth_log: true` also reads the server's own record of each refused sign-in
 (Q6-L6): with `jsonlog` in `log_destination` and the logging collector on, the watcher
