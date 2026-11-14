@@ -2194,6 +2194,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventNotificationDeliveryRecorded, 1}:                                     privacyPayloadShape[privacyNotificationDeliveryRecordedV1](),
 		{EventNotificationDeliveryRecorded, 2}:                                     privacyPayloadShape[NotificationDeliveryRecorded](),
 		{EventCBOMAssetObserved, 1}:                                                privacyPayloadShape[CBOMAssetObserved](),
+		{EventCBOMAssetsObserved, 1}:                                               privacyPayloadShape[CBOMAssetsObserved](),
 		{EventCBOMSourceReconciled, 1}:                                             privacyPayloadShape[CBOMSourceReconciled](),
 		{EventCBOMImportReconciled, 1}:                                             privacyPayloadShape[CBOMImportReconciled](),
 		{EventDeploymentTargetUpserted, 1}:                                         privacyPayloadShape[DeploymentTargetUpserted](),

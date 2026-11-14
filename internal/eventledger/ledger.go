@@ -111,6 +111,7 @@ const (
 	EventSecretStaticRotationQueued               = "secret.static_rotation.queued"
 	EventSecretStaticRotationAdvanced             = "secret.static_rotation.advanced"
 	EventCBOMAssetObserved                        = "cbom.asset.observed"
+	EventCBOMAssetsObserved                       = "cbom.assets.observed"
 	EventCBOMSourceReconciled                     = "cbom.source.reconciled"
 	EventCBOMImportReconciled                     = "cbom.import.reconciled"
 	EventPQCMigrationCampaignStarted              = "pqc.migration_campaign.started"
@@ -284,7 +285,7 @@ var ledger = []FeatureEvent{
 	{"F2", "Network discovery", "triage_finding", "claimDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
 	{"F2", "Network discovery", "dismiss_finding", "dismissDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
 	{"F52", "Cryptographic Bill of Materials", "scan", "startCBOMScan", []string{EventCBOMAssetObserved, EventCBOMSourceReconciled}},
-	{"F52", "Cryptographic Bill of Materials", "import", "importCBOM", []string{EventDiscoverySourceUpserted, EventDiscoveryRunQueued, EventCBOMAssetObserved, EventCBOMImportReconciled}},
+	{"F52", "Cryptographic Bill of Materials", "import", "importCBOM", []string{EventDiscoverySourceUpserted, EventDiscoveryRunQueued, EventCBOMAssetObserved, EventCBOMAssetsObserved, EventCBOMImportReconciled}},
 	{"F52", "Cryptographic Bill of Materials", "start_campaign", "startPQCMigrationCampaign", []string{EventPQCMigrationCampaignStarted}},
 	{"F52", "Cryptographic Bill of Materials", "update_campaign", "updatePQCMigrationCampaign", []string{EventPQCMigrationCampaignUpdated}},
 	{"F52", "Cryptographic Bill of Materials", "record_readiness", "setPQCMigrationCampaignReadiness", []string{EventPQCMigrationCampaignUpdated}},

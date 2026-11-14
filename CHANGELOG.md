@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- A CBOM import records its findings in batches (X6-O1): `cbom.assets.observed` events of up to 500 observations
+  (and 256 KiB) each, applied in order as single observations are, instead of one event per finding; an image
+  scan of 8,100 components imports in about 10 seconds instead of 16 in the served test.
 - The observed-traffic gate finds endpoints behind NAT or a load balancer (X3-L2): a deployment target names the
   backends an observer sees its traffic at (`observed_addresses`, host:port, at most 16), which a migration run freezes
   into its members, and a PQC pilot target can name them too; connections seen there count for the endpoint, as

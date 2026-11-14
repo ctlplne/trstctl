@@ -441,7 +441,10 @@ components and 32 MiB.
 Each import is a discovery run keyed by the source and the BOM's serial number and
 version (its SHA-256 when it has no serial number). Importing the same BOM again returns
 the first import's result with `replayed: true` and writes nothing; a new version of the
-BOM is a new import. Every finding is recorded as `cbom.asset.observed` first.
+BOM is a new import. Every finding is recorded first, an import's in
+`cbom.assets.observed` batches of up to 500 observations (X6-O1), so an image scan of
+8,100 components is 17 events rather than 8,100; each observation in a batch is applied
+as `cbom.asset.observed` would be, in order.
 
 An import also retires what its source no longer lists (X6-L3). Once every finding of the
 BOM is recorded, `cbom.import.reconciled` marks the source's rows that earlier imports
@@ -729,8 +732,9 @@ point it at (TLS endpoints + config files). See
   `POST /api/v1/cbom/scans` (`discovery:write`, `Idempotency-Key` required), and
   `GET /api/v1/cbom/assets` (`risk:read`).
 - **CBOM policy floor:** RSA-2048, EC-256, TLS 1.2; bans 3DES/DES/RC4/NULL/EXPORT/MD5.
-- **CBOM event/read model:** `cbom.asset.observed` and
-  `cbom.source.reconciled` project into `crypto_assets`; rebuilds/snapshots
+- **CBOM event/read model:** `cbom.asset.observed`, an import's
+  `cbom.assets.observed` batches (X6-O1) and `cbom.source.reconciled` project into
+  `crypto_assets`; rebuilds/snapshots
   replay the same active inventory and retained tombstones.
 
 ## See also

@@ -301,6 +301,71 @@ func (s *eventedCBOMSink) Record(ctx context.Context, f cbom.Finding) error {
 	return nil
 }
 
+// maxCBOMBatchBytes bounds one cbom.assets.observed payload, well under the
+// event log's message limit.
+const maxCBOMBatchBytes = 256 << 10
+
+// RecordBatch records an import's findings as cbom.assets.observed batches
+// (X6-O1): up to projections.MaxCBOMAssetsPerEvent observations and
+// maxCBOMBatchBytes an event, in order, each applied as cbom.asset.observed
+// would be. A large image scan is a few events instead of one per finding.
+func (s *eventedCBOMSink) RecordBatch(ctx context.Context, findings []cbom.Finding) error {
+	if s.log == nil || s.store == nil {
+		return errors.New("server: CBOM sink requires store and event log")
+	}
+	var batch []projections.CBOMAssetObserved
+	var assets []store.CryptoAsset
+	size := 0
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		data, err := json.Marshal(projections.CBOMAssetsObserved{Assets: batch})
+		if err != nil {
+			return fmt.Errorf("server: encode CBOM asset batch event: %w", err)
+		}
+		stored, err := s.appendAndProjectStored(ctx, events.Event{
+			ID: events.NewID(), Type: projections.EventCBOMAssetsObserved, TenantID: s.tenantID, Data: data,
+		})
+		if err != nil {
+			return err
+		}
+		s.mu.Lock()
+		if s.observed == nil {
+			s.observed = make(map[string]store.CryptoAsset)
+		}
+		for _, asset := range assets {
+			s.observed[asset.ID] = asset
+		}
+		if s.firstObserved == 0 || stored.Sequence < s.firstObserved {
+			s.firstObserved = stored.Sequence
+		}
+		s.mu.Unlock()
+		batch, assets, size = nil, nil, 0
+		return nil
+	}
+	for _, f := range findings {
+		asset := cbomAssetFor(s.tenantID, f)
+		payload := projections.CBOMAssetObserved{
+			ID: asset.ID, Kind: asset.Kind, Location: asset.Location, Algorithm: asset.Algorithm, CertificateFingerprint: asset.CertificateFingerprint,
+			KeyBits: asset.KeyBits, Protocol: asset.Protocol, Cipher: asset.Cipher,
+			Library: asset.Library, Strength: asset.Strength, QuantumVulnerable: asset.QuantumVulnerable,
+			OutOfPolicy: asset.OutOfPolicy, Reasons: asset.Reasons, ImportSource: s.importSource,
+		}
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("server: encode CBOM asset event: %w", err)
+		}
+		if len(batch) == projections.MaxCBOMAssetsPerEvent || (len(batch) > 0 && size+len(encoded)+1 > maxCBOMBatchBytes) {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+		batch, assets, size = append(batch, payload), append(assets, asset), size+len(encoded)+1
+	}
+	return flush()
+}
+
 // ReconcileImport records that the sink's import of its source took in the
 // whole BOM (X6-L3): the source's facts it did not observe again are retired.
 // It returns the IDs of the rows it retired.

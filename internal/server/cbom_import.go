@@ -51,10 +51,9 @@ func (s *cbomService) Import(ctx context.Context, tenantID, source string, bom c
 		return resp, nil
 	}
 	sink := &eventedCBOMSink{store: s.store, log: s.log, tenantID: tenantID, importSource: source}
-	for _, f := range bom.Findings {
-		if err := sink.Record(ctx, f); err != nil {
-			return api.CBOMImportResponse{}, err
-		}
+	// X6-O1: the findings go in as batches, a few events for a large image scan.
+	if err := sink.RecordBatch(ctx, bom.Findings); err != nil {
+		return api.CBOMImportResponse{}, err
 	}
 	if resp.RetiredAssetIDs, err = sink.ReconcileImport(ctx, resp.RunID); err != nil {
 		return api.CBOMImportResponse{}, err

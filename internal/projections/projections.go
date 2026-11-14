@@ -296,6 +296,7 @@ const (
 	EventNotificationTestQueued                   = "notification.test.queued"
 	EventNotificationDeliveryRecorded             = "notification.delivery.recorded"
 	EventCBOMAssetObserved                        = "cbom.asset.observed"
+	EventCBOMAssetsObserved                       = "cbom.assets.observed"
 	EventCBOMSourceReconciled                     = "cbom.source.reconciled"
 	EventCBOMImportReconciled                     = "cbom.import.reconciled"
 	EventLicensedCryptoMigrationStarted           = "licensed_crypto.migration.started"
@@ -3579,6 +3580,17 @@ type CBOMAssetObserved struct {
 	ImportSource string `json:"import_source,omitempty"`
 }
 
+// CBOMAssetsObserved records a batch of a CBOM import's observations in one
+// event (X6-O1): each is applied as cbom.asset.observed would be, in order,
+// under the batch's sequence, so a large image scan is a few events instead of
+// one per finding.
+type CBOMAssetsObserved struct {
+	Assets []CBOMAssetObserved `json:"assets"`
+}
+
+// MaxCBOMAssetsPerEvent bounds a cbom.assets.observed batch.
+const MaxCBOMAssetsPerEvent = 500
+
 // CBOMImportReconciled records that an import of Source took in every
 // finding of its BOM as the observations from ObservedFromSequence on (X6-L3).
 // The source's facts that this import did not observe again — what a newer
@@ -5638,6 +5650,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventNotificationTestQueued:                   {1: true},
 	EventNotificationDeliveryRecorded:             {1: true, NotificationDeliveryRoutingSchemaVersion: true},
 	EventCBOMAssetObserved:                        {1: true},
+	EventCBOMAssetsObserved:                       {1: true},
 	EventCBOMSourceReconciled:                     {1: true},
 	EventCBOMImportReconciled:                     {1: true},
 	EventDeploymentTargetUpserted:                 {1: true},
@@ -8462,16 +8475,21 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || pl.Kind == "" || pl.Location == "" || pl.Strength == "" {
-			return fmt.Errorf("projections: %s requires id, kind, location, and strength", e.Type)
+		return p.applyCBOMAssetObserved(ctx, tx, e, pl)
+	case EventCBOMAssetsObserved:
+		var pl CBOMAssetsObserved
+		if err := decode(e, &pl); err != nil {
+			return err
 		}
-		return p.store.ApplyCryptoAssetObservedTx(ctx, tx, store.CryptoAsset{
-			ID: pl.ID, TenantID: e.TenantID, Kind: pl.Kind, Location: pl.Location, CertificateFingerprint: pl.CertificateFingerprint,
-			Algorithm: pl.Algorithm, KeyBits: pl.KeyBits, Protocol: pl.Protocol,
-			Cipher: pl.Cipher, Library: pl.Library, Strength: pl.Strength,
-			QuantumVulnerable: pl.QuantumVulnerable, OutOfPolicy: pl.OutOfPolicy,
-			Reasons: pl.Reasons, ImportSource: pl.ImportSource,
-		}, e.Sequence, e.Time)
+		if len(pl.Assets) == 0 || len(pl.Assets) > MaxCBOMAssetsPerEvent {
+			return fmt.Errorf("projections: %s carries %d assets; want 1 to %d", e.Type, len(pl.Assets), MaxCBOMAssetsPerEvent)
+		}
+		for _, asset := range pl.Assets {
+			if err := p.applyCBOMAssetObserved(ctx, tx, e, asset); err != nil {
+				return err
+			}
+		}
+		return nil
 	case EventCBOMImportReconciled:
 		var pl CBOMImportReconciled
 		if err := decode(e, &pl); err != nil {
@@ -11842,4 +11860,19 @@ func validAuditFeedAuthScheme(provider, scheme string) bool {
 	default:
 		return false
 	}
+}
+
+// applyCBOMAssetObserved projects one CBOM observation, alone
+// (cbom.asset.observed) or in a batch (cbom.assets.observed, X6-O1).
+func (p *Projector) applyCBOMAssetObserved(ctx context.Context, tx pgx.Tx, e events.Event, pl CBOMAssetObserved) error {
+	if pl.ID == "" || pl.Kind == "" || pl.Location == "" || pl.Strength == "" {
+		return fmt.Errorf("projections: %s requires id, kind, location, and strength", e.Type)
+	}
+	return p.store.ApplyCryptoAssetObservedTx(ctx, tx, store.CryptoAsset{
+		ID: pl.ID, TenantID: e.TenantID, Kind: pl.Kind, Location: pl.Location, CertificateFingerprint: pl.CertificateFingerprint,
+		Algorithm: pl.Algorithm, KeyBits: pl.KeyBits, Protocol: pl.Protocol,
+		Cipher: pl.Cipher, Library: pl.Library, Strength: pl.Strength,
+		QuantumVulnerable: pl.QuantumVulnerable, OutOfPolicy: pl.OutOfPolicy,
+		Reasons: pl.Reasons, ImportSource: pl.ImportSource,
+	}, e.Sequence, e.Time)
 }
