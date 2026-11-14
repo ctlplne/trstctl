@@ -501,6 +501,9 @@ type spiffeProtocol struct {
 	oidcIssuerBase string
 	// jwtKeys is the rotating JWT signing key behind issuer (N5-L3).
 	jwtKeys *workloadJWTKeyRing
+	// opaqueAudiences are protocols.spiffe.opaque_token_audiences: an access
+	// token for them is opaque, introspected by their resource servers (M4-L3).
+	opaqueAudiences map[string]bool
 }
 
 // RunSPIFFE serves the SPIFFE Workload API gRPC server on its UDS until ctx is

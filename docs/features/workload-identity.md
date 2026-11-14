@@ -531,7 +531,21 @@ gets one when the workload asks for `requested_token_type`
 the same key set and the resource server tells it from a JWT-SVID by its type. A tenant
 without a published issuer is refused with `invalid_request`, as is a type the
 exchange does not issue. `GET /api/v1/workloads/oidc-issuer` lists the types
-(`issued_token_types`), and the console's issuer panel shows them. Each subject token is single-use: trstctl records it (as a
+(`issued_token_types`), and the console's issuer panel shows them.
+
+For a resource server that cannot verify JWTs, list its audience in
+`protocols.spiffe.opaque_token_audiences` (M4-L3; at most 64; needs `oidc_issuer_url`):
+an access token for it is then an opaque reference, `trsto_…`, the token's claims sealed
+under the tenant's own key with nothing stored, which the resource server posts to
+`POST /api/v1/workloads/tokens/introspect` (RFC 7662: form-encoded `token`;
+`trstctl-cli workloads tokens introspect -f introspect.form`) with its own API token
+(`issuers:read`). The answer is `active: true` with `sub`, `client_id`, `aud`, `scope`,
+`iss`, `iat`, `exp`, `jti` and `token_type`, or only `active: false` for a token that is
+another tenant's, altered, expired or not a token. One token is either for opaque
+audiences or for others, never both (`invalid_target`). Like the JWTs, an opaque token
+lives five minutes and is not revoked before then. The issuer view lists the opaque
+audiences (`opaque_token_audiences`) and the `introspection_endpoint`, and the console's
+issuer panel shows both. Each subject token is single-use: trstctl records it (as a
 digest) only after the whole request has been checked, and refuses it again with
 `invalid_grant`; errors follow RFC 6749 (`invalid_request`, `invalid_grant`,
 `invalid_target`, `invalid_scope`, `unsupported_grant_type`). Every exchange is

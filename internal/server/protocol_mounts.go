@@ -1222,6 +1222,8 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		trustDomain:    td,
 		oidcIssuerBase: cfg.OIDCIssuerURL,
 		jwtKeys:        jwtKeys,
+		// M4-L3: audiences whose access tokens are opaque.
+		opaqueAudiences: boolMap(cfg.OpaqueTokenAudiences),
 	}, nil
 }
 

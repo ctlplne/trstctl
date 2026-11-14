@@ -11660,9 +11660,11 @@ OIDCIssuer = TypedDict(
     {
         'algorithms': list[str],
         'discovery_url': str,
+        'introspection_endpoint': str,
         'issued_token_types': list[str],
         'issuer': str,
         'jwks_uri': str,
+        'opaque_token_audiences': list[str],
         'token_endpoint': str,
         'token_lifetime_seconds': int,
     },
@@ -18302,6 +18304,32 @@ TicketIntakeScheduleList = TypedDict(
     'TicketIntakeScheduleList',
     {
         'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+TokenIntrospection = TypedDict(
+    'TokenIntrospection',
+    {
+        'active': bool,
+        'aud': list[str],
+        'client_id': str,
+        'exp': int,
+        'iat': int,
+        'iss': str,
+        'jti': str,
+        'scope': str,
+        'sub': str,
+        'token_type': str,
+    },
+    total=False,
+)
+
+TokenIntrospectionRequest = TypedDict(
+    'TokenIntrospectionRequest',
+    {
+        'token': str,
+        'token_type_hint': str,
     },
     total=False,
 )

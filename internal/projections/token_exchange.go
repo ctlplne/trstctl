@@ -29,6 +29,9 @@ type TokenExchanged struct {
 	// (…:access_token, M4-L3). Empty in exchanges recorded before M4-L3,
 	// which issued JWT-SVIDs only.
 	IssuedTokenType string `json:"issued_token_type,omitempty"`
+	// Opaque is an access token issued as an opaque reference its resource
+	// server introspects (M4-L3); the reference itself is never recorded.
+	Opaque bool `json:"opaque,omitempty"`
 }
 
 func init() {

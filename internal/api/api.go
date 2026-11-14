@@ -142,6 +142,7 @@ type API struct {
 	keyVaultDisable         KeyVaultDisableService
 	pkiSecretLeafRecovery   PKISecretLeafRecoveryService
 	oidcIssuer              OIDCIssuerSource
+	tokenIntrospector       TokenIntrospector
 	workloadJWTKeys         WorkloadJWTKeySource
 	slackApp                SlackAppService
 	managedCALeafRecovery   ManagedCALeafRecoveryService
@@ -325,6 +326,7 @@ type config struct {
 	keyVaultDisable            KeyVaultDisableService
 	pkiSecretLeafRecovery      PKISecretLeafRecoveryService
 	oidcIssuer                 OIDCIssuerSource
+	tokenIntrospector          TokenIntrospector
 	workloadJWTKeys            WorkloadJWTKeySource
 	slackApp                   SlackAppService
 	managedCALeafRecovery      ManagedCALeafRecoveryService
@@ -684,6 +686,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		factoryBatches:              cfg.factoryBatches,
 		keyVaultDisable:             cfg.keyVaultDisable,
 		oidcIssuer:                  cfg.oidcIssuer,
+		tokenIntrospector:           cfg.tokenIntrospector,
 		workloadJWTKeys:             cfg.workloadJWTKeys,
 		pkiSecretLeafRecovery:       cfg.pkiSecretLeafRecovery,
 		managedCALeafRecovery:       cfg.managedCALeafRecovery,

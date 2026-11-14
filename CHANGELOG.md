@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- Opaque access tokens and introspection (M4-L3): for an audience in `protocols.spiffe.opaque_token_audiences` the
+  token exchange's access token is an opaque `trsto_` reference sealed under the tenant's own key (nothing stored),
+  and the resource server introspects it with `POST /api/v1/workloads/tokens/introspect` (RFC 7662, `issuers:read`;
+  `trstctl-cli workloads tokens introspect`); the OIDC issuer view and console list the opaque audiences.
 - The token exchange issues RFC 9068 JWT access tokens (M4-L3): `requested_token_type`
   `urn:ietf:params:oauth:token-type:access_token` returns a token typed `at+jwt` with the tenant's published issuer
   as `iss` and the workload's SPIFFE ID as `sub` and `client_id`, signed by the same signer-held key as JWT-SVIDs;

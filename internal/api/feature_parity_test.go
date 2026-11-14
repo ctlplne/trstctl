@@ -411,8 +411,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// access bundle's standing approvals for its delegated accounts (833).
 	// A236-L4 adds listDeletedSecrets, restoreDeletedSecret and
 	// purgeDeletedSecret (836). M3-L4 adds replaceCloudAccessKey (837).
-	if len(out) != 837 {
-		t.Fatalf("OpenAPI operationIds = %d, want 837", len(out))
+	// M4-L3 adds introspectWorkloadToken (838).
+	if len(out) != 838 {
+		t.Fatalf("OpenAPI operationIds = %d, want 838", len(out))
 	}
 	return out
 }

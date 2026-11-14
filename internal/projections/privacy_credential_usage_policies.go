@@ -20,7 +20,7 @@ func tokenExchangedPrivacyPolicy() events.PrivacyEventPolicy {
 		privacyRule("/spiffe_id", exact), privacyRule("/audience/*", opaque),
 		privacyRule("/scopes/*", opaque), privacyRule("/jti", opaque),
 		privacyRule("/expires_at", opaque), privacyRule("/subject_token_digest", opaque),
-		privacyRule("/issued_token_type", opaque),
+		privacyRule("/issued_token_type", opaque), privacyRule("/opaque", opaque),
 	)
 }
 

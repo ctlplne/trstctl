@@ -28123,6 +28123,14 @@ export const messages = {
     defaultMessage: "JWT access token (RFC 9068)",
     description: "M4-L3: the RFC 9068 JWT access token type (typ at+jwt).",
   },
+  "workloads.oidcIssuer.opaqueAudiences": {
+    defaultMessage: "Opaque access tokens for",
+    description: "M4-L3: the audiences whose access tokens are opaque references their resource servers introspect.",
+  },
+  "workloads.oidcIssuer.introspection": {
+    defaultMessage: "Introspection",
+    description: "M4-L3: where a resource server introspects an opaque access token (RFC 7662).",
+  },
   "workloads.jwtKeys.heading": { defaultMessage: "Signing keys", description: "N5-L3: heading of the JWT signing key list." },
   "workloads.jwtKeys.caption": { defaultMessage: "Workload JWT signing keys", description: "N5-L3: table caption." },
   "workloads.jwtKeys.col.key": { defaultMessage: "Key ID", description: "N5-L3: column." },

@@ -8424,9 +8424,11 @@ export interface OAuthProviderActionResult {
 export interface OIDCIssuer {
   algorithms: string[];
   discovery_url: string;
+  introspection_endpoint: string;
   issued_token_types: string[];
   issuer: string;
   jwks_uri: string;
+  opaque_token_audiences: string[];
   token_endpoint: string;
   token_lifetime_seconds: number;
 }
@@ -13158,6 +13160,24 @@ export interface TicketIntakeSchedule {
 
 export interface TicketIntakeScheduleList {
   items: TicketIntakeSchedule[];
+}
+
+export interface TokenIntrospection {
+  active: boolean;
+  aud?: string[];
+  client_id?: string;
+  exp?: number;
+  iat?: number;
+  iss?: string;
+  jti?: string;
+  scope?: string;
+  sub?: string;
+  token_type?: string;
+}
+
+export interface TokenIntrospectionRequest {
+  token: string;
+  token_type_hint?: string;
 }
 
 export interface TransitCiphertext {

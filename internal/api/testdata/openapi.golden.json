@@ -39168,6 +39168,10 @@
           "discovery_url": {
             "type": "string"
           },
+          "introspection_endpoint": {
+            "description": "where a resource server introspects an opaque access token (RFC 7662), with its own API token (issuers:read)",
+            "type": "string"
+          },
           "issued_token_types": {
             "description": "the RFC 8693 token types a workload may request: urn:ietf:params:oauth:token-type:jwt (a JWT-SVID) and urn:ietf:params:oauth:token-type:access_token (an RFC 9068 JWT access token, typ at+jwt)",
             "items": {
@@ -39181,6 +39185,13 @@
           },
           "jwks_uri": {
             "type": "string"
+          },
+          "opaque_token_audiences": {
+            "description": "the audiences whose access tokens are opaque (protocols.spiffe.opaque_token_audiences); their resource servers introspect them",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "token_endpoint": {
             "description": "where a workload exchanges its platform token (RFC 8693) for one this issuer signs",
@@ -39197,7 +39208,9 @@
           "algorithms",
           "token_endpoint",
           "token_lifetime_seconds",
-          "issued_token_types"
+          "issued_token_types",
+          "opaque_token_audiences",
+          "introspection_endpoint"
         ],
         "type": "object"
       },
@@ -61619,6 +61632,68 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "TokenIntrospection": {
+        "properties": {
+          "active": {
+            "description": "false for a token that is not this tenant's, was altered or has expired; the other fields appear only when true",
+            "type": "boolean"
+          },
+          "aud": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "client_id": {
+            "description": "the workload's SPIFFE ID",
+            "type": "string"
+          },
+          "exp": {
+            "type": "integer"
+          },
+          "iat": {
+            "type": "integer"
+          },
+          "iss": {
+            "description": "the tenant's published issuer",
+            "type": "string"
+          },
+          "jti": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "sub": {
+            "description": "the workload's SPIFFE ID",
+            "type": "string"
+          },
+          "token_type": {
+            "description": "Bearer",
+            "type": "string"
+          }
+        },
+        "required": [
+          "active"
+        ],
+        "type": "object"
+      },
+      "TokenIntrospectionRequest": {
+        "properties": {
+          "token": {
+            "description": "the opaque access token a workload presented",
+            "type": "string"
+          },
+          "token_type_hint": {
+            "description": "optional; access_token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
         ],
         "type": "object"
       },
@@ -117154,6 +117229,63 @@
         ],
         "summary": "Show this tenant's published OpenID issuer: the URL a cloud registers to trust the tokens POST /oauth2/token exchanges, its discovery document and key set",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/workloads/tokens/introspect": {
+      "post": {
+        "operationId": "introspectWorkloadToken",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenIntrospectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenIntrospection"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Introspect an opaque access token the token exchange issued (RFC 7662): whether it is active and, if so, its subject, client, audience, scope and expiry",
+        "x-trstctl-permission": "issuers:read"
       }
     }
   }

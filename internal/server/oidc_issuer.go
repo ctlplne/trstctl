@@ -112,6 +112,8 @@ func (s *Server) OIDCIssuerFor(r *http.Request, tenantID string) (api.OIDCIssuer
 	return api.OIDCIssuerInfo{ // #nosec G101 -- the token endpoint's path and the token lifetime, no credential (CWE-798)
 		Issuer: issuer, DiscoveryURL: issuer + "/.well-known/openid-configuration", JWKSURI: issuer + "/jwks.json",
 		Algorithms: s.oidcIssuerAlgorithms(r), TokenEndpoint: "/oauth2/token", TokenLifetimeSeconds: int(tokenExchangeTTL.Seconds()),
-		IssuedTokenTypes: []string{tokenTypeJWT, tokenTypeAccessToken},
+		IssuedTokenTypes:      []string{tokenTypeJWT, tokenTypeAccessToken},
+		OpaqueTokenAudiences:  s.opaqueTokenAudiences(),
+		IntrospectionEndpoint: "/api/v1/workloads/tokens/introspect",
 	}, true
 }

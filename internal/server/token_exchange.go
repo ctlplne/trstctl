@@ -160,6 +160,10 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_request",
 			"access tokens need this tenant's published issuer: set protocols.spiffe.oidc_issuer_url")
 	}
+	opaque, err := opaqueAccessTokenFor(sp, issued, audience)
+	if err != nil {
+		return tokenExchangeResponse{}, err
+	}
 	method, issuer := exchangeMethodFor(methods(tenantID), []byte(subject))
 	if method == nil {
 		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_grant", "no login method trusts the subject token's issuer")
@@ -213,11 +217,19 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 		claims["iss"] = published
 	}
 	var token string
-	if issued == tokenTypeAccessToken {
+	switch {
+	case opaque:
+		// M4-L3: a reference only this tenant's key opens; the resource
+		// server introspects it.
+		token, err = s.sealOpaqueAccessToken(r.Context(), sp, tenantID, opaqueAccessTokenClaims{
+			Iss: sp.oidcIssuer(tenantID), Sub: spiffeID, ClientID: spiffeID, Aud: audience, Scope: strings.Join(scopes, " "),
+			Iat: expires.Add(-tokenExchangeTTL).Unix(), Exp: expires.Unix(), JTI: jti,
+		})
+	case issued == tokenTypeAccessToken:
 		// RFC 9068: the client is the workload itself, named by its SPIFFE ID.
 		claims["client_id"] = spiffeID
 		token, err = sp.issuer.SignJWTAccessToken(r.Context(), spiffeID, audience, tokenExchangeTTL, claims)
-	} else {
+	default:
 		token, err = sp.issuer.SignJWTSVIDWithClaims(r.Context(), spiffeID, audience, tokenExchangeTTL, claims)
 	}
 	if err != nil {
@@ -225,7 +237,7 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 	}
 	if err := s.orch.RecordTokenExchange(r.Context(), tenantID, projections.TokenExchanged{
 		Method: method.Name(), Principal: principal, SPIFFEID: spiffeID, Audience: audience, Scopes: scopes,
-		JTI: jti, ExpiresAt: expires, SubjectTokenDigest: crypto.SHA256Hex([]byte(subject)), IssuedTokenType: issued,
+		JTI: jti, ExpiresAt: expires, SubjectTokenDigest: crypto.SHA256Hex([]byte(subject)), IssuedTokenType: issued, Opaque: opaque,
 	}); err != nil {
 		return tokenExchangeResponse{}, err
 	}

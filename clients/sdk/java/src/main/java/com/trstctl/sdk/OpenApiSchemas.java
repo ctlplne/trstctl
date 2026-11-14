@@ -1302,6 +1302,8 @@ public final class OpenApiSchemas {
       "TicketIntakeInput",
       "TicketIntakeSchedule",
       "TicketIntakeScheduleList",
+      "TokenIntrospection",
+      "TokenIntrospectionRequest",
       "TransitCiphertext",
       "TransitDecryptRequest",
       "TransitEncryptRequest",

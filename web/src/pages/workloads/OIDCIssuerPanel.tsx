@@ -106,6 +106,14 @@ export function OIDCIssuerPanel() {
               <dd>{issuer.data.issued_token_types.map((type) => (tokenTypeLabel[type] ? t(tokenTypeLabel[type]) : type)).join(", ")}</dd>
             </>
           ) : null}
+          {issuer.data.opaque_token_audiences?.length ? (
+            <>
+              <dt className="font-medium">{t("workloads.oidcIssuer.opaqueAudiences")}</dt>
+              <dd className="break-all font-mono text-xs">{issuer.data.opaque_token_audiences.join(", ")}</dd>
+              <dt className="font-medium">{t("workloads.oidcIssuer.introspection")}</dt>
+              <dd className="break-all font-mono text-xs">{issuer.data.introspection_endpoint}</dd>
+            </>
+          ) : null}
         </dl>
       ) : null}
       {issuer.data && !issuer.data.algorithms.includes("RS256") ? (

@@ -12297,6 +12297,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workloads/tokens/introspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Introspect an opaque access token the token exchange issued (RFC 7662): whether it is active and, if so, its subject, client, audience, scope and expiry */
+        post: operations["introspectWorkloadToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -22956,11 +22973,15 @@ export interface components {
             /** @description the signing algorithms of the issuer's keys */
             algorithms: string[];
             discovery_url: string;
+            /** @description where a resource server introspects an opaque access token (RFC 7662), with its own API token (issuers:read) */
+            introspection_endpoint: string;
             /** @description the RFC 8693 token types a workload may request: urn:ietf:params:oauth:token-type:jwt (a JWT-SVID) and urn:ietf:params:oauth:token-type:access_token (an RFC 9068 JWT access token, typ at+jwt) */
             issued_token_types: string[];
             /** @description the issuer URL a cloud registers; exchanged tokens carry it as iss */
             issuer: string;
             jwks_uri: string;
+            /** @description the audiences whose access tokens are opaque (protocols.spiffe.opaque_token_audiences); their resource servers introspect them */
+            opaque_token_audiences: string[];
             /** @description where a workload exchanges its platform token (RFC 8693) for one this issuer signs */
             token_endpoint: string;
             token_lifetime_seconds: number;
@@ -29086,6 +29107,29 @@ export interface components {
         };
         TicketIntakeScheduleList: {
             items: components["schemas"]["TicketIntakeSchedule"][];
+        };
+        TokenIntrospection: {
+            /** @description false for a token that is not this tenant's, was altered or has expired; the other fields appear only when true */
+            active: boolean;
+            aud?: string[];
+            /** @description the workload's SPIFFE ID */
+            client_id?: string;
+            exp?: number;
+            iat?: number;
+            /** @description the tenant's published issuer */
+            iss?: string;
+            jti?: string;
+            scope?: string;
+            /** @description the workload's SPIFFE ID */
+            sub?: string;
+            /** @description Bearer */
+            token_type?: string;
+        };
+        TokenIntrospectionRequest: {
+            /** @description the opaque access token a workload presented */
+            token: string;
+            /** @description optional; access_token */
+            token_type_hint?: string;
         };
         TransitCiphertext: {
             ciphertext: string;
@@ -65755,6 +65799,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OIDCIssuer"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    introspectWorkloadToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["TokenIntrospectionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenIntrospection"];
                 };
             };
             /** @description client error */

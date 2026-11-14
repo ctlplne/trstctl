@@ -23,6 +23,11 @@ type OIDCIssuerInfo struct {
 	// IssuedTokenTypes are the RFC 8693 token types the exchange issues for
 	// this issuer: JWT-SVIDs and RFC 9068 JWT access tokens (M4-L3).
 	IssuedTokenTypes []string `json:"issued_token_types"`
+	// OpaqueTokenAudiences are the audiences whose access tokens are opaque,
+	// and IntrospectionEndpoint where their resource servers introspect them
+	// (M4-L3).
+	OpaqueTokenAudiences  []string `json:"opaque_token_audiences"`
+	IntrospectionEndpoint string   `json:"introspection_endpoint"`
 }
 
 // OIDCIssuerSource reports the tenant's published issuer; ok is false when the
@@ -38,6 +43,7 @@ func WithOIDCIssuer(source OIDCIssuerSource) Option {
 
 func (a *API) oidcIssuerRoutes() []route {
 	return []route{
+		a.tokenIntrospectionRoute(), // M4-L3: see token_introspection.go
 		{method: "GET", path: "/api/v1/workloads/oidc-issuer", opID: "getOIDCIssuer", summary: "Show this tenant's published OpenID issuer: the URL a cloud registers to trust the tokens POST /oauth2/token exchanges, its discovery document and key set", handler: a.getOIDCIssuer, resSchema: "OIDCIssuer", successCode: "200", perm: authz.CertsRead},
 	}
 }
@@ -62,7 +68,8 @@ func (a *API) getOIDCIssuer(w http.ResponseWriter, r *http.Request) {
 
 func oidcIssuerSchemas() map[string]*Schema {
 	str := func() *Schema { return &Schema{Type: "string"} }
-	return map[string]*Schema{
+	out := tokenIntrospectionSchemas() // M4-L3
+	for name, schema := range map[string]*Schema{
 		"OIDCIssuer": {Type: "object", Properties: map[string]*Schema{
 			"issuer":        {Type: "string", Description: "the issuer URL a cloud registers; exchanged tokens carry it as iss"},
 			"discovery_url": str(), "jwks_uri": str(),
@@ -70,6 +77,11 @@ func oidcIssuerSchemas() map[string]*Schema {
 			"token_endpoint":         {Type: "string", Description: "where a workload exchanges its platform token (RFC 8693) for one this issuer signs"},
 			"token_lifetime_seconds": {Type: "integer"},
 			"issued_token_types":     {Type: "array", Items: str(), Description: "the RFC 8693 token types a workload may request: urn:ietf:params:oauth:token-type:jwt (a JWT-SVID) and urn:ietf:params:oauth:token-type:access_token (an RFC 9068 JWT access token, typ at+jwt)"},
-		}, Required: []string{"issuer", "discovery_url", "jwks_uri", "algorithms", "token_endpoint", "token_lifetime_seconds", "issued_token_types"}},
+			"opaque_token_audiences": {Type: "array", Items: str(), Description: "the audiences whose access tokens are opaque (protocols.spiffe.opaque_token_audiences); their resource servers introspect them"},
+			"introspection_endpoint": {Type: "string", Description: "where a resource server introspects an opaque access token (RFC 7662), with its own API token (issuers:read)"},
+		}, Required: []string{"issuer", "discovery_url", "jwks_uri", "algorithms", "token_endpoint", "token_lifetime_seconds", "issued_token_types", "opaque_token_audiences", "introspection_endpoint"}},
+	} {
+		out[name] = schema
 	}
+	return out
 }

@@ -9694,6 +9694,7 @@
                 "previewAttestedSVID",
                 "issueAttestedSVID",
                 "getOIDCIssuer",
+                "introspectWorkloadToken",
                 "listWorkloadJWTKeys",
                 "rotateWorkloadJWTKey"
             ],
@@ -9709,6 +9710,7 @@
                 "workloads attested-issuance preview",
                 "workloads attested-issuance",
                 "workloads oidc-issuer",
+                "workloads tokens introspect",
                 "workloads jwt-keys list",
                 "workloads jwt-keys rotate"
             ],

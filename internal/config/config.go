@@ -1296,6 +1296,11 @@ type SPIFFEProtocol struct {
 	// applies to keys created from then on: the first key, and each key a
 	// rotation creates; a key already in the signer keeps its algorithm.
 	JWTKeyAlgorithm string `json:"jwt_key_algorithm,omitempty"`
+	// OpaqueTokenAudiences (M4-L3) are audiences whose resource servers take
+	// opaque access tokens: an exchange asking for an access token for them
+	// gets a reference only trstctl can open, which the resource server
+	// introspects (RFC 7662). Needs oidc_issuer_url.
+	OpaqueTokenAudiences []string `json:"opaque_token_audiences,omitempty"`
 	// Entries (B8-D1) register the workloads host agents deliver: each binds a
 	// SPIFFE ID to the selectors the agent must observe of the calling process
 	// and to the enrolled agent, by name, whose host Workload API
@@ -1431,6 +1436,7 @@ func (p Protocols) ValidateTenantBindings(defaultTenant string) []error {
 	default:
 		errs = append(errs, fmt.Errorf("protocols.spiffe.jwt_key_algorithm %q must be ES256 or RS256", p.SPIFFE.JWTKeyAlgorithm))
 	}
+	errs = append(errs, validateOpaqueTokenAudiences(p.SPIFFE)...)
 	errs = append(errs, validateSPIFFEEntries(p.SPIFFE)...)
 	return errs
 }
@@ -6605,4 +6611,31 @@ func validateReconcileKeyDatesSince(label string, s ReconcileSchedule) []error {
 		return []error{fmt.Errorf("%s: every cloud KMS and managed_keys authority in a round must set the same key_dates_since, or none", label)}
 	}
 	return nil
+}
+
+// validateOpaqueTokenAudiences checks protocols.spiffe.opaque_token_audiences
+// (M4-L3): at most 64 distinct, non-empty audiences of at most 512 bytes, and
+// a published issuer, which an access token names.
+func validateOpaqueTokenAudiences(s SPIFFEProtocol) []error {
+	if len(s.OpaqueTokenAudiences) == 0 {
+		return nil
+	}
+	var errs []error
+	if strings.TrimSpace(s.OIDCIssuerURL) == "" {
+		errs = append(errs, errors.New("protocols.spiffe.opaque_token_audiences needs protocols.spiffe.oidc_issuer_url: an access token names its issuer"))
+	}
+	if len(s.OpaqueTokenAudiences) > 64 {
+		errs = append(errs, fmt.Errorf("protocols.spiffe.opaque_token_audiences lists %d audiences; at most 64", len(s.OpaqueTokenAudiences)))
+	}
+	seen := map[string]bool{}
+	for i, aud := range s.OpaqueTokenAudiences {
+		switch {
+		case strings.TrimSpace(aud) == "" || aud != strings.TrimSpace(aud) || len(aud) > 512:
+			errs = append(errs, fmt.Errorf("protocols.spiffe.opaque_token_audiences[%d] must be a non-empty audience of at most 512 bytes without surrounding spaces", i))
+		case seen[aud]:
+			errs = append(errs, fmt.Errorf("protocols.spiffe.opaque_token_audiences repeats %q", aud))
+		}
+		seen[aud] = true
+	}
+	return errs
 }
