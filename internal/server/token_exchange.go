@@ -84,7 +84,8 @@ func (s *Server) tokenExchangeHandler(methods func(string) []authmethod.Method) 
 }
 
 // tokenExchangeJWKSHandler serves GET /oauth2/jwks: the public key the
-// exchanged JWT-SVIDs verify against.
+// exchanged JWT-SVIDs verify against — the SPIFFE surface's tenant's, or with
+// ?tenant_id= another tenant the exchange serves (M4-L5).
 func (s *Server) tokenExchangeJWKSHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sp := s.spiffeForExchange()
@@ -92,7 +93,16 @@ func (s *Server) tokenExchangeJWKSHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		jwks, err := sp.issuer.JWTBundle(r.Context())
+		tenantID := sp.tenantID
+		if asked := r.URL.Query().Get("tenant_id"); asked != "" {
+			tenantID = asked
+		}
+		ex := s.exchangeFor(tenantID)
+		if ex == nil {
+			http.NotFound(w, r)
+			return
+		}
+		jwks, err := ex.issuer.JWTBundle(r.Context())
 		if err != nil {
 			http.Error(w, "the JWT bundle is unavailable", http.StatusServiceUnavailable)
 			return
@@ -150,8 +160,8 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 	if len(audience) == 0 || slices.Contains(audience, "") {
 		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_target", "name the audience the token is for")
 	}
-	sp := s.spiffeForExchange()
-	if sp == nil || sp.tenantID != tenantID || methods == nil || s.store == nil || s.orch == nil {
+	sp, ex := s.spiffeForExchange(), s.exchangeFor(tenantID)
+	if sp == nil || ex == nil || methods == nil || s.store == nil || s.orch == nil {
 		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_request", "token exchange is not configured for this tenant")
 	}
 	// An access token names its issuer (RFC 9068 requires iss), and a relying
@@ -205,7 +215,7 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 	} else if !first {
 		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_grant", "the subject token was already used")
 	}
-	spiffeID := exchangeSPIFFEID(sp.trustDomain, method.Name(), principal)
+	spiffeID := exchangeSPIFFEID(ex.trustDomain, method.Name(), principal)
 	jti := uuid.NewString()
 	expires := time.Now().UTC().Add(tokenExchangeTTL).Truncate(time.Second)
 	claims := map[string]any{
@@ -221,16 +231,16 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 	case opaque:
 		// M4-L3: a reference only this tenant's key opens; the resource
 		// server introspects it.
-		token, err = s.sealOpaqueAccessToken(r.Context(), sp, tenantID, opaqueAccessTokenClaims{
+		token, err = s.sealOpaqueAccessToken(r.Context(), ex, opaqueAccessTokenClaims{
 			Iss: sp.oidcIssuer(tenantID), Sub: spiffeID, ClientID: spiffeID, Aud: audience, Scope: strings.Join(scopes, " "),
 			Iat: expires.Add(-tokenExchangeTTL).Unix(), Exp: expires.Unix(), JTI: jti,
 		})
 	case issued == tokenTypeAccessToken:
 		// RFC 9068: the client is the workload itself, named by its SPIFFE ID.
 		claims["client_id"] = spiffeID
-		token, err = sp.issuer.SignJWTAccessToken(r.Context(), spiffeID, audience, tokenExchangeTTL, claims)
+		token, err = ex.issuer.SignJWTAccessToken(r.Context(), spiffeID, audience, tokenExchangeTTL, claims)
 	default:
-		token, err = sp.issuer.SignJWTSVIDWithClaims(r.Context(), spiffeID, audience, tokenExchangeTTL, claims)
+		token, err = ex.issuer.SignJWTSVIDWithClaims(r.Context(), spiffeID, audience, tokenExchangeTTL, claims)
 	}
 	if err != nil {
 		return tokenExchangeResponse{}, err

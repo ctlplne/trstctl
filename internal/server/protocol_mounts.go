@@ -1142,6 +1142,11 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		jwtKeys = newWorkloadJWTKeyRing(s, c, tenant, jwtSigner, jwtAlgorithm)
 		issuer.JWTKeys = jwtKeys.keys
 	}
+	// M4-L5: the exchange's other tenants, each with its own key.
+	exchanges, err := s.buildExchangeTenants(ctx, c, cfg, jwtAlgorithm)
+	if err != nil {
+		return nil, err
+	}
 	// A default registration entry so the served socket is immediately usable: a
 	// local UDS caller (selector "unix") receives an SVID for the trust domain's
 	// default workload ID. Production registers per-workload entries.
@@ -1224,6 +1229,7 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		jwtKeys:        jwtKeys,
 		// M4-L3: audiences whose access tokens are opaque.
 		opaqueAudiences: boolMap(cfg.OpaqueTokenAudiences),
+		exchanges:       exchanges,
 	}, nil
 }
 

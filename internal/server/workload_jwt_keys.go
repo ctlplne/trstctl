@@ -50,10 +50,16 @@ const (
 // workloadJWTKeyHandle is the signer handle of a generation's key; the first
 // generation is the handle the SPIFFE protocol has always used.
 func workloadJWTKeyHandle(generation int) string {
+	return workloadJWTKeyHandleFor(spiffeJWTHandle, generation)
+}
+
+// workloadJWTKeyHandleFor is a generation's handle under a ring's prefix: an
+// exchange tenant's ring has its own (M4-L5).
+func workloadJWTKeyHandleFor(prefix string, generation int) string {
 	if generation <= 1 {
-		return spiffeJWTHandle
+		return prefix
 	}
-	return spiffeJWTHandle + "-g" + strconv.Itoa(generation)
+	return prefix + "-g" + strconv.Itoa(generation)
 }
 
 // workloadJWTKeyState is one generation of the workload JWT key as of a time.
@@ -112,6 +118,9 @@ type workloadJWTKeyRing struct {
 	// algorithm is what a rotation's new key is created as (OD-6).
 	algorithm crypto.Algorithm
 	now       func() time.Time
+	// handlePrefix names the ring's keys in the signer; empty is the SPIFFE
+	// surface's own, spiffeJWTHandle (M4-L5).
+	handlePrefix string
 
 	mu        sync.Mutex
 	signers   map[int]crypto.DigestSigner
@@ -163,6 +172,14 @@ func (k *workloadJWTKeyRing) invalidate() {
 	k.mu.Unlock()
 }
 
+// handle is a generation's signer handle in this ring.
+func (k *workloadJWTKeyRing) handle(generation int) string {
+	if k.handlePrefix == "" {
+		return workloadJWTKeyHandle(generation)
+	}
+	return workloadJWTKeyHandleFor(k.handlePrefix, generation)
+}
+
 // signer is a generation's key in the signer (AN-4).
 func (k *workloadJWTKeyRing) signer(ctx context.Context, generation int) (crypto.DigestSigner, error) {
 	k.mu.Lock()
@@ -171,7 +188,7 @@ func (k *workloadJWTKeyRing) signer(ctx context.Context, generation int) (crypto
 	if ok {
 		return cached, nil
 	}
-	remote, err := k.srv.signerForPrivilegedHandle(ctx, k.client, workloadJWTKeyHandle(generation), signing.PurposeGeneric)
+	remote, err := k.srv.signerForPrivilegedHandle(ctx, k.client, k.handle(generation), signing.PurposeGeneric)
 	if err != nil {
 		return nil, fmt.Errorf("the signer has no key for workload JWT key generation %d: %w", generation, err)
 	}
@@ -187,7 +204,7 @@ func (k *workloadJWTKeyRing) ensureSigner(ctx context.Context, generation int) e
 	if _, err := k.signer(ctx, generation); err == nil {
 		return nil
 	}
-	remote, err := k.srv.generatePrivilegedKeyHandle(ctx, k.client, k.algorithm, workloadJWTKeyHandle(generation),
+	remote, err := k.srv.generatePrivilegedKeyHandle(ctx, k.client, k.algorithm, k.handle(generation),
 		[]signing.KeyPurpose{signing.PurposeGeneric}, signing.PurposeGeneric)
 	if err != nil {
 		return fmt.Errorf("create workload JWT key generation %d in the signer: %w", generation, err)
@@ -282,11 +299,11 @@ func workloadJWTKeysView(states []workloadJWTKeyState) []api.WorkloadJWTKey {
 // workloadJWTKeyRingFor is the tenant's key ring, or nil when the SPIFFE
 // protocol does not serve the tenant.
 func (s *Server) workloadJWTKeyRingFor(tenantID string) *workloadJWTKeyRing {
-	sp := s.spiffeForExchange()
-	if sp == nil || sp.jwtKeys == nil || tenantID != sp.tenantID {
+	ex := s.exchangeFor(tenantID)
+	if ex == nil || ex.jwtKeys == nil {
 		return nil
 	}
-	return sp.jwtKeys
+	return ex.jwtKeys
 }
 
 // RotateWorkloadJWTKey starts the next generation of the workload JWT key for
@@ -297,7 +314,7 @@ func (s *Server) RotateWorkloadJWTKey(ctx context.Context, tenantID string, publ
 	ring := s.workloadJWTKeyRingFor(tenantID)
 	if ring == nil || s.orch == nil || s.store == nil {
 		return nil, api.ErrStatus(http.StatusNotFound,
-			"the workload JWT key belongs to the SPIFFE protocol's tenant (protocols.spiffe.tenant_id)")
+			"the workload JWT key belongs to a tenant the token exchange serves (protocols.spiffe.tenant_id or protocols.spiffe.exchange_tenants)")
 	}
 	switch {
 	case publishAhead < 0 || publishAhead > maxWorkloadJWTKeyWindow:

@@ -39199,6 +39199,10 @@
           },
           "token_lifetime_seconds": {
             "type": "integer"
+          },
+          "trust_domain": {
+            "description": "the tenant's SPIFFE trust domain: exchanged tokens name spiffe://\u003ctrust_domain\u003e/… as sub",
+            "type": "string"
           }
         },
         "required": [
@@ -39210,7 +39214,8 @@
           "token_lifetime_seconds",
           "issued_token_types",
           "opaque_token_audiences",
-          "introspection_endpoint"
+          "introspection_endpoint",
+          "trust_domain"
         ],
         "type": "object"
       },

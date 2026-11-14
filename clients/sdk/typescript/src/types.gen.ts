@@ -22985,6 +22985,8 @@ export interface components {
             /** @description where a workload exchanges its platform token (RFC 8693) for one this issuer signs */
             token_endpoint: string;
             token_lifetime_seconds: number;
+            /** @description the tenant's SPIFFE trust domain: exchanged tokens name spiffe://<trust_domain>/… as sub */
+            trust_domain: string;
         };
         OIDCMappingStatus: {
             allow_default_tenant: boolean;

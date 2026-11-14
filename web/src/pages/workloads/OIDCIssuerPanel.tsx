@@ -92,6 +92,12 @@ export function OIDCIssuerPanel() {
         <dl className="grid gap-1 text-sm md:grid-cols-[max-content_1fr] md:gap-x-4">
           <dt className="font-medium">{t("workloads.oidcIssuer.issuer")}</dt>
           <dd className="break-all font-mono text-xs">{issuer.data.issuer}</dd>
+          {issuer.data.trust_domain ? (
+            <>
+              <dt className="font-medium">{t("workloads.oidcIssuer.trustDomain")}</dt>
+              <dd className="break-all font-mono text-xs">{issuer.data.trust_domain}</dd>
+            </>
+          ) : null}
           <dt className="font-medium">{t("workloads.oidcIssuer.discovery")}</dt>
           <dd className="break-all font-mono text-xs">{issuer.data.discovery_url}</dd>
           <dt className="font-medium">{t("workloads.oidcIssuer.jwks")}</dt>

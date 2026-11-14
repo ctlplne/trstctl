@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"slices"
@@ -53,7 +54,7 @@ func (s *Server) oidcIssuerDocumentHandler() http.Handler {
 			"jwks_uri":                              issuer + "/jwks.json",
 			"response_types_supported":              []string{"id_token"},
 			"subject_types_supported":               []string{"public"},
-			"id_token_signing_alg_values_supported": s.oidcIssuerAlgorithms(r),
+			"id_token_signing_alg_values_supported": s.oidcIssuerAlgorithms(r.Context(), r.PathValue("tenant")),
 			"claims_supported":                      []string{"iss", "sub", "aud", "iat", "exp", "jti", "scope", "act"},
 		})
 	})
@@ -62,14 +63,21 @@ func (s *Server) oidcIssuerDocumentHandler() http.Handler {
 // oidcIssuerJWKSHandler serves GET /oidc/{tenant}/jwks.json: the key the
 // tenant's exchanged tokens verify against.
 func (s *Server) oidcIssuerJWKSHandler() http.Handler {
-	jwks := s.tokenExchangeJWKSHandler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := s.publishedOIDCIssuer(r.PathValue("tenant")); !ok {
+		tenantID := r.PathValue("tenant")
+		if _, ok := s.publishedOIDCIssuer(tenantID); !ok {
 			http.NotFound(w, r)
 			return
 		}
+		// M4-L5: the tenant's own key set.
+		jwks, err := s.exchangeFor(tenantID).issuer.JWTBundle(r.Context())
+		if err != nil {
+			http.Error(w, "the JWT bundle is unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		w.Header().Set("Cache-Control", "public, max-age=300")
-		jwks.ServeHTTP(w, r)
+		w.Header().Set("Content-Type", "application/jwk-set+json")
+		_ = json.NewEncoder(w).Encode(jwks)
 	})
 }
 
@@ -77,20 +85,20 @@ func (s *Server) oidcIssuerJWKSHandler() http.Handler {
 // one and the tenant is the one the token exchange serves.
 func (s *Server) publishedOIDCIssuer(tenantID string) (string, bool) {
 	sp := s.spiffeForExchange()
-	if _, err := uuid.Parse(tenantID); err != nil || sp == nil || sp.oidcIssuerBase == "" || tenantID != sp.tenantID {
+	if _, err := uuid.Parse(tenantID); err != nil || sp == nil || sp.oidcIssuerBase == "" || s.exchangeFor(tenantID) == nil {
 		return "", false
 	}
 	return sp.oidcIssuer(tenantID), true
 }
 
-// oidcIssuerAlgorithms names the signing algorithm of each key in the JWT
-// bundle.
-func (s *Server) oidcIssuerAlgorithms(r *http.Request) []string {
-	sp := s.spiffeForExchange()
-	if sp == nil {
+// oidcIssuerAlgorithms names the signing algorithm of each key in the
+// tenant's JWT bundle.
+func (s *Server) oidcIssuerAlgorithms(ctx context.Context, tenantID string) []string {
+	ex := s.exchangeFor(tenantID)
+	if ex == nil {
 		return []string{}
 	}
-	set, err := sp.issuer.JWTBundle(r.Context())
+	set, err := ex.issuer.JWTBundle(ctx)
 	if err != nil {
 		return []string{}
 	}
@@ -111,9 +119,10 @@ func (s *Server) OIDCIssuerFor(r *http.Request, tenantID string) (api.OIDCIssuer
 	}
 	return api.OIDCIssuerInfo{ // #nosec G101 -- the token endpoint's path and the token lifetime, no credential (CWE-798)
 		Issuer: issuer, DiscoveryURL: issuer + "/.well-known/openid-configuration", JWKSURI: issuer + "/jwks.json",
-		Algorithms: s.oidcIssuerAlgorithms(r), TokenEndpoint: "/oauth2/token", TokenLifetimeSeconds: int(tokenExchangeTTL.Seconds()),
+		Algorithms: s.oidcIssuerAlgorithms(r.Context(), tenantID), TokenEndpoint: "/oauth2/token", TokenLifetimeSeconds: int(tokenExchangeTTL.Seconds()),
 		IssuedTokenTypes:      []string{tokenTypeJWT, tokenTypeAccessToken},
 		OpaqueTokenAudiences:  s.opaqueTokenAudiences(),
 		IntrospectionEndpoint: "/api/v1/workloads/tokens/introspect",
+		TrustDomain:           s.exchangeFor(tenantID).trustDomain,
 	}, true
 }

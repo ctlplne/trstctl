@@ -73,17 +73,18 @@ func opaqueAccessTokenFor(sp *spiffeProtocol, issued string, audience []string) 
 
 // sealOpaqueAccessToken seals claims under the tenant's key, under the same
 // tenant service checks that sign its JWTs.
-func (s *Server) sealOpaqueAccessToken(ctx context.Context, sp *spiffeProtocol, tenantID string, claims opaqueAccessTokenClaims) (string, error) {
+func (s *Server) sealOpaqueAccessToken(ctx context.Context, ex *workloadExchange, claims opaqueAccessTokenClaims) (string, error) {
+	tenantID := ex.tenantID
 	if s.tenantCrypto == nil {
 		return "", oauthFail(http.StatusServiceUnavailable, "temporarily_unavailable",
 			"opaque access tokens are sealed under the tenant's key, and this control plane has no tenant key domain (configure the credential-store KEK)")
 	}
-	ctx, release, err := sp.issuer.work.Begin(ctx, tenantID)
+	ctx, release, err := ex.issuer.work.Begin(ctx, tenantID)
 	if err != nil {
 		return "", err
 	}
 	defer release()
-	if err := sp.issuer.check.Check(ctx, tenantID); err != nil {
+	if err := ex.issuer.check.Check(ctx, tenantID); err != nil {
 		return "", err
 	}
 	plain, err := json.Marshal(claims)

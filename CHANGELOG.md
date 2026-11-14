@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- The token exchange serves more tenants (M4-L5): each tenant in `protocols.spiffe.exchange_tenants` exchanges in its
+  own trust domain with its own JWT signing key ring in the signer and its own published issuer, so one tenant's tokens
+  never verify against another's key set; `/oauth2/jwks?tenant_id=` and the issuer view (`trust_domain`) show it.
 - Opaque access tokens and introspection (M4-L3): for an audience in `protocols.spiffe.opaque_token_audiences` the
   token exchange's access token is an opaque `trsto_` reference sealed under the tenant's own key (nothing stored),
   and the resource server introspects it with `POST /api/v1/workloads/tokens/introspect` (RFC 7662, `issuers:read`;

@@ -549,7 +549,15 @@ issuer panel shows both. Each subject token is single-use: trstctl records it (a
 digest) only after the whole request has been checked, and refuses it again with
 `invalid_grant`; errors follow RFC 6749 (`invalid_request`, `invalid_grant`,
 `invalid_target`, `invalid_scope`, `unsupported_grant_type`). Every exchange is
-recorded as `token.exchanged`. The SPIFFE surface must be enabled for the tenant.
+recorded as `token.exchanged`. The exchange serves the SPIFFE surface's tenant
+(`protocols.spiffe.tenant_id`) and each tenant in `protocols.spiffe.exchange_tenants`
+(M4-L5; `tenant_id` and `trust_domain`, up to 256), each in its own trust domain and
+with its own JWT signing key in the signer: an exchange tenant's tokens name
+`spiffe://<its trust domain>/…`, verify against its own key set (`GET
+/oauth2/jwks?tenant_id=<tenant>`, or its issuer's) and never against another
+tenant's, and each tenant rotates its key on its own. Exchange tenants get the
+exchange only; the Workload API socket serves `tenant_id`. A tenant in neither is
+refused with `invalid_request`.
 Because subject tokens are single-use and Kubernetes hands a pod the same projected
 token until kubelet rotates it, a pod that exchanges more than once per rotation
 requests a fresh token (the TokenRequest API) for each exchange. Each tenant holds at
@@ -561,8 +569,10 @@ leaves its subject token unused.
 ### trstctl as the OpenID issuer clouds trust (N5)
 
 With `protocols.spiffe.oidc_issuer_url` set to the control plane's public https base
-URL, the tenant whose workloads exchange tokens (`protocols.spiffe.tenant_id`) has a
-published OpenID issuer, `<base>/oidc/<tenant-id>`, and every token `POST /oauth2/token`
+URL, each tenant whose workloads exchange tokens (`protocols.spiffe.tenant_id` and the
+tenants in `protocols.spiffe.exchange_tenants`, M4-L5) has a published OpenID issuer,
+`<base>/oidc/<tenant-id>`, with its own key set and trust domain (the issuer view's
+`trust_domain`, shown on the console's issuer panel), and every token `POST /oauth2/token`
 exchanges for it carries that issuer as `iss`. The issuer's discovery document,
 `GET <issuer>/.well-known/openid-configuration`, names the issuer, its `jwks_uri`
 (`GET <issuer>/jwks.json`, the same signer-held SPIFFE JWT key as `/oauth2/jwks`) and

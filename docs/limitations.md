@@ -1464,7 +1464,8 @@ never live in the API process. What you can do end to end against the running bi
   key in the isolated signer and verifiable offline against `GET /oauth2/jwks`. Each
   subject token is single-use (a replay is `invalid_grant`); every exchange is recorded
   as `token.exchanged`. Proven with a pod-bound token minted by a real Kubernetes API
-  server (kind). Needs the SPIFFE surface enabled for the tenant; access tokens are
+  server (kind). Serves the SPIFFE surface's tenant and the tenants listed in
+  `protocols.spiffe.exchange_tenants` (M4-L5); access tokens are
   RFC 9068 JWTs, or opaque references their resource servers introspect (M4-L3); a pod
   exchanging more than once per kubelet rotation needs a fresh token per exchange.
 - Single-use machine login tokens (M4's prerequisite; A238-L8): an `oidc`, `jwt`,
@@ -9203,8 +9204,9 @@ What comes next:
   `protocols.spiffe.jwt_key_algorithm: RS256` (OD-6) for a cloud that accepts only
   RS256; a key already in the signer keeps its algorithm until a rotation replaces
   it.
-- The token exchange serves one tenant (`protocols.spiffe.tenant_id`), so one
-  tenant has an issuer; per-tenant exchange for every tenant is what comes next.
+- The token exchange serves `protocols.spiffe.tenant_id` and the tenants listed in
+  `protocols.spiffe.exchange_tenants` (M4-L5), each with its own trust domain, signing
+  key and issuer; an issuer for every tenant without listing it is what comes next.
 - Key rotation is served (N5-L3): the next key is published ahead of signing and
   the replaced key stays published for a retain window after the switch (both
   set per rotation, up to 30 days). The windows are the operator's to size

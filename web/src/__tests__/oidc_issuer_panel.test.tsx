@@ -32,6 +32,7 @@ const issuer = {
   issued_token_types: ["urn:ietf:params:oauth:token-type:jwt", "urn:ietf:params:oauth:token-type:access_token"],
   opaque_token_audiences: ["https://legacy.example.test"],
   introspection_endpoint: "/api/v1/workloads/tokens/introspect",
+  trust_domain: "t-1.example.test",
 };
 const firstKey = { key_id: "spiffe-jwt", generation: 1, state: "active" };
 const rotatedKeys = {
@@ -78,6 +79,8 @@ describe("OpenID issuer and signing keys", () => {
     expect(screen.getByText("JWT-SVID, JWT access token (RFC 9068)")).toBeInTheDocument();
     expect(screen.getByText("https://legacy.example.test")).toBeInTheDocument();
     expect(screen.getByText("/api/v1/workloads/tokens/introspect")).toBeInTheDocument();
+    // M4-L5: each tenant the exchange serves has its own trust domain.
+    expect(screen.getByText("t-1.example.test")).toBeInTheDocument();
     const table = await screen.findByRole("table", { name: "Workload JWT signing keys" });
     expect(within(table).getAllByRole("row")[1]).toHaveTextContent(/spiffe-jwt.*Signing.*First key/);
 

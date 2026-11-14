@@ -8431,6 +8431,7 @@ export interface OIDCIssuer {
   opaque_token_audiences: string[];
   token_endpoint: string;
   token_lifetime_seconds: number;
+  trust_domain: string;
 }
 
 export interface OIDCMappingStatus {

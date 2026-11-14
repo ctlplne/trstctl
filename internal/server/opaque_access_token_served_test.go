@@ -146,8 +146,7 @@ func TestServedOpaqueAccessTokenIsIntrospectedM4L3(t *testing.T) {
 	}
 	status, got = introspect(resourceServer, string(altered))
 	inactive("an altered token", status, got)
-	sp := h.srv.spiffeForExchange()
-	expired, err := h.srv.sealOpaqueAccessToken(t.Context(), sp, tenant, opaqueAccessTokenClaims{
+	expired, err := h.srv.sealOpaqueAccessToken(t.Context(), h.srv.exchangeFor(tenant), opaqueAccessTokenClaims{
 		Iss: issuerBase + "/oidc/" + tenant, Sub: workload, ClientID: workload, Aud: []string{legacy},
 		Iat: time.Now().Add(-10 * time.Minute).Unix(), Exp: time.Now().Add(-5 * time.Minute).Unix(), JTI: uuid.NewString(),
 	})

@@ -11667,6 +11667,7 @@ OIDCIssuer = TypedDict(
         'opaque_token_audiences': list[str],
         'token_endpoint': str,
         'token_lifetime_seconds': int,
+        'trust_domain': str,
     },
     total=False,
 )

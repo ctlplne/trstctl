@@ -504,6 +504,9 @@ type spiffeProtocol struct {
 	// opaqueAudiences are protocols.spiffe.opaque_token_audiences: an access
 	// token for them is opaque, introspected by their resource servers (M4-L3).
 	opaqueAudiences map[string]bool
+	// exchanges are protocols.spiffe.exchange_tenants by lower-case tenant ID,
+	// each with its own trust domain and JWT key ring (M4-L5).
+	exchanges map[string]*workloadExchange
 }
 
 // RunSPIFFE serves the SPIFFE Workload API gRPC server on its UDS until ctx is

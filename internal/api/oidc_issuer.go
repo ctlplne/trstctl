@@ -28,6 +28,9 @@ type OIDCIssuerInfo struct {
 	// (M4-L3).
 	OpaqueTokenAudiences  []string `json:"opaque_token_audiences"`
 	IntrospectionEndpoint string   `json:"introspection_endpoint"`
+	// TrustDomain is the tenant's trust domain: the SPIFFE surface's, or its
+	// own in protocols.spiffe.exchange_tenants (M4-L5).
+	TrustDomain string `json:"trust_domain"`
 }
 
 // OIDCIssuerSource reports the tenant's published issuer; ok is false when the
@@ -79,7 +82,8 @@ func oidcIssuerSchemas() map[string]*Schema {
 			"issued_token_types":     {Type: "array", Items: str(), Description: "the RFC 8693 token types a workload may request: urn:ietf:params:oauth:token-type:jwt (a JWT-SVID) and urn:ietf:params:oauth:token-type:access_token (an RFC 9068 JWT access token, typ at+jwt)"},
 			"opaque_token_audiences": {Type: "array", Items: str(), Description: "the audiences whose access tokens are opaque (protocols.spiffe.opaque_token_audiences); their resource servers introspect them"},
 			"introspection_endpoint": {Type: "string", Description: "where a resource server introspects an opaque access token (RFC 7662), with its own API token (issuers:read)"},
-		}, Required: []string{"issuer", "discovery_url", "jwks_uri", "algorithms", "token_endpoint", "token_lifetime_seconds", "issued_token_types", "opaque_token_audiences", "introspection_endpoint"}},
+			"trust_domain":           {Type: "string", Description: "the tenant's SPIFFE trust domain: exchanged tokens name spiffe://<trust_domain>/… as sub"},
+		}, Required: []string{"issuer", "discovery_url", "jwks_uri", "algorithms", "token_endpoint", "token_lifetime_seconds", "issued_token_types", "opaque_token_audiences", "introspection_endpoint", "trust_domain"}},
 	} {
 		out[name] = schema
 	}

@@ -28108,6 +28108,7 @@ export const messages = {
     description: "N5: what the OpenID issuer panel shows.",
   },
   "workloads.oidcIssuer.issuer": { defaultMessage: "Issuer", description: "N5: the issuer URL a cloud registers." },
+  "workloads.oidcIssuer.trustDomain": { defaultMessage: "Trust domain", description: "M4-L5: the tenant's SPIFFE trust domain its exchanged tokens name." },
   "workloads.oidcIssuer.discovery": { defaultMessage: "Discovery document", description: "N5: the issuer's discovery URL." },
   "workloads.oidcIssuer.jwks": { defaultMessage: "Key set", description: "N5: the issuer's JWKS URL." },
   "workloads.oidcIssuer.algorithms": { defaultMessage: "Algorithms", description: "N5: the signing algorithms." },

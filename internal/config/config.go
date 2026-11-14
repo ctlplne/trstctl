@@ -1301,6 +1301,13 @@ type SPIFFEProtocol struct {
 	// gets a reference only trstctl can open, which the resource server
 	// introspects (RFC 7662). Needs oidc_issuer_url.
 	OpaqueTokenAudiences []string `json:"opaque_token_audiences,omitempty"`
+	// ExchangeTenants (M4-L5) are more tenants whose workloads exchange
+	// platform tokens at POST /oauth2/token, each in its own trust domain and
+	// with its own JWT signing key in the signer, so one tenant's tokens never
+	// verify against another's key set. With oidc_issuer_url each gets its
+	// published issuer. They get the token exchange only, not the Workload
+	// API socket, which serves tenant_id.
+	ExchangeTenants []SPIFFEExchangeTenant `json:"exchange_tenants,omitempty"`
 	// Entries (B8-D1) register the workloads host agents deliver: each binds a
 	// SPIFFE ID to the selectors the agent must observe of the calling process
 	// and to the enrolled agent, by name, whose host Workload API
@@ -1308,6 +1315,12 @@ type SPIFFEProtocol struct {
 	// entry to that agent's own certificate identity, so no other agent can
 	// obtain it. They are read at start; changing one takes a restart.
 	Entries []SPIFFEEntry `json:"entries,omitempty"`
+}
+
+// SPIFFEExchangeTenant is one more tenant the token exchange serves (M4-L5).
+type SPIFFEExchangeTenant struct {
+	TenantID    string `json:"tenant_id"`
+	TrustDomain string `json:"trust_domain"`
 }
 
 // SPIFFEEntry is one workload a named host agent may deliver (B8-D1).
@@ -1437,6 +1450,7 @@ func (p Protocols) ValidateTenantBindings(defaultTenant string) []error {
 		errs = append(errs, fmt.Errorf("protocols.spiffe.jwt_key_algorithm %q must be ES256 or RS256", p.SPIFFE.JWTKeyAlgorithm))
 	}
 	errs = append(errs, validateOpaqueTokenAudiences(p.SPIFFE)...)
+	errs = append(errs, validateExchangeTenants(p.SPIFFE)...)
 	errs = append(errs, validateSPIFFEEntries(p.SPIFFE)...)
 	return errs
 }
@@ -6636,6 +6650,42 @@ func validateOpaqueTokenAudiences(s SPIFFEProtocol) []error {
 			errs = append(errs, fmt.Errorf("protocols.spiffe.opaque_token_audiences repeats %q", aud))
 		}
 		seen[aud] = true
+	}
+	return errs
+}
+
+// validateExchangeTenants checks protocols.spiffe.exchange_tenants (M4-L5):
+// at most 256 tenants, each a tenant ID other than tenant_id and the others,
+// in a trust domain of its own (lower-case letters, digits, '.', '-' and '_';
+// at most 255 bytes) other than trust_domain and the others'.
+func validateExchangeTenants(s SPIFFEProtocol) []error {
+	if len(s.ExchangeTenants) == 0 {
+		return nil
+	}
+	var errs []error
+	if !s.Enabled {
+		errs = append(errs, errors.New("protocols.spiffe.exchange_tenants needs protocols.spiffe.enabled"))
+	}
+	if len(s.ExchangeTenants) > 256 {
+		errs = append(errs, fmt.Errorf("protocols.spiffe.exchange_tenants lists %d tenants; at most 256", len(s.ExchangeTenants)))
+	}
+	tenants := map[string]bool{strings.ToLower(strings.TrimSpace(s.TenantID)): true}
+	domains := map[string]bool{strings.TrimSpace(s.TrustDomain): true}
+	for i, t := range s.ExchangeTenants {
+		where := fmt.Sprintf("protocols.spiffe.exchange_tenants[%d]", i)
+		if _, err := uuid.Parse(t.TenantID); err != nil || t.TenantID != strings.TrimSpace(t.TenantID) {
+			errs = append(errs, fmt.Errorf("%s.tenant_id %q must be a tenant ID", where, t.TenantID))
+		} else if tenants[strings.ToLower(t.TenantID)] {
+			errs = append(errs, fmt.Errorf("%s.tenant_id %q is protocols.spiffe.tenant_id or listed twice", where, t.TenantID))
+		}
+		tenants[strings.ToLower(t.TenantID)] = true
+		if t.TrustDomain == "" || len(t.TrustDomain) > 255 || strings.Trim(t.TrustDomain, "abcdefghijklmnopqrstuvwxyz0123456789.-_") != "" ||
+			strings.HasPrefix(t.TrustDomain, ".") || strings.HasSuffix(t.TrustDomain, ".") {
+			errs = append(errs, fmt.Errorf("%s.trust_domain %q must be a trust domain name: lower-case letters, digits, '.', '-' and '_'", where, t.TrustDomain))
+		} else if domains[t.TrustDomain] {
+			errs = append(errs, fmt.Errorf("%s.trust_domain %q is protocols.spiffe.trust_domain or another tenant's", where, t.TrustDomain))
+		}
+		domains[t.TrustDomain] = true
 	}
 	return errs
 }
