@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- S/MIME over ACME certifies mailboxes with non-ASCII local parts as SmtpUTF8Mailbox (P15-L4 part 2, RFC 9598): the
+  crypto boundary reads and writes the otherName, profiles police it with rfc822Names, the challenge mail goes only
+  through a relay that offers SMTPUTF8, and the reply intake offers SMTPUTF8 for UTF-8 replies.
 - S/MIME over ACME takes quoted local parts and internationalized mail domains (P15-L4 part 1): mailboxes compare
   as RFC 9598 does (the local part exact, the domain lowercase in A-labels) from the order through the challenge
   mail, the reply intake (DKIM d= and s= in either label form) and the certificate's rfc822Name.

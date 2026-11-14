@@ -576,6 +576,17 @@ internationalized mail domain in `domains` in its A-label form. A reply whose Fr
 domain is written in U-labels matches, and its DKIM `d=` and `s=` compare and look up
 their key in A-labels (RFC 8616).
 
+A local part may also hold non-ASCII characters (`ålice@example.com`, RFC 6531), kept
+exactly as written: never case-folded or normalized, and refused only for a control
+character, a byte order mark or bytes that are not UTF-8. Such a mailbox is certified
+as an SmtpUTF8Mailbox otherName (RFC 9598) instead of an rfc822Name: the finalize CSR
+must request it that way, in its comparable form, and an ASCII mailbox requested as an
+SmtpUTF8Mailbox is refused. A certificate profile's `allowed_email_domains` polices
+SmtpUTF8Mailboxes as it does rfc822Names, whatever the enrollment protocol. The
+challenge mail to such a mailbox goes only through a relay that offers SMTPUTF8; a
+relay that does not fails the delivery rather than receiving the address. The reply
+intake offers SMTPUTF8 and takes a reply whose From field is UTF-8 (RFC 6532).
+
 Finalize needs a CSR that names exactly the ordered addresses (a common name, if any,
 must be one of them) and asks for a signing-only key usage: digitalSignature and/or
 nonRepudiation and nothing else. A CSR with no key usage or with an encryption bit asks

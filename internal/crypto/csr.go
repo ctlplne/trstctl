@@ -15,6 +15,8 @@ import (
 	"io"
 	"net"
 	"net/url"
+
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // CertificateRequestTemplate is a backend-agnostic PKCS#10 CSR template so
@@ -25,7 +27,10 @@ type CertificateRequestTemplate struct {
 	IPAddresses    []net.IP
 	EmailAddresses []string
 	URIs           []string
-	RequestedEKUs  []string
+	// SmtpUTF8Mailboxes are mailboxes whose local part has non-ASCII
+	// characters, requested as SmtpUTF8Mailbox otherNames (RFC 9598; P15-L4).
+	SmtpUTF8Mailboxes []string
+	RequestedEKUs     []string
 	// ChallengePassword is the PKCS#9 SCEP challengePassword attribute. It is used
 	// only for client-side SCEP request construction and tests; server-side
 	// validation still extracts the attribute from the signed CSR bytes.
@@ -96,6 +101,15 @@ func CreateCertificateRequest(tmpl CertificateRequestTemplate, signer DigestSign
 		}
 		req.ExtraExtensions = append(req.ExtraExtensions, exts...)
 	}
+	if len(tmpl.SmtpUTF8Mailboxes) > 0 {
+		// The x509 encoder writes no otherName; this subjectAltName carries
+		// every name, so the encoder writes none of its own.
+		san, err := subjectAltNameWithMailboxes(tmpl.CommonName == "", req.DNSNames, req.EmailAddresses, req.IPAddresses, req.URIs, tmpl.SmtpUTF8Mailboxes)
+		if err != nil {
+			return nil, err
+		}
+		req.ExtraExtensions = append(req.ExtraExtensions, san)
+	}
 	return x509.CreateCertificateRequest(rand.Reader, req, adapter)
 }
 
@@ -112,14 +126,19 @@ func VerifyCertificateRequest(der []byte) error {
 // against a certificate profile (S8.1), so profile enforcement never imports
 // crypto/x509 (AN-3).
 type CSRInfo struct {
-	KeyAlgorithm   string   // "RSA" | "ECDSA" | "Ed25519"
-	KeyBits        int      // RSA modulus bits, ECDSA curve bits, or 256 for Ed25519
-	DNSNames       []string // SAN dNSNames in the request
-	IPAddresses    []string // SAN iPAddresses in the request, string form
-	EmailAddresses []string // SAN rfc822Names in the request
-	URIs           []string // SAN uniformResourceIdentifiers in the request
-	CommonName     string
-	RequestedEKUs  []string // EKUs requested in the CSR's extensionRequest, if any
+	KeyAlgorithm string   // "RSA" | "ECDSA" | "Ed25519"
+	KeyBits      int      // RSA modulus bits, ECDSA curve bits, or 256 for Ed25519
+	DNSNames     []string // SAN dNSNames in the request
+	IPAddresses  []string // SAN iPAddresses in the request, string form
+	// EmailAddresses are the request's mailboxes: its SAN rfc822Names and,
+	// since P15-L4, its SmtpUTF8Mailboxes, which a profile polices alike (RFC
+	// 9598 §6).
+	EmailAddresses []string
+	// SmtpUTF8Mailboxes are the SAN SmtpUTF8Mailbox otherNames alone.
+	SmtpUTF8Mailboxes []string
+	URIs              []string // SAN uniformResourceIdentifiers in the request
+	CommonName        string
+	RequestedEKUs     []string // EKUs requested in the CSR's extensionRequest, if any
 }
 
 // CSRIdentifiers are the names a PKCS#10 asks to have certified. It is a
@@ -128,9 +147,11 @@ type CSRInfo struct {
 type CSRIdentifiers struct {
 	DNSNames       []string
 	IPAddresses    []string
-	EmailAddresses []string
-	URIs           []string
-	CommonName     string
+	EmailAddresses []string // rfc822Names
+	// SmtpUTF8Mailboxes are the SmtpUTF8Mailbox otherNames (P15-L4).
+	SmtpUTF8Mailboxes []string
+	URIs              []string
+	CommonName        string
 }
 
 // CSRRequestedIdentifiers returns the identifiers a CSR requests WITHOUT
@@ -156,12 +177,17 @@ func CSRRequestedIdentifiers(der []byte) (CSRIdentifiers, error) {
 	if err != nil {
 		return CSRIdentifiers{}, err
 	}
+	mailboxes, err := certinfo.SmtpUTF8Mailboxes(csr.Extensions)
+	if err != nil {
+		return CSRIdentifiers{}, err
+	}
 	return CSRIdentifiers{
-		DNSNames:       append([]string(nil), csr.DNSNames...),
-		IPAddresses:    ipStrings(csr.IPAddresses),
-		EmailAddresses: append([]string(nil), csr.EmailAddresses...),
-		URIs:           uriStrings(csr.URIs),
-		CommonName:     csr.Subject.CommonName,
+		DNSNames:          append([]string(nil), csr.DNSNames...),
+		IPAddresses:       ipStrings(csr.IPAddresses),
+		EmailAddresses:    append([]string(nil), csr.EmailAddresses...),
+		SmtpUTF8Mailboxes: mailboxes,
+		URIs:              uriStrings(csr.URIs),
+		CommonName:        csr.Subject.CommonName,
 	}, nil
 }
 
@@ -254,12 +280,17 @@ func InspectCSR(der []byte) (CSRInfo, error) {
 	if err := csr.CheckSignature(); err != nil {
 		return CSRInfo{}, err
 	}
+	mailboxes, err := certinfo.SmtpUTF8Mailboxes(csr.Extensions)
+	if err != nil {
+		return CSRInfo{}, err
+	}
 	info := CSRInfo{
-		DNSNames:       csr.DNSNames,
-		IPAddresses:    ipStrings(csr.IPAddresses),
-		EmailAddresses: csr.EmailAddresses,
-		URIs:           uriStrings(csr.URIs),
-		CommonName:     csr.Subject.CommonName,
+		DNSNames:          csr.DNSNames,
+		IPAddresses:       ipStrings(csr.IPAddresses),
+		EmailAddresses:    append(append([]string(nil), csr.EmailAddresses...), mailboxes...),
+		SmtpUTF8Mailboxes: mailboxes,
+		URIs:              uriStrings(csr.URIs),
+		CommonName:        csr.Subject.CommonName,
 	}
 	ekus, err := extKeyUsageNamesFromExtensions(csr.Extensions)
 	if err != nil {

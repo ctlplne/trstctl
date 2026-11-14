@@ -28,7 +28,7 @@ func TestEmailIdentifiersTakeQuotedLocalPartsAndInternationalDomainsP15L4(t *tes
 	}
 	for _, bad := range []string{`"unterminated@p15l4.test`, `"a*b"@p15l4.test`, "a*b@p15l4.test", "\"tab\x01\"@p15l4.test",
 		`"bad\"@p15l4.test`, "john doe@p15l4.test", "a@b@p15l4.test", "alice@xn--a.p15l4.test", "alice@-bad.p15l4.test",
-		`""@p15l4.test`, "ålice@p15l4.test"} {
+		`""@p15l4.test`} {
 		if got, err := NormalizeEmailIdentifier(bad); err == nil {
 			t.Fatalf("NormalizeEmailIdentifier(%q) = %q, want a refusal", bad, got)
 		}

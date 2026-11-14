@@ -231,6 +231,18 @@ func (s *realSender) Send(ctx context.Context, from string, to []string, msg []b
 			return err
 		}
 	}
+	// RFC 6531: an address with non-ASCII characters goes only to a relay that
+	// takes SMTPUTF8 (P15-L4); sending it to one that does not would have the
+	// relay refuse or mangle it.
+	if !session.extension("SMTPUTF8") {
+		for _, address := range append([]string{from}, to...) {
+			for i := 0; i < len(address); i++ {
+				if address[i] >= 0x80 {
+					return fmt.Errorf("SMTP relay does not support SMTPUTF8, which the internationalized address needs")
+				}
+			}
+		}
+	}
 	if err := session.mail(from); err != nil {
 		return err
 	}

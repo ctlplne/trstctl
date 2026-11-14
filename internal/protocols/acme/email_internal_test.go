@@ -25,8 +25,9 @@ func TestNormalizeEmailIdentifierP15(t *testing.T) {
 		"Alice.B+tag@Example.COM": "Alice.B+tag@example.com",
 		"o'neil@mail.example.org": "o'neil@mail.example.org",
 		// P15-L4: a quoted local part is accepted, unquoted when it is a
-		// dot-atom.
+		// dot-atom, and a non-ASCII local part is kept exactly.
 		"\"q\"@example.com": "q@example.com",
+		"álice@example.com": "álice@example.com",
 	} {
 		if got, err := NormalizeEmailIdentifier(raw); err != nil || got != want {
 			t.Fatalf("NormalizeEmailIdentifier(%q) = %q, %v; want %q", raw, got, err, want)
@@ -34,7 +35,7 @@ func TestNormalizeEmailIdentifierP15(t *testing.T) {
 	}
 	for _, raw := range []string{"", "alice", "@example.com", "alice@", "*@example.com", "a*b@example.com",
 		"a..b@example.com", ".a@example.com", "a@localhost", "a@exa_mple.com",
-		"álice@example.com", "a@-bad.example.com", strings.Repeat("a", 65) + "@example.com"} {
+		"a@-bad.example.com", strings.Repeat("a", 65) + "@example.com"} {
 		if got, err := NormalizeEmailIdentifier(raw); err == nil {
 			t.Fatalf("NormalizeEmailIdentifier(%q) accepted %q", raw, got)
 		}

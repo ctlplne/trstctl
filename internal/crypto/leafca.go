@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // SelfSignedCACert creates a self-signed CA certificate whose signing key is the
@@ -335,6 +337,20 @@ func signLeafFromCSRWithPreparation(caCertDER []byte, caSigner DigestSigner, csr
 		}
 		leaf.ExtraExtensions = append(leaf.ExtraExtensions, extra...)
 	}
+	// P15-L4: an internationalized mailbox the CSR names as an SmtpUTF8Mailbox
+	// (policed above with its rfc822Names) is written as one. The x509 encoder
+	// writes no otherName, so this subjectAltName carries every name.
+	mailboxes, err := certinfo.SmtpUTF8Mailboxes(csr.Extensions)
+	if err != nil {
+		return IssuedLeaf{}, fmt.Errorf("crypto: the CSR's subjectAltName: %w", err)
+	}
+	if len(mailboxes) > 0 {
+		san, err := subjectAltNameWithMailboxes(len(csr.Subject.ToRDNSequence()) == 0, csr.DNSNames, csr.EmailAddresses, csr.IPAddresses, csr.URIs, mailboxes)
+		if err != nil {
+			return IssuedLeaf{}, err
+		}
+		leaf.ExtraExtensions = append(leaf.ExtraExtensions, san)
+	}
 	// Authority Key Identifier from the issuing CA's SKI (when it has one) so the
 	// AKI is present and correct even though we set the leaf SKI ourselves.
 	if len(caCert.SubjectKeyId) > 0 {
@@ -631,12 +647,17 @@ func SignAgentClientCSR(
 // unconstrained for legacy callers, but once one SAN allow-list is present, every
 // requested SAN type must have its own matching allow-list.
 func enforceLeafProfile(csr *x509.CertificateRequest, ttl time.Duration, prof LeafProfile) error {
+	mailboxes, err := certinfo.SmtpUTF8Mailboxes(csr.Extensions)
+	if err != nil {
+		return &leafProfileError{"the CSR's subjectAltName does not parse"}
+	}
 	return EnforceLeafProfileInfo(CSRInfo{
-		DNSNames:       append([]string(nil), csr.DNSNames...),
-		IPAddresses:    ipStrings(csr.IPAddresses),
-		EmailAddresses: append([]string(nil), csr.EmailAddresses...),
-		URIs:           uriStrings(csr.URIs),
-		CommonName:     csr.Subject.CommonName,
+		DNSNames:          append([]string(nil), csr.DNSNames...),
+		IPAddresses:       ipStrings(csr.IPAddresses),
+		EmailAddresses:    append(append([]string(nil), csr.EmailAddresses...), mailboxes...),
+		SmtpUTF8Mailboxes: mailboxes,
+		URIs:              uriStrings(csr.URIs),
+		CommonName:        csr.Subject.CommonName,
 	}, ttl, prof)
 }
 

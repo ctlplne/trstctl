@@ -30,13 +30,16 @@ import (
 
 // Info is the inventory metadata of a certificate.
 type Info struct {
-	Subject           string
-	CommonName        string // parsed subject CN, not inferred from the display string
-	Issuer            string
-	SerialNumber      string // hex
-	DNSNames          []string
-	IPAddresses       []string
-	EmailAddresses    []string
+	Subject        string
+	CommonName     string // parsed subject CN, not inferred from the display string
+	Issuer         string
+	SerialNumber   string // hex
+	DNSNames       []string
+	IPAddresses    []string
+	EmailAddresses []string
+	// SmtpUTF8Mailboxes are the SAN's internationalized mailboxes (RFC 9598;
+	// P15-L4), which the x509 parser leaves out of EmailAddresses.
+	SmtpUTF8Mailboxes []string
 	URIs              []string
 	NotBefore         time.Time
 	NotAfter          time.Time
@@ -122,6 +125,9 @@ func Inspect(raw []byte) (Info, error) {
 		PublicKeyBits:     publicKeyBits(cert.PublicKey),
 		IsCA:              cert.IsCA,
 	}
+	// P15-L4: the x509 parser skips otherNames; an unreadable SmtpUTF8Mailbox
+	// leaves the inventory without it rather than failing the read.
+	info.SmtpUTF8Mailboxes, _ = SmtpUTF8Mailboxes(cert.Extensions)
 	// Structural inventory only: neither certificate trust nor issuer signature.
 	if cert.PublicKeyAlgorithm == x509.UnknownPublicKeyAlgorithm {
 		algorithm, err := inspectMLDSASubject(cert.RawSubjectPublicKeyInfo)
@@ -258,6 +264,9 @@ func inspectDER(der []byte) (Info, error) {
 		PublicKeyBits:     publicKeyBits(cert.PublicKey),
 		IsCA:              cert.IsCA,
 	}
+	// P15-L4: the x509 parser skips otherNames; an unreadable SmtpUTF8Mailbox
+	// leaves the inventory without it rather than failing the read.
+	info.SmtpUTF8Mailboxes, _ = SmtpUTF8Mailboxes(cert.Extensions)
 	// Structural inventory only: neither certificate trust nor issuer signature.
 	if cert.PublicKeyAlgorithm == x509.UnknownPublicKeyAlgorithm {
 		algorithm, err := inspectMLDSASubject(cert.RawSubjectPublicKeyInfo)

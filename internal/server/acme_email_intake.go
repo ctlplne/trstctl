@@ -134,7 +134,9 @@ func (s *Server) acmeEmailIntakeSession(ctx context.Context, conn net.Conn, tlsC
 			if tlsCert != nil && !secured {
 				lines = append(lines, "250-STARTTLS")
 			}
-			reply(append(lines, "250 8BITMIME")...)
+			// P15-L4: a reply from a mailbox with a non-ASCII local part comes
+			// with SMTPUTF8 (RFC 6531) and UTF-8 header fields (RFC 6532).
+			reply(append(lines, "250-SMTPUTF8", "250 8BITMIME")...)
 		case "HELO":
 			reply("250 " + intake.host)
 		case "STARTTLS":

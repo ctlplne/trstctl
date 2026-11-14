@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/net/idna"
 
@@ -114,11 +116,13 @@ func (s *Server) WithEmailChallenges(from string, domains []string, profileName 
 }
 
 // NormalizeEmailIdentifier returns an email identifier's comparable form
-// (RFC 9598 §5): the local part exact, never case-folded, and the domain
-// lowercased in A-labels. Since P15-L4 the local part may be a quoted string
-// (stored quoted only when it is not a dot-atom, with the fewest escapes) and
-// the domain internationalized (U-labels become A-labels). A wildcard is
-// never allowed (RFC 8823 §3), quoted or not.
+// (RFC 9598 §5): the local part exact, never case-folded or normalized, and
+// the domain lowercased in A-labels. Since P15-L4 the local part may be a
+// quoted string (stored quoted only when it is not a dot-atom, with the
+// fewest escapes) and may hold non-ASCII characters (RFC 6531; such a mailbox
+// is certified as an SmtpUTF8Mailbox), and the domain may be internationalized
+// (U-labels become A-labels). A wildcard is never allowed (RFC 8823 §3),
+// quoted or not, nor a control character or byte order mark.
 func NormalizeEmailIdentifier(v string) (string, error) {
 	if len(v) == 0 || len(v) > 1024 {
 		return "", errors.New("acme: an email identifier is 1-254 characters")
@@ -156,8 +160,9 @@ func canonicalLocalPart(local string) (string, error) {
 					return "", errors.New("acme: an email identifier's quoted local part has a bad escape")
 				}
 				c = local[i]
-			} else if c == '"' || c < 32 || c > 126 {
-				return "", errors.New("acme: an email identifier's quoted local part has a character outside printable ASCII")
+			} else if c == '"' || c < 32 || c == 127 {
+				// Bytes from 0x80 are UTF-8, checked as characters below.
+				return "", errors.New("acme: an email identifier's quoted local part has a control character or a bare quote")
 			}
 			content.WriteByte(c)
 		}
@@ -169,7 +174,7 @@ func canonicalLocalPart(local string) (string, error) {
 		return "", errors.New("acme: an email identifier's local part is not a dot-atom or a quoted string")
 	}
 	for i := 0; i < len(local); i++ {
-		if !dotAtomByte(local[i]) && local[i] != '*' {
+		if !dotAtomByte(local[i]) && local[i] != '*' && local[i] < 0x80 {
 			return "", errors.New("acme: an email identifier's local part is not a dot-atom or a quoted string")
 		}
 	}
@@ -186,13 +191,17 @@ func CanonicalLocalPartContent(content string) (string, error) {
 	if strings.ContainsRune(content, '*') {
 		return "", errors.New("acme: an email identifier's local part has a wildcard, which is never allowed")
 	}
+	if !utf8.ValidString(content) {
+		return "", errors.New("acme: an email identifier's local part is not UTF-8")
+	}
 	dotAtom := content[0] != '.' && content[len(content)-1] != '.' && !strings.Contains(content, "..")
-	for i := 0; i < len(content); i++ {
-		c := content[i]
-		if c < 32 || c > 126 {
-			return "", errors.New("acme: an email identifier's local part has a character outside printable ASCII")
-		}
-		if !dotAtomByte(c) {
+	for _, r := range content {
+		switch {
+		case r < 32 || r == 127 || unicode.IsControl(r) || r == 0xFEFF:
+			return "", errors.New("acme: an email identifier's local part has a control character or a byte order mark")
+		case r >= 0x80:
+			// RFC 6531: a non-ASCII character is atext.
+		case !dotAtomByte(byte(r)):
 			dotAtom = false
 		}
 	}
@@ -229,6 +238,15 @@ func validEmailDomain(domain string) bool {
 			if !ldhByte(label[i]) {
 				return false
 			}
+		}
+	}
+	return true
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
 		}
 	}
 	return true
@@ -472,6 +490,19 @@ func csrEmailIdentifiersMatchOrder(csrDER []byte, authorized []string) error {
 		address, err := NormalizeEmailIdentifier(raw)
 		if err != nil || !allowed[address] {
 			return errors.New("acme: finalize CSR requests an email address the order did not authorize")
+		}
+		requested[address] = true
+	}
+	// P15-L4: a mailbox with a non-ASCII local part is requested as an
+	// SmtpUTF8Mailbox, exactly in its comparable form (the domain lowercase in
+	// A-labels); an ASCII local part never is (RFC 9598 §3).
+	for _, raw := range ids.SmtpUTF8Mailboxes {
+		address, err := NormalizeEmailIdentifier(raw)
+		if err != nil || address != raw || !allowed[address] {
+			return errors.New("acme: finalize CSR requests an SmtpUTF8Mailbox the order did not authorize, or not in its A-label form")
+		}
+		if isASCII(address[:strings.LastIndexByte(address, '@')]) {
+			return errors.New("acme: finalize CSR names an ASCII mailbox as an SmtpUTF8Mailbox; RFC 9598 requires an rfc822Name")
 		}
 		requested[address] = true
 	}
