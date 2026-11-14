@@ -62,6 +62,11 @@ type AWSSTSConfig struct {
 	DenyAccessKeyID     string
 	DenySecretAccessKey []byte
 	DenySessionToken    []byte
+	// DenyBeforeCutoffWhenFull (N3-L2): when the role's inline policies are at
+	// IAM's size quota, a revocation attaches a managed policy that denies
+	// every session of the role issued before now (aws:TokenIssueTime), the
+	// revoked one with them, instead of failing. Needs RevokeWithDenyPolicy.
+	DenyBeforeCutoffWhenFull bool
 }
 
 // AWSSTSChainedSessionMaxDuration is the longest a role session chained from
@@ -86,6 +91,8 @@ type AWSSTSBackend struct {
 	roleARNs     map[string]string
 	denyPolicy   bool
 	roleChaining bool
+	// cutoffWhenFull is DenyBeforeCutoffWhenFull (N3-L2).
+	cutoffWhenFull bool
 }
 
 type awsSTSRef struct {
@@ -139,6 +146,11 @@ func NewAWSSTSBackend(cfg AWSSTSConfig) (*AWSSTSBackend, error) {
 		query.Close()
 		return nil, fmt.Errorf("dynsecret aws-sts: initialize IAM read client: %w", err)
 	}
+	if cfg.DenyBeforeCutoffWhenFull && !cfg.RevokeWithDenyPolicy {
+		query.Close()
+		iam.Close()
+		return nil, errors.New("dynsecret aws-sts: the cutoff fallback needs revoke_with_deny_policy")
+	}
 	deny := iam
 	if cfg.DenyAccessKeyID != "" {
 		if !cfg.RevokeWithDenyPolicy {
@@ -158,7 +170,7 @@ func NewAWSSTSBackend(cfg AWSSTSConfig) (*AWSSTSBackend, error) {
 		}
 	}
 	return &AWSSTSBackend{query: query, iam: iam, deny: deny, roleARNs: cloneStringMap(cfg.RoleARNs),
-		denyPolicy: cfg.RevokeWithDenyPolicy, roleChaining: cfg.AllowRoleChaining}, nil
+		denyPolicy: cfg.RevokeWithDenyPolicy, roleChaining: cfg.AllowRoleChaining, cutoffWhenFull: cfg.DenyBeforeCutoffWhenFull}, nil
 }
 
 func (b *AWSSTSBackend) Create(context.Context, string) (string, []byte, error) {

@@ -134,6 +134,13 @@ func (b *AWSSTSBackend) RevokeMethod(ctx context.Context, ref string) (string, e
 		"Action": "PutRolePolicy", "Version": awsIAMVersion, "RoleName": roleName,
 		"PolicyName": name, "PolicyDocument": doc,
 	}); err != nil {
+		if b.cutoffWhenFull && errors.Is(err, errAWSIAMLimitExceeded) {
+			// N3-L2: the role's inline policies are full.
+			if err := b.denyBeforeCutoff(ctx, roleName, issued.RoleARN, now); err != nil {
+				return "", fmt.Errorf("dynsecret aws-sts: role %s's inline policies are full, and the cutoff fallback failed: %w", roleName, err)
+			}
+			return RevocationMethodDenyPolicy, nil
+		}
 		return "", fmt.Errorf("dynsecret aws-sts: write the session's deny policy on role %s: %w", roleName, err)
 	}
 	raw, err := b.denyClient().call(ctx, map[string]string{

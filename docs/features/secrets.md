@@ -797,7 +797,11 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   refused write or a readback without
   the statement is a retried, then failed, revocation, never a completed one. A
   role's inline policies share a 10,240-character quota, which bounds how many of its
-  sessions can be denied at once. Sessions the revoked session started by assuming
+  sessions can be denied at once; with `deny_quota_fallback: token_issue_time` (N3-L2) a
+  revocation that meets it instead attaches a managed policy denying every session of
+  the role issued before the revocation, read back before completion, and then removes
+  the earlier cutoffs and the per-session denials it covers. Other sessions of the role
+  issued before that cutoff are denied with it. Sessions the revoked session started by assuming
   another role are not covered. A saved AssumeRole result can be recovered with
   the original idempotency key. If AWS may have accepted the request but its response
   was lost, trstctl fences that operation as indeterminate and does not submit it

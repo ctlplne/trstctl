@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- AWS STS revocation falls back to a cutoff when a role's inline policies are full (N3-L2):
+  `deny_quota_fallback: token_issue_time` attaches a managed policy denying every session of the role issued before the
+  revocation (`aws:TokenIssueTime`), read back before completion; earlier cutoffs and the per-session denials it covers
+  are removed, freeing the quota. Opt-in, because it denies the role's other earlier sessions too.
 - An AWS STS provider's denials can be written by their own IAM identity (N3-L1): `deny_access_key_id` and
   `deny_secret_access_key_ref` (with `revoke_with_deny_policy`) sign every denial write, read back and pruning, so the
   identity that calls `AssumeRole` needs no IAM write permission; the provider catalog lists the fields.

@@ -9135,9 +9135,10 @@ What comes next:
 - LocalStack stores IAM policies but does not enforce them, so AWS refusing the
   denied session's next request is a live proof with an AWS account (Track B).
 - A role's inline policies share a 10,240-character quota (about forty denials
-  beside small existing policies); a revocation that hits it fails and is retried,
-  and the session still lapses at its expiry. A managed-policy or
-  `aws:TokenIssueTime` fallback is a lead.
+  beside small existing policies). Without `deny_quota_fallback` a revocation that
+  hits it fails and is retried, and the session still lapses at its expiry; with
+  `deny_quota_fallback: token_issue_time` (N3-L2) the fallback is a cutoff, not one
+  session: every session of the role issued before the revocation is denied.
 - A lease's session can't assume another role (N3-L3): each lease's `AssumeRole`
   passes a session policy that keeps everything the role allows and denies
   `sts:AssumeRole`, because a session chained into another role carries that

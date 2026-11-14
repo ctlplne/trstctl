@@ -3081,6 +3081,21 @@ that calls `AssumeRole` needs no IAM write permission; the IAM permissions above
 belong to the denial identity. They are valid only with `revoke_with_deny_policy`, and
 both the key ID and the secret reference are required.
 
+A role's inline policies share IAM's 10,240-character quota, so a role revoked often
+can run out of room for one more per-session denial. With
+`deny_quota_fallback: token_issue_time` (N3-L2) a revocation that meets the quota
+attaches a customer-managed policy under the path `/trstctl/` that denies every session
+of the role issued before the revocation (`aws:TokenIssueTime`), reads it back, and
+completes as `deny_policy`; **every other session of the role issued before then is
+denied too**, so it is opt-in. Each cutoff is its own policy, so concurrent revocations
+only widen the denial; once one is attached, earlier cutoffs of the role are detached
+and deleted, and the role's per-session denials it must cover (sessions expiring
+within fifteen minutes of the cutoff) are deleted, freeing the quota. The denying
+identity then also needs `iam:CreatePolicy`, `iam:AttachRolePolicy`,
+`iam:ListAttachedRolePolicies`, `iam:GetPolicy`, `iam:GetPolicyVersion`,
+`iam:DetachRolePolicy` and `iam:DeletePolicy`. Without it the quota fails the
+revocation, which is retried, and the session lapses at its expiry.
+
 A lease's session can't assume other roles (N3-L3): every `AssumeRole` passes a
 session policy that keeps what the role allows and denies `sts:AssumeRole`, so no
 session chained into another role outlives the lease's revocation. Set

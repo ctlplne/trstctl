@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3291 annotated sites across 35 rules. Each row is
+3304 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (809 sites)
+### G101 — CWE-798 Use of hardcoded credentials (810 sites)
 
 | Location | Reason |
 |---|---|
@@ -266,6 +266,7 @@ not this file.
 | `internal/config/config_test.go:431` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/deny_credential_test.go:17` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/deny_credential_test.go:19` | test-only file reference paths, no credential values (CWE-798) |
+| `internal/config/deny_credential_test.go:49` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/external_ca_test.go:12` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:19` | fabricated fixture reference, no credential (CWE-798) |
 | `internal/config/external_ca_test.go:46` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -717,7 +718,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:94` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1685` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1686` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:140` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:156` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
@@ -1559,7 +1560,7 @@ not this file.
 | `internal/dynsecret/aws_cache_users.go:170` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/aws_cache_users.go:201` | the new user's password goes to the MemoryDB API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/aws_honeytoken.go:165` | one-time decoy reveal; caller seals or writes and wipes this []byte (CWE-200) |
-| `internal/dynsecret/aws_sts.go:230` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
+| `internal/dynsecret/aws_sts.go:242` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
 | `internal/dynsecret/cassandra.go:179` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/clickhouse.go:131` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/client_secrets.go:183` | the new secret is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
@@ -1592,7 +1593,7 @@ not this file.
 | `internal/dynsecret/openai.go:125` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/openrouter.go:59` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/oracle.go:262` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/providers_real.go:1637` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/dynsecret/providers_real.go:1640` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:150` | the new user's password goes to the management API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:177` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/redfish.go:104` | the rotated controller credential; the rotation seals it before storage (CWE-200) |
@@ -3605,7 +3606,7 @@ not this file.
 | `internal/dynsecret/mongodb_atlas.go:260` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/network_api.go:158` | the operator's configured device endpoint through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/oauth_client_credentials.go:315` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/providers_real.go:1758` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/providers_real.go:1761` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:240` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:284` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/redfish.go:130` | the operator's configured controller through the pinned, egress-guarded client (CWE-918) |
@@ -3632,7 +3633,7 @@ not this file.
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |
 | `tools/dodcensus/proof/launched.go:1770` | developer tool calling the endpoint it was pointed at (CWE-918) |
 
-### G705 — CWE-79 Cross-site scripting (taint) (23 sites)
+### G705 — CWE-79 Cross-site scripting (taint) (35 sites)
 
 | Location | Reason |
 |---|---|
@@ -3645,6 +3646,12 @@ not this file.
 | `internal/dns/akamai/akamai_test.go:131` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/dynsecret/access_test.go:83` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/dynsecret/access_test.go:91` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/dynsecret/aws_sts_deny_cutoff_test.go:49` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/dynsecret/aws_sts_deny_cutoff_test.go:70` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/dynsecret/aws_sts_deny_cutoff_test.go:77` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/dynsecret/aws_sts_deny_cutoff_test.go:92` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/dynsecret/aws_sts_deny_cutoff_test.go:107` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/dynsecret/aws_sts_deny_cutoff_test.go:120` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/dynsecret/aws_sts_deny_test.go:69` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/operator/reconcile_test.go:263` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/secretstore/access.go:86` | the secret read API returns the secret by contract; served as octet-stream with nosniff, never an HTML context (CWE-79) |
@@ -3658,6 +3665,12 @@ not this file.
 | `internal/server/sts_deny_credential_served_test.go:84` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/server/sts_deny_credential_served_test.go:92` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/server/sts_deny_credential_served_test.go:98` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/server/sts_deny_cutoff_served_test.go:50` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/server/sts_deny_cutoff_served_test.go:59` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/server/sts_deny_cutoff_served_test.go:72` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/server/sts_deny_cutoff_served_test.go:80` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/server/sts_deny_cutoff_served_test.go:93` | test writes fixture bytes to its own local server (CWE-79) |
+| `internal/server/sts_deny_cutoff_served_test.go:97` | test writes fixture bytes to its own local server (CWE-79) |
 | `internal/server/sts_role_chaining_served_test.go:81` | test writes fixture bytes to its own local server (CWE-79) |
 
 ### G709 — CWE-502 Deserialization of untrusted data (taint) (1 sites)

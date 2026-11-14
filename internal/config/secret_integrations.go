@@ -184,6 +184,12 @@ type DynamicSecretProviderConfig struct {
 	DenyAccessKeyID     string `json:"deny_access_key_id,omitempty"`
 	DenySecretAccessRef string `json:"deny_secret_access_key_ref,omitempty"`
 	DenySessionTokenRef string `json:"deny_session_token_ref,omitempty"`
+	// DenyQuotaFallback (aws-sts, N3-L2) is "token_issue_time": when a role's
+	// inline policies are at IAM's size quota, a revocation attaches a managed
+	// policy denying every session of the role issued before now
+	// (aws:TokenIssueTime), the revoked one with them, instead of failing.
+	// Every other session of the role issued before then is denied too.
+	DenyQuotaFallback string `json:"deny_quota_fallback,omitempty"`
 
 	PasswordRef             string `json:"password_ref,omitempty"`
 	SecretAccessRef         string `json:"secret_access_key_ref,omitempty"`
@@ -985,6 +991,15 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 	}
 	if c.AllowRoleChaining && c.RevokeWithDenyPolicy {
 		errs = append(errs, fmt.Errorf("%s allow_role_chaining can't be combined with revoke_with_deny_policy: a denial on the lease's role does not reach a session chained into another role", where))
+	}
+	switch c.DenyQuotaFallback {
+	case "":
+	case "token_issue_time":
+		if !c.RevokeWithDenyPolicy || (c.Type != "aws-iam" && c.Type != "aws-sts") {
+			errs = append(errs, fmt.Errorf("%s deny_quota_fallback is only valid for aws-sts with revoke_with_deny_policy", where))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("%s deny_quota_fallback %q must be token_issue_time or empty", where, c.DenyQuotaFallback))
 	}
 	if c.DenyAccessKeyID != "" || c.DenySecretAccessRef != "" || c.DenySessionTokenRef != "" {
 		switch {

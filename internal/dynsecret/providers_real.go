@@ -41,6 +41,9 @@ const (
 var (
 	errAWSIAMAlreadyExists = errors.New("dynsecret aws-iam: entity already exists")
 	errAWSIAMMissing       = errors.New("dynsecret aws-iam: entity not found")
+	// errAWSIAMLimitExceeded is IAM's LimitExceeded, such as a role whose
+	// inline policies are at their size quota (N3-L2).
+	errAWSIAMLimitExceeded = errors.New("dynsecret aws-iam: limit exceeded")
 	errPostgresRoleCreate  = errors.New("dynsecret postgres: create role failed")
 	// errPostgresRolePassword never carries driver text: it can quote the
 	// statement, and the statement carries the password.
@@ -2620,6 +2623,10 @@ func (b *AWSIAMBackend) callService(ctx context.Context, params map[string]strin
 			containsASCIIFold(raw, []byte("not found")),
 			containsASCIIFold(raw, []byte("notfound")):
 			return nil, errAWSIAMMissing
+		case containsASCIIFold(raw, []byte("limitexceeded")):
+			// N3-L2: still the status error its callers classify, and the
+			// limit for the one that falls back.
+			return nil, fmt.Errorf("%w: %w", errAWSIAMLimitExceeded, &cloudhttp.StatusError{StatusCode: resp.StatusCode})
 		default:
 			return nil, &cloudhttp.StatusError{StatusCode: resp.StatusCode}
 		}

@@ -39,3 +39,32 @@ func TestValidateDenialCredentialN3L1(t *testing.T) {
 		}
 	}
 }
+
+// N3-L2: deny_quota_fallback is token_issue_time or empty, and belongs to an
+// aws-sts provider with revoke_with_deny_policy.
+func TestValidateDenyQuotaFallbackN3L2(t *testing.T) {
+	const tenant = "11111111-1111-1111-1111-111111111111"
+	base := func() DynamicSecretProviderConfig {
+		return DynamicSecretProviderConfig{TenantID: tenant, ID: "aws", Type: "aws-sts", Endpoint: "https://sts.us-east-1.amazonaws.com",
+			Region: "us-east-1", AccessKeyID: "AKIDISSUER", SecretAccessRef: "file:/var/lib/trstctl/issuer", MaxTTL: "1h", // #nosec G101 -- test-only file reference paths, no credential values (CWE-798)
+			AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "arn:aws:iam::123456789012:role/reader"},
+			RevokeWithDenyPolicy: true, DenyQuotaFallback: "token_issue_time"}
+	}
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{base()}}, true); err != nil {
+		t.Fatalf("a valid quota fallback was rejected: %v", err)
+	}
+	for name, c := range map[string]struct {
+		edit func(*DynamicSecretProviderConfig)
+		want string
+	}{
+		"no deny policy": {func(c *DynamicSecretProviderConfig) { c.RevokeWithDenyPolicy = false }, "deny_quota_fallback is only valid for aws-sts with revoke_with_deny_policy"},
+		"another value":  {func(c *DynamicSecretProviderConfig) { c.DenyQuotaFallback = "managed_policy" }, "must be token_issue_time or empty"},
+	} {
+		cfg := base()
+		c.edit(&cfg)
+		err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{cfg}}, true)
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Fatalf("%s: %v; want an error naming %q", name, err, c.want)
+		}
+	}
+}
