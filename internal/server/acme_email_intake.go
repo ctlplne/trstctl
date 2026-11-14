@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/dkim"
 	"trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/spf"
 )
 
 // The RFC 8823 reply intake (P15): an SMTP receiver for the ACME challenge
@@ -42,6 +43,18 @@ type acmeEmailIntake struct {
 	host     string
 	from     string
 	verifier dkim.Verifier
+	// spf checks a reply's envelope sender against the delivering address,
+	// and requireSPF refuses a reply it does not pass (P15-L6).
+	spf        spf.Checker
+	requireSPF bool
+}
+
+// smtpEnvelope is what a session learned before DATA: who delivered the
+// reply, the name it greeted with and its MAIL FROM.
+type smtpEnvelope struct {
+	ip       net.IP
+	helo     string
+	mailFrom string
 }
 
 func newACMEEmailIntake(cfg config.ACMEEmail) *acmeEmailIntake {
@@ -52,7 +65,9 @@ func newACMEEmailIntake(cfg config.ACMEEmail) *acmeEmailIntake {
 	}
 	return &acmeEmailIntake{
 		addr: addr, host: from[strings.LastIndexByte(from, '@')+1:], from: from,
-		verifier: dkim.Verifier{Lookup: net.DefaultResolver.LookupTXT, Pinned: cfg.DKIMKeys},
+		verifier:   dkim.Verifier{Lookup: net.DefaultResolver.LookupTXT, Pinned: cfg.DKIMKeys},
+		spf:        spf.Checker{Resolver: net.DefaultResolver, Pinned: cfg.SPFRecords},
+		requireSPF: cfg.RequireSPF,
 	}
 }
 
@@ -122,6 +137,10 @@ func (s *Server) acmeEmailIntakeSession(ctx context.Context, conn net.Conn, tlsC
 	}
 	reply("220 " + intake.host + " ESMTP trstctl ACME reply intake")
 	recipient, secured := false, false
+	envelope := smtpEnvelope{}
+	if tcp, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+		envelope.ip = tcp.IP
+	}
 	for range acmeEmailIntakeMaxCommands {
 		line, err := readSMTPLine(r)
 		if err != nil {
@@ -130,6 +149,7 @@ func (s *Server) acmeEmailIntakeSession(ctx context.Context, conn net.Conn, tlsC
 		verb, arg, _ := strings.Cut(line, " ")
 		switch strings.ToUpper(verb) {
 		case "EHLO":
+			envelope.helo = strings.TrimSpace(arg)
 			lines := []string{"250-" + intake.host, fmt.Sprintf("250-SIZE %d", acme.MaxEmailReplyBytes)}
 			if tlsCert != nil && !secured {
 				lines = append(lines, "250-STARTTLS")
@@ -138,6 +158,7 @@ func (s *Server) acmeEmailIntakeSession(ctx context.Context, conn net.Conn, tlsC
 			// with SMTPUTF8 (RFC 6531) and UTF-8 header fields (RFC 6532).
 			reply(append(lines, "250-SMTPUTF8", "250 8BITMIME")...)
 		case "HELO":
+			envelope.helo = strings.TrimSpace(arg)
 			reply("250 " + intake.host)
 		case "STARTTLS":
 			if tlsCert == nil || secured {
@@ -149,6 +170,7 @@ func (s *Server) acmeEmailIntakeSession(ctx context.Context, conn net.Conn, tlsC
 			r, w, recipient, secured = bufio.NewReader(conn), bufio.NewWriter(conn), false, true
 		case "MAIL":
 			recipient = false
+			envelope.mailFrom = smtpReversePath(arg)
 			reply("250 2.1.0 ok")
 		case "RCPT":
 			if smtpPathAddress(arg) != intake.from {
@@ -172,7 +194,7 @@ func (s *Server) acmeEmailIntakeSession(ctx context.Context, conn net.Conn, tlsC
 				reply(fmt.Sprintf("552 5.3.4 a reply is at most %d bytes", acme.MaxEmailReplyBytes))
 				continue
 			}
-			reply(s.acceptACMEEmailReply(ctx, msg))
+			reply(s.acceptACMEEmailReply(ctx, msg, envelope))
 		case "RSET":
 			recipient = false
 			reply("250 2.0.0 ok")
@@ -190,13 +212,30 @@ func (s *Server) acmeEmailIntakeSession(ctx context.Context, conn net.Conn, tlsC
 
 // acceptACMEEmailReply checks one received message and answers it with an
 // SMTP reply line.
-func (s *Server) acceptACMEEmailReply(ctx context.Context, msg []byte) string {
+func (s *Server) acceptACMEEmailReply(ctx context.Context, msg []byte, envelope smtpEnvelope) string {
 	parsed, err := acme.ParseEmailReply(msg)
 	if err != nil {
 		s.refuseACMEEmailReply(ctx, acme.EmailReplyRefusedMalformed, "", "", err)
 		return "550 5.6.0 not an RFC 8823 reply: " + strings.TrimPrefix(err.Error(), "acme: ")
 	}
 	domain := strings.ToLower(parsed.From[strings.LastIndexByte(parsed.From, '@')+1:])
+	if s.acmeEmailIntake.requireSPF {
+		// P15-L6: SPF for the envelope sender and the delivering address, with
+		// the enhanced status codes of RFC 7372.
+		result, reason := s.acmeEmailIntake.spf.Check(ctx, envelope.ip, envelope.mailFrom, envelope.helo)
+		switch result {
+		case spf.Pass:
+		case spf.TempError:
+			s.refuseACMEEmailReply(ctx, acme.EmailReplyRefusedSPF, domain, "", errors.New(reason))
+			return "451 4.7.24 SPF could not be checked: " + reason
+		case spf.PermError:
+			s.refuseACMEEmailReply(ctx, acme.EmailReplyRefusedSPF, domain, "", errors.New(reason))
+			return "550 5.7.24 SPF validation error: " + reason
+		default:
+			s.refuseACMEEmailReply(ctx, acme.EmailReplyRefusedSPF, domain, "", fmt.Errorf("spf %s: %s", result, reason))
+			return "550 5.7.23 SPF validation failed (" + string(result) + ")"
+		}
+	}
 	if err := s.acmeEmailIntake.verifier.VerifyDomain(ctx, msg, domain); err != nil {
 		s.refuseACMEEmailReply(ctx, acme.EmailReplyRefusedDKIM, domain, "", err)
 		return "550 5.7.20 no valid DKIM signature from " + domain
@@ -270,6 +309,17 @@ func readSMTPData(r *bufio.Reader, max int) ([]byte, bool, error) {
 
 // smtpPathAddress is the normalized address in a MAIL/RCPT argument
 // ("TO:<a@b>" or "FROM:<a@b> SIZE=10").
+// smtpReversePath is a MAIL command's reverse-path as written ("" for the
+// null sender <>).
+func smtpReversePath(arg string) string {
+	_, rest, ok := strings.Cut(arg, "<")
+	if !ok {
+		return ""
+	}
+	address, _, _ := strings.Cut(rest, ">")
+	return strings.TrimSpace(address)
+}
+
 func smtpPathAddress(arg string) string {
 	_, rest, ok := strings.Cut(arg, "<")
 	if !ok {

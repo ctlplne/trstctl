@@ -539,6 +539,8 @@ const (
 	EmailReplyRefusedUnmatched     = "unmatched"
 	EmailReplyRefusedWrongResponse = "wrong_response"
 	EmailReplyRefusedError         = "error"
+	// EmailReplyRefusedSPF: SPF did not pass where it is required (P15-L6).
+	EmailReplyRefusedSPF = "spf"
 )
 
 type acmeEmailReplyRefusedEvent struct {

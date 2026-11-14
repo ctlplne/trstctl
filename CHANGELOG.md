@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The RFC 8823 reply intake can require SPF (P15-L6): with `protocols.acme_email.require_spf`, a reply whose
+  envelope sender's SPF result for the delivering address is not pass is refused with the RFC 7372 codes and recorded
+  as an spf refusal; `spf_records` pins records for domains not in DNS. DMARC is met by the aligned DKIM signature the
+  intake already requires.
 - S/MIME over ACME certifies mailboxes with non-ASCII local parts as SmtpUTF8Mailbox (P15-L4 part 2, RFC 9598): the
   crypto boundary reads and writes the otherName, profiles police it with rfc822Names, the challenge mail goes only
   through a relay that offers SMTPUTF8, and the reply intake offers SMTPUTF8 for UTF-8 replies.

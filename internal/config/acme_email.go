@@ -40,6 +40,13 @@ type ACMEEmail struct {
 	// Empty leaves signing to the relay.
 	DKIMSelector string `json:"dkim_selector,omitempty"`
 	DKIMKeyRef   string `json:"dkim_key_ref,omitempty"`
+	// RequireSPF refuses a reply unless SPF (RFC 7208) passes for its
+	// envelope sender and the address that delivered it (P15-L6). RFC 8823
+	// asks only for DKIM, and forwarding breaks SPF, so it is off unless set.
+	RequireSPF bool `json:"require_spf,omitempty"`
+	// SPFRecords pins SPF records ("v=spf1 ...") by domain for mail domains
+	// whose records are not in DNS; other domains are read from DNS.
+	SPFRecords map[string]string `json:"spf_records,omitempty"`
 }
 
 // dkimSelectorPattern is a DKIM selector: dot-separated DNS labels.
@@ -91,6 +98,15 @@ func validateACMEEmail(p ACMEEmail) []error {
 		}
 		if ref := strings.TrimSpace(p.DKIMKeyRef); !strings.HasPrefix(ref, "file:") && !strings.HasPrefix(ref, "secret://") {
 			errs = append(errs, fmt.Errorf("protocols.acme_email.dkim_key_ref must be a file: or secret:// reference"))
+		}
+	}
+	for domain, record := range p.SPFRecords {
+		lower := strings.ToLower(strings.TrimSpace(record))
+		if !issuerDomainNamePattern.MatchString(domain) {
+			errs = append(errs, fmt.Errorf("protocols.acme_email.spf_records name %q is not a lowercase DNS name", domain))
+		}
+		if lower != "v=spf1" && !strings.HasPrefix(lower, "v=spf1 ") {
+			errs = append(errs, fmt.Errorf("protocols.acme_email.spf_records[%q] is not an SPF record (v=spf1 ...)", domain))
 		}
 	}
 	for name, record := range p.DKIMKeys {

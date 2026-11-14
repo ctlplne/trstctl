@@ -603,6 +603,9 @@ protocols:
     smtp_listen: ":2525"               # route replies for the from address here
     dkim_keys:                         # optional: keys for mail domains not in DNS
       lab._domainkey.example.com: "v=DKIM1; k=rsa; p=MIIBIjAN..."
+    require_spf: false                 # optional: also require SPF to pass (P15-L6)
+    spf_records:                       # optional: SPF records for domains not in DNS
+      example.com: "v=spf1 ip4:192.0.2.0/24 -all"
 ```
 
 Point the mail system at it: an MX for the `from` domain, or a transport rule that
@@ -621,6 +624,19 @@ part of the body (`l=`) or `rsa-sha1` is never accepted. Every refused reply is 
 `acme.email_reply.refused` audit event: the step that refused it (`malformed`, `dkim`,
 `unmatched`, `wrong_response` or `error`), the From domain and, for a wrong response,
 the challenge it invalidated. The event never carries the mailbox or the message.
+
+**SPF and DMARC (P15-L6).** RFC 8823 asks only for DKIM. With `require_spf: true` the
+intake also checks SPF (RFC 7208) for the reply's envelope sender (its MAIL FROM, or
+postmaster at its HELO name for the null sender) and the address that delivered it, and
+refuses anything but pass, with the RFC 7372 codes: `550 5.7.23` for fail, softfail,
+neutral or no record, `550 5.7.24` for a permanent error, and `451 4.7.24` for a DNS
+failure the sender may retry, each also an `spf` refusal event. Forwarding breaks SPF,
+so it is off unless set; `spf_records` pins records for domains not in DNS. The checker
+evaluates all, include, a, mx, ip4, ip6, exists, redirect and the domain-spec macros,
+within RFC 7208's limits of ten DNS-querying terms and two lookups that find nothing;
+ptr never matches. DMARC needs no check of its own: the intake already requires a DKIM
+signature whose `d=` is the From domain, which is DMARC's strict DKIM alignment, so every
+reply it accepts passes DMARC.
 
 **Several replicas (P15-L1).** ACME state is the event log's, and every replica serves
 it: before each ACME request, and before the reply intake matches a reply, a replica

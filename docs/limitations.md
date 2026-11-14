@@ -6443,7 +6443,9 @@ This is a deliberate, documented trust boundary, not an accident.
   domains or mailboxes (P15-L3). Quoted local parts, internationalized domains (kept in
   A-labels) and non-ASCII local parts (certified as SmtpUTF8Mailbox, sent through an
   SMTPUTF8 relay) are served (P15-L4); an ML-DSA issuing CA refuses a request for an
-  SmtpUTF8Mailbox rather than writing it. SPF/DMARC checks are not supported.
+  SmtpUTF8Mailbox rather than writing it. SPF is checked when `require_spf` is set
+  (P15-L6; ptr never matches), and DMARC is met by the aligned DKIM signature the intake
+  requires.
 - Persistent DNS validation, dns-persist-01 (P1): the ACME server offers the
   challenge from the IETF draft draft-ietf-acme-dns-persist (allowed by
   CA/Browser Forum Ballot SC-088v3) when
