@@ -35,7 +35,7 @@ var packs = map[string]pack{
 	"elastic": {Name: "trstctl-elastic-content", Dir: "deploy/elastic",
 		Files: []string{"README.md", "trstctl-audit-index-template.json", "trstctl-audit-pipeline.json"}},
 	"rsyslog": {Name: "trstctl-rsyslog-content", Dir: "deploy/rsyslog",
-		Files: []string{"README.md", "trstctl-audit.conf"}},
+		Files: []string{"README.md", "trstctl-audit.conf", "trstctl-audit-relp.conf"}},
 }
 
 func main() {

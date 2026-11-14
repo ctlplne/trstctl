@@ -295,7 +295,12 @@ export function AuditFeedPanel() {
                 </Select>
               )}
             </Field>
-            <Field label={t("audit.feeds.endpoint")} error={form.formState.errors.endpointUrl?.message} required>
+            <Field
+              label={t("audit.feeds.endpoint")}
+              description={watchedValues.provider === "syslog" ? t("audit.feeds.syslogEndpointHelp") : undefined}
+              error={form.formState.errors.endpointUrl?.message}
+              required
+            >
               {(control) => <Input {...control} type="url" placeholder={t("audit.feeds.endpointPlaceholder")} {...form.register("endpointUrl")} />}
             </Field>
             <Field

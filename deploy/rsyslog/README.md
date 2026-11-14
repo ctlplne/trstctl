@@ -19,6 +19,14 @@ For mutual TLS (P5-L2), set the `StreamDriver.AuthMode` parameter to
 `x509/certvalid`: the feed then needs a `client_cert_ref` holding a
 certificate this CA issued.
 
+`trstctl-audit-relp.conf` (P5-L3) receives the same feed over RELP on TLS on
+port 2514 instead (rsyslog's `imrelp` input; install its RELP module too), and
+keeps, parses and writes the same messages. rsyslog acknowledges each message
+as it takes it, and the feed counts a batch delivered only when every message
+is acknowledged. Point the feed at `relp+tls://<host>:2514`. A message over
+128 KiB ends the session unanswered rather than being truncated, so the feed
+retries it instead of counting a cut record delivered.
+
 Each line carries the record's `sequence`, `type`, `chain_hash` and `data`, so
-the receiver can drop a repeat by sequence after a batch is resent. Proven
-against rsyslog 8.2608.0 in the lab.
+the receiver can drop a repeat by sequence after a batch is resent. Both
+receivers are proven against rsyslog 8.2608.0 in the lab.

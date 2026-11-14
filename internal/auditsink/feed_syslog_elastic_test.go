@@ -111,12 +111,12 @@ func TestSyslogAndElasticEndpointForms(t *testing.T) {
 		"syslog+tls://logs.example.test:10514": "logs.example.test:10514",
 		"syslog+tls://[2001:db8::7]:6514":      "[2001:db8::7]:6514",
 	} {
-		if addr, _, err := SyslogEndpoint(endpoint); err != nil || addr != want {
-			t.Fatalf("%s → %s, %v", endpoint, addr, err)
+		if target, err := ParseSyslogEndpoint(endpoint); err != nil || target.Addr != want || target.Transport != SyslogTLS {
+			t.Fatalf("%s → %+v, %v", endpoint, target, err)
 		}
 	}
 	for _, bad := range []string{"syslog://logs.example.test", "tcp://logs.example.test:514", "syslog+tls://u:p@logs.example.test", "syslog+tls://logs.example.test/x", "syslog+tls://logs.example.test:0", "https://logs.example.test"} {
-		if _, _, err := SyslogEndpoint(bad); err == nil {
+		if _, err := ParseSyslogEndpoint(bad); err == nil {
 			t.Fatalf("%s accepted", bad)
 		}
 	}

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3340 annotated sites across 35 rules. Each row is
+3345 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (837 sites)
+### G101 — CWE-798 Use of hardcoded credentials (839 sites)
 
 | Location | Reason |
 |---|---|
@@ -548,6 +548,8 @@ not this file.
 | `internal/server/audit_feed_name_conflict_served_test.go:73` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_protected_served_test.go:88` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_refusal_test.go:60` | fabricated test header values, no real credential (CWE-798) |
+| `internal/server/audit_feed_relp_lab_test.go:43` | token_ref is a non-secret environment locator (CWE-798) |
+| `internal/server/audit_feed_relp_served_test.go:50` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/audit_feed_rsyslog_content_lab_test.go:42` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/audit_feed_served_test.go:43` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_served_test.go:142` | the credential-bearing URL is a negative fixture that production must reject (CWE-798). |
@@ -2304,7 +2306,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (788 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (791 sites)
 
 | Location | Reason |
 |---|---|
@@ -2817,6 +2819,8 @@ not this file.
 | `internal/server/audit_feed_lab_p5_test.go:35` | the runner's lab CA (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:106` | the runner's mounted rsyslog output (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:160` | the runner's mounted rsyslog output (CWE-22) |
+| `internal/server/audit_feed_relp_lab_test.go:29` | the runner's lab CA (CWE-22) |
+| `internal/server/audit_feed_relp_lab_test.go:75` | the runner's lab output file (CWE-22) |
 | `internal/server/audit_feed_rsyslog_content_lab_test.go:28` | the runner's lab CA (CWE-22) |
 | `internal/server/audit_feed_rsyslog_content_lab_test.go:74` | the runner's lab output file (CWE-22) |
 | `internal/server/audit_feed_syslog_mtls_lab_test.go:29` | the runner's lab CA (CWE-22) |
@@ -3091,6 +3095,7 @@ not this file.
 | `tools/siempack/main.go:65` | a listed file of the pack (CWE-22) |
 | `tools/siempack/main_test.go:30` | test reads the repo's own shipped content (CWE-22) |
 | `tools/siempack/main_test.go:105` | test reads the repo's own shipped content (CWE-22) |
+| `tools/siempack/main_test.go:123` | test reads the repo's own shipped content (CWE-22) |
 | `tools/trstctllint/docs_test.go:75` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/licenseboundary/licenseboundary.go:38` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
@@ -3442,7 +3447,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (164 sites)
+### G703 — CWE-22 Path traversal (taint) (166 sites)
 
 | Location | Reason |
 |---|---|
@@ -3524,6 +3529,8 @@ not this file.
 | `internal/server/audit_feed_lab_p5_test.go:35` | the runner's lab CA (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:106` | the runner's mounted rsyslog output (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:160` | the runner's mounted rsyslog output (CWE-22) |
+| `internal/server/audit_feed_relp_lab_test.go:29` | the runner's lab CA (CWE-22) |
+| `internal/server/audit_feed_relp_lab_test.go:75` | the runner's lab output file (CWE-22) |
 | `internal/server/audit_feed_rsyslog_content_lab_test.go:28` | the runner's lab CA (CWE-22) |
 | `internal/server/audit_feed_rsyslog_content_lab_test.go:74` | the runner's lab output file (CWE-22) |
 | `internal/server/audit_feed_syslog_mtls_lab_test.go:29` | the runner's lab CA (CWE-22) |

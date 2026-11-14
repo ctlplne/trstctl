@@ -12,24 +12,27 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/relp"
 )
 
-// Syslog audit feeds (P5) deliver over TLS (RFC 5425). The receiver's
-// certificate is verified against the system roots, or against the CA
-// certificate a destination's token_ref names, and a receiver that requires
-// mutual TLS is shown the certificate client_cert_ref names (P5-L2); the dial
-// passes through the same egress guard as the HTTP collectors. Syslog acknowledges nothing per
-// message, so a batch is delivered once every framed message is written and
-// the TLS session is closed cleanly; a retry after a broken connection resends
-// the whole batch, and each message carries its audit sequence, so the
-// receiver can drop a repeat.
+// Syslog audit feeds (P5) deliver over TLS: RFC 5425 (syslog+tls://) or RELP
+// (relp+tls://, P5-L3). The receiver's certificate is verified against the
+// system roots, or against the CA certificate a destination's token_ref
+// names, and a receiver that requires mutual TLS is shown the certificate
+// client_cert_ref names (P5-L2); the dial passes through the same egress guard
+// as the HTTP collectors. RFC 5425 acknowledges nothing per message, so such a
+// batch is delivered once every framed message is written and the TLS session
+// is closed cleanly. Over RELP the receiver acknowledges every message, and a
+// batch is delivered only once each one is acknowledged; a refused message or
+// a closed session fails it. Either way a retry resends the whole batch, and
+// each message carries its audit sequence, so the receiver can drop a repeat.
 
 // syslogFeedTimeout bounds one delivery: dial, handshake and write.
 var syslogFeedTimeout = 30 * time.Second
 
 // deliverSyslogBatch writes the framed batch over one verified TLS session.
 func deliverSyslogBatch(ctx context.Context, batch auditsink.FeedBatch, payload []byte) (string, error) {
-	addr, serverName, err := auditsink.SyslogEndpoint(batch.EndpointURL)
+	target, err := auditsink.ParseSyslogEndpoint(batch.EndpointURL)
 	if err != nil {
 		return "", fmt.Errorf("server: audit feed endpoint rejected: %w", err)
 	}
@@ -57,13 +60,24 @@ func deliverSyslogBatch(ctx context.Context, batch auditsink.FeedBatch, payload 
 	}
 	dialCtx, cancel := context.WithTimeout(ctx, syslogFeedTimeout)
 	defer cancel()
-	conn, err := mtls.DialVerifiedTCPWithClientCert(dialCtx, addr, serverName, caPEM, clientPEM, netsec.SafeDialControlWithOptions(opts))
+	conn, err := mtls.DialVerifiedTCPWithClientCert(dialCtx, target.Addr, target.ServerName, caPEM, clientPEM, netsec.SafeDialControlWithOptions(opts))
 	if err != nil {
 		return "", fmt.Errorf("server: audit feed collector request failed: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
 	if err := conn.SetDeadline(time.Now().Add(syslogFeedTimeout)); err != nil {
 		return "", fmt.Errorf("server: audit feed collector request failed: %w", err)
+	}
+	if target.Transport == auditsink.SyslogRELP {
+		// P5-L3: each message is a RELP command the receiver acknowledges.
+		messages, err := auditsink.SyslogMessages(payload)
+		if err != nil {
+			return "", fmt.Errorf("server: encode audit feed batch: %w", err)
+		}
+		if _, err := relp.Send(conn, "trstctl", messages); err != nil {
+			return "", fmt.Errorf("server: audit feed collector request failed: %w", err)
+		}
+		return "relp:" + batch.BatchID, nil
 	}
 	if _, err := conn.Write(payload); err != nil {
 		return "", fmt.Errorf("server: audit feed collector request failed: %w", err)

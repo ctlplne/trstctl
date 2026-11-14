@@ -3,6 +3,7 @@
 package auditsink
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -124,23 +125,68 @@ func ElasticBulkResult(body []byte) (failed int, firstStatus int, err error) {
 	return failed, firstStatus, nil
 }
 
-// SyslogEndpoint reads a syslog+tls://host[:port] endpoint (default port
-// 6514, RFC 5425) into the address to dial and the name to verify. Plain TCP
-// or UDP syslog is not offered: audit records leave only over TLS.
-func SyslogEndpoint(endpoint string) (addr, serverName string, err error) {
+// Syslog transports (P5, P5-L3): a syslog feed's endpoint scheme picks one.
+const (
+	// SyslogTLS is RFC 5425: octet-counted messages on a TLS stream, none
+	// acknowledged.
+	SyslogTLS = "syslog+tls"
+	// SyslogRELP is RELP on a TLS stream: the receiver acknowledges every
+	// message.
+	SyslogRELP = "relp+tls"
+)
+
+// SyslogTarget is a syslog endpoint read: its transport, the address to dial
+// and the name to verify.
+type SyslogTarget struct {
+	Transport  string
+	Addr       string
+	ServerName string
+}
+
+// ParseSyslogEndpoint reads a syslog+tls://host[:port] endpoint (default port
+// 6514, RFC 5425) or a relp+tls://host:port endpoint (P5-L3; RELP has no
+// registered port, so the endpoint names one). Plain TCP, UDP or RELP
+// without TLS is not offered: audit records leave only over TLS.
+func ParseSyslogEndpoint(endpoint string) (SyslogTarget, error) {
 	parsed, err := url.Parse(strings.TrimSpace(endpoint))
-	if err != nil || parsed.Scheme != "syslog+tls" || parsed.Hostname() == "" || parsed.User != nil ||
+	if err != nil || (parsed.Scheme != SyslogTLS && parsed.Scheme != SyslogRELP) || parsed.Hostname() == "" || parsed.User != nil ||
 		(parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", "", errors.New("a syslog endpoint must be syslog+tls://host[:port] with no path, query or credentials")
+		return SyslogTarget{}, errors.New("a syslog endpoint must be syslog+tls://host[:port] or relp+tls://host:port with no path, query or credentials")
 	}
 	port := parsed.Port()
 	if port == "" {
+		if parsed.Scheme == SyslogRELP {
+			return SyslogTarget{}, errors.New("a relp+tls endpoint names its port: RELP has no registered port")
+		}
 		port = "6514"
 	}
 	if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
-		return "", "", fmt.Errorf("syslog endpoint port %q is not a TCP port", port)
+		return SyslogTarget{}, fmt.Errorf("syslog endpoint port %q is not a TCP port", port)
 	}
-	return net.JoinHostPort(parsed.Hostname(), port), parsed.Hostname(), nil
+	return SyslogTarget{Transport: parsed.Scheme, Addr: net.JoinHostPort(parsed.Hostname(), port), ServerName: parsed.Hostname()}, nil
+}
+
+// SyslogMessages splits a batch as WriteCollectorBatch frames it for syslog
+// (octet-counted, RFC 6587 §3.4.1) into its messages, which share framed's
+// bytes. RELP carries each message as its own command.
+func SyslogMessages(framed []byte) ([][]byte, error) {
+	var messages [][]byte
+	for len(framed) > 0 {
+		space := bytes.IndexByte(framed, ' ')
+		if space < 1 || space > 9 {
+			return nil, errors.New("a syslog batch frame has no octet count")
+		}
+		n, err := strconv.Atoi(string(framed[:space]))
+		if err != nil || n < 1 || n > len(framed)-space-1 {
+			return nil, errors.New("a syslog batch frame's octet count does not match its message")
+		}
+		messages = append(messages, framed[space+1:space+1+n])
+		framed = framed[space+1+n:]
+	}
+	if len(messages) == 0 {
+		return nil, errors.New("a syslog batch holds no message")
+	}
+	return messages, nil
 }
 
 // ElasticBulkIndex returns the index an Elasticsearch endpoint path names:

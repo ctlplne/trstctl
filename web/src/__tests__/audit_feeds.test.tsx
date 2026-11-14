@@ -188,6 +188,45 @@ describe("AUD-52 scheduled audit collector feeds", () => {
     await waitFor(() => expect(apiMock.putAuditFeed).toHaveBeenCalledWith("55555555-5555-4555-8555-555555555555", syslogRequest));
   });
 
+  // P5-L3: a syslog feed's endpoint picks RFC 5425 or RELP; the help under
+  // the endpoint names both, and a relp+tls endpoint is saved as typed.
+  it("saves a syslog feed that delivers over RELP", async () => {
+    const user = userEvent.setup();
+    const relpRequest = {
+      name: "rsyslog RELP",
+      provider: "syslog",
+      endpoint_url: "relp+tls://rsyslog.example.test:2514",
+      token_ref: "env:SYSLOG_CA",
+      interval_seconds: 300,
+      batch_size: 100,
+      enabled: true,
+      allow_private_endpoint: false,
+      private_egress_cidrs: [],
+    };
+    apiMock.previewAuditFeed.mockResolvedValue({ ...preview, endpoint_host: "rsyslog.example.test", normalized_request: relpRequest });
+    render(
+      <AppQueryProvider>
+        <AuditFeedPanel />
+      </AppQueryProvider>,
+    );
+    expect(await screen.findByText("Security Splunk")).toBeInTheDocument();
+    expect(screen.queryByText(/relp\+tls:\/\/host:port sends RELP/)).not.toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Feed ID"));
+    await user.type(screen.getByLabelText("Feed ID"), "55555555-5555-4555-8555-555555555556");
+    await user.type(screen.getByLabelText("Name"), "rsyslog RELP");
+    await user.selectOptions(screen.getByLabelText("Collector"), "syslog");
+    expect(screen.getByRole("option", { name: "Syslog over TLS (RFC 5424) or RELP" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Collector endpoint URL")).toHaveAccessibleDescription(
+      /relp\+tls:\/\/host:port sends RELP: the receiver acknowledges every message/,
+    );
+    await user.type(screen.getByLabelText("Collector endpoint URL"), "relp+tls://rsyslog.example.test:2514");
+    await user.type(screen.getByLabelText("Credential reference"), "env:SYSLOG_CA");
+    await user.click(screen.getByRole("button", { name: "Review collector feed" }));
+    await waitFor(() => expect(apiMock.previewAuditFeed).toHaveBeenCalledWith("55555555-5555-4555-8555-555555555556", relpRequest));
+    await user.click(screen.getByRole("button", { name: "Save collector feed" }));
+    await waitFor(() => expect(apiMock.putAuditFeed).toHaveBeenCalledWith("55555555-5555-4555-8555-555555555556", relpRequest));
+  });
+
   // P5-L4: an Elasticsearch feed chooses how its credential is presented; no
   // other collector offers the choice.
   it("saves an Elasticsearch feed with basic authentication", async () => {

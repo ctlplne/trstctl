@@ -313,11 +313,12 @@ func (a *API) normalizeAuditFeedConfiguration(ctx context.Context, tenantID, raw
 }
 
 // validatedAuditFeedEndpointFor checks the endpoint form each collector takes:
-// syslog+tls://host[:port] for syslog (P5), https://host/<index>/_bulk for
-// Elasticsearch, and an HTTP(S) URL for Splunk HEC and Sentinel.
+// syslog+tls://host[:port] or relp+tls://host:port for syslog (P5, P5-L3),
+// https://host/<index>/_bulk for Elasticsearch, and an HTTP(S) URL for Splunk
+// HEC and Sentinel.
 func validatedAuditFeedEndpointFor(provider, endpoint string, allowPrivate bool) (*url.URL, error) {
 	if provider == auditsink.ProviderSyslog {
-		if _, _, err := auditsink.SyslogEndpoint(endpoint); err != nil {
+		if _, err := auditsink.ParseSyslogEndpoint(endpoint); err != nil {
 			return nil, errStatus(http.StatusBadRequest, "endpoint_url: "+err.Error())
 		}
 		return url.Parse(strings.TrimSpace(endpoint))

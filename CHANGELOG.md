@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A syslog audit feed can deliver over RELP (P5-L3): an endpoint of `relp+tls://host:port` sends each RFC 5424 message
+  as a RELP command on the verified TLS connection, and a batch counts as delivered only when the receiver has
+  acknowledged every message; a refused message or a closed session retries the batch. The rsyslog content pack
+  ships `trstctl-audit-relp.conf` for rsyslog's RELP input.
 - The RFC 8823 reply intake holds each source to its sessions and replies (P15-L8): an IPv4 address or IPv6 /64 holds
   at most `protocols.acme_email.intake_sessions_per_source` sessions at once (default 4) and sends at most
   `intake_replies_per_minute` replies a minute (default 20); a source over either is told to try again later,

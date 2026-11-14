@@ -195,10 +195,12 @@ is never silently replaced by whichever records happen to be current.
 
 **Syslog over TLS and Elasticsearch** (P5) take the same records on the same
 outbox path. A `syslog` feed's endpoint is `syslog+tls://host[:port]` (6514 by
-default; plain TCP or UDP syslog is not offered). Each audit record and the chain
+default) or `relp+tls://host:port` (RELP, P5-L3, below); plain TCP or UDP syslog
+and RELP without TLS are not offered. Each audit record and the chain
 trailer is one RFC 5424 message, facility *log audit* and severity
 *informational*, with the record JSON as its message body, octet-counted as RFC
-5425 requires. The receiver's certificate is verified through the system roots,
+5425 requires (over RELP each message is one command instead). The receiver's
+certificate is verified through the system roots,
 or through the CA certificate a `token_ref` names; the dial passes the same
 egress guard as the HTTP collectors. A receiver that requires mutual TLS is shown
 the client certificate a `client_cert_ref` names (P5-L2): an operator-approved
@@ -208,10 +210,18 @@ handshake before the receiver checks its certificate, so every syslog dial waits
 briefly (about one handshake's time, between 0.2 and 2 seconds) for the
 receiver's verdict: a receiver that refuses the client, or a feed with no client
 certificate where one is required, fails the batch, which retries, instead of
-being counted as delivered. Syslog acknowledges nothing per message, so
-a batch counts as delivered once every message is written and the TLS session
-closes cleanly; a retry resends the batch, and each message carries its audit
-sequence for the receiver to drop a repeat. An `elastic` feed posts an
+being counted as delivered. RFC 5425 syslog acknowledges nothing per message,
+so such a batch counts as delivered once every message is written and the TLS
+session closes cleanly. Over RELP (P5-L3) the receiver acknowledges every
+message: the feed opens a RELP session on the same verified TLS connection
+(offering `relp_version=0` and the `syslog` command), sends each message as a
+`syslog` command with at most 128 unanswered at once, and counts the batch
+delivered only when every message is answered `200`. A refused message, a
+`serverclose` or a dropped session fails the batch, which retries; the recorded
+error names the message and the status, never the receiver's text. A message
+over RELP's 128 KiB fails the batch before anything is sent. Either way a retry
+resends the batch, and each message carries its audit sequence for the receiver
+to drop a repeat. An `elastic` feed posts an
 Elasticsearch `_bulk` body to `https://host[:port]/<index>/_bulk` with the
 credential its `token_ref` names, presented the way its `auth_scheme` says
 (P5-L4): `api_key` (the default, sent as `Authorization: ApiKey …`), `basic` (the

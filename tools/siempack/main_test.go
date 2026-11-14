@@ -112,3 +112,24 @@ func TestContentPacksAreDeterministicAndCompleteP5L5(t *testing.T) {
 		}
 	}
 }
+
+// P5-L3: the RELP receiver content keeps the same messages as the TLS one,
+// takes RELP on TLS only, and ends a session on a message over RELP's 128 KiB
+// instead of truncating it (a truncated record would be acknowledged).
+func TestRsyslogRELPReceiverContentP5L3(t *testing.T) {
+	if !slices.Contains(packs["rsyslog"].Files, "trstctl-audit-relp.conf") {
+		t.Fatal("the rsyslog pack does not ship the RELP receiver")
+	}
+	conf, err := os.ReadFile(filepath.Join("..", "..", "deploy", "rsyslog", "trstctl-audit-relp.conf")) // #nosec G304 -- test reads the repo's own shipped content (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`$programname == "trstctl"`, `$msgid == "trstctl-audit"`, `module(load="mmjsonparse")`, `module(load="imrelp")`,
+		`tls="on"`, `maxDataSize="128k"`, `oversizeMode="abort"`, `global(maxMessageSize="128k")`,
+	} {
+		if !strings.Contains(string(conf), want) {
+			t.Fatalf("the RELP receiver lacks %s", want)
+		}
+	}
+}

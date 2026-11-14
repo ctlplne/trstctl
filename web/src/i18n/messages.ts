@@ -4057,8 +4057,8 @@ export const messages = {
     description: "Native Microsoft Sentinel provider option.",
   },
   "audit.feeds.provider.syslog": {
-    defaultMessage: "Syslog over TLS (RFC 5424)",
-    description: "P5: syslog receiver provider option; the endpoint is syslog+tls://host:port.",
+    defaultMessage: "Syslog over TLS (RFC 5424) or RELP",
+    description: "P5, P5-L3: syslog receiver provider option; the endpoint is syslog+tls://host:port or relp+tls://host:port.",
   },
   "audit.feeds.provider.elastic": {
     defaultMessage: "Elasticsearch",
@@ -4067,6 +4067,11 @@ export const messages = {
   "audit.feeds.endpoint": {
     defaultMessage: "Collector endpoint URL",
     description: "Audit feed collector endpoint field.",
+  },
+  "audit.feeds.syslogEndpointHelp": {
+    defaultMessage:
+      "syslog+tls://host:port sends RFC 5425 syslog (port 6514 by default), which acknowledges nothing. relp+tls://host:port sends RELP: the receiver acknowledges every message, and a batch is delivered only when all are.",
+    description: "P5-L3: help under the endpoint field for a syslog feed, naming its two transports.",
   },
   "audit.feeds.endpointPlaceholder": {
     defaultMessage: "https://collector.example.test/events",

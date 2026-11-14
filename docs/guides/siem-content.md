@@ -34,6 +34,14 @@ each record's JSON with `mmjsonparse` and writes one JSON object per line. Set
 its `StreamDriver.AuthMode` parameter to `x509/certvalid` for a receiver that
 requires mutual TLS (P5-L2). Proven against rsyslog 8.2608.0.
 
+`trstctl-audit-relp.conf` (P5-L3) receives the same feed over RELP on TLS on
+port 2514 (rsyslog's `imrelp` input) for a feed whose endpoint is
+`relp+tls://<host>:2514`, and writes the same JSON lines. rsyslog acknowledges
+each message as it takes it, so the feed counts a batch delivered only when
+every message is acknowledged; a message over 128 KiB ends the session instead
+of being truncated, so it is retried rather than counted. Proven against
+rsyslog 8.2608.0 with librelp 1.12.0.
+
 ## Splunk
 
 The [Splunk app](splunk-app.md) consumes the Splunk HEC feed.
