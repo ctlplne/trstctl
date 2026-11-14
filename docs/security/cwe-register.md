@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3374 annotated sites across 35 rules. Each row is
+3375 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (840 sites)
+### G101 — CWE-798 Use of hardcoded credentials (841 sites)
 
 | Location | Reason |
 |---|---|
@@ -864,6 +864,7 @@ not this file.
 | `internal/server/unvaulted_secret_posture_served_test.go:150` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:151` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:152` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/vendor_dcv_sectigo_served_test.go:100` | secret reference, no credential value (CWE-798) |
 | `internal/server/vendor_dcv_served_test.go:94` | secret reference, no credential value (CWE-798) |
 | `internal/server/vendor_dcv_served_test.go:216` | secret reference, no credential value (CWE-798) |
 | `internal/server/vendor_dcv_served_test.go:334` | secret reference, no credential value (CWE-798) |

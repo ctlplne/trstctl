@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- Sectigo's unattended DNS TXT domain validation is proven through the assembled server, as DigiCert's is (A165-L1):
+  refused with nothing published without a consenting DNS-01 provider config; with one, SCM's record is published,
+  validated and retracted, the issue completes with no human step and the validation is recorded as an upstream
+  authorization; CAA naming another CA stops the publish.
 - The observed-traffic gate sees a deciding observer finding however many others the tenant holds (X3-L4): each
   30-second pass reads every one of the tenant's observer TLS findings, a page at a time, keeping only those at the
   endpoints its waiting runs, PQC pilot waves and replaced endpoints watch, instead of the first 5,000. A tenant with

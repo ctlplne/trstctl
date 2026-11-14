@@ -106,3 +106,15 @@ func dcvDomain(w http.ResponseWriter, r *http.Request) (string, bool) {
 	}
 	return strings.ToLower(strings.TrimSpace(body.Domain)), true
 }
+
+// DCVRecord is the TXT record the fake named when it started domain's
+// validation, empty when none was started; a served test checks that record
+// was published and retracted (A165-L1).
+func (s *Server) DCVRecord(domain string) (host, point string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if state := s.dcv[domain]; state != nil {
+		return state.host, state.point
+	}
+	return "", ""
+}

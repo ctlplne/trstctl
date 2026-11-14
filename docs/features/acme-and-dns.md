@@ -254,6 +254,14 @@ backoff (starting at the authority's `poll_interval`, doubling to 30 seconds) un
 reports the domain validated or the authority's `dcv_timeout` runs out (10s–1h, 10
 minutes when unset).
 
+Both vendors' validation is proven through the assembled server against stand-ins of
+their APIs (DigiCert in A165, Sectigo in A165-L1): with no DNS-01 provider config that
+consented to upstream validation nothing is published and the issue is refused; with
+one, the issue publishes the record the vendor names (CertCentral's `_dnsauth.<name>`,
+SCM's own random host), the vendor validates it and issues with no human step, the
+record is retracted, and the validation is recorded as an upstream authorization this
+install earned; CAA that does not name the vendor stops the publish.
+
 The served control plane has a tenant-scoped DNS-01 provider-config API:
 `POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs` stores provider metadata,
 zone/delegation policy, CAA issuer policy, allowed methods, wildcard policy, and
