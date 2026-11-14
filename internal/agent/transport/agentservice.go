@@ -547,6 +547,11 @@ type ClaimedJob struct {
 	// LeaseExpiresUnix is when this claim lapses. Past it the job is claimable by
 	// anyone, so an agent that has not finished must extend or expect to lose it.
 	LeaseExpiresUnix int64 `json:"lease_expires_unix,omitempty"`
+	// LeaseRemainingMillis is how long the lease has left by the server's own
+	// clock when it answered (A227-L1). An agent adds it to its own monotonic
+	// clock, so a host whose wall clock is skewed from the server's neither
+	// gives up fresh authority early nor works past the lease.
+	LeaseRemainingMillis int64 `json:"lease_remaining_ms,omitempty"`
 	// Attempt counts how many times this job has been claimed, ever. An agent can
 	// use it to back off from work it has already failed.
 	Attempt int `json:"attempt,omitempty"`
@@ -723,6 +728,9 @@ type ReportJobResultResponse struct {
 	ReceiptRecorded bool `json:"receipt_recorded,omitempty"`
 	// LeaseExpiresUnix is the new lease after an accepted extend.
 	LeaseExpiresUnix int64 `json:"lease_expires_unix,omitempty"`
+	// LeaseRemainingMillis is the extended lease's time left by the server's
+	// clock (A227-L1), as on a claim.
+	LeaseRemainingMillis int64 `json:"lease_remaining_ms,omitempty"`
 }
 
 // RedeemJobCredentialRequest asks for the credential material a claimed job

@@ -67,6 +67,11 @@
           "presence": "optional"
         },
         {
+          "go_type": "int64",
+          "name": "lease_remaining_ms",
+          "presence": "optional"
+        },
+        {
           "go_type": "int",
           "name": "attempt",
           "presence": "optional"
@@ -836,6 +841,11 @@
         {
           "go_type": "int64",
           "name": "lease_expires_unix",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int64",
+          "name": "lease_remaining_ms",
           "presence": "optional"
         }
       ]

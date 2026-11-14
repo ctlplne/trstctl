@@ -74,7 +74,7 @@ func runWindowsLocalAccountRotation(ctx context.Context, ch Channel, profile con
 		_, _ = channel.ReportLocalAccountRotation(reportCtx, job.JobID, job.Attempt, intent, result)
 		return state == "succeeded"
 	}
-	if ctx.Err() != nil || job.LeaseExpiresUnix <= time.Now().Unix() {
+	if ctx.Err() != nil || !job.LeaseUntil().After(time.Now()) {
 		return emit("refused", "cancelled", nil)
 	}
 	if err = channel.AuthorizeLocalAccountRotation(ctx, intent); err != nil {
@@ -100,7 +100,7 @@ func runWindowsLocalAccountRotation(ctx context.Context, ch Channel, profile con
 		return emit("refused", "worker_busy", nil)
 	}
 	deadline := time.Now().Add(45 * time.Second)
-	lease := time.Unix(job.LeaseExpiresUnix, 0)
+	lease := job.LeaseUntil()
 	if lease.Before(deadline) {
 		deadline = lease
 	}

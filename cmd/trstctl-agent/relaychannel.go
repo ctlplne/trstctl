@@ -50,10 +50,14 @@ func (r relayChannel) ExtendJobClaim(ctx context.Context, jobID int64, attempt i
 	if err != nil {
 		return time.Time{}, err
 	}
-	if !resp.Accepted || resp.LeaseExpiresUnix <= r.clock().Unix() {
+	// A227-L1: the lease is the server's remaining time on this host's
+	// monotonic clock, not the server's wall-clock expiry on ours.
+	received := time.Now()
+	until := relay.LocalLeaseDeadline(received, resp.LeaseExpiresUnix, resp.LeaseRemainingMillis)
+	if !resp.Accepted || !until.After(received) {
 		return time.Time{}, relay.ErrJobClaimLost
 	}
-	return time.Unix(resp.LeaseExpiresUnix, 0), nil
+	return until, nil
 }
 
 var _ relay.JobLeaseMaintainer = relayChannel{}
@@ -93,11 +97,13 @@ func (r relayChannel) ClaimJobs(ctx context.Context, kinds []string, limit, leas
 	if err != nil {
 		return nil, err
 	}
+	received := time.Now()
 	out := make([]relay.Job, 0, len(resp.Jobs))
 	for _, job := range resp.Jobs {
 		out = append(out, relay.Job{
 			JobID: job.JobID, Kind: job.Kind, Attempt: job.Attempt, Payload: job.Payload,
 			ApplianceReference: job.ApplianceReference, LeaseExpiresUnix: job.LeaseExpiresUnix,
+			LeaseDeadline: relay.LocalLeaseDeadline(received, job.LeaseExpiresUnix, job.LeaseRemainingMillis),
 		})
 	}
 	return out, nil

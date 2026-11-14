@@ -368,6 +368,14 @@ worker is executing inside a connector call right now is reported as
 *executing* and left alone, because interrupting it would leave the appliance
 half-written; cancel again once it lands, or roll back. A second cancel finds
 nothing. Cancellation never undoes an effect that already happened.
+
+**Job leases on a skewed clock (A227-L1).** An agent or relay holds a claimed job for
+the lease the server grants and extends it while the work runs. The server answers each
+claim and extension with the lease's expiry and the time it has left by the server's own
+clock (`lease_remaining_ms`); the agent counts that down on its own monotonic clock. A
+host whose wall clock is minutes off the server's therefore neither gives up fresh
+authority early nor keeps working past the lease. An agent talking to a server that
+sends no remaining time keeps using the expiry.
 If an operator withdraws that allowlist entry after accepting a command, the
 existing host job remains queued; restore the entry to let the enrolled host
 claim it, then verify the signed receipt and listener independently.

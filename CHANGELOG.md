@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- A relay keeps a job lease by the server's remaining time, not by comparing wall clocks (A227-L1): claims and
+  extensions carry `lease_remaining_ms`, which the agent counts down on its own monotonic clock, so a host clock
+  minutes off the server's neither drops fresh authority early nor renews after the lease lapsed.
 - A CBOM import records its findings in batches (X6-O1): `cbom.assets.observed` events of up to 500 observations
   (and 256 KiB) each, applied in order as single observations are, instead of one event per finding; an image
   scan of 8,100 components imports in about 10 seconds instead of 16 in the served test.

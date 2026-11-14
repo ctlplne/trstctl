@@ -82,6 +82,10 @@ type Job struct {
 	// ApplianceReference is the appliance's own reference for this job's key
 	// request, recorded by an earlier attempt (A122); empty when none was.
 	ApplianceReference string
+	// LeaseDeadline is when the claim lapses on this host's clock (A227-L1):
+	// the server's remaining lease added to when its answer arrived. Zero
+	// from a server that sends no remaining time; LeaseUntil falls back then.
+	LeaseDeadline time.Time
 }
 
 // Outcome values the relay reports.
@@ -986,3 +990,27 @@ func decodeJobPayload[T any](payload []byte, out *T) error {
 // this package's godoc: a relay reports a denied operation as a failure, never
 // as a success with a footnote.
 var _ = connector.Stats{}
+
+// LocalLeaseDeadline is when a claim lapses on this host's clock (A227-L1):
+// the server's remaining lease added to when its answer arrived, which keeps
+// the monotonic reading, so a relay whose wall clock is skewed from the
+// server's neither gives up fresh authority early nor keeps working past the
+// lease. An answer without the remaining time (an older server) falls back
+// to the absolute expiry.
+func LocalLeaseDeadline(received time.Time, expiresUnix, remainingMillis int64) time.Time {
+	if remainingMillis > 0 {
+		return received.Add(time.Duration(remainingMillis) * time.Millisecond)
+	}
+	if expiresUnix > 0 {
+		return time.Unix(expiresUnix, 0)
+	}
+	return time.Time{}
+}
+
+// LeaseUntil is when the job's claim lapses on this host's clock.
+func (j Job) LeaseUntil() time.Time {
+	if !j.LeaseDeadline.IsZero() {
+		return j.LeaseDeadline
+	}
+	return LocalLeaseDeadline(time.Time{}, j.LeaseExpiresUnix, 0)
+}

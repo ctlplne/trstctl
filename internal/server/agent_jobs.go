@@ -345,7 +345,8 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 		out.Jobs = append(out.Jobs, transport.ClaimedJob{
 			JobID: job.ID, Kind: job.Destination, Payload: payload,
 			IdempotencyKey: job.IdempotencyKey, Attempt: job.ClaimAttempts,
-			LeaseExpiresUnix: job.ClaimExpiresAt.Unix(), ApplianceReference: reference,
+			LeaseExpiresUnix: job.ClaimExpiresAt.Unix(), LeaseRemainingMillis: leaseRemainingMillis(job.ClaimExpiresAt),
+			ApplianceReference: reference,
 		})
 	}
 	for _, job := range out.Jobs {
@@ -477,7 +478,7 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 		}
 		resp := &transport.ReportJobResultResponse{Accepted: ok}
 		if ok {
-			resp.LeaseExpiresUnix = until.Unix()
+			resp.LeaseExpiresUnix, resp.LeaseRemainingMillis = until.Unix(), leaseRemainingMillis(until)
 		}
 		return resp, nil
 
@@ -2145,3 +2146,13 @@ const (
 	// redeemed a credential. See agentDetailForHistory.
 	agentDetailCredentialBearing = "withheld: this job redeemed credentials, so free-text failure details are not retained; inspect its failure reason, redemption audit record and attached evidence"
 )
+
+// leaseRemainingMillis is a lease's time left by this server's clock, at
+// least one millisecond for a lease handed out (A227-L1): an agent schedules
+// from it on its own monotonic clock instead of comparing wall clocks.
+func leaseRemainingMillis(until time.Time) int64 {
+	if remaining := time.Until(until).Milliseconds(); remaining > 0 {
+		return remaining
+	}
+	return 1
+}
