@@ -556,13 +556,19 @@ role, and `tls_session` findings from no other source. When an operator removes 
 the agent renews at once, and its next role check, within seconds, detaches every probe.
 
 **AI assistants and MCP servers on hosts (P7).** Desktop assistants and IDEs list
-the MCP servers they start or call in JSON configuration files, and a server's
-credential is often pasted straight into that file. `--inventory-mcp-config-roots`
-names home or configuration directories; the agent reads the `.json` files under them
-(JSON with comments and trailing commas included, package trees skipped) and
-recognizes MCP client configuration by its format — an `mcpServers` object, or a
-`servers` object at the top level or under `mcp` whose entries carry a command or a
-URL — never by product. Each configured server becomes an `mcp_server` discovery
+the MCP servers they start or call in JSON configuration files, some in TOML or YAML,
+and a server's credential is often pasted straight into that file.
+`--inventory-mcp-config-roots` names home or configuration directories; the agent reads
+the `.json`, `.toml`, `.yaml` and `.yml` files under them (JSON with comments and
+trailing commas included, package trees skipped) and recognizes MCP client
+configuration by its format — in JSON an `mcpServers` object, or a `servers` object at
+the top level or under `mcp`; in TOML `[mcp_servers.<name>]` tables; in YAML an
+`mcpServers`, `mcp_servers` or `servers` mapping of names, or a sequence of entries that
+each carry a `name` (P7-L1) — whose entries carry a command or a URL, never by product.
+TOML and YAML values are read as bytes, like JSON's, by readers of the parts of those
+formats such files use (TOML's tables, dotted and quoted keys, strings, arrays and
+inline tables; YAML's block collections, one-line flow collections, quoted and block
+scalars); a YAML file with anchors, aliases, tags or several documents names nothing. Each configured server becomes an `mcp_server` discovery
 finding on the host: the file, the server's name, its transport (`stdio`, `http`,
 `sse`, `websocket`), the base name of the program it starts or the
 `scheme://host[:port]` it calls, and `static_credential` with `credential_fields`

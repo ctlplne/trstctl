@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- The agent finds MCP servers configured in TOML and YAML as well as JSON (P7-L1): `[mcp_servers.<name>]` tables, and
+  `mcpServers`, `mcp_servers` or `servers` mappings or named sequences, read as bytes by readers of the parts of those
+  formats such files use; static credentials are named by field as before and never reported.
 - A leak a third-party scan found moves into the vault from the operator's copy of the export (P6-L7): `trstctl
   secrets scans move <finding> --export <path>` re-finds the value in the export directory or file the scan read and
   closes by the same evidence as a repository's leak; a natively collected finding is refused with the reason.

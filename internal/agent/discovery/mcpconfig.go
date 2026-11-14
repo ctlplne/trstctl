@@ -20,10 +20,12 @@ import (
 )
 
 // MCP client configuration (P7). Desktop assistants and IDEs list the MCP
-// servers they start or call in JSON configuration files. This source finds
-// those files under operator-configured roots by their format — an
-// "mcpServers" object, or a "servers" object at the top level or under "mcp"
-// whose entries carry a command or a URL — never by product, and reports each
+// servers they start or call in JSON configuration files, and some in TOML or
+// YAML (P7-L1). This source finds those files under operator-configured roots
+// by their format — an "mcpServers" object, or a "servers" object at the top
+// level or under "mcp" whose entries carry a command or a URL; in TOML,
+// [mcp_servers.<name>] tables; in YAML, an mcpServers, mcp_servers or servers
+// mapping or sequence of named entries — never by product, and reports each
 // configured server: its transport, the program it starts or the host it
 // calls, and whether its configuration carries a static credential, named by
 // field. A credential's value is never reported, hashed or kept: values are
@@ -124,7 +126,7 @@ func (s *MCPClientConfigSource) Discover(ctx context.Context) ([]MCPServerFound,
 				}
 				return nil
 			}
-			if !strings.EqualFold(filepath.Ext(path), ".json") || decoy.Is(path) {
+			if !mcpConfigExtension(path) || decoy.Is(path) {
 				return nil
 			}
 			fi, ierr := d.Info()
@@ -181,10 +183,57 @@ func (e *mcpServerEntry) wipe() {
 	}
 }
 
+// mcpConfigExtension reports whether a file may be MCP client configuration:
+// JSON, or TOML or YAML (P7-L1).
+func mcpConfigExtension(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".json", ".toml", ".yaml", ".yml":
+		return true
+	}
+	return false
+}
+
 // parseMCPClientConfig reads one file's servers; a file in another format,
 // or one that does not parse, names none. With a checker (P14-L2), each
 // server's static credentials are checked before the entry is wiped.
 func parseMCPClientConfig(ctx context.Context, path string, data []byte, checker CredentialChecker) []MCPServerFound {
+	var formatted []mcpFormatServer
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".toml":
+		pairs, ok := parseTOMLPairs(data)
+		if !ok {
+			return nil
+		}
+		formatted = tomlMCPServers(pairs)
+		for i := range pairs {
+			pairs[i].val.wipe()
+		}
+	case ".yaml", ".yml":
+		root := parseYAMLTree(data)
+		if root == nil {
+			return nil
+		}
+		formatted = yamlMCPServers(root)
+		root.wipe()
+	default:
+		return parseMCPClientJSON(ctx, path, data, checker)
+	}
+	var out []MCPServerFound
+	for i := range formatted {
+		f := &formatted[i]
+		if found, ok := describeMCPServer(path, f.format, f.name, &f.entry); ok {
+			if checker != nil && found.StaticCredential {
+				found.CredentialValidity = checkMCPCredentials(ctx, checker, &f.entry)
+			}
+			out = append(out, found)
+		}
+		f.entry.wipe()
+	}
+	return out
+}
+
+// parseMCPClientJSON reads a JSON (or JSON-with-comments) file's servers.
+func parseMCPClientJSON(ctx context.Context, path string, data []byte, checker CredentialChecker) []MCPServerFound {
 	clean := stripJSONC(data)
 	defer secret.Wipe(clean)
 	var top map[string]json.RawMessage

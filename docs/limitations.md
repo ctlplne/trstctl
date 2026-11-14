@@ -8411,7 +8411,9 @@ all of this and shows the effective authority after every grant change. What com
 The agent's `--inventory-mcp-config-roots` source finds MCP client configuration by format (an `mcpServers`
 object, or `servers` at the top level or under `mcp`) in `.json` files, with comments and trailing commas
 tolerated, and reports each configured server with its transport, program or host, and the fields that hold a
-static credential — never a value. Formats other than JSON (TOML or YAML client configuration) are not read yet.
+static credential — never a value. TOML (`[mcp_servers.<name>]` tables) and YAML (an `mcpServers`, `mcp_servers` or
+`servers` mapping, or a sequence of named entries) are read too (P7-L1); a YAML file with anchors, aliases, tags or
+several documents names nothing.
 With `--inventory-mcp-validity-providers` (P14-L2) the agent checks static GitHub, GitLab and Slack tokens from the
 host itself and reports `credential_validity` per field; other providers' tokens and passwords are not checked.
 A server whose configuration is removed from the host reads removed (`removed_at`) once the host's next report no

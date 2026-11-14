@@ -1672,7 +1672,7 @@ not this file.
 | `docs/protect_guards_test.go:4748` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/discovery/filesystem.go:61` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
-| `internal/agent/discovery/mcpconfig.go:134` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/mcpconfig.go:136` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/privatekey.go:74` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/truststore.go:78` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/auditsink/discard_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -2502,7 +2502,7 @@ not this file.
 | `internal/agent/discovery/filesystem.go:61` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/keystore.go:87` | the agent inventories operator-configured keystore paths; reading them is the product function (CWE-22) |
 | `internal/agent/discovery/keystore_jceks_test.go:22` | the test reads its own fixtures (CWE-22) |
-| `internal/agent/discovery/mcpconfig.go:134` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/mcpconfig.go:136` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/pkcs11_softhsm_container_test.go:93` | the repository's own go.mod under the test's computed repo root (CWE-22) |
 | `internal/agent/discovery/privatekey.go:74` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/truststore.go:78` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
