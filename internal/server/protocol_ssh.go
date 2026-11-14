@@ -507,6 +507,9 @@ type spiffeProtocol struct {
 	// exchanges are protocols.spiffe.exchange_tenants by lower-case tenant ID,
 	// each with its own trust domain and JWT key ring (M4-L5).
 	exchanges map[string]*workloadExchange
+	// exchangeLimiter bounds each client address's POST /oauth2/token
+	// requests (M4-L6).
+	exchangeLimiter *clientRateLimiter
 }
 
 // RunSPIFFE serves the SPIFFE Workload API gRPC server on its UDS until ctx is

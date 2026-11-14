@@ -18,7 +18,9 @@ import (
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/authmethod"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -40,6 +42,8 @@ const (
 	tokenTypeIDToken     = "urn:ietf:params:oauth:token-type:id_token"       // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	tokenExchangeTTL     = 5 * time.Minute
 	tokenExchangeMaxBody = 64 << 10
+	// tokenExchangeMaxClients bounds the per-client limiter's table (M4-L6).
+	tokenExchangeMaxClients = 10000
 	// tokenTypeAccessToken asks for an RFC 9068 JWT access token (M4-L3).
 	tokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 )
@@ -63,6 +67,18 @@ func (s *Server) tokenExchangeHandler(methods func(string) []authmethod.Method) 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Pragma", "no-cache")
+		// M4-L6: each client address's requests are bounded before the
+		// subject token is read, so no one client can keep the verifier busy.
+		if sp := s.spiffeForExchange(); sp != nil && sp.exchangeLimiter != nil {
+			if wait, ok := sp.exchangeLimiter.allow(netsec.ClientIP(r), time.Now()); !ok {
+				w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusTooManyRequests)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "temporarily_unavailable",
+					"error_description": "too many token requests from this client; retry after the Retry-After interval"})
+				return
+			}
+		}
 		r.Body = http.MaxBytesReader(w, r.Body, tokenExchangeMaxBody)
 		out, err := s.exchangeToken(r, methods)
 		if err != nil {
@@ -334,4 +350,12 @@ func exchangeSPIFFEID(trustDomain, method, principal string) string {
 		}
 	}
 	return "spiffe://" + trustDomain + "/machine/" + url.PathEscape(method) + "/" + url.PathEscape(principal)
+}
+
+// exchangeRequestsPerMinute is the configured per-client limit, or the default.
+func exchangeRequestsPerMinute(cfg config.SPIFFEProtocol) int {
+	if cfg.ExchangeRequestsPerMinute <= 0 {
+		return config.DefaultExchangeRequestsPerMinute
+	}
+	return cfg.ExchangeRequestsPerMinute
 }

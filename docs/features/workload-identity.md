@@ -557,7 +557,15 @@ with its own JWT signing key in the signer: an exchange tenant's tokens name
 /oauth2/jwks?tenant_id=<tenant>`, or its issuer's) and never against another
 tenant's, and each tenant rotates its key on its own. Exchange tenants get the
 exchange only; the Workload API socket serves `tenant_id`. A tenant in neither is
-refused with `invalid_request`.
+refused with `invalid_request`. The endpoint is unauthenticated, so each client address
+(the connection's, or behind a load balancer in `server.trusted_proxies` the address it
+forwards) may make `protocols.spiffe.exchange_requests_per_minute` requests a minute
+(M4-L6; default 120, at most 60,000; a token bucket holding that many): more answer 429
+`temporarily_unavailable` with a `Retry-After` before the subject token is read, so no
+one client keeps the verifier busy. The table of clients is bounded (10,000; clients
+whose buckets have refilled are dropped, and when it is full of clients still
+refilling, new ones share one bucket), and the API bulkhead still bounds the endpoint
+as a whole.
 Because subject tokens are single-use and Kubernetes hands a pod the same projected
 token until kubelet rotates it, a pod that exchanges more than once per rotation
 requests a fresh token (the TokenRequest API) for each exchange. Each tenant holds at

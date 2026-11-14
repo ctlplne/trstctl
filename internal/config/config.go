@@ -417,6 +417,11 @@ type Auth struct {
 // operator sets no auth.api_tokens.max_lifetime (F267).
 const DefaultAPITokenMaxLifetime = 90 * 24 * time.Hour
 
+// DefaultExchangeRequestsPerMinute is each client address's token exchange
+// requests a minute when protocols.spiffe.exchange_requests_per_minute is
+// unset (M4-L6).
+const DefaultExchangeRequestsPerMinute = 120
+
 // DefaultMachineAuthSingleUseLimit is each tenant's limit of live single-use
 // machine-login records when secrets.machine_auth_single_use_limit is unset
 // (M4-L2).
@@ -1308,6 +1313,12 @@ type SPIFFEProtocol struct {
 	// published issuer. They get the token exchange only, not the Workload
 	// API socket, which serves tenant_id.
 	ExchangeTenants []SPIFFEExchangeTenant `json:"exchange_tenants,omitempty"`
+	// ExchangeRequestsPerMinute (M4-L6) is how many requests one client
+	// address may make to the unauthenticated POST /oauth2/token a minute
+	// (a token bucket holding that many); more answer 429 with a Retry-After
+	// before the subject token is read. Zero means
+	// DefaultExchangeRequestsPerMinute; at most 60000.
+	ExchangeRequestsPerMinute int `json:"exchange_requests_per_minute,omitempty"`
 	// Entries (B8-D1) register the workloads host agents deliver: each binds a
 	// SPIFFE ID to the selectors the agent must observe of the calling process
 	// and to the enrolled agent, by name, whose host Workload API
@@ -1451,6 +1462,9 @@ func (p Protocols) ValidateTenantBindings(defaultTenant string) []error {
 	}
 	errs = append(errs, validateOpaqueTokenAudiences(p.SPIFFE)...)
 	errs = append(errs, validateExchangeTenants(p.SPIFFE)...)
+	if n := p.SPIFFE.ExchangeRequestsPerMinute; n < 0 || n > 60000 {
+		errs = append(errs, fmt.Errorf("protocols.spiffe.exchange_requests_per_minute must be between 0 (the default, %d) and 60000", DefaultExchangeRequestsPerMinute))
+	}
 	errs = append(errs, validateSPIFFEEntries(p.SPIFFE)...)
 	return errs
 }

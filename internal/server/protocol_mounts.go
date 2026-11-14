@@ -1230,6 +1230,7 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		// M4-L3: audiences whose access tokens are opaque.
 		opaqueAudiences: boolMap(cfg.OpaqueTokenAudiences),
 		exchanges:       exchanges,
+		exchangeLimiter: newClientRateLimiter(exchangeRequestsPerMinute(cfg), tokenExchangeMaxClients),
 	}, nil
 }
 

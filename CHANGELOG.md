@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- `POST /oauth2/token` limits each client address (M4-L6): `protocols.spiffe.exchange_requests_per_minute` (default
+  120) requests a minute in a bounded per-client token bucket; more answer 429 `temporarily_unavailable` with a
+  `Retry-After` before the subject token is read.
 - The token exchange serves more tenants (M4-L5): each tenant in `protocols.spiffe.exchange_tenants` exchanges in its
   own trust domain with its own JWT signing key ring in the signer and its own published issuer, so one tenant's tokens
   never verify against another's key set; `/oauth2/jwks?tenant_id=` and the issuer view (`trust_domain`) show it.
