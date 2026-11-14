@@ -66,6 +66,8 @@ type IdP struct {
 	subject  string
 	saKey    *rsa.PrivateKey
 	tokens   map[string]bool
+	// assertions is each token request's form the Google stand-in received.
+	assertions []string
 }
 
 func newIdP(kind string) *IdP {
@@ -99,6 +101,21 @@ func StartGoogle(saEmail, subject string) (*IdP, error) {
 	p := newIdP("google")
 	p.saEmail, p.subject, p.saKey = saEmail, subject, key
 	return p, nil
+}
+
+// StartGoogleServiceAccount is Google's token endpoint for a service account
+// signing for itself (no impersonation), as a leaked key's validity check
+// does (P14-L1): an assertion from saEmail with any scope issues a token, and
+// one signed by another key is refused "Invalid JWT Signature."
+func StartGoogleServiceAccount(saEmail string) (*IdP, error) {
+	return StartGoogle(saEmail, "")
+}
+
+// Assertions is each token request's form the Google stand-in received.
+func (p *IdP) Assertions() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]string(nil), p.assertions...)
 }
 
 // ServiceAccountKeyPEM is the Google service account's private key (PKCS#8).
@@ -346,8 +363,12 @@ func (p *IdP) entra(w http.ResponseWriter, r *http.Request) {
 func (p *IdP) google(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodPost && r.URL.Path == "/token":
-		if r.ParseForm() != nil || r.PostForm.Get("grant_type") != "urn:ietf:params:oauth:grant-type:jwt-bearer" || !p.assertionOK(r.PostForm.Get("assertion")) {
-			writeIdPJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
+		parseErr := r.ParseForm()
+		p.mu.Lock()
+		p.assertions = append(p.assertions, r.PostForm.Encode())
+		p.mu.Unlock()
+		if parseErr != nil || r.PostForm.Get("grant_type") != "urn:ietf:params:oauth:grant-type:jwt-bearer" || !p.assertionOK(r.PostForm.Get("assertion")) {
+			writeIdPJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "Invalid JWT Signature."})
 			return
 		}
 		token := randomToken()
@@ -401,6 +422,10 @@ func (p *IdP) assertionOK(assertion string) bool {
 	}
 	if json.Unmarshal(raw, &claims) != nil {
 		return false
+	}
+	if p.subject == "" {
+		// A service account signing for itself (P14-L1).
+		return claims.Iss == p.saEmail && (claims.Sub == "" || claims.Sub == p.saEmail) && claims.Aud == p.srv.URL+"/token" && claims.Scope != ""
 	}
 	return claims.Iss == p.saEmail && claims.Sub == p.subject && claims.Aud == p.srv.URL+"/token" &&
 		strings.Contains(claims.Scope, "https://www.googleapis.com/auth/admin.directory.user")

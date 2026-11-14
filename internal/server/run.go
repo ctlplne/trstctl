@@ -1940,6 +1940,6 @@ func secretValidityChecker(cfg config.SecretValidityChecks) *validity.Checker {
 	if !cfg.Enabled {
 		return nil
 	}
-	return validity.New(validity.Config{Endpoints: cfg.Endpoints, Allowlist: cfg.Allowlist, Rates: cfg.Rates,
+	return validity.New(validity.Config{Providers: cfg.Providers, Endpoints: cfg.Endpoints, Allowlist: cfg.Allowlist, Rates: cfg.Rates,
 		Client: netsec.SafeClient(10 * time.Second)})
 }

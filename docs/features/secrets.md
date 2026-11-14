@@ -2648,6 +2648,38 @@ poster and, from the poster's profile email (`users.info`, which needs the bot's
 `users:read.email` scope), the tenant owner with that address as the finding's
 `owner_id`.
 
+**Tokens, client secrets and service-account keys (P14-L1).**
+`secrets.validity_checks.providers` names more providers to check (AWS alone when it is
+empty, so a deployment that enabled P14 sends nothing anywhere new until it names one):
+
+- `github` checks GitHub tokens (`github-pat`, fine-grained, OAuth and App tokens) with
+  `GET /user`: valid with the user's login (or as a GitHub App installation token),
+  invalid on `Bad credentials`.
+- `gitlab` checks personal, group and project access tokens (`gitlab-pat`) with
+  `GET /api/v4/personal_access_tokens/self`: valid with the token's name, user and
+  scopes; revoked, expired or inactive is invalid.
+- `slack` checks bot, user and legacy tokens with `auth.test`: valid with the workspace
+  and user; `invalid_auth`, `not_authed`, `account_inactive`, `token_revoked` and
+  `token_expired` are invalid.
+- `azure` checks a Microsoft Entra ID client secret with the tenant and application ID
+  labeled within six lines of it (`AZURE_TENANT_ID`/`AZURE_CLIENT_ID`, `ARM_…`,
+  `tenantId`/`clientId`, or `az ad sp create-for-rbac`'s `tenant`/`appId`): one
+  client-credentials token request in that tenant, valid with the application and
+  tenant, invalid on AADSTS7000215 (not the application's secret) or AADSTS7000222
+  (expired).
+- `gcp` checks a private key inside a Google service-account key file: one token
+  request with an assertion the key signs for its own `client_email`, so only a
+  signature leaves the host; `Invalid JWT Signature.` or a deleted account is invalid.
+  A private key outside a service-account key file is not checked, and the file's own
+  `token_uri` is never followed.
+
+A GitHub, GitLab or Slack token and an Entra client secret can only be checked by
+presenting them to their own issuer, which already holds them, and only at that
+provider's declared endpoint (`endpoints` points `github` at a GitHub Enterprise
+Server's `https://host/api/v3` or `gitlab` at a self-managed instance). A token an
+identity platform issues in answer is wiped unread, the verdict names no part of the
+secret, and each provider has its own rate.
+
 **Native collection (N6).** Instead of `artifact_path`, a source may carry `collect`
 and trstctl reads the content from the provider itself, in the layout of that
 provider's own export, so the scan and the finding-to-object mapping are the same as

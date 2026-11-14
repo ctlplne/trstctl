@@ -1896,13 +1896,17 @@ func discoveryRiskScore(notAfter time.Time) int {
 }
 
 // secretValidity checks a finding's secret where the scan found it, while the
-// scanned tree still exists (P14). It returns nil without a checker or for a
-// rule no provider check covers; the value itself is never kept.
+// scanned tree still exists (P14; GitHub, GitLab, Slack, Entra and Google
+// since P14-L1). It returns nil without a checker, or for a rule no enabled
+// provider's check covers; the value itself is never kept.
 func (d *issuanceDispatcher) secretValidity(ctx context.Context, root string, f secretscan.Finding) map[string]any {
-	if d.validity == nil || f.RuleID != "aws-access-token" {
+	if d.validity == nil {
 		return nil
 	}
-	res := d.validity.CheckAWSFinding(ctx, root, f.File, f.Line)
+	res, ok := d.validity.CheckFinding(ctx, f.RuleID, root, f.File, f.Line, f.Column)
+	if !ok {
+		return nil
+	}
 	return map[string]any{"provider": res.Provider, "state": res.State, "detail": res.Detail, "checked_at": res.CheckedAt}
 }
 

@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- Leaked-secret validity checks for GitHub, GitLab and Slack tokens, Microsoft Entra ID client secrets and Google
+  service-account keys (P14-L1): `secrets.validity_checks.providers` names them beside AWS, each checked at its own
+  provider's identity endpoint (a Google key by a signed assertion alone), opt-in so an existing configuration still
+  checks AWS alone.
 - Catalog requested items and requests approve or deny the trstctl requests ServiceNow intake opened from them
   (P13-L2): a `sc_req_item` or `sc_request` intake schedule's approval read decides its requests as a change request's
   does, attributed to the item's or request's own table and number.

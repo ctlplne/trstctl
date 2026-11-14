@@ -34,6 +34,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/trust"
 	"trstctl.com/trstctl/internal/crypto/weakkey"
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/secretscan/validity"
 )
 
 // Datastore mode values.
@@ -3110,15 +3111,24 @@ type Secrets struct {
 }
 
 // SecretValidityChecks configures leaked-secret validity checks (P14): which
-// identity endpoint each provider's check calls, the checks' declared outbound
-// destinations, and how many checks a second each provider gets.
+// providers' checks run, which identity endpoint each provider's check calls,
+// the checks' declared outbound destinations, and how many checks a second
+// each provider gets.
 type SecretValidityChecks struct {
 	Enabled bool `json:"enabled,omitempty"`
-	// Endpoints maps a provider (aws) to the base URL its check calls; the
-	// default is the provider's public identity endpoint.
+	// Providers names the providers whose checks run (P14-L1): aws (alone
+	// when empty), github, gitlab, slack, azure (Microsoft Entra ID client
+	// secrets) and gcp (Google service-account keys). A GitHub, GitLab or
+	// Slack token and an Entra client secret are presented to their own
+	// issuer; the AWS and Google checks send only a signature.
+	Providers []string `json:"providers,omitempty"`
+	// Endpoints maps a provider to the base URL its check calls; the default
+	// is the provider's public identity endpoint (a GitHub Enterprise
+	// Server's https://host/api/v3 or a self-managed GitLab's root instead).
 	Endpoints map[string]string `json:"endpoints,omitempty"`
 	// Allowlist names every destination a check may call
-	// (scheme://host[:port]); empty declares each provider's default.
+	// (scheme://host[:port]); empty declares the default of each provider
+	// whose checks run.
 	Allowlist []string `json:"allowlist,omitempty"`
 	// Rates maps a provider to checks per second (default 5, at most 100).
 	Rates map[string]float64 `json:"rates,omitempty"`
@@ -3126,10 +3136,18 @@ type SecretValidityChecks struct {
 
 // Validate checks the validity-check configuration.
 func (v SecretValidityChecks) Validate() error {
+	known := strings.Join(validity.Providers(), ", ")
+	named := map[string]bool{}
+	for _, provider := range v.Providers {
+		if !validity.KnownProvider(provider) || named[provider] {
+			return fmt.Errorf("secrets.validity_checks.providers: %q must be one of %s, named once", provider, known)
+		}
+		named[provider] = true
+	}
 	for provider, endpoint := range v.Endpoints {
 		u, err := url.Parse(endpoint)
-		if provider != "aws" || err != nil || u.Scheme != "https" || u.Host == "" || u.RawQuery != "" || u.User != nil {
-			return fmt.Errorf("secrets.validity_checks.endpoints: %q must name aws with an https URL", provider)
+		if !validity.KnownProvider(provider) || err != nil || u.Scheme != "https" || u.Host == "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+			return fmt.Errorf("secrets.validity_checks.endpoints: %q must name one of %s with an https URL", provider, known)
 		}
 	}
 	for _, entry := range v.Allowlist {
@@ -3139,8 +3157,8 @@ func (v SecretValidityChecks) Validate() error {
 		}
 	}
 	for provider, rate := range v.Rates {
-		if provider != "aws" || rate <= 0 || rate > 100 {
-			return fmt.Errorf("secrets.validity_checks.rates: %q must name aws with a rate above 0 and at most 100", provider)
+		if !validity.KnownProvider(provider) || rate <= 0 || rate > 100 {
+			return fmt.Errorf("secrets.validity_checks.rates: %q must name one of %s with a rate above 0 and at most 100", provider, known)
 		}
 	}
 	return nil

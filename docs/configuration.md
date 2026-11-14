@@ -3955,12 +3955,18 @@ refuses a duplicate id, a provider other than github, gitlab or bitbucket, an in
 reference, or a `clone_credential_username` without a `clone_credential_ref`.
 
 Leaked-secret validity checks (P14) are configured under `secrets.validity_checks`:
-`enabled` turns them on; `endpoints` maps `aws` to the HTTPS base URL its check calls
-(default `https://sts.amazonaws.com`); `allowlist` lists every destination a check may
-call as `https://host[:port]` (empty declares the default); `rates` maps `aws` to checks
-per second (default 5, at most 100). Startup refuses another provider, a non-HTTPS
-endpoint or allowlist entry, and a rate out of range. A check whose endpoint is not
-in the allowlist is refused before it is sent.
+`enabled` turns them on; `providers` names the providers whose checks run (`aws`,
+alone when empty, and since P14-L1 `github`, `gitlab`, `slack`, `azure` and `gcp`);
+`endpoints` maps a provider to the HTTPS base URL its check calls (defaults
+`https://sts.amazonaws.com`, `https://api.github.com`, `https://gitlab.com`,
+`https://slack.com`, `https://login.microsoftonline.com` and
+`https://oauth2.googleapis.com`; a GitHub Enterprise Server's `https://host/api/v3` or a
+self-managed GitLab's root instead); `allowlist` lists every destination a check may
+call as `https://host[:port]` (empty declares the default of each provider whose checks
+run); `rates` maps a provider to checks per second (default 5, at most 100). Startup
+refuses an unknown or repeated provider, a non-HTTPS endpoint or allowlist entry, and a
+rate out of range. A check whose endpoint is not in the allowlist is refused before it
+is sent.
 
 Machine-auth methods beyond the HMAC token are configured in the JSON/YAML config
 file under `secrets.machine_auth`. Each entry names one method: `kubernetes`,

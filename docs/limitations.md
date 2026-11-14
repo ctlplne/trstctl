@@ -8515,14 +8515,19 @@ module (through ServiceNow's certification).
 
 With `secrets.validity_checks.enabled`, a scan checks each AWS access key it finds where it found it: the secret beside
 the key ID signs one STS `GetCallerIdentity` (SigV4: only a signature leaves the host) and the finding records
-`validity` valid, invalid, unknown or unchecked. Each check's endpoint must be in the checks' declared outbound
+`validity` valid, invalid, unknown or unchecked. Since P14-L1, `providers` adds GitHub, GitLab and Slack tokens (each
+provider's identity call), Microsoft Entra ID client secrets (a client-credentials token request with the tenant and
+application labeled beside the secret) and Google service-account keys (a token request with an assertion the key
+signs: only a signature leaves); a token or client secret is presented only to its own issuer, and AWS stays the only
+provider checked until more are named. Each check's endpoint must be in the checks' declared outbound
 allowlist or it is refused before it is sent, and a per-provider rate (5 a second by default) holds checks within the
 provider's limits, recording the rest unchecked. A secret found in a collected Slack channel (N6) names its poster and,
-from the poster's profile email, the tenant owner. Proven against an STS stand-in that verifies SigV4 signatures and a
-Slack stand-in; a live AWS test key and a test Slack workspace are a Track B row. What comes next: checks for other
-providers (GitHub, GitLab, Slack and cloud tokens), checks run on a relay or agent for content found there, Teams and
-Confluence collection, and the engine decision (stay on Gitleaks for patches, evaluate its successor, or add a second
-engine behind the same interface).
+from the poster's profile email, the tenant owner. Proven against an STS stand-in that verifies SigV4 signatures, a
+Slack stand-in, GitHub, GitLab and Slack identity stand-ins, and Entra and Google token-endpoint stand-ins (the Google one
+verifies the assertion's signature); a live AWS test key, a test Slack workspace and live GitHub, GitLab, Entra and
+Google test credentials are a Track B row. What comes next: checks run on a relay or agent for content found there, and
+the engine decision (stay on Gitleaks for patches, evaluate its successor, or add a second engine behind the same
+interface).
 
 ## Edition and qualification ledger (A253) — served
 

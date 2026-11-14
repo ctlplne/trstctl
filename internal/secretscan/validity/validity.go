@@ -4,10 +4,14 @@
 // where the scan found it (P14). A check reads the value from the scanned file
 // while the scan's temporary tree still exists, calls only the provider's
 // read-only identity endpoint, and keeps nothing but the verdict: for AWS the
-// request is SigV4-signed, so the secret itself never leaves the host — only a
-// signature over one GetCallerIdentity call does. Every provider endpoint a
-// check may call is declared; a check aimed anywhere else is refused before it
-// is sent, and a per-provider rate bounds how fast checks are made.
+// request is SigV4-signed and for a Google service-account key the token
+// request carries an assertion signed with the key, so neither secret leaves
+// the host — only a signature does. A GitHub, GitLab or Slack token and a
+// Microsoft Entra ID client secret can only be checked by presenting them to
+// their own issuer, which already holds them (P14-L1). Every provider endpoint
+// a check may call is declared; a check aimed anywhere else is refused before
+// it is sent, and a per-provider rate bounds how fast checks are made. Only
+// AWS is checked unless the configuration names more providers.
 package validity
 
 import (
@@ -44,8 +48,32 @@ const ProviderAWS = "aws"
 // DefaultAWSEndpoint is the declared AWS identity endpoint.
 const DefaultAWSEndpoint = "https://sts.amazonaws.com"
 
-// DefaultAWSRate is how many AWS checks a second a checker makes.
+// DefaultAWSRate is how many checks a second a checker makes for a provider
+// with no rate of its own, AWS's included.
 const DefaultAWSRate = 5
+
+// DefaultEndpoints is each provider's public identity endpoint, the base URL
+// its check calls unless the configuration names another (P14-L1).
+var DefaultEndpoints = map[string]string{
+	ProviderAWS:    DefaultAWSEndpoint,
+	ProviderGitHub: "https://api.github.com",
+	ProviderGitLab: "https://gitlab.com",
+	ProviderSlack:  "https://slack.com",
+	ProviderAzure:  "https://login.microsoftonline.com",
+	ProviderGCP:    "https://oauth2.googleapis.com",
+}
+
+// providerNames are the providers as a verdict names them.
+var providerNames = map[string]string{
+	ProviderAWS: "AWS", ProviderGitHub: "GitHub", ProviderGitLab: "GitLab", ProviderSlack: "Slack",
+	ProviderAzure: "Microsoft Entra ID", ProviderGCP: "Google",
+}
+
+// KnownProvider reports whether a check exists for provider.
+func KnownProvider(provider string) bool {
+	_, ok := DefaultEndpoints[provider]
+	return ok
+}
 
 // Result is a check's verdict. Detail names the account for a valid key, the
 // provider's refusal for an invalid one, and why for the rest; it never holds
@@ -59,12 +87,17 @@ type Result struct {
 
 // Config declares what a checker may call.
 type Config struct {
+	// Providers names the providers whose checks run; empty runs AWS's alone
+	// (P14), so a deployment that enabled checks before P14-L1 presents no
+	// token to a new destination until it names that provider.
+	Providers []string
 	// Endpoints maps a provider to the base URL its checks call; a provider
 	// with no entry uses its public default.
 	Endpoints map[string]string
 	// Allowlist is the validity checks' declared outbound destinations
-	// (scheme://host[:port]). Empty declares each provider's public default;
-	// a check whose endpoint is not declared is refused before it is sent.
+	// (scheme://host[:port]). Empty declares the public default of each
+	// provider whose checks run; a check whose endpoint is not declared is
+	// refused before it is sent.
 	Allowlist []string
 	// Rates maps a provider to checks per second (default per provider).
 	Rates map[string]float64
@@ -97,10 +130,21 @@ func (c *Checker) endpoint(provider string) string {
 	if e := strings.TrimSpace(c.cfg.Endpoints[provider]); e != "" {
 		return strings.TrimRight(e, "/")
 	}
-	if provider == ProviderAWS {
-		return DefaultAWSEndpoint
+	return DefaultEndpoints[provider]
+}
+
+// Enabled reports whether provider's checks run: AWS's when no providers are
+// named, otherwise the named ones.
+func (c *Checker) Enabled(provider string) bool {
+	if len(c.cfg.Providers) == 0 {
+		return provider == ProviderAWS
 	}
-	return ""
+	for _, p := range c.cfg.Providers {
+		if strings.TrimSpace(p) == provider {
+			return true
+		}
+	}
+	return false
 }
 
 // Declared reports whether target's scheme, host and port are in the
@@ -112,7 +156,11 @@ func (c *Checker) Declared(target string) bool {
 	}
 	allow := c.cfg.Allowlist
 	if len(allow) == 0 {
-		allow = []string{DefaultAWSEndpoint}
+		for provider, endpoint := range DefaultEndpoints {
+			if c.Enabled(provider) {
+				allow = append(allow, endpoint)
+			}
+		}
 	}
 	for _, entry := range allow {
 		d, err := url.Parse(strings.TrimSpace(entry))
@@ -252,14 +300,8 @@ func (c *Checker) CheckAWSFinding(ctx context.Context, root, file string, line i
 // declared AWS endpoint.
 func (c *Checker) CheckAWS(ctx context.Context, keyID string, secretKey []byte) Result {
 	target := c.endpoint(ProviderAWS) + "/"
-	if !c.Declared(target) {
-		return c.result(ProviderAWS, StateUnchecked, "refused: the AWS endpoint is not in the validity checks' outbound allowlist")
-	}
-	if c.cfg.Client == nil {
-		return c.result(ProviderAWS, StateUnchecked, "no client for validity checks")
-	}
-	if !c.take(ctx, ProviderAWS) {
-		return c.result(ProviderAWS, StateUnchecked, "rate limited: the AWS check budget was spent")
+	if refused, ok := c.ready(ctx, ProviderAWS, target); !ok {
+		return refused
 	}
 	body := []byte("Action=GetCallerIdentity&Version=2011-06-15")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
@@ -268,7 +310,7 @@ func (c *Checker) CheckAWS(ctx context.Context, keyID string, secretKey []byte) 
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
 	signAWS(req, body, keyID, secretKey, "us-east-1", "sts", c.cfg.Now().UTC())
-	resp, err := c.cfg.Client.Do(req)
+	resp, err := c.client().Do(req)
 	if err != nil {
 		return c.result(ProviderAWS, StateUnknown, "AWS could not be reached")
 	}
@@ -292,6 +334,23 @@ func (c *Checker) CheckAWS(ctx context.Context, keyID string, secretKey []byte) 
 
 func (c *Checker) result(provider, state, detail string) Result {
 	return Result{Provider: provider, State: state, Detail: detail, CheckedAt: c.cfg.Now().UTC()}
+}
+
+// ready decides whether a check to target may be made: the endpoint must be
+// declared, a client must exist and the provider's rate must allow one more.
+// Nothing is built or sent before it answers.
+func (c *Checker) ready(ctx context.Context, provider, target string) (Result, bool) {
+	name := providerNames[provider]
+	if !c.Declared(target) {
+		return c.result(provider, StateUnchecked, "refused: the "+name+" endpoint is not in the validity checks' outbound allowlist"), false
+	}
+	if c.cfg.Client == nil {
+		return c.result(provider, StateUnchecked, "no client for validity checks"), false
+	}
+	if !c.take(ctx, provider) {
+		return c.result(provider, StateUnchecked, "rate limited: the "+name+" check budget was spent"), false
+	}
+	return Result{}, true
 }
 
 // signAWS signs a request with SigV4 (AWS's signature version 4).
