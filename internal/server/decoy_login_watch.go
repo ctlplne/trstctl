@@ -72,6 +72,112 @@ type decoyElsewhereReader interface {
 	DecoyElsewhere(ctx context.Context, role string) ([]string, error)
 }
 
+// decoyAuthLogReader is a provider that also watches its decoy logins for
+// refused sign-ins in the server's jsonlog (Q6-L6, decoy_auth_log).
+type decoyAuthLogReader interface {
+	DecoyAuthLogEnabled() bool
+	DecoyFailedLogins(ctx context.Context, cursor dynsecret.DecoyLogCursor, roles map[string]bool) ([]dynsecret.DecoyFailedLogin, dynsecret.DecoyLogCursor, error)
+}
+
+// decoyAuthLogCursors remembers where each provider's log read stopped. It
+// starts at the beginning of the current log after a restart; a decoy is
+// triggered once, so a refusal read twice alerts once.
+type decoyAuthLogCursors struct {
+	mu      sync.Mutex
+	cursors map[string]dynsecret.DecoyLogCursor
+}
+
+func (c *decoyAuthLogCursors) get(key string) dynsecret.DecoyLogCursor {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cursors[key]
+}
+
+func (c *decoyAuthLogCursors) set(key string, cursor dynsecret.DecoyLogCursor) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.cursors == nil {
+		c.cursors = map[string]dynsecret.DecoyLogCursor{}
+	}
+	c.cursors[key] = cursor
+}
+
+// DecoyAuthLogEnabled reports whether the provider watches its decoy logins'
+// refused sign-ins (Q6-L6).
+func (p *configuredDynamicProvider) DecoyAuthLogEnabled() bool {
+	return p.cfg.Type == "postgresql" && p.cfg.DecoyAuthLog
+}
+
+// DecoyFailedLogins reads the refused sign-ins by roles from the server's
+// jsonlog through the provider's admin connection, opened for this read.
+func (p *configuredDynamicProvider) DecoyFailedLogins(ctx context.Context, cursor dynsecret.DecoyLogCursor, roles map[string]bool) ([]dynsecret.DecoyFailedLogin, dynsecret.DecoyLogCursor, error) {
+	if !p.DecoyAuthLogEnabled() {
+		return nil, cursor, fmt.Errorf("dynamic-secret provider %q does not watch refused decoy sign-ins", p.id)
+	}
+	backend, closeBackend, err := p.openBackend(ctx)
+	if err != nil {
+		return nil, cursor, err
+	}
+	defer closeBackend()
+	reader, ok := backend.(interface {
+		DecoyFailedLogins(context.Context, dynsecret.DecoyLogCursor, map[string]bool) ([]dynsecret.DecoyFailedLogin, dynsecret.DecoyLogCursor, error)
+	})
+	if !ok {
+		return nil, cursor, fmt.Errorf("dynamic-secret provider %q cannot read refused sign-ins", p.id)
+	}
+	return reader.DecoyFailedLogins(ctx, cursor, roles)
+}
+
+// watchDecoyAuthLogs reads, once per provider that watches its decoy logins'
+// refused sign-ins, the refusals by those logins since the last read (Q6-L6),
+// and triggers each decoy refused there. It returns the decoys it triggered
+// and, per decoy, why its provider's log could not be read.
+func (s *Server) watchDecoyAuthLogs(ctx context.Context, tenantID string, decoys []store.HoneyToken, providers []dynsecret.Provider) (map[string]bool, map[string]error) {
+	triggered, failed := map[string]bool{}, map[string]error{}
+	byProvider := map[string][]store.HoneyToken{}
+	for _, decoy := range decoys {
+		byProvider[decoy.DBProviderID] = append(byProvider[decoy.DBProviderID], decoy)
+	}
+	for _, provider := range providers {
+		watched := byProvider[provider.Name()]
+		reader, ok := provider.(decoyAuthLogReader)
+		if len(watched) == 0 || !ok || !reader.DecoyAuthLogEnabled() {
+			continue
+		}
+		roles := map[string]bool{}
+		byRole := map[string]store.HoneyToken{}
+		for _, decoy := range watched {
+			roles[decoy.DBRole] = true
+			byRole[decoy.DBRole] = decoy
+		}
+		key := tenantID + "/" + provider.Name()
+		refusals, next, err := reader.DecoyFailedLogins(ctx, s.decoyAuthLogs.get(key), roles)
+		if err != nil {
+			for _, decoy := range watched {
+				failed[decoy.ID] = fmt.Errorf("refused sign-ins unreadable: %w", err)
+			}
+			continue
+		}
+		for _, refusal := range refusals {
+			decoy := byRole[refusal.Role]
+			if triggered[decoy.ID] {
+				continue
+			}
+			path := "postgres/" + refusal.Database
+			if refusal.RemoteHost != "" {
+				path += " from " + refusal.RemoteHost
+			}
+			if err := s.orch.RecordHoneyTokenTrigger(ctx, tenantID, decoy.ID, "FAILED_LOGIN", path); err != nil {
+				failed[decoy.ID] = err
+				continue
+			}
+			triggered[decoy.ID] = true
+		}
+		s.decoyAuthLogs.set(key, next)
+	}
+	return triggered, failed
+}
+
 // DecoySessions reads a decoy login's database session counter through the
 // provider's admin connection, opened for this one read.
 func (p *configuredDynamicProvider) DecoySessions(ctx context.Context, role string) (int64, bool, error) {
@@ -160,7 +266,13 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 			continue
 		}
 		providers := s.secretIntegrations.dynamicProvidersForTenant(tenantID)
+		// Q6-L6: refused sign-ins first, from the providers that watch them.
+		refused, authLogFailed := s.watchDecoyAuthLogs(ctx, tenantID, decoys, providers)
 		for _, decoy := range decoys {
+			if refused[decoy.ID] {
+				s.decoyWatchFailures.read(decoy.ID)
+				continue
+			}
 			unwatched := func(cause error) {
 				note(fmt.Errorf("decoy %s: %w", decoy.ID, cause))
 				since := s.decoyWatchFailures.failing(decoy.ID, now)
@@ -172,6 +284,12 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 				}
 			}
 			watched := func() {
+				// Q6-L6: a decoy whose refused sign-ins cannot be read is not
+				// fully watched, however its session counter reads.
+				if cause := authLogFailed[decoy.ID]; cause != nil {
+					unwatched(cause)
+					return
+				}
 				s.decoyWatchFailures.read(decoy.ID)
 				if decoy.WatchGapSince == nil {
 					return

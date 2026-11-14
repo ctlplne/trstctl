@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A decoy database login tried with a wrong password alerts (Q6-L6): with `decoy_auth_log` on a PostgreSQL provider,
+  the decoy watcher reads the server's own record of each refused sign-in from its `jsonlog` through the admin
+  connection (`pg_current_logfile`, `pg_read_file`, a bounded chunk at a time); a refusal by a decoy login (SQLSTATE
+  28P01 or 28000) triggers it with method `FAILED_LOGIN` and its database and client, with one critical alert. An
+  unreadable log is a monitoring gap. The console's decoy logins list says the decoy was tried with a wrong password.
 - People's sign-ins before usage began are seeded from the browser session store (M1-L4): once per active member
   whose sign-in usage has not recorded, the latest sign-in the store holds is recorded as a use with source kind
   `seeded` (source `session_store`, no network); the members list marks it `last_sign_in_seeded` and the console's

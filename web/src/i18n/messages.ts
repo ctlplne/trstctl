@@ -6702,6 +6702,10 @@ export const messages = {
   },
   "secrets.decoyLogins.empty": { defaultMessage: "No decoy logins minted.", description: "Empty decoy login list." },
   "secrets.decoyLogins.used": { defaultMessage: "Used at {at}", description: "When a decoy login was first used." },
+  "secrets.decoyLogins.refused": {
+    defaultMessage: "Tried with a wrong password at {at} ({where})",
+    description: "A decoy login's first use was a sign-in its server refused, read from the server's log (Q6-L6); where is the database and client.",
+  },
   "secrets.decoyLogins.error": { defaultMessage: "Decoy database logins", description: "Decoy login error title." },
   "secrets.decoyLogins.readFailed": { defaultMessage: "Could not read decoy logins", description: "Decoy login list failure." },
   "secrets.decoyLogins.plantFailed": { defaultMessage: "Could not mint the decoy login", description: "Decoy login plant failure." },

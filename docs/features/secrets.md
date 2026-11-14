@@ -2267,7 +2267,17 @@ alert. The first session marks the decoy `triggered` (method `LOGIN`, path
 `postgres/<database>`) and queues one critical alert; later logins do not re-alert.
 The counter persists in PostgreSQL, so a login while trstctl is down is seen at the
 next check; a statistics reset reads zero and alerts nothing. A failed login with a
-wrong password creates no session and is not detected. `retire` revokes the lease,
+wrong password creates no session, so the counter never sees it; a provider with
+`decoy_auth_log: true` also reads the server's own record of each refused sign-in
+(Q6-L6): with `jsonlog` in `log_destination` and the logging collector on, the watcher
+reads the current log through the admin connection (`pg_current_logfile`,
+`pg_read_file`; a superuser, or `pg_monitor` with `EXECUTE` on `pg_read_file`) a
+bounded chunk at a time, and a refusal by a decoy login (SQLSTATE 28P01 or 28000)
+marks it `triggered` with method `FAILED_LOGIN` and path `postgres/<database> from
+<client>`, with the same one critical alert; the console's decoy logins list says it was
+tried with a wrong password. A log the watcher cannot read is a monitoring gap like an
+unreadable counter. After a restart it reads the current log from its start, so a
+refusal in a log the server has already rotated away is not seen. `retire` revokes the lease,
 which drops the login and its database, and stops watching.
 
 #### Decoy files on hosts

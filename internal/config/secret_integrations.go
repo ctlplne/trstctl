@@ -310,6 +310,12 @@ type DynamicSecretProviderConfig struct {
 	// mysql, aws-iam) for roles in allowed_roles. Off by default: a dynamic
 	// provider that only ever issues bounded leases keeps that guarantee.
 	AllowStaticRotation bool `json:"allow_static_rotation,omitempty"`
+	// DecoyAuthLog (Q6-L6) also watches a postgresql provider's decoy logins
+	// for refused sign-ins, read from the server's jsonlog through the admin
+	// connection (pg_current_logfile, pg_read_file): the server must write
+	// jsonlog with the logging collector on, and the admin role must be a
+	// superuser or hold pg_monitor and EXECUTE on pg_read_file.
+	DecoyAuthLog bool `json:"decoy_auth_log,omitempty"`
 	// RotationAccounts makes a role's static rotation two-user (A240): the role
 	// alternates between these two existing accounts, which the database's
 	// owner provisions with the role's grants. A rotation sets a new password
@@ -1344,6 +1350,9 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	var errs []error
 	if c.AllowWildcardAccountHost && c.Type != "mysql" {
 		errs = append(errs, fmt.Errorf("%s allow_wildcard_account_host is only valid for mysql", where))
+	}
+	if c.DecoyAuthLog && (c.Type != "postgresql" || !slices.Contains(c.AllowedRoles, postgresDecoyRole)) {
+		errs = append(errs, fmt.Errorf("%s decoy_auth_log is only valid for a postgresql provider whose allowed_roles include %q", where, postgresDecoyRole))
 	}
 	if len(c.RoleAccess) > 0 && c.Type != "postgresql" && c.Type != "mysql" && c.Type != "mongodb" {
 		errs = append(errs, fmt.Errorf("%s role_access is only valid for mongodb, mysql and postgresql", where))

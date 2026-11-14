@@ -981,6 +981,8 @@ type Server struct {
 	// cannot read, until a monitoring gap is recorded (Q6-L10).
 	decoyWatchGapGrace time.Duration
 	decoyWatchFailures decoyWatchFailureLog
+	// decoyAuthLogs remembers where each provider's jsonlog read stopped (Q6-L6).
+	decoyAuthLogs decoyAuthLogCursors
 	// dynamicSecretAccessInterval paces RunDynamicSecretAccessWatch (G2).
 	dynamicSecretAccessInterval time.Duration
 	// secretMoveClosureInterval paces RunSecretMoveClosure (P6).

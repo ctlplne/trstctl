@@ -81,6 +81,32 @@ describe("Q6 decoy database logins", () => {
     expect(await screen.findByText("Decoy connection string")).toBeInTheDocument();
   });
 
+  // Q6-L6: a decoy first tried with a wrong password says so, and where.
+  it("says a decoy was tried with a wrong password, and where (Q6-L6)", async () => {
+    apiMock.listDatabaseDecoys.mockResolvedValue({
+      items: [
+        {
+          id: "d2",
+          kind: "database",
+          name: "orders bait",
+          placement: "ops wiki",
+          db_provider_id: "warehouse-pg",
+          db_lease_id: "l2",
+          db_role: "trstctl_app_9876543210",
+          state: "triggered",
+          created_at: "2026-11-01T00:00:00Z",
+          triggered_at: "2026-11-01T03:00:00Z",
+          trigger_method: "FAILED_LOGIN",
+          trigger_path: "postgres/trstctl_app_9876543210_db from 203.0.113.9",
+        },
+      ],
+      next_cursor: "",
+    });
+    render(<DecoyDatabaseWorkflow />);
+    expect(await screen.findByText(/Tried with a wrong password at .* \(postgres\/trstctl_app_9876543210_db from 203\.0\.113\.9\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Used at /)).not.toBeInTheDocument();
+  });
+
   it("is hidden from anyone who cannot plant decoys", () => {
     can.value = false;
     const { container } = render(<DecoyDatabaseWorkflow />);

@@ -144,7 +144,13 @@ export function DecoyDatabaseWorkflow() {
               <p>
                 {item.name} · {item.placement} · {item.db_provider_id}
               </p>
-              {item.triggered_at ? <p>{t("secrets.decoyLogins.used", { at: formatDateTime(item.triggered_at) })}</p> : null}
+              {item.triggered_at ? (
+                <p>
+                  {item.trigger_method === "FAILED_LOGIN"
+                    ? t("secrets.decoyLogins.refused", { at: formatDateTime(item.triggered_at), where: item.trigger_path ?? "" })
+                    : t("secrets.decoyLogins.used", { at: formatDateTime(item.triggered_at) })}
+                </p>
+              ) : null}
               {item.state !== "revoked" ? (
                 <Button type="button" variant="outline" className="mt-2" onClick={() => void retire(item.id)} disabled={busy}>
                   {t("secrets.decoys.retire")}

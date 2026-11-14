@@ -1,0 +1,1 @@
+import{m as s,t}from"./schemas-ClreG-SG.js";function r(r){return s(t,r)}export{r as t};
