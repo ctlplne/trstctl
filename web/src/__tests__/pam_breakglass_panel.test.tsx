@@ -137,3 +137,16 @@ it("never offers a break-glass or web console account for a reviewed check-out (
   expect(labels.some((label) => label.includes("orders-vault"))).toBe(true);
   expect(labels.some((label) => label.includes("okta-bg") || label.includes("grafana-admin"))).toBe(false);
 });
+
+// A258-L2: each grant says which approvers its notice was also addressed to by
+// name; a grant that named none went to the approval channels only.
+it("shows which approvers each emergency grant notified by name (A258-L2)", async () => {
+  apiMock.pamEmergencyGrants.mockResolvedValue({
+    items: [{ ...grant("g-named", "oncall@ops.example"), notified_approvers: ["dana", "eli"] }, grant("g-channels", "oncall@ops.example")],
+  });
+  mount("auditor@ops.example", false, false);
+  const table = await screen.findByRole("table", { name: "Emergency grants" });
+  expect(within(table).getByRole("columnheader", { name: "Notified by name" })).toBeInTheDocument();
+  expect(within(table).getByText("dana, eli")).toBeInTheDocument();
+  expect(within(table).getByText("Approval channels only")).toBeInTheDocument();
+});

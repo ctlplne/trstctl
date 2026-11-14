@@ -2618,6 +2618,7 @@ func (s *Server) configurePAMSurface(d Deps) error {
 		sshCA = sshSurface.CA()
 	}
 	svc, err := newPAMService(pamDeps{
+		ApproverNoticesByName:               notify.AddressesRecipients(d.NotificationChannels),
 		DesktopJobEnabled:                   AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionDesktop],
 		ADDesktopJobEnabled:                 AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionADDesktop],
 		NetDeviceJobEnabled:                 AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionNetDevice],

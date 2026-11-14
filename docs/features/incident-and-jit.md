@@ -906,7 +906,11 @@ is used, and a settings object it cannot read reads `error` with nothing sent. T
 targets table shows each target's credential health, with **Check now** for an operator's
 check. Access templates set a request's reason, approvals and maximum length (name
 one with `template_id`). When the reviewers cannot be reached, a named emergency responder
-opens access at once (`trstctl-cli access emergency open`): every approver is notified, the
+opens access at once (`trstctl-cli access emergency open`): every approver is notified on the
+approval channels and, when the operator's email channel sets `named_recipients`, also by name
+at their own address (A258-L2: each active member whose roles grant `access:approve`, other
+than the responder, with an address on record, at most 50); the grant lists whom it notified
+by name, and the console's emergency grants table shows them. The
 session lasts at most an hour, and its post-incident review stays open until another
 approver records it. In the console, the **Emergency responders** panel names the
 responders (one per line), the session dialog's **Open now in an emergency** opens a session

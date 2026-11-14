@@ -43871,6 +43871,13 @@
             "format": "date-time",
             "type": "string"
           },
+          "notified_approvers": {
+            "description": "the approvers the grant's notice was also addressed to by name, at their own addresses (A258-L2): members whose roles grant access:approve, not the responder, when the operator's email channel addresses named recipients; absent when it does not",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "opened_at": {
             "format": "date-time",
             "type": "string"

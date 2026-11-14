@@ -8462,6 +8462,14 @@ export const messages = {
   },
   "admin.access.disableReason": { defaultMessage: "Reason for disabling", description: "PAM target disable audit reason." },
   "admin.access.targetDisabled": { defaultMessage: "Target {id} disabled for new requests.", description: "PAM target disable success." },
+  "admin.access.breakglass.notified": {
+    defaultMessage: "Notified by name",
+    description: "Emergency grants table column: the approvers the grant's notice was also addressed to at their own addresses (A258-L2).",
+  },
+  "admin.access.breakglass.notifiedNone": {
+    defaultMessage: "Approval channels only",
+    description: "Emergency grants table: no approver was notified by name, only the approval channels (A258-L2).",
+  },
   "admin.access.health.healthy": { defaultMessage: "Credential signs in", description: "PAM target credential health: the last check signed in (A258)." },
   "admin.access.health.rejected": {
     defaultMessage: "Credential refused",

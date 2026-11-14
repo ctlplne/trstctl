@@ -6181,6 +6181,9 @@ func componentSchemas() map[string]*Schema {
 			"status": {Type: "string", Enum: []string{"pending", "reviewed"}}, "reviewer": str(),
 			"outcome": {Type: "string", Enum: []string{"justified", "unjustified"}}, "notes": str(), "reviewed_at": timestamp(),
 		}, "status"),
+		"notified_approvers": {Type: "array", Items: str(), Description: "the approvers the grant's notice was also addressed to by name, at their own " +
+			"addresses (A258-L2): members whose roles grant access:approve, not the responder, when the operator's email channel addresses named " +
+			"recipients; absent when it does not"},
 	}, "session_id", "responder", "reason", "target_type", "target_id", "role", "opened_at", "expires_at", "review")
 	graphNode := object(map[string]*Schema{
 		"id": str(), "kind": str(), "name": str(), "attrs": {Type: "object"},

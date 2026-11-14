@@ -33,6 +33,24 @@ type Notifier interface {
 	Notify(ctx context.Context, alert Alert) error
 }
 
+// RecipientChannel is a channel that can address one named person: the
+// operator's email channel with named recipients (A258-L2). An alert with a
+// Recipient is delivered only by such channels.
+type RecipientChannel interface {
+	AddressesRecipients() bool
+}
+
+// AddressesRecipients reports whether any of channels delivers an alert to
+// its named Recipient.
+func AddressesRecipients(channels []Notifier) bool {
+	for _, ch := range channels {
+		if rc, ok := ch.(RecipientChannel); ok && rc.AddressesRecipients() {
+			return true
+		}
+	}
+	return false
+}
+
 // DeliveryNotifier optionally receives the dispatcher's exact command binding.
 // It lets a transport retain a receiver identity across retries without trusting
 // IDs from alert text or changing the stored alert/plugin contract. DeliveredAt
@@ -490,6 +508,17 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 	route := routingEvidence{source: "all_channels"}
 	if len(d.channels) == 0 && d.channelSource == nil {
 		return nil, route, nil
+	}
+	// A notice addressed to one person (A258-L2) goes only to the channels
+	// that address people; routing policy does not widen it to the rest.
+	if alert.Recipient != nil {
+		var channels []Notifier
+		for _, ch := range d.channels {
+			if rc, ok := ch.(RecipientChannel); ok && rc.AddressesRecipients() {
+				channels = append(channels, ch)
+			}
+		}
+		return channels, routingEvidence{source: "named_recipient"}, nil
 	}
 	// A channel test and a scheduled report notice (A103) each name exactly
 	// one channel; routing policy does not widen or redirect them.

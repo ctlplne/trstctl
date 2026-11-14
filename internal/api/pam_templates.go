@@ -58,6 +58,9 @@ type PAMEmergencyGrant struct {
 	OpenedAt   time.Time          `json:"opened_at"`
 	ExpiresAt  time.Time          `json:"expires_at"`
 	Review     PAMEmergencyReview `json:"review"`
+	// NotifiedApprovers (A258-L2) are the approvers the grant's notice was
+	// also addressed to by name.
+	NotifiedApprovers []string `json:"notified_approvers,omitempty"`
 }
 
 // PAMEmergencyReview is an emergency grant's post-incident review.

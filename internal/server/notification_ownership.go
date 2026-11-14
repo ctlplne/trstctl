@@ -39,6 +39,13 @@ func (c *ownedNotificationChannel) Notify(ctx context.Context, alert notify.Aler
 	return c.notifier.Notify(ctx, alert)
 }
 
+// AddressesRecipients forwards notify.RecipientChannel (A258-L2): only the
+// wrapped channel's own answer lets an alert addressed to one person through.
+func (c *ownedNotificationChannel) AddressesRecipients() bool {
+	rc, ok := c.notifier.(notify.RecipientChannel)
+	return ok && rc.AddressesRecipients()
+}
+
 func (c *ownedNotificationChannel) Close() {
 	if c == nil {
 		return

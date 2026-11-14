@@ -9586,7 +9586,6 @@ opens an emergency session from the session dialog (after a confirmation that ev
 is notified) and records post-incident reviews.
 
 What comes next:
-- Notifying approvers by name; today the notice goes to the approval channels they watch.
 - Brokered-account policy rules, folders and templates are served with the limits below.
 
 ## Browser sessions (A259) — served

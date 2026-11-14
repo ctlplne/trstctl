@@ -186,6 +186,7 @@ export function PAMBreakGlassPanel({ subject, canRelease, canReview }: { subject
                 <th scope="col">{t("admin.access.breakglass.responder")}</th>
                 <th scope="col">{t("admin.access.breakglass.reason")}</th>
                 <th scope="col">{t("admin.access.breakglass.opened")}</th>
+                <th scope="col">{t("admin.access.breakglass.notified")}</th>
                 <th scope="col">{t("admin.access.breakglass.review")}</th>
               </tr>
             </thead>
@@ -198,6 +199,7 @@ export function PAMBreakGlassPanel({ subject, canRelease, canReview }: { subject
                   <td>{grant.responder}</td>
                   <td>{grant.reason}</td>
                   <td>{formatDateTime(grant.opened_at, policy)}</td>
+                  <td>{grant.notified_approvers?.length ? grant.notified_approvers.join(", ") : t("admin.access.breakglass.notifiedNone")}</td>
                   <td>
                     {grant.review.status === "pending" ? (
                       canReview && grant.responder !== subject ? (

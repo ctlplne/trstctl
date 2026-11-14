@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- Emergency access notifies each approver by name (A258-L2): with the operator's email channel set to
+  `named_recipients` (`TRSTCTL_NOTIFICATIONS_EMAIL_NAMED_RECIPIENTS`), the grant's notice also goes to every active
+  member whose roles grant `access:approve` (not the responder, with an address on record, at most 50) at their own
+  address, beside the approval-channel notice; an alert addressed to one person reaches only channels that address
+  people. The grant lists `notified_approvers`, and the console's emergency grants table shows them. Migration 0484.
 - A remote desktop target's vaulted Active Directory account has a lockout-aware credential health check (A258-L1):
   before the check signs in, the provider's administrator reads the account's failed sign-ins and the lockout
   threshold that applies to it (its resultant password settings, else the domain's); one short of the threshold the

@@ -24218,6 +24218,8 @@ export interface components {
         PAMEmergencyGrant: {
             /** Format: date-time */
             expires_at: string;
+            /** @description the approvers the grant's notice was also addressed to by name, at their own addresses (A258-L2): members whose roles grant access:approve, not the responder, when the operator's email channel addresses named recipients; absent when it does not */
+            notified_approvers?: string[];
             /** Format: date-time */
             opened_at: string;
             reason: string;

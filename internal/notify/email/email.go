@@ -34,6 +34,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -59,6 +60,9 @@ type Channel struct {
 	from   string
 	to     []string
 	sender Sender
+	// named sends an alert addressed to one person (A258-L2) to that
+	// person's own address instead of the recipient list.
+	named bool
 }
 
 // Option configures a Channel.
@@ -80,6 +84,38 @@ func WithAuth(username, password string) Option {
 			rs.plain = &plainCredentials{username: username, password: []byte(password)}
 		}
 	}
+}
+
+// WithNamedRecipients lets the channel address one person (A258-L2): an alert
+// with a Recipient is sent to that recipient's own address alone; every other
+// alert still goes to the recipient list. The operator opts in, because the
+// address comes from the tenant's member records.
+func WithNamedRecipients() Option {
+	return func(c *Channel) { c.named = true }
+}
+
+// AddressesRecipients reports whether the channel sends an alert addressed to
+// one person to that person (notify.RecipientChannel).
+func (c *Channel) AddressesRecipients() bool { return c.named }
+
+// namedAddress is a recipient's address as an SMTP envelope recipient: a bare
+// addr-spec of printable ASCII, no display name, at most 254 characters, so
+// nothing a member record carries can reach the SMTP exchange as a command.
+func namedAddress(recipient *notify.AlertRecipient) (string, error) {
+	address := recipient.Email
+	if address == "" || len(address) > 254 {
+		return "", fmt.Errorf("email: the named recipient has no usable address")
+	}
+	for _, r := range address {
+		if r <= ' ' || r > '~' || r == '<' || r == '>' || r == ',' || r == '"' || r == '\\' {
+			return "", fmt.Errorf("email: the named recipient's address is not a plain address")
+		}
+	}
+	parsed, err := mail.ParseAddress(address)
+	if err != nil || parsed.Name != "" || parsed.Address != address || strings.Count(address, "@") != 1 {
+		return "", fmt.Errorf("email: the named recipient's address is not a plain address")
+	}
+	return address, nil
 }
 
 // New returns an email channel that sends from from to the recipients in to through the
@@ -123,10 +159,21 @@ func (c *Channel) NotifyDelivery(ctx context.Context, alert notify.Alert, delive
 	if delivery.ID == "" || delivery.PayloadDigest == "" {
 		return fmt.Errorf("email: missing delivery binding")
 	}
+	to := c.to
+	if alert.Recipient != nil {
+		if !c.named {
+			return fmt.Errorf("email: this channel does not address named recipients")
+		}
+		address, err := namedAddress(alert.Recipient)
+		if err != nil {
+			return err
+		}
+		to = []string{address}
+	}
 	binding, err := json.Marshal(struct {
 		Version, Delivery, Payload, From string
 		To                               []string
-	}{"trstctl.email.v1", delivery.ID, delivery.PayloadDigest, c.from, c.to})
+	}{"trstctl.email.v1", delivery.ID, delivery.PayloadDigest, c.from, to})
 	if err != nil {
 		return fmt.Errorf("email: encode delivery binding: %w", err)
 	}
@@ -138,11 +185,11 @@ func (c *Channel) NotifyDelivery(ctx context.Context, alert notify.Alert, delive
 		// ahead of the message.
 		body = alert.PoweredBy + "\n\n" + body
 	}
-	msg, err := buildMessage(c.from, c.to, messageSubject(alert), body, messageID, time.Now().UTC())
+	msg, err := buildMessage(c.from, to, messageSubject(alert), body, messageID, time.Now().UTC())
 	if err != nil {
 		return fmt.Errorf("email: render alert: %w", err)
 	}
-	if err := c.sender.Send(ctx, c.from, c.to, msg); err != nil {
+	if err := c.sender.Send(ctx, c.from, to, msg); err != nil {
 		// net/smtp's error text describes the SMTP exchange and does not contain the
 		// auth password, so it is wrapped as-is; the password is never part of it (AN-8).
 		return fmt.Errorf("email: send alert: %w", err)

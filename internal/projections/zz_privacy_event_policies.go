@@ -1137,7 +1137,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventPAMEmergencyOpened, 1}: privacyRules(
 			privacyRule("/session_id", opaque), privacyRule("/responder", exact), privacyRule("/reason", clear),
 			privacyRule("/target_type", opaque), privacyRule("/target_id", opaque), privacyRule("/role", opaque),
-			privacyRule("/opened_at", opaque), privacyRule("/expires_at", opaque),
+			privacyRule("/opened_at", opaque), privacyRule("/expires_at", opaque), privacyRule("/notified_approvers/*", exact),
 		),
 		{EventPAMEmergencyReviewed, 1}: privacyRules(
 			privacyRule("/session_id", opaque), privacyRule("/reviewer", exact), privacyRule("/outcome", opaque),

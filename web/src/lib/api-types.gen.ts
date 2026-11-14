@@ -9360,6 +9360,7 @@ export interface PAMEmergencyCheckout {
 
 export interface PAMEmergencyGrant {
   expires_at: string;
+  notified_approvers?: string[];
   opened_at: string;
   reason: string;
   responder: string;

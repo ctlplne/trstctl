@@ -55,7 +55,7 @@ func templateView(t store.PAMAccessTemplate) api.PAMAccessTemplate {
 
 func emergencyView(g store.PAMEmergencyGrant) api.PAMEmergencyGrant {
 	return api.PAMEmergencyGrant{SessionID: g.SessionID, Responder: g.Responder, Reason: g.Reason, TargetType: g.TargetType,
-		TargetID: g.TargetID, Role: g.Role, OpenedAt: g.OpenedAt.UTC(), ExpiresAt: g.ExpiresAt.UTC(),
+		TargetID: g.TargetID, Role: g.Role, OpenedAt: g.OpenedAt.UTC(), ExpiresAt: g.ExpiresAt.UTC(), NotifiedApprovers: g.NotifiedApprovers,
 		Review: api.PAMEmergencyReview{Status: g.ReviewStatus, Reviewer: g.Reviewer, Outcome: g.Outcome, Notes: g.Notes, ReviewedAt: g.ReviewedAt}}
 }
 
@@ -360,6 +360,14 @@ func (s *pamService) OpenPAMEmergencySession(ctx context.Context, tenantID, idem
 // in one transaction; reconcileEmergencyNotices queues a notice a crash
 // between the two left out.
 func (s *pamService) recordEmergency(ctx context.Context, tenantID string, opened projections.PAMEmergencyOpened) error {
+	approvers, err := s.namedApprovers(ctx, tenantID, opened.Responder)
+	if err != nil {
+		return err
+	}
+	opened.NotifiedApprovers = nil
+	for _, m := range approvers {
+		opened.NotifiedApprovers = append(opened.NotifiedApprovers, m.Subject)
+	}
 	data, err := json.Marshal(opened)
 	if err != nil {
 		return err
@@ -368,7 +376,7 @@ func (s *pamService) recordEmergency(ctx context.Context, tenantID string, opene
 	if err != nil {
 		return err
 	}
-	entry, err := emergencyNotice(tenantID, opened.SessionID, opened.Responder, opened.TargetType, opened.TargetID, opened.Role, opened.Reason)
+	entries, err := emergencyNotices(tenantID, opened.SessionID, opened.Responder, opened.TargetType, opened.TargetID, opened.Role, opened.Reason, approvers)
 	if err != nil {
 		return err
 	}
@@ -379,9 +387,70 @@ func (s *pamService) recordEmergency(ctx context.Context, tenantID string, opene
 		if s.outbox == nil {
 			return nil
 		}
-		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, entry)
-		return err
+		for _, entry := range entries {
+			if _, err := s.outbox.EnqueueIfAbsent(ctx, tx, entry); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
+}
+
+// namedApprovers are the members an emergency grant's notice is also
+// addressed to by name (A258-L2): the tenant's active members whose roles
+// grant access:approve, other than the responder, with an address on record,
+// at most projections.MaxPAMEmergencyNamedApprovers. None unless a
+// notification channel addresses named recipients.
+func (s *pamService) namedApprovers(ctx context.Context, tenantID, responder string) ([]store.TenantMember, error) {
+	if !s.approverNoticesByName {
+		return nil, nil
+	}
+	members, err := s.pamApproverMembers(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	var out []store.TenantMember
+	for _, m := range members {
+		if m.Subject == responder || strings.TrimSpace(m.Email) == "" {
+			continue
+		}
+		out = append(out, m)
+		if len(out) == projections.MaxPAMEmergencyNamedApprovers {
+			break
+		}
+	}
+	return out, nil
+}
+
+// emergencyNotices are a grant's notice on the approval channels and, for
+// each named approver, the same notice addressed to them (A258-L2), which
+// only a channel that addresses named recipients delivers, to that
+// approver's own address. Each has its own effect lane, so a failing channel
+// holds up no approver's notice.
+func emergencyNotices(tenantID, sessionID, responder, targetType, targetID, role, reason string, approvers []store.TenantMember) ([]orchestrator.Entry, error) {
+	entry, err := emergencyNotice(tenantID, sessionID, responder, targetType, targetID, role, reason)
+	if err != nil {
+		return nil, err
+	}
+	entries := []orchestrator.Entry{entry}
+	for _, m := range approvers {
+		alert, err := json.Marshal(notify.Alert{
+			Kind: notify.KindEmergencyAccess, TenantID: tenantID, OperationID: "emergency-" + sessionID + "-approver",
+			Subject: targetType + "/" + targetID,
+			Detail: fmt.Sprintf("%s opened emergency access to %s/%s as %s without approval: %s. You are notified as an approver; its post-incident review is pending.",
+				responder, targetType, targetID, role, reason),
+			Severity:  notify.AlertSeverityCritical,
+			Recipient: &notify.AlertRecipient{Kind: "approver", Subject: m.Subject, DisplayName: m.DisplayName, Email: m.Email},
+		})
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, orchestrator.Entry{TenantID: tenantID, Destination: notify.DestinationApproval,
+			IdempotencyKey: "emergency-access:" + sessionID + ":approver:" + m.Subject,
+			EffectLane:     notify.DestinationApproval + ":emergency:" + sessionID + ":approver:" + m.Subject,
+			Payload:        alert})
+	}
+	return entries, nil
 }
 
 // emergencyNotice is the alert every approver gets: on the approval channels,
@@ -414,13 +483,25 @@ func (s *pamService) reconcileEmergencyNotices(ctx context.Context) {
 		return
 	}
 	for _, g := range grants {
-		entry, err := emergencyNotice(g.TenantID, g.SessionID, g.Responder, g.TargetType, g.TargetID, g.Role, g.Reason)
+		// A258-L2: the approvers it named, as their member records read now.
+		var approvers []store.TenantMember
+		for _, subject := range g.NotifiedApprovers {
+			m, err := s.store.GetTenantMember(ctx, g.TenantID, subject)
+			if err == nil && m.OffboardedAt == nil && m.Status != "offboarded" && strings.TrimSpace(m.Email) != "" {
+				approvers = append(approvers, m)
+			}
+		}
+		entries, err := emergencyNotices(g.TenantID, g.SessionID, g.Responder, g.TargetType, g.TargetID, g.Role, g.Reason, approvers)
 		if err != nil {
 			continue
 		}
 		_ = s.store.WithTenant(ctx, g.TenantID, func(tx pgx.Tx) error {
-			_, err := s.outbox.EnqueueIfAbsent(ctx, tx, entry)
-			return err
+			for _, entry := range entries {
+				if _, err := s.outbox.EnqueueIfAbsent(ctx, tx, entry); err != nil {
+					return err
+				}
+			}
+			return nil
 		})
 	}
 }

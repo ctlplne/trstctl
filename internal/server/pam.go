@@ -285,6 +285,9 @@ type pamService struct {
 	// scanned (A260).
 	// secretReader reads a vaulted target's account secret (A261).
 	secretReader func(ctx context.Context, tenantID, name string) ([]byte, int, error)
+	// approverNoticesByName (A258-L2): an emergency grant's notice also goes
+	// to each approver by name.
+	approverNoticesByName bool
 	// rotation retires a check-out's revealed credential (A261 part 2).
 	rotation pamAccountRotation
 	// Fault injection for the gap after signing and before the session event.
@@ -326,6 +329,9 @@ type pamTargetID struct {
 }
 
 type pamDeps struct {
+	// ApproverNoticesByName (A258-L2): a notification channel addresses named
+	// recipients, so an emergency grant's notice also goes to each approver.
+	ApproverNoticesByName               bool
 	DesktopJobEnabled                   bool
 	ADDesktopJobEnabled                 bool
 	NetDeviceJobEnabled                 bool
@@ -427,7 +433,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pamService{signInSettle: new(atomic.Int64), desktopJobEnabled: d.DesktopJobEnabled, adDesktopJobEnabled: d.ADDesktopJobEnabled, netDeviceJobEnabled: d.NetDeviceJobEnabled, webJobEnabled: d.WebJobEnabled,
+	return &pamService{signInSettle: new(atomic.Int64), approverNoticesByName: d.ApproverNoticesByName, desktopJobEnabled: d.DesktopJobEnabled, adDesktopJobEnabled: d.ADDesktopJobEnabled, netDeviceJobEnabled: d.NetDeviceJobEnabled, webJobEnabled: d.WebJobEnabled,
 		commandRuleJobKinds:                 d.CommandRuleJobKinds,
 		windowsDependentInventoryEnabled:    d.WindowsDependentInventoryEnabled,
 		windowsLocalAccountInventoryEnabled: d.WindowsLocalAccountInventoryEnabled,

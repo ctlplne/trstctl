@@ -891,6 +891,7 @@ must provide distinct operation IDs to distinguish otherwise identical alerts.
 | `TRSTCTL_NOTIFICATIONS_EMAIL_TO` | empty | Comma-separated recipient addresses. |
 | `TRSTCTL_NOTIFICATIONS_EMAIL_USERNAME` | empty | Optional SMTP username. |
 | `TRSTCTL_NOTIFICATIONS_EMAIL_PASSWORD` / `TRSTCTL_NOTIFICATIONS_EMAIL_PASSWORD_FILE` | empty | Optional SMTP password as bytes or a file. |
+| `TRSTCTL_NOTIFICATIONS_EMAIL_NAMED_RECIPIENTS` | `false` | Let the email channel address one person (A258-L2): an emergency grant's notice to each approver by name goes to that approver's own address, from the tenant's member records, instead of the recipient list. A bare address only; anything else is refused and nothing is sent. |
 | `TRSTCTL_NOTIFICATIONS_SLACK_ENABLED` | `false` | Enable Slack incoming-webhook delivery. |
 | `TRSTCTL_NOTIFICATIONS_SLACK_WEBHOOK_URL` | empty | Slack incoming-webhook URL. |
 | `TRSTCTL_NOTIFICATIONS_SLACK_ALLOW_PRIVATE_CIDRS` | empty | Comma-separated exact private CIDRs the Slack webhook may resolve into (an internal relay or proxy); everything else stays behind the SSRF guard. |

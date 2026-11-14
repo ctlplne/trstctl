@@ -4862,7 +4862,15 @@ type PAMEmergencyOpened struct {
 	Role       string    `json:"role"`
 	OpenedAt   time.Time `json:"opened_at"`
 	ExpiresAt  time.Time `json:"expires_at"`
+	// NotifiedApprovers (A258-L2) are the members the grant's notice was also
+	// addressed to by name; absent before A258-L2 and when no channel
+	// addresses named recipients.
+	NotifiedApprovers []string `json:"notified_approvers,omitempty"`
 }
+
+// MaxPAMEmergencyNamedApprovers bounds the approvers one emergency grant's
+// notice is addressed to by name (A258-L2, AN-7).
+const MaxPAMEmergencyNamedApprovers = 50
 
 // PAMEmergencyReviewed records an emergency grant's post-incident review by
 // someone other than its responder (A258).
@@ -9509,11 +9517,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.SessionID == "" || pl.Responder == "" || pl.TargetType == "" || pl.TargetID == "" || pl.OpenedAt.IsZero() || !pl.ExpiresAt.After(pl.OpenedAt) {
+		if pl.SessionID == "" || pl.Responder == "" || pl.TargetType == "" || pl.TargetID == "" || pl.OpenedAt.IsZero() || !pl.ExpiresAt.After(pl.OpenedAt) ||
+			len(pl.NotifiedApprovers) > MaxPAMEmergencyNamedApprovers || slices.Contains(pl.NotifiedApprovers, "") {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMEmergencyOpenedTx(ctx, tx, e.TenantID, store.PAMEmergencyGrant{SessionID: pl.SessionID, Responder: pl.Responder,
-			Reason: pl.Reason, TargetType: pl.TargetType, TargetID: pl.TargetID, Role: pl.Role, OpenedAt: pl.OpenedAt, ExpiresAt: pl.ExpiresAt})
+			Reason: pl.Reason, TargetType: pl.TargetType, TargetID: pl.TargetID, Role: pl.Role, OpenedAt: pl.OpenedAt, ExpiresAt: pl.ExpiresAt,
+			NotifiedApprovers: pl.NotifiedApprovers})
 	case EventPAMEmergencyReviewed:
 		var pl PAMEmergencyReviewed
 		if err := decode(e, &pl); err != nil {

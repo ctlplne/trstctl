@@ -1762,6 +1762,10 @@ type NotificationEmail struct {
 	Username     string   `json:"username,omitempty"`
 	Password     []byte   `json:"password,omitempty"`
 	PasswordFile string   `json:"password_file,omitempty"`
+	// NamedRecipients lets the channel address one person (A258-L2): a
+	// notice addressed to an approver by name goes to that approver's own
+	// address, from the tenant's member record, instead of To.
+	NamedRecipients bool `json:"named_recipients,omitempty"`
 }
 
 // NotificationSMS configures the SMS gateway channel. See NotificationWebhook
@@ -4450,6 +4454,7 @@ func setNotificationEnv(getenv func(string) string, n *Notifications) {
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_USERNAME", &n.Email.Username)
 	setBytes(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_PASSWORD", &n.Email.Password)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_PASSWORD_FILE", &n.Email.PasswordFile)
+	setBool(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_NAMED_RECIPIENTS", &n.Email.NamedRecipients)
 	setBool(getenv, "TRSTCTL_NOTIFICATIONS_SMS_ENABLED", &n.SMS.Enabled)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_SMS_ENDPOINT", &n.SMS.Endpoint)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_SMS_FROM", &n.SMS.From)

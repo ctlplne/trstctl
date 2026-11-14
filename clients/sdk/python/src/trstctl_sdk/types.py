@@ -12992,6 +12992,7 @@ PAMEmergencyGrant = TypedDict(
     'PAMEmergencyGrant',
     {
         'expires_at': str,
+        'notified_approvers': list[str],
         'opened_at': str,
         'reason': str,
         'responder': str,

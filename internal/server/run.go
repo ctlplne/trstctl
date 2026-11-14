@@ -1341,6 +1341,9 @@ func notificationChannelsFromConfig(cfg config.Notifications, guard *egress.Guar
 			defer zeroBytes(password)
 			opts = append(opts, notifyemail.WithAuth(cfg.Email.Username, secrettext.String(bytes.TrimSpace(password))))
 		}
+		if cfg.Email.NamedRecipients {
+			opts = append(opts, notifyemail.WithNamedRecipients())
+		}
 		channels = append(channels, notifyemail.New(cfg.Email.SMTPAddr, cfg.Email.From, cfg.Email.To, opts...))
 	}
 	if cfg.SMS.Enabled {

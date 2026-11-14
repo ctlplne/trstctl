@@ -222,6 +222,11 @@ type Alert struct {
 	OwnerName            string           `json:"owner_name,omitempty"`
 	OwnerEmail           string           `json:"owner_email,omitempty"`
 	EscalationRecipients []AlertRecipient `json:"escalation_recipients,omitempty"`
+	// Recipient names the one person the alert is addressed to (A258-L2: an
+	// approver notified by name). Only a channel that addresses people
+	// (RecipientChannel) delivers it, to that person alone; routing policy
+	// does not widen it.
+	Recipient *AlertRecipient `json:"recipient,omitempty"`
 
 	// CA calendar fields (H5), set only on KindCAHorizon and
 	// KindCAValidityCompression. AuthorityID names the CA rather than a

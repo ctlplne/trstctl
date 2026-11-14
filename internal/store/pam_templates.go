@@ -55,6 +55,9 @@ type PAMEmergencyGrant struct {
 	ReviewStatus                 string
 	Reviewer, Outcome, Notes     string
 	ReviewedAt                   *time.Time
+	// NotifiedApprovers (A258-L2) are the members the grant's notice was
+	// also addressed to by name.
+	NotifiedApprovers []string
 }
 
 const pamTemplateColumns = `id::text, name, reason, required_approvals, max_ttl_seconds, require_recording, desktop_clipboard, revision, saved_by, saved_at, deleted_at, command_rules, web_sign_in, reauthenticate_within_seconds`
@@ -185,11 +188,15 @@ func (s *Store) ListPAMEmergencyResponders(ctx context.Context, tenantID string)
 
 // ApplyPAMEmergencyOpenedTx projects pam.emergency.opened.
 func (s *Store) ApplyPAMEmergencyOpenedTx(ctx context.Context, tx pgx.Tx, tenantID string, g PAMEmergencyGrant) error {
+	notified := g.NotifiedApprovers
+	if notified == nil {
+		notified = []string{}
+	}
 	_, err := tx.Exec(ctx, `INSERT INTO pam_emergency_grants
-		(tenant_id, session_id, responder, reason, target_type, target_id, role, opened_at, expires_at, review_status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
+		(tenant_id, session_id, responder, reason, target_type, target_id, role, opened_at, expires_at, review_status, notified_approvers)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10)
 		ON CONFLICT (tenant_id, session_id) DO NOTHING`,
-		tenantID, g.SessionID, g.Responder, g.Reason, g.TargetType, g.TargetID, g.Role, g.OpenedAt.UTC(), g.ExpiresAt.UTC())
+		tenantID, g.SessionID, g.Responder, g.Reason, g.TargetType, g.TargetID, g.Role, g.OpenedAt.UTC(), g.ExpiresAt.UTC(), notified)
 	return err
 }
 
@@ -204,12 +211,12 @@ func (s *Store) ApplyPAMEmergencyReviewedTx(ctx context.Context, tx pgx.Tx, tena
 }
 
 const pamEmergencyColumns = `session_id::text, responder, reason, target_type, target_id, role, opened_at, expires_at,
-	review_status, reviewer, review_outcome, review_notes, reviewed_at`
+	review_status, reviewer, review_outcome, review_notes, reviewed_at, notified_approvers`
 
 func scanPAMEmergencyGrant(row pgx.Row) (PAMEmergencyGrant, error) {
 	var g PAMEmergencyGrant
 	err := row.Scan(&g.SessionID, &g.Responder, &g.Reason, &g.TargetType, &g.TargetID, &g.Role, &g.OpenedAt, &g.ExpiresAt,
-		&g.ReviewStatus, &g.Reviewer, &g.Outcome, &g.Notes, &g.ReviewedAt)
+		&g.ReviewStatus, &g.Reviewer, &g.Outcome, &g.Notes, &g.ReviewedAt, &g.NotifiedApprovers)
 	return g, err
 }
 
@@ -282,7 +289,7 @@ func (s *Store) ListRecentPAMEmergencyGrants(ctx context.Context, since time.Tim
 	for rows.Next() {
 		var g PAMEmergencyGrant
 		if err := rows.Scan(&g.TenantID, &g.SessionID, &g.Responder, &g.Reason, &g.TargetType, &g.TargetID, &g.Role, &g.OpenedAt,
-			&g.ExpiresAt, &g.ReviewStatus, &g.Reviewer, &g.Outcome, &g.Notes, &g.ReviewedAt); err != nil {
+			&g.ExpiresAt, &g.ReviewStatus, &g.Reviewer, &g.Outcome, &g.Notes, &g.ReviewedAt, &g.NotifiedApprovers); err != nil {
 			return nil, err
 		}
 		out = append(out, g)

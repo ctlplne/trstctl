@@ -39,6 +39,20 @@ const (
 // pamApprovers are the tenant's active members whose roles grant
 // access:approve, sorted.
 func (s *pamService) pamApprovers(ctx context.Context, tenantID string) ([]string, error) {
+	members, err := s.pamApproverMembers(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(members))
+	for _, m := range members {
+		out = append(out, m.Subject)
+	}
+	return out, nil
+}
+
+// pamApproverMembers are the tenant's active members whose roles grant
+// access:approve, sorted by subject.
+func (s *pamService) pamApproverMembers(ctx context.Context, tenantID string) ([]store.TenantMember, error) {
 	members, err := s.store.ListTenantMembersPage(ctx, tenantID, "", false, 10000)
 	if err != nil {
 		return nil, err
@@ -55,20 +69,22 @@ func (s *pamService) pamApprovers(ctx context.Context, tenantID string) ([]strin
 		}
 		roles[c.Name] = authz.Role{Name: c.Name, Permissions: perms}
 	}
-	var out []string
+	var out []store.TenantMember
+	seen := map[string]bool{}
 	for _, m := range members {
-		if m.OffboardedAt != nil || m.Status == "offboarded" {
+		if m.OffboardedAt != nil || m.Status == "offboarded" || seen[m.Subject] {
 			continue
 		}
 		for _, name := range m.Roles {
 			if role, ok := roles[name]; ok && role.Allows(authz.AccessApprove) {
-				out = append(out, m.Subject)
+				out = append(out, m)
+				seen[m.Subject] = true
 				break
 			}
 		}
 	}
-	slices.Sort(out)
-	return slices.Compact(out), nil
+	slices.SortFunc(out, func(a, b store.TenantMember) int { return strings.Compare(a.Subject, b.Subject) })
+	return out, nil
 }
 
 func approverList(subjects []string) string {
