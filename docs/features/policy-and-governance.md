@@ -992,7 +992,13 @@ A campaign can be generated instead of typed: `POST /api/v1/access/reviews/gener
 with `source` `graph_reachers` and a graph `target` lists every credential that
 reaches that node in the access graph, with its holders, approvers and grant as
 evidence and the graph's coverage statement (an empty or short list is not proof
-that nobody else has access); it needs `graph:read` as well as `access:write`.
+that nobody else has access); it needs `graph:read` as well as `access:write`. A
+dynamic-secret lease's item also carries what its login holds inside the target, as
+the leader last read it (G2, Q1-L8): `graph:rights-login:`, `graph:rights:` (the
+grants, cut at a whole grant within 240 characters) and `graph:rights-read:`
+references, `graph:rights-unknown:<reason>` when the target could not report them, or
+`graph:rights-not-read`; the console shows them as their own line under the item's
+evidence. Access granted outside trstctl is not listed.
 `stale_owner_attestation` lists the credentials of every complete owner whose
 attestation is older than `older_than_days` (default: the attestation cadence) or
 was never made. A campaign holds at most 100 items; a larger answer asks for a

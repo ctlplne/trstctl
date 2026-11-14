@@ -128,6 +128,42 @@ export function AccessReviewGenerate({ onGenerated }: { onGenerated: (campaignId
 // AccessReviewOutcome says what a decision did: for a revoke, whether trstctl
 // requested the credential's revoke, left it to its own revocation, failed, or
 // closed the item on evidence; for a keep, the next review date.
+// Q1-L8: an item built from the access graph names what a dynamic-secret
+// lease's login holds inside its target, as the leader last read it (G2), in
+// graph:rights references; they read as their own line, the other references
+// as before.
+export function AccessReviewItemEvidence({ refs }: { refs: string[] }) {
+  const { t, formatDateTime } = useTranslation();
+  const plain: string[] = [];
+  const rights = { login: "", grants: "", read: "", unknown: "", notRead: false };
+  for (const ref of refs) {
+    if (ref.startsWith("graph:rights-login:")) rights.login = ref.slice("graph:rights-login:".length);
+    else if (ref.startsWith("graph:rights-read:")) rights.read = ref.slice("graph:rights-read:".length);
+    else if (ref.startsWith("graph:rights-unknown:")) rights.unknown = ref.slice("graph:rights-unknown:".length);
+    else if (ref === "graph:rights-not-read") rights.notRead = true;
+    else if (ref.startsWith("graph:rights:")) rights.grants = ref.slice("graph:rights:".length);
+    else plain.push(ref);
+  }
+  let line: string | null = null;
+  if (rights.grants) {
+    line = t("policy.nhiReview.rights.held", {
+      login: rights.login || "-",
+      grants: rights.grants,
+      time: rights.read ? formatDateTime(rights.read) : "-",
+    });
+  } else if (rights.unknown) {
+    line = t("policy.nhiReview.rights.unknown", { reason: rights.unknown });
+  } else if (rights.notRead) {
+    line = t("policy.nhiReview.rights.notRead");
+  }
+  return (
+    <>
+      {plain.length > 0 ? <p>{plain.join(", ")}</p> : null}
+      {line ? <p className="mt-1 text-xs">{line}</p> : null}
+    </>
+  );
+}
+
 export function AccessReviewOutcome({
   item,
   campaignId,

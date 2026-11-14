@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A review generated from who can reach a graph node carries each dynamic-secret lease's rights inside the target as
+  G2 last read them (Q1-L8): the login, its grants and when they were read, unknown with the target's reason, or not
+  read yet, shown as their own line in the console. The graph's coverage statement now names those reads and lease
+  requesters instead of saying they are unseen.
 - The agent finds MCP servers configured in TOML and YAML as well as JSON (P7-L1): `[mcp_servers.<name>]` tables, and
   `mcpServers`, `mcp_servers` or `servers` mappings or named sequences, read as bytes by readers of the parts of those
   formats such files use; static credentials are named by field as before and never reported.

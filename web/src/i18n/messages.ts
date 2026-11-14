@@ -19726,6 +19726,18 @@ export const messages = {
     defaultMessage: "Your session needs access:write to decide this campaign.",
     description: "Guidance when a review campaign is visible but the operator lacks the decision permission.",
   },
+  "policy.nhiReview.rights.held": {
+    defaultMessage: "Inside the target, {login} holds: {grants} (read {time}).",
+    description: "Q1-L8: what a dynamic-secret lease's login holds inside its target, as the leader last read it, on a review item.",
+  },
+  "policy.nhiReview.rights.unknown": {
+    defaultMessage: "Inside the target: unknown ({reason}); it is read again shortly.",
+    description: "Q1-L8: the target could not report a lease login's rights; the reason the target gave.",
+  },
+  "policy.nhiReview.rights.notRead": {
+    defaultMessage: "Inside the target: not read yet.",
+    description: "Q1-L8: nobody has read this lease login's rights inside its target yet.",
+  },
   "policy.nhiReview.generate.heading": {
     defaultMessage: "Generate a review",
     description: "Q1: heading for building an access review from trstctl's records.",

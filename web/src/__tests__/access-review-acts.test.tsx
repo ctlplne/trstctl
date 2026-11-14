@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AccessReviewGenerate, AccessReviewOutcome, AccessReviewSignedResult } from "@/pages/policy/AccessReviewActs";
+import { AccessReviewGenerate, AccessReviewItemEvidence, AccessReviewOutcome, AccessReviewSignedResult } from "@/pages/policy/AccessReviewActs";
 import type { NHIReviewItem } from "@/lib/api";
 
 const { apiMock, can } = vi.hoisted(() => ({
@@ -66,6 +66,30 @@ describe("Q1 access reviews that act", () => {
     await user.type(screen.getByRole("spinbutton"), "45");
     await user.click(screen.getByRole("button", { name: "Generate review" }));
     expect(apiMock.generateNHIReviewCampaign.mock.calls[0][0]).toEqual({ name: "stale owners", source: "stale_owner_attestation", older_than_days: 45 });
+  });
+
+  // Q1-L8: a lease's rights inside its target read as their own line; a
+  // target that could not report them, or a lease nobody has read, says so.
+  it("shows what a lease's login holds inside the target", () => {
+    const { rerender } = render(
+      <AccessReviewItemEvidence
+        refs={[
+          "graph:grant:login grants read from the database",
+          "graph:holder:principal:issuer",
+          "graph:rights-login:trstctl_readonly_50275a2382",
+          "graph:rights:CONNECT on database postgres; SELECT on public.pam_smoke",
+          "graph:rights-read:2026-11-14T14:50:15Z",
+        ]}
+      />,
+    );
+    expect(screen.getByText("graph:grant:login grants read from the database, graph:holder:principal:issuer")).toBeInTheDocument();
+    expect(
+      screen.getByText(/^Inside the target, trstctl_readonly_50275a2382 holds: CONNECT on database postgres; SELECT on public\.pam_smoke \(read .+\)\.$/),
+    ).toBeInTheDocument();
+    rerender(<AccessReviewItemEvidence refs={["graph:rights-unknown:target_unreachable"]} />);
+    expect(screen.getByText("Inside the target: unknown (target_unreachable); it is read again shortly.")).toBeInTheDocument();
+    rerender(<AccessReviewItemEvidence refs={["graph:holder:principal:issuer", "graph:rights-not-read"]} />);
+    expect(screen.getByText("Inside the target: not read yet.")).toBeInTheDocument();
   });
 
   it("is hidden without access:write", () => {

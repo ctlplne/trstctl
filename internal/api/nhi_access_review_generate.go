@@ -133,10 +133,14 @@ func nhiReviewFromReachers(g *graph.Graph, target string) (orchestrator.NHIRevie
 		if owner == "" && len(grant.Holders) > 0 {
 			owner = grant.Holders[0].Node.ID
 		}
-		if len(refs) > 20 {
-			refs = refs[:20]
-		}
 		attrs := grant.Credential.Attrs
+		// Q1-L8: what the credential holds inside the target (G2) rides with
+		// it; holders and approvers fill the rest of the 20 refs.
+		rights := leaseRightsRefs(attrs)
+		if len(refs) > 20-len(rights) {
+			refs = refs[:20-len(rights)]
+		}
+		refs = append(refs, rights...)
 		kind := firstNonEmpty(attrs["credential_kind"], "credential")
 		risk := "medium"
 		if kind == "pam_session" {
@@ -149,6 +153,42 @@ func nhiReviewFromReachers(g *graph.Graph, target string) (orchestrator.NHIRevie
 		})
 	}
 	return orchestrator.NHIReviewCampaignStartRequest{Scope: "credentials reaching " + node.Name, Items: items}, nil
+}
+
+// maxRightsRef bounds the grants an evidence reference carries (the
+// campaign keeps 260 characters of each).
+const maxRightsRef = 240
+
+// leaseRightsRefs names what a dynamic-secret lease's login holds inside the
+// target as the leader last read it (G2, Q1-L8): the login and its grants with
+// when they were read, unknown with the reason the target gave, or not read
+// yet. A credential that is not a lease carries none: its rights inside a
+// target are not read.
+func leaseRightsRefs(attrs map[string]string) []string {
+	if attrs["credential_kind"] != "dynamic_secret_lease" {
+		return nil
+	}
+	var out []string
+	if login := attrs["login"]; login != "" {
+		out = append(out, "graph:rights-login:"+login)
+	}
+	switch attrs["access_status"] {
+	case "", "not_read":
+		return append(out, "graph:rights-not-read")
+	case store.DynamicSecretAccessResolved:
+		grants := attrs["grants"]
+		if len("graph:rights:")+len(grants) > maxRightsRef {
+			// Whole grants only, then a pointer to the rest.
+			cut := strings.LastIndex(grants[:maxRightsRef-len("graph:rights:")-len("; and more")], "; ")
+			if cut < 0 {
+				cut = 0
+			}
+			grants = grants[:cut] + "; and more"
+		}
+		return append(out, "graph:rights:"+grants, "graph:rights-read:"+attrs["access_checked_at"])
+	default:
+		return append(out, "graph:rights-unknown:"+firstNonEmpty(attrs["access_reason"], attrs["access_status"]))
+	}
 }
 
 // nhiReviewFromStaleOwners lists the credentials of every complete owner whose

@@ -2,7 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ComplianceEvidencePackPanel } from "@/components/ComplianceEvidencePackPanel";
 import { PolicyRuleEditor } from "@/pages/policy/PolicyRuleEditor";
-import { AccessReviewGenerate, AccessReviewOutcome, AccessReviewSignedResult } from "@/pages/policy/AccessReviewActs";
+import { AccessReviewGenerate, AccessReviewItemEvidence, AccessReviewOutcome, AccessReviewSignedResult } from "@/pages/policy/AccessReviewActs";
 import { useAuth } from "@/auth/AuthProvider";
 import { hasPermission } from "@/lib/access";
 import { AppQueryProvider, useApiQuery, useHasAppQueryProvider, useQueryClient } from "@/lib/query";
@@ -1734,7 +1734,13 @@ function NHIReviewCampaignPanel({
                       <p>{item.resource}</p>
                       <p className="mt-1 text-xs text-muted-foreground">{item.entitlement}</p>
                     </td>
-                    <td>{item.evidence_refs.join(", ") || translateNow("source.no.evidence.ref.0697e8fb68")}</td>
+                    <td>
+                      {item.evidence_refs.length > 0 ? (
+                        <AccessReviewItemEvidence refs={item.evidence_refs} />
+                      ) : (
+                        translateNow("source.no.evidence.ref.0697e8fb68")
+                      )}
+                    </td>
                     <td>{item.status}</td>
                     <td>
                       {item.status === "pending" ? (

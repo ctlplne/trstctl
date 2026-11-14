@@ -1613,7 +1613,8 @@ never live in the API process. What you can do end to end against the running bi
   opens once (Q1-L7). A person cannot start a campaign carrying that link.
   `POST /api/v1/access/reviews/generate` builds a campaign from who can reach a
   graph node (with the graph's coverage statement) or from stale owner
-  attestations. A failed revoke stays visible and is retried (Q1-L2): the
+  attestations; a lease's item carries its login's rights inside the target as G2
+  last read them (Q1-L8), and access granted outside trstctl is not listed. A failed revoke stays visible and is retried (Q1-L2): the
   leader's reconcile retries it on its own, waiting as long as it has been
   failing (5 minutes to 6 hours) and stopping a week after the first request,
   and an operator retries at any time with a reason
