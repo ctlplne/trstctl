@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3311 annotated sites across 35 rules. Each row is
+3312 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (813 sites)
+### G101 — CWE-798 Use of hardcoded credentials (814 sites)
 
 | Location | Reason |
 |---|---|
@@ -819,6 +819,7 @@ not this file.
 | `internal/server/slack_app_lost_answer_served_test.go:31` | env: references to test-only values, no credential (CWE-798) |
 | `internal/server/slack_app_served_test.go:144` | env: references to test-only values, no credential (CWE-798) |
 | `internal/server/slack_socket_served_test.go:128` | env: references to test-only values, no credential (CWE-798) |
+| `internal/server/slack_thread_collect_served_test.go:66` | an env: reference to a test-only stand-in token, no credential value (CWE-798) |
 | `internal/server/ssh_agentless_collection_served_test.go:27` | public host pin, restricted account and vault-reference fixtures contain no credential value (CWE-798). |
 | `internal/server/thirdparty_collect_served_test.go:194` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
 | `internal/server/thirdparty_collect_served_test.go:195` | env: references to test-only stand-in tokens, no credential values (CWE-798) |

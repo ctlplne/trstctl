@@ -2658,7 +2658,10 @@ bearer token, or through the registry's token service with `username_ref` and
 environment and build history) and the regular files of each layer, each blob checked
 against its digest before it counts; findings name the image's repository and
 digest. `slack` reads `channels` (IDs) through `conversations.history` with a bot
-token; findings name the channel and message. `jira` reads the issues `jql` selects
+token, and each thread's replies through `conversations.replies` (N6-L1), filed by
+day as Slack's export files them (a reply also sent to the channel is kept once);
+findings name the channel and message, and a reply's finding also names its thread.
+`jira` reads the issues `jql` selects
 (summary, description and comments) with a personal access token, or with
 `username_ref` and an API token; findings name the issue. `since` bounds Slack and
 Jira to a lookback (`720h`), and `max_items` and `max_bytes` bound what one run

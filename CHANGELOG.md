@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- Native Slack collection for secret scanning reads each thread's replies (N6-L1): `conversations.replies` cursor
+  pages, filed by day as Slack's export files them, so a secret posted in a reply is found and its finding names the
+  reply and its thread.
 - Every live tenant can have a token exchange and a published issuer (N5-L2): `protocols.spiffe.exchange_all_tenants`
   with `tenant_trust_domain_suffix` creates a tenant's own JWT key on its first exchange or issuer read, in the trust
   domain `<tenant ID>.<suffix>`; unregistered, suspended or offboarding tenants get none.

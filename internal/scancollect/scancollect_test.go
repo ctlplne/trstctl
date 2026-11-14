@@ -368,3 +368,56 @@ func TestCollectCILogsFromGitHubAndGitLabN6(t *testing.T) {
 		t.Fatal("a registry path read as a CI object")
 	}
 }
+
+// N6-L1: a thread's replies are not in the channel history, so the collector
+// reads each thread parent's replies (conversations.replies, cursor pages)
+// and files them by their own day, as Slack's export does; a reply also
+// broadcast to the channel is filed once, and the item limit stops inside a
+// thread.
+func TestCollectSlackReadsThreadRepliesN6L1(t *testing.T) {
+	var replyCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer xoxb-test-token" {
+			_, _ = fmt.Fprint(w, `{"ok":false,"error":"invalid_auth"}`)
+			return
+		}
+		switch r.URL.Path + "|" + r.URL.Query().Get("cursor") {
+		case "/api/conversations.history|":
+			_, _ = fmt.Fprint(w, `{"ok":true,"messages":[`+
+				`{"ts":"1762246800.000100","thread_ts":"1762246800.000100","reply_count":3,"text":"see thread"},`+
+				`{"ts":"1762246900.000300","thread_ts":"1762246800.000100","subtype":"thread_broadcast","text":"broadcast reply"}],"has_more":false}`)
+		case "/api/conversations.replies|":
+			replyCalls++
+			if r.URL.Query().Get("ts") != "1762246800.000100" || r.URL.Query().Get("channel") != "C0OPS" {
+				_, _ = fmt.Fprint(w, `{"ok":false,"error":"thread_not_found"}`)
+				return
+			}
+			_, _ = fmt.Fprint(w, `{"ok":true,"messages":[{"ts":"1762246800.000100","thread_ts":"1762246800.000100","reply_count":3,"text":"see thread"},`+
+				`{"ts":"1762246850.000200","thread_ts":"1762246800.000100","text":"first reply"}],"has_more":true,"response_metadata":{"next_cursor":"r2"}}`)
+		case "/api/conversations.replies|r2":
+			replyCalls++
+			_, _ = fmt.Fprint(w, `{"ok":true,"messages":[{"ts":"1762246900.000300","thread_ts":"1762246800.000100","subtype":"thread_broadcast","text":"broadcast reply"},`+
+				`{"ts":"1762333300.000400","thread_ts":"1762246800.000100","text":"next day: key LEAK-N6L1-next-day"}],"has_more":false}`)
+		default:
+			_, _ = fmt.Fprint(w, `{"ok":false,"error":"unknown_method"}`)
+		}
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	res, err := Collect(context.Background(), dir, Request{Provider: ProviderSlack, BaseURL: srv.URL, Token: []byte("xoxb-test-token"),
+		Channels: []string{"C0OPS"}, Doer: srv.Client()})
+	if err != nil || res.Items != 4 || res.Truncated || replyCalls != 2 {
+		t.Fatalf("collect = %+v %v (reply pages %d); want the parent, two replies and the broadcast once", res, err, replyCalls)
+	}
+	first := readFile(t, dir, "C0OPS/2025-11-04.json")
+	if strings.Count(first, "broadcast reply") != 1 || strings.Count(first, "see thread") != 1 || !strings.Contains(first, "first reply") {
+		t.Fatalf("the thread's day = %s", first)
+	}
+	if next := readFile(t, dir, "C0OPS/2025-11-05.json"); !strings.Contains(next, "LEAK-N6L1-next-day") || !strings.Contains(next, `"channel_id": "C0OPS"`) {
+		t.Fatalf("the reply posted the next day = %s", next)
+	}
+	if res, err := Collect(context.Background(), t.TempDir(), Request{Provider: ProviderSlack, BaseURL: srv.URL,
+		Token: []byte("xoxb-test-token"), Channels: []string{"C0OPS"}, MaxItems: 2, Doer: srv.Client()}); err != nil || res.Items != 2 || !res.Truncated {
+		t.Fatalf("limited collect = %+v %v; want it stopped inside the thread", res, err)
+	}
+}

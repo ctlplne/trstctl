@@ -41,6 +41,7 @@ func collectSlack(ctx context.Context, w *writer, req Request) (Result, error) {
 			return res, fmt.Errorf("%w: %q is not a Slack channel ID", ErrRefused, channel)
 		}
 		days := map[string][]json.RawMessage{}
+		seen := map[string]bool{} // a broadcast reply is in the history and its thread
 		cursor := ""
 		for {
 			if res.Items >= req.MaxItems {
@@ -78,30 +79,17 @@ func collectSlack(ctx context.Context, w *writer, req Request) (Result, error) {
 					res.Truncated = true
 					break
 				}
-				var m struct {
-					TS   string `json:"ts"`
-					User string `json:"user"`
-				}
-				if json.Unmarshal(raw, &m) != nil || !slackTS.MatchString(m.TS) {
-					continue
-				}
-				if slackUserID.MatchString(m.User) {
-					posters[m.User] = true
-				}
-				// Each message names its channel, as a per-message export line does.
-				var fields map[string]json.RawMessage
-				if json.Unmarshal(raw, &fields) != nil {
-					continue
-				}
-				fields["channel_id"], _ = json.Marshal(channel)
-				withChannel, err := json.Marshal(fields)
+				m, err := addSlackMessage(raw, channel, days, posters, seen, &res)
 				if err != nil {
 					return res, err
 				}
-				seconds, _ := strconv.ParseInt(strings.SplitN(m.TS, ".", 2)[0], 10, 64)
-				day := time.Unix(seconds, 0).UTC().Format("2006-01-02")
-				days[day] = append(days[day], withChannel)
-				res.Items++
+				// N6-L1: a thread's replies are not in the channel history; read
+				// them from the thread, as Slack's export files them, by day.
+				if m.ReplyCount > 0 && m.ThreadTS == m.TS && !res.Truncated {
+					if err := collectSlackReplies(ctx, req, channel, m.TS, days, posters, seen, &res); err != nil {
+						return res, err
+					}
+				}
 			}
 			if !page.HasMore || page.Meta.NextCursor == "" || res.Truncated {
 				break
@@ -237,4 +225,85 @@ func collectJira(ctx context.Context, w *writer, req Request) (Result, error) {
 		res.Truncated = true
 	}
 	return res, nil
+}
+
+// slackMessage is what the collector reads of one message.
+type slackMessage struct {
+	TS         string `json:"ts"`
+	User       string `json:"user"`
+	ThreadTS   string `json:"thread_ts"`
+	ReplyCount int    `json:"reply_count"`
+}
+
+// addSlackMessage files one message under its UTC day with the channel it
+// was posted in, once per timestamp; a message without a valid timestamp is
+// skipped.
+func addSlackMessage(raw json.RawMessage, channel string, days map[string][]json.RawMessage, posters, seen map[string]bool, res *Result) (slackMessage, error) {
+	var m slackMessage
+	if json.Unmarshal(raw, &m) != nil || !slackTS.MatchString(m.TS) || seen[m.TS] {
+		return m, nil
+	}
+	if slackUserID.MatchString(m.User) {
+		posters[m.User] = true
+	}
+	// Each message names its channel, as a per-message export line does.
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return m, nil
+	}
+	fields["channel_id"], _ = json.Marshal(channel)
+	withChannel, err := json.Marshal(fields)
+	if err != nil {
+		return m, err
+	}
+	seconds, _ := strconv.ParseInt(strings.SplitN(m.TS, ".", 2)[0], 10, 64)
+	day := time.Unix(seconds, 0).UTC().Format("2006-01-02")
+	days[day] = append(days[day], withChannel)
+	seen[m.TS] = true
+	res.Items++
+	return m, nil
+}
+
+// collectSlackReplies reads one thread's replies (conversations.replies,
+// cursor pages) into the channel's days, within the item limit (N6-L1).
+func collectSlackReplies(ctx context.Context, req Request, channel, threadTS string, days map[string][]json.RawMessage, posters, seen map[string]bool, res *Result) error {
+	cursor := ""
+	for {
+		q := url.Values{"channel": {channel}, "ts": {threadTS}, "limit": {"200"}}
+		if cursor != "" {
+			q.Set("cursor", cursor)
+		}
+		body, _, err := get(ctx, req, req.BaseURL+"/api/conversations.replies?"+q.Encode(), authorization(req))
+		if err != nil {
+			return err
+		}
+		var page struct {
+			OK       bool              `json:"ok"`
+			Error    string            `json:"error"`
+			Messages []json.RawMessage `json:"messages"`
+			HasMore  bool              `json:"has_more"`
+			Meta     struct {
+				NextCursor string `json:"next_cursor"`
+			} `json:"response_metadata"`
+		}
+		if err := json.Unmarshal(body, &page); err != nil {
+			return fmt.Errorf("scancollect: Slack thread %s in %s: %w", threadTS, channel, err)
+		}
+		if !page.OK {
+			return fmt.Errorf("%w: Slack answered %q for thread %s in %s", ErrRefused, page.Error, threadTS, channel)
+		}
+		for _, raw := range page.Messages {
+			if res.Items >= req.MaxItems {
+				res.Truncated = true
+				return nil
+			}
+			if _, err := addSlackMessage(raw, channel, days, posters, seen, res); err != nil {
+				return err
+			}
+		}
+		if !page.HasMore || page.Meta.NextCursor == "" {
+			return nil
+		}
+		cursor = page.Meta.NextCursor
+	}
 }
