@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- An ACME EAB credential can be scoped to mail domains (P15-L3): `allowed_identifiers` takes `@domain`, `@*.domain`
+  or an exact mailbox for `email` orders, set in configuration or through the policy API and the console; a mailbox
+  entry never admits a DNS name nor a name entry a mailbox.
 - trstctl can DKIM-sign its own ACME challenge mail (P15-L2): `protocols.acme_email.dkim_selector` and `dkim_key_ref`
   sign each RFC 8823 challenge mail (rsa-sha256, d= the from domain) before it reaches the relay, with the key read
   from its reference for each mail; a mail whose key cannot be read is retried, never sent unsigned.

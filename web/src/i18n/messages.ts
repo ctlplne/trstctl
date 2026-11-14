@@ -26319,8 +26319,9 @@ export const messages = {
     description: "A53: label for the comma-separated identifier scope.",
   },
   "protocols.eab.policyIdentifiersHelp": {
-    defaultMessage: "Comma-separated exact names or *.suffix entries; empty means unscoped.",
-    description: "A53: help text under the identifier scope field.",
+    defaultMessage:
+      "Comma-separated exact names or *.suffix entries; for mailboxes, @domain, @*.domain or one address. A mailbox entry never admits a name. Empty means unscoped.",
+    description: "A53, P15-L3: help text under the identifier scope field, naming the DNS and mailbox entry forms.",
   },
   "protocols.eab.policyMaxOrders": {
     defaultMessage: "Order quota",

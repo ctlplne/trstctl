@@ -6439,9 +6439,9 @@ This is a deliberate, documented trust boundary, not an accident.
   verified it, as did `openssl smime`; a tampered copy failed. That proof runs in the
   lab, not in CI: the client library stays outside the repository. trstctl signs its
   own challenge mail with a configured RSA key (P15-L2, rsa-sha256; ed25519-sha256
-  signing is not offered), or the relay signs. SPF/DMARC checks, internationalized
-  addresses, quoted local parts and EAB credentials scoped to mail domains are not
-  supported.
+  signing is not offered), or the relay signs. An EAB credential may be scoped to mail
+  domains or mailboxes (P15-L3). SPF/DMARC checks, internationalized addresses and
+  quoted local parts are not supported.
 - Persistent DNS validation, dns-persist-01 (P1): the ACME server offers the
   challenge from the IETF draft draft-ietf-acme-dns-persist (allowed by
   CA/Browser Forum Ballot SC-088v3) when

@@ -4660,7 +4660,8 @@ of your own, from discovery to a signed audit export, run
 
 Each entry in `protocols.acme_eab.keys[]` also carries the scope that credential
 authorizes — `allowed_identifiers` (exact names or `*.suffix`, which covers the apex
-too), `max_orders`, an RFC 3339 `not_after`, and `disabled`. All are optional and a key
+too; for mailboxes `@domain`, `@*.domain` or one address, P15-L3), `max_orders`, an
+RFC 3339 `not_after`, and `disabled`. All are optional and a key
 with none behaves as it did before. An order outside a credential's scope, past its
 quota, or after its window is refused fail-closed and recorded. Scope has no env
 shortcut: it is per-key structured config. See

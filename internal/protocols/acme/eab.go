@@ -39,10 +39,14 @@ import (
 // policy authorizes everything the server would otherwise allow, which is the
 // pre-B4 behavior and remains the default for an operator who sets no scope.
 type EABPolicy struct {
-	// AllowedIdentifiers scopes which DNS identifiers orders under this
-	// credential may request. An entry is either an exact name
+	// AllowedIdentifiers scopes which identifiers orders under this
+	// credential may request. A DNS entry is either an exact name
 	// ("api.example.com") or a wildcard suffix ("*.example.com", which matches
-	// example.com and anything under it). Empty means unscoped.
+	// example.com and anything under it). A mail entry (P15-L3) scopes email
+	// identifiers: "@example.com" (any mailbox there), "@*.example.com" (any
+	// mailbox at example.com or a domain under it) or one exact mailbox
+	// ("alice@example.com"). A DNS entry never admits a mailbox, nor a mail
+	// entry a name. Empty means unscoped.
 	AllowedIdentifiers []string
 	// Profile pins the tenant certificate profile every order under this
 	// credential is issued with (A55). The newOrder handler records it on the
@@ -74,9 +78,21 @@ func (p EABPolicy) permits(identifier string) bool {
 	if name == "" {
 		return false
 	}
+	mailbox := strings.Contains(name, "@")
 	for _, allowed := range p.AllowedIdentifiers {
 		pattern := strings.ToLower(strings.TrimSpace(strings.TrimSuffix(allowed, ".")))
 		if pattern == "" {
+			continue
+		}
+		if strings.Contains(pattern, "@") != mailbox {
+			// P15-L3: a mail entry scopes mailboxes and a DNS entry names;
+			// neither stands in for the other.
+			continue
+		}
+		if mailbox {
+			if permitsMailbox(name, pattern) {
+				return true
+			}
 			continue
 		}
 		if suffix, ok := strings.CutPrefix(pattern, "*."); ok {
@@ -90,6 +106,50 @@ func (p EABPolicy) permits(identifier string) bool {
 		}
 	}
 	return false
+}
+
+// permitsMailbox matches a lowercased mailbox against one mail entry:
+// "@domain", "@*.domain" or an exact mailbox (P15-L3).
+func permitsMailbox(mailbox, pattern string) bool {
+	at := strings.LastIndexByte(mailbox, '@')
+	domain := mailbox[at+1:]
+	if rest, ok := strings.CutPrefix(pattern, "@*."); ok {
+		return domain == rest || strings.HasSuffix(domain, "."+rest)
+	}
+	if rest, ok := strings.CutPrefix(pattern, "@"); ok {
+		return domain == rest
+	}
+	return mailbox == pattern
+}
+
+// ValidEABIdentifierEntry checks one allowed_identifiers entry: a DNS entry
+// (an exact name or *.suffix) or, since P15-L3, a mail entry ("@domain",
+// "@*.domain" or an exact mailbox). A malformed mail entry would admit
+// nothing it seems to admit, so it is refused rather than kept.
+func ValidEABIdentifierEntry(entry string) error {
+	entry = strings.TrimSpace(entry)
+	if entry == "" {
+		return errors.New("an allowed identifier must not be empty")
+	}
+	if !strings.Contains(entry, "@") {
+		return nil
+	}
+	lower := strings.ToLower(strings.TrimSuffix(entry, "."))
+	switch {
+	case strings.HasPrefix(lower, "@*."):
+		if !validEmailDomain(lower[3:]) {
+			return fmt.Errorf("mail entry %q names no mail domain after its @*. prefix", entry)
+		}
+	case strings.HasPrefix(lower, "@"):
+		if !validEmailDomain(lower[1:]) {
+			return fmt.Errorf("mail entry %q names no mail domain after @", entry)
+		}
+	default:
+		if _, err := NormalizeEmailIdentifier(entry); err != nil {
+			return fmt.Errorf("mail entry %q is not @domain, @*.domain or a mailbox: %w", entry, err)
+		}
+	}
+	return nil
 }
 
 // expired reports whether the credential's validity window has closed.
@@ -329,6 +389,14 @@ func (s *Server) UpdateEABPolicy(ctx context.Context, keyID string, update EABPo
 	cred := s.eabCredentials[keyID]
 	if cred == nil {
 		return EABCredentialStatus{}, false, nil
+	}
+	for _, entry := range update.AllowedIdentifiers {
+		if strings.TrimSpace(entry) == "" {
+			continue
+		}
+		if err := ValidEABIdentifierEntry(entry); err != nil {
+			return EABCredentialStatus{}, true, fmt.Errorf("acme: %w", err)
+		}
 	}
 	payload := acmeEABPolicyUpdatedEvent{KeyID: keyID, AllowedIdentifiers: normalizedEABIdentifiers(update.AllowedIdentifiers),
 		MaxOrders: update.MaxOrders, Profile: strings.TrimSpace(update.Profile)}

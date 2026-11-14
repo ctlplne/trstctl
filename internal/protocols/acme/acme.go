@@ -475,6 +475,12 @@ func (s *Server) WithExternalAccountBindings(required bool, keys []ExternalAccou
 			destroyEABCredentials(next)
 			return nil, fmt.Errorf("acme: external account binding key %q must be at least 16 bytes", keyID)
 		}
+		for _, entry := range key.Policy.AllowedIdentifiers {
+			if err := ValidEABIdentifierEntry(entry); err != nil {
+				destroyEABCredentials(next)
+				return nil, fmt.Errorf("acme: external account binding key %q: %w", keyID, err)
+			}
+		}
 		buf, err := secret.NewFrom(key.HMACKey)
 		if err != nil {
 			destroyEABCredentials(next)

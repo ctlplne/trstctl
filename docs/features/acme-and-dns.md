@@ -142,7 +142,11 @@ HMAC key.
 `kid` admitted it, and every order under that account is checked against that
 credential's scope. A credential in `protocols.acme_eab.keys[]` may carry
 `allowed_identifiers` (exact names, or `*.example.com`, which covers the apex and
-anything beneath it), `max_orders`, an RFC 3339 `not_after`, and `disabled`. An order
+anything beneath it; for `email` orders, `@example.com` for any mailbox there,
+`@*.example.com` for mailboxes there and under it, or one exact mailbox, P15-L3),
+`max_orders`, an RFC 3339 `not_after`, and `disabled`. A mailbox entry never admits a
+DNS name nor a name entry a mailbox, so a credential scoped only to mail domains orders
+no TLS certificates; a malformed mailbox entry refuses to start, or to save. An order
 for an identifier outside the scope is refused fail-closed, names the identifier and
 the credential, and records an `acme.eab.order_denied` event; one out-of-scope
 identifier refuses the whole order. A credential with none of those fields behaves
