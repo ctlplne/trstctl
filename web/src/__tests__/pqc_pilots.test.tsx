@@ -55,7 +55,8 @@ const halted = {
           outcome: "rejected" as const,
           handshake_ms: 0,
           chain_bytes: 0,
-          detail: "the client refused the handshake: tlsprobe: handshake 127.0.0.1:4432: EOF",
+          detail:
+            "the client does not offer ML-DSA-65 among its signature algorithms, so the endpoint could not sign the handshake with the ML-DSA-65 leaf and ended it: tlsprobe: handshake 127.0.0.1:4432: remote error: tls: handshake failure",
           observed_at: "2026-10-22T00:00:31Z",
         },
       ],
@@ -109,6 +110,8 @@ describe("PQCPilots", () => {
     expect(within(waves).getByText("3 ms · 408 B")).toBeInTheDocument();
     expect(within(waves).getByText(/Not probed: an earlier wave halted the pilot/)).toBeInTheDocument();
     expect(within(waves).getByText(/key pqc-readiness-report \(ECDSA-P256\)/)).toBeInTheDocument();
+    // B7-L1: the refusal names the leaf's algorithm and why the client refused it.
+    expect(within(waves).getByText(/the client does not offer ML-DSA-65 among its signature algorithms/)).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/Pilot name/), "Web PQ pilot");
     await user.type(screen.getByLabelText(/Issuing authority ID/), "pq-issuing-ca");

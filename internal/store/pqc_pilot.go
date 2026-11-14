@@ -387,3 +387,32 @@ func (s *Store) ListPQCPilotsAwaitingTraffic(ctx context.Context, tenantID strin
 	})
 	return out, err
 }
+
+// PQCPilotLeafAlgorithmsTx reads the key algorithm the inventory records for
+// each of a wave's expected leaves, keyed by lower-case fingerprint (B7-L1); a
+// leaf the inventory does not hold is absent. Exact fingerprints, so the
+// (tenant_id, fingerprint) key serves the lookup.
+func (s *Store) PQCPilotLeafAlgorithmsTx(ctx context.Context, tx pgx.Tx, tenantID string, fingerprints []string) (map[string]string, error) {
+	out := make(map[string]string, len(fingerprints))
+	if len(fingerprints) == 0 {
+		return out, nil
+	}
+	lowered := make([]string, 0, len(fingerprints))
+	for _, fp := range fingerprints {
+		lowered = append(lowered, strings.ToLower(strings.TrimSpace(fp)))
+	}
+	rows, err := tx.Query(ctx, `SELECT fingerprint, key_algorithm FROM certificates
+		 WHERE tenant_id = $1 AND fingerprint = ANY($2) AND key_algorithm <> ''`, tenantID, lowered)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var fp, algorithm string
+		if err := rows.Scan(&fp, &algorithm); err != nil {
+			return nil, err
+		}
+		out[strings.ToLower(fp)] = algorithm
+	}
+	return out, rows.Err()
+}

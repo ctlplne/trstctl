@@ -234,18 +234,49 @@ func (o *Orchestrator) dispatchPQCPilotWaveTx(ctx context.Context, tx pgx.Tx, te
 // evidence. Reached with the exact expected leaf is a negotiation; a
 // completed TCP connection whose TLS handshake failed, or a listener serving a
 // different leaf, is a rejection; a failed dial is unreachable and says
-// nothing about the post-quantum leaf.
-func ClassifyPQCPilotTranscript(tr transport.ProbeTranscript, expectedFingerprint string) (compatlab.Outcome, string) {
+// nothing about the post-quantum leaf. leafAlgorithm is the expected leaf's
+// key algorithm as the inventory records it ("" when unknown); a rejection
+// names it and, where the handshake says so, its cause (B7-L1).
+func ClassifyPQCPilotTranscript(tr transport.ProbeTranscript, expectedFingerprint, leafAlgorithm string) (compatlab.Outcome, string) {
+	leaf := "the post-quantum leaf"
+	if alg := strings.TrimSpace(leafAlgorithm); alg != "" {
+		leaf = "the " + alg + " leaf"
+	}
 	if tr.Reached {
 		if strings.EqualFold(tr.ObservedFingerprint, expectedFingerprint) && tr.Mismatch == "" {
-			return compatlab.OutcomeNegotiated, "the client negotiated the post-quantum leaf"
+			return compatlab.OutcomeNegotiated, "the client negotiated " + leaf
 		}
 		return compatlab.OutcomeRejected, "the endpoint served a different leaf than the pilot deployed"
 	}
 	if strings.HasPrefix(tr.Error, "tlsprobe: dial ") || tr.Error == "" {
 		return compatlab.OutcomeUnreachable, "the endpoint could not be reached: " + tr.Error
 	}
-	return compatlab.OutcomeRejected, "the client refused the handshake: " + tr.Error
+	return compatlab.OutcomeRejected, pqcPilotRefusal(tr.Error, leaf, strings.TrimSpace(leafAlgorithm))
+}
+
+// pqcPilotRefusal says why a handshake with the expected leaf failed, where
+// the handshake shows it. An endpoint that ends the handshake with a
+// handshake_failure alert found no signature algorithm the client offers for
+// its leaf (OpenSSL logs "no suitable signature algorithm"): the client does
+// not offer the leaf's algorithm. A client that could not verify the leaf or
+// its signature says so itself.
+func pqcPilotRefusal(probeError, leaf, algorithm string) string {
+	lower := strings.ToLower(probeError)
+	offered := "the leaf's algorithm"
+	if algorithm != "" {
+		offered = algorithm
+	}
+	switch {
+	case strings.Contains(lower, "handshake failure"):
+		return "the client does not offer " + offered + " among its signature algorithms, so the endpoint could not sign the handshake with " +
+			leaf + " and ended it: " + probeError
+	case strings.Contains(lower, "unsupported signature algorithm") || strings.Contains(lower, "algorithm unimplemented") ||
+		strings.Contains(lower, "unknown public key algorithm") || strings.Contains(lower, "unsupported public key"):
+		return "the client cannot verify " + offered + " signatures, so it refused " + leaf + ": " + probeError
+	case strings.Contains(lower, "x509:") || strings.Contains(lower, "bad certificate") || strings.Contains(lower, "unknown certificate"):
+		return "the client could not verify " + leaf + ": " + probeError
+	}
+	return "the client refused the handshake with " + leaf + ": " + probeError
 }
 
 // RecordPQCPilotWave takes a wave's signed relay report, assesses the pilot
@@ -280,8 +311,15 @@ func (o *Orchestrator) RecordPQCPilotWave(ctx context.Context, tenantID, pilotID
 			return fmt.Errorf("%w: wave %d was never dispatched", ErrPQCPilotInvalid, wave)
 		}
 		expected := make(map[string]string, len(current.Targets))
+		fingerprints := make([]string, 0, len(current.Targets))
 		for _, target := range current.Targets {
 			expected[target.TargetID] = target.Fingerprint
+			fingerprints = append(fingerprints, target.Fingerprint)
+		}
+		// B7-L1: each expected leaf's algorithm, as the inventory records it.
+		algorithms, err := o.store.PQCPilotLeafAlgorithmsTx(ctx, tx, tenantID, fingerprints)
+		if err != nil {
+			return err
 		}
 		now := time.Now().UTC()
 		results := make([]projections.PQCPilotResult, 0, len(report.Results))
@@ -290,7 +328,7 @@ func (o *Orchestrator) RecordPQCPilotWave(ctx context.Context, tenantID, pilotID
 			if !ok {
 				continue
 			}
-			outcome, detail := ClassifyPQCPilotTranscript(res.Transcript, fp)
+			outcome, detail := ClassifyPQCPilotTranscript(res.Transcript, fp, algorithms[strings.ToLower(fp)])
 			observed := time.Unix(res.Transcript.ObservedAtUnix, 0).UTC()
 			if res.Transcript.ObservedAtUnix <= 0 {
 				observed = now

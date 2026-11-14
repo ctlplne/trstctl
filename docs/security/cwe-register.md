@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3366 annotated sites across 35 rules. Each row is
+3370 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1767,7 +1767,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (422 sites)
+### G204 — CWE-78 OS command injection (425 sites)
 
 | Location | Reason |
 |---|---|
@@ -2072,6 +2072,9 @@ not this file.
 | `internal/server/pam_signin_served_test.go:51` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_signin_served_test.go:68` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_signin_served_test.go:504` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pqc_pilot_refusal_served_test.go:154` | the lab's own OpenSSL binary and test-owned arguments (CWE-78) |
+| `internal/server/pqc_pilot_refusal_served_test.go:168` | the lab's own OpenSSL binary and test-owned arguments (CWE-78) |
+| `internal/server/pqc_pilot_refusal_served_test.go:205` | the lab's own OpenSSL binary (CWE-78) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:68` | docker with the lab's own arguments and the runner's image (CWE-78) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:146` | the lab's own container names (CWE-78) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:161` | the lab's own container name (CWE-78) |
@@ -2318,7 +2321,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (797 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (798 sites)
 
 | Location | Reason |
 |---|---|
@@ -2909,6 +2912,7 @@ not this file.
 | `internal/server/pam_served_test.go:921` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/plugins.go:199` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/plugins.go:203` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
+| `internal/server/pqc_pilot_refusal_served_test.go:187` | the lab's own temporary certificate (CWE-22) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:82` | the lab runner's build output (CWE-22) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:97` | the repository's own fixture (CWE-22) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:117` | the repository's own fixture (CWE-22) |
@@ -3410,7 +3414,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (52 sites)
+### G702 — CWE-78 OS command injection (taint) (55 sites)
 
 | Location | Reason |
 |---|---|
@@ -3451,6 +3455,9 @@ not this file.
 | `internal/server/pam_gateway_mysql_served_test.go:164` | the stock mysql client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:107` | the stock redis-cli against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_snowflake_served_test.go:101` | stock curl against the test-owned gateway tunnel (CWE-78) |
+| `internal/server/pqc_pilot_refusal_served_test.go:154` | the lab's own OpenSSL binary and test-owned arguments (CWE-78) |
+| `internal/server/pqc_pilot_refusal_served_test.go:168` | the lab's own OpenSSL binary and test-owned arguments (CWE-78) |
+| `internal/server/pqc_pilot_refusal_served_test.go:205` | the lab's own OpenSSL binary (CWE-78) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:68` | docker with the lab's own arguments and the runner's image (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/redfish_mockup_served_test.go:79` | the interpreter and checkout the CI lab names, fixed arguments (CWE-78) |

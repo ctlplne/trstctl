@@ -310,7 +310,14 @@ classifies every transcript — `negotiated` when the client got exactly that
 leaf, `rejected` when the endpoint was reached but the handshake was refused or
 served a different leaf, `unreachable` when the dial failed — keeping each
 handshake's size and latency, and takes the compat-lab verdict over everything
-probed so far. One refusal halts the pilot; an unreachable canary halts it too,
+probed so far. A refusal names the expected leaf's key algorithm as the inventory
+records it and, where the handshake shows it, the cause (B7-L1): an endpoint that
+ends the handshake with a `handshake_failure` alert found no signature algorithm
+the client offers for its leaf (stock OpenSSL logs "no suitable signature
+algorithm"), so the result reads "the client does not offer ML-DSA-65 among its
+signature algorithms, so the endpoint could not sign the handshake with the
+ML-DSA-65 leaf and ended it"; a client that cannot verify the leaf or its
+signature says that instead. One refusal halts the pilot; an unreachable canary halts it too,
 because silence is not compatibility; otherwise the next wave is dispatched, and
 a pilot whose every wave negotiated completes. Waves after a halt are marked
 `skipped` and are never probed. A finished pilot's evidence is signed inside the

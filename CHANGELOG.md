@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A post-quantum pilot's refusal names the leaf's algorithm and its cause (B7-L1): with the expected leaf's key
+  algorithm read from the inventory, a refused handshake reads, for example, "the client does not offer ML-DSA-65
+  among its signature algorithms, so the endpoint could not sign the handshake with the ML-DSA-65 leaf and ended it"
+  instead of only "the client refused the handshake"; a client that cannot verify the leaf or its signature says so.
 - Emergency access notifies each approver by name (A258-L2): with the operator's email channel set to
   `named_recipients` (`TRSTCTL_NOTIFICATIONS_EMAIL_NAMED_RECIPIENTS`), the grant's notice also goes to every active
   member whose roles grant `access:approve` (not the responder, with an address on record, at most 50) at their own
