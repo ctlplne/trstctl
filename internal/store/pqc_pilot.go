@@ -48,6 +48,9 @@ type PQCPilotTarget struct {
 	ServerName  string `json:"server_name,omitempty"`
 	Connector   string `json:"connector,omitempty"`
 	Fingerprint string `json:"fingerprint"`
+	// ObservedAddresses are where an observer sees the target's traffic
+	// behind NAT or a load balancer (X3-L2).
+	ObservedAddresses []string `json:"observed_addresses,omitempty"`
 }
 
 // PQCPilotResult is one target's classified handshake evidence.

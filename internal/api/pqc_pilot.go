@@ -35,11 +35,12 @@ type pqcPilotWaveRequest struct {
 }
 
 type pqcPilotTargetRequest struct {
-	TargetID    string `json:"target_id"`
-	Address     string `json:"address"`
-	ServerName  string `json:"server_name,omitempty"`
-	Connector   string `json:"connector,omitempty"`
-	Fingerprint string `json:"fingerprint"`
+	TargetID          string   `json:"target_id"`
+	Address           string   `json:"address"`
+	ServerName        string   `json:"server_name,omitempty"`
+	Connector         string   `json:"connector,omitempty"`
+	Fingerprint       string   `json:"fingerprint"`
+	ObservedAddresses []string `json:"observed_addresses,omitempty"`
 }
 
 type pqcPilotResponse struct {
@@ -131,7 +132,7 @@ func toPQCPilotResponse(p store.PQCPilot, withWaves bool) pqcPilotResponse {
 			TrafficCheckedAt: w.TrafficCheckedAt, Targets: []pqcPilotTargetRequest{}}
 		for _, t := range w.Targets {
 			wave.Targets = append(wave.Targets, pqcPilotTargetRequest{TargetID: t.TargetID, Address: t.Address,
-				ServerName: t.ServerName, Connector: t.Connector, Fingerprint: t.Fingerprint})
+				ServerName: t.ServerName, Connector: t.Connector, Fingerprint: t.Fingerprint, ObservedAddresses: t.ObservedAddresses})
 		}
 		for _, r := range w.Results {
 			res := pqcPilotResultRes{TargetID: r.TargetID, Outcome: r.Outcome,
@@ -172,7 +173,7 @@ func (a *API) startPQCPilot(w http.ResponseWriter, r *http.Request) {
 			wr := orchestrator.PQCPilotWaveRequest{Name: wave.Name}
 			for _, t := range wave.Targets {
 				wr.Targets = append(wr.Targets, orchestrator.PQCPilotTargetRequest{TargetID: t.TargetID, Address: t.Address,
-					ServerName: t.ServerName, Connector: t.Connector, Fingerprint: t.Fingerprint})
+					ServerName: t.ServerName, Connector: t.Connector, Fingerprint: t.Fingerprint, ObservedAddresses: t.ObservedAddresses})
 			}
 			in.Waves = append(in.Waves, wr)
 		}

@@ -7434,6 +7434,7 @@ export interface MigrationMemberBinding {
   execution_model?: "host" | "appliance" | "cloud_store";
   issuing_authority_id: string;
   issuing_authority_source?: "platform" | "private" | "external";
+  observed_addresses?: string[];
   predecessor_certificate_id: string;
   predecessor_external_ca_id?: string;
   predecessor_fingerprint: string;
@@ -10330,6 +10331,7 @@ export interface PQCPilotTarget {
   address: string;
   connector?: string;
   fingerprint: string;
+  observed_addresses?: string[];
   server_name?: string;
   target_id: string;
 }

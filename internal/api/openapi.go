@@ -1990,6 +1990,8 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "tenant_id", "name", "owner", "deadline", "wave", "readiness_criteria", "readiness_status", "readiness_evidence_refs", "status", "finding_count", "pending_count", "remediated_count", "excepted_count", "automated_execution_available", "automated_execution_note", "created_at", "updated_at")
 	pqcPilotTarget := object(map[string]*Schema{
 		"target_id": str(), "address": str(), "server_name": str(), "connector": str(), "fingerprint": str(),
+		"observed_addresses": {Type: "array", Items: str(), Description: "where an observer sees the target's traffic when NAT or a " +
+			"load balancer sits in front of address (host:port, at most 16): observed traffic there counts for the target (X3-L2)"},
 	}, "target_id", "address", "fingerprint")
 	pqcPilotWaveReq := object(map[string]*Schema{
 		"name": str(), "targets": {Type: "array", Items: ref("PQCPilotTarget")},
@@ -6340,6 +6342,8 @@ func componentSchemas() map[string]*Schema {
 		"predecessor_source": str(), "predecessor_external_ca_id": str(),
 		"execution_model":       {Type: "string", Enum: []string{"host", "appliance", "cloud_store"}},
 		"successor_fingerprint": str(),
+		"observed_addresses": {Type: "array", Items: str(), Description: "where an observer sees the endpoint's traffic when NAT or a " +
+			"load balancer sits in front of verify_address (host:port, at most 16), frozen from the deployment target's observed_addresses (X3-L2)"},
 	}, "issuing_authority_id", "target_id", "target_revision", "connector", "target", "target_config",
 		"trust_anchor_path", "trust_anchor_pem", "trust_anchor_fingerprint", "verify_address",
 		"subject_common_name", "subject_dns_names", "predecessor_certificate_id", "predecessor_fingerprint")

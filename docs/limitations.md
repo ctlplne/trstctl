@@ -1541,7 +1541,8 @@ never live in the API process. What you can do end to end against the running bi
   traffic advances a wave only when the live receipt and an observer's new connections
   agree for every member, pauses when the wire proof is late, and marks the
   observer's finding for the predecessor remediated with both proofs. Observer
-  evidence is matched by the member's verify address or server name and port; the
+  evidence is matched by the member's verify address or server name and port, or at
+  the observed addresses its target names behind NAT or a load balancer (X3-L2); the
   gate is opt-in per run and covers migration runs and PQC pilot waves (X3-L5: a
   wave waits after its probe until real clients are seen at every target, and a
   target not seen within the window halts the pilot). Plain renewals and other
@@ -1550,7 +1551,7 @@ never live in the API process. What you can do end to end against the running bi
   replacement is already live, and an endpoint without evidence an hour later reads
   unobserved. A replacement is known only from two verifications of the same endpoint
   in a row that saw different certificates, and endpoint evidence is matched by
-  address alone. The Migration
+  its address and its target's observed addresses. The Migration
   page's run history shows the gate and its window, why a run paused, and each
   member's observed traffic (observed, waiting since it was verified live, or not
   seen in the window); the Posture page's pilot waves show what real clients

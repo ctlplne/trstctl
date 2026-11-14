@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/pqc/compatlab"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -61,6 +62,9 @@ type PQCPilotTargetRequest struct {
 	ServerName  string
 	Connector   string
 	Fingerprint string
+	// ObservedAddresses are where an observer sees the target's traffic
+	// behind NAT or a load balancer (X3-L2).
+	ObservedAddresses []string
 }
 
 // PQCPilotReportSigner signs a compat-lab report inside the isolated signer
@@ -147,6 +151,11 @@ func normalizePQCPilot(in PQCPilotStartRequest) (projections.PQCPilotStarted, er
 				ServerName: trimBounded(target.ServerName, 253), Connector: trimBounded(target.Connector, 40),
 				Fingerprint: strings.ToLower(strings.ReplaceAll(strings.TrimSpace(target.Fingerprint), ":", "")),
 			}
+			observed, err := migration.CleanObservedAddresses(target.ObservedAddresses)
+			if err != nil {
+				return projections.PQCPilotStarted{}, fmt.Errorf("%w: target %q: %s", ErrPQCPilotInvalid, t.TargetID, err.Error())
+			}
+			t.ObservedAddresses = observed
 			if t.TargetID == "" || t.Address == "" || len(t.Fingerprint) != 64 {
 				return projections.PQCPilotStarted{}, fmt.Errorf("%w: every target needs target_id, address and the leaf's SHA-256 fingerprint", ErrPQCPilotInvalid)
 			}
@@ -342,7 +351,7 @@ func (o *Orchestrator) dispatchNextPQCPilotWaveTx(ctx context.Context, tx pgx.Tx
 	targets := make([]projections.PQCPilotTarget, 0, len(next.Targets))
 	for _, t := range next.Targets {
 		targets = append(targets, projections.PQCPilotTarget{TargetID: t.TargetID, Address: t.Address,
-			ServerName: t.ServerName, Connector: t.Connector, Fingerprint: t.Fingerprint})
+			ServerName: t.ServerName, Connector: t.Connector, Fingerprint: t.Fingerprint, ObservedAddresses: t.ObservedAddresses})
 	}
 	return o.dispatchPQCPilotWaveTx(ctx, tx, tenantID, pilot.ID, wave+1, targets, pqcPilotTimeout(pilot))
 }

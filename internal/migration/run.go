@@ -219,6 +219,11 @@ type MemberBinding struct {
 	// validation accepts only an explicit non-production value.
 	Environment          string `json:"environment,omitempty"`
 	SuccessorFingerprint string `json:"successor_fingerprint,omitempty"`
+	// ObservedAddresses are where an observer sees this endpoint's traffic
+	// when NAT or a load balancer sits in front of VerifyAddress: the
+	// backends (host:port) the observer is beside (X3-L2), frozen from the
+	// deployment target's observed_addresses.
+	ObservedAddresses []string `json:"observed_addresses,omitempty"`
 }
 
 // OnAppliance reports whether the member's leaf work executes on a network

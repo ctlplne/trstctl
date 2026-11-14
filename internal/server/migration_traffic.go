@@ -5,12 +5,16 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/discovery"
 	"trstctl.com/trstctl/internal/events"
@@ -172,8 +176,12 @@ func (s *Server) checkEndpointTraffic(ctx context.Context, tenantID string, endp
 		return nil
 	}
 	replacement := normalizedFingerprint(endpoint.ObservedFingerprint)
+	at, err := s.endpointObservedAt(ctx, tenantID, endpoint)
+	if err != nil {
+		return err
+	}
 	for _, h := range handshakes {
-		if h.Server != endpoint.Address || h.LastSeen.Before(*endpoint.ReplacedAt) {
+		if !h.at(at) || h.LastSeen.Before(*endpoint.ReplacedAt) {
 			continue
 		}
 		if h.Visible && normalizedFingerprint(h.Fingerprint) != replacement {
@@ -183,7 +191,7 @@ func (s *Server) checkEndpointTraffic(ctx context.Context, tenantID string, endp
 			endpoint.ObservedFingerprint, h.FindingID, *endpoint.ReplacedAt, h.LastSeen); err != nil {
 			return err
 		}
-		return s.closeReplacedEndpointFindings(ctx, tenantID, endpoint, h, handshakes)
+		return s.closeReplacedEndpointFindings(ctx, tenantID, endpoint, at, h, handshakes)
 	}
 	window := migration.ObservedTrafficWindow(migration.Run{})
 	if endpoint.TrafficUnobservedSince == nil && now.Sub(*endpoint.ReplacedAt) >= window {
@@ -193,15 +201,36 @@ func (s *Server) checkEndpointTraffic(ctx context.Context, tenantID string, endp
 	return nil
 }
 
+// endpointObservedAt is where an observer sees a replaced endpoint: its
+// address, and the observed addresses its deployment target names when NAT or
+// a load balancer sits in front of it (X3-L2). The endpoint ID is the target's.
+func (s *Server) endpointObservedAt(ctx context.Context, tenantID string, endpoint store.EndpointVerification) (migration.MemberBinding, error) {
+	at := migration.MemberBinding{VerifyAddress: endpoint.Address}
+	if _, err := uuid.Parse(endpoint.EndpointID); err != nil {
+		return at, nil
+	}
+	target, err := s.store.GetDeploymentTarget(ctx, tenantID, endpoint.EndpointID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return at, nil
+	}
+	if err != nil {
+		return at, err
+	}
+	// The API refuses a malformed list when the target is saved; one that
+	// predates that check names no observed address rather than a guess.
+	at.ObservedAddresses, _ = migration.ObservedAddresses(target.Config)
+	return at, nil
+}
+
 // closeReplacedEndpointFindings marks the observer's findings for the replaced
 // certificate at the endpoint remediated, naming the evidence.
-func (s *Server) closeReplacedEndpointFindings(ctx context.Context, tenantID string, endpoint store.EndpointVerification, evidence observedHandshake, handshakes []observedHandshake) error {
+func (s *Server) closeReplacedEndpointFindings(ctx context.Context, tenantID string, endpoint store.EndpointVerification, at migration.MemberBinding, evidence observedHandshake, handshakes []observedHandshake) error {
 	replaced := normalizedFingerprint(endpoint.ReplacedFingerprint)
 	if replaced == "" {
 		return nil
 	}
 	for _, h := range handshakes {
-		if normalizedFingerprint(h.Fingerprint) != replaced || h.Server != endpoint.Address || h.TriageStatus == string(discovery.TriageRemediated) {
+		if normalizedFingerprint(h.Fingerprint) != replaced || !h.at(at) || h.TriageStatus == string(discovery.TriageRemediated) {
 			continue
 		}
 		// A migration run in the same pass may have closed it already.
@@ -283,7 +312,8 @@ func (s *Server) checkPilotTraffic(ctx context.Context, tenantID string, pilot s
 // probe: on TLS 1.2 they must present the pilot's leaf; on TLS 1.3 the
 // certificate is encrypted, so the probe already proved the leaf served.
 func pilotTrafficEvidence(target store.PQCPilotTarget, probedAt time.Time, handshakes []observedHandshake) (observedHandshake, bool) {
-	binding := migration.MemberBinding{VerifyAddress: target.Address, VerifyServerName: target.ServerName}
+	binding := migration.MemberBinding{VerifyAddress: target.Address, VerifyServerName: target.ServerName,
+		ObservedAddresses: target.ObservedAddresses}
 	leaf := strings.ToLower(target.Fingerprint)
 	for _, h := range handshakes {
 		if !h.at(binding) || h.LastSeen.Before(probedAt) {
@@ -391,17 +421,24 @@ func (s *Server) observedHandshakes(ctx context.Context, tenantID string) ([]obs
 }
 
 // at reports whether the handshake was observed at the member's endpoint:
-// its verify address, or its server name on the same port.
+// its verify address or one of its observed addresses (X3-L2: the backends
+// behind NAT or a load balancer), or its server name on the port of one of
+// them.
 func (h observedHandshake) at(binding migration.MemberBinding) bool {
-	if h.Server == binding.VerifyAddress {
-		return true
+	_, observedPort, observedErr := net.SplitHostPort(h.Server)
+	for _, address := range append([]string{binding.VerifyAddress}, binding.ObservedAddresses...) {
+		if address == "" {
+			continue
+		}
+		if h.Server == address {
+			return true
+		}
+		_, port, err := net.SplitHostPort(address)
+		if err == nil && observedErr == nil && binding.VerifyServerName != "" && h.ServerName == binding.VerifyServerName && observedPort == port {
+			return true
+		}
 	}
-	_, port, err := net.SplitHostPort(binding.VerifyAddress)
-	if err != nil || binding.VerifyServerName == "" || h.ServerName != binding.VerifyServerName {
-		return false
-	}
-	_, observedPort, err := net.SplitHostPort(h.Server)
-	return err == nil && observedPort == port
+	return false
 }
 
 // trafficEvidence finds new connections at the member's endpoint after its

@@ -35192,6 +35192,13 @@
             ],
             "type": "string"
           },
+          "observed_addresses": {
+            "description": "where an observer sees the endpoint's traffic when NAT or a load balancer sits in front of verify_address (host:port, at most 16), frozen from the deployment target's observed_addresses (X3-L2)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "predecessor_certificate_id": {
             "format": "uuid",
             "type": "string"
@@ -48059,6 +48066,13 @@
           },
           "fingerprint": {
             "type": "string"
+          },
+          "observed_addresses": {
+            "description": "where an observer sees the target's traffic when NAT or a load balancer sits in front of address (host:port, at most 16): observed traffic there counts for the target (X3-L2)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "server_name": {
             "type": "string"

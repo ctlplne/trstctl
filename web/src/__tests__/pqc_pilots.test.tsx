@@ -255,3 +255,87 @@ describe("PQCPilots observed traffic (X3-L5)", () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 });
+
+// X3-L2: a target behind NAT or a load balancer names where the observer sees
+// its traffic; the plan carries observed_addresses and the evidence says where
+// real clients were seen.
+describe("PQCPilots observed addresses (X3-L2)", () => {
+  const behindLB = {
+    ...halted,
+    id: "99999999-9999-4999-8999-999999999999",
+    name: "Load-balanced PQ pilot",
+    status: "running" as const,
+    current_wave: 1,
+    halted_at_wave: "",
+    verdict_summary: "",
+    signed_report: undefined,
+    require_observed_traffic: true,
+    observed_traffic_window_seconds: 1800,
+    waves: [
+      {
+        index: 1,
+        name: "canary",
+        status: "assessed" as const,
+        targets: [{ target_id: "lb-1", address: "vip.internal:443", fingerprint, observed_addresses: ["10.0.3.17:8443"] }],
+        results: [
+          {
+            target_id: "lb-1",
+            outcome: "negotiated" as const,
+            handshake_ms: 4,
+            chain_bytes: 5210,
+            observed_at: "2026-11-14T10:00:00Z",
+            traffic: {
+              outcome: "observed" as const,
+              server: "10.0.3.17:8443",
+              tls_version: "TLSv1.3",
+              group: "X25519MLKEM768",
+              pq_hybrid: true,
+              last_seen: "2026-11-14T10:00:05Z",
+            },
+          },
+        ],
+        verdict: { ready: true, halt: false, summary: "Ready.", negotiated: 1, rejected: 0, unreachable: 0, not_attempted: 0 },
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiMock.pqcPilots.mockResolvedValue({ items: [behindLB], next_cursor: "" });
+    apiMock.pqcPilot.mockResolvedValue(behindLB);
+    apiMock.startPQCPilot.mockResolvedValue({ ...behindLB, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", waves: [] });
+  });
+
+  it("sends a target's observed addresses and shows where real clients were seen", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <PQCPilots />
+      </AppQueryProvider>,
+    );
+    await user.click(await screen.findByRole("button", { name: /Load-balanced PQ pilot/ }));
+    const waves = await screen.findByRole("region", { name: /Waves and evidence/ });
+    expect(within(waves).getByText("Seen at 10.0.3.17:8443")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/Pilot name/), "Behind the load balancer");
+    await user.type(screen.getByLabelText(/Issuing authority ID/), "pq-issuing-ca");
+    await user.click(screen.getByRole("checkbox", { name: /Require observed traffic/ }));
+    expect(screen.getByText(/add observed_addresses to it in the plan/)).toBeInTheDocument();
+    const plan = [{ name: "canary", targets: [{ target_id: "lb-1", address: "vip.internal:443", fingerprint, observed_addresses: ["10.0.3.17:8443"] }] }];
+    const wavesField = screen.getByLabelText(/Waves \(JSON\)/);
+    await user.clear(wavesField);
+    await user.click(wavesField);
+    await user.paste(
+      JSON.stringify([{ name: "canary", targets: [{ target_id: "lb-1", address: "vip.internal:443", fingerprint, observed_addresses: ["10.0.3.17"] }] }]),
+    );
+    await user.click(screen.getByRole("button", { name: "Start pilot" }));
+    expect(await screen.findByText("Waves must be a JSON array of {name, targets[]} with at least one target each.")).toBeInTheDocument();
+    expect(apiMock.startPQCPilot).not.toHaveBeenCalled();
+    await user.clear(wavesField);
+    await user.click(wavesField);
+    await user.paste(JSON.stringify(plan));
+    await user.click(screen.getByRole("button", { name: "Start pilot" }));
+    await waitFor(() => expect(apiMock.startPQCPilot).toHaveBeenCalledTimes(1));
+    expect(apiMock.startPQCPilot.mock.calls[0][0]).toMatchObject({ waves: plan, require_observed_traffic: true });
+  });
+});

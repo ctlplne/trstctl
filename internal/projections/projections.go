@@ -1850,6 +1850,9 @@ type PQCPilotTarget struct {
 	ServerName  string `json:"server_name,omitempty"`
 	Connector   string `json:"connector,omitempty"`
 	Fingerprint string `json:"fingerprint"`
+	// ObservedAddresses are where an observer sees the target's traffic
+	// behind NAT or a load balancer (X3-L2).
+	ObservedAddresses []string `json:"observed_addresses,omitempty"`
 }
 
 // PQCPilotWaveDispatched retains the exact outbox row a wave's relay probe
@@ -9936,7 +9939,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 					return fmt.Errorf("projections: %s target requires target_id, address and fingerprint", e.Type)
 				}
 				targets = append(targets, store.PQCPilotTarget{TargetID: target.TargetID, Address: target.Address,
-					ServerName: target.ServerName, Connector: target.Connector, Fingerprint: target.Fingerprint})
+					ServerName: target.ServerName, Connector: target.Connector, Fingerprint: target.Fingerprint,
+					ObservedAddresses: target.ObservedAddresses})
 			}
 			pilot.Waves = append(pilot.Waves, store.PQCPilotWave{PilotID: pl.ID, Index: i + 1, Name: wave.Name, Targets: targets})
 		}

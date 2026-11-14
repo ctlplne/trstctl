@@ -35613,6 +35613,12 @@ export const messages = {
     description: "Help text for the observed-traffic gate checkbox.",
   },
   "posture.pqcPilot.trafficWindow": { defaultMessage: "Traffic window (minutes)", description: "Field label for the observed-traffic window." },
+  "posture.pqcPilot.observedAddressesHelp": {
+    defaultMessage:
+      "A target behind NAT or a load balancer: add observed_addresses to it in the plan, the backend host:port addresses where the observer sees its traffic.",
+    description: "X3-L2: explains naming where an observer sees a target's traffic when NAT or a load balancer sits in front of it.",
+  },
+  "posture.pqcPilot.trafficSeenAt": { defaultMessage: "Seen at {server}", description: "X3-L2: the address where the observer saw the real clients." },
   "posture.pqcPilot.trafficWindowHelp": {
     defaultMessage: "How long a wave waits for real clients after its probe. Leave empty for 60 minutes; at most 10080 (a week).",
     description: "Help text for the observed-traffic window.",

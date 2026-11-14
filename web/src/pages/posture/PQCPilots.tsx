@@ -31,6 +31,16 @@ const waveSchema = z
               .string()
               .trim()
               .regex(/^[0-9a-fA-F:]{64,95}$/),
+            // X3-L2: where the observer sees a target behind NAT or a load balancer.
+            observed_addresses: z
+              .array(
+                z
+                  .string()
+                  .trim()
+                  .regex(/^\S+:\d{1,5}$/),
+              )
+              .max(16)
+              .optional(),
           }),
         )
         .min(1),
@@ -204,6 +214,7 @@ export function PQCPilots() {
             {(control) => <Input {...control} inputMode="numeric" {...createForm.register("trafficWindowMinutes")} />}
           </Field>
         ) : null}
+        {requireTraffic ? <p className="text-caption text-muted-foreground">{t("posture.pqcPilot.observedAddressesHelp")}</p> : null}
         <Button type="submit" disabled={busy}>
           {busy ? t("posture.pqcPilot.creating") : t("posture.pqcPilot.create")}
         </Button>
@@ -308,7 +319,12 @@ export function PQCPilots() {
                           {t("posture.pqcPilot.handshakeCost", { ms: result.handshake_ms, bytes: result.chain_bytes })}
                         </td>
                         {detail?.require_observed_traffic ? (
-                          <td className="py-1 pr-2 text-xs text-muted-foreground">{trafficText(result.traffic, result.outcome)}</td>
+                          <td className="py-1 pr-2 text-xs text-muted-foreground">
+                            {trafficText(result.traffic, result.outcome)}
+                            {result.traffic?.outcome === "observed" && result.traffic.server ? (
+                              <span className="block">{t("posture.pqcPilot.trafficSeenAt", { server: result.traffic.server })}</span>
+                            ) : null}
+                          </td>
                         ) : null}
                         <td className="py-1 text-xs text-muted-foreground">{result.detail}</td>
                       </tr>

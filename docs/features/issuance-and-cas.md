@@ -516,7 +516,12 @@ holds each wave at its live gate until two proofs agree for every member: the si
 live receipt that the endpoint serves the successor (the probe, which also reads the
 chain a wire sensor cannot see on TLS 1.3), and an observer agent's report of new
 connections at the member's verify address (or its server name on that port) after
-the successor went live — presenting the successor on TLS 1.2. The leader checks every
+the successor went live — presenting the successor on TLS 1.2. Behind NAT or a load
+balancer the observer sits beside the backends, so the member's deployment target can
+name them (X3-L2): `"observed_addresses": ["10.0.3.17:8443"]` in the target's
+configuration (host:port, at most 16, refused otherwise when the target is saved) is
+frozen into the run, and connections seen there, or under the member's server name on
+one of their ports, count as the member's. The leader checks every
 30 seconds. A member still unobserved `observed_traffic_window_seconds` (default 3600,
 at most 604800) after going live pauses the run with the reason; the run never
 advances on the probe alone, and a resume releases the gate only once the wire evidence
@@ -530,7 +535,8 @@ verification of an endpoint (`GET /api/v1/endpoints/verifications`, Connectors �
 Health, retries, and rollback) finds it serving another certificate than it last
 observed there, the endpoint records which certificate was replaced and when, and its
 `traffic` reads `awaiting`. On the same 30-second leader pass, an observer agent's new
-connections at the endpoint's address after the replacement — presenting the
+connections at the endpoint's address, or at one of its target's observed addresses
+(X3-L2), after the replacement — presenting the
 replacement on TLS 1.2; on TLS 1.3 any new connection, since the verification already
 proved the certificate — move it to `observed`, naming the observer finding
 (`traffic_finding_id`), and mark the observer's findings for the replaced certificate at

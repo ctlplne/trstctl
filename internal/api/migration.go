@@ -630,6 +630,10 @@ func (a *API) buildMigrationMember(
 	if verifyAddress == "" && executionModel != migration.ExecutionCloudStore {
 		return migration.RunMember{}, nil, errors.New("migration member target must configure verify_address")
 	}
+	observedAddresses, err := migration.ObservedAddresses(target.Config)
+	if err != nil {
+		return migration.RunMember{}, nil, fmt.Errorf("migration member target: %w", err)
+	}
 	connectorName, routed := migrationRoutingAttrs(ident.Attributes)
 	if connectorName != "" && connectorName != target.Type {
 		return migration.RunMember{}, nil, errors.New("identity connector binding conflicts with its deployment target")
@@ -661,6 +665,7 @@ func (a *API) buildMigrationMember(
 		PredecessorSource:        predecessor.Source,
 		PredecessorExternalCAID:  predecessor.IssuingExternalCAID,
 		ExecutionModel:           executionModel,
+		ObservedAddresses:        observedAddresses,
 	}}, gated, nil
 }
 

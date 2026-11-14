@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- The observed-traffic gate finds endpoints behind NAT or a load balancer (X3-L2): a deployment target names the
+  backends an observer sees its traffic at (`observed_addresses`, host:port, at most 16), which a migration run freezes
+  into its members, and a PQC pilot target can name them too; connections seen there count for the endpoint, as
+  they do for a replaced endpoint's wire evidence. The Posture page's pilot plan takes them and shows where real
+  clients were seen.
 - AGID chain-bound credentials and their delegation chains are in the access graph (Q4-L4): each credential is held by
   the subject it was issued to, each live record of its signed chain is a `DELEGATED` edge, and while it is live and
   unrevoked it reaches the tools and resources its leaf record passes on. Who-can-reach answers carry `delegations`,

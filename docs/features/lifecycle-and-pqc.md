@@ -325,7 +325,10 @@ wave's outcomes, verdicts, skipped waves and the signed report.
 each wave after its probe. The relay's handshake shows trstctl's own client
 negotiating the leaf; the wave advances only once an observer agent (X1) has also
 seen real clients connect at every negotiated target after that probe — at its
-address, or its server name on the same port — presenting the pilot's leaf on
+address, or its server name on the same port, or at one of the target's
+`observed_addresses` (X3-L2: the backends an observer sees behind NAT or a load
+balancer, host:port, at most 16; the evidence names the address it was seen at) —
+presenting the pilot's leaf on
 TLS 1.2 (TLS 1.3 encrypts the certificate, so there the probe's proof of the leaf
 stands). Until then the wave is `awaiting_traffic` and no later wave is dispatched;
 the leader checks every 30 seconds. Each target's evidence is kept on the wave's

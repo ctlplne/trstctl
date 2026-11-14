@@ -21898,6 +21898,8 @@ export interface components {
             issuing_authority_id: string;
             /** @enum {string} */
             issuing_authority_source?: "platform" | "private" | "external";
+            /** @description where an observer sees the endpoint's traffic when NAT or a load balancer sits in front of verify_address (host:port, at most 16), frozen from the deployment target's observed_addresses (X3-L2) */
+            observed_addresses?: string[];
             /** Format: uuid */
             predecessor_certificate_id: string;
             predecessor_external_ca_id?: string;
@@ -25432,6 +25434,8 @@ export interface components {
             address: string;
             connector?: string;
             fingerprint: string;
+            /** @description where an observer sees the target's traffic when NAT or a load balancer sits in front of address (host:port, at most 16): observed traffic there counts for the target (X3-L2) */
+            observed_addresses?: string[];
             server_name?: string;
             target_id: string;
         };
