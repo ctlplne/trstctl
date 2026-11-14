@@ -44,6 +44,9 @@ var (
 	// back independently (503). Its public detail is fixed: no custody path,
 	// handle or private diagnostic leaves the server.
 	ErrEventProtectionUnavailable = errors.New("event protection key custody is unavailable")
+	// ErrEventProtectionBusy means every key check was taken for the whole
+	// status budget (A233-L4): nothing is wrong with custody; ask again.
+	ErrEventProtectionBusy = errors.New("event protection key checks are busy; check again in a moment")
 )
 
 // EventProtectionRequest is the opt-in a preview reviews and an enable applies.
@@ -234,6 +237,8 @@ func eventProtectionHTTPError(err error) error {
 	case errors.Is(err, ErrEventProtectionUnavailable):
 		// Fixed public detail: the cause stays in server logs.
 		return errStatusFrom(http.StatusServiceUnavailable, ErrEventProtectionUnavailable)
+	case errors.Is(err, ErrEventProtectionBusy):
+		return errStatusFrom(http.StatusServiceUnavailable, ErrEventProtectionBusy)
 	}
 	return err
 }

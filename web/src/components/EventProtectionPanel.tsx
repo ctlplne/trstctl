@@ -82,7 +82,17 @@ export function EventProtectionPanel() {
       <summary className="cursor-pointer text-title font-semibold">{t("privacy.eventProtection.title")}</summary>
       <p className="max-w-3xl text-body text-muted-foreground">{t("privacy.eventProtection.description")}</p>
       {loading ? <LoadingState>{t("privacy.loading")}</LoadingState> : null}
-      {error ? <ErrorState title={t("privacy.error.actionFailed")}>{error}</ErrorState> : null}
+      {error ? (
+        <ErrorState title={t("privacy.error.actionFailed")}>
+          {error}
+          {/* A233-L4: a busy or unreadable key check can simply be asked again. */}
+          {!status ? (
+            <Button type="button" size="sm" variant="outline" className="mt-2" disabled={loading} onClick={() => void load()}>
+              {t("privacy.eventProtection.checkAgain")}
+            </Button>
+          ) : null}
+        </ErrorState>
+      ) : null}
       {status ? (
         <div className="grid gap-3">
           <dl className="grid gap-2 text-sm sm:grid-cols-2">

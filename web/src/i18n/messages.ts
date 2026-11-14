@@ -29680,6 +29680,10 @@ export const messages = {
     defaultMessage: "Privacy action failed",
     description: "Privacy route action error title.",
   },
+  "privacy.eventProtection.checkAgain": {
+    defaultMessage: "Check again",
+    description: "A233-L4: retries the event-field protection status after a busy or failed key check.",
+  },
   "privacy.eventProtection.title": {
     defaultMessage: "Event-field protection (crypto-shred)",
     description: "A233: disclosure title for the tenant's opt-in to per-tenant encryption of sensitive event fields.",

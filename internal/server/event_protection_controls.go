@@ -79,9 +79,16 @@ func (c *eventProtectionControls) Status(ctx context.Context, tenantID string) (
 	status.ActivatedAt = &activatedAt
 	// Active only when the exact activated key opens now. Missing material is
 	// not erasure; it is unavailable, and the route never regenerates it.
+	// Concurrent reads of one key share one readback, and at most
+	// statusReadbackSlots keys open at once (A233-L4).
 	probe, cancel := context.WithTimeout(ctx, eventProtectionStatusBudget)
 	defer cancel()
-	if err := c.runtime.reader.WithKey(probe, life.Activation.Body.Creation.Ref, func(seal.KeyWrapper) error { return nil }); err != nil {
+	ref := life.Activation.Body.Creation.Ref
+	if err := c.runtime.readbacks.readBack(probe, ref, func(ctx context.Context) error {
+		return c.runtime.reader.WithKey(ctx, ref, func(seal.KeyWrapper) error { return nil })
+	}); errors.Is(err, errReadbackBusy) {
+		return api.EventProtectionStatus{}, api.ErrEventProtectionBusy
+	} else if err != nil {
 		slog.WarnContext(ctx, "event protection: active tenant key did not read back", "error", err)
 		return api.EventProtectionStatus{}, api.ErrEventProtectionUnavailable
 	}

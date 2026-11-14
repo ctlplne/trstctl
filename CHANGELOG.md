@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- The event-protection status route shares and bounds its key checks (A233-L4): concurrent reads of one tenant share
+  one opening of its key, at most four tenant keys are opened at once, and a read that finds them all busy answers
+  503 "key checks are busy" (the console offers **Check again**) instead of opening one more.
 - A relay checks a CA host against its egress policy before certutil reaches it (A229-L1): the AD CS enrollment
   agent restrictions read and the CA database read run certutil outside the Go dialer's guard, so a metadata or
   link-local host, or one outside the egress allowlist, is refused without running certutil (`egress_refused`,

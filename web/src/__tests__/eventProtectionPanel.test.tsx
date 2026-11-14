@@ -121,4 +121,19 @@ describe("A233 event-field protection panel", () => {
     expect(screen.getByRole("button", { name: "Enable protection" })).toBeDisabled();
     expect(apiMock.enableEventProtection).not.toHaveBeenCalled();
   });
+
+  // A233-L4: a key check that was busy can be asked again from the panel.
+  it("checks again after a busy key check", async () => {
+    apiMock.eventProtectionStatus
+      .mockRejectedValueOnce(new Error("event protection key checks are busy; check again in a moment"))
+      .mockResolvedValueOnce({ ...notEnabled, state: "active" });
+    const user = userEvent.setup();
+    renderPanel();
+    await user.click(screen.getByText("Event-field protection (crypto-shred)"));
+    expect(await screen.findByText("event protection key checks are busy; check again in a moment")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() => expect(apiMock.eventProtectionStatus).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Active")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check again" })).not.toBeInTheDocument();
+  });
 });

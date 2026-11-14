@@ -1118,7 +1118,12 @@ and audit verification keep working.
 `GET /api/v1/privacy/event-protection` (`privacy:read`) reports the state
 (`not_enabled`, `preparing`, `active`), the tenant's current registration identity
 and whether the operator configured key custody
-(`privacy.event_protection.key_directory`). `POST
+(`privacy.event_protection.key_directory`). `active` means the tenant's key opened just
+now (A233-L4): concurrent reads of one tenant's status share that one opening, at most
+four tenant keys are opened at once across the deployment, and a read that finds them
+all taken for its two-second budget answers 503 with "key checks are busy" rather than
+waiting longer; the console's **Check again** asks once more. Nothing is cached past
+the opening, so a key file removed from custody reads unavailable on the next request. `POST
 /api/v1/privacy/event-protection/preview` (`privacy:write`) is effect-free: it
 returns the blockers, the writes enabling would make and its warnings. `POST
 /api/v1/privacy/event-protection` (`privacy:write`, `Idempotency-Key`) takes
