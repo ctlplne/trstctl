@@ -34799,6 +34799,15 @@
           "email": {
             "type": "string"
           },
+          "last_sign_in_at": {
+            "description": "the member's last recorded browser sign-in (M1-L2): recorded per client network, at most once an hour plus doubling counts; absent when none is recorded (the list only)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_sign_in_network": {
+            "description": "the client network (/24 or /64) of that sign-in (M1-L2)",
+            "type": "string"
+          },
           "offboard_reason": {
             "type": "string"
           },

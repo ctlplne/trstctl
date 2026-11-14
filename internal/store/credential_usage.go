@@ -17,6 +17,10 @@ import (
 const (
 	CredentialUsageAPIToken    = "api_token"
 	CredentialUsageMachineAuth = "machine_auth"
+	// CredentialUsageBrowserSession (M1-L2) is a person's browser sign-in: the
+	// credential id is the tenant-bound subject reference, never the subject.
+	// It is a person's activity, so NHI posture never reads it.
+	CredentialUsageBrowserSession = "browser_session"
 
 	CredentialUsageSourceNetwork     = "network"
 	CredentialUsageSourceAttestation = "attestation"
@@ -118,7 +122,9 @@ func (s *Store) ApplyCredentialUseTx(ctx context.Context, tx pgx.Tx, u Credentia
 		u.TenantID, u.Kind, u.CredentialID, u.SourceKind, u.Source, usedAt, seq); err != nil {
 		return err
 	}
-	if u.Action == "" || u.WindowStart.IsZero() || u.Count < 1 {
+	// Hourly windows serve API-token misuse findings; a person's sign-ins
+	// (M1-L2) keep only their last use and sources.
+	if u.Action == "" || u.WindowStart.IsZero() || u.Count < 1 || u.Kind == CredentialUsageBrowserSession {
 		return nil
 	}
 	window := u.WindowStart.UTC()

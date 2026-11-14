@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -228,5 +229,36 @@ func TestStaleFindingCarriesTheCredentialsUsageM1L3(t *testing.T) {
 	raw, _ = json.Marshal(f)
 	if !ok || strings.Contains(string(raw), `"usage"`) {
 		t.Fatalf("an untracked credential's finding = %s (ok %v); want no usage", raw, ok)
+	}
+}
+
+// M1-L2: a browser sign-in is noted as a use of kind browser_session with
+// action sign_in from the client's network, under the tenant-bound subject
+// reference (never the subject) as its credential id; the subject is the
+// principal.
+func TestBrowserSignInIsNotedUnderTheSubjectReferenceM1L2(t *testing.T) {
+	const tenant = "7a6b5c4d-3e2f-4a1b-8c9d-0e1f2a3b4c5d"
+	at := time.Date(2026, 11, 14, 9, 30, 0, 0, time.UTC)
+	a := &API{usage: newCredentialUsageRecorder(func() time.Time { return at })}
+	r := httptest.NewRequest(http.MethodGet, "/auth/callback", nil)
+	r.RemoteAddr = "198.51.100.7:51234"
+	a.noteBrowserSignIn(r, tenant, "dana@corp.example")
+	a.noteBrowserSignIn(r, "", "dana@corp.example")
+	a.noteBrowserSignIn(r, tenant, "")
+	select {
+	case n := <-a.usage.queue:
+		u := n.used
+		if n.tenant != tenant || u.Kind != store.CredentialUsageBrowserSession || u.CredentialID != privacy.SubjectRef(tenant, "dana@corp.example") ||
+			u.CredentialID == "dana@corp.example" || u.Principal != "dana@corp.example" || u.Action != projections.CredentialActionSignIn ||
+			u.SourceKind != store.CredentialUsageSourceNetwork || u.Source != "198.51.100.0/24" || !u.WindowStart.Equal(at.Truncate(time.Hour)) || u.Count != 1 {
+			t.Fatalf("noted %+v", n)
+		}
+	default:
+		t.Fatal("a browser sign-in was not noted")
+	}
+	select {
+	case n := <-a.usage.queue:
+		t.Fatalf("a sign-in without a tenant or subject was noted: %+v", n)
+	default:
 	}
 }

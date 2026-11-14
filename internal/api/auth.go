@@ -843,6 +843,8 @@ func (a *API) issueLoginSessionWithBindings(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	a.setSessionCookie(w, token)
+	// M1-L2: a browser sign-in is a use of the person's sign-in, by network.
+	a.noteBrowserSignIn(r, tenantID, claims.Subject)
 	// Issue a fresh double-submit CSRF token bound to this session (SEC-007). The SPA
 	// reads it from the non-HttpOnly cookie and echoes it in X-CSRF-Token on every
 	// mutating request; enforceCSRF rejects a session-authenticated mutation whose

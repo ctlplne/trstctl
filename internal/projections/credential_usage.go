@@ -29,6 +29,8 @@ const (
 	CredentialActionAPICall      = "api_call"
 	CredentialActionSecretRead   = "secret_read"
 	CredentialActionLeaseRequest = "lease_request"
+	// CredentialActionSignIn (M1-L2) is a browser session issued to a person.
+	CredentialActionSignIn = "sign_in"
 )
 
 // CredentialUsed is the payload of credential.used.
@@ -64,10 +66,13 @@ func (p *Projector) applyCredentialUsageTx(ctx context.Context, tx pgx.Tx, e eve
 			return true, err
 		}
 		switch {
-		case pl.Kind != store.CredentialUsageAPIToken || pl.CredentialID == "" || pl.SourceKind != store.CredentialUsageSourceNetwork ||
-			pl.Source == "" || pl.UsedAt.IsZero() || pl.WindowStart.IsZero() || pl.Count < 1:
+		case (pl.Kind != store.CredentialUsageAPIToken && pl.Kind != store.CredentialUsageBrowserSession) || pl.CredentialID == "" ||
+			pl.SourceKind != store.CredentialUsageSourceNetwork || pl.Source == "" || pl.UsedAt.IsZero() || pl.WindowStart.IsZero() || pl.Count < 1:
 			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
-		case pl.Action != CredentialActionAPICall && pl.Action != CredentialActionSecretRead && pl.Action != CredentialActionLeaseRequest:
+		case pl.Kind == store.CredentialUsageBrowserSession && pl.Action != CredentialActionSignIn:
+			return true, fmt.Errorf("projections: %s browser session action %q is unknown", e.Type, pl.Action)
+		case pl.Kind == store.CredentialUsageAPIToken && pl.Action != CredentialActionAPICall && pl.Action != CredentialActionSecretRead &&
+			pl.Action != CredentialActionLeaseRequest:
 			return true, fmt.Errorf("projections: %s action %q is unknown", e.Type, pl.Action)
 		}
 		return true, p.store.ApplyCredentialUseTx(ctx, tx, store.CredentialUse{

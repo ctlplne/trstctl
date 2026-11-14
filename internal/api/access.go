@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -58,6 +59,10 @@ type memberResponse struct {
 	OffboardedAt   *time.Time `json:"offboarded_at,omitempty"`
 	OffboardedBy   string     `json:"offboarded_by,omitempty"`
 	OffboardReason string     `json:"offboard_reason,omitempty"`
+	// LastSignInAt and LastSignInNetwork (M1-L2) are the member's last
+	// recorded browser sign-in and the client network it came from.
+	LastSignInAt      *time.Time `json:"last_sign_in_at,omitempty"`
+	LastSignInNetwork string     `json:"last_sign_in_network,omitempty"`
 }
 
 type memberListResponse struct {
@@ -187,9 +192,24 @@ func (a *API) listMembers(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	items := make([]memberResponse, 0, len(members))
+	// M1-L2: each member's last browser sign-in, read by its subject reference.
+	refs := make([]string, 0, len(members))
 	for _, m := range members {
-		items = append(items, toMemberResponse(m))
+		refs = append(refs, privacy.SubjectRef(tenantID, m.Subject))
+	}
+	signIns, err := a.store.CredentialUsageFor(r.Context(), tenantID, store.CredentialUsageBrowserSession, refs)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	items := make([]memberResponse, 0, len(members))
+	for i, m := range members {
+		item := toMemberResponse(m)
+		if use, ok := signIns[refs[i]]; ok && !use.LastUsedAt.IsZero() {
+			at := use.LastUsedAt.UTC()
+			item.LastSignInAt, item.LastSignInNetwork = &at, use.LastSource
+		}
+		items = append(items, item)
 	}
 	next := ""
 	if len(members) == limit {

@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A person's browser sign-in is recorded in credential usage (M1-L2): kind `browser_session`, action `sign_in`, from
+  the client's network, under the tenant-bound subject reference (never the subject) and at most once an hour per
+  network plus doubling counts. The members list carries each member's `last_sign_in_at` and
+  `last_sign_in_network`, shown in the console's people roster; NHI posture never reads a person's sign-ins.
+  Migration 0485 admits the new kind.
 - A post-quantum pilot's refusal names the leaf's algorithm and its cause (B7-L1): with the expected leaf's key
   algorithm read from the inventory, a refused handshake reads, for example, "the client does not offer ML-DSA-65
   among its signature algorithms, so the endpoint could not sign the handshake with the ML-DSA-65 leaf and ended it"

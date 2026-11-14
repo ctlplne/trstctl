@@ -819,6 +819,7 @@ export function AdminAccess() {
                     <th scope="col">{translateNow("source.roles.c253370554")}</th>
                     <th scope="col">{translateNow("source.status.920e413c7d")}</th>
                     <th scope="col">{translateNow("source.updated.3a5ecca188")}</th>
+                    <th scope="col">{t("admin.access.lastSignIn")}</th>
                     <th scope="col">{t("admin.access.memberActions")}</th>
                   </tr>
                 </thead>
@@ -832,6 +833,20 @@ export function AdminAccess() {
                       <td className="font-mono text-xs">{(member.roles ?? []).join(", ") || "—"}</td>
                       <td>{member.status}</td>
                       <td>{formatOptionalDate(member.updated_at, formatPolicy)}</td>
+                      <td>
+                        {member.last_sign_in_at ? (
+                          <>
+                            {formatDateTime(member.last_sign_in_at, formatPolicy)}
+                            {member.last_sign_in_network ? (
+                              <span className="mt-1 block font-mono text-xs text-muted-foreground">
+                                {t("admin.access.lastSignInFrom", { network: member.last_sign_in_network })}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">{t("admin.access.lastSignInNone")}</span>
+                        )}
+                      </td>
                       <td>
                         {member.status === "active" && member.source !== "scim" && member.subject !== user?.subject ? (
                           <Button

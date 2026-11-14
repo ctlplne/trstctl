@@ -447,6 +447,22 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     expect(within(dialog).queryByText(/0001-01-01/)).not.toBeInTheDocument();
   });
 
+  // M1-L2: the roster shows each person's last recorded browser sign-in and
+  // its network, and says when none is recorded.
+  it("shows each person's last browser sign-in in the roster (M1-L2)", async () => {
+    apiMock.members.mockResolvedValue({
+      items: [
+        { ...member, last_sign_in_at: "2026-11-14T09:30:00Z", last_sign_in_network: "203.0.113.0/24" },
+        { ...member, subject: "auditor@example.test", display_name: "Audit Person", email: "auditor@example.test" },
+      ],
+    });
+    renderPage();
+    const header = await screen.findByRole("columnheader", { name: "Last sign-in" });
+    const table = header.closest("table") as HTMLTableElement;
+    expect(within(table).getByText("from 203.0.113.0/24")).toBeInTheDocument();
+    expect(within(table).getByText("None recorded")).toBeInTheDocument();
+  });
+
   it("adds a person in a focused dialog and reads the roster back", async () => {
     const user = userEvent.setup();
     renderPage();

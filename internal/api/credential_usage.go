@@ -17,6 +17,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -42,7 +43,7 @@ func WithCredentialUsageClock(now func() time.Time) Option {
 	return func(c *config) { c.credentialUsageClock = now }
 }
 
-type credentialUseKey struct{ tenant, credential, source, action string }
+type credentialUseKey struct{ tenant, kind, credential, source, action string }
 
 type credentialUseNote struct {
 	tenant string
@@ -81,9 +82,15 @@ func newCredentialUsageRecorder(now func() time.Time) *credentialUsageRecorder {
 
 // note records one authenticated use of an API token.
 func (r *credentialUsageRecorder) note(tenantID, credentialID, principal, source, action string) {
+	r.noteKind(store.CredentialUsageAPIToken, tenantID, credentialID, principal, source, action)
+}
+
+// noteKind records one use of a credential of kind: an API token's request,
+// or a person's browser sign-in (M1-L2).
+func (r *credentialUsageRecorder) noteKind(kind, tenantID, credentialID, principal, source, action string) {
 	at := r.now().UTC()
 	window := at.Truncate(time.Hour)
-	key := credentialUseKey{tenant: tenantID, credential: credentialID, source: source, action: action}
+	key := credentialUseKey{tenant: tenantID, kind: kind, credential: credentialID, source: source, action: action}
 	r.mu.Lock()
 	if !window.Equal(r.window) {
 		r.window, r.counts = window, map[credentialUseKey]int{}
@@ -101,7 +108,7 @@ func (r *credentialUsageRecorder) note(tenantID, credentialID, principal, source
 		return
 	}
 	n := credentialUseNote{tenant: tenantID, used: projections.CredentialUsed{
-		Kind: store.CredentialUsageAPIToken, CredentialID: credentialID, Principal: principal,
+		Kind: kind, CredentialID: credentialID, Principal: principal,
 		SourceKind: store.CredentialUsageSourceNetwork, Source: source, Action: action,
 		WindowStart: window, UsedAt: at, Count: count,
 	}}
@@ -193,6 +200,18 @@ func (a *API) noteAPITokenUse(r *http.Request, rec store.APITokenRecord) {
 		return
 	}
 	a.usage.note(rec.TenantID, rec.ID, rec.Subject, credentialUseNetwork(netsec.ClientIP(r)), credentialUseAction(r))
+}
+
+// noteBrowserSignIn notes a browser session issued to a person (M1-L2): its
+// credential is the tenant-bound subject reference (privacy.SubjectRef), so
+// the event's opaque credential id never carries the subject, and the
+// principal is the subject, erased with it.
+func (a *API) noteBrowserSignIn(r *http.Request, tenantID, subject string) {
+	if a.usage == nil || tenantID == "" || subject == "" {
+		return
+	}
+	a.usage.noteKind(store.CredentialUsageBrowserSession, tenantID, privacy.SubjectRef(tenantID, subject), subject,
+		credentialUseNetwork(netsec.ClientIP(r)), projections.CredentialActionSignIn)
 }
 
 // credentialUseNetwork is the client network a request came from: its /24 for

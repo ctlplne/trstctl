@@ -4806,6 +4806,9 @@ func componentSchemas() map[string]*Schema {
 		"status":     {Type: "string", Enum: []string{"active", "offboarded"}},
 		"created_at": timestamp(), "updated_at": timestamp(), "offboarded_at": timestamp(),
 		"offboarded_by": str(), "offboard_reason": str(),
+		"last_sign_in_at": {Type: "string", Format: "date-time", Description: "the member's last recorded browser sign-in (M1-L2): recorded " +
+			"per client network, at most once an hour plus doubling counts; absent when none is recorded (the list only)"},
+		"last_sign_in_network": {Type: "string", Description: "the client network (/24 or /64) of that sign-in (M1-L2)"},
 	}, "tenant_id", "subject", "roles", "source", "status", "created_at", "updated_at")
 	memberReq := object(map[string]*Schema{
 		"display_name": str(), "email": str(), "roles": {Type: "array", Items: str()}, "source": str(),

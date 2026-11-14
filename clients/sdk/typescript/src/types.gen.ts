@@ -21799,6 +21799,13 @@ export interface components {
             created_at: string;
             display_name?: string;
             email?: string;
+            /**
+             * Format: date-time
+             * @description the member's last recorded browser sign-in (M1-L2): recorded per client network, at most once an hour plus doubling counts; absent when none is recorded (the list only)
+             */
+            last_sign_in_at?: string;
+            /** @description the client network (/24 or /64) of that sign-in (M1-L2) */
+            last_sign_in_network?: string;
             offboard_reason?: string;
             /** Format: date-time */
             offboarded_at?: string;

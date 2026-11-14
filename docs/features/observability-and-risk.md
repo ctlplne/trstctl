@@ -103,7 +103,12 @@ a forwarded-for header from any other peer is not trusted) and
 what it did (`api_call`, `secret_read`, `lease_request`): one `credential.used` event
 per token, network, action and hour, plus one each time that hour's count doubles, up
 to 1,024. Each machine login counts as a use of its login method by the workload it
-attested. `?unused_days=N` (CLI `--unused-days`, 1-3650, default 90) flags a token or
+attested. A person's browser sign-in (OIDC, SAML or LDAP) is recorded the same way as a
+use of kind `browser_session`, action `sign_in`, from the client's network (M1-L2); its
+credential id is the tenant-bound subject reference, never the subject, which is the
+principal and erased with it. NHI posture never reads a person's sign-ins; the members
+list (`GET /api/v1/access/members`) carries each member's `last_sign_in_at` and
+`last_sign_in_network`, and the console's people roster shows them. `?unused_days=N` (CLI `--unused-days`, 1-3650, default 90) flags a token or
 login method with no recorded use for N days as `unused_no_activity`; a source not yet
 used on three different days is `new_source` while the credential also has a normal
 source, and the flag clears once it has been. Missing telemetry never counts as non-use:

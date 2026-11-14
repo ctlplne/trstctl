@@ -10200,6 +10200,8 @@ Member = TypedDict(
         'created_at': str,
         'display_name': str,
         'email': str,
+        'last_sign_in_at': str,
+        'last_sign_in_network': str,
         'offboard_reason': str,
         'offboarded_at': str,
         'offboarded_by': str,

@@ -7352,6 +7352,8 @@ export interface Member {
   created_at: string;
   display_name?: string;
   email?: string;
+  last_sign_in_at?: string;
+  last_sign_in_network?: string;
   offboard_reason?: string;
   offboarded_at?: string;
   offboarded_by?: string;
