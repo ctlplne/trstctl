@@ -280,3 +280,21 @@ func factoryRoots(roots []string) []string {
 	}
 	return roots
 }
+
+// FactoryBirthByDeviceName finds the latest reconciled birth certificate for a
+// device name (P12-L2), so first boot over ACME is offered for that name.
+func (s *Store) FactoryBirthByDeviceName(ctx context.Context, tenantID, deviceName string) (FactoryBirth, bool, error) {
+	var b FactoryBirth
+	found := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		b, err = scanFactoryBirth(tx.QueryRow(ctx, `SELECT `+factoryBirthColumns+` FROM factory_birth_certificates
+			WHERE tenant_id = $1 AND lower(device_name) = lower($2) AND $2 <> '' ORDER BY recorded_at DESC, serial LIMIT 1`, tenantID, deviceName))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		found = err == nil
+		return err
+	})
+	return b, found, err
+}

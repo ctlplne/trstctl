@@ -164,30 +164,8 @@ func (s *Server) verifyFactoryProof(r *http.Request, tenantID string, renewal bo
 	}
 	now := time.Now()
 	if !renewal {
-		if birth.OverQuota {
-			return factoryProof{}, http.StatusForbidden, errors.New("over-production: this birth certificate is past its batch's quota")
-		}
-		if !birth.NotAfter.After(now) {
-			return factoryProof{}, http.StatusForbidden, errors.New("the birth certificate has expired")
-		}
-		// P12-L1: a batch with device attestation roots enrolls only births
-		// whose device attestation the reconcile verified.
-		if len(batch.DeviceAttestationRootsPEM) > 0 && birth.Attestation != store.FactoryAttestationVerified {
-			return factoryProof{}, http.StatusForbidden, errors.New("the batch requires a verified device attestation of the birth key, and this birth has none")
-		}
-		d, found, err := s.store.GetEdgeDelegation(ctx, tenantID, batch.DelegationID)
-		if err != nil || !found || d.RevokedAt != nil || d.Status == "revoked" {
-			return factoryProof{}, http.StatusForbidden, errors.New("the batch's station delegation is revoked")
-		}
-		delegationDER, err := firstCertDER(d.CertificatePEM)
-		if err != nil {
-			return factoryProof{}, http.StatusInternalServerError, errors.New("the batch's station delegation could not be read")
-		}
-		if _, err := crypto.InspectEdgeReportedLeaf(delegationDER, birth.CertificateDER); err != nil {
-			return factoryProof{}, http.StatusForbidden, errors.New("the birth certificate does not chain to its batch's station")
-		}
-		if birth.Enrolled && !strings.EqualFold(birth.CSRSHA256, digest) {
-			return factoryProof{}, http.StatusConflict, errors.New("this device already enrolled on first boot; renew with its operational certificate")
+		if status, err := s.factoryFirstBootAllowed(ctx, tenantID, birth, batch, digest, now); err != nil {
+			return factoryProof{}, status, err
 		}
 	} else {
 		if !birth.Enrolled {
@@ -259,4 +237,38 @@ func (s *Server) buildFactoryEST(tenantID string, issuer *protocolIssuer, pool *
 		CSRVerifier:  issuer.verifyCSR,
 		CSRInspector: issuer.inspectCSRInfo,
 	})
+}
+
+// factoryFirstBootAllowed checks a birth certificate may enroll its device on
+// first boot, over EST or ACME (P12, P12-L1, P12-L2): within its batch's
+// quota and unexpired, attested when its batch pins device attestation roots,
+// its station's delegation active and the certificate chaining to it, and not
+// already enrolled with another request.
+func (s *Server) factoryFirstBootAllowed(ctx context.Context, tenantID string, birth store.FactoryBirth, batch store.FactoryBatch, csrSHA256 string, now time.Time) (int, error) {
+	if birth.OverQuota {
+		return http.StatusForbidden, errors.New("over-production: this birth certificate is past its batch's quota")
+	}
+	if !birth.NotAfter.After(now) {
+		return http.StatusForbidden, errors.New("the birth certificate has expired")
+	}
+	// P12-L1: a batch with device attestation roots enrolls only births
+	// whose device attestation the reconcile verified.
+	if len(batch.DeviceAttestationRootsPEM) > 0 && birth.Attestation != store.FactoryAttestationVerified {
+		return http.StatusForbidden, errors.New("the batch requires a verified device attestation of the birth key, and this birth has none")
+	}
+	d, found, err := s.store.GetEdgeDelegation(ctx, tenantID, batch.DelegationID)
+	if err != nil || !found || d.RevokedAt != nil || d.Status == "revoked" {
+		return http.StatusForbidden, errors.New("the batch's station delegation is revoked")
+	}
+	delegationDER, err := firstCertDER(d.CertificatePEM)
+	if err != nil {
+		return http.StatusInternalServerError, errors.New("the batch's station delegation could not be read")
+	}
+	if _, err := crypto.InspectEdgeReportedLeaf(delegationDER, birth.CertificateDER); err != nil {
+		return http.StatusForbidden, errors.New("the birth certificate does not chain to its batch's station")
+	}
+	if birth.Enrolled && !strings.EqualFold(birth.CSRSHA256, csrSHA256) {
+		return http.StatusConflict, errors.New("this device already enrolled on first boot; renew with its operational certificate")
+	}
+	return 0, nil
 }

@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A factory device can take its first operational certificate over ACME (P12-L2): `device-attest-01` is offered for
+  a reconciled device's name, and the device answers with its birth certificate and its birth key's signature over the
+  challenge binding (format `trstctl-factory-birth`); the EST first-boot checks apply and the certificate is recorded
+  as the device's first boot.
 - A factory batch can require each device to attest its own key at birth (P12-L1): with `device_attestation_roots_pem`
   the station signs a birth certificate only after the device's TPM attests the CSR's key (bound to the tenant, batch
   and device, device-bound) against those roots (`trstctl-agent --factory-attestation`), the journal carries the
@@ -1722,6 +1726,8 @@
 
 ### Fixed
 
+- A validated ACME challenge carrying a device-bound key's attestation evidence (A131) is now declared in the event's
+  closed privacy shape; on a real event log the challenge failed to record.
 - An automatic or requested annotation on a collected image now lands on the image the collection read (N6-L3): the
   finding took its image from the annotation connection, which a collected scan leaves unnamed, so the annotation had
   no image to write to.

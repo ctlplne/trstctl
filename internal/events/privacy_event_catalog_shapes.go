@@ -217,8 +217,12 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"fingerprint":"","serial":"","reason":1,"at":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/serial"}}), true
 	case "acme.challenge.validated":
-		return shape(`{"challenge_id":"","authz_id":"","order_id":"","challenge_status":"","authz_status":"","order_status":"","attested_key_sha256":""}`,
-			catalogPrivacyShapeOptions{Optional: []string{"/order_status", "/attested_key_sha256"}}), true
+		// A131's device-bound evidence and P12-L2's factory birth grant ride
+		// the validated challenge to finalize.
+		return shape(`{"challenge_id":"","authz_id":"","order_id":"","challenge_status":"","authz_status":"","order_status":"","attested_key_sha256":"",`+
+			`"device_attestation":{"format":"","credential":"","binding":"","public_key_sha256":"","attestation_certificate_sha256":"","trusted_roots_sha256":"","verified_at":""},`+
+			`"factory_birth":{"batch_id":"","serial":"","public_key_der":""}}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/order_status", "/attested_key_sha256", "/device_attestation", "/factory_birth"}}), true
 	case "acme.dns01.plugin.presented", "acme.dns01.plugin.cleaned",
 		"acme.dns01.plugin.denied", "acme.dns01.plugin.failed":
 		return shape(`{"provider":"","record_name":"","detail":""}`,

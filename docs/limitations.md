@@ -8493,7 +8493,9 @@ hierarchy page's Device first-boot batches panel lists batches with their reconc
 enrollment, creates a batch under an active delegation, saves the station manifest and reconciles a journal pasted as
 PEM or as the station's journal file. A batch with device attestation roots enrolls only devices whose TPM attested
 their own key at birth (P12-L1), checked by the station and again at reconcile; proven with the TPM fixture, a real
-device TPM is a Track B row. What comes next: ACME as a first-boot path.
+device TPM is a Track B row. First boot also runs over ACME `device-attest-01` with the birth certificate (P12-L2);
+the certificate then comes from the ACME mount's profile, not the batch's `operational_profile`, and renewal stays
+on EST.
 
 ## ServiceNow two-way sync (P13) — served
 

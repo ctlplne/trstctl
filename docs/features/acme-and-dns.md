@@ -187,6 +187,13 @@ their ordinary renewal or revocation. trstctl also applies an account-keyed
 order/hour limiter plus a concurrent-order cap, so many clients behind one NAT do not
 share a single coarse source-IP budget and one noisy account cannot starve the ACME lane.
 
+A factory device (P12) whose birth certificate was reconciled is offered
+`device-attest-01` for its own name and may answer it with the
+`trstctl-factory-birth` format: its birth certificate and its birth key's
+signature over the challenge binding, under the factory's first-boot checks; the
+finalized certificate is recorded as its first boot (P12-L2, see
+[factory provisioning](../edge-ca-custody.md#factory-provisioning-p12)).
+
 An explicitly configured, default-off certificate profile may also offer TPM
 `device-attest-01` as a fourth alternative. The running ACME server loads the
 active profile through the tenant-scoped PostgreSQL/RLS store, checks the

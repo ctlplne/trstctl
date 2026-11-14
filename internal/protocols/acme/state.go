@@ -78,6 +78,9 @@ type acmeOrderState struct {
 	DeviceAttestation *acmeDeviceAttestationState `json:"device_attestation,omitempty"`
 	// IdentifierType is "email" for an S/MIME order (P15); absent is dns.
 	IdentifierType string `json:"identifier_type,omitempty"`
+	// FactoryBirth (P12-L2) is the birth certificate that answered the
+	// order's device-attest-01.
+	FactoryBirth *FactoryBirthGrant `json:"factory_birth,omitempty"`
 }
 
 // acmeDeviceAttestationState is the retained evidence behind a device-bound
@@ -150,6 +153,9 @@ type acmeChallengeValidatedEvent struct {
 	AttestedKeySHA256 string `json:"attested_key_sha256,omitempty"`
 	// DeviceAttestation is present when the attested key is device-bound.
 	DeviceAttestation *acmeDeviceAttestationState `json:"device_attestation,omitempty"`
+	// FactoryBirth (P12-L2) is present when a factory birth certificate
+	// answered the challenge.
+	FactoryBirth *FactoryBirthGrant `json:"factory_birth,omitempty"`
 }
 
 type acmeIssuedState struct {
@@ -347,6 +353,7 @@ func (s *Server) applyOrderCreatedEventLocked(payload acmeOrderCreatedEvent) err
 		deviceAttestation: payload.Order.DeviceAttestation,
 		identType:         payload.Order.IdentifierType,
 		createdAt:         payload.Order.CreatedAt,
+		factoryBirth:      payload.Order.FactoryBirth,
 	}
 	if o.status == "" {
 		o.status = statusPending
@@ -416,6 +423,9 @@ func (s *Server) applyChallengeValidatedEventLocked(payload acmeChallengeValidat
 			}
 			if payload.DeviceAttestation != nil {
 				o.deviceAttestation = payload.DeviceAttestation
+			}
+			if payload.FactoryBirth != nil {
+				o.factoryBirth = payload.FactoryBirth
 			}
 		}
 	}
@@ -500,6 +510,7 @@ func orderCreatedEventFrom(o *order, authzs []*authorization, seq int) acmeOrder
 			DeviceAttestation: o.deviceAttestation,
 			IdentifierType:    o.identType,
 			CreatedAt:         o.createdAt,
+			FactoryBirth:      o.factoryBirth,
 		},
 	}
 	for _, az := range authzs {

@@ -50,6 +50,12 @@ type DeviceAttestationResponse struct {
 	IssuedAt         time.Time       `json:"issued_at"`
 	CSR              string          `json:"csr"`
 	Attestation      json.RawMessage `json:"attestation"`
+	// P12-L2: with format trstctl-factory-birth, a factory device answers
+	// with its birth certificate (base64url DER) and its birth key's
+	// signature over the binding (base64url) instead of a TPM attestation.
+	Format           string `json:"format,omitempty"`
+	BirthCertificate string `json:"birth_certificate,omitempty"`
+	BirthSignature   string `json:"birth_signature,omitempty"`
 }
 
 // deviceAttestationBinding is the challenge a device-attest-01 attestation
@@ -109,6 +115,8 @@ const deviceAttestationFormatTPM = "tpm-webauthn"
 type deviceAttestationOutcome struct {
 	keyDigest []byte
 	evidence  *acmeDeviceAttestationState
+	// factoryBirth (P12-L2) is the birth certificate that answered.
+	factoryBirth *FactoryBirthGrant
 }
 
 func (s *Server) validateDeviceAttestation(
@@ -127,6 +135,12 @@ func (s *Server) validateDeviceAttestation(
 	}
 	if ch.status != statusPending {
 		return deviceAttestationOutcome{}, errors.New("device attestation challenge is not pending")
+	}
+	var probe struct {
+		Format string `json:"format"`
+	}
+	if err := json.Unmarshal(msg.Payload, &probe); err == nil && probe.Format == FactoryBirthFormat {
+		return s.validateFactoryBirth(ctx, msg, acct, ch, az, o)
 	}
 	policy, enabled, err := s.lookupDeviceAttestationPolicy(ctx, az.domain)
 	if err != nil {

@@ -248,6 +248,9 @@ type order struct {
 	deviceAttestation *acmeDeviceAttestationState // A131: evidence of a device-bound attested key
 	identType         string                      // P15: "email" for an S/MIME order; "" is dns
 	createdAt         time.Time
+	// factoryBirth (P12-L2) is the factory birth certificate that answered
+	// this order's device-attest-01: finalize records the device's first boot.
+	factoryBirth *FactoryBirthGrant
 }
 
 // ariWindow is the validity span the server derives a renewal window from.
@@ -352,6 +355,9 @@ type Server struct {
 	email *emailChallengeConfig
 
 	mux *http.ServeMux
+	// factoryBirth (P12-L2) lets a factory device's birth certificate answer
+	// device-attest-01 on first boot; nil offers no such path.
+	factoryBirth FactoryBirthAuthority
 }
 
 // New returns an ACME server brokering issuance to ca, validating challenges with
@@ -666,6 +672,12 @@ func (s *Server) challengeTypesForDomain(ctx context.Context, domain string) ([]
 	if _, enabled, err := s.lookupDeviceAttestationPolicy(ctx, domain); err != nil {
 		return nil, err
 	} else if enabled {
+		challengeTypes = append(challengeTypes, ChallengeDeviceAttest01)
+	} else if factory, err := s.isFactoryDevice(ctx, domain); err != nil {
+		return nil, err
+	} else if factory {
+		// P12-L2: a factory device's name may be answered by its birth
+		// certificate on first boot.
 		challengeTypes = append(challengeTypes, ChallengeDeviceAttest01)
 	}
 	return challengeTypes, nil
@@ -1450,6 +1462,7 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jo
 	if len(attested.keyDigest) > 0 {
 		event.AttestedKeySHA256 = base64.RawURLEncoding.EncodeToString(attested.keyDigest)
 		event.DeviceAttestation = attested.evidence
+		event.FactoryBirth = attested.factoryBirth
 	}
 	if err := s.appendStateEventLocked(r.Context(), acmeEventChallengeValidated, event); err != nil {
 		s.mu.Unlock()
@@ -1464,6 +1477,9 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jo
 		}
 		if event.DeviceAttestation != nil {
 			o.deviceAttestation = event.DeviceAttestation
+		}
+		if event.FactoryBirth != nil {
+			o.factoryBirth = event.FactoryBirth
 		}
 		if s.allAuthzValid(o) {
 			o.status = statusReady
@@ -1651,6 +1667,14 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		}
 		s.problemWithError(w, r, http.StatusInternalServerError, "serverInternal", "issuance failed: "+err.Error(), err)
 		return
+	}
+	// P12-L2: a factory device's first boot over ACME is recorded as its EST
+	// first boot is, against the birth certificate that answered the order.
+	if o.factoryBirth != nil {
+		if err := s.recordFactoryFirstBoot(r.Context(), *o.factoryBirth, csr, cert.CertificatePEM); err != nil {
+			s.problemWithError(w, r, http.StatusInternalServerError, "serverInternal", "record the device's first boot: "+err.Error(), err)
+			return
+		}
 	}
 
 	s.mu.Lock()

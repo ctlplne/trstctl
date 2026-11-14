@@ -414,6 +414,19 @@ certificate on its first boot.
 whether it is over the quota, enrolled, its current operational serial and its
 renewals.
 
+**First boot over ACME (P12-L2).** A device can also take its operational
+certificate from the ACME server instead of EST. A new order for the device's
+name is offered `device-attest-01`; the device answers with the format
+`trstctl-factory-birth`, its birth certificate (`birth_certificate`, base64url
+DER) and its birth key's signature (`birth_signature`) over the canonical binding
+of the format, tenant, account URL, order and challenge IDs (the last path
+segment of their URLs), challenge token, device name, CSR key SHA-256 and time
+(within five minutes), with the CSR it will finalize. trstctl applies exactly the
+first-boot checks EST applies (reconciled, within the quota, unexpired, attested
+when the batch pins roots, the station's delegation active, no earlier first boot
+with another request) and records the finalized certificate as the device's first
+boot. Renewal stays on EST.
+
 **Device attestation at birth (P12-L1).** A batch created with
 `device_attestation_roots_pem` (the roots of the device TPMs' attestation keys,
 at most 16) has each device prove its own key before it is born. On the line,

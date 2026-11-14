@@ -293,7 +293,8 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 		WithDeviceAttestationPolicy(acmeDeviceAttestationProfiles{
 			store:       s.store,
 			profileName: s.defaultProfile,
-		})
+		}).
+		WithFactoryBirthAuthority(factoryACMEAuthority{server: s})
 	if s.defaultProfile != "" {
 		acmeSrv = acmeSrv.WithCertificateProfileResolver(acmeActiveCertificateProfile{
 			store: s.store, tenantID: acmeTenant, profileName: s.defaultProfile,
