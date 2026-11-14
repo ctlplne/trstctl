@@ -1256,9 +1256,11 @@ trstctl-cli cbom scan -f cbom-scan.json
 trstctl-cli cbom assets
 
 # Export the inventory as a signed CycloneDX 1.6 CBOM and verify it offline
-# against the audit evidence keys you pinned (audit verification-keys).
+# against the audit evidence keys you pinned (audit verification-keys). The BOM
+# also carries its own JSF signature, so a BOM saved on its own verifies with --bom.
 trstctl-cli cbom export-cyclonedx > cbom-export.json
 trstctl-cli cbom verify-cyclonedx --export cbom-export.json --audit-jwks audit.jwks.json --bom-out cbom.cdx.json
+trstctl-cli cbom verify-cyclonedx --bom cbom.cdx.json --audit-jwks audit.jwks.json
 
 # Import CBOMs from vendors, code and images (offline scans; nothing is sent until import).
 trstctl-cli cbom import --source vendor:acme-router -f acme-router.cdx.json

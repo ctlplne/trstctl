@@ -1,0 +1,811 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "bom-ref": "00000000-0000-4000-8000-000000000001",
+      "cryptoProperties": {
+        "algorithmProperties": {
+          "classicalSecurityLevel": 112,
+          "nistQuantumSecurityLevel": 0,
+          "parameterSetIdentifier": "2048",
+          "primitive": "signature"
+        },
+        "assetType": "algorithm",
+        "oid": "1.2.840.113549.1.1.1"
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "api.example.test:443"
+          }
+        ]
+      },
+      "name": "RSA-2048",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "certificate-key"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "acceptable"
+        },
+        {
+          "name": "trstctl:quantum_vulnerable",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:out_of_policy",
+          "value": "false"
+        },
+        {
+          "name": "trstctl:key_bits",
+          "value": "2048"
+        },
+        {
+          "name": "trstctl:certificate_fingerprint",
+          "value": "ab12"
+        },
+        {
+          "name": "trstctl:migration_target",
+          "value": "ML-DSA-65"
+        },
+        {
+          "name": "trstctl:reason",
+          "value": "RSA is breakable by a cryptographically-relevant quantum computer"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "00000000-0000-4000-8000-000000000002",
+      "cryptoProperties": {
+        "algorithmProperties": {
+          "classicalSecurityLevel": 128,
+          "curve": "secp256r1",
+          "nistQuantumSecurityLevel": 0,
+          "primitive": "signature"
+        },
+        "assetType": "algorithm",
+        "oid": "1.2.840.10045.2.1"
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "web.example.test:443"
+          }
+        ]
+      },
+      "name": "ECDSA-P256",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "certificate-key"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "acceptable"
+        },
+        {
+          "name": "trstctl:quantum_vulnerable",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:out_of_policy",
+          "value": "false"
+        },
+        {
+          "name": "trstctl:key_bits",
+          "value": "256"
+        },
+        {
+          "name": "trstctl:migration_target",
+          "value": "ML-DSA-44"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "00000000-0000-4000-8000-000000000003",
+      "cryptoProperties": {
+        "algorithmProperties": {
+          "classicalSecurityLevel": 128,
+          "curve": "Ed25519",
+          "nistQuantumSecurityLevel": 0,
+          "primitive": "signature"
+        },
+        "assetType": "algorithm",
+        "oid": "1.3.101.112"
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "edge.example.test:8443"
+          }
+        ]
+      },
+      "name": "Ed25519",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "certificate-key"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "acceptable"
+        },
+        {
+          "name": "trstctl:quantum_vulnerable",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:out_of_policy",
+          "value": "false"
+        },
+        {
+          "name": "trstctl:key_bits",
+          "value": "256"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "00000000-0000-4000-8000-000000000004",
+      "cryptoProperties": {
+        "algorithmProperties": {
+          "classicalSecurityLevel": 80,
+          "nistQuantumSecurityLevel": 0,
+          "parameterSetIdentifier": "1024",
+          "primitive": "signature"
+        },
+        "assetType": "algorithm",
+        "oid": "1.2.840.113549.1.1.1"
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "legacy.example.test:443"
+          }
+        ]
+      },
+      "name": "RSA-1024",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "certificate-key"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "weak"
+        },
+        {
+          "name": "trstctl:quantum_vulnerable",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:out_of_policy",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:key_bits",
+          "value": "1024"
+        },
+        {
+          "name": "trstctl:reason",
+          "value": "RSA 1024-bit is below the 2048-bit minimum"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "00000000-0000-4000-8000-000000000005",
+      "cryptoProperties": {
+        "algorithmProperties": {
+          "nistQuantumSecurityLevel": 3,
+          "parameterSetIdentifier": "65",
+          "primitive": "signature"
+        },
+        "assetType": "algorithm",
+        "oid": "2.16.840.1.101.3.4.3.18"
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "pq.example.test:443"
+          }
+        ]
+      },
+      "name": "ML-DSA-65",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "certificate-key"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "strong"
+        },
+        {
+          "name": "trstctl:quantum_vulnerable",
+          "value": "false"
+        },
+        {
+          "name": "trstctl:out_of_policy",
+          "value": "false"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "00000000-0000-4000-8000-000000000006",
+      "cryptoProperties": {
+        "algorithmProperties": {
+          "primitive": "unknown"
+        },
+        "assetType": "algorithm"
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "old.example.test:443"
+          }
+        ]
+      },
+      "name": "GOST",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "certificate-key"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "acceptable"
+        },
+        {
+          "name": "trstctl:quantum_vulnerable",
+          "value": "false"
+        },
+        {
+          "name": "trstctl:out_of_policy",
+          "value": "false"
+        },
+        {
+          "name": "trstctl:key_bits",
+          "value": "256"
+        },
+        {
+          "name": "trstctl:reason",
+          "value": "unrecognized algorithm GOST"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "00000000-0000-4000-8000-000000000007",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "type": "tls",
+          "version": "1.3"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "api.example.test:443"
+          }
+        ]
+      },
+      "name": "TLS 1.3",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "tls-endpoint"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "strong"
+        },
+        {
+          "name": "trstctl:quantum_vulnerable",
+          "value": "false"
+        },
+        {
+          "name": "trstctl:out_of_policy",
+          "value": "false"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "00000000-0000-4000-8000-000000000008",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "type": "tls",
+          "version": "1.2"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "legacy.example.test:443"
+          }
+        ]
+      },
+      "name": "TLS 1.2",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "tls-endpoint"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "acceptable"
+        },
+        {
+          "name": "trstctl:quantum_vulnerable",
+          "value": "false"
+        },
+        {
+          "name": "trstctl:out_of_policy",
+          "value": "false"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "00000000-0000-4000-8000-000000000009",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "type": "tls",
+          "version": "1.0"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "/etc/ssl/openssl.cnf"
+          }
+        ]
+      },
+      "name": "TLS 1.0",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "host-config"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "weak"
+        },
+        {
+          "name": "trstctl:quantum_vulnerable",
+          "value": "false"
+        },
+        {
+          "name": "trstctl:out_of_policy",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:library",
+          "value": "openssl"
+        },
+        {
+          "name": "trstctl:reason",
+          "value": "TLSv1.0 is below the TLSv1.2 minimum"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "00000000-0000-4000-8000-00000000000a",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "cipherSuites": [
+            {
+              "name": "TLS_RSA_WITH_3DES_EDE_CBC_SHA"
+            }
+          ],
+          "type": "tls"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "/etc/nginx/nginx.conf"
+          }
+        ]
+      },
+      "name": "TLS_RSA_WITH_3DES_EDE_CBC_SHA",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "host-config"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "weak"
+        },
+        {
+          "name": "trstctl:quantum_vulnerable",
+          "value": "false"
+        },
+        {
+          "name": "trstctl:out_of_policy",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:library",
+          "value": "nginx"
+        },
+        {
+          "name": "trstctl:reason",
+          "value": "cipher contains banned primitive 3DES"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "certificate:ab12",
+      "cryptoProperties": {
+        "assetType": "certificate",
+        "certificateProperties": {
+          "certificateFormat": "X.509",
+          "issuerName": "CN=Example Issuing CA",
+          "notValidAfter": "2027-01-01T00:00:00Z",
+          "notValidBefore": "2026-01-01T00:00:00Z",
+          "subjectName": "CN=api.example.test",
+          "subjectPublicKeyRef": "00000000-0000-4000-8000-000000000001"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "api.example.test:443"
+          }
+        ]
+      },
+      "name": "CN=api.example.test",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "certificate"
+        },
+        {
+          "name": "trstctl:certificate_fingerprint",
+          "value": "ab12"
+        },
+        {
+          "name": "trstctl:serial",
+          "value": "0a1b2c"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "crypto-material:10000000-0000-4000-8000-000000000001",
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "format": "PKCS12",
+          "size": 2048,
+          "type": "private-key"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "/opt/app/conf/keystore.p12#tomcat"
+          }
+        ]
+      },
+      "name": "RSA-2048 private key",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "host-key"
+        },
+        {
+          "name": "trstctl:algorithm",
+          "value": "RSA-2048"
+        },
+        {
+          "name": "trstctl:encrypted",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "unrated"
+        },
+        {
+          "name": "trstctl:public_key_fingerprint",
+          "value": "cd34"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "crypto-material:10000000-0000-4000-8000-000000000002",
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "format": "PEM",
+          "size": 1024,
+          "type": "private-key"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "/etc/ssl/private/legacy.key"
+          }
+        ]
+      },
+      "name": "RSA-1024 private key",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "host-key"
+        },
+        {
+          "name": "trstctl:algorithm",
+          "value": "RSA-1024"
+        },
+        {
+          "name": "trstctl:encrypted",
+          "value": "false"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "weak"
+        },
+        {
+          "name": "trstctl:reason",
+          "value": "RSA modulus below 2048 bits"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "crypto-material:10000000-0000-4000-8000-000000000003",
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "format": "JCEKS",
+          "type": "secret-key"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "/etc/hadoop/conf/creds.jceks"
+          }
+        ]
+      },
+      "name": "secret keys",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "host-key"
+        },
+        {
+          "name": "trstctl:algorithm",
+          "value": "unknown"
+        },
+        {
+          "name": "trstctl:encrypted",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:strength",
+          "value": "unrated"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "library:20000000-0000-4000-8000-000000000001",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "/usr/lib/libssl.so.3"
+          }
+        ]
+      },
+      "name": "openssl",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "crypto-library"
+        },
+        {
+          "name": "trstctl:pq_hybrid_x25519mlkem768",
+          "value": "no"
+        }
+      ],
+      "type": "library",
+      "version": "3.0.13"
+    },
+    {
+      "bom-ref": "observed:30000000-0000-4000-8000-000000000001",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "cipherSuites": [
+            {
+              "name": "TLS_AES_128_GCM_SHA256"
+            }
+          ],
+          "type": "tls",
+          "version": "1.3"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "10.0.0.5:443"
+          }
+        ]
+      },
+      "name": "TLS 1.3",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "observed-handshake"
+        },
+        {
+          "name": "trstctl:observer",
+          "value": "network-observer"
+        },
+        {
+          "name": "trstctl:pq_hybrid",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:key_exchange_group",
+          "value": "X25519MLKEM768"
+        }
+      ],
+      "type": "cryptographic-asset"
+    },
+    {
+      "bom-ref": "observed:30000000-0000-4000-8000-000000000002",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "cipherSuites": [
+            {
+              "name": "chacha20-poly1305@openssh.com"
+            }
+          ],
+          "type": "ssh"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "10.0.0.9:22"
+          }
+        ]
+      },
+      "name": "SSH",
+      "properties": [
+        {
+          "name": "trstctl:asset_kind",
+          "value": "observed-handshake"
+        },
+        {
+          "name": "trstctl:observer",
+          "value": "network-observer"
+        },
+        {
+          "name": "trstctl:pq_hybrid",
+          "value": "true"
+        },
+        {
+          "name": "trstctl:key_exchange_group",
+          "value": "mlkem768x25519-sha256"
+        }
+      ],
+      "type": "cryptographic-asset"
+    }
+  ],
+  "compositions": [
+    {
+      "aggregate": "incomplete",
+      "assemblies": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004",
+        "00000000-0000-4000-8000-000000000005",
+        "00000000-0000-4000-8000-000000000006",
+        "00000000-0000-4000-8000-000000000007",
+        "00000000-0000-4000-8000-000000000008",
+        "00000000-0000-4000-8000-000000000009",
+        "00000000-0000-4000-8000-00000000000a",
+        "certificate:ab12",
+        "crypto-material:10000000-0000-4000-8000-000000000001",
+        "crypto-material:10000000-0000-4000-8000-000000000002",
+        "crypto-material:10000000-0000-4000-8000-000000000003",
+        "library:20000000-0000-4000-8000-000000000001",
+        "observed:30000000-0000-4000-8000-000000000001",
+        "observed:30000000-0000-4000-8000-000000000002"
+      ]
+    }
+  ],
+  "metadata": {
+    "properties": [
+      {
+        "name": "trstctl:coverage:scope",
+        "value": "assets trstctl observed: TLS endpoints and certificate keys at scanned addresses, declared host crypto configuration, imported CBOMs, the certificates the inventory holds for those keys, and what host agents and observers reported: keys in keystores and key files, crypto libraries, and observed TLS and SSH handshakes"
+      },
+      {
+        "name": "trstctl:coverage:assets",
+        "value": "10"
+      },
+      {
+        "name": "trstctl:coverage:asset_kinds",
+        "value": "certificate-key=6,host-config=2,tls-endpoint=2"
+      },
+      {
+        "name": "trstctl:coverage:certificates",
+        "value": "1"
+      },
+      {
+        "name": "trstctl:coverage:host_keys",
+        "value": "3"
+      },
+      {
+        "name": "trstctl:coverage:libraries",
+        "value": "1"
+      },
+      {
+        "name": "trstctl:coverage:observed_handshakes",
+        "value": "2"
+      },
+      {
+        "name": "trstctl:coverage:locations",
+        "value": "14"
+      },
+      {
+        "name": "trstctl:coverage:cut_at",
+        "value": "host_keys=10000"
+      },
+      {
+        "name": "trstctl:coverage:not_covered",
+        "value": "addresses and files no scan named; network traffic outside the interfaces observer agents watch; source code and container images only as far as imported CBOMs cover them"
+      },
+      {
+        "name": "trstctl:coverage:compliance",
+        "value": "none claimed: an algorithm choice is not a compliance determination"
+      }
+    ],
+    "timestamp": "2026-11-12T00:00:00Z",
+    "tools": {
+      "components": [
+        {
+          "name": "trstctl",
+          "type": "application",
+          "version": "test"
+        }
+      ]
+    }
+  },
+  "serialNumber": "urn:uuid:4a3b2c1d-8e7f-5a6b-9c0d-1e2f3a4b5c6d",
+  "signature": {
+    "algorithm": "RS256",
+    "keyId": "audit-export",
+    "publicKey": {
+      "kty": "RSA",
+      "n": "wYovQlgoQVdyBHwpI2s449haU_M_-fuACz6ekX1EDJF2c_bEDNebhQ2UwuxX5tF_HSsIOp7Swpncil0m_loFJlYIoKh8SXLej49wKI3CR-IUWEbpV395SctIElvPFCguKioIj-HjBSfEq-VnvttMdI7fOCCtq4SxrxRqmLxZyLhxkKK6Z2ggcDpWPdfhb0RWSxTsKoWJgbWXK8a0ewV7HB8hfmMWZ65cGWBIajkK4_l3ATGDkOXDQ7Yo67oF_RDzL1dfqOhvCkhrTsE8awABVCxw2Kn8vvm1DvBGfwrJTDvIDWuRdVOHjMm_yzVak58FQhrVgc5XURCL3YHxKSCX7w",
+      "e": "AQAB"
+    },
+    "value": "KGnbzscTZ3rQdEw2dO2oAU7UAL7CAbvrxv-At9vrHopMUNeiBWoOYJ8ypewDhCvMnVwY7MI7LCWpDQ8p3E2H96XYIBPptkRVFXx5cLJEAsyU8jVrNJQHwOTAudv3Xv8-U92zslYAuZ-Hwbj71-O0m96KFVP_M4zB1XvZCP9lLe5_Zv9IaJosLtRoxGfXEx0W34-6OmZEUbWqIjfFCxriDPHW5nqkNYlxk-r7YsDte9cdteFEh90RcDSZo95gBqmc5jSPPRiUcpF6AtwE5ilz6p8feJGd9t3R_NhFQhGjpfYGSyPT5Wu5GR5autONc9kw0v8vjBL40h_GxX3CrF22tA"
+  },
+  "specVersion": "1.6",
+  "version": 1
+}

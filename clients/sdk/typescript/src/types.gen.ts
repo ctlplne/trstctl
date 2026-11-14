@@ -15844,7 +15844,7 @@ export interface components {
             strength: string;
         };
         CBOMCycloneDXExport: {
-            /** @description the CycloneDX 1.6 BOM, exactly the bytes signed_bom signs */
+            /** @description the CycloneDX 1.6 BOM, exactly the bytes signed_bom signs; it carries its own JSF signature (signature: RS256, the audit evidence keyId and publicKey, and the value over the BOM's RFC 8785 form), so the BOM alone verifies after reformatting */
             bom: {
                 [key: string]: unknown;
             };

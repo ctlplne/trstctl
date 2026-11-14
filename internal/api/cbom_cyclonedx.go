@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -20,8 +21,11 @@ import (
 // The crypto inventory as a CycloneDX 1.6 CBOM (Q3): one signed document
 // scanners and agencies can ingest, mapped from the same inventory
 // GET /api/v1/cbom/assets serves, with the certificates, host keys, crypto
-// libraries and observed handshakes beside it (Q3-L2). The audit evidence key signs the exact
-// document bytes, so the export verifies offline with the published keys.
+// libraries and observed handshakes beside it (Q3-L2). The BOM carries its own
+// enveloped JSF signature (Q3-L1), which the isolated signer makes over the
+// BOM's RFC 8785 form, so the BOM alone verifies after any reformatting; the
+// audit evidence key also signs the exact document bytes as a JWS beside it,
+// so the export verifies offline with the published keys.
 
 type cbomCycloneDXExportResponse struct {
 	SpecVersion string          `json:"spec_version"`
@@ -86,9 +90,14 @@ func (a *API) exportCBOMCycloneDX(w http.ResponseWriter, r *http.Request) {
 	document := cbom.CycloneDXWith(assets, extra, cbom.CycloneDXMeta{
 		SerialUUID: gouuid.NewString(), GeneratedAt: time.Now().UTC(), ToolVersion: buildinfo.Version(),
 	})
-	bom, err := json.Marshal(document)
+	jwks, err := a.pqcCampaignSigner.PublicJWKS()
 	if err != nil {
-		a.writeError(w, err)
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "publish the CBOM export verifier: "+err.Error()))
+		return
+	}
+	bom, err := embedCBOMSignature(a.pqcCampaignSigner, jwks, &document)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "sign the CBOM export: "+err.Error()))
 		return
 	}
 	signed, err := a.pqcCampaignSigner.SignArtifact(jose.ArtifactCBOMCycloneDX, bom)
@@ -96,13 +105,42 @@ func (a *API) exportCBOMCycloneDX(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "sign the CBOM export: "+err.Error()))
 		return
 	}
-	jwks, err := a.pqcCampaignSigner.PublicJWKS()
-	if err != nil {
-		a.writeError(w, errStatus(http.StatusServiceUnavailable, "publish the CBOM export verifier: "+err.Error()))
-		return
-	}
 	a.writeJSON(w, http.StatusOK, cbomCycloneDXExportResponse{
 		SpecVersion: cbom.CycloneDXSpecVersion, Components: len(document.Components), BOM: bom,
 		BOMSHA256: "sha256:" + crypto.SHA256Hex(bom), SignedBOM: signed, PublicJWKS: json.RawMessage(jwks),
 	})
+}
+
+// embedCBOMSignature adds the BOM's enveloped JSF signature (Q3-L1): the
+// signature object names the audit evidence key (RS256, its kid and public
+// key), the signer signs the BOM's canonical form with it, and the value goes
+// in. The result is checked against the published key before it is served.
+func embedCBOMSignature(signer PQCCampaignClosureSigner, jwks []byte, document *cbom.CycloneDXBOM) ([]byte, error) {
+	template, err := jose.JSFTemplateFromJWKS(jwks)
+	if err != nil {
+		return nil, err
+	}
+	document.Signature = &cbom.CycloneDXSignature{Algorithm: template.Algorithm, KeyID: template.KeyID,
+		PublicKey: &cbom.CycloneDXSignatureKey{Kty: template.PublicKey.Kty, N: template.PublicKey.N, E: template.PublicKey.E}}
+	unsigned, err := json.Marshal(document)
+	if err != nil {
+		return nil, err
+	}
+	value, err := signer.SignArtifact(jose.ArtifactCBOMCycloneDXJSF, unsigned)
+	if err != nil {
+		return nil, err
+	}
+	document.Signature.Value = value
+	bom, err := json.Marshal(document)
+	if err != nil {
+		return nil, err
+	}
+	keys, err := jose.ParseJWKSet(jwks)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := keys.VerifyJSF(bom); err != nil {
+		return nil, fmt.Errorf("the BOM's embedded signature does not verify: %w", err)
+	}
+	return bom, nil
 }

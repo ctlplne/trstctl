@@ -34866,8 +34866,8 @@ export const messages = {
   },
   "posture.cbom.cyclonedx.help": {
     defaultMessage:
-      "Export this inventory as a CycloneDX 1.6 cryptographic bill of materials that scanners and agencies can ingest. It is signed with the audit evidence key; verify it offline with trstctl cbom verify-cyclonedx. It lists only what trstctl observed and claims no compliance.",
-    description: "Explanation of the CBOM export: format, signature, offline verification and coverage.",
+      "Export this inventory as a CycloneDX 1.6 cryptographic bill of materials that scanners and agencies can ingest. The BOM carries its own signature from the audit evidence key, so it still verifies after reformatting: check the BOM offline with trstctl cbom verify-cyclonedx --bom, or the signed export with --export. It lists only what trstctl observed and claims no compliance.",
+    description: "Explanation of the CBOM export: format, the BOM's own signature, offline verification and coverage.",
   },
   "posture.cbom.cyclonedx.downloadBom": { defaultMessage: "Download CycloneDX CBOM", description: "Button that saves the CycloneDX BOM." },
   "posture.cbom.cyclonedx.downloadSigned": {
@@ -34875,6 +34875,10 @@ export const messages = {
     description: "Button that saves the BOM with its signature and verification keys.",
   },
   "posture.cbom.cyclonedx.saved": { defaultMessage: "Saved a CBOM with {components} components.", description: "Notice after the CBOM export is saved." },
+  "posture.cbom.cyclonedx.embedded": {
+    defaultMessage: "The BOM carries its own {algorithm} signature from key {keyId}.",
+    description: "Q3-L1: notice that the saved BOM is signed in place (a JSF signature), with its algorithm and the audit evidence key ID.",
+  },
   "posture.cbom.cyclonedx.failed": { defaultMessage: "The CBOM could not be exported.", description: "Notice when the CBOM export fails." },
   "posture.cbom.import.title": { defaultMessage: "Import a CBOM", description: "X6-L4: CBOM import panel heading." },
   "posture.cbom.import.description": {

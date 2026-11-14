@@ -124,6 +124,26 @@ type CycloneDXBOM struct {
 	Metadata     cdxMetadata        `json:"metadata"`
 	Components   []CycloneDXAssetJS `json:"components"`
 	Compositions []cdxComposition   `json:"compositions"`
+	// Signature is the BOM's enveloped JSF signature (Q3-L1): the export
+	// fills it after the isolated signer signs the BOM's canonical form.
+	Signature *CycloneDXSignature `json:"signature,omitempty"`
+}
+
+// CycloneDXSignature is a CycloneDX BOM's JSF signature (jsf-0.82,
+// signaturecore): the algorithm, the signing key's ID and public key, and the
+// base64url signature value over the RFC 8785 form of the BOM without it.
+type CycloneDXSignature struct {
+	Algorithm string                 `json:"algorithm"`
+	KeyID     string                 `json:"keyId,omitempty"`
+	PublicKey *CycloneDXSignatureKey `json:"publicKey,omitempty"`
+	Value     string                 `json:"value,omitempty"`
+}
+
+// CycloneDXSignatureKey is the signing key as a JWK of kty, n and e.
+type CycloneDXSignatureKey struct {
+	Kty string `json:"kty"`
+	N   string `json:"n"`
+	E   string `json:"e"`
 }
 
 type cdxMetadata struct {

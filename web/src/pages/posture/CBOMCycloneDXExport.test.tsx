@@ -24,7 +24,12 @@ describe("CycloneDX CBOM export", () => {
     apiMock.exportCBOMCycloneDX.mockResolvedValue({
       spec_version: "1.6",
       components: 3,
-      bom: { bomFormat: "CycloneDX", specVersion: "1.6", components: [] },
+      bom: {
+        bomFormat: "CycloneDX",
+        specVersion: "1.6",
+        components: [],
+        signature: { algorithm: "RS256", keyId: "audit-export", publicKey: { kty: "RSA", n: "AQAB", e: "AQAB" }, value: "c2ln" },
+      },
       bom_sha256: "sha256:ab",
       signed_bom: "header.payload.signature",
       public_jwks: { keys: [] },
@@ -42,11 +47,37 @@ describe("CycloneDX CBOM export", () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     render(<CBOMCycloneDXExport />);
     await user.click(screen.getByRole("button", { name: "Download CycloneDX CBOM" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Saved a CBOM with 3 components.");
-    expect(JSON.parse(await readBlob(saved[0]))).toMatchObject({ bomFormat: "CycloneDX", specVersion: "1.6" });
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Saved a CBOM with 3 components. The BOM carries its own RS256 signature from key audit-export.",
+    );
+    // Q3-L1: the saved BOM keeps its own signature, so it verifies on its own.
+    expect(JSON.parse(await readBlob(saved[0]))).toMatchObject({
+      bomFormat: "CycloneDX",
+      specVersion: "1.6",
+      signature: { algorithm: "RS256", keyId: "audit-export", value: "c2ln" },
+    });
     await user.click(screen.getByRole("button", { name: "Download signed export" }));
     expect(JSON.parse(await readBlob(saved[1]))).toMatchObject({ signed_bom: "header.payload.signature" });
     expect(apiMock.exportCBOMCycloneDX).toHaveBeenCalledTimes(2);
     expect(click).toHaveBeenCalledTimes(2);
+  });
+
+  it("names no embedded signature when the BOM carries none", async () => {
+    const user = userEvent.setup();
+    Object.assign(URL, { createObjectURL: vi.fn(() => "blob:cbom"), revokeObjectURL: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    apiMock.exportCBOMCycloneDX.mockResolvedValueOnce({
+      spec_version: "1.6",
+      components: 1,
+      bom: { bomFormat: "CycloneDX", specVersion: "1.6", components: [] },
+      bom_sha256: "sha256:ab",
+      signed_bom: "header.payload.signature",
+      public_jwks: { keys: [] },
+    });
+    render(<CBOMCycloneDXExport />);
+    await user.click(screen.getByRole("button", { name: "Download CycloneDX CBOM" }));
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Saved a CBOM with 1 components.");
+    expect(status).not.toHaveTextContent("signature");
   });
 });

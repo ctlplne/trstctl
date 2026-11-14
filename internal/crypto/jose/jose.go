@@ -390,8 +390,10 @@ func (k *SigningKey) Sign(payload []byte) (string, error) {
 }
 
 // SignArtifact produces a compact RS256 JWS whose protected header binds the
-// admitted artifact kind. Production wrappers dispatch this into trstctl-signer;
-// local keys retain the same semantic helper for focused tests and offline tools.
+// admitted artifact kind; for ArtifactCBOMCycloneDXJSF it returns the BOM's
+// enveloped JSF signature value instead. Production wrappers dispatch this into
+// trstctl-signer; local keys retain the same semantic helper for focused tests
+// and offline tools.
 func (k *SigningKey) SignArtifact(kind string, payload []byte) (string, error) {
 	if k == nil {
 		return "", errors.New("jose: signing key is nil")
@@ -401,6 +403,9 @@ func (k *SigningKey) SignArtifact(kind string, payload []byte) (string, error) {
 	}
 	if k.artifact != nil {
 		return k.artifact.SignArtifact(kind, payload)
+	}
+	if kind == ArtifactCBOMCycloneDXJSF {
+		return k.signJSF(payload) // the BOM's enveloped JSF value, not a JWS (Q3-L1)
 	}
 	if k.signer == nil && k.key != nil {
 		return k.signLocalJWS(kind, payload)

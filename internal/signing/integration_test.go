@@ -5,6 +5,7 @@ package signing_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -145,6 +146,46 @@ func TestAuditEvidenceOverRealSignerBinary(t *testing.T) {
 	}
 	if _, err := legacy.JWKS().VerifyArtifact(string(res.Signature), jose.ArtifactHistoryContinuity); err == nil {
 		t.Fatal("key destruction evidence verified as history rewrite authority")
+	}
+	// Q3-L1: the signer makes a CycloneDX BOM's enveloped JSF signature with
+	// the same key, only for a BOM whose signature object names that key, and
+	// the value verifies over the BOM's canonical form.
+	jwks, err := legacy.PublicJWKS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	template, err := jose.JSFTemplateFromJWKS(jwks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bomDoc := map[string]any{"bomFormat": "CycloneDX", "specVersion": "1.6", "components": []any{}, "signature": template}
+	unsigned, err := json.Marshal(bomDoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err = client.SignArtifact(ctx, signing.ArtifactSignRequest{
+		Kind: jose.ArtifactCBOMCycloneDXJSF, TenantID: "deployment", AuthorityID: "audit-evidence",
+		KeyID: "audit-export", Payload: unsigned,
+	})
+	if err != nil {
+		t.Fatalf("sign a CycloneDX BOM's JSF signature through the isolated signer: %v", err)
+	}
+	template.Value = string(res.Signature)
+	bomDoc["signature"] = template
+	signedBOM, err := json.Marshal(bomDoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kid, err := legacy.JWKS().VerifyJSF(signedBOM); err != nil || kid != "audit-export" {
+		t.Fatalf("verify the BOM's JSF signature = %q %v", kid, err)
+	}
+	for _, refused := range [][]byte{payload, []byte(`{"bomFormat":"CycloneDX","signature":{"algorithm":"RS256","keyId":"someone-else"}}`)} {
+		if _, err := client.SignArtifact(ctx, signing.ArtifactSignRequest{
+			Kind: jose.ArtifactCBOMCycloneDXJSF, TenantID: "deployment", AuthorityID: "audit-evidence",
+			KeyID: "audit-export", Payload: refused,
+		}); err == nil {
+			t.Fatalf("the signer made a JSF signature for %s", refused)
+		}
 	}
 	_, err = client.SignArtifact(ctx, signing.ArtifactSignRequest{
 		Kind: "trstctl.audit-evidence/forged-kind/v1", TenantID: "deployment", AuthorityID: "audit-evidence",

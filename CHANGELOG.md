@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- A CycloneDX CBOM export carries its own enveloped JSF signature (Q3-L1): RS256 by the audit evidence key, with its
+  `keyId` and `publicKey`, over the BOM's RFC 8785 canonical form, made in the isolated signer. The BOM alone verifies
+  after reformatting: `trstctl-cli cbom verify-cyclonedx --bom` checks it against the pinned keys, and `--export`
+  checks it beside the JWS. The console names the BOM's signature when it saves one.
 - A review generated from who can reach a graph node carries each dynamic-secret lease's rights inside the target as
   G2 last read them (Q1-L8): the login, its grants and when they were read, unknown with the target's reason, or not
   read yet, shown as their own line in the console. The graph's coverage statement now names those reads and lease

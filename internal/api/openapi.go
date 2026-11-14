@@ -7292,7 +7292,7 @@ func componentSchemas() map[string]*Schema {
 	cbomCycloneDXExport := object(map[string]*Schema{
 		"spec_version": {Type: "string", Enum: []string{"1.6"}},
 		"components":   {Type: "integer", Description: "one cryptographic-asset component per inventory asset"},
-		"bom":          {Type: "object", AdditionalProperties: &Schema{}, Description: "the CycloneDX 1.6 BOM, exactly the bytes signed_bom signs"},
+		"bom":          {Type: "object", AdditionalProperties: &Schema{}, Description: "the CycloneDX 1.6 BOM, exactly the bytes signed_bom signs; it carries its own JSF signature (signature: RS256, the audit evidence keyId and publicKey, and the value over the BOM's RFC 8785 form), so the BOM alone verifies after reformatting"},
 		"bom_sha256":   str(),
 		"signed_bom":   {Type: "string", Description: "compact JWS over the BOM bytes under the audit evidence key; verify offline with trstctl-cli cbom verify-cyclonedx"},
 		"public_jwks":  {Type: "object", AdditionalProperties: &Schema{}},

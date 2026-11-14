@@ -58,7 +58,7 @@
       "type": "cryptographic-asset"
     },
     {
-      "bom-ref": "17b376e1-4907-5e5b-891b-c735a6aa4099",
+      "bom-ref": "3aad91bc-765f-5a7e-ba93-5f7c3b10b705",
       "cryptoProperties": {
         "assetType": "protocol",
         "protocolProperties": {
@@ -99,7 +99,7 @@
       "type": "cryptographic-asset"
     },
     {
-      "bom-ref": "21b9aba0-76e3-5f20-b99e-cd0e05d583d4",
+      "bom-ref": "877c05a9-26c2-52b4-a54d-17fd3f961e13",
       "cryptoProperties": {
         "algorithmProperties": {
           "classicalSecurityLevel": 112,
@@ -155,7 +155,7 @@
       "type": "cryptographic-asset"
     },
     {
-      "bom-ref": "3ad9599d-c094-5de5-a709-616d33dbdd55",
+      "bom-ref": "bc10306e-b76a-5b01-97cb-6eb92cd52332",
       "cryptoProperties": {
         "assetType": "protocol",
         "protocolProperties": {
@@ -205,7 +205,7 @@
           "notValidAfter": "2084-01-29T16:00:00Z",
           "notValidBefore": "1970-01-01T00:00:00Z",
           "subjectName": "O=Acme Co",
-          "subjectPublicKeyRef": "21b9aba0-76e3-5f20-b99e-cd0e05d583d4"
+          "subjectPublicKeyRef": "877c05a9-26c2-52b4-a54d-17fd3f961e13"
         }
       },
       "evidence": {
@@ -345,9 +345,9 @@
       "aggregate": "incomplete",
       "assemblies": [
         "0e2aa9c1-db23-596f-8295-2e7645e4f556",
-        "17b376e1-4907-5e5b-891b-c735a6aa4099",
-        "21b9aba0-76e3-5f20-b99e-cd0e05d583d4",
-        "3ad9599d-c094-5de5-a709-616d33dbdd55",
+        "3aad91bc-765f-5a7e-ba93-5f7c3b10b705",
+        "877c05a9-26c2-52b4-a54d-17fd3f961e13",
+        "bc10306e-b76a-5b01-97cb-6eb92cd52332",
         "certificate:468174fd18ae990a0a1e10568e30f9819a8acd23224c319f4ec3eb4f6f2980d9",
         "crypto-material:b07037af-bb1a-5ca0-ba8d-fcdc18df23c2",
         "library:7fda4b26-3f5e-5a8e-ac3d-47793d9281c4",
@@ -398,7 +398,7 @@
         "value": "none claimed: an algorithm choice is not a compliance determination"
       }
     ],
-    "timestamp": "2026-11-12T13:59:28Z",
+    "timestamp": "2026-11-14T15:27:37Z",
     "tools": {
       "components": [
         {
@@ -409,7 +409,17 @@
       ]
     }
   },
-  "serialNumber": "urn:uuid:8cf75211-67a6-45e4-8ba8-96d87488f921",
+  "serialNumber": "urn:uuid:1d10d885-9eac-46de-b323-d65fbc9e71ec",
+  "signature": {
+    "algorithm": "RS256",
+    "keyId": "q3l2-cbom",
+    "publicKey": {
+      "e": "AQAB",
+      "kty": "RSA",
+      "n": "vDKw-iwTxYOG7c86JdFfZHan4QbslRrtGtdNUxe-xALcZ_Qfq1YqKzZfbUMgoRQoEA8fudJaL23N9UbzthXRgrQtqIAj-bl3boAkN2ZEqENkhdDFtAubu8JRrMwEjAYNjeS9IU2yT_4WUbNlhymdNeXW6lGMMtkl6-pnJh3_wHFSnw3BDMcw-LBWg7h_N8AH3V9uZw5Cm2BGFMaOLmrPEs88587rTgamYtgxNB5V_S85bvvw3gEDm_WGrzCmg6PG1HPIGpAh-EhqvFPqKgFTfjoUJCfOTr88RWY6vzee71qvq1IdX7lSPlRG7B-o3xDjIgugP-TehtqBLSbuIiHPew"
+    },
+    "value": "gv5HCQQwNLAmO5vcG4KP5pWXhcYPy4HsUuQUnSPdtMp2uM-SWN-MRr3SLQkr7QptH02SfrqiKPh5jCzOUJHmFoQML42GbcJebGgHrbV7G9ZFNic0a0hUiUwKDwprSCs6WyupDIYbjP92Ox4tjnqKvvJBLWcsrAS8tAMbi7Qrc3x5bMJO0rTBf0plctlyN3kriztvuAMdGNOeNhKRCwEZ-Y6rD8kaOxqO16c_0Gym90oMtEmbQZ-ZvpMm6F1FBiNaUwN90KpLAiY1NoG8W-m4iyNsgRUpqyKXor2F8TSV_i2qxRnX9cg6EHX01kmCF8eOx3zILqE907V_VaNT_T4CBg"
+  },
   "specVersion": "1.6",
   "version": 1
 }

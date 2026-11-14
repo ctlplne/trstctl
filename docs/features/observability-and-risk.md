@@ -400,13 +400,20 @@ group. Agent and observer classes take the newest finding of each location, at m
 10,000 a class; the metadata counts each class and names a class cut at that bound
 (`trstctl:coverage:cut_at`).
 
-The response carries the BOM, its SHA-256, a compact JWS over the exact BOM bytes from
-the audit evidence key, and the public keys. Verify a saved export offline against the
-keys you pinned from `trstctl-cli audit verification-keys`:
+The BOM carries its own signature (Q3-L1): a JSF signature, the format CycloneDX defines
+for a BOM's `signature` property, with algorithm `RS256`, the audit evidence key's `keyId`
+and `publicKey`, and a `value` the isolated signer computes over the BOM's RFC 8785
+canonical form. Because it covers the canonical form rather than the bytes, the BOM alone
+still verifies after it is reformatted, for example the console's CycloneDX CBOM download.
+The response also carries the BOM's SHA-256, a compact JWS over the exact BOM bytes from
+the audit evidence key, and the public keys. Verify a saved export, or a BOM saved on its
+own, offline against the keys you pinned from `trstctl-cli audit verification-keys`; the
+public key inside a BOM is never trusted on its own:
 
 ```bash
 trstctl-cli cbom export-cyclonedx > cbom-export.json
 trstctl-cli cbom verify-cyclonedx --export cbom-export.json --audit-jwks audit.jwks.json --bom-out cbom.cdx.json
+trstctl-cli cbom verify-cyclonedx --bom trstctl-cbom.cdx.json --audit-jwks audit.jwks.json
 ```
 
 #### Importing CBOMs from vendors, code and images

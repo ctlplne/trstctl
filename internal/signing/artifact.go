@@ -81,11 +81,14 @@ var auditEvidenceKinds = map[string]bool{
 	jose.ArtifactAssuranceRecord:     true,
 	jose.ArtifactEvaluationPack:      true,
 	jose.ArtifactCBOMCycloneDX:       true,
+	jose.ArtifactCBOMCycloneDXJSF:    true,
 }
 
 // signAuditEvidenceArtifact is the core, signer-owned evidence admission path.
 // It accepts only the fixed audit authority/handle and a versioned kind allowlist,
-// then builds the complete domain-bound JWS inside this isolated process.
+// then builds the complete domain-bound JWS inside this isolated process. For a
+// CycloneDX BOM's JSF kind it returns the enveloped signature value instead,
+// after admitting only a BOM whose signature object names this key (Q3-L1).
 func (s *Server) signAuditEvidenceArtifact(req ArtifactSignRequest) (ArtifactSignature, error) {
 	if !auditEvidenceKinds[req.Kind] {
 		return ArtifactSignature{}, fmt.Errorf("unsupported audit evidence kind %q", req.Kind)

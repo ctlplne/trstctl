@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3351 annotated sites across 35 rules. Each row is
+3356 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -2312,7 +2312,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (791 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (794 sites)
 
 | Location | Reason |
 |---|---|
@@ -2650,7 +2650,7 @@ not this file.
 | `internal/cli/ca_key_wrap.go:100` | operator-named local file (CWE-22) |
 | `internal/cli/ca_key_wrap_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/cbom_scan_test.go:32` | the test's own temp file (CWE-22) |
-| `internal/cli/cbom_verify.go:109` | operator-named local file (CWE-22) |
+| `internal/cli/cbom_verify.go:141` | operator-named local file (CWE-22) |
 | `internal/cli/cbom_verify_test.go:61` | a file this test wrote under t.TempDir (CWE-22) |
 | `internal/cli/certificate_key_attestation.go:71` | operator-named local file (CWE-22) |
 | `internal/cli/certificate_key_attestation.go:81` | operator-named local file (CWE-22) |
@@ -2693,6 +2693,9 @@ not this file.
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/crypto/fsatomic/syncdir_other.go:10` | the caller's own state directory (CWE-22) |
 | `internal/crypto/jks/jceks_test.go:27` | the test reads its own fixture (CWE-22) |
+| `internal/crypto/jose/jsf_test.go:133` | the repository's own fixture (CWE-22) |
+| `internal/crypto/jose/jsf_test.go:283` | the repository's own fixture (CWE-22) |
+| `internal/crypto/jose/jsf_test.go:287` | the repository's own fixture (CWE-22) |
 | `internal/crypto/kerberos/client_test.go:87` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/mongosignin/mongosignin.go:251` | the session's URI names the CA file on the gateway's host, as a driver's tlsCAFile does (CWE-22) |
@@ -3453,7 +3456,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (166 sites)
+### G703 — CWE-22 Path traversal (taint) (168 sites)
 
 | Location | Reason |
 |---|---|
@@ -3543,6 +3546,8 @@ not this file.
 | `internal/server/audit_feed_syslog_mtls_lab_test.go:33` | the runner's lab client certificate and key (CWE-22) |
 | `internal/server/audit_feed_syslog_mtls_lab_test.go:83` | the runner's lab output file (CWE-22) |
 | `internal/server/backup_reports.go:117` | the staging tree is this backup's own temp directory (CWE-22) |
+| `internal/server/cbom_cyclonedx_jsf_served_test.go:115` | the lab run's own evidence directory (CWE-22) |
+| `internal/server/cbom_cyclonedx_jsf_served_test.go:118` | the lab run's own evidence directory (CWE-22) |
 | `internal/server/codesign_cosign_lab_p9_test.go:58` | a public payload, signature and keys the cosign container reads (CWE-22) |
 | `internal/server/codesign_cosign_rekor_lab_p9l2_test.go:88` | public payload, signature, bundle and keys the cosign container reads (CWE-22) |
 | `internal/server/codesign_notation_lab_p9_test.go:66` | the lab trust policy in the test's own temp directory (CWE-22) |
