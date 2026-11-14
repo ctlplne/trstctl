@@ -672,13 +672,17 @@ func (s *Store) ApplyDiscoveryFindingRecordedWithAlertTx(
 		return fmt.Errorf("store: lock discovery risk alert: %w", err)
 	}
 	var existingDestination string
-	var existingPayload []byte
 	err := tx.QueryRow(ctx,
-		`SELECT destination, payload FROM outbox
+		`SELECT destination FROM outbox
 		  WHERE tenant_id = $1 AND idempotency_key = $2 ORDER BY id LIMIT 1`,
-		f.TenantID, alertKey).Scan(&existingDestination, &existingPayload)
+		f.TenantID, alertKey).Scan(&existingDestination)
 	if err == nil {
-		if existingDestination != alertDestination || !bytes.Equal(existingPayload, alertPayload) {
+		// One urgent alert per finding: its key is the finding's. A later
+		// observation of the same finding at another score or under another
+		// name keeps the alert already raised rather than failing the whole
+		// report (P14-L2-O1); another destination under the key is still a
+		// conflict.
+		if existingDestination != alertDestination {
 			return fmt.Errorf("%w: discovery risk alert key is already bound", ErrIdempotencyConflict)
 		}
 		return nil

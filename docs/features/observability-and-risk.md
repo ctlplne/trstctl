@@ -73,7 +73,10 @@ projection's analyzed/critical/high counts, and deduplicates their union by
 read is an unavailable summary, never a fabricated zero. Recording a critical or high
 discovery finding atomically creates one `notification.risk` / `risk.urgent` outbox
 intent from the same score band; replaying the immutable event reuses the same
-idempotency key rather than creating a second alert.
+idempotency key rather than creating a second alert. The alert is the finding's: a
+later run that observes the same finding at another score (a certificate distrusted
+since, say) records the finding at its new score and keeps the alert already raised
+(P14-L2-O1).
 
 NHI posture reads the same unified inventory as the dashboard — managed identities,
 access tokens, and discovery findings — across four conditions:

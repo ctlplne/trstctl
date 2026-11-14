@@ -3957,7 +3957,8 @@ than sending an operator looking for a credential that was never there.
   by `credential_id`. Dashboard and Risk use that same answer, and a projection read
   failure is unavailable rather than zero. Critical/high discovery findings enqueue
   one same-transaction `notification.risk` / `risk.urgent` outbox intent from the
-  same score band. `status=complete` means every named projection read completed; it
+  same score band, one per finding: a later observation at another score, a rise
+  from high to critical included, raises no second alert (P14-L2-O1). `status=complete` means every named projection read completed; it
   does not mean an undiscovered machine is safe, because discovery coverage still
   bounds what these projections can know. The AI/RCA/MCP surface is also served
   behind `ai.enable_api`.

@@ -1739,6 +1739,10 @@
 
 ### Fixed
 
+- A finding observed again at another urgent score no longer fails the whole report that observed it (P14-L2-O1): its
+  urgent alert's key is the finding's, and the alert carried the first score, so an agent's inventory (a certificate
+  re-rated after a distrust entry, for one) stopped updating at that finding. The finding is now recorded at its new
+  score and keeps the alert already raised; another destination under the key is still refused.
 - A validated ACME challenge carrying a device-bound key's attestation evidence (A131) is now declared in the event's
   closed privacy shape; on a real event log the challenge failed to record.
 - An automatic or requested annotation on a collected image now lands on the image the collection read (N6-L3): the

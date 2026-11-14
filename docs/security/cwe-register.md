@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3339 annotated sites across 35 rules. Each row is
+3340 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (836 sites)
+### G101 — CWE-798 Use of hardcoded credentials (837 sites)
 
 | Location | Reason |
 |---|---|
@@ -596,6 +596,7 @@ not this file.
 | `internal/server/discovery_recovery_served_test.go:211` | reference names only; fixture values are synthetic and never shipped |
 | `internal/server/discovery_recovery_served_test.go:220` | reference names only; fixture values are synthetic and never shipped |
 | `internal/server/discovery_recovery_served_test.go:228` | metadata-only fabricated token reference; no credential value is present |
+| `internal/server/discovery_reobserved_alert_served_test.go:50` | MCP finding metadata naming a field, no credential (CWE-798) |
 | `internal/server/discovery_served_test.go:646` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:648` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:767` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
