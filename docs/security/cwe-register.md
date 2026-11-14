@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3358 annotated sites across 35 rules. Each row is
+3359 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1052,7 +1052,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (513 sites)
+### G115 — CWE-190 Integer overflow or wraparound (514 sites)
 
 | Location | Reason |
 |---|---|
@@ -1140,8 +1140,9 @@ not this file.
 | `internal/api/secretjson.go:173` | rune already range-checked below 0x20 before hex packing (CWE-190) |
 | `internal/api/vault_compat_complete.go:815` | DER length of a public key, far under the uint32 bound (CWE-190) |
 | `internal/audit/audit.go:172` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
-| `internal/auditarchive/reader.go:121` | positive count checked first (CWE-190) |
-| `internal/auditarchive/reader.go:127` | bounded by the int count above (CWE-190) |
+| `internal/auditarchive/reader.go:90` | verified bundle ends at the positive int count (CWE-190) |
+| `internal/auditarchive/reader.go:119` | bounded by the int count above (CWE-190) |
+| `internal/auditarchive/reader.go:153` | positive count checked first (CWE-190) |
 | `internal/backup/backup.go:175` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
 | `internal/backup/backup.go:722` | receiptIndex starts at zero and is bounded by len(affectedOrder) above (CWE-190). |
 | `internal/backup/backup.go:1005` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
@@ -2608,7 +2609,7 @@ not this file.
 | `internal/api/rogue_certificates_weak_key_test.go:18` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/api/sdk_spec_pinned_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/api/vault_compat_contract_test.go:255` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/auditarchive/reader.go:198` | rebuilt from the configured archive dir, tenant and boundary (CWE-22) |
+| `internal/auditarchive/reader.go:226` | rebuilt from the configured archive dir, tenant and boundary (CWE-22) |
 | `internal/auditsink/discard_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/backup/encrypted_artifact.go:62` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/backup/encrypted_artifact.go:194` | operator-invoked backup/restore over its own configured directory (CWE-22) |

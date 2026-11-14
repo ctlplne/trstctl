@@ -67,14 +67,30 @@ type Reader struct {
 	Objects objectstore.Store
 }
 
-// List returns the tenant's v2 segments, oldest first.
+// List returns the tenant's v2 segments, oldest first. The first v2 segment
+// after legacy v1 segments, whose events carried segment-local counts, takes
+// its first record from its own verified bundle (A234-L2); one whose bundle
+// cannot be read and verified keeps 0, unknown, never a guess.
 func (r Reader) List(ctx context.Context, tenantID string) ([]Segment, error) {
 	var out []Segment
-	err := r.each(ctx, tenantID, func(s Segment, _ audit.ArchivedEvent) error {
+	var unknown []audit.ArchivedEvent
+	var unknownAt []int
+	err := r.each(ctx, tenantID, func(s Segment, payload audit.ArchivedEvent) error {
+		if s.FirstRecord == 0 {
+			unknown, unknownAt = append(unknown, payload), append(unknownAt, len(out))
+		}
 		out = append(out, s)
 		return nil
 	})
-	return out, err
+	if err != nil {
+		return nil, err
+	}
+	for i, payload := range unknown {
+		if _, bundle, _, err := r.verified(ctx, tenantID, payload); err == nil {
+			out[unknownAt[i]].FirstRecord = int(bundle.Records[0].Sequence) // #nosec G115 -- verified bundle ends at the positive int count (CWE-190)
+		}
+	}
+	return out, nil
 }
 
 // Read returns the verified segment the tenant's archived event names.
@@ -93,12 +109,28 @@ func (r Reader) Read(ctx context.Context, tenantID, segmentID string) (Release, 
 	if hit == nil {
 		return Release{}, ErrNotFound
 	}
+	signed, bundle, retainedKey, err := r.verified(ctx, tenantID, payload)
+	if err != nil {
+		return Release{}, err
+	}
+	release := Release{Segment: *hit, Signed: signed, Bundle: bundle, SignerJWKS: retainedKey}
+	// The verified bundle is contiguous and ends at the positive int count, so
+	// its first record fits an int.
+	release.FirstRecord = int(bundle.Records[0].Sequence) // #nosec G115 -- bounded by the int count above (CWE-190)
+	return release, nil
+}
+
+// verified reads a segment from the archive and verifies it as this tenant's
+// archived segment: with the current audit key or, after the key has rotated,
+// the key its archive event retained (A234-L1). It returns the signed bytes,
+// the bundle and the retained key's JWK Set when that key verified it.
+func (r Reader) verified(ctx context.Context, tenantID string, payload audit.ArchivedEvent) (string, audit.Bundle, string, error) {
 	signed, err := r.stored(ctx, tenantID, payload)
 	if err != nil {
-		return Release{}, errors.Join(ErrUnavailable, err)
+		return "", audit.Bundle{}, "", errors.Join(ErrUnavailable, err)
 	}
 	if r.Keys == nil {
-		return Release{}, errors.Join(ErrUnavailable, errors.New("no audit verification keys"))
+		return "", audit.Bundle{}, "", errors.Join(ErrUnavailable, errors.New("no audit verification keys"))
 	}
 	bundle, err := audit.VerifyRetentionBundle(signed, r.Keys())
 	retainedKey := ""
@@ -108,24 +140,20 @@ func (r Reader) Read(ctx context.Context, tenantID, segmentID string) (Release, 
 		// never served unverified.
 		retained, parseErr := jose.ParseJWKSet([]byte(payload.SignerJWKS))
 		if parseErr != nil {
-			return Release{}, errors.Join(ErrUnavailable, err, parseErr)
+			return "", audit.Bundle{}, "", errors.Join(ErrUnavailable, err, parseErr)
 		}
 		if bundle, err = audit.VerifyRetentionBundle(signed, retained); err != nil {
-			return Release{}, errors.Join(ErrUnavailable, err)
+			return "", audit.Bundle{}, "", errors.Join(ErrUnavailable, err)
 		}
 		retainedKey = payload.SignerJWKS
 	} else if err != nil {
-		return Release{}, errors.Join(ErrUnavailable, err)
+		return "", audit.Bundle{}, "", errors.Join(ErrUnavailable, err)
 	}
 	if bundle.TenantID != tenantID || bundle.ChainHead != payload.BoundaryHash || len(bundle.Records) == 0 || payload.Count <= 0 ||
 		bundle.Records[len(bundle.Records)-1].Sequence != uint64(payload.Count) { // #nosec G115 -- positive count checked first (CWE-190)
-		return Release{}, errors.Join(ErrUnavailable, errors.New("stored segment is not this tenant's archived segment"))
+		return "", audit.Bundle{}, "", errors.Join(ErrUnavailable, errors.New("stored segment is not this tenant's archived segment"))
 	}
-	release := Release{Segment: *hit, Signed: signed, Bundle: bundle, SignerJWKS: retainedKey}
-	// The verified bundle is contiguous and ends at the positive int count, so
-	// its first record fits an int.
-	release.FirstRecord = int(bundle.Records[0].Sequence) // #nosec G115 -- bounded by the int count above (CWE-190)
-	return release, nil
+	return signed, bundle, retainedKey, nil
 }
 
 func (r Reader) each(ctx context.Context, tenantID string, visit func(Segment, audit.ArchivedEvent) error) error {
@@ -133,8 +161,8 @@ func (r Reader) each(ctx context.Context, tenantID string, visit func(Segment, a
 		return errors.New("auditarchive: no event log")
 	}
 	// previous is the cumulative count the last v2 segment ended at; after a
-	// legacy v1 segment (segment-local count) the next start is unknown and is
-	// reported as 0 until the downloaded bundle names it.
+	// legacy v1 segment (segment-local count) the next start is unknown here
+	// and List reads it from that segment's verified bundle (A234-L2).
 	previous, known := 0, true
 	return r.Log.WithHistoryRead(ctx, func(read context.Context) error {
 		head, err := r.Log.LastSequence(read)

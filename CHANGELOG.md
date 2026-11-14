@@ -1,6 +1,8 @@
 ## [Unreleased]
 
 ### Added
+- The first archived audit segment after a legacy (v1) segment lists the record it really starts at (A234-L2): the
+  list reads it from that segment's own verified bundle instead of reporting 0.
 - A tenant still downloads its archived audit segments after the audit key rotates (A234-L1): each archive event
   records the public key that signed its segment, the server verifies a segment with that retained key when the
   current one does not, and the download names the key (`signer_jwks`), which the console saves beside the segment.

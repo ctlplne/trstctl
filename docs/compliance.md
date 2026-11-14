@@ -610,8 +610,9 @@ can grant it), `GET /api/v1/audit/archives` lists the
 segments by opaque ID, record range, chain head and archive time, and `GET
 /api/v1/audit/archives/{id}` returns one segment's exact signed bytes
 (`?format=jws` for the raw JWS; `trstctl audit archives list|get`). A
-segment that directly follows a legacy segment lists `first_record` 0 because
-the log does not carry its start; the downloaded bundle names it. The server
+segment that directly follows a legacy segment, whose event the log does not
+give a start, lists the first record its own verified bundle holds (A234-L2);
+only one whose bundle cannot be read and verified lists `first_record` 0. The server
 finds a segment only through the tenant's own `audit.archived` event, rebuilds
 its location from the configured archive, the tenant and the record count, and
 verifies the bytes as that tenant's signed retention segment; anything else is
