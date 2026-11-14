@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The access review reconcile visits every open revoke decision in one pass (Q1-L4), page by page, instead of at most
+  200 a tenant each minute: 450 decisions whose requests died close in one call. A tenant's pass is bounded at 20
+  seconds, and a pass that runs out resumes just past the last item it visited, so items behind ones that stay open
+  are still reached.
 - An access review decision whose request died is finished at the reconcile's next pass, not two minutes later
   (Q1-L10): a decision request holds the item's act claim (a PostgreSQL session lock) from before its decision is
   recorded until what it did is recorded, and the reconcile acts only under that claim, so it never acts while the

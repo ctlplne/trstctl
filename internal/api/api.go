@@ -251,6 +251,11 @@ type API struct {
 	ownershipAttestationCadence time.Duration
 	mux                         *http.ServeMux
 	spec                        *Document
+	// nhiReviewReconcileBudget bounds one tenant's access review reconcile
+	// pass, and nhiReviewResume keeps where a pass that ran out stopped
+	// (Q1-L4).
+	nhiReviewReconcileBudget time.Duration
+	nhiReviewResume          nhiReviewResumeCursors
 }
 
 // Option configures an API.
@@ -325,6 +330,7 @@ type config struct {
 	adcsDecisions              ADCSDecisionService
 	mdmCheckIns                MDMCheckInService
 	factoryBatches             FactoryBatchService
+	nhiReviewReconcileBudget   time.Duration
 	keyVaultDisable            KeyVaultDisableService
 	pkiSecretLeafRecovery      PKISecretLeafRecoveryService
 	oidcIssuer                 OIDCIssuerSource
@@ -685,6 +691,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		sshTrustFleet:               cfg.sshTrustFleet,
 		slackApp:                    cfg.slackApp,
 		adcsDecisions:               cfg.adcsDecisions,
+		nhiReviewReconcileBudget:    cfg.nhiReviewReconcileBudget,
 		mdmCheckIns:                 cfg.mdmCheckIns,
 		factoryBatches:              cfg.factoryBatches,
 		keyVaultDisable:             cfg.keyVaultDisable,

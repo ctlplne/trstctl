@@ -986,7 +986,10 @@ reconcile carries no reviewer, so a certificate or identity it would revoke afte
 interrupted decision is `manual` as well. The item records what happened (`requested`, `manual`, `failed` with the
 reason) and closes only when the credential reads revoked, with that evidence
 (`closing_evidence`); a request alone never closes it. Each minute the leader
-re-checks open items and finishes a decision whose act was interrupted. A decision
+re-checks open items and finishes a decision whose act was interrupted. It reads
+every open item in one pass, page by page (Q1-L4), within 20 seconds per tenant; a
+pass that runs out resumes just past the last item it visited at the next pass, and
+reaches the rest before it starts over. A decision
 request holds the item's act claim (a PostgreSQL session lock) from before its
 decision is recorded until what it did is recorded, and the reconcile acts on a
 decision only under that claim (Q1-L10): never while the deciding request still

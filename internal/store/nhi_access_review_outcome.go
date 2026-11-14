@@ -73,17 +73,57 @@ func (s *Store) TenantsWithNHIReviewItemsAwaitingClosure(ctx context.Context) ([
 	return out, rows.Err()
 }
 
-// ListNHIReviewItemsAwaitingClosure returns the tenant's revoke decisions that
-// have not closed, oldest decision first.
-func (s *Store) ListNHIReviewItemsAwaitingClosure(ctx context.Context, tenantID string, limit int) ([]NHIReviewItem, error) {
+// NHIReviewAwaitingCursor is a position in the listing of the tenant's revoke
+// decisions that have not closed (Q1-L4): just past the item a page ended on.
+// The zero cursor is the start of the listing.
+type NHIReviewAwaitingCursor struct {
+	At         time.Time
+	CampaignID string
+	ItemID     string
+}
+
+// IsZero reports whether the cursor is the start of the listing.
+func (c NHIReviewAwaitingCursor) IsZero() bool { return c.CampaignID == "" && c.ItemID == "" }
+
+// Before reports whether c comes before other in the listing's order: decision
+// time, then campaign and item (canonical UUID text sorts as PostgreSQL sorts
+// the UUIDs).
+func (c NHIReviewAwaitingCursor) Before(other NHIReviewAwaitingCursor) bool {
+	if !c.At.Equal(other.At) {
+		return c.At.Before(other.At)
+	}
+	if c.CampaignID != other.CampaignID {
+		return c.CampaignID < other.CampaignID
+	}
+	return c.ItemID < other.ItemID
+}
+
+// NHIReviewAwaitingCursorAt is the listing's position of item.
+func NHIReviewAwaitingCursorAt(item NHIReviewItem) NHIReviewAwaitingCursor {
+	at := item.CreatedAt
+	if item.DecidedAt != nil {
+		at = *item.DecidedAt
+	}
+	return NHIReviewAwaitingCursor{At: at, CampaignID: item.CampaignID, ItemID: item.ItemID}
+}
+
+// ListNHIReviewItemsAwaitingClosure returns up to limit of the tenant's revoke
+// decisions that have not closed, after the cursor, oldest decision first; a
+// caller pages through all of them (Q1-L4).
+func (s *Store) ListNHIReviewItemsAwaitingClosure(ctx context.Context, tenantID string, after NHIReviewAwaitingCursor, limit int) ([]NHIReviewItem, error) {
 	var out []NHIReviewItem
+	campaignID, itemID := after.CampaignID, after.ItemID
+	if after.IsZero() {
+		campaignID, itemID = ZeroUUID, ZeroUUID
+	}
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT `+nhiReviewItemColumns+`
 			   FROM nhi_access_review_items
 			  WHERE tenant_id = $1 AND status = 'revoked' AND revocation_status <> 'closed'
-			  ORDER BY decided_at, item_id
-			  LIMIT $2`, tenantID, limit)
+			    AND ($2::boolean OR (COALESCE(decided_at, created_at), campaign_id, item_id) > ($3::timestamptz, $4::uuid, $5::uuid))
+			  ORDER BY COALESCE(decided_at, created_at), campaign_id, item_id
+			  LIMIT $6`, tenantID, after.IsZero(), after.At, campaignID, itemID, limit)
 		if err != nil {
 			return err
 		}

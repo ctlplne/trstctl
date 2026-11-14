@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
@@ -28,6 +29,50 @@ import (
 // on a decided item only under that claim (Q1-L10): never while the
 // decision's own request still acts, and on the first pass after a request
 // that died, with no fixed wait.
+
+// nhiReviewReconcilePage is how many open items one read of the reconcile
+// takes; a pass reads page after page until every open item was visited
+// (Q1-L4).
+const nhiReviewReconcilePage = 200
+
+// nhiReviewReconcileBudget bounds one tenant's reconcile pass by default, so a
+// tenant with a large backlog does not hold up the others; a pass that runs
+// out resumes just past the last item it visited at the next pass (Q1-L4).
+const nhiReviewReconcileBudget = 20 * time.Second
+
+// WithNHIReviewReconcileBudget sets how long one tenant's access review
+// reconcile pass may run before it stops and resumes at the next pass; zero
+// keeps the default (Q1-L4).
+func WithNHIReviewReconcileBudget(d time.Duration) Option {
+	return func(c *config) { c.nhiReviewReconcileBudget = d }
+}
+
+// nhiReviewResumeCursors keeps, per tenant, where a reconcile pass that ran
+// out of budget stopped (Q1-L4). It lives only on the leader that ran the
+// pass; a new leader starts at the beginning.
+type nhiReviewResumeCursors struct {
+	mu   sync.Mutex
+	next map[string]store.NHIReviewAwaitingCursor
+}
+
+func (r *nhiReviewResumeCursors) load(tenantID string) store.NHIReviewAwaitingCursor {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.next[tenantID]
+}
+
+func (r *nhiReviewResumeCursors) save(tenantID string, cursor store.NHIReviewAwaitingCursor) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if cursor.IsZero() {
+		delete(r.next, tenantID)
+		return
+	}
+	if r.next == nil {
+		r.next = make(map[string]store.NHIReviewAwaitingCursor)
+	}
+	r.next[tenantID] = cursor
+}
 
 // nhiReviewTarget states read from the reviewed credential.
 const (
@@ -421,16 +466,22 @@ func nhiReviewReadError(err error, what string) (string, string, error) {
 // ReconcileNHIReviewRevocations finishes the tenant's revoke decisions: a
 // decision whose act was interrupted acts now with the same idempotency key,
 // a failed revocation is retried once its backoff passes (Q1-L2), and an item
-// closes when its credential reads revoked or is gone (Q1-L3). It returns how
-// many items closed.
+// closes when its credential reads revoked or is gone (Q1-L3). It pages
+// through every open item in one pass (Q1-L4), within the tenant's budget; a
+// pass that runs out stops after the item it was on, and the next pass
+// resumes just past it, reaching the rest before it wraps to the start. It
+// returns how many items closed.
 func (a *API) ReconcileNHIReviewRevocations(ctx context.Context, tenantID string, now time.Time) (int, error) {
 	if a.orch == nil || a.store == nil {
 		return 0, nil
 	}
-	items, err := a.store.ListNHIReviewItemsAwaitingClosure(ctx, tenantID, 200)
-	if err != nil {
-		return 0, err
+	budget := a.nhiReviewReconcileBudget
+	if budget <= 0 {
+		budget = nhiReviewReconcileBudget
 	}
+	deadline := time.Now().Add(budget)
+	start := a.nhiReviewResume.load(tenantID)
+	cursor, wrapped := start, start.IsZero()
 	closed := 0
 	var firstErr error
 	note := func(err error) {
@@ -438,59 +489,94 @@ func (a *API) ReconcileNHIReviewRevocations(ctx context.Context, tenantID string
 			firstErr = err
 		}
 	}
-	for _, item := range items {
-		if err := ctx.Err(); err != nil {
+	for {
+		items, err := a.store.ListNHIReviewItemsAwaitingClosure(ctx, tenantID, cursor, nhiReviewReconcilePage)
+		if err != nil {
+			a.nhiReviewResume.save(tenantID, cursor)
 			return closed, err
 		}
-		if item.RevocationStatus == "" {
-			// Q1-L10: act only under the item's act claim. A held claim is
-			// the decision's own request still acting; the next pass reads
-			// what it recorded. Under the claim the item is read again, since
-			// that request may have recorded its act since the list was read.
-			acquired, err := a.store.WithNHIReviewActClaim(ctx, tenantID, item.CampaignID, item.ItemID, func(ctx context.Context) error {
-				current, err := a.store.GetNHIReviewItem(ctx, tenantID, item.CampaignID, item.ItemID)
-				if err != nil {
-					return err
-				}
-				if current.RevocationStatus == "" {
-					status, detail := a.RevokeReviewedCredential(ctx, tenantID, current.CampaignID, current)
-					if _, err := a.orch.RecordNHIReviewRevocation(ctx, tenantID, current.CampaignID, current.ItemID, status, detail); err != nil {
-						return err
-					}
-					current.RevocationStatus = status
-				}
-				item = current
-				return nil
-			})
-			if err != nil {
-				note(err)
-				continue
+		for _, item := range items {
+			at := store.NHIReviewAwaitingCursorAt(item)
+			if wrapped && !start.IsZero() && !at.Before(start) {
+				// The wrapped read reached where this pass began: every
+				// open item was visited.
+				a.nhiReviewResume.save(tenantID, store.NHIReviewAwaitingCursor{})
+				return closed, firstErr
 			}
-			if !acquired {
-				continue
+			if err := ctx.Err(); err != nil {
+				a.nhiReviewResume.save(tenantID, cursor)
+				return closed, err
+			}
+			closed += a.reconcileNHIReviewItem(ctx, tenantID, item, now, note)
+			cursor = at
+			if time.Now().After(deadline) {
+				a.nhiReviewResume.save(tenantID, cursor)
+				return closed, firstErr
 			}
 		}
-		state, detail, err := a.nhiReviewTargetState(ctx, tenantID, item.NHIID, now)
-		if err != nil {
-			note(err)
-			continue
-		}
-		switch {
-		case state == nhiReviewTargetRevoked || state == nhiReviewTargetGone:
-			if _, err := a.orch.CloseNHIReviewItem(ctx, tenantID, item.CampaignID, item.ItemID, detail); err != nil {
-				note(err)
-				continue
+		if len(items) < nhiReviewReconcilePage {
+			if wrapped {
+				a.nhiReviewResume.save(tenantID, store.NHIReviewAwaitingCursor{})
+				return closed, firstErr
 			}
-			closed++
-		case state == nhiReviewTargetFailed && item.RevocationStatus != store.NHIReviewRevocationFailed:
-			if _, err := a.orch.RecordNHIReviewRevocation(ctx, tenantID, item.CampaignID, item.ItemID, store.NHIReviewRevocationFailed, detail); err != nil {
-				note(err)
-			}
-		case nhiReviewAutoRetryDue(item, now):
-			if _, err := a.autoRetryNHIReviewRevocation(ctx, tenantID, item); err != nil {
-				note(err)
-			}
+			// A pass that resumed mid-list reads from the start up to
+			// where it began.
+			cursor, wrapped = store.NHIReviewAwaitingCursor{}, true
 		}
 	}
-	return closed, firstErr
+}
+
+// reconcileNHIReviewItem visits one open revoke decision and returns 1 when it
+// closed.
+func (a *API) reconcileNHIReviewItem(ctx context.Context, tenantID string, item store.NHIReviewItem, now time.Time, note func(error)) int {
+	if item.RevocationStatus == "" {
+		// Q1-L10: act only under the item's act claim. A held claim is
+		// the decision's own request still acting; the next pass reads
+		// what it recorded. Under the claim the item is read again, since
+		// that request may have recorded its act since the list was read.
+		acquired, err := a.store.WithNHIReviewActClaim(ctx, tenantID, item.CampaignID, item.ItemID, func(ctx context.Context) error {
+			current, err := a.store.GetNHIReviewItem(ctx, tenantID, item.CampaignID, item.ItemID)
+			if err != nil {
+				return err
+			}
+			if current.RevocationStatus == "" {
+				status, detail := a.RevokeReviewedCredential(ctx, tenantID, current.CampaignID, current)
+				if _, err := a.orch.RecordNHIReviewRevocation(ctx, tenantID, current.CampaignID, current.ItemID, status, detail); err != nil {
+					return err
+				}
+				current.RevocationStatus = status
+			}
+			item = current
+			return nil
+		})
+		if err != nil {
+			note(err)
+			return 0
+		}
+		if !acquired {
+			return 0
+		}
+	}
+	state, detail, err := a.nhiReviewTargetState(ctx, tenantID, item.NHIID, now)
+	if err != nil {
+		note(err)
+		return 0
+	}
+	switch {
+	case state == nhiReviewTargetRevoked || state == nhiReviewTargetGone:
+		if _, err := a.orch.CloseNHIReviewItem(ctx, tenantID, item.CampaignID, item.ItemID, detail); err != nil {
+			note(err)
+			return 0
+		}
+		return 1
+	case state == nhiReviewTargetFailed && item.RevocationStatus != store.NHIReviewRevocationFailed:
+		if _, err := a.orch.RecordNHIReviewRevocation(ctx, tenantID, item.CampaignID, item.ItemID, store.NHIReviewRevocationFailed, detail); err != nil {
+			note(err)
+		}
+	case nhiReviewAutoRetryDue(item, now):
+		if _, err := a.autoRetryNHIReviewRevocation(ctx, tenantID, item); err != nil {
+			note(err)
+		}
+	}
+	return 0
 }
