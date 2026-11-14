@@ -2655,9 +2655,11 @@ for an export. `container_registry` reads one image (`repository` and `reference
 tag or `sha256:` digest) over the OCI distribution API — anonymously, with a static
 bearer token, or through the registry's token service with `username_ref` and
 `token_ref` — every platform of an index (up to sixteen), each platform's config (its
-environment and build history) and the regular files of each layer, each blob checked
-against its digest before it counts; findings name the image's repository and
-digest. `slack` reads `channels` (IDs) through `conversations.history` with a bot
+environment and build history) and the regular files of each layer (a plain, gzip or
+zstd tar), each blob checked against its digest before it counts; findings name the
+image's repository and digest. A zstd layer may ask for a decoding window of at most
+128 MiB, and a compressed layer may expand to at most 16 GiB; past either, the run
+fails with the reason (N6-L2). `slack` reads `channels` (IDs) through `conversations.history` with a bot
 token, and each thread's replies through `conversations.replies` (N6-L1), filed by
 day as Slack's export files them (a reply also sent to the channel is kept once);
 findings name the channel and message, and a reply's finding also names its thread.

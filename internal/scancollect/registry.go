@@ -16,6 +16,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/klauspost/compress/zstd"
+
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -31,6 +33,15 @@ const (
 	maxLayerFileBytes  = int64(64) << 20
 	registryManifestAc = mediaOCIIndex + ", " + mediaOCIManifest + ", " + mediaDockerList + ", " + mediaDockerV2
 )
+
+// maxZstdWindow is the largest decoding window a zstd layer may ask for
+// (N6-L2): the format's long-distance and ultra settings stop at 128 MiB.
+const maxZstdWindow = uint64(128) << 20
+
+// maxLayerExpanded is how far one compressed layer may expand while it is
+// read (N6-L2); past it the collection is refused, so a small blob cannot
+// keep the collector expanding. A variable so a test can lower it.
+var maxLayerExpanded = int64(16) << 30
 
 var (
 	registryRepository = regexp.MustCompile(`^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$`)
@@ -289,9 +300,9 @@ func (c *registryClient) blob(ctx context.Context, d descriptor) ([]byte, error)
 	return body, nil
 }
 
-// layer writes the regular files of one gzip (or plain) tar layer. The layer
-// is read once: its bytes feed the digest and the tar reader together, and a
-// layer whose digest does not match fails the collection.
+// layer writes the regular files of one gzip, zstd or plain tar layer. The
+// layer is read once: its bytes feed the digest and the tar reader together,
+// and a layer whose digest does not match fails the collection.
 func (c *registryClient) layer(ctx context.Context, w *writer, dir string, d descriptor) error {
 	if !registryDigest.MatchString(d.Digest) || d.Size < 0 || d.Size > maxRegistryLayer {
 		return fmt.Errorf("%w: layer %s is not a bounded sha256 blob", ErrRefused, d.Digest)
@@ -314,11 +325,20 @@ func (c *registryClient) layer(ctx context.Context, w *writer, dir string, d des
 			return fmt.Errorf("scancollect: layer %s: %w", d.Digest, err)
 		}
 		defer func() { _ = gz.Close() }()
-		stream = gz
+		stream = &expandLimit{r: gz, left: maxLayerExpanded, digest: d.Digest}
+	case strings.HasSuffix(d.MediaType, "+zstd"), strings.HasSuffix(d.MediaType, ".tar.zstd"):
+		// N6-L2: a zstd layer is decoded in this goroutine, with low memory
+		// and a bounded window.
+		zr, err := zstd.NewReader(body, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true), zstd.WithDecoderMaxWindow(maxZstdWindow))
+		if err != nil {
+			return fmt.Errorf("scancollect: layer %s: %w", d.Digest, err)
+		}
+		defer zr.Close()
+		stream = &expandLimit{r: zr, left: maxLayerExpanded, digest: d.Digest}
 	case strings.HasSuffix(d.MediaType, ".tar"), strings.HasSuffix(d.MediaType, "+tar"):
 	default:
-		// A compression this collector does not read (zstd) is skipped, and
-		// its bytes still count against the digest check below.
+		// A compression this collector does not read is skipped, and its
+		// bytes still count against the digest check below.
 		_, _ = io.Copy(io.Discard, body)
 		return checkDigest(digest, d.Digest)
 	}
@@ -349,4 +369,32 @@ func checkDigest(digest *crypto.SHA256HMACDigest, want string) error {
 		return fmt.Errorf("%w: layer %s does not match its digest", ErrRefused, want)
 	}
 	return nil
+}
+
+// expandLimit reads a decompressed layer up to maxLayerExpanded bytes (N6-L2).
+// Past it, or when a zstd frame asks for a window over maxZstdWindow, the
+// layer is refused, so the run fails with the reason instead of being retried.
+type expandLimit struct {
+	r      io.Reader
+	left   int64
+	digest string
+}
+
+func (l *expandLimit) Read(p []byte) (int, error) {
+	if l.left <= 0 {
+		var one [1]byte
+		if n, err := l.r.Read(one[:]); n == 0 && errors.Is(err, io.EOF) {
+			return 0, io.EOF
+		}
+		return 0, fmt.Errorf("%w: layer %s expands past %d bytes", ErrRefused, l.digest, maxLayerExpanded)
+	}
+	if int64(len(p)) > l.left {
+		p = p[:l.left]
+	}
+	n, err := l.r.Read(p)
+	l.left -= int64(n)
+	if errors.Is(err, zstd.ErrWindowSizeExceeded) || errors.Is(err, zstd.ErrDecoderSizeExceeded) {
+		return n, fmt.Errorf("%w: layer %s: %v", ErrRefused, l.digest, err)
+	}
+	return n, err
 }

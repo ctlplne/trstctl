@@ -24,41 +24,45 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+// n6UploadBlob uploads one blob to a stock registry over the distribution
+// API (a monolithic upload) and returns its digest.
+func n6UploadBlob(t *testing.T, registry, repo string, data []byte) string {
+	t.Helper()
+	digest := "sha256:" + crypto.SHA256Hex(data)
+	resp, err := http.Post(registry+"/v2/"+repo+"/blobs/uploads/", "application/octet-stream", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	location := resp.Header.Get("Location")
+	if resp.StatusCode != http.StatusAccepted || location == "" {
+		t.Fatalf("start upload: HTTP %d", resp.StatusCode)
+	}
+	if !strings.HasPrefix(location, "http") {
+		location = registry + location
+	}
+	sep := "?"
+	if strings.Contains(location, "?") {
+		sep = "&"
+	}
+	req, _ := http.NewRequest(http.MethodPut, location+sep+"digest="+digest, bytes.NewReader(data))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	put, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = put.Body.Close()
+	if put.StatusCode != http.StatusCreated {
+		t.Fatalf("finish upload: HTTP %d", put.StatusCode)
+	}
+	return digest
+}
+
 // n6PushImage pushes a one-layer OCI image to a stock registry over the
 // distribution API and returns its manifest digest.
 func n6PushImage(t *testing.T, registry, repo, tag string, files map[string]string, env string) string {
 	t.Helper()
-	upload := func(data []byte) string {
-		t.Helper()
-		digest := "sha256:" + crypto.SHA256Hex(data)
-		resp, err := http.Post(registry+"/v2/"+repo+"/blobs/uploads/", "application/octet-stream", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_ = resp.Body.Close()
-		location := resp.Header.Get("Location")
-		if resp.StatusCode != http.StatusAccepted || location == "" {
-			t.Fatalf("start upload: HTTP %d", resp.StatusCode)
-		}
-		if !strings.HasPrefix(location, "http") {
-			location = registry + location
-		}
-		sep := "?"
-		if strings.Contains(location, "?") {
-			sep = "&"
-		}
-		req, _ := http.NewRequest(http.MethodPut, location+sep+"digest="+digest, bytes.NewReader(data))
-		req.Header.Set("Content-Type", "application/octet-stream")
-		put, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_ = put.Body.Close()
-		if put.StatusCode != http.StatusCreated {
-			t.Fatalf("finish upload: HTTP %d", put.StatusCode)
-		}
-		return digest
-	}
+	upload := func(data []byte) string { return n6UploadBlob(t, registry, repo, data) }
 	var layer bytes.Buffer
 	gz := gzip.NewWriter(&layer)
 	tw := tar.NewWriter(gz)

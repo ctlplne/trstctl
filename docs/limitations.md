@@ -9229,7 +9229,6 @@ What comes next:
 - Live Slack, Jira, GitHub, GitLab, Microsoft Teams, Confluence (OD-4) and
   hosted-registry runs are Track B proofs (the GitLab container is a multi-GB image;
   the stand-ins follow each provider's API reference).
-- A layer compressed with zstd is skipped (its digest is still checked).
 - Slack threads are found through their parents in the collected history, so a
   thread started before `since` is read only for the replies also sent to the
   channel.

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3312 annotated sites across 35 rules. Each row is
+3313 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -821,11 +821,11 @@ not this file.
 | `internal/server/slack_socket_served_test.go:128` | env: references to test-only values, no credential (CWE-798) |
 | `internal/server/slack_thread_collect_served_test.go:66` | an env: reference to a test-only stand-in token, no credential value (CWE-798) |
 | `internal/server/ssh_agentless_collection_served_test.go:27` | public host pin, restricted account and vault-reference fixtures contain no credential value (CWE-798). |
-| `internal/server/thirdparty_collect_served_test.go:194` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
-| `internal/server/thirdparty_collect_served_test.go:195` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
-| `internal/server/thirdparty_collect_served_test.go:196` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
-| `internal/server/thirdparty_collect_served_test.go:197` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
 | `internal/server/thirdparty_collect_served_test.go:198` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
+| `internal/server/thirdparty_collect_served_test.go:199` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
+| `internal/server/thirdparty_collect_served_test.go:200` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
+| `internal/server/thirdparty_collect_served_test.go:201` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
+| `internal/server/thirdparty_collect_served_test.go:202` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
 | `internal/server/thirdparty_collect_teams_confluence_served_test.go:99` | env: references to test-only stand-in values (CWE-798) |
 | `internal/server/thirdparty_collect_teams_confluence_served_test.go:100` | env: references to test-only stand-in values (CWE-798) |
 | `internal/server/thirdparty_collect_teams_confluence_served_test.go:101` | env: references to test-only stand-in values (CWE-798) |
@@ -1735,7 +1735,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (414 sites)
+### G204 — CWE-78 OS command injection (415 sites)
 
 | Location | Reason |
 |---|---|
@@ -2054,6 +2054,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:73` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/python_sdk_served_test.go:82` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/redfish_mockup_served_test.go:79` | the interpreter and checkout the CI lab names, fixed arguments (CWE-78) |
+| `internal/server/registry_zstd_collect_served_test.go:33` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/revocation_openssl_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/sdk_registry_install_served_test.go:239` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/sdk_registry_install_served_test.go:285` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2111,7 +2112,7 @@ not this file.
 | `internal/server/sshcollection_openssh_test.go:272` | stock client against an exact owned container with strict host identity and a disposable private test key (CWE-78). |
 | `internal/server/sshcollection_openssh_test.go:282` | stock-client refusal probe forwards only toward the owned SSH test container, with the same strict host pin (CWE-78). |
 | `internal/server/sts_deny_policy_served_test.go:35` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/thirdparty_collect_served_test.go:109` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/thirdparty_collect_served_test.go:113` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/token_exchange_lab_m4_test.go:36` | the runner's own lab cluster (CWE-78) |
 | `internal/server/token_exchange_lab_m4_test.go:70` | the runner's own lab cluster (CWE-78) |
 | `internal/server/vault_compat_served_test.go:178` | test executes a fixed local tool or fixture it built itself (CWE-78) |

@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- Native image collection for secret scanning reads zstd layers (N6-L2): an OCI `tar+zstd` layer's files are
+  collected and scanned as a gzip layer's are, its digest checked; a zstd window over 128 MiB, or any compressed
+  layer expanding past 16 GiB, fails the run with the reason.
 - Native Slack collection for secret scanning reads each thread's replies (N6-L1): `conversations.replies` cursor
   pages, filed by day as Slack's export files them, so a secret posted in a reply is found and its finding names the
   reply and its thread.

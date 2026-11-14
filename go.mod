@@ -27,6 +27,7 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jcmturner/goidentity/v6 v6.0.1
 	github.com/jcmturner/gokrb5/v8 v8.4.4
+	github.com/klauspost/compress v1.20.3
 	github.com/microsoft/go-mssqldb v1.11.2
 	github.com/miekg/dns v1.1.57
 	github.com/miekg/pkcs11 v1.1.2
@@ -98,7 +99,6 @@ require (
 	github.com/jcmturner/gofork v1.7.6 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
-	github.com/klauspost/compress v1.20.3 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
 	github.com/lestrrat-go/dsig v1.4.0 // indirect
 	github.com/lestrrat-go/dsig-secp256k1 v1.0.0 // indirect
