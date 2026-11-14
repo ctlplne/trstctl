@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/idna"
+
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 )
@@ -111,31 +113,108 @@ func (s *Server) WithEmailChallenges(from string, domains []string, profileName 
 	return s
 }
 
-// NormalizeEmailIdentifier returns an email identifier's comparable form: the
-// domain lowercased, the local part exact. It accepts an ASCII dot-atom
-// addr-spec; quoted local parts and internationalized addresses are refused,
-// and so is a wildcard (RFC 8823 §3).
+// NormalizeEmailIdentifier returns an email identifier's comparable form
+// (RFC 9598 §5): the local part exact, never case-folded, and the domain
+// lowercased in A-labels. Since P15-L4 the local part may be a quoted string
+// (stored quoted only when it is not a dot-atom, with the fewest escapes) and
+// the domain internationalized (U-labels become A-labels). A wildcard is
+// never allowed (RFC 8823 §3), quoted or not.
 func NormalizeEmailIdentifier(v string) (string, error) {
-	if len(v) == 0 || len(v) > 254 {
+	if len(v) == 0 || len(v) > 1024 {
 		return "", errors.New("acme: an email identifier is 1-254 characters")
 	}
 	at := strings.LastIndexByte(v, '@')
 	if at <= 0 || at == len(v)-1 {
 		return "", errors.New("acme: an email identifier is local-part@domain")
 	}
-	local, domain := v[:at], strings.ToLower(v[at+1:])
-	if len(local) > 64 || local[0] == '.' || local[len(local)-1] == '.' || strings.Contains(local, "..") {
-		return "", errors.New("acme: an email identifier's local part is not a dot-atom")
+	local, err := canonicalLocalPart(v[:at])
+	if err != nil {
+		return "", err
+	}
+	domain, err := emailDomainALabels(v[at+1:])
+	if err != nil {
+		return "", err
+	}
+	out := local + "@" + domain
+	if len(out) > 254 {
+		return "", errors.New("acme: an email identifier is 1-254 characters")
+	}
+	return out, nil
+}
+
+// canonicalLocalPart checks a local part written as a dot-atom or a quoted
+// string (RFC 5321 §4.1.2) and returns its canonical form: a quoted string
+// whose content is a dot-atom is written unquoted, as RFC 5321 asks.
+func canonicalLocalPart(local string) (string, error) {
+	if len(local) >= 2 && local[0] == '"' && local[len(local)-1] == '"' {
+		var content strings.Builder
+		for i := 1; i < len(local)-1; i++ {
+			c := local[i]
+			if c == '\\' {
+				i++
+				if i >= len(local)-1 || local[i] < 32 || local[i] > 126 {
+					return "", errors.New("acme: an email identifier's quoted local part has a bad escape")
+				}
+				c = local[i]
+			} else if c == '"' || c < 32 || c > 126 {
+				return "", errors.New("acme: an email identifier's quoted local part has a character outside printable ASCII")
+			}
+			content.WriteByte(c)
+		}
+		return CanonicalLocalPartContent(content.String())
+	}
+	// Unquoted, the local part is a dot-atom (RFC 5321 Dot-string): a quote,
+	// a space or an empty label outside a quoted string is malformed.
+	if local == "" || local[0] == '.' || local[len(local)-1] == '.' || strings.Contains(local, "..") {
+		return "", errors.New("acme: an email identifier's local part is not a dot-atom or a quoted string")
 	}
 	for i := 0; i < len(local); i++ {
-		if !dotAtomByte(local[i]) {
-			return "", errors.New("acme: an email identifier's local part has a character outside the ASCII dot-atom (a wildcard is never allowed)")
+		if !dotAtomByte(local[i]) && local[i] != '*' {
+			return "", errors.New("acme: an email identifier's local part is not a dot-atom or a quoted string")
 		}
 	}
-	if !validEmailDomain(domain) {
+	return CanonicalLocalPartContent(local)
+}
+
+// CanonicalLocalPartContent returns the canonical local part for its
+// unquoted content (as a mail parser returns it): unquoted when the content
+// is a dot-atom, otherwise quoted with only '"' and '\' escaped.
+func CanonicalLocalPartContent(content string) (string, error) {
+	if content == "" {
+		return "", errors.New("acme: an email identifier's local part is empty")
+	}
+	if strings.ContainsRune(content, '*') {
+		return "", errors.New("acme: an email identifier's local part has a wildcard, which is never allowed")
+	}
+	dotAtom := content[0] != '.' && content[len(content)-1] != '.' && !strings.Contains(content, "..")
+	for i := 0; i < len(content); i++ {
+		c := content[i]
+		if c < 32 || c > 126 {
+			return "", errors.New("acme: an email identifier's local part has a character outside printable ASCII")
+		}
+		if !dotAtomByte(c) {
+			dotAtom = false
+		}
+	}
+	out := content
+	if !dotAtom {
+		out = `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(content) + `"`
+	}
+	if len(out) > 64 {
+		return "", errors.New("acme: an email identifier's local part is longer than 64 octets")
+	}
+	return out, nil
+}
+
+// emailDomainALabels returns a mail domain lowercased in A-labels (RFC 9598
+// §3): a U-label is converted (IDNA2008 with UTS #46 mapping for lookup) and
+// an A-label checked.
+func emailDomainALabels(domain string) (string, error) {
+	ascii, err := idna.Lookup.ToASCII(domain)
+	if err != nil || !validEmailDomain(strings.ToLower(ascii)) {
 		return "", errors.New("acme: an email identifier's domain is not a DNS name")
 	}
-	return local + "@" + domain, nil
+	return strings.ToLower(ascii), nil
 }
 
 func validEmailDomain(domain string) bool {

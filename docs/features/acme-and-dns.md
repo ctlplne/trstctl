@@ -566,6 +566,16 @@ another token-part1, validates nothing. A wrong response from the right mailbox
 invalidates the challenge, because RFC 8823 allows one guess. The server keeps only
 SHA-256 digests of token-part1 and of the expected response, never the values.
 
+A mailbox may have a quoted local part (`"john doe"@example.com`) and an
+internationalized domain (P15-L4). The server compares mailboxes the way RFC 9598 does:
+the local part exactly as written (quoted only when it is not a dot-atom, with the
+fewest escapes; a wildcard is refused, quoted or not) and the domain lowercase in
+A-labels, so `alice@bücher.example` is ordered, mailed, matched and issued as
+`alice@xn--bcher-kva.example`, and the certificate names it as an rfc822Name. List an
+internationalized mail domain in `domains` in its A-label form. A reply whose From
+domain is written in U-labels matches, and its DKIM `d=` and `s=` compare and look up
+their key in A-labels (RFC 8616).
+
 Finalize needs a CSR that names exactly the ordered addresses (a common name, if any,
 must be one of them) and asks for a signing-only key usage: digitalSignature and/or
 nonRepudiation and nothing else. A CSR with no key usage or with an encryption bit asks

@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/idna"
+
 	"trstctl.com/trstctl/internal/crypto"
 )
 
@@ -67,7 +69,7 @@ func (v Verifier) VerifyDomain(ctx context.Context, msg []byte, domain string) e
 	if err != nil {
 		return err
 	}
-	domain = strings.ToLower(strings.TrimSuffix(domain, "."))
+	domain = aLabels(strings.TrimSuffix(domain, "."))
 	checked := 0
 	last := ErrNoValidSignature
 	for _, f := range fields {
@@ -82,7 +84,7 @@ func (v Verifier) VerifyDomain(ctx context.Context, msg []byte, domain string) e
 			last = err
 			continue
 		}
-		if strings.ToLower(sig.domain) != domain {
+		if domain == "" || aLabels(sig.domain) != domain {
 			continue
 		}
 		if err := v.verify(ctx, sig, fields, f, body); err != nil {
@@ -235,7 +237,7 @@ func (v Verifier) verify(ctx context.Context, sig signature, all []field, self f
 
 // key reads the selector's key record (RFC 6376 §3.6.1).
 func (v Verifier) key(ctx context.Context, sig signature) (string, []byte, error) {
-	name := sig.selector + "._domainkey." + strings.ToLower(sig.domain)
+	name := aLabels(sig.selector) + "._domainkey." + aLabels(sig.domain)
 	var records []string
 	if pinned, ok := v.Pinned[name]; ok {
 		records = []string{pinned}
@@ -267,6 +269,23 @@ func (v Verifier) key(ctx context.Context, sig signature) (string, []byte, error
 		return keyType, key, nil
 	}
 	return "", nil, fmt.Errorf("dkim: no usable key at %s", name)
+}
+
+// aLabels is a domain name or selector lowercased in A-labels (RFC 8616 §4):
+// a signature may name its d= and s= in U-labels, and both the comparison
+// with the From domain and the key query use the A-label form (P15-L4). A
+// name that does not convert compares equal to nothing.
+func aLabels(name string) string {
+	for i := 0; i < len(name); i++ {
+		if name[i] >= 0x80 {
+			ascii, err := idna.Lookup.ToASCII(name)
+			if err != nil {
+				return ""
+			}
+			return strings.ToLower(ascii)
+		}
+	}
+	return strings.ToLower(name)
 }
 
 // splitMessage splits msg into header fields and body (RFC 5322 §2.1).

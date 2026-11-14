@@ -470,7 +470,7 @@ not this file.
 | `internal/projections/secret_scoped_sync.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_scoped_sync.go:24` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_scoped_sync.go:26` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/protocols/acme/eab.go:325` | an event type name, not credential material (CWE-798) |
+| `internal/protocols/acme/eab.go:344` | an event type name, not credential material (CWE-798) |
 | `internal/protocols/acme/eab_rotation_test.go:34` | fabricated fixture reference, not secret material (CWE-798) |
 | `internal/protocols/acme/email_reply_test.go:23` | RFC 8823 test token and digest, not a credential (CWE-798) |
 | `internal/psa/gradient/gradient_test.go:18` | a test-only value (CWE-798) |

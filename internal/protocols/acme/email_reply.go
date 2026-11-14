@@ -75,7 +75,17 @@ func ParseEmailReply(raw []byte) (ParsedEmailReply, error) {
 	if !ok {
 		return ParsedEmailReply{}, fmt.Errorf("%w: no ACME RESPONSE block", ErrEmailReplyMalformed)
 	}
-	return ParsedEmailReply{From: from[0].Address, SubjectToken: token, Response: response}, nil
+	// The mail parser returns a quoted local part unquoted; quote it again
+	// the canonical way so the address compares with the order's (P15-L4).
+	at := strings.LastIndexByte(from[0].Address, '@')
+	if at <= 0 {
+		return ParsedEmailReply{}, fmt.Errorf("%w: From must name one mailbox", ErrEmailReplyMalformed)
+	}
+	local, err := CanonicalLocalPartContent(from[0].Address[:at])
+	if err != nil {
+		return ParsedEmailReply{}, fmt.Errorf("%w: the From mailbox: %v", ErrEmailReplyMalformed, err)
+	}
+	return ParsedEmailReply{From: local + "@" + from[0].Address[at+1:], SubjectToken: token, Response: response}, nil
 }
 
 // emailReplyText returns the reply's text/plain content, transfer-decoded.

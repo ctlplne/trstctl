@@ -6440,8 +6440,9 @@ This is a deliberate, documented trust boundary, not an accident.
   lab, not in CI: the client library stays outside the repository. trstctl signs its
   own challenge mail with a configured RSA key (P15-L2, rsa-sha256; ed25519-sha256
   signing is not offered), or the relay signs. An EAB credential may be scoped to mail
-  domains or mailboxes (P15-L3). SPF/DMARC checks, internationalized addresses and
-  quoted local parts are not supported.
+  domains or mailboxes (P15-L3). Quoted local parts and internationalized domains are
+  served, domains kept in A-labels (P15-L4 part 1); a local part with non-ASCII
+  characters (an SmtpUTF8Mailbox) and SPF/DMARC checks are not supported.
 - Persistent DNS validation, dns-persist-01 (P1): the ACME server offers the
   challenge from the IETF draft draft-ietf-acme-dns-persist (allowed by
   CA/Browser Forum Ballot SC-088v3) when

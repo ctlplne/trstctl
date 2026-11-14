@@ -90,7 +90,7 @@ func (p EABPolicy) permits(identifier string) bool {
 			continue
 		}
 		if mailbox {
-			if permitsMailbox(name, pattern) {
+			if permitsMailbox(mailboxALabels(name), mailboxALabels(pattern)) {
 				return true
 			}
 			continue
@@ -106,6 +106,25 @@ func (p EABPolicy) permits(identifier string) bool {
 		}
 	}
 	return false
+}
+
+// mailboxALabels writes a mailbox or mail entry's domain in A-labels (P15-L4),
+// so an internationalized domain matches whichever form it was written in.
+func mailboxALabels(v string) string {
+	at := strings.LastIndexByte(v, '@')
+	prefix, domain := v[:at+1], v[at+1:]
+	wildcard := strings.HasPrefix(domain, "*.")
+	if wildcard {
+		domain = domain[2:]
+	}
+	ascii, err := emailDomainALabels(domain)
+	if err != nil {
+		return v
+	}
+	if wildcard {
+		ascii = "*." + ascii
+	}
+	return prefix + ascii
 }
 
 // permitsMailbox matches a lowercased mailbox against one mail entry:
@@ -137,11 +156,11 @@ func ValidEABIdentifierEntry(entry string) error {
 	lower := strings.ToLower(strings.TrimSuffix(entry, "."))
 	switch {
 	case strings.HasPrefix(lower, "@*."):
-		if !validEmailDomain(lower[3:]) {
+		if _, err := emailDomainALabels(lower[3:]); err != nil {
 			return fmt.Errorf("mail entry %q names no mail domain after its @*. prefix", entry)
 		}
 	case strings.HasPrefix(lower, "@"):
-		if !validEmailDomain(lower[1:]) {
+		if _, err := emailDomainALabels(lower[1:]); err != nil {
 			return fmt.Errorf("mail entry %q names no mail domain after @", entry)
 		}
 	default:

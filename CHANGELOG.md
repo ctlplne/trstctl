@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- S/MIME over ACME takes quoted local parts and internationalized mail domains (P15-L4 part 1): mailboxes compare
+  as RFC 9598 does (the local part exact, the domain lowercase in A-labels) from the order through the challenge
+  mail, the reply intake (DKIM d= and s= in either label form) and the certificate's rfc822Name.
 - An ACME EAB credential can be scoped to mail domains (P15-L3): `allowed_identifiers` takes `@domain`, `@*.domain`
   or an exact mailbox for `email` orders, set in configuration or through the policy API and the console; a mailbox
   entry never admits a DNS name nor a name entry a mailbox.
