@@ -1313,6 +1313,16 @@ type SPIFFEProtocol struct {
 	// published issuer. They get the token exchange only, not the Workload
 	// API socket, which serves tenant_id.
 	ExchangeTenants []SPIFFEExchangeTenant `json:"exchange_tenants,omitempty"`
+	// ExchangeAllTenants (N5-L2) has the token exchange serve every live
+	// tenant, not only tenant_id and exchange_tenants: a tenant's first
+	// exchange, or its issuer's first read, creates its own JWT key in the
+	// signer, and its trust domain is <its ID without dashes>.<
+	// tenant_trust_domain_suffix>. With oidc_issuer_url every tenant then has
+	// a published issuer.
+	ExchangeAllTenants bool `json:"exchange_all_tenants,omitempty"`
+	// TenantTrustDomainSuffix is the parent of each tenant's own trust domain
+	// under ExchangeAllTenants (N5-L2).
+	TenantTrustDomainSuffix string `json:"tenant_trust_domain_suffix,omitempty"`
 	// ExchangeRequestsPerMinute (M4-L6) is how many requests one client
 	// address may make to the unauthenticated POST /oauth2/token a minute
 	// (a token bucket holding that many); more answer 429 with a Retry-After
@@ -1462,6 +1472,7 @@ func (p Protocols) ValidateTenantBindings(defaultTenant string) []error {
 	}
 	errs = append(errs, validateOpaqueTokenAudiences(p.SPIFFE)...)
 	errs = append(errs, validateExchangeTenants(p.SPIFFE)...)
+	errs = append(errs, validateExchangeAllTenants(p.SPIFFE)...)
 	if n := p.SPIFFE.ExchangeRequestsPerMinute; n < 0 || n > 60000 {
 		errs = append(errs, fmt.Errorf("protocols.spiffe.exchange_requests_per_minute must be between 0 (the default, %d) and 60000", DefaultExchangeRequestsPerMinute))
 	}
@@ -6700,6 +6711,34 @@ func validateExchangeTenants(s SPIFFEProtocol) []error {
 			errs = append(errs, fmt.Errorf("%s.trust_domain %q is protocols.spiffe.trust_domain or another tenant's", where, t.TrustDomain))
 		}
 		domains[t.TrustDomain] = true
+	}
+	return errs
+}
+
+// validateExchangeAllTenants checks protocols.spiffe.exchange_all_tenants
+// (N5-L2): it needs the SPIFFE surface and a tenant_trust_domain_suffix that
+// is a trust domain name short enough for <32 hex>.<suffix>, and no listed
+// exchange tenant's trust domain may fall under the suffix.
+func validateExchangeAllTenants(s SPIFFEProtocol) []error {
+	if !s.ExchangeAllTenants {
+		if s.TenantTrustDomainSuffix != "" {
+			return []error{errors.New("protocols.spiffe.tenant_trust_domain_suffix needs protocols.spiffe.exchange_all_tenants")}
+		}
+		return nil
+	}
+	var errs []error
+	if !s.Enabled {
+		errs = append(errs, errors.New("protocols.spiffe.exchange_all_tenants needs protocols.spiffe.enabled"))
+	}
+	suffix := s.TenantTrustDomainSuffix
+	if suffix == "" || len(suffix) > 255-33 || strings.Trim(suffix, "abcdefghijklmnopqrstuvwxyz0123456789.-_") != "" ||
+		strings.HasPrefix(suffix, ".") || strings.HasSuffix(suffix, ".") {
+		errs = append(errs, fmt.Errorf("protocols.spiffe.tenant_trust_domain_suffix %q must be a trust domain name of at most %d bytes", suffix, 255-33))
+	}
+	for i, t := range s.ExchangeTenants {
+		if suffix != "" && strings.HasSuffix(t.TrustDomain, "."+suffix) {
+			errs = append(errs, fmt.Errorf("protocols.spiffe.exchange_tenants[%d].trust_domain %q falls under tenant_trust_domain_suffix", i, t.TrustDomain))
+		}
 	}
 	return errs
 }

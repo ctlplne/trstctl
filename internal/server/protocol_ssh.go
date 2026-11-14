@@ -16,11 +16,13 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
 	"trstctl.com/trstctl/internal/protocols/spiffe"
 	"trstctl.com/trstctl/internal/protocols/ssh"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 // sshProtocol is the served SSH CA surface (EXC-WIRE-02 / F43). SSH has no single
@@ -510,6 +512,14 @@ type spiffeProtocol struct {
 	// exchangeLimiter bounds each client address's POST /oauth2/token
 	// requests (M4-L6).
 	exchangeLimiter *clientRateLimiter
+	// allTenants serves every live tenant's exchange, each created on first
+	// use under tenantSuffix (N5-L2).
+	allTenants   bool
+	tenantSuffix string
+	jwtClient    *signing.Client
+	jwtAlgorithm crypto.Algorithm
+	lazyMu       sync.Mutex
+	lazy         map[string]*workloadExchange
 }
 
 // RunSPIFFE serves the SPIFFE Workload API gRPC server on its UDS until ctx is

@@ -576,9 +576,19 @@ leaves its subject token unused.
 
 ### trstctl as the OpenID issuer clouds trust (N5)
 
+With `protocols.spiffe.exchange_all_tenants: true` and a
+`tenant_trust_domain_suffix` (N5-L2) the exchange serves every live tenant, not only
+the ones configured: a tenant's first exchange, or a cloud's first read of its issuer's
+discovery document or key set, creates its own JWT key in the signer (found again after
+a restart), and its trust domain is `<its ID without dashes>.<suffix>`. A tenant that is
+not registered, is suspended or is being offboarded gets no issuer, no exchange and no
+key, and at most 10,000 tenants are served this way. Its tokens verify only against its
+own key set, and it rotates its key on its own, as a listed exchange tenant does.
+
 With `protocols.spiffe.oidc_issuer_url` set to the control plane's public https base
-URL, each tenant whose workloads exchange tokens (`protocols.spiffe.tenant_id` and the
-tenants in `protocols.spiffe.exchange_tenants`, M4-L5) has a published OpenID issuer,
+URL, each tenant whose workloads exchange tokens (`protocols.spiffe.tenant_id`, the
+tenants in `protocols.spiffe.exchange_tenants`, M4-L5, and with
+`protocols.spiffe.exchange_all_tenants`, N5-L2, every live tenant) has a published OpenID issuer,
 `<base>/oidc/<tenant-id>`, with its own key set and trust domain (the issuer view's
 `trust_domain`, shown on the console's issuer panel), and every token `POST /oauth2/token`
 exchanges for it carries that issuer as `iss`. The issuer's discovery document,

@@ -9202,7 +9202,8 @@ What comes next:
   it.
 - The token exchange serves `protocols.spiffe.tenant_id` and the tenants listed in
   `protocols.spiffe.exchange_tenants` (M4-L5), each with its own trust domain, signing
-  key and issuer; an issuer for every tenant without listing it is what comes next.
+  key and issuer; with `exchange_all_tenants` (N5-L2) every live tenant has one,
+  created on first use.
 - Key rotation is served (N5-L3): the next key is published ahead of signing and
   the replaced key stays published for a retain window after the switch (both
   set per rotation, up to 30 days). The windows are the operator's to size

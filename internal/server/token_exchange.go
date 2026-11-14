@@ -113,7 +113,7 @@ func (s *Server) tokenExchangeJWKSHandler() http.Handler {
 		if asked := r.URL.Query().Get("tenant_id"); asked != "" {
 			tenantID = asked
 		}
-		ex := s.exchangeFor(tenantID)
+		ex := s.exchangeForCtx(r.Context(), tenantID)
 		if ex == nil {
 			http.NotFound(w, r)
 			return
@@ -176,7 +176,7 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 	if len(audience) == 0 || slices.Contains(audience, "") {
 		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_target", "name the audience the token is for")
 	}
-	sp, ex := s.spiffeForExchange(), s.exchangeFor(tenantID)
+	sp, ex := s.spiffeForExchange(), s.exchangeForCtx(r.Context(), tenantID)
 	if sp == nil || ex == nil || methods == nil || s.store == nil || s.orch == nil {
 		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_request", "token exchange is not configured for this tenant")
 	}

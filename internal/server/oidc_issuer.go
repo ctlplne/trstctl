@@ -42,7 +42,7 @@ func (sp *spiffeProtocol) oidcIssuer(tenantID string) string {
 // oidcIssuerDocumentHandler serves GET /oidc/{tenant}/.well-known/openid-configuration.
 func (s *Server) oidcIssuerDocumentHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		issuer, ok := s.publishedOIDCIssuer(r.PathValue("tenant"))
+		issuer, ok := s.publishedOIDCIssuer(r.Context(), r.PathValue("tenant"))
 		if !ok {
 			http.NotFound(w, r)
 			return
@@ -65,7 +65,7 @@ func (s *Server) oidcIssuerDocumentHandler() http.Handler {
 func (s *Server) oidcIssuerJWKSHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tenantID := r.PathValue("tenant")
-		if _, ok := s.publishedOIDCIssuer(tenantID); !ok {
+		if _, ok := s.publishedOIDCIssuer(r.Context(), tenantID); !ok {
 			http.NotFound(w, r)
 			return
 		}
@@ -83,9 +83,9 @@ func (s *Server) oidcIssuerJWKSHandler() http.Handler {
 
 // publishedOIDCIssuer is the tenant's issuer when this control plane publishes
 // one and the tenant is the one the token exchange serves.
-func (s *Server) publishedOIDCIssuer(tenantID string) (string, bool) {
+func (s *Server) publishedOIDCIssuer(ctx context.Context, tenantID string) (string, bool) {
 	sp := s.spiffeForExchange()
-	if _, err := uuid.Parse(tenantID); err != nil || sp == nil || sp.oidcIssuerBase == "" || s.exchangeFor(tenantID) == nil {
+	if _, err := uuid.Parse(tenantID); err != nil || sp == nil || sp.oidcIssuerBase == "" || s.exchangeForCtx(ctx, tenantID) == nil {
 		return "", false
 	}
 	return sp.oidcIssuer(tenantID), true
@@ -113,7 +113,7 @@ func (s *Server) oidcIssuerAlgorithms(ctx context.Context, tenantID string) []st
 
 // OIDCIssuerFor reports the tenant's published issuer for the API (N5).
 func (s *Server) OIDCIssuerFor(r *http.Request, tenantID string) (api.OIDCIssuerInfo, bool) {
-	issuer, ok := s.publishedOIDCIssuer(tenantID)
+	issuer, ok := s.publishedOIDCIssuer(r.Context(), tenantID)
 	if !ok {
 		return api.OIDCIssuerInfo{}, false
 	}

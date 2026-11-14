@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- Every live tenant can have a token exchange and a published issuer (N5-L2): `protocols.spiffe.exchange_all_tenants`
+  with `tenant_trust_domain_suffix` creates a tenant's own JWT key on its first exchange or issuer read, in the trust
+  domain `<tenant ID>.<suffix>`; unregistered, suspended or offboarding tenants get none.
 - An AWS decoy trail can be read from its bucket's notifications instead of listing it (N4-L1):
   `trail.notifications_queue_url` names an SQS queue receiving S3 event notifications, EventBridge `Object Created`
   events or the trail's SNS notifications; it is read every 30 seconds, the files its messages name are read and the

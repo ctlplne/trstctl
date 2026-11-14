@@ -246,7 +246,7 @@ func (k *workloadJWTKeyRing) keys(ctx context.Context) (spiffe.JWTKey, []spiffe.
 // shared key set carries trstctl's own SPIFFE JWT authority. served is false
 // when the SPIFFE protocol does not serve the tenant.
 func (s *Server) WorkloadJWTPublicKeysFor(ctx context.Context, tenantID string) ([]api.WorkloadJWTPublicKey, bool, error) {
-	ring := s.workloadJWTKeyRingFor(tenantID)
+	ring := s.workloadJWTKeyRingFor(ctx, tenantID)
 	if ring == nil {
 		return nil, false, nil
 	}
@@ -274,7 +274,7 @@ func (s *Server) WorkloadJWTPublicKeysFor(ctx context.Context, tenantID string) 
 // WorkloadJWTKeysFor reports the tenant's workload JWT key generations for
 // the API; served is false when the SPIFFE protocol does not serve the tenant.
 func (s *Server) WorkloadJWTKeysFor(ctx context.Context, tenantID string) ([]api.WorkloadJWTKey, bool, error) {
-	ring := s.workloadJWTKeyRingFor(tenantID)
+	ring := s.workloadJWTKeyRingFor(ctx, tenantID)
 	if ring == nil {
 		return nil, false, nil
 	}
@@ -298,8 +298,8 @@ func workloadJWTKeysView(states []workloadJWTKeyState) []api.WorkloadJWTKey {
 
 // workloadJWTKeyRingFor is the tenant's key ring, or nil when the SPIFFE
 // protocol does not serve the tenant.
-func (s *Server) workloadJWTKeyRingFor(tenantID string) *workloadJWTKeyRing {
-	ex := s.exchangeFor(tenantID)
+func (s *Server) workloadJWTKeyRingFor(ctx context.Context, tenantID string) *workloadJWTKeyRing {
+	ex := s.exchangeForCtx(ctx, tenantID)
 	if ex == nil || ex.jwtKeys == nil {
 		return nil
 	}
@@ -311,7 +311,7 @@ func (s *Server) workloadJWTKeyRingFor(tenantID string) *workloadJWTKeyRing {
 // after publishAhead, and the key it replaces stays published for retain
 // after that. A rotation still waiting for its activation is refused.
 func (s *Server) RotateWorkloadJWTKey(ctx context.Context, tenantID string, publishAhead, retain time.Duration) ([]api.WorkloadJWTKey, error) {
-	ring := s.workloadJWTKeyRingFor(tenantID)
+	ring := s.workloadJWTKeyRingFor(ctx, tenantID)
 	if ring == nil || s.orch == nil || s.store == nil {
 		return nil, api.ErrStatus(http.StatusNotFound,
 			"the workload JWT key belongs to a tenant the token exchange serves (protocols.spiffe.tenant_id or protocols.spiffe.exchange_tenants)")

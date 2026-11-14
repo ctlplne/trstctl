@@ -1231,6 +1231,9 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		opaqueAudiences: boolMap(cfg.OpaqueTokenAudiences),
 		exchanges:       exchanges,
 		exchangeLimiter: newClientRateLimiter(exchangeRequestsPerMinute(cfg), tokenExchangeMaxClients),
+		// N5-L2: every live tenant, each created on first use.
+		allTenants: cfg.ExchangeAllTenants, tenantSuffix: cfg.TenantTrustDomainSuffix,
+		jwtClient: c, jwtAlgorithm: jwtAlgorithm, lazy: map[string]*workloadExchange{},
 	}, nil
 }
 
