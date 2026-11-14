@@ -52,8 +52,9 @@ const migrationTrafficInterval = 30 * time.Second
 // migrationTrafficActor names the gate in the events it appends.
 const migrationTrafficActor = "system:migration-traffic-gate"
 
-// maxObservedHandshakes bounds one tenant pass over observer findings.
-const maxObservedHandshakes = 5000
+// observedHandshakePage is how many observer findings one read takes; a pass
+// reads them all, keeping only those at the endpoints it watches (X3-L4).
+const observedHandshakePage = 500
 
 // RunMigrationTrafficGate checks runs that require observed traffic on the leader.
 func (s *Server) RunMigrationTrafficGate(ctx context.Context) {
@@ -98,13 +99,21 @@ func (s *Server) CheckMigrationTrafficOnce(ctx context.Context, now time.Time) e
 		}
 	}
 	for _, tenantID := range tenants {
+		// X3-L4: gather what awaits observed traffic, then read the tenant's
+		// observer findings once, keeping only those at the endpoints it
+		// watches, so a deciding finding is seen however many others the
+		// tenant holds.
+		watch := newTrafficWatch()
+		type runCheck struct {
+			run      migration.Run
+			awaiting []migration.RunMemberRef
+		}
+		var runChecks []runCheck
 		runs, err := s.store.ListMigrationRuns(ctx, tenantID, 200)
 		if err != nil {
 			note(err)
 			continue
 		}
-		var handshakes []observedHandshake
-		loaded := false
 		for _, row := range runs {
 			run := row.Run
 			if !run.RequireObservedTraffic || (run.Status != migration.RunRunning && run.Status != migration.RunPaused) {
@@ -114,49 +123,68 @@ func (s *Server) CheckMigrationTrafficOnce(ctx context.Context, now time.Time) e
 			if len(awaiting) == 0 {
 				continue
 			}
-			if !loaded {
-				if handshakes, err = s.observedHandshakes(ctx, tenantID); err != nil {
-					note(err)
-					break
-				}
-				loaded = true
+			runChecks = append(runChecks, runCheck{run: run, awaiting: awaiting})
+			for _, ref := range awaiting {
+				watch.add(ref.Member.Binding)
 			}
-			note(s.checkRunTraffic(ctx, tenantID, run, awaiting, handshakes, now))
 		}
-		pilots, err := s.store.ListPQCPilotsAwaitingTraffic(ctx, tenantID)
-		if err != nil {
+		type pilotCheck struct {
+			pilot store.PQCPilot
+			wave  store.PQCPilotWave
+		}
+		var pilotChecks []pilotCheck
+		if pilots, err := s.store.ListPQCPilotsAwaitingTraffic(ctx, tenantID); err != nil {
 			note(err)
-			continue
+		} else {
+			for _, pilot := range pilots {
+				for _, wave := range pilot.Waves {
+					if wave.Status != "awaiting_traffic" {
+						continue
+					}
+					pilotChecks = append(pilotChecks, pilotCheck{pilot: pilot, wave: wave})
+					for _, target := range wave.Targets {
+						watch.add(pilotTargetBinding(target))
+					}
+				}
+			}
 		}
-		for _, pilot := range pilots {
-			for _, wave := range pilot.Waves {
-				if wave.Status != "awaiting_traffic" {
+		type endpointCheck struct {
+			endpoint store.EndpointVerification
+			at       migration.MemberBinding
+		}
+		var endpointChecks []endpointCheck
+		if endpoints, err := s.store.EndpointsAwaitingTraffic(ctx, tenantID); err != nil {
+			note(err)
+		} else {
+			for _, endpoint := range endpoints {
+				if endpoint.ReplacedAt == nil {
 					continue
 				}
-				if !loaded {
-					if handshakes, err = s.observedHandshakes(ctx, tenantID); err != nil {
-						note(err)
-						break
-					}
-					loaded = true
+				at, err := s.endpointObservedAt(ctx, tenantID, endpoint)
+				if err != nil {
+					note(err)
+					continue
 				}
-				note(s.checkPilotTraffic(ctx, tenantID, pilot, wave, handshakes, now))
+				endpointChecks = append(endpointChecks, endpointCheck{endpoint: endpoint, at: at})
+				watch.add(at)
 			}
 		}
-		endpoints, err := s.store.EndpointsAwaitingTraffic(ctx, tenantID)
+		if len(runChecks) == 0 && len(pilotChecks) == 0 && len(endpointChecks) == 0 {
+			continue
+		}
+		handshakes, err := s.observedHandshakes(ctx, tenantID, watch)
 		if err != nil {
 			note(err)
 			continue
 		}
-		for _, endpoint := range endpoints {
-			if !loaded {
-				if handshakes, err = s.observedHandshakes(ctx, tenantID); err != nil {
-					note(err)
-					break
-				}
-				loaded = true
-			}
-			note(s.checkEndpointTraffic(ctx, tenantID, endpoint, handshakes, now))
+		for _, c := range runChecks {
+			note(s.checkRunTraffic(ctx, tenantID, c.run, c.awaiting, handshakes, now))
+		}
+		for _, c := range pilotChecks {
+			note(s.checkPilotTraffic(ctx, tenantID, c.pilot, c.wave, handshakes, now))
+		}
+		for _, c := range endpointChecks {
+			note(s.checkEndpointTraffic(ctx, tenantID, c.endpoint, c.at, handshakes, now))
 		}
 	}
 	return firstErr
@@ -171,15 +199,11 @@ func (s *Server) CheckMigrationTrafficOnce(ctx context.Context, now time.Time) e
 // observer's findings for the replaced certificate there are marked
 // remediated with it. An endpoint still unobserved when its window has
 // passed is recorded unobserved; later evidence still closes it.
-func (s *Server) checkEndpointTraffic(ctx context.Context, tenantID string, endpoint store.EndpointVerification, handshakes []observedHandshake, now time.Time) error {
+func (s *Server) checkEndpointTraffic(ctx context.Context, tenantID string, endpoint store.EndpointVerification, at migration.MemberBinding, handshakes []observedHandshake, now time.Time) error {
 	if endpoint.ReplacedAt == nil {
 		return nil
 	}
 	replacement := normalizedFingerprint(endpoint.ObservedFingerprint)
-	at, err := s.endpointObservedAt(ctx, tenantID, endpoint)
-	if err != nil {
-		return err
-	}
 	for _, h := range handshakes {
 		if !h.at(at) || h.LastSeen.Before(*endpoint.ReplacedAt) {
 			continue
@@ -312,8 +336,7 @@ func (s *Server) checkPilotTraffic(ctx context.Context, tenantID string, pilot s
 // probe: on TLS 1.2 they must present the pilot's leaf; on TLS 1.3 the
 // certificate is encrypted, so the probe already proved the leaf served.
 func pilotTrafficEvidence(target store.PQCPilotTarget, probedAt time.Time, handshakes []observedHandshake) (observedHandshake, bool) {
-	binding := migration.MemberBinding{VerifyAddress: target.Address, VerifyServerName: target.ServerName,
-		ObservedAddresses: target.ObservedAddresses}
+	binding := pilotTargetBinding(target)
 	leaf := strings.ToLower(target.Fingerprint)
 	for _, h := range handshakes {
 		if !h.at(binding) || h.LastSeen.Before(probedAt) {
@@ -387,13 +410,59 @@ type observedHandshake struct {
 	PQHybrid   bool
 }
 
-// observedHandshakes reads the tenant's observer TLS findings in ID order, up
-// to maxObservedHandshakes.
-func (s *Server) observedHandshakes(ctx context.Context, tenantID string) ([]observedHandshake, error) {
+// pilotTargetBinding is where an observer sees a pilot target: its address,
+// its observed addresses and its server name (X3-L5).
+func pilotTargetBinding(target store.PQCPilotTarget) migration.MemberBinding {
+	return migration.MemberBinding{VerifyAddress: target.Address, VerifyServerName: target.ServerName,
+		ObservedAddresses: target.ObservedAddresses}
+}
+
+// trafficWatch is the endpoints one tenant's pass watches (X3-L4): every
+// address of every awaiting binding, and each binding's server name on the
+// port of each of its addresses.
+type trafficWatch struct {
+	addresses map[string]bool
+	namePorts map[string]bool
+}
+
+func newTrafficWatch() *trafficWatch {
+	return &trafficWatch{addresses: map[string]bool{}, namePorts: map[string]bool{}}
+}
+
+func (w *trafficWatch) add(binding migration.MemberBinding) {
+	for _, address := range append([]string{binding.VerifyAddress}, binding.ObservedAddresses...) {
+		if address == "" {
+			continue
+		}
+		w.addresses[address] = true
+		if _, port, err := net.SplitHostPort(address); err == nil && binding.VerifyServerName != "" {
+			w.namePorts[binding.VerifyServerName+"\x00"+port] = true
+		}
+	}
+}
+
+// watches reports whether h was observed at a watched endpoint: exactly when
+// h.at holds for one of the bindings the watch was given.
+func (w *trafficWatch) watches(h observedHandshake) bool {
+	if w.addresses[h.Server] {
+		return true
+	}
+	_, port, err := net.SplitHostPort(h.Server)
+	return err == nil && h.ServerName != "" && w.namePorts[h.ServerName+"\x00"+port]
+}
+
+// observedHandshakes reads every one of the tenant's observer TLS findings, in
+// ID order, a page at a time, and keeps those the watch watches (X3-L4): the
+// pass holds the findings at the endpoints it decides, never the tenant's
+// whole list, and no count of other findings hides a deciding one.
+func (s *Server) observedHandshakes(ctx context.Context, tenantID string, watch *trafficWatch) ([]observedHandshake, error) {
 	var out []observedHandshake
 	after := store.ZeroUUID
-	for len(out) < maxObservedHandshakes {
-		page, err := s.store.ListDiscoveryFindingsFiltered(ctx, tenantID, store.DiscoveryFindingFilter{Kind: "tls_handshake"}, after, 500)
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		page, err := s.store.ListDiscoveryFindingsFiltered(ctx, tenantID, store.DiscoveryFindingFilter{Kind: "tls_handshake"}, after, observedHandshakePage)
 		if err != nil {
 			return nil, err
 		}
@@ -406,18 +475,20 @@ func (s *Server) observedHandshakes(ctx context.Context, tenantID string) ([]obs
 			if err != nil {
 				continue
 			}
-			out = append(out, observedHandshake{
+			h := observedHandshake{
 				FindingID: f.ID, TriageStatus: f.TriageStatus, Server: meta["server"], ServerName: meta["server_name"],
 				Fingerprint: strings.ToLower(f.Fingerprint), Visible: meta["certificate_visible"] == "true", LastSeen: lastSeen,
 				TLSVersion: meta["tls_version"], Group: meta["group"], PQHybrid: meta["pq_hybrid"] == "true",
-			})
+			}
+			if watch.watches(h) {
+				out = append(out, h)
+			}
 		}
-		if len(page) < 500 {
-			break
+		if len(page) < observedHandshakePage {
+			return out, nil
 		}
 		after = page[len(page)-1].ID
 	}
-	return out, nil
 }
 
 // at reports whether the handshake was observed at the member's endpoint:

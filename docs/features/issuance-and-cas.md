@@ -522,7 +522,9 @@ name them (X3-L2): `"observed_addresses": ["10.0.3.17:8443"]` in the target's
 configuration (host:port, at most 16, refused otherwise when the target is saved) is
 frozen into the run, and connections seen there, or under the member's server name on
 one of their ports, count as the member's. The leader checks every
-30 seconds. A member still unobserved `observed_traffic_window_seconds` (default 3600,
+30 seconds, reading every one of the tenant's observer TLS findings a page at a time
+and keeping only those at the endpoints it is waiting on (X3-L4), so no number of
+findings elsewhere hides the one that decides. A member still unobserved `observed_traffic_window_seconds` (default 3600,
 at most 604800) after going live pauses the run with the reason; the run never
 advances on the probe alone, and a resume releases the gate only once the wire evidence
 is there. Missing wire evidence is never recorded as a failed member. When a member has

@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- The observed-traffic gate sees a deciding observer finding however many others the tenant holds (X3-L4): each
+  30-second pass reads every one of the tenant's observer TLS findings, a page at a time, keeping only those at the
+  endpoints its waiting runs, PQC pilot waves and replaced endpoints watch, instead of the first 5,000. A tenant with
+  5,100 other findings sorting first no longer hides the new connections that close a replaced endpoint.
 - The access review reconcile visits every open revoke decision in one pass (Q1-L4), page by page, instead of at most
   200 a tenant each minute: 450 decisions whose requests died close in one call. A tenant's pass is bounded at 20
   seconds, and a pass that runs out resumes just past the last item it visited, so items behind ones that stay open
