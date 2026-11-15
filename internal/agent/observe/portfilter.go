@@ -2,14 +2,19 @@
 
 package observe
 
+import "strconv"
+
 // A classic BPF program (linux/filter.h) that keeps only TCP segments and UDP
 // datagrams (QUIC and DTLS, X1-L4) to or from a watched port, so the kernel
 // drops everything else before it is copied to the observer. The ports sit at
-// the same offsets in both transport headers. It reads IPv4 (no later fragments) and IPv6 (no
-// extension headers before TCP), untagged or behind up to two in-band VLAN
-// tags (802.1Q 0x8100, 802.1ad 0x88a8; X1-L2): a trunk mirror's frames, and
-// a QinQ frame whose outer tag the kernel moved out of band, keep their
-// inner tag in the data. Other frames are dropped in the kernel. The link
+// the same offsets in both transport headers. It reads IPv4 and IPv6,
+// untagged or behind up to maxVLANTags in-band VLAN tags (802.1Q 0x8100,
+// 802.1ad 0x88a8; X1-L2, X1-L2R): a trunk mirror's frames, and a QinQ frame
+// whose outer tag the kernel moved out of band, keep their inner tags in the
+// data. A later IPv4 fragment of TCP or UDP carries no ports and an IPv6
+// packet with extension headers puts them where the filter cannot follow, so
+// both are passed up, where Assembler.Frame reassembles and walks them inside
+// its bounds (X1-L2R). Other frames are dropped in the kernel. The link
 // header's length is carried in X, so one set of port checks serves every
 // tagging.
 
@@ -69,30 +74,29 @@ func portFilterProgram(ports []uint16, snaplen uint32) []bpfInsn {
 		}
 	}
 	// Link layer: A is the EtherType after the tags, X the header's length.
-	prog = append(prog, insn{code: bpfLdHAbs, k: 12})
-	prog = append(prog, insn{code: bpfJeqK, k: tpid8021Q, jt: "tag1"})
-	prog = append(prog, insn{code: bpfJeqK, k: tpid8021AD, jt: "tag1", jf: "untagged"})
-	mark("tag1")
-	prog = append(prog, insn{code: bpfLdHAbs, k: 16})
-	prog = append(prog, insn{code: bpfJeqK, k: tpid8021Q, jt: "tag2"})
-	prog = append(prog, insn{code: bpfJeqK, k: tpid8021AD, jt: "tag2"})
-	prog = append(prog, insn{code: bpfLdxImm, k: 18})
-	prog = append(prog, insn{code: bpfJa, jt: "l3"})
-	mark("tag2")
-	prog = append(prog, insn{code: bpfLdHAbs, k: 20})
-	prog = append(prog, insn{code: bpfLdxImm, k: 22})
-	prog = append(prog, insn{code: bpfJa, jt: "l3"})
-	mark("untagged")
-	prog = append(prog, insn{code: bpfLdxImm, k: 14})
+	// Each depth reads the next EtherType and either walks one more tag or
+	// stops with X at the network header.
+	for depth := 0; depth <= maxVLANTags; depth++ {
+		mark("tag" + strconv.Itoa(depth))
+		prog = append(prog, insn{code: bpfLdHAbs, k: uint32(12 + 4*depth)}) // #nosec G115 -- depth is at most maxVLANTags (CWE-190)
+		if depth < maxVLANTags {
+			next := "tag" + strconv.Itoa(depth+1)
+			prog = append(prog, insn{code: bpfJeqK, k: tpid8021Q, jt: next})
+			prog = append(prog, insn{code: bpfJeqK, k: tpid8021AD, jt: next})
+		}
+		prog = append(prog, insn{code: bpfLdxImm, k: uint32(14 + 4*depth)}) // #nosec G115 -- depth is at most maxVLANTags (CWE-190)
+		prog = append(prog, insn{code: bpfJa, jt: "l3"})
+	}
 	mark("l3")
 	prog = append(prog, insn{code: bpfJeqK, k: 0x0800, jf: "v6"})
-	// IPv4: TCP or UDP, not a later fragment; X moves past the header (IHL).
+	// IPv4: TCP or UDP; a later fragment is passed up for reassembly, and
+	// otherwise X moves past the header (IHL) to the ports.
 	prog = append(prog, insn{code: bpfLdBInd, k: 9})
 	prog = append(prog, insn{code: bpfJeqK, k: 6, jt: "v4l4"})
 	prog = append(prog, insn{code: bpfJeqK, k: 17, jf: "drop"})
 	mark("v4l4")
 	prog = append(prog, insn{code: bpfLdHInd, k: 6})
-	prog = append(prog, insn{code: bpfJsetK, k: 0x1fff, jt: "drop"})
+	prog = append(prog, insn{code: bpfJsetK, k: 0x1fff, jt: "accept"})
 	prog = append(prog, insn{code: bpfLdBInd, k: 0})
 	prog = append(prog, insn{code: bpfAluAndK, k: 0x0f})
 	prog = append(prog, insn{code: bpfAluLshK, k: 2})
@@ -105,7 +109,13 @@ func portFilterProgram(ports []uint16, snaplen uint32) []bpfInsn {
 	prog = append(prog, insn{code: bpfJeqK, k: 0x86dd, jf: "drop"})
 	prog = append(prog, insn{code: bpfLdBInd, k: 6})
 	prog = append(prog, insn{code: bpfJeqK, k: 6, jt: "v6l4"})
-	prog = append(prog, insn{code: bpfJeqK, k: 17, jf: "drop"})
+	prog = append(prog, insn{code: bpfJeqK, k: 17, jt: "v6l4"})
+	// An extension header before the transport header is walked in user
+	// space (isIPv6ExtensionHeader).
+	for _, next := range []uint32{0, 43, 44, 51, 60, 135} {
+		prog = append(prog, insn{code: bpfJeqK, k: next, jt: "accept"})
+	}
+	prog = append(prog, insn{code: bpfJa, jt: "drop"})
 	mark("v6l4")
 	matchPorts(bpfLdHInd, 40, "v6dst")
 	mark("v6dst")

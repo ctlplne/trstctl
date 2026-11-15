@@ -59,11 +59,7 @@ func Capture(ctx context.Context, iface string, ports []uint16, snaplen int, a *
 		if ll, ok := from.(*unix.SockaddrLinklayer); ok && ll.Pkttype == unix.PACKET_OUTGOING {
 			continue
 		}
-		if seg, ok := DecodeFrame(buf[:n]); ok {
-			a.Segment(seg, time.Now())
-		} else if d, ok := DecodeUDPFrame(buf[:n]); ok {
-			a.Datagram(d, time.Now())
-		}
+		a.Frame(buf[:n], time.Now())
 	}
 	return nil
 }

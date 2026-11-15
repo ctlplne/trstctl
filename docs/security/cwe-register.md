@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3408 annotated sites across 35 rules. Each row is
+3419 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1060,7 +1060,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (521 sites)
+### G115 — CWE-190 Integer overflow or wraparound (531 sites)
 
 | Location | Reason |
 |---|---|
@@ -1114,15 +1114,25 @@ not this file.
 | `internal/agent/observe/capture_linux.go:39` | bounded by the check above; MaxWatchedPorts keeps it to tens (CWE-190) |
 | `internal/agent/observe/closed_flow_test.go:100` | the test's client index fits three bytes (CWE-190) |
 | `internal/agent/observe/closed_flow_test.go:115` | small positive test counts (CWE-190) |
-| `internal/agent/observe/flows.go:269` | TCP sequence numbers wrap; the difference read as a signed 32-bit distance is RFC 1982 serial arithmetic (CWE-190) |
-| `internal/agent/observe/flows.go:282` | one segment's payload is under 64 KiB, and sequence numbers wrap mod 2^32 by design (CWE-190) |
-| `internal/agent/observe/flows.go:317` | RFC 1982 serial arithmetic on wrapping sequence numbers (CWE-190) |
-| `internal/agent/observe/flows.go:323` | a held payload is under MaxDirectionBytes, and sequence numbers wrap by design (CWE-190) |
+| `internal/agent/observe/flows.go:247` | TCP sequence numbers wrap; the difference read as a signed 32-bit distance is RFC 1982 serial arithmetic (CWE-190) |
+| `internal/agent/observe/flows.go:260` | one segment's payload is under 64 KiB, and sequence numbers wrap mod 2^32 by design (CWE-190) |
+| `internal/agent/observe/flows.go:295` | RFC 1982 serial arithmetic on wrapping sequence numbers (CWE-190) |
+| `internal/agent/observe/flows.go:301` | a held payload is under MaxDirectionBytes, and sequence numbers wrap by design (CWE-190) |
 | `internal/agent/observe/flows_test.go:23` | bounded test packet length (CWE-190) |
 | `internal/agent/observe/flows_test.go:62` | bounded test fixture length (CWE-190) |
+| `internal/agent/observe/fragments_test.go:74` | fixture lengths fit (CWE-190) |
+| `internal/agent/observe/fragments_test.go:76` | fixture offsets fit (CWE-190) |
+| `internal/agent/observe/fragments_test.go:102` | fixture lengths fit (CWE-190) |
+| `internal/agent/observe/fragments_test.go:145` | fixture lengths fit (CWE-190) |
+| `internal/agent/observe/fragments_test.go:148` | fixture offsets fit (CWE-190) |
+| `internal/agent/observe/fragments_test.go:188` | fixture ids fit (CWE-190) |
+| `internal/agent/observe/fragments_test.go:202` | fixture ids fit (CWE-190) |
+| `internal/agent/observe/fragments_test.go:265` | small loop index (CWE-190) |
 | `internal/agent/observe/pcap_test.go:80` | bounded test fixture length (CWE-190) |
-| `internal/agent/observe/portfilter.go:124` | a forward jump inside this fixed program, under 255 instructions at MaxWatchedPorts (CWE-190) |
-| `internal/agent/observe/portfilter.go:128` | a forward jump inside this fixed program (CWE-190) |
+| `internal/agent/observe/portfilter.go:81` | depth is at most maxVLANTags (CWE-190) |
+| `internal/agent/observe/portfilter.go:87` | depth is at most maxVLANTags (CWE-190) |
+| `internal/agent/observe/portfilter.go:134` | a forward jump inside this fixed program, under 255 instructions at MaxWatchedPorts (CWE-190) |
+| `internal/agent/observe/portfilter.go:138` | a forward jump inside this fixed program (CWE-190) |
 | `internal/agent/observe/sketch.go:30` | LeadingZeros64 is at most 64 (CWE-190) |
 | `internal/agent/observe/upgrade_test.go:18` | bounded test fixture lengths (CWE-190) |
 | `internal/agent/observe/upgrade_test.go:24` | bounded test fixture lengths (CWE-190) |
@@ -2345,7 +2355,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (809 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (810 sites)
 
 | Location | Reason |
 |---|---|
@@ -2551,6 +2561,7 @@ not this file.
 | `internal/agent/listenersessions/proc.go:158` | a fixed proc file under the agent's proc root |
 | `internal/agent/listenersessions/proc.go:184` | a fixed proc file under the agent's proc root |
 | `internal/agent/mcp_inventory.go:37` | the agent's own state file (CWE-22) |
+| `internal/agent/observe/fragments_test.go:17` | the test reads its own fixture (CWE-22) |
 | `internal/agent/observe/udp_capture_test.go:17` | the test reads its own fixture (CWE-22) |
 | `internal/agent/relay/adcsdatabase_test.go:90` | test-owned temp file (CWE-22). |
 | `internal/agent/relay/adcsdatabase_test.go:298` | test-owned temp file (CWE-22). |

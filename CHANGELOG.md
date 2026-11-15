@@ -1963,6 +1963,11 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- The passive observer reads handshakes the network fragmented or wrapped: it reassembles
+  IPv4 and IPv6 fragments within fixed bounds, walks IPv6 extension headers (hop-by-hop,
+  destination options and the rest) and reads through up to four VLAN tags, where it
+  dropped later fragments, extension headers and a third tag; the kernel filter passes
+  those packets up (X1-L2R).
 - A full read-model rebuild no longer stops at a connector right-sizing operation whose
   command row was reclaimed a day after delivery: it re-created the row under a new id,
   which the operation's delivery and terminal events, naming the original, then failed.

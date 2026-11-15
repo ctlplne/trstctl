@@ -3,7 +3,6 @@
 package observe
 
 import (
-	"encoding/binary"
 	"net/netip"
 	"sync"
 	"time"
@@ -18,69 +17,16 @@ type Segment struct {
 	Payload  []byte
 }
 
-// DecodeFrame reads an Ethernet frame (with up to two VLAN tags) carrying
-// IPv4 or IPv6 and TCP. ok is false for anything else.
+// DecodeFrame reads an Ethernet frame (with up to maxVLANTags VLAN tags)
+// carrying a whole IPv4 or IPv6 packet and TCP, walking IPv6 extension
+// headers. ok is false for anything else, a fragment among it: Assembler.Frame
+// reassembles those (X1-L2R).
 func DecodeFrame(frame []byte) (Segment, bool) {
-	src, dst, proto, tcp, ok := decodeIP(frame)
-	if !ok || proto != 6 || len(tcp) < 20 {
+	pkt, ok := decodePacket(frame)
+	if !ok {
 		return Segment{}, false
 	}
-	offset := int(tcp[12]>>4) * 4
-	if offset < 20 || offset > len(tcp) {
-		return Segment{}, false
-	}
-	flags := tcp[13]
-	return Segment{
-		Src:     netip.AddrPortFrom(src, binary.BigEndian.Uint16(tcp[0:2])),
-		Dst:     netip.AddrPortFrom(dst, binary.BigEndian.Uint16(tcp[2:4])),
-		Seq:     binary.BigEndian.Uint32(tcp[4:8]),
-		FIN:     flags&0x01 != 0,
-		SYN:     flags&0x02 != 0,
-		RST:     flags&0x04 != 0,
-		ACK:     flags&0x10 != 0,
-		Payload: tcp[offset:],
-	}, true
-}
-
-// decodeIP reads an Ethernet frame (with up to two VLAN tags) carrying IPv4
-// (no later fragments) or IPv6 (no extension headers before the transport
-// header), and returns the addresses, the transport protocol and its bytes.
-func decodeIP(frame []byte) (src, dst netip.Addr, proto byte, l4 []byte, ok bool) {
-	if len(frame) < 14 {
-		return src, dst, 0, nil, false
-	}
-	etherType, rest := binary.BigEndian.Uint16(frame[12:14]), frame[14:]
-	for i := 0; i < 2 && (etherType == 0x8100 || etherType == 0x88a8); i++ {
-		if len(rest) < 4 {
-			return src, dst, 0, nil, false
-		}
-		etherType, rest = binary.BigEndian.Uint16(rest[2:4]), rest[4:]
-	}
-	switch etherType {
-	case 0x0800:
-		if len(rest) < 20 || rest[0]>>4 != 4 {
-			return src, dst, 0, nil, false
-		}
-		ihl := int(rest[0]&0x0f) * 4
-		total := int(binary.BigEndian.Uint16(rest[2:4]))
-		fragment := binary.BigEndian.Uint16(rest[6:8])
-		if ihl < 20 || total < ihl || total > len(rest) || fragment&0x3fff != 0 {
-			return src, dst, 0, nil, false
-		}
-		src, dst = netip.AddrFrom4([4]byte(rest[12:16])), netip.AddrFrom4([4]byte(rest[16:20]))
-		return src, dst, rest[9], rest[ihl:total], true
-	case 0x86dd:
-		if len(rest) < 40 {
-			return src, dst, 0, nil, false
-		}
-		payload := int(binary.BigEndian.Uint16(rest[4:6]))
-		if 40+payload > len(rest) {
-			return src, dst, 0, nil, false
-		}
-		src, dst = netip.AddrFrom16([16]byte(rest[8:24])), netip.AddrFrom16([16]byte(rest[24:40]))
-		return src, dst, rest[6], rest[40 : 40+payload], true
-	}
-	return src, dst, 0, nil, false
+	return segmentOf(pkt)
 }
 
 // Event is one observed connection, emitted once.
@@ -102,10 +48,16 @@ type Stats struct {
 	OutOfOrder   uint64 `json:"out_of_order"`
 	// Reordered counts segments that arrived ahead of a gap, were held, and
 	// were read once the gap filled (X1-L3).
-	Reordered     uint64 `json:"reordered"`
-	Unrecognized  uint64 `json:"unrecognized"`
-	ActiveFlows   int    `json:"active_flows"`
-	BufferedBytes int    `json:"buffered_bytes"`
+	Reordered    uint64 `json:"reordered"`
+	Unrecognized uint64 `json:"unrecognized"`
+	// Fragments counts IP fragments read, Reassembled the datagrams rebuilt
+	// from them, and FragmentsDropped the fragments of datagrams given up:
+	// overlapping, oversized, timed out or past the table's bound (X1-L2R).
+	Fragments        uint64 `json:"fragments"`
+	Reassembled      uint64 `json:"reassembled"`
+	FragmentsDropped uint64 `json:"fragments_dropped"`
+	ActiveFlows      int    `json:"active_flows"`
+	BufferedBytes    int    `json:"buffered_bytes"`
 	// ClosedFlows is how many connections one side has ended and the
 	// assembler still remembers (X1-L7); ClosedTableFull counts ends it
 	// could not remember because that table was full.
@@ -170,9 +122,11 @@ type Assembler struct {
 	// count it twice. It holds at most maxFlows entries.
 	closed map[flowKey]closedFlow
 	udp    map[flowKey]*udpFlow
-	emit   func(Event)
-	stats  Stats
-	swept  time.Time
+	// reasm rebuilds fragmented IP datagrams (X1-L2R).
+	reasm *reassembler
+	emit  func(Event)
+	stats Stats
+	swept time.Time
 }
 
 // NewAssembler watches the given server ports with at most maxFlows open
@@ -183,7 +137,31 @@ func NewAssembler(ports []uint16, maxFlows int, idle time.Duration, emit func(Ev
 		watched[p] = true
 	}
 	return &Assembler{ports: watched, maxFlows: maxFlows, idle: idle, flows: map[flowKey]*flow{}, closed: map[flowKey]closedFlow{},
-		udp: map[flowKey]*udpFlow{}, emit: emit}
+		udp: map[flowKey]*udpFlow{}, reasm: newReassembler(), emit: emit}
+}
+
+// Frame reads one captured Ethernet frame (X1-L2R): a TCP segment goes to
+// Segment and a UDP datagram to Datagram, and an IPv4 or IPv6 fragment is held
+// until its datagram is whole.
+func (a *Assembler) Frame(frame []byte, at time.Time) {
+	pkt, ok := decodePacket(frame)
+	if !ok {
+		return
+	}
+	if pkt.frag != nil {
+		a.mu.Lock()
+		whole, done := a.reasm.add(pkt, at, &a.stats)
+		a.mu.Unlock()
+		if !done {
+			return
+		}
+		pkt = whole
+	}
+	if seg, ok := segmentOf(pkt); ok {
+		a.Segment(seg, at)
+	} else if d, ok := datagramOf(pkt); ok {
+		a.Datagram(d, at)
+	}
 }
 
 // closedFlow is a connection one side ended: when, and which side.

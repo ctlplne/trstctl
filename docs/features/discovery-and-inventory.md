@@ -464,9 +464,14 @@ span port, or its own host's interface, on Linux (`CAP_NET_RAW`; other platforms
 an error, never an empty observation set). A kernel filter keeps only the ports in
 `--observe-ports` (default 443, 8443, 636, 993, 995, 465, 22, 80, 389, 5432, 3306, 25,
 587, 143, 110; at most 32), and the agent reads only the first bytes of each connection, in order, up to
-16 KiB a direction. The filter reads through up to two VLAN tags (802.1Q, and QinQ with
-an 802.1ad outer tag; X1-L2), so a trunk's mirror port works: the kernel carries a
-frame's outer tag out of band and a QinQ frame's inner tag stays in the frame. On its own
+16 KiB a direction. The filter reads through up to four VLAN tags (802.1Q, and QinQ with
+an 802.1ad outer tag; X1-L2, X1-L2R), so a trunk's mirror port works: the kernel carries a
+frame's outer tag out of band and a QinQ frame's inner tags stay in the frame. The agent
+reassembles IPv4 and IPv6 fragments (at most 64 datagrams of up to 64 KiB held at once,
+each forgotten after 30 seconds, and a datagram whose fragments overlap dropped whole) and
+walks up to eight IPv6 extension headers, such as hop-by-hop and destination options,
+before the transport header (X1-L2R); its stats count fragments, reassembled datagrams
+and dropped fragments. On its own
 host's interface the agent reads only frames the host receives, so watch a mirror port
 to see both directions of a host's own connections:
 

@@ -1572,8 +1572,11 @@ never live in the API process. What you can do end to end against the running bi
   proven with stock OpenSSL 3.5, OpenSSH 10 and curl/ldapsearch in a Linux container
   (about 920 handshakes per second at 8% of one core and 4 MiB heap on the build
   Mac). Capture throughput on the x86 QA machine is a Track B qualification. It
-  reads IPv4 without later fragments and IPv6 without extension headers, untagged or
-  behind up to two VLAN tags (X1-L2; a third tag is dropped), follows
+  reassembles IPv4 and IPv6 fragments and walks up to eight IPv6 extension headers, untagged
+  or behind up to four VLAN tags (X1-L2, X1-L2R; proven on kernel-fragmented DTLS captures
+  of OpenSSL 3.5.9 at MTU 576 and 1280, and on a real TLS 1.3 capture re-framed as IPv4
+  and IPv6 fragments, behind hop-by-hop and destination options headers and three tags),
+  follows
   connections in order, holding up to 16 segments a direction that arrive ahead
   of a gap until it fills (X1-L3; a gap that never fills ends reading of that
   connection), reads saved classic pcap captures (`--observe-pcap`; not pcapng),

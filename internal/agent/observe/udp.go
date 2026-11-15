@@ -27,22 +27,15 @@ type Datagram struct {
 	Payload  []byte
 }
 
-// DecodeUDPFrame reads an Ethernet frame (with up to two VLAN tags) carrying
-// IPv4 or IPv6 and UDP. ok is false for anything else.
+// DecodeUDPFrame reads an Ethernet frame (with up to maxVLANTags VLAN tags)
+// carrying a whole IPv4 or IPv6 packet and UDP. ok is false for anything
+// else, a fragment among it (X1-L2R).
 func DecodeUDPFrame(frame []byte) (Datagram, bool) {
-	src, dst, proto, l4, ok := decodeIP(frame)
-	if !ok || proto != 17 || len(l4) < 8 {
+	pkt, ok := decodePacket(frame)
+	if !ok {
 		return Datagram{}, false
 	}
-	length := int(binary.BigEndian.Uint16(l4[4:6]))
-	if length < 8 || length > len(l4) {
-		return Datagram{}, false
-	}
-	return Datagram{
-		Src:     netip.AddrPortFrom(src, binary.BigEndian.Uint16(l4[0:2])),
-		Dst:     netip.AddrPortFrom(dst, binary.BigEndian.Uint16(l4[2:4])),
-		Payload: l4[8:length],
-	}, true
+	return datagramOf(pkt)
 }
 
 // maxUDPFlowDatagrams bounds how many datagrams of one flow are read before

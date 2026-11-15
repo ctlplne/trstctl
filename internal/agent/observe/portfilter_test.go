@@ -115,10 +115,17 @@ func TestPortFilterKeepsOnlyWatchedTCPAndUDP(t *testing.T) {
 	if got := runBPF(t, prog, sctp); got != 0 {
 		t.Errorf("SCTP to 443 kept: %d", got)
 	}
+	// X1-L2R: a later fragment (offset 128 bytes) carries no TCP header, so
+	// it is passed up for reassembly; a later fragment of another protocol
+	// is not.
 	fragment := frame(client, netip.MustParseAddrPort("10.0.0.5:443"), 1, syn, nil)
-	fragment[14+7] = 0x10 // a later fragment (offset 128 bytes) carries no TCP header
+	fragment[14+7] = 0x10
+	if got := runBPF(t, prog, fragment); got != 2048 {
+		t.Errorf("a later IPv4 fragment of TCP was dropped: %d", got)
+	}
+	fragment[14+9] = 132
 	if got := runBPF(t, prog, fragment); got != 0 {
-		t.Errorf("a later IPv4 fragment was kept: %d", got)
+		t.Errorf("a later IPv4 fragment of SCTP was kept: %d", got)
 	}
 	v6 := make([]byte, 14+40+20)
 	binary.BigEndian.PutUint16(v6[12:14], 0x86dd)
@@ -186,7 +193,17 @@ func TestPortFilterReadsThroughVLANTagsX1L2(t *testing.T) {
 		{"QinQ IPv6 to 22", tagged(v6, dot1ad, dot1q), 2048},
 		{"802.1Q to 5432", tagged(other, dot1q), 0},
 		{"QinQ to 5432", tagged(other, dot1ad, dot1q), 0},
-		{"three tags", tagged(v4, dot1ad, dot1q, dot1q), 0},
+		// X1-L2R: up to maxVLANTags (four) tags are read, a fifth is not.
+		{"three tags", tagged(v4, dot1ad, dot1q, dot1q), 2048},
+		{"four tags", tagged(v4, dot1ad, dot1q, dot1q, dot1q), 2048},
+		{"four tags to 5432", tagged(other, dot1ad, dot1q, dot1q, dot1q), 0},
+		{"five tags", tagged(v4, dot1ad, dot1q, dot1q, dot1q, dot1q), 0},
+		// An IPv6 packet whose next header is an extension header is passed
+		// up to be walked; ICMPv6 is dropped.
+		{"IPv6 hop-by-hop", ipv6NextHeader(v6, 0), 2048},
+		{"IPv6 fragment header", ipv6NextHeader(v6, 44), 2048},
+		{"802.1Q IPv6 destination options", tagged(ipv6NextHeader(v6, 60), dot1q), 2048},
+		{"IPv6 ICMPv6", ipv6NextHeader(v6, 58), 0},
 	} {
 		if got := runBPF(t, prog, tc.pkt); got != tc.want {
 			t.Errorf("%s: filter returned %d, want %d", tc.name, got, tc.want)
@@ -204,8 +221,8 @@ func TestPortFilterReadsThroughVLANTagsX1L2(t *testing.T) {
 	}
 	fragment := tagged(v4, dot1ad, dot1q)
 	fragment[22+7] = 0x10
-	if got := runBPF(t, prog, fragment); got != 0 {
-		t.Errorf("a tagged later IPv4 fragment was kept: %d", got)
+	if got := runBPF(t, prog, fragment); got != 2048 {
+		t.Errorf("a tagged later IPv4 fragment of TCP was dropped (X1-L2R): %d", got)
 	}
 
 	ports := make([]uint16, MaxWatchedPorts)
@@ -225,4 +242,12 @@ func TestPortFilterReadsThroughVLANTagsX1L2(t *testing.T) {
 	if got := runBPF(t, full, last); got != 2048 {
 		t.Fatalf("the last of %d watched ports behind QinQ was dropped", MaxWatchedPorts)
 	}
+}
+
+// ipv6NextHeader is a copy of an IPv6 frame naming next as its first next
+// header (X1-L2R).
+func ipv6NextHeader(frame []byte, next byte) []byte {
+	out := append([]byte(nil), frame...)
+	out[14+6] = next
+	return out
 }

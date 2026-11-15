@@ -87,11 +87,7 @@ func ReplayPcap(r io.Reader, a *Assembler) (int, error) {
 			nsec *= int64(time.Microsecond)
 		}
 		at := time.Unix(int64(sec), nsec).UTC()
-		if seg, ok := DecodeFrame(frame); ok {
-			a.Segment(seg, at)
-		} else if d, ok := DecodeUDPFrame(frame); ok {
-			a.Datagram(d, at)
-		}
+		a.Frame(frame, at)
 	}
 }
 
