@@ -183,6 +183,8 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotImplemented, "NotImplemented", key)
 	case r.Method == http.MethodPut:
 		s.put(w, r, key)
+	case r.Method == http.MethodGet && (r.URL.Query().Has("legal-hold") || r.URL.Query().Has("retention")):
+		s.objectLock(w, r, key)
 	case r.Method == http.MethodGet || r.Method == http.MethodHead:
 		s.get(w, r, key)
 	case r.Method == http.MethodDelete:
@@ -319,6 +321,10 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, status int, code, key string) {
+	writeErrorMessage(w, r, status, code, code, key)
+}
+
+func writeErrorMessage(w http.ResponseWriter, r *http.Request, status int, code, message, key string) {
 	if r.Method == http.MethodHead {
 		w.WriteHeader(status)
 		return
@@ -331,7 +337,22 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, code, key st
 		Code    string   `xml:"Code"`
 		Message string   `xml:"Message"`
 		Key     string   `xml:"Key,omitempty"`
-	}{Code: code, Message: code, Key: key})
+	}{Code: code, Message: message, Key: key})
+}
+
+// objectLock answers GetObjectLegalHold and GetObjectRetention the way S3
+// does for an object with no lock set, as this fake keeps none: a bucket
+// without Object Lock refuses the request, and one with it answers that the
+// object has no such configuration (A206L2-L1). Either reads as no lock.
+func (s *Server) objectLock(w http.ResponseWriter, r *http.Request, key string) {
+	s.mu.Lock()
+	enabled := s.LockEnabled
+	s.mu.Unlock()
+	if !enabled {
+		writeErrorMessage(w, r, http.StatusBadRequest, "InvalidRequest", "Bucket is missing Object Lock Configuration", key)
+		return
+	}
+	writeErrorMessage(w, r, http.StatusNotFound, "NoSuchObjectLockConfiguration", "The specified object does not have a ObjectLock configuration", key)
 }
 
 // objectLockConfiguration answers GetObjectLockConfiguration the way S3 does:

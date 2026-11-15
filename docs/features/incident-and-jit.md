@@ -954,7 +954,13 @@ keeps the chunk in its spool and retries, and only that session's traffic waits.
 dropped: a staged chunk is retried until it is stored, the recording seals only once no chunk
 waits, and `GET /api/v1/access/sessions/{id}/recording` reports `pending_chunks` (the console's
 session detail shows "N waiting for storage"). `pam.recording_retention`
-deletes sealed recordings unless a legal hold keeps them. The design, its failure modes and
+deletes sealed recordings unless a legal hold keeps them. On a bucket that keeps versions
+(S3 versioning, or S3 Object Lock, which turns it on) a recording's chunks and manifest go
+with every version and the delete markers earlier deletes left, as report retention removes
+a report (A206L2-L1; it needs `s3:ListBucketVersions` and `s3:DeleteObjectVersion`). While S3
+Object Lock protects any of them the whole recording stays, none of it removed, and a later
+pass removes it once the lock lapses. A recording an earlier release deleted on such a bucket
+may still hold noncurrent versions, which a lifecycle rule for noncurrent versions removes. The design, its failure modes and
 its threat model are in [the access gateway design](../design/access-gateway.md).
 
 ### Break-glass procedures (F34)

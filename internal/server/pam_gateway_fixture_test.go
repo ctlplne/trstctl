@@ -46,6 +46,9 @@ type gatewayFixture struct {
 	gatewayLog  *lockedBuffer
 	sshd        pamSSHD
 	objects     *s3test.Server
+	// versioned is the archive store when opts.versionedObjects keeps
+	// versions, as a bucket with S3 versioning or Object Lock does.
+	versioned *s3test.VersionedStore
 	// redisID, mysqlID and mongoID are the Redis, MySQL and MongoDB targets'
 	// containers, which also carry the stock clients the proofs use;
 	// clickhouse is the ClickHouse target (curl on this host is its client).
@@ -72,6 +75,9 @@ type gatewayFixtureOptions struct {
 	// duplicateWindow shortens only this fixture's broker deduplication window.
 	duplicateWindow    time.Duration
 	recordingRetention time.Duration
+	// versionedObjects keeps the archive's object versions (A206L2-L1): a
+	// plain delete only adds a delete marker, as on a versioned bucket.
+	versionedObjects bool
 	// redis adds the Redis target "redis-gw" (A256), bound to the gateway.
 	redis bool
 	// mysqlVaulted (A261-L3) also seeds a vaulted MySQL account and adds the
@@ -234,6 +240,10 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 				AllowedRoles: []string{"readonly"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr}},
 			DatabaseTargets: databaseTargets}
 		d.ArchiveObjectStore = f.objects.Open(t)
+		if opts.versionedObjects {
+			f.versioned = s3test.NewVersionedStore(f.objects.Open(t))
+			d.ArchiveObjectStore = f.versioned
+		}
 		d.AuditSigningKey = f.auditKey
 		if opts.agentBroker {
 			d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy}

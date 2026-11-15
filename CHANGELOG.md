@@ -1956,6 +1956,11 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- PAM recording retention removes every version of a recording's objects on a bucket that keeps
+  versions (A206L2-L1): a plain delete there only hid the sealed chunks behind delete markers.
+  It shares the report archive's removal (now `objectstore.RemoveAll`), which reads every
+  object's S3 Object Lock first, so a lock on one chunk keeps the whole recording until it
+  lapses. The S3 stand-in answers per-object lock reads as S3 does.
 - An Infisical value the server withholds from an inspecting run (`secretValueHidden`) is no
   longer skipped silently: the secret's finding records `content_unavailable_reason`, as a
   hidden GitLab variable's does (OD13-L1).

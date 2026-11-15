@@ -766,13 +766,19 @@ func (s *pamService) deleteRecording(ctx context.Context, rec store.PAMRecording
 	if err != nil {
 		return err
 	}
-	removed := 0
-	for _, ref := range append(chunkRefs(chunks), rec.ManifestRef) {
-		if err := view.Delete(ctx, recordingRel(view, ref)); err != nil && !errors.Is(err, objectstore.ErrNotFound) {
-			return err
-		}
-		removed++
+	// A206L2-L1: on a bucket that keeps versions a plain delete leaves each
+	// chunk's sealed data behind a delete marker, so every version of every
+	// object goes; an S3 Object Lock on any of them keeps the whole recording
+	// (none of it half removed) until a later pass finds the lock lapsed.
+	refs := append(chunkRefs(chunks), rec.ManifestRef)
+	rels := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		rels = append(rels, recordingRel(view, ref))
 	}
+	if err := view.RemoveAll(ctx, rels...); err != nil {
+		return err
+	}
+	removed := len(rels)
 	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("pam-recording-deleted\x00"+rec.TenantID+"\x00"+rec.SessionID)).String()
 	return s.appendOnce(ctx, rec.TenantID, eventID, projections.EventPAMRecordingDeleted, projections.PAMRecordingDeleted{
 		ID: rec.SessionID, Objects: removed, DeletedAt: s.clock().UTC().Truncate(time.Millisecond)})
