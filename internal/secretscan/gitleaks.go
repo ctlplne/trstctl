@@ -134,7 +134,16 @@ func (r *GitleaksRunner) Plan(target string, opts ScanOptions) (Plan, error) {
 	if _, err := r.resolveBinary(); err != nil {
 		return Plan{}, err
 	}
-	rulesActive := GitleaksDefaultRulesActive
+	rulesActive := GitleaksDefaultRulesActive + TrstctlRulesActive
+	if repo := repositoryGitleaksConfig(targetPath); repo != "" {
+		// The scan extends the repository's own config, as Gitleaks would
+		// have read it, rather than the bare defaults (P14-L4).
+		base, err := countGitleaksRules(repo)
+		if err != nil {
+			return Plan{}, err
+		}
+		rulesActive = base + TrstctlRulesActive
+	}
 	customRulesPath := ""
 	customRulesSHA256 := ""
 	if strings.TrimSpace(opts.CustomRulesPath) != "" {
@@ -200,7 +209,7 @@ func (r *GitleaksRunner) ScanWithOptions(ctx context.Context, target string, opt
 	if maxMB <= 0 {
 		maxMB = 50
 	}
-	configPath, configCleanup, err := prepareCustomRulesConfig(opts.CustomRulesPath, r.AllowedRoots)
+	configPath, configCleanup, err := prepareCustomRulesConfig(opts.CustomRulesPath, r.AllowedRoots, targetPath)
 	if err != nil {
 		return Report{}, err
 	}
@@ -246,20 +255,15 @@ func (r *GitleaksRunner) ScanWithOptions(ctx context.Context, target string, opt
 		return Report{}, err
 	}
 	relativizeFindings(findings, targetRoot)
-	rules := GitleaksDefaultRulesActive
-	if configPath != "" {
-		// A custom config replaces or extends the default rule set, so the default
-		// count stops describing what ran. Reporting 213 alongside custom_rules:true
-		// asserts a measurement that was never taken: an operator scanning with a
-		// five-rule config gets evidence claiming 213 active rules, and rules_active
-		// is documented as "an auditable floor for the real default scanner is
-		// active". Count what the config actually declares instead.
-		counted, err := countGitleaksRules(configPath)
-		if err != nil {
-			return Report{}, err
-		}
-		rules = counted
+	// A config extends the default rule set with trstctl's own rules (P14-L4)
+	// and any custom rules, so the default count does not describe what ran:
+	// rules_active is documented as "an auditable floor for the real default
+	// scanner is active". Count what the config actually declares.
+	rules, err := countGitleaksRules(configPath)
+	if err != nil {
+		return Report{}, err
 	}
+	customRules := strings.TrimSpace(opts.CustomRulesPath) != ""
 	if r.rulesActiveOverride > 0 {
 		rules = r.rulesActiveOverride
 	}
@@ -268,8 +272,8 @@ func (r *GitleaksRunner) ScanWithOptions(ctx context.Context, target string, opt
 		EngineVersion: GitleaksPinnedVersion,
 		RulesActive:   rules,
 		Mode:          mode,
-		CustomRules:   configPath != "",
-		Capabilities:  ScanCapabilities(mode, configPath != ""),
+		CustomRules:   customRules,
+		Capabilities:  ScanCapabilities(mode, customRules),
 		Findings:      findings,
 	}, nil
 }
@@ -286,15 +290,23 @@ func NormalizeScanMode(raw string) (string, error) {
 	}
 }
 
-func prepareCustomRulesConfig(customRulesPath string, allowedRoots []string) (string, func(), error) {
+// prepareCustomRulesConfig writes the scan's config: the pinned defaults (or
+// the scanned repository's own config, which Gitleaks reads by itself when no
+// config is named, and which the scan therefore extends), trstctl's own rules
+// (P14-L4) and the operator's custom rules, if any.
+func prepareCustomRulesConfig(customRulesPath string, allowedRoots []string, targetPath string) (string, func(), error) {
 	cleanup := func() {}
-	customRulesPath = strings.TrimSpace(customRulesPath)
-	if customRulesPath == "" {
-		return "", cleanup, nil
+	header := "[extend]\nuseDefault = true\n\n"
+	if repo := repositoryGitleaksConfig(targetPath); repo != "" {
+		header = "[extend]\npath = " + tomlString(repo) + "\n\n"
 	}
-	_, data, err := loadCustomRulesFragment(customRulesPath, allowedRoots)
-	if err != nil {
-		return "", cleanup, err
+	data := trstctlRulesFragment()
+	if customRulesPath = strings.TrimSpace(customRulesPath); customRulesPath != "" {
+		_, custom, err := loadCustomRulesFragment(customRulesPath, allowedRoots)
+		if err != nil {
+			return "", cleanup, err
+		}
+		data = append(append(data, '\n'), custom...)
 	}
 	cfg, err := os.CreateTemp("", "trstctl-gitleaks-config-*.toml")
 	if err != nil {
@@ -302,7 +314,7 @@ func prepareCustomRulesConfig(customRulesPath string, allowedRoots []string) (st
 	}
 	configPath := cfg.Name()
 	cleanup = func() { _ = os.Remove(configPath) }
-	_, writeErr := cfg.Write([]byte("[extend]\nuseDefault = true\n\n"))
+	_, writeErr := cfg.Write([]byte(header))
 	if writeErr == nil {
 		_, writeErr = cfg.Write(data)
 	}
@@ -542,11 +554,18 @@ func (b *limitedBuffer) suffix() string {
 // Getting the count slightly wrong for an exotic config is a much smaller problem
 // than reporting a number that describes a rule set which never ran.
 func countGitleaksRules(configPath string) (int, error) {
-	body, err := os.ReadFile(configPath) // #nosec G304 -- the operator's own scanner config, already validated as a path this process was told to use (CWE-22)
+	return countGitleaksRulesIn(configPath, true)
+}
+
+// countGitleaksRulesIn counts one config; with follow, a config that extends
+// another by path (the scan's own config extending a repository's, P14-L4)
+// adds that config's count, one level deep.
+func countGitleaksRulesIn(configPath string, follow bool) (int, error) {
+	body, err := os.ReadFile(configPath) // #nosec G304,G703 -- the operator's own scanner config, already validated as a path this process was told to use (CWE-22)
 	if err != nil {
 		return 0, fmt.Errorf("secretscan: read gitleaks config to count active rules: %w", err)
 	}
-	rules, extendsDefault := 0, false
+	rules, extendsDefault, extendsPath, table := 0, false, "", ""
 	for _, line := range strings.Split(string(body), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "#") {
@@ -554,14 +573,51 @@ func countGitleaksRules(configPath string) (int, error) {
 		}
 		if strings.HasPrefix(trimmed, "[[rules]]") {
 			rules++
+		}
+		if strings.HasPrefix(trimmed, "[") {
+			table = trimmed
 			continue
 		}
 		if strings.HasPrefix(trimmed, "useDefault") && strings.Contains(trimmed, "true") {
 			extendsDefault = true
 		}
+		// Only [extend]'s path names another config; a rule's path is a
+		// file-path pattern.
+		if key, value, ok := strings.Cut(trimmed, "="); ok && strings.TrimSpace(key) == "path" && table == "[extend]" {
+			extendsPath = strings.Trim(strings.TrimSpace(value), `'"`)
+		}
 	}
 	if extendsDefault {
 		rules += GitleaksDefaultRulesActive
 	}
+	if follow && extendsPath != "" {
+		base, err := countGitleaksRulesIn(extendsPath, false)
+		if err != nil {
+			return 0, err
+		}
+		rules += base
+	}
 	return rules, nil
+}
+
+// repositoryGitleaksConfig is a scanned directory's own .gitleaks.toml, which
+// Gitleaks reads by itself when no config is named; "" when it has none.
+func repositoryGitleaksConfig(targetPath string) string {
+	if strings.TrimSpace(targetPath) == "" {
+		return ""
+	}
+	path := filepath.Join(targetPath, ".gitleaks.toml")
+	if info, err := os.Lstat(path); err == nil && info.Mode().IsRegular() { // #nosec G703 -- the scan target's own config file, under an allowed root (CWE-22)
+		return path
+	}
+	return ""
+}
+
+// tomlString quotes s as a TOML string: a literal string, or a basic string
+// with its backslashes and quotes escaped when s holds a single quote.
+func tomlString(s string) string {
+	if !strings.ContainsRune(s, '\'') {
+		return "'" + s + "'"
+	}
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
 }

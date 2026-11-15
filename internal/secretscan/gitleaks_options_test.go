@@ -85,8 +85,8 @@ regex = '''review_[a-z0-9]{16}'''
 	if plan.TargetPath != resolvedRepo || plan.Mode != ScanModeGitHistory || !plan.CustomRules {
 		t.Fatalf("plan = %+v, want exact history/custom-rules request", plan)
 	}
-	if plan.RulesActive != GitleaksDefaultRulesActive+1 {
-		t.Fatalf("rules_active = %d, want default rules plus one reviewed custom rule", plan.RulesActive)
+	if plan.RulesActive != GitleaksDefaultRulesActive+TrstctlRulesActive+1 {
+		t.Fatalf("rules_active = %d, want default rules, trstctl's own (P14-L4) and one reviewed custom rule", plan.RulesActive)
 	}
 	if len(plan.CustomRulesSHA256) != 64 {
 		t.Fatalf("custom_rules_sha256 = %q, want canonical SHA-256 evidence", plan.CustomRulesSHA256)
@@ -116,7 +116,7 @@ func TestGitleaksRunnerRejectsCustomRulesThatWeakenDefaults(t *testing.T) {
 	if err := os.WriteFile(customRules, []byte("[extend]\ndisabledRules = [\"generic-api-key\"]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := prepareCustomRulesConfig(customRules, []string{filepath.Dir(customRules)})
+	_, _, err := prepareCustomRulesConfig(customRules, []string{filepath.Dir(customRules)}, "")
 	if err == nil || !strings.Contains(err.Error(), ErrInvalidCustomRules.Error()) {
 		t.Fatalf("prepareCustomRulesConfig err = %v, want invalid custom rules", err)
 	}
@@ -141,7 +141,7 @@ func TestGitleaksRunnerRejectsCustomRulesOutsideConfiguredRoots(t *testing.T) {
 	if err := os.WriteFile(customRules, []byte("[[rules]]\nid = \"outside\"\nregex = '''outside'''\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := prepareCustomRulesConfig(customRules, []string{allowed}); err == nil || !strings.Contains(err.Error(), ErrInvalidCustomRules.Error()) {
+	if _, _, err := prepareCustomRulesConfig(customRules, []string{allowed}, ""); err == nil || !strings.Contains(err.Error(), ErrInvalidCustomRules.Error()) {
 		t.Fatalf("prepareCustomRulesConfig outside configured roots err = %v, want invalid custom rules", err)
 	}
 }

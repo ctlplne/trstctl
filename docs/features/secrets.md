@@ -2526,7 +2526,13 @@ file, appending an event, or recording idempotency. Its keyed fingerprint is bou
 the tenant, caller, normalized target, mode, rules path, and capabilities. `POST
 /api/v1/secrets/scans` may require that fingerprint and fails with `409` before the
 scanner starts if the reviewed command changed. Execution scans a repo or workspace
-with the pinned `213`-rule default set (above the 140-rule floor);
+with the pinned `213`-rule default set and trstctl's own `6` rules (above the 140-rule floor;
+P14-L4): the formats the pinned defaults miss in a corpus of the tokens trstctl needs to catch —
+trstctl's API (`trst_`), opaque access (`trsto_`) and response-wrapping (`trstw_`) tokens, Doppler
+service, service account, CLI, SCIM and audit tokens, Infisical service tokens and Bitwarden Secrets
+Manager access tokens — each a `trstctl-` rule carried through the custom-rules path. A scanned
+repository's own `.gitleaks.toml`, which Gitleaks reads by itself, is extended rather than
+replaced, so its allowlists still hold;
 the response and stored finding carry only rule id, file, line, scanner version, and
 fingerprint — Gitleaks redacts the value, never reaching the API, event log, graph, or
 audit output.
@@ -2998,7 +3004,7 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   `POST /api/v1/secrets/scans/third-party/{provider}/ingest`, `POST /api/v1/secrets/scans`;
   `trstctl-cli secrets scans` subcommands `repositories`, `repositories webhook`,
   `third-party`, `third-party ingest`, `run`, `staged-diff`, `pre-commit install`;
-  Gitleaks `v8.27.2`, `213` default rules active, workspace and full-Git-history modes,
+  Gitleaks `v8.27.2`, `213` default rules and `6` trstctl-owned rules active (P14-L4), workspace and full-Git-history modes,
   additive custom `[[rules]]` fragments, CI-log/container-registry/Slack/Jira artifact
   ingress, redacted findings only.
 - **Events:** `secret.version.written`, `rotation.*`, `rotation.rollback_failed`,

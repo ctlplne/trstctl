@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- Secret scans catch the token formats the pinned Gitleaks misses (P14-L4): over a corpus of the tokens trstctl needs to
+  catch, Gitleaks v8.27.2 alone misses 10 of 22 formats — trstctl's API, opaque access and response-wrapping tokens,
+  Doppler service, service account, CLI, SCIM and audit tokens, and Infisical service and Bitwarden Secrets Manager access
+  tokens — so every scan
+  now carries six trstctl-owned rules through the custom-rules path, extending the defaults (`rules_active` 219, plus
+  any custom rules). A scanned repository's own `.gitleaks.toml` is extended, not replaced. No other engine is used.
 - A PAM session started before its approval link names the approval its activation consumed (G1-L6): the
   `pam.session.activation_requested` event's approval is recorded per session (migration 0489,
   `pam_session_approval_links`, a read model in snapshots, format 137), and a started event from before the link takes
