@@ -13635,7 +13635,7 @@ export const messages = {
   },
   "profiles.hostKeyAttestation.help": {
     defaultMessage:
-      "Default off. The host agent has its TPM make the key and sign the request, and proves it with a TPM attestation key that chains to an operator root; no other key is signed. The key never leaves the TPM: nginx serves it through OpenSSL 3's tpm2 provider.",
+      "Default off. The host agent has its TPM make the key and sign the request, and proves it with a TPM attestation key that chains to an operator root; no other key is signed. The key never leaves the TPM: nginx, HAProxy and Postfix with Dovecot serve it through OpenSSL 3's tpm2 provider.",
     description: "Behavior summary for the TPM-held host key requirement.",
   },
   "profiles.hostKeyAttestation.roots": {

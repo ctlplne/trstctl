@@ -1084,7 +1084,8 @@ chain to:
 }
 ```
 
-An `nginx` host renewal under that profile is queued with `key_custody: "tpm"`. The
+An `nginx`, `haproxy` or `postfix` host renewal under that profile is queued with
+`key_custody: "tpm"`. The
 agent has its TPM create a P-256 key under the storage root key at `0x81000001` (made
 under the owner hierarchy when absent) and sign the CSR there. It proves the key with
 `TPM2_Certify` by the host's attestation key, over SHA-256 of the job's binding (the
@@ -1122,7 +1123,9 @@ version in the subject alternative name, and the attestation-key EKU `2.23.133.8
 `attestation_key_auth_file` and `owner_auth_file` optionally hold their authorization.
 A renewal that requires a TPM-held key is refused before any key exists, with its
 reason, when the host profile names no `host_key_tpm`, the connector is not `nginx`,
-the host profile maps no `nginx-upgrade` action, the key is not P-256, or the agent
+`haproxy` or `postfix`, an nginx host profile maps no `nginx-upgrade` action, an
+haproxy configuration's global section does not set `nbthread 1` (the agent reads
+`config_path` inside the profile's allowed roots), the key is not P-256, or the agent
 build cannot send an attestation. A profile that requires one refuses to queue a
 renewal for any other connector.
 
@@ -1196,6 +1199,25 @@ one session for the agent, as the agent's one open of `/dev/tpmrm0` does on a ho
 `TestSwtpmNginxCannotReloadATPMHeldKeyInPlaceOrShareItAcrossWorkersTPMO1L3` shows the
 in-place reload and the two workers failing, and fails when a package changes either.
 The same journey on a real TPM is Track B.
+
+HAProxy (Debian 12: 2.6.12) reads the key from its `crt` bundle through the same
+provider config (TPM-O1-L2). Set `nbthread 1` in the global section: haproxy's threads
+share the provider's context, and with its default of one thread per CPU most
+concurrent handshakes fail. Its reload already re-executes the master
+(`systemctl reload haproxy` runs `haproxy -c`, then sends the master `SIGUSR2`), so
+it needs no extra action. Give the service the provider's config in its environment
+(a drop-in with `Environment=OPENSSL_CONF=...`), and map the profile's `haproxy`
+action to a wrapper like the nginx one, for its `haproxy -c`.
+
+Postfix (3.7.11) and Dovecot (2.3.19) take the provider's config from their own
+settings: add `OPENSSL_CONF=/etc/ssl/openssl-tpm2.cnf` to `import_environment` in
+Postfix's `main.cf` and in Dovecot's configuration. Each Postfix and Dovecot daemon
+starts OpenSSL itself, so concurrent handshakes and reloads need nothing more.
+Dovecot's login processes run as `dovenull`, which needs the `tss` group to open
+`/dev/tpmrm0`. The profile's `postfix`, `doveconf` and `doveadm` actions are the stock
+binaries. `TestSwtpmHostRenewalJourneysHAProxyAndPostfixTPMO1L2` renews a TPM-held key
+into haproxy and into Postfix with Dovecot through the agent, each also while clients
+handshake continuously, with none failing.
 
 ### Deliver into a Kubernetes Secret from inside the cluster
 

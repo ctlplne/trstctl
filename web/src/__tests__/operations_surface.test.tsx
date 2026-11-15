@@ -439,6 +439,16 @@ describe("operational console surface", () => {
     );
   });
 
+  it("TPM-O1-L2 names the services that serve a TPM-held host key", async () => {
+    apiMock.profiles.mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderAt("/profiles");
+    await user.click(await screen.findByRole("button", { name: /Create rule/i }));
+    expect(
+      screen.getByText(/The key never leaves the TPM: nginx, HAProxy and Postfix with Dovecot serve it through OpenSSL 3's tpm2 provider\./),
+    ).toBeInTheDocument();
+  });
+
   it("A178 marks a rule as issuing publicly trusted TLS certificates and requires serverAuth for it", async () => {
     apiMock.profiles.mockResolvedValue([]);
     apiMock.createProfile.mockResolvedValue({ id: "public", name: "web-public", version: 1, active: true });

@@ -2530,8 +2530,9 @@ predecessor epoch, since no earlier KEM key exists.
 ### TPM-held host keys (TPM-O1)
 
 A profile's `host_key_attestation` keeps host renewal keys in the host's TPM for the
-`nginx` connector, proven against swtpm in a container with Debian 12's OpenSSL
-3.0.22, tpm2-openssl 1.1.1 and nginx 1.22.1. On that stack a TPM-held key serves TLS
+`nginx`, `haproxy` and `postfix` connectors, proven against swtpm in a container with
+Debian 12's OpenSSL 3.0.22, tpm2-openssl 1.1.1, nginx 1.22.1, HAProxy 2.6.12, Postfix
+3.7.11 and Dovecot 2.3.19. On that stack a TPM-held key serves TLS
 1.3 only: with the `tpm2` provider preferred, OpenSSL 3.0 drops P-256 from its TLS
 1.2 groups (tpm2-openssl 1.1.1 registers none of its own), so a TLS 1.2 client finds
 no ECDSA suite; `TestSwtpmHostKeyServesTLSThroughTheTPM2ProviderTPMO1` checks this
@@ -2542,9 +2543,15 @@ leaves it failing its handshakes or serving the previous certificate;
 `TestSwtpmNginxCannotReloadATPMHeldKeyInPlaceOrShareItAcrossWorkersTPMO1L3` checks
 both. A re-execution without an outage is proven with Debian's init script; under
 systemd the profile maps a restart, and the upgrade there is part of the real-host
-repeat. What comes next: the other OpenSSL-based host
-connectors (apache, haproxy, postfix and the rest), each proven against its stock
-package with the provider, and the real-TPM repeat of the swtpm journey (Track B).
+repeat. haproxy serves the key with `nbthread 1` (TPM-O1-L2). apache, postgresql and
+mysql take no TPM-held key: each loads the key once and then handshakes on threads
+(apache's event MPM, MariaDB) or in forked processes (PostgreSQL's backends) that
+share that one provider context, so concurrent handshakes fail;
+`TestSwtpmServicesSharingTheTPM2ProviderFailConcurrentHandshakesTPMO1L2` checks each
+and fails when a package changes it (apache's prefork MPM with one child serves the
+key, one connection at a time). The other host connectors do not read their key
+through OpenSSL, or convert it. What comes next: the real-TPM repeat of the swtpm
+journey (Track B).
 
 ### Workload-held co-sign mode (off by default)
 

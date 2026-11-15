@@ -26,10 +26,21 @@ const HostKeyCustodyTPM = "tpm"
 
 // tpmHostKeyConnectors are the host connectors that install a TPM-held key:
 // the service reads the TSS2 key file the TPM wraps the key in through OpenSSL
-// 3's tpm2 provider. nginx is the one proven against the provider (TPM-O1). A
-// connector that converts the key — into a keystore, a Windows store, a
-// Kubernetes Secret — cannot take one, because the key never leaves the TPM.
-var tpmHostKeyConnectors = []string{"nginx"}
+// 3's tpm2 provider, each proven against its stock Debian package. nginx
+// (TPM-O1) runs one worker and is re-executed for each deploy (TPM-O1-L3);
+// haproxy (TPM-O1-L2) runs one thread, and its reload re-executes its
+// master; postfix with dovecot (TPM-O1-L2) starts OpenSSL in each daemon
+// process. Not apache, postgresql or mysql: their threads or forked processes
+// share the provider's one TPM context and fail concurrent handshakes, which
+// the lab's TestSwtpmServicesSharingTheTPM2ProviderFailConcurrentHandshakes
+// TPMO1L2 shows. A connector that converts the key — into a keystore, a
+// Windows store, a Kubernetes Secret — cannot take one, because the key never
+// leaves the TPM.
+var tpmHostKeyConnectors = []string{"nginx", "haproxy", "postfix"}
+
+// TPMHostKeyConnectors are the host connectors that install a TPM-held key;
+// the control plane queues a TPM-held renewal only for these.
+func TPMHostKeyConnectors() []string { return slices.Clone(tpmHostKeyConnectors) }
 
 // AttestedCSRSigner is the SignJobCSR call that carries the TPM's attestation
 // of the CSR's key (TPM-O1). A channel without it cannot take a renewal whose
@@ -56,6 +67,11 @@ func tpmHostKeyRefusal(ch Channel, profile connector.LocalOpsConfig, intent Depl
 		// nginx's handshakes or serving the previous certificate.
 		return "a TPM-held key on nginx needs the host profile's " + nginx.ReexecAction +
 			" action, which re-executes nginx so a fresh master loads the key; an in-place reload does not serve it"
+	}
+	if intent.Connector == "haproxy" {
+		if refusal := haproxyTPMRefusal(profile, intent); refusal != "" {
+			return refusal
+		}
 	}
 	if _, ok := ch.(AttestedCSRSigner); !ok {
 		return "this agent build cannot send a TPM key attestation with its request"
@@ -197,4 +213,66 @@ func profileHasAction(profile connector.LocalOpsConfig, logicalName string) bool
 		}
 	}
 	return false
+}
+
+// haproxyTPMRefusal: haproxy's threads share the tpm2 provider's one TPM
+// context and fail concurrent handshakes, so a TPM-held key needs the
+// configuration's global section to set nbthread 1 (TPM-O1-L2). The agent
+// reads config_path inside the host profile's allowed roots.
+func haproxyTPMRefusal(profile connector.LocalOpsConfig, intent DeployIntent) string {
+	var target HostTargetConfig
+	if len(intent.TargetConfig) > 0 && json.Unmarshal(intent.TargetConfig, &target) != nil {
+		return "the haproxy target configuration did not decode"
+	}
+	const unreadable = "a TPM-held key on haproxy needs its config_path readable inside the host profile's allowed roots, to check nbthread"
+	if strings.TrimSpace(target.ConfigPath) == "" {
+		return unreadable
+	}
+	ops, err := connector.NewLocalOps(profile)
+	if err != nil {
+		return "the host exec profile is not usable: " + err.Error()
+	}
+	reader, ok := ops.(connector.FileReader)
+	if !ok {
+		return unreadable
+	}
+	raw, err := reader.ReadFile(target.ConfigPath)
+	if err != nil {
+		return unreadable
+	}
+	if threads, set := haproxyGlobalNbthread(raw); !set || threads != "1" {
+		return "a TPM-held key on haproxy needs nbthread 1 in its global section: haproxy's threads share the tpm2 provider's one TPM context and fail concurrent handshakes"
+	}
+	return ""
+}
+
+// haproxySections are the keywords that start an haproxy configuration
+// section.
+var haproxySections = map[string]bool{
+	"global": true, "defaults": true, "frontend": true, "backend": true, "listen": true, "resolvers": true,
+	"peers": true, "userlist": true, "program": true, "http-errors": true, "ring": true, "cache": true,
+	"mailers": true, "log-forward": true, "crt-store": true, "traces": true,
+}
+
+// haproxyGlobalNbthread is the nbthread an haproxy configuration's global
+// section sets, the last one if it sets several, as haproxy reads it.
+func haproxyGlobalNbthread(cfg []byte) (string, bool) {
+	inGlobal, value, set := false, "", false
+	for _, line := range strings.Split(string(cfg), "\n") {
+		if i := strings.IndexByte(line, '#'); i >= 0 {
+			line = line[:i]
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		if haproxySections[fields[0]] {
+			inGlobal = fields[0] == "global"
+			continue
+		}
+		if inGlobal && fields[0] == "nbthread" && len(fields) >= 2 {
+			value, set = fields[1], true
+		}
+	}
+	return value, set
 }

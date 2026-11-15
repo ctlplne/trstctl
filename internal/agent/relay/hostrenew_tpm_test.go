@@ -378,3 +378,120 @@ func TestHostDryRunPlansTheNginxReexecForATPMHeldKeyTPMO1L3(t *testing.T) {
 		t.Fatalf("software plan = %+v", softwarePlan)
 	}
 }
+
+// tpmServiceProfile is a host profile whose actions, one per logical name,
+// record their arguments in dir/actions.log, with the host's TPM named.
+func tpmServiceProfile(t *testing.T, dir string, names ...string) connector.LocalOpsConfig {
+	t.Helper()
+	profile := connector.LocalOpsConfig{AllowedRoots: []string{dir},
+		HostKeyTPM: &connector.HostKeyTPMConfig{AttestationKey: filepath.Join(dir, "ak.json"), AttestationCertChain: filepath.Join(dir, "ak.pem")}}
+	script := []byte("#!/bin/sh\necho \"$(basename \"$0\") $*\" >> " + filepath.Join(dir, "actions.log") + "\nexit 0\n")
+	for _, name := range names {
+		if err := os.WriteFile(filepath.Join(dir, name), script, 0o755); err != nil { // #nosec G306,G703 -- the fixture IS an executable, in the test's own temp directory (CWE-276, CWE-22)
+			t.Fatal(err)
+		}
+		profile.Actions = append(profile.Actions, connector.LocalAction{LogicalName: name, Command: filepath.Join(dir, name), PassArgs: true})
+	}
+	return profile
+}
+
+// TestTPMHeldKeysAreInstalledForHAProxyWithOneThreadAndForPostfixTPMO1L2:
+// haproxy and postfix with dovecot take a TPM-held key, each proven against
+// its stock package with the tpm2 provider. haproxy's threads share the
+// provider's one TPM context, so the agent reads its config_path inside the
+// profile's allowed roots and refuses, before any key exists, a configuration
+// whose global section does not set nbthread 1 (or that it cannot read); with
+// it, the renewal makes the key in the TPM and runs haproxy's check and
+// reload. A postfix renewal installs the key for both services and reloads
+// both. apache is still refused.
+func TestTPMHeldKeysAreInstalledForHAProxyWithOneThreadAndForPostfixTPMO1L2(t *testing.T) {
+	dev := &softwareHostKeyTPM{}
+	restore := relay.SetHostKeyTPMForTest(dev, func(jobID int64, _, _ []byte) ([]byte, error) {
+		return []byte("tpm-attestation-for-job-" + strconv.FormatInt(jobID, 10)), nil
+	})
+	defer restore()
+	run := func(t *testing.T, dir string, intent relay.DeployIntent, profile connector.LocalOpsConfig) ([]report, int) {
+		t.Helper()
+		ch := &attestedRenewChannel{renewChannel: renewChannel{certPEM: []byte("ISSUED-LEAF\n"), chainPEM: []byte("ISSUER\n"), fpr: "sha256:issued"}}
+		ch.jobs = []relay.Job{renewJob(t, intent)}
+		if _, err := relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient, profile, 4, 60); err != nil {
+			t.Fatalf("RunOnceWithHost: %v", err)
+		}
+		return ch.reports, ch.signCalls
+	}
+	haproxyIntent := func(t *testing.T, dir, config string) relay.DeployIntent {
+		t.Helper()
+		configPath := filepath.Join(dir, "haproxy.cfg")
+		if config != "" {
+			if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		intent := tpmRenewIntent(t, dir, "haproxy")
+		intent.TargetConfig = mustJSON(t, map[string]string{"crt_path": filepath.Join(dir, "web.pem"), "config_path": configPath})
+		return intent
+	}
+	for _, tc := range []struct {
+		name, config, want string
+	}{
+		{"no nbthread", "global\n  log stderr local0\nfrontend fe\n  bind :443 ssl crt /x\n", "needs nbthread 1 in its global section"},
+		{"four threads", "global\n  nbthread 4\n", "needs nbthread 1 in its global section"},
+		{"nbthread 1 outside global", "global\n  maxconn 10\ndefaults\n  nbthread 1\n", "needs nbthread 1 in its global section"},
+		{"an unreadable config_path", "", "needs its config_path readable inside the host profile's allowed roots"},
+	} {
+		t.Run("haproxy refused: "+tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			before := dev.created
+			reports, signed := run(t, dir, haproxyIntent(t, dir, tc.config), tpmServiceProfile(t, dir, "haproxy", "systemctl"))
+			if len(reports) != 1 || reports[0].outcome != relay.OutcomeFailed || !strings.Contains(reports[0].detail, tc.want) {
+				t.Fatalf("reports = %+v, want a failure naming %q", reports, tc.want)
+			}
+			if dev.created != before || signed != 0 {
+				t.Fatal("the TPM made a key or a CSR was signed before the refusal")
+			}
+		})
+	}
+	t.Run("haproxy with nbthread 1", func(t *testing.T) {
+		dir := t.TempDir()
+		config := "# trstctl-managed\nglobal\n  nbthread 2\n  nbthread 1 # one thread for the TPM-held key\ndefaults\n  mode http\n"
+		reports, signed := run(t, dir, haproxyIntent(t, dir, config), tpmServiceProfile(t, dir, "haproxy", "systemctl"))
+		if len(reports) != 1 || reports[0].outcome == relay.OutcomeFailed || signed != 1 {
+			t.Fatalf("reports = %+v, signed %d", reports, signed)
+		}
+		ran, _ := os.ReadFile(filepath.Join(dir, "actions.log")) // #nosec G304 -- the test's own temp directory (CWE-22)
+		bundle, _ := os.ReadFile(filepath.Join(dir, "web.pem"))  // #nosec G304 -- the test's own temp directory (CWE-22)
+		if string(ran) != "haproxy -c -f "+filepath.Join(dir, "haproxy.cfg")+"\nsystemctl reload haproxy\n" ||
+			!bytes.Contains(bundle, []byte("BEGIN TSS2 PRIVATE KEY")) {
+			t.Fatalf("haproxy ran:\n%s\nbundle:\n%s", ran, bundle)
+		}
+	})
+	t.Run("postfix with dovecot", func(t *testing.T) {
+		dir := t.TempDir()
+		intent := tpmRenewIntent(t, dir, "postfix")
+		intent.TargetConfig = mustJSON(t, map[string]string{
+			"postfix_cert_path": filepath.Join(dir, "postfix.crt"), "postfix_key_path": filepath.Join(dir, "postfix.key"),
+			"dovecot_cert_path": filepath.Join(dir, "dovecot.crt"), "dovecot_key_path": filepath.Join(dir, "dovecot.key")})
+		reports, signed := run(t, dir, intent, tpmServiceProfile(t, dir, "postfix", "doveconf", "doveadm"))
+		if len(reports) != 1 || reports[0].outcome == relay.OutcomeFailed || signed != 1 {
+			t.Fatalf("reports = %+v, signed %d", reports, signed)
+		}
+		for _, name := range []string{"postfix.key", "dovecot.key"} {
+			key, _ := os.ReadFile(filepath.Join(dir, name)) // #nosec G304 -- the test's own temp directory (CWE-22)
+			if !bytes.Contains(key, []byte("BEGIN TSS2 PRIVATE KEY")) {
+				t.Fatalf("%s is not the TPM's key file:\n%s", name, key)
+			}
+		}
+		ran, _ := os.ReadFile(filepath.Join(dir, "actions.log")) // #nosec G304 -- the test's own temp directory (CWE-22)
+		if string(ran) != "postfix check\ndoveconf -n\npostfix reload\ndoveadm reload\n" {
+			t.Fatalf("postfix ran:\n%s", ran)
+		}
+	})
+	t.Run("apache refused", func(t *testing.T) {
+		dir := t.TempDir()
+		reports, signed := run(t, dir, tpmRenewIntent(t, dir, "apache"), tpmServiceProfile(t, dir, "apachectl"))
+		if len(reports) != 1 || reports[0].outcome != relay.OutcomeFailed ||
+			!strings.Contains(reports[0].detail, "installed only for nginx, haproxy, postfix, not apache") || signed != 0 {
+			t.Fatalf("reports = %+v, signed %d", reports, signed)
+		}
+	})
+}

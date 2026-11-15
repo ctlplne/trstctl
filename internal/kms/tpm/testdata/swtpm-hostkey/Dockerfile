@@ -26,3 +26,17 @@ RUN apt-get update \
 # host's /dev/tpmrm0 have.
 COPY tpmrm-bridge.c /usr/local/src/tpmrm-bridge.c
 RUN gcc -O2 -Wall -Werror -o /usr/local/bin/tpmrm-bridge /usr/local/src/tpmrm-bridge.c -ltss2-tctildr
+# TPM-O1-L2: the other OpenSSL-based host services, from Debian's packages:
+# haproxy, postfix and dovecot, which serve a TPM-held key through the tpm2
+# provider, and apache2, postgresql and mariadb-server, whose lab test shows
+# why they cannot (their threads or forked processes share one provider
+# context).
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        haproxy \
+        postfix \
+        dovecot-imapd \
+        apache2 \
+        postgresql \
+        mariadb-server \
+    && rm -rf /var/lib/apt/lists/*

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -66,8 +67,9 @@ func (d *issuanceDispatcher) hostRenewalKeyCustody(ctx context.Context, tenantID
 	if !policy.Required {
 		return "", nil
 	}
-	if target.Type != "nginx" {
-		return "", fmt.Errorf("server: the profile requires host keys held in the host's TPM, and the %s connector cannot install one (nginx can)", target.Type)
+	if connectors := relay.TPMHostKeyConnectors(); !slices.Contains(connectors, target.Type) {
+		return "", fmt.Errorf("server: the profile requires host keys held in the host's TPM, and the %s connector cannot install one (%s can)",
+			target.Type, strings.Join(connectors, ", "))
 	}
 	return relay.HostKeyCustodyTPM, nil
 }

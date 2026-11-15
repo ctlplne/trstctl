@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 ### Added
+- HAProxy and Postfix with Dovecot take TPM-held host keys too (TPM-O1-L2). A profile
+  that requires host keys in the TPM now queues `haproxy` and `postfix` renewals with
+  `key_custody: "tpm"`, and the console's profile builder names them. The agent
+  refuses an haproxy renewal, before any key exists, unless the configuration's global
+  section sets `nbthread 1`. Proven against swtpm with Debian 12's HAProxy 2.6.12,
+  Postfix 3.7.11 and Dovecot 2.3.19 through the agent, including renewals under
+  continuous handshakes with none failing. apache, PostgreSQL and MariaDB are not
+  offered: their threads or forked processes share the tpm2 provider's one TPM
+  context, and the lab shows their concurrent handshakes failing.
 - A CA re-protection keeps a TPM-held host key in the host's TPM (TPM-O1-L1). A
   re-protection whose predecessor's key a host agent's TPM attested is queued with
   `key_custody: "tpm"`: the agent pins the predecessor through the TPM, the TPM signs the
