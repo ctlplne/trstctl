@@ -91,10 +91,10 @@ func ShippedSourceKinds() []ShippedSourceKind {
 			Flags:       []string{"--inventory-keystores", "--inventory-keystore-password-file"},
 		},
 		{
-			// X2: TLS library and Go program versions with their X25519MLKEM768 answer.
+			// X2: TLS library, Go program and Java (X2-L4R) versions with their X25519MLKEM768 answer.
 			Kind:        SourceCryptoLibrary,
 			Constructor: "NewCryptoLibrarySource",
-			Flags:       []string{"--inventory-crypto-libraries", "--inventory-go-binaries"},
+			Flags:       []string{"--inventory-crypto-libraries", "--inventory-go-binaries", "--inventory-java"},
 		},
 		{
 			// P7: MCP servers named by client configuration files, credentials by field only.

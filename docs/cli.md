@@ -1606,7 +1606,8 @@ after inspection and never sends PEM/DER key bytes to the control plane.
 `--inventory-keystores` (with `--inventory-keystore-password-file`) does the same for
 the key entries of Java keystores (JKS, JCEKS, BCFKS) and PKCS#12 files, and `--inventory-crypto-libraries`
 and `--inventory-go-binaries` report TLS library and Go program versions with whether
-each can negotiate X25519MLKEM768.
+each can negotiate X25519MLKEM768; `--inventory-java` does the same for Java
+installations, with their security providers, and BouncyCastle jars.
 `--inventory-mcp-config-roots` names home or configuration directories whose MCP
 client configuration files the agent reads (P7): each configured MCP server, its
 transport, the program it starts or the host it calls, and which fields hold a static

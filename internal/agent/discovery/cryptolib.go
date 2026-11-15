@@ -37,17 +37,22 @@ const (
 // capability.
 type LibraryFound struct {
 	Location string
-	Library  string // openssl, libressl, boringssl, gnutls, nss or go
-	Version  string
+	// Library is openssl, libressl, boringssl, aws-lc, wolfssl, gnutls,
+	// nss, go, java, bcprov, bctls, bc-fips or bctls-fips.
+	Library string
+	Version string
 	// PQHybrid says whether this version can negotiate X25519MLKEM768.
 	PQHybrid string
 	// Basis says why, in a sentence an operator can check.
 	Basis string
+	// Providers are a Java installation's security providers in the order
+	// its java.security lists them (X2-L4R).
+	Providers []string
 }
 
 // libraryNames are the file names a directory walk reads as TLS libraries; a
 // path named directly is always read.
-var libraryNames = regexp.MustCompile(`^(lib(crypto|ssl)[-.0-9a-z_]*\.(so[.0-9]*|dylib|dll)|lib(crypto|ssl)\.so[.0-9]*|libgnutls\.so[.0-9]*|libsoftokn3\.(so|dylib))$`)
+var libraryNames = regexp.MustCompile(`^(lib(crypto|ssl)[-.0-9a-z_]*\.(so[.0-9]*|dylib|dll)|lib(crypto|ssl)\.so[.0-9]*|libgnutls\.so[.0-9]*|libsoftokn3\.(so|dylib)|libwolfssl\.(so[.0-9]*|dylib))$`)
 
 var (
 	openSSLVersion   = regexp.MustCompile(`OpenSSL (\d+)\.(\d+)\.(\d+)([a-z]?)(?:[-+][0-9A-Za-z.+~-]*)?\s+\d{1,2} [A-Z][a-z]{2} \d{4}`)
@@ -61,6 +66,19 @@ var (
 	// hybridGroupName is the X25519MLKEM768 group as libraries spell it in
 	// their group tables (X25519MLKEM768, X25519-MLKEM768).
 	hybridGroupName = regexp.MustCompile(`(?i)x25519[-_]?mlkem768`)
+	// X2-L4R: AWS-LC names its release; wolfSSL names its version beside
+	// its name, or alone in a build without its OpenSSL-compatible text;
+	// BoringSSL calls itself BoringSSL; and the pre-standard Kyber768
+	// hybrids (X25519Kyber768Draft00) are what a BoringSSL cut before
+	// X25519MLKEM768 offers instead.
+	awsLCVersion    = regexp.MustCompile(`AWS-LC (\d+\.\d+\.\d+)`)
+	wolfSSLVersion  = regexp.MustCompile(`wolfSSL (\d+\.\d+\.\d+)`)
+	wolfSSLAPI      = []byte("wolfSSL_lib_version")
+	bareVersion     = regexp.MustCompile(`\x00(\d+\.\d+\.\d+)\x00`)
+	boringSSLName   = []byte("\x00BoringSSL\x00")
+	kyberDraftGroup = regexp.MustCompile(`(?i)(x25519|p256|p384)kyber768`)
+	// classicGroupName is X25519 as a TLS group table names it.
+	classicGroupName = regexp.MustCompile(`\x00[Xx]25519\x00`)
 	// A libcrypto names where it reads its configuration and providers.
 	openSSLDir     = regexp.MustCompile(`OPENSSLDIR: "([^"\x00]{1,512})"`)
 	openSSLModules = regexp.MustCompile(`MODULESDIR: "([^"\x00]{1,512})"`)
@@ -74,7 +92,9 @@ type CryptoLibrarySource struct {
 	cryptoPolicyRoot string
 	libraries        []string
 	goBinaries       []string
-	maxSize          int64
+	// javaPaths are Java installations and BouncyCastle jars (X2-L4R).
+	javaPaths []string
+	maxSize   int64
 }
 
 // NewCryptoLibrarySource inventories TLS libraries under libraries and the Go
@@ -112,6 +132,12 @@ func (s *CryptoLibrarySource) Discover(ctx context.Context) ([]LibraryFound, err
 			out = append(out, found)
 		}
 	})
+	if err != nil {
+		return out, err
+	}
+	// X2-L4R: Java installations and BouncyCastle jars.
+	java, err := s.discoverJava(ctx, seen)
+	out = append(out, java...)
 	// X2-L6: the host's system crypto policy, which decides what the
 	// libraries above offer by default.
 	if s.cryptoPolicyRoot != "" {
@@ -141,13 +167,25 @@ func (s *CryptoLibrarySource) library(path string) (LibraryFound, bool) {
 	return identifyLibrary(path, data)
 }
 
-// identifyLibrary reads a TLS library's version string. BoringSSL and LibreSSL
-// are checked first because both also carry OpenSSL-compatible strings.
+// identifyLibrary reads a TLS library's version string. AWS-LC, BoringSSL,
+// wolfSSL and LibreSSL are checked first because each can also carry
+// OpenSSL-compatible strings, AWS-LC before the BoringSSL it derives from.
 func identifyLibrary(path string, data []byte) (LibraryFound, bool) {
+	if bytes.Contains(data, wolfSSLAPI) {
+		if found, ok := wolfSSL(path, data); ok {
+			return found, true
+		}
+	}
 	switch {
-	case bytes.Contains(data, boringSSLVersion):
-		return LibraryFound{Location: path, Library: "boringssl", Version: "unversioned", PQHybrid: PQHybridUnknown,
-			Basis: "BoringSSL has no release versions; whether this build offers X25519MLKEM768 depends on when it was cut"}, true
+	case awsLCVersion.Match(data):
+		found := LibraryFound{Location: path, Library: "aws-lc", Version: string(awsLCVersion.FindSubmatch(data)[1])}
+		found.PQHybrid, found.Basis = groupTableAnswer("AWS-LC", withSiblingSSL(path, data))
+		return found, true
+	case bytes.Contains(data, boringSSLVersion) || bytes.Contains(data, boringSSLName):
+		found := LibraryFound{Location: path, Library: "boringssl", Version: "unversioned"}
+		found.PQHybrid, found.Basis = groupTableAnswer("BoringSSL", withSiblingSSL(path, data))
+		found.Basis += " (BoringSSL has no release versions)"
+		return found, true
 	case libreSSLVersion.Match(data):
 		return libreSSL(path, data), true
 	case gnuTLSVersion.Match(data):
@@ -170,6 +208,63 @@ func identifyLibrary(path string, data []byte) (LibraryFound, bool) {
 		found.PQHybrid, found.Basis = openSSLProviderMLKEM(data)
 	}
 	return found, true
+}
+
+// wolfSSL rates wolfSSL by what the build carries (X2-L4R): it negotiates
+// X25519MLKEM768 only when built with ML-KEM, and such a build names the
+// group. Its version is the one beside its name, or, in a library file a
+// build left without that text, the version string alone.
+func wolfSSL(path string, data []byte) (LibraryFound, bool) {
+	var version string
+	if m := wolfSSLVersion.FindSubmatch(data); m != nil {
+		version = string(m[1])
+	} else if strings.HasPrefix(filepath.Base(path), "libwolfssl") {
+		if m := bareVersion.FindSubmatch(data); m != nil {
+			version = string(m[1])
+		}
+	}
+	if version == "" {
+		return LibraryFound{}, false
+	}
+	found := LibraryFound{Location: path, Library: "wolfssl", Version: version}
+	if hybridGroupName.Match(data) {
+		found.PQHybrid = PQHybridYes
+		found.Basis = "this wolfSSL build names the X25519MLKEM768 group: it was built with ML-KEM"
+	} else {
+		found.PQHybrid = PQHybridNo
+		found.Basis = "this wolfSSL build names no ML-KEM hybrid group: wolfSSL negotiates X25519MLKEM768 only when built with ML-KEM"
+	}
+	return found, true
+}
+
+// groupTableAnswer rates a BoringSSL-family build by the TLS groups it names
+// (X2-L4R): X25519MLKEM768 in a build that offers it, only the pre-standard
+// Kyber768 hybrids in one cut before it, X25519 alone in one older still. A
+// build that names no TLS group at all is not rated.
+func groupTableAnswer(name string, data []byte) (string, string) {
+	switch {
+	case hybridGroupName.Match(data):
+		return PQHybridYes, "this " + name + " build names the X25519MLKEM768 group in its TLS group table"
+	case kyberDraftGroup.Match(data):
+		return PQHybridNo, "this " + name + " build names only the pre-standard Kyber768 hybrids (X25519Kyber768Draft00), not X25519MLKEM768"
+	case classicGroupName.Match(data):
+		return PQHybridNo, "this " + name + " build's TLS group table names X25519 and no ML-KEM hybrid group"
+	}
+	return PQHybridUnknown, "this " + name + " build names no TLS group the agent can read"
+}
+
+// withSiblingSSL adds, to a libcrypto's bytes, those of the libssl beside it,
+// which holds the TLS group table (X2-L4R).
+func withSiblingSSL(path string, data []byte) []byte {
+	base := filepath.Base(path)
+	if !strings.HasPrefix(base, "libcrypto") {
+		return data
+	}
+	sibling, err := readBounded(filepath.Join(filepath.Dir(path), "libssl"+strings.TrimPrefix(base, "libcrypto")), maxLibraryFileSize)
+	if err != nil {
+		return data
+	}
+	return append(append(append([]byte(nil), data...), 0), sibling...)
 }
 
 // libreSSL rates LibreSSL by its release notes: 4.3.0 added the

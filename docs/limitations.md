@@ -1623,9 +1623,13 @@ never live in the API process. What you can do end to end against the running bi
   signature-checked BCFKS store is not), a PKCS#12 key is never decrypted
   (X2-L3: the file's MAC checks the password, only the contents holding certificates
   are decrypted, and a key bag is noted, never opened). LibreSSL, GnuTLS, NSS and an older
-  OpenSSL with oqsprovider in its configuration are rated (X2-L4); BoringSSL (no release
-  versions), wolfSSL (no version string the agent can identify) and Java providers are
-  not. Keystore and library findings are discovery
+  OpenSSL with oqsprovider in its configuration (X2-L4), and BoringSSL, AWS-LC, wolfSSL,
+  Java installations and BouncyCastle jars (X2-L4R; proven on Alpine, Debian 12 and
+  Ubuntu 24.04 packages, with OpenJDK 25.0.5's and AWS-LC 5.0.0's clients completing
+  X25519MLKEM768 handshakes) are rated from their files. A JSSE provider other than
+  SunJSSE and BouncyCastle's (wolfJSSE, a vendor's) is listed by name, not rated, and a
+  jar inside another jar (a Spring Boot executable jar) is not opened. Keystore and
+  library findings are discovery
   findings: the CycloneDX export carries them (Q3-L2), the CBOM inventory does not.
   The protocol and key-exchange group HAProxy, Envoy and OpenSSL reach only through
   their built-in defaults are reported, marked default, by the version the host's

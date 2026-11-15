@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- The host agent rates BoringSSL, AWS-LC and wolfSSL for X25519MLKEM768 by the TLS
+  groups each build names, and inventories Java: `--inventory-java` reports each Java
+  installation's version, its security providers in order and whether its TLS can
+  negotiate X25519MLKEM768, and each BouncyCastle `bcprov` and `bctls` jar's version and
+  answer (X2-L4R).
 - The passive observer follows a QUIC connection by its connection IDs: when a NAT gives
   the client a new port in the middle of the handshake, or between two of its later
   packets, the new address pair is the same connection, counted as `paths_followed`

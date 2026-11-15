@@ -684,12 +684,12 @@ Certificates outside every key's chain, such as the keystore's trusted entries, 
 counted as `keystore_trusted_certificates`.
 
 `--inventory-crypto-libraries` names TLS libraries (`libssl`, `libcrypto`, GnuTLS's
-`libgnutls`, NSS's `libsoftokn3`) and `--inventory-go-binaries` names Go programs. The
-agent reads each version from the file itself (the library's version string, the binary's
-build information; nothing is executed or loaded) and says whether that version can
-negotiate the X25519MLKEM768 hybrid key exchange: OpenSSL 3.5 and later and Go 1.24 and
-later can (unless built with `tlsmlkem=0`), Go before 1.24 cannot, and BoringSSL reads
-`unknown`, because it has no release versions. X2-L4 adds the others:
+`libgnutls`, NSS's `libsoftokn3`, `libwolfssl`) and `--inventory-go-binaries` names Go
+programs. The agent reads each version from the file itself (the library's version
+string, the binary's build information; nothing is executed or loaded) and says whether
+that version can negotiate the X25519MLKEM768 hybrid key exchange: OpenSSL 3.5 and later
+and Go 1.24 and later can (unless built with `tlsmlkem=0`) and Go before 1.24 cannot.
+X2-L4 and X2-L4R add the others:
 
 - LibreSSL by its release notes: 4.3.0 and later can (4.3.0 added the key share; 4.4.0
   makes it libtls's preferred group), earlier versions cannot.
@@ -698,12 +698,31 @@ later can (unless built with `tlsmlkem=0`), Go before 1.24 cannot, and BoringSSL
   that names none (or a version before 3.8.8) cannot.
 - NSS: its software token (`libsoftokn3`) names the version, and `libnss3` beside it
   names the groups the installation supports; `unknown` when no `libnss3` is beside it.
+- BoringSSL, which has no release versions, and AWS-LC, derived from it (its version from
+  the library), by the TLS groups the build names, read with the `libssl` beside a
+  `libcrypto` (X2-L4R): a build that names X25519MLKEM768 can; one that names only the
+  pre-standard Kyber768 hybrids (X25519Kyber768Draft00), or X25519 alone, cannot; one
+  whose group table the agent cannot read is `unknown`.
+- wolfSSL by what the build carries (X2-L4R): it negotiates X25519MLKEM768 only when
+  built with ML-KEM, and such a build names the group.
 - OpenSSL before 3.5 through its configuration: the library names its `OPENSSLDIR`,
   and when that directory's `openssl.cnf` activates oqsprovider (its module present in
   the library's `MODULESDIR`, or the path the section names), ML-KEM is added: `yes`
   when the configuration's default `Groups` list names an ML-KEM hybrid, `unknown` when
   it names none (programs then offer it only if they set their own groups), `no` when the
   provider's module is missing. An `OPENSSL_CONF` set for one program is not seen.
+
+`--inventory-java` names Java installations (a JDK or JRE home, or a directory such as
+`/usr/lib/jvm`) and BouncyCastle jars or the directories that hold them (X2-L4R). Each
+installation is one `crypto_library` finding, library `java`, with the version its
+`release` file names and its security providers in the order `java.security` lists them
+(`java_security_providers`). It can negotiate X25519MLKEM768 when its module image names
+the group (OpenJDK 25.0.5's does, and its client offers the group first by default;
+21.0.13's does not), and it is `unknown` for the Java 8 layout or a module image the agent
+cannot read. A `bcprov` or `bctls` jar (or its FIPS edition) is reported with the version
+its manifest names: `bctls`, BouncyCastle's JSSE, can when its `NamedGroup` class names
+X25519MLKEM768, and `bcprov`, a provider without TLS, is `unknown`, since the answer is
+`bctls`'s.
 
 Beside them the agent reads the host's system crypto policy (X2-L6), on Fedora, RHEL and
 their relatives: `/etc/crypto-policies/config` names the policy every TLS library starts

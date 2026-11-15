@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3440 annotated sites across 35 rules. Each row is
+3441 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -2375,7 +2375,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (811 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (812 sites)
 
 | Location | Reason |
 |---|---|
@@ -2423,7 +2423,7 @@ not this file.
 | `cmd/trstctl-agent/factory.go:240` | operator-configured local path from the agent's own flags (CWE-22) |
 | `cmd/trstctl-agent/factory_test.go:32` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
-| `cmd/trstctl-agent/inventory_hostcrypto.go:76` | operator-configured keystore password file (CWE-22) |
+| `cmd/trstctl-agent/inventory_hostcrypto.go:78` | operator-configured keystore password file (CWE-22) |
 | `cmd/trstctl-agent/main.go:1391` | operator-supplied PIN file path, read at their instruction (CWE-22) |
 | `cmd/trstctl-agent/main.go:2061` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/observe.go:104` | the operator names the capture file on the command line (CWE-22) |
@@ -2561,10 +2561,11 @@ not this file.
 | `internal/agent/destination/destination_test.go:53` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/destination/destination_test.go:81` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/destination/destination_test.go:88` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/agent/discovery/cryptolib.go:132` | the agent inventories operator-configured library paths; reading them is the product function (CWE-22) |
-| `internal/agent/discovery/cryptolib.go:336` | a file named by the library being inventoried (its OPENSSLDIR or a sibling library) (CWE-22) |
+| `internal/agent/discovery/cryptolib.go:158` | the agent inventories operator-configured library paths; reading them is the product function (CWE-22) |
+| `internal/agent/discovery/cryptolib.go:431` | a file named by the library being inventoried (its OPENSSLDIR or a sibling library) (CWE-22) |
 | `internal/agent/discovery/cryptopolicy.go:120` | the host's own crypto policy files under a fixed root (CWE-22) |
 | `internal/agent/discovery/filesystem.go:61` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/javacrypto.go:143` | the agent inventories operator-configured Java installations; reading them is the product function (CWE-22) |
 | `internal/agent/discovery/keystore.go:87` | the agent inventories operator-configured keystore paths; reading them is the product function (CWE-22) |
 | `internal/agent/discovery/keystore_jceks_test.go:22` | the test reads its own fixtures (CWE-22) |
 | `internal/agent/discovery/mcpconfig.go:136` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |

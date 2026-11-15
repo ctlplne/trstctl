@@ -23,9 +23,11 @@ var (
 	inventoryKeystorePasswordFile = flag.String("inventory-keystore-password-file", "",
 		"file holding keystore passwords, one per line, tried in order before the published default \"changeit\"; a file rather than a flag, because process arguments expose credentials. A JKS or JCEKS lists its entries without one (marked unverified); a PKCS#12 file or BCFKS store it cannot open is reported locked")
 	inventoryCryptoLibraries = flag.String("inventory-crypto-libraries", "",
-		"comma-separated TLS library files, directories or globs (libssl, libcrypto, libgnutls, NSS's libsoftokn3) whose versions the agent reads from the files, with whether each can negotiate X25519MLKEM768; nothing is executed")
+		"comma-separated TLS library files, directories or globs (libssl, libcrypto, libgnutls, NSS's libsoftokn3, libwolfssl; OpenSSL, LibreSSL, BoringSSL, AWS-LC, wolfSSL, GnuTLS and NSS) whose versions the agent reads from the files, with whether each can negotiate X25519MLKEM768; nothing is executed")
 	inventoryGoBinaries = flag.String("inventory-go-binaries", "",
 		"comma-separated Go program files or globs whose build information the agent reads for the same post-quantum answer")
+	inventoryJava = flag.String("inventory-java", "",
+		"comma-separated Java installations (a JDK or JRE home), directories or globs holding them, and BouncyCastle jars (bcprov, bctls and their FIPS editions) or the directories that hold them: each installation's version and security providers, each jar's version, with the same post-quantum answer for their TLS; nothing is run")
 )
 
 func reportHostCryptoInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient) {
@@ -34,9 +36,9 @@ func reportHostCryptoInventory(ctx context.Context, a *agent.Agent, ch agent.Cha
 			fmt.Fprintln(os.Stderr, "trstctl-agent: keystore inventory report failed:", err)
 		}
 	}
-	libraries, programs := splitList(*inventoryCryptoLibraries), splitList(*inventoryGoBinaries)
-	if len(libraries)+len(programs) > 0 {
-		if err := reportCryptoLibraryInventory(ctx, a, ch, libraries, programs); err != nil {
+	libraries, programs, java := splitList(*inventoryCryptoLibraries), splitList(*inventoryGoBinaries), splitList(*inventoryJava)
+	if len(libraries)+len(programs)+len(java) > 0 {
+		if err := reportCryptoLibraryInventory(ctx, a, ch, libraries, programs, java); err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: crypto library inventory report failed:", err)
 		}
 	}
@@ -88,9 +90,16 @@ func readKeystorePasswords(path string) ([][]byte, error) {
 	return out, nil
 }
 
-func reportCryptoLibraryInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, libraries, programs []string) error {
-	found, err := agentdiscovery.NewCryptoLibrarySource(libraries, programs).
-		WithCryptoPolicy(agentdiscovery.DefaultCryptoPolicyRoot).Discover(ctx)
+// cryptoLibrarySource is the library source the agent's flags configure:
+// TLS libraries, Go programs, the system crypto policy (X2-L6) and Java
+// (X2-L4R).
+func cryptoLibrarySource(libraries, programs, java []string) *agentdiscovery.CryptoLibrarySource {
+	return agentdiscovery.NewCryptoLibrarySource(libraries, programs).
+		WithCryptoPolicy(agentdiscovery.DefaultCryptoPolicyRoot).WithJava(java...)
+}
+
+func reportCryptoLibraryInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, libraries, programs, java []string) error {
+	found, err := cryptoLibrarySource(libraries, programs, java).Discover(ctx)
 	if err != nil {
 		return err
 	}
@@ -123,17 +132,22 @@ func cryptoLibraryInventoryFindings(found []agentdiscovery.LibraryFound) []agent
 		if f.Library == agentdiscovery.CryptoPolicyLibrary && agentdiscovery.CryptoPolicyIsLegacy(f.Version) {
 			risk = 70
 		}
+		meta := map[string]string{
+			"library":                  f.Library,
+			"library_version":          f.Version,
+			"pq_hybrid_x25519mlkem768": f.PQHybrid,
+			"pq_basis":                 f.Basis,
+		}
+		// X2-L4R: a Java installation's security providers, in order.
+		if len(f.Providers) > 0 {
+			meta["java_security_providers"] = strings.Join(f.Providers, ", ")
+		}
 		findings = append(findings, agent.InventoryFinding{
 			Kind:       "crypto_library",
 			Ref:        f.Location,
 			Provenance: agentdiscovery.SourceCryptoLibrary + ":" + f.Location,
 			RiskScore:  risk,
-			Metadata: map[string]string{
-				"library":                  f.Library,
-				"library_version":          f.Version,
-				"pq_hybrid_x25519mlkem768": f.PQHybrid,
-				"pq_basis":                 f.Basis,
-			},
+			Metadata:   meta,
 		})
 	}
 	return findings
