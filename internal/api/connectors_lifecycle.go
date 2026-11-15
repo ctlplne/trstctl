@@ -544,7 +544,7 @@ func (a *API) createConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		}
 		// X3-L2: where an observer sees the endpoint behind NAT or a load balancer.
 		if _, err := migration.ObservedAddresses(req.Config); err != nil {
-			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
 		}
 		// A235-L2: every secret:// reference in the config is redeemed for
 		// the connector's endpoint; a caller may name only secrets it could read.
@@ -620,7 +620,7 @@ func (a *API) updateConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		}
 		// X3-L2: where an observer sees the endpoint behind NAT or a load balancer.
 		if _, err := migration.ObservedAddresses(req.Config); err != nil {
-			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
 		}
 		// A235-L2: every secret:// reference in the config is redeemed for
 		// the connector's endpoint; a caller may name only secrets it could read.
