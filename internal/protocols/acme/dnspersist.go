@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"golang.org/x/net/publicsuffix"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // dns-persist-01 (P1): persistent DNS validation, allowed by CA/Browser Forum
@@ -42,8 +44,52 @@ func DNSPersistRecordName(domain string) string {
 	return "_validation-persist." + strings.TrimSuffix(strings.TrimPrefix(domain, "*."), ".")
 }
 
+// DNSPersistAccountHashAlgorithm is the hash a hashed accounturi names
+// (draft-ietf-acme-dns-persist-02 §4.1: the RFC 6920 registry name).
+const DNSPersistAccountHashAlgorithm = "sha-256"
+
+// DNSPersistAccountHashPrefix is the accountHashPrefix this server advertises
+// in its directory's meta when it takes the hashed accounturi form: a path
+// under the server's base, so appending the algorithm and the hash yields a
+// URI, and stable while the base and its account URLs are.
+func DNSPersistAccountHashPrefix(base string) string {
+	return strings.TrimSuffix(base, "/") + "/acme/account-hash/"
+}
+
+// DNSPersistHashedAccountURI is draft-ietf-acme-dns-persist-02's accounturi
+// (P1-ACCOUNTURI, §4.1): prefix (the authority's directory meta
+// accountHashPrefix), "sha-256/", and the unpadded base64url SHA-256 of one
+// octet holding len(domain), domain, the account key's RFC 7638 thumbprint
+// (43 unpadded base64url characters) and the account URL. domain is the name
+// the record stands at, lowercase without a trailing dot, or "*" for a record
+// bound to no name.
+func DNSPersistHashedAccountURI(prefix, domain, thumbprint, accountURL string) (string, error) {
+	if domain != "*" {
+		domain = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(domain)), ".")
+	}
+	if prefix == "" || domain == "" || len(domain) > 255 || thumbprint == "" || accountURL == "" {
+		return "", errors.New("acme: a hashed accounturi needs the prefix, a domain of at most 255 octets, the key thumbprint and the account URL")
+	}
+	input := make([]byte, 0, 1+len(domain)+len(thumbprint)+len(accountURL))
+	input = append(input, byte(len(domain))) // #nosec G115 -- bounded to 255 above (CWE-190)
+	input = append(input, domain...)
+	input = append(input, thumbprint...)
+	input = append(input, accountURL...)
+	return prefix + DNSPersistAccountHashAlgorithm + "/" + crypto.SHA256Base64URL(input), nil
+}
+
+// DNSPersistAccount is the account a standing record must name: its URL and,
+// for the hashed form, the thumbprints of every key the account has held,
+// the current one first (draft-ietf-acme-dns-persist-02 §4.2).
+type DNSPersistAccount struct {
+	URL            string
+	KeyThumbprints []string
+}
+
 // DNSPersistRecordValue is the record an applicant publishes for an issuer
-// and an account; a wildcard identifier needs policy=wildcard.
+// and an account; a wildcard identifier needs policy=wildcard. accountURI is
+// the account URL or, for an authority that advertises accountHashPrefix,
+// its hashed accounturi (DNSPersistHashedAccountURI).
 func DNSPersistRecordValue(issuerDomainName, accountURI string, wildcard bool) string {
 	value := normalizeIssuerDomainName(issuerDomainName) + "; accounturi=" + strings.TrimSpace(accountURI)
 	if wildcard {
@@ -121,6 +167,32 @@ type DNSPersistValidator struct {
 	// CA's choice (the draft makes it a MAY), so the record trstctl relies
 	// on there must stand at the name itself.
 	ExactNameOnly bool
+	// AccountHashPrefix, when set, takes the hashed accounturi of
+	// draft-ietf-acme-dns-persist-02 (P1-ACCOUNTURI): a record names the
+	// account by the hash under this prefix of the domain the record stands
+	// at (or "*"), one of the account's key thumbprints and its URL, and an
+	// account URL in its place is refused. Empty takes the account URL, as
+	// Pebble 2.10 does.
+	AccountHashPrefix string
+}
+
+// namesAccount reports whether a record standing at recordName names acct.
+func (v DNSPersistValidator) namesAccount(recordName, accountURI string, acct DNSPersistAccount) (bool, string) {
+	if v.AccountHashPrefix == "" {
+		return accountURI == acct.URL, "it names a different ACME account"
+	}
+	if accountURI == acct.URL {
+		return false, "it names the account by its URL, and this CA takes the hashed accounturi (draft-ietf-acme-dns-persist-02)"
+	}
+	domain := strings.TrimPrefix(recordName, "_validation-persist.")
+	for _, thumbprint := range acct.KeyThumbprints {
+		for _, d := range []string{domain, "*"} {
+			if want, err := DNSPersistHashedAccountURI(v.AccountHashPrefix, d, thumbprint, acct.URL); err == nil && accountURI == want {
+				return true, ""
+			}
+		}
+	}
+	return false, "it names a different ACME account"
 }
 
 // dnsPersistParents lists the parent domains whose policy=wildcard record
@@ -149,6 +221,13 @@ func dnsPersistParents(name string) []string {
 // ValidatePersist proves that the account at accountURI controls domain
 // through a standing record that names one of issuers.
 func (v DNSPersistValidator) ValidatePersist(ctx context.Context, domain, accountURI string, issuers []string) error {
+	return v.ValidatePersistAccount(ctx, domain, DNSPersistAccount{URL: accountURI}, issuers)
+}
+
+// ValidatePersistAccount is ValidatePersist for an account named by its URL
+// and key thumbprints, as the hashed accounturi needs.
+func (v DNSPersistValidator) ValidatePersistAccount(ctx context.Context, domain string, acct DNSPersistAccount, issuers []string) error {
+	accountURI := acct.URL
 	ours := map[string]bool{}
 	for _, name := range issuers {
 		if name = normalizeIssuerDomainName(name); name != "" {
@@ -212,11 +291,12 @@ func (v DNSPersistValidator) ValidatePersist(ctx context.Context, domain, accoun
 			if !ours[rec.IssuerDomainName] {
 				continue // a record for another CA
 			}
+			named, why := v.namesAccount(name, rec.AccountURI, acct)
 			switch {
 			case err != nil:
 				reason(name, err.Error())
-			case rec.AccountURI != accountURI:
-				reason(name, "it names a different ACME account")
+			case !named:
+				reason(name, why)
 			case subdomain && rec.Policy != "wildcard":
 				reason(name, "it does not allow subdomains (policy=wildcard)")
 			case wildcard && rec.Policy != "wildcard":
@@ -246,6 +326,48 @@ func (v DNSPersistValidator) ValidatePersist(ctx context.Context, domain, accoun
 type dnsPersistConfig struct {
 	issuers   []string
 	validator DNSPersistValidator
+	// hashed takes draft-ietf-acme-dns-persist-02's hashed accounturi: the
+	// directory advertises accountHashPrefix under the request's base, and a
+	// record is checked against the prefix under its account's URL base.
+	hashed bool
+}
+
+// maxPriorKeyThumbprints bounds the earlier key thumbprints an account keeps
+// for hashed dns-persist-01 records.
+const maxPriorKeyThumbprints = 16
+
+// withPriorThumbprint records old as the account's newest earlier key, unless
+// it is the current one or already kept.
+func withPriorThumbprint(prior []string, old, current string) []string {
+	if old == "" || old == current {
+		return prior
+	}
+	out := []string{old}
+	for _, t := range prior {
+		if t != old && t != current && len(out) < maxPriorKeyThumbprints {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// WithDNSPersistHashedAccountURI takes the hashed accounturi form of
+// draft-ietf-acme-dns-persist-02 (P1-ACCOUNTURI) for the dns-persist-01 offer
+// WithDNSPersist made; off takes the account URL, as Pebble 2.10 does.
+func (s *Server) WithDNSPersistHashedAccountURI(on bool) *Server {
+	if s.dnsPersist != nil {
+		s.dnsPersist.hashed = on
+	}
+	return s
+}
+
+// dnsPersistAccountBase is the base an account URL was made under
+// (<base>/acme/acct/<id>).
+func dnsPersistAccountBase(accountURL string) string {
+	if i := strings.LastIndex(accountURL, "/acme/acct/"); i > 0 {
+		return accountURL[:i]
+	}
+	return ""
 }
 
 // WithDNSPersist offers dns-persist-01 for standing records that name any of
@@ -280,7 +402,17 @@ func (s *Server) validateDNSPersist(ctx context.Context, domain string, acct *ac
 	if s.dnsPersist == nil {
 		return errors.New("acme: dns-persist-01 is not offered by this server")
 	}
-	return s.dnsPersist.validator.ValidatePersist(ctx, domain, acct.url, s.dnsPersist.issuers)
+	v := s.dnsPersist.validator
+	who := DNSPersistAccount{URL: acct.url}
+	if s.dnsPersist.hashed {
+		base := dnsPersistAccountBase(acct.url)
+		if base == "" || acct.key == nil {
+			return errors.New("acme: dns-persist-01 cannot derive this account's hashed accounturi (fail closed)")
+		}
+		v.AccountHashPrefix = DNSPersistAccountHashPrefix(base)
+		who.KeyThumbprints = append([]string{acct.key.Thumbprint()}, acct.priorThumbprints...)
+	}
+	return v.ValidatePersistAccount(ctx, domain, who, s.dnsPersist.issuers)
 }
 
 // challengeJSON is a challenge object; dns-persist-01 names the issuer domain

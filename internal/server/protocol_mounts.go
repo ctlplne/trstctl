@@ -322,7 +322,8 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 		acmeSrv = acmeSrv.WithDNS01Automation(s.acmeDNS01).WithDomainValidationPolicy(s.acmeDNS01)
 	}
 	// P1: persistent DNS validation for standing records that name this CA.
-	acmeSrv = acmeSrv.WithDNSPersist(cfg.ACMEDNSPersist.IssuerDomainNames, validators.DNSPersist01)
+	acmeSrv = acmeSrv.WithDNSPersist(cfg.ACMEDNSPersist.IssuerDomainNames, validators.DNSPersist01).
+		WithDNSPersistHashedAccountURI(cfg.ACMEDNSPersist.Hashed())
 	// P15: S/MIME certificates for mailboxes proved by email-reply-00.
 	if s.acmeEmail != nil {
 		acmeSrv = acmeSrv.WithEmailChallenges(cfg.ACMEEmail.From, cfg.ACMEEmail.Domains, cfg.ACMEEmail.Profile, s.acmeEmail)

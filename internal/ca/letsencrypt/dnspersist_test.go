@@ -64,7 +64,17 @@ func (s *persistSolver) Solve(_ context.Context, req acmekey.ChallengeRequest) (
 		return nil, errors.New("persistSolver: not a dns-persist-01 request with issuer and account")
 	}
 	name := acmesrv.DNSPersistRecordName(req.Identifier)
-	want := acmesrv.DNSPersistRecordValue(req.IssuerDomainNames[0], req.AccountURI, strings.HasPrefix(req.Identifier, "*."))
+	accountRef := req.AccountURI
+	if req.AccountHashPrefix != "" {
+		// P1-ACCOUNTURI: the authority advertised accountHashPrefix.
+		hashed, err := acmesrv.DNSPersistHashedAccountURI(req.AccountHashPrefix,
+			strings.TrimPrefix(name, "_validation-persist."), req.AccountKeyThumbprint, req.AccountURI)
+		if err != nil {
+			return nil, err
+		}
+		accountRef = hashed
+	}
+	want := acmesrv.DNSPersistRecordValue(req.IssuerDomainNames[0], accountRef, strings.HasPrefix(req.Identifier, "*."))
 	if current, _ := s.zone.snapshot(name); s.publish && (len(current) != 1 || current[0] != want) {
 		s.zone.set(name, want)
 	}
@@ -145,4 +155,58 @@ func causeOf(err error) string {
 	}
 	walk(err)
 	return strings.Join(texts, " | ")
+}
+
+// TestDNSPersistHashedAccountURIAgainstTrstctlsACMEServerP1ACCOUNTURI: a
+// server taking draft-ietf-acme-dns-persist-02's hashed accounturi advertises
+// accountHashPrefix; the upstream client reads it, publishes the record with
+// the hashed accounturi of its account key and URL, and the order issues; a
+// second order reuses it with no DNS change; a record naming the account by
+// its URL is refused, saying so.
+func TestDNSPersistHashedAccountURIAgainstTrstctlsACMEServerP1ACCOUNTURI(t *testing.T) {
+	builtin, err := ca.NewBuiltin("trstctl P1-ACCOUNTURI CA")
+	if err != nil {
+		t.Fatal(err)
+	}
+	zone := &persistZone{txt: map[string][]string{}}
+	server := acmesrv.New(builtin, acmesrv.DefaultValidators()).
+		WithDNSPersist([]string{"ca.p1.test"}, acmesrv.DNSPersistValidator{Resolver: zone}).
+		WithDNSPersistHashedAccountURI(true)
+	ts := httptest.NewServer(server)
+	t.Cleanup(ts.Close)
+	solver := &persistSolver{zone: zone, publish: true}
+	plugin := newSolvingPlugin(t, ts.URL+"/directory", solver)
+	const domain = "hashed.p1.test"
+	name := acmesrv.DNSPersistRecordName(domain)
+	issue := func() error {
+		issued, err := plugin.Issue(context.Background(), ca.IssueRequest{
+			TenantID: "tenant-a", CSR: buildCSR(t, domain, []string{domain}), DNSNames: []string{domain},
+		})
+		if err == nil && len(issued.CertificatePEM) == 0 {
+			return errors.New("no certificate")
+		}
+		return err
+	}
+	if err := issue(); err != nil {
+		t.Fatalf("first order: %v (%s)", err, causeOf(err))
+	}
+	record, writes := zone.snapshot(name)
+	if writes != 1 || len(record) != 1 || !strings.HasPrefix(record[0], "ca.p1.test; accounturi="+ts.URL+"/acme/account-hash/sha-256/") {
+		t.Fatalf("standing record = %q after %d writes", record, writes)
+	}
+	if err := issue(); err != nil {
+		t.Fatalf("second order on the same record: %v", err)
+	}
+	if _, writes := zone.snapshot(name); writes != 1 {
+		t.Fatalf("the second order changed DNS: %d writes", writes)
+	}
+	// The account URL in place of its hash is refused. The server numbers
+	// accounts from 1, and this test registers one.
+	solver.publish = false
+	hashedRecord := record[0]
+	zone.set(name, "ca.p1.test; accounturi="+ts.URL+"/acme/acct/1")
+	if err := issue(); err == nil || !strings.Contains(causeOf(err), "names the account by its URL") {
+		t.Fatalf("an order on an account-URL record: %v (%s)", err, causeOf(err))
+	}
+	t.Logf("P1ACCOUNTURI_OK record=%q", hashedRecord)
 }

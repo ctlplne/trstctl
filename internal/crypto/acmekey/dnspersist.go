@@ -32,6 +32,10 @@ type persistCapture struct {
 	base  http.RoundTripper
 	mu    sync.Mutex
 	names map[string][]string
+	// hashPrefix is the accountHashPrefix the authority's directory meta
+	// advertises (draft-ietf-acme-dns-persist-02 §4.1, P1-ACCOUNTURI); empty
+	// when it advertises none, and the record then names the account URL.
+	hashPrefix string
 }
 
 // wrap returns a copy of hc whose transport records the names. Without a
@@ -87,17 +91,35 @@ func (c *persistCapture) record(body []byte) {
 	var doc struct {
 		persistChallenge
 		Challenges []persistChallenge `json:"challenges"`
+		// A directory names the account hash prefix in its meta.
+		NewOrder string `json:"newOrder"`
+		Meta     struct {
+			AccountHashPrefix string `json:"accountHashPrefix"`
+		} `json:"meta"`
 	}
 	if json.Unmarshal(body, &doc) != nil {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if doc.NewOrder != "" {
+		c.hashPrefix = doc.Meta.AccountHashPrefix
+	}
 	for _, ch := range append(doc.Challenges, doc.persistChallenge) {
 		if ch.Type == ChallengeDNSPersist01 && ch.URL != "" && len(ch.IssuerDomainNames) > 0 {
 			c.names[ch.URL] = append([]string(nil), ch.IssuerDomainNames...)
 		}
 	}
+}
+
+// accountHashPrefix is the prefix the authority's directory advertised.
+func (c *persistCapture) accountHashPrefix() string {
+	if c == nil {
+		return ""
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.hashPrefix
 }
 
 // issuerDomainNames returns what the authority named for a challenge.

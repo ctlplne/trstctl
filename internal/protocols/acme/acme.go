@@ -150,9 +150,14 @@ type account struct {
 	id        string // thumbprint
 	url       string
 	key       *jose.ACMEKey
-	jwk       json.RawMessage // public JWK needed to rebuild account verification after restart
-	contact   []string        // RFC 8555 §7.1.2 account contact URLs (e.g. mailto:)
-	status    string          // valid or deactivated; persisted in the account event
+	// priorThumbprints are the thumbprints of the keys the account rolled
+	// over from, newest first (at most maxPriorKeyThumbprints): a
+	// dns-persist-01 record in the hashed form may name any key the account
+	// has held (draft-ietf-acme-dns-persist-02 §4.2, P1-ACCOUNTURI).
+	priorThumbprints []string
+	jwk              json.RawMessage // public JWK needed to rebuild account verification after restart
+	contact          []string        // RFC 8555 §7.1.2 account contact URLs (e.g. mailto:)
+	status           string          // valid or deactivated; persisted in the account event
 	// eabKeyID is the external account credential that authorized this account
 	// (RFC 8555 §7.3.4, epic B4). Empty when the deployment does not use EAB.
 	// It is what every order under this account is then scoped against, so it
@@ -858,6 +863,11 @@ func (s *Server) directoryMeta(base string) map[string]any {
 	}
 	if s.meta.ExternalAccountRequired {
 		meta["externalAccountRequired"] = true
+	}
+	// draft-ietf-acme-dns-persist-02 §4.1: a CA taking the hashed accounturi
+	// advertises the prefix it hashes under (P1-ACCOUNTURI).
+	if s.dnsPersist != nil && s.dnsPersist.hashed {
+		meta["accountHashPrefix"] = DNSPersistAccountHashPrefix(base)
 	}
 	// draft-ietf-acme-profiles: advertise the profiles an order may name.
 	if offered := s.advertisedProfiles(); len(offered) > 0 {
@@ -1897,6 +1907,7 @@ func (s *Server) keyChange(w http.ResponseWriter, r *http.Request, msg *jose.ACM
 		return
 	}
 	delete(s.byKey, acct.key.Thumbprint())
+	acct.priorThumbprints = withPriorThumbprint(acct.priorThumbprints, acct.id, newThumb)
 	acct.key = newKey
 	acct.id = newThumb
 	acct.jwk = updated.jwk

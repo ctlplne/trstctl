@@ -139,6 +139,13 @@ type ChallengeRequest struct {
 	// this ACME account.
 	IssuerDomainNames []string
 	AccountURI        string
+	// AccountHashPrefix and AccountKeyThumbprint are set for dns-persist-01
+	// when the authority's directory advertises accountHashPrefix
+	// (draft-ietf-acme-dns-persist-02, P1-ACCOUNTURI): the record then names
+	// the account by its hashed accounturi, which needs the account key's
+	// RFC 7638 thumbprint.
+	AccountHashPrefix    string
+	AccountKeyThumbprint string
 }
 
 // ChallengeSolver satisfies challenges on behalf of the client.
@@ -524,18 +531,25 @@ func (d *Driver) fulfill(ctx context.Context, tenantID string, order *acme.Order
 		}
 
 		var issuerNames []string
-		var accountURI string
+		var accountURI, hashPrefix, thumbprint string
 		if chal.Type == ChallengeDNSPersist01 {
 			issuerNames, accountURI = d.persist.issuerDomainNames(chal.URI), string(d.client.KID)
 			if len(issuerNames) == 0 || accountURI == "" {
 				return fmt.Errorf("acmekey: dns-persist-01 for %s: the authority named no issuer domain name, "+
 					"or the account URL is unknown", identifierOf(authz))
 			}
+			if hashPrefix = d.persist.accountHashPrefix(); hashPrefix != "" {
+				var terr error
+				if thumbprint, terr = acme.JWKThumbprint(d.client.Key.Public()); terr != nil {
+					return fmt.Errorf("acmekey: dns-persist-01 account key thumbprint: %w", terr)
+				}
+			}
 		}
 		retract, err := d.solver.Solve(ctx, ChallengeRequest{
 			TenantID: tenantID, Type: chal.Type, Identifier: identifierOf(authz),
 			Token: chal.Token, KeyAuth: keyAuth,
 			IssuerDomainNames: issuerNames, AccountURI: accountURI,
+			AccountHashPrefix: hashPrefix, AccountKeyThumbprint: thumbprint,
 		})
 		if err != nil {
 			return fmt.Errorf("acmekey: present %s challenge for %s: %w", chal.Type, identifierOf(authz), err)

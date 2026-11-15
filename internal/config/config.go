@@ -4273,6 +4273,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 		p.ACMEEAB.Keys = []ACMEExternalAccountBindingKey{eabKey}
 	}
 	setCSV(getenv, "TRSTCTL_PROTOCOLS_ACME_DNS_PERSIST_ISSUER_DOMAINS", &p.ACMEDNSPersist.IssuerDomainNames)
+	setString(getenv, "TRSTCTL_PROTOCOLS_ACME_DNS_PERSIST_ACCOUNTURI_FORM", &p.ACMEDNSPersist.AccountURIForm)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NONCES", &p.ACMEQuota.MaxNonces)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNTS", &p.ACMEQuota.MaxAccounts)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS", &p.ACMEQuota.MaxPendingOrders)

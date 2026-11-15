@@ -91,3 +91,36 @@ func TestUpstreamDNSPersistIssuerPinIsCheckedP1L5(t *testing.T) {
 		}
 	}
 }
+
+// P1-ACCOUNTURI: the accounturi form comes from config or its environment
+// variable; account_url (or unset) and hashed are the forms, and any other
+// value is refused.
+func TestACMEDNSPersistAccountURIFormP1ACCOUNTURI(t *testing.T) {
+	var p Protocols
+	applyProtocolsEnv(func(key string) string {
+		if key == "TRSTCTL_PROTOCOLS_ACME_DNS_PERSIST_ACCOUNTURI_FORM" {
+			return "hashed"
+		}
+		return ""
+	}, &p)
+	if !p.ACMEDNSPersist.Hashed() {
+		t.Fatalf("the environment's form = %q, want hashed", p.ACMEDNSPersist.AccountURIForm)
+	}
+	for _, form := range []string{"", "account_url", "hashed"} {
+		if errs := validateACMEDNSPersist(ACMEDNSPersist{AccountURIForm: form}); len(errs) != 0 {
+			t.Fatalf("form %q refused: %v", form, errs)
+		}
+	}
+	if (ACMEDNSPersist{AccountURIForm: "account_url"}).Hashed() || (ACMEDNSPersist{}).Hashed() {
+		t.Fatal("the account URL form reads as hashed")
+	}
+	for _, bad := range []string{"Hashed", "draft-02", "pebble"} {
+		if errs := validateACMEDNSPersist(ACMEDNSPersist{AccountURIForm: bad}); len(errs) != 1 || !strings.Contains(errs[0].Error(), "accounturi_form") {
+			t.Fatalf("form %q: %v", bad, errs)
+		}
+	}
+	var decoded ACMEDNSPersist
+	if err := json.Unmarshal([]byte(`{"issuer_domain_names":["ca.example.test"],"accounturi_form":"hashed"}`), &decoded); err != nil || !decoded.Hashed() {
+		t.Fatalf("decoded config = %+v %v", decoded, err)
+	}
+}

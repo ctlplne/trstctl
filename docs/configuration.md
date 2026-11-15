@@ -4695,6 +4695,7 @@ of your own, from discovery to a signed audit export, run
 | `TRSTCTL_PROTOCOLS_ACME_EAB_KEY_ID` | — | Public EAB `kid` accepted by the ACME server. The single env shortcut configures one key; JSON config can carry multiple `protocols.acme_eab.keys`. |
 | `TRSTCTL_PROTOCOLS_ACME_EAB_HMAC_KEY` / `…_FILE` | — | Byte-backed HS256 HMAC key for the EAB `kid`; use the file form for production secret injection. |
 | `TRSTCTL_PROTOCOLS_ACME_DNS_PERSIST_ISSUER_DOMAINS` | — | Comma-separated issuer domain names (`protocols.acme_dns_persist.issuer_domain_names`) that turn on dns-persist-01: an applicant's standing `_validation-persist` TXT record must name one of them and its ACME account. Empty keeps the challenge off. |
+| `TRSTCTL_PROTOCOLS_ACME_DNS_PERSIST_ACCOUNTURI_FORM` | `account_url` | How a dns-persist-01 record names its account (`protocols.acme_dns_persist.accounturi_form`): `account_url` takes the account URL; `hashed` takes draft-ietf-acme-dns-persist-02's hashed `accounturi`, advertises `accountHashPrefix` in the directory and refuses an account URL (P1-ACCOUNTURI). |
 
 Each entry in `protocols.acme_eab.keys[]` also carries the scope that credential
 authorizes — `allowed_identifiers` (exact names or `*.suffix`, which covers the apex

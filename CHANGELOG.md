@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- dns-persist-01 takes the hashed `accounturi` of draft-ietf-acme-dns-persist-02
+  (P1-ACCOUNTURI). With `protocols.acme_dns_persist.accounturi_form: hashed` the ACME
+  server advertises `accountHashPrefix` and accepts a record naming the account by the
+  SHA-256 of its domain, key thumbprint and URL (under its current key or one it rolled
+  over from), refusing the account URL; the default keeps the account URL, as Pebble 2.10
+  takes it. The upstream client publishes the hashed form for an authority that
+  advertises the prefix. The draft's §10.2 vectors are tests.
 - Host renewal keys can live in the host's TPM (TPM-O1). A profile's
   `host_key_attestation` (console: **Host keys in the TPM**) queues its `nginx` host
   renewals with `key_custody: "tpm"`. The agent's TPM creates the key and signs the CSR,

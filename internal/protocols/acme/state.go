@@ -313,6 +313,10 @@ func (s *Server) applyAccountEventLocked(payload acmeAccountEvent) error {
 		acct = &account{url: payload.URL, lifecycle: &sync.RWMutex{}}
 	}
 	oldID := acct.id
+	if oldID != "" && oldID != payload.ID {
+		// A rollover: the event sequence names each key the account held.
+		acct.priorThumbprints = withPriorThumbprint(acct.priorThumbprints, oldID, payload.ID)
+	}
 	acct.id = payload.ID
 	acct.key = key
 	acct.jwk = copyRawMessage(payload.JWK)

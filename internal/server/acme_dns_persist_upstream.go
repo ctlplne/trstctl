@@ -77,13 +77,26 @@ func (s *upstreamACMEDNS01Solver) solvePersist(ctx context.Context, req acmekey.
 	}
 	// Only the name's own record counts here (P1-L2): whether the authority
 	// honors a parent's policy=wildcard record is its choice.
-	stands := acme.DNSPersistValidator{Resolver: s.persistResolver(), ExactNameOnly: true}.
-		ValidatePersist(ctx, identifier, accountURI, standing) == nil
-	if stands {
+	validator := acme.DNSPersistValidator{Resolver: s.persistResolver(), ExactNameOnly: true}
+	recordName := acme.DNSPersistRecordName(identifier)
+	who, accountRef := acme.DNSPersistAccount{URL: accountURI}, accountURI
+	if prefix := strings.TrimSpace(req.AccountHashPrefix); prefix != "" {
+		// P1-ACCOUNTURI: an authority that advertises accountHashPrefix takes
+		// draft-ietf-acme-dns-persist-02's hashed accounturi, bound to the
+		// name the record stands at.
+		hashed, err := acme.DNSPersistHashedAccountURI(prefix, strings.TrimPrefix(recordName, "_validation-persist."),
+			req.AccountKeyThumbprint, accountURI)
+		if err != nil {
+			return nil, fmt.Errorf("server: dns-persist-01 record for %s: %w", identifier, err)
+		}
+		validator.AccountHashPrefix = prefix
+		who.KeyThumbprints = []string{req.AccountKeyThumbprint}
+		accountRef = hashed
+	}
+	if validator.ValidatePersistAccount(ctx, identifier, who, standing) == nil {
 		return nil, nil
 	}
-	recordName := acme.DNSPersistRecordName(identifier)
-	value := acme.DNSPersistRecordValue(issuer, accountURI, wildcard)
+	value := acme.DNSPersistRecordValue(issuer, accountRef, wildcard)
 	// The publish's retraction is dropped on purpose: the record is meant to
 	// stand. Removing it is the operator's act, and the next order then fails.
 	if _, err := s.automation.presentRecord(ctx, tenantID, cfg, identifier, recordName, value); err != nil {

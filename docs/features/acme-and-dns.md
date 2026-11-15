@@ -525,6 +525,17 @@ refused with that reason. Each record is its own authorization: a record at the 
 that names another account does not hide a parent's record that passes. A lookup
 that fails for any reason other than "no such name" refuses the order.
 
+The record names the account in one of two forms, chosen by
+`protocols.acme_dns_persist.accounturi_form` (P1-ACCOUNTURI). `account_url`, the
+default, takes the account URL, as Pebble 2.10 does. `hashed` takes the form
+draft-ietf-acme-dns-persist-02 defines: the directory's `meta` advertises
+`accountHashPrefix` (`<base>/acme/account-hash/`), and the record's `accounturi` is
+that prefix, `sha-256/`, and the unpadded base64url SHA-256 of one octet holding the
+domain's length, the domain the record stands at (or `*` for a record bound to no
+name), the account key's RFC 7638 thumbprint and the account URL. The server accepts
+the hash under the account's current key or any key it rolled over from, and refuses
+an account URL in its place, saying so.
+
 Upstream, an ACME authority configured with `upstream_dns_persist` (with
 `upstream_dns01`) answers a public CA's dns-persist-01 by publishing the standing record
 at each name through the consenting DNS-01 provider configs, once, and never retracting
@@ -532,7 +543,9 @@ it. The record names the first issuer domain name the authority lists in its cha
 When it lists several, `upstream_dns_persist_issuer` pins the one the record names
 (P1-L5): only a record naming the pin then stands, a new record names it, and a pin the
 authority does not list refuses the order before the CAA check and before anything is
-published.
+published. An authority whose directory advertises `accountHashPrefix` gets the
+hashed `accounturi` of the account's key and URL, bound to the name the record stands
+at (P1-ACCOUNTURI); one that advertises none gets the account URL.
 
 ### S/MIME certificates for a mailbox: email-reply-00 (P15, RFC 8823)
 
