@@ -61,6 +61,20 @@ type EdgeCertificationDevice interface {
 	CertifyEdgeKey(objectHandle, signerHandle string, qualifyingData, signerAuth []byte) (crypto.EdgeTPMCertification, error)
 }
 
+// HostKeyDevice is the TPM side of a host endpoint key (TPM-O1): a key the
+// TPM generates under the persistent storage root key and keeps as a TSS2
+// private key file (only this TPM can load it; an OpenSSL 3 service with the
+// tpm2 provider uses it), a signature with it, and TPM2_Certify of it under a
+// separately certified attestation key.
+type HostKeyDevice interface {
+	CreateHostKey() (tss2File, publicKeyDER []byte, err error)
+	SignWithHostKey(tss2File, digest []byte) ([]byte, error)
+	CertifyHostKey(tss2File []byte, signerHandle string, qualifyingData, signerAuth []byte) (crypto.EdgeTPMCertification, error)
+	// HostKeyPublicDER is a host key file's public key (DER SPKI), read from
+	// the file's own public area without loading it.
+	HostKeyPublicDER(tss2File []byte) ([]byte, error)
+}
+
 // Backend is a TPM 2.0 crypto.Backend. It owns a Device and turns the generic backend
 // contract into TPM operations; it never holds private key material itself.
 type Backend struct {

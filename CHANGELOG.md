@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 ### Added
+- Host renewal keys can live in the host's TPM (TPM-O1). A profile's
+  `host_key_attestation` (console: **Host keys in the TPM**) queues its `nginx` host
+  renewals with `key_custody: "tpm"`. The agent's TPM creates the key and signs the CSR,
+  and `TPM2_Certify` by the host's attestation key (named by the host exec profile's
+  `host_key_tpm`) proves it for the job. The control plane signs only after that
+  verifies under the profile's roots, and records the certificate's custody as a
+  device-origin, device-bound, non-exportable key with the evidence. nginx serves the
+  TPM's key file through OpenSSL 3's `tpm2` provider, proven end to end against swtpm;
+  the real-TPM repeat is Track B.
 - Host-config scans report product defaults (X2-L7): a protocol or key-exchange group HAProxy, Envoy or OpenSSL reaches
   only through its built-in default (no minimum or groups stated) is listed in the CBOM, marked `config_source: default`
   with the installed package whose default it is (from the host's dpkg or apk database), by a version-keyed table:

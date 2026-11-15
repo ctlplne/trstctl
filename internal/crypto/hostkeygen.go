@@ -81,6 +81,17 @@ func GenerateHostSubjectKeyFromTemplate(tmpl CertificateRequestTemplate) (*HostS
 	}, nil
 }
 
+// CreateHostSubjectCSR is GenerateHostSubjectKeyFromTemplate's request for a
+// key held elsewhere, such as a host's TPM (TPM-O1): the same normalized names,
+// signed by signer.
+func CreateHostSubjectCSR(tmpl CertificateRequestTemplate, signer DigestSigner) ([]byte, error) {
+	tmpl, err := normalizeHostSubjectTemplate(tmpl)
+	if err != nil {
+		return nil, err
+	}
+	return CreateCertificateRequest(tmpl, signer)
+}
+
 // normalizeHostSubjectTemplate trims the names a host subject may certify and
 // derives the common name from the first DNS name, else the first IP address,
 // when the binding carries none. A template naming nothing is refused.

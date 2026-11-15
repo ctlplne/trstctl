@@ -4994,6 +4994,14 @@ by the agent through the host profile or the relay's HTTP client.
 `--connector-isolation=in_process` runs them as trusted code in the agent process
 instead; a Windows service keeps the choice across SCM restarts.
 
+A host exec profile may also name the host's TPM for renewal keys a profile requires
+to be TPM-held (TPM-O1): `host_key_tpm` with `tpm_path` (empty uses `/dev/tpmrm0`,
+then `/dev/tpm0`), the absolute paths of the TPM attestation key's handle file
+(`attestation_key`) and certificate chain (`attestation_cert_chain`), and optional
+`attestation_key_auth_file` and `owner_auth_file`. A profile with `host_key_tpm`
+must also name allowed roots. See
+[Keep host keys in the host's TPM](features/deployment-connectors.md#keep-host-keys-in-the-hosts-tpm).
+
 For host connector execution, `trstctl-agent --host-exec-profile <file>` also
 initializes an encrypted two-generation predecessor ledger. Set
 `--host-rollback-dir <absolute-directory>` to choose its durable location; when

@@ -13613,6 +13613,39 @@ export const messages = {
     defaultMessage: "Maximum proof age",
     description: "Label for the maximum TPM proof freshness duration.",
   },
+  "profiles.hostKeyAttestation.column": {
+    defaultMessage: "Host keys",
+    description: "Certificate profile table column for where host-generated renewal keys are made (TPM-O1).",
+  },
+  "profiles.hostKeyAttestation.status.required": {
+    defaultMessage: "In the host's TPM",
+    description: "Certificate profile status when host-generated renewal keys must be made and attested in the host's TPM.",
+  },
+  "profiles.hostKeyAttestation.status.none": {
+    defaultMessage: "Host agent",
+    description: "Certificate profile status when host-generated renewal keys are made by the host agent in locked memory.",
+  },
+  "profiles.hostKeyAttestation.legend": {
+    defaultMessage: "Host keys in the TPM",
+    description: "Legend for the profile controls that require TPM-held host renewal keys.",
+  },
+  "profiles.hostKeyAttestation.require": {
+    defaultMessage: "Require host renewal keys made and attested in the host's TPM",
+    description: "Checkbox label that requires host-generated renewal keys to be TPM-held.",
+  },
+  "profiles.hostKeyAttestation.help": {
+    defaultMessage:
+      "Default off. The host agent has its TPM make the key and sign the request, and proves it with a TPM attestation key that chains to an operator root; no other key is signed. The key never leaves the TPM: nginx serves it through OpenSSL 3's tpm2 provider.",
+    description: "Behavior summary for the TPM-held host key requirement.",
+  },
+  "profiles.hostKeyAttestation.roots": {
+    defaultMessage: "Attestation key roots (PEM)",
+    description: "Label for the operator roots a host TPM's attestation key certificate chains to.",
+  },
+  "profiles.hostKeyAttestation.rootsRequired": {
+    defaultMessage: "TPM-held host keys require at least one PEM attestation root.",
+    description: "Validation message when the TPM host key requirement has no root.",
+  },
   "profiles.restore.heading": { defaultMessage: "Recover an earlier rule", description: "Heading for certificate-profile version recovery." },
   "profiles.restore.description": {
     defaultMessage: "Version {source} stays in history. Recovery copies it into a new version after the current active version {active}.",

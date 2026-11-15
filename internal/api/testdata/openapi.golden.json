@@ -15250,8 +15250,10 @@
             "type": "string"
           },
           "source": {
+            "description": "acme_device_attest: an ACME device-attest-01 order's device made the key; host_agent_tpm: a host agent's TPM made it for a host renewal (TPM-O1)",
             "enum": [
-              "acme_device_attest"
+              "acme_device_attest",
+              "host_agent_tpm"
             ],
             "type": "string"
           },
@@ -15388,6 +15390,9 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "host_key_attestation": {
+            "$ref": "#/components/schemas/HostKeyAttestationPolicy"
           },
           "max_validity": {
             "type": "string"
@@ -29395,6 +29400,28 @@
         "required": [
           "items"
         ],
+        "type": "object"
+      },
+      "HostKeyAttestationPolicy": {
+        "properties": {
+          "attestation_roots_pem": {
+            "description": "Operator roots the TPM attestation key's certificate chains to (PEM)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "format": {
+            "enum": [
+              "tpm"
+            ],
+            "type": "string"
+          },
+          "required": {
+            "description": "Host-generated renewals under the profile make their key in the host's TPM, which attests it; the control plane signs no other key for them (TPM-O1)",
+            "type": "boolean"
+          }
+        },
         "type": "object"
       },
       "ITSMTicket": {

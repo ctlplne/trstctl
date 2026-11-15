@@ -969,6 +969,11 @@
           "go_type": "bytes_base64",
           "name": "installed_certificate_der",
           "presence": "optional"
+        },
+        {
+          "go_type": "bytes_base64",
+          "name": "key_attestation",
+          "presence": "optional"
         }
       ]
     },

@@ -329,7 +329,9 @@ type agentService struct {
 	//
 	// The permitted set is passed in already derived from the job payload, so
 	// the signing side cannot be handed names the caller did not authorize.
-	signSubjectCSR func(ctx context.Context, tenantID, agentName string, job store.AgentJobForRedemption, jobID int64, csrDER []byte, permitted []string, attempt int) (*transport.SignJobCSRResponse, error)
+	// keyAttestation is the TPM's proof of the CSR's key for a job that asks
+	// for a TPM-held key (TPM-O1), nil otherwise.
+	signSubjectCSR func(ctx context.Context, tenantID, agentName string, job store.AgentJobForRedemption, jobID int64, csrDER, keyAttestation []byte, permitted []string, attempt int) (*transport.SignJobCSRResponse, error)
 	// recoverJobCertificate hands a reclaimed job back the certificate the
 	// control plane already signed for it when its appliance holds exactly
 	// that certificate and no request to sign again (PANOS-O1). Nil refuses.

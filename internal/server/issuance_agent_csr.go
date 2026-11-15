@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
@@ -45,7 +46,7 @@ import (
 // signAgentSubjectCSR signs a CSR an agent generated for a renewal job it holds.
 func (d *issuanceDispatcher) signAgentSubjectCSR(
 	ctx context.Context, tenantID, agentName string, job store.AgentJobForRedemption,
-	jobID int64, csrDER []byte, permitted []string, attempt int,
+	jobID int64, csrDER, keyAttestation []byte, permitted []string, attempt int,
 ) (*transport.SignJobCSRResponse, error) {
 	if d == nil || d.store == nil || d.orch == nil {
 		return nil, status.Error(codes.FailedPrecondition, "issuance is not configured")
@@ -56,7 +57,7 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 	}
 	return d.underAgentJobIssuanceFence(ctx, tenantID, agentName, intent.IdentityID, job, jobID, attempt,
 		func(fenced context.Context) (*transport.SignJobCSRResponse, error) {
-			return d.signAgentSubjectCSRUnderFence(fenced, tenantID, agentName, job, jobID, csrDER, permitted, attempt)
+			return d.signAgentSubjectCSRUnderFence(fenced, tenantID, agentName, job, jobID, csrDER, keyAttestation, permitted, attempt)
 		})
 }
 
@@ -189,7 +190,7 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	tenantID, agentName string,
 	job store.AgentJobForRedemption,
 	jobID int64,
-	csrDER []byte,
+	csrDER, keyAttestation []byte,
 	permitted []string,
 	attempt int,
 ) (*transport.SignJobCSRResponse, error) {
@@ -209,6 +210,12 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		return nil, err
 	}
 	if err := d.authorizeAgentSubjectAlgorithm(csrDER, intent.SubjectKeyAlgorithm); err != nil {
+		return nil, err
+	}
+	// TPM-O1: a job whose profile requires a TPM-held key signs only a CSR
+	// whose key the TPM attests, under the profile's roots.
+	keyEvidence, err := d.verifyHostKeyAttestation(ctx, tenantID, jobID, intent, csrDER, keyAttestation)
+	if err != nil {
 		return nil, err
 	}
 	identityID := strings.TrimSpace(intent.IdentityID)
@@ -281,6 +288,12 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		var material issuedLeafMaterial
 		var err error
 		origin := agentCSRKeyOrigin(intent)
+		if origin == custody.OriginDevice {
+			// The host agent requested this mint; the device origin its TPM's
+			// verified attestation proves is recorded with the certificate
+			// (recordAgentCSRMaterial), with the evidence (TPM-O1).
+			origin = custody.OriginHostAgent
+		}
 		if intent.ReprotectJobID != "" {
 			material, err = d.mintServedLeafFromCSRForReprotectAtTTL(ctx, tenantID, ident, selection,
 				idemKey, csrPEM, custody.OriginHostAgent, time.Duration(hostPlan.TTLSeconds)*time.Second, hostProfileBinding)
@@ -295,7 +308,15 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		// No KeyPEM to wipe: the CSR path never produces one. That absence IS
 		// the epic — every other issuance path here has a `defer
 		// secret.Wipe(material.KeyPEM)` because it has key bytes to be rid of.
-		return d.recordAgentCSRMaterial(ctx, tenantID, agentName, idemKey, intent, material)
+		recorded, err := d.recordAgentCSRMaterial(ctx, tenantID, agentName, idemKey, intent, material)
+		if err != nil || keyEvidence == nil {
+			return recorded, err
+		}
+		fingerprint, _, _, ok := splitAgentCSRResult(recorded)
+		if !ok {
+			return nil, errors.New("server: the issued certificate could not be read back for its custody claim")
+		}
+		return recorded, d.attestHostKeyCustody(ctx, tenantID, agentName, fingerprint, keyEvidence)
 	})
 	if err != nil {
 		return nil, agentCSRSigningError(err)
@@ -319,11 +340,16 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 }
 
 // agentCSRKeyOrigin is where the key behind an agent's CSR was generated: on
-// the appliance for a target that declared key_generation=appliance, else on
-// the host agent's machine.
+// the appliance for a target that declared key_generation=appliance, in the
+// host's TPM for a job queued with key_custody "tpm" (a device that will not
+// export it; SignJobCSR verified the TPM's attestation before signing,
+// TPM-O1), else on the host agent's machine.
 func agentCSRKeyOrigin(intent RelayDeployIntent) custody.KeyOrigin {
 	if custody.TargetGeneratesKeyOnAppliance(intent.Connector, intent.TargetConfig) {
 		return custody.OriginAppliance
+	}
+	if intent.KeyCustody == relay.HostKeyCustodyTPM {
+		return custody.OriginDevice
 	}
 	return custody.OriginHostAgent
 }
@@ -703,7 +729,7 @@ func (s *Server) signAgentSubjectCSR(
 	tenantID, agentName string,
 	job store.AgentJobForRedemption,
 	jobID int64,
-	csrDER []byte,
+	csrDER, keyAttestation []byte,
 	permitted []string,
 	attempt int,
 ) (*transport.SignJobCSRResponse, error) {
@@ -712,5 +738,5 @@ func (s *Server) signAgentSubjectCSR(
 		return nil, status.Error(codes.FailedPrecondition,
 			"this control plane has no issuing CA, so it cannot sign a host-generated request")
 	}
-	return d.signAgentSubjectCSR(ctx, tenantID, agentName, job, jobID, csrDER, permitted, attempt)
+	return d.signAgentSubjectCSR(ctx, tenantID, agentName, job, jobID, csrDER, keyAttestation, permitted, attempt)
 }

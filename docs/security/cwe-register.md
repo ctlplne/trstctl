@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3392 annotated sites across 35 rules. Each row is
+3406 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -161,8 +161,8 @@ not this file.
 | `internal/agent/relay/ticketnote_test.go:23` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
 | `internal/agent/secretrender/secretrender_test.go:126` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/agent/transport/agentservice.go:949` | an RPC method name, not a credential. The material this |
-| `internal/agent/transport/agentservice.go:956` | an RPC method name. This call carries a CSR up and returns |
+| `internal/agent/transport/agentservice.go:960` | an RPC method name, not a credential. The material this |
+| `internal/agent/transport/agentservice.go:967` | an RPC method name. This call carries a CSR up and returns |
 | `internal/agent/transport/receipt.go:225` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt.go:270` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt_custody_test.go:15` | the credential fingerprint is public fixture metadata, not a credential (CWE-798). |
@@ -1059,7 +1059,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (519 sites)
+### G115 — CWE-190 Integer overflow or wraparound (520 sites)
 
 | Location | Reason |
 |---|---|
@@ -1282,6 +1282,7 @@ not this file.
 | `internal/kms/tpm/tpm_test.go:95` | deliberate byte packing of a bounded TPM handle in a test helper (CWE-190) |
 | `internal/kms/tpm/tpm_test.go:96` | deliberate byte packing of a bounded TPM handle in a test helper (CWE-190) |
 | `internal/kms/tpm/tpm_test.go:245` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/kms/tpm/tss2.go:95` | bounded below 64 KiB by the caller (CWE-190) |
 | `internal/kms/wrapadapter/adapter.go:328` | bounded by the check above (CWE-190) |
 | `internal/leader/leader_test.go:36` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/mdm/challenge/challenge.go:79` | unix-epoch seconds round-trip; in int64 range until year 292e9 (CWE-190) |
@@ -1308,10 +1309,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7625` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7642` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7655` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7689` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7641` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7658` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7671` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7705` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1778,7 +1779,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (429 sites)
+### G204 — CWE-78 OS command injection (433 sites)
 
 | Location | Reason |
 |---|---|
@@ -1889,7 +1890,7 @@ not this file.
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
 | `internal/cli/cbom_scan.go:91` | the operator names the scanner and its arguments; running it is the command's purpose (CWE-78) |
 | `internal/cli/cli_test.go:2634` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/connector/localops.go:434` | operator-configured local-ops action command; running it is the feature (CWE-78) |
+| `internal/connector/localops.go:455` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/connector/wasm/host/host_test.go:44` | fixed toolchain and package; output confined to the temp dir (CWE-78). |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/crypto/pfx/alias_test.go:92` | runs the locally installed JDK tool with fixed arguments (CWE-78). |
@@ -1914,6 +1915,10 @@ not this file.
 | `internal/kmip/pykmip_tenants_test.go:46` | fixed docker subcommands with test-owned arguments (CWE-78) |
 | `internal/kms/pkcs11/softhsm_container_test.go:193` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/kms/tpm/swtpm_container_test.go:110` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
+| `internal/kms/tpm/swtpm_host_key_provider_test.go:92` | fixed tool and test paths (CWE-78) |
+| `internal/kms/tpm/swtpm_host_key_provider_test.go:112` | fixed tool and arguments (CWE-78) |
+| `internal/kms/tpm/swtpm_host_key_provider_test.go:177` | fixed tool and test paths (CWE-78) |
+| `internal/kms/tpm/swtpm_host_key_provider_test.go:217` | fixed tool and test paths (CWE-78) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:165` | the repository's own signer (CWE-78) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:181` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:182` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2338,7 +2343,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (801 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (809 sites)
 
 | Location | Reason |
 |---|---|
@@ -2551,11 +2556,15 @@ not this file.
 | `internal/agent/relay/deploy_failure_log.go:84` | the operator's own flag (CWE-22) |
 | `internal/agent/relay/deploy_failure_log.go:148` | the operator's own flag (CWE-22) |
 | `internal/agent/relay/deploy_failure_log_keep_test.go:72` | the test's own temp file (CWE-22) |
+| `internal/agent/relay/host_key_tpm.go:87` | the operator's host profile names it (CWE-22) |
+| `internal/agent/relay/host_key_tpm.go:95` | the operator's host profile names it (CWE-22) |
+| `internal/agent/relay/host_key_tpm.go:129` | the operator's host profile names it (CWE-22) |
 | `internal/agent/relay/host_pqc_predecessor_test.go:47` | test-owned directory (CWE-22) |
 | `internal/agent/relay/host_renew_pending.go:144` | validated agent-local state directory |
 | `internal/agent/relay/host_renew_pending_replay_test.go:52` | test-owned directory |
-| `internal/agent/relay/hostexec.go:148` | operator-supplied profile path, read at their instruction (CWE-22) |
+| `internal/agent/relay/hostexec.go:179` | operator-supplied profile path, read at their instruction (CWE-22) |
 | `internal/agent/relay/hostposture_store_test.go:34` | test-owned directory |
+| `internal/agent/relay/hostrenew_tpm_test.go:161` | the test's own temp directory (CWE-22) |
 | `internal/agent/relay/hostrollback.go:915` | validated agent-local state directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:193` | test-owned state root (CWE-22) |
@@ -2577,6 +2586,9 @@ not this file.
 | `internal/agent/relay/selfupgrade_test.go:156` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:259` | the test reads its own temp fixture (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:274` | the test reads its own temp fixture (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:204` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:216` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:252` | the test's own temp directory (CWE-22) |
 | `internal/agent/relay/tomcat_activation_test.go:49` | fixed filenames below t.TempDir, no external input (CWE-22). |
 | `internal/agent/relay/trust_distrusted_test.go:17` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/agent/relay/trust_test.go:48` | path is created inside this test's TempDir (CWE-22). |
@@ -2713,8 +2725,8 @@ not this file.
 | `internal/config/config.go:5161` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
-| `internal/connector/localops.go:310` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
-| `internal/connector/localops.go:402` | clean is confined to operator-approved local roots above (CWE-22) |
+| `internal/connector/localops.go:331` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
+| `internal/connector/localops.go:423` | clean is confined to operator-approved local roots above (CWE-22) |
 | `internal/connector/localops_sync_other.go:10` | path is the parent of an operator-approved local connector target (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/host_test.go:51` | the file this test just built (CWE-22). |
@@ -2788,6 +2800,7 @@ not this file.
 | `internal/kmip/pykmip_client_test.go:65` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/kmip/pykmip_tenants_test.go:68` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/kmip/tenant_router_test.go:230` | test-generated TLS material in the test's temp dir (CWE-22) |
+| `internal/kms/tpm/swtpm_host_key_provider_test.go:226` | the test's own temp directory (CWE-22) |
 | `internal/kms/wrapadapter/adapter.go:280` | operator-named adapter configuration (CWE-22) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:104` | the test's own key store (CWE-22) |
 | `internal/kms/wrapadapter/softhsm_signer_real_test.go:74` | the test's own key store (CWE-22) |
@@ -3144,7 +3157,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (138 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (139 sites)
 
 | Location | Reason |
 |---|---|
@@ -3186,6 +3199,7 @@ not this file.
 | `internal/agent/relay/adcsdatabase_test.go:260` | a test-owned executable stand-in (CWE-276). |
 | `internal/agent/relay/adcsdecide_test.go:47` | a test-owned executable stand-in (CWE-276). |
 | `internal/agent/relay/adcsrevoke_test.go:46` | a test-owned executable stand-in (CWE-276). |
+| `internal/agent/relay/hostrenew_tpm_test.go:98` | the fixture IS an executable (CWE-276) |
 | `internal/agent/relay/recovery_check_test.go:31` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/relay/selfupgrade_test.go:35` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/secretrender/replace_windows_test.go:26` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

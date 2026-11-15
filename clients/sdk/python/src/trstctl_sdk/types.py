@@ -4592,6 +4592,7 @@ CertificateProfileSpec = TypedDict(
         'allowed_key_algorithms': list[str],
         'allowed_protocols': list[str],
         'allowed_uri_prefixes': list[str],
+        'host_key_attestation': dict[str, Any],
         'max_validity': str,
         'min_ecdsa_bits': int,
         'min_rsa_bits': int,
@@ -8308,6 +8309,16 @@ HoneyTokenList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+HostKeyAttestationPolicy = TypedDict(
+    'HostKeyAttestationPolicy',
+    {
+        'attestation_roots_pem': list[str],
+        'format': str,
+        'required': bool,
     },
     total=False,
 )

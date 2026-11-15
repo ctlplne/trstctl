@@ -359,7 +359,7 @@ func TestRenewalIsClaimedAndCensusedAsShipped(t *testing.T) {
 func TestEveryHostRenewalConnectorHasCompleteTruthfulCustodyAUD25(t *testing.T) {
 	t.Parallel()
 	for _, connectorName := range relay.HostConnectorKinds() {
-		record, err := relay.HostRenewCustody(connectorName, "host-agent-7")
+		record, err := relay.HostRenewCustody(connectorName, "", "host-agent-7")
 		if err != nil {
 			t.Errorf("HostRenewCustody(%q): %v", connectorName, err)
 			continue

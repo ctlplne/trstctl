@@ -592,6 +592,7 @@ public final class OpenApiSchemas {
       "HoneyTokenCreateRequest",
       "HoneyTokenCreateResponse",
       "HoneyTokenList",
+      "HostKeyAttestationPolicy",
       "ITSMTicket",
       "IdempotencyResultProtectionReadout",
       "Identity",

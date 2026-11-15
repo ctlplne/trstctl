@@ -36,6 +36,8 @@ interface BuilderFields {
   deviceAttestationIdentifiers: string;
   deviceAttestationAlgorithms: string;
   deviceAttestationMaxAge: string;
+  hostKeyAttestationRequired: boolean;
+  hostKeyAttestationRootsPEM: string;
 }
 
 const keyAlgorithms = ["ECDSA", "RSA", "Ed25519", "Hybrid-ML-DSA-44-ECDSA-P256", "ML-DSA-65", "SLH-DSA-SHA2-128s"] as const;
@@ -58,6 +60,8 @@ const defaultBuilder: BuilderFields = {
   deviceAttestationIdentifiers: "host-01.example.com",
   deviceAttestationAlgorithms: "-7",
   deviceAttestationMaxAge: "5m",
+  hostKeyAttestationRequired: false,
+  hostKeyAttestationRootsPEM: "",
 };
 
 export function Profiles() {
@@ -141,6 +145,14 @@ export function Profiles() {
         deviceAttestationEnabled(group.active.spec)
           ? translateNow("profiles.deviceAttestation.status.enabled")
           : translateNow("profiles.deviceAttestation.status.disabled"),
+    },
+    {
+      id: "host-key-attestation",
+      header: translateNow("profiles.hostKeyAttestation.column"),
+      cell: (group) =>
+        hostKeyAttestationRequired(group.active.spec)
+          ? translateNow("profiles.hostKeyAttestation.status.required")
+          : translateNow("profiles.hostKeyAttestation.status.none"),
     },
     { id: "createdby", header: "Created by", cell: (group) => group.active.created_by ?? "-" },
   ];
@@ -445,6 +457,30 @@ function GuidedFields({ fields, onChange }: { fields: BuilderFields; onChange: (
               )}
             </Field>
           </div>
+        )}
+      </fieldset>
+      <fieldset className="space-y-3 border-b border-border pb-3 md:col-span-2">
+        <legend className="text-sm font-medium">{translateNow("profiles.hostKeyAttestation.legend")}</legend>
+        <label htmlFor="profile-host-key-attestation-required" className="inline-flex items-center gap-2 text-sm">
+          <Checkbox
+            id="profile-host-key-attestation-required"
+            checked={fields.hostKeyAttestationRequired}
+            onChange={(e) => onChange({ ...fields, hostKeyAttestationRequired: e.target.checked })}
+          />
+          <span>{translateNow("profiles.hostKeyAttestation.require")}</span>
+        </label>
+        <p className="text-xs text-muted-foreground">{translateNow("profiles.hostKeyAttestation.help")}</p>
+        {fields.hostKeyAttestationRequired && (
+          <Field label={translateNow("profiles.hostKeyAttestation.roots")}>
+            {(control) => (
+              <Textarea
+                {...control}
+                value={fields.hostKeyAttestationRootsPEM}
+                onChange={(e) => onChange({ ...fields, hostKeyAttestationRootsPEM: e.target.value })}
+                className="min-h-32 font-mono text-xs"
+              />
+            )}
+          </Field>
         )}
       </fieldset>
     </div>
@@ -857,6 +893,13 @@ function buildProfileSpec(fields: BuilderFields): ProfileSpec {
       max_age: fields.deviceAttestationMaxAge.trim(),
     };
   }
+  if (fields.hostKeyAttestationRequired) {
+    spec.host_key_attestation = {
+      required: true,
+      format: "tpm",
+      attestation_roots_pem: splitPEMCertificates(fields.hostKeyAttestationRootsPEM),
+    };
+  }
   return spec;
 }
 
@@ -889,6 +932,9 @@ function validateBuilder(fields: BuilderFields): string | null {
       return "TPM device attestation freshness must be a Go-style duration such as 5m.";
     }
   }
+  if (fields.hostKeyAttestationRequired && splitPEMCertificates(fields.hostKeyAttestationRootsPEM).length === 0) {
+    return translateNow("profiles.hostKeyAttestation.rootsRequired");
+  }
   return null;
 }
 
@@ -916,6 +962,12 @@ function deviceAttestationEnabled(spec: unknown): boolean {
   if (!isPlainObject(spec)) return false;
   const policy = spec.acme_device_attestation;
   return isPlainObject(policy) && policy.enabled === true && policy.format === "tpm";
+}
+
+function hostKeyAttestationRequired(spec: unknown): boolean {
+  if (!isPlainObject(spec)) return false;
+  const policy = spec.host_key_attestation;
+  return isPlainObject(policy) && policy.required === true && policy.format === "tpm";
 }
 
 function toggleValue(values: string[], value: string): string[] {

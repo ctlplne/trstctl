@@ -1390,9 +1390,23 @@ type CertificateCustodyDeviceAttested struct {
 	VerifiedAt                   time.Time `json:"verified_at"`
 }
 
-// CertificateDeviceAttestationSourceACME is the only source of device-bound
-// claims today: an ACME device-attest-01 order.
+// CertificateDeviceAttestationSourceACME is a device-bound claim from an ACME
+// device-attest-01 order: the requesting device generated the key.
 const CertificateDeviceAttestationSourceACME = "acme_device_attest"
+
+// deviceHeldHostKeyReceipt is an agent's receipt for a host renewal key its
+// host's TPM made (TPM-O1): a device-origin key the device will not export.
+// The control plane accepts such a receipt only for a job queued for a
+// TPM-held key, whose attestation it verified before signing.
+func deviceHeldHostKeyReceipt(record custody.Record) bool {
+	return record.Origin == custody.OriginDevice && record.Storage == custody.StorageDeviceBound &&
+		record.Exportable == custody.NonExportable
+}
+
+// CertificateDeviceAttestationSourceHostAgentTPM is a device-bound claim from
+// a host-generated renewal whose key the host's TPM created at its agent's
+// request (TPM-O1); the generator is that agent.
+const CertificateDeviceAttestationSourceHostAgentTPM = "host_agent_tpm"
 
 // CertificateApprovalEventID is the only target-event identity allowed to
 // spend one approved certificate command. It is derived from the request and
@@ -6778,7 +6792,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		if strings.TrimSpace(pl.Fingerprint) == "" || strings.TrimSpace(pl.Agent) == "" ||
 			pl.JobID <= 0 || pl.Attempt <= 0 || !record.Complete() ||
-			(record.Origin != custody.OriginHostAgent && record.Origin != custody.OriginAppliance) || record.GeneratedBy != pl.Agent ||
+			(record.Origin != custody.OriginHostAgent && record.Origin != custody.OriginAppliance && !deviceHeldHostKeyReceipt(record)) ||
+			record.GeneratedBy != pl.Agent ||
 			!custody.ValidOrigin(record.Origin) || !custody.ValidStorage(record.Storage) ||
 			!custody.ValidExportability(record.Exportable) ||
 			strings.TrimSpace(pl.ReceiptStatement) == "" || strings.TrimSpace(pl.ReceiptSignature) == "" ||
@@ -6791,7 +6806,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if strings.TrimSpace(pl.Fingerprint) == "" || pl.Source != CertificateDeviceAttestationSourceACME ||
+		if strings.TrimSpace(pl.Fingerprint) == "" ||
+			(pl.Source != CertificateDeviceAttestationSourceACME && pl.Source != CertificateDeviceAttestationSourceHostAgentTPM) ||
 			pl.Format != "tpm-webauthn" || strings.TrimSpace(pl.KeyGeneratedBy) == "" ||
 			len(pl.Credential) == 0 || len(pl.Binding) == 0 || len(pl.PublicKeySHA256) != 32 ||
 			len(pl.AttestationCertificateSHA256) != 32 || len(pl.TrustedRootsSHA256) != 32 || pl.VerifiedAt.IsZero() {

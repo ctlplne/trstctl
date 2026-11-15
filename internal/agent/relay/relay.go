@@ -75,7 +75,12 @@ type DeployIntent struct {
 	// its CSR would get a refusal rather than a wider certificate.
 	// SubjectKeyAlgorithm is the reviewed key choice retained in this job.
 	// Empty preserves legacy ECDSA-P256 jobs. Explicit choices never fall back.
-	SubjectKeyAlgorithm   string   `json:"subject_key_algorithm,omitempty"`
+	SubjectKeyAlgorithm string `json:"subject_key_algorithm,omitempty"`
+	// KeyCustody "tpm" says the profile requires this renewal's key to be
+	// created in the host's TPM and attested there (TPM-O1); empty is a key in
+	// locked memory, installed as a file. The control plane checks the
+	// attestation itself; this tells the agent where to make the key.
+	KeyCustody            string   `json:"key_custody,omitempty"`
 	SubjectCommonName     string   `json:"subject_common_name,omitempty"`
 	SubjectDNSNames       []string `json:"subject_dns_names,omitempty"`
 	SubjectIPAddresses    []string `json:"subject_ip_addresses,omitempty"`

@@ -3241,7 +3241,7 @@ export interface CertificateKeyAttestation {
   fingerprint: string;
   format: "tpm-webauthn";
   public_key_sha256: string;
-  source: "acme_device_attest";
+  source: "acme_device_attest" | "host_agent_tpm";
   trusted_roots_sha256: string;
   verified_at: string;
   verify: string;
@@ -3272,6 +3272,7 @@ export interface CertificateProfileSpec {
   allowed_key_algorithms?: string[];
   allowed_protocols?: string[];
   allowed_uri_prefixes?: string[];
+  host_key_attestation?: HostKeyAttestationPolicy;
   max_validity?: string;
   min_ecdsa_bits?: number;
   min_rsa_bits?: number;
@@ -5992,6 +5993,12 @@ export interface HoneyTokenCreateResponse {
 export interface HoneyTokenList {
   items: HoneyToken[];
   next_cursor?: string;
+}
+
+export interface HostKeyAttestationPolicy {
+  attestation_roots_pem?: string[];
+  format?: "tpm";
+  required?: boolean;
 }
 
 export interface ITSMTicket {

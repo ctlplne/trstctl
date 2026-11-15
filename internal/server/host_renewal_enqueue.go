@@ -182,6 +182,12 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 	if err != nil {
 		return err
 	}
+	// TPM-O1: the served profile decides whether the agent makes the key in
+	// the host's TPM; SignJobCSR re-reads the choice from this payload.
+	keyCustody, err := d.hostRenewalKeyCustody(ctx, tenantID, target, issuance)
+	if err != nil {
+		return err
+	}
 	intent := RelayDeployIntent{
 		Connector:                target.Type,
 		Target:                   routed,
@@ -193,6 +199,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 		VerifyAddress:            verifyAddress,
 		VerifyServerName:         verifyServerName,
 		SubjectKeyAlgorithm:      algorithm,
+		KeyCustody:               keyCustody,
 		SubjectCommonName:        commonName,
 		SubjectDNSNames:          dnsNames,
 		SubjectIPAddresses:       ipAddresses,

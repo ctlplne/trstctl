@@ -63,6 +63,12 @@ func (a *agentService) SignJobCSR(ctx context.Context, req *transport.SignJobCSR
 	if len(req.CSRDER) > 0 && recovering {
 		return nil, status.Error(codes.InvalidArgument, "send csr_der or installed_certificate_der, not both")
 	}
+	if len(req.KeyAttestation) > 0 && recovering {
+		return nil, status.Error(codes.InvalidArgument, "a key attestation goes with a CSR, not with an installed certificate")
+	}
+	if len(req.KeyAttestation) > transport.MaxKeyAttestationBytes {
+		return nil, status.Error(codes.InvalidArgument, "the key attestation is too large")
+	}
 
 	// Check the claim before loading its subject binding. The signing dispatcher
 	// rechecks it under the identity's signing/revocation fence, including the
@@ -122,7 +128,7 @@ func (a *agentService) SignJobCSR(ctx context.Context, req *transport.SignJobCSR
 			"this renewal job names no subject, so there is nothing it authorizes")
 	}
 
-	resp, err := a.signSubjectCSR(ctx, info.TenantID, info.CommonName, job, req.JobID, req.CSRDER, permitted, job.ClaimAttempts)
+	resp, err := a.signSubjectCSR(ctx, info.TenantID, info.CommonName, job, req.JobID, req.CSRDER, req.KeyAttestation, permitted, job.ClaimAttempts)
 	if err != nil {
 		return nil, err
 	}

@@ -34,6 +34,20 @@ func CreateEdgeTPMCredential(tenantID, segmentID string, csrDER []byte, edgeHand
 	if edgeHandle.Version != 1 || aikHandle.Version != 1 || edgeHandle.Algorithm != trstcrypto.ECDSAP256 || aikHandle.Algorithm != trstcrypto.ECDSAP256 {
 		return nil, fmt.Errorf("crypto: edge and attestation TPM handles need the current P-256 format")
 	}
+	challenge := trstcrypto.EdgeAttestationChallenge(tenantID, segmentID, csrDER)
+	return buildTPMCredential(challenge, csrDER, edgeHandle.PublicKeyDER, aikHandle.PublicKeyDER, aikChainPEM,
+		func(qualifyingData []byte) (trstcrypto.EdgeTPMCertification, error) {
+			return certifier.CertifyEdgeKey(edgeHandle.KeyID, aikHandle.KeyID, qualifyingData, aikAuth)
+		})
+}
+
+// buildTPMCredential is the WebAuthn TPM envelope around one TPM2_Certify of
+// the CSR's key (objectPublicDER) by the attestation key (aikPublicDER) whose
+// chain is aikChainPEM, over challenge: certify is asked for the
+// certification over the envelope's qualifying data, and the result is
+// verified locally before it leaves the host.
+func buildTPMCredential(challenge, csrDER, objectPublicDER, aikPublicDER, aikChainPEM []byte,
+	certify func(qualifyingData []byte) (trstcrypto.EdgeTPMCertification, error)) ([]byte, error) {
 	if len(csrDER) == 0 || len(csrDER) > maxDeviceAttestationBytes || len(aikChainPEM) == 0 || len(aikChainPEM) > maxDeviceAttestationBytes {
 		return nil, fmt.Errorf("crypto: edge CSR or attestation certificate chain has invalid size")
 	}
@@ -42,7 +56,7 @@ func CreateEdgeTPMCredential(tenantID, segmentID string, csrDER []byte, edgeHand
 		return nil, fmt.Errorf("crypto: edge CSR is invalid or unsigned")
 	}
 	csrPublicDER, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
-	if err != nil || !bytes.Equal(csrPublicDER, edgeHandle.PublicKeyDER) {
+	if err != nil || !bytes.Equal(csrPublicDER, objectPublicDER) {
 		return nil, fmt.Errorf("crypto: edge CSR key differs from its TPM handle")
 	}
 	publicKey, ok := csr.PublicKey.(*ecdsa.PublicKey)
@@ -56,10 +70,9 @@ func CreateEdgeTPMCredential(tenantID, segmentID string, csrDER []byte, edgeHand
 	if len(chain) < 2 {
 		return nil, fmt.Errorf("crypto: AIK chain must include its configured trust anchor")
 	}
-	if !bytes.Equal(chain[0].RawSubjectPublicKeyInfo, aikHandle.PublicKeyDER) {
+	if !bytes.Equal(chain[0].RawSubjectPublicKeyInfo, aikPublicDER) {
 		return nil, fmt.Errorf("crypto: attestation certificate does not match its TPM handle")
 	}
-	challenge := trstcrypto.EdgeAttestationChallenge(tenantID, segmentID, csrDER)
 	clientDataJSON, err := json.Marshal(map[string]any{
 		"type": "webauthn.create", "challenge": base64.RawURLEncoding.EncodeToString(challenge),
 		"origin": "https://trstctl.invalid", "crossOrigin": false,
@@ -95,11 +108,11 @@ func CreateEdgeTPMCredential(tenantID, segmentID string, csrDER []byte, edgeHand
 	clientHash := sha256.Sum256(clientDataJSON)
 	signed := append(append([]byte(nil), authData...), clientHash[:]...)
 	qualifyingData := sha256.Sum256(signed)
-	certified, err := certifier.CertifyEdgeKey(edgeHandle.KeyID, aikHandle.KeyID, qualifyingData[:], aikAuth)
+	certified, err := certify(qualifyingData[:])
 	if err != nil {
 		return nil, fmt.Errorf("crypto: TPM2_Certify edge key: %w", err)
 	}
-	if !bytes.Equal(certified.ObjectPublicKeyDER, csrPublicDER) || !bytes.Equal(certified.SignerPublicKeyDER, aikHandle.PublicKeyDER) {
+	if !bytes.Equal(certified.ObjectPublicKeyDER, csrPublicDER) || !bytes.Equal(certified.SignerPublicKeyDER, aikPublicDER) {
 		return nil, fmt.Errorf("crypto: certified TPM object or signer differs from the reviewed handles")
 	}
 	if len(certified.PublicArea) == 0 || len(certified.CertInfo) == 0 || len(certified.SignatureDER) == 0 {

@@ -466,7 +466,12 @@ type RelayDeployIntent struct {
 	// it likes; it may not choose what that key gets to be called.
 	// SubjectKeyAlgorithm pins the reviewed subject choice, independently of
 	// allowed profile algorithms. The signer refuses a different algorithm.
-	SubjectKeyAlgorithm             string   `json:"subject_key_algorithm,omitempty"`
+	SubjectKeyAlgorithm string `json:"subject_key_algorithm,omitempty"`
+	// KeyCustody "tpm" is the profile's requirement that the agent create
+	// this renewal's key in the host's TPM and attest it (TPM-O1). SignJobCSR
+	// re-reads it from this payload: a job queued with it signs no CSR without
+	// a verified attestation, whatever the agent sends.
+	KeyCustody                      string   `json:"key_custody,omitempty"`
 	SubjectCommonName               string   `json:"subject_common_name,omitempty"`
 	SubjectDNSNames                 []string `json:"subject_dns_names,omitempty"`
 	SubjectIPAddresses              []string `json:"subject_ip_addresses,omitempty"`

@@ -79,6 +79,27 @@ type LocalOpsConfig struct {
 	// and actions it comes only from the operator's profile; a target or job
 	// payload cannot widen it.
 	KubernetesSecretNamespaces []string
+	// HostKeyTPM is this host's TPM for the renewal keys a profile requires to
+	// be TPM-held (TPM-O1): the device, and the attestation key that proves a
+	// key was made in it. Like the roots and actions it comes only from the
+	// operator's profile.
+	HostKeyTPM *HostKeyTPMConfig
+}
+
+// HostKeyTPMConfig names this host's TPM for host renewal keys (TPM-O1).
+type HostKeyTPMConfig struct {
+	// Path is the TPM device or a swtpm Unix socket; empty uses the Linux
+	// default (/dev/tpmrm0, then /dev/tpm0).
+	Path string
+	// AttestationKey is the JSON handle file of the TPM attestation key, as
+	// trstctl-agent -edge-csr writes one, and AttestationCertChain that key's
+	// certificate chain (PEM, leaf first) from the operator's attestation CA.
+	AttestationKey       string
+	AttestationCertChain string
+	// AttestationKeyAuthFile and OwnerAuthFile optionally hold the
+	// attestation key's and the owner hierarchy's authorization.
+	AttestationKeyAuthFile string
+	OwnerAuthFile          string
 }
 
 // LocalContainment is the host operator's authority to stop one target after

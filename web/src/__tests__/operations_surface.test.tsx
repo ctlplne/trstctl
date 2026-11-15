@@ -386,6 +386,59 @@ describe("operational console surface", () => {
     );
   });
 
+  it("TPM-O1 requires host renewal keys made and attested in the host's TPM, and shows where a rule's host keys are made", async () => {
+    apiMock.profiles
+      .mockResolvedValueOnce([
+        {
+          id: "p1",
+          name: "edge-web",
+          version: 1,
+          active: true,
+          created_by: "ra",
+          spec: {
+            host_key_attestation: {
+              required: true,
+              format: "tpm",
+              attestation_roots_pem: ["-----BEGIN CERTIFICATE-----\nold\n-----END CERTIFICATE-----"],
+            },
+          },
+        },
+        { id: "p3", name: "plain-web", version: 1, active: true, created_by: "ra", spec: {} },
+      ])
+      .mockResolvedValueOnce([]);
+    apiMock.createProfile.mockResolvedValue({ id: "p2", name: "edge-web", version: 2, active: true });
+    const user = userEvent.setup();
+    renderAt("/profiles");
+
+    expect(await screen.findByText("In the host's TPM")).toBeInTheDocument();
+    expect(screen.getByText("Host agent")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
+    await user.type(screen.getByLabelText(/Rule name/i), "edge-web");
+    const required = screen.getByRole("checkbox", { name: "Require host renewal keys made and attested in the host's TPM" });
+    expect(required).not.toBeChecked();
+    await user.click(required);
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
+    expect(await screen.findByText("TPM-held host keys require at least one PEM attestation root.")).toBeInTheDocument();
+    expect(apiMock.createProfile).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Attestation key roots (PEM)"), {
+      target: { value: "-----BEGIN CERTIFICATE-----\nak-root\n-----END CERTIFICATE-----" },
+    });
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
+
+    await waitFor(() =>
+      expect(apiMock.createProfile).toHaveBeenCalledWith({
+        name: "edge-web",
+        spec: expect.objectContaining({
+          host_key_attestation: {
+            required: true,
+            format: "tpm",
+            attestation_roots_pem: ["-----BEGIN CERTIFICATE-----\nak-root\n-----END CERTIFICATE-----"],
+          },
+        }),
+      }),
+    );
+  });
+
   it("A178 marks a rule as issuing publicly trusted TLS certificates and requires serverAuth for it", async () => {
     apiMock.profiles.mockResolvedValue([]);
     apiMock.createProfile.mockResolvedValue({ id: "public", name: "web-public", version: 1, active: true });

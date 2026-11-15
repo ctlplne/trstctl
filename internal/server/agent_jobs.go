@@ -1679,7 +1679,7 @@ func (a *agentService) validateCertificateCustodyReceipt(ctx context.Context, in
 		return "certificate custody cannot be matched to the renewal connector"
 	}
 	origin := agentCSRKeyOrigin(intent)
-	expected, err := relay.HostRenewCustody(intent.Connector, info.CommonName)
+	expected, err := relay.HostRenewCustody(intent.Connector, intent.KeyCustody, info.CommonName)
 	if origin == custody.OriginAppliance {
 		expected, err = relay.ApplianceRenewCustody(info.CommonName), nil
 	}

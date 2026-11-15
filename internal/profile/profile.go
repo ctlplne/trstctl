@@ -54,6 +54,9 @@ type CertificateProfile struct {
 	AllowedEmailDomains   []string                    `json:"allowed_email_domains"`             // rfc822Name domains; set to permit email SANs under a SAN policy
 	AllowedURIPrefixes    []string                    `json:"allowed_uri_prefixes"`              // URI string prefixes; set to permit URI SANs under a SAN policy
 	ACMEDeviceAttestation ACMEDeviceAttestationPolicy `json:"acme_device_attestation,omitempty"` // explicit, default-off device-attest-01 policy
+	// HostKeyAttestation makes a host-generated renewal under this profile
+	// keep its key in the host's TPM and prove it (TPM-O1).
+	HostKeyAttestation HostKeyAttestationPolicy `json:"host_key_attestation,omitempty"`
 	// PublicTLS says the profile issues publicly trusted TLS server
 	// certificates, which the CA/Browser Forum's dated maximum validity binds.
 	// trstctl's own CA is never publicly trusted, so this is the operator's
@@ -104,6 +107,42 @@ type ACMEDeviceAttestationPolicy struct {
 	AllowedIdentifiers  []string `json:"allowed_identifiers,omitempty"`
 	AllowedAlgorithms   []int64  `json:"allowed_algorithms,omitempty"`
 	MaxAge              Duration `json:"max_age,omitempty"`
+}
+
+// HostKeyAttestationPolicy is a profile's TPM requirement for host-generated
+// renewals (TPM-O1). When required, the agent creates the endpoint key in its
+// host's TPM, which signs the CSR, and proves it with a TPM2_Certify by an
+// attestation key whose certificate chains to one of these operator roots;
+// the control plane signs no other key for the profile's host renewals and
+// records the certificate's custody as device-bound with that evidence. The
+// roots are public certificates the operator supplies, like the ACME
+// device-attest roots: nothing is fetched from a manufacturer.
+type HostKeyAttestationPolicy struct {
+	Required            bool     `json:"required"`
+	Format              string   `json:"format,omitempty"`
+	AttestationRootsPEM []string `json:"attestation_roots_pem,omitempty"`
+}
+
+// HostKeyAttestationFormatTPM is the one host key attestation format.
+const HostKeyAttestationFormatTPM = "tpm"
+
+func (p HostKeyAttestationPolicy) validate(profileID string) error {
+	if !p.Required {
+		return nil
+	}
+	if strings.TrimSpace(p.Format) != HostKeyAttestationFormatTPM {
+		return fmt.Errorf("%s host_key_attestation: a required attestation's format must be %q", profileID, HostKeyAttestationFormatTPM)
+	}
+	if len(p.AttestationRootsPEM) == 0 {
+		return fmt.Errorf("%s host_key_attestation: at least one operator attestation root is required", profileID)
+	}
+	for i, root := range p.AttestationRootsPEM {
+		root = strings.TrimSpace(root)
+		if !strings.Contains(root, "-----BEGIN CERTIFICATE-----") || !strings.Contains(root, "-----END CERTIFICATE-----") {
+			return fmt.Errorf("%s host_key_attestation: root %d is not PEM certificate data", profileID, i)
+		}
+	}
+	return nil
 }
 
 // AllowsIdentifier reports whether identifier is explicitly covered by the
@@ -167,6 +206,9 @@ func (p CertificateProfile) ValidateDefinition() error {
 		return fmt.Errorf("%s: min_rsa_bits and min_ecdsa_bits must not be negative", id)
 	}
 	if err := p.ACMEDeviceAttestation.validate(id); err != nil {
+		return err
+	}
+	if err := p.HostKeyAttestation.validate(id); err != nil {
 		return err
 	}
 	if p.PublicTLS && !p.AllowsServerAuth() {

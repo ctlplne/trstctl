@@ -390,3 +390,53 @@ func tpmSubjectAlternativeName() ([]byte, error) {
 		Bytes:      nameDER,
 	}})
 }
+
+// IssueAIKCertificate makes a fresh operator attestation root and, under it, a
+// TPM attestation-key certificate for aikPublicDER (a real TPM's AIK, such as
+// swtpm's in a container journey) in the shape the WebAuthn TPM verifier
+// requires: an empty subject, the TPM directory-name SAN and the AIK EKU. It
+// returns the root (PEM) and the chain leaf first (PEM).
+func IssueAIKCertificate(aikPublicDER []byte, now time.Time) (rootPEM, chainPEM []byte, err error) {
+	rootKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, fmt.Errorf("generate attestation root key: %w", err)
+	}
+	rootSerial, err := randomSerial()
+	if err != nil {
+		return nil, nil, err
+	}
+	root := &x509.Certificate{
+		SerialNumber: rootSerial, Subject: pkix.Name{CommonName: "trstctl test TPM attestation root"},
+		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(24 * time.Hour),
+		KeyUsage: x509.KeyUsageCertSign, BasicConstraintsValid: true, IsCA: true,
+	}
+	rootDER, err := x509.CreateCertificate(rand.Reader, root, root, &rootKey.PublicKey, rootKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create attestation root: %w", err)
+	}
+	publicKey, err := x509.ParsePKIXPublicKey(aikPublicDER)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse attestation key: %w", err)
+	}
+	san, err := tpmSubjectAlternativeName()
+	if err != nil {
+		return nil, nil, err
+	}
+	leafSerial, err := randomSerial()
+	if err != nil {
+		return nil, nil, err
+	}
+	leaf := &x509.Certificate{
+		SerialNumber: leafSerial, Subject: pkix.Name{},
+		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(12 * time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature, BasicConstraintsValid: true,
+		UnknownExtKeyUsage: []asn1.ObjectIdentifier{{2, 23, 133, 8, 3}},
+		ExtraExtensions:    []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 17}, Value: san}},
+	}
+	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, root, publicKey, rootKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create attestation key certificate: %w", err)
+	}
+	rootPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootDER})
+	return rootPEM, append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}), rootPEM...), nil
+}

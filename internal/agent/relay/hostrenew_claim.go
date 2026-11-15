@@ -121,6 +121,14 @@ func signHostCSR(ctx context.Context, signer CSRSigner, job Job, csr []byte, mai
 	})
 }
 
+// signHostCSRWithKeyAttestation is signHostCSR for a TPM-held key, with the
+// TPM's attestation of it (TPM-O1).
+func signHostCSRWithKeyAttestation(ctx context.Context, signer AttestedCSRSigner, job Job, csr, attestation []byte, maintained bool) ([]byte, []byte, string, error) {
+	return callJobSigner(ctx, maintained, func(callCtx context.Context) ([]byte, []byte, string, error) {
+		return signer.SignJobCSRWithKeyAttestation(callCtx, job.JobID, job.Attempt, csr, attestation)
+	})
+}
+
 // callJobSigner makes one signing call, and while the job's claim is
 // maintained retries a pending answer or a transport failure until the call
 // settles or the claim's context ends.

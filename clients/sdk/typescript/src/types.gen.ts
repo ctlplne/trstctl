@@ -16483,8 +16483,11 @@ export interface components {
             format: "tpm-webauthn";
             /** Format: byte */
             public_key_sha256: string;
-            /** @enum {string} */
-            source: "acme_device_attest";
+            /**
+             * @description acme_device_attest: an ACME device-attest-01 order's device made the key; host_agent_tpm: a host agent's TPM made it for a host renewal (TPM-O1)
+             * @enum {string}
+             */
+            source: "acme_device_attest" | "host_agent_tpm";
             /** Format: byte */
             trusted_roots_sha256: string;
             /** Format: date-time */
@@ -16517,6 +16520,7 @@ export interface components {
             allowed_key_algorithms?: string[];
             allowed_protocols?: string[];
             allowed_uri_prefixes?: string[];
+            host_key_attestation?: components["schemas"]["HostKeyAttestationPolicy"];
             max_validity?: string;
             min_ecdsa_bits?: number;
             /** @description RSA key floor in bits; unset enforces 2048, and an explicit lower value is honored but raises a profile-rsa-floor-below-default finding */
@@ -20300,6 +20304,14 @@ export interface components {
         HoneyTokenList: {
             items: components["schemas"]["HoneyToken"][];
             next_cursor?: string;
+        };
+        HostKeyAttestationPolicy: {
+            /** @description Operator roots the TPM attestation key's certificate chains to (PEM) */
+            attestation_roots_pem?: string[];
+            /** @enum {string} */
+            format?: "tpm";
+            /** @description Host-generated renewals under the profile make their key in the host's TPM, which attests it; the control plane signs no other key for them (TPM-O1) */
+            required?: boolean;
         };
         ITSMTicket: {
             /** Format: date-time */

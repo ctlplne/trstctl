@@ -1059,6 +1059,92 @@ target configuration without changing the queued policy or target revision.
 Both the control plane and host agent need this capability to complete
 password-protected host issuance and restore.
 
+### Keep host keys in the host's TPM
+
+A certificate profile can require that host-generated renewals keep their key in the
+host's TPM (TPM-O1). Set `host_key_attestation` on the profile (or tick **Host keys
+in the TPM** in the profile builder) with the operator roots your TPM attestation keys
+chain to:
+
+```json
+{
+  "host_key_attestation": {
+    "required": true,
+    "format": "tpm",
+    "attestation_roots_pem": ["-----BEGIN CERTIFICATE-----\n..."]
+  }
+}
+```
+
+An `nginx` host renewal under that profile is queued with `key_custody: "tpm"`. The
+agent has its TPM create a P-256 key under the storage root key at `0x81000001` (made
+under the owner hierarchy when absent) and sign the CSR there. It proves the key with
+`TPM2_Certify` by the host's attestation key, over SHA-256 of the job's binding (the
+CSR key's digest, the job ID and the purpose `trstctl-host-key`). The control plane
+signs nothing for the job until that attestation verifies under the profile's roots
+and shows a key the TPM generated and will not release (`fixedTPM`, `fixedParent`,
+`sensitiveDataOrigin`). It records the certificate's custody as `key_origin=device`,
+`key_storage=device_bound`, `key_exportable=non_exportable`, with the evidence:
+`trstctl-cli certificates key-attestation` and `verify-key-attestation` check it again
+offline. The agent's signed receipt must make the same claim. What the agent installs
+at `key_path` is the TPM's `TSS2 PRIVATE KEY` file, which only that TPM can load; no
+software private key exists on the host.
+
+Name the TPM in the host exec profile:
+
+```json
+{
+  "allowed_roots": ["/etc/nginx/tls"],
+  "actions": [{"logical_name": "nginx", "command": "/usr/sbin/nginx", "pass_args": true}],
+  "host_key_tpm": {
+    "tpm_path": "/dev/tpmrm0",
+    "attestation_key": "/etc/trstctl/tpm-ak.keyref.json",
+    "attestation_cert_chain": "/etc/trstctl/tpm-ak-chain.pem"
+  }
+}
+```
+
+`attestation_key` is a TPM attestation key's handle file, such as `trstctl-agent
+-edge-csr` writes, and `attestation_cert_chain` its certificate from your attestation
+CA (leaf first, then the root): an empty subject, the TPM manufacturer, model and
+version in the subject alternative name, and the attestation-key EKU `2.23.133.8.3`.
+`attestation_key_auth_file` and `owner_auth_file` optionally hold their authorization.
+A renewal that requires a TPM-held key is refused before any key exists, with its
+reason, when the host profile names no `host_key_tpm`, the connector is not `nginx`,
+the key is not P-256, or the agent build cannot send an attestation. A profile that
+requires one refuses to queue a renewal for any other connector.
+
+The host's nginx reads the key file through OpenSSL 3's `tpm2` provider. On Debian 12
+(OpenSSL 3.0.22, tpm2-openssl 1.1.1, nginx 1.22.1) that takes three things. First,
+an OpenSSL config that loads the provider and prefers it (without the preference,
+OpenSSL 3.0 signs with the default provider and fails with "missing private key").
+Second, the kernel's TPM resource manager `/dev/tpmrm0`, the provider's default (or
+`tpm2-abrmd`). Third, TLS 1.3 enabled: with the preference, OpenSSL 3.0 offers no
+ECDSA suite in TLS 1.2 for the TPM-held P-256 key.
+
+```
+openssl_conf = openssl_init
+[openssl_init]
+providers = provider_sect
+alg_section = evp_properties
+[provider_sect]
+default = default_sect
+tpm2 = tpm2_sect
+[default_sect]
+activate = 1
+[tpm2_sect]
+activate = 1
+[evp_properties]
+default_properties = ?provider=tpm2
+```
+
+Point nginx at it with `env OPENSSL_CONF;` in `nginx.conf` and `ssl_protocols TLSv1.2
+TLSv1.3;` on the server. The swtpm container journey proves the whole path:
+`TestSwtpmContainerHostKeyJourneyTPMO1` runs the TPM's key and attestation, stock
+`openssl s_server` and nginx serving through the provider, and a relay renewal into
+nginx that its own post-deploy handshake verifies. The same journey on a real TPM is
+Track B.
+
 ### Deliver into a Kubernetes Secret from inside the cluster
 
 A `k8s_secret` destination is the `kubernetes.io/tls` Secret an Ingress or Gateway

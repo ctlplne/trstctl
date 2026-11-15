@@ -923,7 +923,18 @@ type SignJobCSRRequest struct {
 	// control plane signs nothing for it. It hands back the job's own signed
 	// result, and only when that result is exactly this certificate.
 	InstalledCertificateDER []byte `json:"installed_certificate_der,omitempty"`
+	// KeyAttestation is the TPM's proof that the CSR's key was created in this
+	// host's TPM and cannot leave it (TPM-O1): a WebAuthn TPM credential whose
+	// TPM2_Certify, by an attestation key chaining to the profile's roots, is
+	// over SHA-256 of the job's host-key binding. Sent only for a renewal whose
+	// intent asks for key_custody "tpm"; the control plane verifies it before
+	// signing and keeps it as the certificate's custody evidence. It holds
+	// public data only.
+	KeyAttestation []byte `json:"key_attestation,omitempty"`
 }
+
+// MaxKeyAttestationBytes bounds a SignJobCSR key attestation.
+const MaxKeyAttestationBytes = 64 << 10
 
 // SignJobCSRResponse returns the issued chain.
 //

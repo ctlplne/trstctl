@@ -5,6 +5,7 @@ package relay
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -127,6 +128,29 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		report(ctx, ch, job, OutcomeFailed, "renewal intent names no subject to certify")
 		return false
 	}
+	// TPM-O1: a profile that requires a TPM-held key is refused here, before
+	// any key exists, when this host cannot provide one.
+	if intent.KeyCustody != "" {
+		if refusal := tpmHostKeyRefusal(ch, profile, intent); refusal != "" {
+			report(ctx, ch, job, OutcomeFailed, refusal)
+			return false
+		}
+	}
+	var hostTPM *hostKeyTPM
+	defer func() { hostTPM.Close() }()
+	openTPM := func() bool {
+		if hostTPM != nil {
+			return true
+		}
+		opened, err := openHostKeyTPM(*profile.HostKeyTPM)
+		if err != nil {
+			log.Printf("trstctl-agent: job %d attempt %d: host key TPM: %v", job.JobID, job.Attempt, err)
+			report(ctx, ch, job, OutcomeFailed, "this host's TPM could not be opened for the renewal key")
+			return false
+		}
+		hostTPM = opened
+		return true
+	}
 	var claim *hostRenewClaim
 	if maintainer, ok := ch.(JobLeaseMaintainer); ok {
 		var err error
@@ -198,8 +222,22 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		csrDER, certPEM, chainPEM, fingerprint = ordinaryPending.CSRDER, ordinaryPending.CertPEM, ordinaryPending.ChainPEM, ordinaryPending.Fingerprint
 		keyBuf, err = secret.NewFrom(ordinaryPending.KeyPEM)
 	} else {
-		key, keyErr := generateHostRenewSubjectKey(intent)
+		var key *hostRenewSubjectKey
+		var keyErr error
+		if intent.KeyCustody == HostKeyCustodyTPM {
+			if !openTPM() {
+				return false
+			}
+			key, keyErr = generateTPMHostRenewSubjectKey(hostTPM, intent)
+		} else {
+			key, keyErr = generateHostRenewSubjectKey(intent)
+		}
 		if keyErr != nil {
+			if intent.KeyCustody == HostKeyCustodyTPM {
+				log.Printf("trstctl-agent: job %d attempt %d: host key TPM: %v", job.JobID, job.Attempt, keyErr)
+				report(ctx, ch, job, OutcomeFailed, "this host's TPM could not create the renewal key")
+				return false
+			}
 			report(ctx, ch, job, OutcomeFailed, "a subject key could not be generated on this host")
 			return false
 		}
@@ -228,7 +266,23 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		return false
 	}
 	defer keyBuf.Destroy()
-	if len(certPEM) == 0 {
+	if len(certPEM) == 0 && intent.KeyCustody == HostKeyCustodyTPM {
+		// The TPM proves the key under its attestation key, over this job's
+		// binding; a reclaimed job's retained key file is certified again.
+		if !openTPM() {
+			return false
+		}
+		attestation, attestErr := hostTPM.attest(job.JobID, keyBuf.Bytes(), csrDER)
+		if attestErr != nil {
+			log.Printf("trstctl-agent: job %d attempt %d: host key TPM attestation: %v", job.JobID, job.Attempt, attestErr)
+			report(ctx, ch, job, OutcomeFailed, "this host's TPM could not attest the renewal key")
+			return false
+		}
+		certPEM, chainPEM, fingerprint, err = signHostCSRWithKeyAttestation(ctx, ch.(AttestedCSRSigner), job, csrDER, attestation, claim != nil)
+		if err == nil && hostRollback != nil {
+			err = hostRollback.RecordHostRenewCertificate(intent.Connector, intent.TargetID, job.JobID, ordinaryBinding, certPEM, chainPEM, fingerprint)
+		}
+	} else if len(certPEM) == 0 {
 		certPEM, chainPEM, fingerprint, err = signHostCSR(ctx, signer, job, csrDER, claim != nil)
 		if err == nil && intent.PQCRunID != "" {
 			err = hostRollback.RecordPQCCertificate(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PQCAssetID, certPEM, chainPEM, fingerprint)
@@ -337,7 +391,7 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		// A245-L2: the listener's sessions against the renewal's start.
 		detail, evidence = withListenerSessions(installIntent, detail, evidence, deployStarted)
 	}
-	record, err := HostRenewCustody(intent.Connector, "")
+	record, err := HostRenewCustody(intent.Connector, intent.KeyCustody, "")
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "the installed key custody could not be classified")
 		return false
@@ -371,12 +425,26 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 // HostRenewCustody maps a host connector to the storage boundary it actually
 // uses after a successful deploy. The caller supplies generatedBy when it knows
 // the certificate identity; the relay runtime leaves it empty and the channel
-// adapter fills it from the same mTLS identity that signs the receipt.
-func HostRenewCustody(connectorName, generatedBy string) (custody.Record, error) {
+// adapter fills it from the same mTLS identity that signs the receipt. A key
+// the renewal had the host's TPM make (keyCustody "tpm", TPM-O1) was generated
+// on a device that will not export it, so it is a device-origin, device-bound,
+// non-exportable key whatever the connector: the same claim the control plane
+// records from the TPM's attestation.
+func HostRenewCustody(connectorName, keyCustody, generatedBy string) (custody.Record, error) {
 	if !ExecutesOnHost(connectorName) {
 		return custody.Record{}, errors.New("relay: connector is not a host renewal target")
 	}
 	record := custody.Record{Origin: custody.OriginHostAgent, GeneratedBy: generatedBy}
+	switch keyCustody {
+	case "":
+	case HostKeyCustodyTPM:
+		record.Origin = custody.OriginDevice
+		record.Storage = custody.StorageDeviceBound
+		record.Exportable = custody.NonExportable
+		return record, nil
+	default:
+		return custody.Record{}, fmt.Errorf("relay: unknown host key custody %q", keyCustody)
+	}
 	switch connectorName {
 	case "iis":
 		record.Storage = custody.StorageOSStore

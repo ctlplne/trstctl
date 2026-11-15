@@ -338,6 +338,21 @@ func (r relayChannel) SignJobCSR(ctx context.Context, jobID int64, attempt int, 
 	return resp.CertificatePEM, resp.ChainPEM, resp.Fingerprint, nil
 }
 
+// SignJobCSRWithKeyAttestation sends a CSR whose key the host's TPM holds
+// with the TPM's attestation of that key (TPM-O1); the control plane verifies
+// it under the profile's roots before signing.
+func (r relayChannel) SignJobCSRWithKeyAttestation(ctx context.Context, jobID int64, attempt int, csrDER, keyAttestation []byte) ([]byte, []byte, string, error) {
+	resp, err := r.c.SignJobCSR(ctx, &transport.SignJobCSRRequest{
+		JobID: jobID, Attempt: attempt, CSRDER: csrDER, KeyAttestation: keyAttestation,
+	})
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return resp.CertificatePEM, resp.ChainPEM, resp.Fingerprint, nil
+}
+
+var _ relay.AttestedCSRSigner = relayChannel{}
+
 // RecoverJobCertificate asks for the certificate the control plane already
 // signed for a job whose appliance installed it and kept no request to sign
 // again, naming the installed certificate (PANOS-O1).

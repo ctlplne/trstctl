@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/k8s"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/kms/tpm"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
 
@@ -41,4 +43,15 @@ func SetCertutilPagingForTest(bound int64, pageRows int) func() {
 // (A193), so a test can read exactly what the module would be handed.
 func PluginHTTPDoerForTest(call PluginCall) pluginhost.HTTPDoer {
 	return pluginHTTPDoer(call.Client, call.Intent, call.Material)
+}
+
+// SetHostKeyTPMForTest makes the host key TPM dev for every host profile, and
+// its attestation attest (TPM-O1). Tests that use it do not run in parallel.
+func SetHostKeyTPMForTest(dev tpm.HostKeyDevice, attest func(jobID int64, file, csrDER []byte) ([]byte, error)) func() {
+	prevOpen, prevAttest := openHostKeyTPM, attestTPMHostKey
+	openHostKeyTPM = func(connector.HostKeyTPMConfig) (*hostKeyTPM, error) { return &hostKeyTPM{device: dev}, nil }
+	attestTPMHostKey = func(_ *hostKeyTPM, jobID int64, file, csrDER []byte) ([]byte, error) {
+		return attest(jobID, file, csrDER)
+	}
+	return func() { openHostKeyTPM, attestTPMHostKey = prevOpen, prevAttest }
 }

@@ -156,7 +156,7 @@ func runHostReprotect(ctx context.Context, ch Channel, client *http.Client, prof
 		report(ctx, ch, job, transport.OutcomeVerifyFailed, reprotectFailureDetail("CA successor not served: "+detail, restoreErr))
 		return false
 	}
-	custody, err := HostRenewCustody(intent.Connector, "")
+	custody, err := HostRenewCustody(intent.Connector, intent.KeyCustody, "")
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "installed host key custody cannot be classified")
 		return false

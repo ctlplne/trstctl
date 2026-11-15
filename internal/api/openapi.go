@@ -4255,7 +4255,7 @@ func componentSchemas() map[string]*Schema {
 	}, "state", "fleet_ready", "sealed_only_floor", "raw_v0_remaining", "legacy_dynamic_remaining", "sealed_results", "pending_results", "indeterminate_results", "recovery")
 	certificateKeyAttestation := object(map[string]*Schema{
 		"certificate_id": uuid(), "fingerprint": str(),
-		"source":            {Type: "string", Enum: []string{"acme_device_attest"}},
+		"source":            {Type: "string", Enum: []string{"acme_device_attest", "host_agent_tpm"}, Description: "acme_device_attest: an ACME device-attest-01 order's device made the key; host_agent_tpm: a host agent's TPM made it for a host renewal (TPM-O1)"},
 		"format":            {Type: "string", Enum: []string{"tpm-webauthn"}},
 		"credential":        {Type: "string", Format: "byte", Description: "The device's WebAuthn TPM attestation, exactly as verified."},
 		"binding":           {Type: "string", Format: "byte", Description: "The canonical binding whose SHA-256 is the challenge the attestation signed."},
@@ -7335,6 +7335,11 @@ func componentSchemas() map[string]*Schema {
 		"allowed_algorithms":    {Type: "array", Items: &Schema{Type: "integer"}},
 		"max_age":               str(),
 	})
+	hostKeyAttestationPolicy := object(map[string]*Schema{
+		"required":              {Type: "boolean", Description: "Host-generated renewals under the profile make their key in the host's TPM, which attests it; the control plane signs no other key for them (TPM-O1)"},
+		"format":                {Type: "string", Enum: []string{"tpm"}},
+		"attestation_roots_pem": {Type: "array", Items: str(), Description: "Operator roots the TPM attestation key's certificate chains to (PEM)"},
+	})
 	adcsIssuerHealthSchema := object(map[string]*Schema{
 		"id": str(), "name": str(),
 		"status":                   {Type: "string", Enum: []string{"healthy", "degraded", "failing", "idle"}},
@@ -7388,6 +7393,7 @@ func componentSchemas() map[string]*Schema {
 		"allowed_email_domains":   {Type: "array", Items: str()},
 		"allowed_uri_prefixes":    {Type: "array", Items: str()},
 		"acme_device_attestation": ref("ACMEDeviceAttestationPolicy"),
+		"host_key_attestation":    ref("HostKeyAttestationPolicy"),
 		"public_tls":              {Type: "boolean", Description: "The profile issues publicly trusted TLS server certificates; requires serverAuth, and the validity-readiness report flags a max_validity over the CA/Browser Forum's dated maximum"},
 		"upstream_external_ca":    {Type: "string", Description: "Registry ID of a configured external CA (for example an AD CS template) that signs ACME, EST, SCEP and CMP enrollments under this profile after its checks pass; empty signs with trstctl's own CA"},
 	})
@@ -9701,6 +9707,7 @@ func componentSchemas() map[string]*Schema {
 		"ProfileRestorePreview":                   profileRestorePreview,
 		"CertificateProfileSpec":                  certificateProfileSpec,
 		"ACMEDeviceAttestationPolicy":             acmeDeviceAttestationPolicy,
+		"HostKeyAttestationPolicy":                hostKeyAttestationPolicy,
 		"Issuer":                                  issuer,
 		"IssuerRequest":                           issuerReq,
 		"IssuerList":                              list("Issuer"),

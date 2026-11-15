@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -110,6 +111,36 @@ type HostProfile struct {
 	// kubernetes.io/tls Secrets in. A cluster agent's profile may name these and
 	// no host roots at all.
 	KubernetesSecrets *HostKubernetesSecrets `json:"kubernetes_secrets,omitempty"`
+	// HostKeyTPM names this host's TPM for the renewal keys a profile
+	// requires to be TPM-held (TPM-O1).
+	HostKeyTPM *HostKeyTPMProfile `json:"host_key_tpm,omitempty"`
+}
+
+// HostKeyTPMProfile is the host profile's TPM for host renewal keys
+// (TPM-O1). Every path is absolute; the two attestation files are required.
+type HostKeyTPMProfile struct {
+	Path                   string `json:"tpm_path,omitempty"`
+	AttestationKey         string `json:"attestation_key"`
+	AttestationCertChain   string `json:"attestation_cert_chain"`
+	AttestationKeyAuthFile string `json:"attestation_key_auth_file,omitempty"`
+	OwnerAuthFile          string `json:"owner_auth_file,omitempty"`
+}
+
+// config validates the profile's TPM and returns it as connector config.
+func (p *HostKeyTPMProfile) config() (*connector.HostKeyTPMConfig, error) {
+	if p == nil {
+		return nil, nil
+	}
+	if strings.TrimSpace(p.AttestationKey) == "" || strings.TrimSpace(p.AttestationCertChain) == "" {
+		return nil, errors.New("relay: host_key_tpm needs attestation_key and attestation_cert_chain")
+	}
+	for _, path := range []string{p.Path, p.AttestationKey, p.AttestationCertChain, p.AttestationKeyAuthFile, p.OwnerAuthFile} {
+		if path != "" && !filepath.IsAbs(path) {
+			return nil, fmt.Errorf("relay: host_key_tpm path %q is not absolute", path)
+		}
+	}
+	return &connector.HostKeyTPMConfig{Path: p.Path, AttestationKey: p.AttestationKey, AttestationCertChain: p.AttestationCertChain,
+		AttestationKeyAuthFile: p.AttestationKeyAuthFile, OwnerAuthFile: p.OwnerAuthFile}, nil
 }
 
 // HostKubernetesSecrets names the namespaces an in-cluster agent may write
@@ -184,11 +215,18 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 	if len(profile.AllowedRoots) == 0 && len(namespaces) == 0 && len(profile.WindowsDependentSIDs) == 0 && len(profile.WindowsDependentWrites) == 0 && !profile.WindowsLocalAccountsInventory && len(profile.WindowsLocalAccountWrites) == 0 {
 		return connector.LocalOpsConfig{}, errors.New("relay: host profile must allow at least one filesystem root, Kubernetes namespace or Windows inventory account SID")
 	}
+	hostKeyTPM, err := profile.HostKeyTPM.config()
+	if err != nil {
+		return connector.LocalOpsConfig{}, err
+	}
 	if len(profile.AllowedRoots) == 0 {
 		// A cluster agent writes Secrets through the API and touches no host
 		// files, so it carries no roots, commands or listener containments.
 		if len(profile.Actions) > 0 || len(profile.Containments) > 0 {
 			return connector.LocalOpsConfig{}, errors.New("relay: a host profile with actions or containments must name the allowed roots they act in")
+		}
+		if hostKeyTPM != nil {
+			return connector.LocalOpsConfig{}, errors.New("relay: a host profile with host_key_tpm must name the allowed roots its key files are written in")
 		}
 		if profile.TLSProbeOpenSSL != "" {
 			if err := tlsprobe.ValidateOpenSSLExecutable(profile.TLSProbeOpenSSL); err != nil {
@@ -225,7 +263,7 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 		})
 	}
 	configured := connector.LocalOpsConfig{WindowsLocalAccountsInventory: profile.WindowsLocalAccountsInventory, WindowsLocalAccountWrites: profile.WindowsLocalAccountWrites, WindowsDependentWrites: profile.WindowsDependentWrites, WindowsDependentProbes: profile.WindowsDependentProbes, WindowsDependentSIDs: profile.WindowsDependentSIDs, AllowedRoots: profile.AllowedRoots, Actions: actions,
-		Containments: containments, TLSProbeOpenSSL: profile.TLSProbeOpenSSL, KubernetesSecretNamespaces: namespaces}
+		Containments: containments, TLSProbeOpenSSL: profile.TLSProbeOpenSSL, KubernetesSecretNamespaces: namespaces, HostKeyTPM: hostKeyTPM}
 	if _, err := connector.NewLocalOps(configured); err != nil {
 		return connector.LocalOpsConfig{}, fmt.Errorf("relay: invalid host profile: %w", err)
 	}
