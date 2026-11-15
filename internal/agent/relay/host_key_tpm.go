@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/nginx"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/deviceattest"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -50,6 +51,11 @@ func tpmHostKeyRefusal(ch Channel, profile connector.LocalOpsConfig, intent Depl
 		return "a TPM-held key is installed only for " + strings.Join(tpmHostKeyConnectors, ", ") + ", not " + intent.Connector
 	case intent.PQCRunID != "" || (intent.SubjectKeyAlgorithm != "" && intent.SubjectKeyAlgorithm != string(crypto.ECDSAP256)):
 		return "a TPM-held host key is ECDSA P-256"
+	case intent.Connector == "nginx" && !profileHasAction(profile, nginx.ReexecAction):
+		// TPM-O1-L3: an in-place reload leaves OpenSSL's tpm2 provider failing
+		// nginx's handshakes or serving the previous certificate.
+		return "a TPM-held key on nginx needs the host profile's " + nginx.ReexecAction +
+			" action, which re-executes nginx so a fresh master loads the key; an in-place reload does not serve it"
 	}
 	if _, ok := ch.(AttestedCSRSigner); !ok {
 		return "this agent build cannot send a TPM key attestation with its request"
@@ -181,4 +187,14 @@ var attestTPMHostKey = func(h *hostKeyTPM, jobID int64, file, csrDER []byte) ([]
 		func(qualifyingData []byte) (crypto.EdgeTPMCertification, error) {
 			return h.device.CertifyHostKey(file, h.aik.KeyID, qualifyingData, h.aikAuth)
 		})
+}
+
+// profileHasAction reports whether the host profile maps the logical action.
+func profileHasAction(profile connector.LocalOpsConfig, logicalName string) bool {
+	for _, action := range profile.Actions {
+		if action.LogicalName == logicalName {
+			return true
+		}
+	}
+	return false
 }

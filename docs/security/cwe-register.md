@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3444 annotated sites across 35 rules. Each row is
+3454 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1812,7 +1812,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (433 sites)
+### G204 — CWE-78 OS command injection (439 sites)
 
 | Location | Reason |
 |---|---|
@@ -1902,6 +1902,9 @@ not this file.
 | `internal/agent/relay/adcsdatabase.go:322` | reviewed SEC-005 argv: fixed flags built by this package; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
 | `internal/agent/relay/native_probe_host_test.go:81` | fixed stock command against owned loopback fixtures. |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:198` | fixed tool and arguments (CWE-78) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:289` | the stock init script with a fixed action (CWE-78) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:306` | the stock init script with a fixed action (CWE-78) |
 | `internal/agent/reportstate/local_account_rotation_test.go:290` | current Go test executable with one fixed test selector and an owned public temp root; no shell or credentials (CWE-78) |
 | `internal/agent/reportstate/task_execution_test.go:337` | the current Go test executable and one fixed test name, public owned fixture root only, no shell or credential (CWE-78) |
 | `internal/agent/secretrender/secretrender.go:745` | operator-configured reload argv from the renderer's own configuration; running it is the feature (CWE-78) |
@@ -1952,6 +1955,9 @@ not this file.
 | `internal/kms/tpm/swtpm_host_key_provider_test.go:112` | fixed tool and arguments (CWE-78) |
 | `internal/kms/tpm/swtpm_host_key_provider_test.go:177` | fixed tool and test paths (CWE-78) |
 | `internal/kms/tpm/swtpm_host_key_provider_test.go:217` | fixed tool and test paths (CWE-78) |
+| `internal/kms/tpm/swtpm_nginx_reexec_test.go:150` | fixed tool and test paths (CWE-78) |
+| `internal/kms/tpm/swtpm_nginx_reexec_test.go:161` | fixed tool and test paths (CWE-78) |
+| `internal/kms/tpm/swtpm_nginx_reexec_test.go:198` | fixed tool and test paths (CWE-78) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:165` | the repository's own signer (CWE-78) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:181` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:182` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2376,7 +2382,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (814 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (818 sites)
 
 | Location | Reason |
 |---|---|
@@ -2592,15 +2598,16 @@ not this file.
 | `internal/agent/relay/deploy_failure_log.go:84` | the operator's own flag (CWE-22) |
 | `internal/agent/relay/deploy_failure_log.go:148` | the operator's own flag (CWE-22) |
 | `internal/agent/relay/deploy_failure_log_keep_test.go:72` | the test's own temp file (CWE-22) |
-| `internal/agent/relay/host_key_tpm.go:87` | the operator's host profile names it (CWE-22) |
-| `internal/agent/relay/host_key_tpm.go:95` | the operator's host profile names it (CWE-22) |
-| `internal/agent/relay/host_key_tpm.go:129` | the operator's host profile names it (CWE-22) |
+| `internal/agent/relay/host_key_tpm.go:93` | the operator's host profile names it (CWE-22) |
+| `internal/agent/relay/host_key_tpm.go:101` | the operator's host profile names it (CWE-22) |
+| `internal/agent/relay/host_key_tpm.go:135` | the operator's host profile names it (CWE-22) |
 | `internal/agent/relay/host_pqc_predecessor_test.go:47` | test-owned directory (CWE-22) |
 | `internal/agent/relay/host_renew_pending.go:144` | validated agent-local state directory |
 | `internal/agent/relay/host_renew_pending_replay_test.go:52` | test-owned directory |
-| `internal/agent/relay/hostexec.go:179` | operator-supplied profile path, read at their instruction (CWE-22) |
+| `internal/agent/relay/hostexec.go:180` | operator-supplied profile path, read at their instruction (CWE-22) |
 | `internal/agent/relay/hostposture_store_test.go:34` | test-owned directory |
-| `internal/agent/relay/hostrenew_tpm_test.go:161` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:167` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:334` | the test's own temp directory (CWE-22) |
 | `internal/agent/relay/hostrollback.go:915` | validated agent-local state directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:193` | test-owned state root (CWE-22) |
@@ -2622,11 +2629,12 @@ not this file.
 | `internal/agent/relay/selfupgrade_test.go:156` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:259` | the test reads its own temp fixture (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:274` | the test reads its own temp fixture (CWE-22) |
-| `internal/agent/relay/swtpm_host_key_journey_test.go:206` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/swtpm_host_key_journey_test.go:218` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/swtpm_host_key_journey_test.go:262` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/swtpm_host_key_journey_test.go:303` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/swtpm_host_key_journey_test.go:356` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:165` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:188` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:299` | the container's nginx log and the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:369` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:432` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:483` | the test's own temp directory (CWE-22) |
 | `internal/agent/relay/tomcat_activation_test.go:49` | fixed filenames below t.TempDir, no external input (CWE-22). |
 | `internal/agent/relay/trust_distrusted_test.go:17` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/agent/relay/trust_test.go:48` | path is created inside this test's TempDir (CWE-22). |
@@ -2839,6 +2847,8 @@ not this file.
 | `internal/kmip/pykmip_tenants_test.go:68` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/kmip/tenant_router_test.go:230` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/kms/tpm/swtpm_host_key_provider_test.go:226` | the test's own temp directory (CWE-22) |
+| `internal/kms/tpm/swtpm_nginx_reexec_test.go:146` | the test's own temp directory (CWE-22) |
+| `internal/kms/tpm/swtpm_nginx_reexec_test.go:207` | the test's own temp directory (CWE-22) |
 | `internal/kms/wrapadapter/adapter.go:280` | operator-named adapter configuration (CWE-22) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:104` | the test's own key store (CWE-22) |
 | `internal/kms/wrapadapter/softhsm_signer_real_test.go:74` | the test's own key store (CWE-22) |
@@ -3237,9 +3247,9 @@ not this file.
 | `internal/agent/relay/adcsdatabase_test.go:260` | a test-owned executable stand-in (CWE-276). |
 | `internal/agent/relay/adcsdecide_test.go:47` | a test-owned executable stand-in (CWE-276). |
 | `internal/agent/relay/adcsrevoke_test.go:46` | a test-owned executable stand-in (CWE-276). |
-| `internal/agent/relay/hostrenew_tpm_test.go:98` | the fixture IS an executable (CWE-276) |
 | `internal/agent/relay/recovery_check_test.go:31` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/relay/selfupgrade_test.go:35` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:284` | the container's stock nginx config path, as the package installs it (CWE-276) |
 | `internal/agent/secretrender/replace_windows_test.go:26` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/sshdiscovery/sshdiscovery_test.go:29` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/sshkrl/install_test.go:61` | public KRL fixture checks that mode is preserved |

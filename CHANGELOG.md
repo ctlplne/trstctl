@@ -1992,6 +1992,15 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- A TPM-held host key on nginx is activated by re-executing nginx, not reloading it
+  (TPM-O1-L3). With OpenSSL 3's `tpm2` provider, an in-place reload left nginx failing
+  every handshake or still serving the previous certificate, and the documented host
+  profile's `nginx -t` could not load the TPM's key file in the agent's scrubbed
+  environment. The agent now runs the host profile's `nginx-upgrade` action (Debian's
+  `/etc/init.d/nginx upgrade`, or `systemctl restart nginx`) for a TPM-held key, and
+  refuses a TPM renewal before any key exists when the profile has none. The docs give
+  the `nginx -t` wrapper and require one worker. Proven against swtpm with the stock
+  nginx, including a renewal under continuous handshakes with none failing.
 - The passive observer reads handshakes the network fragmented or wrapped: it reassembles
   IPv4 and IPv6 fragments within fixed bounds, walks IPv6 extension headers (hop-by-hop,
   destination options and the rest) and reads through up to four VLAN tags, where it

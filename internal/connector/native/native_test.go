@@ -3,12 +3,16 @@
 package native_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/native"
+	"trstctl.com/trstctl/internal/connector/nginx"
+	"trstctl.com/trstctl/internal/connector/nginx/nginxtest"
 )
 
 func TestDecodeTargetRejectsUnknownAndInlineSecretFields(t *testing.T) {
@@ -86,5 +90,32 @@ func TestBuildEveryShippedFamily(t *testing.T) {
 				t.Fatalf("%s: a credential failure = %v, want it wrapped", family, err)
 			}
 		}
+	}
+}
+
+// TestNginxTargetReexecutesOnlyWhenTheAgentAsksTPMO1L3: the agent's
+// ReloadAction nginx-upgrade (a TPM-held key) builds an nginx connector that
+// re-executes nginx instead of reloading it; without it, nginx reloads; and a
+// tenant's nginx target_config cannot name a reload_action.
+func TestNginxTargetReexecutesOnlyWhenTheAgentAsksTPMO1L3(t *testing.T) {
+	cert := []byte("-----BEGIN CERTIFICATE-----\nMIIB-leaf\n-----END CERTIFICATE-----\n")
+	for _, tc := range []struct {
+		action           string
+		reexecs, reloads int
+	}{{nginx.ReexecAction, 1, 0}, {"", 0, 1}} {
+		built, _, err := native.Build("nginx", native.Target{Profile: "p", CertPath: "/c", KeyPath: "/k", ReloadAction: tc.action}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		srv := nginxtest.New("/c")
+		if _, err := connector.Run(context.Background(), built, srv, connector.NewDeployment("web-1", cert, []byte("key"))); err != nil {
+			t.Fatal(err)
+		}
+		if srv.Reexecs() != tc.reexecs || srv.Reloads() != tc.reloads {
+			t.Fatalf("reload_action %q: %d re-executions, %d reloads", tc.action, srv.Reexecs(), srv.Reloads())
+		}
+	}
+	if _, err := native.DecodeTarget("nginx", json.RawMessage(`{"profile":"p","cert_path":"/c","key_path":"/k","reload_action":"nginx-upgrade"}`)); err == nil {
+		t.Fatal("a tenant's nginx target_config named a reload_action")
 	}
 }

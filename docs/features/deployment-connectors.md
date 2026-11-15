@@ -1103,7 +1103,10 @@ Name the TPM in the host exec profile:
 ```json
 {
   "allowed_roots": ["/etc/nginx/tls"],
-  "actions": [{"logical_name": "nginx", "command": "/usr/sbin/nginx", "pass_args": true}],
+  "actions": [
+    {"logical_name": "nginx", "command": "/usr/local/sbin/nginx-tpm2", "pass_args": true},
+    {"logical_name": "nginx-upgrade", "command": "/etc/init.d/nginx", "args": ["upgrade"], "timeout_seconds": 60}
+  ],
   "host_key_tpm": {
     "tpm_path": "/dev/tpmrm0",
     "attestation_key": "/etc/trstctl/tpm-ak.keyref.json",
@@ -1119,8 +1122,9 @@ version in the subject alternative name, and the attestation-key EKU `2.23.133.8
 `attestation_key_auth_file` and `owner_auth_file` optionally hold their authorization.
 A renewal that requires a TPM-held key is refused before any key exists, with its
 reason, when the host profile names no `host_key_tpm`, the connector is not `nginx`,
-the key is not P-256, or the agent build cannot send an attestation. A profile that
-requires one refuses to queue a renewal for any other connector.
+the host profile maps no `nginx-upgrade` action, the key is not P-256, or the agent
+build cannot send an attestation. A profile that requires one refuses to queue a
+renewal for any other connector.
 
 A CA re-protection keeps a TPM-held key in the TPM (TPM-O1-L1). When the predecessor
 certificate's recorded custody is the device-bound claim a host agent's TPM attestation
@@ -1134,12 +1138,23 @@ The key file at `key_path` stays as it is: the successor certificate names the s
 A job whose key custody is not its predecessor's is refused at signing.
 
 The host's nginx reads the key file through OpenSSL 3's `tpm2` provider. On Debian 12
-(OpenSSL 3.0.22, tpm2-openssl 1.1.1, nginx 1.22.1) that takes three things. First,
+(OpenSSL 3.0.22, tpm2-openssl 1.1.1, nginx 1.22.1) that takes five things. First,
 an OpenSSL config that loads the provider and prefers it (without the preference,
 OpenSSL 3.0 signs with the default provider and fails with "missing private key").
 Second, the kernel's TPM resource manager `/dev/tpmrm0`, the provider's default (or
 `tpm2-abrmd`). Third, TLS 1.3 enabled: with the preference, OpenSSL 3.0 offers no
-ECDSA suite in TLS 1.2 for the TPM-held P-256 key.
+ECDSA suite in TLS 1.2 for the TPM-held P-256 key. Fourth, one worker
+(`worker_processes 1;`, where Debian's `nginx.conf` says `auto`): nginx's workers
+share the master's provider context, and with two workers most concurrent handshakes
+fail. Fifth, a re-execution of nginx for each deploy instead of a reload (TPM-O1-L3):
+an in-place reload, `nginx -s reload` or `systemctl reload`, leaves nginx failing its
+handshakes or still serving the previous certificate. For a TPM-held key the agent
+runs the host profile's `nginx-upgrade` action where it would reload. Debian's
+`/etc/init.d/nginx upgrade` is nginx's binary upgrade: the running master starts a
+new one, which loads the configuration and the key in a fresh process, and the old
+master finishes its connections and exits, so no handshake fails. Under systemd,
+map `nginx-upgrade` to `systemctl restart nginx`, which also loads the key in a fresh
+master, with a brief outage while nginx starts.
 
 ```
 openssl_conf = openssl_init
@@ -1157,15 +1172,30 @@ activate = 1
 default_properties = ?provider=tpm2
 ```
 
-Point nginx at it with `env OPENSSL_CONF;` in `nginx.conf` and `ssl_protocols TLSv1.2
-TLSv1.3;` on the server. The swtpm container journey proves the whole path:
+Save it as `/etc/nginx/openssl-tpm2.cnf` and give nginx its path: `env OPENSSL_CONF;` in
+`nginx.conf`, `ssl_protocols TLSv1.2 TLSv1.3;` on the server, and the variable in the
+service's environment (under systemd, a drop-in with
+`Environment=OPENSSL_CONF=/etc/nginx/openssl-tpm2.cnf`). The agent runs host actions
+with a scrubbed environment, so the profile's `nginx` action is a wrapper that gives
+`nginx -t` the same config:
+
+```sh
+#!/bin/sh
+# /usr/local/sbin/nginx-tpm2: nginx -t loads the TPM's key file through the provider.
+OPENSSL_CONF=/etc/nginx/openssl-tpm2.cnf exec /usr/sbin/nginx "$@"
+```
+ The swtpm container journey proves the whole path:
 `TestSwtpmContainerHostKeyJourneyTPMO1` runs the TPM's key and attestation, stock
-`openssl s_server` and nginx serving through the provider, a relay renewal into nginx
-that its own post-deploy handshake verifies, and then a CA re-protection of that
-TPM-held key under a successor CA. While nginx holds `tpm2-abrmd`, the lab reaches the
-TPM through a small resource-manager bridge that keeps one session for the agent, as
-the agent's one open of `/dev/tpmrm0` does on a host. The same journey on a real TPM is
-Track B.
+`openssl s_server` and nginx serving through the provider, and stock nginx started by
+its init script with one worker. Into it go a relay renewal that its own post-deploy
+handshake verifies, a second renewal onto a new TPM key with no failed handshake while
+a client handshakes continuously, and a CA re-protection of that TPM-held key under a
+successor CA, each activated by the init script's upgrade. While nginx holds
+`tpm2-abrmd`, the lab reaches the TPM through a small resource-manager bridge that keeps
+one session for the agent, as the agent's one open of `/dev/tpmrm0` does on a host.
+`TestSwtpmNginxCannotReloadATPMHeldKeyInPlaceOrShareItAcrossWorkersTPMO1L3` shows the
+in-place reload and the two workers failing, and fails when a package changes either.
+The same journey on a real TPM is Track B.
 
 ### Deliver into a Kubernetes Secret from inside the cluster
 

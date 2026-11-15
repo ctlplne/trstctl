@@ -2535,7 +2535,14 @@ A profile's `host_key_attestation` keeps host renewal keys in the host's TPM for
 1.3 only: with the `tpm2` provider preferred, OpenSSL 3.0 drops P-256 from its TLS
 1.2 groups (tpm2-openssl 1.1.1 registers none of its own), so a TLS 1.2 client finds
 no ECDSA suite; `TestSwtpmHostKeyServesTLSThroughTheTPM2ProviderTPMO1` checks this
-and fails when a package changes it. What comes next: the other OpenSSL-based host
+and fails when a package changes it. nginx serves the key with one worker and is
+re-executed, not reloaded, for each deploy (TPM-O1-L3): its workers share the master's
+provider context, so two workers fail concurrent handshakes, and an in-place reload
+leaves it failing its handshakes or serving the previous certificate;
+`TestSwtpmNginxCannotReloadATPMHeldKeyInPlaceOrShareItAcrossWorkersTPMO1L3` checks
+both. A re-execution without an outage is proven with Debian's init script; under
+systemd the profile maps a restart, and the upgrade there is part of the real-host
+repeat. What comes next: the other OpenSSL-based host
 connectors (apache, haproxy, postfix and the rest), each proven against its stock
 package with the provider, and the real-TPM repeat of the swtpm journey (Track B).
 

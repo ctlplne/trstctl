@@ -92,14 +92,20 @@ func (r *attestedRenewChannel) SignJobCSRWithKeyAttestation(ctx context.Context,
 	return r.SignJobCSR(ctx, jobID, attempt, csrDER)
 }
 
+// tpmRenewProfile is a host profile whose nginx and nginx-upgrade actions
+// record their arguments in dir/actions.log; withTPM names the host's TPM.
 func tpmRenewProfile(t *testing.T, dir string, withTPM bool) connector.LocalOpsConfig {
 	t.Helper()
 	nginx := filepath.Join(dir, "nginx")
-	if err := os.WriteFile(nginx, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil { // #nosec G306 -- the fixture IS an executable (CWE-276)
-		t.Fatal(err)
+	script := []byte("#!/bin/sh\necho \"$(basename \"$0\") $*\" >> " + filepath.Join(dir, "actions.log") + "\nexit 0\n")
+	for _, name := range []string{"nginx", "nginx-upgrade"} {
+		if err := os.WriteFile(filepath.Join(dir, name), script, 0o755); err != nil { // #nosec G306,G703 -- the fixture IS an executable, in the test's own temp directory (CWE-276, CWE-22)
+			t.Fatal(err)
+		}
 	}
 	profile := connector.LocalOpsConfig{AllowedRoots: []string{dir},
-		Actions: []connector.LocalAction{{LogicalName: "nginx", Command: nginx, PassArgs: true}}}
+		Actions: []connector.LocalAction{{LogicalName: "nginx", Command: nginx, PassArgs: true},
+			{LogicalName: "nginx-upgrade", Command: filepath.Join(dir, "nginx-upgrade")}}}
 	if withTPM {
 		profile.HostKeyTPM = &connector.HostKeyTPMConfig{AttestationKey: filepath.Join(dir, "ak.json"), AttestationCertChain: filepath.Join(dir, "ak.pem")}
 	}
@@ -186,17 +192,20 @@ func TestTPMHostRenewalIsRefusedBeforeAnyKeyWhenTheHostCannotHoldItTPMO1(t *test
 	})
 	defer restore()
 	for _, tc := range []struct {
-		name     string
-		withTPM  bool
-		plain    bool
-		mutate   func(*relay.DeployIntent)
-		wantText string
+		name      string
+		withTPM   bool
+		plain     bool
+		mutate    func(*relay.DeployIntent)
+		wantText  string
+		noUpgrade bool
 	}{
-		{"no TPM in the host profile", false, false, nil, "names no host_key_tpm"},
-		{"a connector that converts the key", true, false, func(i *relay.DeployIntent) { i.Connector = "apache" }, "installed only for nginx"},
-		{"a key the TPM cannot hold", true, false, func(i *relay.DeployIntent) { i.SubjectKeyAlgorithm = "RSA-2048" }, "ECDSA P-256"},
-		{"a channel that cannot send an attestation", true, true, nil, "cannot send a TPM key attestation"},
-		{"a custody no agent provides", true, false, func(i *relay.DeployIntent) { i.KeyCustody = "hsm" }, "which this agent does not provide"},
+		{"no TPM in the host profile", false, false, nil, "names no host_key_tpm", false},
+		// TPM-O1-L3: nginx must be re-executed to serve a TPM-held key.
+		{"an nginx host profile with no nginx-upgrade action", true, false, nil, "needs the host profile's nginx-upgrade action", true},
+		{"a connector that converts the key", true, false, func(i *relay.DeployIntent) { i.Connector = "apache" }, "installed only for nginx", false},
+		{"a key the TPM cannot hold", true, false, func(i *relay.DeployIntent) { i.SubjectKeyAlgorithm = "RSA-2048" }, "ECDSA P-256", false},
+		{"a channel that cannot send an attestation", true, true, nil, "cannot send a TPM key attestation", false},
+		{"a custody no agent provides", true, false, func(i *relay.DeployIntent) { i.KeyCustody = "hsm" }, "which this agent does not provide", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -217,7 +226,11 @@ func TestTPMHostRenewalIsRefusedBeforeAnyKeyWhenTheHostCannotHoldItTPMO1(t *test
 				ch, signCalls, reports = attested, func() int { return attested.signCalls }, func() []report { return attested.reports }
 			}
 			before := dev.created
-			if _, err := relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient, tpmRenewProfile(t, dir, tc.withTPM), 4, 60); err != nil {
+			profile := tpmRenewProfile(t, dir, tc.withTPM)
+			if tc.noUpgrade {
+				profile.Actions = profile.Actions[:1]
+			}
+			if _, err := relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient, profile, 4, 60); err != nil {
 				t.Fatalf("RunOnceWithHost: %v", err)
 			}
 			got := reports()
@@ -282,5 +295,86 @@ func TestHostKeyTPMProfileNeedsItsAttestationFilesTPMO1(t *testing.T) {
 		if _, err := relay.LoadHostProfile(write(tc.profile)); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("%s: err = %v, want %q", tc.name, err, tc.want)
 		}
+	}
+}
+
+// TestTPMHostRenewalReexecutesNginxInsteadOfReloadingItTPMO1L3: a renewal
+// with a TPM-held key checks nginx's configuration and then runs the host
+// profile's nginx-upgrade action, which re-executes nginx so a fresh master
+// loads the key; it never reloads nginx in place, which with OpenSSL's tpm2
+// provider leaves nginx failing its handshakes or serving the previous
+// certificate. A renewal of a software key on the same profile reloads as
+// before.
+func TestTPMHostRenewalReexecutesNginxInsteadOfReloadingItTPMO1L3(t *testing.T) {
+	dev := &softwareHostKeyTPM{}
+	restore := relay.SetHostKeyTPMForTest(dev, func(jobID int64, _, _ []byte) ([]byte, error) {
+		return []byte("tpm-attestation-for-job-" + strconv.FormatInt(jobID, 10)), nil
+	})
+	defer restore()
+	for _, tc := range []struct {
+		name    string
+		custody string
+		want    string
+	}{
+		{"a TPM-held key", relay.HostKeyCustodyTPM, "nginx -t\nnginx-upgrade \n"},
+		{"a software key", "", "nginx -t\nnginx -s reload\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			intent := tpmRenewIntent(t, dir, "nginx")
+			intent.KeyCustody = tc.custody
+			ch := &attestedRenewChannel{renewChannel: renewChannel{certPEM: []byte("ISSUED-LEAF\n"), chainPEM: []byte("ISSUER\n"), fpr: "sha256:issued"}}
+			ch.jobs = []relay.Job{renewJob(t, intent)}
+			if _, err := relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient, tpmRenewProfile(t, dir, true), 4, 60); err != nil {
+				t.Fatalf("RunOnceWithHost: %v", err)
+			}
+			if len(ch.reports) != 1 || ch.reports[0].outcome == relay.OutcomeFailed {
+				t.Fatalf("reports = %+v", ch.reports)
+			}
+			ran, err := os.ReadFile(filepath.Join(dir, "actions.log")) // #nosec G304 -- the test's own temp directory (CWE-22)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(ran) != tc.want {
+				t.Fatalf("the deploy ran:\n%s\nwant:\n%s", ran, tc.want)
+			}
+		})
+	}
+}
+
+// TestHostDryRunPlansTheNginxReexecForATPMHeldKeyTPMO1L3: a connector test of
+// an nginx target whose key is TPM-held plans nginx -t and the host profile's
+// nginx-upgrade action, not an in-place reload, and is not ready on a profile
+// that does not map nginx-upgrade; a software key's plan still reloads.
+func TestHostDryRunPlansTheNginxReexecForATPMHeldKeyTPMO1L3(t *testing.T) {
+	root := t.TempDir()
+	certPath, keyPath := filepath.Join(root, "site.crt"), filepath.Join(root, "site.key")
+	for _, path := range []string{certPath, keyPath} {
+		if err := os.WriteFile(path, []byte("bootstrap"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	plan := func(custody string, actions ...connector.LocalAction) relay.Plan {
+		t.Helper()
+		p, err := relay.DryRunOnHost(context.Background(), http.DefaultClient,
+			connector.LocalOpsConfig{AllowedRoots: []string{root}, Actions: actions},
+			relay.DeployIntent{Connector: "nginx", Target: "web", KeyCustody: custody,
+				TargetConfig: mustJSON(t, map[string]string{"cert_path": certPath, "key_path": keyPath})}, nil)
+		if err != nil {
+			t.Fatalf("host dry-run: %v", err)
+		}
+		return p
+	}
+	mutates := func(p relay.Plan) string { return strings.Join(p.WouldMutate, "\n") }
+	tpmPlan := plan(relay.HostKeyCustodyTPM, trueAction("nginx", true), trueAction("nginx-upgrade", false))
+	if !tpmPlan.Ready || !strings.Contains(mutates(tpmPlan), "run operator-approved nginx-upgrade") || strings.Contains(mutates(tpmPlan), "-s reload") {
+		t.Fatalf("TPM-held plan = %+v", tpmPlan)
+	}
+	if missing := plan(relay.HostKeyCustodyTPM, trueAction("nginx", true)); missing.Ready {
+		t.Fatalf("a TPM-held plan without nginx-upgrade in the profile is ready: %+v", missing)
+	}
+	softwarePlan := plan("", trueAction("nginx", true))
+	if !softwarePlan.Ready || !strings.Contains(mutates(softwarePlan), "run operator-approved nginx -s reload") {
+		t.Fatalf("software plan = %+v", softwarePlan)
 	}
 }

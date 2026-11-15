@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/javakeystore"
 	"trstctl.com/trstctl/internal/connector/mysql"
+	"trstctl.com/trstctl/internal/connector/nginx"
 	"trstctl.com/trstctl/internal/connector/tomcat"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
@@ -340,6 +341,10 @@ func ExecuteOnHost(
 			return connector.Stats{}, fmt.Errorf("relay: decode host target config: %w", err)
 		}
 	}
+	target, err = hostTargetForKeyCustody(intent, target)
+	if err != nil {
+		return connector.Stats{}, err
+	}
 
 	built, err := buildHostConnector(intent.Connector, target, material)
 	if err != nil {
@@ -392,6 +397,24 @@ func servingCertificatePEM(material Material) ([]byte, error) {
 	return servingPEM, nil
 }
 
+// hostTargetForKeyCustody applies what the key's custody asks of the target:
+// a TPM-held key on nginx is activated by re-executing nginx (TPM-O1-L3),
+// since with OpenSSL's tpm2 provider an in-place reload leaves nginx failing
+// its handshakes or serving the previous certificate. An nginx target never
+// names its own reload action.
+func hostTargetForKeyCustody(intent DeployIntent, target HostTargetConfig) (HostTargetConfig, error) {
+	if intent.Connector != "nginx" {
+		return target, nil
+	}
+	if strings.TrimSpace(target.ReloadAction) != "" {
+		return target, errors.New("relay: an nginx target takes no reload_action")
+	}
+	if intent.KeyCustody == HostKeyCustodyTPM {
+		target.ReloadAction = nginx.ReexecAction
+	}
+	return target, nil
+}
+
 // DryRunOnHost validates a host connector on the machine that would execute it
 // and, when configured, handshakes the listener it would later update. It
 // performs no deployment: PreflightLocalOps only canonicalizes/Lstats roots and
@@ -430,6 +453,13 @@ func DryRunOnHost(
 			})
 			return plan, nil
 		}
+	}
+	target, err := hostTargetForKeyCustody(intent, target)
+	if err != nil {
+		plan.Steps = append(plan.Steps, PlanStep{
+			Name: "target-config", Status: StepFailed, Detail: err.Error(),
+		})
+		return plan, nil
 	}
 	actions, err := hostPreflightActions(intent.Connector, target)
 	if err != nil {
@@ -543,6 +573,9 @@ func hostPreflightActions(name string, target HostTargetConfig) ([]connector.Loc
 	case "nginx":
 		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
 			return nil, err
+		}
+		if target.ReloadAction == nginx.ReexecAction {
+			return []connector.LocalActionInvocation{action("nginx", "-t"), action(nginx.ReexecAction)}, nil
 		}
 		return []connector.LocalActionInvocation{action("nginx", "-t"), action("nginx", "-s", "reload")}, nil
 	case "caddy":

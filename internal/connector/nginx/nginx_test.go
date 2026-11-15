@@ -115,3 +115,30 @@ func TestNginxPassesConformance(t *testing.T) {
 		t.Errorf("nginx connector failed conformance: %+v", report.Checks)
 	}
 }
+
+// TestNginxReexecutesInsteadOfReloadingForATPMHeldKeyTPMO1L3: WithReexec, a
+// deploy is activated by the host profile's nginx-upgrade action and never by
+// `nginx -s reload`, which with OpenSSL's tpm2 provider leaves nginx failing
+// its handshakes or serving the previous certificate; a certificate that fails
+// `nginx -t` is not activated at all.
+func TestNginxReexecutesInsteadOfReloadingForATPMHeldKeyTPMO1L3(t *testing.T) {
+	srv := nginxtest.New(certPath)
+	c := nginx.New(certPath, keyPath, nginx.WithReexec())
+	if _, err := connector.Run(context.Background(), c, srv, connector.NewDeployment("web-1", goodCert, tlsKey)); err != nil {
+		t.Fatalf("Deploy: %v", err)
+	}
+	if srv.Reexecs() != 1 || srv.Reloads() != 0 || !bytes.Equal(srv.Active(), goodCert) {
+		t.Fatalf("re-executed %d times, reloaded %d times; serving the renewed certificate: %v",
+			srv.Reexecs(), srv.Reloads(), bytes.Equal(srv.Active(), goodCert))
+	}
+	bad := nginxtest.New(certPath)
+	if _, err := connector.Run(context.Background(), c, bad, connector.NewDeployment("web-1", badCert, tlsKey)); err == nil {
+		t.Fatal("a certificate that fails nginx -t was deployed")
+	}
+	if bad.Reexecs() != 0 || bad.Reloads() != 0 || bad.Active() != nil {
+		t.Fatal("nginx was activated despite a failed configuration test")
+	}
+	if nginx.ReexecAction != "nginx-upgrade" {
+		t.Fatalf("ReexecAction = %q; the host profile docs name nginx-upgrade", nginx.ReexecAction)
+	}
+}

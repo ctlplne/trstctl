@@ -309,6 +309,11 @@ func Build(family string, target Target, require Require) (connector.Connector, 
 func buildLocal(family string, target Target) (connector.Connector, bool) {
 	switch family {
 	case "nginx":
+		// The agent sets ReexecAction for a TPM-held key (TPM-O1-L3); the
+		// closed target schema gives a tenant no reload_action for nginx.
+		if target.ReloadAction == nginx.ReexecAction {
+			return nginx.New(target.CertPath, target.KeyPath, nginx.WithReexec()), true
+		}
 		return nginx.New(target.CertPath, target.KeyPath), true
 	case "apache":
 		return apache.New(target.CertPath, target.KeyPath), true

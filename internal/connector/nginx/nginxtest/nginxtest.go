@@ -22,6 +22,7 @@ type Server struct {
 	files    map[string][]byte
 	active   []byte
 	reloads  int
+	reexecs  int
 }
 
 var _ connector.Ops = (*Server)(nil)
@@ -57,6 +58,12 @@ func (s *Server) Exec(name string, args []string) error {
 		s.active = clone(s.files[s.certPath])
 		s.reloads++
 		return nil
+	case name == "nginx-upgrade" && len(args) == 0:
+		// The re-exec action (TPM-O1-L3): a new master loads the on-disk
+		// certificate and the old one exits.
+		s.active = clone(s.files[s.certPath])
+		s.reexecs++
+		return nil
 	default:
 		return nil
 	}
@@ -82,6 +89,13 @@ func (s *Server) Active() []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return clone(s.active)
+}
+
+// Reexecs returns how many times nginx was re-executed (TPM-O1-L3).
+func (s *Server) Reexecs() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reexecs
 }
 
 // Reloads returns how many times nginx has reloaded.
