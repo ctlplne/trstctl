@@ -26,10 +26,20 @@ type BrokerIssuance struct {
 	RequestedTTLSeconds int64    `json:"requested_ttl_seconds"`
 	EffectiveTTLSeconds int64    `json:"effective_ttl_seconds"`
 	// RequestedBy is the authenticated principal that asked for the identity:
-	// the person or workload that delegated to the agent (Q4). Issuances
-	// recorded before it existed carry none.
+	// the person or workload that delegated to the agent (Q4). An issuance
+	// recorded before it existed takes it from its event's recorded actor
+	// (Q4-L2), and RequestedBySource says so; one whose event recorded no
+	// actor carries none.
 	RequestedBy string `json:"requested_by,omitempty"`
+	// RequestedBySource is BrokerRequesterFromEventActor when RequestedBy was
+	// derived from the issuance event's recorded actor, empty when the
+	// issuance recorded it itself (Q4-L2).
+	RequestedBySource string `json:"requested_by_source,omitempty"`
 }
+
+// BrokerRequesterFromEventActor marks a requester read from the issuance
+// event's recorded actor (Q4-L2).
+const BrokerRequesterFromEventActor = "event_actor"
 
 func validateBrokerIssuance(c Certificate) error {
 	m := c.BrokerIssuance

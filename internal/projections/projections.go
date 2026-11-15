@@ -6711,6 +6711,17 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if rule, derived := DeriveKeyOrigin(e, pl); derived {
 			keyOrigin, derivation, proofEventID = string(rule.Origin()), string(rule), e.ID
 		}
+		// Q4-L2: an agent broker issuance from before Q4 recorded no
+		// requester in its payload. Its event's recorded actor is the
+		// authenticated principal whose request issued it, so that names the
+		// requester, and the issuance says it was derived. One whose event
+		// recorded no actor keeps none.
+		broker := pl.BrokerIssuance
+		if broker != nil && broker.RequestedBy == "" && e.Actor != nil && strings.TrimSpace(e.Actor.Subject) != "" {
+			derived := *broker
+			derived.RequestedBy, derived.RequestedBySource = strings.TrimSpace(e.Actor.Subject), store.BrokerRequesterFromEventActor
+			broker = &derived
+		}
 		if err := p.store.ApplyCertificateRecordedTx(ctx, tx, store.Certificate{
 			ID: pl.ID, TenantID: e.TenantID, CAID: pl.CAID, OwnerID: pl.OwnerID, Subject: pl.Subject, SANs: pl.SANs,
 			Issuer: pl.Issuer, Serial: pl.Serial, Fingerprint: pl.Fingerprint, KeyAlgorithm: pl.KeyAlgorithm,
@@ -6720,7 +6731,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			CertificateDER: pl.CertificateDER, CertificatePEM: pl.CertificatePEM,
 			IssuanceResponse:       pl.IssuanceResponse,
 			IssuanceIdempotencyKey: pl.IssuanceIdempotencyKey, IssuanceRequestBinding: pl.IssuanceRequestBinding,
-			BrokerIssuance: pl.BrokerIssuance,
+			BrokerIssuance: broker,
 			ReplacesID:     pl.ReplacesID, CreatedAt: e.Time,
 			// B5/B2: the custody claim is projected like any other field, so a
 			// Rebuild() reproduces it. Without this the column stayed empty no

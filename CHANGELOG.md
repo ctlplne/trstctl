@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An agent broker issuance recorded before Q4 takes its requester from its event's recorded actor (Q4-L2), marked as
+  derived (`requested_by_source: event_actor`; the graph's `DELEGATED` edge names the source); one whose event recorded
+  no actor marks its certificate `requested_by: unknown` in the graph. A read-model rebuild derives it for issuances
+  projected before.
 - A machine-login method's `exchange_uses` (M4-L4; 1-10, not aws-iam) lets one subject token make that many token
   exchanges before it expires, so a pod need not request a fresh projected token for each; the next is refused naming
   the count, the single-use record counts the uses (migration 0488), and the console's methods table names the count.

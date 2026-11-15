@@ -1385,7 +1385,9 @@ never live in the API process. What you can do end to end against the running bi
   (`holder_recorded: true`), and privacy export, erasure and retention cover the
   record; leases opened before G1-L1 name no requester. Since Q4 the person who asked the agent broker for an
   identity DELEGATED to the agent, and a live agent credential reaches the tools
-  its scopes name; issuances recorded before Q4 name no requester. Only an agent
+  its scopes name; an issuance recorded before Q4 takes its requester from its
+  event's recorded actor once the read model is rebuilt (Q4-L2), and one whose event
+  recorded no actor is marked `requested_by: unknown`. Only an agent
   scope's grant names its action (Q4-L3), so an answer for one action keeps every
   other grant, whose record names none. AGID chain-bound credentials and their
   delegation chains are read too (Q4-L4), at most 10,000 credentials a build; a cut

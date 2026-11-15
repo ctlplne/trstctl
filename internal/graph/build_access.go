@@ -169,9 +169,25 @@ func addAIAgents(g *Graph, certs []store.Certificate, principals principalIndex,
 		}
 		id, cert := "aiagent:"+issuance.AgentID, credentialID("cert", c.ID)
 		g.AddEdge(Edge{From: id, To: cert, Type: EdgeHolds, Source: "agent broker issuance", Confidence: confidenceAuthority})
+		if issuance.RequestedBy == "" {
+			// Q4-L2: an issuance from before Q4 whose event recorded no actor
+			// names no requester; the credential says so rather than leave a
+			// reader to guess nobody delegated.
+			if node, ok := g.Node(cert); ok {
+				if node.Attrs == nil {
+					node.Attrs = map[string]string{}
+				}
+				node.Attrs["requested_by"] = "unknown"
+				g.AddNode(node)
+			}
+		}
 		if issuance.RequestedBy != "" {
+			source := "agent broker issuance requester"
+			if issuance.RequestedBySource == store.BrokerRequesterFromEventActor {
+				source = "agent broker issuance event actor"
+			}
 			if from := principals.node(g, issuance.RequestedBy); from != id {
-				g.AddEdge(Edge{From: from, To: id, Type: EdgeDelegated, Source: "agent broker issuance requester", Confidence: confidenceAuthority})
+				g.AddEdge(Edge{From: from, To: id, Type: EdgeDelegated, Source: source, Confidence: confidenceAuthority})
 			}
 		}
 		if c.Status != "active" || (c.NotAfter != nil && !c.NotAfter.After(now)) {
