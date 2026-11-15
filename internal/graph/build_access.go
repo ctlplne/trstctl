@@ -342,9 +342,23 @@ func addPAMAccess(ctx context.Context, st *store.Store, tenantID string, g *Grap
 
 func addPAMSession(g *Graph, principals principalIndex, s store.PAMSessionAccess, approvers []string) {
 	id := credentialID("pam", s.ID)
+	// G1-L6: approval_recorded is "true" when the approval is known (recorded
+	// or derived from the activation), "false" when the session recorded that
+	// it consumed none, and "unrecorded" for a session from before the link
+	// whose activation named none: never "false" for what is not known.
+	recorded, link := "unrecorded", s.ApprovalLink
+	switch {
+	case s.ApprovalRequestID != "":
+		recorded = "true"
+	case s.ApprovalLink == store.PAMApprovalLinkRecorded:
+		recorded = "false"
+	}
+	if link == "" {
+		link = "unrecorded"
+	}
 	g.AddNode(Node{ID: id, Kind: KindCredential, Name: s.Role + "@" + s.TargetID, Attrs: map[string]string{
 		"credential_kind": "pam_session", "target_type": s.TargetType, "role": s.Role, "status": s.Status,
-		"expires_at": s.ExpiresAt.UTC().Format(time.RFC3339), "approval_recorded": boolString(s.ApprovalRequestID != ""),
+		"expires_at": s.ExpiresAt.UTC().Format(time.RFC3339), "approval_recorded": recorded, "approval_link": link,
 	}})
 	target := pamTargetResourceID(s.TargetType, s.TargetID)
 	if _, ok := g.Node(target); !ok {

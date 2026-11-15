@@ -9172,6 +9172,11 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, pl.Approval, e.ID, e.Time); err != nil {
 			return err
 		}
+		// G1-L6: the approval this activation consumed, for a started event
+		// from before the session's own link to read.
+		if err := p.store.ApplyPAMSessionApprovalLinkTx(ctx, tx, e.TenantID, pl.ID, pl.Approval.RequestID, e.Time); err != nil {
+			return err
+		}
 		if pl.TargetType == "ssh" {
 			return p.store.ApplyPAMSSHActivationRequestedTx(ctx, tx, e.TenantID, pl.ID, pl.RequestID, e.Time)
 		}
@@ -9765,12 +9770,30 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 				return err
 			}
 		}
+		// G1-L6: how the session's approval link is known. Every started
+		// event at schema version 2 was written by code that records the link
+		// (G1 came first), so one that names none consumed none. An older
+		// event that names none takes the approval its activation named, if
+		// that was recorded; otherwise the link stays unrecorded, never false.
+		approvalID, approvalLink := pl.ApprovalRequestID, ""
+		switch {
+		case approvalID != "" || schemaVersionOf(e) >= PAMCommandRulesEventSchemaVersion:
+			approvalLink = store.PAMApprovalLinkRecorded
+		default:
+			derived, found, err := p.store.PAMSessionApprovalLinkTx(ctx, tx, e.TenantID, pl.ID)
+			if err != nil {
+				return err
+			}
+			if found {
+				approvalID, approvalLink = derived, store.PAMApprovalLinkDerived
+			}
+		}
 		return p.store.ApplyPAMSessionStartedTx(ctx, tx, store.PAMSession{
 			TenantID: e.TenantID, ID: pl.ID, TargetType: pl.TargetType, TargetID: pl.TargetID,
 			Role: pl.Role, Status: pl.Status, Subject: pl.Subject, RequestedBy: pl.RequestedBy,
 			Reason: pl.Reason, AttestationID: pl.AttestationID, Attestation: attestation, BackendRef: pl.BackendRef,
 			SSHKeyID: pl.SSHKeyID, SSHSerial: pl.SSHSerial, IdempotencyKey: pl.IdempotencyKey,
-			Audit: pl.Audit, StartedAt: startedAt, ExpiresAt: pl.ExpiresAt, ApprovalRequestID: pl.ApprovalRequestID,
+			Audit: pl.Audit, StartedAt: startedAt, ExpiresAt: pl.ExpiresAt, ApprovalRequestID: approvalID, ApprovalLink: approvalLink,
 			Delivery: pl.Delivery, GatewayAgentID: pl.GatewayAgentID, GatewayTicketDigest: pl.GatewayTicketDigest,
 			SSHPrincipal: pl.SSHPrincipal, CommandPolicy: pl.CommandPolicy, WebSignIn: pl.WebSignIn, AccountRotationProvider: pl.AccountRotationProvider,
 		})

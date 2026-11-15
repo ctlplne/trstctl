@@ -28,8 +28,13 @@ type PAMSessionAccess struct {
 	Subject           string
 	RequestedBy       string
 	ApprovalRequestID string
-	StartedAt         time.Time
-	ExpiresAt         time.Time
+	// ApprovalLink is how the approval link is known (G1-L6):
+	// PAMApprovalLinkRecorded, PAMApprovalLinkDerived, or "" (unrecorded).
+	// A row projected before the link state read recorded when it names an
+	// approval.
+	ApprovalLink string
+	StartedAt    time.Time
+	ExpiresAt    time.Time
 }
 
 // ListLivePAMSessionAccessPage returns PAM sessions that may still grant access
@@ -44,7 +49,9 @@ func (s *Store) ListLivePAMSessionAccessPage(ctx context.Context, tenantID strin
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, target_type, target_id, role, status, subject, requested_by,
-			        approval_request_id, started_at, expires_at
+			        approval_request_id,
+			        COALESCE(approval_link, CASE WHEN approval_request_id <> '' THEN 'recorded' ELSE '' END),
+			        started_at, expires_at
 			   FROM pam_sessions
 			  WHERE tenant_id = $1
 			    AND id::text > $2
@@ -60,7 +67,7 @@ func (s *Store) ListLivePAMSessionAccessPage(ctx context.Context, tenantID strin
 		for rows.Next() {
 			var p PAMSessionAccess
 			if err := rows.Scan(&p.ID, &p.TargetType, &p.TargetID, &p.Role, &p.Status, &p.Subject, &p.RequestedBy,
-				&p.ApprovalRequestID, &p.StartedAt, &p.ExpiresAt); err != nil {
+				&p.ApprovalRequestID, &p.ApprovalLink, &p.StartedAt, &p.ExpiresAt); err != nil {
 				return err
 			}
 			out = append(out, p)

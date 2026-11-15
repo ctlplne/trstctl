@@ -16,6 +16,18 @@ func TestPAMSSHSigningIntentUsesEventRecoveryAndSnapshots(t *testing.T) {
 	}
 }
 
+// G1-L6: the approval links a rebuild derives for sessions from before the
+// link are a read model like the sessions themselves.
+func TestPAMSessionApprovalLinksUseEventRecoveryAndSnapshotsG1L6(t *testing.T) {
+	const table = "pam_session_approval_links"
+	if !containsRecoveryTable(TenantScopedTables, table) || !containsRecoveryTable(ReadModelTables, table) || !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s must be erased with its tenant and survive rebuild and snapshot restore", table)
+	}
+	if SnapshotFormatVersion < 137 {
+		t.Fatalf("snapshot format %d could restore sessions without their derived approval links", SnapshotFormatVersion)
+	}
+}
+
 func TestDeploymentTargetsAreExcludedFromEventRebuildAndSnapshots(t *testing.T) {
 	for _, table := range []string{"deployment_target_revisions", "deployment_targets"} {
 		if containsRecoveryTable(ReadModelTables, table) {

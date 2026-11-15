@@ -1379,8 +1379,10 @@ never live in the API process. What you can do end to end against the running bi
   Answers are identical after a restart and a full read-model rebuild. Step 1
   sees only trstctl's own records: permissions inside the target system come from
   G2 for PostgreSQL, MySQL, MongoDB, Redis and AWS STS leases (below), access granted outside trstctl is
-  invisible, and PAM sessions started before this release do not record their
-  approval. A dynamic-secret lease records the subject whose request opened it
+  invisible, and a PAM session started before its approval link (G1) takes the
+  approval its activation named once the read model is rebuilt (G1-L6,
+  `approval_link: derived`); one whose activation named none reads
+  `approval_recorded: unrecorded`, never `false`. A dynamic-secret lease records the subject whose request opened it
   (G1-L1): the graph shows that person or principal holding it
   (`holder_recorded: true`), and privacy export, erasure and retention cover the
   record; leases opened before G1-L1 name no requester. Since Q4 the person who asked the agent broker for an

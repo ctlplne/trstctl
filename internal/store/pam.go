@@ -53,6 +53,10 @@ type PAMSession struct {
 	// ApprovalRequestID is the operation approval the activation consumed (G1).
 	// Sessions projected before migration 0355 read "".
 	ApprovalRequestID string
+	// ApprovalLink says how that link is known (G1-L6): PAMApprovalLinkRecorded,
+	// PAMApprovalLinkDerived, or "" (unrecorded: the started event predates the
+	// link and no activation named an approval).
+	ApprovalLink string
 	// Delivery (A254) is "direct" (the requester received the credential) or
 	// "gateway" (only the named gateway ever holds it). GatewayTicketDigest is
 	// the SHA-256 of the one-time ticket the requester holds; the ticket itself
@@ -97,12 +101,12 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		         requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 		         ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
 		         approval_request_id, delivery, gateway_agent_id, gateway_ticket_digest, ssh_principal, command_policy, web_sign_in,
-		         account_rotation_provider)
+		         account_rotation_provider, approval_link)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7,
 		         $8, $9, $10, $11, $12,
 		         $13, $14, $15::jsonb, $16::jsonb, $17, $18, $19,
 		         $20, $21, NULLIF($22,'')::uuid, $23, $24, $25::jsonb, $26::jsonb,
-		         $27)
+		         $27, NULLIF($28, ''))
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET target_type = EXCLUDED.target_type,
 		        target_id = EXCLUDED.target_id,
@@ -128,12 +132,13 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		        ssh_principal = EXCLUDED.ssh_principal,
  command_policy = EXCLUDED.command_policy,
 		        web_sign_in = EXCLUDED.web_sign_in,
-		        account_rotation_provider = EXCLUDED.account_rotation_provider`,
+		        account_rotation_provider = EXCLUDED.account_rotation_provider,
+		        approval_link = EXCLUDED.approval_link`,
 		p.TenantID, p.ID, p.TargetType, p.TargetID, p.Role, p.Status, p.Subject,
 		p.RequestedBy, p.Reason, p.AttestationID, p.BackendRef, p.SSHKeyID,
 		int64(p.SSHSerial), p.IdempotencyKey, jsonbOrEmpty(p.Audit), p.Attestation, p.StartedAt, p.ExpiresAt, p.EndedAt,
 		p.ApprovalRequestID, pamDelivery(p.Delivery), p.GatewayAgentID, p.GatewayTicketDigest, p.SSHPrincipal, policyJSON, webJSON,
-		p.AccountRotationProvider) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		p.AccountRotationProvider, p.ApprovalLink) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 

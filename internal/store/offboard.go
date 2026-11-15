@@ -119,6 +119,7 @@ var TenantScopedTables = []string{
 	"pam_sessions",
 	"pam_targets",
 	"pam_ssh_activations",
+	"pam_session_approval_links",
 	"compliance_report_runs",
 	"compliance_report_schedules",
 	"secret_rotation_schedule_tick_rows",

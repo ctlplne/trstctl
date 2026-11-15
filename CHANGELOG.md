@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- A PAM session started before its approval link names the approval its activation consumed (G1-L6): the
+  `pam.session.activation_requested` event's approval is recorded per session (migration 0489,
+  `pam_session_approval_links`, a read model in snapshots, format 137), and a started event from before the link takes
+  it, marked `approval_link: derived`, so a read-model rebuild gives older sessions their approvers. The graph's
+  `approval_recorded` is `true` when the approval is known, `false` only when the session recorded that it consumed
+  none, and `unrecorded` otherwise, never `false` for what is not known.
 - The network observer counts a finding's clients past 256 (X1-L7): the count is exact up to 256 distinct clients
   and then an estimate from a fixed 1 KiB HyperLogLog sketch, within a few percent, with `clients_estimated=true` on
   the finding.
