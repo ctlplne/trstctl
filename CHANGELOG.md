@@ -1963,6 +1963,11 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- A full read-model rebuild no longer stops at a connector right-sizing operation whose
+  command row was reclaimed a day after delivery: it re-created the row under a new id,
+  which the operation's delivery and terminal events, naming the original, then failed.
+  The rebuild queues no second command, and the run and its receipt take the original id
+  (A237L4-L4).
 - A full read-model rebuild no longer re-runs a command whose job keeps its outbox row's id
   once that row was reclaimed a day after delivery: credential rotation steps, PAM and
   account discovery scans, cloud machine changes, dynamic-secret issues and revocations,

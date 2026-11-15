@@ -111,8 +111,10 @@ already projected, nor re-runs a rotation step, discovery scan, cloud machine ch
 dynamic-secret, managed-key, code-signing or notification-test command: a command row
 the sweep reclaimed after delivery is re-recorded as delivered, so its job keeps an id and
 nothing is dispatched again. An event recorded but not yet projected when the rebuild
-starts still queues its effect once (A237L4-L1, A237L4-L2, A237L4-L3; see the
-limitations for the effects that come next).
+starts still queues its effect once. A secret sync whose row is re-created pending writes
+no target again, since its receiver takes only an unfinished job, and a connector
+right-sizing operation takes the original command id its events name (A237L4-L1 to
+A237L4-L4).
 
 If a recorded issuance event remains but its certificate read row is missing,
 issuance refuses to sign again. HTTP callers receive `503` with

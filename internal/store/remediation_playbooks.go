@@ -202,9 +202,11 @@ func (s *Store) ApplyConnectorRightSizeRequestedTx(
 	if err != nil {
 		return err
 	}
-	r.OutboxID = &outboxID
 	receipt.TenantID = r.TenantID
-	receipt.OutboxID = &outboxID
+	if outboxID != 0 {
+		r.OutboxID = &outboxID
+		receipt.OutboxID = &outboxID
+	}
 	if err := s.ApplyConnectorDeliveryRecordedTx(ctx, tx, receipt); err != nil {
 		return err
 	}
@@ -232,6 +234,13 @@ func ensureConnectorRightSizeOutboxTx(ctx context.Context, tx pgx.Tx, tenantID, 
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return 0, err
 	}
+	// A237L4-L4: a rebuild re-projecting a request whose command row the
+	// sweep reclaimed after delivery queues no second command. The run and its
+	// receipt hold no id until the operation's later events name the original
+	// one (ApplyConnectorDeliveryRecordedTx, ApplyConnectorRightSizeTerminalTx).
+	if effectsAlreadyQueued(ctx) {
+		return 0, nil
+	}
 	if err := tx.QueryRow(ctx,
 		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane)
 		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
@@ -256,16 +265,19 @@ func (s *Store) ApplyConnectorRightSizeTerminalTx(
 		(status != "succeeded" && status != "failed") || phase == "" || terminalReason == "" {
 		return fmt.Errorf("store: connector right-size terminal state is incomplete")
 	}
+	// A237L4-L4: re-projecting a run whose command row a rebuild did not
+	// re-create, the run holds no id yet and takes the original one this
+	// terminal event names.
 	tag, err := tx.Exec(ctx,
 		`UPDATE remediation_playbook_runs
 		    SET status = $5, phase = $6, terminal_reason = $7,
-		        updated_at = GREATEST(updated_at, $8)
+		        updated_at = GREATEST(updated_at, $8), outbox_id = $4
 		  WHERE tenant_id = $1 AND id = $2 AND action = 'right_size'
-		    AND connector_delivery_id = $3 AND outbox_id = $4
+		    AND connector_delivery_id = $3 AND (outbox_id = $4 OR ($9 AND outbox_id IS NULL))
 		    AND request_binding <> ''
 		    AND (status = 'queued' OR
 		         (status = $5 AND phase = $6 AND terminal_reason = $7))`,
-		tenantID, runID, deliveryID, outboxID, status, phase, terminalReason, at)
+		tenantID, runID, deliveryID, outboxID, status, phase, terminalReason, at, effectsAlreadyQueued(ctx))
 	if err != nil {
 		return err
 	}

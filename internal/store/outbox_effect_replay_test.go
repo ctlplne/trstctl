@@ -19,9 +19,8 @@ import (
 // before; the outbox is not truncated, but a delivered row is reclaimed a day
 // after delivery, so a projection that dedupes on its own row queues again.
 var outboxEffectReplayExemptions = map[string]string{
-	"ApplyRestoreDrillAttestationTx":   "the restore-drill attestation is kept across a rebuild (preserveIndependentAttestationsTx) and its alert is skipped for a preserved attestation (preservedRestoreDrillAttestationTx)",
-	"ApplySecretSyncIntentTx":          "open lead A237L4-L4: secret_sync_jobs.outbox_id holds the row's id and the secret-sync outbox trigger admits only a pending row; a retained row is already reattached",
-	"ensureConnectorRightSizeOutboxTx": "open lead A237L4-L4: the run's terminal event matches the row's original id, which a re-created row cannot have",
+	"ApplyRestoreDrillAttestationTx": "the restore-drill attestation is kept across a rebuild (preserveIndependentAttestationsTx) and its alert is skipped for a preserved attestation (preservedRestoreDrillAttestationTx)",
+	"ApplySecretSyncIntentTx":        "a retained row is reattached; a reclaimed one is re-created pending (the secret-sync outbox trigger admits no other state), and the dispatcher settles it without receiver I/O because the receiver-start CAS takes only a pending job, whose completion the rebuild replays (TestSecretSyncPurgedTerminalRebuildUsesProductionDispatcherWithoutOldIOAUD109)",
 }
 
 var outboxInsertRE = regexp.MustCompile(`INSERT INTO outbox\b`)

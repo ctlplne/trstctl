@@ -104,11 +104,15 @@ func (s *Store) ApplyConnectorDeliveryRecordedTx(ctx context.Context, tx pgx.Tx,
 		        adopted_predecessor_fingerprint = CASE WHEN $17 <> '' THEN $17 ELSE adopted_predecessor_fingerprint END
 		  WHERE tenant_id = $2
 		    AND (($3::bigint IS NOT NULL AND outbox_id = $3)
-		      OR ($3::bigint IS NULL AND id = $1))
+		      OR ($3::bigint IS NULL AND id = $1)
+		      OR ($18 AND $3::bigint IS NOT NULL AND id = $1 AND outbox_id IS NULL))
         AND coalesce(latest_event_sequence, 0) <= $16`,
 		r.ID, r.TenantID, r.OutboxID, r.IdentityID, r.Destination, r.Connector, r.Target,
 		r.Fingerprint, r.Status, r.Attempts, r.Reason, r.Detail, r.RollbackRef,
-		r.IdempotencyKey, r.UpdatedAt, r.EventSequence, r.AdoptedPredecessor)
+		r.IdempotencyKey, r.UpdatedAt, r.EventSequence, r.AdoptedPredecessor,
+		// A237L4-L4: a receipt a rebuild re-projected without its command
+		// row (the sweep reclaimed it) takes the original id this event names.
+		effectsAlreadyQueued(ctx))
 	if err != nil {
 		return err
 	}

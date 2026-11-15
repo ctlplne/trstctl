@@ -1445,9 +1445,9 @@ not this file.
 | `internal/store/compliance_report_run.go:294` | non-negative by constraint (CWE-190) |
 | `internal/store/compliance_report_run.go:312` | event sequence is a positive PostgreSQL bigint. |
 | `internal/store/compliance_report_run_lock.go:33` | advisory-lock keys intentionally use all 64 hash bits, including the sign bit. |
-| `internal/store/connector_lifecycle.go:468` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190) |
-| `internal/store/connector_lifecycle.go:522` | constrained positive PostgreSQL bigint (CWE-190) |
-| `internal/store/connector_lifecycle.go:525` | constrained positive PostgreSQL bigint (CWE-190) |
+| `internal/store/connector_lifecycle.go:472` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190) |
+| `internal/store/connector_lifecycle.go:526` | constrained positive PostgreSQL bigint (CWE-190) |
+| `internal/store/connector_lifecycle.go:529` | constrained positive PostgreSQL bigint (CWE-190) |
 | `internal/store/credential_usage.go:87` | bounded to int64 above (CWE-190) |
 | `internal/store/cryptoasset_migration_test.go:73` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/store/deployment_kek_domain.go:153` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
