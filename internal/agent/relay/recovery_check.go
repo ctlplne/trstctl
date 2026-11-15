@@ -229,14 +229,19 @@ func pinnedCommandDigest(action connector.LocalAction) string {
 }
 
 // HostDeployActionNames lists the logical actions a host connector runs while
-// it deploys to a target with this configuration. A recovery action outside
-// the list is pinned but never run by a replacement deploy.
-func HostDeployActionNames(connectorName string, targetConfig json.RawMessage) ([]string, error) {
+// it deploys to a target with this configuration and key custody (a TPM-held
+// key on nginx is activated by nginx-upgrade, TPM-O1-L3). A recovery action
+// outside the list is pinned but never run by a replacement deploy.
+func HostDeployActionNames(connectorName string, targetConfig json.RawMessage, keyCustody string) ([]string, error) {
 	var target HostTargetConfig
 	if len(targetConfig) > 0 {
 		if err := json.Unmarshal(targetConfig, &target); err != nil {
 			return nil, err
 		}
+	}
+	target, err := hostTargetForKeyCustody(DeployIntent{Connector: connectorName, KeyCustody: keyCustody}, target)
+	if err != nil {
+		return nil, err
 	}
 	actions, err := hostPreflightActions(connectorName, target)
 	if err != nil {

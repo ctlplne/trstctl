@@ -80,6 +80,7 @@ func TestSwtpmContainerHostKeyJourneyTPMO1(t *testing.T) {
 		"grep -q TPMO1_JOURNEY_OK /tmp/journey.txt",
 		"grep -q TPMO1L3_RENEWAL_UNDER_LOAD_OK /tmp/journey.txt",
 		"grep -q TPMO1L1_REPROTECT_OK /tmp/journey.txt",
+		"grep -q TPMO1L3L1_STOPPED_NGINX_STARTED_OK /tmp/journey.txt",
 		goTest + " ./internal/agent/relay -run 'TestSwtpmHostRenewalJourneysHAProxyAndPostfixTPMO1L2$' | tee /tmp/l2-journeys.txt",
 		"grep -q TPMO1L2_HAPROXY_OK /tmp/l2-journeys.txt",
 		"grep -q TPMO1L2_POSTFIX_DOVECOT_OK /tmp/l2-journeys.txt",
@@ -95,6 +96,7 @@ func TestSwtpmContainerHostKeyJourneyTPMO1(t *testing.T) {
 		"TPMO1_PROVIDER_TLS12_REFUSED_AS_DOCUMENTED", "TPMO1L3_INPLACE_RELOAD_FAILS_AS_DOCUMENTED", "TPMO1L3_TWO_WORKERS_FAIL_AS_DOCUMENTED",
 		"TPMO1L2_APACHE_EVENT_FAILS_AS_DOCUMENTED", "TPMO1L2_HAPROXY_THREADS_FAIL_AS_DOCUMENTED", "TPMO1L2_POSTGRESQL_FAILS_AS_DOCUMENTED",
 		"TPMO1L2_MARIADB_FAILS_AS_DOCUMENTED", "TPMO1_JOURNEY_OK", "TPMO1L3_RENEWAL_UNDER_LOAD_OK", "TPMO1L1_REPROTECT_OK",
+		"TPMO1L3L1_STOPPED_NGINX_STARTED_OK",
 		"TPMO1L2_HAPROXY_OK", "TPMO1L2_POSTFIX_DOVECOT_OK"} {
 		if !strings.Contains(string(out), marker) {
 			t.Fatalf("the TPM-O1 swtpm journey did not report %s:\n%s", marker, out)

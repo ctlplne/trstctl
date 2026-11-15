@@ -4,7 +4,9 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -16,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -100,12 +103,35 @@ func (a *API) targetContainments(ctx context.Context, tenantID, identityID, targ
 	return out, nil
 }
 
+// endpointDeployKeyCustody is the key custody a deploy of the connector under
+// the profile requirement uses: "tpm" when the profile requires TPM-held host
+// keys and the connector installs one (TPM-O1), so the recovery readiness
+// lists the actions a TPM-held key's deploy runs (TPM-O1-L3-L1).
+func (a *API) endpointDeployKeyCustody(ctx context.Context, tenantID string, requirement orchestrator.ProfileApprovalRequirement,
+	connectorName string) (string, error) {
+	if requirement.ProfileName == "" || !slices.Contains(relay.TPMHostKeyConnectors(), connectorName) {
+		return "", nil
+	}
+	record, err := a.store.GetProfileVersion(ctx, tenantID, requirement.ProfileName, requirement.ProfileVersion)
+	if err != nil {
+		return "", err
+	}
+	var policy profile.CertificateProfile
+	if err := json.Unmarshal(record.Spec, &policy); err != nil {
+		return "", fmt.Errorf("decode endpoint certificate profile: %w", err)
+	}
+	if policy.HostKeyAttestation.Required {
+		return relay.HostKeyCustodyTPM, nil
+	}
+	return "", nil
+}
+
 // endpointRecoveryReadiness reads whether a replacement for an identity whose
 // listener containment stopped can bring that listener back. It is nil when
 // the identity's latest containment of this target did not stop a listener;
 // the preview then claims nothing about recovery.
 func (a *API) endpointRecoveryReadiness(ctx context.Context, tenantID, identityID string,
-	target endpointBindingTargetSummary) (*endpointRecoveryReadiness, error) {
+	target endpointBindingTargetSummary, keyCustody string) (*endpointRecoveryReadiness, error) {
 	if target.ID == "" {
 		return nil, nil
 	}
@@ -116,7 +142,7 @@ func (a *API) endpointRecoveryReadiness(ctx context.Context, tenantID, identityI
 	stop := contained[0]
 	out := &endpointRecoveryReadiness{State: recoveryUnchecked, Reasons: []string{},
 		ContainedAt: stop.UpdatedAt, ContainedFingerprint: stop.Fingerprint}
-	out.DeployActions, err = relay.HostDeployActionNames(target.Connector, target.Config)
+	out.DeployActions, err = relay.HostDeployActionNames(target.Connector, target.Config, keyCustody)
 	if err != nil {
 		out.State = recoveryNotReady
 		out.Reasons = append(out.Reasons, "the "+target.Connector+" connector's deploy actions could not be read for this target: "+err.Error())

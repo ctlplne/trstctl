@@ -492,4 +492,44 @@ exec /usr/sbin/nginx "$@"
 		t.Fatalf("a separate client sees another certificate after the re-protection: %v\n%s", err, logs())
 	}
 	t.Logf("TPMO1L1_REPROTECT_OK fingerprint=%s spki=%s", successor.SHA256Fingerprint, successor.SPKISHA256)
+
+	// TPM-O1-L3-L1: a containment stopped nginx, and the replacement deploy's
+	// nginx-upgrade finds it stopped. Debian's init-script upgrade does not
+	// start a stopped nginx, so the profile maps nginx-upgrade to the
+	// documented script that starts a stopped nginx and re-executes a running
+	// one; the init script reads the provider's config from /etc/default/nginx.
+	defaults := fmt.Sprintf("export OPENSSL_CONF=%s TPM2OPENSSL_TCTI=tabrmd:bus_type=session %s\n", sslConf, busEnv)
+	if err := os.WriteFile("/etc/default/nginx", []byte(defaults), 0o644); err != nil { // #nosec G306 -- the container's stock nginx defaults file (CWE-276)
+		t.Fatal(err)
+	}
+	reexec := filepath.Join(dir, "nginx-upgrade")
+	reexecScript := []byte(`#!/bin/sh
+# nginx-upgrade: re-execute a running nginx, start a stopped one.
+if [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.pid)" 2>/dev/null; then
+  exec /etc/init.d/nginx upgrade
+fi
+exec /etc/init.d/nginx start
+`)
+	if err := os.WriteFile(reexec, reexecScript, 0o755); err != nil { // #nosec G306,G703 -- the fixture IS an executable, in the test's own temp directory (CWE-276, CWE-22)
+		t.Fatal(err)
+	}
+	service("stop")
+	for i := 0; i < 50 && journeyHandshakes(addr, 1, ch.served[2]) == 1; i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if journeyHandshakes(addr, 1, ch.served[2]) == 1 {
+		t.Fatal("nginx still serves after the stop")
+	}
+	profile.Actions[1] = connector.LocalAction{LogicalName: "nginx-upgrade", Command: reexec, Timeout: time.Minute}
+	ch.jobs = []relay.Job{renewal(80)}
+	if _, err := relay.RunOnceWithSelfUpgradeAndHostRollback(ctx, ch, http.DefaultClient, profile, nil, nil, rollback, 4, 120); err != nil {
+		t.Fatalf("the renewal of a stopped nginx: %v\n%s", err, logs())
+	}
+	if len(ch.reports) != 4 || ch.reports[3].outcome != transport.OutcomeVerified || len(ch.served) != 4 {
+		t.Fatalf("reports = %+v, want the renewal of the stopped nginx verified\n%s", ch.reports, logs())
+	}
+	if ok := journeyHandshakes(addr, 8, ch.served[3]); ok != 8 {
+		t.Fatalf("%d of 8 concurrent handshakes saw the certificate the started nginx serves\n%s", ok, logs())
+	}
+	t.Logf("TPMO1L3L1_STOPPED_NGINX_STARTED_OK fingerprint=%s", crypto.SHA256Hex(ch.served[3]))
 }

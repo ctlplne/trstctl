@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3489 annotated sites across 35 rules. Each row is
+3490 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -2636,7 +2636,7 @@ not this file.
 | `internal/agent/relay/plugins.go:271` | sibling of an operator-configured module (CWE-22) |
 | `internal/agent/relay/plugins.go:276` | sibling of an operator-configured module (CWE-22) |
 | `internal/agent/relay/postgresql_verification_test.go:154` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
-| `internal/agent/relay/recovery_check.go:273` | the host operator's own pinned executable from the host profile (CWE-22) |
+| `internal/agent/relay/recovery_check.go:278` | the host operator's own pinned executable from the host profile (CWE-22) |
 | `internal/agent/relay/relay_test.go:675` | certPath is created beneath this test's private t.TempDir, |
 | `internal/agent/relay/relay_test.go:1106` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
 | `internal/agent/relay/rollback_test.go:224` | test-owned temporary path (CWE-22) |
@@ -3235,7 +3235,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (144 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (145 sites)
 
 | Location | Reason |
 |---|---|
@@ -3280,6 +3280,7 @@ not this file.
 | `internal/agent/relay/recovery_check_test.go:31` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/relay/selfupgrade_test.go:35` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/relay/swtpm_host_key_journey_test.go:284` | the container's stock nginx config path, as the package installs it (CWE-276) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:502` | the container's stock nginx defaults file (CWE-276) |
 | `internal/agent/relay/swtpm_host_key_l2_journey_test.go:100` | the tpm2 provider config is not secret (CWE-276) |
 | `internal/agent/relay/swtpm_host_key_l2_journey_test.go:464` | the container's stock dovecot config path (CWE-276) |
 | `internal/agent/secretrender/replace_windows_test.go:26` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

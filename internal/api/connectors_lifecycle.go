@@ -1232,7 +1232,11 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	}
 	var recovery *endpointRecoveryReadiness
 	if replacedResp != nil {
-		if recovery, err = a.endpointRecoveryReadiness(ctx, tenantID, replaced.ID, target); err != nil {
+		keyCustody, err := a.endpointDeployKeyCustody(ctx, tenantID, profileRequirement, target.Connector)
+		if err != nil {
+			return endpointBindingPreviewResponse{}, err
+		}
+		if recovery, err = a.endpointRecoveryReadiness(ctx, tenantID, replaced.ID, target, keyCustody); err != nil {
 			return endpointBindingPreviewResponse{}, err
 		}
 	}

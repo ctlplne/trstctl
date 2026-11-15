@@ -195,15 +195,33 @@ func TestRecoveryCheckReportValidationIsStrict(t *testing.T) {
 }
 
 func TestHostDeployActionNamesFollowTheConnector(t *testing.T) {
-	names, err := HostDeployActionNames("nginx", json.RawMessage(`{"cert_path":"/etc/nginx/a.crt","key_path":"/etc/nginx/a.key"}`))
+	names, err := HostDeployActionNames("nginx", json.RawMessage(`{"cert_path":"/etc/nginx/a.crt","key_path":"/etc/nginx/a.key"}`), "")
 	if err != nil || !slices.Equal(names, []string{"nginx"}) {
 		t.Fatalf("nginx deploy actions = %v err=%v", names, err)
 	}
-	names, err = HostDeployActionNames("haproxy", json.RawMessage(`{"crt_path":"/etc/haproxy/a.pem","config_path":"/etc/haproxy/haproxy.cfg"}`))
+	names, err = HostDeployActionNames("haproxy", json.RawMessage(`{"crt_path":"/etc/haproxy/a.pem","config_path":"/etc/haproxy/haproxy.cfg"}`), "")
 	if err != nil || !slices.Equal(names, []string{"haproxy", "systemctl"}) {
 		t.Fatalf("haproxy deploy actions = %v err=%v", names, err)
 	}
-	if _, err := HostDeployActionNames("future-connector", nil); err == nil {
+	if _, err := HostDeployActionNames("future-connector", nil, ""); err == nil {
 		t.Fatal("a connector without host deploy actions named some")
+	}
+}
+
+// TestHostDeployActionNamesFollowATPMHeldKeyTPMO1L3L1: a deploy of a
+// TPM-held key on nginx runs nginx -t and the profile's nginx-upgrade, so a
+// replacement after containment can run a recovery action pinned to
+// nginx-upgrade; haproxy's actions are the same either way.
+func TestHostDeployActionNamesFollowATPMHeldKeyTPMO1L3L1(t *testing.T) {
+	names, err := HostDeployActionNames("nginx", json.RawMessage(`{"cert_path":"/etc/nginx/a.crt","key_path":"/etc/nginx/a.key"}`), HostKeyCustodyTPM)
+	if err != nil || !slices.Equal(names, []string{"nginx", "nginx-upgrade"}) {
+		t.Fatalf("TPM-held nginx deploy actions = %v err=%v", names, err)
+	}
+	names, err = HostDeployActionNames("haproxy", json.RawMessage(`{"crt_path":"/etc/haproxy/a.pem","config_path":"/etc/haproxy/haproxy.cfg"}`), HostKeyCustodyTPM)
+	if err != nil || !slices.Equal(names, []string{"haproxy", "systemctl"}) {
+		t.Fatalf("TPM-held haproxy deploy actions = %v err=%v", names, err)
+	}
+	if _, err := HostDeployActionNames("nginx", json.RawMessage(`{"cert_path":"/c","key_path":"/k","reload_action":"x"}`), ""); err == nil {
+		t.Fatal("an nginx target named its own reload action")
 	}
 }

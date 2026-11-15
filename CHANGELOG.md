@@ -2001,6 +2001,12 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- After a containment, the replacement preview lists `nginx-upgrade` among the deploy
+  actions of an nginx target whose profile requires TPM-held keys, so a recovery
+  action pinned to it reads as one the replacement runs (TPM-O1-L3-L1). The TPM docs
+  give the `nginx-upgrade` script that starts an nginx a containment stopped and
+  re-executes a running one, since Debian's init-script upgrade does not start a
+  stopped nginx; proven against swtpm with the stock nginx.
 - A TPM-held host key on nginx is activated by re-executing nginx, not reloading it
   (TPM-O1-L3). With OpenSSL 3's `tpm2` provider, an in-place reload left nginx failing
   every handshake or still serving the previous certificate, and the documented host

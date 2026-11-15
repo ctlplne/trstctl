@@ -595,8 +595,8 @@ of its pinned command line (never the path), and what one local TLS probe of
 the listener saw (`stopped`, `serving`, `serving_revoked` or `unverified`).
 Build the preview again once it answers. It reads `ready` only when a check
 requested after the stop shows a recovery action the target's connector runs
-while deploying (for NGINX, `nginx`) and a listener that is not serving the
-contained leaf; otherwise it names what is missing, and creating the
+while deploying (for NGINX, `nginx`, and `nginx-upgrade` too when the key is
+TPM-held) and a listener that is not serving the contained leaf; otherwise it names what is missing, and creating the
 replacement answers 409 with the same reasons and queues nothing. A check that
 ran before the stop, or before the target or its enrolled host changed, reads
 `stale`. `GET /api/v1/connectors/targets/{id}/recovery-check` (CLI
@@ -1158,6 +1158,24 @@ new one, which loads the configuration and the key in a fresh process, and the o
 master finishes its connections and exits, so no handshake fails. Under systemd,
 map `nginx-upgrade` to `systemctl restart nginx`, which also loads the key in a fresh
 master, with a brief outage while nginx starts.
+
+Where a containment can stop this nginx, a replacement deploy finds it stopped, and
+the init script's upgrade does not start a stopped nginx (TPM-O1-L3-L1). Map
+`nginx-upgrade` to a script that starts it, and give the init script the provider's
+config in `/etc/default/nginx` (`export OPENSSL_CONF=/etc/nginx/openssl-tpm2.cnf`):
+
+```sh
+#!/bin/sh
+# /usr/local/sbin/nginx-upgrade: re-execute a running nginx, start a stopped one.
+if [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.pid)" 2>/dev/null; then
+  exec /etc/init.d/nginx upgrade
+fi
+exec /etc/init.d/nginx start
+```
+
+`systemctl restart nginx` starts a stopped nginx too. The replacement preview lists
+`nginx-upgrade` among a TPM-held target's deploy actions, so a containment's
+`recovery_action` may name it.
 
 ```
 openssl_conf = openssl_init
