@@ -1591,9 +1591,13 @@ never live in the API process. What you can do end to end against the running bi
   over UDP to a watched port (X1-L4; proven on captures of nginx 1.30 HTTP/3 with
   OpenSSL 3.5's QUIC client and OpenSSL DTLS 1.2, with the RFC 9001 and RFC 9369 key
   vectors), and needs Linux AF_PACKET for live capture (other platforms report an
-  error). A QUIC Retry (the client's next Initial keyed by the server's connection
-  ID) follows RFC 9001 but was not among the captures, and a connection that migrates
-  to another address mid-handshake is not followed.
+  error). A QUIC Retry is read as the client reads it (X1-L4R; proven on nginx 1.30.6
+  with `quic_retry on`), and a QUIC connection is followed to a new address by its
+  connection IDs (X1-L4R; proven on a NAT rebinding in the middle of a handshake with
+  Caddy 2.11.4). A client that moves after the handshake to a connection ID the server
+  issued in encrypted frames counts as another connection, as QUIC intends (RFC 9000
+  section 9.5), once its handshake was reported; DTLS names no connection ID before its
+  handshake ends.
 - Host TLS session observer (X5): an agent with the session-observer role reports,
   from probes on the host's OpenSSL 3 libraries, each TLS handshake's version, suite,
   key-exchange group, HelloRetryRequest and the peer's certificate — the one TLS 1.3

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3439 annotated sites across 35 rules. Each row is
+3440 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1060,7 +1060,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (550 sites)
+### G115 — CWE-190 Integer overflow or wraparound (551 sites)
 
 | Location | Reason |
 |---|---|
@@ -1114,11 +1114,11 @@ not this file.
 | `internal/agent/observe/capture_linux.go:39` | bounded by the check above; MaxWatchedPorts keeps it to tens (CWE-190) |
 | `internal/agent/observe/closed_flow_test.go:100` | the test's client index fits three bytes (CWE-190) |
 | `internal/agent/observe/closed_flow_test.go:115` | small positive test counts (CWE-190) |
-| `internal/agent/observe/flows.go:286` | TCP sequence numbers wrap; the difference read as a signed 32-bit distance is RFC 1982 serial arithmetic (CWE-190) |
-| `internal/agent/observe/flows.go:312` | one segment's payload is under 64 KiB, and sequence numbers wrap mod 2^32 by design (CWE-190) |
-| `internal/agent/observe/flows.go:334` | RFC 1982 serial arithmetic on wrapping sequence numbers (CWE-190) |
-| `internal/agent/observe/flows.go:363` | RFC 1982 serial arithmetic on wrapping sequence numbers (CWE-190) |
-| `internal/agent/observe/flows.go:369` | a held payload is under MaxDirectionBytes, and sequence numbers wrap by design (CWE-190) |
+| `internal/agent/observe/flows.go:297` | TCP sequence numbers wrap; the difference read as a signed 32-bit distance is RFC 1982 serial arithmetic (CWE-190) |
+| `internal/agent/observe/flows.go:323` | one segment's payload is under 64 KiB, and sequence numbers wrap mod 2^32 by design (CWE-190) |
+| `internal/agent/observe/flows.go:345` | RFC 1982 serial arithmetic on wrapping sequence numbers (CWE-190) |
+| `internal/agent/observe/flows.go:374` | RFC 1982 serial arithmetic on wrapping sequence numbers (CWE-190) |
+| `internal/agent/observe/flows.go:380` | a held payload is under MaxDirectionBytes, and sequence numbers wrap by design (CWE-190) |
 | `internal/agent/observe/flows_test.go:23` | bounded test packet length (CWE-190) |
 | `internal/agent/observe/flows_test.go:62` | bounded test fixture length (CWE-190) |
 | `internal/agent/observe/fragments_test.go:74` | fixture lengths fit (CWE-190) |
@@ -1243,12 +1243,13 @@ not this file.
 | `internal/crypto/pgsignin/pgsignin.go:349` | a SCRAM client-first message is under 100 bytes (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:407` | sign-in messages are bounded and small (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin_test.go:101` | a fake server's messages are a few bytes (CWE-190) |
-| `internal/crypto/quicinitial/quicinitial.go:97` | the token length was checked against the datagram above (CWE-190) |
-| `internal/crypto/quicinitial/quicinitial.go:107` | the length was checked against the datagram above (CWE-190) |
-| `internal/crypto/quicinitial/quicinitial.go:111` | the length was checked against the datagram above (CWE-190) |
-| `internal/crypto/quicinitial/quicinitial.go:158` | one byte of the packet number (CWE-190) |
-| `internal/crypto/quicinitial/quicinitial.go:203` | a key length of at most 32 bytes (CWE-190) |
-| `internal/crypto/quicinitial/quicinitial.go:204` | a label of under 32 bytes (CWE-190) |
+| `internal/crypto/quicinitial/quicinitial.go:108` | the token length was checked against the datagram above (CWE-190) |
+| `internal/crypto/quicinitial/quicinitial.go:118` | the length was checked against the datagram above (CWE-190) |
+| `internal/crypto/quicinitial/quicinitial.go:122` | the length was checked against the datagram above (CWE-190) |
+| `internal/crypto/quicinitial/quicinitial.go:169` | one byte of the packet number (CWE-190) |
+| `internal/crypto/quicinitial/quicinitial.go:201` | a connection ID of at most 20 bytes (CWE-190) |
+| `internal/crypto/quicinitial/quicinitial.go:242` | a key length of at most 32 bytes (CWE-190) |
+| `internal/crypto/quicinitial/quicinitial.go:243` | a label of under 32 bytes (CWE-190) |
 | `internal/crypto/rdp/desktop.go:241` | len(text) is at most MaxClipboard (CWE-190) |
 | `internal/crypto/seal/generation.go:168` | bounded to maxUint16Value by the guard above (CWE-190) |
 | `internal/crypto/seal/seal.go:118` | slice lengths cannot exceed uint64. |
@@ -3477,7 +3478,7 @@ not this file.
 |---|---|
 | `internal/auth/tenantmap_test.go:118` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `internal/crypto/ctlog/ctlog_test.go:134` | fixed-shape test data; the index is in range by construction (CWE-118) |
-| `internal/crypto/quicinitial/quicinitial.go:145` | i < pnLen <= 4, and the mask is one 16-byte AES block (CWE-129) |
+| `internal/crypto/quicinitial/quicinitial.go:156` | i < pnLen <= 4, and the mask is one 16-byte AES block (CWE-129) |
 | `internal/projections/graph_api_test.go:268` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |

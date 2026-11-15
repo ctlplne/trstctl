@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- The passive observer follows a QUIC connection by its connection IDs: when a NAT gives
+  the client a new port in the middle of the handshake, or between two of its later
+  packets, the new address pair is the same connection, counted as `paths_followed`
+  (each report carries `observer_paths_followed`). It acts on a Retry as the client does:
+  one at most, none after the server's Initial, and only one whose integrity tag is right
+  (X1-L4R).
 - The passive observer reads pcapng captures (`--observe-pcap`), as Wireshark and dumpcap
   write them: every section and interface, each interface's timestamp resolution, either
   byte order. A gap that will never fill, a segment the capture missed, is skipped to the

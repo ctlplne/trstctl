@@ -57,6 +57,10 @@ type Stats struct {
 	// the capture never carried, the hold filled, or the connection ended.
 	Resynced     uint64 `json:"resynced"`
 	Unrecognized uint64 `json:"unrecognized"`
+	// PathsFollowed counts address pairs joined to a QUIC connection
+	// already followed, by its connection IDs: a NAT rebinding or a client
+	// that moved (X1-L4R).
+	PathsFollowed uint64 `json:"paths_followed"`
 	// Fragments counts IP fragments read, Reassembled the datagrams rebuilt
 	// from them, and FragmentsDropped the fragments of datagrams given up:
 	// overlapping, oversized, timed out or past the table's bound (X1-L2R).
@@ -145,6 +149,13 @@ type Assembler struct {
 	// count it twice. It holds at most maxFlows entries.
 	closed map[flowKey]closedFlow
 	udp    map[flowKey]*udpFlow
+	// cids finds a QUIC connection by a connection ID it was seen with, and
+	// cidLengths records those IDs' lengths; udpPaths counts the address
+	// pairs in udp that are a followed connection's second or later path
+	// (X1-L4R).
+	cids       map[string]*udpFlow
+	cidLengths uint32
+	udpPaths   int
 	// reasm rebuilds fragmented IP datagrams (X1-L2R).
 	reasm *reassembler
 	// maxHeld bounds the segments one direction holds past a gap (X1-L3R).
@@ -162,7 +173,7 @@ func NewAssembler(ports []uint16, maxFlows int, idle time.Duration, emit func(Ev
 		watched[p] = true
 	}
 	return &Assembler{ports: watched, maxFlows: maxFlows, idle: idle, flows: map[flowKey]*flow{}, closed: map[flowKey]closedFlow{},
-		udp: map[flowKey]*udpFlow{}, reasm: newReassembler(), maxHeld: DefaultMaxHeldSegments, emit: emit}
+		udp: map[flowKey]*udpFlow{}, cids: map[string]*udpFlow{}, reasm: newReassembler(), maxHeld: DefaultMaxHeldSegments, emit: emit}
 }
 
 // SetMaxHeldSegments sets how many segments one direction of a connection
@@ -214,7 +225,7 @@ func (a *Assembler) Stats() Stats {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	s := a.stats
-	s.ActiveFlows = len(a.flows) + len(a.udp)
+	s.ActiveFlows = a.activeFlows()
 	s.ClosedFlows = len(a.closed)
 	for _, f := range a.flows {
 		s.BufferedBytes += len(f.fromClient.buf) + len(f.fromServer.buf) + heldBytes(f.fromClient.ahead) + heldBytes(f.fromServer.ahead)

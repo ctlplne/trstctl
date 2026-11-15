@@ -496,7 +496,14 @@ to see both directions of a host's own connections:
   connection ID and a published salt — so the observer decrypts them as the server does
   (QUIC versions 1 and 2), reassembles the ClientHello however many packets it spans (an
   ML-KEM hybrid key share needs two), and reads the server's group and suite; the rest of
-  the connection stays unreadable. DTLS 1.0 and 1.2 hello messages, and the server's
+  the connection stays unreadable. After a Retry, the client's next Initial packets are
+  read under keys from the connection ID the Retry chose; as the client does, the
+  observer acts on one Retry at most, none after the server's Initial, and only one whose
+  integrity tag is right (X1-L4R). A QUIC connection is followed by its connection IDs,
+  not only its addresses: when a NAT gives the client a new port in the middle of the
+  handshake, or between two of its later packets, the new address pair is the same
+  connection (X1-L4R; counted as `paths_followed`, and every report carries
+  `observer_paths_followed`). DTLS 1.0 and 1.2 hello messages, and the server's
   certificate and ECDHE group, are read in the clear across records and datagrams,
   through a cookie exchange; DTLS 1.3 encrypts its certificate as TLS 1.3 does. Findings
   are `tls_handshake` with `protocol` `quic` or `dtls`; port 443 is watched by default,

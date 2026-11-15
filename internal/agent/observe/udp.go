@@ -42,17 +42,43 @@ func DecodeUDPFrame(frame []byte) (Datagram, bool) {
 // the observer gives up on its handshake.
 const maxUDPFlowDatagrams = 32
 
+const (
+	// maxQUICConnectionIDs bounds the connection IDs one QUIC connection is
+	// followed by: the client's first Destination Connection ID, its own,
+	// and the ones the server chose in a Retry and in its Initial (X1-L4R).
+	maxQUICConnectionIDs = 4
+	// maxQUICPaths bounds the address pairs one QUIC connection is followed
+	// on (X1-L4R).
+	maxQUICPaths = 4
+)
+
 type udpFlow struct {
 	client, server netip.AddrPort
 	kind           byte // 'q' QUIC, 'd' DTLS
 	keyDCID        []byte
-	clientCrypto   cryptoStream
-	serverCrypto   cryptoStream
-	clientDTLS     dtlsStream
-	serverDTLS     dtlsStream
-	datagrams      int
-	finished       bool
-	last           time.Time
+	// odcid is the Destination Connection ID of the client's first Initial
+	// packet, from which a Retry's integrity tag derives; retried and
+	// serverSeen record a Retry acted on and the server's Initial read: a
+	// client acts on one Retry at most, and on none after that (X1-L4R).
+	odcid      []byte
+	retried    bool
+	serverSeen bool
+	// serverCIDLength is the length of the connection ID the server chose,
+	// which a 1-RTT packet's short header does not state (X1-L4R).
+	serverCIDLength int
+	clientCrypto    cryptoStream
+	serverCrypto    cryptoStream
+	clientDTLS      dtlsStream
+	serverDTLS      dtlsStream
+	datagrams       int
+	finished        bool
+	last            time.Time
+	// learned are connection IDs read from this flow's packets and not yet
+	// indexed; cids are those the assembler follows it by, and paths the
+	// address pairs it is known on, the first its own (X1-L4R).
+	learned [][]byte
+	cids    []string
+	paths   []flowKey
 }
 
 // Datagram feeds one decoded datagram. A flow starts with a datagram to a
@@ -67,25 +93,110 @@ func (a *Assembler) Datagram(d Datagram, now time.Time) {
 	key := keyOf(d.Src, d.Dst)
 	f := a.udp[key]
 	if f == nil {
+		f = a.followQUIC(d, key)
+	}
+	if f == nil {
 		if !a.ports[d.Dst.Port()] {
 			return
 		}
-		if len(a.flows)+len(a.udp) >= a.maxFlows {
+		if a.activeFlows() >= a.maxFlows {
 			a.stats.TableFull++
 			return
 		}
-		f = &udpFlow{client: d.Src, server: d.Dst}
+		f = &udpFlow{client: d.Src, server: d.Dst, paths: []flowKey{key}}
 		a.udp[key] = f
 		a.stats.Connections++
 	}
 	f.last = now
+	if f.kind == 'q' && d.Dst == f.server && len(f.cids) < maxQUICConnectionIDs && f.serverCIDLength > 0 &&
+		len(d.Payload) > f.serverCIDLength && d.Payload[0]&0x80 == 0 {
+		// A 1-RTT packet names the connection ID the client sends to now,
+		// one the server issued in encrypted frames: followed too, so that a
+		// NAT that moves the client between two of its packets is seen
+		// (X1-L4R).
+		f.learn(d.Payload[1 : 1+f.serverCIDLength])
+		a.indexQUIC(f)
+	}
 	if f.finished || len(d.Payload) == 0 {
 		return
 	}
-	obs, ok, done := f.read(d.Payload, d.Src == f.client)
+	// The server keeps its address; a client's can change (X1-L4R).
+	obs, ok, done := f.read(d.Payload, d.Dst == f.server)
+	a.indexQUIC(f)
 	if done {
 		a.completeUDP(f, obs, ok, now)
 	}
+}
+
+// activeFlows is how many TCP and UDP connections are followed; a QUIC
+// connection on several address pairs is one.
+func (a *Assembler) activeFlows() int {
+	return len(a.flows) + len(a.udp) - a.udpPaths
+}
+
+// followQUIC finds, by its Destination Connection ID, the QUIC connection a
+// datagram on an address pair not seen before belongs to (X1-L4R): a NAT
+// that gives the client a new port, or a client that moves, keeps the
+// connection IDs. A long header names its connection ID's length; a short
+// one is matched against the lengths of the connection IDs followed. The
+// pair joins that connection's paths, at most maxQUICPaths, when the
+// datagram is to or from its server; the connection is returned, or nil.
+func (a *Assembler) followQUIC(d Datagram, key flowKey) *udpFlow {
+	if len(a.cids) == 0 || len(d.Payload) < 2 {
+		return nil
+	}
+	var f *udpFlow
+	if d.Payload[0]&0x80 != 0 {
+		if h, err := quicinitial.ParseHeader(d.Payload); err == nil && len(h.DCID) > 0 {
+			f = a.cids[string(h.DCID)]
+		}
+	} else {
+		// A short header, whose fixed bit a peer may grease (RFC 9287).
+		for n := 1; n <= 20 && n < len(d.Payload) && f == nil; n++ {
+			if a.cidLengths&(1<<n) != 0 {
+				f = a.cids[string(d.Payload[1:1+n])]
+			}
+		}
+	}
+	if f == nil || len(f.paths) >= maxQUICPaths || (d.Src != f.server && d.Dst != f.server) {
+		return nil
+	}
+	a.udp[key] = f
+	f.paths = append(f.paths, key)
+	a.udpPaths++
+	a.stats.PathsFollowed++
+	return f
+}
+
+// indexQUIC follows a QUIC flow by the connection IDs its packets named
+// (X1-L4R), at most maxQUICConnectionIDs; one another flow is followed by
+// stays that flow's.
+func (a *Assembler) indexQUIC(f *udpFlow) {
+	for _, cid := range f.learned {
+		if len(f.cids) == maxQUICConnectionIDs {
+			break
+		}
+		if _, taken := a.cids[string(cid)]; taken {
+			continue
+		}
+		a.cids[string(cid)] = f
+		f.cids = append(f.cids, string(cid))
+		a.cidLengths |= 1 << len(cid)
+	}
+	f.learned = f.learned[:0]
+}
+
+// learn records a connection ID a flow's packet named, for indexQUIC.
+func (f *udpFlow) learn(cid []byte) {
+	if len(cid) == 0 || len(cid) > 20 {
+		return
+	}
+	for _, have := range f.cids {
+		if have == string(cid) {
+			return
+		}
+	}
+	f.learned = append(f.learned, bytes.Clone(cid))
 }
 
 func (a *Assembler) completeUDP(f *udpFlow, obs Observation, ok bool, now time.Time) {
@@ -106,6 +217,22 @@ func (a *Assembler) finishUDP(key flowKey, f *udpFlow, now time.Time) {
 		a.completeUDP(f, Observation{}, false, now)
 	}
 	delete(a.udp, key)
+	// Every address pair and connection ID the flow was followed by goes
+	// with it (X1-L4R).
+	for _, k := range f.paths {
+		if k != key {
+			if _, ok := a.udp[k]; ok {
+				delete(a.udp, k)
+				a.udpPaths--
+			}
+		}
+	}
+	for _, cid := range f.cids {
+		if a.cids[cid] == f {
+			delete(a.cids, cid)
+		}
+	}
+	f.paths, f.cids, f.learned = nil, nil, nil
 }
 
 func (f *udpFlow) read(payload []byte, fromClient bool) (Observation, bool, bool) {
@@ -146,20 +273,39 @@ func (f *udpFlow) readQUIC(payload []byte, fromClient bool) (Observation, bool, 
 		}
 		if h.Retry {
 			// The client's next Initial packets use the connection ID the
-			// server chose, and their keys derive from it.
-			f.keyDCID = nil
-			f.clientCrypto, f.serverCrypto = cryptoStream{}, cryptoStream{}
+			// server chose, and their keys derive from it. As the client
+			// does (RFC 9000 section 17.2.5.2, RFC 9001 section 5.8), the
+			// observer acts on one Retry at most, none after the server's
+			// Initial, and only one whose integrity tag is right for the
+			// client's first Destination Connection ID (X1-L4R).
+			if !fromClient && !f.retried && !f.serverSeen && quicinitial.RetryValid(packet, f.odcid) {
+				f.retried = true
+				f.keyDCID = nil
+				f.clientCrypto, f.serverCrypto = cryptoStream{}, cryptoStream{}
+				f.learn(h.SCID)
+			}
 			break
 		}
 		if h.Initial {
-			if fromClient && f.keyDCID == nil {
-				f.keyDCID = bytes.Clone(h.DCID)
+			if fromClient {
+				if f.odcid == nil {
+					f.odcid = bytes.Clone(h.DCID)
+					f.learn(h.DCID)
+				}
+				if f.keyDCID == nil {
+					f.keyDCID = bytes.Clone(h.DCID)
+				}
+				f.learn(h.SCID)
 			}
 			if f.keyDCID != nil {
 				if _, frames, err := quicinitial.Open(packet, f.keyDCID, !fromClient); err == nil {
 					stream := &f.serverCrypto
 					if fromClient {
 						stream = &f.clientCrypto
+					} else {
+						f.serverSeen = true
+						f.serverCIDLength = len(h.SCID)
+						f.learn(h.SCID)
 					}
 					readQUICFrames(frames, stream)
 				}

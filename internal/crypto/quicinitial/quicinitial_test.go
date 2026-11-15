@@ -52,3 +52,45 @@ func TestOpenRefusesWhatItCannotReadX1L4(t *testing.T) {
 		t.Fatal("Open changed the datagram")
 	}
 }
+
+// X1-L4R: a Retry's integrity tag is checked as the client checks it. The
+// Retry packets of RFC 9001 appendix A.4 and RFC 9369 appendix A.4, sent to
+// a client whose first Initial named 8394c8f03e515708, verify; with another
+// original connection ID, a changed byte, a changed tag or no tag they do
+// not, and an Initial packet is not a Retry.
+func TestRetryIntegrityMatchesTheRFCVectorsX1L4R(t *testing.T) {
+	odcid := mustHex(t, "8394c8f03e515708")
+	for name, retry := range map[string][]byte{
+		"v1": mustHex(t, "ff000000010008f067a5502a4262b5746f6b656e04a265ba2eff4d829058fb3f0f2496ba"),
+		"v2": mustHex(t, "cf6b3343cf0008f067a5502a4262b5746f6b656ec8646ce8bfe33952d955543665dcc7b6"),
+	} {
+		if !RetryValid(retry, odcid) {
+			t.Errorf("%s: the RFC's Retry does not verify", name)
+		}
+		if RetryValid(retry, mustHex(t, "8394c8f03e515709")) {
+			t.Errorf("%s: verifies for another original connection ID", name)
+		}
+		for i := range retry {
+			changed := append([]byte(nil), retry...)
+			changed[i] ^= 0x01
+			if RetryValid(changed, odcid) {
+				t.Errorf("%s: verifies with byte %d changed", name, i)
+			}
+		}
+		if RetryValid(retry[:len(retry)-16], odcid) {
+			t.Errorf("%s: verifies without its tag", name)
+		}
+	}
+	if RetryValid(mustHex(t, "c000000001088394c8f03e5157080000449e00000002"), odcid) {
+		t.Error("an Initial packet verified as a Retry")
+	}
+}
+
+func mustHex(t *testing.T, s string) []byte {
+	t.Helper()
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}

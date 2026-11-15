@@ -198,8 +198,10 @@ func observationFindings(iface string, items []observe.Item, stats observe.Stats
 			"observer_drops": strconv.FormatUint(stats.TableFull+stats.OutOfOrder+stats.FragmentsDropped+dropped, 10),
 			// X1-L3R: gaps that never filled, read past at the next TLS record.
 			"observer_resynced": strconv.FormatUint(stats.Resynced, 10),
-			"observer_cpu_s":    strconv.FormatFloat(cost.cpuSeconds, 'f', 3, 64),
-			"observer_heap_b":   strconv.FormatUint(cost.heapBytes, 10),
+			// X1-L4R: address pairs joined to a QUIC connection by its connection IDs.
+			"observer_paths_followed": strconv.FormatUint(stats.PathsFollowed, 10),
+			"observer_cpu_s":          strconv.FormatFloat(cost.cpuSeconds, 'f', 3, 64),
+			"observer_heap_b":         strconv.FormatUint(cost.heapBytes, 10),
 		}
 		risk := 30
 		fingerprint := ""
