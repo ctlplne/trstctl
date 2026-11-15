@@ -227,7 +227,12 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// id, tenant and lease worker, never a payload — through WithSystemFirst
 		// (CI-L37 d′), once per outcome: that is two of the three.
 		"internal/orchestrator/outbox.go": 3,
-		"internal/outboxgc/outboxgc.go":   2,
+		// A98-L1: the lease hold moves a live claim's lease_until ahead while
+		// its worker delivers it — the same one-row UPDATE by id, tenant, lease
+		// worker and attempt as finalizeClaim, through WithSystemFirst, reading
+		// and writing no payload.
+		"internal/orchestrator/outbox_claim_hold.go": 1,
+		"internal/outboxgc/outboxgc.go":              2,
 		// The readiness "db" check moved to the store's dedicated probe pool
 		// (ProbePing, DP2-054), so server.go no longer touches SystemPool.
 		// The leader enumerates tenant IDs for renewal, then reads rows under RLS.
