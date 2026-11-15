@@ -4650,8 +4650,10 @@ ChangeApplication = TypedDict(
         'change_set_digest': str,
         'complete': bool,
         'name': str,
+        'not_restored': list[dict[str, Any]],
         'plan_digest': str,
         'results': list[dict[str, Any]],
+        'rollback': dict[str, Any],
     },
     total=False,
 )
@@ -4710,13 +4712,18 @@ ChangePlan = TypedDict(
 ChangeSet = TypedDict(
     'ChangeSet',
     {
+        'agent_roles': list[dict[str, Any]],
         'deployment_targets': list[dict[str, Any]],
         'description': str,
         'issuers': list[dict[str, Any]],
         'members': list[dict[str, Any]],
         'name': str,
+        'notification_channels': list[dict[str, Any]],
         'owners': list[dict[str, Any]],
+        'policy': dict[str, Any],
         'profiles': list[dict[str, Any]],
+        'report_schedules': list[dict[str, Any]],
+        'secret_projects': list[dict[str, Any]],
     },
     total=False,
 )

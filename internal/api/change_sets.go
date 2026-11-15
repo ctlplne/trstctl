@@ -19,7 +19,9 @@ import (
 
 // Reviewed configuration change sets (A248). A change set is a typed set of
 // objects a tenant should hold: certificate profiles and CA bindings, connector
-// targets, member role grants, and owners with their application model. It is
+// targets, member role grants, and owners with their application model; and
+// (A248-L3) the lifecycle policy module, notification channels, report
+// schedules, agent role grants and secrets projects. It is
 // authored by form, API or GitOps (`trstctl changes plan|apply -f`), and every
 // author's set goes through the same plan.
 //
@@ -31,7 +33,7 @@ import (
 // digest binds the set's objects and each one's current revision, so applying
 // needs the digest and refuses a plan the tenant has moved past. Applying
 // writes each object through the command the operator's request takes, then
-// reads it back.
+// reads it back, and returns the change set that puts back what it updated.
 
 // changeSetScope keeps a change set's keyed objects apart from a tenant
 // baseline's in the same tenant.
@@ -60,6 +62,12 @@ type ChangeSet struct {
 	DeploymentTargets []BaselineDeploymentTarget `json:"deployment_targets,omitempty"`
 	Members           []BaselineMember           `json:"members,omitempty"`
 	Owners            []ChangeOwner              `json:"owners,omitempty"`
+	// A248-L3 kinds.
+	Policy               *BaselinePolicy               `json:"policy,omitempty"`
+	NotificationChannels []BaselineNotificationChannel `json:"notification_channels,omitempty"`
+	ReportSchedules      []BaselineReportSchedule      `json:"report_schedules,omitempty"`
+	AgentRoles           []ChangeAgentRoles            `json:"agent_roles,omitempty"`
+	SecretProjects       []ChangeSecretProject         `json:"secret_projects,omitempty"`
 }
 
 // ChangeOwner is an owner and its application model. Key names it within
@@ -127,6 +135,14 @@ type ChangeApplication struct {
 	PlanDigest      string              `json:"plan_digest"`
 	Complete        bool                `json:"complete"`
 	Results         []ChangeApplyResult `json:"results"`
+	// Rollback is the change set that puts every object this apply updated
+	// back as the plan read it (A248-L3): plan, review and apply it as any
+	// other. Absent when the apply updated nothing.
+	Rollback *ChangeSet `json:"rollback,omitempty"`
+	// NotRestored is what the rollback leaves: each object this apply
+	// created (a change set does not remove objects; each names the route
+	// that does) and each whose earlier state a change set cannot carry.
+	NotRestored []ChangeNotRestored `json:"not_restored"`
 }
 
 // normalized is the set with each list in key order and each member's roles
@@ -142,6 +158,19 @@ func (cs ChangeSet) normalized() ChangeSet {
 		sort.Strings(out.Members[i].Roles)
 	}
 	out.Owners = sortedBy(cs.Owners, func(x ChangeOwner) string { return strings.TrimSpace(x.Key) })
+	out.NotificationChannels = sortedBy(cs.NotificationChannels, func(x BaselineNotificationChannel) string {
+		return canonicalNotificationChannelID(x.ChannelType)
+	})
+	out.ReportSchedules = sortedBy(cs.ReportSchedules, func(x BaselineReportSchedule) string { return strings.TrimSpace(x.Key) })
+	out.AgentRoles = sortedBy(cs.AgentRoles, func(x ChangeAgentRoles) string { return strings.TrimSpace(x.AgentID) })
+	for i := range out.AgentRoles {
+		out.AgentRoles[i].Roles = append([]string(nil), out.AgentRoles[i].Roles...)
+		sort.Strings(out.AgentRoles[i].Roles)
+	}
+	out.SecretProjects = sortedBy(cs.SecretProjects, func(x ChangeSecretProject) string { return strings.TrimSpace(x.Slug) })
+	for i := range out.SecretProjects {
+		out.SecretProjects[i] = normalizedSecretProject(out.SecretProjects[i])
+	}
 	return out
 }
 
@@ -164,7 +193,12 @@ func ChangeSetDigest(cs ChangeSet) string {
 }
 
 func (cs ChangeSet) objects() int {
-	return len(cs.Profiles) + len(cs.Issuers) + len(cs.DeploymentTargets) + len(cs.Members) + len(cs.Owners)
+	n := len(cs.Profiles) + len(cs.Issuers) + len(cs.DeploymentTargets) + len(cs.Members) + len(cs.Owners) +
+		len(cs.NotificationChannels) + len(cs.ReportSchedules) + len(cs.AgentRoles) + len(cs.SecretProjects)
+	if cs.Policy != nil {
+		n++
+	}
+	return n
 }
 
 // validateChangeSet refuses a malformed or over-broad change set, and one that
@@ -194,6 +228,14 @@ func (a *API) validateChangeSet(cs ChangeSet) error {
 	}
 	if path, shape := changeSetSecret(cs); path != "" {
 		return errStatus(http.StatusUnprocessableEntity, fmt.Sprintf("%s holds %s; a change set carries references and metadata, never secret values: name a stored secret instead", path, shape))
+	}
+	// A248-L3 kinds, checked once the set is known to hold no secret value,
+	// so no refusal can repeat one.
+	if err := a.ValidateTenantBaseline(TenantBaseline{Policy: cs.Policy, NotificationChannels: cs.NotificationChannels, ReportSchedules: cs.ReportSchedules}); err != nil {
+		return errStatusFrom(http.StatusUnprocessableEntity, err)
+	}
+	if err := validateChangeSetKinds(cs); err != nil {
+		return errStatusFrom(http.StatusUnprocessableEntity, err)
 	}
 	return nil
 }
@@ -238,7 +280,7 @@ func broadChangeName(cs ChangeSet) (string, string) {
 			}
 		}
 	}
-	return "", ""
+	return broadChangeKindName(cs, broad)
 }
 
 // secretFieldNames are field names that hold a secret's value; a field naming a
@@ -290,7 +332,15 @@ func secretIn(path string, v any) (string, string) {
 			}
 		}
 	case string:
-		if shape, ok := aimodel.StructuredSecret(x); ok {
+		probe := x
+		if name, ok := strings.CutPrefix(strings.TrimSpace(x), "secret://"); ok {
+			// A stored secret's reference is what a change set carries in
+			// place of a value: only the name it holds is probed, so the
+			// scheme does not read as a "secret: value" assignment, and a
+			// value written where the name goes is still refused (A248-L3).
+			probe = name
+		}
+		if shape, ok := aimodel.StructuredSecret(probe); ok {
 			return path, shape
 		}
 	}
@@ -331,17 +381,26 @@ func ownerDigest(o store.Owner) string {
 }
 
 // changeStep is one object of a change set: the permission writing it needs,
-// how it reads and applies, and what its plan item discloses.
+// how it reads and applies, what its plan item discloses, and (A248-L3) how
+// its rollback puts back the state the plan read.
 type changeStep struct {
 	perm     authz.Permission
 	step     baselineStep
 	disclose func(ctx context.Context, state BaselineObjectState, current any, item *ChangePlanItem) error
+	// restore adds to rb the entry that puts the object back as current
+	// reads (nil: the apply creates it), or says why it cannot; it may do
+	// both when it puts back only part.
+	restore func(current any, rb *ChangeSet) string
 }
 
 func (a *API) changeSteps(tenantID string, cs ChangeSet) []changeStep {
 	var steps []changeStep
+	name := strings.TrimSpace(cs.Name)
 	for _, p := range cs.Profiles {
 		steps = append(steps, a.changeProfileStep(tenantID, p))
+	}
+	if cs.Policy != nil {
+		steps = append(steps, a.changePolicyStep(tenantID, name, *cs.Policy))
 	}
 	for _, x := range cs.Issuers {
 		steps = append(steps, a.changeIssuerStep(tenantID, x))
@@ -349,11 +408,29 @@ func (a *API) changeSteps(tenantID string, cs ChangeSet) []changeStep {
 	for _, x := range cs.DeploymentTargets {
 		steps = append(steps, a.changeTargetStep(tenantID, x))
 	}
+	for _, x := range cs.NotificationChannels {
+		steps = append(steps, a.changeChannelStep(tenantID, x))
+	}
 	for _, x := range cs.Members {
 		steps = append(steps, a.changeMemberStep(tenantID, x))
 	}
 	for _, x := range cs.Owners {
 		steps = append(steps, a.changeOwnerStep(tenantID, x))
+	}
+	setChannels := map[string]bool{}
+	for _, x := range cs.NotificationChannels {
+		if x.Enabled == nil || *x.Enabled {
+			setChannels[canonicalNotificationChannelID(x.ChannelType)] = true
+		}
+	}
+	for _, x := range cs.ReportSchedules {
+		steps = append(steps, a.changeScheduleStep(tenantID, x, setChannels))
+	}
+	for _, x := range cs.AgentRoles {
+		steps = append(steps, a.changeAgentRolesStep(tenantID, name, x))
+	}
+	for _, x := range cs.SecretProjects {
+		steps = append(steps, a.changeSecretProjectStep(tenantID, x))
 	}
 	return steps
 }
@@ -374,6 +451,18 @@ func (a *API) changeProfileStep(tenantID string, p BaselineProfile) changeStep {
 				item.Effects = []string{projections.EventProfileEditApprovalRequested}
 			}
 			return nil
+		},
+		restore: func(current any, rb *ChangeSet) string {
+			rec, ok := current.(*store.ProfileRecord)
+			if !ok || rec == nil {
+				return "created by this apply; a change set does not remove objects, and a profile is not deleted: its versions stay in its history"
+			}
+			prior := BaselineProfile{Name: strings.TrimSpace(p.Name), Spec: append(json.RawMessage(nil), rec.Spec...)}
+			if entryHoldsSecret(prior) {
+				return notRestoredSecret
+			}
+			rb.Profiles = append(rb.Profiles, prior)
+			return ""
 		}}
 }
 
@@ -390,6 +479,19 @@ func (a *API) changeIssuerStep(tenantID string, x BaselineIssuer) changeStep {
 				item.Identities = []string{fmt.Sprintf("%d identities are issued under this CA", n)}
 			}
 			return nil
+		},
+		restore: func(current any, rb *ChangeSet) string {
+			got, ok := current.(*store.Issuer)
+			if !ok || got == nil {
+				return "created by this apply; a change set does not remove objects, and a CA binding is not deleted"
+			}
+			prior := BaselineIssuer{Key: strings.TrimSpace(x.Key), Name: got.Name, Kind: string(got.Kind), Chain: append([]string(nil), got.Chain...),
+				PublicKey: got.PublicKey, Internal: got.Internal}
+			if entryHoldsSecret(prior) {
+				return notRestoredSecret
+			}
+			rb.Issuers = append(rb.Issuers, prior)
+			return ""
 		}}
 }
 
@@ -441,6 +543,20 @@ func (a *API) changeTargetStep(tenantID string, x BaselineDeploymentTarget) chan
 			}
 			item.Identities = []string{fmt.Sprintf("%d identities deploy to this target", n)}
 			return nil
+		},
+		restore: func(current any, rb *ChangeSet) string {
+			got, ok := current.(*store.DeploymentTarget)
+			if !ok || got == nil {
+				return "created by this apply; a change set does not remove objects: DELETE /api/v1/connectors/targets/" + id + " removes it"
+			}
+			enabled := got.Enabled
+			prior := BaselineDeploymentTarget{Key: strings.TrimSpace(x.Key), Name: got.Name, Connector: got.Type,
+				Config: append(json.RawMessage(nil), got.Config...), Enabled: &enabled}
+			if entryHoldsSecret(prior) {
+				return notRestoredSecret
+			}
+			rb.DeploymentTargets = append(rb.DeploymentTargets, prior)
+			return ""
 		}}
 }
 
@@ -503,6 +619,14 @@ func (a *API) changeMemberStep(tenantID string, x BaselineMember) changeStep {
 			item.Grants = []string{grant}
 			item.Effects = []string{orchestrator.EventAuthzDecision, projections.EventTenantMemberUpserted}
 			return nil
+		},
+		restore: func(current any, rb *ChangeSet) string {
+			m, ok := current.(*store.TenantMember)
+			if !ok || m == nil {
+				return "added by this apply; a change set does not remove members: POST /api/v1/access/members/" + subject + "/offboard removes one"
+			}
+			rb.Members = append(rb.Members, BaselineMember{Subject: subject, DisplayName: m.DisplayName, Email: m.Email, Roles: append([]string(nil), m.Roles...)})
+			return ""
 		}}
 }
 
@@ -547,6 +671,19 @@ func (a *API) changeOwnerStep(tenantID string, x ChangeOwner) changeStep {
 				item.Destinations = []string{"escalation chain " + strings.Join(chain, " → ")}
 			}
 			return nil
+		},
+		restore: func(current any, rb *ChangeSet) string {
+			got, ok := current.(*store.Owner)
+			if !ok || got == nil {
+				return "created by this apply; a change set does not remove objects: DELETE /api/v1/owners/" + id + " removes it"
+			}
+			var chain []string
+			if len(got.EscalationChain) > 0 {
+				_ = json.Unmarshal(got.EscalationChain, &chain)
+			}
+			rb.Owners = append(rb.Owners, ChangeOwner{Key: key, Kind: string(got.Kind), Name: got.Name, Email: got.Email,
+				ApplicationID: got.ApplicationID, Service: got.Service, BusinessUnit: got.BusinessUnit, Environment: got.Environment, EscalationChain: chain})
+			return ""
 		}}
 }
 
@@ -624,7 +761,9 @@ func (a *API) applyChangeSet(ctx context.Context, principal authz.Principal, ten
 	if strings.TrimSpace(req.PlanDigest) != plan.PlanDigest {
 		return ChangeApplication{}, errStatus(http.StatusConflict, "the plan is stale: the tenant or the change set differs from what was reviewed (current plan "+plan.PlanDigest+"); plan it again and review")
 	}
-	out := ChangeApplication{Name: plan.Name, ChangeSetDigest: plan.ChangeSetDigest, PlanDigest: plan.PlanDigest, Complete: true, Results: []ChangeApplyResult{}}
+	out := ChangeApplication{Name: plan.Name, ChangeSetDigest: plan.ChangeSetDigest, PlanDigest: plan.PlanDigest, Complete: true,
+		Results: []ChangeApplyResult{}, NotRestored: []ChangeNotRestored{}}
+	rollback := ChangeSet{Name: "rollback of " + plan.Name, Description: "puts back what applying plan " + plan.PlanDigest + " updated"}
 	for i, p := range planned {
 		item := plan.Items[i]
 		result := ChangeApplyResult{Kind: item.Kind, Key: item.Key, ObjectID: item.ObjectID, Outcome: BaselineUnchanged, Verified: true}
@@ -635,6 +774,13 @@ func (a *API) applyChangeSet(ctx context.Context, principal authz.Principal, ten
 				result.Outcome, result.Error, result.Verified = BaselineFailed, err.Error(), false
 			default:
 				result.Outcome, result.ApprovalRequestID = outcome, approval
+				if outcome == BaselineCreated || outcome == BaselineUpdated {
+					// A248-L3: what puts this object back, from the state the
+					// plan read before the apply.
+					if reason := p.step.restore(p.current, &rollback); reason != "" {
+						out.NotRestored = append(out.NotRestored, ChangeNotRestored{Kind: item.Kind, Key: item.Key, ObjectID: item.ObjectID, Reason: reason})
+					}
+				}
 				after, _, rerr := p.step.step.read(ctx)
 				result.Verified = rerr == nil && after.Status == BaselineInSync
 				if after.ObjectID != "" {
@@ -646,6 +792,10 @@ func (a *API) applyChangeSet(ctx context.Context, principal authz.Principal, ten
 			out.Complete = false
 		}
 		out.Results = append(out.Results, result)
+	}
+	if rollback.objects() > 0 {
+		normalized := rollback.normalized()
+		out.Rollback = &normalized
 	}
 	return out, nil
 }
@@ -719,8 +869,27 @@ func changeSetSchemas() map[string]*Schema {
 	member := object(map[string]*Schema{"subject": str(), "display_name": str(), "email": str(), "roles": list(str())}, "subject", "roles")
 	owner := object(map[string]*Schema{"key": str(), "kind": str(), "name": str(), "email": str(), "application_id": str(), "service": str(),
 		"business_unit": str(), "environment": str(), "escalation_chain": list(str())}, "key", "kind", "name")
+	// A248-L3 kinds.
+	policyModule := object(map[string]*Schema{"module": str(), "description": str()}, "module")
+	channel := object(map[string]*Schema{"channel_type": str(), "label": str(), "endpoint_url": str(),
+		"credential_ref": {Type: "string", Description: "a stored secret's reference, never a value"}, "enabled": boolean()}, "channel_type")
+	ticket := object(map[string]*Schema{"provider": str(), "instance_url": str(), "table": str(),
+		"token_ref": {Type: "string", Description: "a stored secret's reference, never a value"}}, "provider", "instance_url", "table", "token_ref")
+	schedule := object(map[string]*Schema{"key": str(), "name": str(), "framework": str(), "report_type": str(), "interval_seconds": integer(),
+		"enabled": boolean(), "dispatch": object(map[string]*Schema{"channels": list(str()), "ticket": ticket})},
+		"key", "name", "framework", "report_type", "interval_seconds")
+	agentRoles := object(map[string]*Schema{"agent_id": str(), "roles": list(str())}, "agent_id", "roles")
+	secretEnvironment := object(map[string]*Schema{"slug": str(), "name": str(), "restricted": boolean()}, "slug")
+	secretMember := object(map[string]*Schema{"subject": str(),
+		"role":         {Type: "string", Enum: []string{store.SecretProjectRoleViewer, store.SecretProjectRoleDeveloper, store.SecretProjectRoleAdmin, ChangeSecretMemberNone}},
+		"environments": list(str())}, "subject", "role")
+	secretProject := object(map[string]*Schema{"slug": str(), "name": str(), "owner_id": str(), "environments": list(secretEnvironment),
+		"members": list(secretMember)}, "slug", "environments")
 	changeSet := object(map[string]*Schema{"name": str(), "description": str(), "profiles": list(profile), "issuers": list(issuer),
-		"deployment_targets": list(target), "members": list(member), "owners": list(owner)}, "name")
+		"deployment_targets": list(target), "members": list(member), "owners": list(owner),
+		"policy": policyModule, "notification_channels": list(channel), "report_schedules": list(schedule),
+		"agent_roles": list(agentRoles), "secret_projects": list(secretProject)}, "name")
+	notRestored := object(map[string]*Schema{"kind": str(), "key": str(), "object_id": str(), "reason": str()}, "kind", "key", "reason")
 	item := object(map[string]*Schema{"kind": str(), "key": str(), "object_id": str(), "action": {Type: "string", Enum: []string{ChangeCreate, ChangeUpdate, ChangeUnchanged}},
 		"expected_digest": str(), "actual_digest": str(), "detail": str(), "identities": list(str()), "credentials": list(str()), "grants": list(str()),
 		"destinations": list(str()), "approvals": list(str()), "effects": list(str()), "verification": str()},
@@ -734,6 +903,7 @@ func changeSetSchemas() map[string]*Schema {
 		"ChangeSet":          changeSet,
 		"ChangePlan":         plan,
 		"ChangeApplyRequest": object(map[string]*Schema{"change_set": changeSet, "plan_digest": str()}, "change_set", "plan_digest"),
-		"ChangeApplication":  object(map[string]*Schema{"name": str(), "change_set_digest": str(), "plan_digest": str(), "complete": boolean(), "results": list(result)}, "name", "change_set_digest", "plan_digest", "complete", "results"),
+		"ChangeApplication": object(map[string]*Schema{"name": str(), "change_set_digest": str(), "plan_digest": str(), "complete": boolean(), "results": list(result),
+			"rollback": changeSet, "not_restored": list(notRestored)}, "name", "change_set_digest", "plan_digest", "complete", "results"),
 	}
 }

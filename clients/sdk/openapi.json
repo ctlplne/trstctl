@@ -15546,6 +15546,31 @@
           "name": {
             "type": "string"
           },
+          "not_restored": {
+            "items": {
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "object_id": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "key",
+                "reason"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "plan_digest": {
             "type": "string"
           },
@@ -15583,21 +15608,30 @@
               "type": "object"
             },
             "type": "array"
-          }
-        },
-        "required": [
-          "name",
-          "change_set_digest",
-          "plan_digest",
-          "complete",
-          "results"
-        ],
-        "type": "object"
-      },
-      "ChangeApplyRequest": {
-        "properties": {
-          "change_set": {
+          },
+          "rollback": {
             "properties": {
+              "agent_roles": {
+                "items": {
+                  "properties": {
+                    "agent_id": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "agent_id",
+                    "roles"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "deployment_targets": {
                 "items": {
                   "properties": {
@@ -15692,6 +15726,33 @@
               "name": {
                 "type": "string"
               },
+              "notification_channels": {
+                "items": {
+                  "properties": {
+                    "channel_type": {
+                      "type": "string"
+                    },
+                    "credential_ref": {
+                      "description": "a stored secret's reference, never a value",
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "endpoint_url": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "channel_type"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "owners": {
                 "items": {
                   "properties": {
@@ -15735,6 +15796,20 @@
                 },
                 "type": "array"
               },
+              "policy": {
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "module": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "module"
+                ],
+                "type": "object"
+              },
               "profiles": {
                 "items": {
                   "properties": {
@@ -15746,6 +15821,519 @@
                   "required": [
                     "name",
                     "spec"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "report_schedules": {
+                "items": {
+                  "properties": {
+                    "dispatch": {
+                      "properties": {
+                        "channels": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "ticket": {
+                          "properties": {
+                            "instance_url": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "table": {
+                              "type": "string"
+                            },
+                            "token_ref": {
+                              "description": "a stored secret's reference, never a value",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "provider",
+                            "instance_url",
+                            "table",
+                            "token_ref"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "framework": {
+                      "type": "string"
+                    },
+                    "interval_seconds": {
+                      "type": "integer"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "report_type": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "framework",
+                    "report_type",
+                    "interval_seconds"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "secret_projects": {
+                "items": {
+                  "properties": {
+                    "environments": {
+                      "items": {
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "restricted": {
+                            "type": "boolean"
+                          },
+                          "slug": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "slug"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "members": {
+                      "items": {
+                        "properties": {
+                          "environments": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "role": {
+                            "enum": [
+                              "viewer",
+                              "developer",
+                              "admin",
+                              "none"
+                            ],
+                            "type": "string"
+                          },
+                          "subject": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "subject",
+                          "role"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "owner_id": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "slug",
+                    "environments"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "change_set_digest",
+          "plan_digest",
+          "complete",
+          "results"
+        ],
+        "type": "object"
+      },
+      "ChangeApplyRequest": {
+        "properties": {
+          "change_set": {
+            "properties": {
+              "agent_roles": {
+                "items": {
+                  "properties": {
+                    "agent_id": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "agent_id",
+                    "roles"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "deployment_targets": {
+                "items": {
+                  "properties": {
+                    "config": {},
+                    "connector": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "connector",
+                    "config"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "description": {
+                "type": "string"
+              },
+              "issuers": {
+                "items": {
+                  "properties": {
+                    "chain": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "internal": {
+                      "type": "boolean"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "public_key": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "members": {
+                "items": {
+                  "properties": {
+                    "display_name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "subject": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "subject",
+                    "roles"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": "string"
+              },
+              "notification_channels": {
+                "items": {
+                  "properties": {
+                    "channel_type": {
+                      "type": "string"
+                    },
+                    "credential_ref": {
+                      "description": "a stored secret's reference, never a value",
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "endpoint_url": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "channel_type"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "owners": {
+                "items": {
+                  "properties": {
+                    "application_id": {
+                      "type": "string"
+                    },
+                    "business_unit": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "environment": {
+                      "type": "string"
+                    },
+                    "escalation_chain": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "service": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "kind",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "policy": {
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "module": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "module"
+                ],
+                "type": "object"
+              },
+              "profiles": {
+                "items": {
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "spec": {}
+                  },
+                  "required": [
+                    "name",
+                    "spec"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "report_schedules": {
+                "items": {
+                  "properties": {
+                    "dispatch": {
+                      "properties": {
+                        "channels": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "ticket": {
+                          "properties": {
+                            "instance_url": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "table": {
+                              "type": "string"
+                            },
+                            "token_ref": {
+                              "description": "a stored secret's reference, never a value",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "provider",
+                            "instance_url",
+                            "table",
+                            "token_ref"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "framework": {
+                      "type": "string"
+                    },
+                    "interval_seconds": {
+                      "type": "integer"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "report_type": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "framework",
+                    "report_type",
+                    "interval_seconds"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "secret_projects": {
+                "items": {
+                  "properties": {
+                    "environments": {
+                      "items": {
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "restricted": {
+                            "type": "boolean"
+                          },
+                          "slug": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "slug"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "members": {
+                      "items": {
+                        "properties": {
+                          "environments": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "role": {
+                            "enum": [
+                              "viewer",
+                              "developer",
+                              "admin",
+                              "none"
+                            ],
+                            "type": "string"
+                          },
+                          "subject": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "subject",
+                          "role"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "owner_id": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "slug",
+                    "environments"
                   ],
                   "type": "object"
                 },
@@ -15771,6 +16359,27 @@
         "properties": {
           "change_set": {
             "properties": {
+              "agent_roles": {
+                "items": {
+                  "properties": {
+                    "agent_id": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "agent_id",
+                    "roles"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "deployment_targets": {
                 "items": {
                   "properties": {
@@ -15865,6 +16474,33 @@
               "name": {
                 "type": "string"
               },
+              "notification_channels": {
+                "items": {
+                  "properties": {
+                    "channel_type": {
+                      "type": "string"
+                    },
+                    "credential_ref": {
+                      "description": "a stored secret's reference, never a value",
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "endpoint_url": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "channel_type"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "owners": {
                 "items": {
                   "properties": {
@@ -15908,6 +16544,20 @@
                 },
                 "type": "array"
               },
+              "policy": {
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "module": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "module"
+                ],
+                "type": "object"
+              },
               "profiles": {
                 "items": {
                   "properties": {
@@ -15919,6 +16569,145 @@
                   "required": [
                     "name",
                     "spec"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "report_schedules": {
+                "items": {
+                  "properties": {
+                    "dispatch": {
+                      "properties": {
+                        "channels": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "ticket": {
+                          "properties": {
+                            "instance_url": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "table": {
+                              "type": "string"
+                            },
+                            "token_ref": {
+                              "description": "a stored secret's reference, never a value",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "provider",
+                            "instance_url",
+                            "table",
+                            "token_ref"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "framework": {
+                      "type": "string"
+                    },
+                    "interval_seconds": {
+                      "type": "integer"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "report_type": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "framework",
+                    "report_type",
+                    "interval_seconds"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "secret_projects": {
+                "items": {
+                  "properties": {
+                    "environments": {
+                      "items": {
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "restricted": {
+                            "type": "boolean"
+                          },
+                          "slug": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "slug"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "members": {
+                      "items": {
+                        "properties": {
+                          "environments": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "role": {
+                            "enum": [
+                              "viewer",
+                              "developer",
+                              "admin",
+                              "none"
+                            ],
+                            "type": "string"
+                          },
+                          "subject": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "subject",
+                          "role"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "owner_id": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "slug",
+                    "environments"
                   ],
                   "type": "object"
                 },
@@ -16250,6 +17039,27 @@
       },
       "ChangeSet": {
         "properties": {
+          "agent_roles": {
+            "items": {
+              "properties": {
+                "agent_id": {
+                  "type": "string"
+                },
+                "roles": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "agent_id",
+                "roles"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "deployment_targets": {
             "items": {
               "properties": {
@@ -16344,6 +17154,33 @@
           "name": {
             "type": "string"
           },
+          "notification_channels": {
+            "items": {
+              "properties": {
+                "channel_type": {
+                  "type": "string"
+                },
+                "credential_ref": {
+                  "description": "a stored secret's reference, never a value",
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "endpoint_url": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "channel_type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "owners": {
             "items": {
               "properties": {
@@ -16387,6 +17224,20 @@
             },
             "type": "array"
           },
+          "policy": {
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "module": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "module"
+            ],
+            "type": "object"
+          },
           "profiles": {
             "items": {
               "properties": {
@@ -16398,6 +17249,145 @@
               "required": [
                 "name",
                 "spec"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "report_schedules": {
+            "items": {
+              "properties": {
+                "dispatch": {
+                  "properties": {
+                    "channels": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "ticket": {
+                      "properties": {
+                        "instance_url": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "table": {
+                          "type": "string"
+                        },
+                        "token_ref": {
+                          "description": "a stored secret's reference, never a value",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "provider",
+                        "instance_url",
+                        "table",
+                        "token_ref"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "framework": {
+                  "type": "string"
+                },
+                "interval_seconds": {
+                  "type": "integer"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "report_type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "name",
+                "framework",
+                "report_type",
+                "interval_seconds"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "secret_projects": {
+            "items": {
+              "properties": {
+                "environments": {
+                  "items": {
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "restricted": {
+                        "type": "boolean"
+                      },
+                      "slug": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "slug"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "members": {
+                  "items": {
+                    "properties": {
+                      "environments": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "role": {
+                        "enum": [
+                          "viewer",
+                          "developer",
+                          "admin",
+                          "none"
+                        ],
+                        "type": "string"
+                      },
+                      "subject": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "subject",
+                      "role"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "owner_id": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "slug",
+                "environments"
               ],
               "type": "object"
             },

@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- Change sets hold the lifecycle policy module, notification channels, report schedules, agent role grants and
+  secrets projects (A248-L3): each plans with what applying would do, binds the plan digest, applies through the
+  operator's own command and reads back. Every apply returns its rollback, the change set that puts back each object it
+  updated, and `not_restored`, what that rollback leaves (an object it created, with the route that removes it). A
+  `secret://` reference is probed by its name only; a drafted set holding a secret value is withheld. The console's
+  Change sets page starts each new kind from a JSON template and loads an apply's rollback for review.
 - An identity's review plan carries the transition preview's result for each step (A244-L2): the step whose transition
   starts at the identity's state is previewed now as the transition preview previews it (ready or not, its refusals
   apart from its other warnings, the policy execution checks again and its readback), a step the identity is already

@@ -40,6 +40,36 @@ export const changeSetTemplates: Record<string, ChangeSetForm> = {
   target: { ...blank, name: "add a connector target", targets: [{ key: "", name: "", connector: "", config: "{}", enabled: false }] },
 };
 
+/** A248-L3: the kinds beyond the form's start from a JSON template: the
+ * lifecycle policy, notification channels, report schedules, agent role grants
+ * and secrets projects. Each carries references and metadata, never a value. */
+export const changeSetJSONTemplates: Record<string, ChangeSet> = {
+  policy: {
+    name: "set the lifecycle policy",
+    policy: { module: "package trstctl.policy\n\n# the tenant's lifecycle policy module", description: "" },
+  },
+  channel: {
+    name: "add a notification channel",
+    notification_channels: [{ channel_type: "webhook", endpoint_url: "https://", credential_ref: "secret://", enabled: true }],
+  },
+  schedule: {
+    name: "schedule a report",
+    report_schedules: [{ key: "", name: "", framework: "nist-800-53", report_type: "crypto_risk", interval_seconds: 604800, dispatch: { channels: [] } }],
+  },
+  agentRoles: { name: "grant an agent roles", agent_roles: [{ agent_id: "", roles: ["host"] }] },
+  secretProject: {
+    name: "set up a secrets project",
+    secret_projects: [
+      {
+        slug: "",
+        name: "",
+        environments: [{ slug: "dev" }, { slug: "prod", restricted: true }],
+        members: [{ subject: "", role: "viewer", environments: ["dev"] }],
+      },
+    ],
+  },
+};
+
 const list = (value: string) =>
   value
     .split(",")
@@ -129,7 +159,22 @@ export function ChangeSets() {
   }, [stale]);
 
   const loadTemplate = (name: string) => {
+    setReviewed(null);
+    setApplied(null);
+    setMessage("");
+    const json = changeSetJSONTemplates[name];
+    if (json) {
+      setJSON(JSON.stringify(json, null, 2));
+      setMode("json");
+      return;
+    }
     form.reset(changeSetTemplates[name] ?? blank);
+  };
+  // A248-L3: an apply's rollback is reviewed like any change set: it loads
+  // into the JSON editor, to be planned and applied as any other.
+  const reviewRollback = (rollback: ChangeSet) => {
+    setJSON(JSON.stringify(rollback, null, 2));
+    setMode("json");
     setReviewed(null);
     setApplied(null);
     setMessage("");
@@ -201,6 +246,11 @@ export function ChangeSets() {
                   <option value="onboard">{t("changes.template.onboard")}</option>
                   <option value="grant">{t("changes.template.grant")}</option>
                   <option value="target">{t("changes.template.target")}</option>
+                  <option value="policy">{t("changes.template.policy")}</option>
+                  <option value="channel">{t("changes.template.channel")}</option>
+                  <option value="schedule">{t("changes.template.schedule")}</option>
+                  <option value="agentRoles">{t("changes.template.agentRoles")}</option>
+                  <option value="secretProject">{t("changes.template.secretProject")}</option>
                 </Select>
               )}
             </Field>
@@ -459,6 +509,26 @@ export function ChangeSets() {
                 ))}
               </tbody>
             </table>
+            {applied.rollback ? (
+              <div className="space-y-2">
+                <p className="text-sm">{t("changes.rollback.help")}</p>
+                <Button type="button" variant="outline" onClick={() => reviewRollback(applied.rollback as ChangeSet)}>
+                  {t("changes.rollback.review")}
+                </Button>
+              </div>
+            ) : null}
+            {(applied.not_restored ?? []).length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-sm font-medium">{t("changes.rollback.notRestored")}</p>
+                <ul className="list-disc ps-5 text-sm text-muted-foreground">
+                  {(applied.not_restored ?? []).map((entry) => (
+                    <li key={`${entry.kind}/${entry.key}`}>
+                      {t("changes.rollback.notRestoredItem", { kind: entry.kind, key: entry.key, reason: entry.reason })}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3377 annotated sites across 35 rules. Each row is
+3378 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -2267,7 +2267,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:238` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G302 — CWE-276 Incorrect default permissions (chmod) (55 sites)
+### G302 — CWE-276 Incorrect default permissions (chmod) (56 sites)
 
 | Location | Reason |
 |---|---|
@@ -2298,6 +2298,7 @@ not this file.
 | `internal/server/bundled_pg_start_test.go:33` | restore the private directory's required execute bit (CWE-732) |
 | `internal/server/bundled_pg_start_test.go:114` | the source is read-only, as a mount another user owns would be (CWE-732) |
 | `internal/server/bundled_pg_start_test.go:117` | let TempDir remove it (CWE-732) |
+| `internal/server/change_set_kinds_served_test.go:38` | owner execute is required to traverse this private test directory. |
 | `internal/server/compliance_report_dispatch_served_test.go:40` | owner execute is required to traverse this private test directory. |
 | `internal/server/compliance_report_worker_test.go:67` | owner execute is required to traverse this private test directory. |
 | `internal/server/compliance_report_worker_test.go:223` | owner execute is required to traverse this private test directory. |

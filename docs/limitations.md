@@ -8258,8 +8258,13 @@ edited after planning. A draft sends the model names and metadata only, refuses 
 carrying secret material before the model call, and leaves the form, API and GitOps paths
 working when no model is configured. What comes next:
 
-- **More kinds.** The lifecycle policy, notification channels, report schedules, agent role
-  grants and enrollment tokens, and secret metadata (references, never values).
+- **Enrollment tokens stay out.** Minting one creates a secret the apply would have to hand
+  back, and a change set never carries or returns a secret value (`changeSetSecret`,
+  `internal/api/change_sets.go`); tokens are minted on their own route.
+- **A rollback puts back what was updated.** What an apply created stays: a change set holds
+  objects and never removes one (`applyChangeSet` names each in `not_restored` with the route
+  that removes it), as do environments a secrets project gained and names given where there
+  were none.
 
 ## Rehearsals of failure scenarios (A247) — served
 

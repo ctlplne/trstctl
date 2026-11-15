@@ -542,8 +542,10 @@ enforcement, idempotency, event projection, API, CLI, and console coverage.
 
 A change set is the configuration a tenant should hold, as one typed document: certificate
 profiles, CA bindings (issuers), connector targets, member role grants, and owners with their
-application model. You write it as JSON or YAML (a GitOps repository keeps it as YAML), plan
-it, review the plan, and apply exactly what you reviewed.
+application model; and the tenant's lifecycle policy module, notification channels, scheduled
+compliance reports, agent role grants and secrets projects (A248-L3). You write it as JSON or
+YAML (a GitOps repository keeps it as YAML), plan it, review the plan, and apply exactly what
+you reviewed.
 
 `POST /api/v1/changes/plan` (`trstctl-cli changes plan -f change-set.yaml`) changes nothing.
 It refuses a set that is malformed (an unknown field, a missing name, no objects, more than
@@ -552,7 +554,9 @@ that carries a secret value (a field named for one, or a private key, token, bea
 credential or password-bearing connection string anywhere in it; name a stored secret with a
 `…_ref` field instead). It checks you may write every object: the route needs
 `changes:write`, and each object also needs its own permission — `profiles:write`,
-`issuers:write`, `connectors:write`, `access:role.assign` or `owners:write` — and a member grant
+`issuers:write`, `connectors:write`, `access:role.assign`, `owners:write`, `policy:write`,
+`notifications:write`, `audit:write` (report schedules), `agents:relay.grant` (agent roles) or
+`access:write` (secrets projects) — and a member grant
 gets the same checks as `PUT /api/v1/access/members/{subject}` (no self-assignment; only an
 administrator grants an all-permissions role; a custom role only by someone holding all of
 it). Then it lists, per object, whether applying creates, updates or leaves it alone, and
@@ -572,6 +576,41 @@ writes each changed object through the command the operator's own request takes,
 back, and reports `verified` per object; `complete` is false while anything waits for an
 approval or failed. Applying is idempotent under its `Idempotency-Key`, and a second plan of
 an applied set lists every object as `unchanged`.
+
+**The rollback (A248-L3).** Every apply returns `rollback`: the change set that puts each
+object it updated back as the plan read it — the previous profile spec, CA binding, target,
+member roles, owner, policy module (the boot module when the tenant had none of its own),
+channel, schedule, agent roles or project — which you plan, review and apply like any other.
+`not_restored` names what that rollback leaves, and why: an object the apply created (a change
+set does not remove objects; each names the route that does, such as
+`DELETE /api/v1/notification-channels/{id}` or a schedule's `pause`), an environment a project
+gained, a name given where there was none, and any object whose earlier state holds a secret
+value, which a change set never carries.
+
+**The other kinds (A248-L3).**
+
+- `policy` is the tenant's lifecycle policy module (`module`, optional `description`). Applying
+  authors it as a policy version and activates it with the events the operator's own requests
+  append (`policy.version.authored`, `policy.version.activated`); a module that does not compile
+  never plans.
+- `notification_channels` are the tenant's channels by `channel_type`, with `endpoint_url`,
+  `label`, `enabled` and a `credential_ref` that names a stored secret (`secret://…`) the author
+  may read; the endpoint follows the tenant's own rules (public HTTPS, or a private range the
+  operator granted).
+- `report_schedules` are scheduled compliance reports by `key` (`name`, `framework`,
+  `report_type`, `interval_seconds`, `enabled`, and a `dispatch` naming channels and a ticket
+  whose `token_ref` names a stored secret). What would stop the apply stops the plan: an
+  unconfigured audit archive, or a dispatch channel neither the tenant nor the same set holds.
+- `agent_roles` set an existing agent's complete role set (`agent_id`, `roles`), recorded as the
+  operator's grant is: the agent's next certificate renewal signs them. A change set does not
+  enroll agents, and an offboarded agent is refused.
+- `secret_projects` are secrets projects by `slug`: a `name`, an `owner_id` (only when the set
+  creates the project), the `environments` it names (`slug`, `name`, `restricted`) and the
+  `members` it names (`subject`, `role` of `viewer`, `developer` or `admin` over named
+  environments, or `none` to revoke a grant). An environment or member the entry does not name
+  is left alone; a held project's owner and an environment's restriction are set when they are
+  created, so a set that would change them is refused at plan. Metadata only: a project never
+  holds a value in a change set.
 
 ```yaml
 # change-set.yaml
@@ -595,7 +634,10 @@ trstctl-cli changes apply -f change-set.yaml sha256:…  # apply what you review
 **In the console.** The **Change sets** page (Govern & administer; it needs `changes:write`)
 writes the same set. Start from a template — onboard an application (an owner, a profile and a
 member), grant a member roles, add a connector target, or a blank set — and fill in the form, or
-switch to JSON to edit the set itself. **Plan** shows the per-object table the API returns, with
+switch to JSON to edit the set itself. The lifecycle policy, a notification channel, a report
+schedule, agent roles and a secrets project start from JSON templates. After an apply, **Review
+the rollback** loads its rollback into the JSON editor to plan, and the page lists what the
+rollback does not put back. **Plan** shows the per-object table the API returns, with
 both digests. **Apply the reviewed plan** sends that plan's digest; an edit after planning marks
 the plan stale and disables applying until you plan again, and a `409` (the tenant moved past
 the plan) asks you to plan again. Each applied object shows its outcome and whether it read back
@@ -606,8 +648,11 @@ editor beside its plan.
 `POST /api/v1/changes/draft` (`trstctl-cli changes draft -f draft-request.json`, body
 `{"request": "..."}`) turns a request in words into the same typed change set and plans it like
 any other; it is never applied there — you review the plan and apply it yourself. The model is
-sent the request and the tenant's names (roles, profiles, CAs, connector targets, owners) —
-never a spec, a config, a certificate chain, an email or a member subject. A request that holds
+sent the request and the tenant's names (roles, profiles, CAs, connector targets, owners,
+agents by name and ID, secrets projects, and the notification channel types a tenant may author)
+— never a spec, a config, a certificate chain, an endpoint, an email or a member subject. A
+drafted set that holds a secret value is withheld: the response names where, never the value,
+and carries no plan (A248-L3). A request that holds
 a private key, a token, a bearer credential or a password is refused before the model is called;
 the adapter's own redaction strips anything else secret-shaped, and its personal-data policy
 applies. Each draft records an `ai.change_set.drafted` audit event with the model, the request's
@@ -616,9 +661,9 @@ and the form, API and GitOps paths work exactly as before. A draft that asks for
 objects as an API call plans to the same `change_set_digest` and `plan_digest`.
 
 **Status:** served through the console, the API and the CLI for profiles, CA bindings, connector
-targets, member role grants and owners, with AI drafts. The policy, notification-channel,
-report-schedule, agent and secret-metadata kinds come next (see
-[limitations](../limitations.md#reviewed-configuration-change-sets-a248--served)).
+targets, member role grants, owners, the lifecycle policy, notification channels, report
+schedules, agent role grants and secrets projects, with a rollback for every apply and AI drafts
+(see [limitations](../limitations.md#reviewed-configuration-change-sets-a248--served)).
 
 ### ABAC deny overlay
 

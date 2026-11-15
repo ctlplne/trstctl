@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/notify/tenantchannel"
 )
 
 // An AI draft of a reviewed change set (A248). The model turns an operator's
@@ -103,6 +104,30 @@ func (a *API) draftCatalog(ctx context.Context, tenantID string) (map[string][]s
 	for _, o := range owners {
 		add("owners", o.Name+" ("+string(o.Kind)+")")
 	}
+	// A248-L3: the agents (by name and id, which an agent role grant names),
+	// the secrets projects and the notification channel types a tenant may
+	// author; never a value, an endpoint or a member.
+	agents, err := a.store.ListAgentsPage(ctx, tenantID, nil, "", maxDraftCatalog)
+	if err != nil {
+		return nil, err
+	}
+	for _, agent := range agents {
+		if agent.Status != "offboarded" {
+			add("agents", agent.Name+" ("+agent.ID+")")
+		}
+	}
+	projects, err := a.store.ListSecretProjects(ctx, tenantID, maxDraftCatalog)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range projects {
+		add("secret_projects", p.Slug)
+	}
+	for _, channel := range notificationChannelCatalog(nil) {
+		if !tenantchannel.OperatorOnly(channel.ID) {
+			add("notification_channel_types", channel.ID)
+		}
+	}
 	for kind := range catalog {
 		sort.Strings(catalog[kind])
 	}
@@ -118,7 +143,11 @@ func draftPrompt(catalog map[string][]string, request string) string {
  "profiles": [{"name": "...", "spec": {"allowed_key_algorithms": ["ECDSA"], "allowed_protocols": ["acme"], "max_validity": "720h"}}],
  "deployment_targets": [{"key": "...", "name": "...", "connector": "...", "config": {"address_ref": "<stored secret name>"}, "enabled": false}],
  "members": [{"subject": "...", "roles": ["..."]}],
- "owners": [{"key": "...", "kind": "team|user|service|workload|vendor", "name": "...", "application_id": "...", "service": "...", "environment": "..."}]}` + "\n")
+ "owners": [{"key": "...", "kind": "team|user|service|workload|vendor", "name": "...", "application_id": "...", "service": "...", "environment": "..."}],
+ "notification_channels": [{"channel_type": "<a notification channel type>", "endpoint_url": "https://...", "credential_ref": "<stored secret reference>", "enabled": true}],
+ "report_schedules": [{"key": "...", "name": "...", "framework": "...", "report_type": "...", "interval_seconds": 604800, "dispatch": {"channels": ["<a notification channel type>"]}}],
+ "agent_roles": [{"agent_id": "<an agent's id>", "roles": ["host|network|observer|gateway|session-observer"]}],
+ "secret_projects": [{"slug": "...", "name": "...", "environments": [{"slug": "dev"}, {"slug": "prod", "restricted": true}], "members": [{"subject": "...", "role": "viewer|developer|admin|none", "environments": ["dev"]}]}]}` + "\n")
 	b.WriteString("Use only the objects the request asks for. Name each object exactly, never with a pattern. Never write a secret value: refer to a stored secret by a field ending in _ref. Use existing names from this catalog where the request refers to them:\n")
 	kinds := make([]string, 0, len(catalog))
 	for kind := range catalog {
@@ -183,8 +212,12 @@ func (a *API) draftChangeSet(ctx context.Context, principal authz.Principal, ten
 		cs.Name = "AI draft"
 	}
 	out := ChangeDraft{ChangeSet: cs, Model: model.ModelName()}
-	plan, _, err := a.planChangeSet(ctx, principal, tenantID, cs)
-	if err != nil {
+	if path, shape := changeSetSecret(cs); path != "" {
+		// A248-L3: a draft never carries a secret value back, whichever kind
+		// holds it: the drafted set is withheld and the refusal says where.
+		out.ChangeSet = ChangeSet{Name: "AI draft (withheld)"}
+		out.Refused = path + " holds " + shape + "; the draft was withheld: a change set carries references and metadata, never secret values"
+	} else if plan, _, err := a.planChangeSet(ctx, principal, tenantID, cs); err != nil {
 		out.Refused = err.Error()
 	} else {
 		out.Plan = &plan

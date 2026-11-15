@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiError } from "@/lib/apiTransport";
 import type { ChangePlan, ChangeSet } from "@/lib/api";
-import { ChangeSets, changeSetFromForm, changeSetTemplates } from "@/pages/ChangeSets";
+import { ChangeSets, changeSetFromForm, changeSetJSONTemplates, changeSetTemplates } from "@/pages/ChangeSets";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -180,6 +180,62 @@ describe("A248 reviewed change sets in the console", () => {
     expect(await screen.findByText(/3 of 3 objects change/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Apply the reviewed plan" }));
     await waitFor(() => expect(apiMock.applyChangeSet).toHaveBeenCalledWith({ change_set: onboardBilling, plan_digest: "sha256:plan" }));
+  });
+
+  it("starts each new kind from a JSON template that plans as written (A248-L3)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const templates = [
+      ["Add a notification channel (JSON)", changeSetJSONTemplates.channel],
+      ["Schedule a compliance report (JSON)", changeSetJSONTemplates.schedule],
+      ["Grant an agent roles (JSON)", changeSetJSONTemplates.agentRoles],
+      ["Set up a secrets project and its members (JSON)", changeSetJSONTemplates.secretProject],
+      ["Set the lifecycle policy module (JSON)", changeSetJSONTemplates.policy],
+    ] as const;
+    for (const [option, template] of templates) {
+      await user.selectOptions(screen.getByLabelText("Start from"), option);
+      const json = (await screen.findByLabelText("Change set (JSON)")) as HTMLTextAreaElement;
+      expect(JSON.parse(json.value)).toEqual(template);
+    }
+    expect(JSON.stringify(changeSetJSONTemplates)).not.toMatch(/"(password|secret|token|api_key)"/);
+    await user.click(screen.getByRole("button", { name: "Plan" }));
+    await waitFor(() => expect(apiMock.planChangeSet).toHaveBeenCalledWith(changeSetJSONTemplates.policy));
+  });
+
+  it("offers the apply's rollback for review and names what it does not put back (A248-L3)", async () => {
+    const rollback: ChangeSet = {
+      name: "rollback of onboard billing",
+      description: "puts back what applying plan sha256:plan updated",
+      members: [{ subject: "dev@billing.example", roles: ["auditor"] }],
+    };
+    const removal = "created by this apply; a change set does not remove objects: DELETE /api/v1/owners/o-1 removes it";
+    apiMock.applyChangeSet.mockResolvedValue({
+      name: "onboard billing",
+      change_set_digest: "sha256:intent",
+      plan_digest: "sha256:plan",
+      complete: true,
+      results: [
+        { kind: "owner", key: "billing", outcome: "created", verified: true },
+        { kind: "member", key: "dev@billing.example", outcome: "updated", verified: true },
+      ],
+      rollback,
+      not_restored: [{ kind: "owner", key: "billing", object_id: "o-1", reason: removal }],
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await fillOnboardBilling(user);
+    await user.click(screen.getByRole("button", { name: "Plan" }));
+    await screen.findByText(/3 of 3 objects change/);
+    await user.click(screen.getByRole("button", { name: "Apply the reviewed plan" }));
+    expect(await screen.findByText(`owner billing: ${removal}`)).toBeInTheDocument();
+    expect(screen.getByText("What the rollback does not put back")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Review the rollback" }));
+    const json = (await screen.findByLabelText("Change set (JSON)")) as HTMLTextAreaElement;
+    expect(JSON.parse(json.value)).toEqual(rollback);
+    expect(screen.getByRole("button", { name: "Apply the reviewed plan" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Plan" }));
+    await waitFor(() => expect(apiMock.planChangeSet).toHaveBeenLastCalledWith(rollback));
   });
 
   it("shows why a drafted set does not plan, with nothing to apply", async () => {

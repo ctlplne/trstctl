@@ -3314,17 +3314,19 @@ export interface ChangeApplication {
   change_set_digest: string;
   complete: boolean;
   name: string;
+  not_restored?: { key: string; kind: string; object_id?: string; reason: string }[];
   plan_digest: string;
   results: { approval_request_id?: string; error?: string; key: string; kind: string; object_id?: string; outcome: string; verified: boolean }[];
+  rollback?: { agent_roles?: { agent_id: string; roles: string[] }[]; deployment_targets?: { config: unknown; connector: string; enabled?: boolean; key: string; name: string }[]; description?: string; issuers?: { chain?: string[]; internal?: boolean; key: string; kind: string; name: string; public_key?: string }[]; members?: { display_name?: string; email?: string; roles: string[]; subject: string }[]; name: string; notification_channels?: { channel_type: string; credential_ref?: string; enabled?: boolean; endpoint_url?: string; label?: string }[]; owners?: { application_id?: string; business_unit?: string; email?: string; environment?: string; escalation_chain?: string[]; key: string; kind: string; name: string; service?: string }[]; policy?: { description?: string; module: string }; profiles?: { name: string; spec: unknown }[]; report_schedules?: { dispatch?: { channels?: string[]; ticket?: { instance_url: string; provider: string; table: string; token_ref: string } }; enabled?: boolean; framework: string; interval_seconds: number; key: string; name: string; report_type: string }[]; secret_projects?: ({ environments: { name?: string; restricted?: boolean; slug: string }[]; members?: ({ environments?: string[]; role: "viewer" | "developer" | "admin" | "none"; subject: string })[]; name?: string; owner_id?: string; slug: string })[] };
 }
 
 export interface ChangeApplyRequest {
-  change_set: { deployment_targets?: { config: unknown; connector: string; enabled?: boolean; key: string; name: string }[]; description?: string; issuers?: { chain?: string[]; internal?: boolean; key: string; kind: string; name: string; public_key?: string }[]; members?: { display_name?: string; email?: string; roles: string[]; subject: string }[]; name: string; owners?: { application_id?: string; business_unit?: string; email?: string; environment?: string; escalation_chain?: string[]; key: string; kind: string; name: string; service?: string }[]; profiles?: { name: string; spec: unknown }[] };
+  change_set: { agent_roles?: { agent_id: string; roles: string[] }[]; deployment_targets?: { config: unknown; connector: string; enabled?: boolean; key: string; name: string }[]; description?: string; issuers?: { chain?: string[]; internal?: boolean; key: string; kind: string; name: string; public_key?: string }[]; members?: { display_name?: string; email?: string; roles: string[]; subject: string }[]; name: string; notification_channels?: { channel_type: string; credential_ref?: string; enabled?: boolean; endpoint_url?: string; label?: string }[]; owners?: { application_id?: string; business_unit?: string; email?: string; environment?: string; escalation_chain?: string[]; key: string; kind: string; name: string; service?: string }[]; policy?: { description?: string; module: string }; profiles?: { name: string; spec: unknown }[]; report_schedules?: { dispatch?: { channels?: string[]; ticket?: { instance_url: string; provider: string; table: string; token_ref: string } }; enabled?: boolean; framework: string; interval_seconds: number; key: string; name: string; report_type: string }[]; secret_projects?: ({ environments: { name?: string; restricted?: boolean; slug: string }[]; members?: ({ environments?: string[]; role: "viewer" | "developer" | "admin" | "none"; subject: string })[]; name?: string; owner_id?: string; slug: string })[] };
   plan_digest: string;
 }
 
 export interface ChangeDraft {
-  change_set: { deployment_targets?: { config: unknown; connector: string; enabled?: boolean; key: string; name: string }[]; description?: string; issuers?: { chain?: string[]; internal?: boolean; key: string; kind: string; name: string; public_key?: string }[]; members?: { display_name?: string; email?: string; roles: string[]; subject: string }[]; name: string; owners?: { application_id?: string; business_unit?: string; email?: string; environment?: string; escalation_chain?: string[]; key: string; kind: string; name: string; service?: string }[]; profiles?: { name: string; spec: unknown }[] };
+  change_set: { agent_roles?: { agent_id: string; roles: string[] }[]; deployment_targets?: { config: unknown; connector: string; enabled?: boolean; key: string; name: string }[]; description?: string; issuers?: { chain?: string[]; internal?: boolean; key: string; kind: string; name: string; public_key?: string }[]; members?: { display_name?: string; email?: string; roles: string[]; subject: string }[]; name: string; notification_channels?: { channel_type: string; credential_ref?: string; enabled?: boolean; endpoint_url?: string; label?: string }[]; owners?: { application_id?: string; business_unit?: string; email?: string; environment?: string; escalation_chain?: string[]; key: string; kind: string; name: string; service?: string }[]; policy?: { description?: string; module: string }; profiles?: { name: string; spec: unknown }[]; report_schedules?: { dispatch?: { channels?: string[]; ticket?: { instance_url: string; provider: string; table: string; token_ref: string } }; enabled?: boolean; framework: string; interval_seconds: number; key: string; name: string; report_type: string }[]; secret_projects?: ({ environments: { name?: string; restricted?: boolean; slug: string }[]; members?: ({ environments?: string[]; role: "viewer" | "developer" | "admin" | "none"; subject: string })[]; name?: string; owner_id?: string; slug: string })[] };
   model: string;
   plan?: { change_set_digest: string; changes: number; items: ({ action: "create" | "update" | "unchanged"; actual_digest?: string; approvals: string[]; credentials: string[]; destinations: string[]; detail?: string; effects: string[]; expected_digest: string; grants: string[]; identities: string[]; key: string; kind: string; object_id?: string; verification: string })[]; name: string; plan_digest: string };
   refused?: string;
@@ -3350,13 +3352,18 @@ export interface ChangePlan {
 }
 
 export interface ChangeSet {
+  agent_roles?: { agent_id: string; roles: string[] }[];
   deployment_targets?: { config: unknown; connector: string; enabled?: boolean; key: string; name: string }[];
   description?: string;
   issuers?: { chain?: string[]; internal?: boolean; key: string; kind: string; name: string; public_key?: string }[];
   members?: { display_name?: string; email?: string; roles: string[]; subject: string }[];
   name: string;
+  notification_channels?: { channel_type: string; credential_ref?: string; enabled?: boolean; endpoint_url?: string; label?: string }[];
   owners?: { application_id?: string; business_unit?: string; email?: string; environment?: string; escalation_chain?: string[]; key: string; kind: string; name: string; service?: string }[];
+  policy?: { description?: string; module: string };
   profiles?: { name: string; spec: unknown }[];
+  report_schedules?: { dispatch?: { channels?: string[]; ticket?: { instance_url: string; provider: string; table: string; token_ref: string } }; enabled?: boolean; framework: string; interval_seconds: number; key: string; name: string; report_type: string }[];
+  secret_projects?: ({ environments: { name?: string; restricted?: boolean; slug: string }[]; members?: ({ environments?: string[]; role: "viewer" | "developer" | "admin" | "none"; subject: string })[]; name?: string; owner_id?: string; slug: string })[];
 }
 
 export interface CloudKeyActionResult {
