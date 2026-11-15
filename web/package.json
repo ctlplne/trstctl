@@ -89,16 +89,15 @@
       "limit": "350 kB"
     },
     {
-      "name": "largest page chunk (Brotli)",
-      "path": "../internal/webui/dist/assets/Secrets-*.js",
-      "limit": "30 kB"
-    },
-    {
       "name": "all JS shipped (Brotli)",
       "path": "../internal/webui/dist/assets/*.js",
-      "limit": "1000 kB"
+      "limit": "1200 kB"
     }
   ],
+  "page-budget": {
+    "name": "largest page chunk (Brotli; every page, measured by scripts/check-entry-size.mjs)",
+    "limit": "44 kB"
+  },
   "overrides": {
     "source-map-js": "1.2.2",
     "postcss-selector-parser": "7.1.6"

@@ -1,6 +1,29 @@
 # Console bundle budget decisions
 
-## Current decision — 2026-10-25
+## Current decision — 2026-11-15 (BUDGET-O1)
+
+The largest-page ceiling now measures every page, and two ceilings rose under
+the owner's rule that no size rule fails a change (bundle caps are raise and
+tell). Measured on the console built from main at 1018 (`ecbe9b948`), in
+decimal Brotli bytes:
+
+- The 30 kB "largest page chunk" check measured one page's chunk by name,
+  `Secrets-*.js` (28,787 bytes), while three larger pages went unmeasured:
+  Discovery 39,665, AdminAccess 39,076 and CAHierarchy 37,950 (then Posture
+  28,872, Secrets 28,787, Protocols 28,731). `scripts/check-entry-size.mjs`
+  now measures each page's own chunk (the chunk named after a module in
+  `src/pages`; 38 pages) and holds the largest to the `page-budget` limit in
+  `package.json`: **44 kB**, 4.3 kB above Discovery.
+- All shipped JavaScript measured 1,056,757 bytes, so `npm run size` already
+  failed against its 1,000 kB ceiling. That measure counts pages a browser
+  fetches only when an operator opens them; the ceiling is now **1,200 kB**.
+- The complete startup import graph measured 327,596 bytes and keeps its
+  **350 kB** ceiling.
+
+Bringing Discovery, AdminAccess and CAHierarchy back under 30 kB means
+splitting each into lazily loaded sub-chunks; that is the owner's call.
+
+## Decision — 2026-10-25
 
 The owner raised the complete startup import graph ceiling from **245 kB to
 350 kB** so the console can move to React 19. React 19's runtime adds about

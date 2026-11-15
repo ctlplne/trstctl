@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { measureEntry } from "./check-entry-size.mjs";
+import { measureEntry, measurePages } from "./check-entry-size.mjs";
 
 function fixture(t, files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "trstctl-entry-size-"));
@@ -82,4 +82,30 @@ test("unquoted attributes and duplicate attributes follow browser parsing", (t) 
       .sort(),
     ["entry.js", "extra.js", "first.js", "index.html"],
   );
+});
+
+// BUDGET-O1: the largest-page ceiling measures every page's own chunk, not one
+// page's by name; shared and library chunks are not pages.
+test("every page chunk is measured alone and the largest leads", (t) => {
+  const filler = (n) => `export const body=${JSON.stringify(Array.from({ length: n }, (_, i) => `page-${i * 7919}`).join(" "))};`;
+  const root = fixture(t, {
+    "index.html": '<script type="module" src="/assets/index-AAAAAAAA.js"></script>',
+    "assets/index-AAAAAAAA.js": 'export const lazy = () => [import("./Big-Ab_dEf-h.js"), import("./Small-12345678.js")];',
+    "assets/Big-Ab_dEf-h.js": filler(400),
+    "assets/Small-12345678.js": filler(40),
+    "assets/transport-ZZZZZZZZ.js": filler(2000),
+    "assets/BigPanel-QQQQQQQQ.js": filler(3000),
+  });
+  const pages = measurePages(root, ["Small", "Big", "Login"]);
+  assert.deepEqual(
+    pages.map((p) => [p.page, p.file]),
+    [
+      ["Big", "assets/Big-Ab_dEf-h.js"],
+      ["Small", "assets/Small-12345678.js"],
+    ],
+  );
+  assert.ok(pages[0].bytes > pages[1].bytes);
+  fs.writeFileSync(path.join(root, "assets/Big-BBBBBBBB.js"), filler(10));
+  assert.throws(() => measurePages(root, ["Big"]), /2 chunks of its name/);
+  assert.throws(() => measurePages(root, ["Login"]), /no page chunk/);
 });

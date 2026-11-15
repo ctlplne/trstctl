@@ -63,6 +63,29 @@ export function measureEntry(dist) {
   };
 }
 
+// Every page the console loads lazily, each measured alone (BUDGET-O1): the
+// chunk Vite names after a module in src/pages, "<Page>-<8-character hash>.js".
+// The largest-page ceiling used to measure one page's chunk by name (Secrets)
+// while three larger pages went unmeasured. A module without a chunk of its
+// own is bundled into a page or the entry and is skipped; a page with two
+// chunks of its name fails rather than undercounting.
+export function measurePages(dist, pageNames) {
+  const assets = path.join(fs.realpathSync(dist), "assets");
+  const compressedSize = (code) => brotliCompressSync(code, { params: { [constants.BROTLI_PARAM_QUALITY]: 11 } }).length;
+  const chunks = fs.readdirSync(assets).filter((name) => name.endsWith(".js"));
+  const pages = [];
+  for (const page of pageNames) {
+    const named = chunks.filter((name) => name.startsWith(`${page}-`) && /^[A-Za-z0-9_-]{8}\.js$/.test(name.slice(page.length + 1)));
+    if (named.length > 1) throw new Error(`page ${page} has ${named.length} chunks of its name`);
+    if (named.length === 1) {
+      pages.push({ page, file: `assets/${named[0]}`, bytes: compressedSize(fs.readFileSync(path.join(assets, named[0]))) });
+    }
+  }
+  if (pages.length === 0) throw new Error("no page chunk found");
+  pages.sort((a, b) => b.bytes - a.bytes || a.page.localeCompare(b.page));
+  return pages;
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const webRoot = path.resolve(import.meta.dirname, "..");
   const pkg = JSON.parse(fs.readFileSync(path.join(webRoot, "package.json"), "utf8"));
@@ -70,7 +93,18 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (!entry || !/^\d+(?:\.\d+)? kB$/.test(entry.limit) || entry.gzip === true || entry.brotli === false)
     throw new Error("unsupported entry budget configuration");
   const limit = Number.parseFloat(entry.limit) * 1000;
-  const result = measureEntry(path.resolve(webRoot, "../internal/webui/dist"));
+  const dist = path.resolve(webRoot, "../internal/webui/dist");
+  const result = measureEntry(dist);
   console.log(JSON.stringify({ name: "complete entry import graph (Brotli)", ...result, limit }, null, 2));
   if (result.bytes > limit) process.exitCode = 1;
+  const pageBudget = pkg["page-budget"];
+  if (!pageBudget || !/^\d+(?:\.\d+)? kB$/.test(pageBudget.limit)) throw new Error("unsupported page budget configuration");
+  const pageLimit = Number.parseFloat(pageBudget.limit) * 1000;
+  const pageNames = fs
+    .readdirSync(path.join(webRoot, "src/pages"))
+    .filter((name) => name.endsWith(".tsx") && !name.endsWith(".stories.tsx") && !name.endsWith(".test.tsx"))
+    .map((name) => name.slice(0, -".tsx".length));
+  const pages = measurePages(dist, pageNames);
+  console.log(JSON.stringify({ name: pageBudget.name, largest: pages[0], measured: pages.length, largestFive: pages.slice(0, 5), limit: pageLimit }, null, 2));
+  if (pages[0].bytes > pageLimit) process.exitCode = 1;
 }
