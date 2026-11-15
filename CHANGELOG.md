@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- OAuth leases can authenticate the client with a JWT it signs (`client_auth: private_key_jwt`, RFC 7523; A239-L7), so
+  no client secret is sent, and can draw a role's leases with a refresh token obtained once for the client
+  (`refresh_token_ref`, `refresh_token_roles`: the refresh-token grant, narrowed to the role's scopes) for an API that
+  issues no client-credentials tokens. The refresh token is never handed out, revoked or replaced; revoking a lease
+  revokes its access token only. The provider catalog and the console state both. Proven against stock Keycloak
+  (`scripts/labs/keycloak-oauth.sh`).
 - Secret scans catch the token formats the pinned Gitleaks misses (P14-L4): over a corpus of the tokens trstctl needs to
   catch, Gitleaks v8.27.2 alone misses 10 of 22 formats — trstctl's API, opaque access and response-wrapping tokens,
   Doppler service, service account, CLI, SCIM and audit tokens, and Infisical service and Bitwarden Secrets Manager access

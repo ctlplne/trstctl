@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3386 annotated sites across 35 rules. Each row is
+3389 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (844 sites)
+### G101 — CWE-798 Use of hardcoded credentials (847 sites)
 
 | Location | Reason |
 |---|---|
@@ -388,6 +388,9 @@ not this file.
 | `internal/dynsecret/mongodb_atlas_test.go:34` | fabricated stand-in service account (CWE-798) |
 | `internal/dynsecret/native_expiry.go:36` | a credential kind's name, no credential value (CWE-798) |
 | `internal/dynsecret/native_expiry.go:37` | a credential kind's name, no credential value (CWE-798) |
+| `internal/dynsecret/oauth_client_auth_refresh_test.go:135` | fabricated lab client secret, form-encoded (CWE-798) |
+| `internal/dynsecret/oauth_client_auth_refresh_test.go:379` | fabricated fixture secret (CWE-798) |
+| `internal/dynsecret/oauth_client_credentials.go:81` | a registered URN naming the assertion type, not a credential (CWE-798) |
 | `internal/dynsecret/oauth_client_credentials_test.go:29` | fabricated lab client secret, form-encoded (CWE-798) |
 | `internal/dynsecret/oauth_client_credentials_test.go:190` | fabricated fixture secret; the case fails on its scope (CWE-798) |
 | `internal/dynsecret/postgres_decoy_test.go:15` | placeholder test DSNs, not credentials (CWE-798) |
@@ -1631,7 +1634,7 @@ not this file.
 | `internal/dynsecret/mssql.go:321` | the staged credential is this provider's output: the outbox seals it and only an authorized read opens it (CWE-200) |
 | `internal/dynsecret/network_api.go:137` | the rotated device credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/network_device.go:125` | the rotated device credential; the rotation seals it before storage (CWE-200) |
-| `internal/dynsecret/oauth_client_credentials.go:206` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
+| `internal/dynsecret/oauth_client_credentials.go:311` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/openai.go:125` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/openrouter.go:59` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/oracle.go:262` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
@@ -3693,7 +3696,7 @@ not this file.
 | `internal/dynsecret/mongodb_atlas.go:233` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/mongodb_atlas.go:260` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/network_api.go:158` | the operator's configured device endpoint through the pinned, egress-guarded client (CWE-918) |
-| `internal/dynsecret/oauth_client_credentials.go:315` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/oauth_client_credentials.go:436` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/providers_real.go:1761` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:240` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:284` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |

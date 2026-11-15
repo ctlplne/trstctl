@@ -2180,6 +2180,47 @@ describe("secrets surface", () => {
     expect(screen.getByText(/The directory deletes the lease's entry itself, even if trstctl is down/)).toBeInTheDocument();
   });
 
+  // A239-L7: an OAuth provider says how its client signs in to the
+  // authorization server and which roles draw on its refresh token.
+  it("states an OAuth provider's client authentication and refresh-token roles (A239-L7)", async () => {
+    const base = await apiMock.dynamicSecretProviders();
+    const oauth = {
+      type: "oauth-client-credentials",
+      label: "OAuth access tokens",
+      allowed_roles: ["reader", "writer"],
+      maximum_ttl_seconds: 300,
+      ready: true,
+      revocation: "confirmed",
+    };
+    apiMock.dynamicSecretProviders.mockResolvedValue({
+      ...base,
+      configured_providers: [
+        { ...base.configured_providers[0], revocation: "confirmed" },
+        {
+          ...oauth,
+          id: "orders-jwt",
+          configuration_revision: "runtime-revision-e",
+          client_auth: "private_key_jwt",
+          refresh_token_roles: ["reader"],
+        },
+        { ...oauth, id: "orders-basic", configuration_revision: "runtime-revision-f", client_auth: "client_secret_basic" },
+      ],
+    });
+    const user = userEvent.setup();
+    renderSecrets("/secrets/engines");
+    await user.click(await screen.findByRole("button", { name: "Open temporary credential" }));
+    expect(await screen.findByText("When a lease is revoked")).toBeInTheDocument();
+    expect(screen.queryByText("How the client signs in to the authorization server")).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Connected provider"), "orders-jwt");
+    expect(await screen.findByText("How the client signs in to the authorization server")).toBeInTheDocument();
+    expect(screen.getByText(/signs with its private key for each request \(private_key_jwt\), so no secret is sent/)).toBeInTheDocument();
+    expect(screen.getByText("Roles drawn with the provider's refresh token")).toBeInTheDocument();
+    expect(screen.getByText(/^reader: each lease is an access token drawn with the refresh token/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Connected provider"), "orders-basic");
+    expect(await screen.findByText("With its client secret, sent over HTTP Basic.")).toBeInTheDocument();
+    expect(screen.queryByText("Roles drawn with the provider's refresh token")).not.toBeInTheDocument();
+  });
+
   it("issues ephemeral API keys, runs secret scans, and drives leases", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();

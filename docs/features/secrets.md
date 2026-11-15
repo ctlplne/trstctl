@@ -566,7 +566,8 @@ never outlasts its code by more than one period.
 
 The OAuth 2.0 backend (`oauth-client-credentials`) asks an authorization server's
 token endpoint for a new access token per lease (client credentials grant, with the
-scopes the lease's role is bound to). It refuses a token that carries any other
+scopes the lease's role is bound to, or the refresh-token grant for a refresh-token
+role, below). It refuses a token that carries any other
 scope, isn't a Bearer token, or lives longer than `max_ttl` or shorter than the
 lease, and revokes such a token first when it can. A token can't be extended, so a
 renewal is refused. With `revocation_endpoint`, revoking the lease presents the
@@ -576,6 +577,28 @@ the token is accepted until its own expiry, which the lease shows as
 `native_expires_at`, and the revocation stays pending until then (`ttl_only`). A
 token request has no idempotency key, so an uncertain one is never retried: the
 lease fails and states that a token may exist for at most `max_ttl`.
+
+The client authenticates with its secret (`client_auth: client_secret_basic`, the
+default: `client_secret_ref` over HTTP Basic) or, with `client_auth: private_key_jwt`
+(A239-L7), with a JWT it signs through the crypto boundary for each token and
+revocation request (RFC 7523): issuer and subject the client, audience the token
+endpoint, a fresh `jti`, valid for one minute. The key is `private_key_ref` (one
+unencrypted RSA or ECDSA PEM block), named by `client_key_id` when the authorization
+server registers keys by `kid`; no secret is sent. For an API that issues no
+client-credentials tokens, `refresh_token_ref` holds a refresh token obtained once for
+the client, and each lease of a role in `refresh_token_roles` is an access token drawn
+with it (the refresh-token grant, RFC 6749 section 6), asking for the role's scopes as
+a narrowed scope, with the same refusals. The refresh token is configuration, like the
+client secret: no lease carries it, revoking a lease revokes only its access token, and
+a refresh token a server returns (a rotated one, or one added to a client-credentials
+answer) is wiped, never kept or revoked. A server that rotates refresh tokens and stops
+accepting the old one is not followed: the next refresh-role lease fails with
+`invalid_grant`, naming it, until `refresh_token_ref` holds a new token. A server that,
+as RFC 7009 permits, revokes the refresh token along with an access token ends the
+grant at the first revocation, so leave such a provider's `revocation_endpoint` unset.
+The provider catalog and the console state each provider's `client_auth` and
+`refresh_token_roles`; `scripts/labs/keycloak-oauth.sh` proves both against stock
+Keycloak.
 
 The ClickHouse backend creates one ClickHouse user per lease through the HTTP
 interface, as `admin_user`, with a generated password, `VALID UNTIL` the provider's

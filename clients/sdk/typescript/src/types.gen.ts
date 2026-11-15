@@ -18931,6 +18931,11 @@ export interface components {
              * @enum {string}
              */
             backend_expiry?: "directory";
+            /**
+             * @description How an oauth-client-credentials provider's client authenticates to the authorization server (A239-L7): its secret over HTTP Basic, or a JWT it signs with its private key (RFC 7523); absent for other types.
+             * @enum {string}
+             */
+            client_auth?: "client_secret_basic" | "private_key_jwt";
             configuration_revision: string;
             /** @description the secrets environment the provider is placed in, <project>/<environment> (A235-L2); absent when it is the tenant's. In a restricted environment only its members see and use the provider. */
             environment?: string;
@@ -18938,6 +18943,8 @@ export interface components {
             label: string;
             maximum_ttl_seconds: number;
             ready: boolean;
+            /** @description An oauth-client-credentials provider's roles whose leases are access tokens drawn with its refresh token (A239-L7, RFC 6749 section 6), narrowed to the role's scopes; the refresh token itself is never handed out or revoked. */
+            refresh_token_roles?: string[];
             /**
              * @description Whether revoking a lease ends its credential before its native expiry (confirmed), it lapses only then (ttl_only), or a policy the provider enforces denies it before then (deny_policy: an AWS STS provider with revoke_with_deny_policy), for this provider as configured; an OAuth provider is confirmed only with a revocation endpoint.
              * @enum {string}

@@ -5746,7 +5746,15 @@ when off, requiring a KEK when on):
   its role's scope, stock curl reads the realm through Keycloak's admin API with
   it, a renewal is refused, and after the lease is revoked (RFC 7009, through the
   outbox) curl is refused with 401; a provider without a revocation endpoint
-  keeps the revocation pending until the token's expiry. ClickHouse users (A239)
+  keeps the revocation pending until the token's expiry. Signed-JWT client
+  authentication and refresh-token roles (A239-L7) are proven against the same
+  Keycloak (`scripts/labs/keycloak-oauth.sh`): a client registered with Keycloak's
+  client-jwt and no secret leases a reader token drawn with a user's refresh token,
+  narrowed to `orders.read`, and a writer token by client credentials; curl reads
+  the realm with each; after the reader lease is revoked curl is refused (401), and
+  the refresh token serves the next reader lease. A server that rotates refresh
+  tokens and stops accepting the old one is not followed: the refresh token is the
+  operator's configuration, which trstctl never rewrites. ClickHouse users (A239)
   are proven against stock ClickHouse 24.8: stock curl reads the bound database
   with a leased user and is refused a write, a renewal stays within the maximum
   lifetime, and after revocation the login is refused and no leased user is

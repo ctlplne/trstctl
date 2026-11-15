@@ -41,9 +41,24 @@ func openConfiguredTOTPBackend(o *configuredDynamicBackendOpener) (requestDynami
 // the SSRF-guarded HTTP client (A239).
 func openConfiguredOAuthBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
 	cfg := o.provider.cfg
-	clientSecret, err := o.resolve(cfg.ClientSecretRef)
+	// The client authenticates with its secret, or (A239-L7) with a JWT it
+	// signs with its private key: only the credential it uses is read.
+	var clientSecret, clientKey []byte
+	var err error
+	if strings.TrimSpace(cfg.ClientAuth) == dynsecret.OAuthPrivateKeyJWT {
+		clientKey, err = o.resolve(cfg.PrivateKeyRef)
+	} else {
+		clientSecret, err = o.resolve(cfg.ClientSecretRef)
+	}
 	if err != nil {
 		return o.fail(err)
+	}
+	// Refresh-token roles (A239-L7) draw on the provider's refresh token.
+	var refreshToken []byte
+	if cfg.RefreshTokenRef != "" {
+		if refreshToken, err = o.resolve(cfg.RefreshTokenRef); err != nil {
+			return o.fail(err)
+		}
 	}
 	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
 	if err != nil {
@@ -51,6 +66,8 @@ func openConfiguredOAuthBackend(o *configuredDynamicBackendOpener) (requestDynam
 	}
 	backend, err := dynsecret.NewOAuthClientCredentialsBackend(dynsecret.OAuthClientCredentialsConfig{
 		TokenURL: cfg.Endpoint, RevocationURL: cfg.RevocationEndpoint, ClientID: cfg.ClientID, ClientSecret: clientSecret,
+		ClientAuth: cfg.ClientAuth, ClientKeyPEM: clientKey, ClientKeyID: cfg.ClientKeyID,
+		RefreshToken: refreshToken, RefreshRoles: cfg.RefreshTokenRoles,
 		RoleScopes: cfg.RoleBindings, MaxLifetime: o.provider.maxTTL, AllowInsecureLoopback: cfg.AllowInsecureLoopback,
 		HTTPClient: client,
 	})

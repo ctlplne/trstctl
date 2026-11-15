@@ -4830,12 +4830,14 @@ export interface DynamicLeaseRequest {
 export interface DynamicSecretConfiguredProvider {
   allowed_roles: string[];
   backend_expiry?: "directory";
+  client_auth?: "client_secret_basic" | "private_key_jwt";
   configuration_revision: string;
   environment?: string;
   id: string;
   label: string;
   maximum_ttl_seconds: number;
   ready: boolean;
+  refresh_token_roles?: string[];
   revocation?: "confirmed" | "ttl_only" | "deny_policy";
   type: string;
 }

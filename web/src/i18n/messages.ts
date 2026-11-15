@@ -9314,6 +9314,27 @@ export const messages = {
     defaultMessage: "The directory deletes the lease's entry itself, even if trstctl is down; each renewal moves that expiry with the lease.",
     description: "A239-L2: an LDAP provider whose lease entries are RFC 2589 dynamic objects that the directory expires on its own.",
   },
+  "secrets.dynamic.clientAuth": {
+    defaultMessage: "How the client signs in to the authorization server",
+    description: "A239-L7: label for how an OAuth provider's client authenticates to the authorization server.",
+  },
+  "secrets.dynamic.clientAuthSecretBasic": {
+    defaultMessage: "With its client secret, sent over HTTP Basic.",
+    description: "A239-L7: an OAuth provider's client authenticates with client_secret_basic.",
+  },
+  "secrets.dynamic.clientAuthPrivateKeyJWT": {
+    defaultMessage: "With a JWT it signs with its private key for each request (private_key_jwt), so no secret is sent.",
+    description: "A239-L7: an OAuth provider's client authenticates with private_key_jwt (RFC 7523).",
+  },
+  "secrets.dynamic.refreshTokenRoles": {
+    defaultMessage: "Roles drawn with the provider's refresh token",
+    description: "A239-L7: label for an OAuth provider's refresh-token roles.",
+  },
+  "secrets.dynamic.refreshTokenRolesValue": {
+    defaultMessage:
+      "{roles}: each lease is an access token drawn with the refresh token, narrowed to the role's scopes. The refresh token itself is never handed out.",
+    description: "A239-L7: an OAuth provider's refresh-token roles; roles is a comma-separated list of role names.",
+  },
   "secrets.dynamic.requirements": { defaultMessage: "Safe setup checklist", description: "Dynamic provider prerequisites heading." },
   "secrets.dynamic.requiredLabel": { defaultMessage: "Required", description: "Required provider prerequisite marker." },
   "secrets.dynamic.optionalLabel": { defaultMessage: "Optional", description: "Optional provider prerequisite marker." },

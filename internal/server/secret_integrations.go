@@ -2224,6 +2224,28 @@ func (p *configuredDynamicProvider) DynamicSecretGatewayDesktop(role string) (ac
 	return binding, binding.Validate()
 }
 
+// DynamicSecretClientAuth is how an oauth-client-credentials provider's
+// client authenticates, client_secret_basic or private_key_jwt (A239-L7);
+// empty for every other type.
+func (p *configuredDynamicProvider) DynamicSecretClientAuth() string {
+	if strings.TrimSpace(p.cfg.Type) != "oauth-client-credentials" {
+		return ""
+	}
+	if auth := strings.TrimSpace(p.cfg.ClientAuth); auth != "" {
+		return auth
+	}
+	return dynsecret.OAuthClientSecretBasic
+}
+
+// DynamicSecretRefreshTokenRoles are an oauth-client-credentials provider's
+// roles whose leases are drawn with its refresh token (A239-L7).
+func (p *configuredDynamicProvider) DynamicSecretRefreshTokenRoles() []string {
+	if strings.TrimSpace(p.cfg.Type) != "oauth-client-credentials" {
+		return nil
+	}
+	return append([]string(nil), p.cfg.RefreshTokenRoles...)
+}
+
 // DynamicSecretBackendExpiry is "directory" for an ldap provider with
 // dynamic_entries: its directory deletes each lease's entry when the lease's
 // time runs out, on its own (A239-L2).

@@ -3,6 +3,7 @@
 package dynsecret
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +41,24 @@ type OAuthClientCredentialsConfig struct {
 	RevocationURL string
 	ClientID      string
 	ClientSecret  []byte
+	// ClientAuth is how the client authenticates to the token and
+	// revocation endpoints (A239-L7): OAuthClientSecretBasic (the default,
+	// with ClientSecret) or OAuthPrivateKeyJWT (RFC 7523 section 2.2: a JWT
+	// the client signs with ClientKeyPEM, its private key, through the
+	// crypto boundary; ClientKeyID is the JWS kid, when the authorization
+	// server names the key).
+	ClientAuth   string
+	ClientKeyPEM []byte
+	ClientKeyID  string
+	// RefreshToken is the provider's refresh token (A239-L7): an operator
+	// obtained it once (an authorization-code or device grant) for an API
+	// that issues no client-credentials tokens. Each lease of a role in
+	// RefreshRoles is an access token drawn with it (RFC 6749 section 6),
+	// asking for the role's scopes as a narrowed scope. It is configuration,
+	// like the client secret: never handed to a lease holder, revoked or
+	// replaced.
+	RefreshToken []byte
+	RefreshRoles []string
 	// RoleScopes maps each allowed role to its space-separated scopes.
 	RoleScopes map[string]string
 	// MaxLifetime is the longest token lifetime the operator declared for this
@@ -51,12 +71,30 @@ type OAuthClientCredentialsConfig struct {
 	Now                   func() time.Time
 }
 
+// Client authentication methods (A239-L7).
+const (
+	OAuthClientSecretBasic = "client_secret_basic"
+	OAuthPrivateKeyJWT     = "private_key_jwt"
+)
+
+// oauthJWTBearerAssertion is RFC 7523's client_assertion_type.
+const oauthJWTBearerAssertion = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" // #nosec G101 -- a registered URN naming the assertion type, not a credential (CWE-798)
+
+// oauthAssertionLifetime is how long a client assertion is valid: one
+// request's worth.
+const oauthAssertionLifetime = time.Minute
+
 // OAuthClientCredentialsBackend issues access tokens for one confidential client.
 type OAuthClientCredentialsBackend struct {
 	tokenURL      string
 	revocationURL string
 	clientID      string
+	clientAuth    string
 	clientSecret  *secret.Buffer
+	clientKey     *secret.Buffer
+	clientKeyID   string
+	refreshToken  *secret.Buffer
+	refreshRoles  map[string]bool
 	roleScopes    map[string][]string
 	maxLifetime   time.Duration
 	client        *http.Client
@@ -71,8 +109,19 @@ func NewOAuthClientCredentialsBackend(cfg OAuthClientCredentialsConfig) (*OAuthC
 	if err := oauthEndpointURL("revocation", cfg.RevocationURL, true, cfg.AllowInsecureLoopback); err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(cfg.ClientID) == "" || len(cfg.ClientSecret) == 0 {
-		return nil, errors.New("dynsecret oauth: client_id and the client secret are required")
+	auth := strings.TrimSpace(cfg.ClientAuth)
+	if auth == "" {
+		auth = OAuthClientSecretBasic
+	}
+	switch {
+	case strings.TrimSpace(cfg.ClientID) == "":
+		return nil, errors.New("dynsecret oauth: client_id is required")
+	case auth == OAuthClientSecretBasic && len(cfg.ClientSecret) == 0:
+		return nil, errors.New("dynsecret oauth: client_secret_basic needs the client secret")
+	case auth == OAuthPrivateKeyJWT && len(cfg.ClientKeyPEM) == 0:
+		return nil, errors.New("dynsecret oauth: private_key_jwt needs the client's private key")
+	case auth != OAuthClientSecretBasic && auth != OAuthPrivateKeyJWT:
+		return nil, fmt.Errorf("dynsecret oauth: client authentication %q is client_secret_basic or private_key_jwt", auth)
 	}
 	if cfg.HTTPClient == nil {
 		return nil, errors.New("dynsecret oauth: an HTTP client is required")
@@ -81,7 +130,8 @@ func NewOAuthClientCredentialsBackend(cfg OAuthClientCredentialsConfig) (*OAuthC
 		return nil, errors.New("dynsecret oauth: the maximum token lifetime is required")
 	}
 	b := &OAuthClientCredentialsBackend{
-		tokenURL: cfg.TokenURL, revocationURL: cfg.RevocationURL, clientID: cfg.ClientID,
+		tokenURL: cfg.TokenURL, revocationURL: cfg.RevocationURL, clientID: cfg.ClientID, clientAuth: auth,
+		clientKeyID: strings.TrimSpace(cfg.ClientKeyID), refreshRoles: map[string]bool{},
 		roleScopes: map[string][]string{}, maxLifetime: cfg.MaxLifetime, client: cfg.HTTPClient, now: cfg.Now,
 	}
 	if b.now == nil {
@@ -94,8 +144,36 @@ func NewOAuthClientCredentialsBackend(cfg OAuthClientCredentialsConfig) (*OAuthC
 		}
 		b.roleScopes[role] = scopes
 	}
+	for _, role := range cfg.RefreshRoles {
+		if _, ok := b.roleScopes[role]; !ok {
+			return nil, fmt.Errorf("dynsecret oauth: refresh-token role %q has no scopes", role)
+		}
+		b.refreshRoles[role] = true
+	}
+	switch {
+	case len(b.refreshRoles) > 0 && len(bytes.TrimSpace(cfg.RefreshToken)) == 0:
+		return nil, errors.New("dynsecret oauth: refresh-token roles need the provider's refresh token")
+	case len(b.refreshRoles) == 0 && len(cfg.RefreshToken) > 0:
+		return nil, errors.New("dynsecret oauth: a refresh token is configured but no role draws on it")
+	}
 	var err error
-	if b.clientSecret, err = secret.NewFrom(cfg.ClientSecret); err != nil {
+	if auth == OAuthPrivateKeyJWT {
+		// Proven before the first lease: a key the crypto boundary cannot sign
+		// with is refused here.
+		if _, err := crypto.SignJWTWithPEMKeyBytes(cfg.ClientKeyPEM, b.clientKeyID, map[string]any{"probe": true}); err != nil {
+			return nil, fmt.Errorf("dynsecret oauth: the client's private key: %w", err)
+		}
+		b.clientKey, err = secret.NewFrom(cfg.ClientKeyPEM)
+	} else {
+		b.clientSecret, err = secret.NewFrom(cfg.ClientSecret)
+	}
+	if err == nil && len(cfg.RefreshToken) > 0 {
+		// Surrounding whitespace (a file's trailing newline) is not part of
+		// the token.
+		b.refreshToken, err = secret.NewFrom(bytes.TrimSpace(cfg.RefreshToken))
+	}
+	if err != nil {
+		b.Close()
 		return nil, err
 	}
 	return b, nil
@@ -140,8 +218,10 @@ func (b *OAuthClientCredentialsBackend) Create(ctx context.Context, role string)
 }
 
 // CreateCredential implements RequestBackend: one token request with the role's
-// scopes. A token whose type, lifetime or granted scopes differ from the request
-// is refused, and revoked first when a revocation endpoint is configured.
+// scopes, by the client-credentials grant or, for a refresh-token role
+// (A239-L7), the refresh-token grant with the provider's refresh token. A token
+// whose type, lifetime or granted scopes differ from the request is refused,
+// and revoked first when a revocation endpoint is configured.
 func (b *OAuthClientCredentialsBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
 	if req.Static {
 		return "", nil, errors.New("dynsecret oauth: static credentials are not served")
@@ -151,6 +231,18 @@ func (b *OAuthClientCredentialsBackend) CreateCredential(ctx context.Context, re
 		return "", nil, fmt.Errorf("dynsecret oauth: role %q has no scopes", req.Role)
 	}
 	form := url.Values{"grant_type": {"client_credentials"}, "scope": {strings.Join(scopes, " ")}}
+	refresh := b.refreshRoles[req.Role]
+	if refresh {
+		// RFC 6749 section 6: the role's scopes narrow the refresh token's
+		// grant; an authorization server that grants more is refused below.
+		if err := b.refreshToken.Use(func(refreshToken []byte) error {
+			form.Set("grant_type", "refresh_token")
+			form.Set("refresh_token", string(refreshToken))
+			return nil
+		}); err != nil {
+			return "", nil, err
+		}
+	}
 	issuedAt := b.now().UTC()
 	body, status, err := b.post(ctx, b.tokenURL, form)
 	if err != nil {
@@ -158,18 +250,31 @@ func (b *OAuthClientCredentialsBackend) CreateCredential(ctx context.Context, re
 	}
 	defer secret.Wipe(body)
 	if status != http.StatusOK {
-		return "", nil, fmt.Errorf("dynsecret oauth: the token endpoint answered %d%s", status, oauthErrorCode(body))
+		code := oauthErrorCode(body)
+		if refresh && code == ": invalid_grant" {
+			return "", nil, fmt.Errorf("dynsecret oauth: the token endpoint answered %d%s: the provider's refresh token has expired or been revoked, "+
+				"or the authorization server rotated it on use, which this provider does not follow; configure a new refresh_token_ref", status, code)
+		}
+		return "", nil, fmt.Errorf("dynsecret oauth: the token endpoint answered %d%s", status, code)
 	}
 	var token struct {
-		AccessToken secret.JSONBytes `json:"access_token"`
-		TokenType   string           `json:"token_type"`
-		ExpiresIn   json.Number      `json:"expires_in"`
-		Scope       *string          `json:"scope"`
+		AccessToken  secret.JSONBytes `json:"access_token"`
+		TokenType    string           `json:"token_type"`
+		ExpiresIn    json.Number      `json:"expires_in"`
+		Scope        *string          `json:"scope"`
+		RefreshToken secret.JSONBytes `json:"refresh_token"`
 	}
 	if err := json.Unmarshal(body, &token); err != nil || len(token.AccessToken) == 0 {
 		return "", nil, errors.New("dynsecret oauth: the token response carries no access_token")
 	}
 	defer secret.Wipe(token.AccessToken)
+	// A token response may carry a refresh token: one a client-credentials
+	// grant adds (Keycloak's per-client setting), or a refresh grant's
+	// rotated one. No lease holds it and it is not revoked (on some servers
+	// that ends the session the access token belongs to): it is wiped here,
+	// never kept (A239-L7).
+	secret.Wipe(token.RefreshToken)
+	token.RefreshToken = nil
 	refuse := func(reason string) (string, []byte, error) {
 		if b.revocationURL != "" {
 			if err := b.revokeToken(ctx, token.AccessToken); err != nil {
@@ -234,7 +339,7 @@ func oauthScopesBeyond(granted, requested []string) []string {
 	return extra
 }
 
-// OAuthExpiration reads the native expiry from an access-token lease's provider
+// OAuthExpiration reads the native expiry from an OAuth lease's provider
 // reference.
 func OAuthExpiration(ref string) (time.Time, bool) {
 	rest, ok := strings.CutPrefix(ref, oauthRefPrefix)
@@ -282,6 +387,8 @@ func (b *OAuthClientCredentialsBackend) RevokeCredential(ctx context.Context, re
 	return b.revokeToken(ctx, lease.AccessToken)
 }
 
+// revokeToken revokes a lease's access token at the revocation endpoint (RFC
+// 7009 section 2.1); the provider's refresh token is never sent there.
 func (b *OAuthClientCredentialsBackend) revokeToken(ctx context.Context, token []byte) error {
 	form := url.Values{"token": {string(token)}, "token_type_hint": {"access_token"}}
 	body, status, err := b.post(ctx, b.revocationURL, form)
@@ -296,9 +403,21 @@ func (b *OAuthClientCredentialsBackend) revokeToken(ctx context.Context, token [
 	return nil
 }
 
-// post sends a form with HTTP Basic client authentication (RFC 6749 section
-// 2.3.1: form-encoded client_id and secret) and returns the bounded body.
+// post sends a form with the client's authentication and returns the bounded
+// body: HTTP Basic (RFC 6749 section 2.3.1: form-encoded client_id and
+// secret), or a client assertion (RFC 7523 section 2.2) the client signs with
+// its private key, fresh for each request.
 func (b *OAuthClientCredentialsBackend) post(ctx context.Context, endpoint string, form url.Values) ([]byte, int, error) {
+	if b.clientAuth == OAuthPrivateKeyJWT {
+		assertion, err := b.clientAssertion()
+		if err != nil {
+			return nil, 0, err
+		}
+		defer secret.Wipe(assertion)
+		form.Set("client_id", b.clientID)
+		form.Set("client_assertion_type", oauthJWTBearerAssertion)
+		form.Set("client_assertion", string(assertion))
+	}
 	encoded := form.Encode()
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(encoded))
 	if err != nil {
@@ -306,11 +425,13 @@ func (b *OAuthClientCredentialsBackend) post(ctx context.Context, endpoint strin
 	}
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	httpReq.Header.Set("Accept", "application/json")
-	if err := b.clientSecret.Use(func(clientSecret []byte) error {
-		httpReq.SetBasicAuth(url.QueryEscape(b.clientID), url.QueryEscape(string(clientSecret)))
-		return nil
-	}); err != nil {
-		return nil, 0, err
+	if b.clientAuth == OAuthClientSecretBasic {
+		if err := b.clientSecret.Use(func(clientSecret []byte) error {
+			httpReq.SetBasicAuth(url.QueryEscape(b.clientID), url.QueryEscape(string(clientSecret)))
+			return nil
+		}); err != nil {
+			return nil, 0, err
+		}
 	}
 	resp, err := b.client.Do(httpReq) // #nosec G704 -- the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918)
 	if err != nil {
@@ -345,5 +466,50 @@ func oauthErrorCode(body []byte) string {
 	return ": " + e.Error
 }
 
-// Close wipes the client secret.
-func (b *OAuthClientCredentialsBackend) Close() { b.clientSecret.Destroy() }
+// clientAssertion is a JWT the client signs with its private key (RFC 7523
+// section 3; OpenID Connect Core section 9): issuer and subject the client,
+// audience the token endpoint, a unique jti, valid for one minute.
+func (b *OAuthClientCredentialsBackend) clientAssertion() ([]byte, error) {
+	jti, err := crypto.RandomBytes(16)
+	if err != nil {
+		return nil, err
+	}
+	now := b.now().UTC()
+	claims := map[string]any{
+		"iss": b.clientID, "sub": b.clientID, "aud": b.tokenURL, "jti": hex.EncodeToString(jti),
+		"iat": now.Unix(), "exp": now.Add(oauthAssertionLifetime).Unix(),
+	}
+	var assertion []byte
+	err = b.clientKey.Use(func(keyPEM []byte) error {
+		var signErr error
+		assertion, signErr = crypto.SignJWTWithPEMKeyBytes(keyPEM, b.clientKeyID, claims)
+		return signErr
+	})
+	if err != nil {
+		return nil, fmt.Errorf("dynsecret oauth: sign the client assertion: %w", err)
+	}
+	return assertion, nil
+}
+
+// ClientAuth is how the client authenticates (A239-L7).
+func (b *OAuthClientCredentialsBackend) ClientAuth() string { return b.clientAuth }
+
+// RefreshRoles are the roles whose leases are drawn with the provider's
+// refresh token (A239-L7).
+func (b *OAuthClientCredentialsBackend) RefreshRoles() []string {
+	roles := make([]string, 0, len(b.refreshRoles))
+	for role := range b.refreshRoles {
+		roles = append(roles, role)
+	}
+	slices.Sort(roles)
+	return roles
+}
+
+// Close wipes the client secret or key and the refresh token.
+func (b *OAuthClientCredentialsBackend) Close() {
+	for _, buf := range []*secret.Buffer{b.clientSecret, b.clientKey, b.refreshToken} {
+		if buf != nil {
+			buf.Destroy()
+		}
+	}
+}

@@ -59,6 +59,12 @@ type dynamicSecretConfiguredProvider struct {
 	// dynamic_entries, whose directory deletes each lease's entry when its
 	// time runs out); empty otherwise.
 	BackendExpiry string `json:"backend_expiry,omitempty"`
+	// ClientAuth is how an oauth-client-credentials provider's client
+	// authenticates, client_secret_basic or private_key_jwt (A239-L7);
+	// RefreshTokenRoles are its roles whose leases are access tokens drawn
+	// with the provider's refresh token.
+	ClientAuth        string   `json:"client_auth,omitempty"`
+	RefreshTokenRoles []string `json:"refresh_token_roles,omitempty"`
 }
 
 type dynamicSecretProviderCatalogResponse struct {
@@ -266,10 +272,15 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("algorithm", "Algorithm", "SHA1 (the default), SHA256 or SHA512.", false),
 			roles("Every allowed role reads the same seed's codes; role_bindings are not used."),
 		)},
-		{Type: "oauth-client-credentials", Label: "OAuth access tokens", Purpose: "Requests a new access token from an OAuth 2.0 authorization server's token endpoint with the role's scopes (client credentials grant); a token can't be extended, and revoking the lease revokes the token at the revocation endpoint when one is configured, else the token lapses at its expiry.", Requirements: dynamicSecretProviderRequirements(
+		{Type: "oauth-client-credentials", Label: "OAuth access tokens", Purpose: "Requests a new access token from an OAuth 2.0 authorization server's token endpoint with the role's scopes: by the client credentials grant, or for a refresh-token role by the refresh-token grant on the provider's refresh token. The client authenticates with its secret or with a JWT it signs with its private key (private_key_jwt). A token can't be extended, and revoking the lease revokes the token at the revocation endpoint when one is configured, else the token lapses at its expiry.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "Token endpoint", "HTTPS URL of the authorization server's token endpoint.", true),
 			value("client_id", "Client ID", "The confidential client the tokens are issued to; give it only the scopes the roles need.", true),
-			credential("client_secret_ref", "Client secret reference", "The client's secret, sent with HTTP Basic authentication.", true),
+			value("client_auth", "Client authentication", "client_secret_basic (the default): the client's secret over HTTP Basic. private_key_jwt (RFC 7523): a JWT the client signs with its private key for each request, so no secret is sent.", false),
+			credential("client_secret_ref", "Client secret reference", "The client's secret, sent with HTTP Basic authentication; required with client_secret_basic.", false),
+			credential("private_key_ref", "Client private key reference", "With private_key_jwt: the client's private key, one unencrypted RSA or ECDSA PEM block; the authorization server holds its public key.", false),
+			value("client_key_id", "Client key ID", "With private_key_jwt: the kid the authorization server registered the client's key under, when it names its keys.", false),
+			credential("refresh_token_ref", "Refresh token reference", "A refresh token obtained once for the client, for an API that issues no client-credentials tokens; the refresh-token roles draw on it. It is never handed out, revoked or replaced.", false),
+			value("refresh_token_roles", "Refresh-token roles", "Roles whose leases are drawn with the refresh token, each narrowed to its role's scopes; the other roles use the client credentials grant.", false),
 			value("revocation_endpoint", "Revocation endpoint", "Optional HTTPS URL of the RFC 7009 revocation endpoint. Without it revocation waits for each token's expiry.", false),
 			value("max_ttl", "Maximum token lifetime", "The longest lifetime the authorization server gives this client's tokens; a longer-lived token is refused (and revoked when possible).", true),
 			roles("Each allowed role maps to its space-separated scopes; a token granted any other scope is refused."),
@@ -775,6 +786,14 @@ func dynamicSecretConfiguredProviderFrom(provider dynsecret.Provider) dynamicSec
 	}
 	if expiring, ok := provider.(interface{ DynamicSecretBackendExpiry() string }); ok {
 		configured.BackendExpiry = strings.TrimSpace(expiring.DynamicSecretBackendExpiry())
+	}
+	if oauth, ok := provider.(interface {
+		DynamicSecretClientAuth() string
+		DynamicSecretRefreshTokenRoles() []string
+	}); ok {
+		configured.ClientAuth = strings.TrimSpace(oauth.DynamicSecretClientAuth())
+		configured.RefreshTokenRoles = oauth.DynamicSecretRefreshTokenRoles()
+		sort.Strings(configured.RefreshTokenRoles)
 	}
 	return configured
 }

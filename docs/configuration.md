@@ -3538,6 +3538,16 @@ gets a new token (client credentials grant) and refuses one with any other scope
 or a lifetime past `max_ttl` or shorter than the lease. Set `revocation_endpoint`
 (RFC 7009) so revoking a lease revokes its token; without it the token stays valid
 until it expires and the revocation waits for that. Tokens can't be extended.
+Set `client_auth` to `private_key_jwt` (A239-L7) to authenticate the client with a
+JWT signed by its private key instead of a secret: `private_key_ref` names the key
+(one unencrypted RSA or ECDSA PEM block, whose public half the authorization server
+holds), `client_key_id` the `kid` it is registered under, if any, and
+`client_secret_ref` is then not set. For an API that issues no client-credentials
+tokens, set `refresh_token_ref` to a refresh token obtained once for the client and
+list in `refresh_token_roles` the allowed roles whose leases are drawn with it (the
+refresh-token grant, each narrowed to its role's scopes); the two go together. The
+refresh token is never handed out, revoked or replaced: when the server stops
+accepting it, put a new one at the reference.
 
 For ClickHouse (A239, `clickhouse`), set `endpoint` to ClickHouse's HTTPS HTTP
 interface, `admin_user` and `password_ref` to a user with access management that
@@ -3894,6 +3904,25 @@ at `max_ttl` from its creation; revocation deletes it at once.
   "client_secret_ref": "file:/run/secrets/orders-api-client",
   "allowed_roles": ["reader"],
   "role_bindings": {"reader": "orders.read"},
+  "max_ttl": "5m"
+}
+```
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "reports-api",
+  "type": "oauth-client-credentials",
+  "endpoint": "https://login.example.com/realms/prod/protocol/openid-connect/token",
+  "revocation_endpoint": "https://login.example.com/realms/prod/protocol/openid-connect/revoke",
+  "client_id": "trstctl-reports",
+  "client_auth": "private_key_jwt",
+  "private_key_ref": "file:/run/secrets/reports-api-client-key",
+  "client_key_id": "trstctl-reports-1",
+  "refresh_token_ref": "file:/run/secrets/reports-api-refresh",
+  "refresh_token_roles": ["reader"],
+  "allowed_roles": ["reader", "writer"],
+  "role_bindings": {"reader": "reports.read", "writer": "reports.read reports.write"},
   "max_ttl": "5m"
 }
 ```

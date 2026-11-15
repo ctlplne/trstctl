@@ -237,6 +237,20 @@ type DynamicSecretProviderConfig struct {
 	ClientID           string `json:"client_id,omitempty"`
 	ClientSecretRef    string `json:"client_secret_ref,omitempty"`
 	RevocationEndpoint string `json:"revocation_endpoint,omitempty"`
+	// ClientAuth is how an oauth-client-credentials provider's client
+	// authenticates (A239-L7): client_secret_basic (the default, with
+	// client_secret_ref) or private_key_jwt (RFC 7523: a JWT signed with the
+	// client's private key, private_key_ref, whose JWS kid is client_key_id
+	// when the authorization server names its keys).
+	ClientAuth  string `json:"client_auth,omitempty"`
+	ClientKeyID string `json:"client_key_id,omitempty"`
+	// RefreshTokenRef is an oauth-client-credentials provider's refresh
+	// token (A239-L7), one an operator obtained for an API that issues no
+	// client-credentials tokens; each lease of a role in RefreshTokenRoles
+	// is an access token drawn with it (RFC 6749 section 6) for the role's
+	// scopes. The refresh token is never handed out, revoked or replaced.
+	RefreshTokenRef   string   `json:"refresh_token_ref,omitempty"`
+	RefreshTokenRoles []string `json:"refresh_token_roles,omitempty"`
 	// PrivateKeyRef and InstallationID are a github-app provider's app private
 	// key (PEM) and the installation its tokens are minted for; ClientID is the
 	// app's client ID (A239).
@@ -1414,8 +1428,12 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "github-app" && c.InstallationID != "" {
 		errs = append(errs, fmt.Errorf("%s installation_id is only valid for github-app", where))
 	}
-	if c.Type != "github-app" && c.Type != "snowflake" && c.Type != "unix" && c.Type != "windows" && c.Type != "vcenter-sso" && c.Type != "google-workspace-user" && c.PrivateKeyRef != "" {
-		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app, snowflake, unix, windows, vcenter-sso and google-workspace-user", where))
+	if c.Type != "oauth-client-credentials" && (c.ClientAuth != "" || c.ClientKeyID != "" || c.RefreshTokenRef != "" || len(c.RefreshTokenRoles) != 0) {
+		errs = append(errs, fmt.Errorf("%s client_auth, client_key_id, refresh_token_ref and refresh_token_roles are only valid for oauth-client-credentials", where))
+	}
+	if c.Type != "github-app" && c.Type != "snowflake" && c.Type != "unix" && c.Type != "windows" && c.Type != "vcenter-sso" && c.Type != "google-workspace-user" &&
+		c.Type != "oauth-client-credentials" && c.PrivateKeyRef != "" {
+		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app, snowflake, unix, windows, vcenter-sso, google-workspace-user and oauth-client-credentials (private_key_jwt)", where))
 	}
 	if c.Type != "vcenter-sso" && c.SSOAdmin != "" {
 		errs = append(errs, fmt.Errorf("%s sso_admin is only valid for vcenter-sso", where))
@@ -2376,11 +2394,47 @@ func validateOAuthClientCredentialsProvider(where string, c DynamicSecretProvide
 	if id := strings.TrimSpace(c.ClientID); id == "" || id != c.ClientID || strings.ContainsFunc(id, unicode.IsControl) {
 		errs = append(errs, fmt.Errorf("%s client_id is required for oauth-client-credentials, without surrounding spaces or control characters", where))
 	}
-	if err := validateCredentialRef(c.ClientSecretRef); err != nil {
-		errs = append(errs, fmt.Errorf("%s client_secret_ref: %w", where, err))
+	switch c.ClientAuth {
+	case "", "client_secret_basic":
+		if err := validateCredentialRef(c.ClientSecretRef); err != nil {
+			errs = append(errs, fmt.Errorf("%s client_secret_ref: %w", where, err))
+		}
+		if c.PrivateKeyRef != "" || c.ClientKeyID != "" {
+			errs = append(errs, fmt.Errorf("%s private_key_ref and client_key_id are for client_auth private_key_jwt", where))
+		}
+	case "private_key_jwt":
+		if err := validateCredentialRef(c.PrivateKeyRef); err != nil {
+			errs = append(errs, fmt.Errorf("%s private_key_ref (the client's private key for private_key_jwt): %w", where, err))
+		}
+		if c.ClientSecretRef != "" {
+			errs = append(errs, fmt.Errorf("%s client_secret_ref is for client_auth client_secret_basic; private_key_jwt signs with private_key_ref", where))
+		}
+		if id := strings.TrimSpace(c.ClientKeyID); id != c.ClientKeyID || strings.ContainsFunc(id, unicode.IsControl) {
+			errs = append(errs, fmt.Errorf("%s client_key_id has surrounding spaces or control characters", where))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("%s client_auth %q is client_secret_basic or private_key_jwt", where, c.ClientAuth))
 	}
 	if strings.TrimSpace(c.MaxTTL) == "" {
 		errs = append(errs, fmt.Errorf("%s max_ttl is required for oauth-client-credentials: the longest token lifetime the authorization server issues this client", where))
+	}
+	switch {
+	case len(c.RefreshTokenRoles) > 0:
+		if err := validateCredentialRef(c.RefreshTokenRef); err != nil {
+			errs = append(errs, fmt.Errorf("%s refresh_token_ref (the refresh token refresh_token_roles draw on): %w", where, err))
+		}
+	case c.RefreshTokenRef != "":
+		errs = append(errs, fmt.Errorf("%s refresh_token_ref is set but no refresh_token_roles draw on it", where))
+	}
+	refreshRoles := map[string]bool{}
+	for _, role := range c.RefreshTokenRoles {
+		if refreshRoles[role] {
+			errs = append(errs, fmt.Errorf("%s refresh_token_roles lists %q twice", where, role))
+		}
+		refreshRoles[role] = true
+		if !slices.Contains(normalizedStrings(c.AllowedRoles), role) {
+			errs = append(errs, fmt.Errorf("%s refresh_token_roles[%q] has no matching allowed role", where, role))
+		}
 	}
 	allowed := map[string]bool{}
 	for _, role := range normalizedStrings(c.AllowedRoles) {

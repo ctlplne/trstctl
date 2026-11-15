@@ -413,6 +413,26 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
                           <dd className="text-foreground">{t("secrets.dynamic.backendExpiryDirectory")}</dd>
                         </div>
                       ) : null}
+                      {selectedProvider.client_auth ? (
+                        <div className="sm:col-span-2">
+                          <dt>{t("secrets.dynamic.clientAuth")}</dt>
+                          <dd className="text-foreground">
+                            {t(
+                              selectedProvider.client_auth === "private_key_jwt"
+                                ? "secrets.dynamic.clientAuthPrivateKeyJWT"
+                                : "secrets.dynamic.clientAuthSecretBasic",
+                            )}
+                          </dd>
+                        </div>
+                      ) : null}
+                      {selectedProvider.refresh_token_roles?.length ? (
+                        <div className="sm:col-span-2">
+                          <dt>{t("secrets.dynamic.refreshTokenRoles")}</dt>
+                          <dd className="text-foreground">
+                            {t("secrets.dynamic.refreshTokenRolesValue", { roles: selectedProvider.refresh_token_roles.join(", ") })}
+                          </dd>
+                        </div>
+                      ) : null}
                     </dl>
                   ) : null}
                 </CardContent>
