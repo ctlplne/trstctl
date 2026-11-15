@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- A graph census proves no decoy of any kind shows in the credential graph (Q1-L9): one decoy of every kind the decoy
+  inventory admits (API credential, AWS key, secret, database login, file, Kubernetes token) is planted beside ordinary
+  credentials, the graph is built from every input, and nothing names a decoy; a new decoy kind without its case fails.
 - An access explain for project secrets (A235-L4): `GET /api/v1/secrets/projects/{project}/members/{subject}/access`
   evaluates a subject's permission, its restricted-environment membership and the Vault ACL policies for its roles on
   one secret, per surface (native, Vault-compatible KV, `secret://` reference), and names the layer that denies; the

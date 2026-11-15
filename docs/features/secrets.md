@@ -2255,6 +2255,14 @@ rebuild keeps the decoy's state and its readers, and adds no alert while the rea
 alerts are still in the outbox (see the limitations). `retire` stops watching; the
 secret stays in place until you delete it.
 
+No decoy of any kind gives itself away in the credential graph (Q1-L9). Decoy API
+credentials, AWS decoy keys and decoy database logins (their decoy leases), decoy
+secrets, decoy files and Kubernetes decoy tokens are never a node, edge or attribute the
+graph names, for any reader; a decoy secret appears as the ordinary secret it imitates,
+with the same attributes. A census test plants one decoy of every kind the decoy
+inventory admits, builds the graph from every input, and fails when a new decoy kind
+lands without its own case.
+
 A decoy's value planted on purpose, in a repository as a lure for example, is found
 by trstctl's secret scans like any other secret. A scan finding whose line (or a line
 beside it) holds a live decoy's value is the known decoy, not a leak: the finding
