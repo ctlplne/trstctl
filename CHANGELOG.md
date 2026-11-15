@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- The network observer counts a finding's clients past 256 (X1-L7): the count is exact up to 256 distinct clients
+  and then an estimate from a fixed 1 KiB HyperLogLog sketch, within a few percent, with `clients_estimated=true` on
+  the finding.
 - An identity's Application view continues its approvals and alerts past the newest ten (A244-L3):
   `approvals_next_cursor` and `alerts_next_cursor` name where they continue, `GET
   /api/v1/identities/{id}/application/approvals` pages the approval requests by keyset, and
@@ -1917,6 +1920,9 @@
 
 ### Fixed
 
+- A connection whose server ends it first is counted once by the network observer (X1-L7): the observer remembers the
+  ended connection, within the flow table's bound, until the client's FIN, a reset, a new connection on the same
+  addresses or the idle sweep, so the client's close_notify no longer opened a second, unrecognized connection.
 - A finding observed again at another urgent score no longer fails the whole report that observed it (P14-L2-O1): its
   urgent alert's key is the finding's, and the alert carried the first score, so an agent's inventory (a certificate
   re-rated after a distrust entry, for one) stopped updating at that finding. The finding is now recorded at its new

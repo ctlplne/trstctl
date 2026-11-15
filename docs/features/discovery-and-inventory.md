@@ -510,7 +510,13 @@ reported every `--observe-report-interval` (default one minute) under the
 carries the observer role, and only observation kinds from it. The flow table is bounded
 (`--observe-max-flows`, default 2048); a connection that does not fit or is not a
 handshake the observer reads is counted, never buffered, and every report carries the
-observer's own CPU time, heap and drops. Segments that arrive ahead of a gap — a
+observer's own CPU time, heap and drops. The client count is exact up to 256 distinct
+clients of a finding and then an estimate from a fixed 1 KiB sketch (HyperLogLog, within a
+few percent; `clients_estimated=true`; X1-L7). A connection is counted once whichever side
+ends it first: the observer remembers an ended connection, within the flow table's bound,
+until the other side's FIN, a reset, a new connection on the same addresses or the idle
+sweep, so the other side's last bytes (a TLS close_notify, the final ACK) do not open it
+again. Segments that arrive ahead of a gap — a
 reordered or retransmitted ClientHello or server flight — are held, at most 16 a
 direction and only inside the 16 KiB the observer reads, and read once the gap fills
 (X1-L3; counted as `reordered`); a gap that never fills ends reading of that

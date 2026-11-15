@@ -106,6 +106,11 @@ type Stats struct {
 	Unrecognized  uint64 `json:"unrecognized"`
 	ActiveFlows   int    `json:"active_flows"`
 	BufferedBytes int    `json:"buffered_bytes"`
+	// ClosedFlows is how many connections one side has ended and the
+	// assembler still remembers (X1-L7); ClosedTableFull counts ends it
+	// could not remember because that table was full.
+	ClosedFlows     int    `json:"closed_flows"`
+	ClosedTableFull uint64 `json:"closed_table_full"`
 }
 
 type flowKey struct{ lo, hi netip.AddrPort }
@@ -158,10 +163,16 @@ type Assembler struct {
 	maxFlows int
 	idle     time.Duration
 	flows    map[flowKey]*flow
-	udp      map[flowKey]*udpFlow
-	emit     func(Event)
-	stats    Stats
-	swept    time.Time
+	// closed remembers a connection one side ended with a FIN (X1-L7)
+	// until the other side's FIN, an RST, a new SYN on the same addresses
+	// or the idle sweep, so the other side's last bytes (a TLS
+	// close_notify, the final ACK) do not open it again mid-stream and
+	// count it twice. It holds at most maxFlows entries.
+	closed map[flowKey]closedFlow
+	udp    map[flowKey]*udpFlow
+	emit   func(Event)
+	stats  Stats
+	swept  time.Time
 }
 
 // NewAssembler watches the given server ports with at most maxFlows open
@@ -171,7 +182,14 @@ func NewAssembler(ports []uint16, maxFlows int, idle time.Duration, emit func(Ev
 	for _, p := range ports {
 		watched[p] = true
 	}
-	return &Assembler{ports: watched, maxFlows: maxFlows, idle: idle, flows: map[flowKey]*flow{}, udp: map[flowKey]*udpFlow{}, emit: emit}
+	return &Assembler{ports: watched, maxFlows: maxFlows, idle: idle, flows: map[flowKey]*flow{}, closed: map[flowKey]closedFlow{},
+		udp: map[flowKey]*udpFlow{}, emit: emit}
+}
+
+// closedFlow is a connection one side ended: when, and which side.
+type closedFlow struct {
+	at     time.Time
+	closer netip.AddrPort
 }
 
 // Stats reports the assembler's counters and its current footprint.
@@ -180,6 +198,7 @@ func (a *Assembler) Stats() Stats {
 	defer a.mu.Unlock()
 	s := a.stats
 	s.ActiveFlows = len(a.flows) + len(a.udp)
+	s.ClosedFlows = len(a.closed)
 	for _, f := range a.flows {
 		s.BufferedBytes += len(f.clientBuf) + len(f.serverBuf) + heldBytes(f.clientAhead) + heldBytes(f.serverAhead)
 	}
@@ -197,6 +216,17 @@ func (a *Assembler) Segment(s Segment, now time.Time) {
 	key := keyOf(s.Src, s.Dst)
 	f := a.flows[key]
 	if f == nil {
+		if c, ok := a.closed[key]; ok {
+			if !s.SYN || s.ACK {
+				// The ended connection's last segments: read nothing,
+				// count nothing; the other side's FIN or an RST ends it.
+				if s.RST || (s.FIN && s.Src != c.closer) {
+					delete(a.closed, key)
+				}
+				return
+			}
+			delete(a.closed, key) // a new connection on the same addresses
+		}
 		if !a.ports[s.Dst.Port()] || s.RST || s.FIN || (s.SYN && s.ACK) {
 			return
 		}
@@ -211,6 +241,9 @@ func (a *Assembler) Segment(s Segment, now time.Time) {
 	f.last = now
 	if s.RST || s.FIN {
 		a.finish(key, f, now)
+		if !s.RST {
+			a.rememberClosed(key, s.Src, now)
+		}
 		return
 	}
 	fromClient := s.Src == f.client
@@ -329,11 +362,25 @@ func (a *Assembler) finish(key flowKey, f *flow, now time.Time) {
 	delete(a.flows, key)
 }
 
+// rememberClosed records that closer ended the connection (X1-L7).
+func (a *Assembler) rememberClosed(key flowKey, closer netip.AddrPort, now time.Time) {
+	if len(a.closed) >= a.maxFlows {
+		a.stats.ClosedTableFull++
+		return
+	}
+	a.closed[key] = closedFlow{at: now, closer: closer}
+}
+
 func (a *Assembler) sweep(now time.Time) {
 	a.swept = now
 	for key, f := range a.flows {
 		if now.Sub(f.last) > a.idle {
 			a.finish(key, f, now)
+		}
+	}
+	for key, c := range a.closed {
+		if now.Sub(c.at) > a.idle {
+			delete(a.closed, key)
 		}
 	}
 	for key, f := range a.udp {

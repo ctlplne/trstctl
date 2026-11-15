@@ -22,11 +22,16 @@ type Item struct {
 	Obs         Observation
 	Certificate *CertificateFacts
 	Connections uint64
-	Clients     int
-	FirstSeen   time.Time
-	LastSeen    time.Time
-	clients     map[netip.Addr]bool
-	dirty       bool
+	// Clients is how many distinct client addresses the item has seen:
+	// exact up to maxClientsTracked, then an estimate from a fixed-size
+	// sketch, with ClientsEstimated set (X1-L7).
+	Clients          int
+	ClientsEstimated bool
+	FirstSeen        time.Time
+	LastSeen         time.Time
+	clients          map[netip.Addr]bool
+	sketch           *clientSketch
+	dirty            bool
 }
 
 // CertificateFacts is what a TLS 1.2 server certificate says, read through
@@ -38,7 +43,8 @@ type CertificateFacts struct {
 	NotAfter      time.Time
 }
 
-// maxClientsTracked bounds the distinct-client count per item.
+// maxClientsTracked bounds the exact distinct-client set per item; past it
+// the item counts clients with a 1 KiB sketch (X1-L7).
 const maxClientsTracked = 256
 
 // Aggregate folds events into items. It is safe for concurrent use.
@@ -79,10 +85,25 @@ func (g *Aggregate) Add(e Event) {
 	}
 	item.Connections++
 	item.LastSeen = e.At
-	if len(item.clients) < maxClientsTracked {
+	switch {
+	case item.sketch != nil:
+		item.sketch.add(e.Client)
+		item.Clients = max(item.sketch.estimate(), maxClientsTracked+1)
+	case item.clients[e.Client] || len(item.clients) < maxClientsTracked:
 		item.clients[e.Client] = true
+		item.Clients = len(item.clients)
+	default:
+		// The exact set is full and this client is new: count from here
+		// with the sketch, seeded with every client seen so far.
+		item.sketch = &clientSketch{}
+		for client := range item.clients {
+			item.sketch.add(client)
+		}
+		item.sketch.add(e.Client)
+		item.clients = nil
+		item.Clients = max(item.sketch.estimate(), maxClientsTracked+1)
+		item.ClientsEstimated = true
 	}
-	item.Clients = len(item.clients)
 	item.dirty = true
 }
 
@@ -98,7 +119,7 @@ func (g *Aggregate) Changed() ([]Item, uint64) {
 		}
 		item.dirty = false
 		copied := *item
-		copied.clients = nil
+		copied.clients, copied.sketch = nil, nil
 		out = append(out, copied)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Ref < out[j].Ref })

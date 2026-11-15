@@ -172,19 +172,21 @@ func observationFindings(iface string, items []observe.Item, stats observe.Stats
 	for _, item := range items {
 		obs := item.Obs
 		meta := map[string]string{
-			"interface":       iface,
-			"server":          item.Server.String(),
-			"protocol":        obs.Protocol,
-			"connections":     strconv.FormatUint(item.Connections, 10),
-			"clients":         strconv.Itoa(item.Clients),
-			"first_seen":      item.FirstSeen.UTC().Format(time.RFC3339),
-			"last_seen":       item.LastSeen.UTC().Format(time.RFC3339),
-			"payload_stored":  "false",
-			"pq_hybrid":       strconv.FormatBool(obs.PQHybrid()),
-			"observer_flows":  strconv.Itoa(stats.ActiveFlows),
-			"observer_drops":  strconv.FormatUint(stats.TableFull+stats.OutOfOrder+dropped, 10),
-			"observer_cpu_s":  strconv.FormatFloat(cost.cpuSeconds, 'f', 3, 64),
-			"observer_heap_b": strconv.FormatUint(cost.heapBytes, 10),
+			"interface":   iface,
+			"server":      item.Server.String(),
+			"protocol":    obs.Protocol,
+			"connections": strconv.FormatUint(item.Connections, 10),
+			"clients":     strconv.Itoa(item.Clients),
+			// X1-L7: past 256 distinct clients the count is an estimate.
+			"clients_estimated": strconv.FormatBool(item.ClientsEstimated),
+			"first_seen":        item.FirstSeen.UTC().Format(time.RFC3339),
+			"last_seen":         item.LastSeen.UTC().Format(time.RFC3339),
+			"payload_stored":    "false",
+			"pq_hybrid":         strconv.FormatBool(obs.PQHybrid()),
+			"observer_flows":    strconv.Itoa(stats.ActiveFlows),
+			"observer_drops":    strconv.FormatUint(stats.TableFull+stats.OutOfOrder+dropped, 10),
+			"observer_cpu_s":    strconv.FormatFloat(cost.cpuSeconds, 'f', 3, 64),
+			"observer_heap_b":   strconv.FormatUint(cost.heapBytes, 10),
 		}
 		risk := 30
 		fingerprint := ""
