@@ -14,10 +14,30 @@ import { apiProblemMessage } from "@/lib/apiProblem";
  * property it leaves behind; Create makes the profile through the normal
  * profile path (dual control when the template required manager approval).
  */
+type Tightening = { max_validity_days?: number; key_algorithms?: ("ECDSA" | "RSA")[]; min_rsa_bits?: number };
+
+/**
+ * A160-L2: the operator's optional tightening of the modernized profile. Empty
+ * fields keep the baseline (90 days, ECDSA or RSA, RSA of 2048 bits); the
+ * server refuses anything weaker.
+ */
+function tighteningOf(days: string, ecdsa: boolean, rsa: boolean, rsaBits: string): Tightening {
+  const out: Tightening = {};
+  if (days.trim()) out.max_validity_days = Number(days.trim());
+  if (ecdsa !== rsa) out.key_algorithms = ecdsa ? ["ECDSA"] : ["RSA"];
+  if (rsaBits.trim()) out.min_rsa_bits = Number(rsaBits.trim());
+  return out;
+}
+
 export function ADCSModernizeDialog({ template, onClose }: { template: ADCSTemplate; onClose: () => void }) {
   const { t } = useTranslation();
   const titleId = useId();
   const [dnsSuffix, setDNSSuffix] = useState("");
+  const [maxValidityDays, setMaxValidityDays] = useState("");
+  const [allowECDSA, setAllowECDSA] = useState(true);
+  const [allowRSA, setAllowRSA] = useState(true);
+  const [minRSABits, setMinRSABits] = useState("");
+  const [planTightening, setPlanTightening] = useState<Tightening>({});
   const [request, setRequest] = useState(0);
   const [plan, setPlan] = useState<ADCSModernizePlan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,12 +48,16 @@ export function ADCSModernizeDialog({ template, onClose }: { template: ADCSTempl
   useEffect(() => {
     let cancelled = false;
     const suffix = dnsSuffix.trim();
+    const tightening = tighteningOf(maxValidityDays, allowECDSA, allowRSA, minRSABits);
     setLoading(true);
     setError(null);
     api
-      .previewADCSModernize({ domain: template.domain, template: template.template, ...(suffix ? { dns_suffix: suffix } : {}) })
+      .previewADCSModernize({ domain: template.domain, template: template.template, ...(suffix ? { dns_suffix: suffix } : {}), ...tightening })
       .then((next) => {
-        if (!cancelled) setPlan(next);
+        if (!cancelled) {
+          setPlan(next);
+          setPlanTightening(tightening);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(apiProblemMessage(err, t("adcs.modernize.previewFailed")));
@@ -44,9 +68,12 @@ export function ADCSModernizeDialog({ template, onClose }: { template: ADCSTempl
     return () => {
       cancelled = true;
     };
-    // The suffix is applied only when the operator asks for a new preview.
+    // The suffix and the tightening apply only when the operator asks for a
+    // new preview. The translator only words an error, so a new one (the
+    // fallback outside a provider is new on every render) does not preview
+    // again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [template.domain, template.template, request, t]);
+  }, [template.domain, template.template, request]);
 
   async function create() {
     if (!plan?.ready || saving) return;
@@ -58,6 +85,7 @@ export function ADCSModernizeDialog({ template, onClose }: { template: ADCSTempl
         template: template.template,
         dns_suffix: plan.dns_suffix,
         profile_name: plan.profile_name,
+        ...planTightening,
       });
       setResult(
         created.state === "created"
@@ -130,6 +158,37 @@ export function ADCSModernizeDialog({ template, onClose }: { template: ADCSTempl
                 <span>{t("adcs.modernize.dnsSuffixOverride")}</span>
                 <Input value={dnsSuffix} onChange={(event) => setDNSSuffix(event.target.value)} autoComplete="off" />
               </label>
+              <fieldset className="grid gap-2" aria-describedby={`${titleId}-tighten`}>
+                <legend className="font-medium">{t("adcs.modernize.tighten")}</legend>
+                <p id={`${titleId}-tighten`} className="text-caption text-muted-foreground">
+                  {t("adcs.modernize.tightenHelp")}
+                </p>
+                <label className="grid gap-1">
+                  <span>{t("adcs.modernize.maxValidityDays")}</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={maxValidityDays}
+                    onChange={(event) => setMaxValidityDays(event.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={allowECDSA} onChange={(event) => setAllowECDSA(event.target.checked)} />
+                    <span>{t("adcs.modernize.allowECDSA")}</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={allowRSA} onChange={(event) => setAllowRSA(event.target.checked)} />
+                    <span>{t("adcs.modernize.allowRSA")}</span>
+                  </label>
+                </div>
+                <label className="grid gap-1">
+                  <span>{t("adcs.modernize.minRSABits")}</span>
+                  <Input type="number" min={2048} max={16384} value={minRSABits} onChange={(event) => setMinRSABits(event.target.value)} autoComplete="off" />
+                </label>
+              </fieldset>
               <Button type="button" size="sm" variant="outline" className="justify-self-start" onClick={() => setRequest((n) => n + 1)}>
                 {t("adcs.modernize.refresh")}
               </Button>

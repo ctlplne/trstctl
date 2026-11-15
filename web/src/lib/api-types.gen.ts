@@ -676,6 +676,9 @@ export interface ADCSModernizePlan {
 export interface ADCSModernizeRequest {
   dns_suffix?: string;
   domain: string;
+  key_algorithms?: ("ECDSA" | "RSA")[];
+  max_validity_days?: number;
+  min_rsa_bits?: number;
   profile_name?: string;
   template: string;
 }

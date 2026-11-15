@@ -13079,6 +13079,12 @@ export interface components {
             /** @description DNS domain certificates from the profile may name; defaults to the publishing CA's DNS domain */
             dns_suffix?: string;
             domain: string;
+            /** @description A160-L2: narrows the allowed key algorithms to a non-empty subset of ECDSA and RSA; omitted keeps both. */
+            key_algorithms?: ("ECDSA" | "RSA")[];
+            /** @description A160-L2: the profile's validity ceiling in days, 1-90; omitted keeps 90. Never longer than the baseline. */
+            max_validity_days?: number;
+            /** @description A160-L2: raises the RSA floor, 2048-16384; omitted keeps 2048. Only with RSA allowed. */
+            min_rsa_bits?: number;
             /** @description defaults to adcs-<template>-modern */
             profile_name?: string;
             template: string;

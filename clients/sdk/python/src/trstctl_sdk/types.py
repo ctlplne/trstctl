@@ -940,6 +940,9 @@ ADCSModernizeRequest = TypedDict(
     {
         'dns_suffix': str,
         'domain': str,
+        'key_algorithms': list[str],
+        'max_validity_days': int,
+        'min_rsa_bits': int,
         'profile_name': str,
         'template': str,
     },

@@ -20558,6 +20558,24 @@ export const messages = {
     defaultMessage: "Preview again",
     description: "A160: rebuilds the preview with the override.",
   },
+  "adcs.modernize.tighten": {
+    defaultMessage: "Tighten the profile (optional)",
+    description: "A160-L2: legend of the tightening fields.",
+  },
+  "adcs.modernize.tightenHelp": {
+    defaultMessage: "Leave a field empty for the baseline: at most 90 days, ECDSA or RSA keys, RSA of at least 2048 bits. These settings can only tighten it.",
+    description: "A160-L2: help for the tightening fields.",
+  },
+  "adcs.modernize.maxValidityDays": {
+    defaultMessage: "Maximum validity in days (1 to 90)",
+    description: "A160-L2: the profile's validity ceiling.",
+  },
+  "adcs.modernize.allowECDSA": { defaultMessage: "Allow ECDSA keys", description: "A160-L2: keep ECDSA keys allowed." },
+  "adcs.modernize.allowRSA": { defaultMessage: "Allow RSA keys", description: "A160-L2: keep RSA keys allowed." },
+  "adcs.modernize.minRSABits": {
+    defaultMessage: "Minimum RSA key size in bits (2048 to 16384)",
+    description: "A160-L2: the profile's RSA floor.",
+  },
   "adcs.modernize.create": {
     defaultMessage: "Create profile",
     description: "A160: creates the profile.",

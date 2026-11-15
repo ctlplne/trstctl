@@ -11,6 +11,7 @@ package adcsmodern
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -27,6 +28,70 @@ const DefaultMaxValidity = 90 * 24 * time.Hour
 const (
 	ekuServerAuth = "1.3.6.1.5.5.7.3.1"
 )
+
+// baselineKeyAlgorithms are the key algorithms a modernized profile allows
+// unless the operator narrows them.
+var baselineKeyAlgorithms = []string{"ECDSA", "RSA"}
+
+// maxRSABits bounds a raised RSA floor.
+const maxRSABits = 16384
+
+// Options tightens the modernized profile beyond the baseline (A160-L2): a
+// shorter validity ceiling, fewer key algorithms, a higher RSA floor. The zero
+// value is the baseline, and no option can make the profile weaker than it.
+type Options struct {
+	// MaxValidity is the validity ceiling: at least a day and at most
+	// DefaultMaxValidity; zero keeps DefaultMaxValidity.
+	MaxValidity time.Duration
+	// KeyAlgorithms narrows the allowed key algorithms to a non-empty subset
+	// of ECDSA and RSA; empty keeps both.
+	KeyAlgorithms []string
+	// MinRSABits raises the RSA floor: at least profile.DefaultMinRSABits and
+	// at most 16384; zero keeps the default. RSA must stay allowed.
+	MinRSABits int
+}
+
+// Normalized checks o against the baseline and returns it in canonical form:
+// the algorithms upper-cased, deduplicated and in baseline order. An option
+// weaker than the baseline, or one that does not apply, is an error naming
+// the bound.
+func (o Options) Normalized() (Options, error) {
+	switch {
+	case o.MaxValidity < 0:
+		return o, fmt.Errorf("adcsmodern: max validity must be positive")
+	case o.MaxValidity > 0 && o.MaxValidity < 24*time.Hour:
+		return o, fmt.Errorf("adcsmodern: max validity must be at least 1 day")
+	case o.MaxValidity > DefaultMaxValidity:
+		return o, fmt.Errorf("adcsmodern: max validity must be at most %d days; a modernized profile is never longer-lived than the baseline", int(DefaultMaxValidity/(24*time.Hour)))
+	}
+	out := Options{MaxValidity: o.MaxValidity, MinRSABits: o.MinRSABits}
+	if len(o.KeyAlgorithms) > 0 {
+		chosen := map[string]bool{}
+		for _, alg := range o.KeyAlgorithms {
+			alg = strings.ToUpper(strings.TrimSpace(alg))
+			if !slices.Contains(baselineKeyAlgorithms, alg) {
+				return o, fmt.Errorf("adcsmodern: key algorithm %q is not one of %s; a modernized profile only narrows them", alg, strings.Join(baselineKeyAlgorithms, ", "))
+			}
+			chosen[alg] = true
+		}
+		for _, alg := range baselineKeyAlgorithms {
+			if chosen[alg] {
+				out.KeyAlgorithms = append(out.KeyAlgorithms, alg)
+			}
+		}
+	}
+	if o.MinRSABits != 0 {
+		switch {
+		case o.MinRSABits < profile.DefaultMinRSABits:
+			return o, fmt.Errorf("adcsmodern: the RSA floor must be at least %d bits", profile.DefaultMinRSABits)
+		case o.MinRSABits > maxRSABits:
+			return o, fmt.Errorf("adcsmodern: the RSA floor must be at most %d bits", maxRSABits)
+		case len(out.KeyAlgorithms) > 0 && !slices.Contains(out.KeyAlgorithms, "RSA"):
+			return o, fmt.Errorf("adcsmodern: an RSA floor applies only when RSA keys are allowed")
+		}
+	}
+	return out, nil
+}
 
 // Change is one property of the template that the profile does not carry over,
 // or carries over differently, with the reason an operator reads.
@@ -48,6 +113,16 @@ var domainPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:
 // DNS names under the domain, which the enrollment protocol validates, and
 // email, URI and IP names are refused by the profile's name policy.
 func Modernize(t adcs.Template, domain string) (Modernization, error) {
+	return ModernizeWith(t, domain, Options{})
+}
+
+// ModernizeWith is Modernize with the operator's tightening options
+// (A160-L2).
+func ModernizeWith(t adcs.Template, domain string, opts Options) (Modernization, error) {
+	opts, err := opts.Normalized()
+	if err != nil {
+		return Modernization{}, err
+	}
 	domain = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(domain), "."))
 	if !domainPattern.MatchString(domain) {
 		return Modernization{}, fmt.Errorf("adcsmodern: %q is not a DNS domain the profile can confine names to", domain)
@@ -56,9 +131,17 @@ func Modernize(t adcs.Template, domain string) (Modernization, error) {
 		return Modernization{}, fmt.Errorf("adcsmodern: the template has no name")
 	}
 	var changes []Change
+	validity, algorithms := DefaultMaxValidity, append([]string(nil), baselineKeyAlgorithms...)
+	if opts.MaxValidity > 0 {
+		validity = opts.MaxValidity
+	}
+	if len(opts.KeyAlgorithms) > 0 {
+		algorithms = opts.KeyAlgorithms
+	}
 	p := profile.CertificateProfile{
-		AllowedKeyAlgorithms: []string{"ECDSA", "RSA"},
-		MaxValidity:          profile.Duration(DefaultMaxValidity),
+		AllowedKeyAlgorithms: algorithms,
+		MaxValidity:          profile.Duration(validity),
+		MinRSABits:           opts.MinRSABits,
 		AllowedProtocols:     []string{"acme", "est", "api"},
 		AllowedDNSSuffixes:   []string{domain},
 		RequiresApproval:     t.RequiresManagerApproval,
@@ -95,8 +178,28 @@ func Modernize(t adcs.Template, domain string) (Modernization, error) {
 			Detail: "Directory enrollment rights (" + strings.Join(principals, ", ") + ") are replaced by trstctl roles and protocol authentication."})
 	}
 	changes = append(changes, Change{Code: "validity_shortened",
-		Detail: "Certificates are valid for at most 90 days and renew by protocol."})
+		Detail: "Certificates are valid for at most " + validityDays(validity) + " and renew by protocol."})
+	if len(algorithms) < len(baselineKeyAlgorithms) {
+		changes = append(changes, Change{Code: "key_algorithms_narrowed",
+			Detail: "Keys must be " + strings.Join(algorithms, " or ") + "."})
+	}
+	if opts.MinRSABits > profile.DefaultMinRSABits {
+		changes = append(changes, Change{Code: "rsa_floor_raised",
+			Detail: fmt.Sprintf("RSA keys must be at least %d bits.", opts.MinRSABits)})
+	}
 	return Modernization{Profile: p, Changes: changes}, nil
+}
+
+// validityDays reads a validity ceiling in whole days, or hours under a day
+// boundary.
+func validityDays(d time.Duration) string {
+	if d%(24*time.Hour) == 0 {
+		if days := int(d / (24 * time.Hour)); days != 1 {
+			return fmt.Sprintf("%d days", days)
+		}
+		return "1 day"
+	}
+	return fmt.Sprintf("%d hours", int(d/time.Hour))
 }
 
 // modernEKUs keeps server and client authentication and removes the usages

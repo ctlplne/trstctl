@@ -157,6 +157,56 @@ describe("AD CS inventory posture", () => {
     expect(await within(dialog).findByText("Profile adcs-userauth-modern created.")).toBeInTheDocument();
   });
 
+  it("A160-L2 tightens the modernized profile and creates it as previewed", async () => {
+    apiMock.previewADCSModernize.mockReset().mockResolvedValue({
+      capability: "P11",
+      effect_free: true,
+      ready: true,
+      domain: "CORP-CA",
+      template: "UserAuth",
+      dns_suffix: "corp.example",
+      profile_name: "adcs-userauth-modern",
+      spec: { allowed_dns_suffixes: ["corp.example"], allowed_key_algorithms: ["RSA"], max_validity: "720h", min_rsa_bits: 3072 },
+      changes: [{ code: "rsa_floor_raised", detail: "RSA keys must be at least 3072 bits." }],
+      blockers: [],
+    });
+    apiMock.modernizeADCSTemplate.mockReset().mockResolvedValue({ state: "created", changes: [] });
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <ADCSTemplatePanel />
+      </AppQueryProvider>,
+    );
+    await user.click(await screen.findByRole("button", { name: "Modernize" }));
+    const dialog = await screen.findByRole("dialog", { name: "Modernize template UserAuth" });
+    await within(dialog).findByText("RSA keys must be at least 3072 bits.");
+    await user.type(within(dialog).getByRole("spinbutton", { name: "Maximum validity in days (1 to 90)" }), "30");
+    await user.click(within(dialog).getByRole("checkbox", { name: "Allow ECDSA keys" }));
+    await user.type(within(dialog).getByRole("spinbutton", { name: "Minimum RSA key size in bits (2048 to 16384)" }), "3072");
+    await user.click(within(dialog).getByRole("button", { name: "Preview again" }));
+    await waitFor(() =>
+      expect(apiMock.previewADCSModernize).toHaveBeenLastCalledWith({
+        domain: "CORP-CA",
+        template: "UserAuth",
+        max_validity_days: 30,
+        key_algorithms: ["RSA"],
+        min_rsa_bits: 3072,
+      }),
+    );
+    await user.click(await within(dialog).findByRole("button", { name: "Create profile" }));
+    await waitFor(() =>
+      expect(apiMock.modernizeADCSTemplate).toHaveBeenCalledWith({
+        domain: "CORP-CA",
+        template: "UserAuth",
+        dns_suffix: "corp.example",
+        profile_name: "adcs-userauth-modern",
+        max_validity_days: 30,
+        key_algorithms: ["RSA"],
+        min_rsa_bits: 3072,
+      }),
+    );
+  });
+
   it("shows live IIS exposure and honest CA restriction evidence", async () => {
     render(
       <AppQueryProvider>

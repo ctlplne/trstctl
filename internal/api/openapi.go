@@ -7350,8 +7350,11 @@ func componentSchemas() map[string]*Schema {
 	}, "items", "window_days", "guidance")
 	adcsModernizeRequestSchema := object(map[string]*Schema{
 		"domain": str(), "template": str(),
-		"dns_suffix":   {Type: "string", Description: "DNS domain certificates from the profile may name; defaults to the publishing CA's DNS domain"},
-		"profile_name": {Type: "string", Description: "defaults to adcs-<template>-modern"},
+		"dns_suffix":        {Type: "string", Description: "DNS domain certificates from the profile may name; defaults to the publishing CA's DNS domain"},
+		"profile_name":      {Type: "string", Description: "defaults to adcs-<template>-modern"},
+		"max_validity_days": {Type: "integer", Description: "A160-L2: the profile's validity ceiling in days, 1-90; omitted keeps 90. Never longer than the baseline."},
+		"key_algorithms":    {Type: "array", Items: &Schema{Type: "string", Enum: []string{"ECDSA", "RSA"}}, Description: "A160-L2: narrows the allowed key algorithms to a non-empty subset of ECDSA and RSA; omitted keeps both."},
+		"min_rsa_bits":      {Type: "integer", Description: "A160-L2: raises the RSA floor, 2048-16384; omitted keeps 2048. Only with RSA allowed."},
 	}, "domain", "template")
 	adcsModernizeChangeSchema := object(map[string]*Schema{"code": str(), "detail": str()}, "code", "detail")
 	adcsModernizePlanSchema := object(map[string]*Schema{

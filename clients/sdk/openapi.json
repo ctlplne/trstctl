@@ -2927,6 +2927,25 @@
           "domain": {
             "type": "string"
           },
+          "key_algorithms": {
+            "description": "A160-L2: narrows the allowed key algorithms to a non-empty subset of ECDSA and RSA; omitted keeps both.",
+            "items": {
+              "enum": [
+                "ECDSA",
+                "RSA"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "max_validity_days": {
+            "description": "A160-L2: the profile's validity ceiling in days, 1-90; omitted keeps 90. Never longer than the baseline.",
+            "type": "integer"
+          },
+          "min_rsa_bits": {
+            "description": "A160-L2: raises the RSA floor, 2048-16384; omitted keeps 2048. Only with RSA allowed.",
+            "type": "integer"
+          },
           "profile_name": {
             "description": "defaults to adcs-\u003ctemplate\u003e-modern",
             "type": "string"

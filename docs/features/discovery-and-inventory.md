@@ -1558,6 +1558,16 @@ The domain comes from the publishing CA's observed DNS name unless you name a
 `dns_suffix`. Automation uses `POST /api/v1/posture/adcs/templates/modernize/preview`
 and `POST /api/v1/posture/adcs/templates/modernize` (`profiles:write`), or
 `trstctl posture adcs modernize-preview -f req.json` and `... modernize -f req.json`.
+
+The baseline is 90 days, ECDSA or RSA keys, and RSA of at least 2048 bits, and it can
+only be tightened (A160-L2): `max_validity_days` (1 to 90), `key_algorithms` (a non-empty
+subset of `ECDSA` and `RSA`) and `min_rsa_bits` (2048 to 16384, with RSA allowed) set a
+shorter ceiling, fewer algorithms or a higher RSA floor, on the preview and the create
+alike, and the preview's changes name each. A longer validity, another algorithm, a lower
+floor or a floor without RSA is refused (400) and nothing is created. The dialog's
+**Tighten the profile** fields set the same, and enrollment under the profile then
+enforces them.
+
 To keep issuing at AD CS behind the new profile's checks, set the profile's
 `upstream_external_ca` to an `adcs` external CA.
 

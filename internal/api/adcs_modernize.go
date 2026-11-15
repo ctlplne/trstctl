@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/adcsmodern"
 	"trstctl.com/trstctl/internal/discovery/adcs"
@@ -35,6 +36,23 @@ type adcsModernizeRequest struct {
 	// empty derives it from the publishing CA's DNS name.
 	DNSSuffix   string `json:"dns_suffix,omitempty"`
 	ProfileName string `json:"profile_name,omitempty"`
+	// A160-L2: optional tightening beyond the baseline (90 days, ECDSA or
+	// RSA, RSA of at least 2048 bits); nothing here can make it weaker.
+	MaxValidityDays int      `json:"max_validity_days,omitempty"`
+	KeyAlgorithms   []string `json:"key_algorithms,omitempty"`
+	MinRSABits      int      `json:"min_rsa_bits,omitempty"`
+}
+
+// options are the request's tightening options, checked against the baseline.
+func (r adcsModernizeRequest) options() (adcsmodern.Options, error) {
+	opts := adcsmodern.Options{KeyAlgorithms: r.KeyAlgorithms, MinRSABits: r.MinRSABits}
+	if r.MaxValidityDays != 0 {
+		if r.MaxValidityDays < 1 {
+			return opts, errors.New("max_validity_days must be at least 1")
+		}
+		opts.MaxValidity = time.Duration(r.MaxValidityDays) * 24 * time.Hour
+	}
+	return opts.Normalized()
 }
 
 type adcsModernizePlan struct {
@@ -66,6 +84,9 @@ func decodeADCSModernizeRequest(r *http.Request) (adcsModernizeRequest, error) {
 	req.DNSSuffix = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(req.DNSSuffix), "."))
 	if req.Domain == "" || req.Template == "" {
 		return adcsModernizeRequest{}, errStatus(http.StatusBadRequest, "domain and template are required")
+	}
+	if _, err := req.options(); err != nil {
+		return adcsModernizeRequest{}, errStatus(http.StatusBadRequest, strings.TrimPrefix(err.Error(), "adcsmodern: "))
 	}
 	return req, nil
 }
@@ -160,7 +181,11 @@ func (a *API) adcsModernizePlan(ctx context.Context, tenantID string, req adcsMo
 		plan.Blockers = append(plan.Blockers, "No DNS name was observed for the publishing CA; name the DNS suffix certificates from this profile may carry (dns_suffix).")
 		return plan, nil
 	}
-	m, err := adcsmodern.Modernize(observed, plan.DNSSuffix)
+	opts, err := req.options()
+	if err != nil {
+		return plan, errStatus(http.StatusBadRequest, strings.TrimPrefix(err.Error(), "adcsmodern: "))
+	}
+	m, err := adcsmodern.ModernizeWith(observed, plan.DNSSuffix, opts)
 	if err != nil {
 		plan.Blockers = append(plan.Blockers, err.Error())
 		return plan, nil
