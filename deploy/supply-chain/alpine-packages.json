@@ -1,0 +1,47 @@
+{
+  "schema": "trstctl.alpine-packages.v1",
+  "upstream": "https://dl-cdn.alpinelinux.org/alpine",
+  "note": "Every Alpine package an image build fetches, as ADD --checksum=sha256:<sha256> ${ALPINE_MIRROR}/<path> (TOOL-O1). Alpine removes a package from its CDN when it rebuilds it; scripts/supply-chain/alpine-mirror.py keeps a SHA-256-verified copy of each at its path, so a build can use that mirror instead (--build-arg ALPINE_MIRROR=...).",
+  "packages": [
+    {
+      "path": "v3.24/main/aarch64/ca-certificates-bundle-20261020-r0.apk",
+      "sha256": "d0a573c27d337c369ad3abe3f39f09ffe67b95af23861577a8d134738375176a"
+    },
+    {
+      "path": "v3.24/main/aarch64/libcrypto3-3.5.9-r0.apk",
+      "sha256": "2676a2b0b6e23ea2edccf3ee982b9842a665d52603d047de3d0a185dc316d983"
+    },
+    {
+      "path": "v3.24/main/aarch64/libssl3-3.5.9-r0.apk",
+      "sha256": "20ac252b276d73f2c69c1d25f84537c7fba81caefc026c6be1094b394af2082e"
+    },
+    {
+      "path": "v3.24/main/aarch64/libuuid-2.42.3-r1.apk",
+      "sha256": "9ce20c7ffe2ccaa7c321893c10564abbca13c3f2edb82f60a35f1f68e004f86c"
+    },
+    {
+      "path": "v3.24/main/aarch64/openssl-3.5.9-r0.apk",
+      "sha256": "aa27b9edfeffbf7ebafbcf29df3f02eef4bf50f793a4874ae2f52aba6b53e653"
+    },
+    {
+      "path": "v3.24/main/x86_64/ca-certificates-bundle-20261020-r0.apk",
+      "sha256": "bb008f6d214b6af7576324659856fb63dc8dcb4373f8345ff706388696f1254d"
+    },
+    {
+      "path": "v3.24/main/x86_64/libcrypto3-3.5.9-r0.apk",
+      "sha256": "6632d758d8f5e9ea3b650fe966f23bbf9a202f8b8dceecac93da135dec5e3689"
+    },
+    {
+      "path": "v3.24/main/x86_64/libssl3-3.5.9-r0.apk",
+      "sha256": "05e3393fb95aa5751ca2f9d242f659f6cff82c1cc7767cc2df4a086f7ad01877"
+    },
+    {
+      "path": "v3.24/main/x86_64/libuuid-2.42.3-r1.apk",
+      "sha256": "8306e5bb577696c9069fe1dfd9e1dcc39d2d481c6a1b0e707fd03c3e21aa6aa2"
+    },
+    {
+      "path": "v3.24/main/x86_64/openssl-3.5.9-r0.apk",
+      "sha256": "9358e8f38eb19a1e035355626570c76bda1e5a49084c768fb0edc1e607251e99"
+    }
+  ]
+}

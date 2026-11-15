@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3389 annotated sites across 35 rules. Each row is
+3391 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1778,7 +1778,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (428 sites)
+### G204 — CWE-78 OS command injection (429 sites)
 
 | Location | Reason |
 |---|---|
@@ -1806,6 +1806,7 @@ not this file.
 | `deploy/deploycheck_test.go:119` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/deploycheck_test.go:442` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/deploycheck_test.go:452` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/alpine_packages_test.go:152` | fixed interpreter and the repository's own script (CWE-78) |
 | `deploy/docker/context_size_test.go:20` | fixed repository script; the test-owned directory is a separate argv value, never shell code (CWE-78). |
 | `deploy/docker/context_size_test.go:66` | fixed repository script; the test-owned directory is a separate argv value, never shell code (CWE-78). |
 | `deploy/docker/dist_test.go:738` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2337,7 +2338,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (799 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (800 sites)
 
 | Location | Reason |
 |---|---|
@@ -2453,6 +2454,7 @@ not this file.
 | `deploy/deploycheck_test.go:1246` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:1429` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:1673` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/docker/alpine_packages_test.go:165` | the test's own temp directory (CWE-22) |
 | `deploy/docker/context_size_test.go:28` | fixed filename below this test's private t.TempDir (CWE-22). |
 | `deploy/docker/dist_test.go:25` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/dist_test.go:1199` | test reads its own fixture/tempdir path (CWE-22) |

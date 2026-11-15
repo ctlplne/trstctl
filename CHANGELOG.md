@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- Image builds keep building after Alpine rebuilds a pinned package (TOOL-O1): every Alpine package an image fetches is
+  listed with its digest in `deploy/supply-chain/alpine-packages.json` and fetched from `${ALPINE_MIRROR}` (the Alpine
+  CDN by default), and `scripts/supply-chain/alpine-mirror.py` keeps a digest-verified local mirror of them to build
+  from. A guard test ties every Dockerfile's Alpine fetches to the manifest.
 - OAuth leases can authenticate the client with a JWT it signs (`client_auth: private_key_jwt`, RFC 7523; A239-L7), so
   no client secret is sent, and can draw a role's leases with a refresh token obtained once for the client
   (`refresh_token_ref`, `refresh_token_roles`: the refresh-token grant, narrowed to the role's scopes) for an API that

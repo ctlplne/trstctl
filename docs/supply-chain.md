@@ -230,6 +230,33 @@ the release stops before publication when the server advisory decision is red.
 This binary is not bundled in the shipped distroless image (Go binaries
 only); it is fetched on first run of the bundled single-node/eval path.
 
+### Alpine package inputs — committed manifest and a local mirror
+
+The images patch their bases with a few Alpine packages (OpenSSL's libraries,
+libuuid, the CA bundle the trust store is filtered from), each fetched as
+`ADD --checksum=sha256:<digest> ${ALPINE_MIRROR}/<path>` and listed with its
+digest in `deploy/supply-chain/alpine-packages.json` (TOOL-O1). Alpine removes a
+package from its CDN when it rebuilds it, so a pinned fetch then 404s and an
+older commit no longer builds. `ALPINE_MIRROR` defaults to the Alpine CDN, so a
+default build fetches exactly what it did; the checksum holds whichever source
+serves the bytes.
+
+`scripts/supply-chain/alpine-mirror.py fetch DIR` keeps every pinned package in
+`DIR` at its Alpine path, from `--mirror` (or `TRSTCTL_ALPINE_MIRROR`) when
+given and otherwise the Alpine CDN; a download that is not the pinned SHA-256 is
+refused and never written, and a copy already kept needs no network. `verify DIR`
+checks the copies, and `serve DIR` serves them on loopback for a build:
+
+```bash
+python3 scripts/supply-chain/alpine-mirror.py fetch ~/.cache/trstctl/alpine
+python3 scripts/supply-chain/alpine-mirror.py serve ~/.cache/trstctl/alpine --port 8090
+docker build --build-arg ALPINE_MIRROR=http://host.docker.internal:8090 -f deploy/docker/Dockerfile.node .
+```
+
+A guard test holds every Alpine fetch in every Dockerfile to the manifest, and
+`scripts/labs/alpine-mirror.sh` builds every stage that fetches these packages
+on a fresh builder from such a mirror, with no request to the Alpine CDN.
+
 ## SBOMs
 
 Two CycloneDX SBOMs are produced: the image SBOM the release attaches and

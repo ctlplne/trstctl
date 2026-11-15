@@ -171,7 +171,9 @@ RUN set -eu; \
 # remains. The bundle package is the same bytes on every architecture; the
 # x86_64 package is the pinned input.
 FROM scratch AS trust-source
-ADD --checksum=sha256:bb008f6d214b6af7576324659856fb63dc8dcb4373f8345ff706388696f1254d https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20261020-r0.apk /ca-certificates-bundle-20261020-r0.apk
+# The pinned Alpine packages in this stage come from ALPINE_MIRROR (TOOL-O1).
+ARG ALPINE_MIRROR=https://dl-cdn.alpinelinux.org/alpine
+ADD --checksum=sha256:bb008f6d214b6af7576324659856fb63dc8dcb4373f8345ff706388696f1254d ${ALPINE_MIRROR}/v3.24/main/x86_64/ca-certificates-bundle-20261020-r0.apk /ca-certificates-bundle-20261020-r0.apk
 
 FROM build AS trust
 COPY --from=trust-source /ca-certificates-bundle-20261020-r0.apk /tmp/trust/ca-certificates-bundle.apk

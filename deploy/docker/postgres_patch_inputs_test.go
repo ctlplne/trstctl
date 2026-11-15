@@ -21,21 +21,24 @@ func postgresPatchConstructionErrors(df string) []string {
 	required := []string{
 		"ARG TARGETARCH",
 		"FROM scratch AS patches",
+		// TOOL-O1: each fetching stage takes its base from ALPINE_MIRROR, the
+		// Alpine CDN by default; the checksums hold whichever serves them.
+		"ARG ALPINE_MIRROR=https://dl-cdn.alpinelinux.org/alpine",
 		"COPY --from=patches /${TARGETARCH}/ /tmp/trstctl-postgres-patches/",
 		"RUN --network=none apk add --no-network /tmp/trstctl-postgres-patches/*.apk",
 		"&& rm -rf /tmp/trstctl-postgres-patches",
-		"ADD --checksum=sha256:6632d758d8f5e9ea3b650fe966f23bbf9a202f8b8dceecac93da135dec5e3689 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.9-r0.apk /amd64/libcrypto3-3.5.9-r0.apk",
-		"ADD --checksum=sha256:05e3393fb95aa5751ca2f9d242f659f6cff82c1cc7767cc2df4a086f7ad01877 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.9-r0.apk /amd64/libssl3-3.5.9-r0.apk",
-		"ADD --checksum=sha256:8306e5bb577696c9069fe1dfd9e1dcc39d2d481c6a1b0e707fd03c3e21aa6aa2 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libuuid-2.42.3-r1.apk /amd64/libuuid-2.42.3-r1.apk",
-		"ADD --checksum=sha256:2676a2b0b6e23ea2edccf3ee982b9842a665d52603d047de3d0a185dc316d983 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.9-r0.apk /arm64/libcrypto3-3.5.9-r0.apk",
-		"ADD --checksum=sha256:20ac252b276d73f2c69c1d25f84537c7fba81caefc026c6be1094b394af2082e https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.9-r0.apk /arm64/libssl3-3.5.9-r0.apk",
-		"ADD --checksum=sha256:9ce20c7ffe2ccaa7c321893c10564abbca13c3f2edb82f60a35f1f68e004f86c https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libuuid-2.42.3-r1.apk /arm64/libuuid-2.42.3-r1.apk",
+		"ADD --checksum=sha256:6632d758d8f5e9ea3b650fe966f23bbf9a202f8b8dceecac93da135dec5e3689 ${ALPINE_MIRROR}/v3.24/main/x86_64/libcrypto3-3.5.9-r0.apk /amd64/libcrypto3-3.5.9-r0.apk",
+		"ADD --checksum=sha256:05e3393fb95aa5751ca2f9d242f659f6cff82c1cc7767cc2df4a086f7ad01877 ${ALPINE_MIRROR}/v3.24/main/x86_64/libssl3-3.5.9-r0.apk /amd64/libssl3-3.5.9-r0.apk",
+		"ADD --checksum=sha256:8306e5bb577696c9069fe1dfd9e1dcc39d2d481c6a1b0e707fd03c3e21aa6aa2 ${ALPINE_MIRROR}/v3.24/main/x86_64/libuuid-2.42.3-r1.apk /amd64/libuuid-2.42.3-r1.apk",
+		"ADD --checksum=sha256:2676a2b0b6e23ea2edccf3ee982b9842a665d52603d047de3d0a185dc316d983 ${ALPINE_MIRROR}/v3.24/main/aarch64/libcrypto3-3.5.9-r0.apk /arm64/libcrypto3-3.5.9-r0.apk",
+		"ADD --checksum=sha256:20ac252b276d73f2c69c1d25f84537c7fba81caefc026c6be1094b394af2082e ${ALPINE_MIRROR}/v3.24/main/aarch64/libssl3-3.5.9-r0.apk /arm64/libssl3-3.5.9-r0.apk",
+		"ADD --checksum=sha256:9ce20c7ffe2ccaa7c321893c10564abbca13c3f2edb82f60a35f1f68e004f86c ${ALPINE_MIRROR}/v3.24/main/aarch64/libuuid-2.42.3-r1.apk /arm64/libuuid-2.42.3-r1.apk",
 		// The trust store (eMudhra response, Part 1): one pinned Alpine bundle
 		// package, filtered by the shipped distrust list in a Go build stage,
 		// copied over the base image's bundle. Reviewed construction, no
 		// network at install time, no other trust input.
 		"FROM scratch AS trust-source",
-		"ADD --checksum=sha256:bb008f6d214b6af7576324659856fb63dc8dcb4373f8345ff706388696f1254d https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20261020-r0.apk /ca-certificates-bundle-20261020-r0.apk",
+		"ADD --checksum=sha256:bb008f6d214b6af7576324659856fb63dc8dcb4373f8345ff706388696f1254d ${ALPINE_MIRROR}/v3.24/main/x86_64/ca-certificates-bundle-20261020-r0.apk /ca-certificates-bundle-20261020-r0.apk",
 		"COPY --from=trust-source /ca-certificates-bundle-20261020-r0.apk /tmp/trust/ca-certificates-bundle.apk",
 		"trstctl-trustbundle filter -in /tmp/trust/ca-certificates-bundle.apk -out /out/trust/ca-certificates.crt -report /out/trust/report.json -expect 118",
 		"COPY --from=trust /out/trust/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt",
