@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { CredentialChip } from "@/components/CredentialChip";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -110,9 +110,42 @@ export function IdentityApplicationPanel({ identityId }: { identityId: string })
   );
 }
 
+/** A244-L3: a list the view starts and "show more" continues from its cursor.
+ * Pages append in order; an item a refreshed first page already holds is not
+ * repeated. emptyStretch says the last page read found nothing there (a
+ * bounded alerts read can stop with more to read). */
+function useMore<T extends { id: string }>(
+  first: T[],
+  firstCursor: string | undefined,
+  load: (cursor: string) => Promise<{ items: T[]; next_cursor?: string }>,
+) {
+  const [extra, setExtra] = useState<{ items: T[]; cursor?: string; emptyStretch: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const seen = new Set<string>();
+  const items = [...first, ...(extra?.items ?? [])].filter((item) => !seen.has(item.id) && seen.add(item.id) !== undefined);
+  const cursor = extra ? extra.cursor : firstCursor;
+  const more = async () => {
+    if (!cursor) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      const page = await load(cursor);
+      setExtra((prev) => ({ items: [...(prev?.items ?? []), ...page.items], cursor: page.next_cursor, emptyStretch: page.items.length === 0 }));
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { items, cursor, more, busy, failed, emptyStretch: extra?.emptyStretch ?? false };
+}
+
 function ApplicationDetails({ view, formatDateTime }: { view: IdentityApplicationView; formatDateTime: (value?: string) => string }) {
   const { t } = useTranslation();
   const { owner, profile, issuer, certificate, destination, served, renewal } = view;
+  const approvals = useMore(view.approvals, view.approvals_next_cursor, (cursor) => api.identityApplicationApprovals(view.identity.id, cursor));
+  const alerts = useMore(view.alerts, view.alerts_next_cursor, (cursor) => api.identityApplicationAlerts(view.identity.id, cursor));
   const reuse = endpointBindingDefaultsHref(view.defaults);
   return (
     <div className="mt-3 grid gap-4">
@@ -227,11 +260,11 @@ function ApplicationDetails({ view, formatDateTime }: { view: IdentityApplicatio
       </div>
       <div>
         <h4 className="font-medium">{t("identities.application.approvals")}</h4>
-        {view.approvals.length === 0 ? (
+        {approvals.items.length === 0 ? (
           <p className="text-muted-foreground">{t("identities.application.noApprovals")}</p>
         ) : (
           <ul className="mt-1 grid gap-1">
-            {view.approvals.map((approval) => (
+            {approvals.items.map((approval) => (
               <li key={approval.id}>
                 <StatusBadge value={approval.status} />{" "}
                 {t("identities.application.approval", { action: approval.action, at: formatDateTime(approval.created_at) })}
@@ -244,20 +277,23 @@ function ApplicationDetails({ view, formatDateTime }: { view: IdentityApplicatio
             ))}
           </ul>
         )}
+        <MoreButton list={approvals} label={t("identities.application.moreApprovals")} />
       </div>
       <div>
         <h4 className="font-medium">{t("identities.application.alerts")}</h4>
-        {view.alerts.length === 0 ? (
+        {alerts.items.length === 0 ? (
           <p className="text-muted-foreground">{t("identities.application.noAlerts")}</p>
         ) : (
           <ul className="mt-1 grid gap-1">
-            {view.alerts.map((alert) => (
+            {alerts.items.map((alert) => (
               <li key={alert.id}>
                 <StatusBadge vocabulary="delivery" value={alert.status} /> {alert.kind ?? alert.destination} · {formatDateTime(alert.created_at)}
               </li>
             ))}
           </ul>
         )}
+        {alerts.emptyStretch && alerts.cursor && <p className="text-xs text-muted-foreground">{t("identities.application.moreAlertsEmptyStretch")}</p>}
+        <MoreButton list={alerts} label={t("identities.application.moreAlerts")} />
       </div>
       <div>
         <h4 className="font-medium">{t("identities.application.actions")}</h4>
@@ -342,6 +378,19 @@ function PlanStepPreview({ preview, t }: { preview: IdentityApplicationView["rev
         </details>
       )}
     </>
+  );
+}
+
+function MoreButton({ list, label }: { list: { cursor?: string; busy: boolean; failed: boolean; more: () => Promise<void> }; label: string }) {
+  const { t } = useTranslation();
+  if (!list.cursor) return null;
+  return (
+    <div className="mt-1">
+      <Button type="button" size="sm" variant="outline" loading={list.busy} onClick={() => void list.more()}>
+        {label}
+      </Button>
+      {list.failed && <p className="text-xs text-destructive">{t("identities.application.moreFailed")}</p>}
+    </div>
   );
 }
 

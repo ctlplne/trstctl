@@ -77,14 +77,36 @@ func (s *Store) IdentityInventoryEvidence(ctx context.Context, tenantID string, 
 // IdentityApprovals lists an identity's newest operation approvals, any
 // status.
 func (s *Store) IdentityApprovals(ctx context.Context, tenantID, identityID string, limit int) ([]OperationApprovalRequest, error) {
+	return s.IdentityApprovalsPage(ctx, tenantID, identityID, nil, limit)
+}
+
+// IdentityApprovalCursor is where a newest-first page of an identity's
+// approval requests continues: strictly older than this request.
+type IdentityApprovalCursor struct {
+	CreatedAt time.Time
+	ID        string
+}
+
+// IdentityApprovalsPage is the identity's approval requests newest first,
+// strictly older than after when it is set (A244-L3), at most limit (1-50).
+func (s *Store) IdentityApprovalsPage(ctx context.Context, tenantID, identityID string, after *IdentityApprovalCursor, limit int) ([]OperationApprovalRequest, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 50
 	}
 	var out []OperationApprovalRequest
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT `+operationApprovalColumns+` FROM operation_approval_requests r
+		query := `SELECT ` + operationApprovalColumns + ` FROM operation_approval_requests r
 			WHERE r.tenant_id = $1 AND r.resource_kind = 'identity' AND r.resource_id = $2
-			ORDER BY r.created_at DESC, r.id DESC LIMIT $3`, tenantID, identityID, limit)
+			ORDER BY r.created_at DESC, r.id DESC LIMIT $3`
+		args := []any{tenantID, identityID, limit}
+		if after != nil {
+			query = `SELECT ` + operationApprovalColumns + ` FROM operation_approval_requests r
+			WHERE r.tenant_id = $1 AND r.resource_kind = 'identity' AND r.resource_id = $2
+			  AND (r.created_at, r.id) < ($4::timestamptz, $5::uuid)
+			ORDER BY r.created_at DESC, r.id DESC LIMIT $3`
+			args = append(args, after.CreatedAt, after.ID)
+		}
+		rows, err := tx.Query(ctx, query, args...)
 		if err != nil {
 			return err
 		}

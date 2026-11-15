@@ -8364,12 +8364,32 @@ Identity = TypedDict(
     total=False,
 )
 
+IdentityApplicationAlertPage = TypedDict(
+    'IdentityApplicationAlertPage',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+IdentityApplicationApprovalPage = TypedDict(
+    'IdentityApplicationApprovalPage',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 IdentityApplicationView = TypedDict(
     'IdentityApplicationView',
     {
         'actions': list[dict[str, Any]],
         'alerts': list[dict[str, Any]],
+        'alerts_next_cursor': str,
         'approvals': list[dict[str, Any]],
+        'approvals_next_cursor': str,
         'certificate': dict[str, Any],
         'defaults': dict[str, Any],
         'destination': dict[str, Any],

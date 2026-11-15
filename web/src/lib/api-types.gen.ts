@@ -6034,10 +6034,22 @@ export interface Identity {
   terminal_target_state?: "revoked" | "retired";
 }
 
+export interface IdentityApplicationAlertPage {
+  items: { created_at: string; destination: string; id: string; kind?: string; status: string }[];
+  next_cursor?: string;
+}
+
+export interface IdentityApplicationApprovalPage {
+  items: ({ action: string; changed: ("profile" | "destination" | "issuer" | "identity")[]; created_at: string; expires_at: string; id: string; status: string })[];
+  next_cursor?: string;
+}
+
 export interface IdentityApplicationView {
   actions: ({ action: "recover" | "revoke" | "retire"; available: boolean; method: string; path: string; reason?: string })[];
   alerts: { created_at: string; destination: string; id: string; kind?: string; status: string }[];
+  alerts_next_cursor?: string;
   approvals: ({ action: string; changed: ("profile" | "destination" | "issuer" | "identity")[]; created_at: string; expires_at: string; id: string; status: string })[];
+  approvals_next_cursor?: string;
   certificate?: { fingerprint: string; id: string; not_after?: string; serial: string; status: string };
   defaults: { connector?: string; issuer_id?: string; issuer_source?: string; owner_id?: string; profile_name?: string };
   destination?: { connector: string; enabled: boolean; last_delivery_at?: string; last_delivery_fingerprint?: string; last_delivery_status?: string; name: string; revision: string; target_id: string; verify_address?: string };

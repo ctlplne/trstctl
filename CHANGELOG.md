@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- An identity's Application view continues its approvals and alerts past the newest ten (A244-L3):
+  `approvals_next_cursor` and `alerts_next_cursor` name where they continue, `GET
+  /api/v1/identities/{id}/application/approvals` pages the approval requests by keyset, and
+  `.../application/alerts` pages the identity's alerts with a bounded read of the tenant's notifications (5,000 per
+  call) that says where it stopped, so an alert older than the tenant's latest notifications is no longer out of reach.
+  The console shows older approvals and alerts on request.
 - Change sets hold the lifecycle policy module, notification channels, report schedules, agent role grants and
   secrets projects (A248-L3): each plans with what applying would do, binds the plan digest, applies through the
   operator's own command and reads back. Every apply returns its rollback, the change set that puts back each object it

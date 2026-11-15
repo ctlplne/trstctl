@@ -11536,6 +11536,8 @@
             "api_surface": [
                 "listIdentities",
                 "getIdentityApplicationView",
+                "listIdentityApplicationApprovals",
+                "listIdentityApplicationAlerts",
                 "transitionIdentity",
                 "createEndpointBinding",
                 "previewEndpointBinding",

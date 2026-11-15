@@ -412,9 +412,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A236-L4 adds listDeletedSecrets, restoreDeletedSecret and
 	// purgeDeletedSecret (836). M3-L4 adds replaceCloudAccessKey (837).
 	// M4-L3 adds introspectWorkloadToken (838). A235-L4 adds
-	// explainSecretProjectMemberAccess (839).
-	if len(out) != 839 {
-		t.Fatalf("OpenAPI operationIds = %d, want 839", len(out))
+	// explainSecretProjectMemberAccess (839). A244-L3 adds
+	// listIdentityApplicationApprovals and listIdentityApplicationAlerts (841).
+	if len(out) != 841 {
+		t.Fatalf("OpenAPI operationIds = %d, want 841", len(out))
 	}
 	return out
 }

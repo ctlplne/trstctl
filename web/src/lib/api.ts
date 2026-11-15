@@ -436,6 +436,8 @@ import type {
   Identity as GenIdentity,
   IdentityList,
   IdentityDeploymentEvidence,
+  IdentityApplicationAlertPage,
+  IdentityApplicationApprovalPage,
   IdentityApplicationView,
   IdentityTransitionPreview as GenIdentityTransitionPreview,
   IdentityConnectorTargetRequest,
@@ -1007,7 +1009,7 @@ export type { DecoySecret, DecoySecretList, DecoySecretRegisterRequest } from ".
 export type { DeletedSecret, DeletedSecretList } from "./api-types.gen";
 export type { MigrationPlannedCohort } from "./api-types.gen";
 export type { SlackApp, SlackApprovalChannel, SlackChannelList, SlackInstallStart, SlackLinkCode } from "./api-types.gen";
-export type { IdentityApplicationView } from "./api-types.gen";
+export type { IdentityApplicationAlertPage, IdentityApplicationApprovalPage, IdentityApplicationView } from "./api-types.gen";
 export type {
   SecretAccessExplain,
   SecretProject,
@@ -2516,6 +2518,9 @@ export interface Api {
   getIdentity(id: string): Promise<Identity>;
   identityDeploymentEvidence(id: string): Promise<IdentityDeploymentEvidence>;
   identityApplication(id: string): Promise<IdentityApplicationView>;
+  /** A244-L3: the view's approvals and alerts past its first page. */
+  identityApplicationApprovals(id: string, cursor: string): Promise<IdentityApplicationApprovalPage>;
+  identityApplicationAlerts(id: string, cursor: string): Promise<IdentityApplicationAlertPage>;
   createIdentity(input: IdentityRequest, idempotencyKey?: string): Promise<Identity>;
   previewIdentityTransition(id: string, to: TransitionRequest["to"], reason?: string, subjectCSRPEM?: string): Promise<IdentityTransitionPreview>;
   transitionIdentity(
@@ -3533,6 +3538,10 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
   identityDeploymentEvidence: (id) => req<IdentityDeploymentEvidence>(`/api/v1/identities/${encodeURIComponent(id)}/deployment-evidence`),
   identityApplication: (id) => req<IdentityApplicationView>(`/api/v1/identities/${encodeURIComponent(id)}/application`),
+  identityApplicationApprovals: (id, cursor) =>
+    req<IdentityApplicationApprovalPage>(`/api/v1/identities/${encodeURIComponent(id)}/application/approvals?cursor=${encodeURIComponent(cursor)}`),
+  identityApplicationAlerts: (id, cursor) =>
+    req<IdentityApplicationAlertPage>(`/api/v1/identities/${encodeURIComponent(id)}/application/alerts?cursor=${encodeURIComponent(cursor)}`),
   createIdentity: (input, idempotencyKey) => mutate<Identity>("POST", "/api/v1/identities", input, idempotencyKey),
   previewIdentityTransition: (id, to, reason, subjectCSRPEM) =>
     postRead<IdentityTransitionPreview>(`/api/v1/identities/${encodeURIComponent(id)}/transitions/preview`, {

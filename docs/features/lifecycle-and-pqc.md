@@ -559,7 +559,16 @@ everything one certificate's application depends on in one answer:
   (profile, destination or issuer); a changed one no longer covers the issuance;
 - **the next automated action** (renew now, renew before expiry, retry, blocked,
   nothing scheduled) with any failed prerequisite, the latest run, recent alerts,
-  and the **recover, revoke and retire** actions with whether each applies now;
+  and the **recover, revoke and retire** actions with whether each applies now.
+  The view lists the newest ten approvals and the newest ten alerts, and
+  `approvals_next_cursor` and `alerts_next_cursor` continue them (A244-L3):
+  `GET /api/v1/identities/{id}/application/approvals?cursor=` pages the identity's
+  approval requests by keyset, and `.../application/alerts?cursor=` pages its alerts
+  by reading the tenant's notifications newest first, at most 5,000 per call, with a
+  cursor where the read stopped, so no alert is out of reach however many
+  notifications came after it. The console's **Show older approvals** and **Show
+  older alerts** continue each list, and say when a stretch of notifications held
+  no alert for the certificate;
 - a **value-free review plan** — approve, issue from the CA, deploy to the
   destination, verify from the vantage that saw it last — naming exactly what each
   step acts on, never a value. Each step carries the effect-free transition

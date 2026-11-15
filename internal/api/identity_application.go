@@ -4,12 +4,15 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
 	"strings"
 	"time"
+
+	googleuuid "github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
@@ -235,11 +238,20 @@ type identityApplicationView struct {
 	Destination    *applicationDestination `json:"destination,omitempty"`
 	Served         *applicationServed      `json:"served,omitempty"`
 	Approvals      []applicationApproval   `json:"approvals"`
-	Renewal        applicationRenewal      `json:"renewal"`
-	Alerts         []applicationAlert      `json:"alerts"`
-	Actions        []applicationAction     `json:"actions"`
-	Defaults       applicationDefaults     `json:"defaults"`
-	ReviewPlan     []applicationPlanStep   `json:"review_plan"`
+	// ApprovalsNextCursor continues the approvals past the newest ten
+	// (GET .../application/approvals?cursor=, A244-L3); empty when none are
+	// older.
+	ApprovalsNextCursor string             `json:"approvals_next_cursor,omitempty"`
+	Renewal             applicationRenewal `json:"renewal"`
+	Alerts              []applicationAlert `json:"alerts"`
+	// AlertsNextCursor continues the identity's alerts from where this read
+	// stopped (GET .../application/alerts?cursor=, A244-L3): after the
+	// newest ten, or where a bounded scan of the tenant's notifications
+	// ended; empty when it reached the oldest.
+	AlertsNextCursor string                `json:"alerts_next_cursor,omitempty"`
+	Actions          []applicationAction   `json:"actions"`
+	Defaults         applicationDefaults   `json:"defaults"`
+	ReviewPlan       []applicationPlanStep `json:"review_plan"`
 }
 
 type identityApplicationAttributes struct {
@@ -264,10 +276,28 @@ func (a *API) getIdentityApplicationView(w http.ResponseWriter, r *http.Request)
 	a.writeJSON(w, http.StatusOK, view)
 }
 
+// identityApplicationView is the whole view: its core, then the newest
+// approvals and alerts, the renewal, the actions and the review plan.
 func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) (identityApplicationView, error) {
-	identity, err := a.store.GetIdentity(ctx, tenantID, id)
+	view, identity, err := a.identityApplicationCore(ctx, tenantID, id)
 	if err != nil {
 		return identityApplicationView{}, err
+	}
+	approvals, next, err := a.applicationApprovals(ctx, tenantID, view, identity, nil)
+	if err != nil {
+		return identityApplicationView{}, err
+	}
+	view.Approvals, view.ApprovalsNextCursor = approvals, next
+	return a.identityApplicationRest(ctx, tenantID, view, identity)
+}
+
+// identityApplicationCore is what the view and its approvals page share:
+// the identity, owner, issuer, profile, certificate, enrollment,
+// destination and what was seen.
+func (a *API) identityApplicationCore(ctx context.Context, tenantID, id string) (identityApplicationView, store.Identity, error) {
+	identity, err := a.store.GetIdentity(ctx, tenantID, id)
+	if err != nil {
+		return identityApplicationView{}, store.Identity{}, err
 	}
 	var attrs identityApplicationAttributes
 	if len(identity.Attributes) > 0 {
@@ -288,7 +318,7 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 			view.Owner = &applicationOwner{ID: owner.ID, Name: owner.Name, Kind: string(owner.Kind),
 				Application: owner.ApplicationID, Service: owner.Service, Environment: owner.Environment}
 		} else if !store.IsNotFound(err) {
-			return identityApplicationView{}, err
+			return identityApplicationView{}, store.Identity{}, err
 		}
 	}
 	profileName := attrs.Profile
@@ -307,7 +337,7 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 		case errors.As(err, &notActive):
 			profileName = ""
 		default:
-			return identityApplicationView{}, err
+			return identityApplicationView{}, store.Identity{}, err
 		}
 	}
 	if profileName != "" {
@@ -321,12 +351,12 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 				SpecDigest: store.ProfileSpecDigest(rec.Spec), RequiresApproval: spec.RequiresApproval,
 				EnrollmentMethods: append([]string{}, spec.AllowedProtocols...)}
 		} else if !store.IsNotFound(err) {
-			return identityApplicationView{}, err
+			return identityApplicationView{}, store.Identity{}, err
 		}
 	}
 	certs, err := a.store.IdentityRevocationCertificates(ctx, tenantID, id, 101)
 	if err != nil {
-		return identityApplicationView{}, err
+		return identityApplicationView{}, store.Identity{}, err
 	}
 	for i := len(certs) - 1; i >= 0; i-- {
 		if certs[i].Status == "active" {
@@ -340,7 +370,7 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 	// A244-L4: the method that first enrolled the identity's certificate, which
 	// the profile's permitted protocols can't tell.
 	if firstID, firstMethod, err := a.store.IdentityFirstEnrollment(ctx, tenantID, id); err != nil {
-		return identityApplicationView{}, err
+		return identityApplicationView{}, store.Identity{}, err
 	} else if firstID != "" {
 		if view.Enrollment == nil {
 			view.Enrollment = &applicationEnrollment{}
@@ -353,12 +383,12 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 				Revision: target.RevisionID, Enabled: target.Enabled, VerifyAddress: targetVerifyAddress(target.Config)}
 			view.Defaults.Connector = target.Type
 		} else if !store.IsNotFound(err) {
-			return identityApplicationView{}, err
+			return identityApplicationView{}, store.Identity{}, err
 		}
 	}
 	evidence, err := a.store.IdentityInventoryEvidence(ctx, tenantID, []string{id})
 	if err != nil {
-		return identityApplicationView{}, err
+		return identityApplicationView{}, store.Identity{}, err
 	}
 	e, found := evidence[id]
 	view.InventoryState = inventoryState(identity.Status, e, found)
@@ -377,18 +407,103 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 			view.Served = &applicationServed{Fingerprint: e.Fingerprint, Vantage: "connector", At: &at, MatchesCurrent: current}
 		}
 	}
-	approvals, err := a.store.IdentityApprovals(ctx, tenantID, id, 10)
+	return view, identity, nil
+}
+
+// applicationListPage is how many approvals or alerts one read returns.
+const applicationListPage = 10
+
+// identityAlertScanBatch and identityAlertScanBudget bound one read of an
+// identity's alerts (AN-7): the tenant's notifications are read newest first
+// in batches, at most the budget per call, and the cursor says where the
+// scan stopped, so no alert is out of reach however many notifications
+// arrive after it (A244-L3).
+const (
+	identityAlertScanBatch  = 500
+	identityAlertScanBudget = 5000
+)
+
+// applicationApprovals is a newest-first page of the identity's approval
+// requests after cursor, each naming what changed since it was asked, and
+// the cursor that continues it (empty when none are older).
+func (a *API) applicationApprovals(ctx context.Context, tenantID string, view identityApplicationView, identity store.Identity, after *store.IdentityApprovalCursor) ([]applicationApproval, string, error) {
+	requests, err := a.store.IdentityApprovalsPage(ctx, tenantID, identity.ID, after, applicationListPage+1)
 	if err != nil {
-		return identityApplicationView{}, err
+		return nil, "", err
 	}
 	identityDigest, err := store.IdentityIssuanceDigest(identity)
 	if err != nil {
-		return identityApplicationView{}, err
+		return nil, "", err
 	}
-	for _, request := range approvals {
-		view.Approvals = append(view.Approvals, applicationApproval{ID: request.ID, Status: request.Status, Action: request.Action,
+	next := ""
+	if len(requests) > applicationListPage {
+		requests = requests[:applicationListPage]
+		last := requests[len(requests)-1]
+		next = encodeApprovalCursor(store.IdentityApprovalCursor{CreatedAt: last.CreatedAt, ID: last.ID})
+	}
+	out := []applicationApproval{}
+	for _, request := range requests {
+		out = append(out, applicationApproval{ID: request.ID, Status: request.Status, Action: request.Action,
 			CreatedAt: request.CreatedAt, ExpiresAt: request.ExpiresAt, Changed: approvalChanges(request, view, identityDigest)})
 	}
+	return out, next, nil
+}
+
+func encodeApprovalCursor(c store.IdentityApprovalCursor) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(c.CreatedAt.UTC().Format(time.RFC3339Nano) + "|" + c.ID))
+}
+
+func decodeApprovalCursor(raw string) (*store.IdentityApprovalCursor, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, errStatus(http.StatusBadRequest, "invalid approvals cursor")
+	}
+	at, id, ok := strings.Cut(string(decoded), "|")
+	created, perr := time.Parse(time.RFC3339Nano, at)
+	if _, uerr := googleuuid.Parse(id); !ok || perr != nil || uerr != nil {
+		return nil, errStatus(http.StatusBadRequest, "invalid approvals cursor")
+	}
+	return &store.IdentityApprovalCursor{CreatedAt: created, ID: id}, nil
+}
+
+// identityAlertsPage is a newest-first page of the identity's alerts from
+// before (a notification id; 0 is the newest), and the cursor that continues
+// it: after the page's last alert, or where the bounded scan stopped; empty
+// when the scan reached the tenant's oldest notification.
+func (a *API) identityAlertsPage(ctx context.Context, tenantID, id string, before int64) ([]applicationAlert, string, error) {
+	out := []applicationAlert{}
+	cursor := before
+	for scanned := 0; scanned < identityAlertScanBudget; {
+		rows, err := a.store.ListNotificationOutboxPageWithOrder(ctx, tenantID, cursor, identityAlertScanBatch, "", true)
+		if err != nil {
+			return nil, "", err
+		}
+		for _, row := range rows {
+			cursor = row.ID
+			scanned++
+			n := toNotificationResponse(row)
+			if n.IdentityID != id {
+				continue
+			}
+			out = append(out, applicationAlert{ID: n.ID, Kind: n.Kind, Destination: n.Destination, Status: n.Status, CreatedAt: n.CreatedAt})
+			if len(out) == applicationListPage {
+				return out, encodeNotificationCursor(cursor), nil
+			}
+		}
+		if len(rows) < identityAlertScanBatch {
+			return out, "", nil
+		}
+	}
+	return out, encodeNotificationCursor(cursor), nil
+}
+
+// identityApplicationRest completes the view: the renewal, the newest
+// alerts, the actions and the review plan with its preview.
+func (a *API) identityApplicationRest(ctx context.Context, tenantID string, view identityApplicationView, identity store.Identity) (identityApplicationView, error) {
+	id := identity.ID
 	if a.lifecycleAutomationPlan != nil {
 		plan, err := a.lifecycleAutomationPlan.LifecycleAutomationPlan(ctx, tenantID, time.Now().UTC())
 		if err != nil {
@@ -404,17 +519,11 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 		}
 	}
 	view.Renewal.NextAction = nextAutomatedAction(identity.Status, view.Renewal)
-	rows, err := a.store.ListNotificationOutboxPageWithOrder(ctx, tenantID, 0, 200, "", true)
+	alerts, next, err := a.identityAlertsPage(ctx, tenantID, id, 0)
 	if err != nil {
 		return identityApplicationView{}, err
 	}
-	for _, row := range rows {
-		n := toNotificationResponse(row)
-		if n.IdentityID != id || len(view.Alerts) == 10 {
-			continue
-		}
-		view.Alerts = append(view.Alerts, applicationAlert{ID: n.ID, Kind: n.Kind, Destination: n.Destination, Status: n.Status, CreatedAt: n.CreatedAt})
-	}
+	view.Alerts, view.AlertsNextCursor = alerts, next
 	view.Actions = applicationActions(identity)
 	view.ReviewPlan = applicationReviewPlan(identity.Status, view)
 	if err := a.previewApplicationPlan(ctx, tenantID, identity.ID, identity.Status, view, view.ReviewPlan); err != nil {
@@ -685,17 +794,98 @@ func applicationActions(identity store.Identity) []applicationAction {
 	return []applicationAction{recover, revoke, retire}
 }
 
+// applicationApprovalPage and applicationAlertPage continue the view's
+// approvals and alerts (A244-L3).
+type applicationApprovalPage struct {
+	Items      []applicationApproval `json:"items"`
+	NextCursor string                `json:"next_cursor,omitempty"`
+}
+
+type applicationAlertPage struct {
+	Items      []applicationAlert `json:"items"`
+	NextCursor string             `json:"next_cursor,omitempty"`
+}
+
+func (a *API) listIdentityApplicationApprovals(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	after, err := decodeApprovalCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	view, identity, err := a.identityApplicationCore(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	items, next, err := a.applicationApprovals(r.Context(), tenantID, view, identity, after)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, applicationApprovalPage{Items: items, NextCursor: next})
+}
+
+func (a *API) listIdentityApplicationAlerts(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	var before int64
+	if raw := r.URL.Query().Get("cursor"); raw != "" {
+		decoded, err := decodeNotificationCursor(raw)
+		if err != nil || decoded == 0 {
+			a.writeError(w, errStatus(http.StatusBadRequest, "invalid alerts cursor"))
+			return
+		}
+		before = decoded
+	}
+	id := r.PathValue("id")
+	if _, err := a.store.GetIdentity(r.Context(), tenantID, id); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	items, next, err := a.identityAlertsPage(r.Context(), tenantID, id, before)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, applicationAlertPage{Items: items, NextCursor: next})
+}
+
 func identityApplicationRoutes(a *API) []route {
 	return []route{
 		{method: "GET", path: "/api/v1/identities/{id}/application", opID: "getIdentityApplicationView",
 			summary: "Show one certificate's application view: owner, profile, exact issuer, destination, served evidence and vantage, approvals, next automated action, alerts and actions",
 			handler: a.getIdentityApplicationView, pathParams: []param{pathString("id", "identity ID")},
 			resSchema: "IdentityApplicationView", successCode: "200", perm: authz.IdentitiesRead},
+		{method: "GET", path: "/api/v1/identities/{id}/application/approvals", opID: "listIdentityApplicationApprovals",
+			summary: "List one certificate's approval requests past the application view's newest ten, newest first, each naming what changed since it was asked",
+			handler: a.listIdentityApplicationApprovals, pathParams: []param{pathString("id", "identity ID")},
+			query:     []param{{name: "cursor", typ: "string", desc: "approvals_next_cursor from the view, or next_cursor from a page"}},
+			resSchema: "IdentityApplicationApprovalPage", successCode: "200", perm: authz.IdentitiesRead},
+		{method: "GET", path: "/api/v1/identities/{id}/application/alerts", opID: "listIdentityApplicationAlerts",
+			summary: "List one certificate's alerts past where the application view stopped, newest first, reading a bounded share of the tenant's notifications per call",
+			handler: a.listIdentityApplicationAlerts, pathParams: []param{pathString("id", "identity ID")},
+			query:     []param{{name: "cursor", typ: "string", desc: "alerts_next_cursor from the view, or next_cursor from a page"}},
+			resSchema: "IdentityApplicationAlertPage", successCode: "200", perm: authz.IdentitiesRead},
 	}
 }
 
 func identityApplicationSchemas() map[string]*Schema {
 	strs := &Schema{Type: "array", Items: str()}
+	approval := object(map[string]*Schema{
+		"id": uuid(), "status": str(), "action": str(), "created_at": timestamp(), "expires_at": timestamp(),
+		"changed": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"profile", "destination", "issuer", "identity"}}},
+	}, "id", "status", "action", "created_at", "expires_at", "changed")
+	alert := object(map[string]*Schema{
+		"id": str(), "kind": str(), "destination": str(), "status": str(), "created_at": timestamp(),
+	}, "id", "destination", "status", "created_at")
 	states := []string{inventoryRequested, inventoryIssued, inventoryDelivered, inventoryServed, inventoryRevoked, inventoryRetired}
 	return map[string]*Schema{
 		"IdentityApplicationView": object(map[string]*Schema{
@@ -726,17 +916,14 @@ func identityApplicationSchemas() map[string]*Schema {
 				"fingerprint": str(), "vantage": {Type: "string", Enum: []string{"connector", "local", "relay"}},
 				"at": timestamp(), "matches_current": {Type: "boolean"},
 			}, "fingerprint", "vantage", "matches_current"),
-			"approvals": {Type: "array", Items: object(map[string]*Schema{
-				"id": uuid(), "status": str(), "action": str(), "created_at": timestamp(), "expires_at": timestamp(),
-				"changed": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"profile", "destination", "issuer", "identity"}}},
-			}, "id", "status", "action", "created_at", "expires_at", "changed")},
+			"approvals":             {Type: "array", Items: approval},
+			"approvals_next_cursor": {Type: "string", Description: "Continues the approvals past the newest ten (A244-L3); absent when none are older."},
 			"renewal": object(map[string]*Schema{
 				"due": {Type: "boolean"}, "not_after": timestamp(), "source": str(), "next_action": str(),
 				"latest_run_status": str(), "blockers": strs,
 			}, "due", "next_action", "blockers"),
-			"alerts": {Type: "array", Items: object(map[string]*Schema{
-				"id": str(), "kind": str(), "destination": str(), "status": str(), "created_at": timestamp(),
-			}, "id", "destination", "status", "created_at")},
+			"alerts":             {Type: "array", Items: alert},
+			"alerts_next_cursor": {Type: "string", Description: "Continues the identity's alerts from where this read stopped (A244-L3): after the newest ten, or where a bounded scan of the tenant's notifications ended; absent when it reached the oldest."},
 			"actions": {Type: "array", Items: object(map[string]*Schema{
 				"action": {Type: "string", Enum: []string{"recover", "revoke", "retire"}}, "available": {Type: "boolean"},
 				"reason": str(), "method": str(), "path": str(),
@@ -755,6 +942,10 @@ func identityApplicationSchemas() map[string]*Schema {
 					}, Required: []string{"state", "ready", "refusals", "warnings", "policy", "readback"}},
 			}, "action", "subject", "preview")},
 		}, "identity", "inventory_state", "issuer", "approvals", "renewal", "alerts", "actions", "defaults", "review_plan"),
+		"IdentityApplicationApprovalPage": object(map[string]*Schema{"items": {Type: "array", Items: approval},
+			"next_cursor": {Type: "string", Description: "Continues past this page; absent when none are older."}}, "items"),
+		"IdentityApplicationAlertPage": object(map[string]*Schema{"items": {Type: "array", Items: alert},
+			"next_cursor": {Type: "string", Description: "Continues from where this read stopped; absent when it reached the tenant's oldest notification."}}, "items"),
 	}
 }
 

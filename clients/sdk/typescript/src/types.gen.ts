@@ -5900,6 +5900,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identities/{id}/application/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List one certificate's alerts past where the application view stopped, newest first, reading a bounded share of the tenant's notifications per call */
+        get: operations["listIdentityApplicationAlerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identities/{id}/application/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List one certificate's approval requests past the application view's newest ten, newest first, each naming what changed since it was asked */
+        get: operations["listIdentityApplicationApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identities/{id}/approvals": {
         parameters: {
             query?: never;
@@ -20322,6 +20356,33 @@ export interface components {
              */
             terminal_target_state?: "revoked" | "retired";
         };
+        IdentityApplicationAlertPage: {
+            items: {
+                /** Format: date-time */
+                created_at: string;
+                destination: string;
+                id: string;
+                kind?: string;
+                status: string;
+            }[];
+            /** @description Continues from where this read stopped; absent when it reached the tenant's oldest notification. */
+            next_cursor?: string;
+        };
+        IdentityApplicationApprovalPage: {
+            items: {
+                action: string;
+                changed: ("profile" | "destination" | "issuer" | "identity")[];
+                /** Format: date-time */
+                created_at: string;
+                /** Format: date-time */
+                expires_at: string;
+                /** Format: uuid */
+                id: string;
+                status: string;
+            }[];
+            /** @description Continues past this page; absent when none are older. */
+            next_cursor?: string;
+        };
         IdentityApplicationView: {
             actions: {
                 /** @enum {string} */
@@ -20339,6 +20400,8 @@ export interface components {
                 kind?: string;
                 status: string;
             }[];
+            /** @description Continues the identity's alerts from where this read stopped (A244-L3): after the newest ten, or where a bounded scan of the tenant's notifications ended; absent when it reached the oldest. */
+            alerts_next_cursor?: string;
             approvals: {
                 action: string;
                 changed: ("profile" | "destination" | "issuer" | "identity")[];
@@ -20350,6 +20413,8 @@ export interface components {
                 id: string;
                 status: string;
             }[];
+            /** @description Continues the approvals past the newest ten (A244-L3); absent when none are older. */
+            approvals_next_cursor?: string;
             certificate?: {
                 fingerprint: string;
                 /** Format: uuid */
@@ -47070,6 +47135,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IdentityApplicationView"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listIdentityApplicationAlerts: {
+        parameters: {
+            query?: {
+                /** @description alerts_next_cursor from the view, or next_cursor from a page */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                /** @description identity ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityApplicationAlertPage"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listIdentityApplicationApprovals: {
+        parameters: {
+            query?: {
+                /** @description approvals_next_cursor from the view, or next_cursor from a page */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                /** @description identity ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityApplicationApprovalPage"];
                 };
             };
             /** @description client error */

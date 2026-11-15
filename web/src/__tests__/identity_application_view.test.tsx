@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AppQueryProvider } from "@/lib/query";
 import { IntlProvider } from "@/i18n/I18nProvider";
@@ -7,10 +8,10 @@ import type { IdentityApplicationView } from "@/lib/api";
 import { endpointBindingDefaultsFromSearch } from "@/lib/endpointBindingDefaults";
 import { IdentityApplicationPanel } from "@/pages/identities/IdentityApplicationPanel";
 
-const { read } = vi.hoisted(() => ({ read: vi.fn() }));
+const { read, approvalsPage, alertsPage } = vi.hoisted(() => ({ read: vi.fn(), approvalsPage: vi.fn(), alertsPage: vi.fn() }));
 vi.mock("@/lib/api", async (original) => {
   const actual = await original<typeof import("@/lib/api")>();
-  return { ...actual, api: { ...actual.api, identityApplication: read } };
+  return { ...actual, api: { ...actual.api, identityApplication: read, identityApplicationApprovals: approvalsPage, identityApplicationAlerts: alertsPage } };
 });
 
 type StepPreview = IdentityApplicationView["review_plan"][number]["preview"];
@@ -86,6 +87,8 @@ describe("certificate application view (A244)", () => {
   beforeEach(() => {
     cleanup();
     read.mockReset();
+    approvalsPage.mockReset();
+    alertsPage.mockReset();
   });
 
   it("shows the exact CA, destination, what was seen and from where, the next action and the actions", async () => {
@@ -201,6 +204,38 @@ describe("certificate application view (A244)", () => {
     expect(section.getByText("What execution checks and how to confirm it")).toBeInTheDocument();
     expect(section.getByText("Certificate profile, quota, approval, CSR, and signer checks run again at execution.")).toBeInTheDocument();
     expect(section.getByText("Read /api/v1/identities/app-1 and confirm status is issued.")).toBeInTheDocument();
+  });
+
+  it("shows older approvals and alerts from the view's cursors (A244-L3)", async () => {
+    const view = fixture();
+    const approval = (id: string, action: string, at: string) => ({ id, status: "approved", action, created_at: at, expires_at: at, changed: [] });
+    view.approvals = [approval("ap-new", "renew", "2030-01-03T00:00:00Z")];
+    view.approvals_next_cursor = "ap-cursor-1";
+    view.alerts = [];
+    view.alerts_next_cursor = "al-cursor-1";
+    approvalsPage.mockResolvedValueOnce({ items: [approval("ap-old", "issue", "2029-06-01T00:00:00Z"), approval("ap-new", "renew", "2030-01-03T00:00:00Z")] });
+    alertsPage.mockResolvedValueOnce({ items: [], next_cursor: "al-cursor-2" }).mockResolvedValueOnce({
+      items: [{ id: "77", kind: "renewal_failed", destination: "notification.webhook", status: "sent", created_at: "2029-05-01T00:00:00Z" }],
+    });
+    read.mockResolvedValue(view);
+    const user = userEvent.setup();
+    show();
+    const section = within(await screen.findByRole("region", { name: "Application view" }));
+    await user.click(await section.findByRole("button", { name: "Show older approvals" }));
+    expect(approvalsPage).toHaveBeenCalledWith("app-1", "ap-cursor-1");
+    expect(await section.findByText(/^issue/)).toBeInTheDocument();
+    expect(section.getAllByText(/^renew/)).toHaveLength(1);
+    expect(section.queryByRole("button", { name: "Show older approvals" })).not.toBeInTheDocument();
+
+    await user.click(section.getByRole("button", { name: "Show older alerts" }));
+    expect(alertsPage).toHaveBeenCalledWith("app-1", "al-cursor-1");
+    expect(
+      await section.findByText("No alerts for this certificate in that stretch of notifications. Show older alerts reads further back."),
+    ).toBeInTheDocument();
+    await user.click(section.getByRole("button", { name: "Show older alerts" }));
+    expect(alertsPage).toHaveBeenLastCalledWith("app-1", "al-cursor-2");
+    expect(await section.findByText(/renewal_failed/)).toBeInTheDocument();
+    expect(section.queryByRole("button", { name: "Show older alerts" })).not.toBeInTheDocument();
   });
 
   it("says whether anything checks the destination's endpoint (A244-L1)", async () => {

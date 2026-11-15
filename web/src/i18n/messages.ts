@@ -38570,6 +38570,22 @@ export const messages = {
     defaultMessage: "deploy",
     description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
   },
+  "identities.application.moreApprovals": {
+    defaultMessage: "Show older approvals",
+    description: "Application view of one certificate in identity detail: older approvals and alerts past the first page (A244-L3).",
+  },
+  "identities.application.moreAlerts": {
+    defaultMessage: "Show older alerts",
+    description: "Application view of one certificate in identity detail: older approvals and alerts past the first page (A244-L3).",
+  },
+  "identities.application.moreAlertsEmptyStretch": {
+    defaultMessage: "No alerts for this certificate in that stretch of notifications. Show older alerts reads further back.",
+    description: "Application view of one certificate in identity detail: older approvals and alerts past the first page (A244-L3).",
+  },
+  "identities.application.moreFailed": {
+    defaultMessage: "Could not load more. Try again.",
+    description: "Application view of one certificate in identity detail: older approvals and alerts past the first page (A244-L3).",
+  },
   "identities.application.alerts": { defaultMessage: "Recent alerts", description: "Application view of one certificate in identity detail." },
   "identities.application.noAlerts": { defaultMessage: "No alerts.", description: "Application view of one certificate in identity detail." },
   "identities.application.actions": { defaultMessage: "Actions", description: "Application view of one certificate in identity detail." },

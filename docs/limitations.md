@@ -8202,8 +8202,6 @@ decides from, and what comes next:
   at the identity's state is previewed now; a later step reads its transition from
   the lifecycle registry, waits on any earlier refusal and is previewed once the
   identity reaches it.
-- **Bounded reads.** Approvals list the newest ten and alerts the newest ten among
-  the latest two hundred notifications.
 - **Enrollment paths start with A244-L4.** A certificate records the path that
   enrolled it from then on: one issued before, one an external CA delivers after
   holding it for approval, or one observed or imported reads unrecorded.

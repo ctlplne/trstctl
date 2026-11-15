@@ -29584,6 +29584,106 @@
         ],
         "type": "object"
       },
+      "IdentityApplicationAlertPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "destination": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "destination",
+                "status",
+                "created_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "description": "Continues from where this read stopped; absent when it reached the tenant's oldest notification.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "IdentityApplicationApprovalPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "changed": {
+                  "items": {
+                    "enum": [
+                      "profile",
+                      "destination",
+                      "issuer",
+                      "identity"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "expires_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "action",
+                "created_at",
+                "expires_at",
+                "changed"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "description": "Continues past this page; absent when none are older.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "IdentityApplicationView": {
         "properties": {
           "actions": {
@@ -29650,6 +29750,10 @@
             },
             "type": "array"
           },
+          "alerts_next_cursor": {
+            "description": "Continues the identity's alerts from where this read stopped (A244-L3): after the newest ten, or where a bounded scan of the tenant's notifications ended; absent when it reached the oldest.",
+            "type": "string"
+          },
           "approvals": {
             "items": {
               "properties": {
@@ -29695,6 +29799,10 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "approvals_next_cursor": {
+            "description": "Continues the approvals past the newest ten (A244-L3); absent when none are older.",
+            "type": "string"
           },
           "certificate": {
             "properties": {
@@ -90766,6 +90874,138 @@
           }
         ],
         "summary": "Show one certificate's application view: owner, profile, exact issuer, destination, served evidence and vantage, approvals, next automated action, alerts and actions",
+        "x-trstctl-permission": "identities:read"
+      }
+    },
+    "/api/v1/identities/{id}/application/alerts": {
+      "get": {
+        "operationId": "listIdentityApplicationAlerts",
+        "parameters": [
+          {
+            "description": "identity ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "alerts_next_cursor from the view, or next_cursor from a page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityApplicationAlertPage"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List one certificate's alerts past where the application view stopped, newest first, reading a bounded share of the tenant's notifications per call",
+        "x-trstctl-permission": "identities:read"
+      }
+    },
+    "/api/v1/identities/{id}/application/approvals": {
+      "get": {
+        "operationId": "listIdentityApplicationApprovals",
+        "parameters": [
+          {
+            "description": "identity ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "approvals_next_cursor from the view, or next_cursor from a page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityApplicationApprovalPage"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List one certificate's approval requests past the application view's newest ten, newest first, each naming what changed since it was asked",
         "x-trstctl-permission": "identities:read"
       }
     },
