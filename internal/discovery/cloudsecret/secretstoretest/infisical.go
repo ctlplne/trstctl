@@ -15,11 +15,15 @@ import (
 // image v0.167.8 does.
 const InfisicalHiddenValue = "<hidden-by-infisical>"
 
-// InfisicalSecret is one secret in a project environment's folder.
+// InfisicalSecret is one secret in a project environment's folder. Withheld
+// is a secret the identity may list but whose value it may not read:
+// Infisical answers secretValueHidden with the hidden marker for it even when
+// the listing asks for values (OD13-L1).
 type InfisicalSecret struct {
 	Project, Environment, Path, Key, Value string
 	Version                                int
 	Tags                                   []string
+	Withheld                               bool
 }
 
 // InfisicalProject is one project with its environment slugs.
@@ -97,8 +101,9 @@ func NewInfisical(clientID, clientSecret string, projects []InfisicalProject, se
 				if s.Project != q.Get("projectId") || s.Environment != q.Get("environment") || !inFolder {
 					continue
 				}
+				hidden := !withValues || s.Withheld
 				value := InfisicalHiddenValue
-				if withValues {
+				if !hidden {
 					value = s.Value
 				}
 				tags := make([]map[string]string, 0, len(s.Tags))
@@ -107,7 +112,7 @@ func NewInfisical(clientID, clientSecret string, projects []InfisicalProject, se
 				}
 				out = append(out, map[string]any{
 					"id": s.Project + s.Environment + s.Path + s.Key, "secretKey": s.Key, "secretValue": value,
-					"secretValueHidden": !withValues, "version": max(s.Version, 1), "type": "shared",
+					"secretValueHidden": hidden, "version": max(s.Version, 1), "type": "shared",
 					"environment": s.Environment, "secretPath": s.Path, "tags": tags,
 					"createdAt": "2026-11-01T00:00:00.000Z", "updatedAt": "2026-11-10T00:00:00.000Z",
 				})

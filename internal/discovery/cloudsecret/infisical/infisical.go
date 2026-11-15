@@ -228,6 +228,11 @@ func (e *Enumerator) enumerateEnvironment(ctx context.Context, token string, p p
 			"secret_type": item.Type, "tags": strings.Join(tags, ","), "created_at": item.CreatedAt,
 			"updated_at": item.UpdatedAt, "content_inspected": "false",
 		}
+		if e.cfg.InspectContent && item.Hidden {
+			// OD13-L1: the identity may list the secret but not read its value,
+			// so the server withheld it from a listing that asked for values.
+			meta["content_unavailable_reason"] = "hidden value: the Infisical server withholds it from this identity (secretValueHidden)"
+		}
 		out = append(out, cloudsecret.MetadataFound(ProviderName, resource, item.SecretKey, location, resource, meta))
 		if !e.cfg.InspectContent || item.Hidden || len(item.SecretValue) == 0 {
 			continue

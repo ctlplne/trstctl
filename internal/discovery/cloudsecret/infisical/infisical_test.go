@@ -120,3 +120,54 @@ func TestInfisicalRefusesAnIncompleteSourceOD13(t *testing.T) {
 		}
 	}
 }
+
+// OD13-L1: a value the Infisical server withholds from an inspecting run
+// (secretValueHidden, the identity may list the secret but not read it) is
+// not inspected, and the secret's finding says why, as a hidden GitLab
+// variable's does; the other secrets are inspected as before, and a
+// metadata-only run, which asks for no values, records no such reason.
+func TestInfisicalWithheldValueSaysWhyItWasNotInspectedOD13L1(t *testing.T) {
+	token := "gl" + "pat-" + strings.Repeat("Od13L1Withheld", 3)[:24]
+	stand := secretstoretest.NewInfisical("ua-client", "ua-secret", []secretstoretest.InfisicalProject{
+		{ID: "p-1", Name: "payments", Environments: []string{"dev"}},
+	}, []secretstoretest.InfisicalSecret{
+		{Project: "p-1", Environment: "dev", Path: "/", Key: "DEPLOY_TOKEN", Value: token},
+		{Project: "p-1", Environment: "dev", Path: "/", Key: "VAULTED_TOKEN", Value: token, Withheld: true},
+	})
+	t.Cleanup(stand.Close)
+	run := func(inspect bool) []cloudsecret.Found {
+		t.Helper()
+		e, err := infisical.New(infisical.Config{BaseURL: stand.URL(), HTTPClient: stand.Client(), ClientID: "ua-client",
+			ClientSecret: cloudcert.StaticToken("ua-secret"), Project: "p-1", InspectContent: inspect})
+		if err != nil {
+			t.Fatal(err)
+		}
+		found, err := e.Enumerate(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return found
+	}
+	resources := map[string]map[string]string{}
+	inspected := map[string]bool{}
+	for _, f := range run(true) {
+		if f.Kind == cloudsecret.FindingKindSecretResource {
+			resources[f.SecretName] = f.Metadata
+			continue
+		}
+		inspected[f.SecretName] = true
+	}
+	withheld := resources["VAULTED_TOKEN"]
+	if withheld == nil || withheld["content_inspected"] != "false" ||
+		!strings.Contains(withheld["content_unavailable_reason"], "withholds it from this identity") {
+		t.Fatalf("withheld secret metadata = %+v", withheld)
+	}
+	if inspected["VAULTED_TOKEN"] || !inspected["DEPLOY_TOKEN"] || resources["DEPLOY_TOKEN"]["content_unavailable_reason"] != "" {
+		t.Fatalf("inspected = %v, DEPLOY_TOKEN metadata = %+v", inspected, resources["DEPLOY_TOKEN"])
+	}
+	for _, f := range run(false) {
+		if reason := f.Metadata["content_unavailable_reason"]; reason != "" {
+			t.Fatalf("a metadata-only run recorded %q for %s", reason, f.SecretName)
+		}
+	}
+}

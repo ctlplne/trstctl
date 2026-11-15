@@ -1956,6 +1956,9 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- An Infisical value the server withholds from an inspecting run (`secretValueHidden`) is no
+  longer skipped silently: the secret's finding records `content_unavailable_reason`, as a
+  hidden GitLab variable's does (OD13-L1).
 - A network relay refuses the rollback of a target that names no re-bind binding (an aws-acm
   target without `listener_arn`, a fortigate without `bind_to`, a paloalto without
   `ssl_tls_profile` and `commit_admin`, a cisco without `node_hostname`) before it redeems the
