@@ -1956,6 +1956,12 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- A full read-model rebuild no longer queues a decoy's alert, a decoy secret reader's
+  alert, a decoy's watch-gap warning or a compliance report's removal again for an event
+  the deployment had already projected. The decoy credential's critical alert was queued
+  again by every rebuild (the outbox keeps no unique key for it), and the others once
+  their delivered rows were reclaimed a day after delivery. An event not yet projected
+  when the rebuild starts still queues its effect once (A237L4-L1).
 - PAM recording retention removes every version of a recording's objects on a bucket that keeps
   versions (A206L2-L1): a plain delete there only hid the sealed chunks behind delete markers.
   It shares the report archive's removal (now `objectstore.RemoveAll`), which reads every

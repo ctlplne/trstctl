@@ -104,6 +104,12 @@ func (s *Store) ApplyDecoySecretReadTx(ctx context.Context, tx pgx.Tx, tenantID,
 	if err != nil || !firstRead {
 		return err
 	}
+	// A237L4-L1: a rebuild re-projecting a first read rebuilds the reader
+	// record and queues no second alert, even after the delivered one left
+	// the outbox.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	alertKey := decoyAlertKey(id, reader)
 	detail := "Decoy secret " + secretName + " was read by " + reader + " (" + method + " " + path +
 		"); inspect decoy " + id + " at placement " + placement

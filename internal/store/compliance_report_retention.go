@@ -93,6 +93,12 @@ func (s *Store) ApplyComplianceReportArtifactExpiryRequestedTx(ctx context.Conte
 		tenantID, runID, at, int64(sequence)); err != nil { // #nosec G115 -- event sequences fit int64 (CWE-190)
 		return err
 	}
+	// A237L4-L1: a rebuild re-projecting the request queues no second
+	// removal; the request's own removal was queued when it was first
+	// projected, and its delivered row is reclaimed a day later.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	// One row per request: a run released after a hold is queued again.
 	key := "report-expiry:" + runID + ":" + strconv.FormatUint(sequence, 10)
 	var exists bool

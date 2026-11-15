@@ -340,7 +340,8 @@ trstctl-cli --idempotency-key release-soc2-run-1 compliance report-runs release-
 
 A hold placed while that run's removal is in progress is refused with a retry,
 never recorded after the report is gone. Holds, removal requests and removals are
-events, so a projection rebuild reaches the same state. The full backup skips
+events, so a projection rebuild reaches the same state, and it queues no removal a
+second time for a request it projected before (A237L4-L1). The full backup skips
 reports the retention already removed.
 
 When the archive object store writes under S3 Object Lock

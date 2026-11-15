@@ -30,6 +30,11 @@ func (s *Store) ApplyHoneyTokenWatchGapOpenedTx(ctx context.Context, tx pgx.Tx, 
 	if err != nil || tag.RowsAffected() == 0 {
 		return err
 	}
+	// A237L4-L1: a rebuild re-projecting the gap queues no second warning;
+	// the NOT EXISTS below holds only until the delivered row is reclaimed.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	var name, placement string
 	err = tx.QueryRow(ctx, `SELECT name, placement FROM honey_tokens WHERE tenant_id = $1 AND id = $2`, tenantID, id).Scan(&name, &placement)
 	if errors.Is(err, pgx.ErrNoRows) {

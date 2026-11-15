@@ -141,6 +141,20 @@ func (s *Store) ProjectionCheckpoint(ctx context.Context) (uint64, error) {
 	return uint64(seq), nil
 }
 
+// ProjectionCheckpointTx reads the high-water mark on the caller's
+// transaction, so a full rebuild learns which events were projected before it
+// resets the mark (A237L4-L1). It is a system read of the single-row table.
+func (s *Store) ProjectionCheckpointTx(ctx context.Context, tx pgx.Tx) (uint64, error) {
+	var seq int64
+	if err := tx.QueryRow(ctx, `SELECT applied_seq FROM projection_checkpoint WHERE id = 1`).Scan(&seq); err != nil {
+		return 0, fmt.Errorf("store: read projection checkpoint: %w", err)
+	}
+	if seq < 0 {
+		seq = 0
+	}
+	return uint64(seq), nil
+}
+
 // ProjectionTailHealth reads the global projection checkpoint together with its
 // unresolved failure marker. The event stream is globally ordered, so this is a
 // system read with no tenant_id, just like ProjectionCheckpoint.

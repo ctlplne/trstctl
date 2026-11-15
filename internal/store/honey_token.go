@@ -191,6 +191,13 @@ func (s *Store) ApplyHoneyTokenTriggeredTx(ctx context.Context, tx pgx.Tx, tenan
 	if err != nil {
 		return err
 	}
+	// A237L4-L1: the outbox has no unique idempotency index, so ON CONFLICT
+	// below never fires; a rebuild re-projecting this trigger finds the decoy
+	// active again and would page a second time. The trigger's alert was
+	// queued when the event was first projected.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	alertKey := "honeytoken.triggered:" + id
 	if kind == "aws" && generation > 0 {
 		alertKey = fmt.Sprintf("%s:%d", alertKey, generation)

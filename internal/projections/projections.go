@@ -11591,6 +11591,14 @@ func (p *Projector) rebuildFromPlannedHistory(ctx context.Context, log *events.L
 			if err := p.resetEventProjectionsTx(readCtx, tx); err != nil {
 				return err
 			}
+			// A237L4-L1: every event at or below the watermark was projected
+			// before this rebuild, and the external effects its projection
+			// queues (a decoy's alert, a report's removal) were queued then.
+			// Read the mark before the reset below clears it.
+			effectsQueuedThrough, err := p.store.ProjectionCheckpointTx(readCtx, tx)
+			if err != nil {
+				return err
+			}
 			// A full rebuild re-derives from sequence 0, so the projection checkpoint
 			// (SPINE-007) is reset in the SAME transaction as truncate+replay. The
 			// exact pinned head, not merely the last live callback, becomes the new
@@ -11599,6 +11607,10 @@ func (p *Projector) rebuildFromPlannedHistory(ctx context.Context, log *events.L
 				return err
 			}
 			if err := replayProjectionThrough(readCtx, log, 0, replayHead, func(e events.Event) error {
+				applyCtx := readCtx
+				if e.Sequence <= effectsQueuedThrough {
+					applyCtx = store.WithEffectsAlreadyQueued(readCtx)
+				}
 				// The preflight authority marks exactly the secret-bearing source and
 				// terminal sequences erased by an offboarded lifecycle. A later
 				// registration of the same tenant UUID is classified independently.
@@ -11609,7 +11621,7 @@ func (p *Projector) rebuildFromPlannedHistory(ctx context.Context, log *events.L
 						return err
 					}
 				} else {
-					if err := p.applyForRebuild(readCtx, tx, e); err != nil {
+					if err := p.applyForRebuild(applyCtx, tx, e); err != nil {
 						return fmt.Errorf(
 							"projections: rebuild apply %s event %s at sequence %d: %w",
 							e.Type, e.ID, e.Sequence, err,
@@ -11619,7 +11631,7 @@ func (p *Projector) rebuildFromPlannedHistory(ctx context.Context, log *events.L
 						return err
 					}
 				}
-				return p.applyEventProjectionsTx(readCtx, tx, e)
+				return p.applyEventProjectionsTx(applyCtx, tx, e)
 			}); err != nil {
 				return err
 			}

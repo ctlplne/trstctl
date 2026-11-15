@@ -2228,7 +2228,9 @@ route refuses it.
 
 The first bearer use appends `honeytoken.triggered`, changes the decoy to
 `triggered`, and queues one `notification.honeytoken` critical alert in the same
-tenant transaction. The event and detail view retain the matched route pattern
+tenant transaction. A full read-model rebuild re-derives the triggered decoy without
+queuing that alert again, however long ago it was delivered, while a use the deployment
+had not yet projected when the rebuild started still alerts once (A237L4-L1). The event and detail view retain the matched route pattern
 and method, not the raw URL, query, or bearer. Configure an operator notification
 channel and routing policy before planting so the alert has a receiver; the
 notification inbox and delivery receipts show retry or failure. Refresh the
@@ -2274,8 +2276,8 @@ decoy list says so. Listing
 names, reading metadata (native or Vault), the access preview, a template read without
 `resolve`, the NHI inventory, the credential graph, secret sync and trstctl's other
 internal reads never serve the value to a caller and never alert. A full read-model
-rebuild keeps the decoy's state and its readers, and adds no alert while the readers'
-alerts are still in the outbox (see the limitations). `retire` stops watching; the
+rebuild keeps the decoy's state and its readers, and adds no alert for a read it
+projected before, even once the delivered alert has left the outbox (A237L4-L1). `retire` stops watching; the
 secret stays in place until you delete it.
 
 No decoy of any kind gives itself away in the credential graph (Q1-L9). Decoy API

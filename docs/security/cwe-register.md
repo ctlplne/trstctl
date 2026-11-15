@@ -1437,9 +1437,9 @@ not this file.
 | `internal/store/compliance_report_retention.go:62` | event sequences fit int64 (CWE-190) |
 | `internal/store/compliance_report_retention.go:69` | event sequences fit int64 (CWE-190) |
 | `internal/store/compliance_report_retention.go:93` | event sequences fit int64 (CWE-190) |
-| `internal/store/compliance_report_retention.go:176` | event sequences fit int64 (CWE-190) |
-| `internal/store/compliance_report_retention.go:196` | event sequences fit int64 (CWE-190) |
-| `internal/store/compliance_report_retention.go:210` | non-negative by constraint (CWE-190) |
+| `internal/store/compliance_report_retention.go:182` | event sequences fit int64 (CWE-190) |
+| `internal/store/compliance_report_retention.go:202` | event sequences fit int64 (CWE-190) |
+| `internal/store/compliance_report_retention.go:216` | non-negative by constraint (CWE-190) |
 | `internal/store/compliance_report_run.go:294` | non-negative by constraint (CWE-190) |
 | `internal/store/compliance_report_run.go:312` | event sequence is a positive PostgreSQL bigint. |
 | `internal/store/compliance_report_run_lock.go:33` | advisory-lock keys intentionally use all 64 hash bits, including the sign bit. |
@@ -1505,15 +1505,15 @@ not this file.
 | `internal/store/projection.go:820` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:1076` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:1090` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:191` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
-| `internal/store/projection_checkpoint.go:247` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:276` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:331` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:340` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:362` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:369` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:392` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:399` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:205` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
+| `internal/store/projection_checkpoint.go:261` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:290` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:345` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:354` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:376` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:383` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:406` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:413` | log sequence fits PostgreSQL bigint (CWE-190) |
 | `internal/store/provider_billing_sync.go:75` | bounded by the check above (CWE-190) |
 | `internal/store/provider_doc_records.go:56` | bounded by the check above (CWE-190) |
 | `internal/store/provider_psa_tickets.go:82` | bounded by the check above (CWE-190) |
