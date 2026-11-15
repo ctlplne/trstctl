@@ -63,6 +63,22 @@ var (
 // (BER, a signed authSafe, enveloped contents, an unknown algorithm).
 var errNotCertificateOnly = errors.New("pfx: unsupported PKCS#12 structure")
 
+// maxKDFIterations bounds the key derivations a file asks for (X2-L8), as
+// the BCFKS reader bounds its own: the iteration counts come from the file,
+// and a hostile one naming 2^31 would keep the agent hashing, once for each
+// password inventory tries. Files real tools write sit far below it (OpenSSL
+// writes 2048).
+const maxKDFIterations = 1 << 22
+
+// boundedIterations refuses a key derivation over maxKDFIterations before any
+// hashing.
+func boundedIterations(what string, n int) error {
+	if n > maxKDFIterations {
+		return fmt.Errorf("%w: %s asks for %d key-derivation iterations, more than %d", errNotCertificateOnly, what, n, maxKDFIterations)
+	}
+	return nil
+}
+
 type algorithmIdentifier struct {
 	Algorithm  asn1.ObjectIdentifier
 	Parameters asn1.RawValue `asn1:"optional"`
@@ -266,6 +282,9 @@ func verifyMAC(mac macData, message, bmp []byte, password string) error {
 		if kdf.KeyLength < 20 {
 			return fmt.Errorf("%w: PBMAC1 key length %d is under 20 octets", errNotCertificateOnly, kdf.KeyLength)
 		}
+		if err := boundedIterations("the PBMAC1 MAC key", kdf.Iterations); err != nil {
+			return err
+		}
 		key, err := pbkdf2.Key(prf, password, kdf.Salt.Bytes, kdf.Iterations, kdf.KeyLength)
 		if err != nil {
 			return err
@@ -277,6 +296,9 @@ func verifyMAC(mac macData, message, bmp []byte, password string) error {
 		h, v, ok := hashFor(alg)
 		if !ok {
 			return fmt.Errorf("%w: MAC digest %s", errNotCertificateOnly, alg)
+		}
+		if err := boundedIterations("the MAC key", mac.Iterations); err != nil {
+			return err
 		}
 		key := pkcs12KDF(h, v, mac.MacSalt, bmp, mac.Iterations, 3, h().Size())
 		m := hmac.New(h, key)
@@ -299,6 +321,9 @@ func decryptContents(alg algorithmIdentifier, ciphertext, bmp []byte, password s
 	case alg.Algorithm.Equal(oidPBEWithSHA3KeyDESCBC), alg.Algorithm.Equal(oidPBEWithSHA128BitRC2), alg.Algorithm.Equal(oidPBEWithSHA40BitRC2CBC):
 		var params pbeParams
 		if err := strictUnmarshal(alg.Parameters.FullBytes, &params); err != nil {
+			return nil, err
+		}
+		if err := boundedIterations("the content key", params.Iterations); err != nil {
 			return nil, err
 		}
 		iv = pkcs12KDF(sha1.New, 64, params.Salt, bmp, params.Iterations, 2, 8)
@@ -348,6 +373,9 @@ func decryptContents(alg algorithmIdentifier, ciphertext, bmp []byte, password s
 			return nil, fmt.Errorf("%w: PBES2 key length %d", errNotCertificateOnly, kdf.KeyLength)
 		}
 		if err := strictUnmarshal(params.EncryptionScheme.Parameters.FullBytes, &iv); err != nil {
+			return nil, err
+		}
+		if err := boundedIterations("the PBES2 content key", kdf.Iterations); err != nil {
 			return nil, err
 		}
 		// PBES2 inside PKCS #12 keys PBKDF2 with the UTF-8 password, as the

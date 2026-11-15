@@ -1956,6 +1956,10 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- PKCS#12 inventory refuses a file whose key derivations ask for more than 2^22 iterations
+  before any hashing (X2-L8, security): the counts come from the file, so a hostile `.p12`
+  naming 2^31 for its MAC, PBMAC1, PBE or PBES2 key kept the agent hashing, once per
+  password tried. BCFKS stores were already bounded the same way.
 
 - A host renewal whose terminal report reached the control plane after its claim lapsed no longer fails its re-offered
   attempt for good (B4-O1): the agent read the late receipt as acceptance and released the key and certificate the

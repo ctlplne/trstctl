@@ -651,7 +651,10 @@ checks the password, the store is decrypted to reach the certificates, its priva
 secret keys stay sealed, and a store no password opens is reported `locked`. A PKCS#12 file is
 read for its certificates only: its MAC checks the password, the contents holding
 certificates are decrypted, and a key bag is never decrypted (X2-L3); a file no password
-opens is reported `locked`, with nothing listed. Every key of a PKCS#12 file is reported
+opens is reported `locked`, with nothing listed. Every key derivation the file asks for (its
+MAC key and the keys of its encrypted contents, under PKCS #12, PBES2 or PBMAC1) is bounded
+at 2^22 iterations, as a BCFKS store's is (X2-L8): a file naming more is refused before any
+hashing, so a hostile one cannot keep the agent hashing once for each password it tries. Every key of a PKCS#12 file is reported
 (X2-L1): a Java PKCS12 keystore, as keytool writes it, holds one key bag per alias, and
 each is listed at `<file>#<alias>` with the chain the file holds for it (its certificate
 by the key's `localKeyID`, then each issuer the file carries, checked by signature).

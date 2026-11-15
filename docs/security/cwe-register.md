@@ -1204,10 +1204,10 @@ not this file.
 | `internal/crypto/mysqlsignin/mysqlsignin.go:485` | a two-byte length below 1<<16 (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:487` | the three bytes of a value under 1<<24 (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:489` | a length, never negative (CWE-190) |
-| `internal/crypto/pfx/certonly.go:162` | r is at most 0xFFFF here, so its two bytes are exact (CWE-190) |
-| `internal/crypto/pfx/certonly.go:174` | id is the KDF purpose, 1 to 3 (CWE-190) |
-| `internal/crypto/pfx/certonly.go:210` | RFC 7292 B.2 adds modulo 2^(8v): keeping the low byte and carrying is the algorithm (CWE-190) |
-| `internal/crypto/pfx/certonly.go:372` | pad is at most the block size (CWE-190) |
+| `internal/crypto/pfx/certonly.go:178` | r is at most 0xFFFF here, so its two bytes are exact (CWE-190) |
+| `internal/crypto/pfx/certonly.go:190` | id is the KDF purpose, 1 to 3 (CWE-190) |
+| `internal/crypto/pfx/certonly.go:226` | RFC 7292 B.2 adds modulo 2^(8v): keeping the low byte and carrying is the algorithm (CWE-190) |
+| `internal/crypto/pfx/certonly.go:400` | pad is at most the block size (CWE-190) |
 | `internal/crypto/pfx/rc2.go:55` | 255 modulo a power of two up to 256 fits a byte (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:149` | a startup message is a few hundred bytes (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:349` | a SCRAM client-first message is under 100 bytes (CWE-190) |
@@ -3395,7 +3395,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/crypto/pfx/certonly.go:308` | decrypting a legacy file's certificate contents only (CWE-327) |
+| `internal/crypto/pfx/certonly.go:333` | decrypting a legacy file's certificate contents only (CWE-327) |
 
 ### G501 — CWE-? (unmapped rule) (2 sites)
 
