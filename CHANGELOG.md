@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- An access explain for project secrets (A235-L4): `GET /api/v1/secrets/projects/{project}/members/{subject}/access`
+  evaluates a subject's permission, its restricted-environment membership and the Vault ACL policies for its roles on
+  one secret, per surface (native, Vault-compatible KV, `secret://` reference), and names the layer that denies; the
+  console's project member list has **Explain access**.
 - A network relay enrolled while a migration run is under way does not take a cloud-store member the run bound to the
   control plane (A166-L5): the control plane still installs the successor, closes the live gate on the store's
   readback and executes a rollback, and no row of the run is queued for the relay; only a new run must name it.

@@ -1,5 +1,6 @@
 import { mutate, req } from "./apiTransport";
 import type {
+  SecretAccessExplain,
   SecretProject,
   SecretProjectCreateRequest,
   SecretProjectEnvironmentRequest,
@@ -41,6 +42,13 @@ export const renameSecretProjectEnvironment = (project: string, environment: str
     `/api/v1/secrets/projects/${encodeURIComponent(project)}/environments/${encodeURIComponent(environment)}/rename`,
     input,
     idempotencyKey,
+  );
+
+// A235-L4: why a subject can or can't reach one project secret, per surface,
+// naming the layer that denies. A read: no value is ever returned.
+export const explainSecretProjectMemberAccess = (project: string, subject: string, secret: string, action: "read" | "write") =>
+  req<SecretAccessExplain>(
+    `/api/v1/secrets/projects/${encodeURIComponent(project)}/members/${encodeURIComponent(subject)}/access?secret=${encodeURIComponent(secret)}&action=${action}`,
   );
 
 export const deleteSecretProjectMember = (project: string, subject: string) =>

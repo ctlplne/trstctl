@@ -6216,6 +6216,62 @@ export const messages = {
     description: "A235-L1: accessible name of the project member grant form.",
   },
   "secrets.projects.revoke": { defaultMessage: "Revoke", description: "Revoke a project member." },
+  "secrets.projects.explain": { defaultMessage: "Explain access", description: "A235-L4: open the effective-access explain for a member." },
+  "secrets.projects.explainMemberLabel": {
+    defaultMessage: "Explain {subject}'s access",
+    description: "A235-L4: accessible name of a member's explain button.",
+  },
+  "secrets.projects.explainLabel": {
+    defaultMessage: "Explain a subject's access to one secret",
+    description: "A235-L4: accessible name of the effective-access explain form.",
+  },
+  "secrets.projects.explainSubject": { defaultMessage: "Subject", description: "A235-L4: the subject whose access is explained." },
+  "secrets.projects.explainSecret": { defaultMessage: "Secret", description: "A235-L4: the secret the explain is about." },
+  "secrets.projects.explainSecretHelp": {
+    defaultMessage: "Its full name: {project}/<environment>/<key>.",
+    description: "A235-L4: help for the explain's secret field.",
+  },
+  "secrets.projects.explainAction": { defaultMessage: "Action", description: "A235-L4: read or write." },
+  "secrets.projects.explainAction.read": { defaultMessage: "Read", description: "A235-L4: explain a read." },
+  "secrets.projects.explainAction.write": { defaultMessage: "Write", description: "A235-L4: explain a write." },
+  "secrets.projects.explainRun": { defaultMessage: "Explain", description: "A235-L4: run the explain." },
+  "secrets.projects.explainFailed": { defaultMessage: "Could not explain the access", description: "A235-L4: explain error." },
+  "secrets.projects.explainResultLabel": {
+    defaultMessage: "Effective access of {subject}",
+    description: "A235-L4: accessible name of the explain's result list.",
+  },
+  "secrets.projects.explainSurface.native": {
+    defaultMessage: "trstctl API, CLI and console",
+    description: "A235-L4: the native secrets surface.",
+  },
+  "secrets.projects.explainSurface.vault_kv": {
+    defaultMessage: "Vault-compatible KV (/v1)",
+    description: "A235-L4: the Vault-compatible KV surface.",
+  },
+  "secrets.projects.explainSurface.reference": {
+    defaultMessage: "secret:// references",
+    description: "A235-L4: a secret:// reference another configuration keeps.",
+  },
+  "secrets.projects.explainAllowed": { defaultMessage: "Allowed", description: "A235-L4: every layer allows the surface." },
+  "secrets.projects.explainDenied": { defaultMessage: "Denied by {layer}", description: "A235-L4: the first layer that denies." },
+  "secrets.projects.explainLayer.permission": { defaultMessage: "its permission", description: "A235-L4: the trstctl permission layer." },
+  "secrets.projects.explainLayer.environment": {
+    defaultMessage: "its environment membership",
+    description: "A235-L4: the restricted-environment membership layer.",
+  },
+  "secrets.projects.explainLayer.acl_policy": { defaultMessage: "a Vault ACL policy", description: "A235-L4: the Vault ACL policy layer." },
+  "secrets.projects.explainCredentials.member": {
+    defaultMessage: "Its permissions come from its tenant member roles: {roles}.",
+    description: "A235-L4: the subject is a tenant member.",
+  },
+  "secrets.projects.explainCredentials.api_tokens": {
+    defaultMessage: "Its permissions come from its live API tokens' scopes.",
+    description: "A235-L4: the subject acts through API tokens.",
+  },
+  "secrets.projects.explainCredentials.none": {
+    defaultMessage: "It is not a tenant member and holds no live API token.",
+    description: "A235-L4: the subject has no credentials.",
+  },
   "secrets.projects.rename": { defaultMessage: "Rename", description: "A235-L3: rename the project or an environment." },
   "secrets.projects.renameProjectLabel": { defaultMessage: "Rename this project", description: "A235-L3: accessible name of the project rename form." },
   "secrets.projects.renameEnvironmentLabel": {

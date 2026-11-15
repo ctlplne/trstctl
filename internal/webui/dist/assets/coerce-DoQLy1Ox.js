@@ -1,1 +1,0 @@
-import{m as s,t}from"./schemas-DhFEAs_A.js";function r(r){return s(t,r)}export{r as t};

@@ -7662,6 +7662,22 @@ func componentSchemas() map[string]*Schema {
 	secretProjectMemberReq := object(map[string]*Schema{
 		"role": {Type: "string", Enum: []string{"viewer", "developer", "admin"}}, "environments": {Type: "array", Items: str()},
 	}, "role")
+	secretAccessLayer := object(map[string]*Schema{
+		"layer":   {Type: "string", Enum: []string{"permission", "environment", "acl_policy"}},
+		"allowed": {Type: "boolean"}, "detail": str(),
+	}, "layer", "allowed", "detail")
+	secretAccessExplain := object(map[string]*Schema{
+		"project": str(), "subject": str(), "secret": str(),
+		"action":      {Type: "string", Enum: []string{"read", "write"}},
+		"credentials": {Type: "string", Enum: []string{"member", "api_tokens", "none"}, Description: "where the subject's permissions come from: its tenant member roles, the scopes of its live API tokens (answering to Vault ACL policies as the role api-token), or none"},
+		"roles":       {Type: "array", Items: str()},
+		"surfaces": {Type: "array", Items: object(map[string]*Schema{
+			"surface":   {Type: "string", Enum: []string{"native", "vault_kv", "reference"}},
+			"allowed":   {Type: "boolean"},
+			"denied_by": {Type: "string", Enum: []string{"permission", "environment", "acl_policy"}, Description: "the first layer that denies; absent when every layer allows"},
+			"layers":    {Type: "array", Items: secretAccessLayer},
+		}, "surface", "allowed", "layers")},
+	}, "project", "subject", "secret", "action", "credentials", "roles", "surfaces")
 	secretRotationScheduleReq := object(map[string]*Schema{
 		"name": str(), "provider": secretRotationScheduleProvider, "key": str(), "old_ref": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
@@ -9863,6 +9879,7 @@ func componentSchemas() map[string]*Schema {
 		"SecretProjectEnvironmentRequest": secretProjectEnvironmentReq,
 		"SecretProjectRenameRequest":      secretProjectRenameReq,
 		"SecretProjectMemberRequest":      secretProjectMemberReq,
+		"SecretAccessExplain":             secretAccessExplain,
 		"MachineAuthMethod": object(map[string]*Schema{
 			"name": str(), "type": str(), "source": str(),
 			"issuer": str(), "audience": str(), "tenant_claim": str(), "subject_claim": str(),

@@ -16629,6 +16629,20 @@ ScheduledComplianceArtifact = TypedDict(
     total=False,
 )
 
+SecretAccessExplain = TypedDict(
+    'SecretAccessExplain',
+    {
+        'action': str,
+        'credentials': str,
+        'project': str,
+        'roles': list[str],
+        'secret': str,
+        'subject': str,
+        'surfaces': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 SecretAccessPreview = TypedDict(
     'SecretAccessPreview',
     {

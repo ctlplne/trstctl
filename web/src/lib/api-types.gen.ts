@@ -11963,6 +11963,16 @@ export interface ScheduledComplianceArtifact {
   signature: string;
 }
 
+export interface SecretAccessExplain {
+  action: "read" | "write";
+  credentials: "member" | "api_tokens" | "none";
+  project: string;
+  roles: string[];
+  secret: string;
+  subject: string;
+  surfaces: ({ allowed: boolean; denied_by?: "permission" | "environment" | "acl_policy"; layers: ({ allowed: boolean; detail: string; layer: "permission" | "environment" | "acl_policy" })[]; surface: "native" | "vault_kv" | "reference" })[];
+}
+
 export interface SecretAccessPreview {
   api_request: { method: "GET"; path: string };
   blockers: string[];

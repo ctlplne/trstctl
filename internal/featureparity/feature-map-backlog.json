@@ -16385,6 +16385,7 @@
                 "renameSecretProjectEnvironment",
                 "putSecretProjectMember",
                 "deleteSecretProjectMember",
+                "explainSecretProjectMemberAccess",
                 "previewSecretPromotion",
                 "applySecretPromotion",
                 "previewSecretRestore",

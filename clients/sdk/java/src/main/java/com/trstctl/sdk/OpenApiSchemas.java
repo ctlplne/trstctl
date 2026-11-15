@@ -1182,6 +1182,7 @@ public final class OpenApiSchemas {
       "ScaleTenantIsolation",
       "ScaleUnitEconomics",
       "ScheduledComplianceArtifact",
+      "SecretAccessExplain",
       "SecretAccessPreview",
       "SecretAccessPreviewRequest",
       "SecretApproval",

@@ -10645,6 +10645,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/projects/{project}/members/{subject}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Explain a subject's effective access to one project secret on each surface (native, Vault-compatible KV, secret:// reference), naming the layer that denies: its permission, its restricted-environment membership or the Vault ACL policies for its roles (A235-L4) */
+        get: operations["explainSecretProjectMemberAccess"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/projects/{project}/promotions": {
         parameters: {
             query?: never;
@@ -27445,6 +27462,35 @@ export interface components {
             public_key_der: string;
             /** Format: byte */
             signature: string;
+        };
+        SecretAccessExplain: {
+            /** @enum {string} */
+            action: "read" | "write";
+            /**
+             * @description where the subject's permissions come from: its tenant member roles, the scopes of its live API tokens (answering to Vault ACL policies as the role api-token), or none
+             * @enum {string}
+             */
+            credentials: "member" | "api_tokens" | "none";
+            project: string;
+            roles: string[];
+            secret: string;
+            subject: string;
+            surfaces: {
+                allowed: boolean;
+                /**
+                 * @description the first layer that denies; absent when every layer allows
+                 * @enum {string}
+                 */
+                denied_by?: "permission" | "environment" | "acl_policy";
+                layers: {
+                    allowed: boolean;
+                    detail: string;
+                    /** @enum {string} */
+                    layer: "permission" | "environment" | "acl_policy";
+                }[];
+                /** @enum {string} */
+                surface: "native" | "vault_kv" | "reference";
+            }[];
         };
         SecretAccessPreview: {
             api_request: {
@@ -60853,6 +60899,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretProject"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    explainSecretProjectMemberAccess: {
+        parameters: {
+            query: {
+                /** @description the secret's full name, <project>/<environment>/<key> */
+                secret: string;
+                /** @description read (default) or write */
+                action?: string;
+            };
+            header?: never;
+            path: {
+                /** @description secrets project slug */
+                project: string;
+                /** @description subject whose access is explained */
+                subject: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretAccessExplain"];
                 };
             };
             /** @description client error */

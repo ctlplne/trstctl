@@ -405,6 +405,7 @@ import type {
   SlackChannelList,
   SlackInstallStart,
   SlackLinkCode,
+  SecretAccessExplain,
   SecretProject,
   SecretProjectCreateRequest,
   SecretProjectEnvironmentRequest,
@@ -1008,6 +1009,7 @@ export type { MigrationPlannedCohort } from "./api-types.gen";
 export type { SlackApp, SlackApprovalChannel, SlackChannelList, SlackInstallStart, SlackLinkCode } from "./api-types.gen";
 export type { IdentityApplicationView } from "./api-types.gen";
 export type {
+  SecretAccessExplain,
   SecretProject,
   SecretProjectCreateRequest,
   SecretProjectEnvironmentRequest,
@@ -3144,6 +3146,7 @@ export interface Api {
   addSecretProjectEnvironment(project: string, input: SecretProjectEnvironmentRequest, idempotencyKey?: string): Promise<SecretProject>;
   putSecretProjectMember(project: string, subject: string, input: SecretProjectMemberRequest, idempotencyKey?: string): Promise<SecretProject>;
   deleteSecretProjectMember(project: string, subject: string): Promise<SecretProject>;
+  explainSecretProjectMemberAccess(project: string, subject: string, secret: string, action: "read" | "write"): Promise<SecretAccessExplain>;
   renameSecretProject(project: string, input: SecretProjectRenameRequest, idempotencyKey?: string): Promise<SecretProject>;
   renameSecretProjectEnvironment(project: string, environment: string, input: SecretProjectRenameRequest, idempotencyKey?: string): Promise<SecretProject>;
   previewSecretPromotion(project: string, input: SecretPromotionRequest): Promise<SecretPromotionPlan>;
@@ -4392,6 +4395,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   addSecretProjectEnvironment: secretProjects.addSecretProjectEnvironment,
   putSecretProjectMember: secretProjects.putSecretProjectMember,
   deleteSecretProjectMember: secretProjects.deleteSecretProjectMember,
+  explainSecretProjectMemberAccess: secretProjects.explainSecretProjectMemberAccess,
   renameSecretProject: secretProjects.renameSecretProject,
   renameSecretProjectEnvironment: secretProjects.renameSecretProjectEnvironment,
   previewSecretPromotion: (project, input) =>

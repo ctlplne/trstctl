@@ -55528,6 +55528,111 @@
         ],
         "type": "object"
       },
+      "SecretAccessExplain": {
+        "properties": {
+          "action": {
+            "enum": [
+              "read",
+              "write"
+            ],
+            "type": "string"
+          },
+          "credentials": {
+            "description": "where the subject's permissions come from: its tenant member roles, the scopes of its live API tokens (answering to Vault ACL policies as the role api-token), or none",
+            "enum": [
+              "member",
+              "api_tokens",
+              "none"
+            ],
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "secret": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "surfaces": {
+            "items": {
+              "properties": {
+                "allowed": {
+                  "type": "boolean"
+                },
+                "denied_by": {
+                  "description": "the first layer that denies; absent when every layer allows",
+                  "enum": [
+                    "permission",
+                    "environment",
+                    "acl_policy"
+                  ],
+                  "type": "string"
+                },
+                "layers": {
+                  "items": {
+                    "properties": {
+                      "allowed": {
+                        "type": "boolean"
+                      },
+                      "detail": {
+                        "type": "string"
+                      },
+                      "layer": {
+                        "enum": [
+                          "permission",
+                          "environment",
+                          "acl_policy"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "layer",
+                      "allowed",
+                      "detail"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "surface": {
+                  "enum": [
+                    "native",
+                    "vault_kv",
+                    "reference"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "surface",
+                "allowed",
+                "layers"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project",
+          "subject",
+          "secret",
+          "action",
+          "credentials",
+          "roles",
+          "surfaces"
+        ],
+        "type": "object"
+      },
       "SecretAccessPreview": {
         "properties": {
           "api_request": {
@@ -110097,6 +110202,90 @@
         ],
         "summary": "Grant a subject a role in a secrets project, optionally for listed environments only (access:write, or secrets:write as the project's admin within its own grant)",
         "x-trstctl-permission": "secrets:members.manage"
+      }
+    },
+    "/api/v1/secrets/projects/{project}/members/{subject}/access": {
+      "get": {
+        "operationId": "explainSecretProjectMemberAccess",
+        "parameters": [
+          {
+            "description": "secrets project slug",
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "subject whose access is explained",
+            "in": "path",
+            "name": "subject",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the secret's full name, \u003cproject\u003e/\u003cenvironment\u003e/\u003ckey\u003e",
+            "in": "query",
+            "name": "secret",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "read (default) or write",
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretAccessExplain"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Explain a subject's effective access to one project secret on each surface (native, Vault-compatible KV, secret:// reference), naming the layer that denies: its permission, its restricted-environment membership or the Vault ACL policies for its roles (A235-L4)",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/secrets/projects/{project}/promotions": {

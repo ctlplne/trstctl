@@ -12,6 +12,7 @@ const { apiMock, can } = vi.hoisted(() => ({
     deleteSecretProjectMember: vi.fn(),
     renameSecretProject: vi.fn(),
     renameSecretProjectEnvironment: vi.fn(),
+    explainSecretProjectMemberAccess: vi.fn(),
   },
   can: { value: true },
 }));
@@ -127,6 +128,62 @@ describe("A235 secrets projects", () => {
     await user.type(form.getByRole("textbox", { name: "Environments" }), "stage");
     await user.click(form.getByRole("button", { name: "Grant" }));
     expect(apiMock.putSecretProjectMember).toHaveBeenCalledWith("payments", "team-b-ci", { role: "developer", environments: ["stage"] });
+  });
+
+  // A235-L4: a member's effective access to one secret, per surface, names
+  // the layer that denies.
+  it("explains a member's access to a secret, naming the denying layer (A235-L4)", async () => {
+    apiMock.explainSecretProjectMemberAccess.mockResolvedValue({
+      project: "payments",
+      subject: "team-a-ci",
+      secret: "payments/stage/db/password",
+      action: "read",
+      credentials: "api_tokens",
+      roles: ["api-token"],
+      surfaces: [
+        {
+          surface: "native",
+          allowed: true,
+          layers: [
+            { layer: "permission", allowed: true, detail: "its live API tokens' scopes grant secrets:read" },
+            { layer: "environment", allowed: true, detail: "a member granted restricted environment stage with read access" },
+          ],
+        },
+        {
+          surface: "vault_kv",
+          allowed: false,
+          denied_by: "acl_policy",
+          layers: [
+            { layer: "permission", allowed: true, detail: "its live API tokens' scopes grant secrets:read" },
+            { layer: "environment", allowed: true, detail: "a member granted restricted environment stage with read access" },
+            {
+              layer: "acl_policy",
+              allowed: false,
+              detail: "the Vault ACL policies named for its roles do not allow read on secret/data/payments/stage/db/password",
+            },
+          ],
+        },
+        {
+          surface: "reference",
+          allowed: true,
+          layers: [{ layer: "environment", allowed: true, detail: "a member granted restricted environment stage with read access" }],
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<SecretProjectsWorkflow />);
+    await user.click(await screen.findByRole("button", { name: "Open" }));
+    await user.click(await screen.findByRole("button", { name: "Explain team-a-ci's access" }));
+    const form = within(screen.getByRole("form", { name: "Explain a subject's access to one secret" }));
+    expect(form.getByRole("textbox", { name: "Subject" })).toHaveValue("team-a-ci");
+    await user.type(form.getByRole("textbox", { name: "Secret" }), "stage/db/password");
+    await user.click(form.getByRole("button", { name: "Explain" }));
+    expect(apiMock.explainSecretProjectMemberAccess).toHaveBeenCalledWith("payments", "team-a-ci", "payments/stage/db/password", "read");
+    const result = within(await screen.findByRole("list", { name: "Effective access of team-a-ci" }));
+    expect(result.getByText("Denied by a Vault ACL policy")).toBeInTheDocument();
+    expect(result.getAllByText("Allowed")).toHaveLength(2);
+    expect(result.getByText(/do not allow read on secret\/data\/payments\/stage\/db\/password/)).toBeInTheDocument();
+    expect(screen.getByText("Its permissions come from its live API tokens' scopes.")).toBeInTheDocument();
   });
 
   // A235-L3: access:write renames the project and an environment; the slug

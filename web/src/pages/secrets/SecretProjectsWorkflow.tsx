@@ -7,7 +7,7 @@ import { ErrorState } from "@/components/StatePrimitives";
 import { useCan } from "@/components/rbac";
 import { formatDateTime } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, type SecretProject } from "@/lib/api";
+import { api, type SecretAccessExplain, type SecretProject } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { SecretProjectMigrations } from "./SecretProjectMigrations";
 import { SecretProjectTransfers } from "./SecretProjectTransfers";
@@ -56,6 +56,11 @@ export function SecretProjectsWorkflow() {
   const [memberSubject, setMemberSubject] = useState("");
   const [memberRole, setMemberRole] = useState<Role>("developer");
   const [memberEnvironments, setMemberEnvironments] = useState("");
+  // A235-L4: the effective-access explain for one member and one secret.
+  const [explainSubject, setExplainSubject] = useState("");
+  const [explainSecret, setExplainSecret] = useState("");
+  const [explainAction, setExplainAction] = useState<"read" | "write">("read");
+  const [explanation, setExplanation] = useState<SecretAccessExplain | null>(null);
   // A235-L3: renaming the project (environment "") or one environment.
   const [renaming, setRenaming] = useState<{ environment: string } | null>(null);
   const [newName, setNewName] = useState("");
@@ -147,6 +152,28 @@ export function SecretProjectsWorkflow() {
     }
   }
 
+  function startExplain(subject: string) {
+    if (!selected) return;
+    setExplainSubject(subject);
+    setExplainSecret(selected.slug + "/");
+    setExplanation(null);
+  }
+
+  async function explain(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) return;
+    setBusy(true);
+    try {
+      setExplanation(await api.explainSecretProjectMemberAccess(selected.slug, explainSubject.trim(), explainSecret.trim(), explainAction));
+      setError(null);
+    } catch (cause) {
+      setExplanation(null);
+      setError(apiProblemMessage(cause, t("secrets.projects.explainFailed")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function revoke(subject: string) {
     if (!selected) return;
     setBusy(true);
@@ -160,6 +187,16 @@ export function SecretProjectsWorkflow() {
     }
   }
 
+  const explainSurfaceLabel = {
+    native: "secrets.projects.explainSurface.native",
+    vault_kv: "secrets.projects.explainSurface.vault_kv",
+    reference: "secrets.projects.explainSurface.reference",
+  } as const;
+  const explainLayerLabel = {
+    permission: "secrets.projects.explainLayer.permission",
+    environment: "secrets.projects.explainLayer.environment",
+    acl_policy: "secrets.projects.explainLayer.acl_policy",
+  } as const;
   const ownerLabel = (owner: string) => (owner === "unknown" ? t("secrets.projects.ownerUnknown") : owner);
   const healthLabel: Record<string, string> = {
     ok: t("secrets.projects.health.ok"),
@@ -327,10 +364,76 @@ export function SecretProjectsWorkflow() {
                         {t("secrets.projects.revoke")}
                       </Button>
                     ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      aria-label={t("secrets.projects.explainMemberLabel", { subject: member.subject })}
+                      onClick={() => startExplain(member.subject)}
+                      disabled={busy}
+                    >
+                      {t("secrets.projects.explain")}
+                    </Button>
                   </li>
                 ))}
               </ul>
             )}
+            {explainSubject ? (
+              <form onSubmit={(event) => void explain(event)} className="grid max-w-xl gap-3" aria-label={t("secrets.projects.explainLabel")}>
+                <Field label={t("secrets.projects.explainSubject")}>
+                  {(control) => (
+                    <Input {...control} value={explainSubject} maxLength={256} required onChange={(event) => setExplainSubject(event.target.value)} />
+                  )}
+                </Field>
+                <Field label={t("secrets.projects.explainSecret")} description={t("secrets.projects.explainSecretHelp", { project: selected.slug })}>
+                  {(control) => (
+                    <Input {...control} value={explainSecret} maxLength={512} required onChange={(event) => setExplainSecret(event.target.value)} />
+                  )}
+                </Field>
+                <Field label={t("secrets.projects.explainAction")}>
+                  {(control) => (
+                    <Select {...control} value={explainAction} onChange={(event) => setExplainAction(event.target.value as "read" | "write")}>
+                      <option value="read">{t("secrets.projects.explainAction.read")}</option>
+                      <option value="write">{t("secrets.projects.explainAction.write")}</option>
+                    </Select>
+                  )}
+                </Field>
+                <Button type="submit" disabled={busy || !explainSubject.trim() || !explainSecret.trim()}>
+                  {t("secrets.projects.explainRun")}
+                </Button>
+              </form>
+            ) : null}
+            {explanation ? (
+              <div className="grid gap-2 text-sm">
+                <p className="text-muted-foreground">
+                  {explanation.credentials === "member"
+                    ? t("secrets.projects.explainCredentials.member", { roles: explanation.roles.join(", ") })
+                    : explanation.credentials === "api_tokens"
+                      ? t("secrets.projects.explainCredentials.api_tokens")
+                      : t("secrets.projects.explainCredentials.none")}
+                </p>
+                <ul className="grid gap-2" aria-label={t("secrets.projects.explainResultLabel", { subject: explanation.subject })}>
+                  {explanation.surfaces.map((surface) => (
+                    <li key={surface.surface} className="grid gap-1">
+                      <span className="flex flex-wrap gap-2">
+                        <strong>{t(explainSurfaceLabel[surface.surface])}</strong>
+                        <span className={surface.allowed ? "text-foreground" : "font-semibold text-risk-high"}>
+                          {surface.allowed
+                            ? t("secrets.projects.explainAllowed")
+                            : t("secrets.projects.explainDenied", { layer: t(explainLayerLabel[surface.denied_by ?? "permission"]) })}
+                        </span>
+                      </span>
+                      <ul className="grid gap-0.5 text-muted-foreground">
+                        {surface.layers.map((layer) => (
+                          <li key={layer.layer}>
+                            {t(explainLayerLabel[layer.layer])}: {layer.detail}
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {selected.can_manage_members ? (
               <form onSubmit={(event) => void grant(event)} className="grid max-w-xl gap-3" aria-label={t("secrets.projects.grantLabel")}>
                 {selected.manageable_environments?.length ? (

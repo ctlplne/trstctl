@@ -192,7 +192,23 @@ token still can't grant itself an environment. The member routes admit the compu
 can be granted it), and the tenant's ABAC policy is evaluated against the permission the
 caller acts under. A tenant
 administrator who needs a restricted value grants themselves membership, which is
-recorded. `projects show` lists each environment's secrets with their owner, or
+recorded.
+
+Membership is one of the grants a secret answers to. The subject's own permission
+(`secrets:read` or `secrets:write`) is another, and on the Vault-compatible KV routes the
+tenant's Vault ACL policies for its roles are a third: every one must allow. The **access
+explain** (A235-L4) evaluates each for one subject and one secret, on each surface (the
+trstctl API, CLI and console; the Vault-compatible KV routes; a `secret://` reference),
+and names the layer that denies: `permission`, `environment` or `acl_policy`.
+
+```
+GET /api/v1/secrets/projects/{project}/members/{subject}/access?secret=<project>/<environment>/<key>&action=read
+```
+
+It needs `access:read` and returns no value. A tenant member's permissions come from its
+member roles; any other subject's from the scopes of its live API tokens, which answer to
+Vault ACL policies as the role `api-token`. A reference's own route still needs its own
+permission. In the console each member in the project's list has **Explain access**. `projects show` lists each environment's secrets with their owner, or
 `unknown` when none is set, and shows a restricted environment the caller isn't granted
 as `restricted` without its names. Tenant RLS stays the boundary: an environment is not
 a tenant.
