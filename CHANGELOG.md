@@ -1956,6 +1956,12 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- A network relay refuses the rollback of a target that names no re-bind binding (an aws-acm
+  target without `listener_arn`, a fortigate without `bind_to`, a paloalto without
+  `ssl_tls_profile` and `commit_admin`, a cisco without `node_hostname`) before it redeems the
+  appliance credential, as permanent and before contact (A166-L2-T1). Since A166-L2 made
+  aws-acm re-bindable it redeemed first and let the connector refuse. The connectors page no
+  longer says aws-acm and azure-keyvault cannot roll back.
 - PKCS#12 inventory refuses a file whose key derivations ask for more than 2^22 iterations
   before any hashing (X2-L8, security): the counts come from the file, so a hostile `.p12`
   naming 2^31 for its MAC, PBMAC1, PBE or PBES2 key kept the agent hashing, once per

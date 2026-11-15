@@ -116,41 +116,11 @@ func rollbackReadinessFrom(in rollbackReadinessInputs) rollbackReadiness {
 	}
 }
 
-// rebindBindingMissing names the binding a fortigate or paloalto target must
-// configure before its deploys become fingerprint-named and re-bindable.
+// rebindBindingMissing names the binding a re-bind-capable target must
+// configure before its deploys become fingerprint-named and re-bindable; the
+// relay refuses such a rollback with the same check (connector.RebindBindingMissing).
 func rebindBindingMissing(family string, config json.RawMessage) string {
-	var fields struct {
-		BindTo              string `json:"bind_to"`
-		SSLTLSProfile       string `json:"ssl_tls_profile"`
-		CommitAdmin         string `json:"commit_admin"`
-		CertificateMapEntry string `json:"certificate_map_entry"`
-		NodeHostname        string `json:"node_hostname"`
-		ListenerARN         string `json:"listener_arn"`
-	}
-	_ = json.Unmarshal(config, &fields)
-	switch family {
-	case "gcp-certificate-manager":
-		if strings.TrimSpace(fields.CertificateMapEntry) == "" {
-			return "this gcp-certificate-manager target names no certificate_map_entry (\"<map>/<entry>\"); its deploys patch the target-named certificate in place and leave no predecessor to re-bind"
-		}
-	case "fortigate":
-		if strings.TrimSpace(fields.BindTo) == "" {
-			return "this fortigate target names no bind_to (admin or ssl-vpn); its deploys install in place under the target name and leave no predecessor to re-bind"
-		}
-	case "paloalto":
-		if strings.TrimSpace(fields.SSLTLSProfile) == "" || strings.TrimSpace(fields.CommitAdmin) == "" {
-			return "this paloalto target names no ssl_tls_profile with commit_admin; its imports land in place under the target name and leave no predecessor to re-bind"
-		}
-	case "aws-acm":
-		if strings.TrimSpace(fields.ListenerARN) == "" {
-			return "this aws-acm target names no listener_arn, so it re-imports in place under one certificate ARN, which keeps no previous version to re-bind"
-		}
-	case "cisco":
-		if strings.TrimSpace(fields.NodeHostname) == "" {
-			return "this cisco target names no node_hostname with certificate_roles; its imports land in place under the target name and leave no predecessor to re-bind"
-		}
-	}
-	return ""
+	return connector.RebindBindingMissing(family, config)
 }
 
 // rollbackReadiness resolves the facts for one target and computes the verdict.

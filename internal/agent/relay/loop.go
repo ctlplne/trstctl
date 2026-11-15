@@ -775,6 +775,14 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfi
 		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedCannotRebind)
 		return false
 	}
+	// A166-L2-T1: a re-bind-capable family whose target names no binding
+	// (an aws-acm target without listener_arn, a fortigate without bind_to)
+	// re-binds nothing; refuse it here, as its readiness already says, rather
+	// than redeem the appliance credential and let the connector refuse.
+	if !hostJob && connector.RebindBindingMissing(intent.Connector, intent.TargetConfig) != "" {
+		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedNoRebindBinding)
+		return false
+	}
 	if strings.TrimSpace(intent.PredecessorFingerprint) == "" {
 		// A first deployment has no predecessor. Saying so is the useful answer;
 		// retrying would never produce one.

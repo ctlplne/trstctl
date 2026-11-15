@@ -221,6 +221,7 @@ const (
 	RollbackRefusedBadPayload               = "job payload is not a rollback intent"
 	RollbackRefusedNotExecutable            = "connector is not executable by this agent"
 	RollbackRefusedCannotRebind             = "this connector cannot roll back by re-binding"
+	RollbackRefusedNoRebindBinding          = "this target names no binding its connector can re-bind through"
 	RollbackRefusedNoPredecessor            = "no predecessor is recorded for this target"
 	RollbackRefusedNoCredential             = "credential redemption was not granted" // #nosec G101 -- an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798)
 	RollbackRefusedNoLockedMemory           = "redeemed material could not be taken into locked memory"
@@ -319,6 +320,7 @@ func RollbackReasonIsPermanent(reason string) bool {
 		RollbackRefusedBadPayload,
 		RollbackRefusedNotExecutable,
 		RollbackRefusedCannotRebind,
+		RollbackRefusedNoRebindBinding,
 		RollbackRefusedNoPredecessor,
 		RollbackRefusedNoHostRestore,
 		RollbackRefusedNoHostState,

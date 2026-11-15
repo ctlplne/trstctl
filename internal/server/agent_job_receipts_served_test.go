@@ -408,6 +408,7 @@ func TestRollbackContactClassificationMatchesWhatTheRelayDid(t *testing.T) {
 		transport.RollbackRefusedNotExecutable,
 		transport.RollbackRefusedCannotRebind,
 		transport.RollbackRefusedNoPredecessor,
+		transport.RollbackRefusedNoRebindBinding,
 		transport.RollbackRefusedNoCredential,
 		transport.RollbackRefusedNoLockedMemory,
 		transport.RollbackRefusedNoHostRestore,

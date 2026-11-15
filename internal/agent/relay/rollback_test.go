@@ -37,28 +37,44 @@ func rollbackJob(t *testing.T, jobID int64, intent relay.RollbackIntent) relay.J
 	return relay.Job{JobID: jobID, Kind: relay.KindConnectorRollback, Attempt: 1, Payload: payload}
 }
 
-// A connector that cannot re-bind is refused before redeeming.
-func TestRelayRefusesRollbackForANonRebindableConnectorBeforeRedeeming(t *testing.T) {
-	ch := &fakeChannel{
-		jobs: []relay.Job{rollbackJob(t, 1, relay.RollbackIntent{
-			// aws-acm is relay-reachable but its API cannot address an
-			// installed object separately from importing one.
-			Connector: "aws-acm", Target: "edge", PredecessorFingerprint: "abcd1234",
-		})},
-		material: map[string][]byte{"secret://appliance-admin": []byte(appliancePassword)},
-	}
-	executed, err := relay.RunOnce(context.Background(), ch, http.DefaultClient, 4, 60)
-	if err != nil {
-		t.Fatalf("run: %v", err)
-	}
-	if executed != 0 {
-		t.Fatalf("executed %d jobs, want 0", executed)
-	}
-	if ch.redeemed != 0 {
-		t.Errorf("relay redeemed %d credentials for a rollback it cannot perform, want 0", ch.redeemed)
-	}
-	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed {
-		t.Fatalf("reports = %+v, want one failure", ch.reports)
+// A target that cannot re-bind is refused before redeeming (A166-L2-T1).
+// Every family a relay executes re-binds now, but only when its target names
+// the binding it re-binds through: an aws-acm target's listener, a fortigate's
+// bind_to, a paloalto's ssl_tls_profile with commit_admin, a cisco's
+// node_hostname. One that names none re-binds nothing, so the relay refuses it
+// with that reason before it redeems the appliance credential.
+func TestRelayRefusesRollbackForATargetThatCannotRebindBeforeRedeemingA166L2T1(t *testing.T) {
+	for _, tc := range []struct {
+		connector string
+		config    string
+	}{
+		{"aws-acm", `{"region":"us-east-1"}`},
+		{"fortigate", `{"endpoint":"https://fw.example.test"}`},
+		{"paloalto", `{"endpoint":"https://pan.example.test","ssl_tls_profile":"web"}`},
+		{"cisco", `{"endpoint":"https://ise.example.test"}`},
+	} {
+		t.Run(tc.connector, func(t *testing.T) {
+			ch := &fakeChannel{
+				jobs: []relay.Job{rollbackJob(t, 1, relay.RollbackIntent{
+					Connector: tc.connector, Target: "edge", PredecessorFingerprint: "abcd1234",
+					TargetConfig: json.RawMessage(tc.config),
+				})},
+				material: map[string][]byte{"secret://appliance-admin": []byte(appliancePassword)},
+			}
+			executed, err := relay.RunOnce(context.Background(), ch, http.DefaultClient, 4, 60)
+			if err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if executed != 0 {
+				t.Fatalf("executed %d jobs, want 0", executed)
+			}
+			if ch.redeemed != 0 {
+				t.Errorf("relay redeemed %d credentials for a rollback it cannot perform, want 0", ch.redeemed)
+			}
+			if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed || ch.reports[0].detail != transport.RollbackRefusedNoRebindBinding {
+				t.Fatalf("reports = %+v, want one failure naming the missing binding", ch.reports)
+			}
+		})
 	}
 }
 

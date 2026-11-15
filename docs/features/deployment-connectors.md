@@ -456,10 +456,18 @@ without uploading a key; the rollback executes on the control plane's outbox
 worker, where that family's deploys also run, and its receipt reads
 `rolled_back` the same way an agent's would. A target without the map entry
 patches the named certificate in place and its rollback is refused as not
-configured. `aws-acm` and `azure-keyvault` have no executable rollback, and the
-refusal and the destination's `rollback_readiness` say why: ACM re-imports in
-place under one ARN and keeps no previous version, and Key Vault serves the
-newest version by name with no call that makes an older one current. Objects
+configured. An `aws-acm` target that names its load balancer's `listener_arn`
+imports each deploy as a new certificate tagged with its fingerprint and points
+the listener at it, so its rollback re-points the listener at the predecessor
+(A166-L2); one without re-imports in place under one ARN, which keeps no previous
+version, and its rollback is refused as not configured. An `azure-keyvault`
+rollback makes the predecessor current again by importing that version's own
+retained secret as the newest version, for an exportable key (A166-L1). For
+every family that re-binds only through a binding its target names (an aws-acm
+`listener_arn`, a fortigate `bind_to`, a paloalto `ssl_tls_profile` with
+`commit_admin`, a cisco `node_hostname`), a network relay refuses the rollback of
+a target that names none before it redeems the appliance credential, with the
+reason the destination's `rollback_readiness` gives (A166-L2-T1). Objects
 accumulate one certificate per deploy on a map-entry target and nothing prunes
 them.
 

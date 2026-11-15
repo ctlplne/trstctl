@@ -163,8 +163,8 @@ not this file.
 | `internal/agent/secretrender/secretrender_test.go:126` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/transport/agentservice.go:960` | an RPC method name, not a credential. The material this |
 | `internal/agent/transport/agentservice.go:967` | an RPC method name. This call carries a CSR up and returns |
-| `internal/agent/transport/receipt.go:225` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/agent/transport/receipt.go:270` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/agent/transport/receipt.go:226` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/agent/transport/receipt.go:271` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt_custody_test.go:15` | the credential fingerprint is public fixture metadata, not a credential (CWE-798). |
 | `internal/aimodel/redactor_test.go:39` | fixture: AWS's documented example key id; the redactor must catch it (CWE-798) |
 | `internal/aimodel/redactor_test.go:69` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -2580,7 +2580,7 @@ not this file.
 | `internal/agent/relay/recovery_check.go:273` | the host operator's own pinned executable from the host profile (CWE-22) |
 | `internal/agent/relay/relay_test.go:675` | certPath is created beneath this test's private t.TempDir, |
 | `internal/agent/relay/relay_test.go:1106` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
-| `internal/agent/relay/rollback_test.go:208` | test-owned temporary path (CWE-22) |
+| `internal/agent/relay/rollback_test.go:224` | test-owned temporary path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:87` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:152` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:156` | test reads its own tempdir fixture path (CWE-22) |
