@@ -107,9 +107,12 @@ a receipt, or change lifecycle rows to get past the refusal. A warm restart does
 not automatically perform this full rebuild. A full rebuild queues no alert, notice,
 ticket note, revocation, CRL publication, legal-hold change, report removal, observer
 event, renewal-information fetch or decoy scan again for an event the deployment had
-already projected; an event recorded but not yet projected when the rebuild starts still
-queues its effect once (A237L4-L1, A237L4-L2; see the limitations for the effects that
-come next).
+already projected, nor re-runs a rotation step, discovery scan, cloud machine change,
+dynamic-secret, managed-key, code-signing or notification-test command: a command row
+the sweep reclaimed after delivery is re-recorded as delivered, so its job keeps an id and
+nothing is dispatched again. An event recorded but not yet projected when the rebuild
+starts still queues its effect once (A237L4-L1, A237L4-L2, A237L4-L3; see the
+limitations for the effects that come next).
 
 If a recorded issuance event remains but its certificate read row is missing,
 issuance refuses to sign again. HTTP callers receive `503` with

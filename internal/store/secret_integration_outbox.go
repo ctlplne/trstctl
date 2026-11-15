@@ -447,15 +447,21 @@ func ensureSecretIntegrationOutboxAtTx(ctx context.Context, tx pgx.Tx, tenantID,
 		"secret-integration-outbox\x1f"+tenantID+"\x1f"+key); err != nil {
 		return 0, fmt.Errorf("store: lock secret integration outbox: %w", err)
 	}
+	// A237L4-L3: a rebuild re-projecting an event the deployment projected
+	// before queues no second effect, but its caller keeps the row's id. A
+	// row still retained is reused below; one the sweep reclaimed after
+	// delivery is re-created as delivered, so the dispatcher never runs it
+	// and the sweep reclaims it again.
+	status, deliveredAt := replayedEffectStatus(ctx)
 	var id int64
 	err := tx.QueryRow(ctx,
-		`INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key,next_attempt_at)
-		 SELECT $1, $2, $3, $4, $5,COALESCE($6::timestamptz,now())
+		`INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key,next_attempt_at, status, delivered_at)
+		 SELECT $1, $2, $3, $4, $5,COALESCE($6::timestamptz,now()), $7, $8
 		 WHERE NOT EXISTS (
 		     SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $5
 		 )
 		 RETURNING id`,
-		tenantID, destination, effectLane, payload, key, notBefore).Scan(&id)
+		tenantID, destination, effectLane, payload, key, notBefore, status, deliveredAt).Scan(&id)
 	if err == nil {
 		return id, nil
 	}

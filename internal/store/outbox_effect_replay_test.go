@@ -19,14 +19,9 @@ import (
 // before; the outbox is not truncated, but a delivered row is reclaimed a day
 // after delivery, so a projection that dedupes on its own row queues again.
 var outboxEffectReplayExemptions = map[string]string{
-	"ApplyRestoreDrillAttestationTx":         "the restore-drill attestation is kept across a rebuild (preserveIndependentAttestationsTx) and its alert is skipped for a preserved attestation (preservedRestoreDrillAttestationTx)",
-	"ensureCodeSigningOutboxTx":              "open lead A237L4-L3: the row's id is read back (RETURNING id)",
-	"OffboardTenantForEventKeyDestructionTx": "open lead A237L4-L3: an absent row drives the offboard and its insert, then exactly one row is required",
-	"ApplyManagedKeyIntentTx":                "open lead A237L4-L3: RETURNING id feeds managed_key_operations.outbox_id",
-	"ensureNotificationTestOutboxTx":         "open lead A237L4-L3: the row's id is read back (RETURNING id)",
-	"ensureConnectorRightSizeOutboxTx":       "open lead A237L4-L3: the row's id is read back (RETURNING id)",
-	"ApplySecretSyncIntentTx":                "open lead A237L4-L3: secret_sync_jobs.outbox_id holds the row's id",
-	"ensureSecretIntegrationOutboxAtTx":      "open lead A237L4-L3: its callers store the row's id (PAM discovery scans, cloud machine phases, rotation steps, dynamic-secret intents, scoped-sync deletes)",
+	"ApplyRestoreDrillAttestationTx":   "the restore-drill attestation is kept across a rebuild (preserveIndependentAttestationsTx) and its alert is skipped for a preserved attestation (preservedRestoreDrillAttestationTx)",
+	"ApplySecretSyncIntentTx":          "open lead A237L4-L4: secret_sync_jobs.outbox_id holds the row's id and the secret-sync outbox trigger admits only a pending row; a retained row is already reattached",
+	"ensureConnectorRightSizeOutboxTx": "open lead A237L4-L4: the run's terminal event matches the row's original id, which a re-created row cannot have",
 }
 
 var outboxInsertRE = regexp.MustCompile(`INSERT INTO outbox\b`)
@@ -61,7 +56,7 @@ func TestEveryProjectionQueuedEffectSkipsARebuildA237L4L2(t *testing.T) {
 
 // outboxInsertingFunctions maps each function of this package (tests aside)
 // whose body holds a string with INSERT INTO outbox to whether its body calls
-// effectsAlreadyQueued.
+// effectsAlreadyQueued or replayedEffectStatus.
 func outboxInsertingFunctions(t *testing.T) map[string]bool {
 	t.Helper()
 	files, err := filepath.Glob("*.go")
@@ -91,7 +86,9 @@ func outboxInsertingFunctions(t *testing.T) map[string]bool {
 						inserts = true
 					}
 				case *ast.CallExpr:
-					if id, ok := x.Fun.(*ast.Ident); ok && id.Name == "effectsAlreadyQueued" {
+					// replayedEffectStatus consults the mark for an effect row
+					// whose id its caller keeps (A237L4-L3).
+					if id, ok := x.Fun.(*ast.Ident); ok && (id.Name == "effectsAlreadyQueued" || id.Name == "replayedEffectStatus") {
 						guarded = true
 					}
 				}

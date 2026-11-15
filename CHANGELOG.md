@@ -1956,6 +1956,12 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- A full read-model rebuild no longer re-runs a command whose job keeps its outbox row's id
+  once that row was reclaimed a day after delivery: credential rotation steps, PAM and
+  account discovery scans, cloud machine changes, dynamic-secret issues and revocations,
+  managed-key, code-signing and notification-test commands, and the offboard's event-key
+  destruction were queued again as new pending rows. The rebuild re-records such a row as
+  delivered, so the job keeps an id and nothing is dispatched again (A237L4-L3).
 - A full read-model rebuild no longer queues an effect again for an event the deployment had
   already projected: the AD CS drift, discovery risk and session-risk alerts, ticket notes,
   external CA revocations, CRL publications, event-key preparations, key-domain seals,

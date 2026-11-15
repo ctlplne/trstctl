@@ -10434,9 +10434,9 @@ What comes next:
 Status: in progress. A full rebuild (`trstctl --rebuild`) re-derives the read model from
 the event log and queues no alert, notice, ticket note, revocation, CRL publication,
 legal-hold change, report removal, observer event, renewal-information fetch or decoy scan
-again for an event the deployment had already projected. What comes next: the effects whose
-job rows keep the queued row's identity — secret sync and dynamic-secret jobs, credential
-rotation steps, PAM and account discovery scans, cloud machine changes, and managed-key,
-code-signing, right-sizing and notification-test operations — can still be queued again by
-a full rebuild that runs more than a day after they were delivered, when the delivered row
-has been reclaimed. Today: run a full rebuild only when recovery asks for one.
+again for an event the deployment had already projected, and re-records a reclaimed
+rotation-step, discovery-scan, cloud-change, dynamic-secret, managed-key, code-signing or
+notification-test command as delivered instead of dispatching it again (A237L4-L3). What
+comes next: a secret sync job and a connector right-sizing operation can still be queued
+again by a full rebuild that runs more than a day after they were delivered, when the
+delivered row has been reclaimed. Today: run a full rebuild only when recovery asks for one.

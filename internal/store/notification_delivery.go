@@ -154,10 +154,13 @@ func ensureNotificationTestOutboxTx(ctx context.Context, tx pgx.Tx, tenantID, ke
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return 0, err
 	}
+	// A237L4-L3: under a rebuild's mark a reclaimed row is re-created as
+	// delivered (replayedEffectStatus); a retained one was reused above.
+	status, deliveredAt := replayedEffectStatus(ctx)
 	if err := tx.QueryRow(ctx,
-		`INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id`, tenantID, notificationTestDestination, effectLane, payload, key).Scan(&id); err != nil {
+		`INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key, status, delivered_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 RETURNING id`, tenantID, notificationTestDestination, effectLane, payload, key, status, deliveredAt).Scan(&id); err != nil {
 		return 0, fmt.Errorf("store: enqueue notification test: %w", err)
 	}
 	return id, nil

@@ -69,9 +69,13 @@ func (s *Store) OffboardTenantForEventKeyDestructionTx(ctx context.Context, tx p
 		if err != nil {
 			return att, err
 		}
+		// A237L4-L3: a rebuild re-projecting an offboard whose destruction row
+		// was removed after its verified completion re-creates the row as
+		// delivered, so the destruction is not dispatched again.
+		status, deliveredAt := replayedEffectStatus(ctx)
 		if _, err := tx.Exec(ctx, `INSERT INTO outbox
-		 (tenant_id,destination,effect_lane,payload,idempotency_key,required_agent_role,next_attempt_at)
-		 VALUES ($1,$2,$2,$3,$4,'control_plane',$5)`, tenantID, EventKeyDestructionDestination, payload, key, request.NotBefore); err != nil {
+		 (tenant_id,destination,effect_lane,payload,idempotency_key,required_agent_role,next_attempt_at,status,delivered_at)
+		 VALUES ($1,$2,$2,$3,$4,'control_plane',$5,$6,$7)`, tenantID, EventKeyDestructionDestination, payload, key, request.NotBefore, status, deliveredAt); err != nil {
 			return att, fmt.Errorf("store: queue independent event key destruction: %w", err)
 		}
 	case err != nil:

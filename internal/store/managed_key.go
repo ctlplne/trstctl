@@ -68,14 +68,17 @@ func (s *Store) ApplyManagedKeyIntentTx(ctx context.Context, tx pgx.Tx, op Manag
 	}
 	effectLane := ManagedKeyEffectLane(op.Provider, op.KeyID, op.OperationID)
 	var outboxID int64
+	// A237L4-L3: a rebuild re-projecting the intent reuses a retained row and
+	// re-creates a reclaimed one as delivered (replayedEffectStatus).
+	status, deliveredAt := replayedEffectStatus(ctx)
 	err := tx.QueryRow(ctx,
-		`INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key)
-		 SELECT $1, $2, $3, $4, $5
+		`INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key, status, delivered_at)
+		 SELECT $1, $2, $3, $4, $5, $6, $7
 		 WHERE NOT EXISTS (
 		     SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $5
 		 )
 		 RETURNING id`,
-		op.TenantID, managedKeyOutboxDestination, effectLane, payload, op.OperationID).Scan(&outboxID)
+		op.TenantID, managedKeyOutboxDestination, effectLane, payload, op.OperationID, status, deliveredAt).Scan(&outboxID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		var (
 			existingDestination string

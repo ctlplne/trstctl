@@ -2,7 +2,10 @@
 
 package store
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type effectsAlreadyQueuedKey struct{}
 
@@ -22,4 +25,19 @@ func WithEffectsAlreadyQueued(ctx context.Context) context.Context {
 func effectsAlreadyQueued(ctx context.Context) bool {
 	queued, _ := ctx.Value(effectsAlreadyQueuedKey{}).(bool)
 	return queued
+}
+
+// replayedEffectStatus is the outbox status and delivery time of an effect
+// row a projection writes whose id its caller keeps (A237L4-L3): pending, or,
+// re-projecting an event projected before (WithEffectsAlreadyQueued),
+// delivered now. Such a row is written only when the one first queued is gone
+// (the sweep reclaims a delivered row a day after delivery), so the
+// dispatcher never runs its effect again, the caller still has an id, and the
+// sweep reclaims the row again.
+func replayedEffectStatus(ctx context.Context) (string, *time.Time) {
+	if !effectsAlreadyQueued(ctx) {
+		return "pending", nil
+	}
+	now := time.Now().UTC()
+	return "delivered", &now
 }
