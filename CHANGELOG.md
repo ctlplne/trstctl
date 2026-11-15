@@ -1938,6 +1938,11 @@
 
 ### Fixed
 
+- A notification, or any outbox command, slowed past its claim's lease is no longer delivered twice (A98-L1): under
+  load another sweep recovered the row and delivered it again (a tenant PagerDuty test notification reached its receiver
+  twice). The lease now follows the delivering worker, moved ahead every third of a lease while the row is still its
+  attempt, and never past the delivery deadline plus one lease, so a worker that hangs past its deadline still loses the
+  row to recovery.
 - A connection whose server ends it first is counted once by the network observer (X1-L7): the observer remembers the
   ended connection, within the flow table's bound, until the client's FIN, a reset, a new connection on the same
   addresses or the idle sweep, so the client's close_notify no longer opened a second, unrecognized connection.

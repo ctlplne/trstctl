@@ -3365,7 +3365,7 @@ not this file.
 | `internal/crypto/x509_property_test.go:196` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/discovery/adcs/membership_paths_test.go:48` | deterministic property-test permutations, never a cryptographic choice (CWE-330). |
 | `internal/discovery/cloudsecret/generic_entropy_test.go:18` | a seeded fixture generator: reproducible test data, not a secret (CWE-338) |
-| `internal/orchestrator/outbox.go:490` | retry backoff jitter, not a security decision (CWE-338) |
+| `internal/orchestrator/outbox.go:493` | retry backoff jitter, not a security decision (CWE-338) |
 | `internal/protocols/acme/property_test.go:90` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/protocols/acme/property_test.go:144` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |

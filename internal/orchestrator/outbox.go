@@ -121,6 +121,9 @@ type claimedOutboxEntry struct {
 	msg               Message
 	attempts          int
 	retryAttemptLimit int
+	// claimedAt is when this worker took the row; holdClaim never keeps its
+	// lease past claimedAt + the delivery deadline + one lease (A98-L1).
+	claimedAt time.Time
 }
 
 func (c claimedOutboxEntry) attemptLimit(automaticLimit int) int {
@@ -749,6 +752,11 @@ func (o *Outbox) DispatchOneScoped(ctx context.Context, h Handler, scope Destina
 }
 
 func (o *Outbox) dispatchClaim(ctx context.Context, h Handler, claim claimedOutboxEntry) error {
+	// The lease follows this worker while it delivers (A98-L1), so load that
+	// slows the delivery past one lease does not hand the row to a second
+	// delivery.
+	releaseHold := o.holdClaim(ctx, claim)
+	defer releaseHold()
 	// A probe belongs to this delivery attempt, not its SQL finalization.
 	// Cancellation, a failed finalization, or proven no-effect deferral must
 	// release that reservation; the durable outbox lease still owns retry timing.
@@ -1073,6 +1081,7 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 	}
 	claim.msg.ID = claim.id
 	claim.msg.Attempts = claim.attempts
+	claim.claimedAt = now
 	key := circuitKey{tenantID: claim.msg.TenantID, destination: effectiveOutboxLane(claim.msg.Destination, claim.msg.EffectLane)}
 	claim.halfOpenProbe = reservedHalfOpen[key]
 	o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, key, now)

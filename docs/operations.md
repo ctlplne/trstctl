@@ -306,7 +306,12 @@ external CA, connector, webhook, or notification target. It first **leases** one
 due row in a short transaction (`processing`, `worker_id`, `lease_until`), commits,
 does the external call, then records success or retry state in a second short
 transaction. If a worker dies after claiming a row, the lease expires and another
-worker returns the row to pending.
+worker returns the row to pending. While a worker delivers, its lease follows it
+(A98-L1): every third of the 30-second lease the worker moves `lease_until` one lease
+ahead, while the row is still its attempt, so a delivery slowed by load (a slow
+receiver, a busy datastore) is not recovered and delivered a second time by another
+sweep. The hold never reaches past the delivery deadline plus one lease, so a worker
+that hangs past its deadline still loses the row to recovery.
 
 Dispatch is also fair by tenant and destination. Each sweep rotates across tenants
 and destinations, with explicit in-flight caps per tenant and per destination, so
