@@ -73,6 +73,16 @@ func (s *Store) ApplyExternalObserverUpsertedTx(ctx context.Context, tx pgx.Tx, 
 	if err := lockUpsertArbiterTx(ctx, tx, "external_observers", o.TenantID, o.ID); err != nil {
 		return err
 	}
+	// LS-1-L1: a name another of the tenant's observers holds is refused
+	// before its event. An event already in a log that names one failed its
+	// projection live and left the holder as it was, so it is applied as
+	// that no-op; a rebuild of such a log no longer stops here.
+	var held bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM external_observers WHERE tenant_id = $1 AND name = $2 AND id <> $3::uuid)`,
+		o.TenantID, o.Name, o.ID).Scan(&held); err != nil || held {
+		return err
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO external_observers (tenant_id, id, name, events_url, credential_ref, enabled, created_at, updated_at, event_sequence)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8)

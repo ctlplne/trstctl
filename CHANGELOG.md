@@ -1956,6 +1956,10 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- Observer registrations or renames under one name that arrive together register it once
+  and refuse the rest with 409. They could all pass the name check, and the second then
+  answered 500 and left an event that stopped a read-model rebuild; a log that already
+  holds one rebuilds with the first observer kept (LS-1-L1).
 - A notification routing policy created or renamed under a name another policy holds, or
   routing a scope another policy routes (the global scope included), is refused with a 409
   (`name_held`, `scope_held`) before anything is recorded. It answered 500 and recorded an

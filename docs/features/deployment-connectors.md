@@ -1461,7 +1461,9 @@ reason, and no rollback-shaped success is recorded.
 trstctl's own agents and relays verify what a listener serves. An external
 observer — probectl, a synthetic monitor, a load balancer's probe — can confirm it
 independently from where clients stand. An operator registers it with
-`POST /api/v1/observers` (`notifications:write`): a name, an optional https
+`POST /api/v1/observers` (`notifications:write`): a name no other of the tenant's
+observers holds (a held name is a 409, also when two registrations arrive together;
+LS-1-L1), an optional https
 `events_url`, and an optional `secret://` reference whose value signs each event.
 The observer reports with a `discovery:write` token to `POST /api/v1/observations`:
 the endpoint (`host:port`), its vantage, the time, reachability, health, and the

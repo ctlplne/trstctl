@@ -54,17 +54,35 @@ type ObserverInput struct {
 
 // RegisterObserver records a new external observer.
 func (o *Orchestrator) RegisterObserver(ctx context.Context, tenantID string, in ObserverInput) (store.ExternalObserver, error) {
+	var out store.ExternalObserver
+	// LS-1-L1: the projection lock spans the name check, the append and its
+	// projection, so two registrations under one name cannot both pass the
+	// check and leave the second's event failing the (tenant, name) index.
+	err := o.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		if err := o.observerNameAvailable(ctx, tenantID, "", in.Name); err != nil {
+			return err
+		}
+		var err error
+		out, err = o.writeObserver(ctx, tenantID, projections.EventObserverRegistered, uuid.NewString(), in)
+		return err
+	})
+	return out, err
+}
+
+// observerNameAvailable refuses a name another of the tenant's observers
+// holds with ErrObserverNameTaken; an observer keeps its own.
+func (o *Orchestrator) observerNameAvailable(ctx context.Context, tenantID, id, name string) error {
 	existing, err := o.store.ListExternalObservers(ctx, tenantID)
 	if err != nil {
-		return store.ExternalObserver{}, err
+		return err
 	}
-	name := strings.TrimSpace(in.Name)
+	name = strings.TrimSpace(name)
 	for _, observer := range existing {
-		if observer.Name == name {
-			return store.ExternalObserver{}, ErrObserverNameTaken
+		if observer.Name == name && observer.ID != id {
+			return ErrObserverNameTaken
 		}
 	}
-	return o.writeObserver(ctx, tenantID, projections.EventObserverRegistered, uuid.NewString(), in)
+	return nil
 }
 
 // UpdateObserver replaces an existing observer's configuration.
@@ -73,19 +91,17 @@ func (o *Orchestrator) UpdateObserver(ctx context.Context, tenantID, id string, 
 	if err != nil {
 		return store.ExternalObserver{}, err
 	}
-	name := strings.TrimSpace(in.Name)
-	if name != current.Name {
-		existing, err := o.store.ListExternalObservers(ctx, tenantID)
-		if err != nil {
-			return store.ExternalObserver{}, err
+	var out store.ExternalObserver
+	// LS-1-L1: as RegisterObserver, under the projection lock.
+	err = o.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		if err := o.observerNameAvailable(ctx, tenantID, current.ID, in.Name); err != nil {
+			return err
 		}
-		for _, observer := range existing {
-			if observer.Name == name {
-				return store.ExternalObserver{}, ErrObserverNameTaken
-			}
-		}
-	}
-	return o.writeObserver(ctx, tenantID, projections.EventObserverUpdated, current.ID, in)
+		var err error
+		out, err = o.writeObserver(ctx, tenantID, projections.EventObserverUpdated, current.ID, in)
+		return err
+	})
+	return out, err
 }
 
 func (o *Orchestrator) writeObserver(ctx context.Context, tenantID, eventType, id string, in ObserverInput) (store.ExternalObserver, error) {

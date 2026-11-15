@@ -1477,10 +1477,10 @@ not this file.
 | `internal/store/enrollment_diagnostics.go:275` | JetStream/PostgreSQL sequences share the signed-bigint storage bound (CWE-190) |
 | `internal/store/enrollment_diagnostics.go:372` | constrained positive bigint written from a JetStream sequence (CWE-190) |
 | `internal/store/external_ca_held.go:52` | bounded above (CWE-190) |
-| `internal/store/external_observation.go:83` | event sequences fit int64 (CWE-190) |
-| `internal/store/external_observation.go:101` | event sequences fit int64 (CWE-190) |
-| `internal/store/external_observation.go:112` | non-negative by constraint (CWE-190) |
-| `internal/store/external_observation.go:159` | non-negative by constraint (CWE-190) |
+| `internal/store/external_observation.go:93` | event sequences fit int64 (CWE-190) |
+| `internal/store/external_observation.go:111` | event sequences fit int64 (CWE-190) |
+| `internal/store/external_observation.go:122` | non-negative by constraint (CWE-190) |
+| `internal/store/external_observation.go:169` | non-negative by constraint (CWE-190) |
 | `internal/store/factory_batches.go:66` | bounded above (CWE-190) |
 | `internal/store/federation.go:58` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/incident_closures.go:39` | bounded above (CWE-190) |

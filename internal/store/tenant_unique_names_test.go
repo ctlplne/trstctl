@@ -27,7 +27,7 @@ var tenantUniqueNameGuards = map[string]string{ // #nosec G101 -- table names an
 	"secret_store_versions":           "a version is its secret's next, under the secret's mutation fence; the name is the secret's own",
 	"ticket_intake_schedules":         "the projection upserts on (tenant_id, system, name): a held name is that schedule's update",
 	"workload_attester_trust_sources": "the API refuses a held name before the append (ensureWorkloadAttesterTrustSourceNameAvailable) and the projection skips one; ids derive from the lowercased name",
-	"external_observers":              "open lead LS-1-L1: the command refuses a held name (ErrObserverNameTaken, 409) but outside the projection lock",
+	"external_observers":              "the command refuses a held name (ErrObserverNameTaken, 409) under the projection lock and the projection skips one",
 	"tenant_members":                  "SCIM refuses a held userName (409 uniqueness) under the projection lock (applySCIMUser) before the member's event",
 	"provider_operators":              "open lead LS-1-L2: a provider SCIM user with a new externalID under a held userName is not refused",
 }
