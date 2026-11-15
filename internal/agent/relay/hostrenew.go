@@ -372,6 +372,7 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 			return false
 		}
 		if err := hostRollback.RecordDeploy(intent.Connector, intent.TargetID, fingerprint, servingCertPEM, keyPEM); err != nil {
+			log.Printf("trstctl-agent: job %d attempt %d: host rollback ledger: %v", job.JobID, job.Attempt, err)
 			report(ctx, ch, job, OutcomeFailed, "host predecessor state could not be committed")
 			return false
 		}

@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/kms/tpm"
 )
 
 // runHostReprotect has a separate subject-key path from ordinary renewal: the
@@ -47,13 +48,46 @@ func runHostReprotect(ctx context.Context, ch Channel, client *http.Client, prof
 		defer claim.stop()
 		ctx = claim.ctx
 	}
+	// TPM-O1-L1: a TPM-held predecessor key is a TSS2 key file only this
+	// host's TPM can load. The TPM signs the re-protected CSR and certifies
+	// the key again under its attestation key, and the control plane signs
+	// only that attested CSR; no software key is made or read.
+	tpmHeld := intent.KeyCustody == HostKeyCustodyTPM
+	var hostTPM *hostKeyTPM
+	defer func() { hostTPM.Close() }()
+	if tpmHeld {
+		if refusal := tpmHostKeyRefusal(ch, profile, intent); refusal != "" {
+			report(ctx, ch, job, OutcomeFailed, refusal)
+			return false
+		}
+		opened, err := openHostKeyTPM(*profile.HostKeyTPM)
+		if err != nil {
+			log.Printf("trstctl-agent: job %d attempt %d: host key TPM: %v", job.JobID, job.Attempt, err)
+			report(ctx, ch, job, OutcomeFailed, "this host's TPM could not be opened for the CA re-protection")
+			return false
+		}
+		hostTPM = opened
+	} else if intent.KeyCustody != "" {
+		report(ctx, ch, job, OutcomeFailed, "the CA re-protection asks for key custody "+fmt.Sprintf("%q", intent.KeyCustody)+", which this agent does not provide")
+		return false
+	}
 	management, destroyManagement, err := redeemHostManagement(ctx, ch, job, intent.CredentialRefs)
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "host management credentials were unavailable")
 		return false
 	}
 	defer destroyManagement()
-	if err := adoptReprotectPredecessor(ctx, profile, rollback, intent); err != nil {
+	keyMatches := crypto.VerifyCertKeyMatchPEM
+	if tpmHeld {
+		keyMatches = func(certPEM, keyFile []byte) error {
+			info, err := certinfo.Inspect(certPEM)
+			if err != nil {
+				return err
+			}
+			return tpmKeyFileMatches(hostTPM, keyFile, info.SPKISHA256)
+		}
+	}
+	if err := adoptReprotectPredecessor(ctx, profile, rollback, intent, keyMatches); err != nil {
 		report(ctx, ch, job, OutcomeFailed, "CA predecessor could not be pinned and independently verified: "+err.Error())
 		return false
 	}
@@ -74,6 +108,10 @@ func runHostReprotect(ctx context.Context, ch Channel, client *http.Client, prof
 				if createErr != nil {
 					return createErr
 				}
+				if tpmHeld {
+					csrDER, createErr = createTPMRetainedHostKeyCSR(hostTPM, keyPEM, tmpl, intent.ReprotectPredecessorSPKISHA256)
+					return createErr
+				}
 				csrDER, createErr = crypto.CreateRetainedHostKeyCSRFromTemplate(keyPEM, tmpl, intent.ReprotectPredecessorSPKISHA256)
 				return createErr
 			})
@@ -81,12 +119,17 @@ func runHostReprotect(ctx context.Context, ch Channel, client *http.Client, prof
 			err = rollback.RecordReprotectCSR(intent.Connector, intent.TargetID, intent.ReprotectJobID, csrDER)
 		}
 		if err != nil {
+			log.Printf("trstctl-agent: job %d attempt %d: CA re-protection CSR: %v", job.JobID, job.Attempt, err)
 			report(ctx, ch, job, OutcomeFailed, "retained host key could not create one durable CSR")
 			return false
 		}
 	}
 	if len(certPEM) == 0 {
-		certPEM, chainPEM, fingerprint, err = signHostCSR(ctx, signer, job, csrDER, claim != nil)
+		if tpmHeld {
+			certPEM, chainPEM, fingerprint, err = signTPMReprotectCSR(ctx, ch, rollback, hostTPM, job, intent, csrDER, claim != nil)
+		} else {
+			certPEM, chainPEM, fingerprint, err = signHostCSR(ctx, signer, job, csrDER, claim != nil)
+		}
 		if err == nil {
 			err = rollback.RecordReprotectCertificate(intent.Connector, intent.TargetID, intent.ReprotectJobID,
 				certPEM, chainPEM, fingerprint)
@@ -125,7 +168,14 @@ func runHostReprotect(ctx context.Context, ch Channel, client *http.Client, prof
 		return false
 	}
 	defer key.Destroy()
-	if err := crypto.VerifyCertKeyMatchPEM(certPEM, key.Bytes()); err != nil {
+	if tpmHeld {
+		// The TPM holds the private half: the key file's public key, read
+		// through the TPM, is the certificate's.
+		if err := tpmKeyFileMatches(hostTPM, key.Bytes(), issued.SPKISHA256); err != nil {
+			report(ctx, ch, job, OutcomeFailed, "replacement certificate does not match the TPM-held host key")
+			return false
+		}
+	} else if err := crypto.VerifyCertKeyMatchPEM(certPEM, key.Bytes()); err != nil {
 		report(ctx, ch, job, OutcomeFailed, "replacement certificate does not match retained host key")
 		return false
 	}
@@ -202,4 +252,53 @@ func reprotectFailureDetail(cause string, restoreErr error) string {
 		return fmt.Sprintf("%s; predecessor restore failed: %v", cause, restoreErr)
 	}
 	return cause + "; exact predecessor restored and listener verified"
+}
+
+// createTPMRetainedHostKeyCSR has the TPM sign the re-protected CSR with the
+// retained TSS2 key file's key (TPM-O1-L1), after checking that key is the
+// predecessor's, by its SPKI.
+func createTPMRetainedHostKeyCSR(h *hostKeyTPM, keyFile []byte, tmpl crypto.CertificateRequestTemplate, predecessorSPKISHA256 string) ([]byte, error) {
+	publicDER, err := h.device.HostKeyPublicDER(keyFile)
+	if err != nil {
+		return nil, err
+	}
+	if !sameHostRollbackFingerprint(crypto.SHA256Hex(publicDER), predecessorSPKISHA256) {
+		return nil, errors.New("relay: the retained TPM key file is not the predecessor's key")
+	}
+	return crypto.CreateHostSubjectCSR(tmpl, tpm.HostKeySigner(h.device, keyFile, publicDER))
+}
+
+// signTPMReprotectCSR has the TPM certify the retained key over this job's
+// binding and sends the CSR with that attestation (TPM-O1-L1).
+func signTPMReprotectCSR(ctx context.Context, ch Channel, rollback *HostRollbackStore, h *hostKeyTPM, job Job, intent DeployIntent,
+	csrDER []byte, maintained bool) ([]byte, []byte, string, error) {
+	attested, ok := ch.(AttestedCSRSigner)
+	if !ok {
+		return nil, nil, "", errors.New("relay: this channel cannot send a TPM key attestation")
+	}
+	var attestation []byte
+	err := rollback.UseReprotectPredecessor(intent.Connector, intent.TargetID, intent.ReprotectJobID,
+		intent.ReprotectPredecessorFingerprint, func(_, keyFile []byte) error {
+			var attestErr error
+			attestation, attestErr = h.attest(job.JobID, keyFile, csrDER)
+			return attestErr
+		})
+	if err != nil {
+		log.Printf("trstctl-agent: job %d attempt %d: host key TPM attestation: %v", job.JobID, job.Attempt, err)
+		return nil, nil, "", err
+	}
+	return signHostCSRWithKeyAttestation(ctx, attested, job, csrDER, attestation, maintained)
+}
+
+// tpmKeyFileMatches reports whether the TSS2 key file's public key, read
+// through the TPM, has the certificate's SPKI hash.
+func tpmKeyFileMatches(h *hostKeyTPM, keyFile []byte, spkiSHA256 string) error {
+	publicDER, err := h.device.HostKeyPublicDER(keyFile)
+	if err != nil {
+		return err
+	}
+	if !sameHostRollbackFingerprint(crypto.SHA256Hex(publicDER), spkiSHA256) {
+		return errors.New("relay: the TPM key file's public key is not the certificate's")
+	}
+	return nil
 }

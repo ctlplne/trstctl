@@ -19,6 +19,7 @@ import (
 	decstore "trstctl.com/trstctl/internal/decommission/store"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
@@ -51,6 +52,48 @@ type hostReprotectIntent struct {
 	ReprotectPredecessorSPKISHA256  string          `json:"reprotect_predecessor_spki_sha256"`
 	ReprotectTTLSeconds             int64           `json:"reprotect_ttl_seconds"`
 	ReprotectProfileName            string          `json:"reprotect_profile_name,omitempty"`
+	// KeyCustody is "tpm" when the predecessor's key is held in the host's
+	// TPM, as the host agent's verified attestation recorded it: the TPM
+	// signs the re-protected CSR and attests the key again (TPM-O1-L1).
+	KeyCustody string `json:"key_custody,omitempty"`
+}
+
+// verifyHostReprotectCustody refuses a re-protection job whose key custody
+// is not the one its predecessor's recorded custody implies now (TPM-O1-L1):
+// a TPM-held key is signed only through the TPM, and an ordinary one never
+// asks for a TPM.
+func verifyHostReprotectCustody(ctx context.Context, st *corestore.Store, tenantID string, predecessor corestore.Certificate, intent hostReprotectIntent) error {
+	custody, err := hostReprotectKeyCustody(ctx, st, tenantID, predecessor)
+	if err != nil {
+		return err
+	}
+	if custody != intent.KeyCustody {
+		return fmt.Errorf("reprotect: the job's key custody %q is not the predecessor's %q", intent.KeyCustody, custody)
+	}
+	return nil
+}
+
+// hostKeyCustodyTPM is the relay's HostKeyCustodyTPM.
+const hostKeyCustodyTPM = "tpm"
+
+// hostReprotectKeyCustody is the key custody a predecessor's re-protection
+// runs with: "tpm" when its certificate's custody is the device-bound claim a
+// host agent's TPM attestation proved, else none.
+func hostReprotectKeyCustody(ctx context.Context, st *corestore.Store, tenantID string, predecessor corestore.Certificate) (string, error) {
+	if predecessor.KeyOrigin != "device" || predecessor.KeyStorage != "device_bound" {
+		return "", nil
+	}
+	attestation, err := st.GetCertificateKeyAttestation(ctx, tenantID, predecessor.ID)
+	if errors.Is(err, corestore.ErrCertificateKeyAttestationNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if attestation.Source != projections.CertificateDeviceAttestationSourceHostAgentTPM {
+		return "", nil
+	}
+	return hostKeyCustodyTPM, nil
 }
 
 func (h Handler) dispatchHostCredentialReissue(ctx context.Context, job Job, successorID string) error {
@@ -106,6 +149,10 @@ func (h Handler) dispatchHostCredentialReissue(ctx context.Context, job Job, suc
 	if !target.Enabled || target.Type != plan.Connector {
 		return ErrCredentialPlanTargetChanged
 	}
+	keyCustody, err := hostReprotectKeyCustody(ctx, h.coreStore, job.TenantID, cert)
+	if err != nil {
+		return err
+	}
 	intent := hostReprotectIntent{Connector: plan.Connector, Target: target.Name, TargetID: plan.TargetID,
 		Revision: plan.TargetRevisionID, IdentityID: plan.IdentityID,
 		TargetConfig: target.Config, CredentialRefs: hostReprotectSecretRefs(target.Config),
@@ -116,7 +163,7 @@ func (h Handler) dispatchHostCredentialReissue(ctx context.Context, job Job, suc
 		IssuingAuthorityID: successorID, RequiredAgentID: plan.RequiredAgentID,
 		ReprotectJobID: job.ID, ReprotectPredecessorFingerprint: plan.PredecessorFingerprint,
 		ReprotectPredecessorSPKISHA256: plan.PredecessorSPKISHA256, ReprotectTTLSeconds: plan.TTLSeconds,
-		ReprotectProfileName: plan.ProfileName}
+		ReprotectProfileName: plan.ProfileName, KeyCustody: keyCustody}
 	payload, err := json.Marshal(intent)
 	if err != nil {
 		return err
@@ -161,6 +208,9 @@ func AuthorizeHostCSR(ctx context.Context, st *corestore.Store, log *events.Log,
 	}
 	if err := validateHostCSRPublicBinding(plan, intent, predecessor, csrDER); err != nil {
 		return CredentialPlan{}, fmt.Errorf("reprotect: retained CSR and immutable plan binding: %w", err)
+	}
+	if err := verifyHostReprotectCustody(ctx, st, tenantID, predecessor, intent); err != nil {
+		return CredentialPlan{}, err
 	}
 	selection := CredentialPlanSelection{CertificateID: plan.Job.Dependent.ID, SuccessorAuthorityID: plan.SuccessorAuthorityID,
 		TargetID: plan.TargetID, ExpectedTargetRevision: plan.TargetRevisionID,

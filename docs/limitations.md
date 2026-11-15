@@ -2537,10 +2537,7 @@ A profile's `host_key_attestation` keeps host renewal keys in the host's TPM for
 no ECDSA suite; `TestSwtpmHostKeyServesTLSThroughTheTPM2ProviderTPMO1` checks this
 and fails when a package changes it. What comes next: the other OpenSSL-based host
 connectors (apache, haproxy, postfix and the rest), each proven against its stock
-package with the provider; CA re-protection of a TPM-held key, which today fails
-closed because it signs the re-protected CSR from the retained key file in
-software (`crypto.CreateRetainedHostKeyCSRFromTemplate`); and the real-TPM repeat
-of the swtpm journey (Track B).
+package with the provider, and the real-TPM repeat of the swtpm journey (Track B).
 
 ### Workload-held co-sign mode (off by default)
 

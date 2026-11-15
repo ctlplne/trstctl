@@ -1122,6 +1122,17 @@ reason, when the host profile names no `host_key_tpm`, the connector is not `ngi
 the key is not P-256, or the agent build cannot send an attestation. A profile that
 requires one refuses to queue a renewal for any other connector.
 
+A CA re-protection keeps a TPM-held key in the TPM (TPM-O1-L1). When the predecessor
+certificate's recorded custody is the device-bound claim a host agent's TPM attestation
+proved, its re-protection job carries `key_custody: "tpm"`, and the refusals above apply
+before the predecessor is pinned. The agent pins the predecessor by the key file's public
+key, read through the TPM. The TPM signs the re-protected CSR with that same key and
+certifies it again over the re-protection job's binding. The control plane checks that
+attestation under the identity's profile, the revision the re-protection plan resolved,
+before the successor CA signs, and records the successor's custody with the new evidence.
+The key file at `key_path` stays as it is: the successor certificate names the same key.
+A job whose key custody is not its predecessor's is refused at signing.
+
 The host's nginx reads the key file through OpenSSL 3's `tpm2` provider. On Debian 12
 (OpenSSL 3.0.22, tpm2-openssl 1.1.1, nginx 1.22.1) that takes three things. First,
 an OpenSSL config that loads the provider and prefers it (without the preference,
@@ -1149,8 +1160,11 @@ default_properties = ?provider=tpm2
 Point nginx at it with `env OPENSSL_CONF;` in `nginx.conf` and `ssl_protocols TLSv1.2
 TLSv1.3;` on the server. The swtpm container journey proves the whole path:
 `TestSwtpmContainerHostKeyJourneyTPMO1` runs the TPM's key and attestation, stock
-`openssl s_server` and nginx serving through the provider, and a relay renewal into
-nginx that its own post-deploy handshake verifies. The same journey on a real TPM is
+`openssl s_server` and nginx serving through the provider, a relay renewal into nginx
+that its own post-deploy handshake verifies, and then a CA re-protection of that
+TPM-held key under a successor CA. While nginx holds `tpm2-abrmd`, the lab reaches the
+TPM through a small resource-manager bridge that keeps one session for the agent, as
+the agent's one open of `/dev/tpmrm0` does on a host. The same journey on a real TPM is
 Track B.
 
 ### Deliver into a Kubernetes Secret from inside the cluster

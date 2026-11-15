@@ -212,12 +212,6 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	if err := d.authorizeAgentSubjectAlgorithm(csrDER, intent.SubjectKeyAlgorithm); err != nil {
 		return nil, err
 	}
-	// TPM-O1: a job whose profile requires a TPM-held key signs only a CSR
-	// whose key the TPM attests, under the profile's roots.
-	keyEvidence, err := d.verifyHostKeyAttestation(ctx, tenantID, jobID, intent, csrDER, keyAttestation)
-	if err != nil {
-		return nil, err
-	}
 	identityID := strings.TrimSpace(intent.IdentityID)
 	if identityID == "" {
 		return nil, status.Error(codes.FailedPrecondition, "this renewal job names no identity")
@@ -239,6 +233,18 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		if err != nil {
 			return nil, err
 		}
+	}
+	// TPM-O1: a job whose profile requires a TPM-held key signs only a CSR
+	// whose key the TPM attests, under the profile's roots; a CA
+	// re-protection of a TPM-held key is judged by its identity's profile
+	// (TPM-O1-L1).
+	attestationProfile := intent.Issuance
+	if hostProfileBinding != nil {
+		attestationProfile = hostProfileBinding
+	}
+	keyEvidence, err := d.verifyHostKeyAttestation(ctx, tenantID, jobID, intent, attestationProfile, csrDER, keyAttestation)
+	if err != nil {
+		return nil, err
 	}
 
 	// Idempotency keyed on the CSR'S OWN BYTES, not on the job attempt alone.

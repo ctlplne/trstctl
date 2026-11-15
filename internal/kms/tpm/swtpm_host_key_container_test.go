@@ -28,7 +28,8 @@ func TestSwtpmContainerHostKeyJourneyTPMO1(t *testing.T) {
 		t.Fatal(err)
 	}
 	goModCache := hostTPMGoModCache(t)
-	base, image := "trstctl-swtpm-go:aud-26-edge-custody", "trstctl-swtpm-go:tpm-o1-host-key"
+	// tpm-o1-l1: the image adds the lab's tpmrm bridge (TPM-O1-L1).
+	base, image := "trstctl-swtpm-go:aud-26-edge-custody", "trstctl-swtpm-go:tpm-o1-l1-host-key"
 	if out, err := swtpmDockerOutput(t, swtpmDockerProbeTimeout, "image", "inspect", base); err != nil {
 		if buildOut, buildErr := swtpmDockerOutput(t, swtpmDockerBuildTimeout, "build", "-t", base, filepath.Join("testdata", "swtpm")); buildErr != nil {
 			t.Fatalf("build swtpm image after inspect failed (%v, %s): %v\n%s", err, out, buildErr, buildOut)
@@ -49,7 +50,8 @@ func TestSwtpmContainerHostKeyJourneyTPMO1(t *testing.T) {
 		"swtpm socket --tpm2 --tpmstate dir=/tmp/swtpm-state --server type=unixio,path=/tmp/swtpm.sock --ctrl type=unixio,path=/tmp/swtpm.sock.ctrl --flags not-need-init,startup-clear --daemon",
 		"for attempt in $(seq 1 50); do test -S /tmp/swtpm.sock && break; sleep 0.1; done",
 		"test -S /tmp/swtpm.sock",
-		"export TRSTCTL_SWTPM_PATH=/tmp/swtpm.sock TRSTCTL_TPM2_PROVIDER=1",
+		"export TRSTCTL_SWTPM_PATH=/tmp/swtpm.sock TRSTCTL_TPM2_PROVIDER=1 TRSTCTL_TPMRM_BRIDGE=/usr/local/bin/tpmrm-bridge",
+		"dpkg-query -W -f '${Package} ${Version}\\n' gcc libtss2-dev",
 		goTest + " ./internal/crypto/deviceattest -run 'TestSwtpmHostKeyIsCertifiedAndVerifiedTPMO1$' | tee /tmp/host-key.txt",
 		"grep -q SWTPM_HOST_KEY_OK /tmp/host-key.txt",
 		// Each later test starts tpm2-abrmd in front of swtpm and stops it at
@@ -59,6 +61,7 @@ func TestSwtpmContainerHostKeyJourneyTPMO1(t *testing.T) {
 		"grep -q TPMO1_PROVIDER_TLS12_REFUSED_AS_DOCUMENTED /tmp/provider.txt",
 		goTest + " ./internal/agent/relay -run 'TestSwtpmHostRenewalJourneyTPMO1$' | tee /tmp/journey.txt",
 		"grep -q TPMO1_JOURNEY_OK /tmp/journey.txt",
+		"grep -q TPMO1L1_REPROTECT_OK /tmp/journey.txt",
 	}, "\n")
 	out, err := swtpmDockerOutput(t, 20*time.Minute,
 		"run", "--rm", "-e", "TRSTCTL_SWTPM_INNER=1",
@@ -68,7 +71,7 @@ func TestSwtpmContainerHostKeyJourneyTPMO1(t *testing.T) {
 		t.Fatalf("TPM-O1 swtpm journey failed: %v\n%s", err, out)
 	}
 	for _, marker := range []string{"SWTPM_HOST_KEY_OK", "TPMO1_PROVIDER_S_SERVER_OK", "TPMO1_PROVIDER_NGINX_OK",
-		"TPMO1_PROVIDER_TLS12_REFUSED_AS_DOCUMENTED", "TPMO1_JOURNEY_OK"} {
+		"TPMO1_PROVIDER_TLS12_REFUSED_AS_DOCUMENTED", "TPMO1_JOURNEY_OK", "TPMO1L1_REPROTECT_OK"} {
 		if !strings.Contains(string(out), marker) {
 			t.Fatalf("the TPM-O1 swtpm journey did not report %s:\n%s", marker, out)
 		}

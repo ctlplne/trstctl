@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/connector"
-	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
@@ -20,7 +19,11 @@ import (
 // and served, then seals its exact local key before asking for a new signature.
 // A retry may see the already installed successor only when its signed result
 // was first retained in the same encrypted job slot.
-func adoptReprotectPredecessor(ctx context.Context, profile connector.LocalOpsConfig, store *HostRollbackStore, intent DeployIntent) error {
+//
+// keyMatches checks that a key is the certificate's: in software for a key
+// the agent holds, through the host's TPM for a TSS2 key file (TPM-O1-L1).
+func adoptReprotectPredecessor(ctx context.Context, profile connector.LocalOpsConfig, store *HostRollbackStore, intent DeployIntent,
+	keyMatches func(certPEM, keyPEM []byte) error) error {
 	if intent.ReprotectJobID == "" {
 		if intent.ReprotectPredecessorFingerprint != "" || intent.ReprotectPredecessorSPKISHA256 != "" || intent.ReprotectTTLSeconds != 0 {
 			return errors.New("CA re-protection requires a complete bound job")
@@ -41,7 +44,7 @@ func adoptReprotectPredecessor(ctx context.Context, profile connector.LocalOpsCo
 			info, inspectErr := certinfo.Inspect(oldCert)
 			if inspectErr != nil || !sameHostRollbackFingerprint(info.SHA256Fingerprint, intent.ReprotectPredecessorFingerprint) ||
 				!sameHostRollbackFingerprint(info.SPKISHA256, intent.ReprotectPredecessorSPKISHA256) ||
-				crypto.VerifyCertKeyMatchPEM(oldCert, oldKey) != nil {
+				keyMatches(oldCert, oldKey) != nil {
 				return ErrHostRollbackStateMismatch
 			}
 			pinned = true
@@ -72,7 +75,7 @@ func adoptReprotectPredecessor(ctx context.Context, profile connector.LocalOpsCo
 		return err
 	}
 	defer key.Destroy()
-	if err := crypto.VerifyCertKeyMatchPEM(certPEM, key.Bytes()); err != nil {
+	if err := keyMatches(certPEM, key.Bytes()); err != nil {
 		return err
 	}
 	info, err := certinfo.Inspect(certPEM)

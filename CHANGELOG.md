@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- A CA re-protection keeps a TPM-held host key in the host's TPM (TPM-O1-L1). A
+  re-protection whose predecessor's key a host agent's TPM attested is queued with
+  `key_custody: "tpm"`: the agent pins the predecessor through the TPM, the TPM signs the
+  re-protected CSR and certifies the key again for the job, and the control plane checks
+  that attestation under the identity's profile before the successor CA signs. The key
+  file stays as it is. Proven end to end against swtpm, with nginx serving the key
+  through the `tpm2` provider.
 - A host agent's TLS libraries, Go programs, Java installations, keystore keys and key
   files are CBOM assets (`crypto-library`, `keystore-key` and `key-file` at
   `<agent>:<path>`), listed by `GET /api/v1/cbom/assets` and the console's CBOM inventory

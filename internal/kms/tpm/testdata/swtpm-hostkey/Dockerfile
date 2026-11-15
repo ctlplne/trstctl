@@ -17,4 +17,12 @@ RUN apt-get update \
         dbus \
         nginx \
         openssl \
+        gcc \
+        libc6-dev \
+        libtss2-dev \
     && rm -rf /var/lib/apt/lists/*
+# TPM-O1-L1: tpmrm-bridge gives a second client (the agent) its own
+# tpm2-abrmd connection while nginx holds another, as two clients of a
+# host's /dev/tpmrm0 have.
+COPY tpmrm-bridge.c /usr/local/src/tpmrm-bridge.c
+RUN gcc -O2 -Wall -Werror -o /usr/local/bin/tpmrm-bridge /usr/local/src/tpmrm-bridge.c -ltss2-tctildr

@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/deviceattest"
 	"trstctl.com/trstctl/internal/crypto/deviceattesttest"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
@@ -228,6 +230,14 @@ exit 2
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The host's encrypted predecessor ledger, which the CA re-protection
+	// below (TPM-O1-L1) pins its predecessor in. Its own directory: nginx
+	// gives its temp path (dir) to its worker user, and the ledger refuses a
+	// parent directory another user owns.
+	rollback, err := relay.NewHostRollbackStore(filepath.Join(t.TempDir(), "ledger"), "tenant-tpm-o1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ch := &journeyChannel{rootPEM: rootPEM, ca: ca, caDER: caDER}
 	ch.jobs = []relay.Job{renewJob(t, relay.DeployIntent{
 		Connector: "nginx", Target: "web01", TargetID: "t-tpm-o1-journey",
@@ -236,8 +246,8 @@ exit 2
 		TargetConfig:  targetConfig,
 		VerifyAddress: fmt.Sprintf("127.0.0.1:%d", port), VerifyServerName: "web.lab.test",
 	})}
-	if _, err := relay.RunOnceWithHost(ctx, ch, http.DefaultClient, profile, 4, 120); err != nil {
-		t.Fatalf("RunOnceWithHost: %v\n%s", err, logs())
+	if _, err := relay.RunOnceWithSelfUpgradeAndHostRollback(ctx, ch, http.DefaultClient, profile, nil, nil, rollback, 4, 120); err != nil {
+		t.Fatalf("RunOnceWithSelfUpgradeAndHostRollback: %v\n%s", err, logs())
 	}
 	if len(ch.reports) != 1 || ch.reports[0].outcome != transport.OutcomeVerified {
 		t.Fatalf("reports = %+v, want one verified renewal\n%s", ch.reports, logs())
@@ -261,4 +271,98 @@ exit 2
 		t.Fatalf("a separate client sees another certificate: %v\n%s", err, logs())
 	}
 	t.Logf("TPMO1_JOURNEY_OK fingerprint=%s tls_version=%#x", crypto.SHA256Hex(ch.served[0]), res.TLSVersion)
+
+	// TPM-O1-L1: a CA re-protection of that TPM-held key. nginx now holds
+	// tpm2-abrmd's connection to swtpm, as it would hold the kernel's
+	// /dev/tpmrm0, so the agent reaches the same TPM through the lab's
+	// tpmrm bridge, its own tpm2-abrmd connection. The agent pins the
+	// served predecessor (its key file's public key, read through the TPM,
+	// is the certificate's), the TPM signs the re-protected CSR with the
+	// retained key file and certifies the key again over the new job, the
+	// control plane's check accepts that attestation and a successor CA
+	// signs, and nginx serves the successor through the tpm2 provider with
+	// the same key file. No software key is made or read.
+	bridge := os.Getenv("TRSTCTL_TPMRM_BRIDGE")
+	if bridge == "" {
+		t.Fatal("TRSTCTL_TPMRM_BRIDGE names the lab's tpmrm bridge (testdata/swtpm-hostkey)")
+	}
+	rmSock := filepath.Join(dir, "tpmrm.sock")
+	rm := exec.Command(bridge, rmSock, "tabrmd:bus_type=session") // #nosec G204,G702 -- the harness names the lab's own bridge binary (CWE-78)
+	rm.Env = append(os.Environ(), "DBUS_SESSION_BUS_ADDRESS=unix:path="+filepath.Join(dir, "bus"))
+	rm.Stdout, rm.Stderr = os.Stderr, os.Stderr
+	if err := rm.Start(); err != nil {
+		t.Fatalf("start the tpmrm bridge: %v", err)
+	}
+	t.Cleanup(func() { _ = rm.Process.Kill(); _, _ = rm.Process.Wait() })
+	for i := 0; i < 100; i++ {
+		if fi, err := os.Stat(rmSock); err == nil && fi.Mode()&os.ModeSocket != 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	predecessorKey, err := os.ReadFile(keyPath) // #nosec G304 -- the test's own temp directory (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	predecessor, err := certinfo.Inspect(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ch.served[0]}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	successorCA, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer successorCA.Destroy()
+	successorDER, err := crypto.SelfSignedCACert(successorCA, "TPM-O1-L1 successor CA", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch.ca, ch.caDER = successorCA, successorDER
+	reprotect := renewJob(t, relay.DeployIntent{
+		Connector: "nginx", Target: "web01", TargetID: "t-tpm-o1-journey",
+		KeyCustody:        relay.HostKeyCustodyTPM,
+		SubjectCommonName: "web.lab.test", SubjectDNSNames: []string{"web.lab.test"},
+		TargetConfig:  targetConfig,
+		VerifyAddress: fmt.Sprintf("127.0.0.1:%d", port), VerifyServerName: "web.lab.test",
+		IdentityID: "identity-tpm-o1-l1", PredecessorCertificateID: "certificate-tpm-o1",
+		IssuingAuthoritySource: "private", IssuingAuthorityID: "ca-tpm-o1-l1-successor",
+		ReprotectJobID: "vdec-tpm-o1-l1", ReprotectPredecessorFingerprint: predecessor.SHA256Fingerprint,
+		ReprotectPredecessorSPKISHA256: predecessor.SPKISHA256, ReprotectTTLSeconds: 3600,
+	})
+	reprotect.JobID = 78
+	ch.jobs = []relay.Job{reprotect}
+	profile.HostKeyTPM.Path = rmSock
+	if _, err := relay.RunOnceWithSelfUpgradeAndHostRollback(ctx, ch, http.DefaultClient, profile, nil, nil, rollback, 4, 120); err != nil {
+		t.Fatalf("re-protection: %v\n%s", err, logs())
+	}
+	if len(ch.reports) != 2 || ch.reports[1].outcome != transport.OutcomeVerified {
+		t.Fatalf("reports = %+v, want the re-protection verified\n%s", ch.reports, logs())
+	}
+	if ch.signCalls != 2 || len(ch.served) != 2 {
+		t.Fatalf("signed %d CSRs, served %d certificates", ch.signCalls, len(ch.served))
+	}
+	successor, err := certinfo.Inspect(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ch.served[1]}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if successor.SPKISHA256 != predecessor.SPKISHA256 || successor.SHA256Fingerprint == predecessor.SHA256Fingerprint ||
+		!strings.Contains(successor.Issuer, "TPM-O1-L1 successor CA") {
+		t.Fatalf("successor %+v; want the predecessor's key under the successor CA", successor)
+	}
+	if len(ch.custody) != 2 || ch.custody[1].Origin != custody.OriginDevice ||
+		ch.custody[1].Storage != custody.StorageDeviceBound || ch.custody[1].Exportable != custody.NonExportable {
+		t.Fatalf("re-protection custody = %+v, want device, device_bound, non_exportable", ch.custody)
+	}
+	key, err = os.ReadFile(keyPath) // #nosec G304 -- the test's own temp directory (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(key, predecessorKey) {
+		t.Fatal("the re-protection installed another key file than the TPM's retained one")
+	}
+	res, err = tlsprobe.Probe(ctx, fmt.Sprintf("127.0.0.1:%d", port), tlsprobe.WithTimeout(30*time.Second))
+	if err != nil || len(res.PeerCertificates) == 0 || !bytes.Equal(res.PeerCertificates[0], ch.served[1]) {
+		t.Fatalf("a separate client sees another certificate after the re-protection: %v\n%s", err, logs())
+	}
+	t.Logf("TPMO1L1_REPROTECT_OK fingerprint=%s spki=%s", successor.SHA256Fingerprint, successor.SPKISHA256)
 }

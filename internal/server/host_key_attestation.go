@@ -74,14 +74,15 @@ func (d *issuanceDispatcher) hostRenewalKeyCustody(ctx context.Context, tenantID
 
 // verifyHostKeyAttestation checks a renewal CSR's key attestation against the
 // job and the served profile, and returns the evidence to keep; nil when the
-// job asks for none.
+// job asks for none. issuance names the profile: the renewal's own, or a CA
+// re-protection's identity profile (TPM-O1-L1).
 func (d *issuanceDispatcher) verifyHostKeyAttestation(ctx context.Context, tenantID string, jobID int64, intent RelayDeployIntent,
-	csrDER, keyAttestation []byte) (*ca.DeviceAttestation, error) {
+	issuance *store.OperationApprovalIssuanceBinding, csrDER, keyAttestation []byte) (*ca.DeviceAttestation, error) {
 	custody := strings.TrimSpace(intent.KeyCustody)
 	if custody != "" && custody != relay.HostKeyCustodyTPM {
 		return nil, status.Errorf(codes.FailedPrecondition, "this renewal job names key custody %q, which no agent provides", custody)
 	}
-	policy, err := d.hostKeyAttestationPolicy(ctx, tenantID, intent.Issuance)
+	policy, err := d.hostKeyAttestationPolicy(ctx, tenantID, issuance)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "read the profile's host key attestation policy: %v", err)
 	}

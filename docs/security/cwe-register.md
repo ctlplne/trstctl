@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3441 annotated sites across 35 rules. Each row is
+3444 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1060,7 +1060,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (551 sites)
+### G115 — CWE-190 Integer overflow or wraparound (552 sites)
 
 | Location | Reason |
 |---|---|
@@ -1273,6 +1273,7 @@ not this file.
 | `internal/crypto/weakkey/ec.go:208` | the baby-step index is below 2^16, so it fits a uint32 (CWE-190) |
 | `internal/crypto/weakkey/weakkey.go:398` | the sieve index is below 2^16, so it fits a uint64 (CWE-190) |
 | `internal/decommission/reprotect/completion_durable_test.go:37` | port was checked against the uint16 maximum above. |
+| `internal/decommission/reprotect/host_custody_test.go:40` | port was checked against the uint16 maximum above (CWE-190) |
 | `internal/decommission/store/projection.go:180` | rejected values above MaxInt64 immediately above. |
 | `internal/discovery/adcs/acl.go:106` | the offset is uint32-derived and bounded against len(raw) above (CWE-190). |
 | `internal/discovery/adcs/adcs_test.go:205` | the fixed malformed fixture is below MaxUint16 (CWE-190). |
@@ -2375,7 +2376,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (812 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (814 sites)
 
 | Location | Reason |
 |---|---|
@@ -2621,9 +2622,11 @@ not this file.
 | `internal/agent/relay/selfupgrade_test.go:156` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:259` | the test reads its own temp fixture (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:274` | the test reads its own temp fixture (CWE-22) |
-| `internal/agent/relay/swtpm_host_key_journey_test.go:204` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/swtpm_host_key_journey_test.go:216` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/swtpm_host_key_journey_test.go:252` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:206` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:218` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:262` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:303` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/swtpm_host_key_journey_test.go:356` | the test's own temp directory (CWE-22) |
 | `internal/agent/relay/tomcat_activation_test.go:49` | fixed filenames below t.TempDir, no external input (CWE-22). |
 | `internal/agent/relay/trust_distrusted_test.go:17` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/agent/relay/trust_test.go:48` | path is created inside this test's TempDir (CWE-22). |
