@@ -28954,13 +28954,80 @@
                   ],
                   "type": "string"
                 },
+                "preview": {
+                  "description": "The effect-free transition preview's result for the step (A244-L2): previewed (its transition starts at the identity's state and was previewed now), accepted (the identity is in its transition) or later (it runs after an earlier step, which it waits on when that step is refused).",
+                  "properties": {
+                    "event_type": {
+                      "type": "string"
+                    },
+                    "from": {
+                      "type": "string"
+                    },
+                    "policy": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "readback": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "refusals": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "state": {
+                      "enum": [
+                        "previewed",
+                        "accepted",
+                        "later"
+                      ],
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "waits_on": {
+                      "enum": [
+                        "approve",
+                        "issue",
+                        "deploy"
+                      ],
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "ready",
+                    "refusals",
+                    "warnings",
+                    "policy",
+                    "readback"
+                  ],
+                  "type": "object"
+                },
                 "subject": {
                   "type": "string"
                 }
               },
               "required": [
                 "action",
-                "subject"
+                "subject",
+                "preview"
               ],
               "type": "object"
             },

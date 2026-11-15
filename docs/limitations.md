@@ -8197,9 +8197,11 @@ decides from, and what comes next:
   observed it before (A244-L1), and re-verified every interval after. A destination
   whose target names none stays `delivered`, and its application view says nothing
   checks it: no address is guessed.
-- **The plan is the configuration, not a dry run.** The review plan names the
-  steps and their subjects from the bound profile, CA and destination; the
-  transition preview remains the effect-free check of a specific change.
+- **Later steps are previewed when reached.** Each review plan step carries the
+  transition preview's result (A244-L2), but only the step whose transition starts
+  at the identity's state is previewed now; a later step reads its transition from
+  the lifecycle registry, waits on any earlier refusal and is previewed once the
+  identity reaches it.
 - **Bounded reads.** Approvals list the newest ten and alerts the newest ten among
   the latest two hundred notifications.
 - **Enrollment paths start with A244-L4.** A certificate records the path that

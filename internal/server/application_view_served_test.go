@@ -148,9 +148,20 @@ func TestServedApplicationViewKeepsTheExternalCAThroughTwoRenewalsA244(t *testin
 	seen := view("after a relay saw it")
 	// The value-free review plan names what the next renewal acts on: the CA,
 	// the destination and the vantage that saw it last.
-	plan, _ := json.Marshal(seen["review_plan"])
+	// (Each step also carries its transition preview, A244-L2: the renewal
+	// of the deployed certificate is previewed now and would go ahead.)
+	steps := []map[string]any{}
+	for _, step := range seen["review_plan"].([]any) {
+		s := step.(map[string]any)
+		steps = append(steps, map[string]any{"action": s["action"], "subject": s["subject"]})
+	}
+	plan, _ := json.Marshal(steps)
 	if want := `[{"action":"issue","subject":"external:a244-digicert"},{"action":"deploy","subject":"` + acmARN + ` (aws-acm)"},{"action":"verify","subject":"relay"}]`; string(plan) != want {
 		t.Fatalf("review plan = %s, want %s", plan, want)
+	}
+	if p, _ := seen["review_plan"].([]any)[0].(map[string]any)["preview"].(map[string]any); p["state"] != "previewed" ||
+		p["from"] != "deployed" || p["to"] != "renewing" || p["ready"] != true {
+		t.Fatalf("the deployed certificate's issue step previews %v, want the renewal previewed and ready", p)
 	}
 	if served, _ := seen["served"].(map[string]any); seen["inventory_state"] != "served" || served == nil || served["vantage"] != "relay" ||
 		served["matches_current"] != true || served["fingerprint"] != active[0].Fingerprint {

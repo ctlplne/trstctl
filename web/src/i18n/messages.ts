@@ -38518,6 +38518,58 @@ export const messages = {
     defaultMessage: "Nothing observes this destination yet, so the new certificate will read as delivered, not seen in use",
     description: "Application view of one certificate in identity detail.",
   },
+  "identities.application.plan.state.previewed": {
+    defaultMessage: "Previewed now ({from} → {to}). Nothing was written or sent.",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
+  "identities.application.plan.state.accepted": {
+    defaultMessage: "Accepted: the identity is {to}. Follow its receipt.",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
+  "identities.application.plan.state.later": {
+    defaultMessage: "Runs later ({from} → {to}).",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
+  "identities.application.plan.state.reading": {
+    defaultMessage: "Read once the delivery is done.",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
+  "identities.application.plan.refused": {
+    defaultMessage: "Refused now: {refusals}",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
+  "identities.application.plan.waitsOn": {
+    defaultMessage: "Waits on the {step} step, which would be refused now.",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
+  "identities.application.plan.warnings": {
+    defaultMessage: "Warnings: {warnings}",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
+  "identities.application.plan.details": {
+    defaultMessage: "What execution checks and how to confirm it",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
+  "identities.application.plan.policy": {
+    defaultMessage: "Execution checks",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
+  "identities.application.plan.readback": {
+    defaultMessage: "Confirm with",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
+  "identities.application.plan.step.approve": {
+    defaultMessage: "approve",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
+  "identities.application.plan.step.issue": {
+    defaultMessage: "issue",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
+  "identities.application.plan.step.deploy": {
+    defaultMessage: "deploy",
+    description: "Application view of one certificate in identity detail: the transition preview a review plan step carries (A244-L2).",
+  },
   "identities.application.alerts": { defaultMessage: "Recent alerts", description: "Application view of one certificate in identity detail." },
   "identities.application.noAlerts": { defaultMessage: "No alerts.", description: "Application view of one certificate in identity detail." },
   "identities.application.actions": { defaultMessage: "Actions", description: "Application view of one certificate in identity detail." },

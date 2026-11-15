@@ -562,7 +562,16 @@ everything one certificate's application depends on in one answer:
   and the **recover, revoke and retire** actions with whether each applies now;
 - a **value-free review plan** — approve, issue from the CA, deploy to the
   destination, verify from the vantage that saw it last — naming exactly what each
-  step acts on, never a value;
+  step acts on, never a value. Each step carries the effect-free transition
+  preview's result (A244-L2): the step whose transition starts at the identity's
+  state is previewed now, exactly as `POST /api/v1/identities/{id}/transitions/preview`
+  previews it, with whether execution would go ahead, its refusals apart from its
+  other warnings, the policy execution checks again and how to read the result
+  back; a step the identity is already in reads `accepted`; a later step reads its
+  transition from the lifecycle registry and `waits_on` an earlier refused step.
+  Reading the plan writes nothing, enqueues nothing and contacts no signer or
+  external system. The console shows each step's blocker and, on request, what
+  execution checks and how to confirm it;
 - **reusable defaults**: the owner, profile and CA, which the console carries into
   the destination form for the next certificate.
 

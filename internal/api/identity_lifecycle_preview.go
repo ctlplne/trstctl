@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -47,6 +48,31 @@ type identityLifecyclePreviewResponse struct {
 	// validity); ProfileRefusal is the profile's own reason.
 	ProfileRefused bool   `json:"profile_refused,omitempty"`
 	ProfileRefusal string `json:"profile_refusal,omitempty"`
+	// refusals are the warnings that made Ready false, each as it reads in
+	// Warnings; the application view's review plan names them apart from
+	// the other warnings (A244-L2).
+	refusals []string
+}
+
+// refuse marks the plan not ready for reason, which reads among its warnings.
+func (p *identityLifecyclePreviewResponse) refuse(reason string) {
+	p.Ready = false
+	p.Warnings = append(p.Warnings, reason)
+	p.refusals = append(p.refusals, reason)
+}
+
+// transitionReadback is how to confirm an accepted lifecycle transition: the
+// identity's status, its audit event and, for an edge with an outbox effect,
+// that effect's receipt.
+func transitionReadback(id, to, eventType string, sideEffect bool) []string {
+	out := []string{
+		"Read /api/v1/identities/" + id + " and confirm status is " + to + ".",
+		"Find the immutable " + eventType + " audit event for this identity.",
+	}
+	if sideEffect {
+		out = append(out, "Follow the matching delivery or rotation receipt; accepted lifecycle state is not the same as completed external delivery.")
+	}
+	return out
 }
 
 func lifecyclePreviewAPIError(err error) error {
@@ -86,33 +112,42 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
-	// A client cannot choose the preview fence. The server returns the current
-	// immutable projection sequence and execution must echo that value.
-	req.ExpectedVersion = nil
-	if err := canonicalizeTransitionRequest(&req); err != nil {
-		a.writeError(w, err)
-		return
-	}
-	id := r.PathValue("id")
-	identity, version, err := a.store.IdentityApprovalTarget(r.Context(), tenantID, id)
+	plan, err := a.identityTransitionPlan(r.Context(), tenantID, r.PathValue("id"), req)
 	if err != nil {
 		a.writeError(w, err)
 		return
 	}
+	a.writeJSON(w, http.StatusOK, plan)
+}
+
+// identityTransitionPlan is the preview's plan for one transition (the
+// identity application view's review plan carries it too, A244-L2). It emits
+// no event, writes no projection, enqueues no outbox intent, and contacts no
+// signer or external system.
+func (a *API) identityTransitionPlan(ctx context.Context, tenantID, id string, req transitionRequest) (identityLifecyclePreviewResponse, error) {
+	// A client cannot choose the preview fence. The server returns the current
+	// immutable projection sequence and execution must echo that value.
+	req.ExpectedVersion = nil
+	if err := canonicalizeTransitionRequest(&req); err != nil {
+		return identityLifecyclePreviewResponse{}, err
+	}
+	identity, version, err := a.store.IdentityApprovalTarget(ctx, tenantID, id)
+	if err != nil {
+		return identityLifecyclePreviewResponse{}, err
+	}
 	to := orchestrator.State(req.To)
 	eventType, valid := orchestrator.EventTypeFor(orchestrator.State(identity.Status), to)
 	if !valid {
-		a.writeError(w, &orchestrator.TransitionError{IdentityID: id, From: orchestrator.State(identity.Status), To: to})
-		return
+		return identityLifecyclePreviewResponse{}, &orchestrator.TransitionError{IdentityID: id, From: orchestrator.State(identity.Status), To: to}
 	}
 	var profileRefusal error
 	if to == orchestrator.StateIssued && (identity.Kind == store.KindX509Certificate || identity.Kind == "x509") {
-		requirement, err := a.orch.ProfileApprovalRequirement(r.Context(), tenantID, id)
+		requirement, err := a.orch.ProfileApprovalRequirement(ctx, tenantID, id)
 		if err == nil && requirement.ProfileName == "" && a.gate.Profile != "" {
-			requirement, err = a.orch.ProfileApprovalRequirementByName(r.Context(), tenantID, a.gate.Profile)
+			requirement, err = a.orch.ProfileApprovalRequirementByName(ctx, tenantID, a.gate.Profile)
 		}
 		if err == nil {
-			err = a.validateIdentityProfileLifetime(r.Context(), tenantID, identity, requirement, req.SubjectCSRPEM)
+			err = a.validateIdentityProfileLifetime(ctx, tenantID, identity, requirement, req.SubjectCSRPEM)
 		}
 		if errors.Is(err, orchestrator.ErrIssuanceProfileRefused) {
 			// The plan below reports it: execution refuses this issuance
@@ -120,49 +155,41 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 			profileRefusal, err = err, nil
 		}
 		if err != nil {
-			a.writeError(w, err)
-			return
+			return identityLifecyclePreviewResponse{}, err
 		}
 	}
 	if to == orchestrator.StateRenewing {
-		pending, err := a.store.IdentityRenewalWorkPending(r.Context(), tenantID, id)
+		pending, err := a.store.IdentityRenewalWorkPending(ctx, tenantID, id)
 		if err != nil {
-			a.writeError(w, err)
-			return
+			return identityLifecyclePreviewResponse{}, err
 		}
 		if pending {
-			a.writeError(w, orchestrator.ErrRenewalWorkPending)
-			return
+			return identityLifecyclePreviewResponse{}, orchestrator.ErrRenewalWorkPending
 		}
-		replacement, err := a.store.ActiveEndpointReplacement(r.Context(), tenantID, id)
+		replacement, err := a.store.ActiveEndpointReplacement(ctx, tenantID, id)
 		if err != nil {
-			a.writeError(w, err)
-			return
+			return identityLifecyclePreviewResponse{}, err
 		}
 		if replacement != "" {
-			a.writeError(w, errStatus(http.StatusConflict,
-				"This identity has active replacement "+replacement+". Complete or revoke that replacement before renewing the original."))
-			return
+			return identityLifecyclePreviewResponse{}, errStatus(http.StatusConflict,
+				"This identity has active replacement "+replacement+". Complete or revoke that replacement before renewing the original.")
 		}
 	}
 	csrPEM := strings.TrimSpace(req.SubjectCSRPEM)
 	if csrPEM != "" {
 		if to != orchestrator.StateIssued {
-			a.writeError(w, errStatus(http.StatusBadRequest, "subject_csr_pem is only meaningful on a transition to issued"))
-			return
+			return identityLifecyclePreviewResponse{}, errStatus(http.StatusBadRequest, "subject_csr_pem is only meaningful on a transition to issued")
 		}
-		if err := a.validateSubjectCSRPEM(r.Context(), tenantID, csrPEM); err != nil {
-			a.writeError(w, errWithStatus(http.StatusBadRequest, err))
-			return
+		if err := a.validateSubjectCSRPEM(ctx, tenantID, csrPEM); err != nil {
+			return identityLifecyclePreviewResponse{}, errWithStatus(http.StatusBadRequest, err)
 		}
 	}
-	owner, err := a.store.GetOwner(r.Context(), tenantID, identity.OwnerID)
+	owner, err := a.store.GetOwner(ctx, tenantID, identity.OwnerID)
 	if err != nil {
-		a.writeError(w, err)
-		return
+		return identityLifecyclePreviewResponse{}, err
 	}
 	destination, sideEffect := orchestrator.SideEffectFor(orchestrator.State(identity.Status), to)
-	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
+	principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
 	fingerprintBody, err := json.Marshal(struct {
 		Domain          string `json:"domain"`
 		TenantID        string `json:"tenant_id"`
@@ -178,8 +205,7 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 		CSRDigest: crypto.SHA256Hex([]byte(csrPEM)),
 	})
 	if err != nil {
-		a.writeError(w, err)
-		return
+		return identityLifecyclePreviewResponse{}, err
 	}
 	plan := identityLifecyclePreviewResponse{
 		Capability: "nhi_lifecycle_transition", Ready: true,
@@ -199,21 +225,16 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 			"Append one tenant-scoped " + eventType + " event.",
 			"Project the identity from " + identity.Status + " to " + req.To + ".",
 		},
-		ExecutionEffects: []string{},
-		VerificationSteps: []string{
-			"Read /api/v1/identities/" + id + " and confirm status is " + req.To + ".",
-			"Find the immutable " + eventType + " audit event for this identity.",
-		},
-		Warnings: []string{},
-		Guidance: "This preview performed no write and contacted no external system. Execution rechecks the lifecycle version, policy, quota, approval, and idempotency boundaries.",
+		ExecutionEffects:  []string{},
+		VerificationSteps: transitionReadback(id, req.To, eventType, sideEffect),
+		Warnings:          []string{},
+		Guidance:          "This preview performed no write and contacted no external system. Execution rechecks the lifecycle version, policy, quota, approval, and idempotency boundaries.",
 	}
 	if sideEffect {
 		plan.ExecutionWrites = append(plan.ExecutionWrites,
 			"Enqueue one "+destination+" intent in the same PostgreSQL transaction as the state change.")
 		plan.ExecutionEffects = append(plan.ExecutionEffects,
 			"A bounded outbox worker performs "+destination+" asynchronously after the transaction commits.")
-		plan.VerificationSteps = append(plan.VerificationSteps,
-			"Follow the matching delivery or rotation receipt; accepted lifecycle state is not the same as completed external delivery.")
 	}
 	if to == orchestrator.StateIssued {
 		plan.Prerequisites = append(plan.Prerequisites,
@@ -225,29 +246,25 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 		}
 		admission := profileRefusal
 		if admission == nil {
-			admission = a.orch.IssuanceAdmissionRefusal(r.Context(), tenantID, identity, nil)
+			admission = a.orch.IssuanceAdmissionRefusal(ctx, tenantID, identity, nil)
 		}
 		if errors.Is(admission, orchestrator.ErrIssuanceProfileRefused) {
 			// The profile the mint would apply refuses it; execution would
 			// refuse this issuance before recording anything.
-			plan.Ready = false
 			plan.ProfileRefused = true
 			plan.ProfileRefusal = admission.Error()
-			plan.Warnings = append(plan.Warnings, admission.Error())
+			plan.refuse(admission.Error())
 		} else if admission != nil {
-			a.writeError(w, admission)
-			return
+			return identityLifecyclePreviewResponse{}, admission
 		}
 		if csrPEM == "" {
-			if err := a.orch.ControlPlaneKeygenRefusal(r.Context(), tenantID, identity, csrPEM); errors.Is(err, orchestrator.ErrControlPlaneKeygenOff) {
+			if err := a.orch.ControlPlaneKeygenRefusal(ctx, tenantID, identity, csrPEM); errors.Is(err, orchestrator.ErrControlPlaneKeygenOff) {
 				// The tenant turned control-plane key generation off; execution
 				// would refuse this issuance before recording anything.
-				plan.Ready = false
 				plan.KeygenRefused = true
-				plan.Warnings = append(plan.Warnings, err.Error())
+				plan.refuse(err.Error())
 			} else if err != nil {
-				a.writeError(w, err)
-				return
+				return identityLifecyclePreviewResponse{}, err
 			} else {
 				plan.Warnings = append(plan.Warnings,
 					"No requester-generated CSR is attached. The deprecated compatibility path may generate a subject key inside the control plane.")
@@ -256,38 +273,32 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 	}
 	if to == orchestrator.StateRevoked && (identity.Kind == store.KindX509Certificate || identity.Kind == "x509") {
 		if orchestrator.KeyCompromiseNeedsContainment(identity, to, req.Reason) {
-			plan.Ready = false
-			plan.Warnings = append(plan.Warnings,
+			plan.refuse(
 				"This X.509 identity may still be serving a compromised leaf. The disabled ordinary transition would queue CA revocation but no host containment, so it cannot complete a key-compromise response. Use Certificates → Revocation & CT → Revocation center, select the exact host target, and review the compound key-compromise command. If no managed target is available, revoke the exact certificate with its issuing CA and stop the host through an independently verified procedure.")
 			plan.Guidance = "Ordinary key-compromise revocation is unavailable for a serving X.509 identity. Review CA revocation and host containment together in the Revocation center."
 			plan.VerificationSteps = append(plan.VerificationSteps,
 				"Follow both CA publication and host containment receipts, then verify signed CA revocation evidence and the fresh served leaf with stock clients.")
 		}
-		certs, err := a.store.IdentityRevocationCertificates(r.Context(), tenantID, id, 101)
+		certs, err := a.store.IdentityRevocationCertificates(ctx, tenantID, id, 101)
 		if err != nil {
-			a.writeError(w, err)
-			return
+			return identityLifecyclePreviewResponse{}, err
 		}
 		if len(certs) > 100 {
-			plan.Ready = false
-			plan.Warnings = append(plan.Warnings,
+			plan.refuse(
 				"More than 100 exact certificates need revocation. This preview cannot confirm every issuing CA in one bounded read; review the certificate inventory and revocation receipts.")
 		}
 		for _, cert := range certs {
 			if a.certRevocationAuthority == nil {
-				plan.Ready = false
-				plan.Warnings = append(plan.Warnings,
-					"The issuing CA revocation capability is unavailable for certificate "+cert.ID+". Confirm revocation with its issuing CA.")
+				plan.refuse(
+					"The issuing CA revocation capability is unavailable for certificate " + cert.ID + ". Confirm revocation with its issuing CA.")
 				continue
 			}
-			if _, err := a.certRevocationAuthority(r.Context(), cert); err != nil {
+			if _, err := a.certRevocationAuthority(ctx, cert); err != nil {
 				if !errors.Is(err, orchestrator.ErrCertificateRevocationUnsupported) {
-					a.writeError(w, err)
-					return
+					return identityLifecyclePreviewResponse{}, err
 				}
-				plan.Ready = false
-				plan.Warnings = append(plan.Warnings,
-					"trstctl cannot confirm revocation through the issuing CA for exact certificate "+cert.ID+". Revoke it with its issuing CA and verify upstream CRL or OCSP status; a local identity state change does not revoke the certificate.")
+				plan.refuse(
+					"trstctl cannot confirm revocation through the issuing CA for exact certificate " + cert.ID + ". Revoke it with its issuing CA and verify upstream CRL or OCSP status; a local identity state change does not revoke the certificate.")
 			}
 		}
 		if len(certs) != 0 {
@@ -300,8 +311,7 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 			}
 			if len(identity.Attributes) != 0 {
 				if err := json.Unmarshal(identity.Attributes, &binding); err != nil {
-					a.writeError(w, err)
-					return
+					return identityLifecyclePreviewResponse{}, err
 				}
 			}
 			target := "a bound serving workload"
@@ -315,7 +325,7 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 				"Open a fresh connection to the serving target and confirm that no revoked serial or fingerprint is served. Confirm a verified replacement delivery or independently verify service refusal; CA revocation alone is not endpoint containment.")
 		}
 	}
-	a.writeJSON(w, http.StatusOK, plan)
+	return plan, nil
 }
 
 // issuingAuthorityFacts explains which CA will sign when this identity moves to

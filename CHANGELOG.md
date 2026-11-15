@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- An identity's review plan carries the transition preview's result for each step (A244-L2): the step whose transition
+  starts at the identity's state is previewed now as the transition preview previews it (ready or not, its refusals
+  apart from its other warnings, the policy execution checks again and its readback), a step the identity is already
+  in reads `accepted`, and a later step names its transition and `waits_on` an earlier refused step. Reading it writes
+  nothing. The console's Application view shows each step's blocker and what execution checks.
 - An agent broker issuance recorded before Q4 takes its requester from its event's recorded actor (Q4-L2), marked as
   derived (`requested_by_source: event_actor`; the graph's `DELEGATED` edge names the source); one whose event recorded
   no actor marks its certificate `requested_by: unknown` in the graph. A read-model rebuild derives it for issuances

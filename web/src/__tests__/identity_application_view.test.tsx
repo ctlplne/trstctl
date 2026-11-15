@@ -13,6 +13,17 @@ vi.mock("@/lib/api", async (original) => {
   return { ...actual, api: { ...actual.api, identityApplication: read } };
 });
 
+type StepPreview = IdentityApplicationView["review_plan"][number]["preview"];
+const stepPreview = (preview: Partial<StepPreview> & Pick<StepPreview, "state">): StepPreview => ({
+  ready: true,
+  refusals: [],
+  warnings: [],
+  policy: [],
+  readback: [],
+  ...preview,
+});
+const renewal = stepPreview({ state: "previewed", from: "deployed", to: "renewing", event_type: "identity.renewing" });
+
 const fixture = (): IdentityApplicationView => ({
   identity: {
     id: "app-1",
@@ -48,10 +59,14 @@ const fixture = (): IdentityApplicationView => ({
   ],
   defaults: { owner_id: "owner-1", profile_name: "orders-tls", issuer_source: "external", issuer_id: "corp-digicert", connector: "aws-acm" },
   review_plan: [
-    { action: "approve", subject: "orders-tls" },
-    { action: "issue", subject: "external:corp-digicert" },
-    { action: "deploy", subject: "arn:aws:acm:us-east-1:123456789012:certificate/orders (aws-acm)" },
-    { action: "verify", subject: "relay" },
+    { action: "approve", subject: "orders-tls", preview: renewal },
+    { action: "issue", subject: "external:corp-digicert", preview: renewal },
+    {
+      action: "deploy",
+      subject: "arn:aws:acm:us-east-1:123456789012:certificate/orders (aws-acm)",
+      preview: stepPreview({ state: "later", from: "renewing", to: "deployed", event_type: "identity.renewed" }),
+    },
+    { action: "verify", subject: "relay", preview: stepPreview({ state: "later" }) },
   ],
 });
 
@@ -89,7 +104,7 @@ describe("certificate application view (A244)", () => {
     expect(section.queryByText("That sighting is of an earlier certificate, not the active one.")).not.toBeInTheDocument();
     expect(section.getByText("Renew before it expires")).toBeInTheDocument();
     expect(section.getByText("Permitted enrollment methods: acme, api")).toBeInTheDocument();
-    const steps = section.getAllByRole("listitem").map((item) => item.textContent);
+    const steps = section.getAllByRole("listitem").map((item) => item.firstChild?.textContent);
     expect(steps.slice(0, 4)).toEqual([
       "An approver signs off under profile orders-tls",
       "Issue from external:corp-digicert",
@@ -135,8 +150,8 @@ describe("certificate application view (A244)", () => {
     ];
     view.renewal = { due: false, next_action: "blocked", blockers: ["destination disabled"] };
     view.review_plan = [
-      { action: "issue", subject: "external:corp-digicert" },
-      { action: "verify", subject: "" },
+      { action: "issue", subject: "external:corp-digicert", preview: renewal },
+      { action: "verify", subject: "", preview: stepPreview({ state: "later" }) },
     ];
     read.mockResolvedValue(view);
     show();
@@ -148,6 +163,44 @@ describe("certificate application view (A244)", () => {
     expect(section.getByText("Blocked until the failed prerequisites below are fixed")).toBeInTheDocument();
     expect(section.getByText(/destination disabled/)).toBeInTheDocument();
     expect(section.getByText("Nothing observes this destination yet, so the new certificate will read as delivered, not seen in use")).toBeInTheDocument();
+  });
+
+  it("shows what the transition preview refuses in a plan step and which step the later ones wait on (A244-L2)", async () => {
+    const view = fixture();
+    view.identity.status = "requested";
+    const refusal = "control-plane key generation is off for this tenant; attach subject_csr_pem";
+    const issuance = stepPreview({
+      state: "previewed",
+      from: "requested",
+      to: "issued",
+      event_type: "identity.issued",
+      ready: false,
+      refusals: [refusal],
+      warnings: ["No issuing authority is pinned on this identity."],
+      policy: ["Certificate profile, quota, approval, CSR, and signer checks run again at execution."],
+      readback: ["Read /api/v1/identities/app-1 and confirm status is issued."],
+    });
+    view.review_plan = [
+      { action: "issue", subject: "platform:trstctl-issuing-ca", preview: issuance },
+      {
+        action: "deploy",
+        subject: "orders (nginx)",
+        preview: stepPreview({ state: "later", from: "issued", to: "deployed", event_type: "identity.deployed", ready: false, waits_on: "issue" }),
+      },
+      { action: "verify", subject: "", preview: stepPreview({ state: "later", ready: false, waits_on: "issue" }) },
+    ];
+    read.mockResolvedValue(view);
+    show();
+    const section = within(await screen.findByRole("region", { name: "Application view" }));
+    await section.findByText("Previewed now (requested → issued). Nothing was written or sent.");
+    expect(section.getByText(`Refused now: ${refusal}`)).toHaveClass("text-destructive");
+    expect(section.getAllByText("Waits on the issue step, which would be refused now.")).toHaveLength(2);
+    expect(section.getByText("Runs later (issued → deployed).")).toBeInTheDocument();
+    expect(section.getByText("Read once the delivery is done.")).toBeInTheDocument();
+    expect(section.getByText("Warnings: No issuing authority is pinned on this identity.")).toBeInTheDocument();
+    expect(section.getByText("What execution checks and how to confirm it")).toBeInTheDocument();
+    expect(section.getByText("Certificate profile, quota, approval, CSR, and signer checks run again at execution.")).toBeInTheDocument();
+    expect(section.getByText("Read /api/v1/identities/app-1 and confirm status is issued.")).toBeInTheDocument();
   });
 
   it("says whether anything checks the destination's endpoint (A244-L1)", async () => {

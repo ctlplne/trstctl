@@ -54,6 +54,18 @@ const verifyCopy = {
   relay: "identities.application.plan.verify.relay",
 } as const;
 
+const previewStateCopy = {
+  previewed: "identities.application.plan.state.previewed",
+  accepted: "identities.application.plan.state.accepted",
+  later: "identities.application.plan.state.later",
+} as const;
+
+const planStepCopy = {
+  approve: "identities.application.plan.step.approve",
+  issue: "identities.application.plan.step.issue",
+  deploy: "identities.application.plan.step.deploy",
+} as const;
+
 const actionCopy = {
   recover: "identities.application.action.recover",
   revoke: "identities.application.action.revoke",
@@ -205,7 +217,10 @@ function ApplicationDetails({ view, formatDateTime }: { view: IdentityApplicatio
         ) : (
           <ol className="mt-1 grid list-decimal gap-1 ps-5">
             {view.review_plan.map((step) => (
-              <li key={step.action}>{planStep(step, t)}</li>
+              <li key={step.action}>
+                {planStep(step, t)}
+                <PlanStepPreview preview={step.preview} t={t} />
+              </li>
             ))}
           </ol>
         )}
@@ -278,6 +293,56 @@ function planStep(step: IdentityApplicationView["review_plan"][number], t: Retur
     default:
       return step.subject in verifyCopy ? t(verifyCopy[step.subject as keyof typeof verifyCopy]) : t("identities.application.plan.verify.none");
   }
+}
+
+/** What the effect-free transition preview says about one plan step (A244-L2):
+ * whether it was previewed now, what refuses it or which earlier step it waits
+ * on, and what execution checks and how to confirm it. */
+function PlanStepPreview({ preview, t }: { preview: IdentityApplicationView["review_plan"][number]["preview"]; t: ReturnType<typeof useTranslation>["t"] }) {
+  return (
+    <>
+      <span className="block text-xs text-muted-foreground">
+        {preview.from && preview.to
+          ? t(previewStateCopy[preview.state], { from: preview.from, to: preview.to })
+          : t("identities.application.plan.state.reading")}
+      </span>
+      {!preview.ready && (
+        <span className="block text-xs text-destructive">
+          {preview.waits_on
+            ? t("identities.application.plan.waitsOn", { step: t(planStepCopy[preview.waits_on]) })
+            : t("identities.application.plan.refused", { refusals: preview.refusals.join("; ") })}
+        </span>
+      )}
+      {preview.warnings.length > 0 && (
+        <span className="block text-xs text-muted-foreground">{t("identities.application.plan.warnings", { warnings: preview.warnings.join("; ") })}</span>
+      )}
+      {(preview.policy.length > 0 || preview.readback.length > 0) && (
+        <details className="text-xs text-muted-foreground">
+          <summary>{t("identities.application.plan.details")}</summary>
+          {preview.policy.length > 0 && (
+            <>
+              <p className="font-medium">{t("identities.application.plan.policy")}</p>
+              <ul className="list-disc ps-4">
+                {preview.policy.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {preview.readback.length > 0 && (
+            <>
+              <p className="font-medium">{t("identities.application.plan.readback")}</p>
+              <ul className="list-disc ps-4">
+                {preview.readback.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </details>
+      )}
+    </>
+  );
 }
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {

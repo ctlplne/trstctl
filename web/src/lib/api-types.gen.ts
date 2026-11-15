@@ -6041,7 +6041,7 @@ export interface IdentityApplicationView {
   owner?: { application?: string; environment?: string; id: string; kind: string; name: string; service?: string };
   profile?: { enrollment_methods: string[]; name: string; requires_approval: boolean; spec_digest: string; version: number };
   renewal: { blockers: string[]; due: boolean; latest_run_status?: string; next_action: string; not_after?: string; source?: string };
-  review_plan: ({ action: "approve" | "issue" | "deploy" | "verify"; subject: string })[];
+  review_plan: ({ action: "approve" | "issue" | "deploy" | "verify"; preview: { event_type?: string; from?: string; policy: string[]; readback: string[]; ready: boolean; refusals: string[]; state: "previewed" | "accepted" | "later"; to?: string; waits_on?: "approve" | "issue" | "deploy"; warnings: string[] }; subject: string })[];
   served?: { at?: string; fingerprint: string; matches_current: boolean; vantage: "connector" | "local" | "relay" };
 }
 

@@ -20179,6 +20179,21 @@ export interface components {
             review_plan: {
                 /** @enum {string} */
                 action: "approve" | "issue" | "deploy" | "verify";
+                /** @description The effect-free transition preview's result for the step (A244-L2): previewed (its transition starts at the identity's state and was previewed now), accepted (the identity is in its transition) or later (it runs after an earlier step, which it waits on when that step is refused). */
+                preview: {
+                    event_type?: string;
+                    from?: string;
+                    policy: string[];
+                    readback: string[];
+                    ready: boolean;
+                    refusals: string[];
+                    /** @enum {string} */
+                    state: "previewed" | "accepted" | "later";
+                    to?: string;
+                    /** @enum {string} */
+                    waits_on?: "approve" | "issue" | "deploy";
+                    warnings: string[];
+                };
                 subject: string;
             }[];
             served?: {

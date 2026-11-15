@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/usage"
 )
 
 // A244: one certificate's application view. Everything that decides what
@@ -107,6 +109,38 @@ type applicationPlanStep struct {
 	// (deploy) or the vantage that saw the destination last (verify); empty
 	// for verify when nothing has observed the destination yet.
 	Subject string `json:"subject"`
+	// Preview is what the effect-free transition preview says about the step
+	// (A244-L2): the plan was derived from the bound configuration alone, so
+	// it said nothing of a refusal execution would meet.
+	Preview applicationStepPreview `json:"preview"`
+}
+
+// applicationStepPreview is the effect-free transition preview's result for
+// one review plan step. Reading it writes nothing, enqueues nothing and
+// contacts no signer or external system.
+type applicationStepPreview struct {
+	// State is previewed (the step's transition starts at the identity's
+	// state, and the transition preview ran it now), accepted (the identity
+	// is in the step's transition: its effect is queued or done) or later
+	// (the step runs after an earlier one; its transition is read from the
+	// lifecycle registry and previewed once the identity reaches it).
+	State string `json:"state"`
+	// From, To and EventType are the lifecycle transition the step runs in;
+	// empty for verify, a reading rather than a transition.
+	From      string `json:"from,omitempty"`
+	To        string `json:"to,omitempty"`
+	EventType string `json:"event_type,omitempty"`
+	// Ready is false when execution would refuse the step now: Refusals say
+	// why, or WaitsOn names the earlier step whose refusal stops it.
+	Ready    bool     `json:"ready"`
+	WaitsOn  string   `json:"waits_on,omitempty"`
+	Refusals []string `json:"refusals"`
+	// Warnings are the preview's other warnings for the step.
+	Warnings []string `json:"warnings"`
+	// Policy is what execution checks again before the step acts.
+	Policy []string `json:"policy"`
+	// Readback is how to confirm the step acted.
+	Readback []string `json:"readback"`
 }
 
 type applicationCertificate struct {
@@ -383,7 +417,170 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 	}
 	view.Actions = applicationActions(identity)
 	view.ReviewPlan = applicationReviewPlan(identity.Status, view)
+	if err := a.previewApplicationPlan(ctx, tenantID, identity.ID, identity.Status, view, view.ReviewPlan); err != nil {
+		return identityApplicationView{}, err
+	}
 	return view, nil
+}
+
+// applicationStepTransition is the lifecycle transition a review plan step
+// runs in for an identity in status: approve and issue in the next issuance
+// or renewal, deploy in the delivery after it. Verify is a reading.
+func applicationStepTransition(action, status string) (from, to string) {
+	switch action {
+	case "approve", "issue":
+		switch status {
+		case "requested", "issued":
+			return "requested", "issued"
+		case "renewal_failed":
+			return "renewal_failed", "renewing"
+		default:
+			return "deployed", "renewing"
+		}
+	case "deploy":
+		if status == "requested" || status == "issued" {
+			return "issued", "deployed"
+		}
+		return "renewing", "deployed"
+	}
+	return "", ""
+}
+
+// previewApplicationPlan gives each review plan step the transition
+// preview's result (A244-L2). The step whose transition starts at the
+// identity's state is previewed exactly as POST
+// /identities/{id}/transitions/preview would preview it; a step the
+// identity is already in reads accepted; a later step reads its transition
+// from the lifecycle registry and waits on any earlier refusal.
+func (a *API) previewApplicationPlan(ctx context.Context, tenantID, id, status string, view identityApplicationView, plan []applicationPlanStep) error {
+	previews := map[string]applicationTransitionPreview{}
+	waitsOn := ""
+	for i := range plan {
+		step := &plan[i]
+		from, to := applicationStepTransition(step.Action, status)
+		p := applicationStepPreview{From: from, To: to, Ready: true,
+			Refusals: []string{}, Warnings: []string{}, Policy: []string{}, Readback: []string{}}
+		if from != "" {
+			p.EventType, _ = orchestrator.EventTypeFor(orchestrator.State(from), orchestrator.State(to))
+		}
+		switch {
+		case from == "":
+			p.State = "later"
+			p.Readback = applicationVerifyReadback(view)
+		case from == status:
+			p.State = "previewed"
+			key := from + ">" + to
+			previewed, ok := previews[key]
+			if !ok {
+				var err error
+				if previewed, err = a.previewApplicationTransition(ctx, tenantID, id, to); err != nil {
+					return err
+				}
+				previews[key] = previewed
+			}
+			p.Ready, p.Refusals, p.Warnings = previewed.Ready, previewed.Refusals, previewed.Warnings
+			p.Policy, p.Readback = previewed.Policy, previewed.Readback
+		case to == status:
+			p.State = "accepted"
+			destination, sideEffect := orchestrator.SideEffectFor(orchestrator.State(from), orchestrator.State(to))
+			p.Readback = transitionReadback(id, to, p.EventType, sideEffect)
+			if sideEffect {
+				p.Policy = append(p.Policy, "The identity is "+to+": its "+destination+" intent is queued or done.")
+			}
+		default:
+			p.State = "later"
+			destination, sideEffect := orchestrator.SideEffectFor(orchestrator.State(from), orchestrator.State(to))
+			p.Policy = append(p.Policy, "Runs once the identity is "+from+"; it is previewed then.")
+			if sideEffect {
+				p.Policy = append(p.Policy, "Execution enqueues one "+destination+" intent with the state change; a bounded outbox worker performs it after the commit.")
+			}
+			p.Readback = transitionReadback(id, to, p.EventType, sideEffect)
+		}
+		if step.Action == "approve" {
+			// The approval belongs to the issuance's transition; what it
+			// checks and how to read it back are the approval's own.
+			p.Policy = []string{"Profile " + step.Subject + " requires an approved request before the " + p.EventType + " transition runs."}
+			p.Readback = []string{"This view's approvals list the request as approved, naming no change since it was asked."}
+		}
+		if p.State == "later" && waitsOn != "" {
+			p.Ready, p.WaitsOn = false, waitsOn
+		}
+		if !p.Ready && waitsOn == "" && step.Action != "approve" {
+			waitsOn = step.Action
+		}
+		step.Preview = p
+	}
+	return nil
+}
+
+// applicationTransitionPreview is the transition preview's result as a
+// review plan step reads it.
+type applicationTransitionPreview struct {
+	Ready              bool
+	Refusals, Warnings []string
+	Policy, Readback   []string
+}
+
+// previewApplicationTransition runs the transition preview for the
+// identity's next transition. A refusal the preview reports as an error
+// (another renewal running, an active replacement, a refused key or quota)
+// reads as the step's refusal; any other error fails the view as a read.
+func (a *API) previewApplicationTransition(ctx context.Context, tenantID, id, to string) (applicationTransitionPreview, error) {
+	plan, err := a.identityTransitionPlan(ctx, tenantID, id, transitionRequest{To: to, Reason: "application view review plan"})
+	if err != nil {
+		reason, refused := applicationPreviewRefusal(lifecyclePreviewAPIError(err))
+		if !refused {
+			return applicationTransitionPreview{}, err
+		}
+		return applicationTransitionPreview{Refusals: []string{reason}, Warnings: []string{},
+			Policy: []string{}, Readback: []string{}}, nil
+	}
+	out := applicationTransitionPreview{Ready: plan.Ready, Refusals: append([]string{}, plan.refusals...),
+		Warnings: []string{}, Policy: append([]string{}, plan.Prerequisites...), Readback: append([]string{}, plan.VerificationSteps...)}
+	refused := map[string]bool{}
+	for _, r := range plan.refusals {
+		refused[r] = true
+	}
+	for _, w := range plan.Warnings {
+		if !refused[w] {
+			out.Warnings = append(out.Warnings, w)
+		}
+	}
+	return out, nil
+}
+
+// applicationPreviewRefusal says whether a transition preview error is a
+// refusal execution would answer with (a 4xx naming the request's fault or
+// the identity's state), and its reason.
+func applicationPreviewRefusal(err error) (string, bool) {
+	var ae *apiError
+	var notActive *orchestrator.ProfileNotActiveError
+	switch {
+	case errors.As(err, &ae):
+		return ae.detail, ae.status >= 400 && ae.status < 500
+	case errors.As(err, &notActive):
+		return notActive.Error(), true
+	case store.IsNotFound(err):
+		return "A record this transition reads (the identity or its owner) is not found; execution refuses it the same way.", true
+	case errors.Is(err, orchestrator.ErrRenewalWorkPending), errors.Is(err, orchestrator.ErrInvalidTransition),
+		errors.Is(err, orchestrator.ErrControlPlaneKeygenOff), errors.Is(err, orchestrator.ErrIssuanceProfileRefused),
+		errors.Is(err, usage.ErrQuotaExhausted):
+		return err.Error(), true
+	case crypto.RefusedSubjectKey(err):
+		return crypto.SubjectKeyRefusalDetail(err), true
+	}
+	return "", false
+}
+
+// applicationVerifyReadback is how to confirm the new certificate in use.
+func applicationVerifyReadback(view identityApplicationView) []string {
+	if view.Destination != nil && view.Destination.VerifyAddress != "" {
+		return []string{"Open a fresh connection to " + view.Destination.VerifyAddress + " and confirm it presents the new certificate."}
+	}
+	if view.Served != nil {
+		return []string{"The " + view.Served.Vantage + " vantage that saw the destination last confirms it presents the new certificate."}
+	}
+	return []string{"Nothing observes this destination: set verify_address on its deployment target to have the new certificate checked."}
 }
 
 // applicationReviewPlan is what the next issuance or renewal does, step by
@@ -549,7 +746,14 @@ func identityApplicationSchemas() map[string]*Schema {
 			}),
 			"review_plan": {Type: "array", Items: object(map[string]*Schema{
 				"action": {Type: "string", Enum: []string{"approve", "issue", "deploy", "verify"}}, "subject": str(),
-			}, "action", "subject")},
+				"preview": {Type: "object", Description: "The effect-free transition preview's result for the step (A244-L2): previewed (its transition starts at the identity's state and was previewed now), accepted (the identity is in its transition) or later (it runs after an earlier step, which it waits on when that step is refused).",
+					Properties: map[string]*Schema{
+						"state": {Type: "string", Enum: []string{"previewed", "accepted", "later"}},
+						"from":  str(), "to": str(), "event_type": str(),
+						"ready": {Type: "boolean"}, "waits_on": {Type: "string", Enum: []string{"approve", "issue", "deploy"}},
+						"refusals": strs, "warnings": strs, "policy": strs, "readback": strs,
+					}, Required: []string{"state", "ready", "refusals", "warnings", "policy", "readback"}},
+			}, "action", "subject", "preview")},
 		}, "identity", "inventory_state", "issuer", "approvals", "renewal", "alerts", "actions", "defaults", "review_plan"),
 	}
 }
