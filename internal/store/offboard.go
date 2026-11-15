@@ -308,7 +308,7 @@ var TenantScopedTables = []string{
 	"pam_session_recording_chunks", "pam_session_recordings",
 	// A258: credential health, templates, responders and emergency grants;
 	// no foreign keys.
-	"pam_account_health", "pam_access_templates", "pam_emergency_responders", "pam_emergency_grants",
+	"pam_account_health", "pam_account_health_checks", "pam_access_templates", "pam_emergency_responders", "pam_emergency_grants",
 	// A260: discovery sources, runs, run changes, staged and imported
 	// accounts; no foreign keys.
 	"pam_discovery_sources", "pam_discovery_runs", "pam_discovery_run_changes", "pam_discovered_accounts",

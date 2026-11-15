@@ -602,3 +602,15 @@ func TestSlackInstallScopesNeedSnapshotFormat116N8L1(t *testing.T) {
 		t.Fatalf("snapshot format %d could restore a payload without the install's scopes", SnapshotFormatVersion)
 	}
 }
+
+// A274L1-L1: an account's recent health checks are a read model like its
+// latest health.
+func TestPAMAccountHealthChecksUseEventRecoveryAndSnapshotsA274L1L1(t *testing.T) {
+	const table = "pam_account_health_checks"
+	if !containsRecoveryTable(TenantScopedTables, table) || !containsRecoveryTable(ReadModelTables, table) || !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s must be erased with its tenant and survive rebuild and snapshot restore", table)
+	}
+	if SnapshotFormatVersion < 139 {
+		t.Fatalf("snapshot format %d could restore accounts without their recent health checks", SnapshotFormatVersion)
+	}
+}

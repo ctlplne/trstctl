@@ -914,7 +914,7 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// A258: projected from pam.account.health_checked, pam.template.*,
 	// pam.emergency.responders_set, pam.emergency.opened and
 	// pam.emergency.reviewed.
-	"pam_account_health", "pam_access_templates", "pam_emergency_responders", "pam_emergency_grants",
+	"pam_account_health", "pam_account_health_checks", "pam_access_templates", "pam_emergency_responders", "pam_emergency_grants",
 	// A274: projected from pam.signin.collected and pam.signin.records_purged.
 	"pam_signin_records",
 	"pam_account_flags",

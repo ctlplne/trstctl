@@ -36,7 +36,55 @@ func (s *Store) ApplyPAMAccountHealthCheckedTx(ctx context.Context, tx pgx.Tx, t
 		                         ELSE cur.failing_since END
 		  WHERE cur.checked_at <= EXCLUDED.checked_at`,
 		tenantID, h.TargetType, h.TargetID, h.ProviderID, h.Status, h.Attempts, h.CheckedAt.UTC())
+	if err != nil {
+		return err
+	}
+	// A274L1-L1: every check signs in, so each one is kept for the sign-in
+	// collections that look back over it, and checks older than the history
+	// bound before this one are dropped.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO pam_account_health_checks (tenant_id, target_type, target_id, checked_at)
+		VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+		tenantID, h.TargetType, h.TargetID, h.CheckedAt.UTC()); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		DELETE FROM pam_account_health_checks
+		 WHERE tenant_id = $1 AND target_type = $2 AND target_id = $3 AND checked_at < $4`,
+		tenantID, h.TargetType, h.TargetID, h.CheckedAt.UTC().Add(-PAMAccountHealthCheckHistory))
 	return err
+}
+
+// PAMAccountHealthCheckHistory is how far before an account's check its
+// earlier checks are kept (A274L1-L1): a sign-in source looks back at most
+// seven days, and a day more covers the run's slack.
+const PAMAccountHealthCheckHistory = 8 * 24 * time.Hour
+
+// ListPAMAccountHealthChecks returns the times of every recorded credential
+// health check in [from, to] (A274L1-L1), keyed by target type and ID, oldest
+// first.
+func (s *Store) ListPAMAccountHealthChecks(ctx context.Context, tenantID string, from, to time.Time) (map[[2]string][]time.Time, error) {
+	out := map[[2]string][]time.Time{}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT target_type, target_id, checked_at FROM pam_account_health_checks
+			WHERE tenant_id = $1 AND checked_at >= $2 AND checked_at <= $3
+			ORDER BY target_type, target_id, checked_at`, tenantID, from.UTC(), to.UTC())
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var targetType, targetID string
+			var at time.Time
+			if err := rows.Scan(&targetType, &targetID, &at); err != nil {
+				return err
+			}
+			key := [2]string{targetType, targetID}
+			out[key] = append(out[key], at)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 // ListPAMAccountHealth returns a tenant's brokered accounts' health, keyed by

@@ -126,7 +126,10 @@ account, when, from where and how — never a credential or what a session did.
 Each sign-in is explained by a span in which trstctl itself, or a person it let in, signed
 in as that account: a session to one of the provider's vaulted targets (through its
 gateway, or a direct PostgreSQL session) or an SSH session to the provider's host as that
-account, a revealed check-out, a rotation of the account, or a credential health check. A
+account, a revealed check-out, a rotation of the account, or a credential health check —
+every check in the run's span, not only the latest, so two checks between runs each explain
+their own sign-in (trstctl keeps the checks of the eight days before an account's latest,
+covering the longest lookback; A274L1-L1). A
 sign-in no span explains (allowing 30 seconds of clock skew) becomes a
 `compromised_credential` finding (CAP-ITDR-02, OWASP NHI2) with the account, the client
 address, the method, the collector and the target-side reference as evidence — the input to

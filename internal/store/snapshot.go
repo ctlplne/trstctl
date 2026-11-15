@@ -389,7 +389,11 @@ import (
 // an older payload has neither, and a restore from it would read a product
 // default as a stated fact while its covered offset skipped the observation
 // that marked it.
-const SnapshotFormatVersion = 138
+// Version 139 carries A274L1-L1's recent credential health checks
+// (pam_account_health_checks): an older payload has none, and a restore from
+// it would leave a sign-in collection only each account's latest check while
+// its covered offset skipped the earlier checks' events.
+const SnapshotFormatVersion = 139
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -505,7 +509,7 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"pam_session_recordings", "pam_session_recording_chunks",
 	// Format 90: A258's brokered account credential health, access
 	// templates, emergency responders and emergency grants.
-	"pam_account_health", "pam_access_templates", "pam_emergency_responders", "pam_emergency_grants",
+	"pam_account_health", "pam_account_health_checks", "pam_access_templates", "pam_emergency_responders", "pam_emergency_grants",
 	// Format 91: A260's privileged account discovery sources, runs, run
 	// changes and staged accounts; format 92 adds its imported accounts.
 	"pam_discovery_sources", "pam_discovery_runs", "pam_discovery_run_changes", "pam_discovered_accounts",
@@ -946,7 +950,8 @@ SELECT jsonb_build_object(
   'provider_doc_records', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_doc_records t),
   'ssh_certificate_revocations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM ssh_certificate_revocations t),
   'listener_session_observations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM listener_session_observations t),
-  'pam_session_approval_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_session_approval_links t)
+  'pam_session_approval_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_session_approval_links t),
+  'pam_account_health_checks', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_account_health_checks t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL,

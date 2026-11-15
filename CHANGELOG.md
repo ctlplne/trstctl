@@ -1956,6 +1956,10 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- A sign-in collection explains the sign-in of every credential health check in its span,
+  not only the account's latest: two checks between runs no longer leave the earlier
+  check's sign-in flagged as made outside trstctl. trstctl keeps the checks of the eight
+  days before an account's latest (A274L1-L1).
 - A full read-model rebuild no longer queues a decoy's alert, a decoy secret reader's
   alert, a decoy's watch-gap warning or a compliance report's removal again for an event
   the deployment had already projected. The decoy credential's critical alert was queued

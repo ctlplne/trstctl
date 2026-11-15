@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -229,9 +230,15 @@ func (s *pamService) signInWindows(ctx context.Context, tenantID string, src pam
 	for _, r := range rotations {
 		add(roles[r.Key], r.CreatedAt, r.EndedAt, pamsignin.WindowRotation, r.ID)
 	}
-	// Credential health checks (A258) sign in as a vaulted account; the last
-	// one of each target is recorded.
+	// Credential health checks (A258) sign in as a vaulted account. Each
+	// check in the span explains its sign-in (A274L1-L1), not only the
+	// latest; the latest is also read from the account's health, which
+	// holds it for a check recorded before its history was kept.
 	health, err := s.store.ListPAMAccountHealth(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	checks, err := s.store.ListPAMAccountHealthChecks(ctx, tenantID, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -240,11 +247,14 @@ func (s *pamService) signInWindows(ctx context.Context, tenantID string, src pam
 		return nil, err
 	}
 	for _, t := range targets {
-		h, ok := health[[2]string{t.targetType, t.id}]
-		if !ok || h.CheckedAt.Before(from) || h.CheckedAt.After(to) {
-			continue
+		key := [2]string{t.targetType, t.id}
+		times := checks[key]
+		if h, ok := health[key]; ok && !h.CheckedAt.Before(from) && !h.CheckedAt.After(to) && !slices.ContainsFunc(times, h.CheckedAt.Equal) {
+			times = append(times, h.CheckedAt)
 		}
-		add(roles[t.accountSecret], h.CheckedAt.Add(-pamSignInHealthSpan), h.CheckedAt, pamsignin.WindowHealth, t.targetType+"/"+t.id)
+		for _, at := range times {
+			add(roles[t.accountSecret], at.Add(-pamSignInHealthSpan), at, pamsignin.WindowHealth, t.targetType+"/"+t.id)
+		}
 	}
 	return windows, nil
 }
