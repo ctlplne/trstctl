@@ -80,6 +80,8 @@ func Classify(f Finding, p Policy) Classification {
 		return ClassifyProtocol(f.Protocol, p)
 	case f.Cipher != "":
 		return ClassifyCipher(f.Cipher, p)
+	case IsKeyExchangeGroup(f.Algorithm):
+		return ClassifyGroup(f.Algorithm)
 	case f.Algorithm != "":
 		return withKeyVerdict(ClassifyKey(f.Algorithm, f.KeyBits, p), f.KeyWeakReasons, f.KeyDistrust)
 	default:
@@ -193,4 +195,34 @@ func ClassifyCipher(name string, p Policy) Classification {
 		}
 	}
 	return c
+}
+
+// keyExchangeGroups are the TLS named groups a product's defaults offer
+// (X2-L7), by the names OpenSSL and IANA use: true for a hybrid or pure
+// ML-KEM group, false for a classical one.
+var keyExchangeGroups = map[string]bool{
+	"X25519MLKEM768": true, "SecP256r1MLKEM768": true, "SecP384r1MLKEM1024": true,
+	"MLKEM512": true, "MLKEM768": true, "MLKEM1024": true,
+	"X25519": false, "X448": false, "secp256r1": false, "secp384r1": false, "secp521r1": false,
+	"ffdhe2048": false, "ffdhe3072": false, "ffdhe4096": false, "ffdhe6144": false, "ffdhe8192": false,
+}
+
+// IsKeyExchangeGroup reports whether name is a TLS key-exchange group this
+// package rates.
+func IsKeyExchangeGroup(name string) bool {
+	_, ok := keyExchangeGroups[strings.TrimSpace(name)]
+	return ok
+}
+
+// ClassifyGroup rates a TLS key-exchange group: an ML-KEM group (hybrid or
+// pure) resists a cryptographically-relevant quantum computer; a classical
+// group does not, and traffic recorded under it today can be decrypted once
+// one exists.
+func ClassifyGroup(name string) Classification {
+	name = strings.TrimSpace(name)
+	if keyExchangeGroups[name] {
+		return Classification{Strength: StrengthStrong, Reasons: []string{name + " is a post-quantum (ML-KEM) key exchange"}}
+	}
+	return Classification{Strength: StrengthAcceptable, QuantumVulnerable: true, Reasons: []string{
+		name + " key exchange is breakable by a cryptographically-relevant quantum computer: traffic recorded today can be decrypted later"}}
 }

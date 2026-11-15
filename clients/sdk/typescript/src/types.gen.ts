@@ -15889,6 +15889,11 @@ export interface components {
             /** @description SHA-256 of the exact leaf observed for this certificate-key finding. Absent on historical or non-certificate observations; absence must not be inferred from a hostname or algorithm. */
             certificate_fingerprint?: string;
             cipher?: string;
+            /**
+             * @description default: a host-config fact the product reaches only through its built-in default, with nothing in the file stating it (X2-L7); absent for a stated fact.
+             * @enum {string}
+             */
+            config_source?: "default";
             /** Format: uuid */
             id: string;
             key_bits?: number;
@@ -15899,6 +15904,8 @@ export interface components {
             migration_standard: string;
             migration_target: string;
             out_of_policy: boolean;
+            /** @description With config_source default: the installed package whose default it is, as the host's package database names it (for example haproxy 2.8.5-1ubuntu3). */
+            product_version?: string;
             protocol?: string;
             quantum_vulnerable: boolean;
             reasons?: string[];

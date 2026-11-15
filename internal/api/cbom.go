@@ -194,6 +194,11 @@ type CBOMAsset struct {
 	MigrationTarget        string   `json:"migration_target"`
 	MigrationStandard      string   `json:"migration_standard"`
 	MigrationGeneration    string   `json:"migration_generation"`
+	// ConfigSource is "default" for a host-config fact a product reaches
+	// only through its built-in default, and ProductVersion the installed
+	// package whose default it is (X2-L7); absent for a stated fact.
+	ConfigSource   string `json:"config_source,omitempty"`
+	ProductVersion string `json:"product_version,omitempty"`
 }
 
 // CBOMInventoryResponse is the read API for the CBOM plus its migration-progress
@@ -230,7 +235,7 @@ func CBOMInventoryFromAssets(assets []store.CryptoAsset) CBOMInventoryResponse {
 			Strength: a.Strength, QuantumVulnerable: a.QuantumVulnerable,
 			OutOfPolicy: a.OutOfPolicy, Reasons: a.Reasons,
 			MigrationTarget: target.Algorithm, MigrationStandard: target.Standard,
-			MigrationGeneration: target.Generation,
+			MigrationGeneration: target.Generation, ConfigSource: a.ConfigSource, ProductVersion: a.ProductVersion,
 		})
 		findings = append(findings, f)
 	}

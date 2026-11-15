@@ -385,7 +385,11 @@ import (
 // has neither, and a restore from it would leave a session from before the
 // link unrecorded while its covered offset skipped the activation that names
 // its approval.
-const SnapshotFormatVersion = 137
+// Version 138 carries X2-L7's crypto asset config_source and product_version:
+// an older payload has neither, and a restore from it would read a product
+// default as a stated fact while its covered offset skipped the observation
+// that marked it.
+const SnapshotFormatVersion = 138
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

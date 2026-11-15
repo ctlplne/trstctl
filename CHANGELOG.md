@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- Host-config scans report product defaults (X2-L7): a protocol or key-exchange group HAProxy, Envoy or OpenSSL reaches
+  only through its built-in default (no minimum or groups stated) is listed in the CBOM, marked `config_source: default`
+  with the installed package whose default it is (from the host's dpkg or apk database), by a version-keyed table:
+  HAProxy 2.2 and Envoy 1.22 default to TLS 1.2, OpenSSL 3.1 bans TLS below 1.2 above security level 0, and OpenSSL 3.5
+  leads its default groups with the hybrid X25519MLKEM768. Key-exchange groups are rated as such (ML-KEM groups are not
+  quantum vulnerable), and the CycloneDX export carries the source and version.
 - Image builds keep building after Alpine rebuilds a pinned package (TOOL-O1): every Alpine package an image fetches is
   listed with its digest in `deploy/supply-chain/alpine-packages.json` and fetched from `${ALPINE_MIRROR}` (the Alpine
   CDN by default), and `scripts/supply-chain/alpine-mirror.py` keeps a digest-verified local mirror of them to build

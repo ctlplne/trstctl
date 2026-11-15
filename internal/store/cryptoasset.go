@@ -34,14 +34,26 @@ type CryptoAsset struct {
 	// ImportSource is the CBOM import source whose import last observed
 	// this fact (X6-L3); empty for trstctl's own scans.
 	ImportSource string
-	CreatedAt    time.Time
+	// ConfigSource is "default" for a host-config fact a product reaches
+	// only through its built-in default, and ProductVersion the installed
+	// package whose default it is (X2-L7); both empty for a stated fact.
+	ConfigSource   string
+	ProductVersion string
+	CreatedAt      time.Time
 }
 
 // signature identifies an asset within a tenant: the kind, location, and the
 // specific crypto fact it describes. Re-scanning the same usage refreshes the
 // existing row rather than duplicating it.
 func (a CryptoAsset) Signature() string {
-	return strings.Join([]string{a.Kind, a.Location, a.Algorithm, strconv.Itoa(a.KeyBits), a.Protocol, a.Cipher}, "|")
+	parts := []string{a.Kind, a.Location, a.Algorithm, strconv.Itoa(a.KeyBits), a.Protocol, a.Cipher}
+	// A product default is a different fact from the same value stated in the
+	// file (X2-L7). Only a default extends the signature, so every stated
+	// fact keeps the identity it always had.
+	if a.ConfigSource != "" {
+		parts = append(parts, a.ConfigSource)
+	}
+	return strings.Join(parts, "|")
 }
 
 // StableCryptoAssetID derives the same UUID every time for a tenant-scoped asset
@@ -74,15 +86,18 @@ func (s *Store) UpsertCryptoAsset(ctx context.Context, a CryptoAsset) (CryptoAss
 		return tx.QueryRow(ctx,
 			`INSERT INTO crypto_assets
 			        (id, tenant_id, signature, kind, location, algorithm, key_bits, protocol, cipher,
-			         library, strength, quantum_vulnerable, out_of_policy, reasons, certificate_fingerprint)
-			 VALUES ($14, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $15)
+			         library, strength, quantum_vulnerable, out_of_policy, reasons, certificate_fingerprint,
+			         config_source, product_version)
+			 VALUES ($14, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $15, $16, $17)
 			 ON CONFLICT (tenant_id, signature) DO UPDATE
 			    SET key_bits = EXCLUDED.key_bits, library = EXCLUDED.library, strength = EXCLUDED.strength,
 			        quantum_vulnerable = EXCLUDED.quantum_vulnerable, out_of_policy = EXCLUDED.out_of_policy,
-			        reasons = EXCLUDED.reasons, is_active = true, certificate_fingerprint = EXCLUDED.certificate_fingerprint
+			        reasons = EXCLUDED.reasons, is_active = true, certificate_fingerprint = EXCLUDED.certificate_fingerprint,
+			        config_source = EXCLUDED.config_source, product_version = EXCLUDED.product_version
 			 RETURNING id::text, created_at`,
 			a.TenantID, signature, a.Kind, a.Location, a.Algorithm, a.KeyBits, a.Protocol, a.Cipher,
-			a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, a.ID, a.CertificateFingerprint).
+			a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, a.ID, a.CertificateFingerprint,
+			a.ConfigSource, a.ProductVersion).
 			Scan(&a.ID, &a.CreatedAt)
 	})
 	return a, err
@@ -121,11 +136,11 @@ func (s *Store) ApplyCryptoAssetObservedTx(ctx context.Context, tx pgx.Tx, a Cry
 		        protocol = $8, cipher = $9, library = $10, strength = $11,
 		        quantum_vulnerable = $12, out_of_policy = $13, reasons = $14,
 		        event_sequence = $15, is_active = true, certificate_fingerprint = $16,
-		        import_source = $17
+		        import_source = $17, config_source = $18, product_version = $19
 		  WHERE tenant_id = $1 AND id = $2 AND event_sequence <= $15`,
 		a.TenantID, a.ID, signature, a.Kind, a.Location, a.Algorithm, a.KeyBits,
 		a.Protocol, a.Cipher, a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy,
-		reasons, sequence, a.CertificateFingerprint, a.ImportSource)
+		reasons, sequence, a.CertificateFingerprint, a.ImportSource, a.ConfigSource, a.ProductVersion)
 	if err != nil {
 		return err
 	}
@@ -150,16 +165,17 @@ func (s *Store) ApplyCryptoAssetObservedTx(ctx context.Context, tx pgx.Tx, a Cry
 		`INSERT INTO crypto_assets
 		        (id, tenant_id, signature, kind, location, algorithm, key_bits, protocol, cipher,
 		         library, strength, quantum_vulnerable, out_of_policy, reasons, created_at,
-		         event_sequence, is_active, certificate_fingerprint, import_source)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, true, $17, $18)
+		         event_sequence, is_active, certificate_fingerprint, import_source, config_source, product_version)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, true, $17, $18, $19, $20)
 		 ON CONFLICT (tenant_id, signature) DO UPDATE
 		    SET key_bits = EXCLUDED.key_bits, library = EXCLUDED.library, strength = EXCLUDED.strength,
 		        quantum_vulnerable = EXCLUDED.quantum_vulnerable, out_of_policy = EXCLUDED.out_of_policy,
 		        reasons = EXCLUDED.reasons, event_sequence = EXCLUDED.event_sequence, is_active = true, certificate_fingerprint = EXCLUDED.certificate_fingerprint,
-		        import_source = EXCLUDED.import_source
+		        import_source = EXCLUDED.import_source, config_source = EXCLUDED.config_source, product_version = EXCLUDED.product_version
 		  WHERE EXCLUDED.event_sequence >= crypto_assets.event_sequence`,
 		a.ID, a.TenantID, signature, a.Kind, a.Location, a.Algorithm, a.KeyBits, a.Protocol, a.Cipher,
-		a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, observedAt, sequence, a.CertificateFingerprint, a.ImportSource)
+		a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, observedAt, sequence, a.CertificateFingerprint, a.ImportSource,
+		a.ConfigSource, a.ProductVersion)
 	return err
 }
 
@@ -408,7 +424,8 @@ func (s *Store) ListCryptoAssets(ctx context.Context, tenantID string) ([]Crypto
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, kind, location, algorithm, key_bits, protocol, cipher,
-			        library, strength, quantum_vulnerable, out_of_policy, reasons, created_at, certificate_fingerprint
+			        library, strength, quantum_vulnerable, out_of_policy, reasons, created_at, certificate_fingerprint,
+			        config_source, product_version
 			   FROM crypto_assets WHERE tenant_id = $1 AND is_active ORDER BY location, algorithm, protocol, cipher`, tenantID)
 		if err != nil {
 			return err
@@ -418,7 +435,7 @@ func (s *Store) ListCryptoAssets(ctx context.Context, tenantID string) ([]Crypto
 			var a CryptoAsset
 			if err := rows.Scan(&a.ID, &a.TenantID, &a.Kind, &a.Location, &a.Algorithm, &a.KeyBits,
 				&a.Protocol, &a.Cipher, &a.Library, &a.Strength, &a.QuantumVulnerable, &a.OutOfPolicy,
-				&a.Reasons, &a.CreatedAt, &a.CertificateFingerprint); err != nil {
+				&a.Reasons, &a.CreatedAt, &a.CertificateFingerprint, &a.ConfigSource, &a.ProductVersion); err != nil {
 				return err
 			}
 			out = append(out, a)

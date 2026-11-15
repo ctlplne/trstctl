@@ -1615,6 +1615,11 @@ never live in the API process. What you can do end to end against the running bi
   versions), wolfSSL (no version string the agent can identify) and Java providers are
   not. Keystore and library findings are discovery
   findings: the CycloneDX export carries them (Q3-L2), the CBOM inventory does not.
+  The protocol and key-exchange group HAProxy, Envoy and OpenSSL reach only through
+  their built-in defaults are reported, marked default, by the version the host's
+  dpkg or apk database records (X2-L7); an RPM host's versions are not read, so no
+  default is claimed there, and an Envoy BoringSSL FIPS build (P-256 alone) is not
+  told apart from its non-FIPS default.
 - Access reviews that act (Q1): a revoke decision runs the credential's own
   revoke once (PAM sessions, API tokens, machine sessions, dynamic-secret leases,
   and as the reviewer through their own gate certificates and identities: Q1-L1)

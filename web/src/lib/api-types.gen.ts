@@ -2735,6 +2735,7 @@ export interface CBOMAsset {
   algorithm?: string;
   certificate_fingerprint?: string;
   cipher?: string;
+  config_source?: "default";
   id: string;
   key_bits?: number;
   kind: string;
@@ -2744,6 +2745,7 @@ export interface CBOMAsset {
   migration_standard: string;
   migration_target: string;
   out_of_policy: boolean;
+  product_version?: string;
   protocol?: string;
   quantum_vulnerable: boolean;
   reasons?: string[];

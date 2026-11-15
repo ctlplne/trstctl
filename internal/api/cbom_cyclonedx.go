@@ -78,6 +78,7 @@ func (a *API) exportCBOMCycloneDX(w http.ResponseWriter, r *http.Request) {
 			Protocol: item.Protocol, Cipher: item.Cipher, Library: item.Library, CertificateFingerprint: item.CertificateFingerprint,
 			Strength: item.Strength, QuantumVulnerable: item.QuantumVulnerable, OutOfPolicy: item.OutOfPolicy,
 			Reasons: item.Reasons, MigrationTarget: item.MigrationTarget,
+			ConfigSource: item.ConfigSource, ProductVersion: item.ProductVersion,
 		})
 	}
 	var extra cbom.CycloneDXSupplement

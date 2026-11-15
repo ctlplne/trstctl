@@ -3578,6 +3578,12 @@ type CBOMAssetObserved struct {
 	// ImportSource is the CBOM import source (vendor:…, source:…, image:…)
 	// whose import observed this fact (X6-L3); empty for trstctl's own scans.
 	ImportSource string `json:"import_source,omitempty"`
+	// ConfigSource is "default" for a host-config fact a product reaches
+	// only through its built-in default, and ProductVersion the installed
+	// package whose default it is (X2-L7; optional, schema 1). An event from
+	// before them is a stated fact.
+	ConfigSource   string `json:"config_source,omitempty"`
+	ProductVersion string `json:"product_version,omitempty"`
 }
 
 // CBOMAssetsObserved records a batch of a CBOM import's observations in one
@@ -11922,5 +11928,6 @@ func (p *Projector) applyCBOMAssetObserved(ctx context.Context, tx pgx.Tx, e eve
 		Cipher: pl.Cipher, Library: pl.Library, Strength: pl.Strength,
 		QuantumVulnerable: pl.QuantumVulnerable, OutOfPolicy: pl.OutOfPolicy,
 		Reasons: pl.Reasons, ImportSource: pl.ImportSource,
+		ConfigSource: pl.ConfigSource, ProductVersion: pl.ProductVersion,
 	}, e.Sequence, e.Time)
 }

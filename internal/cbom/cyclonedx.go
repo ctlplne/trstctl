@@ -38,6 +38,10 @@ type CycloneDXAsset struct {
 	OutOfPolicy            bool
 	Reasons                []string
 	MigrationTarget        string
+	// ConfigSource and ProductVersion mark a host-config fact a product
+	// reaches through its built-in default, and whose default it is (X2-L7).
+	ConfigSource   string
+	ProductVersion string
 }
 
 // CycloneDXSupplement is what the export carries beside the inventory's
@@ -447,6 +451,8 @@ func cycloneDXComponent(a CycloneDXAsset) CycloneDXAssetJS {
 	}
 	var props cdxCryptoProperties
 	switch {
+	case IsKeyExchangeGroup(a.Algorithm) && a.Protocol == "" && a.Cipher == "":
+		c.Name, props = cycloneDXGroup(a.Algorithm)
 	case a.Kind == string(AssetCertKey) || (a.Algorithm != "" && a.Protocol == "" && a.Cipher == ""):
 		c.Name, props = cycloneDXAlgorithm(a.Algorithm, a.KeyBits)
 	case a.Cipher != "":
@@ -472,6 +478,8 @@ func cycloneDXComponent(a CycloneDXAsset) CycloneDXAssetJS {
 		{Name: "trstctl:certificate_fingerprint", Value: a.CertificateFingerprint},
 		{Name: "trstctl:library", Value: a.Library},
 		{Name: "trstctl:migration_target", Value: a.MigrationTarget},
+		{Name: "trstctl:config_source", Value: a.ConfigSource},
+		{Name: "trstctl:product_version", Value: a.ProductVersion},
 	} {
 		if p.Value != "" {
 			c.Properties = append(c.Properties, p)
@@ -481,6 +489,31 @@ func cycloneDXComponent(a CycloneDXAsset) CycloneDXAssetJS {
 		c.Properties = append(c.Properties, cdxProperty{Name: "trstctl:reason", Value: r})
 	}
 	return c
+}
+
+// cycloneDXGroup describes a TLS key-exchange group (X2-L7): a key agreement,
+// or a KEM for an ML-KEM group, with its curve where it has one; a classical
+// group's NIST quantum security level is 0.
+func cycloneDXGroup(name string) (string, cdxCryptoProperties) {
+	name = strings.TrimSpace(name)
+	props := cdxAlgorithmProperties{Primitive: "key-agree"}
+	if keyExchangeGroups[name] {
+		props.Primitive = "kem"
+		three := 3
+		if strings.Contains(name, "1024") {
+			three = 5
+		} else if strings.HasSuffix(name, "512") {
+			three = 1
+		}
+		props.NISTQuantumSecurityLevel = &three
+	} else {
+		zero := 0
+		props.NISTQuantumSecurityLevel = &zero
+		if strings.HasPrefix(name, "X") || strings.HasPrefix(name, "secp") {
+			props.Curve = name
+		}
+	}
+	return name, cdxCryptoProperties{AssetType: "algorithm", AlgorithmProperties: &props}
 }
 
 // cycloneDXAlgorithm names a key algorithm the way CycloneDX describes it:

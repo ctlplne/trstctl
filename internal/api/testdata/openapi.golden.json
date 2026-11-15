@@ -13097,6 +13097,13 @@
           "cipher": {
             "type": "string"
           },
+          "config_source": {
+            "description": "default: a host-config fact the product reaches only through its built-in default, with nothing in the file stating it (X2-L7); absent for a stated fact.",
+            "enum": [
+              "default"
+            ],
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -13124,6 +13131,10 @@
           },
           "out_of_policy": {
             "type": "boolean"
+          },
+          "product_version": {
+            "description": "With config_source default: the installed package whose default it is, as the host's package database names it (for example haproxy 2.8.5-1ubuntu3).",
+            "type": "string"
           },
           "protocol": {
             "type": "string"

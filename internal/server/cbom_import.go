@@ -136,7 +136,7 @@ func cbomAssetFor(tenantID string, f cbom.Finding) store.CryptoAsset {
 		Algorithm: f.Algorithm, KeyBits: f.KeyBits, Protocol: f.Protocol,
 		Cipher: f.Cipher, Library: f.Library, Strength: string(f.Class.Strength),
 		QuantumVulnerable: f.Class.QuantumVulnerable, OutOfPolicy: f.Class.OutOfPolicy,
-		Reasons: f.Class.Reasons,
+		Reasons: f.Class.Reasons, ConfigSource: f.ConfigSource, ProductVersion: f.ProductVersion,
 	}
 	asset.ID = store.StableCryptoAssetID(asset.TenantID, asset.Signature())
 	return asset

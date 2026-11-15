@@ -9314,6 +9314,10 @@ export const messages = {
     defaultMessage: "The directory deletes the lease's entry itself, even if trstctl is down; each renewal moves that expiry with the lease.",
     description: "A239-L2: an LDAP provider whose lease entries are RFC 2589 dynamic objects that the directory expires on its own.",
   },
+  "posture.cbom.productDefault": {
+    defaultMessage: "Product default, not stated in the file ({version})",
+    description: "X2-L7: a host-config asset the product reaches only through its built-in default; version names the installed package.",
+  },
   "secrets.dynamic.clientAuth": {
     defaultMessage: "How the client signs in to the authorization server",
     description: "A239-L7: label for how an OAuth provider's client authenticates to the authorization server.",

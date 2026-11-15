@@ -28,10 +28,14 @@ type cbomService struct {
 	log                 *events.Log
 	// orch records CBOM imports as discovery runs (X6).
 	orch *orchestrator.Orchestrator
+	// packageDatabases decide a host-config scan's product defaults (X2-L7);
+	// nil means this host's own.
+	packageDatabases []string
 }
 
 func (s *Server) buildCBOMService(d Deps) api.CBOMService {
-	return &cbomService{store: d.Store, log: d.Log, nativeTLSExecutable: d.CBOMTLSProbeOpenSSL, orch: s.orch}
+	return &cbomService{store: d.Store, log: d.Log, nativeTLSExecutable: d.CBOMTLSProbeOpenSSL, orch: s.orch,
+		packageDatabases: d.CBOMPackageDatabases}
 }
 
 const (
@@ -132,6 +136,9 @@ func (s *cbomService) Scan(ctx context.Context, tenantID string, req api.CBOMSca
 	}
 	if len(plan.NormalizedRequest.HostConfigs) > 0 {
 		host = hostsource.New(plan.NormalizedRequest.HostConfigs...)
+		if s.packageDatabases != nil {
+			host.WithPackageDatabases(s.packageDatabases...)
+		}
 		sources = append(sources, host)
 	}
 	sink := &eventedCBOMSink{store: s.store, log: s.log, tenantID: tenantID}
@@ -277,6 +284,7 @@ func (s *eventedCBOMSink) Record(ctx context.Context, f cbom.Finding) error {
 		KeyBits: asset.KeyBits, Protocol: asset.Protocol, Cipher: asset.Cipher,
 		Library: asset.Library, Strength: asset.Strength, QuantumVulnerable: asset.QuantumVulnerable,
 		OutOfPolicy: asset.OutOfPolicy, Reasons: asset.Reasons, ImportSource: s.importSource,
+		ConfigSource: asset.ConfigSource, ProductVersion: asset.ProductVersion,
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -351,6 +359,7 @@ func (s *eventedCBOMSink) RecordBatch(ctx context.Context, findings []cbom.Findi
 			KeyBits: asset.KeyBits, Protocol: asset.Protocol, Cipher: asset.Cipher,
 			Library: asset.Library, Strength: asset.Strength, QuantumVulnerable: asset.QuantumVulnerable,
 			OutOfPolicy: asset.OutOfPolicy, Reasons: asset.Reasons, ImportSource: s.importSource,
+			ConfigSource: asset.ConfigSource, ProductVersion: asset.ProductVersion,
 		}
 		encoded, err := json.Marshal(payload)
 		if err != nil {

@@ -782,6 +782,41 @@ describe("posture collector disclosures", () => {
     expect(screen.queryByText("Non-interactive CBOM preview")).not.toBeInTheDocument();
   });
 
+  // X2-L7: a host-config fact the product reaches only through its built-in
+  // default says so, with the package whose default it is.
+  it("marks a host-config asset that is a product default with its package version (X2-L7)", async () => {
+    const base = await apiMock.listCBOMAssets();
+    apiMock.listCBOMAssets.mockResolvedValue({
+      ...base,
+      items: [
+        ...base.items,
+        {
+          id: "asset-default-1",
+          kind: "host-config",
+          location: "/etc/haproxy/haproxy.cfg",
+          algorithm: "X25519",
+          library: "haproxy",
+          migration_generation: "wave-1",
+          migration_standard: "FIPS 203",
+          migration_target: "ML-KEM hybrid",
+          out_of_policy: false,
+          quantum_vulnerable: true,
+          reasons: ["X25519 key exchange is breakable by a cryptographically-relevant quantum computer"],
+          strength: "acceptable",
+          config_source: "default",
+          product_version: "libssl3t64 3.0.13-0ubuntu3.4",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByText("Algorithm inventory and scan evidence", { exact: true }));
+    const row = await screen.findByRole("row", { name: /\/etc\/haproxy\/haproxy\.cfg host-config/i });
+    expect(within(row).getByText("Product default, not stated in the file (libssl3t64 3.0.13-0ubuntu3.4)")).toBeInTheDocument();
+    const stated = screen.getByRole("row", { name: /https:\/\/edge\.example\.com:443 tls_endpoint/i });
+    expect(within(stated).queryByText(/Product default/)).not.toBeInTheDocument();
+  });
+
   it("reads the saved CBOM inventory back and shows an explicit verification receipt", async () => {
     apiMock.previewCBOMScan.mockResolvedValue({
       capability: "F52",

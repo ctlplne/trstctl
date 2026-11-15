@@ -463,6 +463,9 @@ export function Posture() {
                 <td className="font-medium">
                   <span className="block">{asset.location}</span>
                   <span className="text-xs text-muted-foreground">{asset.kind}</span>
+                  {asset.config_source === "default" ? (
+                    <span className="block text-xs text-muted-foreground">{t("posture.cbom.productDefault", { version: asset.product_version ?? "" })}</span>
+                  ) : null}
                 </td>
                 <td>{algorithmLabel(asset)}</td>
                 <td>{transportLabel(asset)}</td>

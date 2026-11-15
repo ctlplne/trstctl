@@ -46,7 +46,19 @@ type Finding struct {
 	// the import takes a fingerprinted one into the certificate inventory.
 	// It never reaches the CBOM row, which records the asset's crypto only.
 	Certificate *ImportedCertificate `json:"-"`
+	// ConfigSource is ConfigSourceDefault for a host-config fact the product
+	// reaches only through its built-in default, with nothing in the file
+	// saying so (X2-L7); empty for a stated configuration and every other
+	// source.
+	ConfigSource string `json:"config_source,omitempty"`
+	// ProductVersion names the installed package whose default it is, as the
+	// host's package database records it ("haproxy 2.8.5-1ubuntu3").
+	ProductVersion string `json:"product_version,omitempty"`
 }
+
+// ConfigSourceDefault marks a fact a product reaches only through its
+// built-in default (X2-L7).
+const ConfigSourceDefault = "default"
 
 // Classified returns a copy of the finding with its classification filled in
 // from the policy.

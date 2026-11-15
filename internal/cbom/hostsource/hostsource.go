@@ -23,9 +23,12 @@ import (
 
 // Source scans a set of config files or globs.
 type Source struct {
-	paths    []string
-	mu       sync.Mutex
-	resolved []string
+	paths []string
+	// packageDBs are where a scan reads product versions from (X2-L7); nil
+	// means dpkg's status file and apk's installed database.
+	packageDBs []string
+	mu         sync.Mutex
+	resolved   []string
 }
 
 const (
@@ -38,6 +41,14 @@ const (
 
 // New returns a host-config source over the given file paths or globs.
 func New(paths ...string) *Source { return &Source{paths: paths} }
+
+// WithPackageDatabases sets the package databases a scan reads the product
+// versions that decide a default from (X2-L7); none means no default is
+// claimed.
+func (s *Source) WithPackageDatabases(paths ...string) *Source {
+	s.packageDBs = append([]string{}, paths...)
+	return s
+}
 
 // Name identifies the source.
 func (s *Source) Name() string { return "host-config" }
@@ -62,6 +73,19 @@ func (s *Source) Scan(_ context.Context) ([]cbom.Finding, error) {
 	s.mu.Lock()
 	s.resolved = append([]string(nil), paths...)
 	s.mu.Unlock()
+	// Product versions are read once, and only when a file leaves a
+	// product default in force (X2-L7).
+	var pkgs packageVersions
+	versions := func() packageVersions {
+		if pkgs == nil {
+			dbs := s.packageDBs
+			if dbs == nil {
+				dbs = defaultPackageDatabases
+			}
+			pkgs = readPackageVersions(dbs)
+		}
+		return pkgs
+	}
 	for _, path := range paths {
 		data, err := readBounded(path, DefaultMaxFileBytes)
 		if err != nil {
@@ -70,6 +94,7 @@ func (s *Source) Scan(_ context.Context) ([]cbom.Finding, error) {
 		}
 		out = append(out, parseConfig(path, data)...)
 		out = append(out, parseExtended(path, data)...)
+		out = append(out, parseDefaults(path, data, versions)...)
 	}
 	if failures > 0 {
 		return out, &cbom.PartialScanError{Failures: failures, Err: errors.New("one or more CBOM host config selectors could not be read within safety limits")}

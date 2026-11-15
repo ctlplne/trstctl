@@ -348,7 +348,8 @@ You can't plan a crypto migration without knowing what crypto you run. The CBOM 
 inventories cryptographic usage across TLS endpoints and host config files (nginx,
 Apache and sshd directives; HAProxy, Envoy, the OpenSSL configuration file and
 `java.security` since X2, each reporting the lowest protocol a statement explicitly
-allows, never a product default), then
+allows, and since X2-L7 what a product reaches only through its built-in default,
+below), then
 classifies each observation: algorithm family and strength, whether it's
 [quantum-vulnerable](../glossary.md), and whether it meets policy (default floor:
 RSA-2048, EC-256, TLS 1.2; bans 3DES/DES/RC4/NULL/EXPORT/MD5/anon). Findings become
@@ -357,6 +358,27 @@ blast-radius and [compliance](policy-and-governance.md) reporting and the
 [PQC migration](lifecycle-and-pqc.md). Scanning runs in its own bounded lane, is
 non-fatal per source, tenant-isolated at the database layer, and keeps TLS/cert parsing
 behind the single crypto path.
+
+A HAProxy listener, an Envoy listener's TLS context or an OpenSSL configuration
+that states no minimum protocol, or no key-exchange groups, still has them: the
+product's built-in defaults, which differ between releases. A host-config scan
+reports those too (X2-L7), each marked `config_source: default` with
+`product_version`, the installed package whose default it is, as the host's dpkg
+status file or apk database records it. The version decides the default:
+
+| Product | No minimum stated | No groups stated |
+| --- | --- | --- |
+| HAProxy | TLS 1.2 from 2.2; TLS 1.0 before | the linked OpenSSL's |
+| Envoy (listener) | TLS 1.2 from 1.22; TLS 1.0 before | X25519 first (1.22 and later) |
+| OpenSSL configuration | TLS 1.2 from 3.1, TLS 1.0 again at `@SECLEVEL=0`; TLS 1.0 before | X25519MLKEM768 first from 3.5; X25519 before |
+
+A key-exchange group is rated as one: an ML-KEM group (the hybrid X25519MLKEM768)
+resists a quantum computer, a classical group is quantum vulnerable, since traffic
+recorded under it can be decrypted later. A default is its own fact beside the same
+value stated in a file, so an upgrade that moves a default retires the old one on
+the next clean scan, and the CycloneDX export carries `trstctl:config_source` and
+`trstctl:product_version`. With no package database that records the product (an
+RPM host, a binary installed by hand), no default is claimed.
 
 **Status: served.** `POST /api/v1/cbom/scans/preview` (`discovery:write`) is an
 effect-free review of the same plan execution uses. It trims, sorts, and deduplicates

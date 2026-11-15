@@ -14,7 +14,9 @@ import (
 
 // X2: HAProxy, Envoy, OpenSSL configuration and java.security each report the
 // lowest protocol a statement explicitly allows, once per statement, and
-// nothing for a version reached only through a product default.
+// nothing for a version reached only through a product default when no
+// package database says which version runs (X2-L7 claims those defaults
+// with the version; see defaults_test.go).
 func TestScanExtendedHostConfigProtocols(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{
@@ -34,7 +36,7 @@ func TestScanExtendedHostConfigProtocols(t *testing.T) {
 	}
 	protocols := func(name string) map[string]int {
 		t.Helper()
-		findings, err := hostsource.New(filepath.Join(dir, name)).Scan(context.Background())
+		findings, err := hostsource.New(filepath.Join(dir, name)).WithPackageDatabases().Scan(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -48,7 +50,7 @@ func TestScanExtendedHostConfigProtocols(t *testing.T) {
 	}
 	weak := func(name string) int {
 		t.Helper()
-		findings, err := hostsource.New(filepath.Join(dir, name)).Scan(context.Background())
+		findings, err := hostsource.New(filepath.Join(dir, name)).WithPackageDatabases().Scan(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}

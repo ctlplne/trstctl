@@ -134,6 +134,11 @@ type Deps struct {
 	AuditComplianceFactory editionseam.AuditComplianceFactory
 	// CBOMTLSProbeOpenSSL is a trusted local startup path, never tenant-authored.
 	CBOMTLSProbeOpenSSL string
+	// CBOMPackageDatabases are the package databases a served host-config
+	// scan reads the product versions that decide a default from (X2-L7);
+	// nil means this host's own (dpkg's status file and apk's installed
+	// database). A trusted startup or test setting, never tenant-authored.
+	CBOMPackageDatabases []string
 	// BackupDirectory is the full-backup directory the served DR posture
 	// reports on (epic J2). Empty means none is configured, which the API
 	// serves as such rather than reporting an invented path as a missing
