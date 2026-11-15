@@ -146,7 +146,8 @@ func (r relayChannel) ReportJobResult(ctx context.Context, jobID int64, attempt 
 	if err != nil {
 		return false, err
 	}
-	return r.sendSignedReport(ctx, req)
+	accepted, _, err := r.sendSignedReport(ctx, req)
+	return accepted, err
 }
 
 func (r relayChannel) ReportJobResultWithCustody(ctx context.Context, jobID int64, attempt int,
@@ -168,7 +169,8 @@ func (r relayChannel) ReportJobResultWithCustody(ctx context.Context, jobID int6
 	if err != nil {
 		return false, err
 	}
-	return r.sendSignedReport(ctx, req)
+	accepted, _, err := r.sendSignedReport(ctx, req)
+	return accepted, err
 }
 
 func (r relayChannel) ReportHostRenewResultWithCustody(ctx context.Context, jobID int64, attempt int,
@@ -250,16 +252,22 @@ var _ relay.CustodyReceiptChannel = relayChannel{}
 // generation. A temporary reporting failure must not rerun the external effect.
 // The caller persists terminal observations before sending. This inner loop
 // retains identical signed bytes; later recovery freshly attests the stored facts.
-func (r relayChannel) sendSignedReport(ctx context.Context, req *transport.ReportJobResultRequest) (bool, error) {
+//
+// accepted is true only when the claim still held; recorded is true when the
+// control plane kept a terminal observation for a claim it no longer holds
+// (a late receipt). A recorded receipt settles the durable report, but it is
+// not acceptance: the job may be re-offered as a new attempt, which needs
+// whatever the original kept for it (B4-O1).
+func (r relayChannel) sendSignedReport(ctx context.Context, req *transport.ReportJobResultRequest) (accepted, recorded bool, err error) {
 	switch req.Outcome {
 	case transport.JobOutcomeExecuted, transport.JobOutcomeVerified,
 		transport.JobOutcomeVerifyFailed, transport.JobOutcomeFailed:
 	default:
 		resp, err := r.c.ReportJobResult(ctx, req)
 		if err != nil {
-			return false, err
+			return false, false, err
 		}
-		return resp.Accepted, nil
+		return resp.Accepted, false, nil
 	}
 
 	// Bound each RPC as well as the whole reporting window so a stuck channel
@@ -270,34 +278,34 @@ func (r relayChannel) sendSignedReport(ctx context.Context, req *transport.Repor
 	delay := 250 * time.Millisecond
 	for attempt := 0; ; attempt++ {
 		if err := reportCtx.Err(); err != nil {
-			return false, err
+			return false, false, err
 		}
 		callCtx, endCall := context.WithTimeout(reportCtx, 10*time.Second)
 		resp, err := r.c.ReportJobResult(callCtx, req)
 		endCall()
 		if err == nil {
-			return resp.Accepted || resp.ReceiptRecorded, nil
+			return resp.Accepted, resp.ReceiptRecorded, nil
 		}
 		if ctxErr := reportCtx.Err(); ctxErr != nil {
-			return false, ctxErr
+			return false, false, ctxErr
 		}
 		switch status.Code(err) {
 		case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
 		default:
-			return false, err
+			return false, false, err
 		}
 		if attempt == 5 {
-			return false, err
+			return false, false, err
 		}
 		jitter, err := crypto.RandomBytes(1)
 		if err != nil {
-			return false, err
+			return false, false, err
 		}
 		timer := time.NewTimer(delay/2 + time.Duration(jitter[0])*(delay/2)/256)
 		select {
 		case <-reportCtx.Done():
 			timer.Stop()
-			return false, reportCtx.Err()
+			return false, false, reportCtx.Err()
 		case <-timer.C:
 		}
 		delay = min(2*delay, 4*time.Second)

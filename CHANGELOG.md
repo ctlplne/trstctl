@@ -1938,6 +1938,10 @@
 
 ### Fixed
 
+- A host renewal whose terminal report reached the control plane after its claim lapsed no longer fails its re-offered
+  attempt for good (B4-O1): the agent read the late receipt as acceptance and released the key and certificate the
+  re-offered attempt reuses, which then failed with `host_key_not_retained`. A late receipt now settles the agent's
+  durable report, so claiming resumes, and the key and certificate stay until a report is accepted.
 - A notification, or any outbox command, slowed past its claim's lease is no longer delivered twice (A98-L1): under
   load another sweep recovered the row and delivered it again (a tenant PagerDuty test notification reached its receiver
   twice). The lease now follows the delivering worker, moved ahead every third of a lease while the row is still its

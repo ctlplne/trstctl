@@ -19,8 +19,8 @@ func TestReceiptAcknowledgementCannotAuthorizeMoreWork(t *testing.T) {
 		t.Fatalf("receipt granted a lease: %v", err)
 	}
 	for _, outcome := range []string{transport.JobOutcomeExtend, transport.JobOutcomeAuthorizeRollback} {
-		if ok, err := ch.sendSignedReport(t.Context(), &transport.ReportJobResultRequest{JobID: 91, Attempt: 4, Outcome: outcome}); err != nil || ok {
-			t.Errorf("receipt granted %s: %v %v", outcome, ok, err)
+		if ok, recorded, err := ch.sendSignedReport(t.Context(), &transport.ReportJobResultRequest{JobID: 91, Attempt: 4, Outcome: outcome}); err != nil || ok || recorded {
+			t.Errorf("receipt granted %s: %v %v %v", outcome, ok, recorded, err)
 		}
 	}
 }

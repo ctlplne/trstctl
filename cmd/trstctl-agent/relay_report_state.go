@@ -27,13 +27,17 @@ func terminalReport(outcome string) bool {
 	return false
 }
 
+// retainAndSendReport reports whether the claim still held. A late receipt
+// (recorded, not accepted) settles the durable report but reads false, so the
+// relay keeps what a re-offered attempt needs (B4-O1).
 func (r relayChannel) retainAndSendReport(ctx context.Context, value reportstate.Observation) (bool, error) {
 	if r.pending != nil {
 		if err := r.pending.Put(value); err != nil {
 			return false, err
 		}
 	}
-	return r.sendObservation(ctx, value)
+	accepted, _, err := r.sendObservation(ctx, value)
+	return accepted, err
 }
 
 func (r relayChannel) recoverPendingReport(ctx context.Context) error {
@@ -45,23 +49,26 @@ func (r relayChannel) recoverPendingReport(ctx context.Context) error {
 		return err
 	}
 	defer value.Destroy()
-	accepted, err := r.sendObservation(ctx, *value)
+	accepted, recorded, err := r.sendObservation(ctx, *value)
 	if err != nil {
 		return fmt.Errorf("recover original terminal report before claiming work: %w", err)
 	}
-	if !accepted {
+	if !accepted && !recorded {
 		return errors.New("original terminal report remains unacknowledged; no new work will be claimed")
 	}
 	return nil
 }
 
-func (r relayChannel) sendObservation(ctx context.Context, value reportstate.Observation) (bool, error) {
+// sendObservation sends a stored terminal observation. The durable report is
+// settled when it is accepted or recorded; a host renewal's retained key and
+// certificate are released only when it is accepted, since a late receipt's
+// job may be re-offered as an attempt that reuses them (B4-O1).
+func (r relayChannel) sendObservation(ctx context.Context, value reportstate.Observation) (accepted, recorded bool, err error) {
 	id := r.id()
 	if id == nil {
-		return false, errors.New("trstctl-agent: cannot sign a job receipt before enrollment")
+		return false, false, errors.New("trstctl-agent: cannot sign a job receipt before enrollment")
 	}
 	var req *transport.ReportJobResultRequest
-	var err error
 	// IssuedAt is this attestation's signing time, not a new execution time.
 	// The original job, attempt and facts never change during recovery.
 	if value.AdoptedPredecessorFingerprint != "" {
@@ -76,25 +83,25 @@ func (r relayChannel) sendObservation(ctx context.Context, value reportstate.Obs
 		req, err = transport.SignedReport(id, id.TenantID(), id.CommonName(), value.JobID, value.Attempt, value.Outcome, string(value.Detail), value.EvidenceDigest, r.clock().Unix())
 	}
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
-	accepted, err := r.sendSignedReport(ctx, req)
-	if err != nil || !accepted || r.pending == nil {
-		return accepted, err
+	accepted, recorded, err = r.sendSignedReport(ctx, req)
+	if err != nil || (!accepted && !recorded) || r.pending == nil {
+		return accepted, recorded, err
 	}
-	if value.HostRenew != nil {
+	if accepted && value.HostRenew != nil {
 		if r.hostRollback == nil {
-			return false, errors.New("trstctl-agent: accepted host report has no rollback store for cleanup")
+			return false, false, errors.New("trstctl-agent: accepted host report has no rollback store for cleanup")
 		}
 		if err := r.hostRollback.ClearHostRenewPending(value.HostRenew.Connector, value.HostRenew.TargetID,
 			value.JobID, value.HostRenew.Binding, value.CredentialFingerprint); err != nil {
-			return false, fmt.Errorf("clear accepted host renewal key before acknowledging report: %w", err)
+			return false, false, fmt.Errorf("clear accepted host renewal key before acknowledging report: %w", err)
 		}
 	}
 	if err := r.pending.Acknowledge(value); err != nil {
-		return false, fmt.Errorf("persist terminal report acknowledgement: %w", err)
+		return false, false, fmt.Errorf("persist terminal report acknowledgement: %w", err)
 	}
-	return true, nil
+	return accepted, recorded, nil
 }
 
 func reportIdentityBinding(id *mtls.AgentIdentity, caPEM []byte, serverName string) (string, error) {

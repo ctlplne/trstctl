@@ -5011,7 +5011,11 @@ extension also requires the current claim attempt; an expired or stale attempt
 cannot renew its lease. Host rollback still redeems no control-plane credential.
 
 The agent keeps one terminal job report at a time in encrypted `pending-reports`
-state beside `--key` until the control plane acknowledges it. If that report cannot
+state beside `--key` until the control plane acknowledges it. A report the control
+plane keeps after the job's claim lapsed (a late receipt: the job is offered again as
+a new attempt) settles the report but is not acceptance (B4-O1), so a host renewal
+keeps its retained key and certificate for the re-offered attempt, which reuses them;
+they are released once a report is accepted. If that report cannot
 be opened under the agent's current registration (after re-enrollment against a
 rebuilt control plane, a changed `--ca-bundle` file or `--server-name`, a missing
 sealing key, or damage), the agent keeps running with job claims paused. Heartbeats,
