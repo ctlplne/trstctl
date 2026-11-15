@@ -1190,15 +1190,28 @@ func (a *API) appendNotificationRoutingPolicyUpsert(ctx context.Context, tenantI
 	if err != nil {
 		return store.NotificationRoutingPolicy{}, err
 	}
-	ev, err := a.log.Append(ctx, events.Event{
-		Type:     projections.EventNotificationRoutingPolicyUpserted,
-		TenantID: tenantID,
-		Data:     payload,
-	})
-	if err != nil {
-		return store.NotificationRoutingPolicy{}, err
-	}
-	if err := projections.New(a.store).Apply(ctx, ev); err != nil {
+	// LS-1: a name, or a scope other than manual, another of the tenant's
+	// policies holds is refused before anything is appended; its projection
+	// would meet the policy's unique index only after the event was in the
+	// log. The projection lock spans the checks, the append and its
+	// projection, and writeError answers a refusal as a 409.
+	if err := a.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		if err := a.store.EnsureTenantNameAvailable(ctx, "notification_routing_policies", tenantID, policy.ID, policy.Name); err != nil {
+			return err
+		}
+		if err := a.store.EnsureNotificationRoutingScopeAvailable(ctx, tenantID, policy.ID, policy.ScopeKind, policy.ScopeRef); err != nil {
+			return err
+		}
+		ev, err := a.log.Append(ctx, events.Event{
+			Type:     projections.EventNotificationRoutingPolicyUpserted,
+			TenantID: tenantID,
+			Data:     payload,
+		})
+		if err != nil {
+			return err
+		}
+		return projections.New(a.store).Apply(ctx, ev)
+	}); err != nil {
 		return store.NotificationRoutingPolicy{}, err
 	}
 	return a.store.GetNotificationRoutingPolicy(ctx, tenantID, policy.ID)

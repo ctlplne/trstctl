@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -157,6 +158,13 @@ func (s *Store) ApplyNotificationRoutingPolicyUpsertedTx(ctx context.Context, tx
 	if tag.RowsAffected() == 1 {
 		return nil
 	}
+	// LS-1: a name or a routing scope another of the tenant's policies holds
+	// is refused before its event. An event already in a log that names one
+	// failed its projection live and left the holder as it was, so it is
+	// applied as that no-op; a rebuild of such a log no longer stops here.
+	if held, err := notificationRoutingPolicyClashTx(ctx, tx, p); err != nil || held {
+		return err
+	}
 
 	// The event stream can race the command-side projector: both may try to
 	// install the same event at once. PostgreSQL is free to report either the
@@ -185,6 +193,55 @@ func (s *Store) ApplyNotificationRoutingPolicyUpsertedTx(ctx context.Context, tx
 	}
 	if tag.RowsAffected() != 1 {
 		return errors.New("store: notification routing policy conflict does not match the tenant-owned identity")
+	}
+	return nil
+}
+
+// RoutingScopeHeldError is a refused routing scope (LS-1): another of the
+// tenant's notification routing policies already routes Kind (and Ref). A
+// tenant has one policy per scope other than manual.
+type RoutingScopeHeldError struct{ Kind, Ref string }
+
+func (e *RoutingScopeHeldError) Error() string {
+	if e.Ref == "" {
+		return fmt.Sprintf("another notification routing policy already routes the %s scope; edit that policy instead", e.Kind)
+	}
+	return fmt.Sprintf("another notification routing policy already routes %s %q; edit that policy instead", e.Kind, e.Ref)
+}
+
+// notificationRoutingPolicyClashTx reports whether another of the tenant's
+// policies holds p's name, or p's scope when it is not manual (the two
+// tenant-unique indexes of notification_routing_policies).
+func notificationRoutingPolicyClashTx(ctx context.Context, tx pgx.Tx, p NotificationRoutingPolicy) (bool, error) {
+	var held bool
+	err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM notification_routing_policies
+		  WHERE tenant_id = $1 AND id <> $2::uuid
+		    AND (name = $3 OR ($4 <> 'manual' AND scope_kind = $4 AND scope_ref = $5)))`,
+		p.TenantID, p.ID, p.Name, p.ScopeKind, p.ScopeRef).Scan(&held)
+	return held, err
+}
+
+// EnsureNotificationRoutingScopeAvailable refuses a policy that would route
+// a scope another of the tenant's policies routes, with a
+// *RoutingScopeHeldError (LS-1); a manual policy routes no scope and a
+// policy keeps its own. Callers hold the projection lock across this check,
+// the append and its projection.
+func (s *Store) EnsureNotificationRoutingScopeAvailable(ctx context.Context, tenantID, id, scopeKind, scopeRef string) error {
+	if scopeKind == "" || scopeKind == "manual" {
+		return nil
+	}
+	held := false
+	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM notification_routing_policies
+			  WHERE tenant_id = $1 AND id <> $2::uuid AND scope_kind = $3 AND scope_ref = $4)`,
+			tenantID, id, scopeKind, scopeRef).Scan(&held)
+	}); err != nil {
+		return err
+	}
+	if held {
+		return &RoutingScopeHeldError{Kind: scopeKind, Ref: scopeRef}
 	}
 	return nil
 }

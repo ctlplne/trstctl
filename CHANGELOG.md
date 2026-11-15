@@ -1956,6 +1956,12 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- A notification routing policy created or renamed under a name another policy holds, or
+  routing a scope another policy routes (the global scope included), is refused with a 409
+  (`name_held`, `scope_held`) before anything is recorded. It answered 500 and recorded an
+  event that stopped a read-model rebuild; a log that already holds one rebuilds with the
+  first policy kept. A guard lists every tenant-unique name index with how a duplicate is
+  kept out of the log (LS-1).
 - A sign-in collection explains the sign-in of every credential health check in its span,
   not only the account's latest: two checks between runs no longer leave the earlier
   check's sign-in flagged as made outside trstctl. trstctl keeps the checks of the eight

@@ -76,7 +76,7 @@ func TestHandlersKeepTheCauseOfTheErrorsTheyClassify(t *testing.T) {
 	flatten := regexp.MustCompile(`errStatus\(http\.Status\w+, \w+\.Error\(\)\)|problem\.New\(http\.Status\w+, \w+\.Error\(\)\)`)
 	// responses.go's classifier lines sit after its busy check; the eighth is
 	// LS-1's name_held refusal, a typed store error that is never busy.
-	allowed := map[string]int{"responses.go": 8, "identity_transition_execution.go": 1}
+	allowed := map[string]int{"responses.go": 7, "identity_transition_execution.go": 1}
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatal(err)

@@ -27,10 +27,11 @@ func (e *TenantNameHeldError) Is(target error) bool { return target == ErrTenant
 
 // tenantNameKinds names each checked read model's objects in a refusal.
 var tenantNameKinds = map[string]string{
-	"audit_feed_destinations":     "audit feed",
-	"compliance_report_schedules": "report schedule",
-	"secret_rotation_schedules":   "secret rotation schedule",
-	"mdm_scep_policies":           "MDM SCEP policy",
+	"audit_feed_destinations":       "audit feed",
+	"compliance_report_schedules":   "report schedule",
+	"secret_rotation_schedules":     "secret rotation schedule",
+	"mdm_scep_policies":             "MDM SCEP policy",
+	"notification_routing_policies": "notification routing policy",
 }
 
 // tenantNameHeldSQL is, for each read model with a tenant-unique name index
@@ -44,7 +45,8 @@ var tenantNameHeldSQL = map[string]string{ // #nosec G101 -- table names and rea
 	"compliance_report_schedules": `SELECT EXISTS (SELECT 1 FROM compliance_report_schedules WHERE tenant_id = $1 AND name = $2 AND id <> $3::uuid)`,
 	"secret_rotation_schedules":   `SELECT EXISTS (SELECT 1 FROM secret_rotation_schedules WHERE tenant_id = $1 AND name = $2 AND id <> $3::uuid)`,
 	// The MDM SCEP policy index is on lower(name).
-	"mdm_scep_policies": `SELECT EXISTS (SELECT 1 FROM mdm_scep_policies WHERE tenant_id = $1 AND lower(name) = lower($2) AND id <> $3::uuid)`,
+	"mdm_scep_policies":             `SELECT EXISTS (SELECT 1 FROM mdm_scep_policies WHERE tenant_id = $1 AND lower(name) = lower($2) AND id <> $3::uuid)`,
+	"notification_routing_policies": `SELECT EXISTS (SELECT 1 FROM notification_routing_policies WHERE tenant_id = $1 AND name = $2 AND id <> $3::uuid)`,
 }
 
 // tenantNameHeldTx reports whether a row of table other than id holds name.

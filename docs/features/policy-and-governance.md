@@ -934,7 +934,10 @@ so a retry after failure skips channels already rebuilt from the event log; chan
 tests replay through `notification.test.queued` events. Operators can review an exact
 routing-policy draft at `POST /api/v1/notification-routing-policies/preview`, manage
 the saved rules at `/api/v1/notification-routing-policies`, and inspect the effective
-saved hierarchy with `GET /api/v1/notification-routing-preview`. Recovery is explicit:
+saved hierarchy with `GET /api/v1/notification-routing-preview`. Saved rules have distinct
+names, and a scope other than manual (global, a workspace, an owner or an asset) is routed by
+one rule: a rule under a held name answers 409 `name_held`, and one for a routed scope 409
+`scope_held`, before anything is recorded (LS-1). Recovery is explicit:
 replace or delete a bad policy, then requeue only the failed delivery. Retrying is safe
 because completed channel receipts are preserved and skipped.
 

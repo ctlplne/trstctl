@@ -22,6 +22,7 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	var ae *apiError
 	var profileNotActive *orchestrator.ProfileNotActiveError
 	var nameHeld *store.TenantNameHeldError
+	var scopeHeld *store.RoutingScopeHeldError
 	switch {
 	case errors.Is(err, context.Canceled):
 		// The caller went away while a bounded datastore read was running (for
@@ -59,10 +60,17 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrResourceAdmissionBusy):
 		w.Header().Set("Retry-After", "1")
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "resource creation is in progress; retry the same request"))
-	case errors.As(err, &nameHeld):
-		// LS-1: a name another of the tenant's objects holds is refused
-		// before anything is appended.
-		a.writeProblem(w, problem.New(http.StatusConflict, nameHeld.Error()).WithExtension("code", "name_held"))
+	case errors.As(err, &nameHeld), errors.As(err, &scopeHeld):
+		// LS-1: a name another of the tenant's objects holds, or a routing
+		// scope another of its policies routes, is refused before anything
+		// is appended.
+		code, detail := "name_held", ""
+		if nameHeld != nil {
+			detail = nameHeld.Error()
+		} else {
+			code, detail = "scope_held", scopeHeld.Error()
+		}
+		a.writeProblem(w, problem.New(http.StatusConflict, detail).WithExtension("code", code))
 	case errors.Is(err, store.ErrTenantMemberOffboarded):
 		a.writeProblem(w, problem.New(http.StatusConflict, "member is offboarded or offboarding; explicitly reactivate the member before granting access"))
 	case errors.Is(err, usage.ErrQuotaExhausted):
