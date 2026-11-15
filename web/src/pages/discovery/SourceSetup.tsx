@@ -59,6 +59,8 @@ const networkFieldPaths = [
   "allow_rfc1918",
   "allow_loopback",
 ] as const;
+// A network source also carries the MCP probe's settings (P7's network probe).
+const networkSourceFieldPaths = [...networkFieldPaths, "mcp", "mcp_schemes", "mcp_ca_pem"] as const;
 const cloudFieldPaths = [
   "providers[].provider",
   "providers[].region",
@@ -110,7 +112,7 @@ export const sourceWizardFieldPaths: Record<PrimaryKind, readonly string[]> = {
   cloud_machine_entitlement: machineFieldPaths,
   gcp_machine_identity: gcpFieldPaths,
   azure_machine_identity: azureFieldPaths,
-  network: networkFieldPaths,
+  network: networkSourceFieldPaths,
   ssh: networkFieldPaths,
   ssh_trust: [
     "enabled",
@@ -194,6 +196,9 @@ const setupSchema = z
     excludePorts: z.string(),
     allowRFC1918: z.boolean(),
     allowLoopback: z.boolean(),
+    mcpProbe: z.boolean(),
+    mcpHTTP: z.boolean(),
+    mcpCAPEM: z.string().trim(),
     provider: z.string().trim(),
     region: z.string().trim(),
     endpoint: z.string().trim(),
@@ -390,6 +395,9 @@ const defaults: SetupValues = {
   excludePorts: "",
   allowRFC1918: false,
   allowLoopback: false,
+  mcpProbe: false,
+  mcpHTTP: false,
+  mcpCAPEM: "",
   provider: "",
   region: "",
   endpoint: "",
@@ -921,6 +929,32 @@ function NetworkFields({
           </span>
         </label>
       </details>
+      {kind === "network" ? (
+        <details className="rounded-panel border border-border p-4" open={values.mcpProbe}>
+          <summary className="cursor-pointer font-medium">{t("discovery.setup.mcpProbe")}</summary>
+          <label htmlFor="source-setup-mcp" className="mt-3 flex items-start gap-3 text-sm">
+            <Checkbox {...form.register("mcpProbe")} id="source-setup-mcp" className="mt-0.5" />
+            <span>
+              <strong>{t("discovery.setup.mcpProbeLabel")}</strong>
+              <span className="mt-0.5 block text-muted-foreground">{t("discovery.setup.mcpProbeDescription")}</span>
+            </span>
+          </label>
+          {values.mcpProbe ? (
+            <div className="mt-3 grid gap-3">
+              <label htmlFor="source-setup-mcp-http" className="flex items-start gap-3 text-sm">
+                <Checkbox {...form.register("mcpHTTP")} id="source-setup-mcp-http" className="mt-0.5" />
+                <span>
+                  <strong>{t("discovery.setup.mcpHttp")}</strong>
+                  <span className="mt-0.5 block text-muted-foreground">{t("discovery.setup.mcpHttpDescription")}</span>
+                </span>
+              </label>
+              <Field label={t("discovery.setup.mcpCaBundle")} description={t("discovery.setup.mcpCaBundleDescription")}>
+                {(control) => <Textarea {...control} {...form.register("mcpCAPEM")} rows={4} className="font-mono text-xs" />}
+              </Field>
+            </div>
+          ) : null}
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -1200,6 +1234,9 @@ function buildConfig(values: SetupValues): Record<string, unknown> {
       relay_agent_id: values.relayAgentID,
       allow_rfc1918: values.allowRFC1918,
       allow_loopback: values.allowLoopback,
+      ...(values.kind === "network" && values.mcpProbe
+        ? { mcp: true, mcp_schemes: values.mcpHTTP ? ["https", "http"] : ["https"], mcp_ca_pem: values.mcpCAPEM }
+        : {}),
     });
   }
   if (values.kind === "adcs") {

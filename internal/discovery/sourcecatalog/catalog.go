@@ -68,10 +68,10 @@ var standardStages = []string{"configure", "preview", "execute", "observe", "rec
 var items = []Capability{
 	{
 		Kind: "network", Label: "TLS endpoints", Tool: "Discover", Route: "/discovery?tab=sources&kind=network", SetupSurface: SetupSourceWizard,
-		Purpose:      "Find public TLS certificate metadata on explicitly authorized hosts, addresses, and network ranges.",
-		DataHandling: "Connects only to the normalized targets in the approved plan, performs a bounded TLS handshake, and stores public certificate metadata. It does not exploit services or collect private keys.",
+		Purpose:      "Find public TLS certificate metadata on explicitly authorized hosts, addresses, and network ranges, and, when asked, the MCP servers listening there.",
+		DataHandling: "Connects only to the normalized targets in the approved plan, performs a bounded TLS handshake, and stores public certificate metadata. With the MCP probe on, it also sends each target the MCP initialize request, never a credential, and stores whether an MCP server answers and the authorization it requires. It does not exploit services or collect private keys.",
 		Permission:   "discovery:write", Edition: "core", Execution: "network-role relay",
-		Configuration: networkFields(), Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#network-and-ssh-scopes",
+		Configuration: networkSourceFields(), Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#network-and-ssh-scopes",
 	},
 	{
 		Kind: "ssh", Label: "SSH endpoints", Tool: "Discover", Route: "/discovery?tab=sources&kind=ssh", SetupSurface: SetupSourceWizard,
@@ -187,6 +187,19 @@ func networkFields() []Field {
 		field("allow_rfc1918", "Allow approved RFC1918 targets", "boolean", false, false, true, "Permits private IPv4 targets already covered by the declared scope."),
 		field("allow_loopback", "Allow loopback", "boolean", false, false, true, "Restricted local-testing override; never implied by private-range access."),
 	}
+}
+
+// networkSourceFields are a network source's fields: the shared scope fields and
+// the MCP probe's (P7's network probe), which only a network source has.
+func networkSourceFields() []Field {
+	return append(networkFields(),
+		field("mcp", "Look for MCP servers", "boolean", false, false, true,
+			"Also send each target the MCP initialize request, never a credential, and record whether an MCP server answers and the authorization it requires."),
+		field("mcp_schemes", "MCP schemes", "string_list", false, false, true,
+			"https (the default), or https then http; plain http is opt-in."),
+		field("mcp_ca_pem", "MCP private CA certificates", "string", false, false, true,
+			"Public CA certificates (PEM) trusted beside the system roots, for MCP servers under a private CA. Nothing is sent to a server whose certificate does not verify."),
+	)
 }
 
 func cloudCertificateCapability() Capability {

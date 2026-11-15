@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,7 +21,9 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/weakkey"
+	"trstctl.com/trstctl/internal/discovery/mcpprobe"
 	"trstctl.com/trstctl/internal/discovery/netscan"
 )
 
@@ -65,6 +69,15 @@ type Intent struct {
 	// and its first issuers, so revocation can be probed for certificates known
 	// only from scans (A211, opt-in).
 	KeepChain bool `json:"keep_chain,omitempty"`
+	// MCP asks a network sweep to also look for MCP endpoints on its targets and
+	// record the authorization each requires (P7's network probe, opt-in), trying
+	// MCPSchemes in order.
+	MCP        bool     `json:"mcp,omitempty"`
+	MCPSchemes []string `json:"mcp_schemes,omitempty"`
+	// MCPCAPEM is an operator CA bundle (public certificates) the MCP probe trusts
+	// beside the system roots, for endpoints under a private CA. The probe never
+	// sends anything over a connection whose server identity did not verify.
+	MCPCAPEM string `json:"mcp_ca_pem,omitempty"`
 }
 
 type sourceConfig struct {
@@ -80,6 +93,9 @@ type sourceConfig struct {
 	AllowLoopback  bool     `json:"allow_loopback"`
 	Segment        string   `json:"segment"`
 	RelayAgentID   string   `json:"relay_agent_id"`
+	MCP            bool     `json:"mcp"`
+	MCPSchemes     []string `json:"mcp_schemes"`
+	MCPCAPEM       string   `json:"mcp_ca_pem"`
 }
 
 // Resolve converts source configuration into the exact bounded relay command.
@@ -158,12 +174,71 @@ func Resolve(kind string, raw json.RawMessage) (Intent, error) {
 	if len(targets) > MaxTargets {
 		return Intent{}, fmt.Errorf("segment scan: source has %d targets; maximum is %d", len(targets), MaxTargets)
 	}
+	schemes, err := mcpSchemes(mode, cfg)
+	if err != nil {
+		return Intent{}, err
+	}
+	if err := validateMCPCABundle(cfg); err != nil {
+		return Intent{}, err
+	}
 	return Intent{
 		Execution: ExecutionRelay, Mode: mode, Targets: targets,
 		AllowRFC1918: cfg.AllowRFC1918, AllowLoopback: cfg.AllowLoopback,
 		Segment: segment, RequiredAgentRole: RequiredRoleNetwork, RequiredAgentID: relayAgentID,
 		ExcludedTargets: excluded, AppliedExclusions: applied,
+		MCP: cfg.MCP, MCPSchemes: schemes, MCPCAPEM: cfg.MCPCAPEM,
 	}, nil
+}
+
+// maxMCPCABundleBytes bounds the CA bundle a command carries to its relay.
+const maxMCPCABundleBytes = 64 << 10
+
+// validateMCPCABundle accepts a CA bundle only with mcp, bounded, holding at least
+// one certificate.
+func validateMCPCABundle(cfg sourceConfig) error {
+	if cfg.MCPCAPEM == "" {
+		return nil
+	}
+	if !cfg.MCP {
+		return errors.New("segment scan: mcp_ca_pem needs mcp: true")
+	}
+	if len(cfg.MCPCAPEM) > maxMCPCABundleBytes {
+		return fmt.Errorf("segment scan: mcp_ca_pem is larger than %d bytes", maxMCPCABundleBytes)
+	}
+	names, err := crypto.CertificateSubjectNameDERsFromPEM([]byte(cfg.MCPCAPEM))
+	if err != nil || len(names) == 0 {
+		return errors.New("segment scan: mcp_ca_pem holds no certificate")
+	}
+	return nil
+}
+
+// mcpSchemes validates a network source's MCP probe settings: only a network
+// source probes for MCP endpoints, mcp_schemes needs mcp, and each scheme is https
+// or http (https alone by default).
+func mcpSchemes(mode string, cfg sourceConfig) ([]string, error) {
+	if !cfg.MCP {
+		if len(cfg.MCPSchemes) > 0 {
+			return nil, errors.New("segment scan: mcp_schemes needs mcp: true")
+		}
+		return nil, nil
+	}
+	if mode != ModeTLS {
+		return nil, errors.New("segment scan: only a network source probes for MCP endpoints")
+	}
+	if len(cfg.MCPSchemes) == 0 {
+		return []string{"https"}, nil
+	}
+	out := make([]string, 0, 2)
+	for _, scheme := range cfg.MCPSchemes {
+		scheme = strings.ToLower(strings.TrimSpace(scheme))
+		if scheme != "https" && scheme != "http" {
+			return nil, fmt.Errorf("segment scan: mcp scheme %q is not https or http", scheme)
+		}
+		if !slices.Contains(out, scheme) {
+			out = append(out, scheme)
+		}
+	}
+	return out, nil
 }
 
 // ValidateDeclaredSegment proves that every normalized destination belongs to
@@ -474,6 +549,67 @@ type Report struct {
 	// TargetResults names every assigned target's outcome so a partial sweep
 	// says which listener failed or was blocked and why. Older relays omit it.
 	TargetResults []TargetResult `json:"target_results,omitempty"`
+	// MCPFindings are the MCP endpoints an MCP-enabled sweep found, at most one per
+	// target. They are observations beside the TLS outcome, not target outcomes, so
+	// the counters above do not include them.
+	MCPFindings []MCPFinding `json:"mcp_findings,omitempty"`
+}
+
+// MCPFinding is one MCP endpoint a sweep found on an assigned target.
+type MCPFinding struct {
+	Target      string               `json:"target"`
+	Fingerprint string               `json:"fingerprint"`
+	Observation mcpprobe.Observation `json:"observation"`
+}
+
+const maxListedMCPValues = 32
+
+// validateMCPFindings binds each MCP observation to an assigned target, its
+// endpoint to that target's host and port, and its fingerprint to its content.
+func validateMCPFindings(intent Intent, report Report, assigned map[string]struct{}) error {
+	if len(report.MCPFindings) == 0 {
+		return nil
+	}
+	if !intent.MCP || intent.DryRun || len(report.MCPFindings) > len(intent.Targets) {
+		return errors.New("segment scan: MCP findings the command did not ask for")
+	}
+	seen := make(map[string]struct{}, len(report.MCPFindings))
+	for i, f := range report.MCPFindings {
+		if _, ok := assigned[f.Target]; !ok {
+			return fmt.Errorf("segment scan: MCP finding %d names an unassigned target", i)
+		}
+		if _, dup := seen[f.Target]; dup {
+			return fmt.Errorf("segment scan: MCP finding %d repeats a target", i)
+		}
+		seen[f.Target] = struct{}{}
+		o := f.Observation
+		u, err := url.Parse(o.Endpoint)
+		if err != nil || u.Host != f.Target || !slices.Contains(intent.MCPSchemes, u.Scheme) || u.User != nil {
+			return fmt.Errorf("segment scan: MCP finding %d's endpoint is not on its target", i)
+		}
+		if o.Transport != "streamable-http" || (o.Auth != mcpprobe.AuthNone && o.Auth != mcpprobe.AuthOAuth && o.Auth != mcpprobe.AuthOther) {
+			return fmt.Errorf("segment scan: MCP finding %d has an unknown transport or authorization", i)
+		}
+		if len(o.AuthorizationServers) > maxListedMCPValues || len(o.ScopesSupported) > maxListedMCPValues {
+			return fmt.Errorf("segment scan: MCP finding %d lists too many values", i)
+		}
+		values := append([]string{o.Endpoint, o.ResourceMetadataURL, o.Resource, o.ProtocolVersion, o.ServerName, o.ServerVersion},
+			append(append([]string(nil), o.AuthorizationServers...), o.ScopesSupported...)...)
+		for _, v := range values {
+			if err := boundedText("MCP observation", v); err != nil {
+				return fmt.Errorf("segment scan: MCP finding %d: %w", i, err)
+			}
+		}
+		if o.ResourceMetadataURL != "" {
+			if mu, err := url.Parse(o.ResourceMetadataURL); err != nil || (mu.Scheme != "https" && mu.Scheme != "http") || mu.User != nil {
+				return fmt.Errorf("segment scan: MCP finding %d's resource metadata URL is malformed", i)
+			}
+		}
+		if f.Fingerprint == "" || f.Fingerprint != o.Fingerprint() {
+			return fmt.Errorf("segment scan: MCP finding %d's fingerprint does not cover its observation", i)
+		}
+	}
+	return nil
 }
 
 // TargetResult is one assigned target's terminal outcome.
@@ -560,6 +696,9 @@ func ValidateReport(intent Intent, report Report) error {
 			return fmt.Errorf("segment scan: finding %d duplicates an earlier observation", i)
 		}
 		seen[key] = struct{}{}
+	}
+	if err := validateMCPFindings(intent, report, assigned); err != nil {
+		return err
 	}
 	return validateTargetResults(report, assigned)
 }

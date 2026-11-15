@@ -364,6 +364,40 @@ describe("typed discovery source setup", () => {
     expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: "source-1" }));
   });
 
+  it("turns on the MCP probe for a network source and submits its settings (P7)", async () => {
+    const user = userEvent.setup();
+    renderSetup(vi.fn());
+
+    expect(await screen.findByText("What this source does")).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "Agent tools");
+    await user.type(screen.getByRole("textbox", { name: "Authorized scope" }), "agent-tools");
+    await user.type(screen.getByRole("textbox", { name: /Hosts, IPs/ }), "10.42.0.10");
+    const ports = screen.getByRole("textbox", { name: "Ports" });
+    await user.clear(ports);
+    await user.type(ports, "8080");
+    await user.click(screen.getByText("MCP servers"));
+    await user.click(screen.getByRole("checkbox", { name: /Also look for MCP servers on these targets/ }));
+    await user.click(screen.getByRole("checkbox", { name: /Also try plain HTTP/ }));
+
+    await user.click(screen.getByRole("button", { name: "Declare scope and review plan" }));
+    expect(await screen.findByRole("region", { name: "Normalized discovery plan" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save source" }));
+
+    await waitFor(() =>
+      expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
+        name: "Agent tools",
+        kind: "network",
+        config: {
+          targets: ["10.42.0.10:8080"],
+          ports: [8080],
+          segment: "agent-tools",
+          mcp: true,
+          mcp_schemes: ["https", "http"],
+        },
+      }),
+    );
+  });
+
   it("shows the exact server blocker while still allowing the source definition to be saved", async () => {
     const user = userEvent.setup();
     apiMock.previewDiscoveryPlan.mockResolvedValueOnce({

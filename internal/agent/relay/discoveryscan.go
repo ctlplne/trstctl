@@ -7,10 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/netip"
 	"sort"
 	"sync"
 
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/discovery/mcpprobe"
 	"trstctl.com/trstctl/internal/discovery/netscan"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/discovery/sshscan"
@@ -151,12 +155,16 @@ func Sweep(ctx context.Context, intent DiscoveryScanIntent) (DiscoveryReport, er
 		for _, r := range rep.TargetResults {
 			results = append(results, segmentscan.TargetResult{Target: r.Target, Status: r.Status, Error: r.Error})
 		}
-		return DiscoveryReport{
+		out := DiscoveryReport{
 			Mode: DiscoveryModeTLS, Findings: sortFindings(sink.findings),
 			Targets: rep.Targets, Discovered: rep.Discovered,
 			Failed: rep.Failed, Rejected: rep.Rejected, Blocked: rep.Blocked,
 			TargetResults: results,
-		}, nil
+		}
+		if intent.MCP {
+			out.MCPFindings = sweepMCP(ctx, intent, targets)
+		}
+		return out, nil
 	case DiscoveryModeSSH:
 		sink := &relaySSHSink{}
 		var opts []sshscan.Option
@@ -181,6 +189,64 @@ func Sweep(ctx context.Context, intent DiscoveryScanIntent) (DiscoveryReport, er
 	default:
 		return DiscoveryReport{}, fmt.Errorf("relay: unknown discovery mode %q", intent.Mode)
 	}
+}
+
+// sweepMCP looks for MCP endpoints on the sweep's targets (P7's network probe):
+// the initialize request an MCP client opens with, no credential, nothing listed or
+// called. Only the sweep's own literal addresses are approved, each re-checked when
+// it is dialed, so a host-name target is probed only when it resolves to one of
+// them; loopback and private addresses need the sweep's own permission, as for the
+// TLS sweep, and the relay's declared outbound destinations still apply.
+func sweepMCP(ctx context.Context, intent DiscoveryScanIntent, targets []string) []segmentscan.MCPFinding {
+	approved := mcpApprovedPrefixes(intent, targets)
+	if len(approved) == 0 {
+		return nil
+	}
+	prober := &mcpprobe.Prober{Approved: approved, Control: egressControl(nil)}
+	if intent.MCPCAPEM != "" {
+		// The operator's private CA joins the system roots; verification is never off.
+		transport, err := mtls.HTTPTransportWithSystemRootsAndCA([]byte(intent.MCPCAPEM))
+		if err != nil {
+			return nil
+		}
+		prober.Transport = transport
+	}
+	var found []segmentscan.MCPFinding
+	_ = prober.Scan(ctx, targets, intent.MCPSchemes, mcpSweepConcurrency, func(target string, obs mcpprobe.Observation) {
+		found = append(found, segmentscan.MCPFinding{Target: target, Fingerprint: obs.Fingerprint(), Observation: obs})
+	}, nil)
+	sort.Slice(found, func(i, j int) bool { return found[i].Target < found[j].Target })
+	return found
+}
+
+// mcpSweepConcurrency bounds the MCP probes in flight in one sweep (AN-7).
+const mcpSweepConcurrency = 4
+
+func mcpApprovedPrefixes(intent DiscoveryScanIntent, targets []string) []netip.Prefix {
+	allowLoopback := intent.AllowLoopback || intent.AllowReservedRanges
+	allowPrivate := intent.AllowRFC1918 || intent.AllowReservedRanges
+	seen := map[netip.Addr]struct{}{}
+	var out []netip.Prefix
+	for _, target := range targets {
+		host, _, err := net.SplitHostPort(target)
+		if err != nil {
+			continue
+		}
+		addr, err := netip.ParseAddr(host)
+		if err != nil {
+			continue
+		}
+		addr = addr.Unmap()
+		if (addr.IsLoopback() && !allowLoopback) || (addr.IsPrivate() && !allowPrivate) {
+			continue
+		}
+		if _, dup := seen[addr]; dup {
+			continue
+		}
+		seen[addr] = struct{}{}
+		out = append(out, netip.PrefixFrom(addr, addr.BitLen()))
+	}
+	return out
 }
 
 // sortFindings gives a sweep a stable order so two passes over an unchanged

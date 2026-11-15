@@ -174,6 +174,34 @@ listener observed by a later run keeps its one finding (and its triage decision)
 `first_seen_at`, `last_seen_at`, `seen_count`, and `run_id` moved to the latest run,
 so the console and the open-finding counts describe the estate once.
 
+#### MCP servers on the same targets
+
+A `network` source can also look for MCP servers on its targets: set `"mcp": true`
+(**MCP servers → Also look for MCP servers on these targets** in the console). The
+relay then sends each target the MCP initialize request that any MCP client opens
+with, over HTTPS (`"mcp_schemes": ["https"]`, the default) or HTTPS then plain HTTP
+(`["https", "http"]`), at `/mcp` and then `/`. It sends no credential and no cookie,
+never lists or calls a tool, and ends any session the server opened for it. Each MCP
+server it finds becomes an `mcp_server` finding beside the ones the host detectors
+report from agent configurations, with the endpoint, the server's name and version,
+and the authorization it requires:
+
+- `auth: none` — the server answered without any credential (risk 80);
+- `auth: oauth` — it requires OAuth and named its protected resource metadata
+  (RFC 9728), recorded with the authorization servers and scopes it lists (risk 30);
+- `auth: other` — it refused the request without naming OAuth metadata (risk 40).
+
+The probe connects only to the run's own target addresses, checked again when each
+connection is dialed, so a host name is probed only when it resolves to one of them;
+loopback and private addresses need the source's `allow_loopback` and
+`allow_rfc1918`, and link-local and cloud-metadata addresses are never dialed. TLS is
+verified against the system roots and, for servers under a private CA, the public CA
+certificates in `mcp_ca_pem`: nothing is sent to a server whose certificate does not
+verify. A rescan that finds an MCP server unchanged records nothing for it, so it
+writes no new event; a change (another version, another authorization requirement)
+is recorded as a new observation. The run's counts and `target_results` describe the
+TLS sweep; MCP servers appear as findings.
+
 #### Recover a failed or partial run without erasing the failure
 
 Open **Discover → Runs** and choose **Retry** on a `failed` or `partial` run. The

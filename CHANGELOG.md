@@ -1,6 +1,16 @@
 ## [Unreleased]
 
 ### Added
+- Network discovery can also find MCP servers on its targets (P7's network probe): a
+  `network` source with `"mcp": true` (the console's **MCP servers** section) sends each
+  target the MCP initialize request, never a credential, over HTTPS (or HTTPS then
+  plain HTTP when `mcp_schemes` allows it), and records each server it finds as an
+  `mcp_server` finding beside the host detectors' findings, with the authorization it
+  requires: none, OAuth (with the authorization servers and scopes its protected
+  resource metadata lists), or other. The probe connects only to the run's own
+  addresses, verifies TLS against the system roots and an optional `mcp_ca_pem` bundle
+  before sending anything, never lists or calls a tool, ends any session it opened,
+  and records nothing for a server a rescan finds unchanged.
 - HAProxy and Postfix with Dovecot take TPM-held host keys too (TPM-O1-L2). A profile
   that requires host keys in the TPM now queues `haproxy` and `postfix` renewals with
   `key_custody: "tpm"`, and the console's profile builder names them. The agent

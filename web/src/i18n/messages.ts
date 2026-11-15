@@ -15418,6 +15418,26 @@ export const messages = {
     defaultMessage: "Use only for an isolated QA target owned by this deployment. Private-network permission does not enable it.",
     description: "Discovery loopback safety explanation.",
   },
+  "discovery.setup.mcpProbe": { defaultMessage: "MCP servers", description: "Discovery source section for the MCP network probe." },
+  "discovery.setup.mcpProbeLabel": {
+    defaultMessage: "Also look for MCP servers on these targets",
+    description: "Discovery MCP network probe opt-in.",
+  },
+  "discovery.setup.mcpProbeDescription": {
+    defaultMessage:
+      "Sends each target the MCP initialize request, never a credential, and records whether an MCP server answers and what authorization it requires. Nothing is sent to a server whose certificate does not verify.",
+    description: "Discovery MCP network probe explanation.",
+  },
+  "discovery.setup.mcpHttp": { defaultMessage: "Also try plain HTTP", description: "Discovery MCP probe plain-HTTP opt-in." },
+  "discovery.setup.mcpHttpDescription": {
+    defaultMessage: "For MCP servers that listen without TLS. HTTPS is tried first, and the probe still sends no credential.",
+    description: "Discovery MCP probe plain-HTTP explanation.",
+  },
+  "discovery.setup.mcpCaBundle": { defaultMessage: "Private CA certificates (PEM)", description: "Discovery MCP probe CA bundle field." },
+  "discovery.setup.mcpCaBundleDescription": {
+    defaultMessage: "Public certificates of the CA your MCP servers use, trusted beside the system roots. Never paste a private key.",
+    description: "Discovery MCP probe CA bundle explanation.",
+  },
   "discovery.setup.directoryUrl": { defaultMessage: "Directory URL", description: "AD CS directory URL field." },
   "discovery.setup.configurationDn": { defaultMessage: "Configuration naming context", description: "AD CS configuration naming-context field." },
   "discovery.setup.bindIdentity": { defaultMessage: "Bind identity", description: "AD CS bind-identity field." },

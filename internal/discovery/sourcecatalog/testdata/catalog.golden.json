@@ -4,8 +4,8 @@
     {
       "kind": "network",
       "label": "TLS endpoints",
-      "purpose": "Find public TLS certificate metadata on explicitly authorized hosts, addresses, and network ranges.",
-      "data_handling": "Connects only to the normalized targets in the approved plan, performs a bounded TLS handshake, and stores public certificate metadata. It does not exploit services or collect private keys.",
+      "purpose": "Find public TLS certificate metadata on explicitly authorized hosts, addresses, and network ranges, and, when asked, the MCP servers listening there.",
+      "data_handling": "Connects only to the normalized targets in the approved plan, performs a bounded TLS handshake, and stores public certificate metadata. With the MCP probe on, it also sends each target the MCP initialize request, never a credential, and stores whether an MCP server answers and the authorization it requires. It does not exploit services or collect private keys.",
       "tool": "Discover",
       "route": "/discovery?tab=sources\u0026kind=network",
       "setup_surface": "source_wizard",
@@ -91,6 +91,30 @@
           "required": false,
           "advanced": true,
           "description": "Restricted local-testing override; never implied by private-range access."
+        },
+        {
+          "path": "mcp",
+          "label": "Look for MCP servers",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Also send each target the MCP initialize request, never a credential, and record whether an MCP server answers and the authorization it requires."
+        },
+        {
+          "path": "mcp_schemes",
+          "label": "MCP schemes",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "https (the default), or https then http; plain http is opt-in."
+        },
+        {
+          "path": "mcp_ca_pem",
+          "label": "MCP private CA certificates",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Public CA certificates (PEM) trusted beside the system roots, for MCP servers under a private CA. Nothing is sent to a server whose certificate does not verify."
         }
       ],
       "lifecycle": [

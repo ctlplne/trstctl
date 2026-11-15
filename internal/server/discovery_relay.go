@@ -12,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	agentdiscovery "trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/discovery/mcpprobe"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/keyposture"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -101,6 +103,11 @@ func (s *Server) recordDiscoveryScan(ctx context.Context, tenantID, agentName, i
 				return err
 			}
 		}
+		for _, finding := range report.MCPFindings {
+			if err := s.recordRelayMCPFinding(ctx, tenantID, agentID, idempotencyKey, intent, finding); err != nil {
+				return err
+			}
+		}
 	}
 	status, reason := segmentscan.Status(report)
 	if err := s.orch.CompleteDiscoveryRunWithEventID(ctx, tenantID,
@@ -180,6 +187,65 @@ func (s *Server) recordRelayDiscoveryFinding(ctx context.Context, tenantID, agen
 			Metadata: encoded,
 		})
 	return err
+}
+
+// recordRelayMCPFinding records an MCP endpoint a network sweep found (P7's
+// network probe) beside the host detectors' MCP server findings, with the
+// authorization it requires and no credential value. A rescan that observes the
+// endpoint unchanged records nothing, so it writes no event; a change records the
+// new observation.
+func (s *Server) recordRelayMCPFinding(ctx context.Context, tenantID, agentID, idempotencyKey string, intent segmentscan.Intent, finding segmentscan.MCPFinding) error {
+	o := finding.Observation
+	latest, seen, err := s.store.LatestDiscoveryFingerprintAt(ctx, tenantID, intent.SourceID, agentdiscovery.FindingKindMCPServer, o.Endpoint)
+	if err != nil {
+		return err
+	}
+	if seen && latest == finding.Fingerprint {
+		return nil
+	}
+	metadata := map[string]any{
+		"location": o.Endpoint, "endpoint": o.Endpoint, "segment": intent.Segment, "executed_by_agent_id": agentID,
+		"source": "network-mcp-probe", "transport": o.Transport, "auth": string(o.Auth),
+		"credential_values": "not_collected",
+	}
+	for key, value := range map[string]string{
+		"resource_metadata_url": o.ResourceMetadataURL, "resource": o.Resource, "protocol_version": o.ProtocolVersion,
+		"server_name": o.ServerName, "server_version": o.ServerVersion,
+	} {
+		if value != "" {
+			metadata[key] = value
+		}
+	}
+	if len(o.AuthorizationServers) > 0 {
+		metadata["authorization_servers"] = o.AuthorizationServers
+	}
+	if len(o.ScopesSupported) > 0 {
+		metadata["scopes_supported"] = o.ScopesSupported
+	}
+	encoded, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	_, err = s.orch.RecordDiscoveryFindingWithEventID(ctx, tenantID,
+		orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "mcp\x00"+o.Endpoint+"\x00"+finding.Fingerprint), store.DiscoveryFinding{
+			RunID: intent.ID, SourceID: intent.SourceID, Kind: agentdiscovery.FindingKindMCPServer, Ref: o.Endpoint,
+			Provenance: "network-relay:" + intent.Segment + ":" + o.Endpoint, Fingerprint: finding.Fingerprint,
+			RiskScore: mcpEndpointRisk(o.Auth), Metadata: encoded,
+		})
+	return err
+}
+
+// mcpEndpointRisk rates an MCP endpoint by what it lets a caller do without a
+// credential: one that answers anyone rates like a static credential.
+func mcpEndpointRisk(auth mcpprobe.Auth) int {
+	switch auth {
+	case mcpprobe.AuthNone:
+		return 80
+	case mcpprobe.AuthOther:
+		return 40
+	default:
+		return 30
+	}
 }
 
 // keptScanBytes returns the leaf bytes and served issuers a relay kept (A211),
