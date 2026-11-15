@@ -44,6 +44,11 @@ func (s *Store) QueueResolvedFindingAnnotationTx(ctx context.Context, tx pgx.Tx,
 	if !resolvesAnnotation(status) {
 		return nil
 	}
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	var (
 		sourceID, ref string
 		discoveredAt  time.Time

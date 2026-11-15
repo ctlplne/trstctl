@@ -405,7 +405,9 @@ const secretScopedSyncAlertWindow = 24 * time.Hour
 // records it (AN-6). It names the definition, the destination key, the target
 // and the closed reason, never a value.
 func alertSecretScopedSyncDeliveryFailedTx(ctx context.Context, tx pgx.Tx, tenantID, failure, syncID string, at time.Time, detail func(name string) string) error {
-	if time.Since(at) > secretScopedSyncAlertWindow {
+	// A237L4-L2: as for every projection-queued effect, a rebuild queues none
+	// for an event projected before; the window also covers an older failure.
+	if effectsAlreadyQueued(ctx) || time.Since(at) > secretScopedSyncAlertWindow {
 		return nil
 	}
 	var name string

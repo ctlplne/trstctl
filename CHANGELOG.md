@@ -1956,6 +1956,14 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- A full read-model rebuild no longer queues an effect again for an event the deployment had
+  already projected: the AD CS drift, discovery risk and session-risk alerts, ticket notes,
+  external CA revocations, CRL publications, event-key preparations, key-domain seals,
+  resolved scan annotations, AWS decoy scans, observer events, ACME renewal-information
+  fetches, archive legal-hold changes and scoped-sync failure warnings each deduplicated on
+  their own outbox row, which is reclaimed a day after delivery. A guard requires every
+  outbox insert in the store to skip a rebuild's re-projection or name why it need not
+  (A237L4-L2).
 - A Provider SCIM user whose new `externalId` names a userName another Provider operator
   holds is refused with 409 `uniqueness`. It was created as a second operator whose event
   then failed the Provider operators projection, stopping the Provider authority's

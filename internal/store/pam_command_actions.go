@@ -146,6 +146,11 @@ func (s *Store) ApplyPAMCommandAlertedTx(ctx context.Context, tx pgx.Tx, tenantI
 	if err := s.ApplyPAMCommandBlockedTx(ctx, tx, tenantID, a); err != nil {
 		return err
 	}
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "pam-command-alert\x1f"+tenantID+"\x1f"+key); err != nil {
 		return fmt.Errorf("store: lock session risk alert: %w", err)
 	}

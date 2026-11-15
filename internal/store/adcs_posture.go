@@ -293,6 +293,11 @@ func (s *Store) ApplyADCSTemplateDriftObservedTx(
 	if existed || alertDestination == "" {
 		return nil
 	}
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	var existingDestination string
 	var existingPayload []byte
 	err := tx.QueryRow(ctx,

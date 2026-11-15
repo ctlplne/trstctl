@@ -30,6 +30,11 @@ func (s *Store) EnsureExternalCertificateRevocationTx(ctx context.Context, tx pg
 	if certificate.Fingerprint != command.Fingerprint || certificate.Serial != command.Serial {
 		return fmt.Errorf("%w: external certificate revocation target changed", ErrIdempotencyConflict)
 	}
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	payload, err := json.Marshal(command)
 	if err != nil {
 		return err

@@ -41,6 +41,11 @@ func (s *Store) ServiceNowIntakeScheduleForTableTx(ctx context.Context, tx pgx.T
 // note is queued already: a replayed decision queues nothing new, and the
 // relay's read of the ticket keeps a re-run note from being added twice.
 func (s *Store) QueueTicketNoteTx(ctx context.Context, tx pgx.Tx, tenantID, noteID string, payload []byte) error {
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	key := "ticket-note:" + noteID
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
 		"outbox-enqueue-if-absent\x1f"+tenantID+"\x1f"+key); err != nil {

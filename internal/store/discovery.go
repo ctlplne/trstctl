@@ -663,6 +663,11 @@ func (s *Store) ApplyDiscoveryFindingRecordedWithAlertTx(
 	if alertDestination == "" {
 		return nil
 	}
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 
 	// The finding's natural-key insert serializes exact observation races. This
 	// second tenant+receiver lock also protects callers whose event IDs differ

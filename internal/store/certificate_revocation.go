@@ -92,6 +92,11 @@ func (s *Store) EnsureCertificateCRLPublicationTx(ctx context.Context, tx pgx.Tx
 	if tenantID == "" || eventID == "" || caID == "" {
 		return fmt.Errorf("store: CRL publication requires tenant, event and authority")
 	}
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	payload, err := json.Marshal(CertificateCRLPublication{EventID: eventID, CAID: caID})
 	if err != nil {
 		return err

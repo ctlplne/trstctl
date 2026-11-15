@@ -268,6 +268,11 @@ func upstreamARIPayload(a ACMEUpstreamARI) ([]byte, error) {
 }
 
 func enqueueUpstreamARIFetchTx(ctx context.Context, tx pgx.Tx, a ACMEUpstreamARI, due time.Time, suffix string) error {
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	payload, err := upstreamARIPayload(a)
 	if err != nil {
 		return err

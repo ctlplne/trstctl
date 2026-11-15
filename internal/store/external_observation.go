@@ -263,6 +263,11 @@ func (s *Store) ExpectationForEndpoint(ctx context.Context, tenantID, address st
 // from projections that a rebuild may not have reached yet, and a rebuild must
 // not fail on that.
 func (s *Store) EnqueueObserverEventsTx(ctx context.Context, tx pgx.Tx, tenantID, eventKey string, payload func(observerID string) ([]byte, error)) error {
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	rows, err := tx.Query(ctx,
 		`SELECT id::text FROM external_observers
 		  WHERE tenant_id = $1 AND enabled AND events_url <> ''

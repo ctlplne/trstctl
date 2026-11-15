@@ -50,6 +50,11 @@ func (s *Store) EnsureTenantKeyDomainSealOutboxTx(
 		strings.TrimSpace(requestBinding) == "" {
 		return fmt.Errorf("store: tenant key-domain seal outbox requires tenant, operation, idempotency key, and request binding")
 	}
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	payload, err := json.Marshal(TenantKeyDomainSealCommand{
 		OperationID: operationID, IdempotencyKey: idempotencyKey,
 		RequestBinding: requestBinding,

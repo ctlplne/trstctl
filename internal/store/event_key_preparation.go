@@ -64,6 +64,11 @@ func (s *Store) EnsureEventKeyPreparationTx(ctx context.Context, tx pgx.Tx, comm
 	if err := command.Validate(); err != nil {
 		return err
 	}
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	command.RequestedAt = command.RequestedAt.UTC()
 	payload, err := json.Marshal(command)
 	if err != nil {

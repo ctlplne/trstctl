@@ -156,6 +156,11 @@ func (s *Store) RecordArchiveLegalHoldOutcomeTx(ctx context.Context, tx pgx.Tx, 
 }
 
 func queueArchiveLegalHoldEffectTx(ctx context.Context, tx pgx.Tx, tenantID, id, object string, on bool, sequence uint64, retry bool) error {
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	payload, err := json.Marshal(ArchiveLegalHoldEffect{ID: id, Object: object, On: on})
 	if err != nil {
 		return err

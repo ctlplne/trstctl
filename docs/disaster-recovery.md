@@ -104,7 +104,12 @@ read-model rebuild, stop mutating control-plane replicas and use the existing
 deployment configuration with `trstctl --rebuild`. This reconstructs state and
 receipts from complete retained events. Do not clear a checkpoint, manufacture
 a receipt, or change lifecycle rows to get past the refusal. A warm restart does
-not automatically perform this full rebuild.
+not automatically perform this full rebuild. A full rebuild queues no alert, notice,
+ticket note, revocation, CRL publication, legal-hold change, report removal, observer
+event, renewal-information fetch or decoy scan again for an event the deployment had
+already projected; an event recorded but not yet projected when the rebuild starts still
+queues its effect once (A237L4-L1, A237L4-L2; see the limitations for the effects that
+come next).
 
 If a recorded issuance event remains but its certificate read row is missing,
 issuance refuses to sign again. HTTP callers receive `503` with

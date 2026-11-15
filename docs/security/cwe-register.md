@@ -893,7 +893,7 @@ not this file.
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
 | `internal/store/secret_scoped_sync.go:21` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/secret_scoped_sync.go:395` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/store/secret_scoped_sync.go:435` | SQL column list, no credential (CWE-798) |
+| `internal/store/secret_scoped_sync.go:437` | SQL column list, no credential (CWE-798) |
 | `internal/store/secret_static_rotation.go:359` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
 | `internal/store/secret_store.go:329` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
@@ -1386,9 +1386,9 @@ not this file.
 | `internal/store/access_bundles.go:142` | bounded above (CWE-190) |
 | `internal/store/acme_dns01.go:300` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/acme_dns01.go:345` | non-negative by construction (CWE-190) |
-| `internal/store/acme_upstream_ari.go:312` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
-| `internal/store/acme_upstream_ari.go:361` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
-| `internal/store/acme_upstream_ari.go:388` | DB CHECK keeps event_sequence positive (CWE-190) |
+| `internal/store/acme_upstream_ari.go:317` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
+| `internal/store/acme_upstream_ari.go:366` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
+| `internal/store/acme_upstream_ari.go:393` | DB CHECK keeps event_sequence positive (CWE-190) |
 | `internal/store/adcs_decisions.go:46` | bounded above (CWE-190) |
 | `internal/store/adcs_pending_requests.go:54` | bounded above (CWE-190) |
 | `internal/store/application_secret_approval_test.go:49` | the binding validator proved this fixture version is positive (CWE-190). |
@@ -1397,7 +1397,7 @@ not this file.
 | `internal/store/archive_legal_hold.go:145` | event sequences fit int64 (CWE-190) |
 | `internal/store/archive_legal_hold.go:149` | event sequences fit int64 (CWE-190) |
 | `internal/store/archive_legal_hold.go:153` | event sequences fit int64 (CWE-190) |
-| `internal/store/archive_legal_hold.go:192` | positive by constraint (CWE-190) |
+| `internal/store/archive_legal_hold.go:197` | positive by constraint (CWE-190) |
 | `internal/store/assurance_evidence.go:248` | non-negative by construction (CWE-190) |
 | `internal/store/audit_anchor.go:47` | tenant-local audit ordinal fits a Postgres bigint (CWE-190) |
 | `internal/store/audit_anchor.go:49` | event-log sequence fits a Postgres bigint (CWE-190) |

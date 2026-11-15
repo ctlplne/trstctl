@@ -75,6 +75,11 @@ func AWSHoneyScanKey(id, region string, cycle int64, page int) string {
 }
 
 func enqueueAWSHoneyScanTx(ctx context.Context, tx pgx.Tx, tenantID, id, region string, cycle int64, page int, due time.Time) error {
+	// A237L4-L2: a rebuild re-projecting an event this deployment projected
+	// before queues no second effect.
+	if effectsAlreadyQueued(ctx) {
+		return nil
+	}
 	payload, err := json.Marshal(struct {
 		ID     string `json:"id"`
 		Region string `json:"region"`
