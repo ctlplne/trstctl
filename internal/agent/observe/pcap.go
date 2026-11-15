@@ -12,9 +12,10 @@ import (
 )
 
 // Saved captures (X1-L3). ReplayPcap reads a classic pcap file — what tcpdump
-// -w writes — and feeds its frames to an assembler in file order with each
+// -w writes — or a pcapng file — what Wireshark and dumpcap write (X1-L3R,
+// pcapng.go) — and feeds its frames to an assembler in file order with each
 // packet's own time, so a capture taken on a mirror port, or anywhere the
-// agent cannot listen, is read like live traffic. pcapng is not read.
+// agent cannot listen, is read like live traffic.
 
 const (
 	pcapLinkEthernet = 1
@@ -26,16 +27,19 @@ const (
 	maxPcapRecord = 262144
 )
 
-// ErrPcapNG is returned for a pcapng file.
-var ErrPcapNG = errors.New("observe: the capture is pcapng; save it as pcap (tcpdump -w, or editcap -F pcap)")
-
-// ReplayPcap feeds every TCP segment of a classic pcap capture to a, and
-// returns how many packet records it read. Frames that are not TCP over IPv4
-// or IPv6 are skipped as they are on an interface.
+// ReplayPcap feeds every frame of a classic pcap or pcapng capture to a, and
+// returns how many packet records it read. Frames that are not TCP or UDP
+// over IPv4 or IPv6 are skipped as they are on an interface.
 func ReplayPcap(r io.Reader, a *Assembler) (int, error) {
 	br := bufio.NewReader(r)
 	var header [24]byte
-	if _, err := io.ReadFull(br, header[:]); err != nil {
+	if _, err := io.ReadFull(br, header[:4]); err != nil {
+		return 0, fmt.Errorf("observe: reading the pcap header: %w", err)
+	}
+	if binary.LittleEndian.Uint32(header[0:4]) == pcapngSectionHeader {
+		return replayPcapNG(br, a) // X1-L3R
+	}
+	if _, err := io.ReadFull(br, header[4:]); err != nil {
 		return 0, fmt.Errorf("observe: reading the pcap header: %w", err)
 	}
 	var order binary.ByteOrder
@@ -49,8 +53,6 @@ func ReplayPcap(r io.Reader, a *Assembler) (int, error) {
 		order = binary.BigEndian
 	case 0x4d3cb2a1:
 		order, nanos = binary.BigEndian, true
-	case 0x0a0d0d0a:
-		return 0, ErrPcapNG
 	default:
 		return 0, fmt.Errorf("observe: not a pcap capture (magic %#x)", magic)
 	}

@@ -523,13 +523,23 @@ until the other side's FIN, a reset, a new connection on the same addresses or t
 sweep, so the other side's last bytes (a TLS close_notify, the final ACK) do not open it
 again. Segments that arrive ahead of a gap — a
 reordered or retransmitted ClientHello or server flight — are held, at most 16 a
-direction and only inside the 16 KiB the observer reads, and read once the gap fills
-(X1-L3; counted as `reordered`); a gap that never fills ends reading of that
-connection, counted as out of order, and what it held is dropped.
+direction (`--observe-hold-segments`, 1 to 1024) and only inside the 16 KiB the observer
+reads, and read once the gap fills (X1-L3; counted as `reordered`). A gap that will never
+fill, a segment the capture missed but the endpoint received, is skipped to the next TLS
+record after it (X1-L3R; counted as `resynced`, and every report carries
+`observer_resynced`). The observer knows the gap is permanent when the other side
+acknowledges bytes past it, when the hold is full, or when the connection ends. It keeps
+the bytes before the gap up to their last whole record and resumes at a record header from
+which whole records follow, so a TLS 1.2 server's key exchange and the end of its flight
+are read past a segment lost inside its certificate, which is then not reported. A stream
+that is not TLS from its first byte (SSH, or TLS after STARTTLS) is not resynchronized: its
+reading ends at a gap that never fills, counted as out of order, and what it held is
+dropped.
 
 A saved capture reads the same way: `--observe-pcap <file>` (a classic pcap, as
-`tcpdump -w` writes it, of Ethernet, raw IP or Linux cooked frames; pcapng is refused
-with a hint to save it as pcap) makes an agent with the observer role read the file once
+`tcpdump -w` writes it, or pcapng, as Wireshark and dumpcap write it by default, with any
+number of sections and interfaces, each interface's own timestamp resolution and either
+byte order (X1-L3R); of Ethernet, raw IP or Linux cooked frames) makes an agent with the observer role read the file once
 at start, for the ports in `--observe-ports`, and report its handshakes like an
 interface's under interface `pcap:<file name>`. Use it for a capture taken where no agent
 runs, such as a network team's tap. Observations are discovery

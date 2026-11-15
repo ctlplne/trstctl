@@ -30,7 +30,9 @@ var (
 	observeReportInterval = flag.Duration("observe-report-interval", time.Minute,
 		"how often the observer reports what it saw")
 	observePcap = flag.String("observe-pcap", "",
-		"a saved capture (classic pcap, as tcpdump -w writes) whose connections' handshakes the agent reads once at start and reports like an interface's, under interface pcap:<file name>; needs the observer role. Only handshake metadata is kept")
+		"a saved capture (classic pcap, as tcpdump -w writes, or pcapng, as Wireshark and dumpcap write) whose connections' handshakes the agent reads once at start and reports like an interface's, under interface pcap:<file name>; needs the observer role. Only handshake metadata is kept")
+	observeHoldSegments = flag.Int("observe-hold-segments", observe.DefaultMaxHeldSegments,
+		"segments each direction of a connection holds while it waits for a missing one, 1 to 1024; the held bytes stay within the 16 KiB the observer reads either way")
 )
 
 // observerSourceKind is the inventory source kind observations are reported under.
@@ -59,9 +61,13 @@ func startObserver(ctx context.Context, a *agent.Agent, ch agent.ChannelClient) 
 		fmt.Fprintln(os.Stderr, "trstctl-agent: observer:", err)
 		return func() {}
 	}
-	ctx, cancel := context.WithCancel(ctx)
 	agg := observe.NewAggregate(4096)
 	asm := observe.NewAssembler(ports, *observeMaxFlows, 30*time.Second, agg.Add)
+	if err := asm.SetMaxHeldSegments(*observeHoldSegments); err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: observer:", err)
+		return func() {}
+	}
+	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		err := observe.Capture(ctx, iface, ports, 2048, asm)
 		if err != nil {
@@ -85,17 +91,21 @@ func startObserver(ctx context.Context, a *agent.Agent, ch agent.ChannelClient) 
 	return cancel
 }
 
-// captureObservations reads a saved capture (X1-L3) for the watched ports
-// and returns what its connections' handshakes stated, aggregated as an
-// interface's would be, with the assembler's counters.
+// captureObservations reads a saved capture (X1-L3; pcapng too, X1-L3R) for
+// the watched ports and returns what its connections' handshakes stated,
+// aggregated as an interface's would be, with the assembler's counters. The
+// hold is --observe-hold-segments, as on an interface.
 func captureObservations(path string, ports []uint16, maxFlows int) ([]observe.Item, observe.Stats, uint64, error) {
+	agg := observe.NewAggregate(4096)
+	asm := observe.NewAssembler(ports, maxFlows, 30*time.Second, agg.Add)
+	if err := asm.SetMaxHeldSegments(*observeHoldSegments); err != nil {
+		return nil, observe.Stats{}, 0, err
+	}
 	f, err := os.Open(path) // #nosec G304 -- the operator names the capture file on the command line (CWE-22)
 	if err != nil {
 		return nil, observe.Stats{}, 0, err
 	}
 	defer func() { _ = f.Close() }()
-	agg := observe.NewAggregate(4096)
-	asm := observe.NewAssembler(ports, maxFlows, 30*time.Second, agg.Add)
 	if _, err := observe.ReplayPcap(f, asm); err != nil {
 		return nil, observe.Stats{}, 0, err
 	}
@@ -185,9 +195,11 @@ func observationFindings(iface string, items []observe.Item, stats observe.Stats
 			"pq_hybrid":         strconv.FormatBool(obs.PQHybrid()),
 			"observer_flows":    strconv.Itoa(stats.ActiveFlows),
 			// X1-L2R: fragments of datagrams the observer gave up on count too.
-			"observer_drops":  strconv.FormatUint(stats.TableFull+stats.OutOfOrder+stats.FragmentsDropped+dropped, 10),
-			"observer_cpu_s":  strconv.FormatFloat(cost.cpuSeconds, 'f', 3, 64),
-			"observer_heap_b": strconv.FormatUint(cost.heapBytes, 10),
+			"observer_drops": strconv.FormatUint(stats.TableFull+stats.OutOfOrder+stats.FragmentsDropped+dropped, 10),
+			// X1-L3R: gaps that never filled, read past at the next TLS record.
+			"observer_resynced": strconv.FormatUint(stats.Resynced, 10),
+			"observer_cpu_s":    strconv.FormatFloat(cost.cpuSeconds, 'f', 3, 64),
+			"observer_heap_b":   strconv.FormatUint(cost.heapBytes, 10),
 		}
 		risk := 30
 		fingerprint := ""

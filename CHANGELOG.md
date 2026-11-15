@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- The passive observer reads pcapng captures (`--observe-pcap`), as Wireshark and dumpcap
+  write them: every section and interface, each interface's timestamp resolution, either
+  byte order. A gap that will never fill, a segment the capture missed, is skipped to the
+  next TLS record after it (counted as `resynced`), so a TLS 1.2 server's key exchange is
+  still read past a segment lost inside its certificate; `--observe-hold-segments` sets
+  how many segments a direction holds past a gap (X1-L3R).
 - dns-persist-01 takes the hashed `accounturi` of draft-ietf-acme-dns-persist-02
   (P1-ACCOUNTURI). With `protocols.acme_dns_persist.accounturi_form: hashed` the ACME
   server advertises `accountHashPrefix` and accepts a record naming the account by the

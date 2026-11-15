@@ -84,15 +84,15 @@ func TestAssemblerBoundsAndCountsWhatItDrops(t *testing.T) {
 		t.Fatalf("flow table = %+v, want 2 flows and 1 refused", st)
 	}
 	// A gap is waited for (X1-L3): segments ahead of it are held, up to
-	// MaxHeldSegments; one more ends reading that connection, counted, and
-	// what it held is dropped.
+	// the default hold; one more, with no TLS record to resume at (X1-L3R),
+	// ends reading that connection, counted, and what it held is dropped.
 	c := netip.MustParseAddrPort("10.0.0.9:40000")
-	for i := uint32(0); i < MaxHeldSegments; i++ {
+	for i := uint32(0); i < DefaultMaxHeldSegments; i++ {
 		s, _ := DecodeFrame(frame(c, server, 500+10*i, ack, []byte("late")))
 		a.Segment(s, now)
 	}
-	if st := a.Stats(); st.OutOfOrder != 0 || st.BufferedBytes != 4*MaxHeldSegments {
-		t.Fatalf("stats while holding = %+v, want %d held bytes and nothing dropped", st, 4*MaxHeldSegments)
+	if st := a.Stats(); st.OutOfOrder != 0 || st.BufferedBytes != 4*DefaultMaxHeldSegments {
+		t.Fatalf("stats while holding = %+v, want %d held bytes and nothing dropped", st, 4*DefaultMaxHeldSegments)
 	}
 	s, _ := DecodeFrame(frame(c, server, 900, ack, []byte("late")))
 	a.Segment(s, now)

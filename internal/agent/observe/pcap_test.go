@@ -5,7 +5,6 @@ package observe
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"net/netip"
 	"os"
 	"strings"
@@ -85,10 +84,12 @@ func TestAGapThatNeverFillsKeepsNothingX1L3(t *testing.T) {
 
 func TestReplayPcapRefusesWhatItDoesNotRead(t *testing.T) {
 	a := NewAssembler([]uint16{443}, 4, time.Minute, func(Event) {})
+	// X1-L3R reads pcapng; a section header without its byte-order magic
+	// is refused, saying so.
 	ng := make([]byte, 24)
 	binary.LittleEndian.PutUint32(ng, 0x0a0d0d0a)
-	if _, err := ReplayPcap(bytes.NewReader(ng), a); !errors.Is(err, ErrPcapNG) {
-		t.Fatalf("pcapng = %v", err)
+	if _, err := ReplayPcap(bytes.NewReader(ng), a); err == nil || !strings.Contains(err.Error(), "byte-order magic") {
+		t.Fatalf("a malformed pcapng = %v", err)
 	}
 	wifi := make([]byte, 24)
 	binary.LittleEndian.PutUint32(wifi, 0xa1b2c3d4)

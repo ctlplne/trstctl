@@ -150,6 +150,7 @@ func segmentOf(pkt ipPacket) (Segment, bool) {
 		Src:     netip.AddrPortFrom(pkt.src, binary.BigEndian.Uint16(tcp[0:2])),
 		Dst:     netip.AddrPortFrom(pkt.dst, binary.BigEndian.Uint16(tcp[2:4])),
 		Seq:     binary.BigEndian.Uint32(tcp[4:8]),
+		Ack:     binary.BigEndian.Uint32(tcp[8:12]),
 		FIN:     flags&0x01 != 0,
 		SYN:     flags&0x02 != 0,
 		RST:     flags&0x04 != 0,

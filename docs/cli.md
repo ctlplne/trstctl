@@ -1619,9 +1619,10 @@ endpoint and reports only the verdict (`credential_validity`);
 `--observe-interface` (Linux, observer role) watches an interface's handshakes and
 reports what each connection negotiated, never payload (TLS, SSH and plaintext over TCP;
 QUIC and DTLS over UDP); `--observe-ports` (TCP and UDP),
-`--observe-max-flows` and `--observe-report-interval` bound it. `--observe-pcap <file>`
-(observer role) reads a saved classic pcap capture once at start and reports its
-handshakes the same way.
+`--observe-max-flows` and `--observe-report-interval` bound it, and
+`--observe-hold-segments` (default 16, up to 1024) sets how many segments a direction
+holds past a missing one. `--observe-pcap <file>` (observer role) reads a saved classic
+pcap or pcapng capture once at start and reports its handshakes the same way.
 `--observe-tls-sessions` (Linux 5.17+, session-observer role, BPF privileges and the host
 PID namespace) attaches probes to the host's OpenSSL 3 libraries and reports what each TLS
 handshake on the host negotiated, with the peer's certificate, never application data;

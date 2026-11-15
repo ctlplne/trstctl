@@ -1577,9 +1577,14 @@ never live in the API process. What you can do end to end against the running bi
   of OpenSSL 3.5.9 at MTU 576 and 1280, and on a real TLS 1.3 capture re-framed as IPv4
   and IPv6 fragments, behind hop-by-hop and destination options headers and three tags),
   follows
-  connections in order, holding up to 16 segments a direction that arrive ahead
-  of a gap until it fills (X1-L3; a gap that never fills ends reading of that
-  connection), reads saved classic pcap captures (`--observe-pcap`; not pcapng),
+  connections in order, holding up to 16 segments a direction
+  (`--observe-hold-segments`, up to 1024) that arrive ahead of a gap until it fills
+  (X1-L3), skips a gap that will never fill to the next TLS record (X1-L3R; proven on a
+  real TLS 1.2 capture of OpenSSL 3.5.9 missing a segment inside the server's
+  certificate; the record the gap cuts through is not read, and a stream that is not TLS
+  from its first byte, such as SSH or TLS after STARTTLS, still ends reading at such a
+  gap), reads saved classic pcap and pcapng captures (`--observe-pcap`; proven on
+  captures written by dumpcap 4.6.9 and mergecap),
   reads TLS reached by SMTP/IMAP STARTTLS, POP3 STLS, LDAP StartTLS, PostgreSQL's
   SSLRequest and MySQL's SSL request (X1-L4; proven on captures of PostgreSQL 17,
   MariaDB 11.8 and OpenLDAP 2.6), reads QUIC (versions 1 and 2) and DTLS handshakes

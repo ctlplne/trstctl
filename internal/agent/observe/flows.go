@@ -3,6 +3,7 @@
 package observe
 
 import (
+	"fmt"
 	"net/netip"
 	"sync"
 	"time"
@@ -12,6 +13,8 @@ import (
 type Segment struct {
 	Src, Dst netip.AddrPort
 	Seq      uint32
+	// Ack is the acknowledgment number, meaningful when ACK is set.
+	Ack      uint32
 	SYN, ACK bool
 	FIN, RST bool
 	Payload  []byte
@@ -48,7 +51,11 @@ type Stats struct {
 	OutOfOrder   uint64 `json:"out_of_order"`
 	// Reordered counts segments that arrived ahead of a gap, were held, and
 	// were read once the gap filled (X1-L3).
-	Reordered    uint64 `json:"reordered"`
+	Reordered uint64 `json:"reordered"`
+	// Resynced counts gaps that would never fill, skipped to the next TLS
+	// record header after them (X1-L3R): the other side acknowledged bytes
+	// the capture never carried, the hold filled, or the connection ended.
+	Resynced     uint64 `json:"resynced"`
 	Unrecognized uint64 `json:"unrecognized"`
 	// Fragments counts IP fragments read, Reassembled the datagrams rebuilt
 	// from them, and FragmentsDropped the fragments of datagrams given up:
@@ -75,13 +82,23 @@ func keyOf(a, b netip.AddrPort) flowKey {
 }
 
 type flow struct {
-	client, server           netip.AddrPort
-	clientNext, serverNext   uint32
-	clientSet, serverSet     bool
-	clientBuf, serverBuf     []byte
-	clientAhead, serverAhead []heldSegment
-	finished                 bool
-	last                     time.Time
+	client, server         netip.AddrPort
+	fromClient, fromServer direction
+	finished               bool
+	last                   time.Time
+}
+
+// direction is one side of a connection: the next sequence number to read,
+// the bytes read so far, and the segments held past a gap (X1-L3).
+type direction struct {
+	next  uint32
+	set   bool
+	buf   []byte
+	ahead []heldSegment
+	// triedRead and triedHeld are how many bytes were read and held when a
+	// resynchronization last found nothing to resume at; another try waits
+	// for either to change (X1-L3R).
+	triedRead, triedHeld int
 }
 
 // heldSegment is a segment that arrived ahead of a gap in its direction,
@@ -91,11 +108,17 @@ type heldSegment struct {
 	payload []byte
 }
 
-// MaxHeldSegments bounds how many segments one direction holds while it
-// waits for a gap to fill; one more ends reading that connection, counted as
-// out of order. Held bytes stay inside the first MaxDirectionBytes, the only
-// part Parse reads.
-const MaxHeldSegments = 16
+const (
+	// DefaultMaxHeldSegments is how many segments one direction holds while
+	// it waits for a gap to fill, unless SetMaxHeldSegments says otherwise.
+	// One more skips the gap if a TLS record follows it (X1-L3R) and
+	// otherwise ends reading that connection, counted as out of order. Held
+	// bytes stay inside the first MaxDirectionBytes, the only part Parse
+	// reads, whatever the count.
+	DefaultMaxHeldSegments = 16
+	// MaxHeldSegmentsLimit bounds SetMaxHeldSegments.
+	MaxHeldSegmentsLimit = 1024
+)
 
 func heldBytes(held []heldSegment) int {
 	n := 0
@@ -124,9 +147,11 @@ type Assembler struct {
 	udp    map[flowKey]*udpFlow
 	// reasm rebuilds fragmented IP datagrams (X1-L2R).
 	reasm *reassembler
-	emit  func(Event)
-	stats Stats
-	swept time.Time
+	// maxHeld bounds the segments one direction holds past a gap (X1-L3R).
+	maxHeld int
+	emit    func(Event)
+	stats   Stats
+	swept   time.Time
 }
 
 // NewAssembler watches the given server ports with at most maxFlows open
@@ -137,7 +162,21 @@ func NewAssembler(ports []uint16, maxFlows int, idle time.Duration, emit func(Ev
 		watched[p] = true
 	}
 	return &Assembler{ports: watched, maxFlows: maxFlows, idle: idle, flows: map[flowKey]*flow{}, closed: map[flowKey]closedFlow{},
-		udp: map[flowKey]*udpFlow{}, reasm: newReassembler(), emit: emit}
+		udp: map[flowKey]*udpFlow{}, reasm: newReassembler(), maxHeld: DefaultMaxHeldSegments, emit: emit}
+}
+
+// SetMaxHeldSegments sets how many segments one direction of a connection
+// holds while it waits for a gap to fill (X1-L3R), from 1 to
+// MaxHeldSegmentsLimit. Held bytes stay inside MaxDirectionBytes whatever the
+// count, so a larger hold costs a segment header each, not more bytes.
+func (a *Assembler) SetMaxHeldSegments(n int) error {
+	if n < 1 || n > MaxHeldSegmentsLimit {
+		return fmt.Errorf("observe: the hold is 1 to %d segments, not %d", MaxHeldSegmentsLimit, n)
+	}
+	a.mu.Lock()
+	a.maxHeld = n
+	a.mu.Unlock()
+	return nil
 }
 
 // Frame reads one captured Ethernet frame (X1-L2R): a TCP segment goes to
@@ -178,7 +217,7 @@ func (a *Assembler) Stats() Stats {
 	s.ActiveFlows = len(a.flows) + len(a.udp)
 	s.ClosedFlows = len(a.closed)
 	for _, f := range a.flows {
-		s.BufferedBytes += len(f.clientBuf) + len(f.serverBuf) + heldBytes(f.clientAhead) + heldBytes(f.serverAhead)
+		s.BufferedBytes += len(f.fromClient.buf) + len(f.fromServer.buf) + heldBytes(f.fromClient.ahead) + heldBytes(f.fromServer.ahead)
 	}
 	return s
 }
@@ -224,95 +263,125 @@ func (a *Assembler) Segment(s Segment, now time.Time) {
 		}
 		return
 	}
-	fromClient := s.Src == f.client
-	next, set := &f.serverNext, &f.serverSet
-	buf, ahead := &f.serverBuf, &f.serverAhead
-	if fromClient {
-		next, set = &f.clientNext, &f.clientSet
-		buf, ahead = &f.clientBuf, &f.clientAhead
+	d, other := &f.fromServer, &f.fromClient
+	if s.Src == f.client {
+		d, other = &f.fromClient, &f.fromServer
 	}
 	if s.SYN {
-		*next, *set = s.Seq+1, true
+		d.next, d.set = s.Seq+1, true
+		return
+	}
+	if s.ACK && !f.finished && a.acknowledged(other, s.Ack) && a.completeIfDone(f, now) {
 		return
 	}
 	if len(s.Payload) == 0 || f.finished {
 		return
 	}
-	if !*set {
+	if !d.set {
 		// Joined mid-connection: read from here; Parse gives up on bytes
 		// that do not start a handshake.
-		*next, *set = s.Seq, true
+		d.next, d.set = s.Seq, true
 	}
 	payload := s.Payload
-	if delta := int32(*next - s.Seq); delta > 0 { // #nosec G115 -- TCP sequence numbers wrap; the difference read as a signed 32-bit distance is RFC 1982 serial arithmetic (CWE-190)
+	if delta := int32(d.next - s.Seq); delta > 0 { // #nosec G115 -- TCP sequence numbers wrap; the difference read as a signed 32-bit distance is RFC 1982 serial arithmetic (CWE-190)
 		if int(delta) >= len(payload) {
 			return // a retransmission of bytes already read
 		}
 		payload = payload[delta:]
 	} else if delta < 0 {
-		// Ahead of a gap: hold it until the bytes before it arrive.
-		if !a.hold(ahead, *buf, s.Seq, -int(delta), payload) {
-			a.stats.OutOfOrder++
-			a.abandon(f)
+		// Ahead of a gap: hold it until the bytes before it arrive. A full
+		// hold means the gap is not filling: skip it if a TLS record
+		// follows (X1-L3R), then hold this segment against where reading
+		// resumed; otherwise give the connection up.
+		if !a.hold(d, s.Seq, payload) {
+			if !a.resync(d) {
+				a.stats.OutOfOrder++
+				a.abandon(f)
+				return
+			}
+			if !a.hold(d, s.Seq, payload) {
+				a.stats.OutOfOrder++
+				a.abandon(f)
+				return
+			}
+			a.stats.Reordered += a.release(d)
+			a.completeIfDone(f, now)
 		}
 		return
 	}
-	*next += uint32(len(payload)) // #nosec G115 -- one segment's payload is under 64 KiB, and sequence numbers wrap mod 2^32 by design (CWE-190)
-	*buf = appendBounded(*buf, payload)
-	a.release(next, buf, ahead)
-	obs, ok, done := Parse(f.clientBuf, f.serverBuf)
+	d.next += uint32(len(payload)) // #nosec G115 -- one segment's payload is under 64 KiB, and sequence numbers wrap mod 2^32 by design (CWE-190)
+	d.buf = appendBounded(d.buf, payload)
+	a.stats.Reordered += a.release(d)
+	a.completeIfDone(f, now)
+}
+
+// completeIfDone parses what the connection has read and completes it once
+// nothing more can be learned, reporting whether it did.
+func (a *Assembler) completeIfDone(f *flow, now time.Time) bool {
+	obs, ok, done := Parse(f.fromClient.buf, f.fromServer.buf)
 	if done {
 		a.complete(f, obs, ok, now)
 	}
+	return done
 }
 
-// hold keeps a copy of a segment that starts gap bytes past what was read,
-// trimmed to the part Parse can still use. A segment wholly past that part is
-// dropped and changes nothing. It reports false when the direction already
-// holds MaxHeldSegments segments or MaxDirectionBytes held bytes.
-func (a *Assembler) hold(ahead *[]heldSegment, buf []byte, seq uint32, gap int, payload []byte) bool {
-	room := MaxDirectionBytes - len(buf) - gap
+// hold keeps a copy of a segment that starts past what the direction has
+// read, trimmed to the part Parse can still use; a segment at or before that
+// point is read, not held. A segment wholly past the usable part is dropped
+// and changes nothing. It reports false when the direction already holds
+// maxHeld segments or MaxDirectionBytes held bytes.
+func (a *Assembler) hold(d *direction, seq uint32, payload []byte) bool {
+	gap := -int(int32(d.next - seq)) // #nosec G115 -- RFC 1982 serial arithmetic on wrapping sequence numbers (CWE-190)
+	if gap <= 0 {
+		// Reading resumed at or past this segment's start: it is read like
+		// any in-order segment once released.
+		gap = 0
+	}
+	room := MaxDirectionBytes - len(d.buf) - gap
 	if room <= 0 {
 		return true
 	}
 	if len(payload) > room {
 		payload = payload[:room]
 	}
-	if len(*ahead) >= MaxHeldSegments || heldBytes(*ahead)+len(payload) > MaxDirectionBytes {
+	if len(d.ahead) >= a.maxHeld || heldBytes(d.ahead)+len(payload) > MaxDirectionBytes {
 		return false
 	}
-	*ahead = append(*ahead, heldSegment{seq: seq, payload: append([]byte(nil), payload...)})
+	d.ahead = append(d.ahead, heldSegment{seq: seq, payload: append([]byte(nil), payload...)})
 	return true
 }
 
 // release reads every held segment the stream has now reached, in order,
-// and drops those whose bytes were all read already.
-func (a *Assembler) release(next *uint32, buf *[]byte, ahead *[]heldSegment) {
-	for progressed := true; progressed && len(*ahead) > 0; {
+// drops those whose bytes were all read already, and returns how many it
+// read.
+func (a *Assembler) release(d *direction) uint64 {
+	var read uint64
+	for progressed := true; progressed && len(d.ahead) > 0; {
 		progressed = false
-		kept := (*ahead)[:0]
-		for _, h := range *ahead {
-			delta := int32(*next - h.seq) // #nosec G115 -- RFC 1982 serial arithmetic on wrapping sequence numbers (CWE-190)
+		kept := d.ahead[:0]
+		for _, h := range d.ahead {
+			delta := int32(d.next - h.seq) // #nosec G115 -- RFC 1982 serial arithmetic on wrapping sequence numbers (CWE-190)
 			switch {
 			case delta < 0:
 				kept = append(kept, h)
 			case int(delta) < len(h.payload):
 				chunk := h.payload[delta:]
-				*next += uint32(len(chunk)) // #nosec G115 -- a held payload is under MaxDirectionBytes, and sequence numbers wrap by design (CWE-190)
-				*buf = appendBounded(*buf, chunk)
-				a.stats.Reordered++
+				d.next += uint32(len(chunk)) // #nosec G115 -- a held payload is under MaxDirectionBytes, and sequence numbers wrap by design (CWE-190)
+				d.buf = appendBounded(d.buf, chunk)
+				read++
 				progressed = true
 			}
 		}
-		*ahead = kept
+		d.ahead = kept
 	}
+	return read
 }
 
 // abandon stops reading a connection and drops everything it held.
 func (a *Assembler) abandon(f *flow) {
 	f.finished = true
-	f.clientBuf, f.serverBuf = nil, nil
-	f.clientAhead, f.serverAhead = nil, nil
+	f.fromClient.buf, f.fromServer.buf = nil, nil
+	f.fromClient.ahead, f.fromServer.ahead = nil, nil
 }
 
 func appendBounded(buf, payload []byte) []byte {
@@ -334,7 +403,11 @@ func (a *Assembler) complete(f *flow, obs Observation, ok bool, now time.Time) {
 
 func (a *Assembler) finish(key flowKey, f *flow, now time.Time) {
 	if !f.finished {
-		obs, ok, _ := Parse(f.clientBuf, f.serverBuf)
+		// A gap still open when the connection ends will never fill
+		// (X1-L3R).
+		a.resync(&f.fromClient)
+		a.resync(&f.fromServer)
+		obs, ok, _ := Parse(f.fromClient.buf, f.fromServer.buf)
 		a.complete(f, obs, ok, now)
 	}
 	delete(a.flows, key)
