@@ -3244,7 +3244,16 @@ type MachineAuthMethod struct {
 	// present a platform-managed token more than once — the CSI secrets driver
 	// presents the kubelet's projected token until the kubelet rotates it.
 	AllowTokenReuse bool `json:"allow_token_reuse,omitempty"`
+	// ExchangeUses (every method but aws-iam, M4-L4) is how many token
+	// exchanges (POST /oauth2/token) one subject token may make before it
+	// expires: 1 to MaxMachineAuthExchangeUses, 0 means 1. RFC 8693 does not
+	// require single use; a pod that exchanges its kubelet-projected token
+	// more than once per rotation sets it.
+	ExchangeUses int `json:"exchange_uses,omitempty"`
 }
+
+// MaxMachineAuthExchangeUses bounds a method's exchange_uses (M4-L4).
+const MaxMachineAuthExchangeUses = 10
 
 // AI configures the served AI / RCA / NL-query / MCP surface (SURFACE-003; F75/F76/
 // F77/F78) under /api/v1/ai/* and /api/v1/mcp/*. It is OFF by default (fail closed): an
@@ -5833,8 +5842,7 @@ func validateSecretsMachineAuth(methods []MachineAuthMethod) []error {
 		// method by name. Reject overlapping reach so the verifier and authority
 		// an operator reviews are exactly those used for the exchange. A blank
 		// tenant_id applies to every tenant through a verified tenant claim.
-		for j := 0; j < i; j++ {
-			prior := methods[j]
+		for j, prior := range methods[:i] {
 			if strings.TrimSpace(prior.Name) != name {
 				continue
 			}
@@ -5874,6 +5882,12 @@ func validateSecretsMachineAuth(methods []MachineAuthMethod) []error {
 		}
 		if m.AllowTokenReuse && name != "kubernetes" && name != "gcp" && name != "azure" {
 			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].allow_token_reuse is supported only for kubernetes, gcp or azure; an oidc or jwt token always logs in once", i))
+		}
+		switch {
+		case m.ExchangeUses < 0 || m.ExchangeUses > MaxMachineAuthExchangeUses:
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].exchange_uses must be between 1 and %d (0 means 1)", i, MaxMachineAuthExchangeUses))
+		case m.ExchangeUses > 1 && name == "aws-iam":
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].exchange_uses does not apply to aws-iam: the token exchange takes a JWT subject token", i))
 		}
 		if name == "aws-iam" {
 			if strings.TrimSpace(m.TenantID) == "" {

@@ -374,6 +374,10 @@ type OIDCMethod struct {
 	// Guard, when non-nil, records each accepted token's single use durably, so
 	// a replay is refused across processes and restarts until the token expires.
 	Guard ReplayGuard
+	// ExchangeUses is how many token exchanges one subject token may make
+	// before it expires (M4-L4); zero or one means once. Machine login reads
+	// AllowTokenReuse instead.
+	ExchangeUses int
 }
 
 // ReplayGuard is a durable single-use record. FirstUse records key as used for

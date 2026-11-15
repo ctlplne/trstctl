@@ -5449,6 +5449,10 @@ export const messages = {
     defaultMessage: "Token reuse allowed: the same token logs in again until it expires",
     description: "A238-L8: a kubernetes, gcp or azure method whose operator set allow_token_reuse.",
   },
+  "secrets.methods.exchangeUses": {
+    defaultMessage: "Token exchanges: one subject token may make {count} before it expires",
+    description: "M4-L4: a method whose operator set exchange_uses above one.",
+  },
   "secrets.methods.enable": { defaultMessage: "Enable", description: "Auth-methods action: re-enable a method." },
   "secrets.methods.disable": { defaultMessage: "Disable", description: "Auth-methods action: disable a method (refused at login)." },
   "secrets.methods.empty": { defaultMessage: "No login methods are configured.", description: "Auth-methods empty state." },

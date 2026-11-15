@@ -7080,6 +7080,7 @@ export interface MachineAuthMethod {
   allowed_service_accounts?: string[];
   audience?: string;
   disabled?: boolean;
+  exchange_uses?: number;
   issuer?: string;
   jwks_configured: boolean;
   name: string;

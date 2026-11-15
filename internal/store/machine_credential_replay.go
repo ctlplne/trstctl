@@ -39,8 +39,21 @@ func (e *SingleUseLimitError) Is(target error) bool { return target == ErrSingle
 // replayed key is still reported as a replay. Logins in flight at the same
 // moment may each pass the count, so the limit can be exceeded by them.
 func (s *Store) FirstMachineCredentialUse(ctx context.Context, tenantID, method, keyDigest string, expires time.Time, limit int) (bool, error) {
+	return s.UseMachineCredential(ctx, tenantID, method, keyDigest, expires, limit, 1)
+}
+
+// UseMachineCredential records one more use of a credential that may be used
+// at most maxUses times before it expires (M4-L4: a token-exchange method's
+// exchange_uses; 1 is single use). It reports whether this use is allowed: the
+// first, or a later one while the live record counts fewer than maxUses. A
+// further use of a live record adds no record, so only a first use is held to
+// the tenant's limit of live records.
+func (s *Store) UseMachineCredential(ctx context.Context, tenantID, method, keyDigest string, expires time.Time, limit, maxUses int) (bool, error) {
+	if maxUses < 1 {
+		maxUses = 1
+	}
 	if tenantID == "" || method == "" || keyDigest == "" || expires.IsZero() {
-		return false, fmt.Errorf("store: FirstMachineCredentialUse requires a tenant, method, key and expiry (AN-1)")
+		return false, fmt.Errorf("store: UseMachineCredential requires a tenant, method, key and expiry (AN-1)")
 	}
 	first := false
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -56,7 +69,7 @@ func (s *Store) FirstMachineCredentialUse(ctx context.Context, tenantID, method,
 				tenantID, method, keyDigest).Scan(&replayed); err != nil {
 				return err
 			}
-			if replayed {
+			if replayed && maxUses == 1 {
 				return nil
 			}
 			var live int
@@ -64,7 +77,7 @@ func (s *Store) FirstMachineCredentialUse(ctx context.Context, tenantID, method,
 				WHERE tenant_id = $1 AND expires_at > now() LIMIT $2) AS live`, tenantID, limit).Scan(&live); err != nil {
 				return err
 			}
-			if live >= limit {
+			if !replayed && live >= limit {
 				var oldest *time.Time
 				if err := tx.QueryRow(ctx, `SELECT min(expires_at) FROM machine_credential_replays
 					WHERE tenant_id = $1 AND expires_at > now()`, tenantID).Scan(&oldest); err != nil {
@@ -78,11 +91,16 @@ func (s *Store) FirstMachineCredentialUse(ctx context.Context, tenantID, method,
 			}
 		}
 		tag, err := tx.Exec(ctx, `
-			INSERT INTO machine_credential_replays (tenant_id, method, key_digest, expires_at, used_at)
-			VALUES ($1, $2, $3, $4, now())
-			ON CONFLICT (tenant_id, method, key_digest) DO UPDATE SET expires_at = EXCLUDED.expires_at, used_at = now()
-			 WHERE machine_credential_replays.expires_at <= now()`,
-			tenantID, method, keyDigest, expires.UTC())
+			INSERT INTO machine_credential_replays (tenant_id, method, key_digest, expires_at, used_at, uses)
+			VALUES ($1, $2, $3, $4, now(), 1)
+			ON CONFLICT (tenant_id, method, key_digest) DO UPDATE
+			   SET expires_at = CASE WHEN machine_credential_replays.expires_at <= now() THEN EXCLUDED.expires_at
+			                         ELSE machine_credential_replays.expires_at END,
+			       uses = CASE WHEN machine_credential_replays.expires_at <= now() THEN 1
+			                   ELSE machine_credential_replays.uses + 1 END,
+			       used_at = now()
+			 WHERE machine_credential_replays.expires_at <= now() OR machine_credential_replays.uses < $5`,
+			tenantID, method, keyDigest, expires.UTC(), maxUses)
 		if err != nil {
 			return err
 		}

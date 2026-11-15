@@ -1480,8 +1480,9 @@ never live in the API process. What you can do end to end against the running bi
   as `token.exchanged`. Proven with a pod-bound token minted by a real Kubernetes API
   server (kind). Serves the SPIFFE surface's tenant and the tenants listed in
   `protocols.spiffe.exchange_tenants` (M4-L5); access tokens are
-  RFC 9068 JWTs, or opaque references their resource servers introspect (M4-L3); a pod
-  exchanging more than once per kubelet rotation needs a fresh token per exchange.
+  RFC 9068 JWTs, or opaque references their resource servers introspect (M4-L3). A
+  method's `exchange_uses` (M4-L4, up to 10) lets one subject token make that many
+  exchanges before it expires, and anyone who copies it can do the same.
 - Single-use machine login tokens (M4's prerequisite; A238-L8): an `oidc`, `jwt`,
   `kubernetes`, `gcp` or `azure` machine login token logs in once; trstctl records a
   digest of it (issuer + `jti`, else the whole token) in PostgreSQL until it expires

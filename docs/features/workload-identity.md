@@ -566,9 +566,15 @@ one client keeps the verifier busy. The table of clients is bounded (10,000; cli
 whose buckets have refilled are dropped, and when it is full of clients still
 refilling, new ones share one bucket), and the API bulkhead still bounds the endpoint
 as a whole.
-Because subject tokens are single-use and Kubernetes hands a pod the same projected
-token until kubelet rotates it, a pod that exchanges more than once per rotation
-requests a fresh token (the TokenRequest API) for each exchange. Each tenant holds at
+Kubernetes hands a pod the same projected token until kubelet rotates it, and RFC 8693
+does not require a subject token to be used once. A method may therefore set
+`exchange_uses` (M4-L4; 1 to 10, every method but `aws-iam`): one subject token of that
+method may then make that many exchanges before it expires, and the next is refused
+with `invalid_grant` naming the count. Anyone who copies such a token can exchange it as
+often, so keep the count as low as the workload needs. The record counts the uses; it is
+still taken only after the whole request is checked. At the default of one, a pod that
+exchanges more than once per rotation requests a fresh token (the TokenRequest API) for
+each exchange. The console's machine-login methods table names a method's count. Each tenant holds at
 most `secrets.machine_auth_single_use_limit` live single-use records (M4-L2; default
 100,000, shared with machine logins): an exchange that would add one more answers 429
 `temporarily_unavailable` with a `Retry-After` until the oldest record expires, and

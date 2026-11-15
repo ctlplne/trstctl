@@ -1177,6 +1177,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	481: true, // TestMigration0481AddsIsolatedACMEReplicaStateOnly
 	482: true, // TestMigration0482KeepsSecretMovesUnchecked
 	484: true, // TestMigration0484KeepsEmergencyGrantsNamingNoApprovers
+	488: true, // TestMigration0488KeepsEveryReplayRecordAtItsOneUse
 	442: true, // TestMigration0442KeepsSlackInstallsWithNoScopes
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod
 	383: true, // TestMigration0383KeepsDecoyUsesAsFoundByLookup

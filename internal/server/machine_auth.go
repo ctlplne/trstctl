@@ -78,6 +78,12 @@ func (g machineCredentialReplayGuard) FirstUse(ctx context.Context, method, key 
 	return g.store.FirstMachineCredentialUse(ctx, g.tenantID, method, key, expires, machineCredentialUseLimit(g.limit))
 }
 
+// Use records one of at most maxUses uses of the credential before it
+// expires (M4-L4) and reports whether this one is allowed.
+func (g machineCredentialReplayGuard) Use(ctx context.Context, method, key string, expires time.Time, maxUses int) (bool, error) {
+	return g.store.UseMachineCredential(ctx, g.tenantID, method, key, expires, machineCredentialUseLimit(g.limit), maxUses)
+}
+
 // machineCredentialUseLimit is the configured per-tenant limit of live
 // single-use records, or the default.
 func machineCredentialUseLimit(limit int) int {
@@ -139,6 +145,7 @@ func (cm configuredMachineAuthMethod) methodForTenant(tenantID string) authmetho
 			AllowedServiceAccounts: boolMap(c.AllowedServiceAccounts),
 			Scopes:                 append([]string(nil), c.Scopes...),
 			AllowTokenReuse:        c.AllowTokenReuse,
+			ExchangeUses:           c.ExchangeUses,
 		}
 	case "aws-iam":
 		return authmethod.AWSIAMMethod{
@@ -158,6 +165,7 @@ func (cm configuredMachineAuthMethod) methodForTenant(tenantID string) authmetho
 			AllowedProjects: boolMap(c.AllowedProjects),
 			Scopes:          append([]string(nil), c.Scopes...),
 			AllowTokenReuse: c.AllowTokenReuse,
+			ExchangeUses:    c.ExchangeUses,
 		}
 	case "azure":
 		return authmethod.AzureMethod{
@@ -170,6 +178,7 @@ func (cm configuredMachineAuthMethod) methodForTenant(tenantID string) authmetho
 			PrincipalClaim:      c.SubjectClaim,
 			Scopes:              append([]string(nil), c.Scopes...),
 			AllowTokenReuse:     c.AllowTokenReuse,
+			ExchangeUses:        c.ExchangeUses,
 		}
 	case "oidc":
 		return authmethod.OIDCMethod{
@@ -181,6 +190,7 @@ func (cm configuredMachineAuthMethod) methodForTenant(tenantID string) authmetho
 			Scopes:          append([]string(nil), c.Scopes...),
 			ScopesClaim:     c.ScopesClaim,
 			PrincipalPrefix: c.PrincipalPrefix,
+			ExchangeUses:    c.ExchangeUses,
 		}
 	case "jwt":
 		return authmethod.JWTMethod{
@@ -193,6 +203,7 @@ func (cm configuredMachineAuthMethod) methodForTenant(tenantID string) authmetho
 			Scopes:          append([]string(nil), c.Scopes...),
 			ScopesClaim:     c.ScopesClaim,
 			PrincipalPrefix: c.PrincipalPrefix,
+			ExchangeUses:    c.ExchangeUses,
 		}
 	default:
 		return nil

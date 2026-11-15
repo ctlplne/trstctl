@@ -733,6 +733,9 @@ type machineAuthMethodInfo struct {
 	// AllowTokenReuse (kubernetes, gcp, azure; A238-L8): the operator let the
 	// same token log in again until it expires; otherwise each logs in once.
 	AllowTokenReuse bool `json:"allow_token_reuse,omitempty"`
+	// ExchangeUses (M4-L4) is how many token exchanges one subject token of
+	// the method may make before it expires; absent means one.
+	ExchangeUses int `json:"exchange_uses,omitempty"`
 	// Disabled reflects the event-sourced per-tenant overlay (C-S3): a
 	// disabled method is refused by the login exchange until re-enabled.
 	Disabled bool `json:"disabled,omitempty"`
@@ -775,6 +778,15 @@ func copyRequiredClaims(m map[string]string) map[string]string {
 // machineAuthMethodProjection allow-lists the non-secret configuration of one
 // concrete method. Unknown method types degrade to name/type only rather than
 // risking reflection over unvetted fields.
+// exchangeUsesView is a method's exchange_uses as the view names it: absent
+// (zero) for the default single use (M4-L4).
+func exchangeUsesView(uses int) int {
+	if uses <= 1 {
+		return 0
+	}
+	return uses
+}
+
 func machineAuthMethodProjection(m authmethod.Method, source string) machineAuthMethodInfo {
 	info := machineAuthMethodInfo{Name: m.Name(), Type: m.Name(), Source: source}
 	switch v := m.(type) {
@@ -785,6 +797,7 @@ func machineAuthMethodProjection(m authmethod.Method, source string) machineAuth
 		info.Scopes = append([]string(nil), v.DefaultScopes...)
 		info.ScopesByPrincipal = copyScopesByPrincipal(v.Scopes)
 	case authmethod.OIDCMethod:
+		info.ExchangeUses = exchangeUsesView(v.ExchangeUses)
 		info.Type = "oidc"
 		info.Issuer = v.Issuer
 		info.Audience = v.Audience
@@ -795,6 +808,7 @@ func machineAuthMethodProjection(m authmethod.Method, source string) machineAuth
 		info.RequiredClaims = copyRequiredClaims(v.RequiredClaims)
 		info.JWKSConfigured = len(v.JWKS.Keys) > 0
 	case authmethod.JWTMethod:
+		info.ExchangeUses = exchangeUsesView(v.ExchangeUses)
 		info.Type = "jwt"
 		info.Issuer = v.Issuer
 		info.Audience = v.Audience
@@ -806,6 +820,7 @@ func machineAuthMethodProjection(m authmethod.Method, source string) machineAuth
 		info.RequiredClaims = copyRequiredClaims(v.RequiredClaims)
 		info.JWKSConfigured = len(v.JWKS.Keys) > 0
 	case authmethod.KubernetesSATMethod:
+		info.ExchangeUses = exchangeUsesView(v.ExchangeUses)
 		info.Type = "kubernetes"
 		info.Issuer = v.Issuer
 		info.Audience = v.Audience
@@ -816,6 +831,7 @@ func machineAuthMethodProjection(m authmethod.Method, source string) machineAuth
 		info.JWKSConfigured = len(v.JWKS.Keys) > 0
 		info.AllowTokenReuse = v.AllowTokenReuse
 	case authmethod.GCPMethod:
+		info.ExchangeUses = exchangeUsesView(v.ExchangeUses)
 		info.Type = "gcp"
 		info.Issuer = v.Issuer
 		info.Audience = v.Audience
@@ -825,6 +841,7 @@ func machineAuthMethodProjection(m authmethod.Method, source string) machineAuth
 		info.JWKSConfigured = len(v.JWKS.Keys) > 0
 		info.AllowTokenReuse = v.AllowTokenReuse
 	case authmethod.AzureMethod:
+		info.ExchangeUses = exchangeUsesView(v.ExchangeUses)
 		info.Type = "azure"
 		info.Issuer = v.Issuer
 		info.Audience = v.Audience

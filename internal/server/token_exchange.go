@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"net/url"
@@ -219,7 +220,9 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 	}
 	guard := machineCredentialReplayGuard{store: s.store, tenantID: tenantID, limit: s.machineCredentialUseLimit}
 	var full *store.SingleUseLimitError
-	if first, err := guard.FirstUse(r.Context(), method.Name(), key, keyExpiry); errors.As(err, &full) {
+	// M4-L4: a method may let one subject token make exchange_uses
+	// exchanges before it expires; by default each makes one.
+	if allowed, err := guard.Use(r.Context(), method.Name(), key, keyExpiry, exchangeUsesOf(method)); errors.As(err, &full) {
 		// M4-L2: the tenant's single-use records are at their limit; the
 		// subject token is not used up and works once older ones expire.
 		oe := oauthFail(http.StatusTooManyRequests, "temporarily_unavailable",
@@ -228,7 +231,11 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 		return tokenExchangeResponse{}, oe
 	} else if err != nil {
 		return tokenExchangeResponse{}, err
-	} else if !first {
+	} else if !allowed {
+		if uses := exchangeUsesOf(method); uses > 1 {
+			return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_grant",
+				fmt.Sprintf("the subject token has made its %d exchanges", uses))
+		}
 		return tokenExchangeResponse{}, oauthFail(http.StatusBadRequest, "invalid_grant", "the subject token was already used")
 	}
 	spiffeID := exchangeSPIFFEID(ex.trustDomain, method.Name(), principal)
@@ -314,6 +321,25 @@ func jwtMethodIssuer(m authmethod.Method) string {
 	default:
 		return ""
 	}
+}
+
+// exchangeUsesOf is how many exchanges one subject token of the method may
+// make before it expires (M4-L4): its exchange_uses, at least one.
+func exchangeUsesOf(m authmethod.Method) int {
+	uses := 0
+	switch v := m.(type) {
+	case authmethod.OIDCMethod:
+		uses = v.ExchangeUses
+	case authmethod.JWTMethod:
+		uses = v.ExchangeUses
+	case authmethod.KubernetesSATMethod:
+		uses = v.ExchangeUses
+	case authmethod.GCPMethod:
+		uses = v.ExchangeUses
+	case authmethod.AzureMethod:
+		uses = v.ExchangeUses
+	}
+	return max(uses, 1)
 }
 
 // withReplayGuard sets (or, with nil, clears) a method's durable single-use

@@ -21508,6 +21508,8 @@ export interface components {
             allowed_service_accounts?: string[];
             audience?: string;
             disabled?: boolean;
+            /** @description how many token exchanges (POST /oauth2/token) one subject token of the method may make before it expires (M4-L4), 2 to 10; absent means one. */
+            exchange_uses?: number;
             issuer?: string;
             jwks_configured: boolean;
             name: string;

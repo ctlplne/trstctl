@@ -9899,6 +9899,7 @@ func componentSchemas() map[string]*Schema {
 			"jwks_configured":          {Type: "boolean"},
 			"allow_unexpiring":         {Type: "boolean"},
 			"allow_token_reuse":        {Type: "boolean", Description: "kubernetes, gcp, azure: the operator let the same token log in again until it expires (A238-L8); otherwise each token logs in once."},
+			"exchange_uses":            {Type: "integer", Description: "how many token exchanges (POST /oauth2/token) one subject token of the method may make before it expires (M4-L4), 2 to 10; absent means one."},
 			"disabled":                 {Type: "boolean"},
 		}, "name", "type", "source", "jwks_configured"),
 		"MachineAuthMethodList": list("MachineAuthMethod"),

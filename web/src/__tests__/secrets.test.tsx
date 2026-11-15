@@ -3165,6 +3165,21 @@ describe("secrets auth-method console (C-S4 / DA-02)", () => {
     expect(within(jwtRow).queryByText(/Token reuse allowed/)).not.toBeInTheDocument();
   });
 
+  // M4-L4: a method whose subject tokens may make several token exchanges
+  // says how many; a single-exchange method says nothing.
+  it("says how many token exchanges a method's subject token may make (M4-L4)", async () => {
+    const base = await apiMock.machineAuthMethods();
+    apiMock.machineAuthMethods.mockResolvedValue({
+      ...base,
+      items: base.items.map((method: { name: string }) => (method.name === "kubernetes" ? { ...method, exchange_uses: 3 } : method)),
+    });
+    await openAccessTab();
+    const kubernetesRow = (await screen.findByText("https://kubernetes.default.svc.cluster.local")).closest("tr") as HTMLTableRowElement;
+    expect(within(kubernetesRow).getByText("Token exchanges: one subject token may make 3 before it expires")).toBeInTheDocument();
+    const jwtRow = screen.getByText("ci-jwt").closest("tr") as HTMLTableRowElement;
+    expect(within(jwtRow).queryByText(/Token exchanges:/)).not.toBeInTheDocument();
+  });
+
   it("reviews one exact method before accepting a credential, executes it once, and verifies the durable session", async () => {
     const user = await openAccessTab();
     const loginForm = within(screen.getByRole("form", { name: "Machine login test" }));

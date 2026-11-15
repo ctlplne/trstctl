@@ -2178,6 +2178,11 @@ export function Secrets() {
                             <td>
                               {method.disabled ? t("secrets.methods.disabled") : t("secrets.methods.enabled")}
                               {method.allow_token_reuse ? <p className="mt-1 text-xs text-status-warning">{t("secrets.methods.tokenReuse")}</p> : null}
+                              {method.exchange_uses ? (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {t("secrets.methods.exchangeUses", { count: String(method.exchange_uses) })}
+                                </p>
+                              ) : null}
                             </td>
                             {canAdminMethods && (
                               <td>

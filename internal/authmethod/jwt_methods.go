@@ -37,6 +37,10 @@ type JWTMethod struct {
 	Leeway          time.Duration
 	Replay          *JTICache
 	Guard           ReplayGuard
+	// ExchangeUses is how many token exchanges one subject token may make
+	// before it expires (M4-L4); zero or one means once. Machine login reads
+	// AllowTokenReuse instead.
+	ExchangeUses int
 }
 
 // Name implements Method.
@@ -97,6 +101,10 @@ type KubernetesSATMethod struct {
 	Leeway                 time.Duration
 	Replay                 *JTICache
 	Guard                  ReplayGuard
+	// ExchangeUses is how many token exchanges one subject token may make
+	// before it expires (M4-L4); zero or one means once. Machine login reads
+	// AllowTokenReuse instead.
+	ExchangeUses int
 	// AllowTokenReuse marks a method whose operator let the same token log in
 	// again until it expires (A238-L8). Authenticate never reads it: the
 	// machine login's durable replay guard is attached only to a method that
@@ -178,6 +186,10 @@ type GCPMethod struct {
 	Leeway          time.Duration
 	Replay          *JTICache
 	Guard           ReplayGuard
+	// ExchangeUses is how many token exchanges one subject token may make
+	// before it expires (M4-L4); zero or one means once. Machine login reads
+	// AllowTokenReuse instead.
+	ExchangeUses int
 	// AllowTokenReuse: see KubernetesSATMethod.AllowTokenReuse.
 	AllowTokenReuse bool
 }
@@ -245,6 +257,10 @@ type AzureMethod struct {
 	Leeway              time.Duration
 	Replay              *JTICache
 	Guard               ReplayGuard
+	// ExchangeUses is how many token exchanges one subject token may make
+	// before it expires (M4-L4); zero or one means once. Machine login reads
+	// AllowTokenReuse instead.
+	ExchangeUses int
 	// AllowTokenReuse: see KubernetesSATMethod.AllowTokenReuse.
 	AllowTokenReuse bool
 }

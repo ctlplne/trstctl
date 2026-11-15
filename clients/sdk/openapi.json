@@ -33652,6 +33652,10 @@
           "disabled": {
             "type": "boolean"
           },
+          "exchange_uses": {
+            "description": "how many token exchanges (POST /oauth2/token) one subject token of the method may make before it expires (M4-L4), 2 to 10; absent means one.",
+            "type": "integer"
+          },
           "issuer": {
             "type": "string"
           },

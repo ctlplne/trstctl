@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- A machine-login method's `exchange_uses` (M4-L4; 1-10, not aws-iam) lets one subject token make that many token
+  exchanges before it expires, so a pod need not request a fresh projected token for each; the next is refused naming
+  the count, the single-use record counts the uses (migration 0488), and the console's methods table names the count.
 - The CycloneDX CBOM export's schema check validates the schema's IRI and internationalized email formats (Q3-L3)
   instead of skipping them, and fails on any format the validator does not know; a malformed IRI reference or email
   address is rejected.

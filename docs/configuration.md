@@ -4001,6 +4001,9 @@ more than once per rotation needs a fresh token each time — or, for a `kuberne
 again until it expires (A238-L8). The CSI secrets driver needs it: it presents the
 kubelet's projected token until the kubelet rotates it. Reuse lets anyone who copies
 such a token log in with it until it expires, so leave it off for every other method.
+`exchange_uses` (M4-L4; 1 to 10, every method but `aws-iam`; unset means 1) is the same
+choice for the token exchange (`POST /oauth2/token`): one subject token may make that
+many exchanges before it expires. Login and exchange uses of a token share its record.
 Each tenant holds at most `secrets.machine_auth_single_use_limit` live single-use records
 (M4-L2; default 100,000, at most 10,000,000), shared by machine logins and the token
 exchange. A token that would be one more is refused with 429 and a `Retry-After` until

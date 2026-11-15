@@ -9820,6 +9820,7 @@ MachineAuthMethod = TypedDict(
         'allowed_service_accounts': list[str],
         'audience': str,
         'disabled': bool,
+        'exchange_uses': int,
         'issuer': str,
         'jwks_configured': bool,
         'name': str,
