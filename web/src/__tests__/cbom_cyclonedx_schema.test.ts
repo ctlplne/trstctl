@@ -1,6 +1,7 @@
 import { createPublicKey, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { domainToASCII } from "node:url";
 import Ajv from "ajv";
 import { describe, expect, it } from "vitest";
 
@@ -11,8 +12,46 @@ import { describe, expect, it } from "vitest";
 const testdata = resolve(process.cwd(), "../internal/cbom/testdata");
 const load = (name: string) => JSON.parse(readFileSync(resolve(testdata, name), "utf8")) as Record<string, unknown>;
 
+// Q3-L3: Ajv 6 knows no IRI or IDN format, and ignoring the unknown ones left
+// every iri-reference and idn-email in the schema unchecked. They are checked
+// through Ajv's own RFC 3986 and RFC 5322 rules ("full" mode): an IRI is a URI
+// whose non-ASCII characters map to their UTF-8 percent-encoding (RFC 3987
+// section 3.1), and an internationalized address (RFC 6531) has an IDN domain
+// checked in its ASCII form (RFC 5890) and a local part that may hold any
+// non-ASCII letter. Any other format the schemas name fails the compile.
+function strict(format: string) {
+  const check = new Ajv({ format: "full" }).compile({ type: "string", format });
+  return (value: string) => Boolean(check(value));
+}
+const uriReference = strict("uri-reference");
+const uri = strict("uri");
+const email = strict("email");
+const hostname = strict("hostname");
+const nonASCII = /[^\p{ASCII}]/gu;
+const iriToURI = (iri: string) => iri.replace(nonASCII, (c) => encodeURIComponent(c));
+const idnFormats: Record<string, (value: string) => boolean> = {
+  "iri-reference": (value) => uriReference(iriToURI(value)),
+  iri: (value) => uri(iriToURI(value)),
+  "idn-hostname": (value) => {
+    const ascii = domainToASCII(value);
+    return ascii !== "" && hostname(ascii);
+  },
+  "idn-email": (value) => {
+    const at = value.lastIndexOf("@");
+    if (at < 1) return false;
+    const domain = domainToASCII(value.slice(at + 1));
+    return domain !== "" && email(value.slice(0, at).replace(nonASCII, "a") + "@" + domain);
+  },
+};
+
+function strictAjv() {
+  const ajv = new Ajv({ schemaId: "auto", unknownFormats: true, allErrors: true });
+  for (const [name, check] of Object.entries(idnFormats)) ajv.addFormat(name, check);
+  return ajv;
+}
+
 function validator() {
-  const ajv = new Ajv({ schemaId: "auto", unknownFormats: "ignore", allErrors: true });
+  const ajv = strictAjv();
   ajv.addSchema(load("cyclonedx/spdx.schema.json"));
   ajv.addSchema(load("cyclonedx/jsf-0.82.schema.json"));
   return ajv.compile(load("cyclonedx/bom-1.6.schema.json"));
@@ -39,6 +78,29 @@ describe("CycloneDX 1.6 CBOM export", () => {
     const components = bom.components as Array<Record<string, unknown>>;
     const broken = { ...bom, components: [{ ...components[0], cryptoProperties: { assetType: "not-an-asset-type" } }] };
     expect(validate(broken)).toBe(false);
+  });
+
+  // Q3-L3: the IRI and IDN formats the schema names are checked, and a format
+  // the validator does not know fails rather than passes.
+  it("rejects a malformed iri-reference or idn-email and an unknown format (Q3-L3)", () => {
+    const validate = validator();
+    const bom = load("cyclonedx-export.golden.json");
+    const components = bom.components as Array<Record<string, unknown>>;
+    const withReference = (url: string) => ({
+      ...bom,
+      components: [{ ...components[0], externalReferences: [{ type: "website", url }] }, ...components.slice(1)],
+    });
+    expect(validate(withReference("https://例え.テスト/パス?q=値#frag"))).toBe(true);
+    expect(validate(withReference("https://inventory.example.test/a%20b"))).toBe(true);
+    expect(validate(withReference("http://[not-an-address/"))).toBe(false);
+    expect(validate(withReference("https://inventory.example.test/a b"))).toBe(false);
+    const metadata = bom.metadata as Record<string, unknown>;
+    const withAuthor = (address: string) => ({ ...bom, metadata: { ...metadata, authors: [{ name: "Owner", email: address }] } });
+    expect(validate(withAuthor("dörte@exämple.test"))).toBe(true);
+    expect(validate(withAuthor("owner@example.test"))).toBe(true);
+    expect(validate(withAuthor("not an address"))).toBe(false);
+    expect(validate(withAuthor("owner@-bad-.test"))).toBe(false);
+    expect(() => strictAjv().compile({ type: "string", format: "no-such-format" })).toThrow(/unknown format/);
   });
 
   // Q3-L1: the BOM's own JSF signature checked by an independent

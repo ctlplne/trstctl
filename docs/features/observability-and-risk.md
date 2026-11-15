@@ -395,6 +395,10 @@ where it was observed (`evidence.occurrences`) and the inventory's classificatio
 `trstctl:` properties. The document states its coverage in its metadata, marks its
 composition `incomplete` (it lists what trstctl observed, never the whole estate), and
 claims no compliance: choosing an algorithm does not make a deployment compliant.
+The console's test suite checks every export shape against the official CycloneDX 1.6
+schemas with an independent validator, the schema's IRI references and
+internationalized email addresses included (Q3-L3); a format the validator does not
+know fails the check rather than passing it.
 
 Beside the inventory's assets the export carries what trstctl knows about them and what
 agents report (Q3-L2). Each certificate the certificate inventory holds for an inventory

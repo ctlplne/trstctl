@@ -1,6 +1,9 @@
 ## [Unreleased]
 
 ### Added
+- The CycloneDX CBOM export's schema check validates the schema's IRI and internationalized email formats (Q3-L3)
+  instead of skipping them, and fails on any format the validator does not know; a malformed IRI reference or email
+  address is rejected.
 - Modernizing an AD CS template can tighten the profile beyond its baseline (A160-L2): `max_validity_days` (1-90),
   `key_algorithms` (ECDSA, RSA or both) and `min_rsa_bits` (2048-16384) on the preview and the create, and the dialog's
   Tighten the profile fields; anything weaker than 90 days, ECDSA or RSA, and 2048-bit RSA is refused (400).
