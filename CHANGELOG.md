@@ -1956,6 +1956,11 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- A Provider SCIM user whose new `externalId` names a userName another Provider operator
+  holds is refused with 409 `uniqueness`. It was created as a second operator whose event
+  then failed the Provider operators projection, stopping the Provider authority's
+  catch-up and rebuild; a log that already holds one applies it without taking the name,
+  and an offboard in such an event still lands (LS-1-L2).
 - Observer registrations or renames under one name that arrive together register it once
   and refuse the rest with 409. They could all pass the name check, and the second then
   answered 500 and left an event that stopped a read-model rebuild; a log that already

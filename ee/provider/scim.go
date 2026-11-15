@@ -338,7 +338,39 @@ func (h *providerSCIMHandler) upsertUser(ctx context.Context, token SCIMToken, p
 	} else {
 		identity.DeprovisionedAt = time.Time{}
 	}
-	return h.emitIdentity(ctx, token, typ, identity, key, binding)
+	// LS-1-L2: provider_operators is unique on user_name. A user with a new
+	// external ID under a userName another operator holds would append an
+	// event whose projection then meets that index, so it is refused before
+	// anything is appended, under the authority fence its append takes.
+	var out OperatorIdentity
+	err := h.withMutationFence(ctx, func(ctx context.Context) error {
+		holder, err := h.access.ResolveOperator(ctx, userName)
+		switch {
+		case err == nil && holder.ID != identity.ID && holder.UserName == userName:
+			return scim.BulkRefusal{Status: http.StatusConflict, ScimType: "uniqueness",
+				Detail: "userName is already held by another provider operator"}
+		case err != nil && !errors.Is(err, ErrNotFound):
+			return err
+		}
+		out, err = h.emitIdentity(ctx, token, typ, identity, key, binding)
+		return err
+	})
+	return out, err
+}
+
+// fencedMutationSink is a mutation sink that can hold its authority fence
+// across a caller's checks and its append (LS-1-L2).
+type fencedMutationSink interface {
+	withMutationFence(ctx context.Context, fn func(context.Context) error) error
+}
+
+// withMutationFence runs fn under the sink's authority fence when the sink
+// has one; an append inside it joins the same fence.
+func (h *providerSCIMHandler) withMutationFence(ctx context.Context, fn func(context.Context) error) error {
+	if fenced, ok := h.mutations.(fencedMutationSink); ok {
+		return fenced.withMutationFence(ctx, fn)
+	}
+	return fn(ctx)
 }
 
 func (h *providerSCIMHandler) emitIdentity(ctx context.Context, token SCIMToken, typ string, identity OperatorIdentity, key, binding string) (OperatorIdentity, error) {

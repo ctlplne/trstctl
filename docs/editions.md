@@ -332,6 +332,8 @@ need its double-submit `X-Provider-CSRF-Token` value.
 Provider SCIM is served at `/provider/scim/v2`. Token bytes are read from
 custody-checked files, hashed, wiped, and never retained as strings. User
 join/update/`active:false`/delete emits immutable operator lifecycle events.
+A userName is one operator's: a user whose new `externalId` names a userName
+another operator holds is refused with 409 `uniqueness` before any event (LS-1-L2).
 When SCIM is enabled, OIDC and SAML re-read that projected operator row on
 **every request**. A still-valid token or browser session therefore stops at the
 first request after a leaver event; the leaver projection also revokes every

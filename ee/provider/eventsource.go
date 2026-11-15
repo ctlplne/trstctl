@@ -179,6 +179,19 @@ func (s *EventMutationSink) Append(
 	return canonical, err
 }
 
+// withMutationFence holds the authority fence across fn, so a caller's
+// checks and the append inside fn are one ordered step (LS-1-L2); the
+// append joins the fence its context already holds.
+func (s *EventMutationSink) withMutationFence(ctx context.Context, fn func(context.Context) error) error {
+	if s == nil || s.projection == nil || s.projection.store == nil {
+		return fn(ctx)
+	}
+	if capture, _ := ctx.Value(authorityBootstrapCaptureContext{}).(bool); capture {
+		return fn(ctx)
+	}
+	return withAuthorityFence(ctx, s.projection.store, fn)
+}
+
 // The deployment projection lock orders concurrent Provider append/apply pairs
 // with bootstrap/rebuild. A source append can still survive a process crash;
 // completion receipts and ordered recovery handle that missing projection.
@@ -826,8 +839,35 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			return fmt.Errorf("provider: %s needs operator state", event.Type)
 		}
 		operator := payload.Operator
+		// LS-1-L2: a userName another operator holds is refused before its
+		// event. An event already in a log that names one failed its
+		// projection live; it is applied without taking the name: an operator
+		// that exists takes the rest of its state (an offboard always lands)
+		// and keeps its own userName, and one that does not is not created.
+		var heldBy string
 		//trstctl:system-query — exact fixed-tenant Provider operator projection; no customer-selected tenant enters this statement.
-		if _, err := tx.Exec(ctx, `INSERT INTO provider_operators
+		if err := tx.QueryRow(ctx, `SELECT coalesce((SELECT id FROM provider_operators
+			WHERE tenant_id = $1 AND user_name = $2 AND id <> $3 LIMIT 1), '')`,
+			providerAuthorityTenant, operator.UserName, operator.ID).Scan(&heldBy); err != nil {
+			return err
+		}
+		if heldBy != "" {
+			//trstctl:system-query — exact fixed-tenant Provider operator projection; no customer-selected tenant enters this statement.
+			tag, err := tx.Exec(ctx, `UPDATE provider_operators SET external_id = $3, email = $4, display_name = $5,
+				role = $6, active = $7, source = $8, updated_at = $9, deprovisioned_at = $10
+				WHERE tenant_id = $1 AND id = $2`, providerAuthorityTenant,
+				operator.ID, operator.ExternalID, operator.Email, operator.DisplayName,
+				string(operator.Role), operator.Active, operator.Source, operator.UpdatedAt.UTC(),
+				nullTime(operator.DeprovisionedAt))
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() == 0 {
+				return nil
+			}
+		} else {
+			//trstctl:system-query — exact fixed-tenant Provider operator projection; no customer-selected tenant enters this statement.
+			if _, err := tx.Exec(ctx, `INSERT INTO provider_operators
 			(tenant_id, id, external_id, user_name, email, display_name, role, active, source,
 			 created_at, updated_at, deprovisioned_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -836,10 +876,11 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			role = EXCLUDED.role, active = EXCLUDED.active, source = EXCLUDED.source,
 			created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at,
 			deprovisioned_at = EXCLUDED.deprovisioned_at`, providerAuthorityTenant,
-			operator.ID, operator.ExternalID, operator.UserName, operator.Email, operator.DisplayName,
-			string(operator.Role), operator.Active, operator.Source, operator.CreatedAt.UTC(),
-			operator.UpdatedAt.UTC(), nullTime(operator.DeprovisionedAt)); err != nil {
-			return err
+				operator.ID, operator.ExternalID, operator.UserName, operator.Email, operator.DisplayName,
+				string(operator.Role), operator.Active, operator.Source, operator.CreatedAt.UTC(),
+				operator.UpdatedAt.UTC(), nullTime(operator.DeprovisionedAt)); err != nil {
+				return err
+			}
 		}
 		if !operator.Active {
 			//trstctl:system-query — offboarding closes every still-live episode without erasing an earlier one.
