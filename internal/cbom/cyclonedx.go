@@ -254,6 +254,12 @@ func CycloneDXWith(assets []CycloneDXAsset, extra CycloneDXSupplement, meta Cycl
 	kinds := map[string]int{}
 	locations := map[string]bool{}
 	for _, a := range sorted {
+		// A host agent's libraries, keystore keys and key files are
+		// inventory assets too (X2-L5R); the export writes them once, from
+		// the agents' findings with their versions and formats, below.
+		if a.Kind == string(AssetCryptoLibrary) || a.Kind == string(AssetKeystoreKey) || a.Kind == string(AssetKeyFile) {
+			continue
+		}
 		components = append(components, cycloneDXComponent(a))
 		kinds[a.Kind]++
 		locations[a.Location] = true

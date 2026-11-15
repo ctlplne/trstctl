@@ -15904,7 +15904,7 @@ export interface components {
             migration_standard: string;
             migration_target: string;
             out_of_policy: boolean;
-            /** @description With config_source default: the installed package whose default it is, as the host's package database names it (for example haproxy 2.8.5-1ubuntu3). */
+            /** @description With config_source default: the installed package whose default it is, as the host's package database names it (for example haproxy 2.8.5-1ubuntu3). On a crypto-library asset, which a host agent reported (X2-L5R): the library and its version (for example openssl 3.5.9). */
             product_version?: string;
             protocol?: string;
             quantum_vulnerable: boolean;

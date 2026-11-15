@@ -397,7 +397,9 @@ The complete expert machinery remains on this page under three named disclosures
   observations and show repair-and-retry guidance. A zero-finding run is marked
   inconclusive. An inventory receipt checks this run's exact asset IDs against a
   separate server read, so older records cannot mask a failed scan. The section also contains the policy
-  floor, algorithm rollup, exact asset rows, and recommendations.
+  floor, algorithm rollup, exact asset rows, and recommendations. A host agent's libraries
+  are listed by name and version, and its keystore keys and key files by type and size
+  (X2-L5R); the core migration workflow leaves them out, since each is changed on its host.
 - **Compatibility, PQC policy, and upgrade planning** contains graph-bound readiness,
   attributed owners, dependency paths, core PQC campaigns, and the core migration workflow.
   Campaign creation defaults to graph binding, which requires the selected finding's

@@ -724,6 +724,17 @@ its manifest names: `bctls`, BouncyCastle's JSSE, can when its `NamedGroup` clas
 X25519MLKEM768, and `bcprov`, a provider without TLS, is `unknown`, since the answer is
 `bctls`'s.
 
+Every library, Go program and Java installation the agent reports, every key its
+keystores hold and every private key file it finds is a CBOM asset too (X2-L5R):
+`GET /api/v1/cbom/assets` and the console's CBOM inventory list it at `<agent>:<path>` as a
+`crypto-library` (strong when it can negotiate X25519MLKEM768, quantum-vulnerable when it
+cannot, with `product_version` naming the library and its version), a `keystore-key` or a
+`key-file` (rated by type and size, as a certificate key is). Each report is the agent's
+whole inventory of its kind, so a library or key it no longer names is retired, and an
+upgrade at the same path updates the same asset. The CycloneDX export writes each once,
+from the agent's finding; the migration workflow does not offer them, since a library is
+upgraded and a key replaced on its host.
+
 Beside them the agent reads the host's system crypto policy (X2-L6), on Fedora, RHEL and
 their relatives: `/etc/crypto-policies/config` names the policy every TLS library starts
 from (DEFAULT, LEGACY, FUTURE, FIPS, with sub-policies such as `DEFAULT:PQ`), and the

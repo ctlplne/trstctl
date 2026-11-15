@@ -29,7 +29,8 @@ func MigrationTargetFor(f Finding) MigrationTarget {
 			return t
 		}
 	}
-	if f.Protocol != "" || f.Cipher != "" {
+	// A TLS library's migration is its key establishment (X2-L5R).
+	if f.Protocol != "" || f.Cipher != "" || f.Kind == AssetCryptoLibrary {
 		return MigrationTarget{Algorithm: "licensed-key-establishment-transition", Standard: "licensed", Generation: GenerationMigrationRequired}
 	}
 	switch keyFamily(f.Algorithm) {

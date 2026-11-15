@@ -76,6 +76,8 @@ var tlsRank = map[string]int{"SSLv3": 0, "TLSv1.0": 1, "TLSv1.1": 2, "TLSv1.2": 
 // Classify dispatches on the crypto fact a finding carries.
 func Classify(f Finding, p Policy) Classification {
 	switch {
+	case f.Kind == AssetCryptoLibrary:
+		return ClassifyLibrary(f.ProductVersion, f.PQHybrid, f.PQBasis)
 	case f.Protocol != "":
 		return ClassifyProtocol(f.Protocol, p)
 	case f.Cipher != "":
@@ -212,6 +214,29 @@ var keyExchangeGroups = map[string]bool{
 func IsKeyExchangeGroup(name string) bool {
 	_, ok := keyExchangeGroups[strings.TrimSpace(name)]
 	return ok
+}
+
+// ClassifyLibrary rates a TLS library, Go program or Java installation by
+// whether it can negotiate the X25519MLKEM768 hybrid (X2-L5R): one that can
+// is strong; one that cannot makes key exchanges a cryptographically-relevant
+// quantum computer can break; one the version does not settle claims
+// nothing either way.
+func ClassifyLibrary(product, pqHybrid, basis string) Classification {
+	if product == "" {
+		product = "this library"
+	}
+	why := ""
+	if basis != "" {
+		why = ": " + basis
+	}
+	switch pqHybrid {
+	case PQHybridYes:
+		return Classification{Strength: StrengthStrong, Reasons: []string{product + " can negotiate the X25519MLKEM768 post-quantum hybrid" + why}}
+	case PQHybridNo:
+		return Classification{Strength: StrengthAcceptable, QuantumVulnerable: true, Reasons: []string{
+			product + " cannot negotiate X25519MLKEM768, so its TLS key exchanges are breakable by a cryptographically-relevant quantum computer" + why}}
+	}
+	return Classification{Strength: StrengthAcceptable, Reasons: []string{"whether " + product + " can negotiate X25519MLKEM768 is not known" + why}}
 }
 
 // ClassifyGroup rates a TLS key-exchange group: an ML-KEM group (hybrid or

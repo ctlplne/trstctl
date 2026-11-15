@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -217,6 +218,16 @@ func (s *eventedCBOMSink) observedSourceIDs(sourceKind, location string) []strin
 	defer s.mu.Unlock()
 	var ids []string
 	for id, a := range s.observed {
+		switch sourceKind {
+		case store.AgentCryptoLibrarySource, store.AgentKeystoreSource, store.AgentPrivateKeySource:
+			// A host agent's report covers its host: "<host>:<path>" (X2-L5R).
+			want := map[string]string{store.AgentCryptoLibrarySource: string(cbom.AssetCryptoLibrary),
+				store.AgentKeystoreSource: string(cbom.AssetKeystoreKey), store.AgentPrivateKeySource: string(cbom.AssetKeyFile)}[sourceKind]
+			if a.Kind == want && strings.HasPrefix(a.Location, location+":") {
+				ids = append(ids, id)
+			}
+			continue
+		}
 		if a.Location != location {
 			continue
 		}

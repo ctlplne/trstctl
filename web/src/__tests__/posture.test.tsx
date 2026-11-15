@@ -817,6 +817,52 @@ describe("posture collector disclosures", () => {
     expect(within(stated).queryByText(/Product default/)).not.toBeInTheDocument();
   });
 
+  it("lists a host agent's library by its version and its keystore key by type and size (X2-L5R)", async () => {
+    const base = await apiMock.listCBOMAssets();
+    apiMock.listCBOMAssets.mockResolvedValue({
+      ...base,
+      items: [
+        ...base.items,
+        {
+          id: "asset-library-1",
+          kind: "crypto-library",
+          location: "web-01:/opt/old/libcrypto.so.3",
+          library: "openssl",
+          product_version: "openssl 3.0.13",
+          migration_generation: "migration-required",
+          migration_standard: "licensed",
+          migration_target: "licensed-key-establishment-transition",
+          out_of_policy: false,
+          quantum_vulnerable: true,
+          reasons: ["openssl 3.0.13 cannot negotiate X25519MLKEM768, so its TLS key exchanges are breakable by a cryptographically-relevant quantum computer"],
+          strength: "acceptable",
+        },
+        {
+          id: "asset-keystore-1",
+          kind: "keystore-key",
+          location: "web-01:/opt/app/keystore.p12#tomcat",
+          algorithm: "RSA",
+          key_bits: 2048,
+          migration_generation: "migration-required",
+          migration_standard: "licensed",
+          migration_target: "licensed-signature-transition",
+          out_of_policy: false,
+          quantum_vulnerable: true,
+          reasons: ["RSA is breakable by a cryptographically-relevant quantum computer"],
+          strength: "acceptable",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByText("Algorithm inventory and scan evidence", { exact: true }));
+    const library = await screen.findByRole("row", { name: /web-01:\/opt\/old\/libcrypto\.so\.3 crypto-library/i });
+    expect(within(library).getAllByText("openssl 3.0.13").length).toBeGreaterThan(0);
+    expect(within(library).getByText(/cannot negotiate X25519MLKEM768/)).toBeInTheDocument();
+    const key = screen.getByRole("row", { name: /web-01:\/opt\/app\/keystore\.p12#tomcat keystore-key/i });
+    expect(within(key).getByText("RSA-2048")).toBeInTheDocument();
+  });
+
   it("reads the saved CBOM inventory back and shows an explicit verification receipt", async () => {
     apiMock.previewCBOMScan.mockResolvedValue({
       capability: "F52",

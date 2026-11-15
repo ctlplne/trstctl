@@ -806,6 +806,8 @@ function AlgorithmRollup({ assets, loading }: { assets: CBOMAsset[]; loading: bo
 }
 
 function algorithmLabel(asset: CBOMAsset): string {
+  // X2-L5R: a host agent's library, Go program or Java installation, by its version.
+  if (asset.kind === "crypto-library" && asset.product_version) return asset.product_version;
   if (!asset.algorithm && !asset.key_bits) return asset.library ?? "not reported";
   return `${asset.algorithm ?? "unknown"}${asset.key_bits ? `-${asset.key_bits}` : ""}`;
 }

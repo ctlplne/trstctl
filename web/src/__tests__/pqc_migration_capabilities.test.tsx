@@ -134,6 +134,29 @@ describe("Core PQC runtime authority", () => {
     expect(await screen.findByRole("checkbox", { name: "Select edge.internal:443 · TLSv1.2 for PQC migration" })).toBeInTheDocument();
   });
 
+  it("does not offer a host agent's library or keystore key for migration (X2-L5R)", async () => {
+    const library = {
+      id: "library-1",
+      kind: "crypto-library",
+      location: "web-01:/opt/old/libcrypto.so.3",
+      library: "openssl",
+      product_version: "openssl 3.0.13",
+      quantum_vulnerable: true,
+    } as CBOMAsset;
+    const keystoreKey = {
+      id: "keystore-1",
+      kind: "keystore-key",
+      location: "web-01:/opt/app/keystore.p12#tomcat",
+      algorithm: "RSA",
+      key_bits: 2048,
+      quantum_vulnerable: true,
+    } as CBOMAsset;
+    const keyFile = { ...keystoreKey, id: "key-file-1", kind: "key-file", location: "web-01:/etc/ssl/private/web.key" } as CBOMAsset;
+    render(workflow(view(), false, [asset, library, keystoreKey, keyFile]));
+    expect(await screen.findByRole("checkbox", { name: /Select 127\.0\.0\.1:10443/ })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /web-01:/ })).not.toBeInTheDocument();
+  });
+
   it("distinguishes protocol and cipher findings at the same config path", async () => {
     const user = userEvent.setup();
     const cipherAsset = { ...tlsAsset, id: "tls-asset-2", protocol: undefined, cipher: "TLS_RSA_WITH_3DES_EDE_CBC_SHA" } as CBOMAsset;

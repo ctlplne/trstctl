@@ -7308,7 +7308,7 @@ func componentSchemas() map[string]*Schema {
 		"reasons": {Type: "array", Items: str()}, "migration_target": str(),
 		"migration_standard": str(), "migration_generation": str(),
 		"config_source":   {Type: "string", Enum: []string{"default"}, Description: "default: a host-config fact the product reaches only through its built-in default, with nothing in the file stating it (X2-L7); absent for a stated fact."},
-		"product_version": {Type: "string", Description: "With config_source default: the installed package whose default it is, as the host's package database names it (for example haproxy 2.8.5-1ubuntu3)."},
+		"product_version": {Type: "string", Description: "With config_source default: the installed package whose default it is, as the host's package database names it (for example haproxy 2.8.5-1ubuntu3). On a crypto-library asset, which a host agent reported (X2-L5R): the library and its version (for example openssl 3.5.9)."},
 	}, "id", "kind", "location", "strength", "quantum_vulnerable", "out_of_policy", "migration_target", "migration_standard", "migration_generation")
 	cbomCycloneDXExport := object(map[string]*Schema{
 		"spec_version": {Type: "string", Enum: []string{"1.6"}},

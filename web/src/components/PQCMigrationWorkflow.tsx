@@ -56,6 +56,11 @@ const splitList = (value: string): string[] =>
 const findingLabel = (asset: CBOMAsset): string => [asset.location, asset.protocol || asset.cipher].filter(Boolean).join(" · ");
 // A hybrid composite leaf is quantum-safe but still carries a classical key;
 // its move to pure ML-DSA is a cutover held for relying-party acknowledgments.
+// X2-L5R: a host agent's libraries, keystore keys and key files are CBOM
+// assets but not migration targets: a library is upgraded, and a key
+// replaced, on its host.
+const migratable = (asset: CBOMAsset) => !["crypto-library", "keystore-key", "key-file"].includes(asset.kind);
+
 const isHybridCertificate = (asset: CBOMAsset): boolean =>
   asset.kind === "certificate-key" && (asset.algorithm ?? "").trim().toUpperCase().startsWith("HYBRID");
 const migrationTarget = (asset: CBOMAsset, targetAlgorithm: PQCTargetAlgorithm): string =>
@@ -121,7 +126,8 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
     () =>
       assets.filter(
         (asset) =>
-          asset.quantum_vulnerable || asset.out_of_policy || isHybridCertificate(asset) || (asset.kind === "tls-endpoint" && asset.protocol === "TLSv1.2"),
+          migratable(asset) &&
+          (asset.quantum_vulnerable || asset.out_of_policy || isHybridCertificate(asset) || (asset.kind === "tls-endpoint" && asset.protocol === "TLSv1.2")),
       ),
     [assets],
   );

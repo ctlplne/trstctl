@@ -22,6 +22,24 @@ const (
 	AssetCertKey AssetKind = "certificate-key"
 	// AssetHostConfig is a protocol or cipher declared in host crypto config.
 	AssetHostConfig AssetKind = "host-config"
+	// AssetCryptoLibrary is a TLS library, Go program or Java installation
+	// a host agent inventoried, rated by whether it can negotiate the
+	// X25519MLKEM768 hybrid (X2-L5R).
+	AssetCryptoLibrary AssetKind = "crypto-library"
+	// AssetKeystoreKey is a key held in a keystore a host agent
+	// inventoried, by its type and size (X2-L5R).
+	AssetKeystoreKey AssetKind = "keystore-key"
+	// AssetKeyFile is a private key file a host agent inventoried, by its
+	// type and size (X2-L5R).
+	AssetKeyFile AssetKind = "key-file"
+)
+
+// The answers a crypto-library asset's PQHybrid carries: whether the
+// library can negotiate X25519MLKEM768 (X2-L5R).
+const (
+	PQHybridYes     = "yes"
+	PQHybridNo      = "no"
+	PQHybridUnknown = "unknown"
 )
 
 // Finding is one observed cryptographic usage. Exactly one of the crypto facts
@@ -52,8 +70,14 @@ type Finding struct {
 	// source.
 	ConfigSource string `json:"config_source,omitempty"`
 	// ProductVersion names the installed package whose default it is, as the
-	// host's package database records it ("haproxy 2.8.5-1ubuntu3").
+	// host's package database records it ("haproxy 2.8.5-1ubuntu3"); for a
+	// crypto-library asset, the library and its version ("openssl 3.5.9",
+	// X2-L5R).
 	ProductVersion string `json:"product_version,omitempty"`
+	// PQHybrid and PQBasis are a crypto-library asset's answer and its
+	// reason, inputs to its classification only (X2-L5R).
+	PQHybrid string `json:"-"`
+	PQBasis  string `json:"-"`
 }
 
 // ConfigSourceDefault marks a fact a product reaches only through its

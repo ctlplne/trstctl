@@ -1628,9 +1628,9 @@ never live in the API process. What you can do end to end against the running bi
   Ubuntu 24.04 packages, with OpenJDK 25.0.5's and AWS-LC 5.0.0's clients completing
   X25519MLKEM768 handshakes) are rated from their files. A JSSE provider other than
   SunJSSE and BouncyCastle's (wolfJSSE, a vendor's) is listed by name, not rated, and a
-  jar inside another jar (a Spring Boot executable jar) is not opened. Keystore and
-  library findings are discovery
-  findings: the CycloneDX export carries them (Q3-L2), the CBOM inventory does not.
+  jar inside another jar (a Spring Boot executable jar) is not opened. Keystore keys, key
+  files and libraries are CBOM assets too, at `<agent>:<path>` (X2-L5R), and the
+  CycloneDX export carries each once (Q3-L2).
   The protocol and key-exchange group HAProxy, Envoy and OpenSSL reach only through
   their built-in defaults are reported, marked default, by the version the host's
   dpkg or apk database records (X2-L7); an RPM host's versions are not read, so no

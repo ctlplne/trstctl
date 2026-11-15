@@ -1335,6 +1335,12 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "record agent inventory: %v", err)
 	}
+	// X2-L5R: libraries and keystore keys are CBOM assets too. The report
+	// is recorded either way; a failed CBOM write asks the agent to send it
+	// again, which records it again idempotently.
+	if err := a.recordAgentCBOM(ctx, info.TenantID, info.CommonName, sourceKind, findings); err != nil {
+		return nil, status.Errorf(codes.Unavailable, "record agent inventory in the CBOM: %v", err)
+	}
 	return &transport.InventoryResponse{TenantID: info.TenantID, RunID: run.ID, Recorded: recorded, Rejected: rejected}, nil
 }
 

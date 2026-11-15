@@ -187,13 +187,27 @@ func (s *Store) ApplyCryptoSourceReconciledTx(ctx context.Context, tx pgx.Tx, te
 		return errors.New("store: CBOM reconciliation requires a source location")
 	}
 	var kinds []string
+	// A host agent's report (X2-L5R) is its host's whole inventory of a
+	// kind: location names the host, and the assets are those at
+	// "<host>:<path>".
+	byHost := false
 	switch sourceKind {
 	case "host-config":
 		kinds = []string{"host-config"}
 	case "tls-endpoints":
 		kinds = []string{"tls-endpoint", "certificate-key"}
+	case AgentCryptoLibrarySource:
+		kinds, byHost = []string{"crypto-library"}, true
+	case AgentKeystoreSource:
+		kinds, byHost = []string{"keystore-key"}, true
+	case AgentPrivateKeySource:
+		kinds, byHost = []string{"key-file"}, true
 	default:
 		return fmt.Errorf("store: unsupported CBOM reconciliation source %q", sourceKind)
+	}
+	at := `location = $2`
+	if byHost {
+		at = `starts_with(location, $2 || ':')`
 	}
 	if len(observedIDs) > 1024 {
 		return errors.New("store: CBOM reconciliation exceeds the finding limit")
@@ -219,7 +233,7 @@ func (s *Store) ApplyCryptoSourceReconciledTx(ctx context.Context, tx pgx.Tx, te
 	var matched int
 	if err := tx.QueryRow(ctx,
 		`SELECT count(*) FROM crypto_assets
-		  WHERE tenant_id = $1 AND location = $2 AND kind = ANY($3::text[]) AND id::text = ANY($4::text[])`,
+		  WHERE tenant_id = $1 AND `+at+` AND kind = ANY($3::text[]) AND id::text = ANY($4::text[])`,
 		tenantID, location, kinds, observedIDs).Scan(&matched); err != nil {
 		return err
 	}
@@ -228,11 +242,20 @@ func (s *Store) ApplyCryptoSourceReconciledTx(ctx context.Context, tx pgx.Tx, te
 	}
 	_, err = tx.Exec(ctx,
 		`UPDATE crypto_assets SET is_active = false, event_sequence = $5
-		  WHERE tenant_id = $1 AND location = $2 AND kind = ANY($3::text[])
+		  WHERE tenant_id = $1 AND `+at+` AND kind = ANY($3::text[])
 		    AND NOT (id::text = ANY($4::text[])) AND is_active AND event_sequence < $5`,
 		tenantID, location, kinds, observedIDs, sequence)
 	return err
 }
+
+// The CBOM reconciliation sources of a host agent's reports (X2-L5R): its
+// TLS libraries, Go programs and Java installations, its keystore keys, and
+// its private key files.
+const (
+	AgentCryptoLibrarySource = "agent-crypto-libraries"
+	AgentKeystoreSource      = "agent-keystores"
+	AgentPrivateKeySource    = "agent-private-keys"
+)
 
 // importedCryptoAssetKinds are the kinds a CBOM import records (internal/cbom).
 var importedCryptoAssetKinds = []string{"imported-algorithm", "imported-certificate", "imported-key", "imported-protocol", "imported-library"}

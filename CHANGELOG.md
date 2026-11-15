@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- A host agent's TLS libraries, Go programs, Java installations, keystore keys and key
+  files are CBOM assets (`crypto-library`, `keystore-key` and `key-file` at
+  `<agent>:<path>`), listed by `GET /api/v1/cbom/assets` and the console's CBOM inventory
+  and rated by their X25519MLKEM768 answer or key type and size; the agent's next report
+  updates and retires them (X2-L5R).
 - The host agent rates BoringSSL, AWS-LC and wolfSSL for X25519MLKEM768 by the TLS
   groups each build names, and inventories Java: `--inventory-java` reports each Java
   installation's version, its security providers in order and whether its TLS can
