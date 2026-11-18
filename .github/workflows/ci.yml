@@ -802,7 +802,36 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/a240-windows-accounts-lab.ps1
 
+  # A268's native local administrator proofs and A238's Windows file and service
+  # proofs, in a job of their own so a red A240 lab cannot skip them (CR-150).
+  # Once the runner is set up, every proof step runs whether or not an earlier
+  # proof step passed, and each fails on its own missing marker.
+  # The proof steps' own go test deadlines add up to 20 minutes; with runner
+  # setup, four test-binary builds and cmd/go's grace after each deadline, 45
+  # minutes keeps a hung step from cutting off the steps after it.
+  a268-windows-native:
+    name: a268 lab (Windows native agent proofs)
+    runs-on: windows-latest
+    timeout-minutes: 45 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        id: prefetch
+        shell: bash
+        run: scripts/ci/go-mod-download.sh
+
       - name: Native local administrator inventory (A268)
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
         shell: pwsh
         run: |
           $env:TRSTCTL_A268_WINDOWS_INVENTORY = '1'
@@ -810,6 +839,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Native local administrator inventory failed' }
           if (($a268InventoryOutput -join "`n") -notmatch 'A268_WINDOWS_LOCAL_INVENTORY_OK') { throw 'Required native inventory proof marker missing' }
       - name: Native local administrator password rotation
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
         shell: pwsh
         run: |
           $env:TRSTCTL_A268_WINDOWS_ROTATION = '1'
@@ -818,6 +848,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Native local administrator rotation failed' }
           if (($a268RotationOutput -join "`n") -notmatch 'A268_WINDOWS_LOCAL_ROTATION_OK') { throw 'Required native rotation proof marker missing' }
       - name: Durable local account rotation journal
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
         shell: pwsh
         run: |
           $a268JournalOutput = & go test ./internal/agent/reportstate -run '^TestLocalAccountRotation' -count=1 -v -timeout=3m 2>&1
@@ -825,6 +856,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Durable local account rotation journal failed' }
           if (($a268JournalOutput -join "`n") -notmatch 'A268_LOCAL_ROTATION_JOURNAL_OK') { throw 'Required durable rotation journal proof marker missing' }
       - name: Enrolled local account rotation receipt transport
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
         shell: pwsh
         run: |
           $a268ChannelOutput = & go test ./cmd/trstctl-agent -run '^TestLocalAccountRotation' -count=1 -v -timeout=3m 2>&1
@@ -832,6 +864,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Enrolled local account rotation receipt transport failed' }
           if (($a268ChannelOutput -join "`n") -notmatch 'A268_HOST_ROTATION_RECEIPT_OK') { throw 'Required native host receipt transport proof marker missing' }
       - name: Rendered secret files carry an explicit DACL (A238-L10)
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
         shell: pwsh
         run: |
           $a238DaclOutput = & go test ./internal/agent/secretrender -run '^TestWindowsRenderedFileHasAnExplicitProtectedDACLA238L10$' -count=1 -v -timeout=3m 2>&1
@@ -839,6 +872,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Rendered secret file DACL proof failed' }
           if (($a238DaclOutput -join "`n") -notmatch '--- PASS: TestWindowsRenderedFileHasAnExplicitProtectedDACLA238L10') { throw 'Required rendered-file DACL proof missing' }
       - name: A rendered file's reload controls a Windows service (A238-L3)
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
         shell: pwsh
         run: |
           $env:TRSTCTL_A238L3_WINDOWS_SERVICE = '1'
@@ -847,15 +881,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Rendered-file service reload proof failed' }
           if (($a238ServiceOutput -join "`n") -notmatch 'A238L3_WINDOWS_SERVICE_RELOAD_OK') { throw 'Required service reload proof marker missing' }
 
-
-
-
   # A267: native SCM service APIs and functional work on an owned local account.
   # Samba proves the directory separately; this does not qualify an AD forest.
+  # Each A267 stage is its own step (CR-150): once the runner is set up, every
+  # stage runs whether or not an earlier one passed, and each fails on its own
+  # exit code and missing marker. The stages' go test deadlines add up to 64
+  # minutes; with runner setup, test-binary builds, the IIS features and cmd/go's
+  # grace after each deadline, 90 minutes keeps a hung stage from cutting off the
+  # stages after it.
   a267-windows-dependents:
     name: a267 lab (Windows dependents)
     runs-on: windows-latest
-    timeout-minutes: 30 # TEST-004
+    timeout-minutes: 90 # TEST-004
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -868,11 +905,108 @@ jobs:
           check-latest: true
           cache: true
       - name: Prefetch dependencies (retries a transient module-proxy failure)
+        id: prefetch
         shell: bash
         run: scripts/ci/go-mod-download.sh
+      # Real native APIs on exact test-owned accounts and services. No credential
+      # files, command-line passwords, domain changes or unrelated service changes.
       - name: Native service credential update and functional recovery (A267)
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
         shell: pwsh
-        run: ./scripts/ci/a267-windows-dependents-lab.ps1
+        run: |
+          $env:TRSTCTL_A267_WINDOWS_SERVICES = '1'
+          $a267ServiceOutput = & go test -count=1 -timeout 10m -run '^TestNativeWindowsServiceLifecycleA267$' -v ./internal/crypto/windependents 2>&1
+          $a267ServiceOutput | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'Native service lifecycle failed' }
+          if (($a267ServiceOutput -join "`n") -notmatch 'A267_WINDOWS_SERVICE_OK') { throw 'Required native service proof marker missing' }
+      - name: Native Automation boundary (A267)
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          $env:TRSTCTL_A267_WINDOWS_AUTOMATION = '1'
+          $a267AutomationOutput = & go test -count=1 -timeout 3m -run '^TestNativeAutomationBoundaryA267$' -v ./internal/crypto/windependents 2>&1
+          $a267AutomationOutput | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'Native Automation boundary failed' }
+          if (($a267AutomationOutput -join "`n") -notmatch 'A267_WINDOWS_AUTOMATION_OK') { throw 'Required native Automation proof marker missing' }
+      - name: Native foreign buffer (A267)
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          $a267BufferOutput = & go test -count=1 -timeout 3m -run '^TestNativeWindowsForeignBufferA267$' -v ./internal/crypto/secret 2>&1
+          $a267BufferOutput | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'Native foreign buffer failed' }
+          if (($a267BufferOutput -join "`n") -notmatch 'A267_WINDOWS_NATIVE_BUFFER_OK') { throw 'Required native buffer proof marker missing' }
+      - name: Native scheduled-task lifecycle (A267)
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          # Enable this log only on the disposable owned CI runner. Product verification
+          # reads existing log policy and refuses to change it on an operator's host.
+          & wevtutil.exe sl Microsoft-Windows-TaskScheduler/Operational /e:true
+          if ($LASTEXITCODE -ne 0) { throw 'owned task operational log setup failed' }
+          $env:TRSTCTL_A267_WINDOWS_TASKS = '1'
+          $a267TaskOutput = & go test -count=1 -timeout 10m -run '^TestNativeWindowsTaskLifecycleA267$' -v ./internal/crypto/windependents 2>&1
+          $a267TaskOutput | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'Native task lifecycle failed' }
+          if (($a267TaskOutput -join "`n") -notmatch 'A267_WINDOWS_TASK_OK') { throw 'Required native task proof marker missing' }
+      - name: Native IIS application pool lifecycle (A267)
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          # Inbox features only, with Windows Update access forbidden. Missing local
+          # payload is a concrete native-proof blocker, never a download or skipped pass.
+          foreach ($featureName in @('IIS-WebServerRole', 'IIS-ASPNET45', 'IIS-ManagementScriptingTools')) {
+            $feature = Get-WindowsOptionalFeature -Online -FeatureName $featureName
+            if ($feature.State -eq 'DisabledWithPayloadRemoved') { throw "local inbox feature payload is missing: $featureName" }
+            if ($feature.State -ne 'Enabled') {
+              $result = Enable-WindowsOptionalFeature -Online -FeatureName $featureName -All -LimitAccess -NoRestart
+              if ($result.RestartNeeded) { throw "native IIS fixture needs a runner restart: $featureName" }
+            }
+          }
+          Start-Service WAS
+          Start-Service W3SVC
+          $env:TRSTCTL_A267_WINDOWS_IIS = '1'
+          $a267IISOutput = & go test -count=1 -timeout 10m -run '^TestNativeWindowsIISPoolLifecycleA267$' -v ./internal/crypto/windependents 2>&1
+          $a267IISOutput | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'Native IIS pool lifecycle failed' }
+          if (($a267IISOutput -join "`n") -notmatch 'A267_WINDOWS_IIS_OK') { throw 'Required native IIS proof marker missing' }
+      - name: Native task execution journal (A267)
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          # The journal uses native Windows file locking and preserves failed and lost
+          # starts across a real abrupt child-process exit; the abrupt-exit test must pass.
+          $a267JournalOutput = & go test -count=1 -timeout 3m -run '^TestTaskExecution' -v ./internal/agent/reportstate 2>&1
+          $a267JournalOutput | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'Native task execution journal failed' }
+          if (($a267JournalOutput -join "`n") -notmatch '--- PASS: TestTaskExecutionAbruptProcessExitDoesNotRepeatA267') { throw 'Required abrupt child-exit journal proof missing' }
+          Write-Output 'A267_WINDOWS_TASK_JOURNAL_OK: sealed native filesystem fence, lost replies, failed reports and abrupt child exit; full host coordination remains separate'
+      - name: Native enrolled-host inventory collector (A267)
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          $env:TRSTCTL_A267_WINDOWS_INVENTORY = '1'
+          $a267InventoryOutput = & go test -count=1 -timeout 3m -run '^TestNativeWindowsInventoryCollectorA267$' -v ./internal/agent/relay 2>&1
+          $a267InventoryOutput | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'Native inventory collector failed' }
+          if (($a267InventoryOutput -join "`n") -notmatch 'A267_WINDOWS_INVENTORY_OK') { throw 'Required native inventory proof marker missing' }
+      - name: Native shipped receiver lifecycle (A267)
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          # Compile the shipped receiver as a separate native executable so the crypto
+          # fixture can drive it through anonymous pipes without introducing an import
+          # cycle. Only public fixture paths appear in environment or command arguments.
+          $executor = Join-Path $env:RUNNER_TEMP 'a267-dependent-native-executor.test.exe'
+          & go test -c -o $executor ./internal/agent/relay
+          if ($LASTEXITCODE -ne 0) { throw 'A267 native receiver compilation failed' }
+          $env:TRSTCTL_A267_NATIVE_EXECUTOR = $executor
+          $env:TRSTCTL_A267_NATIVE_EXECUTOR_SHA256 = (Get-FileHash -LiteralPath $executor -Algorithm SHA256).Hash.ToLowerInvariant()
+          $env:TRSTCTL_A267_WINDOWS_EXECUTOR = '1'
+          $a267ExecutorOutput = & go test -count=1 -timeout 22m -run '^TestNativeWindowsDependentExecutorLifecycleA267$' -v ./internal/crypto/windependents 2>&1
+          $a267ExecutorOutput | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'Native shipped receiver lifecycle failed' }
+          if (($a267ExecutorOutput -join "`n") -notmatch 'A267_WINDOWS_EXECUTOR_OK') { throw 'Required native receiver proof marker missing' }
 
   # P9's Windows signing adapter (Track A on GitHub-hosted runners since
   # 2026-11-02). The Windows runner image has no C compiler, so the CNG key
@@ -1100,7 +1234,7 @@ jobs:
 
   build-test-lint:
     name: build / test / lint
-    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts, a267-windows-dependents, p9-ksp-windows-build, p9-windows-signtool, x5-session-observer, a266-scale-smoke, a271-device-labs]
+    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts, a268-windows-native, a267-windows-dependents, p9-ksp-windows-build, p9-windows-signtool, x5-session-observer, a266-scale-smoke, a271-device-labs]
     # Always run, so a failed or skipped lane fails this required check instead of
     # leaving it skipped (a skipped required check would read as passing).
     if: always()
@@ -3150,6 +3284,7 @@ jobs:
           cache: true
 
       - name: Prefetch dependencies (retries a transient module-proxy failure)
+        id: prefetch
         run: scripts/ci/go-mod-download.sh
         shell: bash
 
@@ -3164,7 +3299,12 @@ jobs:
       - name: Test (Windows agent surface, incl. real certificate store)
         run: go test ./internal/agent/... ./internal/dist/... ./internal/crypto/...
 
+      # The MSI build and the installer lifecycle below are their own proof: they
+      # run whether or not the test step above passed (CR-150), and every step
+      # that reads dist runs only when the MSIs were built.
       - name: Build current and prior-fixture MSIs (WiX v3)
+        id: msi
+        if: ${{ !cancelled() && steps.prefetch.outcome == 'success' }}
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist, dist\prior | Out-Null
@@ -3188,6 +3328,7 @@ jobs:
       # upgrade, reject downgrade, simulate resume, and uninstall. A local TCP
       # sink keeps first-boot enrollment pending without external credentials.
       - name: Exercise MSI and Windows service lifecycle
+        if: ${{ !cancelled() && steps.msi.outcome == 'success' }}
         shell: pwsh
         run: |
           .\scripts\ci\windows-msi-lifecycle.ps1 `
@@ -3201,11 +3342,13 @@ jobs:
       # a remote OIDC-authenticated signer, so CI never materializes code-signing
       # private-key material on a runner (SUPPLY-002).
       - name: Note unsigned CI artifact
+        if: ${{ !cancelled() && steps.msi.outcome == 'success' }}
         shell: pwsh
         run: |
           Write-Host '::notice::Windows CI artifacts are intentionally unsigned; release.yml signs through the protected remote Authenticode signer.'
 
       - name: Publish SHA-256 sums
+        if: ${{ !cancelled() && steps.msi.outcome == 'success' }}
         shell: pwsh
         run: |
           Get-FileHash dist\trstctl-agent.exe, dist\trstctl-agent.msi -Algorithm SHA256 |
@@ -3213,6 +3356,7 @@ jobs:
             Tee-Object -FilePath dist\SHA256SUMS
 
       - name: Upload Windows artifacts
+        if: ${{ !cancelled() && steps.msi.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: trstctl-agent-windows

@@ -3741,6 +3741,17 @@
 
 ### Security
 
+- CI runs the A267, A268 and A238 Windows-native proofs and the MSI install and service lifecycle on
+  every run, so one red proof no longer hides the ones after it (CR-150). The A267 lab script stopped
+  at its first failing stage, the A268 local administrator proofs (with the A238 file-DACL and
+  service-reload proofs) ran only after the A240 lab in the same job passed, and the MSI build and
+  Windows Installer and service lifecycle ran only after the Windows test step passed. Those earlier
+  steps fail on every run, so only A267's first stage had ever executed in CI. Each A267 stage is now
+  its own step; the A268 and A238 proofs run in their own job, `a268 lab (Windows native agent
+  proofs)`; every proof step runs whether or not an earlier one passed; and the MSI build and
+  lifecycle run whether or not the test step passed. A docs guard keeps each of these proofs
+  independent of the steps around it.
+
 - EST no longer lets a client choose the address its failed authentication attempts are counted
   against (M1-L1). It read the first `X-Forwarded-For` entry from any peer, so a client could send a
   new address with each attempt; it now counts the connection's peer, or the client a trusted proxy

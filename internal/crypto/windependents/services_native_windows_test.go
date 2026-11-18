@@ -410,7 +410,12 @@ func TestNativeWindowsServiceLifecycleA267(t *testing.T) {
 	adapter := NewServices()
 	found, err := adapter.Discover(ctx, sid.String())
 	if err != nil || len(found) != 1 || found[0].Name != serviceName {
-		t.Fatal("native selected-SID service discovery failed")
+		// Name the cause, so a CI run shows which condition failed (CR-150).
+		names := make([]string, 0, len(found))
+		for _, service := range found {
+			names = append(names, service.Name)
+		}
+		t.Fatalf("native selected-SID service discovery failed: found %q for %s, want only %s: %v", names, sid, serviceName, err)
 	}
 	target := found[0]
 	tampered := target

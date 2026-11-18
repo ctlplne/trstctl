@@ -10209,11 +10209,12 @@ snapshot/rebuild, predecessor generations, unknown effects never rolled back) an
 `TestServedWindowsLocalCheckoutRotatesOnHostA268` (registration refusals, no
 sessions, one reveal, check-in waits for the offline host and publishes the host's
 distinct successor, the deadline queues the next host generation). The signed
-native reports in these served tests are fixtures. The windows-latest CI job runs
-the native inventory, rotation (two owned accounts get distinct passwords, the new
-one authenticates, the old one is refused), journal and receipt proofs; their
-results are read at FINISH, which is where A268's Done-when ("on windows-latest")
-is judged.
+native reports in these served tests are fixtures. The windows-latest CI job
+`a268 lab (Windows native agent proofs)` runs the native inventory, rotation (two
+owned accounts get distinct passwords, the new one authenticates, the old one is
+refused), journal and receipt proofs on every CI run, each whether or not an
+earlier proof passed; their results are read at FINISH, which is where A268's
+Done-when ("on windows-latest") is judged.
 
 What comes next:
 - Reading the windows-latest job's native results at FINISH, and a native
