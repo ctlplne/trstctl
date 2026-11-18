@@ -92,7 +92,7 @@ func TestADReconcileBackendFreezesNativeAuthorityA267(t *testing.T) {
 	}
 	for _, operation := range []func() error{
 		func() error {
-			_, _, e := b.CreateCredential(t.Context(), GenerateRequest{Role: "directory/service", Static: true, LeaseID: "owned", Predecessor: cfg.RoleGroups["directory/service"]})
+			_, _, e := b.CreateCredential(t.Context(), GenerateRequest{Role: "directory/service", Static: true, LeaseID: "owned", PrincipalSuffix: testPrincipalSuffix("owned"), Predecessor: cfg.RoleGroups["directory/service"]})
 			return e
 		},
 		func() error { return b.Revoke(t.Context(), cfg.RoleGroups["directory/service"]) },

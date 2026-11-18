@@ -83,7 +83,7 @@ func newLabMilvus(t *testing.T, srv *httptest.Server, bindings map[string]string
 func TestMilvusLeaseIsAUserMilvusDropsA239(t *testing.T) {
 	lab, srv := newMilvusStandIn(t)
 	b := newLabMilvus(t, srv, map[string]string{"reader": "orders_reader, audit", "broken": "no_such_role"})
-	req := GenerateRequest{Role: "reader", LeaseID: "lease-0001"}
+	req := GenerateRequest{Role: "reader", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
 	user, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +104,7 @@ func TestMilvusLeaseIsAUserMilvusDropsA239(t *testing.T) {
 		!slices.Equal(lab.roles[user], []string{"orders_reader", "audit"}) {
 		t.Fatalf("retry: %q (%v); users %v roles %v", again, err, lab.users, lab.roles)
 	}
-	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "broken", LeaseID: "lease-0002"}); err == nil || len(lab.users) != 1 {
+	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "broken", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")}); err == nil || len(lab.users) != 1 {
 		t.Fatalf("a failed grant: %v, users %v", err, lab.users)
 	}
 	if err := b.Revoke(context.Background(), user); err != nil || len(lab.users) != 0 {

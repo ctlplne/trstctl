@@ -66,7 +66,7 @@ func TestNetworkDeviceRotationA270(t *testing.T) {
 				AdminUser: "netadmin", AdminPassword: []byte("x"), RoleAccounts: map[string]string{"net/admin": "netadmin"}}); err == nil {
 				t.Fatal("a role bound to the administrator was accepted")
 			}
-			ref, credential, err := b.CreateCredential(ctx, GenerateRequest{Role: "net/ops", LeaseID: "lease-1", Static: true})
+			ref, credential, err := b.CreateCredential(ctx, GenerateRequest{Role: "net/ops", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1"), Static: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -95,7 +95,7 @@ func TestNetworkDeviceRotationA270(t *testing.T) {
 			// Rollback: the device keeps refusing the next password; the
 			// predecessor is put back and signs in again.
 			d.RejectChangedPasswords(true)
-			_, next, err := b.CreateCredential(ctx, GenerateRequest{Role: "net/ops", LeaseID: "lease-2", Static: true})
+			_, next, err := b.CreateCredential(ctx, GenerateRequest{Role: "net/ops", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2"), Static: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -110,7 +110,7 @@ func TestNetworkDeviceRotationA270(t *testing.T) {
 				t.Fatal("rollback did not restore the predecessor")
 			}
 			if tc.vendor == "iosxe" {
-				_, enable, err := b.CreateCredential(ctx, GenerateRequest{Role: "net/enable", LeaseID: "lease-3", Static: true})
+				_, enable, err := b.CreateCredential(ctx, GenerateRequest{Role: "net/enable", LeaseID: "lease-3", PrincipalSuffix: testPrincipalSuffix("lease-3"), Static: true})
 				if err != nil {
 					t.Fatal(err)
 				}

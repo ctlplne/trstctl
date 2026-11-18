@@ -44,7 +44,7 @@ func startPAMRedis(t *testing.T) (string, DynamicSecretProviderRegistry) {
 		AllowedRoles:  []string{"redis-writer"},
 		RedisACLRoles: map[string]redisacl.Role{"redis-writer": {KeyPrefixes: []string{"a256:"}, Commands: []string{"get", "set", "del"}}},
 		MaxTTL:        "1h", UsernamePrefix: "a256_redis",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

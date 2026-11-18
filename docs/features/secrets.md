@@ -537,6 +537,20 @@ AWS STS instead fences an uncertain AssumeRole call and never blindly retries it
 Cloud/Kubernetes endpoints require HTTPS; `allow_insecure_loopback` is a
 same-host-emulator exception limited to `localhost`, `127.0.0.0/8`, or `::1`.
 
+Each lease's principal (a database role or user, a directory entry, a cloud user, a
+key's name) carries the provider's prefix, the role, and a lease suffix that the control
+plane derives under the deployment key from the tenant, its registration epoch, the
+provider and the lease. Nobody can compute or choose another lease's suffix, so no
+caller can make two leases share a principal, across tenants or within one, even when
+they use the same provider ID on the same server. A retry after an uncertain attempt
+derives the same suffix and replaces its own principal. The suffix is 16 hex digits,
+shortened to no fewer than 10 when a long prefix would not fit otherwise. A shortened
+suffix also cuts the role, so it makes a chance collision between two live leases with
+the same prefix on one server more likely (at ten digits, around a million of them):
+keep prefixes short enough for all 16. Revocation still accepts the ten-digit names
+earlier releases issued. Before upgrading with leases in flight, see
+[the upgrade runbook](../runbooks/upgrade-rollback.md#dynamic-secret-principal-names-across-this-upgrade).
+
 The LDAP backend creates one directory entry per lease under the configured
 container, with a password the directory sets and hashes itself, in the group its
 role is bound to, and deletes it at revocation; the directory then refuses its bind.
@@ -606,7 +620,7 @@ maximum lifetime, and the ClickHouse role its lease role is bound to as its only
 (default) role, so the lease carries exactly that role's grants. Revocation drops
 the user and ClickHouse then refuses its login. The user's name derives from the
 lease, so a retry after an uncertain attempt replaces the same user, and revocation
-only ever drops users with the provider's issued-name shape (its prefix, the role, and the lease digest suffix). Server errors are reported by
+only ever drops users with the provider's issued-name shape (its prefix, the role, and the keyed lease suffix). Server errors are reported by
 their ClickHouse error code only, since their text can echo the statement.
 
 The Elasticsearch backend creates one API key per lease through the security API,
@@ -653,7 +667,7 @@ every request, so a client still connected is refused from its next request (Kaf
 not end an authenticated connection when its credential goes). Then it deletes the
 credential, so the next login fails. A retry after an uncertain attempt replaces the
 same user's password and leaves its ACLs as they are, and if the ACLs fail the new user
-is deleted again. Only users with the provider's issued-name shape (its prefix, the role, and the lease digest suffix) are ever revoked.
+is deleted again. Only users with the provider's issued-name shape (its prefix, the role, and the keyed lease suffix) are ever revoked.
 
 The Cassandra backend creates one login role per lease with a generated password,
 granted only its role's existing Cassandra roles (`"orders_reader"`), as an
@@ -666,7 +680,8 @@ its next query once the node's role and permission caches expire (`roles_validit
 and `permissions_validity`, 2 s by default; Cassandra does not end the connection). A
 retry after an uncertain attempt finds the same role, sets the new password and keeps
 the grants it already has, and if a grant fails the new role is dropped again. Only
-roles with the provider's issued-name shape are ever dropped.
+roles with the provider's issued-name shape (its prefix, the role, and the keyed lease
+suffix) are ever dropped.
 
 The SAP HANA backend creates one user per lease with a generated password and no
 password lifetime, granted only its role's existing HANA roles, through go-hdb. Like the
@@ -685,7 +700,8 @@ runs, so no statement text carries them. Revocation locks the user, kills its op
 (`ALTER SYSTEM KILL SESSION`) and drops it, waiting out a session that is still going, so
 the next login fails. A retry after an uncertain attempt finds the same user, sets the new
 password and unlocks it, and if a grant fails the new user is dropped again. Only users with
-the provider's issued-name shape are ever dropped.
+the provider's issued-name shape (its prefix, the role, and the keyed lease suffix) are
+ever dropped.
 
 The Couchbase backend creates one local user per lease through the cluster's
 management REST API, with a generated password and only its role's roles on the named

@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
@@ -1799,14 +1800,107 @@ func scopedName(prefix, role string, max int, sep string) (string, error) {
 	return scopedNameWithSuffix(prefix, role, suffix, max, sep)
 }
 
+// PrincipalNameLabel is the purpose label of the deployment key's derived
+// digest that names dynamic-secret principals (seal.LocalKEK.DerivedDigest).
+// A new naming scheme takes a new label; principals already issued keep their
+// recorded names, which the revoke gate still accepts.
+const PrincipalNameLabel = "trstctl.dynsecret.principal-name.v1"
+
+const (
+	// keyedPrincipalSuffixDigits is the keyed suffix's length: 64 bits of the
+	// derived digest, in lowercase hex.
+	keyedPrincipalSuffixDigits = 16
+	// legacyPrincipalSuffixDigits is the shortest suffix a name may carry: the
+	// unkeyed lease-digest suffix of earlier releases, and the floor a keyed
+	// suffix is shortened to so a configured prefix stays whole.
+	legacyPrincipalSuffixDigits = 10
+)
+
+// KeyedPrincipalSuffix derives the name suffix of one lease's principal: the
+// first 64 bits, in lowercase hex, of digest(PrincipalNameLabel, material),
+// where digest is the deployment key's DerivedDigest and material length-prefixes
+// the tenant, its registration epoch, the provider and the lease. Without the
+// key nobody can compute a lease's name, so an Idempotency-Key can no longer be
+// chosen to name another lease's principal, in this tenant, another tenant or an
+// erased registration of the same tenant UUID (CR-220); a crash retry of the
+// same lease derives the same name and converges on its own principal.
+func KeyedPrincipalSuffix(digest func(label, material []byte) ([]byte, error), tenantID, tenantEpoch, providerID, leaseID string) (string, error) {
+	if digest == nil {
+		return "", errors.New("dynsecret: principal naming requires the deployment key's derived digest")
+	}
+	if tenantID == "" || tenantEpoch == "" || providerID == "" || leaseID == "" {
+		return "", errors.New("dynsecret: principal naming requires tenant, registration epoch, provider and lease")
+	}
+	var material []byte
+	for _, field := range []string{tenantID, tenantEpoch, providerID, leaseID} {
+		var size [8]byte
+		binary.BigEndian.PutUint64(size[:], uint64(len(field))) // #nosec G115 -- a string length is never negative (CWE-190)
+		material = append(material, size[:]...)
+		material = append(material, field...)
+	}
+	sum, err := digest([]byte(PrincipalNameLabel), material)
+	if err != nil {
+		return "", fmt.Errorf("dynsecret: derive principal name: %w", err)
+	}
+	if len(sum) < keyedPrincipalSuffixDigits/2 {
+		return "", errors.New("dynsecret: principal-name digest is too short")
+	}
+	return hex.EncodeToString(sum[:keyedPrincipalSuffixDigits/2]), nil
+}
+
 func scopedNameForRequest(prefix string, req GenerateRequest, max int, sep string) (string, error) {
-	if strings.TrimSpace(req.LeaseID) == "" {
+	if strings.TrimSpace(req.LeaseID) == "" && req.PrincipalSuffix == "" {
 		return scopedName(prefix, req.Role, max, sep)
 	}
-	// The stable suffix makes a crash retry converge on the same external
-	// principal instead of leaking one random user per attempt.
-	suffix := crypto.SHA256Hex([]byte(req.LeaseID))[:10]
-	return scopedNameWithSuffix(prefix, req.Role, suffix, max, sep)
+	// A lease's name carries the control plane's keyed suffix, never a digest
+	// a caller could reproduce: a principal with this name can only be this
+	// lease's own, so a crash retry may converge on it (CR-220).
+	if !validKeyedPrincipalSuffix(req.PrincipalSuffix) {
+		return "", errors.New("dynsecret: a lease's principal name needs the control plane's keyed suffix")
+	}
+	return scopedNameWithSuffix(prefix, req.Role, fitPrincipalSuffix(prefix, req.PrincipalSuffix, max, sep), max, sep)
+}
+
+// LegacyLeasePrincipalName is the name earlier releases derived for a lease
+// with no keyed suffix: an unkeyed digest of the lease ID. Only the AWS decoy
+// backend still uses it, to find decoys it already issued; it guards every
+// such name with the decoy's own ownership tag before touching it.
+func LegacyLeasePrincipalName(prefix, role, leaseID string, max int, sep string) (string, error) {
+	if strings.TrimSpace(leaseID) == "" {
+		return "", errors.New("dynsecret: a legacy lease name needs the lease")
+	}
+	return scopedNameWithSuffix(prefix, role, crypto.SHA256Hex([]byte(leaseID))[:legacyPrincipalSuffixDigits], max, sep)
+}
+
+func validKeyedPrincipalSuffix(suffix string) bool {
+	if len(suffix) != keyedPrincipalSuffixDigits {
+		return false
+	}
+	for _, c := range suffix {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// fitPrincipalSuffix shortens a keyed suffix, never below the legacy ten
+// digits, so the whole sanitized prefix, its separator, one role character and
+// the suffix's separator still fit within max: the revoke gate matches the
+// whole prefix, so a configuration whose prefix fits today keeps it whole.
+func fitPrincipalSuffix(prefix, suffix string, max int, sep string) string {
+	if max <= 0 {
+		return suffix
+	}
+	room := max - len(sanitizeFragment(prefix, defaultDynsecretPrefix)) - 2*len(sep) - 1
+	switch {
+	case room >= len(suffix):
+		return suffix
+	case room < legacyPrincipalSuffixDigits:
+		return suffix[:legacyPrincipalSuffixDigits]
+	default:
+		return suffix[:room]
+	}
 }
 
 func scopedNameWithSuffix(prefix, role, suffix string, max int, sep string) (string, error) {
@@ -1830,11 +1924,13 @@ func scopedNameWithSuffix(prefix, role, suffix string, max int, sep string) (str
 
 // issuedPrincipalName reports whether ref has the shape scopedNameForRequest
 // gives a principal issued with this prefix and "_": the sanitized prefix, a
-// separator, and a final separator before a ten-hex-digit suffix (the lease
-// digest, or a random one). Providers that delete principals by name refuse
-// anything else, so a foreign principal that merely shares the prefix - an
-// administrator named trstctl_admin, say - is never deleted. The comparison
-// ignores case for systems that upper-case unquoted names.
+// separator, and after the last separator a suffix of 10 to 16 hex digits (the
+// keyed lease suffix, possibly shortened to keep a long prefix whole; the lease
+// digest of earlier releases; or a random one). Providers that delete
+// principals by name refuse anything else, so a foreign principal that merely
+// shares the prefix - an administrator named trstctl_admin, say - is never
+// deleted. The comparison ignores case for systems that upper-case unquoted
+// names.
 func issuedPrincipalName(prefix, ref string) bool { return issuedPrincipalNameWith(prefix, ref, '_') }
 
 // issuedPrincipalNameWith is issuedPrincipalName for names issued with
@@ -1842,10 +1938,18 @@ func issuedPrincipalName(prefix, ref string) bool { return issuedPrincipalNameWi
 func issuedPrincipalNameWith(prefix, ref string, sep byte) bool {
 	lower := strings.ToLower(ref)
 	start := sanitizeFragment(prefix, defaultDynsecretPrefix) + string(sep)
-	if !strings.HasPrefix(lower, start) || len(lower) < len(start)+10 || lower[len(lower)-11] != sep {
+	if !strings.HasPrefix(lower, start) {
 		return false
 	}
-	for _, c := range lower[len(lower)-10:] {
+	cut := strings.LastIndexByte(lower, sep)
+	if cut < len(start)-1 {
+		return false
+	}
+	tail := lower[cut+1:]
+	if len(tail) < legacyPrincipalSuffixDigits || len(tail) > keyedPrincipalSuffixDigits {
+		return false
+	}
+	for _, c := range tail {
 		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return false
 		}

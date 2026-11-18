@@ -44,7 +44,7 @@ func TestLDAPDynamicLeaseExpiresInOpenLDAPA239L2(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer backend.Close()
-	ref, raw, err := backend.CreateCredential(ctx, GenerateRequest{Role: "readonly", TTL: 20 * time.Second, LeaseID: "a239l2-lab"})
+	ref, raw, err := backend.CreateCredential(ctx, GenerateRequest{Role: "readonly", TTL: 20 * time.Second, LeaseID: "a239l2-lab", PrincipalSuffix: testPrincipalSuffix("a239l2-lab")})
 	if err != nil {
 		t.Fatal("create a dynamic lease entry:", err)
 	}

@@ -257,7 +257,7 @@ member: `+ldapTwoUserAccountB+`
 	if err := config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{DynamicProviders: []config.DynamicSecretProviderConfig{providerConfig}}, true); err != nil {
 		t.Fatalf("two-user directory provider: %v", err)
 	}
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{providerConfig}, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{providerConfig}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -34,7 +34,7 @@ func TestServedVaultEngineConfigPathsWithTheStockCLIA203L2(t *testing.T) {
 		AdminDSNRef: writeServedCredentialFile(t, "pg-admin-dsn", dsn), Database: parsed.Database,
 		AllowedRoles: []string{"readonly", "reporting"}, RoleAccess: map[string]string{"readonly": "read", "reporting": "read"},
 		MaxTTL: "2h", UsernamePrefix: "trstctl_a203l2",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

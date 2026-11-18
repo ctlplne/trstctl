@@ -169,7 +169,7 @@ func (s *n3l3STSStandIn) chainFrom(t *testing.T, credential map[string]string) e
 		t.Fatal(err)
 	}
 	defer backend.Close()
-	_, raw, err := backend.CreateCredential(context.Background(), dynsecret.GenerateRequest{Role: "admin", TTL: time.Hour, LeaseID: "n3l3-chained"})
+	_, raw, err := backend.CreateCredential(context.Background(), dynsecret.GenerateRequest{Role: "admin", TTL: time.Hour, LeaseID: "n3l3-chained", PrincipalSuffix: serverTestPrincipalSuffix("n3l3-chained")})
 	clear(raw)
 	return err
 }

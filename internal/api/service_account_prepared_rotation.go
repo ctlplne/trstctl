@@ -14,7 +14,7 @@ import (
 )
 
 func staticPreparedRequest(cmd store.SecretStaticRotationCommand) dynsecret.GenerateRequest {
-	return dynsecret.GenerateRequest{Role: cmd.Key, LeaseID: cmd.ID, Static: true, Predecessor: cmd.OldRef}
+	return dynsecret.GenerateRequest{Role: cmd.Key, LeaseID: cmd.ID, Static: true, Predecessor: cmd.OldRef, TenantEpoch: cmd.TenantEpoch}
 }
 func boundStaticPreparation(provider dynsecret.Provider, cmd store.SecretStaticRotationCommand) (dynsecret.PreparedStaticRotationProvider, error) {
 	prepared, ok := provider.(dynsecret.PreparedStaticRotationProvider)

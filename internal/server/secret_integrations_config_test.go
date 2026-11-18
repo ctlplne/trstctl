@@ -316,7 +316,7 @@ func TestSecretIntegrationFactoriesBuildAllTenantBoundRegistrations(t *testing.T
 		{TenantID: tenantB, ID: "redis-b", Type: "redis", Addr: "redis-b.internal:6379", PasswordRef: ref, RedisTLSServerName: "redis-b.internal", AllowedRoles: role,
 			RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"tenant-b:"}, Commands: []string{"get"}}}},
 	}
-	dynamicRegistry, err := dynamicSecretProvidersFromConfig(context.Background(), dynamic, nil, nil, nil)
+	dynamicRegistry, err := dynamicSecretProvidersFromConfig(context.Background(), dynamic, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

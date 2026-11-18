@@ -47,7 +47,7 @@ func TestAWSSTSAssumeRoleUsesNativeExpiryAndNeverCreatesIAMKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer backend.Close()
-	ref, raw, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "reader", TTL: time.Hour, LeaseID: "lease-sts-test"})
+	ref, raw, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "reader", TTL: time.Hour, LeaseID: "lease-sts-test", PrincipalSuffix: testPrincipalSuffix("lease-sts-test")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,9 +96,9 @@ func TestAWSSTSRefusesUnboundedOrUnknownRoleWithoutRemoteCall(t *testing.T) {
 	}
 	defer backend.Close()
 	for _, req := range []GenerateRequest{
-		{Role: "writer", TTL: time.Hour, LeaseID: "lease"},
-		{Role: "reader", TTL: 14 * time.Minute, LeaseID: "lease"},
-		{Role: "reader", TTL: 13 * time.Hour, LeaseID: "lease"},
+		{Role: "writer", TTL: time.Hour, LeaseID: "lease", PrincipalSuffix: testPrincipalSuffix("lease")},
+		{Role: "reader", TTL: 14 * time.Minute, LeaseID: "lease", PrincipalSuffix: testPrincipalSuffix("lease")},
+		{Role: "reader", TTL: 13 * time.Hour, LeaseID: "lease", PrincipalSuffix: testPrincipalSuffix("lease")},
 		{Role: "reader", TTL: time.Hour},
 	} {
 		if _, raw, err := backend.CreateCredential(context.Background(), req); err == nil || len(raw) != 0 {

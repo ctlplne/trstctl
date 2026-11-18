@@ -78,7 +78,7 @@ func TestServedPrivilegedAccountDiscoverySQLServerA260(t *testing.T) {
 	registry, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{{
 		TenantID: servedTestTenant, ID: "a260-mssql", Type: "mssql", AdminDSNRef: writeServedCredentialFile(t, "a260-mssql-dsn", dsn),
 		Database: "orders", AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "db_datareader"}, MaxTTL: "1h",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

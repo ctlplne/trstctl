@@ -121,7 +121,7 @@ func TestServedDynamicOAuthLeaseIsRevokedAtTheAuthorizationServerA239(t *testing
 	if err := config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{DynamicProviders: configs}, true); err != nil {
 		t.Fatalf("the providers as configured: %v", err)
 	}
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), configs, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), configs, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

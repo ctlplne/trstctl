@@ -142,7 +142,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 		ID: "a273-bmc", Type: "redfish", Endpoint: bmc.URL(), TLSCARef: writeServedCredentialFile(t, "a273-bmc-ca", string(bmc.CAPEM())),
 		AdminUser: "Administrator", PasswordRef: writeServedCredentialFile(t, "a273-bmc-admin", "a273-bmc-admin-password"),
 		AllowedRoles: []string{"bmc/a273-ops"}, RoleBindings: map[string]string{"bmc/a273-ops": "ops"}, MaxTTL: "1h", AllowStaticRotation: true,
-		AllowPrivate: true, PrivateEgressCIDRs: []string{"127.0.0.1/32"}}}, nil, nil, nil)
+		AllowPrivate: true, PrivateEgressCIDRs: []string{"127.0.0.1/32"}}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

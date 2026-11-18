@@ -49,7 +49,7 @@ func TestServedScheduledDynamicLeaseRotationRevokesTheOldLeaseA201L1(t *testing.
 		TenantID: servedTestTenant, ID: "pg-sched", Type: "postgresql",
 		AdminDSNRef: writeServedCredentialFile(t, "pg-admin-dsn", dsn), Database: parsed.Database,
 		AllowedRoles: []string{role}, RoleAccess: map[string]string{role: "read"}, MaxTTL: "1h", UsernamePrefix: "trstctl_a201l1",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -88,7 +88,7 @@ func newFakeKafkaBackend(t *testing.T, fake *fakeKafka) *KafkaBackend {
 func TestKafkaLeaseIsASCRAMUserWithOnlyItsRoleACLsA239(t *testing.T) {
 	fake := &fakeKafka{scram: map[string]string{}, acls: map[kafkaACLKey]bool{}}
 	b := newFakeKafkaBackend(t, fake)
-	req := GenerateRequest{Role: "consumer", LeaseID: "lease-0001"}
+	req := GenerateRequest{Role: "consumer", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
 	user, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -112,7 +112,7 @@ func TestKafkaLeaseIsASCRAMUserWithOnlyItsRoleACLsA239(t *testing.T) {
 	if err != nil || again != user || len(fake.scram) != 1 || fake.scram[user] != got2.Password || got2.Password == got.Password || !mapsEqual(fake.acls, want) {
 		t.Fatalf("retry: %q (%v); scram %v, acls %v", again, err, fake.scram, fake.acls)
 	}
-	logs, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "logs", LeaseID: "lease-0002"})
+	logs, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "logs", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")})
 	if err != nil || !fake.acls[kafkaACLKey{"User:" + logs, "write", "topic", "logs-", true}] || fake.acls[kafkaACLKey{"User:" + logs, "write", "topic", "logs-", false}] {
 		t.Fatalf("prefixed grant: %v, acls %v", err, fake.acls)
 	}
@@ -145,16 +145,16 @@ func TestKafkaLeaseIsASCRAMUserWithOnlyItsRoleACLsA239(t *testing.T) {
 func TestKafkaFailedACLsRemoveTheNewUserA239(t *testing.T) {
 	fake := &fakeKafka{scram: map[string]string{}, acls: map[kafkaACLKey]bool{}, failACLs: true}
 	b := newFakeKafkaBackend(t, fake)
-	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "consumer", LeaseID: "lease-0003"}); err == nil {
+	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "consumer", LeaseID: "lease-0003", PrincipalSuffix: testPrincipalSuffix("lease-0003")}); err == nil {
 		t.Fatal("issued with failed ACLs")
 	}
 	if len(fake.scram) != 0 || len(fake.acls) != 0 {
 		t.Fatalf("left behind: scram %v, acls %v", fake.scram, fake.acls)
 	}
-	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "admin", LeaseID: "lease-0004"}); err == nil {
+	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "admin", LeaseID: "lease-0004", PrincipalSuffix: testPrincipalSuffix("lease-0004")}); err == nil {
 		t.Fatal("issued an unbound role")
 	}
-	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "consumer", LeaseID: "lease-0005", Static: true}); err == nil {
+	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "consumer", LeaseID: "lease-0005", PrincipalSuffix: testPrincipalSuffix("lease-0005"), Static: true}); err == nil {
 		t.Fatal("served a static credential")
 	}
 }

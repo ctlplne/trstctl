@@ -84,7 +84,7 @@ func TestServedActiveDirectoryDiscoveryA260(t *testing.T) {
 		BindDN: "CN=Administrator,CN=Users,DC=a260,DC=test", PasswordRef: writeServedCredentialFile(t, "a260-ad-password", domainPassword),
 		UsersDN: "CN=Users,DC=a260,DC=test", AllowedRoles: []string{"reader"},
 		RoleBindings: map[string]string{"reader": "CN=Domain Users,CN=Users,DC=a260,DC=test"}, MaxTTL: "1h", UsernamePrefix: "a260lease",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

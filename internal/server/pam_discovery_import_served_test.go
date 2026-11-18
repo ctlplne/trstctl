@@ -63,7 +63,7 @@ func TestServedPrivilegedAccountImportA260(t *testing.T) {
 		TenantID: servedTestTenant, ID: "a260i-pg", Type: "postgresql", Database: "postgres", Schema: "public", UsernamePrefix: "a260",
 		AdminDSNRef:  writeServedCredentialFile(t, "a260i-pg-dsn", "postgres://postgres:a260-import-admin@"+pgAddr+"/postgres?sslmode=disable"),
 		AllowedRoles: []string{"readonly"}, MaxTTL: "1h",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -81,6 +81,14 @@ func (k *DeploymentKeyring) KeyedDigest(domain, material []byte) ([]byte, error)
 	return k.local.KeyedDigest(domain, material)
 }
 
+// DerivedDigest computes a purpose-bound digest under the deployment key file
+// (seal.LocalKEK.DerivedDigest). Like KeyedDigest it is not a wrapping key, so
+// it stays stable across rotations: dynamic-secret principal names derive from
+// it and must not change when the wrapping generation does (CR-220).
+func (k *DeploymentKeyring) DerivedDigest(label, material []byte) ([]byte, error) {
+	return k.local.DerivedDigest(label, material)
+}
+
 // WrapDEK wraps under the generation new data is written to.
 func (k *DeploymentKeyring) WrapDEK(dek []byte) ([]byte, error) {
 	state, err := k.current(false)

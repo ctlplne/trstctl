@@ -45,12 +45,12 @@ func TestADPreparationParserAndBindingA267(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer backend.Close()
-	for _, req := range []GenerateRequest{{Role: "foreign", LeaseID: good.OperationID, Static: true, Predecessor: good.DN}, {Role: good.Role, LeaseID: "different-operation", Static: true, Predecessor: good.DN}, {Role: good.Role, LeaseID: good.OperationID, Static: false, Predecessor: good.DN}, {Role: good.Role, LeaseID: good.OperationID, Static: true, Predecessor: "foreign"}} {
+	for _, req := range []GenerateRequest{{Role: "foreign", LeaseID: good.OperationID, PrincipalSuffix: testPrincipalSuffix(good.OperationID), Static: true, Predecessor: good.DN}, {Role: good.Role, LeaseID: "different-operation", PrincipalSuffix: testPrincipalSuffix("different-operation"), Static: true, Predecessor: good.DN}, {Role: good.Role, LeaseID: good.OperationID, PrincipalSuffix: testPrincipalSuffix(good.OperationID), Static: false, Predecessor: good.DN}, {Role: good.Role, LeaseID: good.OperationID, PrincipalSuffix: testPrincipalSuffix(good.OperationID), Static: true, Predecessor: "foreign"}} {
 		if _, _, err := backend.GenerateStaticPrepared(t.Context(), req, raw, good.ProviderBinding); err == nil || !strings.Contains(err.Error(), "preparation differs") {
 			t.Fatalf("changed authority reached native IO: %v", err)
 		}
 	}
-	req := GenerateRequest{Role: good.Role, LeaseID: good.OperationID, Static: true, Predecessor: good.DN}
+	req := GenerateRequest{Role: good.Role, LeaseID: good.OperationID, PrincipalSuffix: testPrincipalSuffix(good.OperationID), Static: true, Predecessor: good.DN}
 	if _, _, err := backend.GenerateStaticPrepared(t.Context(), req, raw, strings.Repeat("c", 64)); err == nil || !strings.Contains(err.Error(), "preparation differs") {
 		t.Fatal("changed provider binding reached native IO")
 	}

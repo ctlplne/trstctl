@@ -38,7 +38,7 @@ func TestServedGatewayAzureApplicationA263(t *testing.T) {
 	if json.Unmarshal(raw, &provider) != nil {
 		t.Fatal("provider fixture decode")
 	}
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{provider}, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{provider}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

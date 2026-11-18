@@ -191,7 +191,7 @@ func TestServedDynamicLeaseRotationIssuesTheRequestedTTLAndRetiresTheOldLease(t 
 		TenantID: servedTestTenant, ID: "pg-leases", Type: "postgresql",
 		AdminDSNRef: writeServedCredentialFile(t, "pg-admin-dsn", dsn), Database: parsed.Database,
 		AllowedRoles: []string{"reporting"}, RoleAccess: map[string]string{"reporting": "read"}, MaxTTL: "1h", UsernamePrefix: "trstctl_a201",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

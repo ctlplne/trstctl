@@ -226,7 +226,7 @@ func vcsimProviderHarness(t *testing.T, sim stockVcsim, adminPassword string) (*
 	if err := config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{DynamicProviders: []config.DynamicSecretProviderConfig{cfg}}, true); err != nil {
 		t.Fatalf("the provider as configured: %v", err)
 	}
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{cfg}, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{cfg}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

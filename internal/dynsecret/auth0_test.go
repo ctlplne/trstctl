@@ -102,7 +102,7 @@ func TestAuth0RotatesTheBoundApplicationsClientSecret(t *testing.T) {
 	if _, _, err := backend.CreateCredential(ctx, GenerateRequest{Role: "auth0/orders"}); err == nil || !strings.Contains(err.Error(), "not leased") {
 		t.Fatalf("a lease was issued: %v", err)
 	}
-	ref, credential, err := backend.CreateCredential(ctx, GenerateRequest{Role: "auth0/orders", LeaseID: "cmd-1", Static: true})
+	ref, credential, err := backend.CreateCredential(ctx, GenerateRequest{Role: "auth0/orders", LeaseID: "cmd-1", PrincipalSuffix: testPrincipalSuffix("cmd-1"), Static: true})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -60,7 +60,7 @@ func TestClickHouseLeaseIsAUserWithItsRoleUntilItsLifetimeA239(t *testing.T) {
 	now := time.Date(2026, 11, 2, 14, 0, 0, 0, time.UTC)
 	lab, srv := newClickHouseLab(t)
 	b := newLabClickHouse(t, srv, now)
-	req := GenerateRequest{Role: "reader", TTL: 10 * time.Minute, LeaseID: "lease-0001"}
+	req := GenerateRequest{Role: "reader", TTL: 10 * time.Minute, LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
 	user, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +106,7 @@ func TestClickHouseFailureNeverEchoesThePasswordA239(t *testing.T) {
 	lab, srv := newClickHouseLab(t)
 	lab.fail = "CREATE USER"
 	b := newLabClickHouse(t, srv, time.Now())
-	_, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-0002"})
+	_, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")})
 	if err == nil {
 		t.Fatal("a refused CREATE USER issued a credential")
 	}
@@ -114,7 +114,7 @@ func TestClickHouseFailureNeverEchoesThePasswordA239(t *testing.T) {
 		t.Fatalf("error %q leaks the statement or drops the code", err)
 	}
 	lab.fail = "GRANT"
-	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-0003"}); err == nil {
+	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-0003", PrincipalSuffix: testPrincipalSuffix("lease-0003")}); err == nil {
 		t.Fatal("a failed grant issued a credential")
 	}
 	if last := lab.statements[len(lab.statements)-1]; !strings.HasPrefix(last, "DROP USER IF EXISTS trstctl_reader_") {

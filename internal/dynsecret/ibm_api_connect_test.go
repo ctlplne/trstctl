@@ -87,7 +87,7 @@ func TestAPIConnectLeaseIsAnAppCredentialA239(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.Close()
-	req := GenerateRequest{Role: "partner", LeaseID: "lease-0001"}
+	req := GenerateRequest{Role: "partner", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
 	ref, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)

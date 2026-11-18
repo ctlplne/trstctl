@@ -43,7 +43,7 @@ func TestVCenterSSORotationA271(t *testing.T) {
 	if _, err := NewVCenterSSOBackend(bad); err == nil {
 		t.Fatal("a role bound to the SSO administrator was accepted")
 	}
-	ref, credential, err := b.CreateCredential(ctx, GenerateRequest{Role: "sso/backup", LeaseID: "lease-1", Static: true})
+	ref, credential, err := b.CreateCredential(ctx, GenerateRequest{Role: "sso/backup", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1"), Static: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestVCenterSSORotationA271(t *testing.T) {
 		}
 	}
 	vc.DropNextChanges(1)
-	_, next, err := b.CreateCredential(ctx, GenerateRequest{Role: "sso/backup", LeaseID: "lease-2", Static: true})
+	_, next, err := b.CreateCredential(ctx, GenerateRequest{Role: "sso/backup", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2"), Static: true})
 	if err != nil {
 		t.Fatal(err)
 	}

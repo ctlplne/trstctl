@@ -184,7 +184,7 @@ func TestServedPrivilegedAccountDiscoveryA260(t *testing.T) {
 			AllowedRoles: []string{"readonly"}, MaxTTL: "1h"},
 	}
 	secret.Wipe(adminPEM)
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), providers, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), providers, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

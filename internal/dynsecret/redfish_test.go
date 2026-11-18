@@ -36,7 +36,7 @@ func TestRedfishRotationA271(t *testing.T) {
 		AdminPassword: []byte("x"), RoleAccounts: map[string]string{"bmc/admin": "Administrator"}}); err == nil {
 		t.Fatal("a role bound to the administrator was accepted")
 	}
-	ref, credential, err := b.CreateCredential(ctx, GenerateRequest{Role: "bmc/ops", LeaseID: "lease-1", Static: true})
+	ref, credential, err := b.CreateCredential(ctx, GenerateRequest{Role: "bmc/ops", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1"), Static: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestRedfishRotationA271(t *testing.T) {
 		t.Fatal("the account did not move to the new password alone:", err)
 	}
 	bmc.DropNextChanges(1)
-	_, next, err := b.CreateCredential(ctx, GenerateRequest{Role: "bmc/ops", LeaseID: "lease-2", Static: true})
+	_, next, err := b.CreateCredential(ctx, GenerateRequest{Role: "bmc/ops", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2"), Static: true})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -60,7 +60,7 @@ func TestPostgresTwoUserRotationKeepsGrantsA240(t *testing.T) {
 	}
 	predecessor, next := "orders_app_a", 10
 	for cycle := 1; cycle <= 3; cycle++ {
-		ref, dsn, err := b.CreateCredential(ctx, GenerateRequest{Role: "orders-db", LeaseID: "cmd-" + string(rune('0'+cycle)), Static: true, Predecessor: predecessor})
+		ref, dsn, err := b.CreateCredential(ctx, GenerateRequest{Role: "orders-db", LeaseID: "cmd-" + string(rune('0'+cycle)), PrincipalSuffix: testPrincipalSuffix("cmd-" + string(rune('0'+cycle))), Static: true, Predecessor: predecessor})
 		if err != nil {
 			t.Fatalf("cycle %d stage: %v", cycle, err)
 		}
@@ -92,11 +92,11 @@ func TestPostgresTwoUserRotationKeepsGrantsA240(t *testing.T) {
 	}
 	// A retry of an uncertain stage converges on the same account: the first
 	// password stops working, the second works, no other role appears.
-	ref1, dsn1, err := b.CreateCredential(ctx, GenerateRequest{Role: "orders-db", LeaseID: "cmd-retry", Static: true, Predecessor: predecessor})
+	ref1, dsn1, err := b.CreateCredential(ctx, GenerateRequest{Role: "orders-db", LeaseID: "cmd-retry", PrincipalSuffix: testPrincipalSuffix("cmd-retry"), Static: true, Predecessor: predecessor})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref2, dsn2, err := b.CreateCredential(ctx, GenerateRequest{Role: "orders-db", LeaseID: "cmd-retry", Static: true, Predecessor: predecessor})
+	ref2, dsn2, err := b.CreateCredential(ctx, GenerateRequest{Role: "orders-db", LeaseID: "cmd-retry", PrincipalSuffix: testPrincipalSuffix("cmd-retry"), Static: true, Predecessor: predecessor})
 	if err != nil || ref1 != ref2 || works(string(dsn1), 100) == nil || works(string(dsn2), 101) != nil {
 		t.Fatalf("retry: %q %q (%v)", ref1, ref2, err)
 	}
@@ -110,7 +110,7 @@ func TestPostgresTwoUserRotationKeepsGrantsA240(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer missing.Close()
-	if _, _, err := missing.CreateCredential(ctx, GenerateRequest{Role: "orders-db", LeaseID: "cmd-x", Static: true, Predecessor: "orders_app_a"}); err == nil ||
+	if _, _, err := missing.CreateCredential(ctx, GenerateRequest{Role: "orders-db", LeaseID: "cmd-x", PrincipalSuffix: testPrincipalSuffix("cmd-x"), Static: true, Predecessor: "orders_app_a"}); err == nil ||
 		!strings.Contains(err.Error(), "provision it with the role's grants first") {
 		t.Fatalf("a missing account: %v", err)
 	}

@@ -61,7 +61,7 @@ func TestServedVaultAWSCredentialsOnLocalStack(t *testing.T) {
 		Region: "us-east-1", AccessKeyID: "test", SecretAccessRef: writeServedCredentialFile(t, "aws-secret", "test"),
 		AllowedRoles: []string{"deployer"}, RoleBindings: map[string]string{"deployer": roleARN}, MaxTTL: "1h",
 		UsernamePrefix: "trstctl-a203",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestServedVaultKubernetesCredentialsOnKind(t *testing.T) {
 		AllowPrivate:       true, PrivateEgressCIDRs: []string{"127.0.0.0/8"},
 		AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "ClusterRole/view"}, MaxTTL: "1h",
 		UsernamePrefix: "trstctl-a203",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

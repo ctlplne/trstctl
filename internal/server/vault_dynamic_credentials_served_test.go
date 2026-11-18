@@ -62,7 +62,7 @@ func TestServedVaultDatabaseCredentialsWithTheStockCLI(t *testing.T) {
 		TenantID: servedTestTenant, ID: "app-postgres", Type: "postgresql",
 		AdminDSNRef: writeServedCredentialFile(t, "pg-admin-dsn", dsn), Database: parsed.Database,
 		AllowedRoles: []string{"readonly"}, MaxTTL: "2h", UsernamePrefix: "trstctl_a203",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

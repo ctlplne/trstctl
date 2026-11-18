@@ -76,7 +76,7 @@ func newLabCouchbase(t *testing.T, srv *httptest.Server) *CouchbaseBackend {
 func TestCouchbaseLeaseIsALocalUserCouchbaseDeletesA239(t *testing.T) {
 	lab, srv := newCouchbaseStandIn(t)
 	b := newLabCouchbase(t, srv)
-	req := GenerateRequest{Role: "orders", LeaseID: "lease-0001"}
+	req := GenerateRequest{Role: "orders", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
 	user, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestCouchbaseLeaseIsALocalUserCouchbaseDeletesA239(t *testing.T) {
 			t.Errorf("deleted %q, a user this provider did not create", foreign)
 		}
 	}
-	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "admin", LeaseID: "lease-0002"}); err == nil {
+	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "admin", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")}); err == nil {
 		t.Fatal("issued an unbound role")
 	}
 }

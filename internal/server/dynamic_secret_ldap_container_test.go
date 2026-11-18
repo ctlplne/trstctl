@@ -54,7 +54,7 @@ member: cn=admin,dc=lab,dc=test
 		PasswordRef: writeServedCredentialFile(t, "ldap-admin-password", adminPassword), UsersDN: "ou=leases," + base,
 		AllowedRoles: []string{"readonly"}, RoleBindings: map[string]string{"readonly": "cn=readers,ou=groups," + base},
 		MaxTTL: "1h", UsernamePrefix: "a239",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

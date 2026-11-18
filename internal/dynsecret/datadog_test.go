@@ -127,18 +127,18 @@ func TestDatadogKeysRotateInTwoPhases(t *testing.T) {
 	}
 	defer backend.Close()
 
-	if _, _, err := backend.CreateCredential(ctx, GenerateRequest{Role: "datadog/ingest", LeaseID: "cmd-1", Static: true}); err != nil {
+	if _, _, err := backend.CreateCredential(ctx, GenerateRequest{Role: "datadog/ingest", LeaseID: "cmd-1", PrincipalSuffix: testPrincipalSuffix("cmd-1"), Static: true}); err != nil {
 		t.Fatal(err)
 	}
 	// A retry of the same command replaces its key instead of adding one.
-	oldRef, oldKey, err := backend.CreateCredential(ctx, GenerateRequest{Role: "datadog/ingest", LeaseID: "cmd-1", Static: true})
+	oldRef, oldKey, err := backend.CreateCredential(ctx, GenerateRequest{Role: "datadog/ingest", LeaseID: "cmd-1", PrincipalSuffix: testPrincipalSuffix("cmd-1"), Static: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if fake.count("trstctl-") != 1 {
 		t.Fatalf("a retried creation left %d keys", fake.count("trstctl-"))
 	}
-	newRef, newKey, err := backend.CreateCredential(ctx, GenerateRequest{Role: "datadog/ingest", LeaseID: "cmd-2", Static: true})
+	newRef, newKey, err := backend.CreateCredential(ctx, GenerateRequest{Role: "datadog/ingest", LeaseID: "cmd-2", PrincipalSuffix: testPrincipalSuffix("cmd-2"), Static: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestDatadogKeysRotateInTwoPhases(t *testing.T) {
 	}
 	_ = newRef
 
-	appRef, appKey, err := backend.CreateCredential(ctx, GenerateRequest{Role: "datadog/metrics", LeaseID: "lease-1"})
+	appRef, appKey, err := backend.CreateCredential(ctx, GenerateRequest{Role: "datadog/metrics", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")})
 	if err != nil {
 		t.Fatal(err)
 	}

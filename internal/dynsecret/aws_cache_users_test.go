@@ -161,7 +161,7 @@ func TestAWSCacheLeaseIsAnRBACUserInTheGroupA239(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer b.Close()
-			req := GenerateRequest{Role: "reader", LeaseID: "lease-0001"}
+			req := GenerateRequest{Role: "reader", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
 			user, credential, err := b.CreateCredential(context.Background(), req)
 			if err != nil {
 				t.Fatal(err)

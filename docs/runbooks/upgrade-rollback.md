@@ -80,6 +80,93 @@ An ordinary restart or read-model rebuild retaining the same registration event
 does not authorize a new tenant generation. Missing registration history requires
 source recovery before enrollment can proceed.
 
+## Dynamic-secret principal names across this upgrade
+
+Each dynamic-secret lease names its principal (a database role or user, a
+directory entry, a cloud user, a key) with the provider's prefix, the role and a
+suffix that the control plane now derives under the deployment key from the
+tenant, its registration epoch, the provider and the lease. Earlier releases
+ended the name in ten hex digits that anyone holding the lease ID could compute.
+Active leases keep their recorded names: the upgraded build revokes, expires and
+rotates them as before.
+
+Drain before upgrading, with every control-plane replica stopped. A lease or a
+static rotation whose earlier attempt created its principal under the old name
+and then stopped would, on its retry, create the new name and leave the old
+principal behind, and a PostgreSQL static principal never expires on its own.
+
+1. Pause every rotation schedule
+   (`POST /api/v1/secrets/rotation-schedules/{id}/pause`); otherwise they keep
+   queuing static rotations.
+2. Stop the control plane and wait until its pods are gone:
+
+```sh
+kubectl -n trstctl scale deployment/trstctl --replicas=0
+kubectl -n trstctl wait --for=delete pod \
+  -l app.kubernetes.io/instance=trstctl,app.kubernetes.io/component=control-plane \
+  --timeout=10m
+```
+
+3. As a PostgreSQL superuser or a role with `BYPASSRLS`, record what is still
+   pending (the application role sees no rows without a tenant setting; per
+   tenant, run `SET trstctl.tenant_id = '<tenant uuid>'` first):
+
+```sql
+SELECT tenant_id, id, provider, role FROM dynamic_secret_leases WHERE state = 'pending';
+SELECT tenant_id, id, provider, secret_key, phase FROM secret_static_rotation_commands WHERE terminal_at IS NULL;
+```
+
+4. Upgrade (`helm upgrade` below restores the replica count), then resume the
+   schedules (`POST /api/v1/secrets/rotation-schedules/{id}/resume`).
+
+If an ID you recorded was still pending, its retry can leave a principal under
+the old name: `<prefix>_<role>_` followed by the first ten hex digits of SHA-256
+over the ID. It is shaped like the backend's other issued names: the prefix and
+role are lower-cased with each run of other characters as one `_`, joined by the
+backend's separator (`_` or `-`; Kubernetes uses `-` throughout), and cut so the
+whole name fits the backend's length limit; HANA, Oracle and Snowflake store it
+in upper case. Once the retry
+has completed, remove that principal at the target by hand. trstctl does not
+drop it on its own, because a name anyone can compute may belong to another
+lease.
+
+Stopping every replica first also keeps the old and new builds from running side
+by side. The chart's default rolling update (`maxSurge: 1`) overlaps them while
+leadership hands over; an older pod cannot revoke a lease the new build named,
+and it keeps issuing the old names. Upgrade one release at a time.
+
+Rolling back: the preflight's `redeploy_previous_binary` verdict covers database
+migrations only. Once the upgraded build has issued leases, an older build cannot
+revoke them, so do not roll back past this release. If you must:
+
+1. Revoke every lease issued since the upgrade, and wait until each revocation
+   has completed:
+
+```sql
+SELECT tenant_id, id FROM dynamic_secret_leases WHERE state = 'active' AND issued_at >= '<upgrade start>';
+```
+
+2. Record the static credentials minted since the upgrade, which an older build
+   cannot retire (filtering on `updated_at` also catches a rotation queued before
+   the upgrade and staged after it):
+
+```sql
+SELECT tenant_id, id, provider, new_ref FROM secret_static_rotation_commands WHERE updated_at >= '<upgrade start>';
+```
+
+   Only one-user rotations mint such a principal: its name ends in more than ten
+   hex digits after its last separator, which the older build refuses to revoke.
+   The name is `new_ref` for a database user, the part of `new_ref` before `/`
+   for AWS IAM, and, for a key or service account, the name the provider shows
+   for the ID in `new_ref`. After rolling back, the older build's next rotation
+   of that key replaces its credential and then ends `retire_pending`, because it
+   cannot retire the predecessor. Drop that principal at the target by hand only
+   after the rotation has replaced it; never drop a key's current credential.
+   Never drop a two-user rotation account or an account rotated in place (its
+   `new_ref` is `<account>/<command id>`): the older build retires those itself,
+   without dropping them. Static credentials have no expiry of their own, so the
+   minted ones otherwise stay live.
+
 ## Commands: preflight
 
 Render the chart with the exact values file and inspect the agent channel and
@@ -112,8 +199,14 @@ means the rollback below is enough; `restore_backup` means a pending migration i
 destructive, so take a full backup first (the preflight blocks until a verified
 one from the last 26 hours is visible) and roll back by restoring it. See
 [Database migrations & upgrades](../migrations.md#upgrade-runbook).
+The verdict covers database migrations only; for dynamic-secret leases, also
+follow [Dynamic-secret principal names across this upgrade](#dynamic-secret-principal-names-across-this-upgrade).
 
 ## Commands: upgrade
+
+With any dynamic-secret provider configured, drain first as
+[Dynamic-secret principal names across this upgrade](#dynamic-secret-principal-names-across-this-upgrade)
+describes.
 
 ```sh
 helm upgrade trstctl deploy/helm/trstctl \
@@ -184,6 +277,10 @@ left it. That is safe when the preflight's rollback method was
 [A failed upgrade](../migrations.md#a-failed-upgrade)). When it was
 `restore_backup` and the destructive migration ran, restore the pre-upgrade
 backup first ([Restoring](../disaster-recovery.md#restoring)).
+
+An older build cannot revoke the dynamic-secret leases this release issued.
+Before rolling back past it, follow
+[Dynamic-secret principal names across this upgrade](#dynamic-secret-principal-names-across-this-upgrade).
 
 If the rollback itself cannot reach readiness, stop fleet churn first, then use
 the signer or DR runbook depending on the failing dependency:

@@ -73,7 +73,7 @@ func TestServedHostScanReadsTheConfiguredAuthorizedKeysFilesA260L2(t *testing.T)
 		HostKeyFingerprint: lab.fingerprint, PrivateKeyRef: writeServedCredentialFile(t, "a260l2-host-admin-key.pem", string(adminPEM)),
 		AllowedRoles: []string{"host/single"}, RoleBindings: map[string]string{"host/single": "orders-single"}, MaxTTL: "1h", AllowStaticRotation: true}}
 	secret.Wipe(adminPEM)
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), providers, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), providers, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

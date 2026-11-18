@@ -754,6 +754,11 @@ func TestDurableDynamicSecretIssueIsOutboxOnlyAndCrashReplaySafe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// CR-220: the worker passes the lease's registration epoch, which binds the
+	// principal name the provider derives for it.
+	if record.TenantEpoch == "" || requests[0].TenantEpoch != record.TenantEpoch {
+		t.Fatalf("provider request epoch = %q, want the lease's %q", requests[0].TenantEpoch, record.TenantEpoch)
+	}
 	if record.State != store.DynamicSecretLeaseActive || record.IssueOutboxID == 0 || len(record.SealedCredential) == 0 || bytes.Contains(record.SealedCredential, credential) {
 		t.Fatalf("durable issuance result is not active/outbox-linked/ciphertext-only: %+v", record)
 	}

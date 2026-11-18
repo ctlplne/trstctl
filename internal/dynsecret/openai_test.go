@@ -136,17 +136,17 @@ func TestOpenAIServiceAccountKeysRotateInTwoPhases(t *testing.T) {
 	}
 	defer backend.Close()
 
-	if _, _, err := backend.CreateCredential(ctx, GenerateRequest{Role: "openai/orders", LeaseID: "cmd-1", Static: true}); err != nil {
+	if _, _, err := backend.CreateCredential(ctx, GenerateRequest{Role: "openai/orders", LeaseID: "cmd-1", PrincipalSuffix: testPrincipalSuffix("cmd-1"), Static: true}); err != nil {
 		t.Fatal(err)
 	}
-	oldRef, oldKey, err := backend.CreateCredential(ctx, GenerateRequest{Role: "openai/orders", LeaseID: "cmd-1", Static: true})
+	oldRef, oldKey, err := backend.CreateCredential(ctx, GenerateRequest{Role: "openai/orders", LeaseID: "cmd-1", PrincipalSuffix: testPrincipalSuffix("cmd-1"), Static: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if fake.named("trstctl-") != 1 {
 		t.Fatalf("a retried creation left %d service accounts", fake.named("trstctl-"))
 	}
-	newRef, newKey, err := backend.CreateCredential(ctx, GenerateRequest{Role: "openai/orders", LeaseID: "cmd-2", Static: true})
+	newRef, newKey, err := backend.CreateCredential(ctx, GenerateRequest{Role: "openai/orders", LeaseID: "cmd-2", PrincipalSuffix: testPrincipalSuffix("cmd-2"), Static: true})
 	if err != nil {
 		t.Fatal(err)
 	}

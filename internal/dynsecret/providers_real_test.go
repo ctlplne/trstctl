@@ -431,7 +431,7 @@ func TestGCPIAMPreparedUploadIsIdempotentAcrossWorkerRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer backend.Close()
-	req := GenerateRequest{LeaseID: "lease-gcp-stable", Role: "reader", TTL: time.Hour}
+	req := GenerateRequest{LeaseID: "lease-gcp-stable", PrincipalSuffix: testPrincipalSuffix("lease-gcp-stable"), Role: "reader", TTL: time.Hour}
 	prepared, err := PrepareGCPIAMCredential(req)
 	if err != nil {
 		t.Fatal(err)
@@ -454,7 +454,7 @@ func TestGCPIAMPreparedUploadIsIdempotentAcrossWorkerRetry(t *testing.T) {
 
 func TestProviderWorkerRetryReplacesLostAuthorityOnStableIdentity(t *testing.T) {
 	ctx := context.Background()
-	req := GenerateRequest{LeaseID: "lease-retry-stable", Role: "reader", TTL: time.Hour}
+	req := GenerateRequest{LeaseID: "lease-retry-stable", PrincipalSuffix: testPrincipalSuffix("lease-retry-stable"), Role: "reader", TTL: time.Hour}
 
 	t.Run("aws iam", func(t *testing.T) {
 		remote := newAWSIAMServer(t)
@@ -544,13 +544,13 @@ func TestKubernetesTokenRequestIsBoundToLeaseSecretAndAudience(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer backend.Close()
-	if _, _, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "short", TTL: 5 * time.Minute}); err == nil || !strings.Contains(err.Error(), "10 minutes") {
+	if _, _, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "short", PrincipalSuffix: testPrincipalSuffix("short"), TTL: 5 * time.Minute}); err == nil || !strings.Contains(err.Error(), "10 minutes") {
 		t.Fatalf("sub-minimum Kubernetes lease must fail before creating an identity: %v", err)
 	}
 	if remote.count(http.MethodPost, "/api/v1/namespaces/apps/serviceaccounts") != 0 {
 		t.Fatal("short lease created a ServiceAccount")
 	}
-	ref, _, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "bounded", TTL: 10 * time.Minute})
+	ref, _, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "bounded", PrincipalSuffix: testPrincipalSuffix("bounded"), TTL: 10 * time.Minute})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -580,7 +580,7 @@ func TestKubernetesTokenRequestIsBoundToLeaseSecretAndAudience(t *testing.T) {
 }
 
 func TestKubernetesRetryRefusesForeignResourceCollision(t *testing.T) {
-	req := GenerateRequest{Role: "reader", LeaseID: "lease-collision", TTL: 10 * time.Minute}
+	req := GenerateRequest{Role: "reader", LeaseID: "lease-collision", PrincipalSuffix: testPrincipalSuffix("lease-collision"), TTL: 10 * time.Minute}
 	name, err := scopedKubernetesNameForRequest("trstctl", req)
 	if err != nil {
 		t.Fatal(err)
@@ -1341,7 +1341,7 @@ func TestMongoTwoUserRotationSetsPasswordsAndDropsNothing(t *testing.T) {
 	}
 	defer backend.Close()
 	ctx := context.Background()
-	ref, credential, err := backend.CreateCredential(ctx, GenerateRequest{Role: "orders", Static: true, Predecessor: "orders_app_a", LeaseID: "cmd-1"})
+	ref, credential, err := backend.CreateCredential(ctx, GenerateRequest{Role: "orders", Static: true, Predecessor: "orders_app_a", LeaseID: "cmd-1", PrincipalSuffix: testPrincipalSuffix("cmd-1")})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -83,7 +83,10 @@ func (b *AWSHoneyBackend) Create(ctx context.Context, decoyID string) (string, [
 	if decoyID == "" {
 		return "", nil, errors.New("aws honeytoken: decoy ID required")
 	}
-	user, err := scopedNameForRequest(b.query.usernamePrefix, GenerateRequest{LeaseID: decoyID, Role: "honeytoken"}, 64, "_")
+	// A decoy keeps its earlier-release name: the decoy ID is a lease ID, and
+	// the ownership tag (bound to tenant, provider and decoy) is what proves a
+	// colliding user is this decoy's before anything touches it.
+	user, err := LegacyLeasePrincipalName(b.query.usernamePrefix, "honeytoken", decoyID, 64, "_")
 	if err != nil {
 		return "", nil, err
 	}
@@ -289,7 +292,7 @@ func (b *AWSHoneyBackend) Retire(ctx context.Context, ref string) error {
 	if json.Unmarshal([]byte(ref), &item) != nil || item.AccountID != b.accountID || item.OwnerTag != b.ownerTag || item.DecoyID == "" || item.UserName == "" || item.AccessKeyID == "" {
 		return errors.New("aws honeytoken: invalid or foreign decoy reference")
 	}
-	expectedUser, err := scopedNameForRequest(b.query.usernamePrefix, GenerateRequest{LeaseID: item.DecoyID, Role: "honeytoken"}, 64, "_")
+	expectedUser, err := LegacyLeasePrincipalName(b.query.usernamePrefix, "honeytoken", item.DecoyID, 64, "_")
 	if err != nil || item.UserName != expectedUser {
 		return errors.New("aws honeytoken: decoy reference does not match its generated IAM username")
 	}

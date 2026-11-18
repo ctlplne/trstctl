@@ -68,7 +68,7 @@ func TestTailscaleLeaseIsASingleUseTaggedAuthKeyA239(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(b.Close)
-	ref, credential, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "ci", LeaseID: "lease-0001"})
+	ref, credential, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "ci", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")})
 	if err != nil {
 		t.Fatal(err)
 	}

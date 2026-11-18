@@ -63,7 +63,7 @@ func TestAWSSTSLeaseSessionCannotChainRolesN3L3(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	standIn := newAWSSTSChainingStandIn(t, now.Add(time.Hour))
 	backend := standIn.backend(t, AWSSTSConfig{})
-	ref, raw, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "reader", TTL: time.Hour, LeaseID: "lease-n3l3"})
+	ref, raw, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "reader", TTL: time.Hour, LeaseID: "lease-n3l3", PrincipalSuffix: testPrincipalSuffix("lease-n3l3")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestAWSSTSRoleChainingOptInWaitsForAChainedSessionN3L3(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	standIn := newAWSSTSChainingStandIn(t, now.Add(time.Hour))
 	backend := standIn.backend(t, AWSSTSConfig{AllowRoleChaining: true})
-	ref, raw, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "reader", TTL: time.Hour, LeaseID: "lease-n3l3-chain"})
+	ref, raw, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "reader", TTL: time.Hour, LeaseID: "lease-n3l3-chain", PrincipalSuffix: testPrincipalSuffix("lease-n3l3-chain")})
 	if err != nil {
 		t.Fatal(err)
 	}

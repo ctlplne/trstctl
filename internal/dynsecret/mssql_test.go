@@ -63,7 +63,7 @@ func TestMSSQLLoginLeaseStatementsA239(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, credential, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-0001"})
+	user, credential, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestMSSQLContainedUserAndCleanupA239(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-0002"})
+	user, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestMSSQLContainedUserAndCleanupA239(t *testing.T) {
 	// A failed membership removes the new principal again, and the error names
 	// only the SQL Server error number, never the driver's message.
 	exec.calls, exec.failOn = nil, "no_such_role"
-	_, _, err = b.CreateCredential(context.Background(), GenerateRequest{Role: "broken", LeaseID: "lease-0003"})
+	_, _, err = b.CreateCredential(context.Background(), GenerateRequest{Role: "broken", LeaseID: "lease-0003", PrincipalSuffix: testPrincipalSuffix("lease-0003")})
 	if err == nil || !strings.Contains(err.Error(), "SQL Server error 15151") || strings.Contains(err.Error(), "Secret-Statement-Text") {
 		t.Fatalf("failed membership: %v", err)
 	}

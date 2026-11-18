@@ -391,7 +391,7 @@ func TestServedLeaseAccessReadsLocalStackIAMG2(t *testing.T) {
 		AllowInsecureLoopback: true, Region: "us-east-1", AccessKeyID: "test",
 		SecretAccessRef: writeServedCredentialFile(t, "aws-secret", "test"),
 		AllowedRoles:    []string{"publisher"}, RoleBindings: map[string]string{"publisher": roleARN}, MaxTTL: "1h",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

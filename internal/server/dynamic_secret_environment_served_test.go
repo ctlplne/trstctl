@@ -63,7 +63,7 @@ func TestServedDynamicProvidersInRestrictedEnvironmentsA235L2(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &providers); err != nil {
 		t.Fatal(err)
 	}
-	registry, err := dynamicSecretProvidersFromConfig(ctx, providers, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(ctx, providers, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

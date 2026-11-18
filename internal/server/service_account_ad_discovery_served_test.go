@@ -40,7 +40,7 @@ func TestServedADServiceAccountDiscoveryA267(t *testing.T) {
 	st := nativeDesktopOwnedStore(t)
 	before := nativeADDiscoveryPublicSnapshot(t, ctx)
 	cfg := config.DynamicSecretProviderConfig{TenantID: servedTestTenant, ID: "ad-service-discovery", Type: "ldap", DirectoryMode: "active_directory", Addr: "ad263:636", TLSServerName: "ad263", TLSCARef: "file:/run/ad-ca.pem", BindDN: "CN=Administrator,CN=Users,DC=a263,DC=test", PasswordRef: "file:/run/ad-admin-password", UsersDN: "OU=TrstctlA263,DC=a263,DC=test", AllowedRoles: []string{"directory/discovery"}, RoleBindings: map[string]string{"directory/discovery": "CN=a267-discovery-bound,OU=TrstctlA263,DC=a263,DC=test"}, AllowStaticRotation: true, MaxTTL: "1h"} // #nosec G101 -- configuration carries only a protected credential-file reference, never a credential value (CWE-798)
-	providers, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{cfg}, nil, nil, nil)
+	providers, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{cfg}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

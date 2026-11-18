@@ -73,7 +73,7 @@ func TestServedIdPAdminRotationA272(t *testing.T) {
 			t.Fatalf("%s: a misconfigured identity provider was accepted", name)
 		}
 	}
-	registry, err := dynamicSecretProvidersFromConfig(ctx, configs, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(ctx, configs, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

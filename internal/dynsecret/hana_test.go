@@ -56,7 +56,7 @@ func newTestHANA(t *testing.T, fake *fakeHANA) *HANABackend {
 func TestHANALeaseIsAUserGrantedOnlyItsRolesA239(t *testing.T) {
 	fake := &fakeHANA{}
 	b := newTestHANA(t, fake)
-	ref, raw, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-1"})
+	ref, raw, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestHANALeaseIsAUserGrantedOnlyItsRolesA239(t *testing.T) {
 func TestHANAFailedGrantAndRevocationA239(t *testing.T) {
 	fake := &fakeHANA{fail: map[string]error{`'GRANT "'`: errors.New("SQL error 258 - insufficient privilege: Not authorized: CREATE USER \"X\" PASSWORD ...")}}
 	b := newTestHANA(t, fake)
-	_, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-2"})
+	_, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2")})
 	if err == nil || strings.Contains(err.Error(), "PASSWORD") {
 		t.Fatalf("err = %v", err)
 	}

@@ -127,7 +127,7 @@ func TestServedDynamicLeaseRotationOnMySQLAndRedis(t *testing.T) {
 			AllowedRoles:  []string{"redis-reader"},
 			RedisACLRoles: map[string]redisacl.Role{"redis-reader": {KeyPrefixes: []string{"a201:"}, Commands: []string{"get"}}},
 			MaxTTL:        "1h", UsernamePrefix: "a201_redis"},
-	}, nil, nil, nil)
+	}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

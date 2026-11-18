@@ -81,7 +81,7 @@ func TestServedGatewayAWSSTSAccountA263(t *testing.T) {
 	stsProvider := provider
 	stsProvider.ID = "pam-aws-sts-provider"
 	stsProvider.Gateway = &config.DynamicSecretGatewayConfig{Endpoint: endpoint, Service: "sts", Region: "us-east-1"}
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{provider, stsProvider}, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{provider, stsProvider}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

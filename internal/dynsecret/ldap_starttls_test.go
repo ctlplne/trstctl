@@ -29,7 +29,7 @@ func TestLDAPStartTLSConfigurationA239L3(t *testing.T) {
 		t.Fatalf("a StartTLS backend: startTLS %v url %q server name %q", b.startTLS, b.url, b.serverName)
 	}
 	b.dial = newTestLDAPBackend(t, directory).dial
-	_, raw, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "readonly", LeaseID: "lease-starttls"})
+	_, raw, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "readonly", LeaseID: "lease-starttls", PrincipalSuffix: testPrincipalSuffix("lease-starttls")})
 	if err != nil {
 		t.Fatal(err)
 	}

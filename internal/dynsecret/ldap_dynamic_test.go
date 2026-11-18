@@ -74,7 +74,7 @@ func TestLDAPLeaseEntriesExpireInTheDirectoryA239L2(t *testing.T) {
 	ctx := context.Background()
 	directory := &dynamicDirectory{fakeDirectory: newFakeDirectory(), maxTTL: 86400, refreshed: map[string]int64{}}
 	b := newDynamicLDAPBackend(t, directory)
-	ref, raw, err := b.CreateCredential(ctx, GenerateRequest{Role: "readonly", TTL: 15 * time.Minute, LeaseID: "l-1"})
+	ref, raw, err := b.CreateCredential(ctx, GenerateRequest{Role: "readonly", TTL: 15 * time.Minute, LeaseID: "l-1", PrincipalSuffix: testPrincipalSuffix("l-1")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestLDAPLeaseEntriesExpireInTheDirectoryA239L2(t *testing.T) {
 	// A directory that keeps entries for at most 10 minutes would end a
 	// 15-minute lease early: refused, and no entry is left.
 	directory.maxTTL = 600
-	if _, _, err := b.CreateCredential(ctx, GenerateRequest{Role: "readonly", TTL: 15 * time.Minute, LeaseID: "l-2"}); !errors.Is(err, ErrLDAPDynamicTTLShortened) {
+	if _, _, err := b.CreateCredential(ctx, GenerateRequest{Role: "readonly", TTL: 15 * time.Minute, LeaseID: "l-2", PrincipalSuffix: testPrincipalSuffix("l-2")}); !errors.Is(err, ErrLDAPDynamicTTLShortened) {
 		t.Fatalf("a shortened time to live was accepted: %v", err)
 	}
 	if len(directory.entries) != 1 {
@@ -106,7 +106,7 @@ func TestLDAPLeaseEntriesExpireInTheDirectoryA239L2(t *testing.T) {
 	}
 	// A directory without RFC 2589 refuses the refresh: no lease, no entry.
 	directory.maxTTL, directory.refuse = 86400, true
-	if _, _, err := b.CreateCredential(ctx, GenerateRequest{Role: "readonly", TTL: time.Minute, LeaseID: "l-3"}); err == nil || len(directory.entries) != 1 {
+	if _, _, err := b.CreateCredential(ctx, GenerateRequest{Role: "readonly", TTL: time.Minute, LeaseID: "l-3", PrincipalSuffix: testPrincipalSuffix("l-3")}); err == nil || len(directory.entries) != 1 {
 		t.Fatalf("a directory without dynamic entries took the lease: %v, %d entries", err, len(directory.entries))
 	}
 	// Outside the provider's leases nothing is refreshed.

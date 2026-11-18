@@ -5,12 +5,14 @@ package seal
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hkdf"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"slices"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -120,6 +122,39 @@ func (k *LocalKEK) KeyedDigest(domain, material []byte) ([]byte, error) {
 		_, _ = mac.Write(domain)
 		binary.BigEndian.PutUint64(size[:], uint64(len(material))) // #nosec G115 -- slice lengths cannot exceed uint64.
 		_, _ = mac.Write(size[:])
+		_, _ = mac.Write(material)
+		digest = mac.Sum(nil)
+		return nil
+	})
+	return digest, err
+}
+
+// derivedDigestContext separates DerivedDigest's HKDF info from every other
+// derivation from the KEK; the purpose label follows it.
+var derivedDigestContext = []byte("trstctl.seal.derived-digest.v1\x00")
+
+// DerivedDigest computes HMAC-SHA256 over material under a key derived from the
+// KEK for one purpose: HKDF-SHA256 with no salt and the info
+// derivedDigestContext || label, 32 bytes. Each label gets its own key, so a
+// digest made for one purpose never matches one made for another, and neither
+// is made with the wrapping key itself. The derived key never leaves this
+// boundary and is wiped after use. A new scheme takes a new label: changing
+// this derivation changes every digest made under a label (CR-220: dynamic
+// secret principal names are such digests).
+func (k *LocalKEK) DerivedDigest(label, material []byte) ([]byte, error) {
+	if len(label) == 0 {
+		return nil, errors.New("seal: derived digest requires a label")
+	}
+	info := make([]byte, 0, len(derivedDigestContext)+len(label))
+	info = append(append(info, derivedDigestContext...), label...)
+	var digest []byte
+	err := k.key.Use(func(kek []byte) error {
+		derived, err := hkdf.Key(sha256.New, kek, nil, string(info), kekSize)
+		if err != nil {
+			return fmt.Errorf("seal: derive digest key: %w", err)
+		}
+		defer clear(derived)
+		mac := hmac.New(sha256.New, derived)
 		_, _ = mac.Write(material)
 		digest = mac.Sum(nil)
 		return nil

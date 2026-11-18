@@ -284,7 +284,7 @@ func TestNativeADPreparedResetSurvivesEveryWorkerExitA267(t *testing.T) {
 			dn, old := ownedADNativeResetAccount(t, ctx)
 			backend := ownedADCrashBackend(t, dn)
 			defer backend.Close()
-			prepared, e := backend.PrepareStaticCredential(ctx, GenerateRequest{Role: "directory/durable", Static: true, LeaseID: "owned-durable-" + strconv.Itoa(boundary), Predecessor: dn}, strings.Repeat("a", 64))
+			prepared, e := backend.PrepareStaticCredential(ctx, GenerateRequest{Role: "directory/durable", Static: true, LeaseID: "owned-durable-" + strconv.Itoa(boundary), PrincipalSuffix: testPrincipalSuffix("owned-durable-" + strconv.Itoa(boundary)), Predecessor: dn}, strings.Repeat("a", 64))
 			if e != nil {
 				t.Fatal("durable native preparation unavailable", e)
 			}
@@ -383,7 +383,7 @@ func TestNativeADPreparedResetRefusesSerialDriftA267(t *testing.T) {
 	_ = old
 	backend := ownedADCrashBackend(t, dn)
 	defer backend.Close()
-	req := GenerateRequest{Role: "directory/durable", Static: true, LeaseID: "owned-durable-drift", Predecessor: dn}
+	req := GenerateRequest{Role: "directory/durable", Static: true, LeaseID: "owned-durable-drift", PrincipalSuffix: testPrincipalSuffix("owned-durable-drift"), Predecessor: dn}
 	binding := strings.Repeat("a", 64)
 	raw, e := backend.PrepareStaticCredential(ctx, req, binding)
 	if e != nil {

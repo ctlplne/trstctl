@@ -79,7 +79,7 @@ func TestServedLeaseAccessReadsMySQLMongoDBAndRedisG2L2(t *testing.T) {
 			AllowedRoles:  []string{"redis-reader"},
 			RedisACLRoles: map[string]redisacl.Role{"redis-reader": {KeyPrefixes: []string{"g2l2:"}, Commands: []string{"get"}}},
 			MaxTTL:        "1h", UsernamePrefix: "g2l2_redis"},
-	}, nil, nil, nil)
+	}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

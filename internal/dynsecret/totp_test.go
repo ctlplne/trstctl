@@ -28,7 +28,7 @@ func TestTOTPBackendIssuesTheCurrentCodeWithItsExpiryA239(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ref, raw, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "login", LeaseID: "lease-1"})
+		ref, raw, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "login", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")})
 		if err != nil {
 			t.Fatal(err)
 		}

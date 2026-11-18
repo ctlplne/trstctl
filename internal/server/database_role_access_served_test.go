@@ -52,7 +52,7 @@ func TestServedDatabaseLeasesGetTheirRolesAccessClass(t *testing.T) {
 		!strings.Contains(err.Error(), `role "reporting" needs role_access["reporting"]`) {
 		t.Fatalf("a role with no class was accepted: %v", err)
 	}
-	registry, err := dynamicSecretProvidersFromConfig(ctx, providers, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(ctx, providers, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

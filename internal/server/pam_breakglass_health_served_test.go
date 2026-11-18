@@ -59,7 +59,7 @@ func TestServedBreakGlassHealthNeverLocksOutA272(t *testing.T) {
 	if err = config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{DynamicProviders: configs}, true); err != nil {
 		t.Fatalf("the providers as configured: %v", err)
 	}
-	registry, err := dynamicSecretProvidersFromConfig(ctx, configs, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(ctx, configs, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

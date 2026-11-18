@@ -51,7 +51,7 @@ func TestClientSecretRotatorKeepsToItsBoundClientsA240(t *testing.T) {
 	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "portal"}); err == nil || !strings.Contains(err.Error(), "issues no leases") {
 		t.Fatalf("a lease: %v", err)
 	}
-	ref, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "portal", Static: true, LeaseID: "cmd-1"})
+	ref, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "portal", Static: true, LeaseID: "cmd-1", PrincipalSuffix: testPrincipalSuffix("cmd-1")})
 	if err != nil || !strings.HasPrefix(ref, "0oa1b2c3d4e5f6g7h8i9/") {
 		t.Fatalf("a rotation: %q %v", ref, err)
 	}

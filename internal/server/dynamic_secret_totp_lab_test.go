@@ -40,7 +40,7 @@ func TestServedDynamicTOTPLeaseVerifiesWithOathtoolA239(t *testing.T) {
 	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{{
 		TenantID: servedTestTenant, ID: "ops-totp", Type: "totp", SeedRef: writeServedCredentialFile(t, "totp-seed", seed),
 		Digits: 6, Period: "30s", AllowedRoles: []string{"operator"}, MaxTTL: "30s",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

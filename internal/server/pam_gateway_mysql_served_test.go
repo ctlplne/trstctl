@@ -72,7 +72,7 @@ func startPAMMySQLWithVault(t *testing.T, note string, vault bool) (string, stri
 			MaxTTL: "1h", UsernamePrefix: mysqlVaultPrefix, AllowStaticRotation: true,
 		})
 	}
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), providers, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), providers, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

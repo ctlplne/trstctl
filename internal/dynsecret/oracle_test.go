@@ -66,7 +66,7 @@ func newTestOracle(t *testing.T, fake *fakeOracle) *OracleBackend {
 func TestOracleLeaseIsAUserGrantedOnlyItsRoles(t *testing.T) {
 	fake := &fakeOracle{}
 	b := newTestOracle(t, fake)
-	ref, raw, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-1"})
+	ref, raw, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestOracleLeaseIsAUserGrantedOnlyItsRoles(t *testing.T) {
 			t.Fatalf("a value reached the PL/SQL text: %q", call.statement)
 		}
 	}
-	again, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-1"})
+	again, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")})
 	if err != nil || again != ref {
 		t.Fatalf("a retry of the same lease = %q, %v", again, err)
 	}
@@ -105,7 +105,7 @@ func TestOracleLeaseIsAUserGrantedOnlyItsRoles(t *testing.T) {
 func TestOracleFailedGrantDropsTheNewUser(t *testing.T) {
 	fake := &fakeOracle{fail: map[string][]error{"'GRANT '": {nil, &network.OracleError{ErrCode: 1919, ErrMsg: "ORA-01919: role 'AUDIT_READER' does not exist"}}}}
 	b := newTestOracle(t, fake)
-	_, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-2"})
+	_, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2")})
 	if err == nil || !strings.Contains(err.Error(), "ORA-01919") || strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("err = %v", err)
 	}

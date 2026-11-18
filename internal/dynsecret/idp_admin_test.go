@@ -56,7 +56,7 @@ func TestIdPAdminRotationA272(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer b.Close()
-			ref, credential, err := b.CreateCredential(ctx, GenerateRequest{Role: "idp/breakglass", LeaseID: "lease-1", Static: true})
+			ref, credential, err := b.CreateCredential(ctx, GenerateRequest{Role: "idp/breakglass", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1"), Static: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -81,7 +81,7 @@ func TestIdPAdminRotationA272(t *testing.T) {
 				}
 			}
 			tc.idp.DropNextChanges(1)
-			_, next, err := b.CreateCredential(ctx, GenerateRequest{Role: "idp/breakglass", LeaseID: "lease-2", Static: true})
+			_, next, err := b.CreateCredential(ctx, GenerateRequest{Role: "idp/breakglass", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2"), Static: true})
 			if err != nil {
 				t.Fatal(err)
 			}

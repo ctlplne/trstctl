@@ -76,7 +76,7 @@ func TestServedBreakGlassEmergencyCheckoutA272(t *testing.T) {
 	if config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{DynamicProviders: []config.DynamicSecretProviderConfig{dangling, totpCfg}}, true) == nil {
 		t.Fatal("a TOTP reference to no totp provider was accepted")
 	}
-	registry, err := dynamicSecretProvidersFromConfig(ctx, configs, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(ctx, configs, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

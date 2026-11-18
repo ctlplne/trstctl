@@ -184,7 +184,7 @@ func TestSnowflakeLeaseIsAKeyPairServiceUserA239(t *testing.T) {
 	sf, srv := newSnowflakeStandIn(t, adminSPKI)
 	sf.accepted = 1 // the first CREATE USER runs asynchronously
 	b := newLabSnowflake(t, srv, adminKey)
-	req := GenerateRequest{Role: "analyst", LeaseID: "lease-0001"}
+	req := GenerateRequest{Role: "analyst", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
 	user, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -253,7 +253,7 @@ func TestSnowflakeLeaseIsAKeyPairServiceUserA239(t *testing.T) {
 			t.Errorf("dropped %q, a user this provider did not create", foreign)
 		}
 	}
-	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "broken", LeaseID: "lease-0002"}); err == nil || len(sf.keys) != 1 {
+	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "broken", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")}); err == nil || len(sf.keys) != 1 {
 		t.Fatalf("a failed grant: %v, users %d", err, len(sf.keys))
 	}
 }
@@ -294,7 +294,7 @@ func TestSnowflakeConfigA239(t *testing.T) {
 }
 
 func TestIssuedPrincipalNameRequiresTheLeaseSuffixA239(t *testing.T) {
-	for _, req := range []GenerateRequest{{Role: "reader", LeaseID: "lease-1"}, {Role: "Orders App", LeaseID: "lease-2"}, {Role: "x"}} {
+	for _, req := range []GenerateRequest{{Role: "reader", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")}, {Role: "Orders App", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2")}, {Role: "x"}} {
 		for _, prefix := range []string{"", "acme"} {
 			name, err := scopedNameForRequest(prefix, req, 64, "_")
 			if err != nil || !issuedPrincipalName(prefix, name) || !issuedPrincipalName(prefix, strings.ToUpper(name)) {

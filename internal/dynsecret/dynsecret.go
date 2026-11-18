@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +37,17 @@ type GenerateRequest struct {
 	// replaces (empty or "none" for the first). A two-user rotation stages the
 	// other account of the role's pair (A240).
 	Predecessor string
+	// TenantEpoch is the tenant registration epoch the lease or rotation
+	// command belongs to. The control plane binds principal names to it, so a
+	// re-registered tenant UUID never derives an erased registration's names.
+	TenantEpoch string
+	// PrincipalSuffix is the keyed, lease-bound suffix a backend names its
+	// principal with (KeyedPrincipalSuffix: 16 lowercase hex digits). It is
+	// public, part of a name, but nobody can compute or choose it without the
+	// deployment key, so no request can be handed another lease's principal
+	// (CR-220). A request with a LeaseID must carry one: name builders refuse
+	// a lease without it.
+	PrincipalSuffix string
 }
 
 // StaticRotationProvider is the optional contract a provider implements when
@@ -301,7 +313,9 @@ func (e *Engine) Issue(ctx context.Context, provider, role string, ttl time.Dura
 
 	idb, _ := crypto.RandomBytes(12)
 	leaseID := "lease-" + hex.EncodeToString(idb)
-	cred, err := p.Generate(ctx, GenerateRequest{Role: role, TTL: ttl, LeaseID: leaseID})
+	// The library engine's lease IDs are random, so a suffix drawn from the
+	// same randomness is as unguessable as the control plane's keyed one.
+	cred, err := p.Generate(ctx, GenerateRequest{Role: role, TTL: ttl, LeaseID: leaseID, PrincipalSuffix: crypto.SHA256Hex(idb)[:keyedPrincipalSuffixDigits]})
 	if err != nil {
 		return Lease{}, nil, fmt.Errorf("dynsecret: generate: %w", err)
 	}
@@ -490,7 +504,7 @@ func Conform(p Provider) error {
 	if p == nil || p.Name() == "" {
 		return fmt.Errorf("dynsecret: provider has no name")
 	}
-	cred, err := p.Generate(ctx, GenerateRequest{Role: "conformance", TTL: time.Minute, LeaseID: "l1"})
+	cred, err := p.Generate(ctx, GenerateRequest{Role: "conformance", TTL: time.Minute, LeaseID: "l1", PrincipalSuffix: strings.Repeat("a", keyedPrincipalSuffixDigits)})
 	if err != nil {
 		return fmt.Errorf("dynsecret: %s generate: %w", p.Name(), err)
 	}
@@ -502,7 +516,7 @@ func Conform(p Provider) error {
 	}
 	// Interrupted lease: a credential generated but whose revoke is replayed after a
 	// crash must still revoke, and a double-revoke must be safe (idempotent).
-	cred2, err := p.Generate(ctx, GenerateRequest{Role: "conformance", TTL: time.Minute, LeaseID: "l2"})
+	cred2, err := p.Generate(ctx, GenerateRequest{Role: "conformance", TTL: time.Minute, LeaseID: "l2", PrincipalSuffix: strings.Repeat("b", keyedPrincipalSuffixDigits)})
 	if err != nil {
 		return fmt.Errorf("dynsecret: %s second generate: %w", p.Name(), err)
 	}

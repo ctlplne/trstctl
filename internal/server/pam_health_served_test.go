@@ -66,7 +66,7 @@ func TestServedCredentialHealthNeverLocksOutA258(t *testing.T) {
 		TenantID: servedTestTenant, ID: "a258-mysql", Type: "mysql", AdminDSNRef: dsnRef,
 		Database: "app", Addr: addr, AccountHost: "%", AllowWildcardAccountHost: true,
 		AllowedRoles: []string{"reader"}, MaxTTL: "1h", UsernamePrefix: "a258",
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -158,7 +158,7 @@ func testServedADStaticRotationRollbackA267(t *testing.T, importedUnicode bool) 
 	}
 	const account = "CN=a267-served,OU=TrstctlA263,DC=a263,DC=test"
 	cfg := config.DynamicSecretProviderConfig{TenantID: servedTestTenant, ID: "a267-directory", Type: "ldap", DirectoryMode: "active_directory", Addr: "ad263:636", TLSServerName: "ad263", TLSCARef: "file:/run/ad-ca.pem", BindDN: "CN=Administrator,CN=Users,DC=a263,DC=test", PasswordRef: "file:" + path, UsersDN: "OU=TrstctlA263,DC=a263,DC=test", AllowedRoles: []string{"directory/dependents"}, RoleBindings: map[string]string{"directory/dependents": account}, AllowStaticRotation: true, MaxTTL: "1h"}
-	providers, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{cfg}, nil, nil, nil)
+	providers, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{cfg}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

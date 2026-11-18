@@ -94,7 +94,7 @@ func newLabElasticsearch(t *testing.T, srv *httptest.Server) *ElasticsearchBacke
 func TestElasticsearchLeaseIsAnAPIKeyWithTheRoleIndexGrantA239(t *testing.T) {
 	lab, srv := newElasticsearchLab(t)
 	b := newLabElasticsearch(t, srv)
-	req := GenerateRequest{Role: "reader", TTL: 10 * time.Minute, LeaseID: "lease-0001"}
+	req := GenerateRequest{Role: "reader", TTL: 10 * time.Minute, LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
 	ref, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -142,7 +142,7 @@ func TestElasticsearchFailureNamesOnlyTheErrorTypeA239(t *testing.T) {
 	lab, srv := newElasticsearchLab(t)
 	lab.createErr = true
 	b := newLabElasticsearch(t, srv)
-	_, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-0002"})
+	_, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")})
 	if err == nil || !strings.Contains(err.Error(), "HTTP 403 (security_exception)") || strings.Contains(err.Error(), "secret details") {
 		t.Fatalf("error %v", err)
 	}

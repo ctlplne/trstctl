@@ -71,7 +71,7 @@ func startPAMClickHouse(t *testing.T, note string) (pamClickHouse, DynamicSecret
 		PasswordRef:  writeServedCredentialFile(t, "clickhouse-admin-password", "a256-admin"),
 		AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "notes_reader"},
 		MaxTTL: "1h", UsernamePrefix: "a256_ch", AllowInsecureLoopback: true,
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

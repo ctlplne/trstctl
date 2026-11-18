@@ -48,7 +48,7 @@ func TestServedDynamicHANAUserAgainstHANAExpressA239(t *testing.T) {
 	if err := config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{DynamicProviders: configs}, true); err != nil {
 		t.Fatalf("the provider as configured: %v", err)
 	}
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), configs, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), configs, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func hanaLabDirectRoundTrip(t *testing.T, adminDSN string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref, credential, err := backend.CreateCredential(ctx, dynsecret.GenerateRequest{Role: "reader", LeaseID: "a239-hana-direct-round-trip"})
+	ref, credential, err := backend.CreateCredential(ctx, dynsecret.GenerateRequest{Role: "reader", LeaseID: "a239-hana-direct-round-trip", PrincipalSuffix: serverTestPrincipalSuffix("a239-hana-direct-round-trip")})
 	if err != nil {
 		hanaLabProbeSQLScript(ctx, t, db)
 		t.Fatalf("the provider, called directly: %v", err)

@@ -542,7 +542,9 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 			Error: "AWS STS minimum 15-minute native validity window elapsed before issuance",
 		})
 	}
-	request := dynsecret.GenerateRequest{Role: command.Role, TTL: nativeTTL, LeaseID: command.ID}
+	// The registration epoch binds the lease's principal name to this
+	// registration of the tenant (CR-220).
+	request := dynsecret.GenerateRequest{Role: command.Role, TTL: nativeTTL, LeaseID: command.ID, TenantEpoch: command.TenantEpoch}
 	credential, err := d.generateDynamicSecretCredential(ctx, m, command, record, provider, request)
 	if err != nil {
 		return err

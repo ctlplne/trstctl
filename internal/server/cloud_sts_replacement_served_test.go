@@ -46,7 +46,7 @@ func TestServedCloudReplacementSTSIdentityProofA264(t *testing.T) {
 	}
 	wrong := cfg
 	wrong.RoleBindings = map[string]string{"reader": "arn:aws:iam::000000000000:role/not-the-approved-role"}
-	other, err := dynamicSecretProvidersFromConfig(t.Context(), []config.DynamicSecretProviderConfig{wrong}, nil, nil, nil)
+	other, err := dynamicSecretProvidersFromConfig(t.Context(), []config.DynamicSecretProviderConfig{wrong}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func nativeReplacementProviderA264(t *testing.T, endpoint, path, alias string) (
 		t.Fatal("private test authority files could not be written")
 	}
 	cfg := config.DynamicSecretProviderConfig{TenantID: servedTestTenant, ID: "replacement-sts", Type: "aws-sts", Endpoint: endpoint, IAMEndpoint: endpoint, Region: "us-east-1", AccessKeyID: bootstrap.Credentials.AccessKeyID, SecretAccessRef: "file:" + keyPath, SessionTokenRef: "file:" + tokenPath, AllowedRoles: []string{alias}, RoleBindings: map[string]string{alias: "arn:aws:iam::000000000000:role/a264-replacement553"}, MaxTTL: "20m", AllowInsecureLoopback: true}
-	registry, err := dynamicSecretProvidersFromConfig(t.Context(), []config.DynamicSecretProviderConfig{cfg}, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(t.Context(), []config.DynamicSecretProviderConfig{cfg}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

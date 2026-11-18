@@ -36,7 +36,7 @@ func TestPostgresDecoyDSNNamesTheDecoyDatabaseAndNothingSaysDecoy(t *testing.T) 
 			}
 		})
 	}
-	req := GenerateRequest{Role: DecoyRole, LeaseID: "lease-1"}
+	req := GenerateRequest{Role: DecoyRole, LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")}
 	named := req
 	named.Role = decoyLoginFragment
 	user, err := scopedNameForRequest("trstctl", named, decoyLoginNameMaximum, "_")

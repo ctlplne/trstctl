@@ -43,7 +43,7 @@ func TestServedSSHCertificateLeaseVerifiesAndIsRevokedOnTheKRLA239L11(t *testing
 	if err := config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{DynamicProviders: configs}, true); err != nil {
 		t.Fatalf("the provider as configured: %v", err)
 	}
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), configs, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), configs, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -117,7 +117,7 @@ func newTestLDAPBackend(t *testing.T, directory *fakeDirectory) *LDAPBackend {
 func TestLDAPBackendCreatesAndRevokesALeasedEntryA239(t *testing.T) {
 	directory := newFakeDirectory()
 	b := newTestLDAPBackend(t, directory)
-	ref, raw, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "readonly", LeaseID: "lease-1"})
+	ref, raw, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "readonly", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,12 +166,12 @@ func TestLDAPBackendCreatesAndRevokesALeasedEntryA239(t *testing.T) {
 func TestLDAPBackendConvergesOnOneEntryAfterARetryA239(t *testing.T) {
 	directory := newFakeDirectory()
 	b := newTestLDAPBackend(t, directory)
-	first, _, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "readwrite", LeaseID: "lease-2"})
+	first, _, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "readwrite", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	firstPassword := directory.passwords[first]
-	second, _, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "readwrite", LeaseID: "lease-2"})
+	second, _, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "readwrite", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,13 +179,13 @@ func TestLDAPBackendConvergesOnOneEntryAfterARetryA239(t *testing.T) {
 		t.Fatalf("a retry made %d entries (%q, %q)", len(directory.entries), first, second)
 	}
 	directory.failPW = true
-	if _, _, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "readonly", LeaseID: "lease-3"}); err == nil {
+	if _, _, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "readonly", LeaseID: "lease-3", PrincipalSuffix: testPrincipalSuffix("lease-3")}); err == nil {
 		t.Fatal("an issue whose password could not be set succeeded")
 	}
 	if len(directory.entries) != 1 {
 		t.Fatalf("a failed issue left %d entries", len(directory.entries))
 	}
-	if _, _, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "admin", LeaseID: "lease-4"}); err == nil {
+	if _, _, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "admin", LeaseID: "lease-4", PrincipalSuffix: testPrincipalSuffix("lease-4")}); err == nil {
 		t.Fatal("a role with no group was issued")
 	}
 	if _, _, err := b.CreateCredential(t.Context(), GenerateRequest{Role: "readonly", Static: true}); err == nil {

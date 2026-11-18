@@ -110,7 +110,7 @@ func newLabRabbitMQ(t *testing.T, srv *httptest.Server) *RabbitMQBackend {
 func TestRabbitMQLeaseIsAUserWithItsVHostPermissionsA239(t *testing.T) {
 	lab, srv := newRabbitMQLab(t)
 	b := newLabRabbitMQ(t, srv)
-	req := GenerateRequest{Role: "reader", LeaseID: "lease-0001"}
+	req := GenerateRequest{Role: "reader", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
 	user, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +153,7 @@ func TestRabbitMQFailedPermissionsDeleteTheUserA239(t *testing.T) {
 	lab, srv := newRabbitMQLab(t)
 	lab.failPerms = true
 	b := newLabRabbitMQ(t, srv)
-	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "writer", LeaseID: "lease-0002"}); err == nil {
+	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "writer", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")}); err == nil {
 		t.Fatal("failed permissions issued a credential")
 	}
 	if len(lab.users) != 0 {
@@ -182,7 +182,7 @@ func TestRabbitMQRevokeListsOnlyTheUsersConnectionsA239L9(t *testing.T) {
 		lab, srv := newRabbitMQLab(t)
 		lab.noPerUser = !perUser
 		b := newLabRabbitMQ(t, srv)
-		user, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-l9"})
+		user, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-l9", PrincipalSuffix: testPrincipalSuffix("lease-l9")})
 		if err != nil {
 			t.Fatal(err)
 		}

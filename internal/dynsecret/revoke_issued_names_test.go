@@ -21,7 +21,7 @@ import (
 func TestBackendsRefuseToDeleteWhatTheyDidNotIssue(t *testing.T) {
 	ctx := context.Background()
 	const foreign = "orders_app"
-	issued, err := scopedNameForRequest("trstctl", GenerateRequest{Role: "reader", LeaseID: "lease-1"}, 63, "_")
+	issued, err := scopedNameForRequest("trstctl", GenerateRequest{Role: "reader", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")}, 63, "_")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -56,7 +56,7 @@ func TestServedESXiRotationA271(t *testing.T) {
 			t.Fatalf("%s: a misconfigured host provider was accepted", name)
 		}
 	}
-	registry, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{cfg}, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{cfg}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

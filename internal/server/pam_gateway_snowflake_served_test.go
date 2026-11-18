@@ -56,7 +56,7 @@ func TestServedGatewaySnowflakeSQLAPISessionsA263(t *testing.T) {
 		t.Fatal(err)
 	}
 	secret.Wipe(adminPEM)
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{{TenantID: servedTestTenant, ID: "pam-snowflake-provider", Type: "snowflake", Endpoint: stand.URL, Account: "served-lab", AdminUser: "TRSTCTL_ADMIN", PrivateKeyRef: "file:" + adminFile, AllowedRoles: []string{"analyst"}, RoleBindings: map[string]string{"analyst": "ANALYST"}, MaxTTL: "1h", UsernamePrefix: "A263_SF", AllowInsecureLoopback: true}}, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{{TenantID: servedTestTenant, ID: "pam-snowflake-provider", Type: "snowflake", Endpoint: stand.URL, Account: "served-lab", AdminUser: "TRSTCTL_ADMIN", PrivateKeyRef: "file:" + adminFile, AllowedRoles: []string{"analyst"}, RoleBindings: map[string]string{"analyst": "ANALYST"}, MaxTTL: "1h", UsernamePrefix: "A263_SF", AllowInsecureLoopback: true}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

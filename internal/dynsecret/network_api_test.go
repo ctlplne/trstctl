@@ -63,7 +63,7 @@ func TestNetworkAPIRotationA270(t *testing.T) {
 				t.Fatal("a role bound to the administrator was accepted")
 			}
 			saves := d.Saves()
-			ref, credential, err := b.CreateCredential(ctx, GenerateRequest{Role: "net/ops", LeaseID: "lease-1", Static: true})
+			ref, credential, err := b.CreateCredential(ctx, GenerateRequest{Role: "net/ops", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1"), Static: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -84,7 +84,7 @@ func TestNetworkAPIRotationA270(t *testing.T) {
 				t.Fatal("the old password still signs in")
 			}
 			d.DropNextChanges(1)
-			_, next, err := b.CreateCredential(ctx, GenerateRequest{Role: "net/ops", LeaseID: "lease-2", Static: true})
+			_, next, err := b.CreateCredential(ctx, GenerateRequest{Role: "net/ops", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2"), Static: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -99,7 +99,7 @@ func TestNetworkAPIRotationA270(t *testing.T) {
 				if err = b.RestoreStaticCredential(ctx, "net/ops", ref, spaced); err == nil || !d.SignsIn("ops", issued.Password) {
 					t.Fatal("a predecessor the command line cannot take reached the device")
 				}
-				_, enable, err := b.CreateCredential(ctx, GenerateRequest{Role: "net/enable", LeaseID: "lease-3", Static: true})
+				_, enable, err := b.CreateCredential(ctx, GenerateRequest{Role: "net/enable", LeaseID: "lease-3", PrincipalSuffix: testPrincipalSuffix("lease-3"), Static: true})
 				if err != nil {
 					t.Fatal(err)
 				}

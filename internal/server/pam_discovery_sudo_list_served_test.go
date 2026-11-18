@@ -69,7 +69,7 @@ func TestServedPrivilegedDiscoveryListsSudoRightsA260L3(t *testing.T) {
 		AllowStaticRotation: true,
 	}}
 	secret.Wipe(adminPEM)
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), providers, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), providers, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

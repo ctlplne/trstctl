@@ -554,6 +554,11 @@ func (p *configuredDynamicProvider) generate(ctx context.Context, req dynsecret.
 	case req.TTL <= 0 || req.TTL > p.maxTTL:
 		return dynsecret.Credential{}, p.beforeDynamicReceiver(fmt.Errorf("dynamic-secret provider %q TTL must be between 1s and %s", p.id, p.maxTTL))
 	}
+	named, err := p.principalNamedRequest(req)
+	if err != nil {
+		return dynsecret.Credential{}, p.beforeDynamicReceiver(err)
+	}
+	req = named
 	backend, closeBackend, err := p.openBackend(ctx)
 	if err != nil {
 		return dynsecret.Credential{}, p.beforeDynamicReceiver(err)
@@ -578,6 +583,43 @@ func (p *configuredDynamicProvider) generate(ctx context.Context, req dynsecret.
 		Secret:     value,
 		Metadata:   map[string]string{"role": req.Role, "provider_type": p.cfg.Type},
 	}, nil
+}
+
+// principalNameDigest is the deployment key's purpose-bound digest
+// (seal.LocalKEK.DerivedDigest), which names dynamic-secret principals.
+type principalNameDigest interface {
+	DerivedDigest(label, material []byte) ([]byte, error)
+}
+
+// principalNamedRequest gives a lease or rotation request its keyed principal
+// suffix before any backend sees it (CR-220). Every caller that passes an ID a
+// client can influence also passes the tenant registration epoch, and only
+// this funnel derives the suffix, from this provider's tenant and ID, the epoch
+// and the lease, under the deployment key: a backend therefore only ever names
+// a principal that this exact lease derived. Fail closed: no key that can
+// derive it, or a suffix set by anyone else, refuses the request. A request
+// with a lease but no epoch (the break-glass TOTP code) names no principal and
+// gets no suffix; a backend that needs one then refuses it.
+func (p *configuredDynamicProvider) principalNamedRequest(req dynsecret.GenerateRequest) (dynsecret.GenerateRequest, error) {
+	if req.LeaseID == "" || req.TenantEpoch == "" {
+		if req.PrincipalSuffix != "" {
+			return req, fmt.Errorf("dynamic-secret provider %q refuses a principal suffix it cannot check against a lease and registration epoch", p.id)
+		}
+		return req, nil
+	}
+	digest, ok := p.credentials.kek.(principalNameDigest)
+	if p.credentials.kek == nil || !ok {
+		return req, fmt.Errorf("dynamic-secret provider %q cannot name a principal: the deployment key's derived digest is unavailable", p.id)
+	}
+	suffix, err := dynsecret.KeyedPrincipalSuffix(digest.DerivedDigest, p.tenantID, req.TenantEpoch, p.id, req.LeaseID)
+	if err != nil {
+		return req, err
+	}
+	if req.PrincipalSuffix != "" && req.PrincipalSuffix != suffix {
+		return req, fmt.Errorf("dynamic-secret provider %q refuses a principal suffix that does not belong to this lease", p.id)
+	}
+	req.PrincipalSuffix = suffix
+	return req, nil
 }
 
 func (p *configuredDynamicProvider) beforeDynamicReceiver(err error) error {

@@ -104,7 +104,7 @@ func startKindPAMCluster(t *testing.T, prefix string) kindPAMCluster {
 		AllowPrivate:       true, PrivateEgressCIDRs: []string{"127.0.0.0/8"},
 		AllowedRoles: []string{"operator"}, RoleBindings: map[string]string{"operator": "ClusterRole/edit"}, MaxTTL: "1h",
 		UsernamePrefix: prefix,
-	}}, nil, nil, nil)
+	}}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

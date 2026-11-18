@@ -38,7 +38,7 @@ func TestServedADPreparedResponseLossA267(t *testing.T) {
 	}
 	const account = "CN=a267-prepared,OU=TrstctlA263,DC=a263,DC=test"
 	cfg := config.DynamicSecretProviderConfig{TenantID: servedTestTenant, ID: "a267-prepared-directory", Type: "ldap", DirectoryMode: "active_directory", Addr: "ad263:636", TLSServerName: "ad263", TLSCARef: "file:/run/ad-ca.pem", BindDN: "CN=Administrator,CN=Users,DC=a263,DC=test", PasswordRef: "file:" + path, UsersDN: "OU=TrstctlA263,DC=a263,DC=test", AllowedRoles: []string{"directory/prepared"}, RoleBindings: map[string]string{"directory/prepared": account}, AllowStaticRotation: true, MaxTTL: "1h"}
-	providers, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{cfg}, nil, nil, nil)
+	providers, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{cfg}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestServedADPreparedResponseLossA267(t *testing.T) {
 	}
 	changedCfg := cfg
 	changedCfg.Addr = "127.0.0.1:1"
-	changed, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{changedCfg}, nil, nil, nil)
+	changed, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{changedCfg}, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

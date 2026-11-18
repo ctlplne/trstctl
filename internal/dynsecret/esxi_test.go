@@ -40,7 +40,7 @@ func TestESXiRotationA271(t *testing.T) {
 			t.Fatalf("binding %s was accepted", name)
 		}
 	}
-	ref, credential, err := b.CreateCredential(ctx, GenerateRequest{Role: "esxi/ops", LeaseID: "lease-1", Static: true})
+	ref, credential, err := b.CreateCredential(ctx, GenerateRequest{Role: "esxi/ops", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1"), Static: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestESXiRotationA271(t *testing.T) {
 		t.Fatal("the account did not move to the new password alone:", err)
 	}
 	host.DropNextChanges(1)
-	_, next, err := b.CreateCredential(ctx, GenerateRequest{Role: "esxi/ops", LeaseID: "lease-2", Static: true})
+	_, next, err := b.CreateCredential(ctx, GenerateRequest{Role: "esxi/ops", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2"), Static: true})
 	if err != nil {
 		t.Fatal(err)
 	}

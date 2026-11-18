@@ -92,7 +92,7 @@ func TestMongoDBAtlasLeaseIsADatabaseUserAtlasDeletesA239(t *testing.T) {
 	now := time.Date(2026, 11, 2, 15, 0, 0, 0, time.UTC)
 	lab, srv := newAtlasStandIn(t)
 	b := newLabAtlas(t, srv, now)
-	req := GenerateRequest{Role: "reader", LeaseID: "lease-0001"}
+	req := GenerateRequest{Role: "reader", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001")}
 	user, credential, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)

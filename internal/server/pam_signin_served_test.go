@@ -121,7 +121,7 @@ func TestServedBypassDetectionOnALinuxHostA274(t *testing.T) {
 	if err := config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{DynamicProviders: providers}, true); err != nil {
 		t.Fatalf("the provider as configured: %v", err)
 	}
-	registry, err := dynamicSecretProvidersFromConfig(ctx, providers, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(ctx, providers, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,7 +526,7 @@ func TestServedBypassDetectionOnMySQLA274(t *testing.T) {
 	if err := config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{DynamicProviders: providers}, true); err != nil {
 		t.Fatalf("the provider as configured: %v", err)
 	}
-	registry, err := dynamicSecretProvidersFromConfig(ctx, providers, nil, nil, nil)
+	registry, err := dynamicSecretProvidersFromConfig(ctx, providers, nil, serverTestPrincipalKEK(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

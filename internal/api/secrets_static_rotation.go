@@ -422,7 +422,7 @@ func (a *API) FailStaticSecretRotation(ctx context.Context, tenantID, commandID 
 // and the staged event replaces the same principal instead of leaking one. A
 // two-user role stages the account its predecessor does not name instead.
 func (a *API) stageStaticRotation(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider) error {
-	cred, err := provider.Generate(ctx, dynsecret.GenerateRequest{Role: cmd.Key, LeaseID: cmd.ID, Static: true, Predecessor: cmd.OldRef})
+	cred, err := provider.Generate(ctx, dynsecret.GenerateRequest{Role: cmd.Key, LeaseID: cmd.ID, Static: true, Predecessor: cmd.OldRef, TenantEpoch: cmd.TenantEpoch})
 	if err != nil {
 		return fmt.Errorf("api: static rotation stage: %w", err)
 	}

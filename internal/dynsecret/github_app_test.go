@@ -124,7 +124,7 @@ func TestGitHubAppLeaseIsANarrowedInstallationTokenA239(t *testing.T) {
 	keyPEM, jwks := githubAppTestKey(t)
 	gh, srv := newGitHubAppStandIn(t, jwks, now)
 	b := newLabGitHubApp(t, srv, keyPEM, &now)
-	ref, credential, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "ci", LeaseID: "lease-0001", TTL: 30 * time.Minute})
+	ref, credential, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "ci", LeaseID: "lease-0001", PrincipalSuffix: testPrincipalSuffix("lease-0001"), TTL: 30 * time.Minute})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,17 +167,17 @@ func TestGitHubAppRefusesABroaderTokenA239(t *testing.T) {
 	gh, srv := newGitHubAppStandIn(t, jwks, now)
 	gh.extra = map[string]string{"administration": "write"}
 	b := newLabGitHubApp(t, srv, keyPEM, &now)
-	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "ci", LeaseID: "lease-0002"}); err == nil ||
+	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "ci", LeaseID: "lease-0002", PrincipalSuffix: testPrincipalSuffix("lease-0002")}); err == nil ||
 		!strings.Contains(err.Error(), "administration:write beyond the role") || len(gh.tokens) != 0 {
 		t.Fatalf("a broader token: %v, live tokens %d", err, len(gh.tokens))
 	}
 	gh.extra = nil
-	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "ci", LeaseID: "lease-0003", TTL: 2 * time.Hour}); err == nil || len(gh.tokens) != 0 {
+	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "ci", LeaseID: "lease-0003", PrincipalSuffix: testPrincipalSuffix("lease-0003"), TTL: 2 * time.Hour}); err == nil || len(gh.tokens) != 0 {
 		t.Fatalf("a lease longer than the token: %v, live tokens %d", err, len(gh.tokens))
 	}
 	other, _ := githubAppTestKey(t)
 	wrongKey := newLabGitHubApp(t, srv, other, &now)
-	if _, _, err := wrongKey.CreateCredential(context.Background(), GenerateRequest{Role: "ci", LeaseID: "lease-0004"}); err == nil {
+	if _, _, err := wrongKey.CreateCredential(context.Background(), GenerateRequest{Role: "ci", LeaseID: "lease-0004", PrincipalSuffix: testPrincipalSuffix("lease-0004")}); err == nil {
 		t.Fatal("GitHub accepted a JWT signed with another key")
 	}
 }

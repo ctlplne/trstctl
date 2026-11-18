@@ -104,7 +104,7 @@ func TestWindowsLocalAccountsLabA240(t *testing.T) {
 	// predecessor, only the successor logs in.
 	live := credential{Username: "orders_app_a", Password: string(initialPassword)}
 	for cycle, next := range []string{"orders_app_b", "orders_app_a"} {
-		ref, raw, err := b.CreateCredential(ctx, GenerateRequest{Role: "orders", Static: true, LeaseID: "a240-windows-" + next, Predecessor: live.Username})
+		ref, raw, err := b.CreateCredential(ctx, GenerateRequest{Role: "orders", Static: true, LeaseID: "a240-windows-" + next, PrincipalSuffix: testPrincipalSuffix("a240-windows-" + next), Predecessor: live.Username})
 		if err != nil {
 			t.Fatalf("cycle %d stage: %v", cycle+1, err)
 		}
@@ -128,7 +128,7 @@ func TestWindowsLocalAccountsLabA240(t *testing.T) {
 	}
 
 	// The single account changes in place: the old password stops at once.
-	_, raw, err := b.CreateCredential(ctx, GenerateRequest{Role: "single", Static: true, LeaseID: "a240-windows-single"})
+	_, raw, err := b.CreateCredential(ctx, GenerateRequest{Role: "single", Static: true, LeaseID: "a240-windows-single", PrincipalSuffix: testPrincipalSuffix("a240-windows-single")})
 	if err != nil {
 		t.Fatalf("single: %v", err)
 	}

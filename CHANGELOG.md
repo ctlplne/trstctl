@@ -3741,6 +3741,23 @@
 
 ### Security
 
+- No caller can make a dynamic-secret lease receive or destroy another lease's principal (CR-220). A
+  lease's principal (a database role or user, a directory entry, a cloud user, a key's name) ended
+  in an unkeyed digest of its lease ID, and the lease ID derives from the caller's Idempotency-Key,
+  so two leases could be given one name, across tenants or within one, when their providers used the
+  same prefix on the same server, and a caller could arrange it. The second issue then replaced the
+  first lease's principal (on PostgreSQL, dropping what it owned) and handed it to the second
+  caller. Names now end in a suffix the control plane derives under the deployment key from the
+  tenant, its registration epoch, the provider and the lease, and every backend that names a
+  principal after its lease refuses a lease without it (AWS decoys keep their earlier names, guarded
+  by their ownership tag, and Elasticsearch keys keep their own 96-bit digest of the lease and
+  role). A retry still reaches its own principal, and leases issued before the upgrade keep their
+  names and still revoke. Drain before upgrading, as the upgrade runbook's dynamic-secret section
+  describes: stop every control-plane replica and record the pending lease and static-rotation IDs,
+  since a pending ID's retry can leave a principal under its old name, which you remove by hand. An
+  older build cannot revoke the new names, so revoke them before rolling back past this release. The
+  static-rotation `old_ref` check is still not bound to a tenant on a shared server (CR-231).
+
 - CI runs the A267, A268 and A238 Windows-native proofs and the MSI install and service lifecycle on
   every run, so one red proof no longer hides the ones after it (CR-150). The A267 lab script stopped
   at its first failing stage, the A268 local administrator proofs (with the A238 file-DACL and

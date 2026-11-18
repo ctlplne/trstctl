@@ -74,7 +74,7 @@ func fakeHostedBackend(t *testing.T) (*HostedKeyBackend, *fakeVendor) {
 // mint first deletes the earlier attempt's key: one key per lease, not two.
 func TestHostedKeyRetryReplacesTheEarlierAttemptsKeyA240(t *testing.T) {
 	b, vendor := fakeHostedBackend(t)
-	req := GenerateRequest{Role: "inference", LeaseID: "lease-1"}
+	req := GenerateRequest{Role: "inference", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")}
 	first, _, err := b.CreateCredential(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +95,7 @@ func TestHostedKeyRetryReplacesTheEarlierAttemptsKeyA240(t *testing.T) {
 // a key already gone counts as revoked.
 func TestHostedKeyRevokeDeletesOnlyIssuedKeysA240(t *testing.T) {
 	b, vendor := fakeHostedBackend(t)
-	ref, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "batch", LeaseID: "lease-2"})
+	ref, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "batch", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2")})
 	if err != nil {
 		t.Fatal(err)
 	}

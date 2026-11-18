@@ -67,7 +67,7 @@ var cassandraHashedPassword = regexp.MustCompile(`HASHED PASSWORD = '(\$2a\$10\$
 func TestCassandraLeaseIsAHashedLoginRoleWithOnlyItsRoles(t *testing.T) {
 	fake := &fakeCassandra{}
 	b := newTestCassandra(t, fake)
-	ref, raw, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-1"})
+	ref, raw, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestCassandraLeaseIsAHashedLoginRoleWithOnlyItsRoles(t *testing.T) {
 	// The retry of an uncertain issue meets the grant it already made.
 	retry := &fakeCassandra{fail: map[string]error{"GRANT": cassandraRequestError{code: gocql.ErrCodeInvalid, message: ref + " is a member of orders_reader"}}}
 	b.connect = func(context.Context) (cassandraAdmin, error) { return retry, nil }
-	again, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-1"})
+	again, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-1", PrincipalSuffix: testPrincipalSuffix("lease-1")})
 	if err != nil || again != ref {
 		t.Fatalf("retry = %q, %v", again, err)
 	}
@@ -117,7 +117,7 @@ func TestCassandraFailedGrantDropsTheNewRole(t *testing.T) {
 	fake := &fakeCassandra{fail: map[string]error{`GRANT "audit_reader"`: cassandraRequestError{code: gocql.ErrCodeUnauthorized,
 		message: "User lab_admin has no AUTHORIZE permission on <role audit_reader> HASHED PASSWORD = '$2a$10$...'"}}}
 	b := newTestCassandra(t, fake)
-	_, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-2"})
+	_, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-2", PrincipalSuffix: testPrincipalSuffix("lease-2")})
 	if err == nil || !strings.Contains(err.Error(), "Cassandra error 0x2100") || strings.Contains(err.Error(), "HASHED") {
 		t.Fatalf("err = %v", err)
 	}
@@ -131,7 +131,7 @@ func TestCassandraFailedGrantDropsTheNewRole(t *testing.T) {
 func TestCassandraRevokeDropsOnlyIssuedRoles(t *testing.T) {
 	fake := &fakeCassandra{}
 	b := newTestCassandra(t, fake)
-	ref, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-3"})
+	ref, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "lease-3", PrincipalSuffix: testPrincipalSuffix("lease-3")})
 	if err != nil {
 		t.Fatal(err)
 	}

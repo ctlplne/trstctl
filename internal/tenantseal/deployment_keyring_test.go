@@ -176,6 +176,16 @@ func TestDeploymentKeyringRoutesGenerationsAndRetiresThePrevious(t *testing.T) {
 	if fileDigest, _ := local.KeyedDigest([]byte("domain"), []byte("material")); !bytes.Equal(digest, fileDigest) {
 		t.Fatal("the keyring's evidence MAC changed with the rotation")
 	}
+	// CR-220: dynamic-secret principal names derive from DerivedDigest, so it
+	// stays on the key file across a completed rotation too, or a crash retry
+	// after a rotation would name a different principal.
+	derived, err := ring.DerivedDigest([]byte("trstctl.dynsecret.principal-name.v1"), []byte("material"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fileDerived, _ := local.DerivedDigest([]byte("trstctl.dynsecret.principal-name.v1"), []byte("material")); !bytes.Equal(derived, fileDerived) {
+		t.Fatal("the keyring's principal-name digest changed with the rotation")
+	}
 }
 
 func mustWrapped(t *testing.T, container []byte) []byte {
