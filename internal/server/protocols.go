@@ -534,6 +534,9 @@ func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolN
 		KeyAlgorithm:   csrInfo.KeyAlgorithm,
 		KeyBits:        csrInfo.KeyBits,
 		RequestedEKUs:  requestedEKUs,
+		DeploymentEKUs: p.leafProfile.AllowedExtKeyUsage,
+		// Without an upstream external CA the platform issuing CA signs.
+		PlatformCA:     strings.TrimSpace(prof.UpstreamExternalCA) == "",
 		TTL:            ttl,
 		DNSNames:       profileDNSNames(csrInfo, dnsNames),
 		IPAddresses:    csrInfo.IPAddresses,

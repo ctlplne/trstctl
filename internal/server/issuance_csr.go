@@ -238,9 +238,9 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelectionAtTTLWithPurpose(
 		if keyOrigin != custody.OriginHostAgent {
 			return issuedLeafMaterial{}, errors.New("server: CA re-protection requires an unexported host-agent key and reviewed plan TTL")
 		}
-		leafProfile, err = d.enforceProfileForCAReprotect(ctx, tenantID, csrDER, dnsNames, ttl, binding)
+		leafProfile, err = d.enforceProfileForCAReprotect(ctx, tenantID, selection.Source, csrDER, dnsNames, ttl, binding)
 	} else {
-		leafProfile, err = d.enforceProfile(ctx, tenantID, csrDER, dnsNames, ttl, binding)
+		leafProfile, err = d.enforceProfile(ctx, tenantID, selection.Source, csrDER, dnsNames, ttl, binding)
 	}
 	if err != nil {
 		return issuedLeafMaterial{}, err

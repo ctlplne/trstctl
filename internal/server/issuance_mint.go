@@ -75,7 +75,7 @@ func (d *issuanceDispatcher) mintServedLeafMaterialFromTemplate(
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
-	leafProfile, err := d.enforceProfile(ctx, tenantID, csrDER, dnsNames, ttl, binding)
+	leafProfile, err := d.enforceProfile(ctx, tenantID, selection.Source, csrDER, dnsNames, ttl, binding)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}

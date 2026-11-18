@@ -30,21 +30,21 @@ func TestCAReprotectProfilePreservesCertificatePolicyWithoutOpeningAPIEnrollment
 	})
 	h.handler.defaultProfile = name
 	csr := serverTestCSR(t, "host.qa.invalid", nil)
-	if _, err := h.handler.enforceProfile(ctx, h.tenant, csr, []string{"host.qa.invalid"}, time.Hour); err == nil || !strings.Contains(err.Error(), `enrollment protocol "api"`) {
+	if _, err := h.handler.enforceProfile(ctx, h.tenant, "platform", csr, []string{"host.qa.invalid"}, time.Hour); err == nil || !strings.Contains(err.Error(), `enrollment protocol "api"`) {
 		t.Fatalf("ordinary API enrollment must remain refused: %v", err)
 	}
-	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, csr, []string{"host.qa.invalid"}, time.Hour); err != nil {
+	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, "platform", csr, []string{"host.qa.invalid"}, time.Hour); err != nil {
 		t.Fatalf("bound administrative continuation should pass certificate policy: %v", err)
 	}
-	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, csr, []string{"host.qa.invalid"}, 25*time.Hour); err == nil || !strings.Contains(err.Error(), "caps validity") {
+	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, "platform", csr, []string{"host.qa.invalid"}, 25*time.Hour); err == nil || !strings.Contains(err.Error(), "caps validity") {
 		t.Fatalf("administrative continuation must retain TTL cap: %v", err)
 	}
 	outside := serverTestCSR(t, "host.other.invalid", nil)
-	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, outside, []string{"host.other.invalid"}, time.Hour); err == nil || !strings.Contains(err.Error(), "DNS SAN") {
+	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, "platform", outside, []string{"host.other.invalid"}, time.Hour); err == nil || !strings.Contains(err.Error(), "DNS SAN") {
 		t.Fatalf("administrative continuation must retain name policy: %v", err)
 	}
 	clientAuth := serverTestCSR(t, "host.qa.invalid", []string{"clientAuth"})
-	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, clientAuth, []string{"host.qa.invalid"}, time.Hour); err == nil || !strings.Contains(err.Error(), "extended key usage") {
+	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, "platform", clientAuth, []string{"host.qa.invalid"}, time.Hour); err == nil || !strings.Contains(err.Error(), "extended key usage") {
 		t.Fatalf("administrative continuation must retain EKU policy: %v", err)
 	}
 	var apiDenied, continuationAllowed bool
@@ -93,7 +93,7 @@ func TestCAReprotectSignerUsesIdentitySelectedCurrentPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	csr := serverTestCSR(t, "host.qa.invalid", nil)
-	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, csr, []string{"host.qa.invalid"}, time.Hour); err == nil {
+	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, "platform", csr, []string{"host.qa.invalid"}, time.Hour); err == nil {
 		t.Fatal("unrelated default unexpectedly permitted the host name")
 	}
 	requirement, err := h.orch.ProfileApprovalRequirementByName(ctx, h.tenant, "selected-host-policy")
@@ -116,13 +116,13 @@ func TestCAReprotectSignerUsesIdentitySelectedCurrentPolicy(t *testing.T) {
 	if recovered, err := h.handler.caReprotectProfileBinding(ctx, h.tenant, legacyPlan); err != nil || recovered.ProfileName != "selected-host-policy" {
 		t.Fatalf("legacy plan did not recover under the identity's current selection: %+v err=%v", recovered, err)
 	}
-	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, csr, []string{"host.qa.invalid"}, time.Hour, binding); err != nil {
+	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, "platform", csr, []string{"host.qa.invalid"}, time.Hour, binding); err != nil {
 		t.Fatalf("identity-selected policy refused the reviewed host: %v", err)
 	}
 	storeServerTestProfile(t, h.store, h.tenant, "selected-host-policy", profile.CertificateProfile{
 		Name: "selected-host-policy", AllowedDNSSuffixes: []string{"elsewhere.invalid"},
 	})
-	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, csr, []string{"host.qa.invalid"}, time.Hour, binding); err == nil || !strings.Contains(err.Error(), "changed before signing") {
+	if _, err := h.handler.enforceProfileForCAReprotect(ctx, h.tenant, "platform", csr, []string{"host.qa.invalid"}, time.Hour, binding); err == nil || !strings.Contains(err.Error(), "changed before signing") {
 		t.Fatalf("stale policy revision authorized signing: %v", err)
 	}
 	var selectedAllow, staleDeny bool

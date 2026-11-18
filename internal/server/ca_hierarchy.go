@@ -1801,7 +1801,13 @@ func applyAuthorityLane(profile crypto.LeafProfile, ca store.CAAuthority) crypto
 		}
 	}
 	if len(profile.AllowedExtKeyUsage) == 0 && len(ca.EKUs) > 0 {
-		profile.AllowedExtKeyUsage = append([]string(nil), ca.EKUs...)
+		// ocspSigning and anyExtendedKeyUsage are never copied onto a leaf
+		// (CR-052); a CA constrained only to them gives its leaves the
+		// default pair.
+		profile.AllowedExtKeyUsage = slices.DeleteFunc(append([]string(nil), ca.EKUs...), crypto.LeafForbiddenExtKeyUsage)
+		if len(profile.AllowedExtKeyUsage) == 0 {
+			profile.AllowedExtKeyUsage = nil
+		}
 	}
 	return profile
 }

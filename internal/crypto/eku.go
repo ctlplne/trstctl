@@ -97,13 +97,50 @@ func extKeyUsageNamesFromDER(raw []byte) ([]string, error) {
 	return dedupeStrings(out), nil
 }
 
-func leafExtKeyUsage(names []string) ([]x509.ExtKeyUsage, []asn1.ObjectIdentifier, error) {
+// LeafForbiddenExtKeyUsage reports whether an extended key usage, by name or
+// as a dotted OID, is one no leaf certificate may carry (CR-052): ocspSigning
+// would make the leaf a delegated OCSP responder for every certificate its CA
+// issued (RFC 6960 4.2.2.2), and anyExtendedKeyUsage lifts every purpose
+// restriction. The platform's own responder certificate is not a leaf profile.
+func LeafForbiddenExtKeyUsage(name string) bool {
+	name = strings.TrimSpace(name)
+	oid, oidErr := parseDottedOID(name)
+	for _, def := range extKeyUsageDefs {
+		if def.usage != x509.ExtKeyUsageOCSPSigning && def.usage != x509.ExtKeyUsageAny {
+			continue
+		}
+		if strings.EqualFold(name, def.name) || (oidErr == nil && oid.Equal(def.oid)) {
+			return true
+		}
+	}
+	return false
+}
+
+// TimeStampingExtKeyUsage reports whether name, by name (any case) or as a
+// dotted OID, is timeStamping (CR-052: the platform issuing CA signs no such
+// leaf).
+func TimeStampingExtKeyUsage(name string) bool {
+	name = strings.TrimSpace(name)
+	if strings.EqualFold(name, "timeStamping") {
+		return true
+	}
+	oid, err := parseDottedOID(name)
+	return err == nil && oid.Equal(asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 8})
+}
+
+func leafExtKeyUsage(names []string, refuseTimeStamping bool) ([]x509.ExtKeyUsage, []asn1.ObjectIdentifier, error) {
 	if len(names) == 0 {
 		return []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}, nil, nil
 	}
 	var known []x509.ExtKeyUsage
 	var custom []asn1.ObjectIdentifier
 	for _, name := range names {
+		if LeafForbiddenExtKeyUsage(name) {
+			return nil, nil, fmt.Errorf("extended key usage %q is never issued on a leaf certificate", name)
+		}
+		if refuseTimeStamping && TimeStampingExtKeyUsage(name) {
+			return nil, nil, fmt.Errorf("this CA never signs a %q leaf: its own timestamping certificate is the only one it trusts", name)
+		}
 		if usage, ok := knownExtKeyUsage(name); ok {
 			known = append(known, usage)
 			continue

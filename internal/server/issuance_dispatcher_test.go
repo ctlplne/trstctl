@@ -1119,7 +1119,7 @@ func TestIssuanceDispatcherRejectsExcludedCSRRequestedEKUBeforeSigning(t *testin
 		return crypto.IssuedLeaf{}, nil
 	}
 
-	_, err = h.handler.enforceProfile(ctx, h.tenant, csrDER, []string{"client-only.eku.test"}, time.Hour)
+	_, err = h.handler.enforceProfile(ctx, h.tenant, "platform", csrDER, []string{"client-only.eku.test"}, time.Hour)
 	if err == nil || !strings.Contains(err.Error(), `extended key usage "clientAuth"`) {
 		t.Fatalf("enforceProfile error = %v, want excluded clientAuth before signing", err)
 	}

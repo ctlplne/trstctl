@@ -628,6 +628,15 @@ and protocols. Editing a profile creates a *new version*; old versions stay
 queryable, so you always know which rules a past certificate was issued under. On
 every issuance, `enforceProfile` fetches the active version, validates the request,
 and emits an audit event for the allow-or-deny decision.
+A leaf's extended key usages come from its profile, never from the CSR alone: a CSR
+may ask only for usages the profile allows, a profile that lists none allows
+`serverAuth` and `clientAuth`, and no leaf ever carries `ocspSigning` or
+`anyExtendedKeyUsage`. An `ocspSigning` leaf from an issuing CA would be a delegated
+OCSP responder for every certificate that CA issued; trstctl's own responder
+certificate is made separately. A CA hierarchy's `any` constraint is not copied onto
+its leaves either. The platform issuing CA also never signs a `timeStamping` leaf: its
+own TSA certificate, minted separately, anchors the audit trail, so a timestamping
+leaf comes from a tenant-managed CA.
 For an identity lifecycle issuance, preview and execution check the pinned profile's
 known protocol, validity, and subject-name rules before recording `identity.issued`.
 The signing worker still checks the actual CSR, including key strength and requested

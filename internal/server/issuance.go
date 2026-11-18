@@ -1112,8 +1112,8 @@ func (d *issuanceDispatcher) activeRenewalCertificates(ctx context.Context, tena
 // violation so the mint is rejected before any signature. A configured-but-
 // unresolved profile fails closed: the platform must not silently mint outside a
 // declared governance model.
-func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration, issuance ...*store.OperationApprovalIssuanceBinding) (crypto.LeafProfile, error) {
-	return d.enforceProfileForPurpose(ctx, tenantID, csrDER, dnsNames, ttl, "api", issuance...)
+func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID, authority string, csrDER []byte, dnsNames []string, ttl time.Duration, issuance ...*store.OperationApprovalIssuanceBinding) (crypto.LeafProfile, error) {
+	return d.enforceProfileForPurpose(ctx, tenantID, authority, csrDER, dnsNames, ttl, "api", issuance...)
 }
 
 // CA re-protection continues one previously issued, deployed certificate with
@@ -1122,11 +1122,14 @@ func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string
 // describe this administrative action. The key, EKU, names, and TTL still pass
 // the active certificate profile and the decision is audited separately.
 // Only the SignJobCSR path after reprotect.AuthorizeHostCSR may call this.
-func (d *issuanceDispatcher) enforceProfileForCAReprotect(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration, issuance ...*store.OperationApprovalIssuanceBinding) (crypto.LeafProfile, error) {
-	return d.enforceProfileForPurpose(ctx, tenantID, csrDER, dnsNames, ttl, "ca-reprotect", issuance...)
+func (d *issuanceDispatcher) enforceProfileForCAReprotect(ctx context.Context, tenantID, authority string, csrDER []byte, dnsNames []string, ttl time.Duration, issuance ...*store.OperationApprovalIssuanceBinding) (crypto.LeafProfile, error) {
+	return d.enforceProfileForPurpose(ctx, tenantID, authority, csrDER, dnsNames, ttl, "ca-reprotect", issuance...)
 }
 
-func (d *issuanceDispatcher) enforceProfileForPurpose(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration, purpose string, issuance ...*store.OperationApprovalIssuanceBinding) (crypto.LeafProfile, error) {
+// enforceProfileForPurpose resolves and validates the profile for one
+// issuance. authority is the identity's issuing-authority source ("platform",
+// "private" or "external"); the platform issuing CA signs no timeStamping leaf.
+func (d *issuanceDispatcher) enforceProfileForPurpose(ctx context.Context, tenantID, authority string, csrDER []byte, dnsNames []string, ttl time.Duration, purpose string, issuance ...*store.OperationApprovalIssuanceBinding) (crypto.LeafProfile, error) {
 	if purpose != "api" && purpose != "ca-reprotect" {
 		return crypto.LeafProfile{}, errors.New("server: unsupported served profile purpose")
 	}
@@ -1189,6 +1192,8 @@ func (d *issuanceDispatcher) enforceProfileForPurpose(ctx context.Context, tenan
 		KeyAlgorithm:   info.KeyAlgorithm,
 		KeyBits:        info.KeyBits,
 		RequestedEKUs:  requestedEKUs,
+		DeploymentEKUs: d.leafProfile.AllowedExtKeyUsage,
+		PlatformCA:     authority == "platform",
 		TTL:            ttl,
 		DNSNames:       profileDNSNames(info, dnsNames),
 		IPAddresses:    info.IPAddresses,

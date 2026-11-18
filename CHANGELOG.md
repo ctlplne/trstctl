@@ -3741,6 +3741,21 @@
 
 ### Security
 
+- A leaf's extended key usages come from its profile, never from the CSR alone, and no leaf carries
+  ocspSigning or anyExtendedKeyUsage (CR-052). A profile that listed no allowed_ekus let the CSR
+  choose any usage, so a client entitled to an ordinary certificate, such as an ACME client under an
+  internal-PKI profile, could obtain an ocspSigning leaf from the issuing CA that every tenant
+  shares and answer OCSP for other tenants' certificates; a profile writer could also list
+  ocspSigning or any. A profile that lists no usages now allows serverAuth and clientAuth, and a CSR
+  may ask only for usages its profile allows. ocspSigning and any, by name or OID, are refused when
+  a profile is written, at issuance (a profile stored earlier issues nothing until they are removed)
+  and by the leaf signer itself, and a CA hierarchy's any constraint is no longer copied onto its
+  leaves. The platform issuing CA no longer signs a timeStamping leaf for any profile: its own TSA
+  certificate anchors the audit trail, and a timestamping leaf of that CA could have signed anchors
+  its verifier accepts. Upgrading: a profile that relied on the old empty list to issue codeSigning,
+  emailProtection or timeStamping must now list them, and a timestamping leaf must come from a
+  tenant-managed CA.
+
 - No caller can make a dynamic-secret lease receive or destroy another lease's principal (CR-220). A
   lease's principal (a database role or user, a directory entry, a cloud user, a key's name) ended
   in an unkeyed digest of its lease ID, and the lease ID derives from the caller's Idempotency-Key,

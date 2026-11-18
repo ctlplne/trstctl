@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -200,7 +201,9 @@ func (c *CA) applyCALane(prof boundarycrypto.LeafProfile) boundarycrypto.LeafPro
 		}
 	}
 	if len(prof.AllowedExtKeyUsage) == 0 {
-		if ekus := ekuStrings(c.ekus); len(ekus) > 0 {
+		// A CA's anyExtendedKeyUsage means it is unrestricted; it is never
+		// copied onto a leaf (CR-052), which keeps the CA's other usages.
+		if ekus := slices.DeleteFunc(ekuStrings(c.ekus), boundarycrypto.LeafForbiddenExtKeyUsage); len(ekus) > 0 {
 			prof.AllowedExtKeyUsage = ekus
 		}
 	}

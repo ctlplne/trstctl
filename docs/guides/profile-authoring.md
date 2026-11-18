@@ -92,7 +92,7 @@ A profile spec is JSON:
 | --- | --- |
 | `allowed_key_algorithms` | permitted key algorithms, e.g. `["ECDSA","RSA"]` (empty = any) |
 | `min_rsa_bits` / `min_ecdsa_bits` | minimum key strength floors; an unset `min_rsa_bits` enforces 2048 bits, and an explicit lower value is honored but raises a `profile-rsa-floor-below-default` finding |
-| `allowed_ekus` | permitted extended key usages, e.g. `["serverAuth"]` (empty = any) |
+| `allowed_ekus` | permitted extended key usages, e.g. `["serverAuth"]` (empty = `serverAuth` and `clientAuth`); a CSR may ask only for usages listed here. One that asks for none gets this list or, when the profile lists none, the deployment default (`serverAuth` and `clientAuth`) or a managed CA's own usages. List `codeSigning`, `emailProtection` or `timeStamping` explicitly to issue them; the platform issuing CA never signs `timeStamping` (its own TSA certificate anchors the audit trail), so such a leaf comes from a tenant-managed CA. `ocspSigning` and `any` (by name or OID) are never allowed: a profile listing them is refused, and one stored before that check issues nothing until they are removed |
 | `max_validity` | validity ceiling as a duration, e.g. `"2160h"` (0 = no ceiling) |
 | `allowed_protocols` | enrollment protocols that may use this profile, e.g. `["api","acme"]` |
 | `allowed_dns_suffixes` | name constraint on SAN dNSNames (empty = unconstrained) |

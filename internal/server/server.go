@@ -3210,6 +3210,9 @@ func (s *Server) issueLeafWithValidity(ctx context.Context, csrDER []byte, ttl t
 	// credential. Make issuer-lifetime enforcement a property of the served
 	// boundary, not an optional profile knob that a caller can forget to set.
 	leafProfile.ClampTTLToIssuer = true
+	// The platform issuing CA signs no timeStamping leaf: its own TSA
+	// certificate anchors the audit trail (CR-052).
+	leafProfile.RefuseTimeStamping = true
 	// The signer must be reachable and serving before we attempt to sign.
 	if s.signer != nil {
 		c := s.signer.Client()
@@ -3265,6 +3268,7 @@ func (s *Server) IssueLicensedLeafWithProfile(ctx context.Context, csrDER []byte
 	// Licensed algorithms share the same issuer-time boundary as core issuance.
 	// The edition seam may change the leaf algorithm, never CA validity rules.
 	leafProfile.ClampTTLToIssuer = true
+	leafProfile.RefuseTimeStamping = true // CR-052, as in issueLeafWithValidity
 	if s.licensedLeafSigner == nil {
 		return nil, errors.New("server: licensed issuance unavailable — no licensed signer extension (fail closed)")
 	}

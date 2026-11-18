@@ -259,7 +259,7 @@ func signOpaqueLeafWithPreparation(caCertDER []byte, caSigner DigestSigner, req 
 	if err != nil {
 		return IssuedLeaf{}, err
 	}
-	knownEKUs, customEKUs, err := leafExtKeyUsage(prof.AllowedExtKeyUsage)
+	knownEKUs, customEKUs, err := leafExtKeyUsage(prof.AllowedExtKeyUsage, prof.RefuseTimeStamping)
 	if err != nil {
 		return IssuedLeaf{}, &leafProfileError{err.Error()}
 	}

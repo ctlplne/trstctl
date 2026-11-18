@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net/netip"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,7 +46,7 @@ type CertificateProfile struct {
 	AllowedKeyAlgorithms  []string                    `json:"allowed_key_algorithms"`            // e.g. ["ECDSA","RSA"]; empty = any
 	MinRSABits            int                         `json:"min_rsa_bits"`                      // floor for RSA keys; 0 = DefaultMinRSABits
 	MinECDSABits          int                         `json:"min_ecdsa_bits"`                    // floor for ECDSA curve size
-	AllowedEKUs           []string                    `json:"allowed_ekus"`                      // e.g. ["serverAuth","clientAuth"]; empty = any
+	AllowedEKUs           []string                    `json:"allowed_ekus"`                      // e.g. ["serverAuth","clientAuth"]; empty = DefaultEKUs; never ocspSigning or any
 	MaxValidity           Duration                    `json:"max_validity"`                      // full signed validity ceiling, including backdating; 0 = no ceiling
 	AllowedProtocols      []string                    `json:"allowed_protocols"`                 // enrollment protocols permitted; empty = any
 	ACMEAuthMode          ACMEAuthMode                `json:"acme_auth_mode,omitempty"`          // public_trust (default) or trust_authenticated
@@ -72,10 +73,24 @@ type CertificateProfile struct {
 	UpstreamExternalCA string `json:"upstream_external_ca,omitempty"`
 }
 
+// DefaultEKUs are the extended key usages a profile that lists none allows:
+// TLS server and client authentication. Before CR-052 such a profile allowed
+// any usage the CSR asked for.
+func DefaultEKUs() []string { return []string{"serverAuth", "clientAuth"} }
+
+// EffectiveEKUs is the profile's extended key usage allow-list: AllowedEKUs, or
+// DefaultEKUs when it lists none.
+func (p CertificateProfile) EffectiveEKUs() []string {
+	if len(p.AllowedEKUs) > 0 {
+		return slices.Clone(p.AllowedEKUs)
+	}
+	return DefaultEKUs()
+}
+
 // AllowsServerAuth reports whether the profile permits the serverAuth extended
-// key usage; an empty allow-list permits any.
+// key usage; an empty allow-list permits the default pair, which includes it.
 func (p CertificateProfile) AllowsServerAuth() bool {
-	return len(p.AllowedEKUs) == 0 || contains(p.AllowedEKUs, "serverAuth")
+	return contains(p.EffectiveEKUs(), "serverAuth")
 }
 
 // DefaultMinRSABits is the RSA floor a profile enforces when it sets none
@@ -211,6 +226,11 @@ func (p CertificateProfile) ValidateDefinition() error {
 	if err := p.HostKeyAttestation.validate(id); err != nil {
 		return err
 	}
+	for _, eku := range p.AllowedEKUs {
+		if crypto.LeafForbiddenExtKeyUsage(eku) {
+			return fmt.Errorf("%s allowed_ekus: %q is never issued on a leaf certificate", id, eku)
+		}
+	}
 	if p.PublicTLS && !p.AllowsServerAuth() {
 		return fmt.Errorf("%s: public_tls requires serverAuth in allowed_ekus", id)
 	}
@@ -288,6 +308,8 @@ type Request struct {
 	KeyAlgorithm   string        // from internal/crypto.CSRInfo
 	KeyBits        int           // from internal/crypto.CSRInfo
 	RequestedEKUs  []string      // EKUs the caller asks for
+	DeploymentEKUs []string      // the deployment leaf profile's EKU allow-list, when it sets one
+	PlatformCA     bool          // the platform's issuing CA signs the leaf: it signs no timeStamping leaf
 	TTL            time.Duration // requested validity
 	DNSNames       []string      // SANs
 	IPAddresses    []string      // SAN iPAddresses
@@ -343,9 +365,28 @@ func (p CertificateProfile) Validate(r Request) error {
 			return refuse(false, "%s requires ECDSA curves of at least %d bits, got %d", id, p.MinECDSABits, r.KeyBits)
 		}
 	}
+	// CR-052: a profile stored before profile writes refused ocspSigning and
+	// anyExtendedKeyUsage issues nothing until they are removed.
+	for _, eku := range p.AllowedEKUs {
+		if crypto.LeafForbiddenExtKeyUsage(eku) {
+			return refuse(false, "%s lists extended key usage %q, which is never issued on a leaf certificate", id, eku)
+		}
+	}
+	allowed := p.EffectiveEKUs()
 	for _, eku := range r.RequestedEKUs {
-		if len(p.AllowedEKUs) > 0 && !contains(p.AllowedEKUs, eku) {
-			return refuse(false, "%s does not allow extended key usage %q (allowed: %s)", id, eku, strings.Join(p.AllowedEKUs, ", "))
+		if crypto.LeafForbiddenExtKeyUsage(eku) {
+			return refuse(false, "%s: extended key usage %q is never issued on a leaf certificate", id, eku)
+		}
+		if !contains(allowed, eku) {
+			return refuse(false, "%s does not allow extended key usage %q (allowed: %s)", id, eku, strings.Join(allowed, ", "))
+		}
+		if len(r.DeploymentEKUs) > 0 && !contains(r.DeploymentEKUs, eku) {
+			return refuse(false, "%s: the deployment does not allow extended key usage %q (allowed: %s)", id, eku, strings.Join(r.DeploymentEKUs, ", "))
+		}
+		// The platform's own TSA certificate anchors trstctl's audit trail, and
+		// its verifier trusts a timeStamping end entity of that CA (CR-052).
+		if r.PlatformCA && crypto.TimeStampingExtKeyUsage(eku) {
+			return refuse(false, "%s: the platform issuing CA never signs extended key usage %q; issue it from a tenant-managed CA", id, eku)
 		}
 	}
 	return nil

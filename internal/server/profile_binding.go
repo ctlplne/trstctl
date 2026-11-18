@@ -66,6 +66,13 @@ func (d *issuanceDispatcher) renewalIssuanceBinding(ctx context.Context, tenantI
 	return requirement.IssuanceBinding(), nil
 }
 
+// intendedProfileEKUs is the extended key usages a leaf gets: those the CSR
+// asks for, or, when it asks for none, the profile's list. The profile's
+// Validate refuses any the profile (serverAuth and clientAuth when it lists
+// none), or the deployment's list, does not allow, and ocspSigning and
+// anyExtendedKeyUsage always (CR-052). When neither names a usage the result
+// is empty, so the deployment's list, a managed CA's own usages or the
+// signer's default pair apply.
 func intendedProfileEKUs(requested, allowed []string) []string {
 	if len(requested) > 0 {
 		return cloneStrings(requested)

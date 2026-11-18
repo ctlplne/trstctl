@@ -91,6 +91,15 @@ type LeafProfile struct {
 	PermittedEmailDomains []string      // email SAN domains; set to permit rfc822Name SANs under a SAN policy
 	PermittedURIPrefixes  []string      // URI SAN prefixes; set to permit URI SANs under a SAN policy
 
+	// RefuseTimeStamping refuses a timeStamping leaf (CR-052). The platform's
+	// issuing CA sets it: its own TSA certificate, minted separately, anchors
+	// trstctl's audit trail, and the TSA verifier trusts a timeStamping end
+	// entity of that CA, so no profile may give a leaf of it that usage. It is
+	// not part of a retained leaf template's encoding (json:"-"): the served
+	// choke points always set it, and a template retained before it existed
+	// must still match on retry.
+	RefuseTimeStamping bool `json:"-"`
+
 	// ClampTTLToIssuer bounds the leaf's TTL by the issuing CA's own remaining
 	// lifetime, using the CA certificate this signer already parses — one parse
 	// per issuance instead of a separate pre-flight Inspect (AUD-201 follow-up
@@ -284,7 +293,7 @@ func signLeafFromCSRWithPreparation(caCertDER []byte, caSigner DigestSigner, csr
 	if err != nil {
 		return IssuedLeaf{}, err
 	}
-	knownEKUs, customEKUs, err := leafExtKeyUsage(prof.AllowedExtKeyUsage)
+	knownEKUs, customEKUs, err := leafExtKeyUsage(prof.AllowedExtKeyUsage, prof.RefuseTimeStamping)
 	if err != nil {
 		return IssuedLeaf{}, &leafProfileError{err.Error()}
 	}
