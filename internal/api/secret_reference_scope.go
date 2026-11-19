@@ -6,9 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/url"
-	"slices"
-	"strings"
+
+	"trstctl.com/trstctl/internal/credref"
 )
 
 // A235-L2: a stored-secret reference a caller sets up through the API — a
@@ -23,33 +22,15 @@ import (
 // reference to a secret outside every restricted environment stays governed
 // by the route's own permission.
 
-// storedSecretRefNames returns the stored secret names a secret:// reference
-// resolves to, as each redeemer reads it: the integration form (the rest of
-// the reference, trimmed of slashes) and the connector and relay form (the
-// URL host and path, unescaped, with an optional ?version=N). Both are
-// checked, so no spelling reaches a restricted secret through one redeemer
-// while passing for another. A value that is not a secret:// reference
-// names nothing.
-func storedSecretRefNames(ref string) []string {
-	ref = strings.TrimSpace(ref)
-	rest, ok := strings.CutPrefix(ref, "secret://")
-	if !ok {
-		return nil
+func storedSecretScopeName(ref string) (string, error) {
+	if !credref.IsStored(ref) {
+		return "", nil
 	}
-	var names []string
-	if raw := strings.Trim(strings.TrimSpace(rest), "/"); raw != "" {
-		names = append(names, raw)
+	parsed, err := credref.Parse(ref)
+	if err != nil {
+		return credref.NameForDenial(err), err
 	}
-	if parsed, err := url.Parse(ref); err == nil {
-		escaped := strings.Trim(strings.TrimSpace(parsed.Host+parsed.EscapedPath()), "/")
-		if name, err := url.PathUnescape(escaped); err == nil {
-			name = strings.Trim(name, "/")
-			if name != "" && !slices.Contains(names, name) {
-				names = append(names, name)
-			}
-		}
-	}
-	return names
+	return parsed.Name, nil
 }
 
 // secretReferencesIn returns every secret:// reference string anywhere in a
@@ -68,7 +49,7 @@ func secretReferencesIn(raw json.RawMessage) []string {
 	walk = func(v any) {
 		switch t := v.(type) {
 		case string:
-			if strings.HasPrefix(strings.TrimSpace(t), "secret://") {
+			if credref.IsStored(t) {
 				out = append(out, t)
 			}
 		case map[string]any:
@@ -96,7 +77,8 @@ func errSecretReferenceRestricted(field string) error {
 // names a secret in a restricted environment the caller may not read.
 func (a *API) requireSecretReferencesRead(ctx context.Context, tenantID, field string, refs ...string) error {
 	for _, ref := range refs {
-		for _, name := range storedSecretRefNames(ref) {
+		name, formatErr := storedSecretScopeName(ref)
+		if name != "" {
 			ok, err := a.secretScopeAllows(ctx, tenantID, name, false)
 			if err != nil {
 				return err
@@ -104,6 +86,9 @@ func (a *API) requireSecretReferencesRead(ctx context.Context, tenantID, field s
 			if !ok {
 				return errSecretReferenceRestricted(field)
 			}
+		}
+		if formatErr != nil {
+			return errStatus(http.StatusBadRequest, field+": "+formatErr.Error())
 		}
 	}
 	return nil

@@ -3,31 +3,45 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"slices"
 	"testing"
 )
 
-// TestStoredSecretRefNamesCoverEveryRedeemerSpellingA235L2: a secret://
-// reference names the secret each redeemer would read — the integration
-// resolver's trimmed remainder and the connector/relay parser's unescaped
-// URL host and path without its ?version — so no spelling reaches a
-// restricted secret unchecked; anything else names nothing.
+func TestSecretReferenceScopeRejectsNoncanonicalStoredScheme(t *testing.T) {
+	a := &API{}
+	for _, ref := range []string{"Secret://fixture/team/token", "secret:fixture/team/token"} {
+		if err := a.requireSecretReferencesRead(context.Background(), "", "credential_ref", ref); err == nil {
+			t.Errorf("admission accepted a noncanonical stored credential reference %q", ref)
+		}
+	}
+	raw := json.RawMessage(`{"provider":{"credential_ref":"Secret://fixture/team/token"},"note":"plain fixture"}`)
+	if err := a.requireSecretReferencesReadIn(context.Background(), "", "config", raw); err == nil {
+		t.Error("nested configuration accepted a noncanonical stored credential reference")
+	}
+}
+
+// A235-L2: authorization checks the identity every redeemer uses. An invalid
+// legacy alias preserves the existing environment denial and cannot redeem.
 func TestStoredSecretRefNamesCoverEveryRedeemerSpellingA235L2(t *testing.T) {
-	for ref, want := range map[string][]string{
-		"secret://pay/prod/token":           {"pay/prod/token"},
-		"secret:///pay/prod/token/":         {"pay/prod/token"},
-		" secret://pay/prod/token ":         {"pay/prod/token"},
-		"secret://pay/prod/token?version=2": {"pay/prod/token?version=2", "pay/prod/token"},
-		"secret://pay/prod%2Ftoken":         {"pay/prod%2Ftoken", "pay/prod/token"},
-		"secret://pay/prod/%74oken":         {"pay/prod/%74oken", "pay/prod/token"},
-		"secret://":                         nil,
-		"file:/etc/trstctl/token":           nil,
-		"env:TRSTCTL_TOKEN":                 nil,
-		"pay/prod/token":                    nil,
+	for ref, want := range map[string]struct {
+		name    string
+		invalid bool
+	}{
+		"secret://pay/prod/token":           {"pay/prod/token", false},
+		"secret:///pay/prod/token/":         {"pay/prod/token", true},
+		" secret://pay/prod/token ":         {"pay/prod/token", false},
+		"secret://pay/prod/token?version=2": {"pay/prod/token", false},
+		"secret://pay/prod%2Ftoken":         {"pay/prod/token", true},
+		"secret://pay/prod/%74oken":         {"pay/prod/token", true},
+		"secret://":                         {"", true},
+		"file:/etc/trstctl/token":           {"", false},
+		"env:TRSTCTL_TOKEN":                 {"", false},
+		"pay/prod/token":                    {"", false},
 	} {
-		if got := storedSecretRefNames(ref); !slices.Equal(got, want) {
-			t.Errorf("storedSecretRefNames(%q) = %q, want %q", ref, got, want)
+		if name, err := storedSecretScopeName(ref); name != want.name || (err != nil) != want.invalid {
+			t.Errorf("scope for %q = %q, %v, want name=%q invalid=%t", ref, name, err, want.name, want.invalid)
 		}
 	}
 }

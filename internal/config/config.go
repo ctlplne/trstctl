@@ -30,6 +30,7 @@ import (
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/trust"
@@ -5267,8 +5268,8 @@ func validateITSM(c *Config) []error {
 		if tokenRef == "" {
 			errs = append(errs, fmt.Errorf("%s.token_ref is required", prefix))
 		} else if b.RelayOnly {
-			if name, ok := strings.CutPrefix(tokenRef, "secret://"); !ok || strings.TrimSpace(name) == "" {
-				errs = append(errs, fmt.Errorf("%s.token_ref must be a secret:// reference for relay_only bindings", prefix))
+			if _, err := credref.Parse(tokenRef); err != nil {
+				errs = append(errs, fmt.Errorf("%s.token_ref must be a secret:// reference for relay_only bindings (%w)", prefix, err))
 			}
 		} else if name, ok := strings.CutPrefix(tokenRef, "env:"); !ok || strings.TrimSpace(name) == "" {
 			errs = append(errs, fmt.Errorf("%s.token_ref must be an env:NAME credential reference", prefix))

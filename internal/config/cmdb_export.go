@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"trstctl.com/trstctl/internal/cmdbexport"
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
@@ -45,8 +46,10 @@ func ValidateCMDBCertificateExports(bindings []CMDBCertificateExportBinding) []e
 		if _, err := cmdbexport.Endpoint(binding.InstanceURL, binding.DataSource); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", name, err))
 		}
-		if !strings.HasPrefix(binding.TokenRef, "secret://") && !strings.HasPrefix(binding.TokenRef, "file:") {
-			errs = append(errs, fmt.Errorf("%s.token_ref must use a secret:// reference or a file: reference", name))
+		if !strings.HasPrefix(binding.TokenRef, "file:") {
+			if _, err := credref.Parse(binding.TokenRef); err != nil {
+				errs = append(errs, fmt.Errorf("%s.token_ref must use a secret:// reference or a file: reference (%w)", name, err))
+			}
 		}
 		if binding.AllowPrivateEndpoint != (len(binding.PrivateEgressCIDRs) > 0) {
 			errs = append(errs, fmt.Errorf("%s private endpoint access requires allow_private_endpoint and exact private_egress_cidrs together", name))

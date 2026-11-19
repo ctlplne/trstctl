@@ -27,6 +27,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
@@ -43,6 +44,7 @@ import (
 	"trstctl.com/trstctl/internal/protocols/ssh"
 	"trstctl.com/trstctl/internal/ratelimit"
 	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/tsa"
 )
@@ -701,22 +703,21 @@ func (s *Server) mdmSCEPPolicyTrustAnchors(ctx context.Context, tenantID string,
 }
 
 func (s *Server) loadMDMSCEPTrustAnchorRef(ctx context.Context, tenantID, key, ref string, keyWrapper sealKeyWrapper) ([][]byte, error) {
+	reference, err := credref.Parse(ref)
+	if err != nil {
+		return nil, fmt.Errorf("server: MDM SCEP trust anchor %s: %w", key, err)
+	}
 	if keyWrapper == nil {
 		return nil, fmt.Errorf("server: MDM SCEP trust-anchor references require a credential KEK")
 	}
-	name, ok := strings.CutPrefix(strings.TrimSpace(ref), "secret://")
-	if !ok {
-		return nil, fmt.Errorf("server: MDM SCEP trust anchor %s must use a secret:// reference", key)
+	sealed, err := readFormerlyLiteralSecretReference(ctx, s.store, tenantID, reference)
+	if errors.Is(err, store.ErrSecretReferenceLiteralConflict) {
+		return nil, err
 	}
-	name = strings.TrimSpace(strings.TrimPrefix(name, "/"))
-	if name == "" {
-		return nil, fmt.Errorf("server: MDM SCEP trust anchor %s has an empty secret reference", key)
-	}
-	rec, err := s.store.GetSecret(ctx, tenantID, name)
 	if err != nil {
 		return nil, fmt.Errorf("server: MDM SCEP trust anchor %s is not readable", key)
 	}
-	plain, err := openTenantValue(ctx, s.tenantCrypto, keyWrapper, tenantID, rec.Sealed, secretStoreAADForMDMSCEP(tenantID, name))
+	plain, err := openTenantValue(ctx, s.tenantCrypto, keyWrapper, tenantID, sealed, secretStoreAADForMDMSCEP(tenantID, reference.Name))
 	if err != nil {
 		return nil, fmt.Errorf("server: MDM SCEP trust anchor %s is not openable", key)
 	}

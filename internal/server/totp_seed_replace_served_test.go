@@ -37,6 +37,10 @@ func TestServedTOTPSeedIsReplacedThroughTheAPIA239L5(t *testing.T) {
 	var configs []config.DynamicSecretProviderConfig
 	if err := json.Unmarshal([]byte(`[{"tenant_id": "`+servedTestTenant+`", "id": "mfa", "type": "totp",
 	    "seed_ref": "secret://ops/break-glass-mfa", "allowed_roles": ["operator"], "max_ttl": "30s"},
+	  {"tenant_id": "`+servedTestTenant+`", "id": "mfa-pinned", "type": "totp",
+	    "seed_ref": "secret://ops/break-glass-mfa?version=1", "allowed_roles": ["operator"], "max_ttl": "30s"},
+	  {"tenant_id": "`+servedTestTenant+`", "id": "mfa-escaped", "type": "totp",
+	    "seed_ref": "secret://ops/fixture%20mfa", "allowed_roles": ["operator"], "max_ttl": "30s"},
 	  {"tenant_id": "`+servedTestTenant+`", "id": "mfa-file", "type": "totp",
 	    "seed_ref": "`+writeServedCredentialFile(t, "a239l5-seed", seedA)+`", "allowed_roles": ["operator"], "max_ttl": "30s"}]`), &configs); err != nil {
 		t.Fatal(err)
@@ -104,6 +108,7 @@ func TestServedTOTPSeedIsReplacedThroughTheAPIA239L5(t *testing.T) {
 	const replace = "/api/v1/secrets/leases/providers/mfa/totp-seed"
 
 	call(admin, http.MethodPost, "/api/v1/secrets/store", "a239l5-seed-a", map[string]any{"name": "ops/break-glass-mfa", "value": seedA}, http.StatusCreated)
+	call(admin, http.MethodPost, "/api/v1/secrets/store", "fixture-escaped-seed", map[string]any{"name": "ops/fixture mfa", "value": seedA}, http.StatusCreated)
 	leaseFrom("a239l5-lease-a", seedA)
 
 	// A code from another seed proves nothing: refused, nothing written.
@@ -112,6 +117,12 @@ func TestServedTOTPSeedIsReplacedThroughTheAPIA239L5(t *testing.T) {
 	call(reader, http.MethodPost, replace, "a239l5-reader", map[string]any{"seed": seedB, "code": codeFor(seedB, time.Now())}, http.StatusForbidden)
 	call(admin, http.MethodPost, "/api/v1/secrets/leases/providers/no-such-mfa/totp-seed", "a239l5-unknown", map[string]any{"seed": seedB, "code": codeFor(seedB, time.Now())}, http.StatusNotFound)
 	call(admin, http.MethodPost, "/api/v1/secrets/leases/providers/mfa-file/totp-seed", "a239l5-file", map[string]any{"seed": seedB, "code": codeFor(seedB, time.Now())}, http.StatusConflict)
+	call(admin, http.MethodPost, "/api/v1/secrets/leases/providers/mfa-pinned/totp-seed", "fixture-pinned-replace", map[string]any{"seed": seedB, "code": codeFor(seedB, time.Now())}, http.StatusConflict)
+	call(admin, http.MethodPost, "/api/v1/secrets/leases/providers/mfa-escaped/totp-seed", "fixture-escaped-replace", map[string]any{"seed": seedB, "code": codeFor(seedB, time.Now())}, http.StatusConflict)
+	escaped, err := h.store.GetSecret(t.Context(), h.tenant, "ops/fixture mfa")
+	if err != nil || escaped.Version != 1 {
+		t.Fatalf("escaped seed changed after a refused provider replacement, version=%d err=%v", escaped.Version, err)
+	}
 	if v := version(); v != 1 {
 		t.Fatalf("the seed's version after refused replacements = %d, want 1", v)
 	}

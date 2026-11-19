@@ -15,6 +15,7 @@ import (
 
 	gouuid "github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/discovery/sourcecatalog"
@@ -911,8 +912,11 @@ func secretRepoScanConfig(provider string, req secretRepoScanWebhookRequest) (se
 	if credentialRef != "" {
 		// OD-1: a private repository's clone credential is a reference the
 		// worker opens for the clone, sent to an https clone URL only.
-		if !strings.HasPrefix(credentialRef, "file:") && !strings.HasPrefix(credentialRef, "secret://") {
-			return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "credential_ref must be a file: or secret:// reference")
+		if !strings.HasPrefix(credentialRef, "file:") {
+			if _, err := credref.Parse(credentialRef); err != nil {
+				return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest,
+					"credential_ref must be a file: reference or use canonical secret://name with an optional ?version=N")
+			}
 		}
 		if cloneURL == "" || !strings.HasPrefix(strings.ToLower(cloneURL), "https://") {
 			return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "credential_ref needs an https clone_url")

@@ -3741,6 +3741,13 @@
 
 ### Security
 
+- Stored credential references use one parser for configuration, authorization,
+  and redemption (CR-060). Connector, relay, and integration readers use the
+  same tenant secret name and optional version. Integrations and protocol
+  readers refuse a reference if the former literal name differs from the
+  decoded name and is live or has a recorded deletion. Correct ambiguous
+  and noncanonical references before running jobs that use them.
+
 - Discovery records closed run and per-target error diagnostics, and applies
   the same rules in views of older runs. The diagnostics retain required
   configuration fields and explain why a relay rejected a findings count.

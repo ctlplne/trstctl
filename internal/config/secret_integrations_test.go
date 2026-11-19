@@ -1626,3 +1626,42 @@ func TestValidateSecretIntegrationsIAMEndpointNamesWherePoliciesAreReadG2L2(t *t
 		t.Fatalf("iam_endpoint on a kubernetes provider error = %v", err)
 	}
 }
+
+func TestIntegrationCredentialConfigurationRejectsNoncanonicalStoredReferences(t *testing.T) {
+	for _, ref := range []string{"secret://fixture/team/%74oken", "secret://fixture/team/token?version=1&version=2"} {
+		if err := validateCredentialRef(ref); err == nil {
+			t.Errorf("configuration accepted a noncanonical stored reference %q", ref)
+		}
+	}
+	if err := validateCredentialRef("secret://fixture/team/edge%20token?version=2"); err != nil {
+		t.Errorf("configuration refused a canonical pinned reference: %v", err)
+	}
+}
+
+func TestStoredReferenceConfigurationGatesRejectAliases(t *testing.T) {
+	const ref = "secret://fixture/team/%74oken"
+	const tenant = "11111111-1111-1111-1111-111111111111"
+	const endpoint = "https://fixture.example.test"
+	rightSize := Connectors{HTTPTimeout: "10s", RightSize: []ConnectorRightSizeBinding{{
+		TenantID: tenant, Connector: "fixture", Endpoint: endpoint, TokenRef: ref,
+	}}}
+	if errs := validateConnectors(rightSize); len(errs) == 0 {
+		t.Error("right-size configuration accepted a noncanonical stored reference")
+	}
+	email := ACMEEmail{From: "acme@fixture.example.test", Domains: []string{"example.test"}, Profile: "smime",
+		RelayAddr: "relay.example.test:25", DKIMSelector: "fixture", DKIMKeyRef: ref,
+	}
+	if errs := validateACMEEmail(email); len(errs) == 0 {
+		t.Error("ACME DKIM configuration accepted a noncanonical stored reference")
+	}
+	if errs := ValidateCMDBCertificateExports([]CMDBCertificateExportBinding{{
+		ID: "fixture", TenantID: tenant, InstanceURL: endpoint, TokenRef: ref, DataSource: "trstctl",
+	}}); len(errs) == 0 {
+		t.Error("CMDB export configuration accepted a noncanonical stored reference")
+	}
+	cfg := Default()
+	cfg.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: endpoint, TokenRef: ref, RelayOnly: true}}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "token_ref") {
+		t.Errorf("ServiceNow relay configuration accepted a noncanonical stored reference: %v", err)
+	}
+}

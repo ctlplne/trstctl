@@ -195,6 +195,13 @@ func TestServedCMDBScheduleRefusesAnUnapprovedInstance(t *testing.T) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: servedCMDBSecretRef, RelayOnly: true}}
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write")
+	badRefStatus, badRefBody := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-bad-reference", map[string]any{
+		"instance_url": "https://example.service-now.com", "token_ref": "secret://fixture/team/%74oken",
+		"interval_seconds": 3600, "enabled": true,
+	})
+	if badRefStatus != http.StatusBadRequest || !strings.Contains(string(badRefBody), "canonical secret://") {
+		t.Errorf("malformed CMDB token reference did not reach the format check, status=%d", badRefStatus)
+	}
 	status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-unapproved", map[string]any{
 		"instance_url":     "https://attacker.example.com",
 		"token_ref":        servedCMDBSecretRef,

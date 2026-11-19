@@ -1512,8 +1512,33 @@ document after installing the files to notify the watcher, preserving its conten
 The document must be inside the agent's allowed roots and readable and writable
 there. Preview refuses a missing `config_path` before any certificate is installed.
 
-Every `*_ref` is a `secret://name` or `secret://name?version=N` reference in the same
-tenant, and every `profile` points to an operator-owned `connectors.local_profiles`
+Every `*_ref` is a same-tenant `secret://name` or `secret://name?version=N`
+reference. Use the lowercase scheme and a slash-separated name without empty
+segments. Escape spaces as `%20` and keep path separators as literal slashes.
+The optional version is a decimal integer from 1 to 2147483647 with no leading zeros.
+Authorization and credential lookup use that same decoded name. A stored
+reference with a different spelling must be corrected before the connector
+can use it.
+
+Some older integrations, ACME DNS-01 providers and MDM SCEP profiles used the
+whole suffix as a literal name. After upgrading, those readers refuse a
+reference when the canonical spelling identifies a different name and the
+former literal name is live or has a recorded deletion. Purging the deleted
+value leaves its existing mutation receipt, so it does not unblock the
+reference. Check the intended credential and update the reference explicitly.
+Use `%25` for a literal percent and `%3F` for a literal question mark. Switch
+to an unambiguous name if the first segment used an escape that older connector
+and relay readers interpreted differently.
+If you are upgrading a development build from before migration 0147, verify
+escaped and versioned references against the intended credential before starting
+workers. Those builds could delete a credential without recording its name in a
+mutation receipt.
+
+The TOTP seed replacement endpoint accepts unversioned names that need no
+escaping. Use the secret store's rotation workflow for a seed with an escaped
+name.
+
+Every `profile` points to an operator-owned `connectors.local_profiles`
 entry, which maps the connector's logical command (`nginx`, `apachectl`, `caddy`,
 `powershell`, `netsh`, `haproxy`, `systemctl`, `postfix`, `doveconf`, `doveadm`,
 `pg_ctl`, `mysql-tls-reload`, `rabbitmqctl`, or `tomcat-tls-reload`) to one absolute executable;

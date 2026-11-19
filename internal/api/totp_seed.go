@@ -4,9 +4,9 @@ package api
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/dynsecret"
 )
 
@@ -63,10 +63,13 @@ func (a *API) replaceTOTPProviderSeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ref, digits, period, algorithm, _ := provider.DynamicSecretTOTPSeed()
-	name, isSecret := strings.CutPrefix(ref, "secret://")
-	name = strings.Trim(name, "/")
-	if !isSecret || name == "" {
-		a.writeError(w, errStatus(http.StatusConflict, "the provider's seed_ref is not a secret:// reference; replace the seed where it is kept"))
+	reference, err := credref.Parse(ref)
+	if err != nil || reference.Version != nil {
+		a.writeError(w, errStatus(http.StatusConflict, "the provider's seed_ref must be an unversioned canonical secret:// reference to replace its seed here"))
+		return
+	}
+	if reference.LegacyLiteralName() != "" {
+		a.writeError(w, errStatus(http.StatusConflict, "replace an escaped seed name through the secret store and confirm the provider's seed_ref names that same secret"))
 		return
 	}
 	var req totpSeedReplaceRequest
@@ -95,5 +98,5 @@ func (a *API) replaceTOTPProviderSeed(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusUnprocessableEntity, "the code is not the new seed's current code; check the seed and the authenticator's clock"))
 		return
 	}
-	a.rotateApplicationSecret(w, r, name, idempotencyKey, secretWriteRequest{Name: name, Value: req.Seed})
+	a.rotateApplicationSecret(w, r, reference.Name, idempotencyKey, secretWriteRequest{Name: reference.Name, Value: req.Seed})
 }

@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/hostaccounts"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -232,17 +233,25 @@ func (r *relayCredentialResolver) resolveJobReferences(
 }
 
 func (r *relayCredentialResolver) resolveReferenceNames(ctx context.Context, tenantID string, refs []string) (redeemedMaterial, error) {
-	if r == nil || r.store == nil {
-		return redeemedMaterial{}, errors.New("credential reference resolver is not configured")
-	}
 	if len(refs) == 0 {
 		return redeemedMaterial{}, errors.New("job names no credential references to redeem")
+	}
+	references := make([]credref.Stored, len(refs))
+	for i, ref := range refs {
+		parsed, err := credref.Parse(ref)
+		if err != nil {
+			return redeemedMaterial{}, err
+		}
+		references[i] = parsed
+	}
+	if r == nil || r.store == nil {
+		return redeemedMaterial{}, errors.New("credential reference resolver is not configured")
 	}
 	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.tenantCrypto, tenantID: tenantID}
 	var items []transport.RedeemedSecret
 	var refNames []string
-	for _, ref := range refs {
-		value, err := lease.require(ctx, ref)
+	for i, ref := range refs {
+		value, err := lease.openReference(ctx, references[i])
 		if err != nil {
 			lease.Close()
 			return redeemedMaterial{}, fmt.Errorf("resolve credential reference: %w", err)
@@ -394,7 +403,7 @@ func collectSecretRefs(raw json.RawMessage) []string {
 	walk = func(v any) {
 		switch t := v.(type) {
 		case string:
-			if strings.HasPrefix(strings.TrimSpace(t), "secret://") {
+			if credref.IsStored(t) {
 				seen[strings.TrimSpace(t)] = true
 			}
 		case map[string]any:

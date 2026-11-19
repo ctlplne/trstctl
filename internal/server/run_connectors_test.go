@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
@@ -22,10 +23,12 @@ import (
 	"trstctl.com/trstctl/internal/connector/fortigate"
 	"trstctl.com/trstctl/internal/connector/javakeystore"
 	"trstctl.com/trstctl/internal/connector/kemp"
+	"trstctl.com/trstctl/internal/connector/native"
 	"trstctl.com/trstctl/internal/connector/postfix"
 	"trstctl.com/trstctl/internal/connector/traefik"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 var (
@@ -370,5 +373,203 @@ func TestParseConnectorSecretRefIsVersionedAndClosed(t *testing.T) {
 		if _, _, err := parseConnectorSecretRef(ref); err == nil {
 			t.Fatalf("parseConnectorSecretRef(%q) succeeded", ref)
 		}
+	}
+}
+
+func TestConnectorSecretReferenceRejectsNoncanonicalGrammar(t *testing.T) {
+	for _, ref := range []string{
+		"Secret://fixture/team/token",
+		"secret:/fixture/team/token",
+		"secret:///fixture/team/token",
+		"secret://fixture/team/%74oken",
+		"secret://fixture/team/token#",
+		"secret://fixture/team/token?",
+		"secret://fixture/team/token?version=",
+		"secret://fixture/team/token?version=01",
+		"secret://fixture/team/token?version=1&version=2",
+		"secret://fixture/team/token?version=2147483648",
+	} {
+		if _, _, err := parseConnectorSecretRef(ref); err == nil {
+			t.Errorf("redeemer accepted noncanonical stored credential reference %q", ref)
+		}
+	}
+}
+
+func TestRelayCollectorRetainsNoncanonicalReferencesForRejection(t *testing.T) {
+	got := collectSecretRefs(json.RawMessage(`{"credential_ref":"Secret://fixture/team/token","note":"ordinary fixture"}`))
+	if !reflect.DeepEqual(got, []string{"Secret://fixture/team/token"}) {
+		t.Error("relay silently dropped a stored credential candidate before validation")
+	}
+}
+
+func TestAzureKeyVaultChecksStoredReferenceBeforeCustody(t *testing.T) {
+	lease := &connectorCredentialLease{}
+	_, _, err := native.Build("azure-keyvault", native.Target{
+		BearerTokenRef: "Secret://fixture/team/token",
+	}, lease.requirer(t.Context(), nil))
+	if err == nil || !strings.Contains(err.Error(), "canonical secret://") {
+		t.Fatalf("Azure Key Vault bearer reference did not fail at format validation: %v", err)
+	}
+}
+
+func TestRelayChecksAllStoredReferenceSyntaxBeforeCustody(t *testing.T) {
+	resolver := &relayCredentialResolver{}
+	refs := []string{"secret://fixture/public/token", "Secret://fixture/team/token"}
+	if _, err := resolver.resolveReferenceNames(t.Context(), "fixture-tenant", refs); err == nil ||
+		!strings.Contains(err.Error(), "canonical secret://") {
+		t.Fatalf("relay reference list did not fail at format validation: %v", err)
+	}
+}
+
+func TestProtocolSecretReferencesCheckFormatBeforeCustody(t *testing.T) {
+	const ref = "secret://fixture/team/%74oken"
+	ctx := t.Context()
+	var automation servedACMEDNS01Automation
+	var srv Server
+	for _, tc := range []struct {
+		name  string
+		check func() error
+	}{
+		{"DNS-01", func() error {
+			_, err := automation.secretRef(ctx, "fixture-tenant", json.RawMessage(`{"token_ref":"`+ref+`"}`), "token_ref")
+			return err
+		}},
+		{"MDM challenge", func() error {
+			_, err := srv.openMDMSCEPSecretRef(ctx, "fixture-tenant", "challenge", ref, nil)
+			return err
+		}},
+		{"MDM trust anchor", func() error {
+			_, err := srv.loadMDMSCEPTrustAnchorRef(ctx, "fixture-tenant", "anchor", ref, nil)
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.check(); err == nil || !strings.Contains(err.Error(), "canonical secret://") {
+				t.Errorf("reference did not fail before custody lookup: %v", err)
+			}
+		})
+	}
+}
+
+func TestServedStoredReferenceSelectsOneHistoricalVersionAcrossReaders(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.DeletedSecretRetention = time.Hour
+	})
+	ctx := t.Context()
+	const name = "fixture/team/edge token"
+	const ref = "secret://fixture/team/edge%20token?version=1"
+	const previous = "fixture-version-one"
+	token := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+	if status, _ := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", token, map[string]string{"name": name, "value": previous}); status != http.StatusCreated {
+		t.Fatalf("create fixture secret returned HTTP %d", status)
+	}
+	if status, _ := secretsReq(t, h, http.MethodPut, "/api/v1/secrets/store/fixture/team/edge%20token", token,
+		map[string]string{"value": "fixture-version-two"}); status != http.StatusOK {
+		t.Fatalf("rotate fixture secret returned HTTP %d", status)
+	}
+	lease := &connectorCredentialLease{store: h.store, kek: h.kek, crypto: h.srv.tenantCrypto, tenantID: h.tenant}
+	defer lease.Close()
+	if value, err := lease.require(ctx, ref); err != nil || !bytes.Equal(value, []byte(previous)) {
+		t.Errorf("connector did not resolve the pinned fixture version: %v", err)
+	}
+	integration := integrationCredentialResolver{store: h.store, kek: h.kek, crypto: h.srv.tenantCrypto}
+	value, err := integration.resolve(ctx, h.tenant, ref)
+	if err != nil {
+		t.Errorf("integration did not resolve the pinned fixture version: %v", err)
+	} else {
+		defer value.Destroy()
+		if !bytes.Equal(value.Bytes(), []byte(previous)) {
+			t.Error("integration selected the wrong fixture version")
+		}
+	}
+	relay := relayCredentialResolver{store: h.store, kek: h.kek, tenantCrypto: h.srv.tenantCrypto}
+	material, err := relay.resolveReferenceNames(ctx, h.tenant, []string{ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer material.wipe()
+	if len(material.items) != 1 || material.items[0].Name != ref || !bytes.Equal(material.items[0].Value, []byte(previous)) {
+		t.Error("relay did not preserve the reference and pinned fixture version")
+	}
+	const unversioned = "secret://fixture/team/edge%20token"
+	current, err := integration.resolve(ctx, h.tenant, unversioned)
+	if err != nil {
+		t.Fatalf("integration did not resolve the current fixture version: %v", err)
+	}
+	if !bytes.Equal(current.Bytes(), []byte("fixture-version-two")) {
+		t.Error("integration selected the wrong current fixture version")
+	}
+	current.Destroy()
+	if status, _ := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", token,
+		map[string]string{"name": strings.TrimPrefix(unversioned, "secret://"), "value": "fixture-retired-literal"}); status != http.StatusCreated {
+		t.Fatalf("create unpinned literal fixture returned HTTP %d", status)
+	}
+	if status, _ := secretsReqKey(t, h, http.MethodDelete, "/api/v1/secrets/store/fixture/team/edge%2520token",
+		token, "fixture-delete-retired-literal", nil); status != http.StatusNoContent {
+		t.Fatalf("delete literal fixture returned HTTP %d", status)
+	}
+	retired, err := integration.resolve(ctx, h.tenant, unversioned)
+	if retired != nil {
+		retired.Destroy()
+	}
+	if err == nil || !strings.Contains(err.Error(), "legacy literal name") {
+		t.Errorf("a retained deleted name allowed the reader to change identity: %v", err)
+	}
+	if purged, err := h.store.PurgeDeletedSecret(ctx, h.tenant, strings.TrimPrefix(unversioned, "secret://")); err != nil || !purged {
+		t.Fatalf("purge deleted fixture credential: purged=%t err=%v", purged, err)
+	}
+	purged, err := integration.resolve(ctx, h.tenant, unversioned)
+	if purged != nil {
+		purged.Destroy()
+	}
+	if err == nil || !strings.Contains(err.Error(), "legacy literal name") {
+		t.Errorf("purging the value allowed a retained reference to change identity: %v", err)
+	}
+
+	// Older integrations and protocol readers used the complete suffix as a
+	// literal name. An existing literal credential blocks a change of identity.
+	literalName := strings.TrimPrefix(ref, "secret://")
+	if status, _ := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", token,
+		map[string]string{"name": literalName, "value": "fixture-old-literal"}); status != http.StatusCreated {
+		t.Fatalf("create retained literal fixture returned HTTP %d", status)
+	}
+	automation := servedACMEDNS01Automation{store: h.store, kek: h.kek, crypto: h.srv.tenantCrypto}
+	for _, tc := range []struct {
+		name string
+		call func() error
+	}{
+		{"integration", func() error {
+			buf, err := integration.resolve(ctx, h.tenant, ref)
+			if buf != nil {
+				buf.Destroy()
+			}
+			return err
+		}},
+		{"DNS-01", func() error {
+			value, err := automation.secretRef(ctx, h.tenant, json.RawMessage(`{"token_ref":"`+ref+`"}`), "token_ref")
+			secret.Wipe(value)
+			return err
+		}},
+		{"MDM challenge", func() error {
+			value, err := h.srv.openMDMSCEPSecretRef(ctx, h.tenant, "challenge", ref, h.kek)
+			secret.Wipe(value)
+			return err
+		}},
+		{"MDM trust anchor", func() error {
+			values, err := h.srv.loadMDMSCEPTrustAnchorRef(ctx, h.tenant, "anchor", ref, h.kek)
+			for _, value := range values {
+				secret.Wipe(value)
+			}
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.call(); err == nil || !strings.Contains(err.Error(), "legacy literal name") {
+				t.Errorf("reader did not refuse the two possible stored identities: %v", err)
+			}
+		})
+	}
+	if value, err := lease.require(ctx, ref); err != nil || !bytes.Equal(value, []byte(previous)) {
+		t.Errorf("a connector whose original syntax used the version stopped resolving it: %v", err)
 	}
 }

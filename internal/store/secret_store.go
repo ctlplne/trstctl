@@ -26,6 +26,10 @@ import (
 // the production store exposes no direct application-secret mutator.
 var ErrSecretNotFound = errors.New("store: secret not found")
 
+// ErrSecretReferenceLiteralConflict means an older reader could have selected
+// a different name from the same configuration.
+var ErrSecretReferenceLiteralConflict = errors.New("stored credential reference also identifies a legacy literal name. Configure an unambiguous reference")
+
 // ErrSecretShareNotFound is returned when a one-time share token hash is absent,
 // expired, or already consumed.
 var ErrSecretShareNotFound = errors.New("store: secret share not found")
@@ -1037,6 +1041,43 @@ func (s *Store) GetSecret(ctx context.Context, tenantID, name string) (Secret, e
 		return Secret{}, ErrSecretNotFound
 	}
 	return out, err
+}
+
+// GetSecretWithoutLiteralConflict reads only the canonical credential, after
+// checking for a competing legacy literal name in the same statement snapshot.
+// A delete receipt still rules out a change of identity after value retention
+// purges the deleted credential. All lookups use the same tenant and RLS.
+func (s *Store) GetSecretWithoutLiteralConflict(ctx context.Context, tenantID, name, literalName string, version *int) ([]byte, error) {
+	var conflict bool
+	var sealed []byte
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			WITH legacy AS (
+				SELECT (
+					EXISTS (SELECT 1 FROM secret_store WHERE tenant_id = $1 AND name = $3)
+					OR EXISTS (SELECT 1 FROM secret_store_tombstones WHERE tenant_id = $1 AND name = $3)
+					OR EXISTS (SELECT 1 FROM application_secret_mutation_receipts
+					           WHERE tenant_id = $1 AND secret_name = $3 AND action = 'delete')
+				) AS present
+			)
+			SELECT present,
+			       CASE WHEN present THEN NULL::bytea
+			            WHEN $4::integer IS NULL
+			            THEN (SELECT sealed FROM secret_store WHERE tenant_id = $1 AND name = $2)
+			            ELSE (SELECT sealed FROM secret_store_versions WHERE tenant_id = $1 AND name = $2 AND version = $4)
+			       END
+			  FROM legacy`, tenantID, name, literalName, version).Scan(&conflict, &sealed)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if conflict {
+		return nil, ErrSecretReferenceLiteralConflict
+	}
+	if sealed == nil {
+		return nil, ErrSecretNotFound
+	}
+	return sealed, nil
 }
 
 // ApplicationSecretApprovalTargetTx serializes a reviewer decision with the

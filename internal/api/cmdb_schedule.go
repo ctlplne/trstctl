@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -87,9 +88,9 @@ func (a *API) putCMDBSchedule(w http.ResponseWriter, r *http.Request) {
 		if err := requireAbsoluteURL(body.InstanceURL, "instance_url"); err != nil {
 			return 0, nil, err
 		}
-		if !strings.HasPrefix(strings.TrimSpace(body.TokenRef), "secret://") {
+		if _, err := credref.Parse(body.TokenRef); err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest,
-				"token_ref must be a secret:// reference; the network relay redeems it per attempt and the control plane never holds the token")
+				"token_ref: "+err.Error()+". The network relay redeems it per attempt.")
 		}
 		if body.IntervalSeconds < minCMDBInterval {
 			return 0, nil, errStatus(http.StatusBadRequest,

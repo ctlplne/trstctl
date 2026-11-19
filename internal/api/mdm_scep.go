@@ -12,6 +12,7 @@ import (
 
 	googleuuid "github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -129,6 +130,18 @@ func (a *API) previewMDMSCEPPolicy(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.writeMDMSCEPError(w, err)
 		return
+	}
+	if req.ChallengeCredentialRef != "" {
+		if _, err := credref.Parse(req.ChallengeCredentialRef); err != nil {
+			a.writeMDMSCEPError(w, errStatus(http.StatusBadRequest, "challenge_credential_ref: "+err.Error()))
+			return
+		}
+	}
+	for _, ref := range secretReferencesIn(req.TrustAnchorRefs) {
+		if _, err := credref.Parse(ref); err != nil {
+			a.writeMDMSCEPError(w, errStatus(http.StatusBadRequest, "trust_anchor_refs: "+err.Error()))
+			return
+		}
 	}
 	operation := "create"
 	policyID := strings.TrimSpace(r.PathValue("id"))

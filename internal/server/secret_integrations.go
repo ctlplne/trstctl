@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudauth"
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mongosignin"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -103,21 +104,22 @@ func (r integrationCredentialResolver) resolve(ctx context.Context, tenantID, re
 			return nil, fmt.Errorf("lock credential file value: %w", lockErr)
 		}
 		return locked, nil
-	case strings.HasPrefix(ref, "secret://"):
+	case credref.IsStored(ref):
+		reference, err := credref.Parse(ref)
+		if err != nil {
+			return nil, err
+		}
 		if r.store == nil || r.kek == nil {
 			return nil, errors.New("server: secret:// credential refs require store and KEK")
 		}
-		name := strings.Trim(strings.TrimPrefix(ref, "secret://"), "/")
-		if name == "" {
-			return nil, errors.New("server: empty secret:// credential ref")
-		}
+		name := reference.Name
 		var value []byte
-		err := withTenantCipher(ctx, r.crypto, r.kek, tenantID, func(_ context.Context, cipher tenantseal.Cipher) (err error) {
-			rec, err := r.store.GetSecret(ctx, tenantID, name)
+		err = withTenantCipher(ctx, r.crypto, r.kek, tenantID, func(_ context.Context, cipher tenantseal.Cipher) (err error) {
+			sealed, err := readFormerlyLiteralSecretReference(ctx, r.store, tenantID, reference)
 			if err != nil {
 				return fmt.Errorf("load tenant credential %q: %w", name, err)
 			}
-			value, err = cipher.Open(rec.Sealed, secretIntegrationStoreAAD(tenantID, name))
+			value, err = cipher.Open(sealed, secretIntegrationStoreAAD(tenantID, name))
 			return err
 		})
 		if err != nil {

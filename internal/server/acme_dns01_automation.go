@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	dnsacmedns "trstctl.com/trstctl/internal/dns/acmedns"
 	dnsakamai "trstctl.com/trstctl/internal/dns/akamai"
@@ -987,18 +988,18 @@ func (a *servedACMEDNS01Automation) secretRef(ctx context.Context, tenantID stri
 	if ref == "" {
 		return nil, nil
 	}
-	name := strings.TrimSpace(strings.TrimPrefix(ref, "secret://"))
-	if name == "" || name == ref {
-		return nil, fmt.Errorf("server: acme dns-01 credential ref %q must use secret://", field)
+	reference, err := credref.Parse(ref)
+	if err != nil {
+		return nil, fmt.Errorf("server: acme dns-01 credential ref %q: %w", field, err)
 	}
 	if a.kek == nil {
 		return nil, errors.New("server: acme dns-01 credential references require the secret store KEK")
 	}
-	rec, err := a.store.GetSecret(ctx, tenantID, name)
+	sealed, err := readFormerlyLiteralSecretReference(ctx, a.store, tenantID, reference)
 	if err != nil {
 		return nil, err
 	}
-	value, err := openTenantValue(ctx, a.crypto, a.kek, tenantID, rec.Sealed, []byte(tenantID+"/secret-store/"+name))
+	value, err := openTenantValue(ctx, a.crypto, a.kek, tenantID, sealed, []byte(tenantID+"/secret-store/"+reference.Name))
 	if err != nil {
 		return nil, err
 	}

@@ -1183,6 +1183,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	494: true, // TestMigration0494KeepsLegacyRollbackPublicationUnknown
 	495: true, // TestMigration0495RetainsUnclassifiedDiscoveryHistory
 	496: true, // TestMigration0496KeepsHistoricalAttackPathMetadataUnverified
+	497: true, // TestMigration0497IndexesExistingDeletionReceiptsWithoutChangingThem
 	442: true, // TestMigration0442KeepsSlackInstallsWithNoScopes
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod
 	383: true, // TestMigration0383KeepsDecoyUsesAsFoundByLookup

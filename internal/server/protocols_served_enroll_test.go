@@ -203,6 +203,24 @@ func TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004(t *testing.T) {
 			"root_ca_ref": "secret://mdm/intune/root-ca",
 		},
 	}
+	for _, tc := range []struct {
+		field string
+		value any
+		mode  string
+	}{
+		{"trust_anchor_refs", map[string]string{"root_ca_ref": "secret://fixture/mdm/anchor?version=01"}, "intune-jws"},
+		{"challenge_credential_ref", "secret://fixture/mdm/challenge?version=01", "hmac-dynamic"},
+	} {
+		body := map[string]any{
+			"name": "fixture-mdm-preview", "provider": "intune", "scep_profile": "mobile-scep",
+			"scep_endpoint": h.ts.URL + "/scep/pkiclient.exe", "challenge_mode": tc.mode,
+			tc.field: tc.value,
+		}
+		status, raw := secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies/preview", tok, body)
+		if status != http.StatusBadRequest || !bytes.Contains(raw, []byte("canonical secret://")) {
+			t.Errorf("preview accepted a noncanonical %s, HTTP %d", tc.field, status)
+		}
+	}
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies/preview", tok, create)
 	if status != http.StatusOK {
 		t.Fatalf("preview MDM SCEP policy: status %d body %s", status, body)

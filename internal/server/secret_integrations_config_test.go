@@ -236,6 +236,14 @@ func TestIntegrationCredentialResolverUsesCustodyCheckedFilesAndRejectsAmbientVa
 	}
 }
 
+func TestIntegrationResolverChecksStoredReferenceBeforeCustody(t *testing.T) {
+	resolver := integrationCredentialResolver{}
+	if _, err := resolver.resolve(t.Context(), "fixture-tenant", "secret://fixture/team/token?version=1&version=2"); err == nil ||
+		!strings.Contains(err.Error(), "canonical secret://") {
+		t.Fatalf("integration reference did not fail at format validation: %v", err)
+	}
+}
+
 func TestConfiguredBackendOpenersConstructEveryNetworklessProvider(t *testing.T) {
 	dir := t.TempDir()
 	credentialPath := filepath.Join(dir, "provider-admin")

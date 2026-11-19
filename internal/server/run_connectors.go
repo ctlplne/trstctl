@@ -12,13 +12,13 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/native"
 	connectorwasm "trstctl.com/trstctl/internal/connector/wasm/host"
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/egress"
@@ -346,28 +346,22 @@ type connectorCredentialLease struct {
 }
 
 func (l *connectorCredentialLease) require(ctx context.Context, ref string) ([]byte, error) {
-	if l.store == nil || l.kek == nil || strings.TrimSpace(l.tenantID) == "" {
-		return nil, errors.New("tenant secret-store runtime is unavailable")
-	}
-	name, version, err := parseConnectorSecretRef(ref)
+	reference, err := credref.Parse(ref)
 	if err != nil {
 		return nil, err
 	}
-	var sealed []byte
-	if version == nil {
-		record, err := l.store.GetSecret(ctx, l.tenantID, name)
-		if err != nil {
-			return nil, err
-		}
-		sealed = record.Sealed
-	} else {
-		record, err := l.store.GetSecretVersion(ctx, l.tenantID, name, *version)
-		if err != nil {
-			return nil, err
-		}
-		sealed = record.Sealed
+	return l.openReference(ctx, reference)
+}
+
+func (l *connectorCredentialLease) openReference(ctx context.Context, reference credref.Stored) ([]byte, error) {
+	if l.store == nil || l.kek == nil || strings.TrimSpace(l.tenantID) == "" {
+		return nil, errors.New("tenant secret-store runtime is unavailable")
 	}
-	plain, err := openTenantValue(ctx, l.crypto, l.kek, l.tenantID, sealed, []byte(l.tenantID+"/secret-store/"+name))
+	sealed, err := readSealedSecretReference(ctx, l.store, l.tenantID, reference)
+	if err != nil {
+		return nil, err
+	}
+	plain, err := openTenantValue(ctx, l.crypto, l.kek, l.tenantID, sealed, []byte(l.tenantID+"/secret-store/"+reference.Name))
 	if err != nil {
 		return nil, err
 	}
@@ -405,29 +399,26 @@ func (l *connectorCredentialLease) Close() {
 }
 
 func parseConnectorSecretRef(raw string) (string, *int, error) {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || parsed.Scheme != "secret" || parsed.User != nil || parsed.Fragment != "" {
-		return "", nil, fmt.Errorf("credential reference must use secret://")
+	reference, err := credref.Parse(raw)
+	return reference.Name, reference.Version, err
+}
+
+func readSealedSecretReference(ctx context.Context, st *store.Store, tenantID string, ref credref.Stored) ([]byte, error) {
+	if ref.Version != nil {
+		record, err := st.GetSecretVersion(ctx, tenantID, ref.Name, *ref.Version)
+		return record.Sealed, err
 	}
-	name := strings.Trim(strings.TrimSpace(parsed.Host+parsed.EscapedPath()), "/")
-	name, err = url.PathUnescape(name)
-	if err != nil || name == "" || strings.Contains(name, "..") {
-		return "", nil, fmt.Errorf("credential reference has an invalid secret name")
+	record, err := st.GetSecret(ctx, tenantID, ref.Name)
+	return record.Sealed, err
+}
+
+// Readers that previously used the reference suffix literally must not switch
+// credentials when that old name still exists.
+func readFormerlyLiteralSecretReference(ctx context.Context, st *store.Store, tenantID string, ref credref.Stored) ([]byte, error) {
+	if literalName := ref.LegacyLiteralName(); literalName != "" {
+		return st.GetSecretWithoutLiteralConflict(ctx, tenantID, ref.Name, literalName, ref.Version)
 	}
-	query := parsed.Query()
-	for key := range query {
-		if key != "version" {
-			return "", nil, fmt.Errorf("credential reference query %q is not supported", key)
-		}
-	}
-	if query.Get("version") == "" {
-		return name, nil, nil
-	}
-	version, err := strconv.Atoi(query.Get("version"))
-	if err != nil || version <= 0 {
-		return "", nil, fmt.Errorf("credential reference version must be positive")
-	}
-	return name, &version, nil
+	return readSealedSecretReference(ctx, st, tenantID, ref)
 }
 
 func connectorAttemptCleanup(built connector.Connector, lease *connectorCredentialLease, destroyers ...interface{ Destroy() }) func() {

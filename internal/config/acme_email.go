@@ -7,6 +7,8 @@ import (
 	"net"
 	"regexp"
 	"strings"
+
+	"trstctl.com/trstctl/internal/credref"
 )
 
 // ACMEEmail offers S/MIME certificates over ACME (RFC 8823, P15): email
@@ -102,8 +104,10 @@ func validateACMEEmail(p ACMEEmail) []error {
 		if len(sel) > 253 || !dkimSelectorPattern.MatchString(sel) {
 			errs = append(errs, fmt.Errorf("protocols.acme_email.dkim_selector %q is not a lowercase DKIM selector", p.DKIMSelector))
 		}
-		if ref := strings.TrimSpace(p.DKIMKeyRef); !strings.HasPrefix(ref, "file:") && !strings.HasPrefix(ref, "secret://") {
-			errs = append(errs, fmt.Errorf("protocols.acme_email.dkim_key_ref must be a file: or secret:// reference"))
+		if ref := strings.TrimSpace(p.DKIMKeyRef); !strings.HasPrefix(ref, "file:") {
+			if _, err := credref.Parse(ref); err != nil {
+				errs = append(errs, fmt.Errorf("protocols.acme_email.dkim_key_ref must be a file: or secret:// reference (%w)", err))
+			}
 		}
 	}
 	if p.IntakeSessionsPerSource < 0 || p.IntakeSessionsPerSource > 16 {

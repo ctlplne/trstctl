@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/accessdesktop"
 	"unicode"
 
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/dbaccess"
 	"trstctl.com/trstctl/internal/hostedkey"
 	"trstctl.com/trstctl/internal/netsec"
@@ -1316,8 +1317,9 @@ func validateCredentialRef(raw string) error {
 			return errors.New("file reference must contain an absolute path")
 		}
 		return nil
-	case strings.HasPrefix(raw, "secret://") && strings.Trim(strings.TrimPrefix(raw, "secret://"), "/") != "":
-		return nil
+	case credref.IsStored(raw):
+		_, err := credref.Parse(raw)
+		return err
 	default:
 		return errors.New("must use file:/absolute/path or tenant-scoped secret://name")
 	}

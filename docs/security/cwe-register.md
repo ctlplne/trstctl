@@ -204,12 +204,12 @@ not this file.
 | `internal/api/secret_scan_known_decoy_test.go:18` | fabricated decoy fixture; no value is real (CWE-798) |
 | `internal/api/secrets_posture.go:1169` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1317` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:48` | public MAC domain label, not a credential |
-| `internal/api/secrets_scanning.go:698` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:722` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:796` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:806` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:816` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:49` | public MAC domain label, not a credential |
+| `internal/api/secrets_scanning.go:699` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:723` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:797` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:807` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:817` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/audit/audit_test.go:179` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
 | `internal/audit/audit_test.go:211` | deliberately toxic fixture proves retained-prefix redaction (CWE-798). |
 | `internal/auth/oidc_client_secret.go:15` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -244,8 +244,8 @@ not this file.
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:14` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:21` | test-only file reference path (CWE-798) |
-| `internal/config/config.go:3717` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:4526` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3718` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:4527` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:28` | credential file paths only, no credential value (CWE-798) |
@@ -789,7 +789,7 @@ not this file.
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_access_explain_served_test.go:100` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
-| `internal/server/secret_integrations.go:1762` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1764` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:140` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:156` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
@@ -940,7 +940,7 @@ not this file.
 | `internal/store/secret_scoped_sync.go:395` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/secret_scoped_sync.go:437` | SQL column list, no credential (CWE-798) |
 | `internal/store/secret_static_rotation.go:429` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
-| `internal/store/secret_store.go:345` | SQL column identifiers only; this constant contains no credential material. |
+| `internal/store/secret_store.go:349` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
 | `internal/store/tenant_name_held.go:43` | table names and read queries, not credentials (CWE-798) |
 | `internal/store/tenant_unique_names_test.go:19` | table names and reasons, not credentials (CWE-798) |
@@ -1440,8 +1440,8 @@ not this file.
 | `internal/server/pam_gateway_private_ca_served_test.go:71` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_health.go:100` | a positive interval in nanoseconds, never negative (CWE-190) |
 | `internal/server/pam_served_test.go:731` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/server/protocol_mounts.go:1043` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
-| `internal/server/protocol_mounts.go:1045` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:1044` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:1046` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:482` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:256` | bounded small ints from config (CWE-190) |
@@ -1451,7 +1451,7 @@ not this file.
 | `internal/server/secret_sync_source_sequence_test.go:67` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:72` | this fixture appends exactly two events. |
 | `internal/server/secrets_rotation_served_test.go:2589` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/server/totp_seed_replace_served_test.go:72` | a positive clock step in a test (CWE-190) |
+| `internal/server/totp_seed_replace_served_test.go:76` | a positive clock step in a test (CWE-190) |
 | `internal/signing/keystore.go:128` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:130` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:132` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
@@ -1841,7 +1841,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4238` | closed test table list above |
+| `internal/store/migration_content_test.go:4239` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
@@ -2839,9 +2839,9 @@ not this file.
 | `internal/cloudauth/cloudauth.go:402` | operator-configured projected token path (CWE-22) |
 | `internal/cloudauth/gcp_token_source.go:115` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:3812` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:5175` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5194` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:3813` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:5176` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5195` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:331` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -3078,10 +3078,10 @@ not this file.
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:97` | the repository's own fixture (CWE-22) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:117` | the repository's own fixture (CWE-22) |
 | `internal/server/protect_correct102_guard_test.go:122` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/protocol_mounts.go:763` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:878` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:995` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:1404` | operator-configured trust bundle path (CWE-22) |
+| `internal/server/protocol_mounts.go:764` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:879` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:996` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:1405` | operator-configured trust bundle path (CWE-22) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:602` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:237` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:241` | test reads its own tempdir fixture (CWE-22) |
@@ -3101,7 +3101,7 @@ not this file.
 | `internal/server/run.go:1225` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run.go:1412` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run.go:1873` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/run_connectors_test.go:92` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/scan_annotation_served_test.go:48` | test fixture under t.TempDir (CWE-22) |
 | `internal/server/sdk_registry_install_served_test.go:330` | the test reads what it downloaded under its own temp dir (CWE-22) |
@@ -3109,7 +3109,7 @@ not this file.
 | `internal/server/sdk_registry_install_served_test.go:352` | the test reads what it installed under its own temp dir (CWE-22) |
 | `internal/server/secret_csi_restart_served_test.go:143` | the test's own temp file (CWE-22) |
 | `internal/server/secret_csi_restart_served_test.go:153` | the test's own temp file (CWE-22) |
-| `internal/server/secret_integrations.go:482` | the operator's own administrator DSN names this root file on the control plane's host (CWE-22) |
+| `internal/server/secret_integrations.go:484` | the operator's own administrator DSN names this root file on the control plane's host (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:82` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:105` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:135` | the test's own temp file (CWE-22) |
@@ -3686,8 +3686,8 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
-| `internal/config/config.go:5175` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5194` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5176` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5195` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |

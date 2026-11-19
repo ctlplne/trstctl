@@ -9,11 +9,11 @@ import (
 	"html"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	mdmchallenge "trstctl.com/trstctl/internal/mdm/challenge"
@@ -59,19 +59,21 @@ func (s *Server) mdmSCEPDynamicPolicy(ctx context.Context, tenantID, policyID st
 // openMDMSCEPSecretRef opens one secret:// reference of an MDM SCEP policy from
 // the tenant secret store. The caller wipes the plaintext.
 func (s *Server) openMDMSCEPSecretRef(ctx context.Context, tenantID, label, ref string, keyWrapper sealKeyWrapper) ([]byte, error) {
+	reference, err := credref.Parse(ref)
+	if err != nil {
+		return nil, fmt.Errorf("server: MDM SCEP %s: %w", label, err)
+	}
 	if keyWrapper == nil {
 		return nil, fmt.Errorf("server: MDM SCEP %s references require a credential KEK", label)
 	}
-	name, ok := strings.CutPrefix(strings.TrimSpace(ref), "secret://")
-	name = strings.TrimSpace(strings.TrimPrefix(name, "/"))
-	if !ok || name == "" {
-		return nil, fmt.Errorf("server: MDM SCEP %s must be a non-empty secret:// reference", label)
+	sealed, err := readFormerlyLiteralSecretReference(ctx, s.store, tenantID, reference)
+	if errors.Is(err, store.ErrSecretReferenceLiteralConflict) {
+		return nil, err
 	}
-	rec, err := s.store.GetSecret(ctx, tenantID, name)
 	if err != nil {
 		return nil, fmt.Errorf("server: MDM SCEP %s is not readable", label)
 	}
-	plain, err := openTenantValue(ctx, s.tenantCrypto, keyWrapper, tenantID, rec.Sealed, secretStoreAADForMDMSCEP(tenantID, name))
+	plain, err := openTenantValue(ctx, s.tenantCrypto, keyWrapper, tenantID, sealed, secretStoreAADForMDMSCEP(tenantID, reference.Name))
 	if err != nil {
 		return nil, fmt.Errorf("server: MDM SCEP %s is not openable", label)
 	}

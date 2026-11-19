@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
@@ -204,9 +205,8 @@ func validateConnectors(c Connectors) []error {
 			(endpoint.Scheme != "https" && (!c.AllowInsecureHTTP || endpoint.Scheme != "http" || !netsec.IsLoopbackHost(endpoint.Hostname()))) {
 			errs = append(errs, fmt.Errorf("%s.endpoint must be an absolute HTTPS URL without userinfo, query, or fragment; explicit insecure http is loopback-only", where))
 		}
-		secretRef, err := url.Parse(strings.TrimSpace(binding.TokenRef))
-		if err != nil || secretRef.Scheme != "secret" || strings.Trim(secretRef.Host+secretRef.Path, "/") == "" || secretRef.User != nil || secretRef.Fragment != "" {
-			errs = append(errs, fmt.Errorf("%s.token_ref must use secret://name", where))
+		if _, err := credref.Parse(binding.TokenRef); err != nil {
+			errs = append(errs, fmt.Errorf("%s.token_ref must use secret://name (%w)", where, err))
 		}
 		if executor := strings.ToLower(strings.TrimSpace(binding.Executor)); executor != "" && executor != "control_plane" && executor != RightSizeExecutorNetwork {
 			errs = append(errs, fmt.Errorf("%s.executor must be empty, \"control_plane\" or \"network\"", where))
