@@ -81,6 +81,51 @@ func TestServedACMEPlanNamesInternalTrustModeAndRequiresEAB(t *testing.T) {
 	}
 }
 
+// CR-050: the readiness plan for an internal-trust default requires an
+// active credential pinned to that profile.
+func TestServedACMEPlanRequiresActivePinForInternalTrustDefault(t *testing.T) {
+	const profileName = "pinned-internal"
+	h := newOperatingServedHarness(t, config.Protocols{
+		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		ACMEEAB: config.ACMEExternalAccountBinding{Required: true, Keys: []config.ACMEExternalAccountBindingKey{
+			{KeyID: "active", HMACKey: bytes.Repeat([]byte{0x31}, 32)},
+			{KeyID: "disabled", HMACKey: bytes.Repeat([]byte{0x32}, 32), Profile: profileName, Disabled: true},
+		}},
+	}, func(d *Deps) { d.DefaultProfile = profileName })
+	storeServerTestProfile(t, h.store, h.tenant, profileName, profile.CertificateProfile{
+		Name: profileName, ACMEAuthMode: profile.ACMEAuthModeTrustAuthenticated,
+		MaxValidity: profile.Duration(24 * time.Hour), AllowedProtocols: []string{"acme"},
+	})
+	token := seedScopedToken(t, h.store, h.tenant, string(authz.IssuersRead), string(authz.IssuersWrite))
+	readPlan := func() (bool, []string) {
+		t.Helper()
+		status, body := secretsReq(t, h, http.MethodGet, "/api/v1/acme/operator-plan", token, nil)
+		var plan struct {
+			Ready    bool     `json:"ready"`
+			Blockers []string `json:"blockers"`
+		}
+		if status != http.StatusOK {
+			t.Fatalf("read ACME operator plan: %d %s", status, body)
+		}
+		if err := json.Unmarshal(body, &plan); err != nil {
+			t.Fatal(err)
+		}
+		return plan.Ready, plan.Blockers
+	}
+	if ready, blockers := readPlan(); ready || !strings.Contains(strings.Join(blockers, " "), "pinned") {
+		t.Errorf("plan without active matching pin = ready %v, blockers %v", ready, blockers)
+	}
+	status, body := secretsReq(t, h, http.MethodPut, "/api/v1/acme/eab-credentials/active/policy", token, map[string]any{
+		"profile": profileName,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("pin active credential: %d %s", status, body)
+	}
+	if ready, blockers := readPlan(); !ready || len(blockers) != 0 {
+		t.Errorf("plan with an active matching pin = ready %v, blockers %v", ready, blockers)
+	}
+}
+
 // F5 needs one server-owned answer to the operator's simple question: "Can an
 // ACME client get a certificate from this tenant right now?" Browser probes can
 // only prove that one browser reached one URL. They cannot prove the tenant

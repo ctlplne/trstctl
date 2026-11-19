@@ -166,6 +166,29 @@ func TestEABCredentialsCarryNoSecret(t *testing.T) {
 	}
 }
 
+// CR-050: once installed, the grant owns the identifiers used by order checks.
+func TestACMEInstalledCredentialOwnsItsIdentifierScope(t *testing.T) {
+	scope := []string{"first.example.test"}
+	s, err := New(nil, Validators{}).WithExternalAccountBindings(true, []ExternalAccountBindingKey{{
+		KeyID: "enrollment", HMACKey: []byte("owned-profile-fixture"),
+		Policy: EABPolicy{AllowedIdentifiers: scope, Profile: "first-pki"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Destroy)
+	scope[0] = "second.example.test"
+	acct := &account{eabKeyID: "enrollment"}
+	req := OrderRequest{Identifiers: []Identifier{{Type: IdentifierDNS, Value: "first.example.test"}}}
+	if _, reason := s.authorizeOrderAgainstEAB(acct, req); reason != "" {
+		t.Fatalf("caller changed the installed credential's scope: %s", reason)
+	}
+	req.Identifiers[0].Value = "second.example.test"
+	if _, reason := s.authorizeOrderAgainstEAB(acct, req); reason == "" {
+		t.Fatal("caller widened the installed credential's scope")
+	}
+}
+
 // TestAuthorizeOrderAgainstEABFailsClosedOnAMissingCredential covers the case a
 // config reload creates: an account outlives the credential that admitted it.
 // Treating that as unscoped would turn removing a credential into widening it.
@@ -173,9 +196,9 @@ func TestAuthorizeOrderAgainstEABFailsClosedOnAMissingCredential(t *testing.T) {
 	s := New(nil, Validators{})
 	s.eabCredentials = map[string]*eabCredential{}
 
-	cred, reason := s.authorizeOrderAgainstEAB(&account{url: "u", eabKeyID: "gone"}, OrderRequest{})
-	if cred != nil || reason == "" {
-		t.Fatalf("a missing credential must fail closed, got cred=%v reason=%q", cred, reason)
+	authorization, reason := s.authorizeOrderAgainstEAB(&account{url: "u", eabKeyID: "gone"}, OrderRequest{})
+	if authorization.credential != nil || reason == "" {
+		t.Fatalf("a missing credential must fail closed, got cred=%v reason=%q", authorization.credential, reason)
 	}
 
 	// An account created without EAB is not constrained here: whether the

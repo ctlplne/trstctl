@@ -175,19 +175,28 @@ key lives, never the key. A successor whose reference stops resolving is listed 
 `unavailable` and admits nothing. The served disable verb cannot re-enable a
 credential that configuration disables; config is the floor. A credential may pin
 the certificate profile its orders are issued with (`keys[].profile`, or the served
-policy); without a pin the deployment's `ca.default_profile` applies.
+policy). An unpinned account uses the deployment's `ca.default_profile`. The
+public directory's `meta.profiles` lists only that default. An account can omit
+the profile field to use its pin or explicitly name its pin. The server resolves
+that name and refuses a different profile before creating an order. The
+`meta.credentialProfileSelection` capability tells EAB-capable clients that the
+server accepts private profile selections without publishing their names.
 
 The default ACME profile mode is full public-trust domain validation. For internal PKI,
 an active certificate profile can explicitly set `"acme_auth_mode":"trust_authenticated"`.
-Set `ca.default_profile` to that profile and configure `protocols.acme_eab.required=true`
-with a scoped EAB credential injected through a 0600 `hmac_key_file`. The server reads
-the tenant's active profile version for each order. Only an account that registered
-with that EAB credential can move an order straight to ready without a DV challenge;
-possession of a self-created ACME account key is insufficient. The readiness panel
-names this mode and blocks a trust-authenticated profile when EAB is not mandatory.
-Changing the active profile or disabling/expiring its EAB credential stops a pending
-internal-trust order from finalizing; already issued certificates remain valid until
-their ordinary renewal or revocation. trstctl also applies an account-keyed
+Set `protocols.acme_eab.required=true` and pin a scoped EAB credential to that
+profile. The `ca.default_profile` setting separately selects the profile listed
+in the directory. A credential's pin may name a different active profile.
+Inject the HMAC key through a 0600
+`hmac_key_file`. An account bound to that exact pin can create a ready order
+without a DV challenge. The readiness panel checks mandatory EAB and an active
+matching credential for an internal-trust default. The server rechecks the
+active profile and the current credential pin before finalizing. Changing the
+pin, disabling or expiring the credential, or switching the profile to public
+trust stops a pending internal-trust order from finalizing. Already issued
+certificates remain valid until expiration or revocation. When upgrading,
+configure pins for internal-trust credentials and replace pending internal-trust
+orders that have no recorded profile. trstctl also applies an account-keyed
 order/hour limiter plus a concurrent-order cap, so many clients behind one NAT do not
 share a single coarse source-IP budget and one noisy account cannot starve the ACME lane.
 
@@ -762,8 +771,8 @@ tenant cannot read another tenant's certificate identifiers or rotation evidence
   — this is deliberate, not a bug.
 - **CAA fails closed** on lookup errors: if your DNS is unreachable, issuance is
   refused rather than risked.
-- **`trust_authenticated` is not public issuance.** Use it only for an internal profile
-  with mandatory, scoped EAB. The ACME account key alone is not enrollment authority.
+- **`trust_authenticated` requires a matching EAB profile pin.** Make EAB
+  mandatory and scope each enrollment credential to its intended internal names.
 
 ## Reference
 

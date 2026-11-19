@@ -636,36 +636,46 @@ func (s *Server) eabAllowsDNS01Publication(acct *account, identifier string) boo
 	return active
 }
 
-// authorizeOrderAgainstEAB decides whether an order is inside the scope of the
-// credential that admitted its account. It returns that credential (so the caller
-// can count the outcome) and an operator-facing denial reason, empty when the
-// order may proceed.
-//
-// An account created without EAB has no credential and is unconstrained here —
-// the deployment either requires EAB or it does not, and this function does not
-// re-litigate that decision.
-func (s *Server) authorizeOrderAgainstEAB(acct *account, req OrderRequest) (*eabCredential, string) {
-	if acct == nil || acct.eabKeyID == "" {
-		return nil, ""
-	}
+type eabOrderAuthorization struct {
+	credential *eabCredential // retained for usage accounting
+	profile    string
+	required   bool
+}
+
+// authorizeOrderAgainstEAB checks identifiers and captures the profile pin from
+// the same policy. Accounts created without EAB have no identifier constraints
+// here. The caller uses required and profile for the internal-trust mode gate.
+func (s *Server) authorizeOrderAgainstEAB(acct *account, req OrderRequest) (eabOrderAuthorization, string) {
 	s.mu.Lock()
+	authorization := eabOrderAuthorization{required: s.meta.ExternalAccountRequired}
+	if acct == nil || acct.eabKeyID == "" {
+		s.mu.Unlock()
+		return authorization, ""
+	}
 	cred := s.eabCredentials[acct.eabKeyID]
-	s.mu.Unlock()
 	if cred == nil {
+		s.mu.Unlock()
 		// The credential that admitted this account is gone from configuration.
 		// Fail closed: an account outlives a config reload, and silently treating
 		// it as unscoped would turn removing a credential into widening it.
-		return nil, "the external account credential that authorized this account is no longer configured"
+		return authorization, "the external account credential that authorized this account is no longer configured"
 	}
-	if ok, reason := cred.active(time.Now()); !ok {
-		return cred, reason
+	authorization.credential = cred
+	// Installed policies own their identifier slices. Policy updates replace
+	// the slice under s.mu, so matching can run on this snapshot after unlock.
+	policy := cred.policy
+	active, reason := cred.active(time.Now())
+	s.mu.Unlock()
+	if !active {
+		return authorization, reason
 	}
 	for _, id := range req.Identifiers {
-		if !cred.policy.permits(id.Value) {
-			return cred, "identifier " + id.Value + " is outside the scope of external account credential " + cred.keyID
+		if !policy.permits(id.Value) {
+			return authorization, "identifier " + id.Value + " is outside the scope of external account credential " + cred.keyID
 		}
 	}
-	return cred, ""
+	authorization.profile = strings.TrimSpace(policy.Profile)
+	return authorization, ""
 }
 
 // recordEABOrderDenial appends the denial to the state log. A log failure must

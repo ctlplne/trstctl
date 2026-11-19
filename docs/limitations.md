@@ -7909,18 +7909,19 @@ state.
 ## ACME certificate profiles
 
 Both directions of draft-ietf-acme-profiles are served. trstctl's ACME client (the
-`letsencrypt` external CA type) requests the profile named by the authority's
-`acme_profile` configuration on every `newOrder`, and only when the authority's
-directory advertises it in `meta.profiles`: an unadvertised or misspelled name
-fails before an order exists. With no `acme_profile` the authority applies its
-own default, as before. trstctl's ACME server advertises its offered profiles in
-`meta.profiles` (the mount's default plus every credential-pinned profile), accepts
-a client's `profile` member when it names an advertised profile, and refuses an
-unknown one with `invalidProfile`; a `protocols.acme_eab.keys[].profile` pins the
-profile every order under that credential is issued with, and a client asking for
-a different one is refused. The selected profile is recorded on the order and the
-served issuance signs under it. A live profile request against Let's Encrypt's
-production directory is not part of local evidence.
+`letsencrypt` external CA type) requests the configured `acme_profile` on each
+`newOrder`. The directory must list the name in `meta.profiles` or advertise
+`meta.credentialProfileSelection` while the client supplies an EAB binding.
+An authority that supports private selection checks the name at order creation.
+With no `acme_profile`, the authority chooses the profile.
+
+The trstctl directory lists only the mount default. An EAB credential can pin
+a private profile with `protocols.acme_eab.keys[].profile`. The server matches a
+request against the credential's pin or the mount default for an unpinned
+account. It answers `invalidProfile` for an unauthorized explicit name. The
+selected profile is recorded on the order and controls served issuance. Local
+profile-request evidence uses controlled authorities. The production Let's
+Encrypt directory requires a separate live check.
 
 ## Upstream domain validation
 

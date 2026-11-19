@@ -23,6 +23,48 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
+// CR-050: private pin selection must stay opt-in at the authority. An ordinary
+// upstream continues to reject unknown names before an order is sent.
+func TestDriverRequiresAdvertisementForAnOrdinaryUpstream(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		meta string
+		eab  bool
+	}{
+		{"ordinary EAB upstream", `{"profiles":{"public":"Public issuance"}}`, true},
+		{"private selection without an EAB binding", `{"profiles":{"public":"Public issuance"},"credentialProfileSelection":true}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			requests := 0
+			client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				requests++
+				if req.Method != http.MethodGet || req.URL.Path != "/directory" {
+					t.Fatalf("unexpected ACME request: %s %s", req.Method, req.URL.Path)
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"meta":` + tc.meta + `}`)),
+				}, nil
+			})}
+			driver, err := newLocalDriverWithHTTPClient("https://acme.test/directory", nil, client)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(driver.Destroy)
+			driver.WithProfile("private")
+			if tc.eab {
+				driver.WithExternalAccountBinding("account-fixture", []byte("private-profile-fixture"))
+			}
+			if _, err := driver.authorizeOrder(t.Context(), []string{"svc.example.test"}); !errors.Is(err, ErrProfileNotOffered) {
+				t.Fatalf("unadvertised profile returned %v, want ErrProfileNotOffered", err)
+			}
+			if requests != 1 {
+				t.Fatalf("directory and order requests = %d, want one GET", requests)
+			}
+		})
+	}
+}
+
 func TestDriverUsesInjectedHTTPClientAndDestroysAccountKey(t *testing.T) {
 	requests := 0
 	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {

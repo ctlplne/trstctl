@@ -31,9 +31,9 @@ import (
 // encoder is not exported, so a profile-bearing newOrder is posted here with
 // the same account key, nonce discipline and flattened JWS encoding the library
 // uses. Everything after order creation (authorizations, finalize, fetch) goes
-// back through the library, which only needs the order's URLs. The profile is
-// requested only when the directory advertises it in meta.profiles, so a
-// misspelled name fails before any order exists.
+// back through the library, which only needs the order's URLs. The directory
+// must advertise the name, or explicitly support private selection for an
+// account with EAB. The authority checks the private pin at order creation.
 
 // WithProfile asks the authority to issue every order under the named
 // draft-ietf-acme-profiles profile. Empty clears the request.
@@ -52,39 +52,39 @@ func (d *Driver) Profile() string {
 	return d.profile
 }
 
-// ErrProfileNotOffered is returned when the directory does not advertise the
-// requested profile. No order is created.
+// ErrProfileNotOffered means the directory authorizes neither public nor
+// private selection of this request. No order is created.
 var ErrProfileNotOffered = errors.New("acmekey: the authority does not offer the requested certificate profile")
 
 type directoryProfiles struct {
 	Meta struct {
-		Profiles map[string]string `json:"profiles"`
+		Profiles                   map[string]string `json:"profiles"`
+		CredentialProfileSelection bool              `json:"credentialProfileSelection"`
 	} `json:"meta"`
 }
 
-// offeredProfiles reads meta.profiles from the directory document.
-func (d *Driver) offeredProfiles(ctx context.Context) (map[string]string, error) {
+func (d *Driver) directoryProfileMetadata(ctx context.Context) (directoryProfiles, error) {
+	var dir directoryProfiles
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, d.client.DirectoryURL, nil)
 	if err != nil {
-		return nil, err
+		return dir, err
 	}
 	client, err := d.httpClient()
 	if err != nil {
-		return nil, err
+		return dir, err
 	}
 	res, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return dir, err
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("acmekey: directory returned status %d", res.StatusCode)
+		return dir, fmt.Errorf("acmekey: directory returned status %d", res.StatusCode)
 	}
-	var dir directoryProfiles
 	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&dir); err != nil {
-		return nil, fmt.Errorf("acmekey: decode directory: %w", err)
+		return dir, fmt.Errorf("acmekey: decode directory: %w", err)
 	}
-	return dir.Meta.Profiles, nil
+	return dir, nil
 }
 
 // httpClient is the client the authority was constructed with. A driver built
@@ -104,11 +104,12 @@ func (d *Driver) authorizeOrder(ctx context.Context, dnsNames []string) (*acme.O
 	if d.profile == "" {
 		return d.client.AuthorizeOrder(ctx, acme.DomainIDs(dnsNames...))
 	}
-	offered, err := d.offeredProfiles(ctx)
+	metadata, err := d.directoryProfileMetadata(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := offered[d.profile]; !ok {
+	privateSelection := metadata.Meta.CredentialProfileSelection && d.eab != nil
+	if _, public := metadata.Meta.Profiles[d.profile]; !public && !privateSelection {
 		return nil, fmt.Errorf("%w: %q", ErrProfileNotOffered, d.profile)
 	}
 	dir, err := d.client.Discover(ctx)

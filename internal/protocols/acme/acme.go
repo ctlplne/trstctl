@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -310,8 +309,7 @@ type Server struct {
 	// namedProfileResolver reads any active tenant profile by name, for a
 	// credential-pinned or client-requested profile (A55/A56).
 	namedProfileResolver func(context.Context, string) (profile.CertificateProfile, error)
-	// defaultProfileName is the mount's default profile, advertised in the
-	// directory's meta.profiles beside every credential-pinned profile.
+	// defaultProfileName is the only profile advertised in the public directory.
 	defaultProfileName string
 
 	// onFailure receives a diagnosis for every refusal this server issues
@@ -500,7 +498,9 @@ func (s *Server) WithExternalAccountBindings(required bool, keys []ExternalAccou
 			destroyEABCredentials(next)
 			return nil, fmt.Errorf("acme: external account binding key %q: %w", keyID, err)
 		}
-		next[keyID] = &eabCredential{keyID: keyID, key: buf, policy: key.Policy}
+		policy := key.Policy
+		policy.AllowedIdentifiers = append([]string(nil), policy.AllowedIdentifiers...)
+		next[keyID] = &eabCredential{keyID: keyID, key: buf, policy: policy}
 	}
 	if required && len(next) == 0 {
 		return nil, errors.New("acme: external account binding required with no keys")
@@ -570,56 +570,17 @@ func (s *Server) WithDefaultProfileName(name string) *Server {
 	return s
 }
 
-// advertisedProfiles lists the profile names this mount offers: the default
-// and every credential-pinned one, sorted.
-func (s *Server) advertisedProfiles() []string {
-	seen := map[string]bool{}
-	var out []string
-	add := func(name string) {
-		name = strings.TrimSpace(name)
-		if name == "" || seen[name] {
-			return
+// selectOrderProfile gives a pinned account its own profile. An unpinned
+// account can name the mount default or leave the request empty.
+func (s *Server) selectOrderProfile(requested, pinned string) (string, string) {
+	if pinned != "" {
+		if requested != "" && requested != pinned {
+			return "", "this account's external account credential pins profile " + strconv.Quote(pinned) + "; it cannot order under " + strconv.Quote(requested)
 		}
-		seen[name] = true
-		out = append(out, name)
-	}
-	add(s.defaultProfileName)
-	s.mu.Lock()
-	for _, cred := range s.eabCredentials {
-		add(cred.policy.Profile)
-	}
-	s.mu.Unlock()
-	sort.Strings(out)
-	return out
-}
-
-func (s *Server) profileAdvertised(name string) bool {
-	for _, offered := range s.advertisedProfiles() {
-		if offered == name {
-			return true
-		}
-	}
-	return false
-}
-
-// selectOrderProfile decides which profile an order is issued under: the
-// credential's pinned profile wins; a client-requested profile must be
-// advertised and must not contradict the pin. It returns the selected name
-// ("" for the mount default) or a problem detail.
-func (s *Server) selectOrderProfile(requested string, cred *eabCredential) (string, string) {
-	pinned := ""
-	if cred != nil {
-		pinned = strings.TrimSpace(cred.policy.Profile)
-	}
-	requested = strings.TrimSpace(requested)
-	if requested == "" {
 		return pinned, ""
 	}
-	if !s.profileAdvertised(requested) {
+	if requested != "" && requested != s.defaultProfileName {
 		return "", "profile " + strconv.Quote(requested) + " is not offered by this server; see the directory's meta.profiles"
-	}
-	if pinned != "" && requested != pinned {
-		return "", "this account's external account credential pins profile " + strconv.Quote(pinned) + "; it cannot order under " + strconv.Quote(requested)
 	}
 	return requested, ""
 }
@@ -875,13 +836,13 @@ func (s *Server) directoryMeta(base string) map[string]any {
 	if s.dnsPersist != nil && s.dnsPersist.hashed {
 		meta["accountHashPrefix"] = DNSPersistAccountHashPrefix(base)
 	}
-	// draft-ietf-acme-profiles: advertise the profiles an order may name.
-	if offered := s.advertisedProfiles(); len(offered) > 0 {
-		profiles := make(map[string]string, len(offered))
-		for _, name := range offered {
-			profiles[name] = "trstctl certificate profile " + name
+	// The capability lets EAB clients request a private profile explicitly.
+	// Its value is independent of which credentials or pins are configured.
+	meta["credentialProfileSelection"] = true
+	if name := s.defaultProfileName; name != "" {
+		meta["profiles"] = map[string]string{
+			name: "trstctl certificate profile " + name,
 		}
-		meta["profiles"] = profiles
 	}
 	return meta
 }
@@ -1229,7 +1190,8 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	// (B4). This runs before any work is done and before any rate limiter, so a
 	// denial costs nothing and is recorded against the credential rather than
 	// disappearing into a generic rejection.
-	eabCred, eabDenial := s.authorizeOrderAgainstEAB(acct, req)
+	eabGrant, eabDenial := s.authorizeOrderAgainstEAB(acct, req)
+	eabCred := eabGrant.credential
 	if eabDenial != "" {
 		if eabCred != nil {
 			eabCred.recordDenial(time.Now())
@@ -1238,15 +1200,14 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		s.problem(w, r, http.StatusForbidden, "unauthorized", eabDenial)
 		return
 	}
-	// The profile the order is issued under (A55/A56): the credential's pin
-	// wins, a client's request must be advertised and must not contradict it.
-	selectedProfile, profileProblem := s.selectOrderProfile(req.Profile, eabCred)
+	pinnedProfile := eabGrant.profile
+	selectedProfile, profileProblem := s.selectOrderProfile(req.Profile, pinnedProfile)
 	if emailAddresses != nil {
 		selectedProfile, profileProblem = s.email.profile, ""
 		if requested := strings.TrimSpace(req.Profile); requested != "" && requested != s.email.profile {
 			profileProblem = "an S/MIME order is issued under profile " + strconv.Quote(s.email.profile)
 		}
-		if eabCred != nil && eabCred.policy.Profile != "" && eabCred.policy.Profile != s.email.profile {
+		if pinnedProfile != "" && pinnedProfile != s.email.profile {
 			profileProblem = "this account's external account credential pins a profile that does not issue S/MIME certificates"
 		}
 	}
@@ -1259,18 +1220,14 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		s.problem(w, r, http.StatusServiceUnavailable, "serverInternal", "the ACME certificate profile for this order is unavailable")
 		return
 	}
-	// An ACME account key alone proves only possession of a self-created key.
-	// Skipping DNS validation requires operator-issued EAB authorization, both
-	// in the served directory policy and on this exact account.
-	s.mu.Lock()
-	eabRequired := s.meta.ExternalAccountRequired
-	s.mu.Unlock()
+	// Internal-trust issuance requires mandatory EAB and an exact profile pin
+	// on this account. The mount default grants no authority to skip DV.
 	if authMode == profile.ACMEAuthModeTrustAuthenticated && emailAddresses != nil {
 		s.problem(w, r, http.StatusForbidden, "unauthorized", "an S/MIME order always proves control of the mailbox")
 		return
 	}
-	if authMode == profile.ACMEAuthModeTrustAuthenticated && (!eabRequired || acct.eabKeyID == "") {
-		s.problem(w, r, http.StatusForbidden, "unauthorized", "internal-trust ACME orders require a required, EAB-bound account")
+	if authMode == profile.ACMEAuthModeTrustAuthenticated && (!eabGrant.required || selectedProfile == "" || pinnedProfile != selectedProfile) {
+		s.problem(w, r, http.StatusForbidden, "unauthorized", "internal-trust ACME orders require mandatory EAB and a credential pinned to the issuing profile")
 		return
 	}
 	if s.quota.MaxNewOrdersPerAccount > 0 && s.accountLimiter != nil {
@@ -1697,9 +1654,8 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		}()
 	}
 	if o.authMode == profile.ACMEAuthModeTrustAuthenticated {
-		// Re-read the profile THIS order was selected under (A55/A56), not the
-		// mount default: a credential-pinned trust-authenticated order stays
-		// authorized while that profile is active.
+		// Recheck the retained profile and the account's current pin. An
+		// unnamed order cannot prove which profile its grant authorized.
 		mode, err := s.authModeForProfile(r.Context(), o.profile)
 		if err != nil {
 			s.problem(w, r, http.StatusServiceUnavailable, "serverInternal", "the ACME certificate profile for this order is unavailable")
@@ -1707,10 +1663,11 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		}
 		s.mu.Lock()
 		credential := s.eabCredentials[acct.eabKeyID]
-		eabRequired := s.meta.ExternalAccountRequired
+		authorized := s.meta.ExternalAccountRequired && o.profile != "" &&
+			credential != nil && strings.TrimSpace(credential.policy.Profile) == o.profile &&
+			credential.pendingFinalizationAllowed(time.Now())
 		s.mu.Unlock()
-		if mode != profile.ACMEAuthModeTrustAuthenticated || !eabRequired ||
-			credential == nil || !credential.pendingFinalizationAllowed(time.Now()) {
+		if mode != profile.ACMEAuthModeTrustAuthenticated || !authorized {
 			s.problem(w, r, http.StatusForbidden, "unauthorized", "internal-trust ACME authorization is no longer active")
 			return
 		}

@@ -75,9 +75,11 @@ func (s *Server) acmeOperatorPlan(ctx context.Context, tenantID string) (api.ACM
 	}
 	plan.EABRequired = posture.Required
 	plan.EABConfigured = len(posture.Items)
+	activeDefaultPin := false
 	for _, credential := range posture.Items {
 		if credential.State == "active" {
 			plan.EABActive++
+			activeDefaultPin = activeDefaultPin || credential.Profile == plan.IssuingProfile
 		}
 	}
 	if plan.EABRequired && plan.EABActive == 0 {
@@ -102,6 +104,11 @@ func (s *Server) acmeOperatorPlan(ctx context.Context, tenantID string) (api.ACM
 	if err := s.acmeOperatorProfile(ctx, tenantID, &plan); err != nil {
 		return api.ACMEOperatorPlan{}, err
 	}
+	if plan.IssuingProfileAuthMode == string(profile.ACMEAuthModeTrustAuthenticated) &&
+		plan.EABRequired && plan.EABActive > 0 && !activeDefaultPin {
+		plan.Blockers = append(plan.Blockers, "The internal-trust default requires an active External Account Binding credential pinned to the default issuing profile.")
+		plan.RecoverySteps = append(plan.RecoverySteps, "Set the active EAB credential's profile pin to the default issuing profile and reload this plan.")
+	}
 
 	plan.Ready = plan.Served && plan.TenantBound && plan.IssuingProfileReady &&
 		(!plan.EABRequired || plan.EABActive > 0) && len(plan.Blockers) == 0
@@ -115,7 +122,7 @@ func (s *Server) acmeOperatorPlan(ctx context.Context, tenantID string) (api.ACM
 	case plan.Ready:
 		detail := "Point a stock ACME client at this directory. Account, order, challenge, issuance, renewal, and revocation remain protocol operations."
 		if plan.IssuingProfileAuthMode == string(profile.ACMEAuthModeTrustAuthenticated) {
-			detail = "Register the client with scoped EAB and request an internal certificate. Domain challenges are skipped; issuance, renewal, and revocation remain protocol operations."
+			detail = "Register the client with a scoped EAB credential pinned to the issuing profile. This grant allows the account to skip domain challenges."
 		}
 		plan.NextAction = api.ACMEOperatorAction{
 			Kind: "connect_acme_client", Label: "Connect an ACME client",

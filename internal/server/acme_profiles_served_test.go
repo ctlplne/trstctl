@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"net/http"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -19,13 +19,9 @@ import (
 	"trstctl.com/trstctl/internal/profile"
 )
 
-// A55/A56 on the served ACME mount: the directory advertises the default and
-// every credential-pinned profile; an order under a credential that pins a
-// trust-authenticated profile is issued under it (ready without challenges)
-// while an unpinned credential gets the public-trust default; a client that
-// requests the advertised pinned profile issues end to end, and one that asks
-// for a different profile than its credential pins is refused with
-// invalidProfile before any order exists.
+// A55/A56 and CR-797 on the served ACME mount: the directory advertises the
+// public default. An order under a credential with a private pin uses that
+// profile. An unpinned credential uses the public-trust default.
 func TestServedACMEProfilesPerCredentialAndOnRequest(t *testing.T) {
 	pinnedKey := bytes.Repeat([]byte{0x51}, 32)
 	plainKey := bytes.Repeat([]byte{0x52}, 32)
@@ -46,7 +42,7 @@ func TestServedACMEProfilesPerCredentialAndOnRequest(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	// The directory advertises both profiles.
+	// The public directory offers exactly the mount default.
 	res, err := h.ts.Client().Get(h.ts.URL + "/directory")
 	if err != nil {
 		t.Fatal(err)
@@ -63,8 +59,8 @@ func TestServedACMEProfilesPerCredentialAndOnRequest(t *testing.T) {
 	if _, ok := directory.Meta.Profiles["public-acme"]; !ok {
 		t.Fatalf("directory does not advertise the default profile: %v", directory.Meta.Profiles)
 	}
-	if _, ok := directory.Meta.Profiles["internal-acme"]; !ok {
-		t.Fatalf("directory does not advertise the credential-pinned profile: %v", directory.Meta.Profiles)
+	if len(directory.Meta.Profiles) != 1 {
+		t.Fatalf("directory profiles = %v, want only the mount default", directory.Meta.Profiles)
 	}
 
 	// A55: the pinned credential's orders are issued under its profile, which
@@ -86,7 +82,7 @@ func TestServedACMEProfilesPerCredentialAndOnRequest(t *testing.T) {
 		t.Fatalf("unpinned credential order status = %q, want pending under the public-trust default", order.Status)
 	}
 
-	// A56: a client that asks for the advertised pinned profile issues end to
+	// A56: a client that asks for its own private profile issues end to
 	// end; one that asks for the other profile is refused before any order.
 	account, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
@@ -115,10 +111,9 @@ func TestServedACMEProfilesPerCredentialAndOnRequest(t *testing.T) {
 	if len(chain) == 0 {
 		t.Fatal("no certificate chain returned")
 	}
-	// A misspelled profile is refused by the client before any order.
+	// The server refuses an unknown private name before placing the order.
 	driver = driver.WithProfile("internal-acm")
-	if _, err := driver.IssueChain(ctx, acmekey.OrderRequest{TenantID: h.tenant, DNSNames: []string{"client.internal.example.test"}, CSR: subject.CSRDER}); err == nil || !strings.Contains(err.Error(), "does not offer") {
-		t.Fatalf("unadvertised profile = %v, want the client's own refusal", err)
+	if _, err := driver.IssueChain(ctx, acmekey.OrderRequest{TenantID: h.tenant, DNSNames: []string{"client.internal.example.test"}, CSR: subject.CSRDER}); !errors.Is(err, acmekey.ErrIssuanceNotSubmitted) || !strings.Contains(err.Error(), "invalidProfile") {
+		t.Fatalf("unknown private profile = %v, want invalidProfile before issuance", err)
 	}
-	_ = http.StatusOK
 }

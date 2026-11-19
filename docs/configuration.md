@@ -4824,21 +4824,22 @@ of your own, from discovery to a signed audit export, run
 | `TRSTCTL_PROTOCOLS_ACME_DNS_PERSIST_ISSUER_DOMAINS` | — | Comma-separated issuer domain names (`protocols.acme_dns_persist.issuer_domain_names`) that turn on dns-persist-01: an applicant's standing `_validation-persist` TXT record must name one of them and its ACME account. Empty keeps the challenge off. |
 | `TRSTCTL_PROTOCOLS_ACME_DNS_PERSIST_ACCOUNTURI_FORM` | `account_url` | How a dns-persist-01 record names its account (`protocols.acme_dns_persist.accounturi_form`): `account_url` takes the account URL; `hashed` takes draft-ietf-acme-dns-persist-02's hashed `accounturi`, advertises `accountHashPrefix` in the directory and refuses an account URL (P1-ACCOUNTURI). |
 
-Each entry in `protocols.acme_eab.keys[]` also carries the scope that credential
-authorizes — `allowed_identifiers` (exact names or `*.suffix`, which covers the apex
-too; for mailboxes `@domain`, `@*.domain` or one address, P15-L3), `max_orders`, an
-RFC 3339 `not_after`, and `disabled`. All are optional and a key
-with none behaves as it did before. An order outside a credential's scope, past its
-quota, or after its window is refused fail-closed and recorded. Scope has no env
-shortcut: it is per-key structured config. See
+Each `protocols.acme_eab.keys[]` entry can set `allowed_identifiers`, `profile`,
+`max_orders`, an RFC 3339 `not_after`, and `disabled`. DNS scopes accept exact
+names and `*.suffix`, including the apex. Mail scopes accept `@domain`,
+`@*.domain`, and exact mailboxes (P15-L3). The server refuses and records
+orders outside the scope, past the quota, or after the validity window. Set
+the scope and profile pin in per-key structured config. See
 [ACME external account bindings](features/acme-and-dns.md).
 
-For an internal ACME profile with `acme_auth_mode: trust_authenticated`, select it
-with `ca.default_profile` and require EAB. Put each HMAC key in a 0600 file and
-reference it as `protocols.acme_eab.keys[].hmac_key_file`; the credential's
-`allowed_identifiers` must cover only the intended internal names. The server
-checks the active tenant profile at each order and refuses a trusted order from
-an account without EAB, even if the account predates the configuration change.
+For an internal ACME profile with `acme_auth_mode: trust_authenticated`, set
+`protocols.acme_eab.required: true` and pin each internal enrollment credential
+to that profile in `protocols.acme_eab.keys[].profile`. Set `allowed_identifiers`
+to the intended internal names. Put the HMAC key in a 0600 file and reference it
+with `protocols.acme_eab.keys[].hmac_key_file`. Set `ca.default_profile` when
+the internal profile should be the mount default. Accounts still need a
+matching pin on that mount. The server checks the current pin and active
+profile both when it admits the order and when it finalizes the certificate.
 
 | `TRSTCTL_PROTOCOLS_ACME_MAX_NONCES` | `4096` | Maximum outstanding ACME replay nonces retained by the tenant-bound ACME mount. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNTS` | `2048` | Maximum ACME accounts retained by the tenant-bound ACME mount. |

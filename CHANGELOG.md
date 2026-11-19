@@ -3741,6 +3741,11 @@
 
 ### Security
 
+- ACME publishes only the mount default profile in its public directory
+  (CR-050 and CR-797). An External Account Binding credential's pin controls
+  its orders. Internal-trust issuance requires mandatory EAB and an exact pin
+  at order creation and finalization.
+
 - Served ACME publishes a managed DNS-01 TXT record only when the account's
   active External Account Binding credential explicitly covers the requested name
   (CR-051). Accounts without a current scoped grant publish their own TXT
