@@ -254,10 +254,16 @@ CAP-K8S-04 posture, supported signer names, required RBAC, and residuals.
 
 ## TrustBundle CA-bundle distribution
 
-To distribute a public CA bundle into multiple namespaces, create a cluster-scoped
-trstctl `TrustBundle`. The agent validates that `spec.caBundlePEM` contains only
-PEM `CERTIFICATE` blocks, writes a ConfigMap in each target namespace, and marks
-the TrustBundle Ready with the target count and bundle hash.
+To distribute a public CA bundle into multiple namespaces, first set the
+controller's DaemonSet arg to `--k8s-trust-namespaces=apps,payments`, using the
+exact namespace names that should receive trust. The shipped value is empty and
+permits no namespaces. The list applies to locally created TrustBundles and
+control-plane rollouts. Names beginning `kube-` are always refused. Keep the
+Kubernetes RBAC grants for the intended targets.
+
+Create a cluster-scoped trstctl `TrustBundle`. The agent parses each X.509
+certificate, re-encodes the public PEM in the supplied order, and compares the
+SHA-256 of those canonical bytes. The same bytes go to each admitted target.
 
 ```yaml
 apiVersion: trstctl.com/v1alpha1
@@ -277,26 +283,35 @@ spec:
       - payments
 ```
 
-The agent creates or updates `ConfigMap/platform-ca-bundle` in `apps` and
-`payments`, setting `data["ca-bundle.pem"]` to the public CA bundle. In a
-ConfigMap that already exists it changes only that key, its own labels and the
-`trstctl.com/bundle-sha256` annotation, keeping any other keys, and it writes
-nothing when a copy already holds the bundle. It watches the copies too, so an
-edited or deleted one is put back within about a second. It does not
-copy private keys, bearer tokens, or workload credentials into the ConfigMap. Use
-`trstctl-cli kubernetes trust-bundles` or
-`GET /api/v1/kubernetes/trust-bundles` to inspect the served CAP-K8S-07 posture,
-required RBAC, status fields, and residuals.
+The agent writes `data["ca-bundle.pem"]` in `ConfigMap/platform-ca-bundle` in
+`apps` and `payments`. A new object gets the labels
+`app.kubernetes.io/managed-by: trstctl-agent` and
+`trstctl.com/trust-bundle: platform-roots`. Both labels must match on an
+existing object before it can be updated. Other data keys are preserved. The
+controller rewrites an edited or missing owned copy on a watch event or resync.
+An already matching copy is left alone.
 
-A bundle that cannot be distributed (an invalid spec, a target it may not
-write, an API the cluster does not serve) is marked `Ready=False` with reason
-`DistributionFailed` and the cause in its message, so `kubectl get trustbundle`
-shows why; the agent retries and marks it Ready once the cause is fixed.
+Use exact Kubernetes names for namespaces and targets. A TrustBundle name
+must fit in its 63-character ownership label. The target names
+`trstctl-ca-bundle` and `trstctl-secrets-csi` are reserved, including when they
+carry matching labels. Omit optional fields to use their defaults. The CRD
+preserves an explicit `null` for the controller to refuse. A bad target or
+namespace anywhere in the list blocks the bundle before it touches any target.
+An API failure after preflight can leave a partial distribution, since
+Kubernetes writes each object independently.
+
+`kubectl get trustbundle` shows `Ready=False` and the `DistributionFailed`
+reason when distribution fails for an eligible local CR or a CR with a valid
+agent-owned rollout identity. The agent leaves status untouched for reserved
+names and unowned remote identities. Correct the spec, local
+allowlist or Kubernetes grant and verify the next reconcile. Use
+`trstctl-cli kubernetes trust-bundles` or `GET /api/v1/kubernetes/trust-bundles`
+for CAP-K8S-07 posture, required RBAC, and status fields.
 
 ### Secret and ClusterTrustBundle targets
 
 Some consumers read CA bundles from Secrets, and Kubernetes can mount a
-`ClusterTrustBundle` into pods through a projected volume. A TrustBundle can
+`ClusterTrustBundle` into pods through a projected volume. A locally authored TrustBundle can
 name either or both, next to its ConfigMaps:
 
 ```yaml
@@ -360,7 +375,12 @@ The plugin runs the agent binary in its CSI mode
 (`trstctl-agent --csi-trust-socket`) on every node, beside the upstream node
 driver registrar. It reads TrustBundles with its own service account, which may
 only `get` them, needs no enrollment or control-plane connection, and writes
-the bundle's certificates into the volume as one read-only file. It never
+the canonical certificates into the volume as one read-only file. Local
+TrustBundles are eligible by default. For remote-origin TrustBundles, set
+`--k8s-trust-rollouts=true` on the CSI driver DaemonSet itself. The driver
+checks the object's rollout identity and admitted bundle hash before serving it.
+The namespace allowlist controls the controller's object fan-out. CSI volume
+access uses Kubernetes Pod admission and kubelet volume authorization. The plugin never
 mounts anything and drops every capability, but runs as root because the
 kubelet's pod directories are root-owned. The CSIDriver asks the kubelet to
 republish volumes periodically, so a changed TrustBundle reaches running pods
@@ -395,10 +415,15 @@ volume. Its volume attributes and its trust boundary are in
 
 ## Rolling a TrustBundle out to several clusters
 
-Instead of applying the same TrustBundle in each cluster, roll it out from the
-control plane to the clusters whose controllers report there. Pick the clusters
-by the ids their reports carry (`trstctl-cli kubernetes trust-bundles` lists the
-reporting controllers); the first is the canary:
+Enable remote rollout execution on each participating controller by setting
+`--k8s-trust-rollouts=true` on its DaemonSet. Configure the same local
+`--k8s-trust-namespaces` list for all namespaces the rollout needs. The shipped
+controller and CSI driver both default to `false`. With the opt-in off, the
+controller refuses stored remote-origin CRs and incoming remote rollouts.
+
+To schedule a rollout, pick the cluster IDs their controllers reported to the
+control plane. `trstctl-cli kubernetes trust-bundles` lists the reporting
+controllers. The first cluster is the canary.
 
 ```sh
 jq -n --rawfile pem roots.pem '{name:"platform-roots", ca_bundle_pem:$pem,
@@ -406,26 +431,56 @@ jq -n --rawfile pem roots.pem '{name:"platform-roots", ca_bundle_pem:$pem,
   | trstctl-cli kubernetes trust-rollouts start -f -
 ```
 
-The control plane accepts public CERTIFICATE blocks only and records the
-bundle's SHA-256. The canary's agent receives the bundle in the answer to its
-next posture report, creates or updates `TrustBundle/platform-roots` as an
-object it owns (label `app.kubernetes.io/managed-by: trstctl-agent`, annotation
-`trstctl.com/rollout-id`), and its controller distributes it as above. The
-canary reads verified only when its own controller reports the bundle
-distributed with that hash; then the other clusters receive it, and the
-rollout completes when each has reported the same. A failure is shown with
-its reason and holds the rest back while the canary has not verified. Pause a
-rollout to hold the canary gate, and resume it to continue. Starting a new
-rollout of the same name replaces the earlier one cluster by cluster: a
-cluster keeps the bundle it has until the new rollout reaches it.
+New rollouts record the canonical public PEM and its SHA-256. The canary
+receives the desired revision on its next posture report. The cluster agent
+creates or revises the remote-owned `TrustBundle/platform-roots` and records
+`trstctl.com/rollout-id` and `trstctl.com/rollout-sha256`. A rollout can update
+only a prior TrustBundle it can identify as rollout-owned. Remote TrustBundles
+can distribute to ConfigMaps. Secret and ClusterTrustBundle fan-out require a
+locally authored CR.
 
-The agent never changes a TrustBundle of that name that someone else created;
-the rollout then waits on that cluster. To keep rollouts out of a cluster, run
-its agent with `--k8s-trust-rollouts=false` and remove the TrustBundle
-create/update/patch verbs from its ClusterRole. `GET
-/api/v1/kubernetes/trust-rollouts/{id}`, `trstctl-cli kubernetes trust-rollouts
-get`, and the Workloads console show each cluster's state and the report that
-verified it.
+A matching Ready posture report allows the canary gate to advance. Check the
+live TrustBundle annotations and read back each intended target when verifying
+a revision. Posture compares name and public PEM hash, so the same hash alone
+cannot establish which revision or target set was applied. Use `trstctl-cli
+kubernetes trust-rollouts get`, `GET /api/v1/kubernetes/trust-rollouts/{id}`, or
+the Workloads console to see the report and each cluster's state. Starting a
+new rollout of the same name replaces the earlier one cluster by cluster.
+
+### Upgrade and recover trust rollouts
+
+1. Stop older controller and CSI processes or remove their effective update
+   and mount authority. Pause holds future canary progression. An older agent
+   can still receive dispatched work or reconcile stored rollout CRs.
+2. Apply the updated TrustBundle CRD. Inventory existing CRs, ConfigMaps, and
+   CSI mounts before opting in. An older agent may have put its labels on an
+   existing object. Use known-good configuration to restore any such object
+   and retain intentionally managed targets. The old CRD may already have
+   converted an explicit null to an omitted or defaulted field.
+3. Upgrade all control-plane writers and projectors before resuming writes.
+   New starts use event schema v2. The upgraded projector preserves the
+   original bytes and hash of a v1 event. If the agent refuses an older bundle
+   because its hash differs after canonicalization, create a new rollout from
+   the intended public certificates. A validated delivery is required to
+   re-admit a stored remote CR that predates the hash annotation.
+4. Enable the participating agents. Verify a known canary's actual targets
+   before widening distribution. Turning opt-in off fences new agent work and
+   keeps previously published objects and mount files in place. Keep older
+   agents fenced on rollback. Once v2 events exist, keep v2-capable projectors
+   or stop incompatible projectors until they can read the journal.
+
+If a rollout start was interrupted between append and projection, keep the
+same `Idempotency-Key`. A 503 can indicate that an exact retained event is
+awaiting its read-model row. For a known or suspected interruption, stop
+writers, live and warm projectors, and consumers of desired state before
+recovery. On external PostgreSQL and external NATS, run `trstctl --rebuild`
+against the retained journal, then check the rebuilt rollout and cluster
+states and independently verify the desired revision for each cluster before
+reopening. A successful retry or warm restart alone cannot establish
+that earlier dispatches were rebuilt in source order. On bundled PostgreSQL
+or embedded NATS, keep the affected rollout writes, desired delivery, and
+remote execution fenced pending qualified ordered recovery. The shipped
+`--rebuild` command requires both datastores to be external.
 
 ## trstctl native Certificate API
 

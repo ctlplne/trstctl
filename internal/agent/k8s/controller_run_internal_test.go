@@ -68,7 +68,7 @@ func startRunFixture(t *testing.T) *runFixture {
 	srv := httptest.NewServer(f.api.handler())
 	controller, err := NewIssuerController(New(srv.URL, "tok", "apps", srv.Client()), SignerFunc(func(_ context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
 		return ca.SignClientCSR(csrDER, ttl)
-	}), DefaultIssuerGroup, runSignerURL)
+	}), DefaultIssuerGroup, runSignerURL, fixtureTrustPolicy(t, true, "apps,payments,billing"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestReconcileWithoutCertManagerSignsCSRsAndDistributesBundles(t *testing.T)
 	defer srv.Close()
 	controller, err := NewIssuerController(New(srv.URL, "tok", "apps", srv.Client()), SignerFunc(func(_ context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
 		return ca.SignClientCSR(csrDER, ttl)
-	}), DefaultIssuerGroup, runSignerURL)
+	}), DefaultIssuerGroup, runSignerURL, fixtureTrustPolicy(t, false, "apps"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +398,7 @@ func TestApplyDesiredTrustBundlesCreatesUpdatesAndRefuses(t *testing.T) {
 	defer srv.Close()
 	controller, err := NewIssuerController(New(srv.URL, "tok", "apps", srv.Client()), SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
 		return nil, nil
-	}), DefaultIssuerGroup, runSignerURL)
+	}), DefaultIssuerGroup, runSignerURL, fixtureTrustPolicy(t, true, "apps,payments"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -464,7 +464,7 @@ func TestTrustBundleSecretAndClusterTrustBundleTargets(t *testing.T) {
 	defer srv.Close()
 	controller, err := NewIssuerController(New(srv.URL, "tok", "apps", srv.Client()), SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
 		return nil, nil
-	}), DefaultIssuerGroup, runSignerURL)
+	}), DefaultIssuerGroup, runSignerURL, fixtureTrustPolicy(t, false, "apps,payments"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -555,7 +555,7 @@ func TestTrustBundleSecretAndClusterTrustBundleTargets(t *testing.T) {
 	defer plainSrv.Close()
 	plainController, err := NewIssuerController(New(plainSrv.URL, "tok", "apps", plainSrv.Client()), SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
 		return nil, nil
-	}), DefaultIssuerGroup, runSignerURL)
+	}), DefaultIssuerGroup, runSignerURL, fixtureTrustPolicy(t, false, "apps,payments"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -586,7 +586,7 @@ func TestApplyDesiredTrustBundleRetriesAnUpdateConflict(t *testing.T) {
 	defer srv.Close()
 	controller, err := NewIssuerController(New(srv.URL, "tok", "apps", srv.Client()), SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
 		return nil, nil
-	}), DefaultIssuerGroup, runSignerURL)
+	}), DefaultIssuerGroup, runSignerURL, fixtureTrustPolicy(t, true, "apps"))
 	if err != nil {
 		t.Fatal(err)
 	}

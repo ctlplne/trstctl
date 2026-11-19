@@ -20,7 +20,7 @@ func TestTrustBundleRefusesACertificateThatDoesNotParseTBO1(t *testing.T) {
 		t.Fatal(err)
 	}
 	good := string(ca.BundlePEM())
-	if err := validateTrustBundlePEM(good); err != nil {
+	if _, _, err := trustBundlePEM(map[string]any{"caBundlePEM": good}); err != nil {
 		t.Fatalf("a valid bundle was refused: %v", err)
 	}
 	block, _ := pem.Decode([]byte(good))
@@ -34,7 +34,7 @@ func TestTrustBundleRefusesACertificateThatDoesNotParseTBO1(t *testing.T) {
 		"garbled":              garbled,
 		"valid then truncated": good + truncated,
 	} {
-		err := validateTrustBundlePEM(bundle)
+		_, _, err := trustBundlePEM(map[string]any{"caBundlePEM": bundle})
 		if err == nil || !strings.Contains(err.Error(), "does not parse") {
 			t.Errorf("%s: %v, want a refusal naming the certificate that does not parse", name, err)
 		}

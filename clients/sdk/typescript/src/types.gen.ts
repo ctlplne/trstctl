@@ -21379,7 +21379,7 @@ export interface components {
             /** @description The posture report that verified or failed the cluster. */
             report_id?: string;
             /**
-             * @description verified means the cluster's own controller reported the bundle distributed with bundle_sha256.
+             * @description Verified means the cluster controller reported Ready for the bundle name and bundle_sha256. Check actual targets to verify the intended revision.
              * @enum {string}
              */
             state: "waiting" | "dispatched" | "verified" | "failed";
@@ -21390,17 +21390,17 @@ export interface components {
             items: components["schemas"]["KubernetesTrustRollout"][];
         };
         KubernetesTrustRolloutRequest: {
-            /** @description Public PEM CA certificates only; any other PEM block is refused. */
+            /** @description Public X.509 CERTIFICATE PEM blocks only. The control plane records re-encoded canonical PEM and its SHA-256. */
             ca_bundle_pem: string;
             /** @description Cluster ids that have reported Kubernetes controller posture, in rollout order; the first is the canary and the rest wait for it to be verified. */
             clusters: string[];
-            /** @description ConfigMap written in every target namespace; defaults to the name. */
+            /** @description Unreserved Kubernetes ConfigMap name. Defaults to the TrustBundle name. */
             config_map_name?: string;
-            /** @description ConfigMap data key; defaults to ca-bundle.pem. */
+            /** @description Kubernetes ConfigMap data key. Defaults to ca-bundle.pem. */
             key?: string;
-            /** @description The TrustBundle object name each cluster's controller creates or updates. */
+            /** @description Unreserved Kubernetes TrustBundle name, up to 63 characters. The agent also uses it as an ownership label. */
             name: string;
-            /** @description Namespaces that receive the ConfigMap in each cluster. */
+            /** @description Distinct Kubernetes namespaces that receive the ConfigMap after local agent opt-in, allowlist, and RBAC checks. Names beginning kube- are refused. */
             namespaces: string[];
         };
         LifecycleAutomationControl: {

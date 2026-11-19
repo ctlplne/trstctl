@@ -140,7 +140,8 @@ func main() {
 	bridgeSignerTokenFile := flag.String("bridge-signer-token-file", "", "file containing the API token used by the cert-manager bridge signer")
 	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the cert-manager bridge reconciles, and the Kubernetes controller's posture heartbeat")
 	k8sResync := flag.Duration("k8s-resync", 10*time.Minute, "how often the Kubernetes controller re-checks every object, beyond what its watches report")
-	k8sTrustRollouts := flag.Bool("k8s-trust-rollouts", true, "apply the TrustBundles the control plane rolls out to this cluster (public CA certificates only)")
+	k8sTrustRollouts := flag.Bool("k8s-trust-rollouts", false, "opt this Kubernetes controller or CSI trust process into remote TrustBundles (public CA certificates only)")
+	k8sTrustNamespaces := flag.String("k8s-trust-namespaces", "", "comma-separated exact namespaces for TrustBundle targets; empty allows no namespaced distribution")
 	csiTrustSocket := flag.String("csi-trust-socket", "", "serve trstctl TrustBundles to pods as inline CSI volumes (driver trust.csi.trstctl.com) on this Unix socket; needs only the in-cluster service account, no enrollment")
 	csiSecretsSocket := flag.String("csi-secrets-socket", "", "serve trstctl secrets to pods as inline CSI volumes (driver secrets.csi.trstctl.com) on this Unix socket, read with each pod's own service-account token into a memory filesystem; needs --csi-secrets-config, no enrollment")
 	csiSecretsConfig := flag.String("csi-secrets-config", "", "the CSI secrets driver's YAML configuration (control-plane server, ca_file, tenant, login method, state_dir)")
@@ -424,7 +425,7 @@ func main() {
 	if *csiTrustSocket != "" {
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
-		if err := runCSITrust(ctx, *csiTrustSocket); err != nil && !errors.Is(err, context.Canceled) {
+		if err := runCSITrust(ctx, *csiTrustSocket, *k8sTrustRollouts); err != nil && !errors.Is(err, context.Canceled) {
 			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 			os.Exit(1)
 		}
@@ -619,7 +620,7 @@ func main() {
 		kopts := k8sOptions{
 			secret: *k8sSecret, issuer: *cmIssuer, group: *cmGroup,
 			controller: *cmController, signerURL: *bridgeSignerURL, signerTokenFile: *bridgeSignerTokenFile,
-			reconcileEvery: *reconcileEvery, resync: *k8sResync, trustRollouts: *k8sTrustRollouts,
+			reconcileEvery: *reconcileEvery, resync: *k8sResync, trustRollouts: *k8sTrustRollouts, trustNamespaces: *k8sTrustNamespaces,
 			csrApprover: *k8sCSRApprover,
 		}
 		run = func(ctx context.Context, o agentOptions) error { return runKubernetes(ctx, o, kopts) }

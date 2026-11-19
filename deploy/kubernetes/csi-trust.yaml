@@ -101,6 +101,7 @@ spec:
           command: ["/usr/local/bin/trstctl-agent"]
           args:
             - "--csi-trust-socket=/csi/csi.sock"
+            - "--k8s-trust-rollouts=false"
           env:
             - name: NODE_NAME
               valueFrom:

@@ -47,9 +47,13 @@ func TestTrustBundleSecretAndClusterTrustBundleTargets(t *testing.T) {
 	k.must(http.MethodPost, "/api/v1/namespaces", "", map[string]any{"apiVersion": "v1", "kind": "Namespace", "metadata": map[string]any{"name": namespace}})
 	t.Cleanup(func() { k.do(http.MethodDelete, "/api/v1/namespaces/"+namespace, "", nil) })
 
+	policy, err := k8s.ParseTrustDistributionPolicy(false, namespace)
+	if err != nil {
+		t.Fatal(err)
+	}
 	controller, err := k8s.NewIssuerController(client, k8s.SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
 		return nil, errors.New("this test signs nothing")
-	}), "trstctl.com", "https://trstctl.trstctl.svc/api/v1/ca/authorities/e2e/issue")
+	}), "trstctl.com", "https://trstctl.trstctl.svc/api/v1/ca/authorities/e2e/issue", policy)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +173,7 @@ func TestTrustBundleSecretAndClusterTrustBundleTargets(t *testing.T) {
 			"restartPolicy":                "Never",
 			"automountServiceAccountToken": false,
 			"containers": []any{map[string]any{
-				"name": "reader", "image": "registry.k8s.io/e2e-test-images/busybox:1.29-4",
+				"name": "reader", "image": trustFixtureReaderImage(), "imagePullPolicy": "IfNotPresent",
 				"command":      []any{"sh", "-c", "while true; do cat /trust/ca.crt; sleep 5; done"},
 				"volumeMounts": []any{map[string]any{"name": "trust", "mountPath": "/trust", "readOnly": true}},
 			}},

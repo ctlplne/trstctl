@@ -100,7 +100,7 @@ func TestCSITrustDriverDeliversTrustBundlesToPods(t *testing.T) {
 		"spec": map[string]any{
 			"restartPolicy": "Never",
 			"containers": []any{map[string]any{
-				"name": "reader", "image": "registry.k8s.io/e2e-test-images/busybox:1.29-4",
+				"name": "reader", "image": trustFixtureReaderImage(), "imagePullPolicy": "IfNotPresent",
 				"command":      []any{"sh", "-c", "while true; do cat /trust/ca.crt; sleep 5; done"},
 				"volumeMounts": []any{map[string]any{"name": "trust", "mountPath": "/trust", "readOnly": true}},
 			}},
@@ -148,4 +148,12 @@ func waitUntil(t *testing.T, what string, within time.Duration, cond func() bool
 		time.Sleep(2 * time.Second)
 	}
 	t.Logf("%s after %s", what, time.Since(start).Round(time.Second))
+}
+
+// The owned lab can preload a digest-pinned public reader image.
+func trustFixtureReaderImage() string {
+	if image := os.Getenv("K8S_TRUST_READER_IMAGE"); image != "" {
+		return image
+	}
+	return "registry.k8s.io/e2e-test-images/busybox:1.29-4"
 }

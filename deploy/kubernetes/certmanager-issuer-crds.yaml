@@ -112,9 +112,11 @@ spec:
                   properties:
                     configMapName:
                       type: string
+                      nullable: true
                       description: ConfigMap name created or updated in every target namespace; defaults to the TrustBundle name.
                     key:
                       type: string
+                      nullable: true
                       default: "ca-bundle.pem"
                       description: ConfigMap data key that receives the public PEM bundle.
                     namespaces:
@@ -125,6 +127,7 @@ spec:
                       description: Namespaces that receive the ConfigMap copy.
                     secret:
                       type: object
+                      nullable: true
                       required: ["name"]
                       description: >-
                         Also write the bundle into an Opaque Secret of this name in every target namespace,
@@ -135,9 +138,11 @@ spec:
                           type: string
                         key:
                           type: string
+                          nullable: true
                           default: "ca.crt"
                     clusterTrustBundle:
                       type: object
+                      nullable: true
                       required: ["name"]
                       description: >-
                         Also publish the bundle as a cluster-scoped ClusterTrustBundle (no signer name), which

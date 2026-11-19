@@ -174,10 +174,10 @@ var kubernetesCSRResiduals = []string{
 
 var kubernetesTrustBundleFlow = []string{
 	"the in-cluster agent controller lists and watches trstctl.com/v1alpha1 TrustBundle resources and the ConfigMaps it distributed",
-	"for each bundle it writes spec.caBundlePEM into a ConfigMap (spec.target.configMapName, default the bundle name; key spec.target.key, default ca-bundle.pem) in every namespace of spec.target.namespaces, keeping a ConfigMap's other keys",
-	"when the bundle names them, it also writes an Opaque Secret (spec.target.secret.name, key spec.target.secret.key, default ca.crt) in every target namespace and a ClusterTrustBundle (spec.target.clusterTrustBundle.name) that pods mount through a projected clusterTrustBundle volume; it never changes a Secret or ClusterTrustBundle it did not create",
+	"it validates all target names and the local --k8s-trust-namespaces allowlist before distributing canonical public certificates. Existing ConfigMaps require both agent and bundle ownership labels",
+	"when a locally authored bundle names them, it also writes an Opaque Secret (spec.target.secret.name, key spec.target.secret.key, default ca.crt) in every target namespace and a ClusterTrustBundle (spec.target.clusterTrustBundle.name) that pods mount through a projected clusterTrustBundle volume; it never changes a Secret or ClusterTrustBundle it did not create",
 	"writes are content-compared, so an unchanged bundle rewrites nothing, and an edited or deleted copy is put back",
-	"status.targets, status.secretTargets, status.clusterTrustBundle, status.bundleSHA256 and the Ready condition are updated on the TrustBundle when they change; a bundle that cannot be distributed is marked Ready=False (reason DistributionFailed) with the cause",
+	"status.targets, status.secretTargets, status.clusterTrustBundle, status.bundleSHA256 and the Ready condition are updated on the TrustBundle when they change; an eligible TrustBundle identity that cannot distribute gets Ready=False with DistributionFailed. Reserved names and unowned remote identities receive no status write",
 	"after each burst of changes, and on its heartbeat, the controller posts an idempotent, metadata-only posture report over the authenticated agent channel — that report is what this surface serves",
 }
 
@@ -187,7 +187,8 @@ var kubernetesTrustBundleEvidenceRefs = []string{
 }
 
 var kubernetesTrustBundleResiduals = []string{
-	"distribution reaches only namespaces named in spec.target.namespaces and granted by the controller's RBAC",
+	"the empty local namespace allowlist denies distribution. Configured targets need RBAC and exact local consent. Trust distribution always refuses kube-* namespaces",
+	"stored and incoming remote rollouts require --k8s-trust-rollouts=true and an admitted canonical bundle hash for fan-out. The CSI trust plugin needs its own opt-in",
 	"the TrustBundle CRD must be installed in the cluster; without it the controller reports failure rather than inventing targets",
 	"only public trust material (CA certificates) is distributed — never private keys",
 	"Secret targets outside the agent's namespace need the opt-in grant in deploy/kubernetes/rbac-trust-secrets.yaml, which lets the agent read any Secret by name; without it the TrustBundle reports the namespace it could not write",
@@ -278,7 +279,7 @@ func (a *API) getKubernetesTrustBundleDistribution(w http.ResponseWriter, r *htt
 		APIGroup: "trstctl.com", APIVersion: "trstctl.com/v1alpha1", Resource: "trustbundles",
 		Summary: state.summary, Controllers: state.controllers, Objects: state.objects,
 		RBACRules: []KubernetesCSRSupportRule{
-			{APIGroup: "trstctl.com", Resource: "trustbundles", Verbs: []string{"get", "list", "watch"}},
+			{APIGroup: "trstctl.com", Resource: "trustbundles", Verbs: []string{"get", "list", "watch", "create", "update", "patch"}},
 			{APIGroup: "trstctl.com", Resource: "trustbundles/status", Verbs: []string{"update", "patch"}},
 			{APIGroup: "", Resource: "configmaps", Verbs: []string{"get", "list", "watch", "create", "update", "patch"}},
 			{APIGroup: "certificates.k8s.io", Resource: "clustertrustbundles", Verbs: []string{"get", "list", "watch", "create", "update", "patch"}},

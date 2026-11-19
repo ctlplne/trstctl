@@ -38,9 +38,13 @@ func TestIssuerControllerRunsFromWatchEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	signerURL := "https://trstctl.trstctl.svc/api/v1/ca/authorities/e2e/issue"
+	policy, err := k8s.ParseTrustDistributionPolicy(true, ns)
+	if err != nil {
+		t.Fatal(err)
+	}
 	controller, err := k8s.NewIssuerController(client, k8s.SignerFunc(func(_ context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
 		return ca.SignClientCSR(csrDER, ttl)
-	}), "trstctl.com", signerURL)
+	}), "trstctl.com", signerURL, policy)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,5 +197,26 @@ func TestIssuerControllerRunsFromWatchEvents(t *testing.T) {
 	waitFor("the rolled-out TrustBundle was distributed", 10*time.Second, func() bool {
 		st, obj := k.do(http.MethodGet, rolledConfigMap, "", nil)
 		return st == http.StatusOK && at(obj, "data", "ca-bundle.pem") == normalized
+	})
+
+	revisedCA, err := mtls.NewCA("revised watch e2e trust root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const revisedID = "44444444-4444-4444-8444-444444444444"
+	revised := string(revisedCA.BundlePEM())
+	revisedHash := crypto.SHA256Hex([]byte(revised))
+	if n, err := controller.ApplyDesiredTrustBundles(t.Context(), []k8s.DesiredTrustBundle{{
+		RolloutID: revisedID, Name: rolledName, CABundlePEM: revised, BundleSHA256: revisedHash,
+		ConfigMapName: rolledName, Key: "revised-ca.pem", Namespaces: []string{ns},
+	}}); err != nil || n != 1 {
+		t.Fatalf("apply same-name revised rollout: %d, %v", n, err)
+	}
+	waitFor("the revised rollout wrote its admitted hash and new target key", 10*time.Second, func() bool {
+		obj := k.get("/apis/trstctl.com/v1alpha1/trustbundles/" + rolledName)
+		st, target := k.do(http.MethodGet, rolledConfigMap, "", nil)
+		return at(obj, "metadata", "annotations", "trstctl.com/rollout-id") == revisedID &&
+			at(obj, "metadata", "annotations", "trstctl.com/rollout-sha256") == revisedHash &&
+			at(obj, "status", "bundleSHA256") == revisedHash && st == http.StatusOK && at(target, "data", "revised-ca.pem") == revised
 	})
 }

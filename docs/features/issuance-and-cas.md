@@ -173,23 +173,23 @@ Machines without calling an externally controlled renewal manual. This is
 issuance provenance; verify the Kubernetes Secret and the served listener
 independently before claiming deployment.
 
-The same agent serves CAP-K8S-07 trust-bundle distribution: operators apply a
-cluster-scoped `TrustBundle.trstctl.com` resource with a public PEM CA bundle and
-target namespaces; the controller rejects non-certificate PEM blocks, creates/updates
-the named ConfigMap per namespace, and records `status.targets`, `status.bundleSHA256`,
-and Ready=True. `GET /api/v1/kubernetes/trust-bundles`,
-`trstctl-cli kubernetes trust-bundles`, and the Workloads console disclose the CRD,
-RBAC, ConfigMap target, and residuals.
+The same agent serves CAP-K8S-07 public trust-bundle distribution. Configure the
+controller's exact `--k8s-trust-namespaces` allowlist before applying a
+cluster-scoped `TrustBundle.trstctl.com`. The empty default allows no
+namespaced targets. The controller writes canonical public certificates to
+new or matching agent-owned ConfigMaps and records the target count, bundle
+hash, and Ready condition. `GET /api/v1/kubernetes/trust-bundles`,
+`trstctl-cli kubernetes trust-bundles`, and the Workloads console show the
+controller's reported posture and required grants.
 
-One bundle can also be rolled out from the control plane to every cluster whose
-controller reports here (`POST /api/v1/kubernetes/trust-rollouts`,
-`trstctl-cli kubernetes trust-rollouts start`, or the Workloads console). The
-first cluster is the canary and the rest wait for it. Each cluster's agent
-receives the bundle in the answer to its posture report, applies it as a
-TrustBundle it owns, and distributes it. A cluster reads verified only when its
-own controller reports the bundle distributed with the rollout's SHA-256. A
-rollout can be paused before the canary gate; a newer rollout of the same name
-replaces it cluster by cluster.
+The control plane can schedule a rollout to reporting clusters, canary first.
+Each participating controller must enable `--k8s-trust-rollouts=true` locally.
+Stored remote TrustBundles require a valid rollout identity and hash, and can
+distribute to ConfigMaps. The separate CSI trust plugin needs its own opt-in to
+serve remote TrustBundles. Read the intended revision and its live target bytes
+when verifying delivery. The canary gate uses the reported hash and bundle
+name. A newer rollout of the same name replaces it cluster by cluster. See the
+[Kubernetes trust guide](../guides/kubernetes-agent.md#rolling-a-trustbundle-out-to-several-clusters).
 
 ### Running your own CA hierarchy (F48)
 

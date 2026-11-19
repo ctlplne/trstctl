@@ -9,11 +9,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"regexp"
+	"net/url"
 	"slices"
 	"sync"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/kubetrust"
 )
 
 // A139: besides the namespace ConfigMap, a TrustBundle can be distributed as a
@@ -22,11 +23,6 @@ import (
 // `clusterTrustBundle` volume source. Both hold public CA certificates only and
 // are labeled as the agent's own; the agent never takes over an object of the
 // same name that someone else created.
-
-var (
-	trustObjectNameRE = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$`)
-	trustDataKeyRE    = regexp.MustCompile(`^[-._a-zA-Z0-9]{1,253}$`)
-)
 
 // trustBundleTargets is where one bundle is distributed.
 type trustBundleTargets struct {
@@ -50,29 +46,33 @@ func (t trustBundleTargets) message() string {
 type trustSecretTarget struct{ name, key string }
 
 func parseTrustSecretTarget(target map[string]any) (*trustSecretTarget, error) {
-	raw, ok := target["secret"].(map[string]any)
-	if !ok || raw == nil {
+	value, present := target["secret"]
+	if !present {
 		return nil, nil
 	}
-	out := &trustSecretTarget{name: nativeString(raw, "name"), key: nativeString(raw, "key")}
-	if out.key == "" {
-		out.key = "ca.crt"
+	raw, ok := value.(map[string]any)
+	if !ok || raw == nil {
+		return nil, fmt.Errorf("spec.target.secret must be a target object")
 	}
-	if !trustObjectNameRE.MatchString(out.name) || !trustDataKeyRE.MatchString(out.key) {
-		return nil, fmt.Errorf("spec.target.secret needs a Kubernetes object name and a data key")
+	out := &trustSecretTarget{name: trustTargetString(raw, "name", ""), key: trustTargetString(raw, "key", "ca.crt")}
+	if !kubetrust.ValidTargetName(out.name) || !kubetrust.ValidDataKey(out.key) {
+		return nil, fmt.Errorf("spec.target.secret needs an unreserved Kubernetes object name and a valid data key")
 	}
 	return out, nil
 }
 
 func parseClusterTrustBundleTarget(target map[string]any) (string, error) {
-	raw, ok := target["clusterTrustBundle"].(map[string]any)
-	if !ok || raw == nil {
+	value, present := target["clusterTrustBundle"]
+	if !present {
 		return "", nil
 	}
-	name := nativeString(raw, "name")
-	// A ClusterTrustBundle without a signer name may not contain ':'.
-	if !trustObjectNameRE.MatchString(name) {
-		return "", fmt.Errorf("spec.target.clusterTrustBundle.name must be a Kubernetes object name")
+	raw, ok := value.(map[string]any)
+	if !ok || raw == nil {
+		return "", fmt.Errorf("spec.target.clusterTrustBundle must be a target object")
+	}
+	name := trustTargetString(raw, "name", "")
+	if !kubetrust.ValidTargetName(name) {
+		return "", fmt.Errorf("spec.target.clusterTrustBundle.name must be an unreserved Kubernetes object name")
 	}
 	return name, nil
 }
@@ -91,7 +91,8 @@ func trustObjectLabels(bundleName string) map[string]any {
 // changed. Writing Secrets outside the agent's namespace needs the opt-in grant
 // in deploy/kubernetes/rbac-trust-secrets.yaml.
 func (c *IssuerController) installTrustSecret(ctx context.Context, namespace, bundleName string, target trustSecretTarget, bundlePEM, hash string) (bool, error) {
-	path := fmt.Sprintf("/api/v1/namespaces/%s/secrets/%s", namespace, target.name)
+	collection := secretCollectionPath(namespace)
+	path := collection + "/" + url.PathEscape(target.name)
 	st, body, err := c.client.request(ctx, http.MethodGet, path, nil)
 	defer secret.Wipe(body)
 	if err != nil {
@@ -109,7 +110,7 @@ func (c *IssuerController) installTrustSecret(ctx context.Context, namespace, bu
 			},
 			"data": map[string]any{target.key: base64.StdEncoding.EncodeToString([]byte(bundlePEM))},
 		}
-		st, created, err := c.client.request(ctx, http.MethodPost, fmt.Sprintf("/api/v1/namespaces/%s/secrets", namespace), obj)
+		st, created, err := c.client.request(ctx, http.MethodPost, collection, obj)
 		secret.Wipe(created)
 		if err != nil {
 			return false, err
@@ -130,7 +131,7 @@ func (c *IssuerController) installTrustSecret(ctx context.Context, namespace, bu
 	}
 	meta, _ := live["metadata"].(map[string]any)
 	if !trustObjectOwned(meta, bundleName) {
-		return false, fmt.Errorf("k8s: Secret %s/%s exists and was not created for TrustBundle %s; rename the target or remove it", namespace, target.name, bundleName)
+		return false, permanent(fmt.Errorf("k8s: Secret %s/%s exists and was not created for TrustBundle %s; rename the target or remove it", namespace, target.name, bundleName))
 	}
 	data, _ := live["data"].(map[string]any)
 	if data == nil {
@@ -205,7 +206,7 @@ func (c *IssuerController) installClusterTrustBundle(ctx context.Context, name, 
 		return false, err
 	}
 	collection := "/apis/certificates.k8s.io/" + version + "/clustertrustbundles"
-	st, body, err := c.client.request(ctx, http.MethodGet, collection+"/"+name, nil)
+	st, body, err := c.client.request(ctx, http.MethodGet, collection+"/"+url.PathEscape(name), nil)
 	if err != nil {
 		return false, err
 	}
@@ -236,7 +237,7 @@ func (c *IssuerController) installClusterTrustBundle(ctx context.Context, name, 
 	}
 	meta, _ := live["metadata"].(map[string]any)
 	if !trustObjectOwned(meta, bundleName) {
-		return false, fmt.Errorf("k8s: ClusterTrustBundle %s exists and was not created for TrustBundle %s; rename the target or remove it", name, bundleName)
+		return false, permanent(fmt.Errorf("k8s: ClusterTrustBundle %s exists and was not created for TrustBundle %s; rename the target or remove it", name, bundleName))
 	}
 	spec, _ := live["spec"].(map[string]any)
 	if current, _ := spec["trustBundle"].(string); bytes.Equal([]byte(current), []byte(bundlePEM)) {
@@ -253,7 +254,7 @@ func (c *IssuerController) installClusterTrustBundle(ctx context.Context, name, 
 	}
 	annotations["trstctl.com/bundle-sha256"] = hash
 	meta["annotations"] = annotations
-	st, updated, err := c.client.request(ctx, http.MethodPut, collection+"/"+name, live)
+	st, updated, err := c.client.request(ctx, http.MethodPut, collection+"/"+url.PathEscape(name), live)
 	if err != nil {
 		return false, err
 	}

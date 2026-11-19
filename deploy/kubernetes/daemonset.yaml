@@ -68,6 +68,8 @@ spec:
             - "--cert=/var/lib/trstctl-agent/agent.crt"
             - "--k8s-secret=trstctl/$(NODE_NAME)-tls"
             - "--cert-manager-controller"
+            - "--k8s-trust-rollouts=false"
+            - "--k8s-trust-namespaces="
             - "--bridge-signer-url=$(TRSTCTL_BRIDGE_SIGNER_URL)"
             - "--bridge-signer-token-file=/var/run/trstctl/cert-manager/token"
           env:

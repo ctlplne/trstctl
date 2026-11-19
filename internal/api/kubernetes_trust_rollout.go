@@ -14,16 +14,15 @@ import (
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
-// KubernetesTrustRolloutStore reads rollouts and the clusters a rollout may
-// name. The shipped binary attaches the projected store explicitly.
+// KubernetesTrustRolloutStore reads projected rollouts. The shipped binary attaches the projected store explicitly.
 type KubernetesTrustRolloutStore interface {
 	ListKubernetesTrustRollouts(context.Context, string) ([]store.KubernetesTrustRollout, error)
 	GetKubernetesTrustRollout(context.Context, string, string) (store.KubernetesTrustRollout, error)
-	KnownKubernetesClusters(context.Context, string) (map[string]bool, error)
 }
 
 // WithKubernetesTrustRollouts serves multi-cluster TrustBundle rollouts (A138).
@@ -114,11 +113,6 @@ func (a *API) startKubernetesTrustRollout(w http.ResponseWriter, r *http.Request
 		a.writeError(w, errStatus(http.StatusBadRequest, "invalid JSON body: "+err.Error()))
 		return
 	}
-	bundle, hash, err := projections.NormalizeKubernetesTrustBundlePEM(req.CABundlePEM)
-	if err != nil {
-		a.writeError(w, errStatusFrom(http.StatusUnprocessableEntity, err))
-		return
-	}
 	name := strings.TrimSpace(req.Name)
 	configMap := firstNonBlank(strings.TrimSpace(req.ConfigMapName), name)
 	key := firstNonBlank(strings.TrimSpace(req.Key), "ca-bundle.pem")
@@ -127,37 +121,37 @@ func (a *API) startKubernetesTrustRollout(w http.ResponseWriter, r *http.Request
 		a.writeError(w, err)
 		return
 	}
-	canonical, err := json.Marshal(kubernetesTrustRolloutRequest{
-		Name: name, CABundlePEM: bundle, ConfigMapName: configMap, Key: key, Namespaces: req.Namespaces, Clusters: req.Clusters,
+	// Preserve the principal-bound v1 request bytes for completed historical
+	// retries. Current effect admission runs inside the durable callback.
+	bindingPayload, err := json.Marshal(kubernetesTrustRolloutRequest{
+		Name: name, CABundlePEM: strings.TrimSpace(req.CABundlePEM) + "\n", ConfigMapName: configMap, Key: key, Namespaces: req.Namespaces, Clusters: req.Clusters,
 	})
 	if err != nil {
 		a.writeError(w, err)
 		return
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	binding := crypto.SHA256Hex([]byte("kubernetes-trust-rollout\x00" + principal + "\x00" + string(canonical)))
+	binding := crypto.SHA256Hex([]byte("kubernetes-trust-rollout\x00" + principal + "\x00" + string(bindingPayload)))
 	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		started := projections.KubernetesTrustRolloutStarted{
 			RolloutID: googleuuid.NewSHA1(googleuuid.NameSpaceOID, []byte("kubernetes-trust-rollout\x00"+tenantID+"\x00"+idempotencyKey)).String(),
-			Name:      name, CABundlePEM: bundle, BundleSHA256: hash, ConfigMapName: configMap, Key: key,
+			Name:      name, CABundlePEM: req.CABundlePEM, ConfigMapName: configMap, Key: key,
 			Namespaces: req.Namespaces, Clusters: req.Clusters,
 		}
-		if err := projections.ValidateKubernetesTrustRolloutStarted(started); err != nil {
-			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
-		}
-		known, err := reader.KnownKubernetesClusters(ctx, tenantID)
-		if err != nil {
-			return 0, nil, err
-		}
-		for _, cluster := range started.Clusters {
-			if !known[cluster] {
-				return 0, nil, errStatus(http.StatusUnprocessableEntity, "cluster "+cluster+" has not reported Kubernetes controller posture to this tenant; enroll its agent with --cert-manager-controller first")
+		if err := a.orch.StartKubernetesTrustRollout(ctx, tenantID, started); err != nil {
+			switch {
+			case errors.Is(err, orchestrator.ErrKubernetesTrustRolloutTargets):
+				return 0, nil, errStatusFrom(http.StatusBadRequest, err)
+			case errors.Is(err, orchestrator.ErrKubernetesTrustRolloutInput):
+				return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
+			default:
+				return 0, nil, err
 			}
 		}
-		if err := a.orch.StartKubernetesTrustRollout(ctx, tenantID, started); err != nil {
-			return 0, nil, err
-		}
 		rollout, err := reader.GetKubernetesTrustRollout(ctx, tenantID, started.RolloutID)
+		if errors.Is(err, store.ErrKubernetesTrustRolloutNotFound) {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "retained Kubernetes trust rollout is awaiting ordered projection recovery; preserve this Idempotency-Key")
+		}
 		if err != nil {
 			return 0, nil, err
 		}

@@ -106,8 +106,7 @@ func (c *IssuerController) secretPresent(ctx context.Context, namespace, name st
 	if name == "" {
 		return false, nil
 	}
-	st, body, err := c.client.request(ctx, http.MethodGet, NewSecretDestination(c.client, namespace, name).itemPath(), nil)
-	secret.Wipe(body)
+	st, err := NewSecretDestination(c.client, namespace, name).Status(ctx)
 	if err != nil {
 		return false, err
 	}

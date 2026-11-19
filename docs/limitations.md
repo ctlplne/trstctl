@@ -6786,38 +6786,27 @@ This is a deliberate, documented trust boundary, not an accident.
     started (a counter that resets on restart, and says so), and when it last
     reported — with "not reported" kept distinct from "not serving", because the
     first is fixed by upgrading an agent and the second by changing a flag.
-  - Kubernetes TrustBundle distribution is served for public CA-bundle
-    propagation: the agent reconciles cluster-scoped
-    `TrustBundle.trstctl.com` resources, validates that `spec.caBundlePEM`
-    contains only PEM `CERTIFICATE` blocks, each a certificate that parses, writes namespace ConfigMaps, and
-    marks status with target count, `bundleSHA256`, and Ready=True. The
-    posture route `GET /api/v1/kubernetes/trust-bundles`, CLI command
-    `trstctl-cli kubernetes trust-bundles`, and Workloads console disclose
-    the CRD, RBAC, ConfigMap target, and residuals: the controller is
-    event-driven — it watches its TrustBundles and the ConfigMaps it wrote,
-    converges a change or a deleted copy within about a second, and writes
-    nothing when a copy already holds the bundle. One bundle can be rolled
-    out from the control plane to every reporting cluster, canary first
-    (`/api/v1/kubernetes/trust-rollouts`, `trstctl-cli kubernetes
-    trust-rollouts`, Workloads): each cluster's agent receives it in the
-    answer to its posture report and applies it as a TrustBundle it owns, and
-    a cluster reads verified only when its own controller reports the bundle
-    distributed with the rollout's hash. A TrustBundle can also name a Secret
-    in each target namespace and a ClusterTrustBundle that pods mount through
-    a projected `clusterTrustBundle` volume, and the opt-in CSI node plugin
-    (`deploy/kubernetes/csi-trust.yaml`, driver `trust.csi.trstctl.com`)
-    serves a TrustBundle to a pod as an inline volume on Linux nodes (Windows
-    nodes are what comes next; the agent refuses to serve it there); focused kind tests
-    prove each target end to end, including a changed bundle reaching a
-    running pod. Their limits: Secret targets outside the agent's namespace
-    need the opt-in grant in `deploy/kubernetes/rbac-trust-secrets.yaml`,
-    which lets the agent read any Secret by name; ClusterTrustBundle needs a
-    cluster serving `certificates.k8s.io/v1beta1` (off by default through
-    Kubernetes 1.35) and the kubelet projection feature gate; the CSI plugin
-    runs as root without capabilities to write into the kubelet's pod
-    directories, and a changed bundle reaches pods on the kubelet's next
-    republish. A bundle that cannot be distributed is marked Ready=False
-    with the cause.
+  - Kubernetes TrustBundle distribution is served for canonical public CA
+    certificates. A local `--k8s-trust-namespaces` allowlist and Kubernetes
+    RBAC must permit each namespaced target. The shipped list is empty, and
+    `kube-*` namespaces are refused. Existing ConfigMaps must carry the
+    matching agent and TrustBundle ownership labels. The controller reports
+    the target count, SHA-256, and Ready condition. An eligible TrustBundle
+    that fails distribution records `Ready=False` and the cause. An invalid
+    name, reserved name, or unowned remote identity receives no status write.
+    `GET /api/v1/kubernetes/trust-bundles`, `trstctl-cli kubernetes
+    trust-bundles`, and the Workloads console expose the reported posture.
+    Control-plane rollouts require local `--k8s-trust-rollouts=true` on each
+    participating controller and validate existing remote rollout identities
+    and hashes before fan-out. The canary gate compares the reported bundle
+    name and hash. Confirm the rollout revision and target copies independently.
+    Locally authored CRs can also name a Secret and ClusterTrustBundle. Secret
+    targets outside the agent's namespace need an additional grant, and
+    ClusterTrustBundle needs a serving API and kubelet projection support.
+    The optional Linux CSI trust plugin (`trust.csi.trstctl.com`) uses its own
+    opt-in for remote CRs. File updates reach pods on the next kubelet
+    republish. Kind tests cover all target types and running-pod readback.
+    See the [Kubernetes trust guide](guides/kubernetes-agent.md#trustbundle-ca-bundle-distribution).
   - The SSH CA is served at `/ssh/...` (`protocols.ssh.enabled`): cert
     issuance plus the OpenSSH binary KRL at `/ssh/krl` (`sshd`'s
     `RevokedKeys` consumes it); a served acceptance test issues a user cert

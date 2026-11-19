@@ -5621,7 +5621,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAgentCertRevoked:                         {1: true},
 	EventAgentOffboarded:                          {1: true},
 	EventKubernetesControllerPostureReported:      {1: true},
-	EventKubernetesTrustRolloutStarted:            {1: true},
+	EventKubernetesTrustRolloutStarted:            {1: true, KubernetesTrustRolloutStartedSchemaVersion: true},
 	EventKubernetesTrustRolloutPaused:             {1: true},
 	EventKubernetesTrustRolloutResumed:            {1: true},
 	EventProfileCreated:                           {1: true, 2: true},

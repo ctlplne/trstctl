@@ -152,9 +152,12 @@ The DaemonSet runs `trstctl-agent --k8s`, which:
    (to ConfigMaps and, when named, Secrets and a ClusterTrustBundle),
    and writes status back to the owning resource. It watches these resources
    and converges each as it changes, re-checking everything every
-   `--k8s-resync` (default ten minutes). It also applies the TrustBundles the
-   control plane rolls out to this cluster (public CA certificates only; turn
-   that off with `--k8s-trust-rollouts=false`).
+   `--k8s-resync` (default ten minutes). Choose exact TrustBundle target
+   namespaces with `--k8s-trust-namespaces=apps,payments`. The shipped value is
+   empty and allows no namespaced distribution. Set `--k8s-trust-rollouts=true`
+   only on participating agents. Remote rollouts are disabled by default on
+   the controller and the CSI trust plugin. See the
+   [trust rollout upgrade procedure](../../docs/guides/kubernetes-agent.md#upgrade-and-recover-trust-rollouts).
 
 Do not combine `--cert-manager-controller` with the older
 `--cert-manager-issuer` fixed-name bridge. The bridge does not read Issuer

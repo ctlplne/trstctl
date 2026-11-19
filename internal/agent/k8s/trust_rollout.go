@@ -8,7 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
+	"net/url"
+	"reflect"
+
+	"trstctl.com/trstctl/internal/kubetrust"
 )
 
 // DesiredTrustBundle is one TrustBundle the control plane is rolling out to
@@ -49,14 +52,30 @@ func (c *IssuerController) ApplyDesiredTrustBundles(ctx context.Context, desired
 }
 
 func (c *IssuerController) applyDesiredTrustBundle(ctx context.Context, bundle DesiredTrustBundle) (bool, error) {
+	if !c.trustPolicy.allowRemote {
+		return false, permanent(errors.New("k8s: remote TrustBundle requires local --k8s-trust-rollouts opt-in"))
+	}
+	if !kubetrust.ValidRolloutID(bundle.RolloutID) {
+		return false, permanent(errors.New("k8s: TrustBundle rollout ID must be a canonical nonzero UUID"))
+	}
+	if err := kubetrust.ValidateTargets(bundle.Name, bundle.ConfigMapName, bundle.Key, bundle.Namespaces); err != nil {
+		return false, permanent(fmt.Errorf("k8s: TrustBundle rollout targets: %w", err))
+	}
+	if err := c.trustPolicy.admitNamespaces(bundle.Namespaces); err != nil {
+		return false, permanent(err)
+	}
+	pem, hash, err := kubetrust.NormalizeBundle(bundle.CABundlePEM)
+	if err != nil {
+		return false, permanent(fmt.Errorf("k8s: rollout %s TrustBundle %s: %w", bundle.RolloutID, bundle.Name, err))
+	}
+	if hash != bundle.BundleSHA256 {
+		return false, permanent(fmt.Errorf("k8s: rollout %s TrustBundle %s does not match its canonical bundle hash", bundle.RolloutID, bundle.Name))
+	}
 	spec := map[string]any{
-		"caBundlePEM": bundle.CABundlePEM,
+		"caBundlePEM": pem,
 		"target": map[string]any{
 			"configMapName": bundle.ConfigMapName, "key": bundle.Key, "namespaces": stringsToAny(bundle.Namespaces),
 		},
-	}
-	if _, hash, err := trustBundlePEM(spec); err != nil || hash != bundle.BundleSHA256 {
-		return false, fmt.Errorf("k8s: rollout %s TrustBundle %s is not the public bundle it names: %v", bundle.RolloutID, bundle.Name, err)
 	}
 	// The running controller writes the same object's status, so an update can
 	// lose the optimistic-concurrency race (409 Conflict). Read it again and
@@ -75,7 +94,7 @@ func (c *IssuerController) applyDesiredTrustBundle(ctx context.Context, bundle D
 const trustBundleUpdateAttempts = 3
 
 func (c *IssuerController) applyDesiredTrustBundleOnce(ctx context.Context, bundle DesiredTrustBundle, spec map[string]any) (bool, bool, error) {
-	path := trustBundleCollectionPath() + "/" + bundle.Name
+	path := trustBundleCollectionPath() + "/" + url.PathEscape(bundle.Name)
 	st, body, err := c.client.request(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return false, false, err
@@ -86,7 +105,7 @@ func (c *IssuerController) applyDesiredTrustBundleOnce(ctx context.Context, bund
 			"metadata": map[string]any{
 				"name":        bundle.Name,
 				"labels":      map[string]any{"app.kubernetes.io/managed-by": "trstctl-agent"},
-				"annotations": map[string]any{trustRolloutAnnotation: bundle.RolloutID},
+				"annotations": map[string]any{trustRolloutAnnotation: bundle.RolloutID, trustRolloutHashAnnotation: bundle.BundleSHA256},
 			},
 			"spec": spec,
 		}
@@ -95,7 +114,7 @@ func (c *IssuerController) applyDesiredTrustBundleOnce(ctx context.Context, bund
 			return false, false, err
 		}
 		if st/100 != 2 {
-			return false, false, fmt.Errorf("k8s: create TrustBundle %s for rollout %s: status %d: %s", bundle.Name, bundle.RolloutID, st, string(body))
+			return false, st == http.StatusConflict, fmt.Errorf("k8s: create TrustBundle %s for rollout %s: status %d: %s", bundle.Name, bundle.RolloutID, st, string(body))
 		}
 		return true, false, nil
 	}
@@ -107,19 +126,16 @@ func (c *IssuerController) applyDesiredTrustBundleOnce(ctx context.Context, bund
 		return false, false, fmt.Errorf("k8s: decode TrustBundle %s: %w", bundle.Name, err)
 	}
 	meta, _ := live["metadata"].(map[string]any)
-	labels, _ := meta["labels"].(map[string]any)
-	if labels["app.kubernetes.io/managed-by"] != "trstctl-agent" {
-		return false, false, fmt.Errorf("k8s: TrustBundle %s exists and was not created by the agent; rollout %s leaves it alone", bundle.Name, bundle.RolloutID)
+	origin, originErr := trustBundleOrigin(meta)
+	if originErr != nil || origin.rolloutID == "" || origin.hashPresent && !kubetrust.ValidBundleHash(origin.hash) {
+		return false, false, permanent(fmt.Errorf("k8s: TrustBundle %s was not created by the agent with a valid rollout identity; rollout %s leaves it alone", bundle.Name, bundle.RolloutID))
 	}
-	annotations, _ := meta["annotations"].(map[string]any)
-	if annotations == nil {
-		annotations = map[string]any{}
-	}
-	if annotations[trustRolloutAnnotation] == bundle.RolloutID && trustBundleSpecEqual(live["spec"], spec) {
+	if origin.rolloutID == bundle.RolloutID && origin.hash == bundle.BundleSHA256 && reflect.DeepEqual(live["spec"], spec) {
 		return false, false, nil
 	}
+	annotations := meta["annotations"].(map[string]any)
 	annotations[trustRolloutAnnotation] = bundle.RolloutID
-	meta["annotations"] = annotations
+	annotations[trustRolloutHashAnnotation] = bundle.BundleSHA256
 	live["spec"] = spec
 	st, body, err = c.client.request(ctx, http.MethodPut, path, live)
 	if err != nil {
@@ -132,16 +148,6 @@ func (c *IssuerController) applyDesiredTrustBundleOnce(ctx context.Context, bund
 		return false, false, fmt.Errorf("k8s: update TrustBundle %s for rollout %s: status %d: %s", bundle.Name, bundle.RolloutID, st, string(body))
 	}
 	return true, false, nil
-}
-
-func trustBundleSpecEqual(live any, want map[string]any) bool {
-	spec, _ := live.(map[string]any)
-	target, _ := spec["target"].(map[string]any)
-	wantTarget, _ := want["target"].(map[string]any)
-	return spec["caBundlePEM"] == want["caBundlePEM"] &&
-		nativeString(target, "configMapName") == wantTarget["configMapName"] &&
-		nativeString(target, "key") == wantTarget["key"] &&
-		slices.Equal(nativeStringList(target["namespaces"]), nativeStringList(wantTarget["namespaces"]))
 }
 
 func stringsToAny(values []string) []any {

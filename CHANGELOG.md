@@ -3741,6 +3741,13 @@
 
 ### Security
 
+- Kubernetes agents distribute canonical public TrustBundles only to locally
+  allowed namespaces and agent-owned targets (CR-431 and CR-759). Remote
+  rollouts require explicit controller and CSI opt-in. The agent protects
+  bootstrap and CSI resource names, rejects invalid target paths before I/O,
+  and preserves historical rollout events and completed retries. See the
+  [Kubernetes trust rollout upgrade procedure](docs/guides/kubernetes-agent.md#upgrade-and-recover-trust-rollouts).
+
 - Wrapped CA key import requires an authenticated v2 offer and a fingerprint
   obtained directly from the signer host (CR-821 and CR-819). The offline CLI
   verifies the offer and the approved request before opening the private key

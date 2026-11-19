@@ -7,16 +7,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"trstctl.com/trstctl/internal/agent/csitrust"
+	"trstctl.com/trstctl/internal/kubetrust"
 )
 
-// TrustBundlePEM returns a TrustBundle's public CA certificates in the form the
-// controller distributes them (A139): the CSI trust driver writes exactly these
-// bytes into a pod's volume. A bundle that is not public certificates is an
-// error, never written.
+// TrustBundleSource is the cluster-local source for the CSI trust driver.
+// Remote-origin bundles require explicit opt-in on the CSI process itself.
+type TrustBundleSource struct {
+	client      *Client
+	allowRemote bool
+}
+
+func NewTrustBundleSource(c *Client, allowRemote bool) TrustBundleSource {
+	return TrustBundleSource{client: c, allowRemote: allowRemote}
+}
+
+// TrustBundlePEM reads a locally authored bundle for CSI compatibility.
 func (c *Client) TrustBundlePEM(ctx context.Context, name string) ([]byte, error) {
-	st, body, err := c.request(ctx, http.MethodGet, trustBundleCollectionPath()+"/"+name, nil)
+	return NewTrustBundleSource(c, false).TrustBundlePEM(ctx, name)
+}
+
+// TrustBundlePEM returns canonical public certificates from an admitted bundle.
+func (s TrustBundleSource) TrustBundlePEM(ctx context.Context, name string) ([]byte, error) {
+	if !kubetrust.ValidBundleName(name) {
+		return nil, fmt.Errorf("k8s: invalid or reserved TrustBundle name %q", name)
+	}
+	st, body, err := s.client.request(ctx, http.MethodGet, trustBundleCollectionPath()+"/"+url.PathEscape(name), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -26,15 +44,16 @@ func (c *Client) TrustBundlePEM(ctx context.Context, name string) ([]byte, error
 	if st/100 != 2 {
 		return nil, fmt.Errorf("k8s: read TrustBundle %s: status %d", name, st)
 	}
-	var obj struct {
-		Spec map[string]any `json:"spec"`
-	}
+	var obj map[string]any
 	if err := json.Unmarshal(body, &obj); err != nil {
 		return nil, fmt.Errorf("k8s: decode TrustBundle %s: %w", name, err)
 	}
-	bundle, _, err := trustBundlePEM(obj.Spec)
+	bundle, err := parseStoredTrustBundle(obj, s.allowRemote, false)
 	if err != nil {
 		return nil, fmt.Errorf("k8s: TrustBundle %s: %w", name, err)
 	}
-	return []byte(bundle), nil
+	if bundle.name != name {
+		return nil, fmt.Errorf("k8s: unexpected TrustBundle identity returned for %s", name)
+	}
+	return []byte(bundle.pem), nil
 }

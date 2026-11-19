@@ -51,10 +51,11 @@ type IssuerReconcileResult struct {
 // direct JSON/HTTPS API calls with the service-account token instead of
 // client-go/controller-runtime.
 type IssuerController struct {
-	client    *Client
-	signer    Signer
-	group     string
-	signerURL string
+	client      *Client
+	signer      Signer
+	group       string
+	signerURL   string
+	trustPolicy TrustDistributionPolicy
 	// clusterTrustBundles remembers which API version serves
 	// ClusterTrustBundle targets (A139).
 	clusterTrustBundles clusterTrustBundleAPI
@@ -78,7 +79,7 @@ func (config issuerConfig) limitTTL(requested time.Duration) time.Duration {
 // NewIssuerController returns a controller for trstctl Issuer and ClusterIssuer
 // resources in group. signerURL is the operator-configured, TLS-authenticated
 // CA endpoint. A resource that names any other endpoint is never usable.
-func NewIssuerController(client *Client, signer Signer, group, signerURL string) (*IssuerController, error) {
+func NewIssuerController(client *Client, signer Signer, group, signerURL string, trustPolicies ...TrustDistributionPolicy) (*IssuerController, error) {
 	if group == "" {
 		group = DefaultIssuerGroup
 	}
@@ -86,7 +87,14 @@ func NewIssuerController(client *Client, signer Signer, group, signerURL string)
 	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return nil, fmt.Errorf("k8s: issuer controller requires a configured HTTPS signer URL without credentials, query, or fragment")
 	}
-	return &IssuerController{client: client, signer: signer, group: group, signerURL: signerURL}, nil
+	if len(trustPolicies) > 1 {
+		return nil, fmt.Errorf("k8s: issuer controller accepts one local trust distribution policy")
+	}
+	controller := &IssuerController{client: client, signer: signer, group: group, signerURL: signerURL}
+	if len(trustPolicies) == 1 {
+		controller.trustPolicy = trustPolicies[0]
+	}
+	return controller, nil
 }
 
 func issuerCollectionPath(namespace string) string {
@@ -159,11 +167,11 @@ func (c *IssuerController) Reconcile(ctx context.Context, namespace string) (Iss
 
 	result.TrustBundleFailureCode = "reconcile_failed"
 	bundles, bundlePosture, err := c.reconcileTrustBundles(ctx)
+	result.TrustBundlesDistributed = bundles
 	result.TrustBundlePosture = bundlePosture
 	if err != nil {
 		return result, err
 	}
-	result.TrustBundlesDistributed = bundles
 	result.TrustBundleComplete = true
 	result.TrustBundleFailureCode = ""
 	return result, nil

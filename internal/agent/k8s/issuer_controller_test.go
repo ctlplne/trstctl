@@ -23,9 +23,9 @@ import (
 
 const testIssuerSignerURL = "https://trstctl.trstctl.svc/api/v1/issue"
 
-func testIssuerController(t *testing.T, client *k8s.Client, signer k8s.Signer, group string) *k8s.IssuerController {
+func testIssuerController(t *testing.T, client *k8s.Client, signer k8s.Signer, group string, trustPolicies ...k8s.TrustDistributionPolicy) *k8s.IssuerController {
 	t.Helper()
-	controller, err := k8s.NewIssuerController(client, signer, group, testIssuerSignerURL)
+	controller, err := k8s.NewIssuerController(client, signer, group, testIssuerSignerURL, trustPolicies...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1005,7 +1005,11 @@ func TestIssuerControllerDistributesTrustBundlesCAPK8S07(t *testing.T) {
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	policy, err := k8s.ParseTrustDistributionPolicy(false, "apps,payments")
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com", policy)
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -1070,7 +1074,11 @@ func TestIssuerControllerRejectsPrivateKeyInTrustBundleCAPK8S07(t *testing.T) {
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	policy, err := k8s.ParseTrustDistributionPolicy(false, "apps,payments")
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com", policy)
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err == nil || !strings.Contains(err.Error(), "only CERTIFICATE blocks") {
 		t.Fatalf("Reconcile error = %v, want private-key rejection", err)

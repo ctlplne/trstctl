@@ -18,7 +18,7 @@ import (
 // runCSITrust serves the trust.csi.trstctl.com node plugin on socketPath until
 // ctx ends. The node id is NODE_NAME from the downward API, as the shipped
 // DaemonSet sets it.
-func runCSITrust(ctx context.Context, socketPath string) error {
+func runCSITrust(ctx context.Context, socketPath string, allowRemote bool) error {
 	if runtime.GOOS == "windows" {
 		// The kubelet reaches this node plugin over a Unix socket on Linux
 		// nodes; Windows nodes reach CSI plugins through csi-proxy, which the
@@ -36,5 +36,5 @@ func runCSITrust(ctx context.Context, socketPath string) error {
 		}
 	}
 	fmt.Printf("trstctl-agent: serving %s on %s for node %s\n", csitrust.DriverName, socketPath, node)
-	return csitrust.NewDriver(client, node, buildinfo.Version()).Serve(ctx, socketPath)
+	return csitrust.NewDriver(k8s.NewTrustBundleSource(client, allowRemote), node, buildinfo.Version()).Serve(ctx, socketPath)
 }

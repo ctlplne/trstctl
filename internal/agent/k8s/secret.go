@@ -9,8 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"trstctl.com/trstctl/internal/agent/destination"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/kubetrust"
 )
 
 // SecretDestination installs a credential into a Kubernetes Secret of type
@@ -30,12 +33,16 @@ func NewSecretDestination(client *Client, namespace, name string) *SecretDestina
 	return &SecretDestination{client: client, namespace: namespace, name: name}
 }
 
+func secretCollectionPath(namespace string) string {
+	return fmt.Sprintf("/api/v1/namespaces/%s/secrets", url.PathEscape(namespace))
+}
+
 func (d *SecretDestination) collectionPath() string {
-	return fmt.Sprintf("/api/v1/namespaces/%s/secrets", d.namespace)
+	return secretCollectionPath(d.namespace)
 }
 
 func (d *SecretDestination) itemPath() string {
-	return d.collectionPath() + "/" + d.name
+	return d.collectionPath() + "/" + url.PathEscape(d.name)
 }
 
 // SecretReadback is what the cluster holds after a write: the Secret's
@@ -89,6 +96,9 @@ func (d *SecretDestination) InstallAndRead(ctx context.Context, cred destination
 }
 
 func (d *SecretDestination) write(ctx context.Context, cred destination.Credential) error {
+	if err := d.validateCoordinates(); err != nil {
+		return err
+	}
 	if len(cred.CertPEM) == 0 {
 		return errors.New("k8s: nothing to install (empty certificate)")
 	}
@@ -177,6 +187,17 @@ func existingResourceVersion(body []byte) string {
 // Status reads the Secret without changing it and returns the API server's
 // HTTP status: 200 when it exists, 404 when a write would create it.
 func (d *SecretDestination) Status(ctx context.Context) (int, error) {
-	status, _, err := d.client.request(ctx, http.MethodGet, d.itemPath(), nil)
+	if err := d.validateCoordinates(); err != nil {
+		return 0, err
+	}
+	status, body, err := d.client.request(ctx, http.MethodGet, d.itemPath(), nil)
+	secret.Wipe(body)
 	return status, err
+}
+
+func (d *SecretDestination) validateCoordinates() error {
+	if !kubetrust.ValidNamespace(d.namespace) || !kubetrust.ValidObjectName(d.name) {
+		return fmt.Errorf("k8s: invalid Secret namespace or name %q/%q", d.namespace, d.name)
+	}
+	return nil
 }

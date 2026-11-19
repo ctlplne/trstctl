@@ -33139,7 +33139,7 @@
             "type": "string"
           },
           "state": {
-            "description": "verified means the cluster's own controller reported the bundle distributed with bundle_sha256.",
+            "description": "Verified means the cluster controller reported Ready for the bundle name and bundle_sha256. Check actual targets to verify the intended revision.",
             "enum": [
               "waiting",
               "dispatched",
@@ -33178,7 +33178,7 @@
       "KubernetesTrustRolloutRequest": {
         "properties": {
           "ca_bundle_pem": {
-            "description": "Public PEM CA certificates only; any other PEM block is refused.",
+            "description": "Public X.509 CERTIFICATE PEM blocks only. The control plane records re-encoded canonical PEM and its SHA-256.",
             "type": "string"
           },
           "clusters": {
@@ -33189,19 +33189,19 @@
             "type": "array"
           },
           "config_map_name": {
-            "description": "ConfigMap written in every target namespace; defaults to the name.",
+            "description": "Unreserved Kubernetes ConfigMap name. Defaults to the TrustBundle name.",
             "type": "string"
           },
           "key": {
-            "description": "ConfigMap data key; defaults to ca-bundle.pem.",
+            "description": "Kubernetes ConfigMap data key. Defaults to ca-bundle.pem.",
             "type": "string"
           },
           "name": {
-            "description": "The TrustBundle object name each cluster's controller creates or updates.",
+            "description": "Unreserved Kubernetes TrustBundle name, up to 63 characters. The agent also uses it as an ownership label.",
             "type": "string"
           },
           "namespaces": {
-            "description": "Namespaces that receive the ConfigMap in each cluster.",
+            "description": "Distinct Kubernetes namespaces that receive the ConfigMap after local agent opt-in, allowlist, and RBAC checks. Names beginning kube- are refused.",
             "items": {
               "type": "string"
             },

@@ -349,25 +349,28 @@ func (s *Store) DesiredKubernetesTrustBundles(ctx context.Context, tenantID, clu
 	return out, err
 }
 
-// KnownKubernetesClusters lists the clusters whose controllers have reported
-// posture for the tenant: the clusters a rollout may name.
-func (s *Store) KnownKubernetesClusters(ctx context.Context, tenantID string) (map[string]bool, error) {
-	out := map[string]bool{}
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx,
-			`SELECT DISTINCT cluster_id FROM kubernetes_controller_posture WHERE tenant_id = $1`, tenantID)
-		if err != nil {
-			return err
+// LockKubernetesTrustRolloutStartTx serializes start delivery for the same
+// tenant and bundle name, including concurrent retries of one durable request.
+func (s *Store) LockKubernetesTrustRolloutStartTx(ctx context.Context, tx pgx.Tx, nameDigest string) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, nameDigest)
+	return err
+}
+
+// KnownKubernetesClustersTx returns cluster IDs already reported to this tenant.
+func (s *Store) KnownKubernetesClustersTx(ctx context.Context, tx pgx.Tx, tenantID string) (map[string]bool, error) {
+	rows, err := tx.Query(ctx,
+		`SELECT DISTINCT cluster_id FROM kubernetes_controller_posture WHERE tenant_id = $1`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]bool)
+	for rows.Next() {
+		var cluster string
+		if err := rows.Scan(&cluster); err != nil {
+			return nil, err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var cluster string
-			if err := rows.Scan(&cluster); err != nil {
-				return err
-			}
-			out[cluster] = true
-		}
-		return rows.Err()
-	})
-	return out, err
+		out[cluster] = true
+	}
+	return out, rows.Err()
 }

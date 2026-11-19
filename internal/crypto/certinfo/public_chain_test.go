@@ -5,6 +5,7 @@ package certinfo
 import (
 	"bytes"
 	"encoding/pem"
+	"os"
 	"testing"
 	"testing/quick"
 )
@@ -74,6 +75,56 @@ func FuzzParsePublicPEMChain(f *testing.F) {
 			if leafErr != nil || !bytes.Equal(leaf, der) {
 				t.Fatal("successful result changed leaf identity")
 			}
+		}
+	})
+}
+
+// CR-431. Public trust bundles use the same exact PEM envelope as chains,
+// with an independent size bound and no leaf-identity requirement.
+func TestNormalizePublicCertificatePEM(t *testing.T) {
+	first, der := testCert(t)
+	second, _ := testCert(t)
+	want := append(bytes.Clone(first), second...)
+	raw := append(bytes.ReplaceAll(first, []byte("\n"), []byte("\r\n")), []byte("\n\n")...)
+	raw = append(raw, second...)
+	if got, err := NormalizePublicCertificatePEM(raw); err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("normalization did not keep both certificates in order: %v", err)
+	}
+	header := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der, Headers: map[string]string{"Comment": "fixture"}})
+	for name, raw := range map[string][]byte{
+		"oversize":        bytes.Repeat([]byte(" "), MaxPublicCertificatePEMBytes+1),
+		"text":            append([]byte("fixture notes\n"), first...),
+		"header":          header,
+		"malformed block": append([]byte("-----BEGIN CERTIFICATE-----\nfixture\n"), first...),
+		"empty":           nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := NormalizePublicCertificatePEM(raw); err == nil {
+				t.Error("expected an exact public certificate envelope")
+			}
+		})
+	}
+}
+
+func FuzzNormalizePublicCertificatePEM(f *testing.F) {
+	seed, err := os.ReadFile("testdata/der-whitespace/signature-09.pem")
+	if err != nil {
+		f.Fatal(err)
+		return
+	}
+	f.Add(seed)
+	f.Add([]byte("fixture public notes"))
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		got, err := NormalizePublicCertificatePEM(raw)
+		if err != nil {
+			return
+		}
+		if len(got) == 0 || len(got) > MaxPublicCertificatePEMBytes {
+			t.Fatal("invalid successful output size")
+		}
+		again, err := NormalizePublicCertificatePEM(got)
+		if err != nil || !bytes.Equal(again, got) {
+			t.Fatalf("public PEM was not canonical: %v", err)
 		}
 	})
 }

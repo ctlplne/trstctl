@@ -13,7 +13,7 @@ import (
 // the CSI trust driver refuses before reaching the cluster or opening a
 // socket, and says Windows nodes are what comes next.
 func TestCSITrustDriverRefusesOnWindows(t *testing.T) {
-	err := runCSITrust(t.Context(), `C:\var\lib\kubelet\plugins\trust.csi.trstctl.com\csi.sock`)
+	err := runCSITrust(t.Context(), `C:\var\lib\kubelet\plugins\trust.csi.trstctl.com\csi.sock`, false)
 	if err == nil || !strings.Contains(err.Error(), "Windows nodes are what comes next") {
 		t.Fatalf("runCSITrust on Windows = %v, want a clean refusal", err)
 	}

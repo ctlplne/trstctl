@@ -2145,6 +2145,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventOCSPResponderRotated, 1}:                                             privacyPayloadShape[OCSPResponderRotated](),
 		{EventKubernetesControllerPostureReported, 1}:                              privacyPayloadShape[KubernetesControllerPostureReported](),
 		{EventKubernetesTrustRolloutStarted, 1}:                                    privacyPayloadShape[KubernetesTrustRolloutStarted](),
+		{EventKubernetesTrustRolloutStarted, 2}:                                    privacyPayloadShape[KubernetesTrustRolloutStarted](),
 		{EventKubernetesTrustRolloutPaused, 1}:                                     privacyPayloadShape[KubernetesTrustRolloutControlled](),
 		{EventKubernetesTrustRolloutResumed, 1}:                                    privacyPayloadShape[KubernetesTrustRolloutControlled](),
 		{EventProfileCreated, 1}:                                                   privacyPayloadShape[ProfileVersioned](),

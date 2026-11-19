@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/kubetrust"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -31,6 +32,8 @@ const (
 	EventKubernetesTrustRolloutPaused  = "kubernetes.trust_rollout.paused"
 	EventKubernetesTrustRolloutResumed = "kubernetes.trust_rollout.resumed"
 
+	KubernetesTrustRolloutStartedSchemaVersion = 2
+
 	maxKubernetesTrustRolloutClusters   = 100
 	maxKubernetesTrustRolloutNamespaces = 100
 	maxKubernetesTrustBundleBytes       = 1 << 20
@@ -38,8 +41,8 @@ const (
 
 // KubernetesTrustRolloutStarted rolls one TrustBundle out to Clusters in order;
 // the first is the canary. CABundlePEM is public CA certificates only, in the
-// normalized form the cluster controller hashes (trimmed, one trailing newline),
-// so BundleSHA256 is the hash the cluster reports back.
+// canonical form the cluster controller hashes for v2. Historical v1 events
+// preserve the original trimmed bytes and their original SHA-256.
 type KubernetesTrustRolloutStarted struct {
 	RolloutID     string   `json:"rollout_id"`
 	Name          string   `json:"name"`
@@ -63,10 +66,15 @@ var (
 	kubernetesClusterIDRE  = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
-// NormalizeKubernetesTrustBundlePEM returns the bundle in the form a cluster's
-// controller distributes and hashes, and its SHA-256, after checking it holds
-// only parseable CERTIFICATE blocks.
+// NormalizeKubernetesTrustBundlePEM encodes exactly the public certificate
+// envelope new rollouts and the current cluster agent admit.
 func NormalizeKubernetesTrustBundlePEM(bundle string) (string, string, error) {
+	return kubetrust.NormalizeBundle(bundle)
+}
+
+// normalizeLegacyKubernetesTrustBundlePEM is the original v1 projection
+// contract. Its bytes and validation must stay stable during retained replay.
+func normalizeLegacyKubernetesTrustBundlePEM(bundle string) (string, string, error) {
 	normalized := strings.TrimSpace(bundle) + "\n"
 	if len(normalized) > maxKubernetesTrustBundleBytes {
 		return "", "", errors.New("the CA bundle exceeds 1 MiB")
@@ -97,10 +105,25 @@ func NormalizeKubernetesTrustBundlePEM(bundle string) (string, string, error) {
 	return normalized, crypto.SHA256Hex([]byte(normalized)), nil
 }
 
-// ValidateKubernetesTrustRolloutStarted checks a rollout the way the API and
-// the projection both must: Kubernetes names, public certificates only, a hash
-// that matches the bundle, and distinct clusters and namespaces.
+// ValidateKubernetesTrustRolloutStarted checks the current v2 contract.
 func ValidateKubernetesTrustRolloutStarted(p KubernetesTrustRolloutStarted) error {
+	if !kubetrust.ValidRolloutID(p.RolloutID) {
+		return errors.New("rollout_id must be a canonical nonzero UUID")
+	}
+	if err := kubetrust.ValidateTargets(p.Name, p.ConfigMapName, p.Key, p.Namespaces); err != nil {
+		return err
+	}
+	canonical, hash, err := NormalizeKubernetesTrustBundlePEM(p.CABundlePEM)
+	if err != nil {
+		return err
+	}
+	if canonical != p.CABundlePEM || hash != p.BundleSHA256 {
+		return errors.New("bundle_sha256 must match the canonical public CA bundle bytes")
+	}
+	return validateKubernetesTrustRolloutClusters(p.Clusters)
+}
+
+func validateLegacyKubernetesTrustRolloutStarted(p KubernetesTrustRolloutStarted) error {
 	if _, err := uuid.Parse(p.RolloutID); err != nil {
 		return errors.New("rollout_id must be a UUID")
 	}
@@ -113,7 +136,7 @@ func ValidateKubernetesTrustRolloutStarted(p KubernetesTrustRolloutStarted) erro
 	if !kubernetesConfigKeyRE.MatchString(p.Key) {
 		return errors.New("key must be a ConfigMap key (letters, digits, '-', '_' and '.')")
 	}
-	normalized, hash, err := NormalizeKubernetesTrustBundlePEM(p.CABundlePEM)
+	normalized, hash, err := normalizeLegacyKubernetesTrustBundlePEM(p.CABundlePEM)
 	if err != nil {
 		return err
 	}
@@ -130,11 +153,15 @@ func ValidateKubernetesTrustRolloutStarted(p KubernetesTrustRolloutStarted) erro
 		}
 		seen[namespace] = true
 	}
-	if len(p.Clusters) == 0 || len(p.Clusters) > maxKubernetesTrustRolloutClusters {
+	return validateKubernetesTrustRolloutClusters(p.Clusters)
+}
+
+func validateKubernetesTrustRolloutClusters(clusters []string) error {
+	if len(clusters) == 0 || len(clusters) > maxKubernetesTrustRolloutClusters {
 		return fmt.Errorf("clusters must name 1 to %d clusters", maxKubernetesTrustRolloutClusters)
 	}
-	seen = map[string]bool{}
-	for _, cluster := range p.Clusters {
+	seen := map[string]bool{}
+	for _, cluster := range clusters {
 		if !kubernetesClusterIDRE.MatchString(cluster) || seen[cluster] {
 			return fmt.Errorf("cluster %q is not a distinct reported cluster id", cluster)
 		}
@@ -165,7 +192,11 @@ func (p *Projector) applyKubernetesTrustRolloutTx(ctx context.Context, tx pgx.Tx
 		if err := decodeKubernetesTrustRolloutEvent(e, &pl); err != nil {
 			return true, err
 		}
-		if err := ValidateKubernetesTrustRolloutStarted(pl); err != nil {
+		validate := ValidateKubernetesTrustRolloutStarted
+		if schemaVersionOf(e) == 1 {
+			validate = validateLegacyKubernetesTrustRolloutStarted
+		}
+		if err := validate(pl); err != nil {
 			return true, fmt.Errorf("projections: %s: %w", e.Type, err)
 		}
 		clusters := make([]store.KubernetesTrustRolloutCluster, 0, len(pl.Clusters))

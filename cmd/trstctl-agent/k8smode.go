@@ -30,6 +30,7 @@ type k8sOptions struct {
 	reconcileEvery  time.Duration
 	resync          time.Duration // the controller's full re-check beyond its watches
 	trustRollouts   bool          // apply TrustBundles the control plane rolls out here
+	trustNamespaces string        // exact local list for namespaced TrustBundle targets
 	// csrApprover lets the issuing CA approve or deny native CSRs for trstctl
 	// signer names (A195); off leaves approval to a Kubernetes approver.
 	csrApprover bool
@@ -70,6 +71,10 @@ func (k k8sOptions) validateIssuerConfig() error {
 // CertificateRequests, and native Kubernetes CertificateSigningRequests.
 func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 	if err := k.validateIssuerConfig(); err != nil {
+		return err
+	}
+	trustPolicy, err := k8s.ParseTrustDistributionPolicy(k.trustRollouts, k.trustNamespaces)
+	if err != nil {
 		return err
 	}
 	client, err := k8s.InCluster()
@@ -141,7 +146,7 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 			fmt.Printf("trstctl-agent: cert-manager bridge active for issuer %q\n", k.issuer)
 		}
 		if k.controller {
-			issuerController, err = k8s.NewIssuerController(client, signer, k.group, k.signerURL)
+			issuerController, err = k8s.NewIssuerController(client, signer, k.group, k.signerURL, trustPolicy)
 			if err != nil {
 				return err
 			}

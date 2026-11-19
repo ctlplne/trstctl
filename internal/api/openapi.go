@@ -8061,16 +8061,16 @@ func componentSchemas() map[string]*Schema {
 		"objects":                  {Type: "array", Items: ref("KubernetesPostureObject")},
 	}, "capability", "served", "generated_at", "api_group", "api_version", "resource", "distribution_targets", "controller_flow", "rbac_rules", "status_fields", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
 	kubernetesTrustRolloutRequest := object(map[string]*Schema{
-		"name":            {Type: "string", Description: "The TrustBundle object name each cluster's controller creates or updates."},
-		"ca_bundle_pem":   {Type: "string", Description: "Public PEM CA certificates only; any other PEM block is refused."},
-		"config_map_name": {Type: "string", Description: "ConfigMap written in every target namespace; defaults to the name."},
-		"key":             {Type: "string", Description: "ConfigMap data key; defaults to ca-bundle.pem."},
-		"namespaces":      {Type: "array", Items: str(), Description: "Namespaces that receive the ConfigMap in each cluster."},
+		"name":            {Type: "string", Description: "Unreserved Kubernetes TrustBundle name, up to 63 characters. The agent also uses it as an ownership label."},
+		"ca_bundle_pem":   {Type: "string", Description: "Public X.509 CERTIFICATE PEM blocks only. The control plane records re-encoded canonical PEM and its SHA-256."},
+		"config_map_name": {Type: "string", Description: "Unreserved Kubernetes ConfigMap name. Defaults to the TrustBundle name."},
+		"key":             {Type: "string", Description: "Kubernetes ConfigMap data key. Defaults to ca-bundle.pem."},
+		"namespaces":      {Type: "array", Items: str(), Description: "Distinct Kubernetes namespaces that receive the ConfigMap after local agent opt-in, allowlist, and RBAC checks. Names beginning kube- are refused."},
 		"clusters":        {Type: "array", Items: str(), Description: "Cluster ids that have reported Kubernetes controller posture, in rollout order; the first is the canary and the rest wait for it to be verified."},
 	}, "name", "ca_bundle_pem", "namespaces", "clusters")
 	kubernetesTrustRolloutCluster := object(map[string]*Schema{
 		"cluster_id": str(), "position": {Type: "integer"}, "canary": {Type: "boolean"},
-		"state":         {Type: "string", Enum: []string{"waiting", "dispatched", "verified", "failed"}, Description: "verified means the cluster's own controller reported the bundle distributed with bundle_sha256."},
+		"state":         {Type: "string", Enum: []string{"waiting", "dispatched", "verified", "failed"}, Description: "Verified means the cluster controller reported Ready for the bundle name and bundle_sha256. Check actual targets to verify the intended revision."},
 		"reason":        str(),
 		"report_id":     {Type: "string", Description: "The posture report that verified or failed the cluster."},
 		"observed_hash": str(), "dispatched_at": timestamp(), "verified_at": timestamp(),
