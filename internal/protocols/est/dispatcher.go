@@ -12,8 +12,8 @@ import (
 
 // ProfileRoute binds one EST profile server to an optional PathID. Empty PathID
 // is the legacy /.well-known/est route family; non-empty PathIDs mount under
-// /.well-known/est/<PathID>. EnableMTLS also mounts the authenticated sibling
-// /.well-known/est-mtls/<PathID> route family.
+// /.well-known/est/<PathID>. EnableMTLS also mounts the authenticated, renew-only
+// sibling /.well-known/est-mtls/<PathID> route family.
 type ProfileRoute struct {
 	PathID     string
 	Server     *Server
@@ -114,8 +114,10 @@ func isMTLSRoute(ctx context.Context) bool {
 // MTLSRouteHandler serves this EST server on a listener that has already
 // authenticated the client's TLS certificate (ClientAuth RequireAndVerify).
 // Every request is tagged as an mTLS route: /simplereenroll authenticates by the
-// presented certificate and binds the CSR to its identifiers instead of asking
-// for a bootstrap token. The paths are the standard /.well-known/est/... ones.
+// presented certificate, which the server's MTLSClientCertificate check must
+// accept, and binds the CSR to its identifiers instead of asking for a bootstrap
+// token; /simpleenroll and /serverkeygen are refused (CR-059). The paths are the
+// standard /.well-known/est/... ones.
 func MTLSRouteHandler(server *Server) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		server.ServeHTTP(w, r.Clone(routeContext(r.Context(), true)))

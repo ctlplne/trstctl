@@ -161,25 +161,61 @@ func (s *revocationService) statusResponse(ctx context.Context, tenantID, serial
 	return s.signedStatus(ctx, tenantID, serial, nil, false)
 }
 
-func (s *revocationService) signedStatus(ctx context.Context, tenantID, serial string, nonce []byte, noncePresent bool) ([]byte, error) {
-	if pending, err := s.store.PendingCertificateRevocationForSerial(ctx, tenantID, s.caID, serial); err != nil {
-		return nil, err
+// issuedCertStanding is a platform-CA serial's standing in one tenant.
+type issuedCertStanding int
+
+const (
+	issuedCertUnknown issuedCertStanding = iota
+	issuedCertGood
+	issuedCertRevoked
+	issuedCertPending
+)
+
+// issuedCertReader is the two reads a serial's standing needs.
+type issuedCertReader interface {
+	PendingCertificateRevocationForSerial(ctx context.Context, tenantID, caID, serial string) (bool, error)
+	LookupIssuedCert(ctx context.Context, tenantID, caID, serial string) (store.IssuedCert, bool, error)
+}
+
+// issuedCertStatus reads a serial's standing the one way both the OCSP responder
+// and the EST mutual-TLS gate read it (CR-059, CR-058): a pending revocation
+// decision first, then the CA's issued-certificate ledger under the tenant's RLS.
+// A serial the ledger does not know is unknown.
+func issuedCertStatus(ctx context.Context, st issuedCertReader, tenantID, caID, serial string) (issuedCertStanding, store.IssuedCert, error) {
+	if pending, err := st.PendingCertificateRevocationForSerial(ctx, tenantID, caID, serial); err != nil {
+		return issuedCertUnknown, store.IssuedCert{}, err
 	} else if pending {
-		return nil, errors.New("server: issuer serial has a pending revocation decision")
+		return issuedCertPending, store.IssuedCert{}, nil
 	}
-	rec, found, err := s.store.LookupIssuedCert(ctx, tenantID, s.caID, serial)
+	rec, found, err := st.LookupIssuedCert(ctx, tenantID, caID, serial)
+	switch {
+	case err != nil:
+		return issuedCertUnknown, store.IssuedCert{}, err
+	case !found:
+		return issuedCertUnknown, rec, nil
+	case rec.Revoked():
+		return issuedCertRevoked, rec, nil
+	}
+	return issuedCertGood, rec, nil
+}
+
+func (s *revocationService) signedStatus(ctx context.Context, tenantID, serial string, nonce []byte, noncePresent bool) ([]byte, error) {
+	standing, rec, err := issuedCertStatus(ctx, s.store, tenantID, s.caID, serial)
 	if err != nil {
 		return nil, err
+	}
+	if standing == issuedCertPending {
+		return nil, errors.New("server: issuer serial has a pending revocation decision")
 	}
 	status := crypto.OCSPUnknown
 	var revokedAt time.Time
 	reason := 0
-	switch {
-	case found && rec.Revoked():
+	switch standing {
+	case issuedCertRevoked:
 		status = crypto.OCSPRevoked
 		revokedAt = *rec.RevokedAt
 		reason = rec.ReasonCode
-	case found:
+	case issuedCertGood:
 		status = crypto.OCSPGood
 	}
 	now := s.now()

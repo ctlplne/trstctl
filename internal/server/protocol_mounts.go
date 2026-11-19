@@ -142,13 +142,16 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 	if cfg.EST.Enabled {
 		sp.estTenant = firstNonEmpty(cfg.EST.TenantID, tenantFallback)
 		estSrv := est.New(est.Config{
-			Enroller:     enrollerAdapter{tenantID: sp.estTenant, issuer: issuer},
-			Auth:         servedEnrollAuth{store: s.store, tenantID: sp.estTenant, tenantServiceCheck: s.tenantServiceCheck},
-			CAChainDER:   [][]byte{s.caCertDER},
-			Pool:         pool,
-			Log:          s.log,
-			CSRVerifier:  issuer.verifyCSR,
-			CSRInspector: issuer.inspectCSRInfo,
+			Enroller: enrollerAdapter{tenantID: sp.estTenant, issuer: issuer},
+			Auth:     servedEnrollAuth{store: s.store, tenantID: sp.estTenant, tenantServiceCheck: s.tenantServiceCheck},
+			// CR-059, CR-058: the mutual-TLS listener renews only active EST
+			// leaves the platform CA issued into this mount's tenant.
+			MTLSClientCertificate: s.estMTLSClientCertificate(sp.estTenant),
+			CAChainDER:            [][]byte{s.caCertDER},
+			Pool:                  pool,
+			Log:                   s.log,
+			CSRVerifier:           issuer.verifyCSR,
+			CSRInspector:          issuer.inspectCSRInfo,
 			FailureDiagnosis: func(requestCtx context.Context, diagnosis enrollmentdiag.Diagnosis) {
 				if s.api == nil {
 					return

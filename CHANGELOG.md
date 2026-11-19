@@ -3741,6 +3741,17 @@
 
 ### Security
 
+- The EST mutual-TLS listener now renews only active certificates issued by EST for the
+  configured tenant (CR-059 and the EST part of CR-058). The enrollment CA must have issued
+  the client certificate directly with `clientAuth`. The tenant ledger and inventory must
+  agree on the certificate's identity and EST provenance. The issuance worker checks standing
+  again before it accepts the renewal, so a pending or recorded revocation can stop a queued
+  request. Older inventory records qualify when the CA ledger links them to an EST issuance
+  event. An unrevoked, superseded certificate still qualifies for renewal.
+  `/simpleenroll` and `/serverkeygen` return `403` on the mutual-TLS listener. Use the main
+  listener with a bootstrap credential for initial enrollment and to replace a certificate
+  that cannot renew under these rules.
+
 - The repository's secret scan also flags HashiCorp Vault-style tokens: `hvs.`, `hvb.` or `hvr.` and 20
   or more token characters. GitHub push protection blocks that shape, while gitleaks' default rules match
   only far longer `hvs.` and `hvb.` tokens and no `hvr.` token, so a fabricated test fixture could pass

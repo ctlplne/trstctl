@@ -7905,7 +7905,16 @@ token; with `TRSTCTL_PROTOCOLS_EST_MTLS_ADDR` set, a second listener requires a
 client certificate from the enrollment CA and authenticates renewals by that
 certificate, binding the CSR to its identifiers, so devices keep no token for
 renewals (DP2-037 closed; proven with a Go client and with libest `estclient -r`).
+That listener renews only certificates EST enrollment obtained for the EST mount's
+tenant that are still in good standing, and it does not enroll (CR-059, CR-058;
+the rules are in [Enrollment protocols](features/enrollment-protocols.md)).
 Found by the cold design-partner run 20260906t143500z (DP2-036, DP2-037).
+
+Today a disabled or decommissioned identity whose certificate was never revoked
+still renews over the EST mutual-TLS listener: the listener checks the
+certificate's standing, not the identity's state. Revoke the certificate when
+you retire a device. What comes next: renewal that also follows the identity's
+state.
 
 ## ACME certificate profiles
 

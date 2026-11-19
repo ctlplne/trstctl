@@ -570,14 +570,33 @@ func TestServedRevocationRegressionGuardsStayRequired(t *testing.T) {
 	}
 
 	revocation := read(t, "../internal/server/revocation.go")
+	standingCheck, ocspResponder, ok := strings.Cut(revocation, "func (s *revocationService) signedStatus(")
+	if !ok {
+		t.Fatal("CORRECT-103: served OCSP responder no longer declares signedStatus")
+	}
+	pendingRead := strings.Index(standingCheck, "st.PendingCertificateRevocationForSerial(ctx, tenantID, caID, serial)")
+	ledgerRead := strings.Index(standingCheck, "st.LookupIssuedCert(ctx, tenantID, caID, serial)")
+	if pendingRead < 0 || ledgerRead <= pendingRead {
+		t.Error("CORRECT-103: the shared standing check must read the tenant's revocation fence before its CA ledger")
+	}
 	for _, want := range []string{
-		"s.store.LookupIssuedCert(ctx, tenantID, s.caID, serial)",
-		"case found && rec.Revoked():",
+		"return issuedCertPending, store.IssuedCert{}, nil",
+		"case rec.Revoked():",
+		"return issuedCertRevoked, rec, nil",
+	} {
+		if !strings.Contains(standingCheck, want) {
+			t.Errorf("CORRECT-103: the shared certificate standing check no longer contains %q", want)
+		}
+	}
+	for _, want := range []string{
+		"issuedCertStatus(ctx, s.store, tenantID, s.caID, serial)",
+		"if standing == issuedCertPending {",
+		"case issuedCertRevoked:",
 		"status = crypto.OCSPRevoked",
 		"revokedAt = *rec.RevokedAt",
 		"crypto.SignDelegatedOCSPResponseWithNonce(",
 	} {
-		if !strings.Contains(revocation, want) {
+		if !strings.Contains(ocspResponder, want) {
 			t.Errorf("CORRECT-103: served OCSP responder no longer contains %q; revoked platform state may not be surfaced", want)
 		}
 	}

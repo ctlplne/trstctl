@@ -141,29 +141,48 @@ func TLSStateWithPeerCertificates(certsDER [][]byte) (*TLSConnectionState, error
 	}}, nil
 }
 
-// VerifyTLSClientCertificate verifies the peer certificate chain on a TLS request
-// against DER trust anchors. It keeps x509 verification inside internal/crypto
-// (AN-3) while EST/KMIP-style protocols consume only request state and DER roots.
-func VerifyTLSClientCertificate(state *tls.ConnectionState, rootsDER [][]byte) error {
+// VerifyTLSClientCertificate verifies a TLS client's leaf against DER trust
+// anchors and returns the verified leaf's DER. The leaf must be issued directly
+// by one of the anchors (no intermediate the client supplies is used) and must
+// list clientAuth among its extended key usages: a leaf with no EKU extension or
+// with anyExtendedKeyUsage is refused (CR-059). It keeps x509 verification inside
+// internal/crypto (AN-3) while EST/KMIP-style protocols consume only request state
+// and DER.
+func VerifyTLSClientCertificate(state *tls.ConnectionState, rootsDER [][]byte) ([]byte, error) {
 	if state == nil || len(state.PeerCertificates) == 0 {
-		return errors.New("crypto: TLS client certificate required")
+		return nil, errors.New("crypto: TLS client certificate required")
 	}
 	roots, err := certPoolFromDER(rootsDER)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	intermediates := x509.NewCertPool()
-	for _, cert := range state.PeerCertificates[1:] {
-		intermediates.AddCert(cert)
+	leaf := state.PeerCertificates[0]
+	if !leafListsClientAuth(leaf) {
+		return nil, errors.New("crypto: TLS client certificate does not list clientAuth")
 	}
-	if _, err := state.PeerCertificates[0].Verify(x509.VerifyOptions{
+	if _, err := leaf.Verify(x509.VerifyOptions{
 		Roots:         roots,
-		Intermediates: intermediates,
-		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+		Intermediates: x509.NewCertPool(),
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}); err != nil {
-		return fmt.Errorf("crypto: verify TLS client certificate: %w", err)
+		return nil, fmt.Errorf("crypto: verify TLS client certificate: %w", err)
 	}
-	return nil
+	return append([]byte(nil), leaf.Raw...), nil
+}
+
+// leafListsClientAuth reports whether the leaf names clientAuth and not
+// anyExtendedKeyUsage, which the x509 verifier lets satisfy every usage.
+func leafListsClientAuth(leaf *x509.Certificate) bool {
+	clientAuth := false
+	for _, usage := range leaf.ExtKeyUsage {
+		switch usage {
+		case x509.ExtKeyUsageAny:
+			return false
+		case x509.ExtKeyUsageClientAuth:
+			clientAuth = true
+		}
+	}
+	return clientAuth
 }
 
 func parseCertificates(certsDER [][]byte) ([]*x509.Certificate, error) {

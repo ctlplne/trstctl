@@ -63,16 +63,46 @@ Found by the cold design-partner run 20260906t143500z (DP2-036).
 
 A device should renew with the certificate it already holds, not with a bootstrap
 token it has to keep. Set `TRSTCTL_PROTOCOLS_EST_MTLS_ADDR` (for example `:9445`)
-and trstctl serves EST on a second HTTPS listener that requires a client certificate
-issued by the enrollment CA. On that listener `/.well-known/est/simplereenroll`
-authenticates the device by the certificate it presents and binds the renewal CSR
-to that certificate's identifiers: a CSR for another name is refused with `403`,
-a connection without a certificate fails the TLS handshake, and the ordinary
-token-authenticated routes stay on the main listener, which never requests a
-client certificate (so browsers are not prompted). The listener reuses the main
-listener's server identity and TLS floor, so cisco libest `estclient -r -c
-<cert> -k <key>` renews against it with `TRSTCTL_SERVER_TLS_MIN_VERSION=1.2`.
-Closes DP2-037.
+and trstctl serves EST renewals on a second HTTPS listener that requires a client
+certificate issued by the enrollment CA. On that listener
+`/.well-known/est/simplereenroll` authenticates the device by the certificate it
+presents and binds the renewal CSR to that certificate's identifiers: a CSR for
+another name is refused with `403`, a connection without a certificate fails the
+TLS handshake, and the ordinary token-authenticated routes stay on the main
+listener, which never requests a client certificate (so browsers are not
+prompted). The listener reuses the main listener's server identity and TLS floor,
+so cisco libest `estclient -r -c <cert> -k <key>` renews against it with
+`TRSTCTL_SERVER_TLS_MIN_VERSION=1.2`. Closes DP2-037.
+
+The enrollment CA is the platform issuing CA every tenant shares, so a chain to it
+proves nothing about whose certificate it is. A renewal goes through only when the
+presented certificate is one EST enrollment obtained for the EST mount's own
+tenant and is still in good standing:
+
+- it lists clientAuth (and not anyExtendedKeyUsage) and the enrollment CA issued
+  it directly; an intermediate the client sends along is not used;
+- the issued-certificate ledger knows its serial in the mount's tenant and holds
+  no revocation or pending revocation decision for it, read the same way the OCSP
+  responder reads it;
+- the tenant's inventory row for its fingerprint carries the same serial, is not
+  revoked (a superseded certificate that was never revoked still renews, so a
+  device that lost its renewal response can try again), and records EST as the
+  enrollment path. A row recorded before trstctl kept the enrollment path passes
+  when the ledger's record of the certificate's issuance names EST; the row's
+  source label alone does not count, because an import can change it.
+
+trstctl checks standing again when the validated renewal enters the issuance
+worker, after reading the CSR and waiting in the queue. A revocation decision
+already recorded when the worker reads the revocation fence blocks that renewal.
+If a certificate fails verification after the TLS handshake, the request returns
+`401`. A failed tenant, issuance path, or standing check returns `403` with a
+generic message.
+`/simpleenroll` and `/serverkeygen` also answer `403` on this
+listener: a device enrolls for the first time on the main listener with its
+bootstrap credential, and `/cacerts` and `/csrattrs` still answer here. A device
+whose certificate does not meet these rules (one issued in another tenant, by
+another enrollment path or another CA, imported, revoked, or older than the
+ledger's issuance records) enrolls again on the main listener.
 
 #### Check EST safely from the console
 
@@ -101,9 +131,11 @@ has the signer generate the key, returning the certificate plus encrypted privat
 material as CMS EnvelopedData, with the raw key never entering logs or audit events.
 RFC 9266 channel binding via `tls-server-end-point` binds a CSR to the server TLS
 certificate so a relayed enrollment fails closed. Profiles can split by per-profile
-PathID under `/.well-known/est/<PathID>/...`, with a separate mTLS sibling route under
-`/.well-known/est-mtls/<PathID>/...` for 802.1X/Wi-Fi bootstrap, plus per-IP and
-per-principal rate limits.
+PathID under `/.well-known/est/<PathID>/...`, plus per-IP and per-principal rate
+limits. The EST package also has an mTLS sibling route under
+`/.well-known/est-mtls/<PathID>/...`; the served control plane does not mount it
+(its mutual-TLS listener above answers the standard paths), and like that listener
+the sibling renews only, through the mount's client certificate check.
 
 ### SCEP (F23) — the one network and MDM gear still speaks
 
@@ -515,9 +547,11 @@ enables.
 
 - **EST:** `GET /.well-known/est/cacerts`, `POST /.well-known/est/simpleenroll`,
   `/simplereenroll`, `GET /.well-known/est/csrattrs`, `POST
-  /.well-known/est/serverkeygen` (RFC 7030); profile PathID and mTLS sibling route
-  variants mount under `/.well-known/est/<PathID>/...` and
-  `/.well-known/est-mtls/<PathID>/...`.
+  /.well-known/est/serverkeygen` (RFC 7030); profile PathID variants mount under
+  `/.well-known/est/<PathID>/...`. With `TRSTCTL_PROTOCOLS_EST_MTLS_ADDR`, the
+  mutual-TLS listener answers `/simplereenroll`, `/cacerts` and `/csrattrs` on the
+  same paths. The package's renew-only mTLS sibling route
+  (`/.well-known/est-mtls/<PathID>/...`) is not mounted by the served control plane.
 - **SCEP:** `/scep?operation=GetCACaps|GetCACert|PKIOperation` (RFC 8894).
 - **CMP:** `POST /cmp` (RFC 4210 / RFC 6712) for protected `p10cr` enrollment;
   authenticated read-only `POST /api/v1/protocols/cmp/qualification` and

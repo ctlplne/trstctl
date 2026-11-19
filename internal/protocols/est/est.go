@@ -18,6 +18,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -86,6 +87,7 @@ type Server struct {
 	channelBindingRequired       bool
 	channelBindingCertificateDER []byte
 	mtlsClientCAsDER             [][]byte
+	mtlsClientCertificate        func(context.Context, []byte) error
 	principalLimit               int
 	principalWindow              time.Duration
 	principalLimiter             *windowCounter
@@ -108,13 +110,19 @@ type Config struct {
 	ChannelBindingRequired       bool
 	ChannelBindingCertificateDER []byte
 	MTLSClientCAsDER             [][]byte
-	MaxEnrollmentsPerPrincipal   int
-	PrincipalRateLimitWindow     time.Duration
-	Auth                         Authenticator
-	CAChainDER                   [][]byte
-	ProfileName                  string
-	Pool                         *bulkhead.Pool // AN-7; nil runs inline
-	Log                          *events.Log    // AN-2; nil disables audit emit
+	// MTLSClientCertificate decides whether a verified mutual-TLS client leaf
+	// may renew on this mount: an active EST certificate the platform CA issued
+	// into the mount's tenant (CR-059, CR-058). It runs before reading the
+	// request body and again when the validated renewal enters issuance. Nil
+	// refuses every mTLS renewal.
+	MTLSClientCertificate      func(ctx context.Context, leafDER []byte) error
+	MaxEnrollmentsPerPrincipal int
+	PrincipalRateLimitWindow   time.Duration
+	Auth                       Authenticator
+	CAChainDER                 [][]byte
+	ProfileName                string
+	Pool                       *bulkhead.Pool // AN-7; nil runs inline
+	Log                        *events.Log    // AN-2; nil disables audit emit
 	// CSRVerifier/CSRInspector are feature-neutral production seams for subject
 	// algorithms not yet understood by the Go toolchain. Nil uses the strict
 	// internal/crypto classical parser.
@@ -130,7 +138,8 @@ func New(cfg Config) *Server {
 	s := &Server{
 		enroller: cfg.Enroller, serverKeygen: cfg.ServerKeygen, serverKeygenEnabled: cfg.ServerKeygenEnabled,
 		channelBindingRequired: cfg.ChannelBindingRequired, channelBindingCertificateDER: cfg.ChannelBindingCertificateDER, mtlsClientCAsDER: cfg.MTLSClientCAsDER,
-		principalLimit: cfg.MaxEnrollmentsPerPrincipal, principalWindow: cfg.PrincipalRateLimitWindow,
+		mtlsClientCertificate: cfg.MTLSClientCertificate,
+		principalLimit:        cfg.MaxEnrollmentsPerPrincipal, principalWindow: cfg.PrincipalRateLimitWindow,
 		auth: cfg.Auth, caChain: cfg.CAChainDER, profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
 		verifyCSR: cfg.CSRVerifier, inspectCSR: cfg.CSRInspector, onFailure: cfg.FailureDiagnosis,
 	}
@@ -282,11 +291,20 @@ const (
 	estOpReenroll = "est-reenroll"
 )
 
+var errMTLSClientCertificateNotActive = errors.New("est: mutual-TLS client certificate is no longer active")
+
 // enroll handles /simpleenroll and /simplereenroll. The opType distinguishes them
 // in the audit trail.
 func (s *Server) enroll(opType string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !s.authorize(w, r, opType) {
+		// The mutual-TLS listener renews only; refused before the body or any
+		// certificate lookup is touched (CR-059).
+		if opType != estOpReenroll && isMTLSRoute(r.Context()) {
+			s.refuseMTLSEnrollment(w, r, opType)
+			return
+		}
+		clientLeafDER, authorized := s.authorize(w, r, opType)
+		if !authorized {
 			return
 		}
 		csrDER, err := parseEnrollBodyWithVerifier(r.Body, s.verifyCSR)
@@ -347,8 +365,19 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 			if idem == "" {
 				idem = estFallbackIdempotencyKey(opType, csrDER)
 			}
+			// The body read and queue wait can outlive the original authority
+			// check. Check the same leaf at admission, before invoking issuance.
+			if clientLeafDER != nil {
+				if err := s.mtlsClientCertificate(ctx, clientLeafDER); err != nil {
+					return nil, fmt.Errorf("%w: %w", errMTLSClientCertificateNotActive, err)
+				}
+			}
 			return s.enroller.Enroll(ctx, csrDER, s.profile, "est", idem)
 		})
+		if errors.Is(rerr, errMTLSClientCertificateNotActive) {
+			s.denyMTLSClientCertificate(w, r, opType, rerr)
+			return
+		}
 		if errors.Is(rerr, bulkhead.ErrRejected) {
 			s.audit(r.Context(), opType, "shed", "bulkhead full")
 			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepIssue, http.StatusServiceUnavailable, rerr),
@@ -437,12 +466,16 @@ func (s *Server) allowPrincipalEnrollment(r *http.Request, csrDER []byte) (bool,
 
 func (s *Server) serverKeygenHandler(w http.ResponseWriter, r *http.Request) {
 	const opType = "est-serverkeygen"
+	if isMTLSRoute(r.Context()) {
+		s.refuseMTLSEnrollment(w, r, opType)
+		return
+	}
 	if !s.serverKeygenEnabled || s.serverKeygen == nil {
 		s.audit(r.Context(), opType, "deny", "serverkeygen disabled")
 		http.NotFound(w, r)
 		return
 	}
-	if !s.authorize(w, r, opType) {
+	if _, authorized := s.authorize(w, r, opType); !authorized {
 		return
 	}
 	csrDER, err := parseEnrollBodyWithVerifier(r.Body, s.verifyCSR)
@@ -501,23 +534,46 @@ type limitedAuthenticator interface {
 	RecordFailure(*http.Request)
 }
 
-func (s *Server) authorize(w http.ResponseWriter, r *http.Request, opType string) bool {
+// refuseMTLSEnrollment answers an enrollment or server-side keygen on the
+// mutual-TLS listener, which serves re-enrollment only (CR-059).
+func (s *Server) refuseMTLSEnrollment(w http.ResponseWriter, r *http.Request, opType string) {
+	s.audit(r.Context(), opType, "deny", "the mutual-TLS listener serves re-enrollment only")
+	s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, http.StatusForbidden, nil),
+		r.Method+" "+r.URL.Path, "mtls:reenroll-only")
+	http.Error(w, "the mutual-TLS listener serves re-enrollment only; enroll on the main listener", http.StatusForbidden)
+}
+
+// authorize returns the verified client leaf for mutual-TLS renewals. A token
+// request that is authorized returns a nil leaf.
+func (s *Server) authorize(w http.ResponseWriter, r *http.Request, opType string) ([]byte, bool) {
 	if isMTLSRoute(r.Context()) {
-		if err := crypto.VerifyTLSClientCertificate(r.TLS, s.mtlsClientCAsDER); err != nil {
+		leafDER, err := crypto.VerifyTLSClientCertificate(r.TLS, s.mtlsClientCAsDER)
+		if err != nil {
 			s.audit(r.Context(), opType, "deny", "mTLS client certificate rejected")
 			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, http.StatusUnauthorized, err),
 				r.Method+" "+r.URL.Path, "client-certificate:rejected")
 			http.Error(w, "mTLS client certificate required", http.StatusUnauthorized)
-			return false
+			return nil, false
 		}
-		return true
+		// CR-059, CR-058: only an active EST certificate the platform CA issued
+		// into this mount's tenant renews; a missing check refuses.
+		if s.mtlsClientCertificate == nil {
+			err = errors.New("est: no mutual-TLS client certificate check is configured")
+		} else {
+			err = s.mtlsClientCertificate(r.Context(), leafDER)
+		}
+		if err != nil {
+			s.denyMTLSClientCertificate(w, r, opType, err)
+			return nil, false
+		}
+		return leafDER, true
 	}
 	if limiter, ok := s.auth.(limitedAuthenticator); ok && limiter.TooManyFailures(r) {
 		s.audit(r.Context(), opType, "shed", "basic auth failures over limit")
 		s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, http.StatusTooManyRequests, nil),
 			r.Method+" "+r.URL.Path, "principal:rate-limited")
 		http.Error(w, "too many failed enrollment attempts", http.StatusTooManyRequests)
-		return false
+		return nil, false
 	}
 	result := AuthenticationResult{StatusCode: http.StatusUnauthorized}
 	if s.auth != nil {
@@ -538,9 +594,16 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, opType string
 		s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, status, nil),
 			r.Method+" "+r.URL.Path, "principal:unauthorized")
 		http.Error(w, "unauthorized", status)
-		return false
+		return nil, false
 	}
-	return true
+	return nil, true
+}
+
+func (s *Server) denyMTLSClientCertificate(w http.ResponseWriter, r *http.Request, opType string, err error) {
+	s.audit(r.Context(), opType, "deny", "mTLS client certificate is not an active certificate of this tenant")
+	s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, http.StatusForbidden, err),
+		r.Method+" "+r.URL.Path, "client-certificate:not-active")
+	http.Error(w, "client certificate is not an active certificate of this mount's tenant", http.StatusForbidden)
 }
 
 // setWWWAuthenticate preserves the conventional RFC field spelling on the
