@@ -149,8 +149,8 @@ DNS name nor a name entry a mailbox, so a credential scoped only to mail domains
 no TLS certificates; a malformed mailbox entry refuses to start, or to save. An order
 for an identifier outside the scope is refused fail-closed, names the identifier and
 the credential, and records an `acme.eab.order_denied` event; one out-of-scope
-identifier refuses the whole order. A credential with none of those fields behaves
-exactly as it did before.
+identifier refuses the whole order. An unscoped credential may still register
+accounts and place orders subject to the other ACME policies.
 
 The mechanism: `GET /api/v1/acme/eab-credentials` serves each credential's scope,
 quota, window, and live accounts-bound / orders-created / orders-denied counters, and
@@ -312,15 +312,28 @@ idempotency keys, raw outbox payloads, or raw worker errors. Cleanup uses an ind
 bounded context, so a disconnected browser does not abandon the DNS record. If cleanup
 still fails, the run stays visibly recoverable instead of being reported as green.
 
-On an actual served ACME DNS-01 order, accepting the `dns-01` challenge resolves the
-tenant's matching provider config, enqueues `acme.dns01.present` and
+The served ACME server publishes a DNS-01 record only when the account is bound
+to an active External Account Binding credential whose explicit
+`allowed_identifiers` scope covers the order's DNS identifier.
+The server checks the current scope when the client accepts the challenge. An
+account with no binding, an unscoped credential, or a grant that no longer
+covers the identifier must publish its own TXT record before accepting the
+challenge. A reached order quota also ends the credential's authority to
+request server-side publication. To keep managed publication available during
+an upgrade, give each automation account a scoped EAB credential. If an existing
+account was registered without EAB, register a replacement account with the
+scoped credential before switching its orders to the new server.
+
+For an authorized account, accepting the `dns-01` challenge resolves the tenant's
+matching provider config, enqueues `acme.dns01.present` and
 `acme.dns01.cleanup` outbox rows, waits for the published TXT record before
 validation, and records `acme.dns01.record.presented` /
 `acme.dns01.record.cleaned` metadata events. Provider credentials are resolved from
 secret references inside the outbox worker; TXT values and credential refs are not
 written to the audit events. When the provider config sets `caa_issuer_domain`, the
-served DNS-01 path checks authoritative live CAA before enqueueing provider writes and
-fails closed if the governing CAA set denies that issuer or cannot be read. When the
+served DNS-01 path checks authoritative live CAA before validating the challenge,
+including when the client publishes the TXT record. The check refuses the challenge
+if the governing CAA set denies that issuer or cannot be read. When the
 provider config sets `delegation_target`, the outbox worker verifies the live
 `_acme-challenge` CNAME against that configured target and publishes/cleans up the TXT
 only at the delegated validation name. A delegated config's `_validation-persist` names
@@ -771,8 +784,9 @@ tenant cannot read another tenant's certificate identifiers or rotation evidence
   `GET /api/v1/acme/dns-01/providers`.
 - **DNS-01 provider config:** `POST/GET/PUT/DELETE
   /api/v1/acme/dns-01/provider-configs`; `POST /api/v1/acme/dns-01/preflight`.
-- **Order-time DNS-01 automation:** `POST /acme/chal/{id}` for a served `dns-01`
-  challenge publishes, validates, and cleans through `acme.dns01.*` outbox rows.
+- **Order-time DNS-01 automation:** `POST /acme/chal/{id}` validates the TXT
+  record. An active EAB credential scoped to the name enables managed publish
+  and cleanup through `acme.dns01.*` outbox rows.
 - **Key functions:** `SelectMethod` (method choice), `ConformDNSProvider` (provider
   conformance), `VerifyDelegation` / `PreflightDNS01` (onboarding checks).
 - **RFCs:** 8555 (ACME), 8659 (CAA), 9773 (ARI).

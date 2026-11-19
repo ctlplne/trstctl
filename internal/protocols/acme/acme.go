@@ -214,6 +214,12 @@ type DomainValidationPolicy interface {
 	AllowedMethods(ctx context.Context, tenantID, domain string) (methods []string, constrained bool, err error)
 }
 
+// dns01CAAPolicy is the read-only CAA check a managed zone can supply for
+// client-published proof, when the server does not call DNS01Automation.Present.
+type dns01CAAPolicy interface {
+	CheckDNS01CAA(ctx context.Context, tenantID, domain string) error
+}
+
 type challenge struct {
 	id      string
 	typ     string
@@ -430,10 +436,10 @@ func (s *Server) WithAccountOrderLimiter(l AccountOrderLimiter) *Server {
 	return s
 }
 
-// WithDNS01Automation wires managed DNS-01 publish/cleanup for served
-// deployments. Nil leaves the ACME server's RFC 8555 behavior unchanged:
-// clients/operators must publish DNS-01 TXT records out of band before accepting
-// the challenge.
+// WithDNS01Automation wires managed DNS-01 publish/cleanup for accounts with
+// an active EAB credential whose explicit scope covers the order identifier.
+// Other accounts publish DNS-01 TXT records out of band before accepting the
+// challenge.
 func (s *Server) WithDNS01Automation(a DNS01Automation) *Server {
 	s.dns01Automation = a
 	return s
@@ -1496,9 +1502,13 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jo
 		}
 	default:
 		keyAuth := ch.token + "." + acct.key.Thumbprint()
-		if ch.typ == ChallengeDNS01 && s.dns01Automation != nil {
+		if ch.typ == ChallengeDNS01 {
 			var err error
-			cleanup, err = s.dns01Automation.Present(r.Context(), s.stateTenantID, az.domain, ch.token, keyAuth)
+			if s.dns01Automation != nil && s.eabAllowsDNS01Publication(acct, az.domain) {
+				cleanup, err = s.dns01Automation.Present(r.Context(), s.stateTenantID, az.domain, ch.token, keyAuth)
+			} else if policy, ok := s.dvPolicy.(dns01CAAPolicy); ok {
+				err = policy.CheckDNS01CAA(r.Context(), s.stateTenantID, az.domain)
+			}
 			if err != nil {
 				s.problem(w, r, http.StatusBadRequest, "unauthorized", "challenge validation failed: "+err.Error())
 				return

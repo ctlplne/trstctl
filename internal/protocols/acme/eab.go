@@ -622,6 +622,20 @@ type acmeEABOrderDeniedEvent struct {
 	Reason      string   `json:"reason"`
 }
 
+// eabAllowsDNS01Publication checks the current grant for the exact order
+// identifier, including its wildcard prefix if present. An account can still
+// validate client-published proof without this permission.
+func (s *Server) eabAllowsDNS01Publication(acct *account, identifier string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cred := s.eabCredentials[acct.eabKeyID]
+	if cred == nil || !cred.policy.scopesIdentifiers() || !cred.policy.permits(identifier) {
+		return false
+	}
+	active, _ := cred.active(time.Now())
+	return active
+}
+
 // authorizeOrderAgainstEAB decides whether an order is inside the scope of the
 // credential that admitted its account. It returns that credential (so the caller
 // can count the outcome) and an operator-facing denial reason, empty when the

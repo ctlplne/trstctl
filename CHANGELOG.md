@@ -3741,6 +3741,11 @@
 
 ### Security
 
+- Served ACME publishes a managed DNS-01 TXT record only when the account's
+  active External Account Binding credential explicitly covers the requested name
+  (CR-051). Accounts without a current scoped grant publish their own TXT
+  records. Managed zones still enforce configured live CAA policy.
+
 - Served secret scans require explicit roots for local paths and custom rules
   (CR-090). Configure `secrets.scan_roots` for existing path-based workflows.
   Worker-owned repository clones have a per-scan root, Git-history scans check

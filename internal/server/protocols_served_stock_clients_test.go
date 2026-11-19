@@ -57,12 +57,19 @@ func TestServedACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 	servedWriteExecutable(t, cleanupHook, servedCertbotCleanupHookScript())
 
 	const dnsWebhookToken = "certbot-aud73-webhook-token" // #nosec G101 -- fabricated test-only webhook credential (CWE-798)
+	const eabKeyID = "certbot-aud73-publisher"
+	eabKey := bytes.Repeat([]byte{0x51}, 32)
 	dns := newServedDNSWebhookFixture(t, dnsWebhookToken)
 	validators := acmesrv.Validators{
 		DNS01: acmesrv.DNS01Validator{Resolver: servedCertbotDNSResolver{recordsPath: recordsPath}},
 	}
 	h := newServedHarness(t,
-		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+		config.Protocols{
+			ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+			ACMEEAB: config.ACMEExternalAccountBinding{Required: true, Keys: []config.ACMEExternalAccountBindingKey{{
+				KeyID: eabKeyID, HMACKey: eabKey, AllowedIdentifiers: []string{domain},
+			}}},
+		},
 		withSecretsEnabled(t, nil),
 		func(d *Deps) { d.ACMEValidators = &validators },
 	)
@@ -124,6 +131,8 @@ func TestServedACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 		"--agree-tos",
 		"--email", "acme-stock-client@example.com",
 		"--no-eff-email",
+		"--eab-kid", eabKeyID,
+		"--eab-hmac-key", base64.RawURLEncoding.EncodeToString(eabKey),
 		"--cert-name", certName,
 		"-d", domain,
 	}, commonArgs...), env, issueLogPath)

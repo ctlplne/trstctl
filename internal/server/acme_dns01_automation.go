@@ -380,6 +380,19 @@ func (a *servedACMEDNS01Automation) AllowedMethods(ctx context.Context, tenantID
 	return methods, true, nil
 }
 
+// CheckDNS01CAA checks the managed zone policy when the ACME client supplies
+// its own TXT record. It performs no provider write.
+func (a *servedACMEDNS01Automation) CheckDNS01CAA(ctx context.Context, tenantID, domain string) error {
+	if _, managed, err := a.AllowedMethods(ctx, tenantID, domain); err != nil || !managed {
+		return err
+	}
+	cfg, err := a.selectProviderConfig(ctx, tenantID, domain)
+	if err != nil {
+		return err
+	}
+	return a.enforceLiveCAA(ctx, domain, cfg)
+}
+
 func (a *servedACMEDNS01Automation) enforceLiveCAA(ctx context.Context, domain string, cfg store.ACMEDNS01ProviderConfig) error {
 	issuer := strings.TrimSpace(cfg.CAAIssuerDomain)
 	if issuer == "" {
@@ -391,7 +404,7 @@ func (a *servedACMEDNS01Automation) enforceLiveCAA(ctx context.Context, domain s
 	}
 	checker := acme.CAAChecker{Resolver: resolver, IssuerDomain: issuer}
 	if err := checker.Check(ctx, domain, acme.IsWildcard(domain)); err != nil {
-		return fmt.Errorf("acme: live CAA policy rejected %s before DNS-01 publish: %w", domain, err)
+		return fmt.Errorf("acme: live CAA policy rejected %s: %w", domain, err)
 	}
 	return nil
 }

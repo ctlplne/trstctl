@@ -621,13 +621,20 @@ func TestServedACMEDNS01ProviderConfigDuplicateNameDoesNotPoisonEventTail(t *tes
 // validates it, cleans it up through the outbox, and then finalizes a real signer-
 // issued certificate.
 func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testing.T) {
+	const domain = "dns01.trace012.test"
+	eabKey := bytes.Repeat([]byte{0x42}, 32)
 	dns := newServedDNSWebhookFixture(t, "dns-webhook-token")
 	validators := acmesrv.Validators{
 		HTTP01: acmesrv.HTTP01Validator{},
 		DNS01:  acmesrv.DNS01Validator{Resolver: dns},
 	}
 	h := newServedHarness(t,
-		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+		config.Protocols{
+			ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+			ACMEEAB: config.ACMEExternalAccountBinding{Keys: []config.ACMEExternalAccountBindingKey{{
+				KeyID: "trace012-publisher", HMACKey: eabKey, AllowedIdentifiers: []string{domain},
+			}}},
+		},
 		withSecretsEnabled(t, nil),
 		func(d *Deps) { d.ACMEValidators = &validators },
 	)
@@ -661,15 +668,8 @@ func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testin
 	}
 
 	ctx := context.Background()
-	client, err := acmekey.NewClient(h.ts.URL + "/directory")
-	if err != nil {
-		t.Fatalf("acme client: %v", err)
-	}
-	if _, err := client.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
-		t.Fatalf("register: %v", err)
-	}
+	client := registerWithEAB(t, h, "trace012-publisher", eabKey)
 
-	const domain = "dns01.trace012.test"
 	order, err := client.AuthorizeOrder(ctx, xacme.DomainIDs(domain))
 	if err != nil {
 		t.Fatalf("authorize order: %v", err)
