@@ -4894,7 +4894,10 @@ protocols:
 
 Every selector must be observed: `unix:uid:<n>`, `unix:gid:<n>` or
 `unix:path:<executable>`; a bare `unix` would match every process on the host and is
-refused. The control plane scopes each entry to that agent's own certificate identity,
+refused. On Linux the agent observes `unix:path` only when it can verify that the
+live connecting process shares the agent's mount namespace. The kernel's UID and
+GID selectors remain available when the executable path cannot be verified.
+The control plane scopes each entry to that agent's own certificate identity,
 so no other agent can obtain it and the control plane's own socket never serves it.
 An entry outside the trust domain, in the reserved `/_trstctl` namespace, with no
 selectors or no agent, or repeated for the same agent is refused at start. Entries are

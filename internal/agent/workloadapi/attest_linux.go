@@ -37,8 +37,9 @@ func peerCredentialsFD(fd uintptr) (PeerIdentity, error) {
 // (Linux 6.5) is a pidfd for the connecting process itself, so the path is kept
 // only when that process still holds the pid after the read: a process that is
 // alive after the read was alive during it, and a live process keeps its pid.
-// A kernel without SO_PEERPIDFD, or a caller that has exited, yields no path
-// selector — never a guess.
+// Only paths in the agent's mount namespace can satisfy its path selectors.
+// A missing pidfd, an exited caller, or an unverifiable mount namespace yields
+// no path selector.
 func linuxExecutablePath(fd uintptr, pid int) string {
 	if pid <= 0 {
 		return ""
@@ -51,14 +52,27 @@ func linuxExecutablePath(fd uintptr, pid int) string {
 	if pidfdPID(pidfd) != pid {
 		return ""
 	}
-	resolved, err := os.Readlink(filepath.Join("/proc", strconv.Itoa(pid), "exe"))
-	if err != nil {
+	peerProc := filepath.Join("/proc", strconv.Itoa(pid))
+	if !sameLinuxMountNamespace(peerProc) {
+		return ""
+	}
+	resolved, err := os.Readlink(filepath.Join(peerProc, "exe"))
+	if err != nil || !sameLinuxMountNamespace(peerProc) {
 		return ""
 	}
 	if unix.PidfdSendSignal(pidfd, 0, nil, 0) != nil || pidfdPID(pidfd) != pid {
 		return ""
 	}
 	return resolved
+}
+
+func sameLinuxMountNamespace(peerProc string) bool {
+	local, err := os.Stat("/proc/self/ns/mnt")
+	if err != nil {
+		return false
+	}
+	peer, err := os.Stat(filepath.Join(peerProc, "ns", "mnt"))
+	return err == nil && os.SameFile(local, peer)
 }
 
 // pidfdPID is the pid a pidfd names in this process's pid namespace, read from

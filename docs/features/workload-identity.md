@@ -382,6 +382,10 @@ selectors the agent must observe and the agent's enrolled name; see
 [configuration](../configuration.md)), and mount only the host-local Workload API
 socket into workloads. This limits a compromised
 host to identities assigned to that host instead of widening it to the trust domain.
+When attesting a new Linux connection, the agent emits `unix:path` only if it
+verifies that the live peer shares its mount namespace. The Workload API matches
+entries using those connection selectors. Workloads in separate mount namespaces
+can match entries that require only the UID and GID reported by the kernel.
 The control-plane socket keeps serving `FetchX509Bundles`, `FetchJWTBundles`, and
 `ValidateJWTSVID` for validators; a workload that still dials it for an SVID is
 refused with a message naming the host socket, and the attempt is recorded as

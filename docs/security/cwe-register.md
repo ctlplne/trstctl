@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3540 annotated sites across 35 rules. Each row is
+3541 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -3817,7 +3817,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G704 — CWE-918 Server-side request forgery (taint) (53 sites)
+### G704 — CWE-918 Server-side request forgery (taint) (54 sites)
 
 | Location | Reason |
 |---|---|
@@ -3827,6 +3827,7 @@ not this file.
 | `internal/agent/relay/k8ssecret_kind_e2e_test.go:108` | the kind cluster API server the job exports (CWE-918) |
 | `internal/agent/relay/k8ssecret_kind_e2e_test.go:117` | the kind cluster API server the job exports (CWE-918) |
 | `internal/agent/workloadapi/attest_linux_test.go:29` | the parent test hands its own temporary socket's path to this helper process (CWE-918). |
+| `internal/agent/workloadapi/attest_mount_namespace_linux_test.go:81` | this fixture connects to the test's own local socket (CWE-918). |
 | `internal/crypto/kerberos/client_test.go:115` | the test's own loopback httptest server (CWE-918) |
 | `internal/crypto/kerberos/client_test.go:125` | the test's own loopback httptest server (CWE-918) |
 | `internal/crypto/windependents/rotation_native_windows_test.go:131` | both exact listener addresses validated as literal loopback before handler installation; only a validated 16-byte hex nonce varies (CWE-918) |

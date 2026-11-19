@@ -3741,6 +3741,10 @@
 
 ### Security
 
+- The Linux Workload API verifies that the connecting process shares the agent's
+  mount namespace before emitting `unix:path` (CR-693). The agent omits the path
+  when it cannot verify the namespace and keeps the kernel's UID and GID selectors.
+
 - A requester and its bundle-run subject share one identity for separation
   of duties (CR-101). Approval and denial reject that reviewer before a new
   decision reaches the event log. Rebuild retains previously recorded
