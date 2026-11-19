@@ -2692,6 +2692,7 @@ cryptography lives behind the platform's single crypto boundary.
 | `TRSTCTL_SECRETS_AUTH_TOKEN_TENANT_ID` | unset | Exact tenant UUID allowed to use the builtin HMAC token authority. One deployment-wide verifier is never implicitly trusted across tenants. Required with `TRSTCTL_SECRETS_AUTH_SECRET_FILE`. |
 | `TRSTCTL_SECRETS_AUTH_TOKEN_SCOPES` | unset | Comma-separated least-privilege API permissions returned by the builtin token exchange, for example `secrets:read`. Required and non-empty with `TRSTCTL_SECRETS_AUTH_SECRET_FILE`; there is no implicit wildcard or inert empty grant. |
 | `TRSTCTL_SECRETS_GITLEAKS_BIN` | auto-detect | Path to the pinned Gitleaks `v8.27.2` binary used by `POST /api/v1/secrets/scans`. Empty resolves `TRSTCTL_GITLEAKS_BIN`, `tools/bin/gitleaks`, then `PATH`. Run `tools/gitleaks/install.sh` during image build or host provisioning to install the supported checksum-verified release tarball. A missing binary makes scan requests fail closed with `503`. |
+| `TRSTCTL_SECRETS_SCAN_ROOTS` | unset | Comma-separated paths to existing operator-mounted directories, also available as `secrets.scan_roots`. Empty disables served local paths, including repository `checkout_path`. The server rejects a filesystem root or any directory that contains its process temporary directory. Worker-owned clones use their individual checkout directory. |
 
 Every default-binary idempotency result is outer-sealed through the same
 tenant-aware crypto resolver before PostgreSQL retains it. A legacy tenant uses

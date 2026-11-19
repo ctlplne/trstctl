@@ -16,6 +16,7 @@ import (
 	"time"
 
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/safefile"
 )
 
 const (
@@ -80,11 +81,10 @@ type GitleaksRunner struct {
 	Binary             string
 	Timeout            time.Duration
 	MaxTargetMegabytes int
-	// AllowedRoots confines every served scan target and custom-rules file to
-	// operator-approved filesystem trees. Empty means the process working
-	// directory, which keeps the default fail-closed without breaking local CLI
-	// use from a repository checkout.
+	// AllowedRoots confines scan targets and custom rules. An empty allowlist
+	// admits no local path. The CLI constructor explicitly sets its workspace.
 	AllowedRoots        []string
+	served              bool
 	rulesActiveOverride int
 }
 
@@ -94,15 +94,43 @@ func NewGitleaksRunner(binary string) *GitleaksRunner {
 	return &GitleaksRunner{Binary: strings.TrimSpace(binary), Timeout: 2 * time.Minute, MaxTargetMegabytes: 50, AllowedRoots: []string{"."}}
 }
 
+// NewServedGitleaksRunner uses only the operator's roots for local paths.
+func NewServedGitleaksRunner(binary string, roots []string) *GitleaksRunner {
+	runner := NewGitleaksRunner(binary)
+	runner.AllowedRoots = append([]string(nil), roots...)
+	runner.served = true
+	return runner
+}
+
+func (r *GitleaksRunner) scanRoots() ([]string, error) {
+	if !r.served {
+		return r.AllowedRoots, nil
+	}
+	roots, err := safefile.ScanRoots(r.AllowedRoots)
+	if err != nil {
+		return nil, fmt.Errorf("%w: operator scan roots must be dedicated directories", ErrInvalidScanTarget)
+	}
+	return roots, nil
+}
+
+// ValidateLocalTarget performs only filesystem admission. A repository webhook
+// uses it before queueing local checkout work, and the worker checks again.
+func (r *GitleaksRunner) ValidateLocalTarget(path string) error {
+	roots, err := r.scanRoots()
+	if err != nil {
+		return err
+	}
+	_, _, err = normalizeTarget(path, roots)
+	return err
+}
+
 // Scan runs the default workspace scan for compatibility with older embedders.
 func (r *GitleaksRunner) Scan(ctx context.Context, target string) (Report, error) {
 	return r.ScanWithOptions(ctx, target, ScanOptions{})
 }
 
 // ScanClone scans a checkout this process cloned into its own temporary
-// directory (a repository scan's clone_url). That directory alone is the scan
-// root: the operator's scan roots need not cover the temporary directory, and
-// nothing outside the clone is reachable.
+// directory. That checkout alone is authorized as this scan's target root.
 func (r *GitleaksRunner) ScanClone(ctx context.Context, dir string) (Report, error) {
 	clone := *r
 	clone.AllowedRoots = []string{dir}
@@ -112,11 +140,20 @@ func (r *GitleaksRunner) ScanClone(ctx context.Context, dir string) (Report, err
 // Plan validates the exact target, confinement boundary, mode, scanner binary,
 // and additive custom rules without starting a process or writing a file.
 func (r *GitleaksRunner) Plan(target string, opts ScanOptions) (Plan, error) {
+	return r.PlanContext(context.Background(), target, opts)
+}
+
+// PlanContext applies the caller's deadline to bounded custom-rule reads.
+func (r *GitleaksRunner) PlanContext(ctx context.Context, target string, opts ScanOptions) (Plan, error) {
 	mode, err := NormalizeScanMode(opts.Mode)
 	if err != nil {
 		return Plan{}, err
 	}
-	targetPath, targetRoot, err := normalizeTarget(target, r.AllowedRoots)
+	roots, err := r.scanRoots()
+	if err != nil {
+		return Plan{}, err
+	}
+	targetPath, targetRoot, err := normalizeTarget(target, roots)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -125,7 +162,7 @@ func (r *GitleaksRunner) Plan(target string, opts ScanOptions) (Plan, error) {
 		if err != nil {
 			return Plan{}, err
 		}
-		root, err = resolveAllowedPath(root, r.AllowedRoots)
+		root, _, err = resolveAllowedPath(root, roots)
 		if err != nil {
 			return Plan{}, fmt.Errorf("%w: repository root is outside the configured scan roots", ErrInvalidScanTarget)
 		}
@@ -148,7 +185,7 @@ func (r *GitleaksRunner) Plan(target string, opts ScanOptions) (Plan, error) {
 	customRulesSHA256 := ""
 	if strings.TrimSpace(opts.CustomRulesPath) != "" {
 		var data []byte
-		customRulesPath, data, err = loadCustomRulesFragment(opts.CustomRulesPath, r.AllowedRoots)
+		customRulesPath, data, err = loadCustomRulesFragment(ctx, opts.CustomRulesPath, roots)
 		if err != nil {
 			return Plan{}, err
 		}
@@ -174,7 +211,11 @@ func (r *GitleaksRunner) ScanWithOptions(ctx context.Context, target string, opt
 	if err != nil {
 		return Report{}, err
 	}
-	targetPath, targetRoot, err := normalizeTarget(target, r.AllowedRoots)
+	roots, err := r.scanRoots()
+	if err != nil {
+		return Report{}, err
+	}
+	targetPath, targetRoot, err := normalizeTarget(target, roots)
 	if err != nil {
 		return Report{}, err
 	}
@@ -182,6 +223,10 @@ func (r *GitleaksRunner) ScanWithOptions(ctx context.Context, target string, opt
 		root, err := GitTopLevel(ctx, targetPath)
 		if err != nil {
 			return Report{}, fmt.Errorf("%w: git history scan requires a local repository: %v", ErrInvalidScanTarget, err)
+		}
+		root, _, err = resolveAllowedPath(root, roots)
+		if err != nil {
+			return Report{}, fmt.Errorf("%w: repository root is outside the configured scan roots", ErrInvalidScanTarget)
 		}
 		targetPath = root
 		targetRoot = root
@@ -209,7 +254,7 @@ func (r *GitleaksRunner) ScanWithOptions(ctx context.Context, target string, opt
 	if maxMB <= 0 {
 		maxMB = 50
 	}
-	configPath, configCleanup, err := prepareCustomRulesConfig(opts.CustomRulesPath, r.AllowedRoots, targetPath)
+	configPath, configCleanup, err := prepareCustomRulesConfig(ctx, opts.CustomRulesPath, roots, targetPath)
 	if err != nil {
 		return Report{}, err
 	}
@@ -294,7 +339,7 @@ func NormalizeScanMode(raw string) (string, error) {
 // the scanned repository's own config, which Gitleaks reads by itself when no
 // config is named, and which the scan therefore extends), trstctl's own rules
 // (P14-L4) and the operator's custom rules, if any.
-func prepareCustomRulesConfig(customRulesPath string, allowedRoots []string, targetPath string) (string, func(), error) {
+func prepareCustomRulesConfig(ctx context.Context, customRulesPath string, allowedRoots []string, targetPath string) (string, func(), error) {
 	cleanup := func() {}
 	header := "[extend]\nuseDefault = true\n\n"
 	if repo := repositoryGitleaksConfig(targetPath); repo != "" {
@@ -302,7 +347,7 @@ func prepareCustomRulesConfig(customRulesPath string, allowedRoots []string, tar
 	}
 	data := trstctlRulesFragment()
 	if customRulesPath = strings.TrimSpace(customRulesPath); customRulesPath != "" {
-		_, custom, err := loadCustomRulesFragment(customRulesPath, allowedRoots)
+		_, custom, err := loadCustomRulesFragment(ctx, customRulesPath, allowedRoots)
 		if err != nil {
 			return "", cleanup, err
 		}
@@ -330,29 +375,31 @@ func prepareCustomRulesConfig(customRulesPath string, allowedRoots []string, tar
 	return configPath, cleanup, nil
 }
 
-func loadCustomRulesFragment(customRulesPath string, allowedRoots []string) (string, []byte, error) {
+func loadCustomRulesFragment(ctx context.Context, customRulesPath string, allowedRoots []string) (string, []byte, error) {
 	abs, err := filepath.Abs(strings.TrimSpace(customRulesPath))
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: %v", ErrInvalidCustomRules, err)
 	}
 	abs = filepath.Clean(abs)
-	abs, err = resolveAllowedPath(abs, allowedRoots)
+	abs, rootPath, err := resolveAllowedPath(abs, allowedRoots)
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: custom rules path is outside the configured scan roots", ErrInvalidCustomRules)
 	}
-	info, err := os.Stat(abs)
+	root, err := os.OpenRoot(rootPath)
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: %v", ErrInvalidCustomRules, err)
 	}
-	if info.IsDir() {
-		return "", nil, fmt.Errorf("%w: custom rules path must be a file", ErrInvalidCustomRules)
+	defer func() { _ = root.Close() }()
+	name, err := filepath.Rel(rootPath, abs)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: %v", ErrInvalidCustomRules, err)
 	}
-	if info.Size() > 1<<20 {
+	data, err := safefile.ReadRegularFile(ctx, root, name, 1<<20)
+	if errors.Is(err, safefile.ErrFileLimit) {
 		return "", nil, fmt.Errorf("%w: custom rules file is larger than 1 MiB", ErrInvalidCustomRules)
 	}
-	data, err := os.ReadFile(abs) // #nosec G304 -- path is resolved inside an operator-configured scan root
 	if err != nil {
-		return "", nil, fmt.Errorf("%w: %v", ErrInvalidCustomRules, err)
+		return "", nil, fmt.Errorf("%w: %w", ErrInvalidCustomRules, err)
 	}
 	if err := validateCustomRulesFragment(data); err != nil {
 		return "", nil, err
@@ -450,13 +497,16 @@ func normalizeTarget(target string, allowedRoots []string) (targetPath string, r
 		return "", "", fmt.Errorf("%w: %v", ErrInvalidScanTarget, err)
 	}
 	abs = filepath.Clean(abs)
-	abs, err = resolveAllowedPath(abs, allowedRoots)
+	abs, _, err = resolveAllowedPath(abs, allowedRoots)
 	if err != nil {
 		return "", "", fmt.Errorf("%w: path is outside the configured scan roots", ErrInvalidScanTarget)
 	}
 	info, err := os.Stat(abs)
 	if err != nil {
 		return "", "", fmt.Errorf("%w: %v", ErrInvalidScanTarget, err)
+	}
+	if !info.IsDir() && !info.Mode().IsRegular() {
+		return "", "", fmt.Errorf("%w: scan path must be a directory or regular file", ErrInvalidScanTarget)
 	}
 	root = abs
 	if !info.IsDir() {
@@ -465,13 +515,13 @@ func normalizeTarget(target string, allowedRoots []string) (targetPath string, r
 	return abs, root, nil
 }
 
-func resolveAllowedPath(path string, allowedRoots []string) (string, error) {
+func resolveAllowedPath(path string, allowedRoots []string) (string, string, error) {
+	if len(allowedRoots) == 0 {
+		return "", "", errors.New("no configured scan roots")
+	}
 	resolvedPath, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		return "", err
-	}
-	if len(allowedRoots) == 0 {
-		allowedRoots = []string{"."}
+		return "", "", err
 	}
 	for _, configuredRoot := range allowedRoots {
 		configuredRoot = strings.TrimSpace(configuredRoot)
@@ -486,12 +536,11 @@ func resolveAllowedPath(path string, allowedRoots []string) (string, error) {
 		if err != nil {
 			continue
 		}
-		rel, err := filepath.Rel(root, resolvedPath)
-		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel) {
-			return resolvedPath, nil
+		if safefile.ContainsPath(root, resolvedPath) {
+			return resolvedPath, root, nil
 		}
 	}
-	return "", errors.New("path is outside configured roots")
+	return "", "", errors.New("path is outside configured roots")
 }
 
 func relativizeFindings(findings []Finding, root string) {

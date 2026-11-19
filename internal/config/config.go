@@ -36,6 +36,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/weakkey"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/outboundcred"
+	"trstctl.com/trstctl/internal/safefile"
 	"trstctl.com/trstctl/internal/secretscan/validity"
 )
 
@@ -3120,9 +3121,9 @@ type Secrets struct {
 	// tools/bin/gitleaks, then PATH at request time.
 	GitleaksBin string `json:"gitleaks_bin,omitempty"`
 	// ScanRoots is the closed set of local filesystem trees the served Gitleaks
-	// bridge may read. Empty means the control-plane working directory. Operators
-	// mount repositories/rules beneath these roots; API callers cannot scan other
-	// host or container paths merely because they hold secrets:write.
+	// bridge may read. Empty disables served local-path scans. Operators mount
+	// repositories and rules in dedicated roots that cannot include the process
+	// temporary directory. A worker-owned clone has its own one-scan root.
 	ScanRoots []string `json:"scan_roots,omitempty"`
 	// MachineAuth configures the non-token machine-auth login methods exposed by
 	// POST /api/v1/secrets/login. Each entry is either tenant-pinned with tenant_id
@@ -5512,6 +5513,9 @@ func validateServedSurfaces(c *Config) []error {
 		errs = append(errs, fmt.Errorf("secrets.machine_auth_single_use_limit must be between 0 (the default, %d) and 10000000", DefaultMachineAuthSingleUseLimit))
 	}
 	errs = append(errs, validateSecretScanWebhooks(c.Secrets.ScanWebhooks)...)
+	if _, err := safefile.ScanRoots(c.Secrets.ScanRoots); err != nil {
+		errs = append(errs, fmt.Errorf("secrets.scan_roots: %w", err))
+	}
 	if err := c.Secrets.ValidityChecks.Validate(); err != nil {
 		errs = append(errs, err)
 	}

@@ -666,7 +666,7 @@ type Deps struct {
 	// TRSTCTL_GITLEAKS_BIN/tools/bin/gitleaks/PATH at request time.
 	SecretScanGitleaksBin string
 	// SecretScanRoots confines served scan targets/custom rules to explicitly
-	// mounted operator-owned trees. Empty means the process working directory.
+	// mounted operator-owned trees. Empty disables served local paths.
 	SecretScanRoots []string
 	// SecretScanner overrides the pinned Gitleaks runner for tests and embedded
 	// compositions. Production leaves it nil so both the REST scan route and the

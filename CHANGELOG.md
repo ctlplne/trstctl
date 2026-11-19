@@ -3741,6 +3741,11 @@
 
 ### Security
 
+- Served secret scans require explicit roots for local paths and custom rules
+  (CR-090). Configure `secrets.scan_roots` for existing path-based workflows.
+  Worker-owned repository clones have a per-scan root, Git-history scans check
+  the repository root, and custom rules use bounded regular-file reads.
+
 - Hosted credential adapters validate public management identifiers before
   publishing lease or rotation metadata (CR-663, CR-962 and CR-588). LiteLLM
   uses SHA-256 handles, revocation dispatch binds the issued lease and exact

@@ -37,6 +37,14 @@ type secretScannerPlanner interface {
 	Plan(path string, opts secretscan.ScanOptions) (secretscan.Plan, error)
 }
 
+type secretScannerContextPlanner interface {
+	PlanContext(ctx context.Context, path string, opts secretscan.ScanOptions) (secretscan.Plan, error)
+}
+
+type secretScannerPathValidator interface {
+	ValidateLocalTarget(path string) error
+}
+
 const secretScanReviewDomain = "trstctl.api.f39-secret-scan-review.v1" // #nosec G101 -- public MAC domain label, not a credential
 
 type secretRepoScanProviderResponse struct {
@@ -231,7 +239,7 @@ type secretScanResponse struct {
 	Findings      []secretScanFindingResponse `json:"findings"`
 }
 
-func normalizeSecretScanRequest(scanner SecretScanner, req secretScanRequest) (secretscan.Plan, error) {
+func normalizeSecretScanRequest(ctx context.Context, scanner SecretScanner, req secretScanRequest) (secretscan.Plan, error) {
 	path := strings.TrimSpace(req.Path)
 	if path == "" {
 		return secretscan.Plan{}, errStatus(http.StatusBadRequest, "path is required")
@@ -241,22 +249,26 @@ func normalizeSecretScanRequest(scanner SecretScanner, req secretScanRequest) (s
 		return secretscan.Plan{}, errStatusFrom(http.StatusBadRequest, err)
 	}
 	opts := secretscan.ScanOptions{Mode: mode, CustomRulesPath: strings.TrimSpace(req.CustomRulesPath)}
-	if planner, ok := scanner.(secretScannerPlanner); ok {
-		plan, err := planner.Plan(path, opts)
-		if err != nil {
-			return secretscan.Plan{}, secretScanRequestError(err)
-		}
-		return plan, nil
+	var plan secretscan.Plan
+	switch planner := scanner.(type) {
+	case secretScannerContextPlanner:
+		plan, err = planner.PlanContext(ctx, path, opts)
+	case secretScannerPlanner:
+		plan, err = planner.Plan(path, opts)
+	default:
+		// Embedded scanners may predate the planner. They remain responsible
+		// for enforcing their own target boundary and effecting the bound scan.
+		return secretscan.Plan{
+			TargetPath: path, TargetRoot: path, Mode: mode,
+			CustomRulesPath: opts.CustomRulesPath, CustomRules: opts.CustomRulesPath != "",
+			RulesActive:  secretscan.GitleaksDefaultRulesActive,
+			Capabilities: secretscan.ScanCapabilities(mode, opts.CustomRulesPath != ""),
+		}, nil
 	}
-	// Test and embedded scanners may predate the optional planner interface. The
-	// execution request is still bound exactly and the scanner remains responsible
-	// for enforcing its own target boundary. Production uses GitleaksRunner.Plan.
-	return secretscan.Plan{
-		TargetPath: path, TargetRoot: path, Mode: mode,
-		CustomRulesPath: opts.CustomRulesPath, CustomRules: opts.CustomRulesPath != "",
-		RulesActive:  secretscan.GitleaksDefaultRulesActive,
-		Capabilities: secretscan.ScanCapabilities(mode, opts.CustomRulesPath != ""),
-	}, nil
+	if err != nil {
+		return secretscan.Plan{}, secretScanRequestError(err)
+	}
+	return plan, nil
 }
 
 func secretScanRequestError(err error) error {
@@ -335,7 +347,7 @@ func (a *API) previewSecretScan(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
-	plan, err := normalizeSecretScanRequest(a.secrets.be.SecretScanner, req)
+	plan, err := normalizeSecretScanRequest(r.Context(), a.secrets.be.SecretScanner, req)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -401,7 +413,7 @@ func (a *API) scanSecrets(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		plan, err := normalizeSecretScanRequest(a.secrets.be.SecretScanner, req)
+		plan, err := normalizeSecretScanRequest(ctx, a.secrets.be.SecretScanner, req)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -635,6 +647,13 @@ func (a *API) queueSecretRepoScan(ctx context.Context, tenantID, provider string
 	cfg, err := secretRepoScanConfig(provider, req)
 	if err != nil {
 		return 0, nil, err
+	}
+	if cfg.CheckoutPath != "" && a.secrets != nil {
+		if validator, ok := a.secrets.be.SecretScanner.(secretScannerPathValidator); ok {
+			if err := validator.ValidateLocalTarget(cfg.CheckoutPath); err != nil {
+				return 0, nil, secretScanRequestError(err)
+			}
+		}
 	}
 	body, err := json.Marshal(cfg)
 	if err != nil {

@@ -4,6 +4,7 @@ package secretscan
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,7 +117,7 @@ func TestGitleaksRunnerRejectsCustomRulesThatWeakenDefaults(t *testing.T) {
 	if err := os.WriteFile(customRules, []byte("[extend]\ndisabledRules = [\"generic-api-key\"]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := prepareCustomRulesConfig(customRules, []string{filepath.Dir(customRules)}, "")
+	_, _, err := prepareCustomRulesConfig(t.Context(), customRules, []string{filepath.Dir(customRules)}, "")
 	if err == nil || !strings.Contains(err.Error(), ErrInvalidCustomRules.Error()) {
 		t.Fatalf("prepareCustomRulesConfig err = %v, want invalid custom rules", err)
 	}
@@ -135,13 +136,47 @@ func TestGitleaksRunnerRejectsPathsOutsideConfiguredRoots(t *testing.T) {
 	}
 }
 
+// CR-090. A Git history scan must keep the discovered repository root confined.
+func TestGitleaksHistoryExecutionRequiresRepositoryRootInAllowlist(t *testing.T) {
+	repo := initSecretScanGitRepo(t)
+	allowed := filepath.Join(repo, "included")
+	if err := os.Mkdir(allowed, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	argsPath := filepath.Join(t.TempDir(), "executed")
+	binary := fakeGitleaksCommand(t, argsPath, filepath.Join(t.TempDir(), "config.toml"), `[]`)
+	runner := &GitleaksRunner{Binary: binary, AllowedRoots: []string{allowed}}
+	if _, err := runner.ScanWithOptions(t.Context(), allowed, ScanOptions{Mode: ScanModeGitHistory}); !errors.Is(err, ErrInvalidScanTarget) {
+		t.Errorf("history scan returned %v, want confined target refusal", err)
+	}
+	if _, err := os.Stat(argsPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("scanner started for a repository outside the configured root: %v", err)
+	}
+}
+
+func TestServedGitleaksCanScanItsWorkerOwnedCloneWithoutLocalRoots(t *testing.T) {
+	checkout := t.TempDir()
+	argsPath := filepath.Join(t.TempDir(), "executed")
+	binary := fakeGitleaksCommand(t, argsPath, filepath.Join(t.TempDir(), "config.toml"), `[]`)
+	runner := NewServedGitleaksRunner(binary, nil)
+	if _, err := runner.Scan(t.Context(), checkout); !errors.Is(err, ErrInvalidScanTarget) {
+		t.Fatalf("ordinary local target should be refused: %v", err)
+	}
+	if _, err := os.Stat(argsPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("scanner ran before worker-owned clone admission: %v", err)
+	}
+	if report, err := runner.ScanClone(t.Context(), checkout); err != nil || report.Scanner != "gitleaks" {
+		t.Fatalf("worker-owned clone was not scanned: scanner=%q err=%v", report.Scanner, err)
+	}
+}
+
 func TestGitleaksRunnerRejectsCustomRulesOutsideConfiguredRoots(t *testing.T) {
 	allowed := t.TempDir()
 	customRules := filepath.Join(t.TempDir(), "custom.toml")
 	if err := os.WriteFile(customRules, []byte("[[rules]]\nid = \"outside\"\nregex = '''outside'''\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := prepareCustomRulesConfig(customRules, []string{allowed}, ""); err == nil || !strings.Contains(err.Error(), ErrInvalidCustomRules.Error()) {
+	if _, _, err := prepareCustomRulesConfig(t.Context(), customRules, []string{allowed}, ""); err == nil || !strings.Contains(err.Error(), ErrInvalidCustomRules.Error()) {
 		t.Fatalf("prepareCustomRulesConfig outside configured roots err = %v, want invalid custom rules", err)
 	}
 }

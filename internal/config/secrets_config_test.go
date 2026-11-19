@@ -3,6 +3,8 @@
 package config_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -39,6 +41,7 @@ func TestSecretsKEKEnvOverride(t *testing.T) {
 }
 
 func TestSecretsGitleaksEnvOverride(t *testing.T) {
+	repositories, rules := t.TempDir(), t.TempDir()
 	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_POSTGRES_MODE":                       "external",
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
@@ -47,7 +50,7 @@ func TestSecretsGitleaksEnvOverride(t *testing.T) {
 		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 		"TRSTCTL_SECRETS_GITLEAKS_BIN":                "/opt/trstctl/tools/gitleaks",
-		"TRSTCTL_SECRETS_SCAN_ROOTS":                  "/workspace/repos,/workspace/rules",
+		"TRSTCTL_SECRETS_SCAN_ROOTS":                  repositories + "," + rules,
 	}
 	cfg, err := config.Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -56,8 +59,25 @@ func TestSecretsGitleaksEnvOverride(t *testing.T) {
 	if cfg.Secrets.GitleaksBin != "/opt/trstctl/tools/gitleaks" {
 		t.Errorf("secrets.gitleaks_bin = %q, want the env override", cfg.Secrets.GitleaksBin)
 	}
-	if len(cfg.Secrets.ScanRoots) != 2 || cfg.Secrets.ScanRoots[0] != "/workspace/repos" || cfg.Secrets.ScanRoots[1] != "/workspace/rules" {
+	if len(cfg.Secrets.ScanRoots) != 2 || cfg.Secrets.ScanRoots[0] != repositories || cfg.Secrets.ScanRoots[1] != rules {
 		t.Errorf("secrets.scan_roots = %#v, want the two configured roots", cfg.Secrets.ScanRoots)
+	}
+}
+
+// CR-090. Operator roots cannot cover the shared staging directory.
+func TestSecretsScanRootsExcludeProcessTemporaryTree(t *testing.T) {
+	allowed := t.TempDir()
+	for _, path := range []string{os.TempDir(), filepath.Dir(os.TempDir())} {
+		cfg := config.Default()
+		cfg.Secrets.ScanRoots = []string{allowed, path}
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "secrets.scan_roots") {
+			t.Errorf("Validate accepted a scan root covering process temp: %v", err)
+		}
+	}
+	cfg := config.Default()
+	cfg.Secrets.ScanRoots = []string{allowed}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate rejected an isolated scan root: %v", err)
 	}
 }
 

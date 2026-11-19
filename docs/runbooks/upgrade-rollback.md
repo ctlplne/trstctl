@@ -139,6 +139,17 @@ An ordinary restart or read-model rebuild retaining the same registration event
 does not authorize a new tenant generation. Missing registration history requires
 source recovery before enrollment can proceed.
 
+## Local scanner roots
+
+Before upgrading, mount the repository and custom-rules directories inside the
+control plane. Set `secrets.scan_roots` or `TRSTCTL_SECRETS_SCAN_ROOTS` to those
+dedicated directories. A relative request path resolves from the server's working
+directory and must land inside an approved root. Prefer paths that name the
+container mounts directly. The server rejects an empty allowlist on local scans
+and on repository webhooks that name `checkout_path`. A queued checkout that no
+longer fits the allowlist fails visibly and can be queued again after correction.
+Use the scan preview to verify an updated local path before restarting its workflow.
+
 ## Hosted credential references
 
 New hosted leases and rotations store public management identifiers in their

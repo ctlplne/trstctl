@@ -1411,6 +1411,9 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 		scan = cloner.ScanClone
 	}
 	report, err := scan(ctx, target.Path)
+	if errors.Is(err, secretscan.ErrInvalidScanTarget) {
+		return netscan.Report{}, "failed", "repository checkout path is outside the configured scan roots or is not scannable", nil
+	}
 	if err != nil {
 		return netscan.Report{}, "", "", err
 	}

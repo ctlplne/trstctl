@@ -2575,9 +2575,11 @@ recording redacted findings into [discovery](discovery-and-inventory.md), the
 points at the Gitleaks `v8.27.2` binary from `tools/gitleaks/install.sh`, which
 checksums the release tarball before installing. `secrets.scan_roots` (or
 `TRSTCTL_SECRETS_SCAN_ROOTS`, a comma-separated list) is the closed set of mounted
-filesystem trees the served scanner may read; an empty setting confines scans to the
-control-plane working directory. This prevents a caller with `secrets:write` from
-turning the scanner into a general host-file reader. `POST
+filesystem trees for served paths and custom rules. Empty roots disable local-path
+scans and path-based repository webhooks. Mount dedicated operator-owned directories
+inside the control plane. A root cannot be a filesystem root or contain the process
+temporary directory. A checkout created by a repository scan worker has a separate
+root for that scan. `POST
 /api/v1/secrets/scans/preview` first validates the exact confined path, scan mode,
 installed scanner, and additive rules without starting Git or Gitleaks, creating a
 file, appending an event, or recording idempotency. Its keyed fingerprint is bound to
@@ -2597,17 +2599,18 @@ audit output.
 
 ```bash
 cat > secret-scan.json <<'JSON'
-{"path":".","mode":"git_history","custom_rules_path":"./gitleaks-custom-rules.toml"}
+{"path":"/scan/repos/payments","mode":"git_history","custom_rules_path":"/scan/rules/gitleaks-custom-rules.toml"}
 JSON
 trstctl-cli secrets scans preview -f secret-scan.json
 # Copy request_fingerprint from the review into preview_fingerprint, then run.
 trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f reviewed-secret-scan.json
 ```
 
-A bare `{"path":"."}` scans the working tree by default; `mode`/`custom_rules_path`
-above switch on full Git-history scanning (`--log-opts --all`) plus an additive
+A path inside an approved root scans the working tree by default. The `mode` and
+`custom_rules_path` above enable full Git-history scanning (`--log-opts --all`) and an additive
 `[[rules]]` TOML fragment wrapped with `[extend] useDefault = true` — never an
-allowlist or disabled-rule override. The response's `mode`, `custom_rules`, and
+allowlist or disabled-rule override. The rules fragment must be a regular file
+up to 1 MiB inside an approved root. The response's `mode`, `custom_rules`, and
 `capabilities` fields prove full-history, entropy, pattern, 100+ default-rule, and
 custom-rule coverage without storing a secret value; `run_id` can be replayed against
 `GET /api/v1/discovery/findings?run_id=...` or the graph view. TruffleHog JSON

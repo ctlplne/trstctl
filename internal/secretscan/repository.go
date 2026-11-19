@@ -13,9 +13,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const RepositorySourceKind = "secret_repo"
+
+const repositoryFetchTimeout = 2 * time.Minute
 
 var (
 	ErrRepositoryTargetRequired = errors.New("secretscan: repository scan requires checkout_path or clone_url")
@@ -103,6 +106,12 @@ func PrepareRepositoryTarget(ctx context.Context, cfg RepositoryScanConfig) (Rep
 // URL or the checkout's configuration, and is sent nowhere else: a redirect to
 // another origin gets no header, and the host's credential helpers are off.
 func PrepareRepositoryTargetWithCredential(ctx context.Context, cfg RepositoryScanConfig, cred *RepositoryCredential) (RepositoryTarget, error) {
+	return prepareRepositoryTargetWithGit(ctx, cfg, cred, runGit)
+}
+
+func prepareRepositoryTargetWithGit(ctx context.Context, cfg RepositoryScanConfig, cred *RepositoryCredential,
+	run func(context.Context, string, []string, ...string) error,
+) (RepositoryTarget, error) {
 	if path := strings.TrimSpace(cfg.CheckoutPath); path != "" {
 		return RepositoryTarget{Path: path, Cleanup: func() {}, Mode: "checkout_path"}, nil
 	}
@@ -136,19 +145,22 @@ func PrepareRepositoryTargetWithCredential(ctx context.Context, cfg RepositorySc
 		args = append(args, "--branch", branch)
 	}
 	args = append(args, "--", cloneURL, tmp)
-	if err := runGit(ctx, "", auth, args...); err != nil {
+	if err := run(ctx, "", auth, args...); err != nil {
 		cleanup()
 		return RepositoryTarget{}, err
 	}
 	if commit != "" {
-		if err := runGit(ctx, tmp, nil, "checkout", "--detach", commit); err != nil {
+		if err := run(ctx, tmp, nil, "checkout", "--detach", commit); err != nil {
 			// The branch moved on after the push: fetch the pushed commit
 			// itself (hosts serve a reachable commit by its ID).
-			if ferr := runGit(ctx, tmp, auth, "fetch", "--no-tags", "--depth", "1", "--", "origin", commit); ferr != nil {
+			fetchCtx, cancel := context.WithTimeout(ctx, repositoryFetchTimeout)
+			fetchErr := run(fetchCtx, tmp, auth, "fetch", "--no-tags", "--depth", "1", "--", "origin", commit)
+			cancel()
+			if fetchErr != nil {
 				cleanup()
-				return RepositoryTarget{}, err
+				return RepositoryTarget{}, fetchErr
 			}
-			if err := runGit(ctx, tmp, nil, "checkout", "--detach", commit); err != nil {
+			if err := run(ctx, tmp, nil, "checkout", "--detach", commit); err != nil {
 				cleanup()
 				return RepositoryTarget{}, err
 			}
@@ -245,6 +257,8 @@ func credentialGitConfig(cloneURL string, cred *RepositoryCredential) ([]string,
 // the clone credential's header travels that way, never in argv).
 func runGit(ctx context.Context, dir string, config []string, args ...string) error {
 	cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- fixed git/gitleaks binaries over the operator's own repository (CWE-78)
+	// A terminated Git process may have left stdout or stderr open in a child.
+	cmd.WaitDelay = 2 * time.Second
 	if dir != "" {
 		cmd.Dir = filepath.Clean(dir)
 	}
@@ -258,6 +272,9 @@ func runGit(ctx context.Context, dir string, config []string, args ...string) er
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		if ctx.Err() != nil {
+			return fmt.Errorf("secretscan: git %s interrupted: %w", args[0], ctx.Err())
+		}
 		msg := strings.TrimSpace(string(out))
 		if msg == "" {
 			return fmt.Errorf("secretscan: git %s failed: %w", strings.Join(args, " "), err)
