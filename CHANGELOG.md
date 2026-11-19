@@ -3748,6 +3748,10 @@
   staging or retiring a key. An interrupted rotation resumes from its exact
   vault publication. A failed provider restore releases its unpublished vault
   reservation so an authorized operator can write a verified replacement.
+  Coordinated service-account rotations publish against their own immutable
+  queue record. A completed schedule control can be replayed after its row is
+  gone. That replay still checks the current write grant for a configured
+  static provider and removes unverified references from older receipts.
 
 - The Linux Workload API verifies that the connecting process shares the agent's
   mount namespace before emitting `unix:path` (CR-693). The agent omits the path

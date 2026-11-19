@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/leaseworker"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/pkisecret"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/rotation"
@@ -1447,32 +1448,39 @@ func (a *API) controlSecretRotationScheduleRequest(w http.ResponseWriter, r *htt
 		return
 	}
 	id := r.PathValue("id")
-	schedule, err := a.store.GetSecretRotationSchedule(r.Context(), tenantID, id)
+	view := a.scheduleCachedReferenceView(id, action, idempotencyKey, binding)
+	ctx := r.Context()
+	schedule, err := a.store.GetSecretRotationSchedule(ctx, tenantID, id)
+	if store.IsNotFound(err) {
+		// An archived control can only read its completed receipt. A fresh
+		// request for a missing schedule must leave the key unclaimed.
+		raw, found, lookupErr := a.idem.LookupBound(ctx, tenantID, idempotencyKey, binding)
+		switch {
+		case lookupErr != nil && !errors.Is(lookupErr, orchestrator.ErrIdempotencyConflict):
+			a.writeError(w, lookupErr)
+		case found:
+			a.writeBoundMutationResponse(w, ctx, tenantID, binding, raw, view)
+		default:
+			a.writeError(w, err)
+		}
+		return
+	}
 	if err != nil {
 		a.writeError(w, err)
 		return
 	}
 	if isStaticSecretRotation(schedule.Provider) {
-		if err := a.requireStaticRotationProviderWrite(r.Context(), tenantID, schedule.Provider); err != nil {
+		if err := a.requireStaticRotationProviderWrite(ctx, tenantID, schedule.Provider); err != nil {
 			a.writeError(w, err)
 			return
 		}
 	}
 	a.mutateWithReferenceView(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		return a.controlSecretRotationSchedule(ctx, tenantID, id, action, idempotencyKey, binding)
-	}, true, a.scheduleCachedReferenceView(id, action, idempotencyKey, binding))
+	}, true, view)
 }
 
 func (a *API) controlSecretRotationSchedule(ctx context.Context, tenantID, id, action, idempotencyKey, binding string) (int, any, error) {
-	// A bound retry must resolve its retained first result before any current-
-	// state or connector-readiness check can reject or reverse it.
-	retained, found, err := a.orch.RecoverSecretRotationScheduleControl(ctx, tenantID, id, action, idempotencyKey, binding)
-	if err != nil {
-		return 0, nil, err
-	}
-	if found {
-		return http.StatusOK, toSecretRotationScheduleResponse(retained), nil
-	}
 	schedule, err := a.store.GetSecretRotationSchedule(ctx, tenantID, id)
 	if err != nil {
 		return 0, nil, err
@@ -1481,6 +1489,15 @@ func (a *API) controlSecretRotationSchedule(ctx context.Context, tenantID, id, a
 		if err := a.requireStaticRotationProviderWrite(ctx, tenantID, schedule.Provider); err != nil {
 			return 0, nil, err
 		}
+	}
+	// Reapply a retained control only after checking today's provider scope.
+	// Resolve the first result before checking schedule state or connector readiness.
+	retained, found, err := a.orch.RecoverSecretRotationScheduleControl(ctx, tenantID, id, action, idempotencyKey, binding)
+	if err != nil {
+		return 0, nil, err
+	}
+	if found {
+		return http.StatusOK, toSecretRotationScheduleResponse(retained), nil
 	}
 	if schedule.RetiredAt != nil {
 		if action == "retire" {

@@ -3,12 +3,18 @@
 package server
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -100,6 +106,51 @@ func TestServedStaticRotationRequiresProviderEnvironmentWrite(t *testing.T) {
 			})
 		}
 	}
+	t.Run("archived-controls-need-current-provider-scope", func(t *testing.T) {
+		for _, version := range []int{0, 1} {
+			for _, tc := range []struct {
+				subject, token string
+				want           int
+			}{
+				{"rotation-authorized", writer, http.StatusOK},
+				{"rotation-read-only", viewer, http.StatusForbidden},
+				{"rotation-other", outsider, http.StatusNotFound},
+			} {
+				t.Run(fmt.Sprintf("version-%d/%s", version, tc.subject), func(t *testing.T) {
+					id := uuid.NewString()
+					path := schedules + "/" + id + "/pause"
+					key := fmt.Sprintf("rotation-scope-archive-%d-%s", version, tc.subject)
+					binding := crypto.SHA256Hex([]byte(`{"domain":"trstctl.api.mutation-route-binding.v1","principal":"` + tc.subject + `","method":"POST","escaped_path":"` + path + `"}`))
+					_, err := h.srv.idem.DoDurableEffectBound(t.Context(), h.tenant, key, binding, func(context.Context) ([]byte, error) {
+						return json.Marshal(map[string]any{"s": http.StatusOK, "h": binding, "r": version,
+							"b": map[string]any{"id": id, "provider": provider.name, "enabled": false}})
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+					status, body := secretsReqKey(t, h, http.MethodPost, path, tc.token, key, nil)
+					if status != tc.want || bytes.Contains(body, []byte(id)) != (tc.want == http.StatusOK) {
+						t.Errorf("archived result status = %d, want %d, receipt identity included = %t", status, tc.want, bytes.Contains(body, []byte(id)))
+					}
+					call(writer, http.MethodPost, path, key+"-fresh", nil, http.StatusNotFound)
+				})
+			}
+		}
+	})
+	t.Run("missing-control-does-not-claim-key", func(t *testing.T) {
+		const key = "rotation-scope-uncached-control"
+		livePath := schedules + "/" + makeSchedule("reusable-key", true) + "/pause"
+		missingPath := schedules + "/" + uuid.NewString() + "/pause"
+		call(writer, http.MethodPost, missingPath, key, nil, http.StatusNotFound)
+		call(writer, http.MethodPost, livePath, key, nil, http.StatusOK)
+	})
+	t.Run("missing-control-keeps-not-found-for-reserved-key", func(t *testing.T) {
+		const key = store.TenantOffboardReceiverKeyPrefix + "fixture-schedule-control"
+		livePath := schedules + "/" + makeSchedule("reserved-key", true) + "/pause"
+		missingPath := schedules + "/" + uuid.NewString() + "/pause"
+		call(writer, http.MethodPost, missingPath, key, nil, http.StatusNotFound)
+		call(writer, http.MethodPost, livePath, key, nil, http.StatusConflict)
+	})
 	t.Run("retained-receipts-need-current-provider-scope", func(t *testing.T) {
 		create := map[string]any{"name": "scope-replay", "provider": provider.name, "key": provider.role,
 			"old_ref": "none", "interval_seconds": 3600, "enabled": true}

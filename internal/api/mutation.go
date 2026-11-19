@@ -228,7 +228,7 @@ func (a *API) mutateWithRecorder(w http.ResponseWriter, r *http.Request, idempot
 // original protected response and authenticated request binding are verified.
 // Its route must render newly recorded successful results using the current
 // reference view before returning them to the recorder.
-type mutationResponseView func(context.Context, string, []byte) ([]byte, error)
+type mutationResponseView func(ctx context.Context, tenantID string, body []byte, classified bool) ([]byte, error)
 
 func (a *API) mutateWithReferenceView(
 	w http.ResponseWriter, r *http.Request, idempotencyKey, binding string,
@@ -304,8 +304,11 @@ func (a *API) mutateWithRecorderLimit(w http.ResponseWriter, r *http.Request, id
 		a.writeError(w, err)
 		return
 	}
-	defer secret.Wipe(raw)
+	a.writeBoundMutationResponse(w, r.Context(), tenantID, binding, raw, present)
+}
 
+func (a *API) writeBoundMutationResponse(w http.ResponseWriter, ctx context.Context, tenantID, binding string, raw []byte, present mutationResponseView) {
+	defer secret.Wipe(raw)
 	var c cachedResponse
 	if err := json.Unmarshal(raw, &c); err != nil {
 		a.writeError(w, err)
@@ -321,12 +324,13 @@ func (a *API) mutateWithRecorderLimit(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 	body := []byte(c.Body)
-	if present != nil && c.RotationReferenceView != 1 && c.Status >= 200 && c.Status < 300 {
-		body, err = present(r.Context(), tenantID, c.Body)
+	if present != nil && c.Status >= 200 && c.Status < 300 {
+		view, err := present(ctx, tenantID, c.Body, c.RotationReferenceView == 1)
 		if err != nil {
 			a.writeError(w, err)
 			return
 		}
+		body = view
 	}
 	if err := writeCachedResponseContentType(w, c.ContentType); err != nil {
 		a.writeError(w, err)

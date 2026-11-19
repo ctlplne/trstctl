@@ -1005,6 +1005,15 @@ interruption checks the vault's pending or committed cutover and rollback before
 verifying or retiring a credential.
 Preview, execution, schedule creation, and schedule controls also require write
 access to the provider's environment when the operator restricts that environment.
+An exact authenticated retry of a completed schedule control can return its
+receipt after the schedule row is gone. It still requires write access if its
+static provider is configured in a restricted environment. Older receipts omit
+references whose source the control plane cannot verify. A request for a
+missing schedule with no matching receipt leaves its idempotency key available
+for a corrected request.
+When a rotation coordinates a service account and its dependents, the worker
+checks the coordinated operation's immutable queue record before publishing the
+new vault version.
 The staged credential and the predecessor value stay sealed under the tenant key
 domain between phases (AN-8). A verification that still fails on its third worker
 attempt rolls back: the predecessor is restored as a new version and the successor

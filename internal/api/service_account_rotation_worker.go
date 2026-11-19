@@ -5,16 +5,33 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
+
 	googleuuid "github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"time"
+
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/servicedependents"
 	"trstctl.com/trstctl/internal/store"
 )
+
+// decodeDependentRotationQueueSource checks the command's immutable queue
+// evidence. Newer phase events may be waiting for their SQL projection.
+func decodeDependentRotationQueueSource(event events.Event, cmd store.SecretStaticRotationCommand) (projections.ServiceDependentRotationQueued, error) {
+	var source projections.ServiceDependentRotationQueued
+	if event.TenantID != cmd.TenantID || event.Type != projections.EventServiceDependentRotationQueued || event.ID != cmd.ID || event.ID != cmd.DependentChangeID || event.Time.IsZero() || event.SensitiveErased || json.Unmarshal(event.Data, &source) != nil {
+		return source, errors.New("api: native rotation has no canonical parent authority")
+	}
+	digest, err := source.Intent.Digest()
+	if err != nil || digest != cmd.RequestBinding || source.Child.ID != cmd.ID || source.Child.ProviderBinding != cmd.ProviderBinding || cmd.Provider != source.Intent.Plan.Account.ProviderID || cmd.Key != source.Intent.Plan.SecretName || cmd.OldRef != source.Intent.Plan.Account.DN || cmd.ExpectedVersion != source.Intent.ExpectedVersion || cmd.TenantEpoch != source.Child.TenantEpoch {
+		return source, errors.New("api: native rotation parent or sealed generation differs")
+	}
+	return source, projections.ValidateServiceDependentRotationSource(event, source)
+}
 
 func (a *API) dependentRotationParent(ctx context.Context, cmd store.SecretStaticRotationCommand) (store.ServiceDependentRotation, error) {
 	parent, e := a.store.GetServiceDependentRotation(ctx, cmd.TenantID, cmd.DependentChangeID)
@@ -25,20 +42,20 @@ func (a *API) dependentRotationParent(ctx context.Context, cmd store.SecretStati
 	if e != nil {
 		return parent, e
 	}
-	var source projections.ServiceDependentRotationQueued
-	if !found || event.TenantID != cmd.TenantID || event.Type != projections.EventServiceDependentRotationQueued || json.Unmarshal(event.Data, &source) != nil {
+	if !found {
 		return parent, errors.New("api: native rotation has no canonical parent authority")
 	}
-	digest, e := source.Intent.Digest()
-	if e != nil || digest != parent.IntentDigest || digest != cmd.RequestBinding || source.Child.ID != cmd.ID || parent.CommandID != cmd.ID || source.Child.ProviderBinding != cmd.ProviderBinding || cmd.Provider != source.Intent.Plan.Account.ProviderID || cmd.Key != source.Intent.Plan.SecretName || cmd.OldRef != source.Intent.Plan.Account.DN || cmd.ExpectedVersion != source.Intent.ExpectedVersion || cmd.TenantEpoch != source.Child.TenantEpoch {
+	source, e := decodeDependentRotationQueueSource(event, cmd)
+	if e != nil {
+		return parent, e
+	}
+	digest := cmd.RequestBinding
+	if digest != parent.IntentDigest || parent.CommandID != cmd.ID {
 		return parent, errors.New("api: native rotation parent or sealed generation differs")
 	}
 	retained, e := parent.Intent.Digest()
 	if e != nil || retained != digest {
 		return parent, errors.New("api: retained native intent differs from its source")
-	}
-	if err := projections.ValidateServiceDependentRotationSource(event, source); err != nil {
-		return parent, err
 	}
 	if source.Approval != nil {
 		approval, err := a.store.GetOperationApproval(ctx, cmd.TenantID, source.Approval.RequestID)

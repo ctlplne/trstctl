@@ -47,6 +47,16 @@ func (a *API) staticRotationQueueReferenceEvidence(ctx context.Context, cmd stor
 	if err != nil || !found {
 		return "", nil, err
 	}
+	// Queue schema versions belong to their event types. Coordinated rotations
+	// use the dependent parent as their canonical command source.
+	switch event.Type {
+	case projections.EventServiceDependentRotationQueued:
+		_, err := decodeDependentRotationQueueSource(event, cmd)
+		return "", nil, err
+	case projections.EventSecretStaticRotationQueued:
+	default:
+		return "", nil, store.ErrIdempotencyConflict
+	}
 	var bound *projections.SecretStaticRotationBoundQueued
 	var queued projections.SecretStaticRotationQueued
 	var kind string
@@ -273,7 +283,10 @@ func (a *API) staticRotationReferenceView(ctx context.Context, cmd store.SecretS
 }
 
 func (a *API) staticRotationCachedReferenceView(provider, key, binding string) mutationResponseView {
-	return func(ctx context.Context, tenantID string, raw []byte) ([]byte, error) {
+	return func(ctx context.Context, tenantID string, raw []byte, classified bool) ([]byte, error) {
+		if classified {
+			return raw, nil
+		}
 		var response secretRotationResponse
 		if err := json.Unmarshal(raw, &response); err != nil {
 			return nil, err
@@ -301,12 +314,27 @@ func (a *API) staticRotationCachedReferenceView(provider, key, binding string) m
 }
 
 func (a *API) scheduleCachedReferenceView(expectedID, action, key, binding string) mutationResponseView {
-	return func(ctx context.Context, tenantID string, raw []byte) ([]byte, error) {
+	return func(ctx context.Context, tenantID string, raw []byte, classified bool) ([]byte, error) {
+		if classified && action == "" {
+			return raw, nil
+		}
 		var response secretRotationScheduleResponse
 		if err := json.Unmarshal(raw, &response); err != nil {
 			return nil, err
 		}
-		if store.SecretRotationScheduleHasNamespacedReference(response.Provider) {
+		if action != "" {
+			if response.ID != expectedID {
+				return nil, errStatus(http.StatusConflict, "retained schedule control differs from the requested schedule")
+			}
+			// The authenticated receipt can outlive its schedule row. Its provider
+			// still needs today's write grant if that provider is configured.
+			if isStaticSecretRotation(response.Provider) {
+				if err := a.requireStaticRotationProviderWrite(ctx, tenantID, response.Provider); err != nil {
+					return nil, err
+				}
+			}
+		}
+		if classified || store.SecretRotationScheduleHasNamespacedReference(response.Provider) {
 			return raw, nil
 		}
 		old, next := "", ""

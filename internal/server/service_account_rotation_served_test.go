@@ -302,6 +302,46 @@ func TestServedDependentReconciliationRequiresIndependentReviewA267(t *testing.T
 	}
 }
 
+func TestServedDependentRotationMetadataStaysReadableDuringProjectionGapA267(t *testing.T) {
+	servedDependentRotationScenario(t, nil, false, dependentRotationOptions{ReadDuringApplyProjectionGap: true})
+}
+
+func assertDependentRotationReadDuringApplyProjectionGap(t *testing.T, h *roleHarness, token string, parent store.ServiceDependentRotation, directory *dependentDirectoryBoundary) {
+	t.Helper()
+	ctx := t.Context()
+	const listPath = "/api/v1/secrets/rotations"
+	command, err := h.store.GetSecretStaticRotationCommand(ctx, h.tenant, parent.CommandID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC()
+	raw, err := json.Marshal(projections.ServiceDependentDirectoryApplyStarted{RotationID: parent.ID, IntentDigest: parent.IntentDigest, At: at})
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := h.log.Append(ctx, events.Event{ID: servicedependents.DirectoryApplyStartedSourceID(parent.ID), TenantID: h.tenant,
+		Type: projections.EventServiceDependentDirectoryApplyStarted, SchemaVersion: 1, Time: at, Data: raw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := h.store.GetServiceDependentRotation(ctx, h.tenant, parent.ID)
+	if err != nil || before.DirectoryApplyStarted || directory.applied != 0 {
+		t.Fatal("fixture did not hold the apply projection before any native effect", err)
+	}
+	for _, path := range []string{listPath + "/" + command.ID, listPath} {
+		status, body := secretsReq(t, h.servedHarness, http.MethodGet, path, token, nil)
+		if status != http.StatusOK || !bytes.Contains(body, []byte(command.ID)) || !bytes.Contains(body, []byte(`"phase":"`+string(command.Phase)+`"`)) {
+			t.Errorf("rotation metadata during apply projection gap: %s returned %d", path, status)
+		}
+	}
+	if err := h.srv.api.AdvanceStaticSecretRotation(ctx, h.tenant, command.ID, 1); err == nil || directory.applied != 0 {
+		t.Fatal("worker crossed the apply projection gap", err)
+	}
+	if err := h.srv.proj.Apply(ctx, event); err != nil {
+		t.Fatal("fixture apply-started event could not project", err)
+	}
+}
+
 type dependentRotationOptions struct {
 	ManifestExecution       bool
 	ManifestResetScopeFault bool
@@ -315,12 +355,13 @@ type dependentRotationOptions struct {
 	// LateResetBarrier makes the worker's clock pass the review deadline
 	// between a pass's first deadline check and its reset stamp, as a scope
 	// read or preflight that outlasts the deadline would (A267-O3).
-	LateResetBarrier       bool
-	InvalidRecovery        bool
-	EraseClaim             bool
-	LoseQueueProjection    bool
-	Reconcile              bool
-	RefusePublicationProof bool
+	LateResetBarrier             bool
+	InvalidRecovery              bool
+	EraseClaim                   bool
+	LoseQueueProjection          bool
+	Reconcile                    bool
+	RefusePublicationProof       bool
+	ReadDuringApplyProjectionGap bool
 }
 
 func servedDependentRotationCaseWithMode(t *testing.T, native *dependentNativeDirectoryFixture, injectFailure, reconcile bool, moved ...bool) {
@@ -973,6 +1014,10 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 		}
 		if step.Action == servicedependents.Preflight && step.Direction == servicedependents.Forward {
 			preflights++
+		}
+		if scenario.ReadDuringApplyProjectionGap && preflights == len(preview.Intent.Plan.Order) {
+			assertDependentRotationReadDuringApplyProjectionGap(t, h, token, queued.Rotation, directory)
+			return
 		}
 		if scenario.ManifestResetScopeFault && step.Action == servicedependents.Preflight && len(seen) == 3 {
 			proveDependentFinalPreflightScopeFence(t, h, token, root, queued.Rotation.CommandID, directory)
