@@ -15661,9 +15661,9 @@ export interface components {
             parent_id?: string;
             /**
              * Format: byte
-             * @description The PKCS#8 private key sealed to the offer on the operator's machine (trstctl-cli ca authorities wrap-key). Never the plaintext key.
+             * @description PKCS#8 private key sealed with the upgraded wrap-key CLI after authenticating the signer offer. Required for v2 import.
              */
-            sealed_key: string;
+            sealed_key_v2: string;
             spec: components["schemas"]["CASpec"];
         };
         CAImportOfflineIntermediateRequest: {
@@ -15729,24 +15729,53 @@ export interface components {
             threshold: number;
         };
         CAKeyImportOffer: {
+            /** @description Signed signer protocol hash restrictions. The CA import's empty set keeps its current hash policy. */
+            allowed_hashes?: number[];
+            /** @description Signed signer protocol purpose identifiers. Current CA import permits only CA_SIGN (1). */
+            allowed_purposes?: number[];
             /** Format: uuid */
             ceremony_id: string;
             /**
              * Format: byte
-             * @description The certificate's PKIX public key; the private key must match it, and it is part of the sealing binding.
+             * @description The approved certificate's PKIX public key. The imported private key must match it.
              */
             expected_public_key: string;
+            /**
+             * Format: int64
+             * @description Exclusive expiry as Unix seconds.
+             */
+            expires_at_unix?: number;
+            /**
+             * Format: int64
+             * @description Issue time as Unix seconds.
+             */
+            issued_at_unix?: number;
+            /** Format: uuid */
             operation_id: string;
             /**
              * Format: byte
-             * @description The import key's public half, the bytes to seal the private key to.
+             * @description The signer's one-time HPKE recipient public key, bound by the signature.
              */
             public_key: string;
+            /** @description Signed dual-control requirement. True for CA private-key import. */
+            require_authorization?: boolean;
+            /**
+             * Format: byte
+             * @description ASN.1 ECDSA P-256 signature over the authenticated offer transcript.
+             */
+            signature?: string;
             signer_handle: string;
-            /** @description The sealing scheme: HPKE base mode with MLKEM768-P256, HKDF-SHA256 and AES-256-GCM. */
+            /**
+             * Format: byte
+             * @description The offer identity's public PKIX key. Verify it against a fingerprint obtained separately from the signer host.
+             */
+            signer_public_key?: string;
+            /** @description The authenticated v2 profile uses HPKE base mode with ML-KEM-768/P-256, HKDF-SHA-256 and AES-256-GCM. */
             suite: string;
             /** Format: uuid */
             tenant_id: string;
+            /** @description Authenticated import offer version. Current offers carry 2. Historical HTTP retry responses can omit the v2 fields. */
+            version?: number;
         };
         CAKeyImportOfferRequest: {
             /** Format: uuid */

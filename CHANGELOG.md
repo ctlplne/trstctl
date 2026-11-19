@@ -3741,6 +3741,16 @@
 
 ### Security
 
+- Wrapped CA key import requires an authenticated v2 offer and a fingerprint
+  obtained directly from the signer host (CR-821 and CR-819). The offline CLI
+  verifies the offer and the approved request before opening the private key
+  file. The signed policy and HPKE context bind the tenant, ceremony, CA public
+  key, signer handle, and mandatory dual control. The signer publishes the key
+  exclusively and accepts only the exact sealed request for recovery. Upgrade
+  all replicas and the CLI, provision the signer identity, and replace any
+  unfinished v1 ceremony. See the
+  [upgrade runbook](docs/runbooks/upgrade-rollback.md#authenticated-ca-key-import).
+
 - GitHub OIDC workload trust and keyless signing now support issuer-scoped
   `allowed_owner_ids` and `allowed_repository_ids` (CR-384). The verifier checks
   the signed numeric IDs before issuing, signing, or exchanging a cloud

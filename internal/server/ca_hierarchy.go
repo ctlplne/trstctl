@@ -32,8 +32,6 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-const hierarchySignerHandlePrefix = "ca-hierarchy-"
-
 type caCrossSignedEvent struct {
 	CAID                 string `json:"ca_id"`
 	CeremonyID           string `json:"ceremony_id"`
@@ -1724,7 +1722,7 @@ func cryptoProfile(spec api.CASpec) crypto.HierarchyCAProfile {
 }
 
 func hierarchySignerHandle(ceremonyID string) string {
-	return hierarchySignerHandlePrefix + ceremonyID
+	return crypto.CAHierarchySignerHandle(ceremonyID)
 }
 
 func (h *caHierarchyService) createOrBindSigner(ctx context.Context, handle string, algorithm crypto.Algorithm) (*signing.RemoteSigner, bool, error) {

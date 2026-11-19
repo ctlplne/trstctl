@@ -29,6 +29,9 @@ func (s *Server) MigrateLegacySigningKeyFile(path, handle string, allowedPurpose
 	if handle == "" || sanitizeHandle(handle) != handle {
 		return false, fmt.Errorf("signing: invalid legacy key handle %q", handle)
 	}
+	if hierarchy, err := hierarchyCustodySlot(handle); hierarchy || err != nil {
+		return false, errors.New("signing: legacy audit migration cannot write a CA hierarchy slot")
+	}
 	pemBytes, err := os.ReadFile(path) // #nosec G304 -- signer operator supplies the one legacy migration path
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil

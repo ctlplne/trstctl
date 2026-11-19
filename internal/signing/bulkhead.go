@@ -58,8 +58,11 @@ var expensiveMethods = map[string]bool{
 	signerpb.SignerService_WrapTenantDataKey_FullMethodName:     true,
 	signerpb.SignerService_UnwrapTenantDataKey_FullMethodName:   true,
 	// A key import generates or opens a hybrid KEM key and parses a private key.
-	signerpb.SignerService_PrepareKeyImport_FullMethodName: true,
-	signerpb.SignerService_ImportWrappedKey_FullMethodName: true,
+	signerpb.SignerService_PrepareKeyImportV2_FullMethodName: true,
+	signerpb.SignerService_ImportWrappedKeyV2_FullMethodName: true,
+	// Hierarchy terminal calls take the shared storage guard and fsync.
+	signerpb.SignerService_RevokeKey_FullMethodName:  true,
+	signerpb.SignerService_DestroyKey_FullMethodName: true,
 }
 
 // limiter is a fixed-capacity, non-blocking concurrency gate. A failed Acquire

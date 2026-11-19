@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -22,13 +24,14 @@ import (
 // 'ca authorities import-key' takes, carrying only the sealed key.
 
 func caWrapKeyUsage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "Usage: trstctl ca authorities wrap-key --offer <file> --key <file> --request <file> [--out <file>]")
+	_, _ = fmt.Fprintln(w, "Usage: trstctl-cli ca authorities wrap-key --offer <file> --key <file> --request <file> --tenant-id <uuid> --signer-fingerprint <sha256> [--out <file>]")
 	_, _ = fmt.Fprintln(w, "\nSeals a CA's existing private key to a key offer, on this machine. --offer is the JSON 'ca authorities key-offer'")
 	_, _ = fmt.Fprintln(w, "printed; --key is the CA's PKCS#8 private key in PEM ('openssl pkcs8 -topk8 -nocrypt' converts other forms);")
 	_, _ = fmt.Fprintln(w, "--request is the import request (ceremony_id, certificate_pem, spec and any parent_id the ceremony approved).")
-	_, _ = fmt.Fprintln(w, "The key must be the one the certificate names. The output is the request with sealed_key added, for")
+	_, _ = fmt.Fprintln(w, "Obtain the signer fingerprint directly from the signer host over a separate trusted channel.")
+	_, _ = fmt.Fprintln(w, "The key must be the one the certificate names. The output is the request with sealed_key_v2 added, for")
 	_, _ = fmt.Fprintln(w, "'ca authorities import-key'. The private key itself is never sent.")
-	_, _ = fmt.Fprintln(w, "\nExample: trstctl ca authorities wrap-key --offer offer.json --key ca-key.pem --request import.json --out import-sealed.json")
+	_, _ = fmt.Fprintln(w, "\nExample: trstctl-cli ca authorities wrap-key --offer offer.json --key ca-key.pem --request import.json --tenant-id \"$tenant_id\" --signer-fingerprint \"$signer_fingerprint\" --out import-sealed.json")
 }
 
 func runCAWrapKey(args []string, stdout, stderr io.Writer) int {
@@ -36,7 +39,9 @@ func runCAWrapKey(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	offerFile := fs.String("offer", "", "JSON from 'ca authorities key-offer'")
 	keyFile := fs.String("key", "", "the CA's PKCS#8 private key, PEM")
-	requestFile := fs.String("request", "", "the import request without sealed_key")
+	requestFile := fs.String("request", "", "the import request before sealing")
+	tenantID := fs.String("tenant-id", "", "the tenant UUID from the reviewed ceremony")
+	signerFingerprint := fs.String("signer-fingerprint", "", "the SHA-256 fingerprint obtained directly from the signer host")
 	out := fs.String("out", "", "write the sealed import request here instead of stdout")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -45,7 +50,11 @@ func runCAWrapKey(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "error: --offer, --key and --request are required")
 		return 2
 	}
-	body, err := buildCAKeyImportRequest(*offerFile, *keyFile, *requestFile)
+	if *signerFingerprint == "" || *tenantID == "" {
+		_, _ = fmt.Fprintln(stderr, "error: --signer-fingerprint and --tenant-id are required")
+		return 2
+	}
+	body, err := buildCAKeyImportRequest(*offerFile, *keyFile, *requestFile, *tenantID, *signerFingerprint)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
@@ -62,27 +71,29 @@ func runCAWrapKey(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func buildCAKeyImportRequest(offerFile, keyFile, requestFile string) ([]byte, error) {
-	raw, err := os.ReadFile(offerFile) // #nosec G304 -- operator-named local file (CWE-22)
+func buildCAKeyImportRequest(offerFile, keyFile, requestFile, tenantID, signerFingerprint string) ([]byte, error) {
+	raw, err := readCAImportFile(offerFile, 64<<10)
 	if err != nil {
 		return nil, fmt.Errorf("read offer: %w", err)
 	}
 	var offer struct {
-		CeremonyID        string `json:"ceremony_id"`
-		TenantID          string `json:"tenant_id"`
-		OperationID       string `json:"operation_id"`
-		Suite             string `json:"suite"`
-		PublicKey         []byte `json:"public_key"`
-		ExpectedPublicKey []byte `json:"expected_public_key"`
+		crypto.AuthenticatedKeyImportOffer
+		CeremonyID string `json:"ceremony_id"`
 	}
-	if err := json.Unmarshal(raw, &offer); err != nil || offer.CeremonyID == "" || offer.TenantID == "" ||
-		offer.OperationID == "" || len(offer.PublicKey) == 0 || len(offer.ExpectedPublicKey) == 0 {
-		return nil, errors.New("offer file must be the JSON printed by 'ca authorities key-offer'")
+	if err := json.Unmarshal(raw, &offer); err != nil || offer.CeremonyID != offer.OperationID {
+		return nil, errors.New("offer file must carry one key-offer ceremony and operation")
 	}
-	if offer.Suite != crypto.KeyImportSuite {
-		return nil, fmt.Errorf("the offer uses suite %q; this trstctl seals %q", offer.Suite, crypto.KeyImportSuite)
+	if offer.Suite != crypto.AuthenticatedKeyImportSuite {
+		return nil, errors.New("the offer must use authenticated key import v2; obtain a new offer from the upgraded signer")
 	}
-	rawRequest, err := os.ReadFile(requestFile) // #nosec G304 -- operator-named local file (CWE-22)
+	info, err := offer.Verify(signerFingerprint, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	if offer.TenantID != tenantID {
+		return nil, errors.New("the authenticated offer belongs to a different tenant")
+	}
+	rawRequest, err := readCAImportFile(requestFile, 2<<20)
 	if err != nil {
 		return nil, fmt.Errorf("read request: %w", err)
 	}
@@ -94,10 +105,24 @@ func buildCAKeyImportRequest(offerFile, keyFile, requestFile string) ([]byte, er
 	if err := json.Unmarshal(request["ceremony_id"], &ceremonyID); err != nil || ceremonyID != offer.CeremonyID {
 		return nil, fmt.Errorf("the request's ceremony_id does not match the offer's ceremony %s", offer.CeremonyID)
 	}
-	if _, present := request["sealed_key"]; present {
-		return nil, errors.New("the request already carries a sealed_key")
+	for field := range request {
+		if strings.EqualFold(field, "sealed_key") || strings.EqualFold(field, "sealed_key_v2") {
+			return nil, errors.New("the wrapping request already carries a sealed key")
+		}
 	}
-	keyPEM, err := os.ReadFile(keyFile) // #nosec G304 -- operator-named local file (CWE-22)
+	var certificatePEM string
+	if err := json.Unmarshal(request["certificate_pem"], &certificatePEM); err != nil {
+		return nil, errors.New("the wrapping request requires the reviewed certificate chain")
+	}
+	certificate, _ := pem.Decode([]byte(certificatePEM))
+	if certificate == nil || certificate.Type != "CERTIFICATE" {
+		return nil, errors.New("the wrapping request requires a CA certificate as its first PEM block")
+	}
+	certificateSPKI, err := crypto.CertificateSubjectPublicKeyInfo(certificate.Bytes)
+	if err != nil || !bytes.Equal(certificateSPKI, offer.ExpectedPublicKey) {
+		return nil, errors.New("the wrapping request's CA certificate does not match the authenticated offer")
+	}
+	keyPEM, err := readCAImportFile(keyFile, 64<<10)
 	if err != nil {
 		return nil, fmt.Errorf("read private key: %w", err)
 	}
@@ -116,7 +141,7 @@ func buildCAKeyImportRequest(offerFile, keyFile, requestFile string) ([]byte, er
 	if !matches {
 		return nil, errors.New("this private key is not the key in the certificate being imported")
 	}
-	sealed, err := crypto.SealKeyImport(offer.PublicKey, crypto.KeyImportInfo(offer.TenantID, offer.OperationID, offer.ExpectedPublicKey), block.Bytes)
+	sealed, err := crypto.SealKeyImport(offer.PublicKey, info, block.Bytes)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +149,24 @@ func buildCAKeyImportRequest(offerFile, keyFile, requestFile string) ([]byte, er
 	if err != nil {
 		return nil, err
 	}
-	request["sealed_key"] = encoded
+	request["sealed_key_v2"] = encoded
 	return json.MarshalIndent(request, "", "  ")
+}
+
+func readCAImportFile(path string, limit int64) ([]byte, error) {
+	file, err := os.Open(path) // #nosec G304 -- operator-named local file (CWE-22)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	data, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil {
+		secret.Wipe(data)
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		secret.Wipe(data)
+		return nil, errors.New("file exceeds the wrapping input limit")
+	}
+	return data, nil
 }

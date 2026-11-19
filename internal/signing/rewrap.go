@@ -3,6 +3,7 @@
 package signing
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -23,8 +24,8 @@ type RewrapReport struct {
 	// opened under the destination before the swap.
 	Rewrapped int
 	Keys      int
-	// Copied counts the files that are not sealed containers (public kits,
-	// tombstones, anchors), carried over byte for byte.
+	// Copied counts files carried over byte for byte, including opaque
+	// records and interrupted import stages that cannot be opened.
 	Copied int
 	// Backup is where the original directory was kept: the rollback set,
 	// still opened by the source wrapper.
@@ -42,8 +43,8 @@ type RewrapReport struct {
 // since the copy began. Only then is dir renamed to
 // <dir>.pre-rewrap-<UTC time> (the rollback set) and the copy renamed into
 // its place. Any failure leaves dir untouched and removes the copy. The
-// signer must be stopped while it runs; a container that source does not
-// open stops the re-wrap rather than being carried over unreadable.
+// signer must be stopped while it runs. Unreadable authoritative state stops
+// the re-wrap. An unreadable import stage is kept for guarded cleanup.
 func RewrapKeyStore(dir string, source, destination seal.KeyWrapper, now time.Time) (RewrapReport, error) {
 	var report RewrapReport
 	if source == nil || destination == nil {
@@ -165,20 +166,24 @@ func rewrapTree(dir, staging string, source, destination seal.KeyWrapper, report
 		}
 		defer secret.Wipe(raw)
 		seen[rel] = fileFingerprint{size: info.Size(), mode: info.Mode(), modTime: info.ModTime(), digest: crypto.SHA256Hex(raw)}
-		out := raw
 		if _, _, notSealed := seal.ContainerWrappedDEK(raw); notSealed == nil {
 			moved, _, err := seal.RewrapContainerDEK(raw, func(wrapped []byte) ([]byte, bool, error) {
 				return moveDataKey(rel, wrapped, source, destination)
 			})
-			if err != nil {
+			if err == nil {
+				report.Rewrapped++
+				return writeStagedFile(dst, rel, moved, info.Mode().Perm())
+			}
+			stage, staged := strings.CutSuffix(rel, custodyStageExt)
+			if !staged || !isImportCustodyFinalName(stage) || !errors.Is(err, errRewrapSourceDEK) {
 				return err
 			}
-			out = moved
-			report.Rewrapped++
-		} else {
-			report.Copied++
+			// A crash can leave a parseable envelope header and an incomplete
+			// stage. Only final names are authoritative. Keep this stage for
+			// exact guarded cleanup without attempting to use it as a key.
 		}
-		return writeStagedFile(dst, rel, out, info.Mode().Perm())
+		report.Copied++
+		return writeStagedFile(dst, rel, raw, info.Mode().Perm())
 	})
 	if err != nil {
 		return nil, err
@@ -186,12 +191,26 @@ func rewrapTree(dir, staging string, source, destination seal.KeyWrapper, report
 	return seen, nil
 }
 
+func isImportCustodyFinalName(name string) bool {
+	if name == keyImportIdentityName {
+		return true
+	}
+	for _, suffix := range []string{keyFileExt, keyImportOfferExt} {
+		if handle, ok := strings.CutSuffix(name, suffix); ok && crypto.IsCanonicalCAHierarchyHandle(handle) {
+			return true
+		}
+	}
+	return false
+}
+
+var errRewrapSourceDEK = errors.New("is not sealed under the source key")
+
 // moveDataKey unwraps one container's data key with source, wraps it with
 // destination, and checks destination gives back the same bytes.
 func moveDataKey(rel string, wrapped []byte, source, destination seal.KeyWrapper) ([]byte, bool, error) {
 	dek, err := source.UnwrapDEK(wrapped)
 	if err != nil {
-		return nil, false, fmt.Errorf("signing: re-wrap: %s is not sealed under the source key: %w", rel, err)
+		return nil, false, fmt.Errorf("signing: re-wrap: %s %w: %w", rel, errRewrapSourceDEK, err)
 	}
 	defer secret.Wipe(dek)
 	next, err := destination.WrapDEK(dek)
@@ -209,39 +228,113 @@ func moveDataKey(rel string, wrapped []byte, source, destination seal.KeyWrapper
 	return next, true, nil
 }
 
-// verifyRewrappedKeys opens every signer key file under destination in the
-// staging copy (and under source in the original), so the swap happens only
-// when each key still decrypts.
+// verifyRewrappedKeys opens installed signing keys and v2 import state under
+// both wrappers, before the staging copy becomes the live store.
 func verifyRewrappedKeys(dir, staging string, source, destination seal.KeyWrapper, report *RewrapReport) error {
 	entries, err := os.ReadDir(staging)
 	if err != nil {
 		return err
 	}
+	original, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = original.Close() }()
+	staged, err := os.OpenRoot(staging)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = staged.Close() }()
 	for _, entry := range entries {
 		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, keyFileExt) {
+		importCustody := isImportCustodyFinalName(name)
+		if entry.IsDir() {
+			if importCustody {
+				return fmt.Errorf("signing: re-wrap: %q must be a regular custody file", name)
+			}
 			continue
 		}
-		stem := strings.TrimSuffix(name, keyFileExt)
-		for _, check := range []struct {
-			root    string
-			wrapper seal.KeyWrapper
-			label   string
-		}{{dir, source, "the source"}, {staging, destination, "the destination"}} {
-			sealed, err := os.ReadFile(filepath.Join(check.root, name)) // #nosec G304 -- the operator's own key store and its staging copy (CWE-22)
-			if err != nil {
-				return err
-			}
-			plaintext, err := seal.Open(check.wrapper, sealed, []byte(stem))
-			secret.Wipe(sealed)
-			if err != nil {
-				return fmt.Errorf("signing: re-wrap: key %q does not open under %s: %w", stem, check.label, err)
-			}
-			secret.Wipe(plaintext)
+		switch {
+		case strings.HasSuffix(name, keyFileExt):
+			report.Keys++
+		case importCustody:
+		default:
+			continue
 		}
-		report.Keys++
+		if err := verifyRewrappedState(original, staged, source, destination, name); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func verifyRewrappedState(original, staged *os.Root, source, destination seal.KeyWrapper, name string) error {
+	open := func(root *os.Root, wrapper seal.KeyWrapper) ([]byte, error) {
+		ciphertext, err := root.ReadFile(name)
+		if err != nil {
+			return nil, err
+		}
+		defer secret.Wipe(ciphertext)
+		return openRewrappedState(wrapper, name, ciphertext)
+	}
+	before, err := open(original, source)
+	if err != nil {
+		return fmt.Errorf("signing: re-wrap: %q does not open under the source: %w", name, err)
+	}
+	defer secret.Wipe(before)
+	after, err := open(staged, destination)
+	if err != nil {
+		return fmt.Errorf("signing: re-wrap: %q does not open under the destination: %w", name, err)
+	}
+	defer secret.Wipe(after)
+	if !crypto.ConstantTimeEqual(before, after) {
+		return fmt.Errorf("signing: re-wrap: %q does not preserve its sealed contents", name)
+	}
+	return nil
+}
+
+func openRewrappedState(wrapper seal.KeyWrapper, name string, ciphertext []byte) ([]byte, error) {
+	if strings.HasSuffix(name, keyFileExt) {
+		stem := strings.TrimSuffix(name, keyFileExt)
+		store := NewKeyStore("", wrapper)
+		plain, public, err := store.openHeldKey(stem, ciphertext)
+		if err != nil {
+			return nil, err
+		}
+		v4Metadata := len(plain) > len(metaMagic) && bytes.HasPrefix(plain, metaMagic) && plain[len(metaMagic)] == importReceiptMetaVersion
+		if public != nil || v4Metadata {
+			key, err := store.decodeHeldKeyPlaintext(stem, plain, public)
+			if err != nil {
+				secret.Wipe(plain)
+				return nil, err
+			}
+			key.signer.Destroy()
+		}
+		return plain, nil
+	}
+	if name == keyImportIdentityName {
+		plain, err := seal.Open(wrapper, ciphertext, []byte(keyImportIdentityAAD))
+		if err != nil {
+			return nil, err
+		}
+		identity, err := parseKeyImportIdentity(plain)
+		if err != nil {
+			secret.Wipe(plain)
+			return nil, err
+		}
+		identity.Destroy()
+		return plain, nil
+	}
+	handle := strings.TrimSuffix(name, keyImportOfferExt)
+	plain, err := seal.Open(wrapper, ciphertext, []byte(keyImportPreparationAAD(handle)))
+	if err != nil {
+		return nil, err
+	}
+	if err := validateImportPreparationForRewrap(handle, plain); err != nil {
+		secret.Wipe(plain)
+		return nil, err
+	}
+	return plain, nil
 }
 
 func fingerprintTree(dir string) (map[string]fileFingerprint, error) {

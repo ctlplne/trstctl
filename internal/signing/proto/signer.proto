@@ -186,21 +186,17 @@ service SignerService {
   // operation, reason and time.
   rpc RevokeKey(RevokeKeyRequest) returns (RevokeKeyResponse);
 
-  // PrepareKeyImport returns the one-time import key for an operation (A128):
-  // an operator seals an existing private key to its public half on their own
-  // machine, so only sealed bytes cross the control plane. A repeat for the
-  // same operation returns the same import key until an import uses it. The
-  // import key is held sealed at rest like a signing key and is never a
-  // signing key.
+  // Retired v1 method. Kept on the wire to return FAILED_PRECONDITION to
+  // older clients before exposing an unsigned offer.
   rpc PrepareKeyImport(PrepareKeyImportRequest) returns (PrepareKeyImportResponse);
 
-  // ImportWrappedKey opens a sealed private key with the operation's import
-  // key, under a binding of the tenant, the operation and the public key the
-  // private key must match; refuses a key that does not match it or is weak;
-  // and keeps it under the requested handle with the requested constraints.
-  // Only the public key comes back. The plaintext exists inside the signer for
-  // the one call, and the import key is destroyed by the import that uses it.
+  // Retired v1 method. Returns FAILED_PRECONDITION before accessing custody.
   rpc ImportWrappedKey(ImportWrappedKeyRequest) returns (ImportWrappedKeyResponse);
+
+  // Authenticate the recipient and bind its exact CA policy. Separate
+  // methods make an older signer refuse the request before handling any key.
+  rpc PrepareKeyImportV2(PrepareKeyImportV2Request) returns (PrepareKeyImportV2Response);
+  rpc ImportWrappedKeyV2(ImportWrappedKeyV2Request) returns (ImportWrappedKeyV2Response);
 }
 
 // Algorithm mirrors internal/crypto.Algorithm. Proprietary algorithms use
@@ -825,6 +821,44 @@ message ImportWrappedKeyRequest {
 }
 
 message ImportWrappedKeyResponse {
+  KeyHandle handle = 1;
+  Algorithm algorithm = 2;
+  bytes public_key = 3;
+}
+
+message KeyImportPolicyV2 {
+  string tenant_id = 1;
+  string operation_id = 2;
+  string requested_id = 3;
+  bytes expected_public_key = 4;
+  repeated KeyPurpose allowed_purposes = 5;
+  repeated Hash allowed_hashes = 6;
+  bool require_authorization = 7;
+}
+
+message PrepareKeyImportV2Request {
+  uint32 version = 1;
+  KeyImportPolicyV2 policy = 2;
+}
+
+message PrepareKeyImportV2Response {
+  uint32 version = 1;
+  KeyImportPolicyV2 policy = 2;
+  string suite = 3;
+  bytes public_key = 4;
+  int64 issued_at_unix = 5;
+  int64 expires_at_unix = 6;
+  bytes signer_public_key = 7;
+  bytes signature = 8;
+}
+
+message ImportWrappedKeyV2Request {
+  uint32 version = 1;
+  KeyImportPolicyV2 policy = 2;
+  bytes sealed_key = 3;
+}
+
+message ImportWrappedKeyV2Response {
   KeyHandle handle = 1;
   Algorithm algorithm = 2;
   bytes public_key = 3;

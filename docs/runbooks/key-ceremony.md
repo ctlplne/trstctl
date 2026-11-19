@@ -475,12 +475,58 @@ Leaf issuance then uses `POST /api/v1/ca/authorities/{imported-ca-id}/issue`.
 
 Use this when the CA's private key exists today outside trstctl (an OpenSSL CA,
 another CA product, a key file) and the CA should keep its key and certificate.
-The key never crosses the control plane in the clear: the signer offers a
-one-time import key, you seal the PKCS#8 key to it on your own machine, and
-only the sealed bytes pass through trstctl. The signer opens it, refuses it
-unless it is exactly the key the certificate names (and not weak), and holds it
-under the ceremony's own signer handle with CA-signing constraints and dual
-control.
+The isolated signer signs a one-time import offer. On the machine holding the
+private key, the wrapping CLI checks that signature against a fingerprint you
+obtained independently. Only the sealed request passes through the control
+plane. The signer checks the key against the certificate, then holds it under
+the ceremony's handle with CA-signing constraints and dual control.
+
+### Obtain the signer fingerprint
+
+Upgrade every signer sharing the keystore, every control-plane replica and the
+wrapping CLI before using v2. The signer-host administrator runs the following
+once against the existing keystore and the wrapper configured for the signer.
+The keystore directory must already be durable, including its entry in the
+parent directory.
+For an external wrapper, use the configured `--kms-provider`, `--kms-key-ref`
+and `--kms-wrap-command` in place of `--kek`.
+
+```bash
+trstctl-signer --keystore "$signer_store" --kek "$signer_kek" --init-import-offer-identity
+trstctl-signer --keystore "$signer_store" --kek "$signer_kek" --import-offer-fingerprint
+```
+
+Transfer the printed SHA-256 fingerprint to the person who holds the CA key
+through independently authenticated signer-host access. Keep it in
+`signer_fingerprint`. A value copied from the offer, API, or console does not
+establish the signer's identity. The signer-host administrator needs a custody
+account independent of the control plane, with sole access to the signer
+keystore and its key wrapper. If those credentials or privileges are shared,
+the pin cannot distinguish the two processes.
+
+For a shared store, qualify the exact filesystem, mount options and signer
+nodes before enabling import. With all nodes using the same protected scratch
+directory on that mount, hold an exclusive advisory lock on one scratch file
+from the first node. A nonblocking lock from the second node must report that
+the lock is held, then succeed after release. Check that an exclusive
+same-directory hard link succeeds exactly once, both mounts read the same
+bytes and terminal marker, and file and directory fsync succeed. An RWX volume
+claim alone does not qualify the store. The supported startup and cutover
+ordering is in the [upgrade runbook](upgrade-rollback.md#authenticated-ca-key-import).
+
+For rotation, pause CA imports, settle active requests, and stop all signers
+sharing the store. Record the current pin, then move
+`key-import-offer-identity.sealed` into protected rollback storage. Initialize
+the replacement and update every wrapping station from the new signer-host
+fingerprint before imports resume. An unexpired old offer can still verify at
+a station that keeps the old pin. The upgraded signer accepts new imports only
+from preparations signed by the current identity. Existing CA keys and exact
+recovery of completed imports continue to work. Pending preparations signed by
+the retired identity need a new approved ceremony. If the identity is lost,
+restore a verified sealed copy or provision a replacement and replace every
+pin before resuming.
+
+### Complete the approved import
 
 1. **Export the public chain** as in the previous procedure (the imported
    authority certificate first, then its issuer chain), and convert the private
@@ -500,24 +546,31 @@ control.
 3. **Collect approvals** at `POST /api/v1/ca/ceremonies/{id}/approvals`.
 4. **Finish on the machine that holds the key.** Write the import request,
    `import.json` (the same `ceremony_id`, `certificate_pem`, `spec`, and any
-   `parent_id`; the console's **Download import request** writes it), then:
+   `parent_id`; the console's **Download import request** writes it). Set
+   `tenant_id` to the UUID of the approved tenant, then run:
 
    ```bash
    trstctl-cli ca authorities key-offer -f import.json > offer.json
-   trstctl-cli ca authorities wrap-key --offer offer.json --key ca-key.p8.pem --request import.json --out import-sealed.json
+   trstctl-cli ca authorities wrap-key --offer offer.json --key ca-key.p8.pem --request import.json \
+     --tenant-id "$tenant_id" --signer-fingerprint "$signer_fingerprint" --out import-sealed.json
    trstctl-cli ca authorities import-key -f import-sealed.json
    ```
 
    `key-offer` (`POST /api/v1/ca/authorities/imported/key-offer`) returns the
-   signer's import key: HPKE base mode with the MLKEM768-P256 hybrid KEM,
-   HKDF-SHA256 and AES-256-GCM, bound to your tenant, this ceremony, and the
-   certificate's public key; a repeat returns the same key until it is used.
-   `wrap-key` runs locally: it refuses a private key that is not the
-   certificate's and writes only the sealed key into the request.
+   signer's signed HPKE offer. It binds the one-time recipient to the tenant,
+   ceremony, certificate public key, signer handle, exact purpose and dual
+   control. It uses HPKE with MLKEM768-P256, HKDF-SHA256 and AES-256-GCM. A repeat
+   returns the same offer for up to one hour while the handle is still available.
+   `wrap-key` verifies the offer and matches the request before opening the
+   local key file. It checks the key matches the certificate and adds
+   `sealed_key_v2` to the request. Write that request to a new file in an
+   operator-only directory.
    `import-key` (`POST /api/v1/ca/authorities/imported/key`) has the signer open
    and check the key, then binds the chain exactly as the previous procedure
    does and consumes the ceremony. A key that is not the certificate's answers
-   422; a used ceremony answers 409.
+   422. After a lost response, retry with the original request body and
+   idempotency key. A used ceremony with a different key answers 409. An expired
+   offer that never installed a key requires a new approved ceremony.
 5. **Verify** that the authority lists as active with `possession_proof:
    signer_challenge`, and that a leaf it issues chains to your certificate.
    Then destroy the private key file and any other copy under your own policy:

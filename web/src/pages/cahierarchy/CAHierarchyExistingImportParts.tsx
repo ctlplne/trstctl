@@ -228,7 +228,7 @@ function KeyImportSteps({ ceremonyID, form, spec }: { ceremonyID: string; form: 
   };
   const commands = [
     "trstctl-cli ca authorities key-offer -f import.json > offer.json",
-    "trstctl-cli ca authorities wrap-key --offer offer.json --key ca-key.pem --request import.json --out import-sealed.json",
+    'trstctl-cli ca authorities wrap-key --offer offer.json --key ca-key.pem --request import.json --tenant-id "$tenant_id" --signer-fingerprint "$signer_fingerprint" --out import-sealed.json',
     "trstctl-cli ca authorities import-key -f import-sealed.json",
   ];
   function download() {

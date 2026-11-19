@@ -12405,8 +12405,8 @@
             "format": "uuid",
             "type": "string"
           },
-          "sealed_key": {
-            "description": "The PKCS#8 private key sealed to the offer on the operator's machine (trstctl-cli ca authorities wrap-key). Never the plaintext key.",
+          "sealed_key_v2": {
+            "description": "PKCS#8 private key sealed with the upgraded wrap-key CLI after authenticating the signer offer. Required for v2 import.",
             "format": "byte",
             "type": "string"
           },
@@ -12418,7 +12418,7 @@
           "ceremony_id",
           "certificate_pem",
           "spec",
-          "sealed_key"
+          "sealed_key_v2"
         ],
         "type": "object"
       },
@@ -12622,33 +12622,76 @@
       },
       "CAKeyImportOffer": {
         "properties": {
+          "allowed_hashes": {
+            "description": "Signed signer protocol hash restrictions. The CA import's empty set keeps its current hash policy.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "allowed_purposes": {
+            "description": "Signed signer protocol purpose identifiers. Current CA import permits only CA_SIGN (1).",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
           "ceremony_id": {
             "format": "uuid",
             "type": "string"
           },
           "expected_public_key": {
-            "description": "The certificate's PKIX public key; the private key must match it, and it is part of the sealing binding.",
+            "description": "The approved certificate's PKIX public key. The imported private key must match it.",
             "format": "byte",
             "type": "string"
           },
+          "expires_at_unix": {
+            "description": "Exclusive expiry as Unix seconds.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "issued_at_unix": {
+            "description": "Issue time as Unix seconds.",
+            "format": "int64",
+            "type": "integer"
+          },
           "operation_id": {
+            "format": "uuid",
             "type": "string"
           },
           "public_key": {
-            "description": "The import key's public half, the bytes to seal the private key to.",
+            "description": "The signer's one-time HPKE recipient public key, bound by the signature.",
+            "format": "byte",
+            "type": "string"
+          },
+          "require_authorization": {
+            "description": "Signed dual-control requirement. True for CA private-key import.",
+            "type": "boolean"
+          },
+          "signature": {
+            "description": "ASN.1 ECDSA P-256 signature over the authenticated offer transcript.",
             "format": "byte",
             "type": "string"
           },
           "signer_handle": {
             "type": "string"
           },
+          "signer_public_key": {
+            "description": "The offer identity's public PKIX key. Verify it against a fingerprint obtained separately from the signer host.",
+            "format": "byte",
+            "type": "string"
+          },
           "suite": {
-            "description": "The sealing scheme: HPKE base mode with MLKEM768-P256, HKDF-SHA256 and AES-256-GCM.",
+            "description": "The authenticated v2 profile uses HPKE base mode with ML-KEM-768/P-256, HKDF-SHA-256 and AES-256-GCM.",
             "type": "string"
           },
           "tenant_id": {
             "format": "uuid",
             "type": "string"
+          },
+          "version": {
+            "description": "Authenticated import offer version. Current offers carry 2. Historical HTTP retry responses can omit the v2 fields.",
+            "type": "integer"
           }
         },
         "required": [

@@ -974,6 +974,8 @@ trstctl-cli ca authorities import-existing -f prepared-ca-import.json
 # Import a CA together with its existing private key: two custodians approve
 # the chain and profile, then the key is sealed on this machine and only the
 # sealed key is sent. import.json holds ceremony_id, certificate_pem and spec.
+# Set tenant_id from the approved tenant. Obtain signer_fingerprint directly
+# from the signer host using trstctl-signer --import-offer-fingerprint.
 cat > key-import-ceremony.json <<'JSON'
 {"operation":"import_ca_key","threshold":2,"certificate_pem":"<imported CA first, then its issuer chain>","spec":{"common_name":"Example Imported Issuing CA","ttl_seconds":71280000,"signature_algorithm":"ECDSA-P256","max_path_len":0}}
 JSON
@@ -981,7 +983,8 @@ trstctl-cli ca ceremonies start -f key-import-ceremony.json
 trstctl-cli ca ceremonies approve <key-import-ceremony-id>
 trstctl-cli ca ceremonies approve <key-import-ceremony-id>
 trstctl-cli ca authorities key-offer -f import.json > offer.json
-trstctl-cli ca authorities wrap-key --offer offer.json --key ca-key.p8.pem --request import.json --out import-sealed.json
+trstctl-cli ca authorities wrap-key --offer offer.json --key ca-key.p8.pem --request import.json \
+  --tenant-id "$tenant_id" --signer-fingerprint "$signer_fingerprint" --out import-sealed.json
 trstctl-cli ca authorities import-key -f import-sealed.json
 
 # Revoke a signer-backed authority's key: two custodians approve the exact

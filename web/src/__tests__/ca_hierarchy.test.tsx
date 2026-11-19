@@ -1952,6 +1952,8 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByDisplayValue("ceremony-key-import")).toBeInTheDocument();
     const steps = await screen.findByRole("region", { name: "Finish on your machine" });
     expect(within(steps).getByText(/ca authorities wrap-key --offer offer.json --key ca-key.pem/)).toBeInTheDocument();
+    expect(within(steps).getByText(/--tenant-id "\$tenant_id" --signer-fingerprint "\$signer_fingerprint"/)).toBeInTheDocument();
+    expect(within(steps).getByText(/directly from the trusted signer host/)).toBeInTheDocument();
     expect(within(steps).getByRole("button", { name: "Download import request" })).toBeInTheDocument();
     expect(screen.queryByLabelText(/private key/i)).not.toBeInTheDocument();
   }, 15_000);

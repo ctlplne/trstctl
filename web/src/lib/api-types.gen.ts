@@ -2543,7 +2543,7 @@ export interface CAImportKeyRequest {
   ceremony_id: string;
   certificate_pem: string;
   parent_id?: string;
-  sealed_key: string;
+  sealed_key_v2: string;
   spec: CASpec;
 }
 
@@ -2606,13 +2606,21 @@ export interface CAKeyCeremony {
 }
 
 export interface CAKeyImportOffer {
+  allowed_hashes?: number[];
+  allowed_purposes?: number[];
   ceremony_id: string;
   expected_public_key: string;
+  expires_at_unix?: number;
+  issued_at_unix?: number;
   operation_id: string;
   public_key: string;
+  require_authorization?: boolean;
+  signature?: string;
   signer_handle: string;
+  signer_public_key?: string;
   suite: string;
   tenant_id: string;
+  version?: number;
 }
 
 export interface CAKeyImportOfferRequest {

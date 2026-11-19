@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"net/http"
@@ -12,12 +13,15 @@ import (
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
 
 var (
 	ErrCAHierarchyUnavailable = errors.New("api: CA hierarchy surface is not enabled")
+	ErrCAImportSignerUpgrade  = errors.New("api: CA key import requires an upgraded isolated signer")
+	ErrCAImportSignerBusy     = errors.New("api: the isolated signer is temporarily unavailable for CA key import")
 	ErrCAHierarchyInvalid     = errors.New("api: invalid CA hierarchy request")
 	ErrCAHierarchyConflict    = errors.New("api: CA hierarchy request conflicts with current ceremony state")
 )
@@ -254,28 +258,22 @@ type CAKeyImportOfferRequest struct {
 	Spec           CASpec `json:"spec"`
 }
 
-// CAKeyImportOffer is what an operator seals the CA's private key to, on their
-// own machine: the import key's public half under Suite, bound by TenantID,
-// OperationID and ExpectedPublicKey (the certificate's key). The signer keeps
-// the key under SignerHandle.
+// CAKeyImportOffer transports the signer's signed recipient and policy to the
+// operator. The operator verifies them with a separately pinned identity.
 type CAKeyImportOffer struct {
-	CeremonyID        string `json:"ceremony_id"`
-	TenantID          string `json:"tenant_id"`
-	OperationID       string `json:"operation_id"`
-	Suite             string `json:"suite"`
-	PublicKey         []byte `json:"public_key"`
-	ExpectedPublicKey []byte `json:"expected_public_key"`
-	SignerHandle      string `json:"signer_handle"`
+	CeremonyID string `json:"ceremony_id"`
+	crypto.AuthenticatedKeyImportOffer
 }
 
 // CAImportKeyRequest carries the sealed private key for an import_ca_key
 // ceremony, with the chain, profile and parent it approved.
 type CAImportKeyRequest struct {
-	CeremonyID     string `json:"ceremony_id"`
-	CertificatePEM string `json:"certificate_pem"`
-	ParentID       string `json:"parent_id,omitempty"`
-	Spec           CASpec `json:"spec"`
-	SealedKey      []byte `json:"sealed_key"`
+	CeremonyID     string          `json:"ceremony_id"`
+	CertificatePEM string          `json:"certificate_pem"`
+	ParentID       string          `json:"parent_id,omitempty"`
+	Spec           CASpec          `json:"spec"`
+	SealedKey      json.RawMessage `json:"sealed_key,omitempty"`
+	SealedKeyV2    []byte          `json:"sealed_key_v2"`
 }
 
 // CAAuthorityRevokeRequest executes a revoke_ca ceremony that reached quorum
@@ -1108,6 +1106,13 @@ func (a *API) writeCAHierarchyError(w http.ResponseWriter, err error) bool {
 		w.Header().Set("Retry-After", "1")
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable,
 			"CA history is catching up; retry with the same Idempotency-Key"))
+	case errors.Is(err, ErrCAImportSignerUpgrade):
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable,
+			"upgrade the isolated signer for authenticated CA key import"))
+	case errors.Is(err, ErrCAImportSignerBusy):
+		w.Header().Set("Retry-After", "1")
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable,
+			"CA key import is temporarily unavailable; retry with the same Idempotency-Key"))
 	case errors.Is(err, ErrCAHierarchyUnavailable):
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "CA hierarchy surface is not enabled"))
 	case errors.Is(err, ErrCAHierarchyInvalid):

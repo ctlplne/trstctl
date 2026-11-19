@@ -6,7 +6,9 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"os"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -34,15 +36,13 @@ type Server struct {
 	keys map[string]*heldKey
 	// revocations holds the administrative key revocations of a signer without
 	// a key store; a persistent signer keeps them beside the sealed keys.
-	revocations map[string]KeyRevocation
-	// importKeys holds the one-time key import keys of a signer without a key
-	// store; a persistent signer keeps them sealed in it. importMu serializes
-	// key imports in this process.
-	importKeys map[string]*crypto.KeyImportKey
-	importMu   sync.Mutex
-	serving    bool
-	store      *KeyStore // optional sealed persistence; nil = in-memory only
-	keyspec    KeyFactory
+	revocations      map[string]KeyRevocation
+	serving          bool
+	store            *KeyStore // optional sealed persistence; nil = in-memory only
+	keyspec          KeyFactory
+	keyImportClock   func() time.Time                // test clock for preparation and expiry
+	beforeImportOpen func()                          // test observer for the HPKE open boundary
+	checkImportedKey func(crypto.DigestSigner) error // test observer across the import ceremony check
 	// managedKeys owns remote KMS/HSM lifecycle backends in this isolated
 	// process. The control plane can reach them only through ManageKey over the
 	// authenticated signer transport; provider credentials and key operations
@@ -156,7 +156,7 @@ func WithKeyFactory(factory KeyFactory) ServerOption {
 // NewServer returns a ready in-memory signing server (keys do not survive a
 // restart).
 func NewServer(opts ...ServerOption) *Server {
-	s := &Server{keys: make(map[string]*heldKey), revocations: make(map[string]KeyRevocation), importKeys: make(map[string]*crypto.KeyImportKey), serving: true, keyspec: defaultKeyFactory{}, gatedDestroyStreams: newLimiter(2)}
+	s := &Server{keys: make(map[string]*heldKey), revocations: make(map[string]KeyRevocation), serving: true, keyspec: defaultKeyFactory{}, gatedDestroyStreams: newLimiter(2)}
 	for _, o := range opts {
 		o(s)
 	}
@@ -172,7 +172,7 @@ func NewServer(opts ...ServerOption) *Server {
 // generated. Usage constraints are sealed with the key and restored too, so a
 // CA-class key stays purpose-bound across a restart.
 func NewPersistentServer(store *KeyStore, opts ...ServerOption) (*Server, error) {
-	s := &Server{serving: true, store: store, revocations: make(map[string]KeyRevocation), importKeys: make(map[string]*crypto.KeyImportKey), keyspec: defaultKeyFactory{}, gatedDestroyStreams: newLimiter(2)}
+	s := &Server{serving: true, store: store, revocations: make(map[string]KeyRevocation), keyspec: defaultKeyFactory{}, gatedDestroyStreams: newLimiter(2)}
 	for _, o := range opts {
 		o(s)
 	}
@@ -235,13 +235,7 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 	held := &heldKey{signer: ls, constraints: constraints}
 	if err := s.mintHeldKey(id, held); err != nil {
 		ls.Destroy()
-		if errors.Is(err, errKeyHandleExists) {
-			return nil, status.Error(codes.AlreadyExists, "key handle already exists")
-		}
-		if errors.Is(err, ErrDestroyedKeyHandle) {
-			return nil, status.Error(codes.FailedPrecondition, ErrDestroyedKeyHandle.Error())
-		}
-		return nil, status.Errorf(codes.Internal, "persist key: %v", err)
+		return nil, hierarchyCustodyStatus("persist key", err)
 	}
 
 	return &signerpb.GenerateKeyResponse{
@@ -276,6 +270,30 @@ var errKeyHandleExists = errors.New("signing: key handle already exists")
 func (s *Server) mintHeldKey(id string, held *heldKey) error {
 	var staged *stagedSave
 	if s.store != nil {
+		hierarchy, err := hierarchyCustodySlot(id)
+		if err != nil {
+			return err
+		}
+		if hierarchy {
+			unlock, err := s.store.lockHierarchyWriter(id)
+			if err != nil {
+				return err
+			}
+			defer unlock()
+			s.mu.Lock()
+			_, exists := s.keys[id]
+			s.mu.Unlock()
+			if exists {
+				return errKeyHandleExists
+			}
+			if err := s.store.saveHierarchyKeyLocked(id, held.signer, held.constraints); err != nil {
+				return err
+			}
+			s.mu.Lock()
+			s.keys[id] = held
+			s.mu.Unlock()
+			return nil
+		}
 		st, err := s.store.stageSave(id, held.signer, held.constraints)
 		if err != nil {
 			return err
@@ -439,6 +457,9 @@ func (s *Server) GatedDestroy(ctx context.Context, req *signerpb.GatedDestroyReq
 		if errors.Is(err, ErrNoGatedDestroyer) {
 			return nil, status.Error(codes.Unimplemented, err.Error())
 		}
+		if status.Code(err) == codes.Unavailable {
+			return nil, err
+		}
 		return nil, status.Errorf(codes.FailedPrecondition, "gated destroy: %v", err)
 	}
 	return gatedDestroyDecisionToProto(decision), nil
@@ -460,6 +481,9 @@ func (s *Server) destroyKeyHandle(_ context.Context, handle string) error {
 	if handle == "" {
 		return status.Error(codes.InvalidArgument, "missing key handle")
 	}
+	if handled, err := s.destroyHierarchyKey(handle, false); handled || err != nil {
+		return err
+	}
 	if _, err := s.lookup(&signerpb.KeyHandle{Id: handle}); err != nil {
 		if status.Code(err) == codes.NotFound {
 			return nil
@@ -477,19 +501,16 @@ func (s *Server) destroyGatedKeyHandle(_ context.Context, handle string) error {
 	if handle == "" {
 		return status.Error(codes.InvalidArgument, "missing key handle")
 	}
+	if handled, err := s.destroyHierarchyKey(handle, true); handled || err != nil {
+		return err
+	}
 	if s.store != nil {
-		if err := s.store.MarkDestroyed(handle); err != nil {
+		if err := s.store.markDestroyed(handle); err != nil {
 			return status.Errorf(codes.Internal, "persist destroyed-key tombstone: %v", err)
 		}
 	}
-	s.mu.Lock()
-	held, ok := s.keys[handle]
-	if ok {
-		delete(s.keys, handle)
-	}
-	delete(s.revocations, handle)
-	s.mu.Unlock()
-	if ok {
+	held := s.forgetKey(handle)
+	if held != nil {
 		held.signer.Destroy()
 		if s.store != nil {
 			if err := s.store.Remove(handle); err != nil {
@@ -498,6 +519,15 @@ func (s *Server) destroyGatedKeyHandle(_ context.Context, handle string) error {
 		}
 	}
 	return nil
+}
+
+func (s *Server) forgetKey(handle string) *heldKey {
+	s.mu.Lock()
+	held := s.keys[handle]
+	delete(s.keys, handle)
+	delete(s.revocations, handle)
+	s.mu.Unlock()
+	return held
 }
 
 // Health reports whether the server is serving or draining.
@@ -522,10 +552,6 @@ func (s *Server) Shutdown() {
 		held.signer.Destroy()
 		delete(s.keys, id)
 	}
-	for id, key := range s.importKeys {
-		key.Destroy()
-		delete(s.importKeys, id)
-	}
 	if s.kemCustody != nil {
 		s.kemCustody.DestroyAll()
 	}
@@ -546,6 +572,15 @@ func (s *Server) Shutdown() {
 func (s *Server) lookup(h *signerpb.KeyHandle) (*heldKey, error) {
 	if h == nil || h.GetId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing key handle")
+	}
+	if s.store != nil {
+		hierarchy, err := hierarchyCustodySlot(h.GetId())
+		if err != nil {
+			return nil, hierarchyCustodyStatus("resolve key handle", err)
+		}
+		if hierarchy {
+			return s.lookupHierarchyKey(h.GetId())
+		}
 	}
 	s.mu.Lock()
 	if s.store != nil {
@@ -585,4 +620,58 @@ func (s *Server) lookup(h *signerpb.KeyHandle) (*heldKey, error) {
 		}
 	}
 	return nil, status.Error(codes.NotFound, "unknown key handle")
+}
+
+func (s *Server) lookupHierarchyKey(handle string) (*heldKey, error) {
+	destroyed, err := s.store.IsDestroyed(handle)
+	if err != nil {
+		return nil, hierarchyCustodyStatus("read destroyed-key tombstone", err)
+	}
+	s.mu.Lock()
+	held := s.keys[handle]
+	if destroyed {
+		delete(s.keys, handle)
+	}
+	s.mu.Unlock()
+	if destroyed {
+		if held != nil {
+			held.signer.Destroy()
+		}
+		return nil, status.Error(codes.NotFound, "destroyed key handle")
+	}
+	if held != nil {
+		return held, nil
+	}
+	unlock, err := s.store.lockHierarchyCustody(handle)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, status.Error(codes.NotFound, "unknown key handle")
+	}
+	if err != nil {
+		return nil, hierarchyCustodyStatus("load key handle", err)
+	}
+	defer unlock()
+	s.mu.Lock()
+	held = s.keys[handle]
+	s.mu.Unlock()
+	if held != nil {
+		destroyed, err := s.store.IsDestroyed(handle)
+		if err != nil {
+			return nil, hierarchyCustodyStatus("read destroyed-key tombstone", err)
+		}
+		if destroyed {
+			return nil, status.Error(codes.NotFound, "destroyed key handle")
+		}
+		return held, nil
+	}
+	held, err = s.store.loadHierarchyKeyLocked(handle)
+	if err != nil {
+		return nil, hierarchyCustodyStatus("load key handle", err)
+	}
+	if held == nil {
+		return nil, status.Error(codes.NotFound, "unknown key handle")
+	}
+	s.mu.Lock()
+	s.keys[handle] = held
+	s.mu.Unlock()
+	return held, nil
 }

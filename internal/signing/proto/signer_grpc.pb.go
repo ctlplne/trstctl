@@ -63,6 +63,8 @@ const (
 	SignerService_RevokeKey_FullMethodName                     = "/trstctl.signing.v1.SignerService/RevokeKey"
 	SignerService_PrepareKeyImport_FullMethodName              = "/trstctl.signing.v1.SignerService/PrepareKeyImport"
 	SignerService_ImportWrappedKey_FullMethodName              = "/trstctl.signing.v1.SignerService/ImportWrappedKey"
+	SignerService_PrepareKeyImportV2_FullMethodName            = "/trstctl.signing.v1.SignerService/PrepareKeyImportV2"
+	SignerService_ImportWrappedKeyV2_FullMethodName            = "/trstctl.signing.v1.SignerService/ImportWrappedKeyV2"
 )
 
 // SignerServiceClient is the client API for SignerService service.
@@ -218,20 +220,15 @@ type SignerServiceClient interface {
 	// revocation holds: a repeat or redelivered request reads back the original
 	// operation, reason and time.
 	RevokeKey(ctx context.Context, in *RevokeKeyRequest, opts ...grpc.CallOption) (*RevokeKeyResponse, error)
-	// PrepareKeyImport returns the one-time import key for an operation (A128):
-	// an operator seals an existing private key to its public half on their own
-	// machine, so only sealed bytes cross the control plane. A repeat for the
-	// same operation returns the same import key until an import uses it. The
-	// import key is held sealed at rest like a signing key and is never a
-	// signing key.
+	// Retired v1 method. Kept on the wire to return FAILED_PRECONDITION to
+	// older clients before exposing an unsigned offer.
 	PrepareKeyImport(ctx context.Context, in *PrepareKeyImportRequest, opts ...grpc.CallOption) (*PrepareKeyImportResponse, error)
-	// ImportWrappedKey opens a sealed private key with the operation's import
-	// key, under a binding of the tenant, the operation and the public key the
-	// private key must match; refuses a key that does not match it or is weak;
-	// and keeps it under the requested handle with the requested constraints.
-	// Only the public key comes back. The plaintext exists inside the signer for
-	// the one call, and the import key is destroyed by the import that uses it.
+	// Retired v1 method. Returns FAILED_PRECONDITION before accessing custody.
 	ImportWrappedKey(ctx context.Context, in *ImportWrappedKeyRequest, opts ...grpc.CallOption) (*ImportWrappedKeyResponse, error)
+	// Authenticate the recipient and bind its exact CA policy. Separate
+	// methods make an older signer refuse the request before handling any key.
+	PrepareKeyImportV2(ctx context.Context, in *PrepareKeyImportV2Request, opts ...grpc.CallOption) (*PrepareKeyImportV2Response, error)
+	ImportWrappedKeyV2(ctx context.Context, in *ImportWrappedKeyV2Request, opts ...grpc.CallOption) (*ImportWrappedKeyV2Response, error)
 }
 
 type signerServiceClient struct {
@@ -575,6 +572,26 @@ func (c *signerServiceClient) ImportWrappedKey(ctx context.Context, in *ImportWr
 	return out, nil
 }
 
+func (c *signerServiceClient) PrepareKeyImportV2(ctx context.Context, in *PrepareKeyImportV2Request, opts ...grpc.CallOption) (*PrepareKeyImportV2Response, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareKeyImportV2Response)
+	err := c.cc.Invoke(ctx, SignerService_PrepareKeyImportV2_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) ImportWrappedKeyV2(ctx context.Context, in *ImportWrappedKeyV2Request, opts ...grpc.CallOption) (*ImportWrappedKeyV2Response, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ImportWrappedKeyV2Response)
+	err := c.cc.Invoke(ctx, SignerService_ImportWrappedKeyV2_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SignerServiceServer is the server API for SignerService service.
 // All implementations must embed UnimplementedSignerServiceServer
 // for forward compatibility.
@@ -728,20 +745,15 @@ type SignerServiceServer interface {
 	// revocation holds: a repeat or redelivered request reads back the original
 	// operation, reason and time.
 	RevokeKey(context.Context, *RevokeKeyRequest) (*RevokeKeyResponse, error)
-	// PrepareKeyImport returns the one-time import key for an operation (A128):
-	// an operator seals an existing private key to its public half on their own
-	// machine, so only sealed bytes cross the control plane. A repeat for the
-	// same operation returns the same import key until an import uses it. The
-	// import key is held sealed at rest like a signing key and is never a
-	// signing key.
+	// Retired v1 method. Kept on the wire to return FAILED_PRECONDITION to
+	// older clients before exposing an unsigned offer.
 	PrepareKeyImport(context.Context, *PrepareKeyImportRequest) (*PrepareKeyImportResponse, error)
-	// ImportWrappedKey opens a sealed private key with the operation's import
-	// key, under a binding of the tenant, the operation and the public key the
-	// private key must match; refuses a key that does not match it or is weak;
-	// and keeps it under the requested handle with the requested constraints.
-	// Only the public key comes back. The plaintext exists inside the signer for
-	// the one call, and the import key is destroyed by the import that uses it.
+	// Retired v1 method. Returns FAILED_PRECONDITION before accessing custody.
 	ImportWrappedKey(context.Context, *ImportWrappedKeyRequest) (*ImportWrappedKeyResponse, error)
+	// Authenticate the recipient and bind its exact CA policy. Separate
+	// methods make an older signer refuse the request before handling any key.
+	PrepareKeyImportV2(context.Context, *PrepareKeyImportV2Request) (*PrepareKeyImportV2Response, error)
+	ImportWrappedKeyV2(context.Context, *ImportWrappedKeyV2Request) (*ImportWrappedKeyV2Response, error)
 	mustEmbedUnimplementedSignerServiceServer()
 }
 
@@ -850,6 +862,12 @@ func (UnimplementedSignerServiceServer) PrepareKeyImport(context.Context, *Prepa
 }
 func (UnimplementedSignerServiceServer) ImportWrappedKey(context.Context, *ImportWrappedKeyRequest) (*ImportWrappedKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ImportWrappedKey not implemented")
+}
+func (UnimplementedSignerServiceServer) PrepareKeyImportV2(context.Context, *PrepareKeyImportV2Request) (*PrepareKeyImportV2Response, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareKeyImportV2 not implemented")
+}
+func (UnimplementedSignerServiceServer) ImportWrappedKeyV2(context.Context, *ImportWrappedKeyV2Request) (*ImportWrappedKeyV2Response, error) {
+	return nil, status.Error(codes.Unimplemented, "method ImportWrappedKeyV2 not implemented")
 }
 func (UnimplementedSignerServiceServer) mustEmbedUnimplementedSignerServiceServer() {}
 func (UnimplementedSignerServiceServer) testEmbeddedByValue()                       {}
@@ -1455,6 +1473,42 @@ func _SignerService_ImportWrappedKey_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SignerService_PrepareKeyImportV2_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareKeyImportV2Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).PrepareKeyImportV2(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_PrepareKeyImportV2_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).PrepareKeyImportV2(ctx, req.(*PrepareKeyImportV2Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_ImportWrappedKeyV2_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportWrappedKeyV2Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).ImportWrappedKeyV2(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_ImportWrappedKeyV2_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).ImportWrappedKeyV2(ctx, req.(*ImportWrappedKeyV2Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SignerService_ServiceDesc is the grpc.ServiceDesc for SignerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1589,6 +1643,14 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ImportWrappedKey",
 			Handler:    _SignerService_ImportWrappedKey_Handler,
+		},
+		{
+			MethodName: "PrepareKeyImportV2",
+			Handler:    _SignerService_PrepareKeyImportV2_Handler,
+		},
+		{
+			MethodName: "ImportWrappedKeyV2",
+			Handler:    _SignerService_ImportWrappedKeyV2_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

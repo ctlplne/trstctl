@@ -731,16 +731,24 @@ func componentSchemas() map[string]*Schema {
 		"ceremony_id": uuid(), "certificate_pem": str(), "parent_id": uuid(), "spec": ref("CASpec"),
 	}, "ceremony_id", "certificate_pem", "spec")
 	caKeyImportOffer := object(map[string]*Schema{
-		"ceremony_id": uuid(), "tenant_id": uuid(), "operation_id": str(),
-		"suite":               {Type: "string", Description: "The sealing scheme: HPKE base mode with MLKEM768-P256, HKDF-SHA256 and AES-256-GCM."},
-		"public_key":          {Type: "string", Format: "byte", Description: "The import key's public half, the bytes to seal the private key to."},
-		"expected_public_key": {Type: "string", Format: "byte", Description: "The certificate's PKIX public key; the private key must match it, and it is part of the sealing binding."},
-		"signer_handle":       str(),
+		"ceremony_id": uuid(), "tenant_id": uuid(), "operation_id": uuid(),
+		"version":               {Type: "integer", Description: "Authenticated import offer version. Current offers carry 2. Historical HTTP retry responses can omit the v2 fields."},
+		"suite":                 {Type: "string", Description: "The authenticated v2 profile uses HPKE base mode with ML-KEM-768/P-256, HKDF-SHA-256 and AES-256-GCM."},
+		"public_key":            {Type: "string", Format: "byte", Description: "The signer's one-time HPKE recipient public key, bound by the signature."},
+		"expected_public_key":   {Type: "string", Format: "byte", Description: "The approved certificate's PKIX public key. The imported private key must match it."},
+		"signer_handle":         str(),
+		"allowed_purposes":      {Type: "array", Items: &Schema{Type: "integer"}, Description: "Signed signer protocol purpose identifiers. Current CA import permits only CA_SIGN (1)."},
+		"allowed_hashes":        {Type: "array", Items: &Schema{Type: "integer"}, Description: "Signed signer protocol hash restrictions. The CA import's empty set keeps its current hash policy."},
+		"require_authorization": {Type: "boolean", Description: "Signed dual-control requirement. True for CA private-key import."},
+		"issued_at_unix":        {Type: "integer", Format: "int64", Description: "Issue time as Unix seconds."},
+		"expires_at_unix":       {Type: "integer", Format: "int64", Description: "Exclusive expiry as Unix seconds."},
+		"signer_public_key":     {Type: "string", Format: "byte", Description: "The offer identity's public PKIX key. Verify it against a fingerprint obtained separately from the signer host."},
+		"signature":             {Type: "string", Format: "byte", Description: "ASN.1 ECDSA P-256 signature over the authenticated offer transcript."},
 	}, "ceremony_id", "tenant_id", "operation_id", "suite", "public_key", "expected_public_key", "signer_handle")
 	caImportKeyReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "certificate_pem": str(), "parent_id": uuid(), "spec": ref("CASpec"),
-		"sealed_key": {Type: "string", Format: "byte", Description: "The PKCS#8 private key sealed to the offer on the operator's machine (trstctl-cli ca authorities wrap-key). Never the plaintext key."},
-	}, "ceremony_id", "certificate_pem", "spec", "sealed_key")
+		"sealed_key_v2": {Type: "string", Format: "byte", Description: "PKCS#8 private key sealed with the upgraded wrap-key CLI after authenticating the signer offer. Required for v2 import."},
+	}, "ceremony_id", "certificate_pem", "spec", "sealed_key_v2")
 	caRevocationReasons := []string{"key_compromise", "ca_compromise", "affiliation_changed", "superseded", "cessation_of_operation", "privilege_withdrawn"}
 	caAuthorityRevokeReq := object(map[string]*Schema{
 		"ceremony_id": uuid(),

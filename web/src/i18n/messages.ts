@@ -14013,7 +14013,7 @@ export const messages = {
   },
   "caHierarchy.existing.keyImportStepsHelp": {
     defaultMessage:
-      "After the approvals, download the import request, then run these commands where the CA's PKCS#8 private key file is. wrap-key checks the key is the certificate's before sealing it.",
+      "Set tenant_id to the approved tenant UUID and obtain signer_fingerprint directly from the trusted signer host. After approval, download the request and run these commands where you keep the CA private key. The signed offer expires after one hour.",
     description: "Explanation of the CLI steps that complete a CA key import.",
   },
   "caHierarchy.existing.keyImportDownload": {

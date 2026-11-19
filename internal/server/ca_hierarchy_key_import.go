@@ -53,8 +53,8 @@ func (h *caHierarchyService) approvedKeyImport(ctx context.Context, tenantID, ce
 	return expected, handle, nil
 }
 
-// PrepareKeyImport offers the signer's one-time import key for an approved
-// import_ca_key ceremony. A repeat offers the same key until an import uses it.
+// PrepareKeyImport relays the signer's authenticated one-time offer for an
+// approved import_ca_key ceremony.
 func (h *caHierarchyService) PrepareKeyImport(ctx context.Context, tenantID string, req api.CAKeyImportOfferRequest) (api.CAKeyImportOffer, error) {
 	ceremonyID := strings.TrimSpace(req.CeremonyID)
 	expected, handle, err := h.approvedKeyImport(ctx, tenantID, ceremonyID, req.CertificatePEM, req.ParentID, req.Spec)
@@ -65,13 +65,22 @@ func (h *caHierarchyService) PrepareKeyImport(ctx context.Context, tenantID stri
 	if client == nil {
 		return api.CAKeyImportOffer{}, api.ErrCAHierarchyUnavailable
 	}
-	suite, public, err := client.PrepareKeyImport(ctx, ceremonyID)
-	if err != nil {
+	policy := crypto.CAKeyImportPolicy(tenantID, ceremonyID, expected)
+	policy.Handle = handle
+	offer, err := client.PrepareKeyImport(ctx, policy)
+	switch status.Code(err) {
+	case codes.OK:
+	case codes.FailedPrecondition, codes.AlreadyExists:
+		return api.CAKeyImportOffer{}, fmt.Errorf("%w: %s", api.ErrCAHierarchyConflict, status.Convert(err).Message())
+	case codes.Unimplemented:
+		return api.CAKeyImportOffer{}, api.ErrCAImportSignerUpgrade
+	case codes.Unavailable, codes.ResourceExhausted:
+		return api.CAKeyImportOffer{}, api.ErrCAImportSignerBusy
+	default:
 		return api.CAKeyImportOffer{}, err
 	}
 	return api.CAKeyImportOffer{
-		CeremonyID: ceremonyID, TenantID: tenantID, OperationID: ceremonyID, Suite: suite,
-		PublicKey: public, ExpectedPublicKey: expected, SignerHandle: handle,
+		CeremonyID: ceremonyID, AuthenticatedKeyImportOffer: offer,
 	}, nil
 }
 
@@ -79,8 +88,8 @@ func (h *caHierarchyService) PrepareKeyImport(ctx context.Context, tenantID stri
 // approved chain to it and consumes the ceremony.
 func (h *caHierarchyService) ImportKey(ctx context.Context, tenantID string, req api.CAImportKeyRequest) (api.CAAuthority, error) {
 	ceremonyID := strings.TrimSpace(req.CeremonyID)
-	if len(req.SealedKey) == 0 {
-		return api.CAAuthority{}, fmt.Errorf("%w: sealed_key is required; seal the private key with trstctl-cli ca authorities wrap-key", api.ErrCAHierarchyInvalid)
+	if len(req.SealedKey) != 0 || len(req.SealedKeyV2) == 0 {
+		return api.CAAuthority{}, fmt.Errorf("%w: sealed_key_v2 is required; obtain a signed offer and use the upgraded trstctl-cli ca authorities wrap-key", api.ErrCAHierarchyInvalid)
 	}
 	expected, handle, err := h.approvedKeyImport(ctx, tenantID, ceremonyID, req.CertificatePEM, req.ParentID, req.Spec)
 	if err != nil {
@@ -90,16 +99,20 @@ func (h *caHierarchyService) ImportKey(ctx context.Context, tenantID string, req
 	if client == nil {
 		return api.CAAuthority{}, api.ErrCAHierarchyUnavailable
 	}
-	_, err = client.ImportDualControlKey(ctx, signing.KeyImport{
-		OperationID: ceremonyID, TenantID: tenantID, Handle: handle, SealedKey: req.SealedKey,
-		ExpectedPublicKey: expected, AllowedPurposes: []signing.KeyPurpose{signing.PurposeCASign},
-	}, signing.PurposeCASign, h.signAuthz)
+	policy := crypto.CAKeyImportPolicy(tenantID, ceremonyID, expected)
+	policy.Handle = handle
+	_, err = client.ImportDualControlKey(ctx, signing.KeyImport{Policy: policy, SealedKey: req.SealedKeyV2},
+		signing.PurposeCASign, h.signAuthz)
 	switch status.Code(err) {
 	case codes.OK:
 	case codes.InvalidArgument:
 		return api.CAAuthority{}, fmt.Errorf("%w: %s", api.ErrCAHierarchyInvalid, status.Convert(err).Message())
 	case codes.FailedPrecondition, codes.AlreadyExists:
 		return api.CAAuthority{}, fmt.Errorf("%w: %s", api.ErrCAHierarchyConflict, status.Convert(err).Message())
+	case codes.Unimplemented:
+		return api.CAAuthority{}, api.ErrCAImportSignerUpgrade
+	case codes.Unavailable, codes.ResourceExhausted:
+		return api.CAAuthority{}, api.ErrCAImportSignerBusy
 	default:
 		return api.CAAuthority{}, err
 	}

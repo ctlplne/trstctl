@@ -235,23 +235,28 @@ keeps refusing it. The first revocation holds: a repeat or redelivered request
 reads back the original operation, reason and time. The mark travels with the
 keystore in a full backup.
 
-`PrepareKeyImport` and `ImportWrappedKey` (A128) take an operator's existing
-private key into custody without its plaintext crossing the control plane.
-`PrepareKeyImport` returns a one-time import key for one operation (the
-control plane's ceremony): HPKE (RFC 9180) base mode with the MLKEM768-P256
-hybrid KEM, HKDF-SHA256 and AES-256-GCM, every component FIPS-approved. A
-persistent signer seals the import key's seed at rest beside the signing keys
-and links it into place exclusively, so every signer process sharing the
-keystore offers the same key and any of them can complete the import. The
-operator seals the PKCS#8 key to it on their own machine under a binding of
-the tenant, the operation and the public key the private key must match (the
-CA certificate's). `ImportWrappedKey` opens it inside the signer, refuses a key
-that does not open under that binding, does not match the expected public key,
-is weak, or is an algorithm the signer does not hold, keeps it under the
-requested handle with the requested purpose constraints (and dual control when
-asked), destroys the used import key, and returns only the public key. A retry
-after a lost response finds the key already held under its handle and returns
-it. Both RPCs count against the expensive-call bound.
+`PrepareKeyImportV2` and `ImportWrappedKeyV2` (A128) take an operator's existing
+CA key into custody. The signer seals the offer identity in a fixed file outside
+the generic key handle namespace. Its P-256 signature authenticates the one-time
+HPKE recipient, algorithms, one-hour validity, tenant, ceremony, canonical
+handle, expected SPKI and exact authorization policy. The offline CLI verifies
+the identity against an independently provisioned fingerprint. The retired v1
+methods return an upgrade error. Both v2 RPCs count against the expensive-call
+bound.
+
+The signer keeps one sealed preparation per canonical handle. On a qualifying
+POSIX store, a bounded set of shared locks orders preparation, installation,
+first load, revocation, and destruction across replicas. File fsync, exclusive
+hard-link publication and directory fsync make each result durable. A newly
+installed key carries a receipt over the approved policy and original ciphertext.
+Its authenticated envelope carries the public key so the terminal signer
+revocation can record its public result without opening imported private key
+material.
+Only the exact request can recover that result after a lost acknowledgement,
+including after offer expiry. An unrelated key or terminal marker fences replay.
+The signer retires the final and staged preparation names before it acknowledges
+success. A terminal retry can finish that cleanup by exact name after the key
+file is gone.
 
 ### 5.4 Limits and resource bounds
 

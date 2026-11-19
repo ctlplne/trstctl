@@ -3,6 +3,7 @@
 package signing
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
@@ -30,6 +32,11 @@ type KeyStore struct {
 	journalDirMu     sync.Mutex
 	journalParent    os.FileInfo
 	journalDirectory os.FileInfo
+
+	// Fault injection at the custody filesystem boundaries.
+	beforeHierarchySync     func() error
+	beforeHierarchyFileSync func(string) error
+	beforeHierarchyUnlink   func(string) error
 }
 
 // ErrDestroyedKeyHandle is a durable tombstone, not a transient persistence
@@ -95,10 +102,10 @@ var metaMagic = []byte("CSKM")
 // metaVersion is the current sealed-constraint header version. v1 framed only
 // purposes+hashes; v2 appends a one-byte flags field (bit 0 = dual-control /
 // requireAuth, RED-003); v3 appends a one-byte Algorithm enum so non-PKCS#8
-// licensed key bytes can be reconstructed after restart. Older files still decode
-// (requireAuth defaults false, algorithm defaults to legacy PKCS#8 inference), so
-// an existing keystore keeps working across the upgrade.
+// licensed key bytes can be reconstructed after restart. v4 appends a receipt
+// only for authenticated imports. Older files retain their original defaults.
 const metaVersion = 3
+const importReceiptMetaVersion = 4
 
 // flagRequireAuth is bit 0 of the v2 flags byte: the key is dual-control.
 const flagRequireAuth = 1 << 0
@@ -107,13 +114,17 @@ const flagOfflineOnly = 1 << 1
 // encodeConstraintMeta frames the usage constraints into a deterministic,
 // non-secret header: magic | version | nPurposes | purposes... | nHashes |
 // hashes... | flags | algorithm. Enum values are bounded small (<256), so each
-// fits in one byte. The trailing algorithm byte is the v3 addition.
+// fits in one byte. Receipt-bearing keys use v4 and append a 32-byte receipt.
 func encodeConstraintMeta(kc keyConstraints, algorithm signerpb.Algorithm) []byte {
 	purposes := kc.purposeList()
 	hashes := kc.hashList()
 	out := make([]byte, 0, len(metaMagic)+5+len(purposes)+len(hashes))
 	out = append(out, metaMagic...)
-	out = append(out, metaVersion)
+	version := byte(metaVersion)
+	if kc.importReceipt != [32]byte{} {
+		version = importReceiptMetaVersion
+	}
+	out = append(out, version)
 	out = append(out, byte(len(purposes))) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
 	for _, p := range purposes {
 		out = append(out, byte(p)) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
@@ -131,6 +142,9 @@ func encodeConstraintMeta(kc keyConstraints, algorithm signerpb.Algorithm) []byt
 	}
 	out = append(out, flags)
 	out = append(out, byte(algorithm)) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
+	if version == importReceiptMetaVersion {
+		out = append(out, kc.importReceipt[:]...)
+	}
 	return out
 }
 
@@ -149,7 +163,7 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, signerpb.Algorithm,
 		return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: truncated key metadata (version)")
 	}
 	ver := plaintext[off]
-	if ver < 1 || ver > metaVersion {
+	if (ver < 1 || ver > metaVersion) && ver != importReceiptMetaVersion {
 		return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, fmt.Errorf("signing: unsupported key metadata version %d", ver)
 	}
 	off++
@@ -204,6 +218,16 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, signerpb.Algorithm,
 		alg = signerpb.Algorithm(plaintext[off])
 		off++
 	}
+	if ver == importReceiptMetaVersion {
+		if len(plaintext)-off < len(kc.importReceipt) {
+			return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: truncated key import receipt")
+		}
+		off += copy(kc.importReceipt[:], plaintext[off:])
+		if kc.importReceipt == [32]byte{} || !kc.requireAuth || kc.offlineOnly || len(kc.hashes) != 0 ||
+			len(kc.purposes) != 1 || !kc.purposes[signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN] {
+			return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: invalid key import receipt or constraints")
+		}
+	}
 	return kc, alg, plaintext[off:], nil
 }
 
@@ -211,6 +235,18 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, signerpb.Algorithm,
 // the handle as AAD) and writes it 0600. The unsealed key copy lives only for the
 // moment of sealing, then is wiped (AN-8).
 func (ks *KeyStore) Save(handle string, ls signerKey, constraints keyConstraints) error {
+	hierarchy, err := hierarchyCustodySlot(handle)
+	if err != nil {
+		return err
+	}
+	if hierarchy {
+		unlock, err := ks.lockHierarchyWriter(handle)
+		if err != nil {
+			return err
+		}
+		defer unlock()
+		return ks.saveHierarchyKeyLocked(handle, ls, constraints)
+	}
 	staged, err := ks.stageSave(handle, ls, constraints)
 	if err != nil {
 		return err
@@ -236,19 +272,7 @@ type stagedSave struct {
 // concurrent destroy from being resurrected, so commit performs it.
 func (ks *KeyStore) stageSave(handle string, ls signerKey, constraints keyConstraints) (*stagedSave, error) {
 	stem := sanitizeHandle(handle)
-	keyBytes, err := privateKeyBytesForSealing(ls)
-	if err != nil {
-		return nil, err
-	}
-	defer secret.Wipe(keyBytes)
-	// Frame: metadata header || DER. The header is non-secret, but it shares the
-	// plaintext buffer with the key, so the whole buffer is wiped after sealing.
-	meta := encodeConstraintMeta(constraints, ks.keyFactory.ProtoFromAlgorithm(ls.Algorithm()))
-	plaintext := make([]byte, 0, len(meta)+len(keyBytes))
-	plaintext = append(plaintext, meta...)
-	plaintext = append(plaintext, keyBytes...)
-	defer secret.Wipe(plaintext)
-	sealed, err := seal.Seal(ks.wrapper, plaintext, []byte(stem))
+	sealed, err := ks.sealHeldKey(stem, ls, constraints)
 	if err != nil {
 		return nil, err
 	}
@@ -278,6 +302,30 @@ func (ks *KeyStore) stageSave(handle string, ls signerKey, constraints keyConstr
 		return nil, err
 	}
 	return &stagedSave{ks: ks, handle: handle, tmpPath: tmpName, finalPath: finalPath}, nil
+}
+
+func (ks *KeyStore) sealHeldKey(stem string, ls signerKey, constraints keyConstraints) ([]byte, error) {
+	keyBytes, err := privateKeyBytesForSealing(ls)
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(keyBytes)
+	// Frame: metadata header || DER. The header is non-secret, but it shares the
+	// plaintext buffer with the key, so the whole buffer is wiped after sealing.
+	meta := encodeConstraintMeta(constraints, ks.keyFactory.ProtoFromAlgorithm(ls.Algorithm()))
+	plaintext := make([]byte, 0, len(meta)+len(keyBytes))
+	plaintext = append(plaintext, meta...)
+	plaintext = append(plaintext, keyBytes...)
+	defer secret.Wipe(plaintext)
+	if constraints.importReceipt != [32]byte{} {
+		spki := ls.Public().DER
+		if err := crypto.ValidateKeyImportSPKI(spki); err != nil {
+			return nil, err
+		}
+		domain := append(installedImportDomain(stem), spki...)
+		return seal.SealDomain(ks.wrapper, plaintext, domain, domain)
+	}
+	return seal.Seal(ks.wrapper, plaintext, []byte(stem))
 }
 
 // commit checks the destroyed tombstone and, if the handle is still alive,
@@ -336,32 +384,16 @@ func (ks *KeyStore) Load() (map[string]*heldKey, error) {
 			continue
 		}
 		stem := strings.TrimSuffix(name, keyFileExt)
-		destroyed, err := ks.IsDestroyed(stem)
+		held, err := ks.LoadHandle(stem)
 		if err != nil {
+			for _, loaded := range out {
+				loaded.signer.Destroy()
+			}
 			return nil, err
 		}
-		if destroyed {
-			continue
+		if held != nil {
+			out[stem] = held
 		}
-		sealed, err := os.ReadFile(filepath.Join(ks.dir, name)) // #nosec G304 -- the signer's own keystore/journal directory from its config (CWE-22)
-		if err != nil {
-			return nil, err
-		}
-		plaintext, err := seal.Open(ks.wrapper, sealed, []byte(stem))
-		if err != nil {
-			return nil, fmt.Errorf("signing: open sealed key %q: %w", stem, err)
-		}
-		constraints, alg, privateKey, err := decodeConstraintMeta(plaintext)
-		if err != nil {
-			secret.Wipe(plaintext)
-			return nil, fmt.Errorf("signing: decode key metadata %q: %w", stem, err)
-		}
-		ls, err := ks.keyFactory.SigningKeyFromSealedBytes(alg, privateKey)
-		secret.Wipe(plaintext)
-		if err != nil {
-			return nil, fmt.Errorf("signing: load key %q: %w", stem, err)
-		}
-		out[stem] = &heldKey{signer: ls, constraints: constraints}
 	}
 	return out, nil
 }
@@ -375,6 +407,25 @@ func (ks *KeyStore) Load() (map[string]*heldKey, error) {
 // rather than reporting the handle missing. It opens only the named handle (not the
 // whole directory) so a runtime miss is a cheap, targeted read.
 func (ks *KeyStore) LoadHandle(handle string) (*heldKey, error) {
+	hierarchy, err := hierarchyCustodySlot(handle)
+	if err != nil {
+		return nil, err
+	}
+	if hierarchy {
+		unlock, err := ks.lockHierarchyCustody(handle)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		defer unlock()
+		return ks.loadHierarchyKeyLocked(handle)
+	}
+	return ks.loadUnfencedHandle(handle)
+}
+
+func (ks *KeyStore) loadUnfencedHandle(handle string) (*heldKey, error) {
 	stem := sanitizeHandle(handle)
 	destroyed, err := ks.IsDestroyed(handle)
 	if err != nil {
@@ -390,19 +441,48 @@ func (ks *KeyStore) LoadHandle(handle string) (*heldKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	plaintext, err := seal.Open(ks.wrapper, sealed, []byte(stem))
+	return ks.decodeHeldKey(stem, sealed)
+}
+
+func (ks *KeyStore) decodeHeldKey(stem string, sealed []byte) (*heldKey, error) {
+	plaintext, spki, err := ks.openHeldKey(stem, sealed)
 	if err != nil {
-		return nil, fmt.Errorf("signing: open sealed key %q: %w", stem, err)
+		return nil, err
 	}
+	defer secret.Wipe(plaintext)
+	return ks.decodeHeldKeyPlaintext(stem, plaintext, spki)
+}
+
+func (ks *KeyStore) openHeldKey(stem string, sealed []byte) (plaintext, spki []byte, err error) {
+	spki, domain, err := installedImportPublic(stem, sealed)
+	if err == nil {
+		if domain != nil {
+			plaintext, err = seal.OpenDomain(ks.wrapper, sealed, domain, domain)
+		} else {
+			plaintext, err = seal.Open(ks.wrapper, sealed, []byte(stem))
+		}
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("signing: open sealed key %q: %w", stem, err)
+	}
+	return plaintext, spki, nil
+}
+
+func (ks *KeyStore) decodeHeldKeyPlaintext(stem string, plaintext, spki []byte) (*heldKey, error) {
 	constraints, alg, privateKey, err := decodeConstraintMeta(plaintext)
 	if err != nil {
-		secret.Wipe(plaintext)
 		return nil, fmt.Errorf("signing: decode key metadata %q: %w", stem, err)
 	}
+	if (constraints.importReceipt != [32]byte{}) != (spki != nil) {
+		return nil, errors.New("signing: sealed key receipt does not match its custody format")
+	}
 	ls, err := ks.keyFactory.SigningKeyFromSealedBytes(alg, privateKey)
-	secret.Wipe(plaintext)
 	if err != nil {
 		return nil, fmt.Errorf("signing: load key %q: %w", stem, err)
+	}
+	if spki != nil && !bytes.Equal(ls.Public().DER, spki) {
+		ls.Destroy()
+		return nil, errors.New("signing: imported key does not match its authenticated public key")
 	}
 	return &heldKey{signer: ls, constraints: constraints}, nil
 }
@@ -416,10 +496,12 @@ func (ks *KeyStore) Remove(handle string) error {
 	return err
 }
 
-// MarkDestroyed durably prevents a signer replica from loading or continuing
+const destructionMarker = "trstctl-destroyed-key-v1\n"
+
+// markDestroyed durably prevents a signer replica from loading or continuing
 // to use a shared persisted handle. The marker is public state but lives in the
 // signer-owned 0700 keystore and is fsynced before local key zeroization.
-func (ks *KeyStore) MarkDestroyed(handle string) error {
+func (ks *KeyStore) markDestroyed(handle string) error {
 	stem := sanitizeHandle(handle)
 	if err := os.MkdirAll(ks.dir, 0o700); err != nil {
 		return err
@@ -432,7 +514,7 @@ func (ks *KeyStore) MarkDestroyed(handle string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := file.Write([]byte("trstctl-destroyed-key-v1\n")); err != nil {
+	if _, err := file.Write([]byte(destructionMarker)); err != nil {
 		_ = file.Close()
 		return err
 	}

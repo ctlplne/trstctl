@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3541 annotated sites across 35 rules. Each row is
+3540 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1451,11 +1451,11 @@ not this file.
 | `internal/server/secret_sync_source_sequence_test.go:72` | this fixture appends exactly two events. |
 | `internal/server/secrets_rotation_served_test.go:2589` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/totp_seed_replace_served_test.go:72` | a positive clock step in a test (CWE-190) |
-| `internal/signing/keystore.go:117` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
-| `internal/signing/keystore.go:119` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
-| `internal/signing/keystore.go:121` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
-| `internal/signing/keystore.go:123` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
-| `internal/signing/keystore.go:133` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/signing/keystore.go:128` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/signing/keystore.go:130` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/signing/keystore.go:132` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/signing/keystore.go:134` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/signing/keystore.go:144` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/slackapp/socket.go:207` | bounded by maxSocketMessage above (CWE-190) |
 | `internal/slackapp/socket.go:231` | n <= 0xFFFF here (CWE-190) |
 | `internal/slackapp/socket.go:234` | a length is non-negative (CWE-190) |
@@ -1857,7 +1857,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (447 sites)
+### G204 — CWE-78 OS command injection (452 sites)
 
 | Location | Reason |
 |---|---|
@@ -2089,6 +2089,10 @@ not this file.
 | `internal/server/aws_honeytoken_trail_served_test.go:41` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/backup_test.go:966` | fixed repository binary and test-owned destination (CWE-78) |
 | `internal/server/bundled_pg_dependency_test.go:19` | fixed local Go tool and package pattern (CWE-78) |
+| `internal/server/ca_hierarchy_key_import_served_test.go:99` | fixed tool and package targets, output to this test's temporary directory (CWE-78) |
+| `internal/server/ca_hierarchy_key_import_served_test.go:125` | this test executes a local signer it built in its private fixture (CWE-78) |
+| `internal/server/ca_hierarchy_key_import_served_test.go:155` | this test executes a local signer it built in its private fixture (CWE-78) |
+| `internal/server/ca_hierarchy_key_import_served_test.go:317` | the test compiles and executes the local CLI in an isolated fixture (CWE-78) |
 | `internal/server/ca_hierarchy_pqc_served_test.go:32` | LookPath-resolved OpenSSL with fixed arguments |
 | `internal/server/ca_hierarchy_pqc_served_test.go:41` | LookPath-resolved OpenSSL; arguments are test-owned paths and flags |
 | `internal/server/cbom_native_served_test.go:166` | resolved stock OpenSSL, fixed arguments and owned loopback fixture paths (CWE-78). |
@@ -2274,6 +2278,7 @@ not this file.
 | `internal/server/vault_dynamic_credentials_cloud_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:84` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/helpers_test.go:29` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/signing/keyimport_multiprocess_test.go:124` | test reexecutes its exact test binary with a fixed selector (CWE-78) |
 | `internal/signing/rewrap_binary_test.go:56` | the test's own freshly built signer binary (CWE-78) |
 | `internal/signing/static_test.go:41` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/supervisor.go:46` | spawns the repo's own signer binary; AN-4 child-process mode (CWE-78) |
@@ -2439,7 +2444,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (838 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (833 sites)
 
 | Location | Reason |
 |---|---|
@@ -2801,10 +2806,8 @@ not this file.
 | `internal/cli/assurance_verify.go:41` | operator-named local file (CWE-22) |
 | `internal/cli/assurance_verify.go:46` | operator-named local file (CWE-22) |
 | `internal/cli/audit_verify.go:203` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |
-| `internal/cli/ca_key_wrap.go:66` | operator-named local file (CWE-22) |
-| `internal/cli/ca_key_wrap.go:85` | operator-named local file (CWE-22) |
-| `internal/cli/ca_key_wrap.go:100` | operator-named local file (CWE-22) |
-| `internal/cli/ca_key_wrap_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/cli/ca_key_wrap.go:157` | operator-named local file (CWE-22) |
+| `internal/cli/ca_key_wrap_test.go:120` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/cbom_scan_test.go:32` | the test's own temp file (CWE-22) |
 | `internal/cli/cbom_verify.go:141` | operator-named local file (CWE-22) |
 | `internal/cli/cbom_verify_test.go:61` | a file this test wrote under t.TempDir (CWE-22) |
@@ -3139,20 +3142,17 @@ not this file.
 | `internal/signing/design_test.go:137` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:252` | exact signer-owned journal path. |
 | `internal/signing/hardening_contract_test.go:55` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/signing/keyimport.go:95` | path passed the explicit signer-keystore confinement check above (CWE-22) |
-| `internal/signing/keystore.go:346` | the signer's own keystore/journal directory from its config (CWE-22) |
-| `internal/signing/keystore.go:428` | path joins a sanitized handle to the signer-owned 0700 keystore (CWE-22). |
+| `internal/signing/keystore.go:510` | path joins a sanitized handle to the signer-owned 0700 keystore (CWE-22). |
 | `internal/signing/keystore_test.go:139` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/keystore_test.go:229` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/signing/legacy_migration.go:32` | signer operator supplies the one legacy migration path |
+| `internal/signing/legacy_migration.go:35` | signer operator supplies the one legacy migration path |
 | `internal/signing/managedkeys.go:359` | the signer's own journal directory from its config (CWE-22) |
 | `internal/signing/managedkeys.go:754` | the signer's own keystore/journal directory from its config (CWE-22) |
 | `internal/signing/managedkeys.go:897` | the signer's own keystore/journal directory from its config (CWE-22) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/offline_breakglass.go:290` | path is the signer-owned offline vault journal or kit (CWE-22) |
 | `internal/signing/offline_lock_unix.go:14` | fixed lock name under dedicated operator-selected offline vault (CWE-22) |
-| `internal/signing/revocation.go:105` | path passed the explicit signer-keystore confinement check above (CWE-22) |
-| `internal/signing/rewrap.go:231` | the operator's own key store and its staging copy (CWE-22) |
+| `internal/signing/revocation.go:113` | path passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/rewrap_binary_test.go:72` | the test's own temp key store (CWE-22) |
 | `internal/signing/rewrap_test.go:102` | the test's own temp key store (CWE-22) |
 | `internal/spireupstream/plugin.go:381` | operator-configured public CA bundle path (CWE-22) |
@@ -3640,7 +3640,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (173 sites)
+### G703 — CWE-22 Path traversal (taint) (172 sites)
 
 | Location | Reason |
 |---|---|
@@ -3782,12 +3782,11 @@ not this file.
 | `internal/server/ssh_trust_fleet_openssh_test.go:215` | retain the owned generated public certificate beside its fixture key; no external path input (CWE-22). |
 | `internal/server/vault_compat_served_test.go:195` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:156` | test reads the cluster CA its runner wrote (CWE-22) |
-| `internal/signing/keyimport.go:120` | path passed the explicit signer-keystore confinement check above (CWE-22) |
-| `internal/signing/keystore.go:306` | both absolute paths passed the explicit signer-keystore confinement check above (CWE-22) |
-| `internal/signing/keystore.go:317` | tmpPath passed the explicit signer-keystore confinement check above (CWE-22) |
-| `internal/signing/keystore.go:454` | path passed the explicit signer-keystore confinement check above (CWE-22) |
+| `internal/signing/keystore.go:354` | both absolute paths passed the explicit signer-keystore confinement check above (CWE-22) |
+| `internal/signing/keystore.go:365` | tmpPath passed the explicit signer-keystore confinement check above (CWE-22) |
+| `internal/signing/keystore.go:536` | path passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/keystore_test.go:233` | test path inside its own tempdir/checkout (CWE-22) |
-| `internal/signing/revocation.go:132` | path passed the explicit signer-keystore confinement check above (CWE-22) |
+| `internal/signing/revocation.go:148` | path passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/testutil/openssltest/openssltest.go:89` | test-support helper probing fixed well-known openssl paths; not linked into served binaries (CWE-22) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/tsa/http_test.go:112` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |

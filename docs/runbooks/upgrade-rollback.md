@@ -49,6 +49,37 @@ the event log. After upgrading again, reconcile the trust projection from
 that log and verify issuer and pin pairs before resuming. Rebuild the
 projection if an older projector processed events containing pins.
 
+## Authenticated CA key import
+
+Pause wrapped CA-key imports and drain in-flight ceremonies before upgrading.
+Upgrade every signer touching the keystore before enabling v2, then upgrade
+control-plane replicas and the CLI. A v2 request cannot use an old signer, and
+the upgraded signer rejects v1 preparation and ciphertext. An old offer or
+unfinished v1 wrapper file needs a fresh approved ceremony.
+Disable every older wrapping binary at the wrapping stations and discard cached
+unsigned offers before resuming. Upgrade the signer and CLI together before
+preparing replacement offers.
+
+On the signer host, [qualify shared storage and provision the offer
+identity](key-ceremony.md#obtain-the-signer-fingerprint). Keep the keystore and
+its wrapper under the signer account. Back up the existing key store with its
+wrapper and terminal markers. Transfer the fingerprint independently from the
+control-plane response. An exact retry of an installed v2 request uses the
+original sealed request and HTTP idempotency key, including after offer expiry.
+
+Keep every process that uses the live v2 keystore on a v2-aware build. Older
+signers do not understand the receipt-bearing key format or the shared
+publication guard. Reading retained v2 revocation results also requires an
+upgraded signer, including after destruction of the imported key. If rollback
+requires a pre-v2 signer after the first v2
+import, freeze custody changes and preserve the current store. Use a v2-aware
+signer alongside a compatible control plane for continued use of existing keys.
+Returning to the pre-upgrade backup loses signer custody changes made after
+that backup. Reconcile those changes and the event log before a restored
+environment can issue again. When rewrapping, stop every signer sharing the
+store, retain the rollback copy, and verify the signer fingerprint is the same
+after rewrap.
+
 ## Idempotency keys across this upgrade
 
 An idempotency key is a retry label. It tells trstctl that two copies of the

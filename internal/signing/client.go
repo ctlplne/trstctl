@@ -3,15 +3,17 @@
 package signing
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	"sync/atomic"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -500,35 +502,51 @@ func (c *Client) KeyRevoked(ctx context.Context, handle string) (bool, error) {
 // KeyImport is one sealed private key for the signer to take into custody
 // (A128): sealed on the operator's machine to the operation's import key.
 type KeyImport struct {
-	OperationID       string
-	TenantID          string
-	Handle            string
-	SealedKey         []byte
-	ExpectedPublicKey []byte
-	AllowedPurposes   []KeyPurpose
+	Policy    crypto.KeyImportPolicy
+	SealedKey []byte
 }
 
 // PrepareKeyImport asks the signer for an operation's one-time import key and
-// returns its sealing suite and public half.
-func (c *Client) PrepareKeyImport(ctx context.Context, operationID string) (string, []byte, error) {
-	resp, err := c.svc.PrepareKeyImport(ctx, &signerpb.PrepareKeyImportRequest{OperationId: operationID})
-	if err != nil {
-		return "", nil, err
+// returns the signed offer for verification on the operator's machine.
+func (c *Client) PrepareKeyImport(ctx context.Context, policy crypto.KeyImportPolicy) (crypto.AuthenticatedKeyImportOffer, error) {
+	if err := policy.Validate(); err != nil {
+		return crypto.AuthenticatedKeyImportOffer{}, err
 	}
-	return resp.GetSuite(), resp.GetPublicKey(), nil
+	resp, err := c.svc.PrepareKeyImportV2(ctx, &signerpb.PrepareKeyImportV2Request{
+		Version: crypto.KeyImportOfferVersion, Policy: keyImportPolicyProto(policy),
+	})
+	if err != nil {
+		return crypto.AuthenticatedKeyImportOffer{}, err
+	}
+	offer := crypto.AuthenticatedKeyImportOffer{
+		KeyImportPolicy: keyImportPolicyFromProto(resp.GetPolicy()), Version: resp.GetVersion(), Suite: resp.GetSuite(),
+		PublicKey: resp.GetPublicKey(), IssuedAt: resp.GetIssuedAtUnix(), ExpiresAt: resp.GetExpiresAtUnix(),
+		SignerPublicKey: resp.GetSignerPublicKey(), Signature: resp.GetSignature(),
+	}
+	if !offer.Equal(policy) || len(offer.Signature) == 0 {
+		return crypto.AuthenticatedKeyImportOffer{}, errors.New("signing: signer returned an incomplete or mismatched CA import offer")
+	}
+	if _, err := offer.HPKEInfo(); err != nil {
+		return crypto.AuthenticatedKeyImportOffer{}, err
+	}
+	return offer, nil
 }
 
 // ImportDualControlKey has the signer open a sealed private key and keep it as
 // a dual-control key bound to its allowed purposes, and returns a RemoteSigner
 // for it that asserts declaredPurpose and signs through authorizer.
 func (c *Client) ImportDualControlKey(ctx context.Context, in KeyImport, declaredPurpose KeyPurpose, authorizer SignTokenProvider) (*RemoteSigner, error) {
-	resp, err := c.svc.ImportWrappedKey(ctx, &signerpb.ImportWrappedKeyRequest{
-		OperationId: in.OperationID, TenantId: in.TenantID, SealedKey: in.SealedKey,
-		ExpectedPublicKey: in.ExpectedPublicKey, RequestedId: in.Handle,
-		AllowedPurposes: in.AllowedPurposes, RequireAuthorization: true,
+	if err := in.Policy.Validate(); err != nil {
+		return nil, err
+	}
+	resp, err := c.svc.ImportWrappedKeyV2(ctx, &signerpb.ImportWrappedKeyV2Request{
+		Version: crypto.KeyImportOfferVersion, Policy: keyImportPolicyProto(in.Policy), SealedKey: in.SealedKey,
 	})
 	if err != nil {
 		return nil, err
+	}
+	if resp.GetHandle().GetId() != in.Policy.Handle || !bytes.Equal(resp.GetPublicKey(), in.Policy.ExpectedPublicKey) {
+		return nil, errors.New("signing: installed CA key does not match the authenticated import policy")
 	}
 	alg, err := algorithmFromProto(resp.GetAlgorithm())
 	if err != nil {

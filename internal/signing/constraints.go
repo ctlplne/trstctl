@@ -36,6 +36,8 @@ type keyConstraints struct {
 	// break-glass procedure after it verifies custodian signatures. Generic Sign
 	// must refuse them even when a socket caller knows the handle.
 	offlineOnly bool
+	// importReceipt binds a v2 imported key to one exact approved request.
+	importReceipt [32]byte
 }
 
 // constraintsFromGenerate builds the constraint set declared on a GenerateKey

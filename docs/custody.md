@@ -22,6 +22,15 @@ A private key can be created in exactly three places in a trstctl deployment:
 - **The control plane** — the remaining legacy paths, each named below with what
   replaces it.
 
+An existing CA key can move from its operator into the isolated signer with
+[authenticated CA key import](runbooks/key-ceremony.md#procedure-importing-a-ca-with-its-existing-private-key).
+The offline CLI verifies the offer with an independently obtained signer
+fingerprint before it opens the key file. The control plane relays ciphertext.
+The signer seals the imported key under its existing wrapper, applies mandatory
+dual control, and retires the one-time recipient used to open the ciphertext.
+The offer-signing identity is a separate sealed P-256 key outside the generic
+key handle namespace.
+
 ## Per certificate and per kind
 
 The table below answers this per credential KIND, which is the right level for a

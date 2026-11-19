@@ -6,285 +6,248 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
-	"io"
 	"os"
-	"path/filepath"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
-// Wrapped key import (A128). An operator's existing private key reaches the
-// signer sealed to a one-time import key the signer holds for one operation
-// (the control plane's ceremony). The plaintext exists on the operator's
-// machine and inside this process for one call; the control plane relays only
-// sealed bytes. The import key is never a signing key, and the import that
-// uses it destroys it.
-
-const importKeyFileExt = ".import"
-
 // maxSealedImportKey bounds a sealed private key on the wire and on disk.
 const maxSealedImportKey = 64 << 10
 
-var errImportKeyExists = errors.New("signing: an import key already exists for this operation")
+const legacyImportRefusal = "authenticated CA key import v2 is required; upgrade the signer, control plane and CLI and prepare a new offer"
 
-func importKeyStem(operationID string) string {
-	return sanitizeHandle("key-import-" + operationID)
+func (s *Server) keyImportNow() time.Time {
+	if s.keyImportClock != nil {
+		return s.keyImportClock()
+	}
+	return time.Now()
 }
 
-func importKeyAAD(stem string) []byte {
-	return []byte("trstctl.key-import\x00" + stem)
+// PrepareKeyImport keeps the old wire method available to report the upgrade
+// requirement explicitly before exposing any legacy offer.
+func (s *Server) PrepareKeyImport(context.Context, *signerpb.PrepareKeyImportRequest) (*signerpb.PrepareKeyImportResponse, error) {
+	return nil, status.Error(codes.FailedPrecondition, legacyImportRefusal)
 }
 
-// SaveImportKey seals an import key's seed at rest and links it into place
-// exclusively: the first import key saved for an operation is the one every
-// signer process sharing the keystore reads.
-func (ks *KeyStore) SaveImportKey(operationID string, seed []byte) error {
-	stem := importKeyStem(operationID)
-	path, err := confinedKeystorePath(ks.dir, filepath.Join(ks.dir, stem+importKeyFileExt))
-	if err != nil {
-		return err
-	}
-	sealed, err := seal.Seal(ks.wrapper, seed, importKeyAAD(stem))
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(ks.dir, 0o700); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(ks.dir, ".importing-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-	if _, err := tmp.Write(sealed); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Link(tmpPath, path); err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return errImportKeyExists
-		}
-		return err
-	}
-	return syncDirectory(ks.dir)
+// ImportWrappedKey refuses legacy ciphertext before reading key custody.
+func (s *Server) ImportWrappedKey(context.Context, *signerpb.ImportWrappedKeyRequest) (*signerpb.ImportWrappedKeyResponse, error) {
+	return nil, status.Error(codes.FailedPrecondition, legacyImportRefusal)
 }
 
-// LoadImportKey opens an operation's sealed import key seed. The caller wipes
-// the seed.
-func (ks *KeyStore) LoadImportKey(operationID string) ([]byte, bool, error) {
-	stem := importKeyStem(operationID)
-	path, err := confinedKeystorePath(ks.dir, filepath.Join(ks.dir, stem+importKeyFileExt))
-	if err != nil {
-		return nil, false, err
+func (s *Server) lockKeyImport(policy crypto.KeyImportPolicy) (func(), error) {
+	if err := policy.Validate(); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	file, err := os.Open(path) // #nosec G304 -- path passed the explicit signer-keystore confinement check above (CWE-22)
+	if s.store == nil || s.authorizer == nil {
+		return nil, status.Error(codes.FailedPrecondition, "CA key import requires a persistent signer and a configured dual-control authorizer")
+	}
+	unlock, err := s.store.lockHierarchyCustody(policy.Handle)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, false, nil
+		return nil, status.Error(codes.FailedPrecondition, "provision the CA import offer identity on the signer host first")
 	}
 	if err != nil {
-		return nil, false, err
+		return nil, hierarchyCustodyStatus("lock CA import storage", err)
 	}
-	defer func() { _ = file.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(file, maxSealedImportKey+1))
-	if err != nil {
-		return nil, true, err
+	if err := s.store.hierarchyStanding(policy.Handle); err != nil {
+		unlock()
+		return nil, hierarchyCustodyStatus("check CA import handle", err)
 	}
-	if len(raw) > maxSealedImportKey {
-		return nil, true, fmt.Errorf("signing: sealed import key for %q is oversized", operationID)
-	}
-	seed, err := seal.Open(ks.wrapper, raw, importKeyAAD(stem))
-	return seed, true, err
+	return unlock, nil
 }
 
-// RemoveImportKey deletes an operation's used import key.
-func (ks *KeyStore) RemoveImportKey(operationID string) error {
-	path, err := confinedKeystorePath(ks.dir, filepath.Join(ks.dir, importKeyStem(operationID)+importKeyFileExt))
+// PrepareKeyImportV2 returns the exact signed offer retained for the approved
+// policy. The same guard orders preparations and every writer of the handle.
+func (s *Server) PrepareKeyImportV2(_ context.Context, req *signerpb.PrepareKeyImportV2Request) (*signerpb.PrepareKeyImportV2Response, error) {
+	if req.GetVersion() != crypto.KeyImportOfferVersion {
+		return nil, status.Error(codes.InvalidArgument, "CA key import requires protocol version 2")
+	}
+	policy := keyImportPolicyFromProto(req.GetPolicy())
+	unlock, err := s.lockKeyImport(policy)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) { // #nosec G703 -- path passed the explicit signer-keystore confinement check above (CWE-22)
-		return err
-	}
-	return syncDirectory(ks.dir)
-}
+	defer unlock()
 
-// loadImportKey returns the operation's import key and the release to call
-// when done with it.
-func (s *Server) loadImportKey(operationID string) (*crypto.KeyImportKey, func(), bool, error) {
-	if s.store == nil {
-		key := s.importKeys[operationID]
-		return key, func() {}, key != nil, nil
-	}
-	seed, found, err := s.store.LoadImportKey(operationID)
-	if err != nil || !found {
-		return nil, nil, found, err
-	}
-	defer secret.Wipe(seed)
-	key, err := crypto.NewKeyImportKey(seed)
+	exists, err := s.store.hierarchyEntryExists(policy.Handle + keyFileExt)
 	if err != nil {
-		return nil, nil, true, err
+		return nil, hierarchyCustodyStatus("check CA import slot", err)
 	}
-	return key, key.Destroy, true, nil
-}
+	if exists {
+		return nil, status.Error(codes.AlreadyExists, "key handle already exists")
+	}
+	identity, err := s.store.loadKeyImportIdentity()
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "load the signer-host CA import identity: %v", err)
+	}
+	defer identity.Destroy()
 
-// dropImportKey destroys an operation's used import key.
-func (s *Server) dropImportKey(operationID string) error {
-	if s.store == nil {
-		if key := s.importKeys[operationID]; key != nil {
-			key.Destroy()
+	prepared, err := s.store.loadKeyImportPreparation(policy.Handle)
+	if err != nil {
+		return nil, hierarchyCustodyStatus("load CA import preparation", err)
+	}
+	stage := keyImportPreparationName(policy.Handle) + custodyStageExt
+	if prepared.recipient != nil {
+		defer prepared.recipient.Destroy()
+		if _, err := verifyPreparedKeyImport(policy, prepared.offer, crypto.SHA256Hex(identity.Public().DER), s.keyImportNow()); err != nil {
+			return nil, err
 		}
-		delete(s.importKeys, operationID)
-		return nil
+		if err := s.store.retireCustodyNames(stage); err != nil {
+			return nil, hierarchyCustodyStatus("sync CA import preparation", err)
+		}
+		if s.keyImportNow().Unix() >= prepared.offer.ExpiresAt {
+			return nil, status.Error(codes.FailedPrecondition, "CA import offer expired; start a new approved ceremony")
+		}
+		return prepareKeyImportProto(prepared.offer), nil
 	}
-	return s.store.RemoveImportKey(operationID)
+
+	if err := s.store.retireCustodyNames(stage); err != nil {
+		return nil, hierarchyCustodyStatus("retire incomplete CA import preparation", err)
+	}
+	recipient, err := crypto.GenerateKeyImportKey()
+	if err != nil {
+		return nil, hierarchyCustodyStatus("generate CA import recipient", err)
+	}
+	defer recipient.Destroy()
+	offer, err := crypto.SignKeyImportOffer(policy, recipient.Public(), s.keyImportNow(), identity)
+	if err != nil {
+		return nil, hierarchyCustodyStatus("sign CA import offer", err)
+	}
+	if err := s.store.saveKeyImportPreparation(keyImportPreparation{offer: offer, recipient: recipient}); err != nil {
+		return nil, hierarchyCustodyStatus("persist CA import preparation", err)
+	}
+	if s.keyImportNow().Unix() >= offer.ExpiresAt {
+		return nil, status.Error(codes.FailedPrecondition, "CA import offer expired; start a new approved ceremony")
+	}
+	return prepareKeyImportProto(offer), nil
 }
 
-// PrepareKeyImport returns the operation's one-time import key, creating it on
-// the first call.
-func (s *Server) PrepareKeyImport(_ context.Context, req *signerpb.PrepareKeyImportRequest) (*signerpb.PrepareKeyImportResponse, error) {
-	operationID := req.GetOperationId()
-	if !validOperationID(operationID) {
-		return nil, status.Error(codes.InvalidArgument, "key import needs an operation id")
+func verifyPreparedKeyImport(policy crypto.KeyImportPolicy, offer crypto.AuthenticatedKeyImportOffer, pin string, now time.Time) ([]byte, error) {
+	if !offer.Equal(policy) {
+		return nil, status.Error(codes.InvalidArgument, "CA key import request differs from its prepared policy")
 	}
-	s.importMu.Lock()
-	defer s.importMu.Unlock()
-	key, release, found, err := s.loadImportKey(operationID)
+	info, err := offer.Verify(pin, now)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "read import key: %v", err)
+		return nil, status.Errorf(codes.FailedPrecondition, "verify prepared CA import offer: %v", err)
 	}
-	if found {
-		defer release()
-		return &signerpb.PrepareKeyImportResponse{Suite: crypto.KeyImportSuite, PublicKey: key.Public()}, nil
+	return info, nil
+}
+
+// ImportWrappedKeyV2 opens ciphertext only with a live, signed preparation for
+// the exact approved policy. Installed keys replay only their exact receipt.
+func (s *Server) ImportWrappedKeyV2(_ context.Context, req *signerpb.ImportWrappedKeyV2Request) (*signerpb.ImportWrappedKeyV2Response, error) {
+	if req.GetVersion() != crypto.KeyImportOfferVersion {
+		return nil, status.Error(codes.InvalidArgument, "CA key import requires protocol version 2")
 	}
-	key, err = crypto.GenerateKeyImportKey()
+	encryptedKey := req.GetSealedKey()
+	if len(encryptedKey) == 0 || len(encryptedKey) > maxSealedImportKey {
+		return nil, status.Error(codes.InvalidArgument, "CA key import requires bounded v2 ciphertext")
+	}
+	policy := keyImportPolicyFromProto(req.GetPolicy())
+	unlock, err := s.lockKeyImport(policy)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "generate import key: %v", err)
+		return nil, err
 	}
-	if s.store == nil {
-		s.importKeys[operationID] = key
-		return &signerpb.PrepareKeyImportResponse{Suite: crypto.KeyImportSuite, PublicKey: key.Public()}, nil
+	defer unlock()
+
+	receipt := policy.Receipt(encryptedKey)
+	held, err := s.store.readHierarchyKeyLocked(policy.Handle)
+	if err != nil {
+		return nil, hierarchyCustodyStatus("load installed CA import key", err)
+	}
+	if held != nil {
+		defer held.signer.Destroy()
+		if held.constraints.importReceipt != receipt || !bytes.Equal(held.signer.Public().DER, policy.ExpectedPublicKey) {
+			return nil, status.Error(codes.AlreadyExists, "key handle already exists for a different request")
+		}
+		return s.finishKeyImportLocked(policy.Handle, held.signer)
+	}
+
+	pin, err := s.store.KeyImportIdentityFingerprint()
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "load the signer-host CA import identity: %v", err)
+	}
+	prepared, err := s.store.loadKeyImportPreparation(policy.Handle)
+	if err != nil {
+		return nil, hierarchyCustodyStatus("load CA import preparation", err)
+	}
+	if prepared.recipient == nil {
+		return nil, status.Error(codes.FailedPrecondition, "prepare a signed CA import offer first")
+	}
+	defer prepared.recipient.Destroy()
+	info, err := verifyPreparedKeyImport(policy, prepared.offer, pin, s.keyImportNow())
+	if err != nil {
+		return nil, err
+	}
+	if s.keyImportNow().Unix() >= prepared.offer.ExpiresAt {
+		return nil, status.Error(codes.FailedPrecondition, "CA import offer expired; start a new approved ceremony")
+	}
+	if s.beforeImportOpen != nil {
+		s.beforeImportOpen()
+	}
+	key, err := openImportedCAKey(prepared.recipient, info, encryptedKey, policy.ExpectedPublicKey)
+	if err != nil {
+		return nil, err
 	}
 	defer key.Destroy()
-	seed, err := key.Seed()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "read import key: %v", err)
+	if s.keyspec.ProtoFromAlgorithm(key.Algorithm()) == signerpb.Algorithm_ALGORITHM_UNSPECIFIED {
+		return nil, status.Error(codes.InvalidArgument, "the sealed key's algorithm is not one this signer holds")
 	}
-	defer secret.Wipe(seed)
-	switch err := s.store.SaveImportKey(operationID, seed); {
-	case errors.Is(err, errImportKeyExists):
-		// Another signer process sharing the keystore saved one first: offer it.
-		winner, release, _, err := s.loadImportKey(operationID)
-		if err != nil || winner == nil {
-			return nil, status.Errorf(codes.Internal, "read import key: %v", err)
-		}
-		defer release()
-		return &signerpb.PrepareKeyImportResponse{Suite: crypto.KeyImportSuite, PublicKey: winner.Public()}, nil
-	case err != nil:
-		return nil, status.Errorf(codes.Internal, "persist import key: %v", err)
+	check := ceremonyCheck
+	if s.checkImportedKey != nil {
+		check = s.checkImportedKey
 	}
-	return &signerpb.PrepareKeyImportResponse{Suite: crypto.KeyImportSuite, PublicKey: key.Public()}, nil
+	if err := check(key); err != nil {
+		return nil, status.Error(codes.Internal, "key ceremony check failed")
+	}
+	constraints := keyConstraints{
+		purposes:    map[signerpb.KeyPurpose]bool{signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN: true},
+		requireAuth: true, importReceipt: receipt,
+	}
+	if err := s.store.saveHierarchyKeyLocked(policy.Handle, key, constraints); err != nil {
+		return nil, hierarchyCustodyStatus("persist CA import key", err)
+	}
+	return s.finishKeyImportLocked(policy.Handle, key)
 }
 
-// ImportWrappedKey opens a sealed private key with the operation's import key
-// and keeps it under the requested handle.
-func (s *Server) ImportWrappedKey(_ context.Context, req *signerpb.ImportWrappedKeyRequest) (*signerpb.ImportWrappedKeyResponse, error) {
-	operationID, handle := req.GetOperationId(), req.GetRequestedId()
-	if !validOperationID(operationID) || req.GetTenantId() == "" || handle == "" ||
-		len(req.GetSealedKey()) == 0 || len(req.GetSealedKey()) > maxSealedImportKey || len(req.GetExpectedPublicKey()) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "key import needs an operation, tenant, handle, sealed key and expected public key")
-	}
-	constraints, err := constraintsFromGenerate(&signerpb.GenerateKeyRequest{
-		AllowedPurposes: req.GetAllowedPurposes(), AllowedHashes: req.GetAllowedHashes(),
-	})
+func openImportedCAKey(recipient *crypto.KeyImportKey, info, ciphertext, expectedSPKI []byte) (*crypto.LockedSigner, error) {
+	plaintext, err := recipient.Open(info, ciphertext)
 	if err != nil {
-		return nil, err
-	}
-	if req.GetRequireAuthorization() {
-		if s.authorizer == nil {
-			return nil, status.Error(codes.FailedPrecondition,
-				"dual-control key requested but this signer has no authorizer configured")
-		}
-		constraints.requireAuth = true
-	}
-	s.importMu.Lock()
-	defer s.importMu.Unlock()
-	// A retry after a lost response finds the key already held under its handle.
-	if held, err := s.lookup(&signerpb.KeyHandle{Id: handle}); err == nil {
-		if !bytes.Equal(held.signer.Public().DER, req.GetExpectedPublicKey()) {
-			return nil, status.Error(codes.AlreadyExists, "key handle already exists")
-		}
-		return importResponse(s, handle, held.signer), nil
-	} else if status.Code(err) != codes.NotFound {
-		return nil, err
-	}
-	key, release, found, err := s.loadImportKey(operationID)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "read import key: %v", err)
-	}
-	if !found {
-		return nil, status.Error(codes.FailedPrecondition, "no import key for this operation; prepare one first")
-	}
-	defer release()
-	plaintext, err := key.Open(crypto.KeyImportInfo(req.GetTenantId(), operationID, req.GetExpectedPublicKey()), req.GetSealedKey())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "the sealed key does not open under this operation's import key and binding")
+		return nil, status.Error(codes.InvalidArgument, "the sealed key does not open under the prepared CA import offer")
 	}
 	defer secret.Wipe(plaintext)
-	ls, err := crypto.LockedKeyFromPKCS8(plaintext)
+	key, err := crypto.LockedKeyFromPKCS8(plaintext)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "the sealed key is not a PKCS#8 signing key")
 	}
-	refuse := func(code codes.Code, msg string) (*signerpb.ImportWrappedKeyResponse, error) {
-		ls.Destroy()
-		return nil, status.Error(code, msg)
+	if err := crypto.RefuseWeakKey(key.Public()); err != nil {
+		key.Destroy()
+		return nil, status.Error(codes.InvalidArgument, "the sealed key is weak: "+err.Error())
 	}
-	if s.keyspec.ProtoFromAlgorithm(ls.Algorithm()) == signerpb.Algorithm_ALGORITHM_UNSPECIFIED {
-		return refuse(codes.InvalidArgument, "the sealed key's algorithm is not one this signer holds")
+	if !bytes.Equal(key.Public().DER, expectedSPKI) {
+		key.Destroy()
+		return nil, status.Error(codes.InvalidArgument, "the sealed key does not match the expected public key")
 	}
-	if err := crypto.RefuseWeakKey(ls.Public()); err != nil {
-		return refuse(codes.InvalidArgument, "the sealed key is weak: "+err.Error())
-	}
-	if !bytes.Equal(ls.Public().DER, req.GetExpectedPublicKey()) {
-		return refuse(codes.InvalidArgument, "the sealed key does not match the expected public key")
-	}
-	if err := ceremonyCheck(ls); err != nil {
-		return refuse(codes.Internal, "key ceremony check failed")
-	}
-	if err := s.mintHeldKey(handle, &heldKey{signer: ls, constraints: constraints}); err != nil {
-		ls.Destroy()
-		switch {
-		case errors.Is(err, errKeyHandleExists):
-			return nil, status.Error(codes.AlreadyExists, "key handle already exists")
-		case errors.Is(err, ErrDestroyedKeyHandle):
-			return nil, status.Error(codes.FailedPrecondition, ErrDestroyedKeyHandle.Error())
-		default:
-			return nil, status.Errorf(codes.Internal, "persist key: %v", err)
-		}
-	}
-	if err := s.dropImportKey(operationID); err != nil {
-		return nil, status.Errorf(codes.Internal, "destroy the used import key: %v", err)
-	}
-	return importResponse(s, handle, ls), nil
+	return key, nil
 }
 
-func importResponse(s *Server, handle string, key signerKey) *signerpb.ImportWrappedKeyResponse {
-	return &signerpb.ImportWrappedKeyResponse{
+func (s *Server) finishKeyImportLocked(handle string, key signerKey) (*signerpb.ImportWrappedKeyV2Response, error) {
+	if err := s.store.retireCustodyNames(handle + keyFileExt + custodyStageExt); err != nil {
+		return nil, hierarchyCustodyStatus("sync installed CA import key", err)
+	}
+	if err := s.store.retireKeyImportPreparation(handle); err != nil {
+		return nil, hierarchyCustodyStatus("retire CA import preparation", err)
+	}
+	if err := s.store.hierarchyStanding(handle); err != nil {
+		return nil, hierarchyCustodyStatus("check installed CA import key", err)
+	}
+	return &signerpb.ImportWrappedKeyV2Response{
 		Handle: &signerpb.KeyHandle{Id: handle}, Algorithm: s.keyspec.ProtoFromAlgorithm(key.Algorithm()),
 		PublicKey: key.Public().DER,
-	}
+	}, nil
 }

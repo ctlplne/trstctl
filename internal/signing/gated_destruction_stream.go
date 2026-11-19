@@ -96,6 +96,9 @@ func (s *Server) GatedDestroyStream(stream signerpb.SignerService_GatedDestroySt
 		if errors.Is(err, ErrNoGatedDestroyer) {
 			return status.Error(codes.Unimplemented, err.Error())
 		}
+		if status.Code(err) == codes.Unavailable {
+			return err
+		}
 		return status.Errorf(codes.FailedPrecondition, "gated destroy stream: %v", err)
 	}
 	if err := stream.SendAndClose(&signerpb.GatedDestroyStreamResponse{
