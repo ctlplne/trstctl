@@ -55,6 +55,11 @@ works for anything from a 4 KB manifest to a 4 GB image. Two modes:
   command; the handle derives deterministically from the operation ID even if a crash
   loses the in-memory value first. Cleanup is idempotent and records
   `codesign.ephemeral.destroyed`, so a crash cannot strand an ephemeral handle.
+  For GitHub, the tenant can pin signed owner IDs, repository IDs, or both.
+  An owner name is an additional condition on that issuer's ID policy. A
+  legacy name-only configuration stays unavailable for GitHub keyless
+  signing until the operator adds an ID pin. Successful
+  `codesign.keyless.signed` events include the verified IDs when present.
   The service records the verified OIDC issuer and identity as Fulcio binding
   metadata. It does not request a Fulcio certificate or return a portable
   attestation of that identity. The proof itself is not sent to Fulcio or Rekor.

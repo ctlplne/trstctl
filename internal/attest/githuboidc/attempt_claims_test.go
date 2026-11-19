@@ -23,10 +23,14 @@ func testIssuer(t *testing.T) (*githuboidc.Attestor, func(map[string]any) []byte
 	if err != nil {
 		t.Fatal(err)
 	}
-	attestor := &githuboidc.Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{key}}, Audience: "trstctl", AllowedOwners: map[string]bool{"acme": true}}
+	attestor := &githuboidc.Attestor{
+		JWKS: crypto.JWKS{Keys: []crypto.JWK{key}}, Audience: "trstctl",
+		AllowedOwners: map[string]bool{"acme": true}, AllowedOwnerIDs: map[string]bool{"123": true},
+	}
 	sign := func(changes map[string]any) []byte {
 		t.Helper()
 		claims := map[string]any{"iss": githuboidc.DefaultIssuer, "aud": "trstctl", "sub": "repo:acme/payments:ref:refs/heads/main", "repository": "acme/payments", "repository_owner": "acme", "workflow": "deploy", "ref": "refs/heads/main", "job_workflow_ref": "acme/payments/.github/workflows/deploy.yml@refs/heads/main", "exp": time.Now().Add(time.Minute).Unix(), "run_id": "47001", "run_attempt": "1"}
+		claims["repository_owner_id"] = "123"
 		for name, value := range changes {
 			if value == nil {
 				delete(claims, name)

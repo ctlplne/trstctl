@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Ban, Network, Plus, RefreshCw, RotateCw, ServerOff, ShieldAlert, Trash2, Waypoints } from "lucide-react";
+import { z } from "zod";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
@@ -41,7 +42,15 @@ import type { MessageKey } from "@/i18n/messages";
 type SafeAttestation = Pick<Attestation, "id" | "method" | "selectors" | "subject" | "verified_at">;
 type AttestedSVIDRow = Pick<AttestedSVID, "credential_id" | "not_after" | "subject"> & { attestation: SafeAttestation };
 type TrustSourceMethod = WorkloadAttesterTrustSourceRequest["method"];
-type TrustSourceStatusLabels = { pending: string; revoked: string; disabled: string; enabled: string };
+type TrustSourceStatusLabels = { pending: string; revoked: string; disabled: string; enabled: string; pinRequired: string };
+
+const githubPinFields = ["allowed_owner_ids", "allowed_repository_ids"] as const;
+const githubPinID = z.string().refine((id) => /^[1-9][0-9]{0,19}$/.test(id) && (id.length < 20 || id <= "18446744073709551615"));
+const githubPinFieldsSchema = z.object({
+  allowed_owner_ids: z.array(githubPinID),
+  allowed_repository_ids: z.array(githubPinID),
+});
+type GitHubPinFields = z.infer<typeof githubPinFieldsSchema>;
 
 type WorkloadOverviewState = {
   agents: Agent[] | null;
@@ -148,6 +157,7 @@ export function Workloads() {
   const [attestedSVIDs, setAttestedSVIDs] = useState<AttestedSVIDRow[]>([]);
   const [attesterTrustSources, setAttesterTrustSources] = useState<WorkloadAttesterTrustSource[]>([]);
   const [trustSourceMethod, setTrustSourceMethod] = useState<TrustSourceMethod>("k8s_sat");
+  const [githubPinErrors, setGitHubPinErrors] = useState<Partial<Record<keyof GitHubPinFields, string>>>({});
   const [rotateTrustSourceID, setRotateTrustSourceID] = useState("");
   const [showTrustSourceSetup, setShowTrustSourceSetup] = useState(() => searchParams.get("workflow") === "attester-trust");
   const [showTrustSourceRotation, setShowTrustSourceRotation] = useState(false);
@@ -343,10 +353,29 @@ export function Workloads() {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    setBusy("trust-create");
     setTrustSourceError(null);
+    setGitHubPinErrors({});
+    let pins: GitHubPinFields | undefined;
+    if (trustSourceMethod === "github_oidc") {
+      const result = githubPinFieldsSchema.safeParse({
+        allowed_owner_ids: splitFormList(data, "allowed_owner_ids"),
+        allowed_repository_ids: splitFormList(data, "allowed_repository_ids"),
+      });
+      if (!result.success) {
+        const errors: Partial<Record<keyof GitHubPinFields, string>> = {};
+        for (const field of githubPinFields) {
+          if (result.error.issues.some((issue) => issue.path[0] === field)) {
+            errors[field] = t("workloads.attestation.invalidGitHubID");
+          }
+        }
+        setGitHubPinErrors(errors);
+        return;
+      }
+      pins = result.data;
+    }
+    setBusy("trust-create");
     try {
-      const source = await api.createWorkloadAttesterTrustSource(trustSourceRequestFromForm(data, trustSourceMethod));
+      const source = await api.createWorkloadAttesterTrustSource({ ...trustSourceRequestFromForm(data, trustSourceMethod), ...pins });
       upsertTrustSource(source);
       form.reset();
       setTrustSourceMethod("k8s_sat");
@@ -1150,13 +1179,20 @@ export function Workloads() {
               />
             </label>
             {trustSourceMethod === "github_oidc" ? (
-              <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                <label className="grid gap-1 text-sm font-medium">
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label={t("workloads.attestation.allowedOwnerIDs")} error={githubPinErrors.allowed_owner_ids}>
+                  {(control) => <Input {...control} name="allowed_owner_ids" />}
+                </Field>
+                <Field label={t("workloads.attestation.allowedRepositoryIDs")} error={githubPinErrors.allowed_repository_ids}>
+                  {(control) => <Input {...control} name="allowed_repository_ids" />}
+                </Field>
+                <p className="text-xs text-muted-foreground md:col-span-2">{t("workloads.attestation.githubIDPinHelp")}</p>
+                <label className="grid gap-1 text-sm font-medium md:col-span-2">
                   {t("workloads.attestation.allowedOwners")}
                   <input className="ui-input" name="allowed_owners" placeholder={translateNow("workloads.attestation.allowedOwnersPlaceholder")} />
                   <span className="text-xs font-normal text-muted-foreground">{t("workloads.attestation.allowedOwnersHelp")}</span>
                 </label>
-                <label className="flex items-center gap-2 self-end text-sm font-medium">
+                <label className="flex items-center gap-2 self-end text-sm font-medium md:col-span-2">
                   <input className="h-4 w-4" type="checkbox" name="self_authenticating" />
                   {t("workloads.attestation.selfAuthenticating")}
                 </label>
@@ -1281,7 +1317,11 @@ export function Workloads() {
                           revoked: t("workloads.attestation.statusRevoked"),
                           disabled: t("workloads.attestation.statusDisabled"),
                           enabled: t("workloads.attestation.statusEnabled"),
+                          pinRequired: t("workloads.attestation.githubIDPinRequired"),
                         })}
+                        {source.immutable_pin_required && source.enabled && !source.revoked_at && !source.authority_pending ? (
+                          <span className="text-xs text-muted-foreground">{t("workloads.attestation.githubIDPinRemediation")}</span>
+                        ) : null}
                         <span className="text-xs text-muted-foreground">
                           {t("workloads.attestation.versionColumn")} {source.rotation_version} · {t("workloads.attestation.lastRotatedColumn")}{" "}
                           {formatDate(source.last_rotated_at || source.updated_at)}
@@ -1415,6 +1455,7 @@ function trustSourceStatusBadge(source: WorkloadAttesterTrustSource, labels: Tru
   if (source.authority_pending) return <StatusBadge value="pending" label={labels.pending} tone="warning" />;
   if (source.revoked_at) return <StatusBadge value="revoked" label={labels.revoked} tone="critical" />;
   if (!source.enabled) return <StatusBadge value="disabled" label={labels.disabled} tone="neutral" />;
+  if (source.immutable_pin_required) return <StatusBadge value="pin-required" label={labels.pinRequired} tone="warning" />;
   return <StatusBadge value="active" label={labels.enabled} tone="success" />;
 }
 
@@ -1435,14 +1476,17 @@ function trustSourceRequestFromForm(data: FormData, method: TrustSourceMethod): 
   const expectedNonce = formString(data, "expected_nonce_base64");
   if (expectedNonce) input.expected_nonce_base64 = expectedNonce;
   if (method === "github_oidc") {
-    const owners = formString(data, "allowed_owners")
-      .split(/[\s,]+/)
-      .map((owner) => owner.trim().toLowerCase())
-      .filter((owner) => owner.length > 0);
+    const owners = splitFormList(data, "allowed_owners").map((owner) => owner.toLowerCase());
     if (owners.length > 0) input.allowed_owners = owners;
     if (data.get("self_authenticating") === "on") input.self_authenticating = true;
   }
   return input;
+}
+
+function splitFormList(data: FormData, name: string): string[] {
+  return formString(data, name)
+    .split(/[\s,]+/)
+    .filter(Boolean);
 }
 
 function trustSourceRotateRequestFromForm(data: FormData): WorkloadAttesterTrustSourceRotateRequest {

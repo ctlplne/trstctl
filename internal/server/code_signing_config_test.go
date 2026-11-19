@@ -10,10 +10,65 @@ import (
 	"strings"
 	"testing"
 
+	"trstctl.com/trstctl/internal/attest/githuboidc"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/store"
 )
+
+// CR-384: both managed workload trust and configured keyless trust have to
+// preserve the administrator's immutable conditions when constructing the verifier.
+func TestGitHubRuntimeTrustPreservesPinsAndExcludesLegacyNameOnlySources(t *testing.T) {
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	jwk, err := crypto.PublicJWK(key.Public(), "test-github-issuer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := json.Marshal(crypto.JWKS{Keys: []crypto.JWK{jwk}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed := store.WorkloadAttesterTrustSource{
+		ID: "workflow", Method: "github_oidc", Audience: "trstctl", JWKS: document,
+		AllowedOwners: []string{"acme"}, AllowedOwnerIDs: []string{"123"}, AllowedRepositoryIDs: []string{"456"},
+	}
+	resolved, err := attestorFromTrustSource(managed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier := resolved.(*githuboidc.Attestor)
+	if !verifier.AllowedOwners["acme"] || !verifier.AllowedOwnerIDs["123"] || !verifier.AllowedRepositoryIDs["456"] {
+		t.Error("managed verifier did not retain all configured conditions")
+	}
+	managed.AllowedOwnerIDs, managed.AllowedRepositoryIDs = nil, nil
+	if _, err := attestorFromTrustSource(managed); err == nil {
+		t.Error("legacy managed trust was presented as ready to verify")
+	}
+
+	configured, err := codeSigningAttestorsFromConfig([]config.CodeSigningGitHubOIDC{
+		{TenantID: "pinned", Audience: "sigstore", JWKSJSON: string(document), AllowedOwners: []string{"acme"},
+			AllowedOwnerIDs: []string{"123"}, AllowedRepositoryIDs: []string{"456"}},
+		{TenantID: "legacy", Audience: "sigstore", JWKSJSON: string(document), AllowedOwners: []string{"acme"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(configured["pinned"]) != 1 {
+		t.Fatal("valid configured tenant lost its verifier")
+	}
+	verifier = configured["pinned"][0].(*githuboidc.Attestor)
+	if !verifier.AllowedOwners["acme"] || !verifier.AllowedOwnerIDs["123"] || !verifier.AllowedRepositoryIDs["456"] {
+		t.Error("keyless verifier did not retain all configured conditions")
+	}
+	if len(configured["legacy"]) != 0 {
+		t.Error("legacy keyless trust was advertised to the signing service")
+	}
+}
 
 func TestCodeSigningAlgorithmsAndTenantResolverFailClosed(t *testing.T) {
 	for raw, want := range map[string]crypto.Algorithm{
@@ -94,7 +149,8 @@ func TestCodeSigningGitHubOIDCAttestorsLoadInlineAndFileJWKS(t *testing.T) {
 	}
 
 	attestors, err := codeSigningAttestorsFromConfig([]config.CodeSigningGitHubOIDC{
-		{TenantID: "tenant-inline", Issuer: "https://token.actions.githubusercontent.com", Audience: "sigstore", JWKSJSON: string(document), AllowedOwners: []string{" acme ", "", "acme"}},
+		{TenantID: "tenant-inline", Issuer: "https://token.actions.githubusercontent.com", Audience: "sigstore",
+			JWKSJSON: string(document), AllowedOwners: []string{" acme ", "", "acme"}, AllowedOwnerIDs: []string{servedGitHubOwnerID}},
 		{TenantID: "tenant-file", Audience: "sigstore", JWKSFile: path},
 	})
 	if err != nil {

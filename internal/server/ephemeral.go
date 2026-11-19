@@ -9,7 +9,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -535,6 +534,7 @@ func (s *ephemeralIssuerService) recoverApprovedEphemeralCertificate(
 }
 
 func ephemeralApprovedRequestBinding(requester string, req api.EphemeralCredentialRequest, att attest.Attestation) (string, error) {
+	att = att.WithoutGitHubRepositoryIDEvidence()
 	basis := struct {
 		Requester string                         `json:"requester"`
 		Request   api.EphemeralCredentialRequest `json:"request"`
@@ -624,29 +624,7 @@ func (s *ephemeralIssuerService) validateCommand(tenantID, requester string, req
 }
 
 func (s *ephemeralIssuerService) availableMethods(ctx context.Context, tenantID string) ([]string, error) {
-	methods := make(map[string]struct{}, len(s.methods))
-	for method := range s.methods {
-		methods[method] = struct{}{}
-	}
-	sources, err := s.store.ListWorkloadAttesterTrustSources(ctx, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	for _, source := range sources {
-		if !source.Enabled || source.RevokedAt != nil {
-			continue
-		}
-		if _, err := attestorFromTrustSource(source); err != nil {
-			return nil, err
-		}
-		methods[source.Method] = struct{}{}
-	}
-	out := make([]string, 0, len(methods))
-	for method := range methods {
-		out = append(out, method)
-	}
-	sort.Strings(out)
-	return out, nil
+	return availableWorkloadAttestationMethods(ctx, s.store, s.methods, tenantID)
 }
 
 func (s *ephemeralIssuerService) attestorsForMethod(ctx context.Context, tenantID, method string) ([]attest.Attestor, error) {
@@ -677,6 +655,7 @@ func (s *ephemeralIssuerService) ensureEphemeralApprovalRequest(ctx context.Cont
 }
 
 func (s *ephemeralIssuerService) ephemeralApprovalBinding(tenantID string, req api.EphemeralCredentialRequest, att attest.Attestation) (ephemerallib.ApprovalBinding, error) {
+	att = att.WithoutGitHubRepositoryIDEvidence()
 	spiffeID, err := ephemeralSPIFFEID(s.trustDomain, tenantID, att.Method, att.Subject)
 	if err != nil {
 		return ephemerallib.ApprovalBinding{}, err

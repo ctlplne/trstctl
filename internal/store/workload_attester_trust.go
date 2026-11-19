@@ -39,17 +39,28 @@ type WorkloadAttesterTrustSource struct {
 	// SelfAuthenticating (A84): the verified proof of this github_oidc source
 	// is itself the bearer credential of attested issuance for the tenant.
 	SelfAuthenticating bool
-	// AllowedOwners (A84): lower-cased GitHub repository owners this source
-	// admits; never empty when SelfAuthenticating.
-	AllowedOwners    []string
-	Enabled          bool
-	AuthorityPending bool
-	RevokedAt        *time.Time
-	RevokedReason    string
-	RotationVersion  int
-	LastRotatedAt    *time.Time
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// AllowedOwners adds an optional name condition to the GitHub ID pins.
+	AllowedOwners        []string
+	AllowedOwnerIDs      []string
+	AllowedRepositoryIDs []string
+	Enabled              bool
+	AuthorityPending     bool
+	RevokedAt            *time.Time
+	RevokedReason        string
+	RotationVersion      int
+	LastRotatedAt        *time.Time
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+func (s WorkloadAttesterTrustSource) HasImmutableGitHubPins() bool {
+	return s.Method == "github_oidc" && (len(s.AllowedOwnerIDs) > 0 || len(s.AllowedRepositoryIDs) > 0)
+}
+
+// RequiresImmutableGitHubPin flags legacy authority that cannot verify proofs
+// until an operator supplies a pin for this issuer.
+func (s WorkloadAttesterTrustSource) RequiresImmutableGitHubPin() bool {
+	return s.Method == "github_oidc" && (s.SelfAuthenticating || len(s.AllowedOwners) > 0) && !s.HasImmutableGitHubPins()
 }
 
 // ApplyWorkloadAttesterTrustSourceUpsertedTx projects a
@@ -63,6 +74,12 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 	}
 	if ts.AllowedOwners == nil {
 		ts.AllowedOwners = []string{}
+	}
+	if len(ts.AllowedOwnerIDs) == 0 {
+		ts.AllowedOwnerIDs = nil
+	}
+	if len(ts.AllowedRepositoryIDs) == 0 {
+		ts.AllowedRepositoryIDs = nil
 	}
 	if ts.RotationVersion <= 0 {
 		ts.RotationVersion = 1
@@ -108,9 +125,9 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 		`INSERT INTO workload_attester_trust_sources
 		    (id, tenant_id, name, method, issuer, audience, jwks, root_certs_pem,
 		     expected_nonce_base64, enabled, rotation_version, created_at, updated_at,
-		     self_authenticating, allowed_owners)
+		     self_authenticating, allowed_owners, allowed_owner_ids, allowed_repository_ids)
 		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8,
-		         $9, $10, $11, $12, $13, $14, $15)
+		         $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		 ON CONFLICT (id) DO UPDATE SET
 		     name = EXCLUDED.name,
 		     method = EXCLUDED.method,
@@ -122,6 +139,8 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 		     enabled = EXCLUDED.enabled,
 		     self_authenticating = EXCLUDED.self_authenticating,
 		     allowed_owners = EXCLUDED.allowed_owners,
+		     allowed_owner_ids = EXCLUDED.allowed_owner_ids,
+		     allowed_repository_ids = EXCLUDED.allowed_repository_ids,
 		     revoked_at = NULL,
 		     revoked_reason = '',
 		     rotation_version = GREATEST(workload_attester_trust_sources.rotation_version, EXCLUDED.rotation_version),
@@ -130,7 +149,7 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 		 WHERE workload_attester_trust_sources.tenant_id = EXCLUDED.tenant_id`,
 		ts.ID, ts.TenantID, ts.Name, ts.Method, ts.Issuer, ts.Audience, jsonbOrEmpty(ts.JWKS),
 		ts.RootCertsPEM, ts.ExpectedNonceBase64, ts.Enabled, ts.RotationVersion, ts.CreatedAt, ts.UpdatedAt,
-		ts.SelfAuthenticating, ts.AllowedOwners)
+		ts.SelfAuthenticating, ts.AllowedOwners, ts.AllowedOwnerIDs, ts.AllowedRepositoryIDs)
 	if err != nil {
 		return err
 	}
@@ -150,7 +169,7 @@ func (s *Store) GetWorkloadAttesterTrustSourceByName(ctx context.Context, tenant
 			`SELECT id::text, tenant_id::text, name, method, issuer, audience, jwks,
 			        root_certs_pem, expected_nonce_base64, enabled, revoked_at, revoked_reason,
 			        rotation_version, last_rotated_at, created_at, updated_at,
-			        self_authenticating, allowed_owners
+			        self_authenticating, allowed_owners, allowed_owner_ids, allowed_repository_ids
 			   FROM workload_attester_trust_sources
 			  WHERE tenant_id = $1 AND lower(name) = lower($2)`,
 			tenantID, strings.TrimSpace(name)), &out)
@@ -239,7 +258,7 @@ func (s *Store) GetWorkloadAttesterTrustSource(ctx context.Context, tenantID, id
 			`SELECT id::text, tenant_id::text, name, method, issuer, audience, jwks,
 			        root_certs_pem, expected_nonce_base64, enabled, revoked_at, revoked_reason,
 			        rotation_version, last_rotated_at, created_at, updated_at,
-			        self_authenticating, allowed_owners
+			        self_authenticating, allowed_owners, allowed_owner_ids, allowed_repository_ids
 			   FROM workload_attester_trust_sources
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id), &out)
@@ -264,7 +283,7 @@ func (s *Store) GetEffectiveWorkloadAttesterTrustSource(ctx context.Context, ten
 			             THEN false ELSE trust.enabled END,
 			        trust.revoked_at, trust.revoked_reason, trust.rotation_version,
 			        trust.last_rotated_at, trust.created_at, trust.updated_at,
-			        trust.self_authenticating, trust.allowed_owners,
+			        trust.self_authenticating, trust.allowed_owners, trust.allowed_owner_ids, trust.allowed_repository_ids,
 			        COALESCE(command.status='pending', false)
 			   FROM workload_attester_trust_sources AS trust
 			   LEFT JOIN workload_attester_trust_commands AS command
@@ -291,7 +310,7 @@ func (s *Store) ListEnabledWorkloadAttesterTrustSources(ctx context.Context, ten
 			`SELECT id::text, tenant_id::text, name, method, issuer, audience, jwks,
 			        root_certs_pem, expected_nonce_base64, enabled, revoked_at, revoked_reason,
 			        rotation_version, last_rotated_at, created_at, updated_at,
-			        self_authenticating, allowed_owners
+			        self_authenticating, allowed_owners, allowed_owner_ids, allowed_repository_ids
 			   FROM workload_attester_trust_sources AS trust
 			  WHERE trust.tenant_id = $1 AND trust.method = $2 AND trust.enabled = true
 			    AND NOT EXISTS (SELECT 1 FROM workload_attester_trust_commands AS command
@@ -327,7 +346,7 @@ func (s *Store) listWorkloadAttesterTrustSources(ctx context.Context, tenantID, 
 		                 THEN false ELSE trust.enabled END,
 		               trust.revoked_at, trust.revoked_reason,
 		               trust.rotation_version, trust.last_rotated_at, trust.created_at, trust.updated_at,
-		               trust.self_authenticating, trust.allowed_owners,
+		               trust.self_authenticating, trust.allowed_owners, trust.allowed_owner_ids, trust.allowed_repository_ids,
 		               EXISTS (SELECT 1 FROM workload_attester_trust_commands AS pending
 		                 WHERE pending.tenant_id=trust.tenant_id AND pending.source_id=trust.id
 		                   AND pending.status='pending')
@@ -360,12 +379,13 @@ func scanWorkloadAttesterTrustSource(row pgx.Row, ts *WorkloadAttesterTrustSourc
 	return row.Scan(&ts.ID, &ts.TenantID, &ts.Name, &ts.Method, &ts.Issuer, &ts.Audience,
 		&ts.JWKS, &ts.RootCertsPEM, &ts.ExpectedNonceBase64, &ts.Enabled, &ts.RevokedAt,
 		&ts.RevokedReason, &ts.RotationVersion, &ts.LastRotatedAt, &ts.CreatedAt, &ts.UpdatedAt,
-		&ts.SelfAuthenticating, &ts.AllowedOwners)
+		&ts.SelfAuthenticating, &ts.AllowedOwners, &ts.AllowedOwnerIDs, &ts.AllowedRepositoryIDs)
 }
 
 func scanEffectiveWorkloadAttesterTrustSource(row pgx.Row, ts *WorkloadAttesterTrustSource) error {
 	return row.Scan(&ts.ID, &ts.TenantID, &ts.Name, &ts.Method, &ts.Issuer, &ts.Audience,
 		&ts.JWKS, &ts.RootCertsPEM, &ts.ExpectedNonceBase64, &ts.Enabled, &ts.RevokedAt,
 		&ts.RevokedReason, &ts.RotationVersion, &ts.LastRotatedAt, &ts.CreatedAt,
-		&ts.UpdatedAt, &ts.SelfAuthenticating, &ts.AllowedOwners, &ts.AuthorityPending)
+		&ts.UpdatedAt, &ts.SelfAuthenticating, &ts.AllowedOwners, &ts.AllowedOwnerIDs,
+		&ts.AllowedRepositoryIDs, &ts.AuthorityPending)
 }

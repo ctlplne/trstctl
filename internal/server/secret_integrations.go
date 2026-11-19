@@ -1630,27 +1630,21 @@ func (p *configuredSyncPusher) mintAWSWorkloadIdentity(ctx context.Context, remo
 		}
 		return nil, cloudauth.OfflineDisabled("AWS")
 	}
-	trust, err := p.store.GetWorkloadAttesterTrustSource(ctx, p.tenantID, source.TrustSourceID)
-	if err != nil || !trust.Enabled || trust.RevokedAt != nil || trust.Audience != source.Audience {
+	cacheKey, verifyProof, err := p.workloadIdentityTrust(ctx, source)
+	if err != nil {
 		if statusErr := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
 			store.SecretSyncWorkloadIdentityExchangeFailed, "trust_source_invalid", nil); statusErr != nil {
 			return nil, fmt.Errorf("server: record AWS workload identity trust failure: %w", statusErr)
 		}
 		return nil, errors.New("server: AWS workload identity trust source is unavailable")
 	}
-	// Configuration updated_at changes only on operator upsert, not on runtime
-	// status. Trust rotation/version changes likewise force a fresh exchange.
-	cacheKey := fmt.Sprintf("%s\x00%s\x00%d\x00%d\x00%d",
-		p.tenantID, source.ID, source.UpdatedAt.UnixNano(), trust.RotationVersion, trust.UpdatedAt.UnixNano())
 	credential, cacheHit, err := p.minter.Mint(ctx, cacheKey, func(exchangeCtx context.Context) (cloudauth.Material, error) {
 		proof, resolveErr := p.credentials.resolve(exchangeCtx, p.tenantID, source.WorkloadProofRef)
 		if resolveErr != nil {
 			return cloudauth.Material{}, errors.New("cloudauth: workload proof reference could not be resolved")
 		}
 		defer proof.Destroy()
-		if validateErr := cloudauth.ValidateOIDCProof(
-			proof.Bytes(), trust.JWKS, trust.Issuer, source.Audience, source.Subject, time.Now().UTC(),
-		); validateErr != nil {
+		if validateErr := verifyProof(proof.Bytes()); validateErr != nil {
 			return cloudauth.Material{}, validateErr
 		}
 		client, clientErr := secretIntegrationHTTPClient(
@@ -1768,25 +1762,21 @@ func (p *configuredSyncPusher) mintGCPWorkloadIdentity(ctx context.Context, remo
 		}
 		return nil, cloudauth.OfflineDisabled("GCP")
 	}
-	trust, err := p.store.GetWorkloadAttesterTrustSource(ctx, p.tenantID, source.TrustSourceID)
-	if err != nil || !trust.Enabled || trust.RevokedAt != nil || trust.Audience != source.Audience {
+	cacheKey, verifyProof, err := p.workloadIdentityTrust(ctx, source)
+	if err != nil {
 		if statusErr := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
 			store.SecretSyncWorkloadIdentityExchangeFailed, "trust_source_invalid", nil); statusErr != nil {
 			return nil, fmt.Errorf("server: record GCP workload identity trust failure: %w", statusErr)
 		}
 		return nil, errors.New("server: GCP workload identity trust source is unavailable")
 	}
-	cacheKey := fmt.Sprintf("%s\x00%s\x00%d\x00%d\x00%d",
-		p.tenantID, source.ID, source.UpdatedAt.UnixNano(), trust.RotationVersion, trust.UpdatedAt.UnixNano())
 	credential, cacheHit, err := p.minter.Mint(ctx, cacheKey, func(exchangeCtx context.Context) (cloudauth.Material, error) {
 		proof, resolveErr := p.credentials.resolve(exchangeCtx, p.tenantID, source.WorkloadProofRef)
 		if resolveErr != nil {
 			return cloudauth.Material{}, errors.New("cloudauth: workload proof reference could not be resolved")
 		}
 		defer proof.Destroy()
-		if validateErr := cloudauth.ValidateOIDCProof(
-			proof.Bytes(), trust.JWKS, trust.Issuer, source.Audience, source.Subject, time.Now().UTC(),
-		); validateErr != nil {
+		if validateErr := verifyProof(proof.Bytes()); validateErr != nil {
 			return cloudauth.Material{}, validateErr
 		}
 		client, clientErr := secretIntegrationHTTPClient(
@@ -1882,25 +1872,21 @@ func (p *configuredSyncPusher) mintAzureWorkloadIdentity(ctx context.Context, re
 		}
 		return nil, cloudauth.OfflineDisabled("Azure")
 	}
-	trust, err := p.store.GetWorkloadAttesterTrustSource(ctx, p.tenantID, source.TrustSourceID)
-	if err != nil || !trust.Enabled || trust.RevokedAt != nil || trust.Audience != source.Audience {
+	cacheKey, verifyProof, err := p.workloadIdentityTrust(ctx, source)
+	if err != nil {
 		if statusErr := p.recordWorkloadIdentityStatus(ctx, source.ID, operationID,
 			store.SecretSyncWorkloadIdentityExchangeFailed, "trust_source_invalid", nil); statusErr != nil {
 			return nil, fmt.Errorf("server: record Azure workload identity trust failure: %w", statusErr)
 		}
 		return nil, errors.New("server: Azure workload identity trust source is unavailable")
 	}
-	cacheKey := fmt.Sprintf("%s\x00%s\x00%d\x00%d\x00%d",
-		p.tenantID, source.ID, source.UpdatedAt.UnixNano(), trust.RotationVersion, trust.UpdatedAt.UnixNano())
 	credential, cacheHit, err := p.minter.Mint(ctx, cacheKey, func(exchangeCtx context.Context) (cloudauth.Material, error) {
 		proof, resolveErr := p.credentials.resolve(exchangeCtx, p.tenantID, source.WorkloadProofRef)
 		if resolveErr != nil {
 			return cloudauth.Material{}, errors.New("cloudauth: workload proof reference could not be resolved")
 		}
 		defer proof.Destroy()
-		if validateErr := cloudauth.ValidateOIDCProof(
-			proof.Bytes(), trust.JWKS, trust.Issuer, source.Audience, source.Subject, time.Now().UTC(),
-		); validateErr != nil {
+		if validateErr := verifyProof(proof.Bytes()); validateErr != nil {
 			return cloudauth.Material{}, validateErr
 		}
 		endpoint := azureWorkloadIdentityEndpoint(p.cfg, source.AzureTenantID)

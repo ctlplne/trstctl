@@ -952,6 +952,28 @@ before that mapped subject, as described above. Trust
 material rotates, revokes, and offboards via `.../rotate`, `.../revoke`, and
 `DELETE .../{id}`, each idempotent and recorded as an immutable event.
 
+### GitHub OIDC trust pins
+
+Set `allowed_owner_ids` to match the signed `repository_owner_id` or
+`allowed_repository_ids` to match the signed `repository_id`. Use positive
+decimal strings from your GitHub administration records. When both arrays
+contain IDs, the proof must match an entry in each. The optional
+`allowed_owners` list adds a case-insensitive name check. GitHub.com is
+the default issuer. Use IDs from the exact issuer configured on the source,
+including when using GitHub Enterprise Server.
+
+A signed proof can use GitHub's classic subject format or its newer format
+with IDs in the subject. Secret-sync exchange also requires the exact
+configured subject. Update that binding when GitHub changes the workflow's
+subject format. [GitHub OIDC claim reference](https://docs.github.com/en/actions/reference/security/oidc)
+
+A repository-only pin continues to identify that repository after a transfer.
+Pin its owner ID as well to restrict which owner may control it. A rule using
+owner names or `self_authenticating` requires an immutable ID. A legacy source
+that needs an ID appears as `immutable_pin_required` and cannot verify proofs.
+See the [CLI repair workflow](../cli.md#add-ids-to-an-existing-github-oidc-trust-source)
+and [upgrade runbook](../runbooks/upgrade-rollback.md#github-oidc-trust-pins).
+
 Approval-gated ephemeral/JIT issuance is off by default. Enable the
 `ephemeral_issuance` block with a trust domain, credential TTL bounds, approval TTL,
 and approval threshold. Verification material is not global process config: each

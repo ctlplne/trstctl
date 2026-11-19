@@ -6,12 +6,45 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/cli"
 )
+
+func TestGitHubTrustCLIForwardsExactPinArraysOnReplacement(t *testing.T) {
+	const sourceID = "00000000-0000-4000-8000-000000038481"
+	const request = `{"name":"workflow","method":"github_oidc","allowed_owner_ids":[],"allowed_repository_ids":["18446744073709551615"]}`
+	const response = `{"id":"` + sourceID + `","immutable_pin_required":false,"allowed_owner_ids":[],"allowed_repository_ids":["18446744073709551615"]}`
+	bodyPath := filepath.Join(t.TempDir(), "github-trust-update.json")
+	if err := os.WriteFile(bodyPath, []byte(request), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var captured capture
+	srv := mockServer(t, http.StatusOK, response, &captured)
+	code, out, stderr := run(t, []string{"--idempotency-key", "github-pin-update-1",
+		"workloads", "attester-trust-sources", "update", sourceID, "--file", bodyPath},
+		cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, "")
+	if code != 0 || stderr != "" {
+		t.Fatalf("update exit=%d stderr=%q", code, stderr)
+	}
+	if captured.Method != http.MethodPut || captured.Path != "/api/v1/workloads/attester-trust-sources/"+sourceID ||
+		captured.Header.Get("Idempotency-Key") != "github-pin-update-1" || string(captured.Body) != request {
+		t.Fatal("CLI changed the mutation method, source, retry key, or exact pin arrays")
+	}
+	var result struct {
+		OwnerIDs      []string `json:"allowed_owner_ids"`
+		RepositoryIDs []string `json:"allowed_repository_ids"`
+	}
+	if err := json.Unmarshal([]byte(out), &result); err != nil ||
+		!reflect.DeepEqual(result.OwnerIDs, []string{}) ||
+		!reflect.DeepEqual(result.RepositoryIDs, []string{"18446744073709551615"}) {
+		t.Fatalf("CLI lost empty-array or string precision in response: %v", err)
+	}
+}
 
 func TestWorkloadCLIHandsOffExactSignedIDAndPreservesAbsentLegacyFields(t *testing.T) {
 	const signedID = "spiffe://served.test/_trstctl/v1/tenant/11111111-1111-4111-8111-111111111111/attested/method/k8s_sat/subject/ns/QA/sa/Web"

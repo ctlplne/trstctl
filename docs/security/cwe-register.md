@@ -788,7 +788,7 @@ not this file.
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_access_explain_served_test.go:100` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
-| `internal/server/secret_integrations.go:1729` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1723` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:140` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:156` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
@@ -866,8 +866,8 @@ not this file.
 | `internal/server/secret_validity_providers_served_test.go:105` | a key file for a key generated at run time for the stand-in, not a credential (CWE-798) |
 | `internal/server/secret_validity_served_test.go:88` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/secrets_scan_served_test.go:260` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/secrets_served_test.go:583` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/secrets_served_test.go:2525` | fabricated STS exchange fixture; no real credential (CWE-798) |
+| `internal/server/secrets_served_test.go:565` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/secrets_served_test.go:2507` | fabricated STS exchange fixture; no real credential (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:579` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:591` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:602` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1386,10 +1386,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7641` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7658` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7671` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7705` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7643` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7660` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7673` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7707` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -2118,7 +2118,7 @@ not this file.
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/esxi_vcsim_served_test.go:70` | the stock simulator on PATH with fixed arguments (CWE-78) |
-| `internal/server/github_action_served_test.go:246` | the test deliberately executes a generated copy of the fixed shipped action script (CWE-78). |
+| `internal/server/github_action_served_test.go:259` | the test deliberately executes a generated copy of the fixed shipped action script (CWE-78). |
 | `internal/server/java_sdk_served_test.go:56` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/java_sdk_served_test.go:60` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/java_sdk_served_test.go:91` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2832,7 +2832,7 @@ not this file.
 | `internal/cloudauth/aws_credential_chain.go:164` | operator- or platform-configured projected token path (CWE-22) |
 | `internal/cloudauth/aws_credential_chain.go:223` | platform-configured Pod Identity token path (CWE-22) |
 | `internal/cloudauth/azure_token_source.go:83` | operator-configured projected token path (CWE-22) |
-| `internal/cloudauth/cloudauth.go:398` | operator-configured projected token path (CWE-22) |
+| `internal/cloudauth/cloudauth.go:402` | operator-configured projected token path (CWE-22) |
 | `internal/cloudauth/gcp_token_source.go:115` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:3811` | the config loader reading the operator's own config file (CWE-22) |
@@ -3028,7 +3028,7 @@ not this file.
 | `internal/server/ca_custody_test.go:269` | same test-owned path proves the mismatch was not overwritten (CWE-22) |
 | `internal/server/cbom_cyclonedx_served_test.go:239` | the repository's own fixture path (CWE-22) |
 | `internal/server/cmdb_readonly_test.go:126` | test reads repo source files it names itself (CWE-22) |
-| `internal/server/code_signing_config.go:96` | operator-configured certificate chain path (CWE-22) |
+| `internal/server/code_signing_config.go:97` | operator-configured certificate chain path (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:69` | the lab runner's build output (CWE-22) |
 | `internal/server/decoy_files_container_lab_q6o1_test.go:50` | the lab runner's build output (CWE-22) |
 | `internal/server/discovery_key_posture_test.go:18` | a fixed test fixture, named by the test itself (CWE-22) |
@@ -3869,8 +3869,8 @@ not this file.
 | `internal/server/pam_gateway_kubernetes_kind_test.go:71` | test calls the cluster its runner named (CWE-918) |
 | `internal/server/secret_render_served_test.go:134` | the test application or the lab nginx on loopback (CWE-918) |
 | `internal/server/secret_render_served_test.go:136` | the test application or the lab nginx on loopback (CWE-918) |
-| `internal/server/secrets_served_test.go:284` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
-| `internal/server/secrets_served_test.go:295` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
+| `internal/server/secrets_served_test.go:264` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
+| `internal/server/secrets_served_test.go:277` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
 | `internal/server/spire_jwt_authorities_container_test.go:242` | test calls its own served harness (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:175` | test calls the cluster its runner named (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |

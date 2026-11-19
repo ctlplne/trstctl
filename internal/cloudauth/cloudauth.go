@@ -291,9 +291,10 @@ func (m *Minter) Close() {
 
 // ValidateOIDCProof verifies a byte-native JWT against tenant-owned public JWKS
 // and enforces exact issuer, audience, subject, and validity-window bindings.
-// Every failure collapses to ErrInvalidWorkloadProof so token content cannot be
-// reflected into a durable error.
-func ValidateOIDCProof(proof, jwksJSON []byte, expectedIssuer, expectedAudience, expectedSubject string, now time.Time) error {
+// An optional check runs on the verified claims before their buffer is wiped.
+// It must neither modify nor retain the buffer. Every failure collapses to
+// ErrInvalidWorkloadProof so proof content stays out of durable errors.
+func ValidateOIDCProof(proof, jwksJSON []byte, expectedIssuer, expectedAudience, expectedSubject string, now time.Time, checkVerifiedClaims func([]byte) error) error {
 	if len(proof) == 0 || len(jwksJSON) == 0 || expectedIssuer == "" || expectedAudience == "" || expectedSubject == "" {
 		return ErrInvalidWorkloadProof
 	}
@@ -330,6 +331,9 @@ func ValidateOIDCProof(proof, jwksJSON []byte, expectedIssuer, expectedAudience,
 		if err != nil || nbf > now.UTC().Add(30*time.Second).Unix() {
 			return ErrInvalidWorkloadProof
 		}
+	}
+	if checkVerifiedClaims != nil && checkVerifiedClaims(claimsJSON) != nil {
+		return ErrInvalidWorkloadProof
 	}
 	return nil
 }

@@ -4291,7 +4291,8 @@ than sending an operator looking for a credential that was never there.
   An unfinished mint whose public template was lost requires its original
   bookkeeping to be restored; the signer journal refuses changed signing input.
   Fork pull requests are refused locally before OIDC, and the server still
-  verifies the signed `repository_owner` against `allowed_owners`. CI extracts
+  verifies signed `repository_owner_id` and `repository_id` against the configured
+  immutable pins and applies any additional `allowed_owners` check. CI extracts
   and executes the shipped composite run block against the full served test
   deployment, then proves success, foreign-owner and same-attempt mint refusals,
   a successful new signed attempt, and unsigned-attempt refusal. Local native
@@ -4303,12 +4304,12 @@ than sending an operator looking for a credential that was never there.
   maintainer pushes the reviewed commits and creates the tag; the current
   local remediation does neither. The Action no longer needs an API token: a
   `github_oidc` trust source created with `self_authenticating: true` and an
-  `allowed_owners` pin lets the workflow send its verified OIDC token as the
+  immutable owner or repository ID pin lets the workflow send its verified OIDC token as the
   bearer credential of `POST /api/v1/workloads/attested-issuance` with the
   tenant in `X-Tenant-ID` (the Action's `tenant` input). That principal is
   `github:` plus the repository name (for example `github:acme/payments`), holds `certs:issue` on the attested-issuance
   routes only, and must present the same token as `payload_base64`; the
-  server refuses to flag a source without an owner pin, and a disabled or
+  server requires an immutable ID pin for a self-authenticating source, and a disabled or
   revoked source closes the door again. A `token` input scoped to
   `certs:issue` remains supported. The live proof on a real GitHub Actions run
   still needs the Action published from a pushed tag. Approving a request

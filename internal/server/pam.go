@@ -826,6 +826,7 @@ func (s *pamService) targetReviewEvidence(ctx context.Context, tenantID string, 
 }
 
 func (s *pamService) approvalCommandDigest(ctx context.Context, tenantID, requester string, req api.PAMSessionRequest, att attest.Attestation) (string, error) {
+	att = att.WithoutGitHubRepositoryIDEvidence()
 	targetDigest, err := s.targetDigest(ctx, tenantID, req)
 	if err != nil {
 		return "", err

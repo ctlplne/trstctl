@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -252,6 +253,7 @@ func bindManagedCodeSigningKey(ctx context.Context, client *signing.Client, keyC
 
 func codeSigningAttestorsFromConfig(items []config.CodeSigningGitHubOIDC) (map[string][]attest.Attestor, error) {
 	out := make(map[string][]attest.Attestor, len(items))
+	seen := make(map[string]bool, len(items))
 	for _, item := range items {
 		tenantID := strings.TrimSpace(item.TenantID)
 		if tenantID == "" {
@@ -276,18 +278,19 @@ func codeSigningAttestorsFromConfig(items []config.CodeSigningGitHubOIDC) (map[s
 		if err != nil {
 			return nil, fmt.Errorf("code-signing GitHub OIDC tenant %s: %w", tenantID, err)
 		}
-		owners := make(map[string]bool, len(item.AllowedOwners))
-		for _, owner := range item.AllowedOwners {
-			if owner = strings.TrimSpace(owner); owner != "" {
-				owners[owner] = true
-			}
-		}
-		if _, duplicate := out[tenantID]; duplicate {
+		if seen[tenantID] {
 			return nil, fmt.Errorf("code-signing GitHub OIDC tenant %s is configured more than once", tenantID)
 		}
-		out[tenantID] = []attest.Attestor{&githuboidc.Attestor{
-			JWKS: jwks, Issuer: strings.TrimSpace(item.Issuer), Audience: strings.TrimSpace(item.Audience), AllowedOwners: owners,
-		}}
+		seen[tenantID] = true
+		verifier := &githuboidc.Attestor{JWKS: jwks, Issuer: strings.TrimSpace(item.Issuer), Audience: strings.TrimSpace(item.Audience)}
+		if err := verifier.ConfigureRepositoryPins(item.AllowedOwners, item.AllowedOwnerIDs, item.AllowedRepositoryIDs); err != nil {
+			return nil, fmt.Errorf("code-signing GitHub OIDC tenant %s pins: %w", tenantID, err)
+		}
+		if len(verifier.AllowedOwners) > 0 && len(verifier.AllowedOwnerIDs) == 0 && len(verifier.AllowedRepositoryIDs) == 0 {
+			slog.Warn("code-signing GitHub OIDC trust requires immutable pins", "tenant_id", tenantID)
+			continue
+		}
+		out[tenantID] = []attest.Attestor{verifier}
 	}
 	return out, nil
 }

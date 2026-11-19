@@ -68,6 +68,22 @@ func githubAttemptKey(tenantID string, att attest.Attestation) (string, error) {
 	return "attested-github-attempt:v1:" + crypto.SHA256Hex(wire), nil
 }
 
+func (s *attestedIssuerService) githubAttemptRequestBinding(att attest.Attestation, publicKey []byte, spiffeID string, ttl time.Duration) (string, error) {
+	// Keep the v1 input stable when the verifier adds repository ID evidence.
+	legacy := att.WithoutGitHubRepositoryIDEvidence()
+	wire, err := json.Marshal(struct {
+		Issuer, PublicKey       []byte
+		CAID, SPIFFEID, Subject string
+		Claims                  map[string]string
+		Selectors               []string
+		TTL                     time.Duration
+	}{s.caCertDER, publicKey, s.caID, spiffeID, legacy.Subject, legacy.Claims, legacy.Selectors, ttl})
+	if err != nil {
+		return "", err
+	}
+	return crypto.SHA256Hex(wire), nil
+}
+
 func (s *attestedIssuerService) issueGitHubAttempt(ctx context.Context, tenantID string, verifier *attest.Verifier, att attest.Attestation, publicKey []byte, ttl time.Duration) (api.AttestedSVID, error) {
 	key, err := githubAttemptKey(tenantID, att)
 	if err != nil {
@@ -88,20 +104,12 @@ func (s *attestedIssuerService) issueGitHubAttempt(ctx context.Context, tenantID
 	if err := refuseCompromisedPublicKey(ctx, s.store, tenantID, publicKey); err != nil {
 		return api.AttestedSVID{}, err
 	}
-	// Exclude JWT timestamps/signature and the caller's key: a fresh valid proof
-	// may recover an identical command. Include all verified identity attributes,
-	// the exact issuer, public key, SPIFFE identity and effective lifetime.
-	wire, err := json.Marshal(struct {
-		Issuer, PublicKey       []byte
-		CAID, SPIFFEID, Subject string
-		Claims                  map[string]string
-		Selectors               []string
-		TTL                     time.Duration
-	}{s.caCertDER, publicKey, s.caID, spiffeID, att.Subject, att.Claims, att.Selectors, ttl})
+	// A fresh valid proof can recover an identical command. The binding keeps
+	// the historical identity inputs, exact issuer, public key and lifetime.
+	binding, err := s.githubAttemptRequestBinding(att, publicKey, spiffeID, ttl)
 	if err != nil {
 		return api.AttestedSVID{}, err
 	}
-	binding := crypto.SHA256Hex(wire)
 	recovered, err := recoverCertificatesByIssuanceKey(ctx, s.store, s.log, tenantID, key)
 	if err != nil {
 		return api.AttestedSVID{}, err
@@ -120,11 +128,13 @@ func (s *attestedIssuerService) issueGitHubAttempt(ctx context.Context, tenantID
 	// issuance. It commits the public template before any signing operation. The
 	// independent signer journal refuses a changed digest even if bookkeeping is
 	// lost; restoring the original preparation is then required, never a remint.
+	preparedNow := false
 	preparedJSON, err := s.idem.DoBound(ctx, tenantID, "github-attempt-template:v1:"+key, binding, func(context.Context) ([]byte, error) {
 		leaf, err := crypto.NewLeafPreparation()
 		if err != nil {
 			return nil, err
 		}
+		preparedNow = true
 		return json.Marshal(githubAttemptPreparation{Leaf: leaf, VerifiedAt: att.VerifiedAt})
 	})
 	if err != nil {
@@ -141,6 +151,9 @@ func (s *attestedIssuerService) issueGitHubAttempt(ctx context.Context, tenantID
 	info, err := certinfo.Inspect(certDER)
 	if err != nil {
 		return api.AttestedSVID{}, err
+	}
+	if !preparedNow {
+		att = att.WithoutGitHubRepositoryIDEvidence()
 	}
 	att.VerifiedAt = prepared.VerifiedAt
 	response, err := json.Marshal(githubAttemptEvidence{RunID: att.Claims["run_id"], RunAttempt: att.Claims["run_attempt"], VerifiedAt: prepared.VerifiedAt})
@@ -199,6 +212,7 @@ func (s *attestedIssuerService) recoverGitHubAttempt(ctx context.Context, tenant
 		evidence.RunID != att.Claims["run_id"] || evidence.RunAttempt != att.Claims["run_attempt"] {
 		return api.AttestedSVID{}, errors.New("server: retained GitHub attempt response is invalid")
 	}
+	att = att.WithoutGitHubRepositoryIDEvidence()
 	att.VerifiedAt = evidence.VerifiedAt
 	return s.finish(ctx, tenantID, verifier, att, retained.CertificateDER, ttl, false)
 }

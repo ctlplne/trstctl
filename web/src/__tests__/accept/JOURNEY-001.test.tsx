@@ -58,6 +58,40 @@ describe("JOURNEY-001 workload owner attested onboarding", () => {
       .mockResolvedValueOnce(attestedSVIDFixture("cred-svid-2", "2026-06-30T12:15:00Z"));
   });
 
+  it("flags an older GitHub source and submits immutable pins as strings", async () => {
+    const user = userEvent.setup();
+    apiMock.workloadAttesterTrustSources.mockResolvedValue({
+      items: [
+        trustSourceFixture({
+          name: "legacy-github",
+          method: "github_oidc",
+          allowed_owners: ["acme"],
+          immutable_pin_required: true,
+        }),
+      ],
+    });
+    renderWorkloads();
+
+    const legacy = await screen.findByRole("row", { name: /legacy-github/ });
+    expect(within(legacy).getByText("GitHub ID pin required")).toBeInTheDocument();
+    expect(within(legacy).getByText(/update this trust source with the CLI/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Set up workload identity" }));
+    await user.type(screen.getByLabelText("Trust source name"), "github-ci");
+    await user.selectOptions(screen.getByLabelText("Trust source method"), "github_oidc");
+    await user.type(screen.getByLabelText("Allowed GitHub owner IDs"), "9007199254740993");
+    await user.type(screen.getByLabelText("Allowed GitHub repository IDs"), "18446744073709551615, 456");
+    await user.click(screen.getByRole("button", { name: "Create trust source" }));
+
+    expect(apiMock.createWorkloadAttesterTrustSource).toHaveBeenCalledWith({
+      name: "github-ci",
+      method: "github_oidc",
+      enabled: true,
+      allowed_owner_ids: ["9007199254740993"],
+      allowed_repository_ids: ["18446744073709551615", "456"],
+    });
+  });
+
   it("self-serves trust-source lifecycle before issuing and renewing an attested SVID", async () => {
     const user = userEvent.setup();
     renderWorkloads();

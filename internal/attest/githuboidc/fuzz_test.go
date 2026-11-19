@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/githubidentity"
 )
 
 // FuzzGitHubOIDCAttest hardens the GitHub Actions OIDC attester's untrusted entry
@@ -33,13 +34,15 @@ func FuzzGitHubOIDCAttest(f *testing.F) {
 
 	mkClaims := func() map[string]any {
 		return map[string]any{
-			"iss":              DefaultIssuer,
-			"aud":              "trstctl",
-			"exp":              time.Now().Add(time.Hour).Unix(),
-			"sub":              "repo:octo/app:ref:refs/heads/main",
-			"repository":       "octo/app",
-			"repository_owner": "octo",
-			"run_id":           "47001", "run_attempt": "1",
+			"iss":                 DefaultIssuer,
+			"aud":                 "trstctl",
+			"exp":                 time.Now().Add(time.Hour).Unix(),
+			"sub":                 "repo:octo/app:ref:refs/heads/main",
+			"repository":          "octo/app",
+			"repository_owner":    "octo",
+			"repository_owner_id": "123",
+			"repository_id":       "456",
+			"run_id":              "47001", "run_attempt": "1",
 			"workflow":         "release",
 			"ref":              "refs/heads/main",
 			"sha":              "deadbeef",
@@ -61,10 +64,10 @@ func FuzzGitHubOIDCAttest(f *testing.F) {
 	if tok, err := crypto.SignJWT(signer, "gh1", big); err == nil {
 		f.Add([]byte(tok))
 	}
-	for _, field := range []string{"run_id", "run_attempt"} {
+	for _, field := range []string{"run_id", "run_attempt", repositoryOwnerIDClaim, repositoryIDClaim} {
 		for _, invalid := range []any{nil, "", "0", "01", "+1", "1e3", "18446744073709551616", 1, true} {
 			claims := mkClaims()
-			if invalid == nil {
+			if invalid == nil && (field == "run_id" || field == "run_attempt") {
 				delete(claims, field)
 			} else {
 				claims[field] = invalid
@@ -86,8 +89,16 @@ func FuzzGitHubOIDCAttest(f *testing.F) {
 		// Only the absence of a panic is asserted; a forged, malformed, or
 		// wrong-shaped token legitimately returns an error.
 		att, err := a.Attest(context.Background(), payload)
-		if err == nil && (!validRunID(att.Claims["run_id"]) || !validRunID(att.Claims["run_attempt"])) {
+		if err != nil {
+			return
+		}
+		if !githubidentity.ValidID(att.Claims["run_id"]) || !githubidentity.ValidID(att.Claims["run_attempt"]) {
 			t.Fatal("accepted proof lost its canonical signed attempt coordinates")
+		}
+		for _, key := range []string{repositoryOwnerIDClaim, repositoryIDClaim} {
+			if id, found := att.Claims[key]; found && !githubidentity.ValidID(id) {
+				t.Errorf("accepted proof retained a malformed %s", key)
+			}
 		}
 	})
 }

@@ -67,8 +67,13 @@ func TestGitHubOIDCOwnerAllowlist(t *testing.T) {
 	signer, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer signer.Destroy()
 	jwk, _ := crypto.PublicJWK(signer.Public(), "gh1")
-	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl", AllowedOwners: map[string]bool{"trusted-org": true}}
-	tok := ghToken(t, signer, "gh1", nil) // owner "acme" not allowed
+	a := &Attestor{
+		JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl",
+		AllowedOwners: map[string]bool{"trusted-org": true}, AllowedOwnerIDs: map[string]bool{"123": true},
+	}
+	tok := ghToken(t, signer, "gh1", func(claims map[string]any) {
+		claims["repository_owner_id"] = "123"
+	})
 	if _, err := a.Attest(context.Background(), []byte(tok)); err == nil {
 		t.Error("attested a repository owner not on the allowlist")
 	}
@@ -90,18 +95,24 @@ func TestAllowedOwnersMatchCaseInsensitively(t *testing.T) {
 	}
 	token, err := crypto.SignJWT(signer, "k1", map[string]any{
 		"iss": DefaultIssuer, "aud": "trstctl", "exp": time.Now().Add(5 * time.Minute).Unix(),
-		"sub": "repo:Acme/payments:ref:refs/heads/main", "repository": "Acme/payments", "repository_owner": "Acme", "run_id": "47001", "run_attempt": "1",
+		"sub": "repo:Acme/payments:ref:refs/heads/main", "repository": "Acme/payments", "repository_owner": "Acme", "repository_owner_id": "123", "run_id": "47001", "run_attempt": "1",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, pin := range []string{"acme", "ACME", "Acme"} {
-		a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl", AllowedOwners: map[string]bool{pin: true}}
+		a := &Attestor{
+			JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl",
+			AllowedOwners: map[string]bool{pin: true}, AllowedOwnerIDs: map[string]bool{"123": true},
+		}
 		if _, err := a.Attest(context.Background(), []byte(token)); err != nil {
 			t.Fatalf("pin %q refused repository_owner Acme: %v", pin, err)
 		}
 	}
-	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl", AllowedOwners: map[string]bool{"acme-labs": true}}
+	a := &Attestor{
+		JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl",
+		AllowedOwners: map[string]bool{"acme-labs": true}, AllowedOwnerIDs: map[string]bool{"123": true},
+	}
 	if _, err := a.Attest(context.Background(), []byte(token)); err == nil {
 		t.Fatal("a different owner was admitted")
 	}

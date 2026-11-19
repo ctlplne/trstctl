@@ -5,13 +5,17 @@ package codesign
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
 )
 
 type keyMap struct {
@@ -114,17 +118,27 @@ func TestCodesignUnapprovedRefused(t *testing.T) {
 func TestCodesignKeylessFulcioBound(t *testing.T) {
 	eph, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer eph.Destroy()
-	svc, _ := New(Config{TenantID: "t1", Keys: keyMap{m: map[string]crypto.DigestSigner{}}})
+	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	const tenant = "11111111-1111-4111-8111-111111111111"
+	svc, err := New(Config{TenantID: tenant, Keys: keyMap{m: map[string]crypto.DigestSigner{}}, Audit: audit.NewAuditor(log)})
+	if err != nil {
+		t.Fatal(err)
+	}
 	digest := crypto.SHA256Sum([]byte("image-manifest"))
 	// The verified attestation is authoritative: Fulcio-specific verified claims
 	// take precedence over the generic OIDC subject/issuer.
 	san := "https://github.com/acme/x/.github/workflows/release.yml@refs/heads/main"
-	sig, err := svc.SignKeyless(context.Background(), KeylessRequest{
+	sig, err := svc.SignKeyless(t.Context(), KeylessRequest{
 		Principal: "ci",
 		Identity: attest.Attestation{
 			Method: "github_oidc", Subject: "repo:acme/x:ref:refs/heads/main",
 			Claims: map[string]string{
 				"fulcio_san": san, "fulcio_issuer": "https://token.actions.githubusercontent.com",
+				"repository_owner_id": "9007199254740993", "repository_id": "456",
 			},
 			VerifiedAt: time.Now(),
 		},
@@ -144,6 +158,31 @@ func TestCodesignKeylessFulcioBound(t *testing.T) {
 	}
 	if sig.FulcioIssuer != "https://token.actions.githubusercontent.com" {
 		t.Errorf("keyless issuer = %q, want the verified attestation issuer", sig.FulcioIssuer)
+	}
+	// CR-384: the success record identifies the verified repository without
+	// persisting the OIDC proof.
+	var evidence map[string]string
+	var successes int
+	if err := log.Replay(t.Context(), 1, func(event events.Event) error {
+		if event.TenantID != tenant || event.Type != "codesign.keyless.signed" {
+			return nil
+		}
+		successes++
+		return json.Unmarshal(event.Data, &evidence)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if successes != 1 {
+		t.Fatalf("privacy-checked event log retained %d keyless success events, want one", successes)
+	}
+	if evidence["repository_owner_id"] != "9007199254740993" || evidence["repository_id"] != "456" {
+		t.Error("keyless success audit omitted the immutable repository coordinates")
+	}
+	// The original success shape also remains valid for historical and non-GitHub events.
+	if _, err := log.Append(t.Context(), events.Event{Type: "codesign.keyless.signed", TenantID: tenant,
+		Data: []byte(`{"principal":"ci","fulcio_san":"workload","fulcio_issuer":"https://issuer.example.test","artifact_type":"blob"}`),
+	}); err != nil {
+		t.Fatalf("original keyless audit shape stopped working: %v", err)
 	}
 }
 

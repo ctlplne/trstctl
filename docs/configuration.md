@@ -962,7 +962,9 @@ looks like this:
       "issuer": "https://token.actions.githubusercontent.com",
       "audience": "sigstore",
       "jwks_file": "/run/trstctl/github-actions-jwks.json",
-      "allowed_owners": ["acme"]
+      "allowed_owners": ["acme"],
+      "allowed_owner_ids": ["123"],
+      "allowed_repository_ids": ["456"]
     }],
     "ephemeral_algorithm": "ecdsa-p256",
     "rekor": {
@@ -973,6 +975,14 @@ looks like this:
   }
 }
 ```
+
+Use ID strings from the configured issuer. When both arrays contain IDs, the
+token must match an entry in each. `allowed_owners` optionally checks the
+owner's display name in addition to the IDs. A previously configured tenant
+entry with only owner names is omitted from GitHub keyless verification and
+produces an operator warning at startup. Add IDs in the tenant's configuration
+and restart all affected control-plane processes during the
+[GitHub OIDC cutover](runbooks/upgrade-rollback.md#github-oidc-trust-pins).
 
 `create_if_missing` provisions a `code-sign`-purpose-constrained handle inside the
 separate signer process; the control plane never receives the private key.

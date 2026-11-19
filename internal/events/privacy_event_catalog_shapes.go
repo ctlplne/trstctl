@@ -324,7 +324,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"principal":"","reason":"","claimed_san":"","verified_san":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/claimed_san", "/verified_san"}}), true
 	case "codesign.keyless.signed":
-		return shape(`{"principal":"","fulcio_san":"","fulcio_issuer":"","artifact_type":""}`), true
+		return shape(`{"principal":"","fulcio_san":"","fulcio_issuer":"","artifact_type":"","repository_owner_id":"","repository_id":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/repository_owner_id", "/repository_id"}}), true
 	case "codesign.refused":
 		return shape(`{"principal":"","key":"","reason":""}`), true
 	case "codesign.signed":

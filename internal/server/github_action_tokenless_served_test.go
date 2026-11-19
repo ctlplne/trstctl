@@ -15,13 +15,15 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/attest/githuboidc"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
 )
 
 // A84: the GitHub Action issues on the OIDC attestation alone. A github_oidc
-// trust source flagged self_authenticating (and pinned to allowed_owners) lets
+// trust source flagged self_authenticating with an immutable owner pin lets
 // a workflow present its OIDC token as the bearer credential of
 // POST /api/v1/workloads/attested-issuance, naming the tenant with
 // X-Tenant-ID. The verified token is the principal (github:<repository>) with
@@ -116,26 +118,34 @@ func TestServedGitHubActionIssuesOnTheAttestationAloneA84(t *testing.T) {
 
 	// An ordinary (unflagged) github_oidc source: the OIDC token attests, but it
 	// does not authenticate. Tokenless issuance stays 401.
-	if status, body := servedSelfAuthenticatingGitHubSource(t, h, admin, "a84-plain", jwk, map[string]any{"allowed_owners": []string{"acme"}}); status != http.StatusCreated {
+	if status, body := servedSelfAuthenticatingGitHubSource(t, h, admin, "a84-plain", jwk, map[string]any{
+		"allowed_owners": []string{"acme"}, "allowed_owner_ids": []string{servedGitHubOwnerID},
+	}); status != http.StatusCreated {
 		t.Fatalf("create plain source: %d %s", status, body)
 	}
 	if status, body := servedTokenlessAttestedIssue(t, h, tokenlessAttestedRequest{bearer: upstream, tenant: h.tenant, idemKey: "a84-plain-run"}, publicKeyPEM); status != http.StatusUnauthorized {
 		t.Fatalf("tokenless issuance against an unflagged source = %d %s, want 401", status, body)
 	}
 
-	status, body := servedSelfAuthenticatingGitHubSource(t, h, admin, "a84-self", jwk, map[string]any{"self_authenticating": true, "allowed_owners": []string{"ACME"}})
+	status, body := servedSelfAuthenticatingGitHubSource(t, h, admin, "a84-self", jwk, map[string]any{
+		"self_authenticating": true, "allowed_owners": []string{"ACME"}, "allowed_owner_ids": []string{servedGitHubOwnerID},
+	})
 	if status != http.StatusCreated {
 		t.Fatalf("create self-authenticating source: %d %s", status, body)
 	}
 	var created struct {
 		SelfAuthenticating bool     `json:"self_authenticating"`
 		AllowedOwners      []string `json:"allowed_owners"`
+		AllowedOwnerIDs    []string `json:"allowed_owner_ids"`
 	}
 	if err := json.Unmarshal(body, &created); err != nil {
 		t.Fatal(err)
 	}
 	if !created.SelfAuthenticating || len(created.AllowedOwners) != 1 || created.AllowedOwners[0] != "acme" {
 		t.Fatalf("created source = %+v, want self_authenticating with the owner pin normalised to lower case", created)
+	}
+	if len(created.AllowedOwnerIDs) != 1 || created.AllowedOwnerIDs[0] != servedGitHubOwnerID {
+		t.Fatal("create response lost the immutable owner pin")
 	}
 
 	// The tenant must be named: the token carries no trstctl tenant.
@@ -191,6 +201,28 @@ func TestServedGitHubActionIssuesOnTheAttestationAloneA84(t *testing.T) {
 	if status != http.StatusOK || !strings.Contains(string(body), "github:acme/payments") {
 		t.Fatalf("audit log = %d %.400s, want the issuance attributed to github:acme/payments", status, body)
 	}
+	foundEvidence := false
+	if err := h.log.Replay(t.Context(), 0, func(e events.Event) error {
+		if e.TenantID != h.tenant || e.Type != "attestation.verified" {
+			return nil
+		}
+		var record attest.Attestation
+		if err := json.Unmarshal(e.Data, &record); err != nil {
+			return err
+		}
+		if record.Method == "github_oidc" && record.Subject == "repo:acme/payments:ref:refs/heads/main" {
+			foundEvidence = true
+			if record.Claims["repository_owner_id"] != servedGitHubOwnerID || record.Claims["repository_id"] != "456" || record.VerifiedAt.IsZero() {
+				t.Fatal("the protected verification event lost signed GitHub ID evidence or its verification time")
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !foundEvidence {
+		t.Fatal("the protected verification event is missing")
+	}
 	// Disabling the source closes the door again.
 	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources/"+servedTrustSourceID(t, body, h, admin, "a84-self")+"/revoke", admin, "a84-revoke", map[string]any{"reason": "rotate off"}); status != http.StatusOK {
 		t.Fatalf("revoke: %d %s", status, body)
@@ -237,7 +269,9 @@ func TestShippedGitHubActionRunsWithoutAnAPITokenA84(t *testing.T) {
 		d.AttestedIssuance = AttestedIssuanceConfig{Enabled: true, TrustDomain: "ci.example.org", DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour}
 	})
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a84-action-admin@example.test", "certs:issue", "certs:read")
-	if status, body := servedSelfAuthenticatingGitHubSource(t, h, admin, "a84-action", jwk, map[string]any{"self_authenticating": true, "allowed_owners": []string{"acme"}}); status != http.StatusCreated {
+	if status, body := servedSelfAuthenticatingGitHubSource(t, h, admin, "a84-action", jwk, map[string]any{
+		"self_authenticating": true, "allowed_owners": []string{"acme"}, "allowed_owner_ids": []string{servedGitHubOwnerID},
+	}); status != http.StatusCreated {
 		t.Fatalf("create self-authenticating source: %d %s", status, body)
 	}
 	jwt := githubWorkflowAttemptToken(t, signer, "gha-a84-action", "acme", "84001", "1")

@@ -3741,6 +3741,16 @@
 
 ### Security
 
+- GitHub OIDC workload trust and keyless signing now support issuer-scoped
+  `allowed_owner_ids` and `allowed_repository_ids` (CR-384). The verifier checks
+  the signed numeric IDs before issuing, signing, or exchanging a cloud
+  credential. A tenant can use an owner name as an additional condition.
+  Self-authenticating sources and sources with owner names require at least one
+  immutable ID. Older name-only sources remain visible with remediation
+  guidance. Upgrade all writers, projectors, verifiers, and exchange workers
+  before accepting pin writes. See the
+  [upgrade runbook](docs/runbooks/upgrade-rollback.md#github-oidc-trust-pins).
+
 - The EST mutual-TLS listener now renews only active certificates issued by EST for the
   configured tenant (CR-059 and the EST part of CR-058). The enrollment CA must have issued
   the client certificate directly with `clientAuth`. The tenant ledger and inventory must

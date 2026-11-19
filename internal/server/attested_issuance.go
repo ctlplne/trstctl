@@ -242,7 +242,7 @@ func availableWorkloadAttestationMethods(ctx context.Context, st *store.Store, p
 		return nil, err
 	}
 	for _, source := range sources {
-		if !source.Enabled || source.RevokedAt != nil {
+		if !source.Enabled || source.RevokedAt != nil || source.RequiresImmutableGitHubPin() {
 			continue
 		}
 		if _, err := attestorFromTrustSource(source); err != nil {
@@ -383,6 +383,9 @@ func resolveWorkloadAttestors(ctx context.Context, st *store.Store, processAttes
 			return nil, err
 		}
 		for _, source := range sources {
+			if source.RequiresImmutableGitHubPin() {
+				continue
+			}
 			a, err := attestorFromTrustSource(source)
 			if err != nil {
 				return nil, err
@@ -434,16 +437,16 @@ func attestorFromTrustSource(source store.WorkloadAttesterTrustSource) (attest.A
 		}
 		return &gcpmeta.Attestor{JWKS: jwks, Issuer: source.Issuer, Audience: source.Audience}, nil
 	case "github_oidc":
+		if source.RequiresImmutableGitHubPin() {
+			return nil, fmt.Errorf("trust source %s requires an immutable GitHub pin", source.ID)
+		}
 		jwks, err := crypto.ParseJWKS(source.JWKS)
 		if err != nil {
 			return nil, fmt.Errorf("trust source %s jwks: %w", source.ID, err)
 		}
 		attestor := &githuboidc.Attestor{JWKS: jwks, Issuer: source.Issuer, Audience: source.Audience}
-		if len(source.AllowedOwners) > 0 {
-			attestor.AllowedOwners = make(map[string]bool, len(source.AllowedOwners))
-			for _, owner := range source.AllowedOwners {
-				attestor.AllowedOwners[owner] = true
-			}
+		if err := attestor.ConfigureRepositoryPins(source.AllowedOwners, source.AllowedOwnerIDs, source.AllowedRepositoryIDs); err != nil {
+			return nil, fmt.Errorf("trust source %s GitHub pins: %w", source.ID, err)
 		}
 		return attestor, nil
 	case "aws_iid":
@@ -608,7 +611,7 @@ func (s *Server) ResolveAttestedPrincipal(ctx context.Context, tenantID string, 
 	var failures []string
 	consulted := 0
 	for _, source := range sources {
-		if !source.SelfAuthenticating || source.RevokedAt != nil || len(source.AllowedOwners) == 0 {
+		if !source.SelfAuthenticating || source.RevokedAt != nil || !source.HasImmutableGitHubPins() {
 			continue
 		}
 		consulted++

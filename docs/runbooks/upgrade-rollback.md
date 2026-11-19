@@ -21,6 +21,34 @@ helm get values trstctl -n trstctl -o yaml > trstctl-values.before.yaml
 - Run `trstctl --check-config` in the candidate environment and confirm the
   `agent_channel.*` lines match the planned fleet topology.
 
+## GitHub OIDC trust pins
+
+Before accepting the first trust update with immutable GitHub IDs, pause
+GitHub-backed issuance, secret-sync exchanges, and keyless signing. Fence
+trust-source writes from operators and automation. Drain old writers and
+settle their pending workload trust commands. An older projector can advance
+the shared event checkpoint while omitting fields it cannot read.
+
+1. Upgrade every control-plane process that writes or projects workload trust.
+   Verify migration `0492` completed. Upgrade all instances that verify GitHub
+   claims or exchange GitHub proofs for cloud credentials.
+2. Add verified issuer-scoped ID pins using the
+   [CLI workflow](../cli.md#add-ids-to-an-existing-github-oidc-trust-source).
+   Apply equivalent tenant code-signing configuration on every replica.
+3. Confirm current reads show the intended issuer and exact ID strings, with
+   `immutable_pin_required: false` and `authority_pending: false`. Resume
+   GitHub paths and check a known workflow's `attestation.verified` or
+   `codesign.keyless.signed` evidence.
+
+Before rolling back, stop these execution paths again, settle pending work
+and trust commands, and fence trust mutations throughout the downgrade.
+An older verifier can treat a source with only ID pins as unrestricted.
+An older writer can change the issuer without updating its pins. Keep the
+affected control plane offline if you cannot enforce those stops. Preserve
+the event log. After upgrading again, reconcile the trust projection from
+that log and verify issuer and pin pairs before resuming. Rebuild the
+projection if an older projector processed events containing pins.
+
 ## Idempotency keys across this upgrade
 
 An idempotency key is a retry label. It tells trstctl that two copies of the

@@ -3261,10 +3261,12 @@ type WorkloadAttesterTrustSourceUpserted struct {
 	ExpectedNonceBase64 string          `json:"expected_nonce_base64,omitempty"`
 	Enabled             bool            `json:"enabled"`
 	RotationVersion     int             `json:"rotation_version,omitempty"`
-	// SelfAuthenticating and AllowedOwners (A84): the github_oidc proof alone
-	// authenticates attested issuance, for these repository owners only.
-	SelfAuthenticating bool     `json:"self_authenticating,omitempty"`
-	AllowedOwners      []string `json:"allowed_owners,omitempty"`
+	// A self-authenticating source can act as a bearer credential with an
+	// immutable pin. Historical events without pins remain replayable.
+	SelfAuthenticating   bool     `json:"self_authenticating,omitempty"`
+	AllowedOwners        []string `json:"allowed_owners,omitempty"`
+	AllowedOwnerIDs      []string `json:"allowed_owner_ids,omitempty"`
+	AllowedRepositoryIDs []string `json:"allowed_repository_ids,omitempty"`
 }
 
 // WorkloadAttesterTrustSourceRotated is the payload of
@@ -8206,6 +8208,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			RootCertsPEM: pl.RootCertsPEM, ExpectedNonceBase64: pl.ExpectedNonceBase64,
 			Enabled: pl.Enabled, RotationVersion: pl.RotationVersion, CreatedAt: e.Time, UpdatedAt: e.Time,
 			SelfAuthenticating: pl.SelfAuthenticating, AllowedOwners: pl.AllowedOwners,
+			AllowedOwnerIDs: pl.AllowedOwnerIDs, AllowedRepositoryIDs: pl.AllowedRepositoryIDs,
 		}); err != nil {
 			return err
 		}

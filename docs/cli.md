@@ -406,6 +406,39 @@ exhaustive subcommand list:
 Plus `version`. `trstctl` (the server binary) additionally serves `token`,
 `connector`, and `ssh` under its own conventions — see the callout above.
 
+### Add IDs to an existing GitHub OIDC trust source
+
+List sources in the target tenant and look for `immutable_pin_required: true`.
+Obtain the owner or repository IDs from the administration records for the
+source's issuer. Put them in JSON as strings to preserve every digit.
+
+```sh
+trstctl-cli workloads attester-trust-sources list
+trstctl-cli workloads attester-trust-sources get "$source_id" > github-trust-current.json
+
+jq --arg owner_id "$github_owner_id" --arg repo_id "$github_repository_id" '
+  {name, method, issuer, audience, jwks, enabled, self_authenticating, allowed_owners}
+  | with_entries(select(.value != null))
+  | .allowed_owner_ids = ([$owner_id] | map(select(length > 0)))
+  | .allowed_repository_ids = ([$repo_id] | map(select(length > 0)))
+' github-trust-current.json > github-trust-update.json
+
+trstctl-cli --idempotency-key github-pin-update-1 \
+  workloads attester-trust-sources update "$source_id" --file github-trust-update.json
+trstctl-cli workloads attester-trust-sources get "$source_id"
+```
+
+Set `source_id` to the ID from the list. Use an empty value for the ID category
+you intend to omit, and supply at least one verified ID for a source that
+requires remediation. Review the generated body before submitting it. A
+replacement of a pinned source requires both arrays in the request. Use
+`[]` to remove a condition deliberately, with any remaining name or
+self-authentication rule still backed by an ID. Use the same JSON field names
+with `workloads attester-trust-sources create --file` for a new source.
+Confirm the effective read shows the configured IDs and clears
+`immutable_pin_required`. Key or JWKS rollover within one issuer uses
+`rotate` and preserves the pins.
+
 Review a notification route before saving it:
 
 ```bash

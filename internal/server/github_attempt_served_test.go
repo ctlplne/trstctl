@@ -3,6 +3,8 @@
 package server
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -21,6 +23,171 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 )
 
+func TestGitHubImmutablePinUpgradeRecoversLegacyAttempts(t *testing.T) {
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	const kid = "github-upgrade-fixture"
+	jwk, err := crypto.PublicJWK(key.Public(), kid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.AttestedIssuance = AttestedIssuanceConfig{
+			Enabled: true, TrustDomain: "ci.example.test", DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour,
+		}
+	})
+	const trustPath = "/api/v1/workloads/attester-trust-sources"
+	const issuePath = "/api/v1/workloads/attested-issuance"
+	apiToken := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read")
+	trust := map[string]any{
+		"name": "upgrade-fixture", "method": "github_oidc", "audience": "trstctl", "jwks": crypto.JWKS{Keys: []crypto.JWK{jwk}},
+	}
+	status, body := secretsReqKey(t, h, http.MethodPost, trustPath, apiToken, "legacy-ordinary-source", trust)
+	var source servedWorkloadTrustSourceResponse
+	if status != http.StatusCreated || json.Unmarshal(body, &source) != nil || source.ID == "" {
+		t.Fatalf("create ordinary trust: %d", status)
+	}
+	proof := func(runID string, withIDs bool) []byte {
+		t.Helper()
+		if withIDs {
+			return githubWorkflowAttemptToken(t, key, kid, "acme", runID, "1")
+		}
+		return githubWorkflowAttemptTokenWithIDs(t, key, kid, "acme", runID, "1", "", "")
+	}
+	oldPublicKey := servedAttestedPublicKeyPEM(t)
+	oldBody := map[string]any{
+		"method": "github_oidc", "payload_base64": base64.StdEncoding.EncodeToString(proof("38451", false)),
+		"public_key_pem": oldPublicKey, "ttl_seconds": 600,
+	}
+	const oldCallerKey = "original-legacy-http-call"
+	status, oldResponse := secretsReqKey(t, h, http.MethodPost, issuePath, apiToken, oldCallerKey, oldBody)
+	var original api.AttestedSVID
+	if status != http.StatusCreated || json.Unmarshal(oldResponse, &original) != nil || original.CredentialID == "" {
+		t.Fatalf("complete legacy attempt: %d", status)
+	}
+
+	pendingPublicKey, err := crypto.ParsePublicKeyPEM([]byte(servedAttestedPublicKeyPEM(t)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := *h.srv.attestedIssuance
+	journal, ok := service.caSigner.(journaledLeafSigner)
+	if !ok {
+		t.Fatal("served fixture did not wire the journaled signer")
+	}
+	probe := &githubAttemptUpgradeSigner{journaledLeafSigner: journal, paused: true}
+	service.caSigner = probe
+	pending := api.AttestedSVIDRequest{Method: "github_oidc", Payload: proof("38452", false), PublicKeyDER: pendingPublicKey.DER, TTLSeconds: 600}
+	if _, err := service.IssueAttestedSVID(t.Context(), h.tenant, "original-legacy-prepare", pending); !errors.Is(err, errGitHubAttemptUpgradePaused) || probe.calls != 1 {
+		t.Fatalf("prepare an attempt while the signer is paused: calls=%d err=%v", probe.calls, err)
+	}
+	probe.paused = false
+
+	trust["allowed_owner_ids"] = []string{servedGitHubOwnerID}
+	trust["allowed_repository_ids"] = []string{"456"}
+	status, _ = secretsReqKey(t, h, http.MethodPut, trustPath+"/"+source.ID, apiToken, "add-immutable-pins", trust)
+	if status != http.StatusOK {
+		t.Fatalf("replace GitHub trust with pins: %d", status)
+	}
+	exactStatus, exactResponse := secretsReqKey(t, h, http.MethodPost, issuePath, apiToken, oldCallerKey, oldBody)
+	if exactStatus != http.StatusCreated || !bytes.Equal(exactResponse, oldResponse) {
+		t.Fatal("an exact authenticated HTTP replay changed the completed result")
+	}
+	public, err := crypto.ParsePublicKeyPEM([]byte(oldPublicKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed := api.AttestedSVIDRequest{Method: "github_oidc", Payload: proof("38451", true), PublicKeyDER: public.DER, TTLSeconds: 600}
+	recovered, err := service.IssueAttestedSVID(t.Context(), h.tenant, "recover-legacy-completion", completed)
+	if err != nil || recovered.CertificatePEM != original.CertificatePEM ||
+		!recovered.Attestation.VerifiedAt.Equal(original.Attestation.VerifiedAt) || probe.calls != 1 {
+		t.Fatalf("recover completed attempt without another signature: calls=%d err=%v", probe.calls, err)
+	}
+	completed.Payload = proof("38451", false)
+	if _, err := service.IssueAttestedSVID(t.Context(), h.tenant, "legacy-proof-under-current-policy", completed); !errors.Is(err, api.ErrAttestedIssuanceRejected) || probe.calls != 1 {
+		t.Fatalf("service recovery did not enforce current proof requirements: calls=%d err=%v", probe.calls, err)
+	}
+	pending.Payload = proof("38452", true)
+	resumed, err := service.IssueAttestedSVID(t.Context(), h.tenant, "resume-legacy-preparation", pending)
+	if err != nil || resumed.CertificatePEM == "" || probe.calls != 2 {
+		t.Fatalf("resume prepared attempt once: calls=%d err=%v", probe.calls, err)
+	}
+	for _, result := range []api.AttestedSVID{recovered, resumed} {
+		if result.Attestation.Claims["repository_owner_id"] != "" || result.Attestation.Claims["repository_id"] != "" {
+			t.Fatal("fresh IDs were attached to the historical verification time")
+		}
+	}
+	if servedCertificateCountAUD47(t, h) != 2 {
+		t.Fatal("replay and preparation recovery must leave exactly their original two certificates")
+	}
+
+	sourcePath := trustPath + "/" + source.ID
+	type pinView struct {
+		OwnerIDs      []string `json:"allowed_owner_ids"`
+		RepositoryIDs []string `json:"allowed_repository_ids"`
+		NeedsPin      bool     `json:"immutable_pin_required"`
+	}
+	assertPins := func(view pinView) {
+		t.Helper()
+		if view.NeedsPin || len(view.OwnerIDs) != 1 || view.OwnerIDs[0] != servedGitHubOwnerID ||
+			len(view.RepositoryIDs) != 1 || view.RepositoryIDs[0] != "456" {
+			t.Fatalf("wrong effective pin policy: %+v", view)
+		}
+	}
+	status, body = secretsReqKey(t, h, http.MethodGet, sourcePath, apiToken, "", nil)
+	var effective pinView
+	if status != http.StatusOK || json.Unmarshal(body, &effective) != nil {
+		t.Fatalf("read updated source: %d", status)
+	}
+	assertPins(effective)
+	status, body = secretsReqKey(t, h, http.MethodGet, trustPath, apiToken, "", nil)
+	var list struct {
+		Items []pinView `json:"items"`
+	}
+	if status != http.StatusOK || json.Unmarshal(body, &list) != nil || len(list.Items) != 1 {
+		t.Fatalf("list updated source: %d", status)
+	}
+	assertPins(list.Items[0])
+
+	rotate := map[string]any{"issuer": githuboidc.DefaultIssuer, "jwks": crypto.JWKS{Keys: []crypto.JWK{jwk}}}
+	status, body = secretsReqKey(t, h, http.MethodPost, sourcePath+"/rotate", apiToken, "same-issuer-material", rotate)
+	var rotated struct {
+		TrustSource pinView `json:"trust_source"`
+	}
+	if status != http.StatusOK || json.Unmarshal(body, &rotated) != nil {
+		t.Fatalf("same-issuer material rotation: %d", status)
+	}
+	assertPins(rotated.TrustSource)
+	status, replay := secretsReqKey(t, h, http.MethodPost, sourcePath+"/rotate", apiToken, "same-issuer-material", rotate)
+	if status != http.StatusOK || !bytes.Equal(replay, body) {
+		t.Fatal("an exact material rotation retry lost the first result")
+	}
+	trust["allowed_repository_ids"] = []string{"789"}
+	status, _ = secretsReqKey(t, h, http.MethodPut, sourcePath, apiToken, "add-immutable-pins", trust)
+	if status != http.StatusConflict {
+		t.Fatalf("changed pin policy reused an earlier request key: %d", status)
+	}
+}
+
+var errGitHubAttemptUpgradePaused = errors.New("fixture signer paused after storing the public preparation")
+
+type githubAttemptUpgradeSigner struct {
+	journaledLeafSigner
+	paused bool
+	calls  int
+}
+
+func (s *githubAttemptUpgradeSigner) SignDigestForOperation(operationID string, digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	s.calls++
+	if s.paused {
+		return nil, errGitHubAttemptUpgradePaused
+	}
+	return s.journaledLeafSigner.SignDigestForOperation(operationID, digest, opts)
+}
+
 // Q1 changes AUD-47 deliberately: the signed workflow attempt owns the mint.
 // A caller-controlled idempotency key or a fresh runner cannot reserve it again.
 func newGitHubAttemptHarness(t *testing.T) (*servedHarness, *crypto.LockedSigner) {
@@ -38,7 +205,8 @@ func newGitHubAttemptHarness(t *testing.T) (*servedHarness, *crypto.LockedSigner
 		d.AttestedIssuance = AttestedIssuanceConfig{
 			Enabled: true, TrustDomain: "ci.example.org", DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour,
 			Attestors: []attest.Attestor{&githuboidc.Attestor{
-				JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl", AllowedOwners: map[string]bool{"acme": true},
+				JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl",
+				AllowedOwners: map[string]bool{"acme": true}, AllowedOwnerIDs: map[string]bool{servedGitHubOwnerID: true},
 			}},
 		}
 	})

@@ -28737,16 +28737,39 @@ export const messages = {
     description: "Placeholder example for the allowed GitHub owners input.",
   },
   "workloads.attestation.allowedOwnersHelp": {
-    defaultMessage: "Organizations or users whose repositories this source admits, separated by commas. Without a pin, every repository on GitHub can attest.",
+    defaultMessage: "Optional owner names, separated by commas. Owner names require an owner ID or repository ID pin.",
     description: "Help text under the allowed GitHub owners input.",
+  },
+  "workloads.attestation.allowedOwnerIDs": {
+    defaultMessage: "Allowed GitHub owner IDs",
+    description: "Label for the signed repository_owner_id values allowed by the source.",
+  },
+  "workloads.attestation.allowedRepositoryIDs": {
+    defaultMessage: "Allowed GitHub repository IDs",
+    description: "Label for the signed repository_id values allowed by the source.",
+  },
+  "workloads.attestation.githubIDPinHelp": {
+    defaultMessage: "Enter IDs from your GitHub administration records, separated by commas. When you fill both lists, the workflow must match an ID in each.",
+    description: "Instructions for configuring immutable GitHub trust pins.",
+  },
+  "workloads.attestation.invalidGitHubID": {
+    defaultMessage: "Enter positive decimal IDs without leading zeroes, up to 18446744073709551615.",
+    description: "Validation error for an invalid ID in a GitHub pin list.",
+  },
+  "workloads.attestation.githubIDPinRequired": {
+    defaultMessage: "GitHub ID pin required",
+    description: "Status for a legacy GitHub trust source that requires an immutable pin.",
+  },
+  "workloads.attestation.githubIDPinRemediation": {
+    defaultMessage: "Update this trust source with the CLI to add an owner ID or repository ID and resume verification.",
+    description: "Remediation for an enabled GitHub trust source that needs a pin.",
   },
   "workloads.attestation.selfAuthenticating": {
     defaultMessage: "Issue on the OIDC token alone",
     description: "Checkbox label that lets the verified GitHub OIDC token be the credential for attested issuance, with no API token.",
   },
   "workloads.attestation.selfAuthenticatingHelp": {
-    defaultMessage:
-      "Workflows from the allowed owners send their OIDC token as the bearer credential of attested issuance and name this tenant; no trstctl API token lives in the pipeline. Requires at least one allowed owner.",
+    defaultMessage: "The workflow names this tenant and uses its OIDC token as the bearer credential. Requires an owner ID or repository ID pin.",
     description: "Help text under the self-authenticating checkbox.",
   },
   "workloads.attestation.createTrustSource": {

@@ -14,17 +14,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/githubidentity"
 )
 
 // DefaultIssuer is GitHub Actions' OIDC issuer.
-const DefaultIssuer = "https://token.actions.githubusercontent.com"
+const DefaultIssuer = githubidentity.DefaultIssuer
 
 // Attestor verifies GitHub Actions OIDC tokens.
 type Attestor struct {
@@ -34,8 +34,11 @@ type Attestor struct {
 	Issuer string
 	// Audience, if set, must equal the token's aud.
 	Audience string
-	// AllowedOwners, if non-empty, restricts attestation to these repository owners.
+	// AllowedOwners adds a case-insensitive name condition to the immutable pins.
 	AllowedOwners map[string]bool
+	// Each populated ID list requires an exact match in the signed claims.
+	AllowedOwnerIDs      map[string]bool
+	AllowedRepositoryIDs map[string]bool
 	// Now overrides the clock for expiry checks (tests).
 	Now func() time.Time
 }
@@ -44,11 +47,11 @@ type Attestor struct {
 func (a *Attestor) Method() string { return "github_oidc" }
 
 type ghClaims struct {
+	repositoryClaims
 	Iss               string `json:"iss"`
 	Aud               string `json:"aud"`
 	Sub               string `json:"sub"`
 	Repository        string `json:"repository"`
-	RepositoryOwner   string `json:"repository_owner"`
 	Workflow          string `json:"workflow"`
 	Ref               string `json:"ref"`
 	SHA               string `json:"sha"`
@@ -99,10 +102,7 @@ func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation
 	if err := json.Unmarshal(raw, &c); err != nil {
 		return attest.Attestation{}, fmt.Errorf("github_oidc: parse claims: %w", err)
 	}
-	wantIss := a.Issuer
-	if wantIss == "" {
-		wantIss = DefaultIssuer
-	}
+	wantIss := githubidentity.EffectiveIssuer(a.Issuer)
 	if c.Iss != wantIss {
 		return attest.Attestation{}, fmt.Errorf("github_oidc: unexpected issuer %q", c.Iss)
 	}
@@ -116,14 +116,15 @@ func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation
 	if err := attest.ValidateJWTTimeWindow(raw, now()); err != nil {
 		return attest.Attestation{}, fmt.Errorf("github_oidc: %w", err)
 	}
-	if !validRunID(c.RunID) || !validRunID(c.RunAttempt) {
+	if !githubidentity.ValidID(c.RunID) || !githubidentity.ValidID(c.RunAttempt) {
 		return attest.Attestation{}, fmt.Errorf("github_oidc: signed run_id and run_attempt must be canonical positive decimal strings")
 	}
 	if c.Repository == "" {
 		return attest.Attestation{}, fmt.Errorf("github_oidc: token missing repository")
 	}
-	if len(a.AllowedOwners) > 0 && !a.ownerAllowed(c.RepositoryOwner) {
-		return attest.Attestation{}, fmt.Errorf("github_oidc: owner %s is not allowed", c.RepositoryOwner)
+	ids, err := a.verifyRepositoryPins(c.repositoryClaims)
+	if err != nil {
+		return attest.Attestation{}, err
 	}
 	// Fulcio binds the SAN to the workflow identity (job_workflow_ref, falling back
 	// to the OIDC subject) and records the issuer in an extension.
@@ -131,7 +132,7 @@ func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation
 	if san == "" {
 		san = c.Sub
 	}
-	return attest.Attestation{
+	verified := attest.Attestation{
 		Subject: c.Sub,
 		Selectors: []string{
 			"github:repository:" + c.Repository,
@@ -151,20 +152,7 @@ func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation
 			"fulcio_san":    san,
 			"fulcio_issuer": c.Iss,
 		},
-	}, nil
-}
-
-// validRunID uses one representation for the signed scope. Leading zeroes,
-// signs, whitespace, floats and oversized values must not create aliases.
-func validRunID(value string) bool {
-	if len(value) == 0 || len(value) > 20 || value[0] == '0' {
-		return false
 	}
-	for _, digit := range []byte(value) {
-		if digit < '0' || digit > '9' {
-			return false
-		}
-	}
-	_, err := strconv.ParseUint(value, 10, 64)
-	return err == nil
+	ids.addEvidence(&verified)
+	return verified, nil
 }

@@ -822,7 +822,7 @@ func (s *Server) sshWorkflowAttestorMethods(ctx context.Context, tenantID string
 			return nil, err
 		}
 		for _, source := range sources {
-			if source.Enabled && strings.TrimSpace(source.Method) != "" {
+			if source.Enabled && !source.RequiresImmutableGitHubPin() && strings.TrimSpace(source.Method) != "" {
 				methods[source.Method] = struct{}{}
 			}
 		}

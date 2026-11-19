@@ -150,7 +150,7 @@ func attestationAllowsSSHPrincipal(att attest.Attestation, principal string) boo
 	if principal == att.Subject {
 		return true
 	}
-	for _, value := range att.Claims {
+	for _, value := range att.WithoutGitHubRepositoryIDEvidence().Claims {
 		if value == principal {
 			return true
 		}

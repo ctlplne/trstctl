@@ -19,8 +19,48 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/egress"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+// CR-384: the declaration route identifies a source that still needs pin
+// remediation without resolving a proof or calling the cloud adapter.
+func TestServedCloudWorkloadSourceRequiresEffectiveGitHubTrust(t *testing.T) {
+	fixture := newAWSFederatedSecretSyncFixture(t)
+	h := newAWSFederatedServedHarness(t, fixture, nil)
+	operator := seedScopedTokenSubject(t, h.store, h.tenant, "workflow-trust-operator",
+		"secrets:read", "secrets:write", "certs:read", "certs:issue")
+	const sourceID = "00000000-0000-4000-8000-000000038401"
+	data, err := json.Marshal(projections.WorkloadAttesterTrustSourceUpserted{
+		ID: sourceID, Name: "legacy-workflow", Method: "github_oidc", Audience: "trstctl",
+		JWKS: json.RawMessage(`{"keys":[]}`), Enabled: true, AllowedOwners: []string{"acme"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.log.Append(t.Context(), events.Event{
+		Type: projections.EventWorkloadAttesterTrustSourceUpserted, TenantID: h.tenant, Data: data,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	catchUpServedProjection(t, h)
+
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs/workload-identity-sources", operator,
+		"workflow-federation-declaration", map[string]any{
+			"name": "workflow federation", "provider": "aws",
+			"role_arn": "arn:aws:iam::123456789012:role/trstctl-secret-sync",
+			"audience": "trstctl", "subject": "repo:acme/workflow",
+			"target_id": servedAWSFederatedTargetID, "allowed_remote_key_prefixes": []string{"prod/workflow/"},
+			"workload_proof_ref": "secret://" + servedAWSFederatedProofName, "trust_source_id": sourceID,
+		})
+	if status != http.StatusBadRequest || !strings.Contains(string(body), "immutable") {
+		t.Fatalf("legacy GitHub declaration status = %d, want 400 with pin remediation", status)
+	}
+	if fixture.stsCalls.Load() != 0 || fixture.secretManagerCalls.Load() != 0 {
+		t.Fatal("declaring a workload trust reference called the cloud adapter")
+	}
+}
 
 const (
 	servedAWSFederatedTargetID   = "aws-federated"

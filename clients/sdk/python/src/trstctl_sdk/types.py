@@ -18959,13 +18959,16 @@ VerificationSuggestions = TypedDict(
 WorkloadAttesterTrustSource = TypedDict(
     'WorkloadAttesterTrustSource',
     {
+        'allowed_owner_ids': list[str],
         'allowed_owners': list[str],
+        'allowed_repository_ids': list[str],
         'audience': str,
         'authority_pending': bool,
         'created_at': str,
         'enabled': bool,
         'expected_nonce_base64': str,
         'id': str,
+        'immutable_pin_required': bool,
         'issuer': str,
         'jwks': dict[str, Any],
         'last_rotated_at': str,
@@ -18994,7 +18997,9 @@ WorkloadAttesterTrustSourceList = TypedDict(
 WorkloadAttesterTrustSourceRequest = TypedDict(
     'WorkloadAttesterTrustSourceRequest',
     {
+        'allowed_owner_ids': list[str],
         'allowed_owners': list[str],
+        'allowed_repository_ids': list[str],
         'audience': str,
         'enabled': bool,
         'expected_nonce_base64': str,

@@ -12,12 +12,14 @@ package codesign
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/githubidentity"
 )
 
 // KeyResolver returns the isolated signer-held key for a key id. The signer is a
@@ -250,8 +252,20 @@ func (s *Service) SignKeyless(ctx context.Context, req KeylessRequest) (KeylessS
 		return KeylessSignature{}, classify(ErrSignerOperation, fmt.Errorf("codesign: keyless sign: %w", err))
 	}
 	pub := req.Ephemeral.Public()
-	_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.keyless.signed", s.cfg.TenantID,
-		[]byte(fmt.Sprintf(`{"principal":%q,"fulcio_san":%q,"fulcio_issuer":%q,"artifact_type":%q}`, req.Principal, san, issuer, req.ArtifactType)))
+	evidence := struct {
+		Principal         string `json:"principal"`
+		FulcioSAN         string `json:"fulcio_san"`
+		FulcioIssuer      string `json:"fulcio_issuer"`
+		ArtifactType      string `json:"artifact_type"`
+		RepositoryOwnerID string `json:"repository_owner_id,omitempty"`
+		RepositoryID      string `json:"repository_id,omitempty"`
+	}{Principal: req.Principal, FulcioSAN: san, FulcioIssuer: issuer, ArtifactType: req.ArtifactType}
+	if req.Identity.Method == "github_oidc" {
+		evidence.RepositoryOwnerID = req.Identity.Claims[githubidentity.RepositoryOwnerIDClaim]
+		evidence.RepositoryID = req.Identity.Claims[githubidentity.RepositoryIDClaim]
+	}
+	payload, _ := json.Marshal(evidence)
+	_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.keyless.signed", s.cfg.TenantID, payload)
 	return KeylessSignature{
 		Algorithm: string(pub.Algorithm), Value: value, PublicKeyDER: pub.DER,
 		FulcioSAN: san, FulcioIssuer: issuer, ArtifactType: req.ArtifactType,

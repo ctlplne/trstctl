@@ -29994,8 +29994,12 @@ export interface components {
             verify_server_name?: string;
         };
         WorkloadAttesterTrustSource: {
-            /** @description Lower-cased GitHub repository owners this source admits. */
+            /** @description The GitHub owner ID pins configured for this issuer. Present in current reads; older replayed responses may omit it. */
+            allowed_owner_ids?: string[];
+            /** @description Lower-cased GitHub repository owner names checked alongside immutable pins. */
             allowed_owners: string[];
+            /** @description The GitHub repository ID pins configured for this issuer. Present in current reads; older replayed responses may omit it. */
+            allowed_repository_ids?: string[];
             audience?: string;
             /** @description An accepted trust change is awaiting projection; old proof is denied until recovery completes. */
             authority_pending?: boolean;
@@ -30005,6 +30009,8 @@ export interface components {
             expected_nonce_base64?: string;
             /** Format: uuid */
             id: string;
+            /** @description This GitHub source needs an immutable pin to verify proofs. Present in current reads; older replayed responses may omit it. */
+            immutable_pin_required?: boolean;
             issuer?: string;
             jwks: Record<string, never>;
             /** Format: date-time */
@@ -30029,8 +30035,12 @@ export interface components {
             next_cursor?: string;
         };
         WorkloadAttesterTrustSourceRequest: {
-            /** @description GitHub repository owners (organisations or users) this source admits; compared without regard to case. */
+            /** @description Canonical positive decimal GitHub repository_owner_id strings in this issuer's namespace. Supply both ID arrays when replacing a pinned source. */
+            allowed_owner_ids?: string[];
+            /** @description Optional case-insensitive owner names for github_oidc. Requires an owner ID or repository ID pin. */
             allowed_owners?: string[];
+            /** @description Canonical positive decimal GitHub repository_id strings in this issuer's namespace. When both ID arrays are populated, both must match. An explicit empty array removes that condition on replacement. */
+            allowed_repository_ids?: string[];
             audience?: string;
             enabled?: boolean;
             expected_nonce_base64?: string;
@@ -30040,7 +30050,7 @@ export interface components {
             method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
             name: string;
             root_certs_pem?: string[];
-            /** @description A84: github_oidc only; the verified OIDC token is by itself the bearer credential of POST /api/v1/workloads/attested-issuance for this tenant. Requires allowed_owners. */
+            /** @description For github_oidc, the verified token can authenticate attested issuance for this tenant. Requires an owner ID or repository ID pin. */
             self_authenticating?: boolean;
         };
         WorkloadAttesterTrustSourceRevokeRequest: {

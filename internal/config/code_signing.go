@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/githubidentity"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
@@ -53,12 +54,14 @@ type CodeSigningKey struct {
 // JWKS is file/inline public material, so token verification does not fetch keys on
 // the signing request hot path.
 type CodeSigningGitHubOIDC struct {
-	TenantID      string   `json:"tenant_id"`
-	Issuer        string   `json:"issuer,omitempty"`
-	Audience      string   `json:"audience"`
-	JWKSFile      string   `json:"jwks_file,omitempty"`
-	JWKSJSON      string   `json:"jwks_json,omitempty"`
-	AllowedOwners []string `json:"allowed_owners,omitempty"`
+	TenantID             string                `json:"tenant_id"`
+	Issuer               string                `json:"issuer,omitempty"`
+	Audience             string                `json:"audience"`
+	JWKSFile             string                `json:"jwks_file,omitempty"`
+	JWKSJSON             string                `json:"jwks_json,omitempty"`
+	AllowedOwners        []string              `json:"allowed_owners,omitempty"`
+	AllowedOwnerIDs      githubidentity.PinIDs `json:"allowed_owner_ids,omitempty"`
+	AllowedRepositoryIDs githubidentity.PinIDs `json:"allowed_repository_ids,omitempty"`
 }
 
 // CodeSigningRekor configures asynchronous Rekor v1 HashedRekord publication.
@@ -145,6 +148,12 @@ func validateCodeSigning(c CodeSigning) []error {
 		}
 		if (strings.TrimSpace(source.JWKSFile) == "") == (strings.TrimSpace(source.JWKSJSON) == "") {
 			errs = append(errs, fmt.Errorf("%s requires exactly one of jwks_file or jwks_json", where))
+		}
+		if _, err := githubidentity.NormalizeIDs(source.AllowedOwnerIDs); err != nil {
+			errs = append(errs, fmt.Errorf("%s.allowed_owner_ids: %w", where, err))
+		}
+		if _, err := githubidentity.NormalizeIDs(source.AllowedRepositoryIDs); err != nil {
+			errs = append(errs, fmt.Errorf("%s.allowed_repository_ids: %w", where, err))
 		}
 	}
 	switch strings.TrimSpace(c.EphemeralAlgorithm) {

@@ -3,10 +3,47 @@
 package config
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 )
+
+// CR-384: deployment configuration keeps repository coordinates as exact
+// decimal strings and rejects present fields with a different shape.
+func TestCodeSigningGitHubPinWireFormat(t *testing.T) {
+	for _, tc := range []struct {
+		name, input string
+		valid       bool
+	}{
+		{"owner and repository pins", `{"allowed_owner_ids":["9007199254740993"],"allowed_repository_ids":["456"]}`, true},
+		{"empty pins", `{"allowed_owner_ids":[],"allowed_repository_ids":[]}`, true},
+		{"null array", `{"allowed_owner_ids":null}`, false},
+		{"null item", `{"allowed_repository_ids":[null]}`, false},
+		{"number item", `{"allowed_repository_ids":[456]}`, false},
+		{"leading zero", `{"allowed_owner_ids":["0123"]}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var source CodeSigningGitHubOIDC
+			err := json.Unmarshal([]byte(tc.input), &source)
+			if (err == nil) != tc.valid {
+				t.Fatalf("decoded = %t, want %t, error %v", err == nil, tc.valid, err)
+			}
+			if tc.name != "owner and repository pins" {
+				return
+			}
+			encoded, err := json.Marshal(source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{`"allowed_owner_ids":["9007199254740993"]`, `"allowed_repository_ids":["456"]`} {
+				if !strings.Contains(string(encoded), want) {
+					t.Errorf("encoded trust source omitted %s", want)
+				}
+			}
+		})
+	}
+}
 
 func TestCodeSigningConfigIsTenantBoundAndFailClosed(t *testing.T) {
 	valid := CodeSigning{

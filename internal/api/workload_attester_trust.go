@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/githubidentity"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -32,11 +33,12 @@ type workloadAttesterTrustSourceRequest struct {
 	RootCertsPEM        []string        `json:"root_certs_pem,omitempty"`
 	ExpectedNonceBase64 string          `json:"expected_nonce_base64,omitempty"`
 	Enabled             *bool           `json:"enabled,omitempty"`
-	// SelfAuthenticating (A84): a github_oidc source whose verified token is by
-	// itself the bearer credential of attested issuance for this tenant. It
-	// requires AllowedOwners, the pin that keeps the rest of GitHub out.
-	SelfAuthenticating bool     `json:"self_authenticating,omitempty"`
-	AllowedOwners      []string `json:"allowed_owners,omitempty"`
+	// A self-authenticating source needs an immutable pin before its proof can
+	// serve as the tenant's attested-issuance bearer credential.
+	SelfAuthenticating   bool                  `json:"self_authenticating,omitempty"`
+	AllowedOwners        []string              `json:"allowed_owners,omitempty"`
+	AllowedOwnerIDs      githubidentity.PinIDs `json:"allowed_owner_ids,omitempty"`
+	AllowedRepositoryIDs githubidentity.PinIDs `json:"allowed_repository_ids,omitempty"`
 }
 
 type workloadAttesterTrustSourceRotateRequest struct {
@@ -53,25 +55,28 @@ type workloadAttesterTrustSourceRevokeRequest struct {
 }
 
 type workloadAttesterTrustSourceResponse struct {
-	ID                  string          `json:"id"`
-	TenantID            string          `json:"tenant_id"`
-	Name                string          `json:"name"`
-	Method              string          `json:"method"`
-	Issuer              string          `json:"issuer,omitempty"`
-	Audience            string          `json:"audience,omitempty"`
-	JWKS                json.RawMessage `json:"jwks"`
-	RootCertsPEM        []string        `json:"root_certs_pem"`
-	ExpectedNonceBase64 string          `json:"expected_nonce_base64,omitempty"`
-	SelfAuthenticating  bool            `json:"self_authenticating"`
-	AllowedOwners       []string        `json:"allowed_owners"`
-	Enabled             bool            `json:"enabled"`
-	AuthorityPending    bool            `json:"authority_pending"`
-	RevokedAt           string          `json:"revoked_at,omitempty"`
-	RevokedReason       string          `json:"revoked_reason,omitempty"`
-	RotationVersion     int             `json:"rotation_version"`
-	LastRotatedAt       string          `json:"last_rotated_at,omitempty"`
-	CreatedAt           string          `json:"created_at"`
-	UpdatedAt           string          `json:"updated_at"`
+	ID                   string          `json:"id"`
+	TenantID             string          `json:"tenant_id"`
+	Name                 string          `json:"name"`
+	Method               string          `json:"method"`
+	Issuer               string          `json:"issuer,omitempty"`
+	Audience             string          `json:"audience,omitempty"`
+	JWKS                 json.RawMessage `json:"jwks"`
+	RootCertsPEM         []string        `json:"root_certs_pem"`
+	ExpectedNonceBase64  string          `json:"expected_nonce_base64,omitempty"`
+	SelfAuthenticating   bool            `json:"self_authenticating"`
+	AllowedOwners        []string        `json:"allowed_owners"`
+	AllowedOwnerIDs      []string        `json:"allowed_owner_ids"`
+	AllowedRepositoryIDs []string        `json:"allowed_repository_ids"`
+	ImmutablePinRequired bool            `json:"immutable_pin_required"`
+	Enabled              bool            `json:"enabled"`
+	AuthorityPending     bool            `json:"authority_pending"`
+	RevokedAt            string          `json:"revoked_at,omitempty"`
+	RevokedReason        string          `json:"revoked_reason,omitempty"`
+	RotationVersion      int             `json:"rotation_version"`
+	LastRotatedAt        string          `json:"last_rotated_at,omitempty"`
+	CreatedAt            string          `json:"created_at"`
+	UpdatedAt            string          `json:"updated_at"`
 }
 
 type workloadAttesterTrustSourceListResponse struct {
@@ -172,7 +177,7 @@ func (a *API) createWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 		if err := a.ensureWorkloadAttesterTrustSourceNameAvailable(ctx, tenantID, req.Name, ""); err != nil {
 			return 0, nil, err
 		}
-		if err := a.emitWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding, req, 1); err != nil {
+		if err := a.emitWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding, req, 1, true); err != nil {
 			return 0, nil, err
 		}
 		rec, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id)
@@ -242,7 +247,7 @@ func (a *API) updateWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 		if err := a.ensureWorkloadAttesterTrustSourceNameAvailable(ctx, tenantID, req.Name, id); err != nil {
 			return 0, nil, err
 		}
-		if err := a.emitWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding, req, existing.RotationVersion); err != nil {
+		if err := a.emitWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding, req, existing.RotationVersion, false); err != nil {
 			return 0, nil, err
 		}
 		rec, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id)
@@ -309,7 +314,7 @@ func (a *API) rotateWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 			return 0, nil, err
 		}
 		if err := a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding,
-			projections.EventWorkloadAttesterTrustSourceRotated, payload, false); err != nil {
+			projections.EventWorkloadAttesterTrustSourceRotated, payload, store.WorkloadAttesterTrustCommand{}); err != nil {
 			return 0, nil, err
 		}
 		rec, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id)
@@ -351,7 +356,7 @@ func (a *API) revokeWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 			return 0, nil, err
 		}
 		if err := a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding,
-			projections.EventWorkloadAttesterTrustSourceRevoked, payload, true); err != nil {
+			projections.EventWorkloadAttesterTrustSourceRevoked, payload, store.WorkloadAttesterTrustCommand{TargetDisabled: true}); err != nil {
 			return 0, nil, err
 		}
 		rec, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id)
@@ -387,28 +392,34 @@ func (a *API) deleteWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 			return 0, nil, err
 		}
 		if err := a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding,
-			projections.EventWorkloadAttesterTrustSourceDeleted, payload, true); err != nil {
+			projections.EventWorkloadAttesterTrustSourceDeleted, payload, store.WorkloadAttesterTrustCommand{TargetDisabled: true}); err != nil {
 			return 0, nil, err
 		}
 		return http.StatusNoContent, nil, nil
 	})
 }
 
-func (a *API) emitWorkloadAttesterTrustSource(ctx context.Context, tenantID, id, idempotencyKey, requestBinding string, req workloadAttesterTrustSourceRequest, rotationVersion int) error {
+func (a *API) emitWorkloadAttesterTrustSource(ctx context.Context, tenantID, id, idempotencyKey, requestBinding string, req workloadAttesterTrustSourceRequest, rotationVersion int, create bool) error {
 	payload, err := json.Marshal(projections.WorkloadAttesterTrustSourceUpserted{
 		ID: id, Name: req.Name, Method: req.Method, Issuer: req.Issuer, Audience: req.Audience,
 		JWKS: req.JWKS, RootCertsPEM: req.RootCertsPEM, ExpectedNonceBase64: req.ExpectedNonceBase64,
 		Enabled: *req.Enabled, RotationVersion: rotationVersion,
 		SelfAuthenticating: req.SelfAuthenticating, AllowedOwners: req.AllowedOwners,
+		AllowedOwnerIDs: req.AllowedOwnerIDs, AllowedRepositoryIDs: req.AllowedRepositoryIDs,
 	})
 	if err != nil {
 		return err
 	}
 	return a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding,
-		projections.EventWorkloadAttesterTrustSourceUpserted, payload, !*req.Enabled)
+		projections.EventWorkloadAttesterTrustSourceUpserted, payload, store.WorkloadAttesterTrustCommand{
+			TargetDisabled: !*req.Enabled,
+			UpsertAdmission: store.WorkloadAttesterTrustUpsertAdmission{
+				Create: create, PinsExplicit: req.AllowedOwnerIDs != nil && req.AllowedRepositoryIDs != nil,
+			},
+		})
 }
 
-func (a *API) appendAndProjectWorkloadAttesterTrustSource(ctx context.Context, tenantID, sourceID, idempotencyKey, requestBinding, eventType string, payload []byte, targetDisabled bool) error {
+func (a *API) appendAndProjectWorkloadAttesterTrustSource(ctx context.Context, tenantID, sourceID, idempotencyKey, requestBinding, eventType string, payload []byte, candidate store.WorkloadAttesterTrustCommand) error {
 	if a.store == nil || a.log == nil {
 		return errStatus(http.StatusServiceUnavailable, "workload attester trust-source management is not configured")
 	}
@@ -427,7 +438,7 @@ func (a *API) appendAndProjectWorkloadAttesterTrustSource(ctx context.Context, t
 		Domain, TenantID, SourceID, IdempotencyKey, EventType, Principal, PayloadSHA256 string
 		TargetDisabled                                                                  bool
 	}{"trstctl.workload-attester-trust-command.v1", tenantID, sourceID, idempotencyKey,
-		eventType, principal, crypto.SHA256Hex(payload), targetDisabled})
+		eventType, principal, crypto.SHA256Hex(payload), candidate.TargetDisabled})
 	if err != nil {
 		return err
 	}
@@ -439,11 +450,20 @@ func (a *API) appendAndProjectWorkloadAttesterTrustSource(ctx context.Context, t
 	if actor, ok := events.ActorFromContext(ctx); ok {
 		wanted.Actor = &actor
 	}
-	command, err := a.store.ClaimWorkloadAttesterTrustCommand(ctx, store.WorkloadAttesterTrustCommand{
-		SourceID: sourceID, BindingSHA256: crypto.SHA256Hex(bindingMaterial), RequestBinding: requestBinding,
-		TargetDisabled: targetDisabled, Event: wanted,
-	})
+	candidate.SourceID = sourceID
+	candidate.BindingSHA256 = crypto.SHA256Hex(bindingMaterial)
+	candidate.RequestBinding = requestBinding
+	candidate.Event = wanted
+	command, err := a.store.ClaimWorkloadAttesterTrustCommand(ctx, candidate)
 	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrPinnedTrustSourceExists):
+			return errStatus(http.StatusConflict, "a pinned GitHub trust source already exists, update it explicitly")
+		case errors.Is(err, store.ErrPinnedTrustReplacement):
+			return errStatus(http.StatusConflict, "replacing pinned GitHub trust requires the github_oidc method and explicit allowed_owner_ids and allowed_repository_ids arrays")
+		case errors.Is(err, store.ErrPinnedTrustIssuerRotation):
+			return errStatus(http.StatusConflict, "update the trust source with explicit GitHub pins to change its issuer")
+		}
 		return err
 	}
 	ev, found, err := a.log.EventByID(ctx, eventID)
@@ -501,7 +521,7 @@ func decodeWorkloadAttesterTrustSourceRequest(r *http.Request) (workloadAttester
 		return workloadAttesterTrustSourceRequest{}, err
 	}
 	req.AllowedOwners = normalizeAllowedOwners(req.AllowedOwners)
-	if err := validateSelfAuthenticatingTrustSource(req.Method, req.SelfAuthenticating, req.AllowedOwners); err != nil {
+	if err := validateWorkloadAttesterGitHubPins(req); err != nil {
 		return workloadAttesterTrustSourceRequest{}, err
 	}
 	req.JWKS = normalizeJWKSForMethod(req.Method, req.JWKS)
@@ -525,22 +545,18 @@ func normalizeAllowedOwners(values []string) []string {
 	return out
 }
 
-// validateSelfAuthenticatingTrustSource (A84) fails closed: only a GitHub OIDC
-// token can stand in for an API token, and only for pinned owners. An unpinned
-// self-authenticating source would let every repository on GitHub mint under
-// this tenant, so it is refused at creation rather than trusted at issuance.
-func validateSelfAuthenticatingTrustSource(method string, selfAuthenticating bool, owners []string) error {
-	if len(owners) > 0 && method != "github_oidc" {
-		return errStatus(http.StatusBadRequest, "allowed_owners applies to github_oidc sources only")
+func validateWorkloadAttesterGitHubPins(req workloadAttesterTrustSourceRequest) error {
+	hasOwnerNames := len(req.AllowedOwners) > 0
+	if req.Method != "github_oidc" {
+		if hasOwnerNames || req.AllowedOwnerIDs != nil || req.AllowedRepositoryIDs != nil {
+			return errStatus(http.StatusBadRequest, "GitHub pin fields apply to github_oidc sources only")
+		}
+		if req.SelfAuthenticating {
+			return errStatus(http.StatusBadRequest, "self_authenticating is available for github_oidc sources only")
+		}
 	}
-	if !selfAuthenticating {
-		return nil
-	}
-	if method != "github_oidc" {
-		return errStatus(http.StatusBadRequest, "self_authenticating is available for github_oidc sources only")
-	}
-	if len(owners) == 0 {
-		return errStatus(http.StatusBadRequest, "a self_authenticating source requires allowed_owners: without the owner pin every repository on GitHub could issue under this tenant")
+	if (req.SelfAuthenticating || hasOwnerNames) && len(req.AllowedOwnerIDs) == 0 && len(req.AllowedRepositoryIDs) == 0 {
+		return errStatus(http.StatusBadRequest, "self_authenticating and allowed_owners require an immutable pin in allowed_owner_ids or allowed_repository_ids")
 	}
 	return nil
 }
@@ -559,6 +575,12 @@ func decodeWorkloadAttesterTrustSourceRotateRequest(r *http.Request, existing st
 	}
 	if containsInlineSecret(obj) {
 		return workloadAttesterTrustSourceRotateRequest{}, errStatus(http.StatusBadRequest, "workload attester trust-source rotation accepts public trust material and references, not inline secrets")
+	}
+	for field := range obj {
+		switch strings.ToLower(field) {
+		case "allowed_owner_ids", "allowed_repository_ids":
+			return workloadAttesterTrustSourceRotateRequest{}, errStatus(http.StatusBadRequest, "update the trust source to change its GitHub pins")
+		}
 	}
 	var req workloadAttesterTrustSourceRotateRequest
 	if err := json.Unmarshal(raw, &req); err != nil {
@@ -682,13 +704,22 @@ func toWorkloadAttesterTrustSourceResponse(rec store.WorkloadAttesterTrustSource
 	if owners == nil {
 		owners = []string{}
 	}
+	ownerIDs, repositoryIDs := rec.AllowedOwnerIDs, rec.AllowedRepositoryIDs
+	if ownerIDs == nil {
+		ownerIDs = []string{}
+	}
+	if repositoryIDs == nil {
+		repositoryIDs = []string{}
+	}
 	out := workloadAttesterTrustSourceResponse{
 		ID: rec.ID, TenantID: rec.TenantID, Name: rec.Name, Method: rec.Method,
 		Issuer: rec.Issuer, Audience: rec.Audience, JWKS: jwks, RootCertsPEM: roots,
 		ExpectedNonceBase64: rec.ExpectedNonceBase64, Enabled: rec.Enabled,
 		SelfAuthenticating: rec.SelfAuthenticating, AllowedOwners: owners,
-		AuthorityPending: rec.AuthorityPending,
-		RevokedReason:    rec.RevokedReason, RotationVersion: rec.RotationVersion,
+		AllowedOwnerIDs: ownerIDs, AllowedRepositoryIDs: repositoryIDs,
+		ImmutablePinRequired: rec.RequiresImmutableGitHubPin(),
+		AuthorityPending:     rec.AuthorityPending,
+		RevokedReason:        rec.RevokedReason, RotationVersion: rec.RotationVersion,
 		CreatedAt: rec.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: rec.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}

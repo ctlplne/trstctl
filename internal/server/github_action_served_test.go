@@ -22,6 +22,8 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+const servedGitHubOwnerID = "123"
+
 // The GitHub Action's flow, proven against the served binary (I3): the exact
 // request shape clients/github-action/action.yml sends — method github_oidc,
 // payload_base64 carrying the workflow's OIDC JWT, public_key_pem, ttl — is
@@ -40,7 +42,12 @@ func githubWorkflowToken(t *testing.T, signer *crypto.LockedSigner, kid, owner s
 
 func githubWorkflowAttemptToken(t *testing.T, signer *crypto.LockedSigner, kid, owner, runID, attempt string) []byte {
 	t.Helper()
-	token, err := crypto.SignJWT(signer, kid, map[string]any{
+	return githubWorkflowAttemptTokenWithIDs(t, signer, kid, owner, runID, attempt, servedGitHubOwnerID, "456")
+}
+
+func githubWorkflowAttemptTokenWithIDs(t *testing.T, signer *crypto.LockedSigner, kid, owner, runID, attempt, ownerID, repositoryID string) []byte {
+	t.Helper()
+	claims := map[string]any{
 		"iss": githuboidc.DefaultIssuer, "aud": "trstctl",
 		"exp":        time.Now().Add(10 * time.Minute).Unix(),
 		"sub":        "repo:" + owner + "/payments:ref:refs/heads/main",
@@ -49,7 +56,14 @@ func githubWorkflowAttemptToken(t *testing.T, signer *crypto.LockedSigner, kid, 
 		"workflow": "issue-deploy-cert", "ref": "refs/heads/main",
 		"sha":              "0123456789abcdef0123456789abcdef01234567",
 		"job_workflow_ref": owner + "/payments/.github/workflows/issue.yml@refs/heads/main",
-	})
+	}
+	if ownerID != "" {
+		claims["repository_owner_id"] = ownerID
+	}
+	if repositoryID != "" {
+		claims["repository_id"] = repositoryID
+	}
+	token, err := crypto.SignJWT(signer, kid, claims)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,12 +86,11 @@ func TestServedGitHubActionFlowIssuesAndRefusesForeignOwners(t *testing.T) {
 			Enabled: true, TrustDomain: "ci.example.org",
 			DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour,
 			Attestors: []attest.Attestor{
-				// AllowedOwners pinned, as the action's README tells the
-				// operator to do: an unpinned source attests every repository
-				// on GitHub.
+				// The operator scopes the source to an immutable owner and
+				// checks its display name as an additional condition.
 				&githuboidc.Attestor{
 					JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl",
-					AllowedOwners: map[string]bool{"acme": true},
+					AllowedOwners: map[string]bool{"acme": true}, AllowedOwnerIDs: map[string]bool{servedGitHubOwnerID: true},
 				},
 			},
 		}
@@ -124,7 +137,7 @@ func TestShippedGitHubActionRunsAgainstServedDeploymentAUD47(t *testing.T) {
 			Enabled: true, TrustDomain: "ci.example.org", DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour,
 			Attestors: []attest.Attestor{&githuboidc.Attestor{
 				JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl",
-				AllowedOwners: map[string]bool{"acme": true},
+				AllowedOwners: map[string]bool{"acme": true}, AllowedOwnerIDs: map[string]bool{servedGitHubOwnerID: true},
 			}},
 		}
 	})

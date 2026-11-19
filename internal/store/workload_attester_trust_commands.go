@@ -17,6 +17,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/githubidentity"
 )
 
 // WorkloadAttesterTrustCommand is the latest independently committed posture
@@ -29,7 +30,21 @@ type WorkloadAttesterTrustCommand struct {
 	TargetDisabled bool
 	Event          events.Event
 	Status         string
+	// UpsertAdmission is supplied by the request adapter for a new upsert claim.
+	// The persisted command has already passed it.
+	UpsertAdmission WorkloadAttesterTrustUpsertAdmission
 }
+
+type WorkloadAttesterTrustUpsertAdmission struct {
+	Create       bool
+	PinsExplicit bool
+}
+
+var (
+	ErrPinnedTrustSourceExists   = errors.New("store: a pinned GitHub trust source with that ID already exists")
+	ErrPinnedTrustReplacement    = errors.New("store: replacing pinned GitHub trust requires explicit pin lists and the GitHub method")
+	ErrPinnedTrustIssuerRotation = errors.New("store: rotation must keep the issuer of a pinned GitHub trust source")
+)
 
 // WorkloadAttesterTrustReceipt is the immutable result of one projected source
 // event. Snapshot contains public trust metadata, never a proof or private key.
@@ -135,6 +150,8 @@ func (s *Store) ClaimWorkloadAttesterTrustCommand(ctx context.Context, candidate
 	var coordinates struct {
 		ID      string `json:"id"`
 		Enabled bool   `json:"enabled"`
+		Method  string `json:"method"`
+		Issuer  string `json:"issuer"`
 	}
 	if err := json.Unmarshal(candidate.Event.Data, &coordinates); err != nil || coordinates.ID != candidate.SourceID {
 		return canonical, errors.New("store: attester trust command source differs from payload")
@@ -203,6 +220,11 @@ func (s *Store) ClaimWorkloadAttesterTrustCommand(ctx context.Context, candidate
 					if canonical.Status == "pending" {
 						return ErrIdempotencyConflict
 					}
+				}
+				if pinErr := checkWorkloadAttesterPinAdmission(barrierCtx, tx, candidate, coordinates.Method, coordinates.Issuer); pinErr != nil {
+					return pinErr
+				}
+				if err == nil {
 					_, err = tx.Exec(barrierCtx, `UPDATE workload_attester_trust_commands SET
 						event_id=$3,event_type=$4,event_time=$5,event_actor=$6,event_payload=$7,
 						payload_sha256=$8,binding_sha256=$9,request_binding=$10,target_disabled=$11,
@@ -230,6 +252,40 @@ func (s *Store) ClaimWorkloadAttesterTrustCommand(ctx context.Context, candidate
 			})
 		})
 	return canonical, err
+}
+
+// checkWorkloadAttesterPinAdmission runs with the source-command arbiter held.
+// A caller's earlier read can precede an issuer or pin replacement.
+func checkWorkloadAttesterPinAdmission(ctx context.Context, tx pgx.Tx, candidate WorkloadAttesterTrustCommand, method, issuer string) error {
+	const upsert = "workload.attester_trust_source.upserted"
+	const rotate = "workload.attester_trust_source.rotated"
+	if candidate.Event.Type != upsert && candidate.Event.Type != rotate {
+		return nil
+	}
+	var source WorkloadAttesterTrustSource
+	err := tx.QueryRow(ctx, `SELECT method, issuer, allowed_owner_ids, allowed_repository_ids
+		FROM workload_attester_trust_sources WHERE tenant_id=$1 AND id=$2`,
+		candidate.Event.TenantID, candidate.SourceID).
+		Scan(&source.Method, &source.Issuer, &source.AllowedOwnerIDs, &source.AllowedRepositoryIDs)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil || !source.HasImmutableGitHubPins() {
+		return err
+	}
+	if candidate.Event.Type == rotate {
+		if githubidentity.EffectiveIssuer(source.Issuer) != githubidentity.EffectiveIssuer(issuer) {
+			return ErrPinnedTrustIssuerRotation
+		}
+		return nil
+	}
+	if candidate.UpsertAdmission.Create {
+		return ErrPinnedTrustSourceExists
+	}
+	if method != "github_oidc" || !candidate.UpsertAdmission.PinsExplicit {
+		return ErrPinnedTrustReplacement
+	}
+	return nil
 }
 
 // CompleteWorkloadAttesterTrustCommandTx atomically binds the independent
@@ -268,7 +324,7 @@ func (s *Store) CompleteWorkloadAttesterTrustCommandTx(ctx context.Context, tx p
 			`SELECT id::text,tenant_id::text,name,method,issuer,audience,jwks,
 			        root_certs_pem,expected_nonce_base64,enabled,revoked_at,revoked_reason,
 			        rotation_version,last_rotated_at,created_at,updated_at,
-			        self_authenticating,allowed_owners
+			        self_authenticating,allowed_owners,allowed_owner_ids,allowed_repository_ids
 			   FROM workload_attester_trust_sources WHERE tenant_id=$1 AND id=$2`,
 			event.TenantID, sourceID), &source); err != nil {
 			return err

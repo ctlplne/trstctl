@@ -64696,8 +64696,22 @@
       },
       "WorkloadAttesterTrustSource": {
         "properties": {
+          "allowed_owner_ids": {
+            "description": "The GitHub owner ID pins configured for this issuer. Present in current reads; older replayed responses may omit it.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "allowed_owners": {
-            "description": "Lower-cased GitHub repository owners this source admits.",
+            "description": "Lower-cased GitHub repository owner names checked alongside immutable pins.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_repository_ids": {
+            "description": "The GitHub repository ID pins configured for this issuer. Present in current reads; older replayed responses may omit it.",
             "items": {
               "type": "string"
             },
@@ -64723,6 +64737,10 @@
           "id": {
             "format": "uuid",
             "type": "string"
+          },
+          "immutable_pin_required": {
+            "description": "This GitHub source needs an immutable pin to verify proofs. Present in current reads; older replayed responses may omit it.",
+            "type": "boolean"
           },
           "issuer": {
             "type": "string"
@@ -64812,8 +64830,22 @@
       },
       "WorkloadAttesterTrustSourceRequest": {
         "properties": {
+          "allowed_owner_ids": {
+            "description": "Canonical positive decimal GitHub repository_owner_id strings in this issuer's namespace. Supply both ID arrays when replacing a pinned source.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "allowed_owners": {
-            "description": "GitHub repository owners (organisations or users) this source admits; compared without regard to case.",
+            "description": "Optional case-insensitive owner names for github_oidc. Requires an owner ID or repository ID pin.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_repository_ids": {
+            "description": "Canonical positive decimal GitHub repository_id strings in this issuer's namespace. When both ID arrays are populated, both must match. An explicit empty array removes that condition on replacement.",
             "items": {
               "type": "string"
             },
@@ -64855,7 +64887,7 @@
             "type": "array"
           },
           "self_authenticating": {
-            "description": "A84: github_oidc only; the verified OIDC token is by itself the bearer credential of POST /api/v1/workloads/attested-issuance for this tenant. Requires allowed_owners.",
+            "description": "For github_oidc, the verified token can authenticate attested issuance for this tenant. Requires an owner ID or repository ID pin.",
             "type": "boolean"
           }
         },

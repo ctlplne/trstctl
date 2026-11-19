@@ -39,7 +39,7 @@ jobs:
 ```
 
 The `tenant` input names the trstctl tenant whose self-authenticating
-`github_oidc` trust source admits this repository's owner. To keep an API
+`github_oidc` trust source admits this owner or repository ID. To keep an API
 token instead, set `token: ${{ secrets.TRSTCTL_CI_TOKEN }}` (scoped to
 `certs:issue` only) and omit `tenant`; the Action refuses to run with neither.
 
@@ -48,11 +48,12 @@ token instead, set `token: ${{ secrets.TRSTCTL_CI_TOKEN }}` (scoped to
 1. Create a `github_oidc` trust source for the tenant
    (`POST /api/v1/workloads/attester-trust-sources`, or the console's
    Workloads page): issuer `https://token.actions.githubusercontent.com`, the
-   audience your workflows request, GitHub's JWKS, `allowed_owners` pinning
-   your GitHub organization, and `self_authenticating: true`. The server
-   refuses to flag a source without an owner pin: an unpinned
-   self-authenticating source would let every repository on GitHub issue under
-   the tenant. The OIDC token is then accepted as the bearer credential of
+   audience your workflows request, GitHub's JWKS, and
+   `self_authenticating: true`. Set `allowed_owner_ids` to admit the owner's
+   repositories, `allowed_repository_ids` to admit specific repositories, or
+   both to require both conditions. Supply IDs as decimal strings from your
+   GitHub administration records. Optional `allowed_owners` names add a
+   case-insensitive check. The OIDC token is then accepted as the bearer credential of
    `POST /api/v1/workloads/attested-issuance` alone, for that tenant, with
    nothing but `certs:issue` there, and it must be the same token the request
    carries as `payload_base64`. Issued certificates are attributed to
@@ -65,13 +66,17 @@ token instead, set `token: ${{ secrets.TRSTCTL_CI_TOKEN }}` (scoped to
 
 ## What the attestation binds
 
-The issued SVID's identity comes from the VERIFIED token claims — repository,
-ref, workflow — not from anything the workflow asserts about itself. A fork
-cannot impersonate the upstream repository: its token carries its own
-`repository` claim, and an `allowed_owners` pin refuses it outright.
+The issued SVID's identity comes from the verified repository, ref, and workflow
+claims. On the server, `allowed_owner_ids` checks the signed `repository_owner_id`
+and `allowed_repository_ids` checks the signed `repository_id`. Both apply within
+the configured issuer's namespace. A repository ID follows the repository after
+a transfer. Add an owner ID pin to restrict the permitted destination owners.
 The Action also reads GitHub's event document and refuses fork pull requests
-before requesting OIDC. That local check is defense in depth; `allowed_owners`
-on the server is the signed-token security boundary.
+before requesting OIDC.
+
+For a source reporting `immutable_pin_required`, follow the
+[CLI repair workflow](../../docs/cli.md#add-ids-to-an-existing-github-oidc-trust-source)
+before resuming workflows.
 
 ## Reruns and idempotency
 

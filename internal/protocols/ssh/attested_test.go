@@ -17,6 +17,24 @@ import (
 
 type sshStubAtt struct{}
 
+// CR-384: the verified GitHub repository coordinates are audit evidence.
+func TestGitHubRepositoryIDEvidenceDoesNotGrantAnSSHPrincipal(t *testing.T) {
+	proof := attest.Attestation{
+		Method: "github_oidc", Subject: "workflow",
+		Claims: map[string]string{"repository_owner_id": "123", "repository_id": "456", "owner": "acme"},
+	}
+	for _, principal := range []string{"123", "456"} {
+		if attestationAllowsSSHPrincipal(proof, principal) {
+			t.Error("repository ID evidence was accepted as a requested principal")
+		}
+	}
+	for _, principal := range []string{"workflow", "acme"} {
+		if !attestationAllowsSSHPrincipal(proof, principal) {
+			t.Errorf("existing attestation field %q lost its principal match", principal)
+		}
+	}
+}
+
 func (sshStubAtt) Method() string { return "k8s_sat" }
 func (sshStubAtt) Attest(_ context.Context, p []byte) (attest.Attestation, error) {
 	if string(p) != "genuine" {

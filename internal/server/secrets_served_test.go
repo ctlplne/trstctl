@@ -240,36 +240,13 @@ func catchUpServedProjection(t *testing.T, h *servedHarness) {
 // harmless), and a fresh Idempotency-Key is sent for mutations.
 func secretsReq(t *testing.T, h *servedHarness, method, path, token string, body any) (int, []byte) {
 	t.Helper()
-	var rdr io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			t.Fatalf("marshal body: %v", err)
-		}
-		rdr = bytes.NewReader(b)
-	}
-	req, err := http.NewRequest(method, h.ts.URL+path, rdr)
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
+	idemKey := ""
 	if method != http.MethodGet {
 		// A per-(method,path) idempotency key; callers that need a STABLE key across two
 		// calls (the AN-5 retry probe) set it explicitly via secretsReqKey.
-		req.Header.Set("Idempotency-Key", method+":"+path+":"+strconv.FormatInt(time.Now().UnixNano(), 10))
+		idemKey = method + ":" + path + ":" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	}
-	resp, err := h.ts.Client().Do(req)
-	if err != nil {
-		t.Fatalf("do request: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	data, _ := io.ReadAll(resp.Body)
-	return resp.StatusCode, data
+	return secretsReqKey(t, h, method, path, token, idemKey, body)
 }
 
 // secretsReqKey is secretsReq with an explicit (stable) Idempotency-Key, for the
@@ -278,7 +255,10 @@ func secretsReqKey(t *testing.T, h *servedHarness, method, path, token, idemKey 
 	t.Helper()
 	var rdr io.Reader
 	if body != nil {
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		if err != nil {
+			t.Fatalf("marshal body: %v", err)
+		}
 		rdr = bytes.NewReader(b)
 	}
 	req, err := http.NewRequest(method, h.ts.URL+path, rdr) // #nosec G704 -- the harness's own loopback httptest server; the test chooses the path (CWE-918)
@@ -291,7 +271,9 @@ func secretsReqKey(t *testing.T, h *servedHarness, method, path, token, idemKey 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set("Idempotency-Key", idemKey)
+	if idemKey != "" {
+		req.Header.Set("Idempotency-Key", idemKey)
+	}
 	resp, err := h.ts.Client().Do(req) // #nosec G704 -- the harness's own loopback httptest server; the test chooses the path (CWE-918)
 	if err != nil {
 		t.Fatalf("do request: %v", err)

@@ -253,15 +253,18 @@ func (a *API) decodeSecretSyncWorkloadIdentitySourceRequest(ctx context.Context,
 		}
 	}
 	req.AllowedRemoteKeyPrefixes = prefixes
-	trust, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, req.TrustSourceID)
+	trust, err := a.store.GetEffectiveWorkloadAttesterTrustSource(ctx, tenantID, req.TrustSourceID)
 	if err != nil {
 		if errors.Is(err, store.ErrWorkloadAttesterTrustSourceNotFound) {
 			return req, errStatus(http.StatusBadRequest, "trust_source_id must name a tenant workload attester trust source")
 		}
 		return req, err
 	}
-	if !trust.Enabled || trust.RevokedAt != nil {
+	if trust.AuthorityPending || !trust.Enabled || trust.RevokedAt != nil {
 		return req, errStatus(http.StatusBadRequest, "trust_source_id must be enabled and not revoked")
+	}
+	if trust.RequiresImmutableGitHubPin() {
+		return req, errStatus(http.StatusBadRequest, "update the selected GitHub trust source with an immutable pin")
 	}
 	switch trust.Method {
 	case "k8s_sat", "gcp_iit", "github_oidc":

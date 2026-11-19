@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,6 +24,74 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 )
+
+func TestServedGitHubCodeSigningRefusesUnpinnedEvidenceBeforeAllocation(t *testing.T) {
+	provider, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(provider.Destroy)
+	const kid = "release-workflow-fixture"
+	jwk, err := crypto.PublicJWK(provider.Public(), kid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwks, err := json.Marshal(crypto.JWKS{Keys: []crypto.JWK{jwk}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenantAttestors, err := codeSigningAttestorsFromConfig([]config.CodeSigningGitHubOIDC{{
+		TenantID: servedTestTenant, Audience: "trstctl", JWKSJSON: string(jwks),
+		AllowedOwnerIDs: []string{servedGitHubOwnerID}, AllowedRepositoryIDs: []string{"456"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof := githubWorkflowAttemptTokenWithIDs(t, provider, kid, "acme", "38471", "1", servedGitHubOwnerID, "789")
+	var allocations, publicationCalls atomic.Int32
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.CodeSigning = CodeSigningConfig{
+			Keys: codeSigningKeyMap{},
+			AttestorsForTenant: func(tenantID string) []attest.Attestor {
+				return tenantAttestors[tenantID]
+			},
+			NewEphemeralSigner: func(context.Context, string, crypto.Algorithm) (crypto.DigestSigner, string, error) {
+				allocations.Add(1)
+				return nil, "", errors.New("unexpected fixture signer allocation")
+			},
+			DestroyEphemeralSigner: func(context.Context, string) error { return nil },
+			RekorDestination:       "transparency.rekor",
+			TransparencyHandler: orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error {
+				publicationCalls.Add(1)
+				return nil
+			}),
+		}
+	})
+	ctx, stop := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		h.srv.RunDispatcher(ctx)
+	}()
+	t.Cleanup(func() { stop(); <-done })
+
+	token := seedScopedTokenSubject(t, h.store, h.tenant, "release-workflow", "keys:read", "keys:write")
+	status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/keyless", token, "outside-keyless-pin", map[string]any{
+		"artifact_type": "oci-image", "digest": crypto.SHA256Sum([]byte("fixture-manifest")),
+		"identity_method": "github_oidc", "identity_payload": proof,
+	})
+	if status != http.StatusForbidden || !bytes.Contains(body, []byte("identity_attestation_failed")) || !h.hasEvent(t, "attestation.rejected") {
+		t.Fatalf("configured GitHub verifier did not refuse the command: %d %s", status, body)
+	}
+	drainCtx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if err := h.srv.Drain(drainCtx); err != nil {
+		t.Fatal(err)
+	}
+	if allocations.Load() != 0 || publicationCalls.Load() != 0 || h.hasEvent(t, "codesign.keyless.signed") {
+		t.Fatal("the refused GitHub proof reached key allocation, signing, or transparency publication")
+	}
+}
 
 func TestServedCodeSigningKeyBasedAndKeylessSigstore(t *testing.T) {
 	signingKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)

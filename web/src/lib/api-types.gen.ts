@@ -13607,13 +13607,16 @@ export interface VerificationSuggestions {
 }
 
 export interface WorkloadAttesterTrustSource {
+  allowed_owner_ids?: string[];
   allowed_owners: string[];
+  allowed_repository_ids?: string[];
   audience?: string;
   authority_pending?: boolean;
   created_at: string;
   enabled: boolean;
   expected_nonce_base64?: string;
   id: string;
+  immutable_pin_required?: boolean;
   issuer?: string;
   jwks: Record<string, unknown>;
   last_rotated_at?: string;
@@ -13634,7 +13637,9 @@ export interface WorkloadAttesterTrustSourceList {
 }
 
 export interface WorkloadAttesterTrustSourceRequest {
+  allowed_owner_ids?: string[];
   allowed_owners?: string[];
+  allowed_repository_ids?: string[];
   audience?: string;
   enabled?: boolean;
   expected_nonce_base64?: string;
