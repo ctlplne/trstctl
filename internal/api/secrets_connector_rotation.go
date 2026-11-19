@@ -127,6 +127,10 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if isStaticSecretRotation(req.Provider) {
+		if err := a.requireStaticRotationProviderWrite(r.Context(), tenantID, req.Provider); err != nil {
+			a.writeError(w, err)
+			return
+		}
 		// A14: the static plan names the durable phases the worker will run.
 		predecessor := "predecessor"
 		plan.OldRef = a.previewStaticRotationReference(tenantID, req)
@@ -151,7 +155,8 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 		if req.TTLSeconds != nil {
 			plan.Blockers = append(plan.Blockers, "ttl_seconds is unsupported for static rotation")
 		}
-		if provider, _, err := a.staticRotationProvider(tenantID, req.Provider, req.Key); err != nil {
+		provider, _, providerErr := a.staticRotationProvider(tenantID, req.Provider, req.Key)
+		if providerErr != nil {
 			plan.Blockers = append(plan.Blockers, staticRotationProviderUnavailableDetail)
 		} else if pair, twoUser := staticRotationTwoUserAccounts(provider, req.Key); twoUser {
 			// A240: a two-user role never mints or drops an account.
@@ -168,9 +173,6 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 				"verify the staged credential at provider " + req.Provider + " before retiring anything",
 				"retire account " + req.OldRef + " at provider " + req.Provider + " after verification by " + retirement + "; its grants stay",
 			}
-			if err := checkStaticRotationPredecessor(provider, req.Key, req.OldRef); err != nil {
-				plan.Blockers = append(plan.Blockers, fmt.Sprintf(staticRotationTwoUserOldRefDetail, pair[0], pair[1]))
-			}
 		}
 		current, getErr := a.secrets.be.Store.GetSecret(r.Context(), tenantID, req.Key)
 		switch {
@@ -183,6 +185,15 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 			plan.CurrentVersion = current.Version
 			plan.NextVersion = current.Version + 1
 		}
+		if getErr == nil && providerErr == nil && dynsecret.HostedReferenceProviderType(provider) == "" {
+			var denial *apiError
+			if err := a.checkNativeStaticRotationPredecessor(r.Context(), tenantID, req.Key, provider, req.OldRef, "", &current); errors.As(err, &denial) {
+				plan.Blockers = append(plan.Blockers, denial.detail)
+			} else if err != nil {
+				a.writeError(w, err)
+				return
+			}
+		}
 		if latest, found, err := a.store.LatestSecretStaticRotationCommandForKey(r.Context(), tenantID, req.Key); err != nil {
 			a.writeError(w, err)
 			return
@@ -190,7 +201,7 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 			plan.Blockers = append(plan.Blockers, staticRotationInFlightDetail)
 		}
 		// A240: a single-phase provider warns before it runs.
-		if provider, _, err := a.staticRotationProvider(tenantID, req.Provider, req.Key); err == nil &&
+		if providerErr == nil &&
 			staticRotationPhase(provider, req.Key) == dynsecret.RotationSinglePhase {
 			plan.ExecuteExternalEffects = append(plan.ExecuteExternalEffects, "single phase: issuing the new credential at provider "+
 				req.Provider+" invalidates the current one at once, so consumers fail until they read the new version")

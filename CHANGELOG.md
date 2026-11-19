@@ -3741,6 +3741,14 @@
 
 ### Security
 
+- Static secret rotation checks write access to the provider's environment
+  for preview, execution, and schedule changes (CR-231). A native predecessor
+  must match the secret's live reference or the role's configured principal.
+  Snowflake also checks the exact role user and live key slot fingerprint before
+  staging or retiring a key. An interrupted rotation resumes from its exact
+  vault publication. A failed provider restore releases its unpublished vault
+  reservation so an authorized operator can write a verified replacement.
+
 - The Linux Workload API verifies that the connecting process shares the agent's
   mount namespace before emitting `unix:path` (CR-693). The agent omits the path
   when it cannot verify the namespace and keeps the kernel's UID and GID selectors.

@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudauth"
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mongosignin"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/pgsignin"
@@ -283,6 +285,9 @@ func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowe
 	}
 	if cfg.Type == "gcp-iam" {
 		return &configuredPreparedDynamicProvider{configuredDynamicProvider: provider}
+	}
+	if cfg.Type == "snowflake" {
+		return &configuredSnowflakeProvider{configuredDynamicProvider: provider}
 	}
 	if cfg.Type == "ssh-certificate" {
 		roles := make(map[string]config.SSHCertificateRole, len(cfg.SSHRoles))
@@ -670,6 +675,24 @@ func (p *configuredDynamicProvider) Revoke(ctx context.Context, backendRef strin
 	return backend.Revoke(ctx, backendRef)
 }
 
+type configuredSnowflakeProvider struct{ *configuredDynamicProvider }
+
+func (p *configuredSnowflakeProvider) RevokeStaticRotationCredential(ctx context.Context, role, backendRef string) error {
+	if owned, _ := p.OwnsStaticRotationReference(role, backendRef); !owned {
+		return errors.New("server: Snowflake static retirement reference does not name this role's user")
+	}
+	backend, closeBackend, err := p.openBackend(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeBackend()
+	revoker, ok := backend.(dynsecret.StaticRotationCredentialRevoker)
+	if !ok {
+		return errors.New("server: Snowflake role-scoped retirement is unavailable")
+	}
+	return revoker.RevokeStaticRotationCredential(ctx, role, backendRef)
+}
+
 // RevokeMethod revokes like Revoke and, for an AWS STS lease, names how its
 // session ended: denied through its role by an inline policy before its expiry
 // when the provider has revoke_with_deny_policy (N3), else at its native
@@ -837,6 +860,14 @@ func (o *configuredDynamicBackendOpener) resolve(ref string) ([]byte, error) {
 	value, err := o.provider.credentials.resolve(o.ctx, o.provider.tenantID, ref)
 	if err != nil {
 		return nil, err
+	}
+	if expected, guarded := dynsecret.ExpectedStaticRotationReceiverAuthority(o.ctx); guarded &&
+		o.provider.StaticRotationRequiresReceiverBinding() && ref == o.provider.cfg.AdminDSNRef {
+		actual, err := o.provider.staticRotationReceiverDigest(value.Bytes())
+		if err != nil || !crypto.ConstantTimeEqual([]byte(expected), []byte(actual)) {
+			value.Destroy()
+			return nil, errors.New("server: database receiver authority changed after rotation was queued")
+		}
 	}
 	o.credentialLeases = append(o.credentialLeases, value)
 	return value.Bytes(), nil
@@ -2045,6 +2076,52 @@ func (p *configuredDynamicProvider) AllowsStaticRotation(role string) bool {
 	return p != nil && p.cfg.AllowStaticRotation && config.StaticRotationProviderTypes[strings.TrimSpace(p.cfg.Type)] && p.allowedRoles[role]
 }
 
+func (p *configuredDynamicProvider) StaticRotationAuthority(role string) string {
+	if !p.AllowsStaticRotation(role) {
+		return ""
+	}
+	encoded, err := json.Marshal(struct {
+		Provider config.DynamicSecretProviderConfig
+		Role     string
+	}{p.cfg, role})
+	if err != nil {
+		return ""
+	}
+	defer secret.Wipe(encoded)
+	return crypto.SHA256Hex(encoded)
+}
+
+func (p *configuredDynamicProvider) StaticRotationRequiresReceiverBinding() bool {
+	switch p.cfg.Type {
+	case "postgresql", "mysql", "mongodb", "mssql", "azure-sql", "oracle":
+		return true
+	}
+	return false
+}
+
+func (p *configuredDynamicProvider) ResolveStaticRotationReceiverAuthority(ctx context.Context) (string, error) {
+	value, err := p.credentials.resolve(ctx, p.tenantID, p.cfg.AdminDSNRef)
+	if err != nil {
+		return "", err
+	}
+	defer value.Destroy()
+	return p.staticRotationReceiverDigest(value.Bytes())
+}
+
+func (p *configuredDynamicProvider) staticRotationReceiverDigest(value []byte) (string, error) {
+	key, ok := p.credentials.kek.(principalNameDigest)
+	if !ok {
+		return "", errors.New("server: database receiver binding key is unavailable")
+	}
+	label := []byte("trstctl/static-rotation/receiver/v1\x00" + p.tenantID + "\x00" + p.id)
+	digest, err := key.DerivedDigest(label, value)
+	defer secret.Wipe(digest)
+	if err != nil || len(digest) != 32 {
+		return "", errors.New("server: database receiver binding is unavailable")
+	}
+	return hex.EncodeToString(digest), nil
+}
+
 // RotationAccounts implements dynsecret.TwoUserRotationProvider: a role with
 // rotation_accounts on a provider that allows its static rotation alternates
 // between those two accounts (A240).
@@ -2054,6 +2131,33 @@ func (p *configuredDynamicProvider) RotationAccounts(role string) ([2]string, bo
 		return [2]string{}, false
 	}
 	return [2]string{accounts[0], accounts[1]}, true
+}
+
+func (p *configuredDynamicProvider) OwnsStaticRotationReference(role, reference string) (owned, fixedPrincipal bool) {
+	if !p.AllowsStaticRotation(role) {
+		return false, true
+	}
+	account := strings.TrimSpace(p.cfg.RoleBindings[role])
+	switch {
+	case p.cfg.Type == "snowflake":
+		user, ok := dynsecret.SnowflakeKeyPairUser(account)
+		return ok && dynsecret.SnowflakeKeyPairReferenceMatchesUser(user, reference), true
+	case p.cfg.Type == "ldap" && p.cfg.DirectoryMode == "active_directory":
+		return account != "" && dynsecret.SameADNativeDN(account, reference), true
+	case config.SinglePhaseRotationProviderTypes[p.cfg.Type] && p.cfg.Type != "auth0",
+		p.cfg.Type == "unix", p.cfg.Type == "windows" && p.cfg.WindowsHostAgentID == "":
+		if account == "" {
+			return false, true
+		}
+		if reference == account {
+			return true, true
+		}
+		generation, matches := strings.CutPrefix(reference, account+"/")
+		// The configured account can bootstrap an imported credential. A
+		// generation of that account still needs a matching vault receipt.
+		return false, !matches || !validUUID(generation)
+	}
+	return false, false
 }
 
 // TwoUserRetirement implements dynsecret.TwoUserRetirer: what retiring one

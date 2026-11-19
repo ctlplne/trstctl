@@ -62,6 +62,44 @@ type StaticRotationProvider interface {
 	VerifyStaticCredential(ctx context.Context, backendRef string, credential []byte) (string, error)
 }
 
+// StaticRotationReferenceOwner checks provider-local evidence for a role's
+// own principal. A fixed principal requires this match even when an earlier
+// rotation recorded a reference under the same provider ID.
+type StaticRotationReferenceOwner interface {
+	OwnsStaticRotationReference(role, reference string) (owned, fixedPrincipal bool)
+}
+
+// StaticRotationAuthority identifies the configured provider and role across
+// restarts. A different receiver or role binding must produce a different ID.
+type StaticRotationAuthority interface {
+	StaticRotationAuthority(role string) string
+}
+
+// StaticRotationReceiverAuthority proves the operator-configured receiver
+// material whose source can change independently of the provider config.
+type StaticRotationReceiverAuthority interface {
+	StaticRotationRequiresReceiverBinding() bool
+	ResolveStaticRotationReceiverAuthority(ctx context.Context) (string, error)
+}
+
+type staticRotationReceiverAuthorityKey struct{}
+
+func WithStaticRotationReceiverAuthority(ctx context.Context, authority string) context.Context {
+	return context.WithValue(ctx, staticRotationReceiverAuthorityKey{}, authority)
+}
+
+func ExpectedStaticRotationReceiverAuthority(ctx context.Context) (string, bool) {
+	authority, ok := ctx.Value(staticRotationReceiverAuthorityKey{}).(string)
+	return authority, ok
+}
+
+// StaticRotationCredentialRevoker retains the role at the provider's static
+// retirement boundary. An implementation may handle normal lease revocation
+// separately when that operation has a different reference format.
+type StaticRotationCredentialRevoker interface {
+	RevokeStaticRotationCredential(ctx context.Context, role, reference string) error
+}
+
 // StaticCredentialRestorer is an explicit native inverse for an in-place
 // rotation. Success means the exact predecessor authenticates upstream again;
 // the outbox worker may only then publish it as recovered vault state.

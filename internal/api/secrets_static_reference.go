@@ -35,21 +35,73 @@ func staticReferenceProviderType(provider dynsecret.Provider) string {
 // staticRotationQueueReferenceType verifies a reference admission against the
 // exact immutable source of the projected command.
 func (a *API) staticRotationQueueReferenceType(ctx context.Context, cmd store.SecretStaticRotationCommand) (string, error) {
+	kind, _, err := a.staticRotationQueueReferenceEvidence(ctx, cmd)
+	return kind, err
+}
+
+func (a *API) staticRotationQueueReferenceEvidence(ctx context.Context, cmd store.SecretStaticRotationCommand) (string, *projections.SecretStaticRotationBoundQueued, error) {
 	if a.log == nil {
-		return "", nil
+		return "", nil, nil
 	}
 	event, found, err := a.log.EventByID(ctx, cmd.ID)
-	if err != nil || !found || event.SchemaVersion != projections.SecretStaticRotationReferenceQueueSchemaVersion {
-		return "", err
+	if err != nil || !found {
+		return "", nil, err
 	}
-	queued, kind, err := projections.DecodeSecretStaticRotationQueueSource(event)
+	var bound *projections.SecretStaticRotationBoundQueued
+	var queued projections.SecretStaticRotationQueued
+	var kind string
+	switch event.SchemaVersion {
+	case projections.SecretStaticRotationBoundQueueSchemaVersion:
+		var native projections.SecretStaticRotationBoundQueued
+		native, err = projections.DecodeSecretStaticRotationBoundQueueSource(event)
+		bound = &native
+		queued, kind = native.SecretStaticRotationQueued, store.SecretRotationScheduleNativeReference
+	case projections.SecretStaticRotationReferenceQueueSchemaVersion:
+		queued, kind, err = projections.DecodeSecretStaticRotationQueueSource(event)
+	default:
+		return "", nil, nil
+	}
 	if err != nil || event.TenantID != cmd.TenantID || event.ID != cmd.ID || event.Time.IsZero() || event.SensitiveErased ||
 		queued.ID != cmd.ID || queued.TenantEpoch != cmd.TenantEpoch || queued.Provider != cmd.Provider || queued.Key != cmd.Key ||
 		queued.OldRef != cmd.OldRef || queued.RequestBinding != cmd.RequestBinding || queued.ScheduleID != cmd.ScheduleID ||
 		queued.ExpectedVersion != cmd.ExpectedVersion || queued.IdempotencyKeyDigest != cmd.IdempotencyKeyDigest {
-		return "", store.ErrIdempotencyConflict
+		return "", nil, store.ErrIdempotencyConflict
 	}
-	return kind, nil
+	return kind, bound, nil
+}
+
+func staticRotationAuthority(provider dynsecret.Provider, key string) string {
+	if authority, ok := provider.(dynsecret.StaticRotationAuthority); ok {
+		return authority.StaticRotationAuthority(key)
+	}
+	// In-process providers without an operator configuration are identified by
+	// their Go type in addition to the tenant, provider ID and role on the event.
+	return crypto.SHA256Hex([]byte(reflect.TypeOf(provider).String()))
+}
+
+func staticRotationReceiverRequiresBinding(provider dynsecret.Provider) bool {
+	receiver, ok := provider.(dynsecret.StaticRotationReceiverAuthority)
+	return ok && receiver.StaticRotationRequiresReceiverBinding()
+}
+
+func resolveStaticRotationReceiverAuthority(ctx context.Context, provider dynsecret.Provider) (string, error) {
+	receiver, ok := provider.(dynsecret.StaticRotationReceiverAuthority)
+	if !ok || !receiver.StaticRotationRequiresReceiverBinding() {
+		return "", nil
+	}
+	binding, err := receiver.ResolveStaticRotationReceiverAuthority(ctx)
+	if err != nil || len(binding) != 64 {
+		return "", errStatus(http.StatusConflict, staticReferenceReviewDetail)
+	}
+	return binding, nil
+}
+
+func nativeStaticRotationMatchesSecret(bound *projections.SecretStaticRotationBoundQueued, current store.Secret) bool {
+	return bound.ExpectedVersion == current.Version && bound.SecretCreatedAt.Equal(current.CreatedAt) && bound.SecretUpdatedAt.Equal(current.UpdatedAt)
+}
+
+func staticRotationReceiptMatchesSecret(receipt store.ApplicationSecretMutationReceipt, current store.Secret) bool {
+	return receipt.ResultVersion == current.Version && receipt.ResultCreatedAt.Equal(current.CreatedAt) && receipt.ResultUpdatedAt.Equal(current.UpdatedAt)
 }
 
 func staticRotationRecordedNativeType(cmd store.SecretStaticRotationCommand) bool {
@@ -57,11 +109,18 @@ func staticRotationRecordedNativeType(cmd store.SecretStaticRotationCommand) boo
 	return cmd.ProviderBinding != "" || !hosted && runtimeconfig.StaticRotationProviderTypes[cmd.ProviderType]
 }
 
-func staticRotationProviderKeepsReferenceAuthority(cmd store.SecretStaticRotationCommand, provider dynsecret.Provider, currentKind, queuedKind string) bool {
+func staticRotationProviderKeepsReferenceAuthority(cmd store.SecretStaticRotationCommand, provider dynsecret.Provider, currentKind, queuedKind string, nativeBound bool) bool {
+	if cmd.Phase == store.SecretStaticRotationQueued && cmd.ProviderBinding == "" && cmd.ProviderType == "" && !nativeBound &&
+		(queuedKind == "" || queuedKind == store.SecretRotationScheduleNativeReference) {
+		return false
+	}
 	if _, wasHosted := hostedkey.Providers[cmd.ProviderType]; wasHosted && cmd.ProviderType != currentKind {
 		return false
 	}
 	if currentKind == store.SecretRotationScheduleNativeReference {
+		if typed, ok := provider.(interface{ DynamicSecretProviderType() string }); ok && cmd.ProviderType != "" && cmd.ProviderType != typed.DynamicSecretProviderType() {
+			return false
+		}
 		return queuedKind == currentKind || staticRotationRecordedNativeType(cmd) || !strings.Contains(cmd.OldRef, "/")
 	}
 	if staticRotationRecordedNativeType(cmd) {
@@ -110,10 +169,25 @@ func (a *API) liveRotationReference(
 func (a *API) liveStaticRotationPredecessor(
 	ctx context.Context, tenantID, key string, provider dynsecret.Provider, command store.SecretStaticRotationCommand,
 ) (string, error) {
-	if reference, err := a.liveRotationReference(ctx, tenantID, provider.Name(), key, command); err != nil || reference == "" {
+	current, err := a.secrets.be.Store.GetSecret(ctx, tenantID, key)
+	if err != nil {
 		return "", err
 	}
-	queueKind, err := a.staticRotationQueueReferenceType(ctx, command)
+	return a.liveStaticRotationPredecessorForSecret(ctx, tenantID, current, provider, command, "")
+}
+
+func (a *API) liveStaticRotationPredecessorForSecret(
+	ctx context.Context, tenantID string, current store.Secret, provider dynsecret.Provider, command store.SecretStaticRotationCommand, receiverAuthority string,
+) (string, error) {
+	reference := staticRotationLiveRef(command)
+	if command.TenantID != tenantID || command.Provider != provider.Name() || command.Key != current.Name || reference == "" || reference == staticRotationNoPredecessor {
+		return "", nil
+	}
+	epoch, err := a.applicationSecretTenantEpoch(ctx, tenantID)
+	if err != nil || command.TenantEpoch != epoch {
+		return "", err
+	}
+	queueKind, bound, err := a.staticRotationQueueReferenceEvidence(ctx, command)
 	if err != nil {
 		return "", err
 	}
@@ -125,8 +199,36 @@ func (a *API) liveStaticRotationPredecessor(
 			queueKind = command.ProviderType
 		}
 	}
-	if queueKind != kind || !staticRotationProviderKeepsReferenceAuthority(command, provider, kind, queueKind) {
+	if queueKind != kind || !staticRotationProviderKeepsReferenceAuthority(command, provider, kind, queueKind, bound != nil) {
 		return "", nil
+	}
+	if bound != nil && bound.ProviderAuthority != staticRotationAuthority(provider, current.Name) {
+		return "", nil
+	}
+	if receiverAuthority != "" && (bound == nil || bound.ReceiverAuthority != receiverAuthority) {
+		return "", nil
+	}
+	version, step := command.ResultVersion, "cutover"
+	switch command.Phase {
+	case store.SecretStaticRotationFailed:
+		version, step = command.ExpectedVersion, ""
+	case store.SecretStaticRotationRolledBack:
+		version, step = command.RestoredVersion, "rollback"
+	}
+	if version <= 0 || current.Version != version {
+		return "", nil
+	}
+	if kind == store.SecretRotationScheduleNativeReference {
+		if step == "" {
+			if bound == nil || !nativeStaticRotationMatchesSecret(bound, current) {
+				return "", nil
+			}
+		} else {
+			receipt, found, err := a.staticRotationPublicationReceipt(ctx, command, step)
+			if err != nil || !found || !staticRotationReceiptMatchesSecret(receipt, current) {
+				return "", err
+			}
+		}
 	}
 	predecessor := command.Phase == store.SecretStaticRotationFailed || command.Phase == store.SecretStaticRotationRolledBack
 	return a.authorizeStaticRotationReference(ctx, command, provider, predecessor)
@@ -286,10 +388,16 @@ func (a *API) previewStaticRotationReference(tenantID string, req secretRotation
 
 func (a *API) admitStaticRotationPredecessor(
 	ctx context.Context, tenantID, epoch string, current store.Secret,
-	provider dynsecret.Provider, reference string,
+	provider dynsecret.Provider, reference, receiverAuthority string,
 ) (string, error) {
 	kind := dynsecret.HostedReferenceProviderType(provider)
-	if kind == "" || reference == staticRotationNoPredecessor {
+	if kind == "" {
+		if err := a.checkNativeStaticRotationPredecessor(ctx, tenantID, current.Name, provider, reference, receiverAuthority, &current); err != nil {
+			return "", err
+		}
+		return reference, nil
+	}
+	if reference == staticRotationNoPredecessor {
 		return reference, nil
 	}
 	refused := errStatus(http.StatusConflict, staticReferenceReviewDetail)
@@ -322,6 +430,37 @@ func (a *API) admitStaticRotationPredecessor(
 	}
 	return canonical, nil
 }
+
+// checkNativeStaticRotationPredecessor reads only local authority. A generated
+// principal is bound by a command for this secret's currently published version.
+func (a *API) checkNativeStaticRotationPredecessor(ctx context.Context, tenantID, key string, provider dynsecret.Provider, reference, receiverAuthority string, current *store.Secret) error {
+	if owned, err := staticRotationRolePredecessor(provider, key, reference); owned || err != nil {
+		return err
+	}
+	prior, found, err := a.store.LatestSecretStaticRotationCommandForKey(ctx, tenantID, key)
+	if err != nil {
+		return err
+	}
+	if found && prior.Terminal() && staticRotationLiveRef(prior) == reference {
+		if current == nil {
+			snapshot, err := a.secrets.be.Store.GetSecret(ctx, tenantID, key)
+			if err != nil {
+				return err
+			}
+			current = &snapshot
+		}
+		live, err := a.liveStaticRotationPredecessorForSecret(ctx, tenantID, *current, provider, prior, receiverAuthority)
+		if err == nil && live == reference {
+			return nil
+		}
+		if err != nil && !errors.Is(err, errNativeStaticRotationPredecessorUnproved) {
+			return err
+		}
+	}
+	return errStatus(http.StatusConflict, staticRotationUnboundOldRefDetail)
+}
+
+var errNativeStaticRotationPredecessorUnproved = errors.New(staticRotationUnboundOldRefDetail)
 
 func (a *API) guardedStaticStage(ctx context.Context, command store.SecretStaticRotationCommand, kind, reference string) (bool, error) {
 	if a.log == nil {
@@ -412,6 +551,9 @@ func (a *API) revokeStaticRotationReference(
 	if err != nil {
 		return err
 	}
+	if revoker, ok := provider.(dynsecret.StaticRotationCredentialRevoker); ok {
+		return revoker.RevokeStaticRotationCredential(ctx, command.Key, reference)
+	}
 	return provider.Revoke(ctx, reference)
 }
 
@@ -426,6 +568,17 @@ func (a *API) authorizeStaticRotationReference(
 	if kind == "" {
 		if _, wasHosted := hostedkey.Providers[command.ProviderType]; wasHosted {
 			return "", errors.New(staticReferenceReviewDetail)
+		}
+		owned, err := staticRotationRolePredecessor(provider, command.Key, reference)
+		if err != nil {
+			return "", errNativeStaticRotationPredecessorUnproved
+		}
+		_, bound, err := a.staticRotationQueueReferenceEvidence(ctx, command)
+		if err != nil {
+			return "", err
+		}
+		if bound != nil && bound.ProviderAuthority != staticRotationAuthority(provider, command.Key) || predecessor && !owned && bound == nil {
+			return "", errNativeStaticRotationPredecessorUnproved
 		}
 		return reference, nil
 	}

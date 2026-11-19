@@ -28,6 +28,37 @@ type configuredDynamicBackendFixture struct {
 	closed    int
 }
 
+// CR-231: changing the bytes behind the same connection reference must not
+// move a previously authorized rotation to a different database receiver.
+func TestConfiguredStaticRotationRejectsAReplacedDSN(t *testing.T) {
+	ref := writeServedCredentialFile(t, "fixture-connection", "original-receiver-material")
+	provider := &configuredDynamicProvider{
+		tenantID: servedTestTenant,
+		cfg:      config.DynamicSecretProviderConfig{Type: "postgresql", AdminDSNRef: ref},
+		credentials: integrationCredentialResolver{
+			kek: serverTestPrincipalKEK(),
+		},
+	}
+	authority, err := provider.ResolveStaticRotationReceiverAuthority(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	opener := &configuredDynamicBackendOpener{
+		ctx:      dynsecret.WithStaticRotationReceiverAuthority(t.Context(), authority),
+		provider: provider,
+	}
+	defer opener.destroyCredentials()
+	if value, err := opener.resolve(ref); err != nil || len(value) == 0 {
+		t.Fatal("the bound receiver material was refused")
+	}
+	if err := os.WriteFile(strings.TrimPrefix(ref, "file:"), []byte("different-receiver-material"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if value, err := opener.resolve(ref); err == nil || value != nil {
+		t.Fatal("replacement receiver material reached the backend opener")
+	}
+}
+
 func (b *configuredDynamicBackendFixture) CreateCredential(_ context.Context, req dynsecret.GenerateRequest) (string, []byte, error) {
 	b.created = append(b.created, req)
 	if b.createErr != nil {

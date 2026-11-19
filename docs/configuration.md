@@ -2994,7 +2994,9 @@ restricted, only the members granted it can see the provider. That covers the ca
 Vault-compatible role and connection listings. Only its developers and admins issue, renew and
 revoke its leases; viewers can read them. The rule holds on the native lease routes, the
 Vault-compatible creds, sts and lease paths and the dynamic-lease rotations, for a person, a
-machine session or the agent alike. To anyone else the provider answers as one not configured.
+machine session or the agent alike. A static rotation's preview, execution, and schedule
+changes also require write access to its provider's environment. To anyone else the provider
+answers as one not configured.
 A placement naming an environment the tenant does not have closes the provider until that
 environment exists. A provider with no placement, or placed in an unrestricted environment,
 belongs to the tenant and follows the routes' own permissions.
@@ -3029,7 +3031,8 @@ ID (`proj_...`) its service accounts are created in. It issues leases, and with
 
 A `snowflake` provider's role may be bound to `user <NAME>` instead of roles: with
 `allow_static_rotation: true` it rotates that existing user's key pair through the user's
-two key slots and issues no leases (A240).
+two key slots and issues no leases (A240). The `old_ref` for that role names its own
+user, slot, and live public key fingerprint.
 
 A `gcp-iam` provider with `allow_static_rotation: true` also rotates a stored
 service-account key in two phases (A240): a new key beside the predecessor, which

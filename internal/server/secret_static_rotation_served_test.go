@@ -14,6 +14,8 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // staticRotationProviderDouble is a configured provider that allows static
@@ -22,6 +24,7 @@ import (
 type staticRotationProviderDouble struct {
 	name       string
 	role       string
+	initialRef string
 	verifyFail bool
 
 	mu       sync.Mutex
@@ -53,6 +56,9 @@ func (p *staticRotationProviderDouble) Revoke(_ context.Context, ref string) err
 }
 
 func (p *staticRotationProviderDouble) AllowsStaticRotation(role string) bool { return role == p.role }
+func (p *staticRotationProviderDouble) OwnsStaticRotationReference(role, reference string) (bool, bool) {
+	return role == p.role && p.initialRef != "" && reference == p.initialRef, false
+}
 
 func (p *staticRotationProviderDouble) VerifyStaticCredential(context.Context, string, []byte) (string, error) {
 	p.mu.Lock()
@@ -104,10 +110,13 @@ type staticRotationCommandView struct {
 // and revokes the successor. Schedules queue the same command per due edge and
 // chain the predecessor from the last completed command.
 func TestServedStaticSecretRotationRunsThroughDurableWorker(t *testing.T) {
-	provider := &staticRotationProviderDouble{name: "pg-main", role: "db/reporting"}
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
-		d.TenantDynamicSecretProviders = DynamicSecretProviderRegistry{servedTestTenant: {provider}}
-	})
+	provider := &staticRotationProviderDouble{name: "pg-main", role: "db/reporting", initialRef: "role:old"}
+	st := newServerTestStore(t, store.WithPoolSizes(store.PoolSizes{Lock: 1}))
+	h := newServedHarnessWithOwnedStore(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, st,
+		withSecretsEnabled(t, nil), func(d *Deps) {
+			d.TenantDynamicSecretProviders = DynamicSecretProviderRegistry{servedTestTenant: {provider}}
+		})
+	registerServedTenant(t, h, "Static rotation fixture with one lock connection")
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 	ctx := context.Background()
 

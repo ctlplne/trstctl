@@ -99,6 +99,9 @@ func (p *adRollbackFaultProvider) RestorePreparedStaticCredential(ctx context.Co
 func (p *adRollbackFaultProvider) AllowsStaticRotation(role string) bool {
 	return p.Provider.(dynsecret.StaticRotationProvider).AllowsStaticRotation(role)
 }
+func (p *adRollbackFaultProvider) OwnsStaticRotationReference(role, reference string) (bool, bool) {
+	return p.Provider.(dynsecret.StaticRotationReferenceOwner).OwnsStaticRotationReference(role, reference)
+}
 func (p *adRollbackFaultProvider) RotationPhase(role string) string {
 	return p.Provider.(dynsecret.RotationPhaser).RotationPhase(role)
 }

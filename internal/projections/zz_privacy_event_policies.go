@@ -2300,6 +2300,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 	addOperatorRecordPrivacyShapes(shapes)
 	addTransparencyPrivacyShapes(shapes)
 	shapes[privacyEventPolicyKey{EventSecretStaticRotationQueued, SecretStaticRotationReferenceQueueSchemaVersion}] = privacyPayloadShape[SecretStaticRotationReferenceQueued]()
+	shapes[privacyEventPolicyKey{EventSecretStaticRotationQueued, SecretStaticRotationBoundQueueSchemaVersion}] = privacyPayloadShape[SecretStaticRotationBoundQueued]()
 	shapes[privacyEventPolicyKey{EventSecretStaticRotationAdvanced, SecretStaticRotationHostedStageSchemaVersion}] = privacyPayloadShape[SecretStaticRotationHostedStaged]()
 	shapes[privacyEventPolicyKey{EventSecretRotationScheduleUpserted, SecretRotationScheduleReferenceSchemaVersion}] = privacyPayloadShape[SecretRotationScheduleReferenceUpserted]()
 	shapes[privacyEventPolicyKey{EventSecretRotationSchedulePaused, SecretRotationScheduleControlViewSchemaVersion}] = privacyPayloadShape[SecretRotationScheduleControlledV2]()

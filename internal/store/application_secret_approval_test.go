@@ -443,6 +443,60 @@ func TestApplicationSecretMutationFenceOutlivesBrokerDuplicateWindow(t *testing.
 	}
 }
 
+// CR-231: compare the expected live publication while reserving the name.
+// An earlier incarnation's numeric version alone conveys no write authority.
+func TestApplicationSecretMutationFenceRequiresTheExactLiveVersion(t *testing.T) {
+	s := newOperationApprovalStore(t)
+	ctx := t.Context()
+	current := seedApplicationSecretFixture(t, s, "fence/live-version", []byte("fixture-ciphertext"))
+	candidate := store.ApplicationSecretMutationFence{
+		TenantID: tenantA, Name: current.Name, Operation: "rotate",
+		EventID:        "77500000-0000-4000-8000-000000000003",
+		EventType:      projections.EventApplicationSecretRotated,
+		SchemaVersion:  projections.ApplicationSecretMutationSchemaVersion,
+		RequestBinding: strings.Repeat("3", 64),
+		Payload:        []byte(`{"action":"rotate"}`),
+		LiveVersion: &store.ApplicationSecretLiveVersion{
+			Version: current.Version, CreatedAt: current.CreatedAt.Add(-time.Hour), UpdatedAt: current.UpdatedAt,
+		},
+	}
+	if _, err := s.ClaimApplicationSecretMutationFence(ctx, candidate); !errors.Is(err, store.ErrApplicationSecretLiveVersionMoved) {
+		t.Fatalf("stale live-version claim: %v", err)
+	}
+	if _, err := s.GetApplicationSecretMutationFence(ctx, tenantA, current.Name); !store.IsNotFound(err) {
+		t.Fatalf("stale claim changed the durable fence: %v", err)
+	}
+	candidate.LiveVersion.CreatedAt = current.CreatedAt
+	if _, err := s.ClaimApplicationSecretMutationFence(ctx, candidate); err != nil {
+		t.Fatalf("exact live-version claim: %v", err)
+	}
+}
+
+func TestStaticRotationPublicationLockReusesTenantServiceSession(t *testing.T) {
+	_ = newStore(t)
+	s, err := store.Open(t.Context(), testDSN, store.WithPoolSizes(store.PoolSizes{Lock: 1}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	ctx, release, err := s.BeginTenantService(ctx, tenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	const command = "77500000-0000-4000-8000-000000000004"
+	err = s.WithStaticRotationPublicationLock(ctx, tenantA, command, func(locked context.Context) error {
+		return s.WithTenantEventProtection(locked, tenantA, func(protected context.Context) error {
+			return s.WithProjectionLock(protected, func(context.Context) error { return nil })
+		})
+	})
+	if err != nil {
+		t.Fatalf("tenant-admitted publication with one lock connection: %v", err)
+	}
+}
+
 func TestApplicationSecretMutationFenceBindsActorAndPrivacyRewritesForRecovery(t *testing.T) {
 	s := newOperationApprovalStore(t)
 	ctx := context.Background()

@@ -71,38 +71,57 @@ func (a *API) dependentIntentProvider(tenantID string, intent servicedependents.
 	}
 	return provider, nil
 }
-func (a *API) staticRotationCommandProvider(ctx context.Context, cmd store.SecretStaticRotationCommand) (dynsecret.Provider, dynsecret.StaticRotationProvider, error) {
+func (a *API) staticRotationCommandProvider(ctx context.Context, cmd store.SecretStaticRotationCommand) (dynsecret.Provider, dynsecret.StaticRotationProvider, string, error) {
 	if err := a.validateDependentCommandSource(ctx, cmd); err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	if cmd.DependentChangeID == "" {
 		provider, verifier, err := a.staticRotationProvider(cmd.TenantID, cmd.Provider, cmd.Key)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
-		kind, err := a.staticRotationQueueReferenceType(ctx, cmd)
+		kind, bound, err := a.staticRotationQueueReferenceEvidence(ctx, cmd)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
 		currentKind := staticReferenceProviderType(provider)
-		if kind != "" && currentKind != kind || !staticRotationProviderKeepsReferenceAuthority(cmd, provider, currentKind, kind) {
-			return nil, nil, errStatus(http.StatusConflict, staticReferenceReviewDetail)
+		if kind != "" && currentKind != kind || !staticRotationProviderKeepsReferenceAuthority(cmd, provider, currentKind, kind, bound != nil) {
+			return nil, nil, "", errStatus(http.StatusConflict, staticReferenceReviewDetail)
 		}
-		return provider, verifier, nil
+		receiverAuthority := ""
+		if bound != nil {
+			if staticRotationAuthority(provider, cmd.Key) != bound.ProviderAuthority {
+				return nil, nil, "", errStatus(http.StatusConflict, staticReferenceReviewDetail)
+			}
+			receiverAuthority = bound.ReceiverAuthority
+			if cmd.Phase == store.SecretStaticRotationQueued {
+				current, err := a.secrets.be.Store.GetSecret(ctx, cmd.TenantID, cmd.Key)
+				if err != nil {
+					return nil, nil, "", err
+				}
+				if !nativeStaticRotationMatchesSecret(bound, current) {
+					return nil, nil, "", errWithStatus(http.StatusConflict, errStaticRotationVersionMoved)
+				}
+			}
+		}
+		if staticRotationReceiverRequiresBinding(provider) && receiverAuthority == "" {
+			return nil, nil, "", errStatus(http.StatusConflict, staticReferenceReviewDetail)
+		}
+		return provider, verifier, receiverAuthority, nil
 	}
 	parent, err := a.dependentRotationParent(ctx, cmd)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	provider, err := a.dependentIntentProvider(cmd.TenantID, parent.Intent)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	verifier, ok := provider.(dynsecret.StaticRotationProvider)
 	if !ok {
-		return nil, nil, errors.New("api: designated native verifier unavailable")
+		return nil, nil, "", errors.New("api: designated native verifier unavailable")
 	}
-	return provider, verifier, nil
+	return provider, verifier, "", nil
 }
 
 //trstctl:mutation

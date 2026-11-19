@@ -4,6 +4,7 @@ package projections
 
 import (
 	"errors"
+	"time"
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/hostedkey"
@@ -12,6 +13,7 @@ import (
 
 const (
 	SecretStaticRotationReferenceQueueSchemaVersion = 2
+	SecretStaticRotationBoundQueueSchemaVersion     = 3
 	SecretStaticRotationHostedStageSchemaVersion    = 3
 	SecretRotationScheduleReferenceSchemaVersion    = 2
 	SecretRotationScheduleControlViewSchemaVersion  = 3
@@ -20,6 +22,16 @@ const (
 type SecretStaticRotationReferenceQueued struct {
 	SecretStaticRotationQueued
 	ReferenceProviderType string `json:"reference_provider_type"`
+}
+
+// SecretStaticRotationBoundQueued records that the writer checked a native
+// predecessor under the exact tenant, provider, key and expected version.
+type SecretStaticRotationBoundQueued struct {
+	SecretStaticRotationQueued
+	ProviderAuthority string    `json:"provider_authority"`
+	ReceiverAuthority string    `json:"receiver_authority,omitempty"`
+	SecretCreatedAt   time.Time `json:"secret_created_at"`
+	SecretUpdatedAt   time.Time `json:"secret_updated_at"`
 }
 
 type SecretRotationScheduleReferenceUpserted struct {
@@ -65,6 +77,10 @@ func DecodeSecretStaticRotationQueueSource(e events.Event) (SecretStaticRotation
 		err := decode(e, &queued)
 		return queued, "", err
 	}
+	if schemaVersionOf(e) == SecretStaticRotationBoundQueueSchemaVersion {
+		bound, err := DecodeSecretStaticRotationBoundQueueSource(e)
+		return bound.SecretStaticRotationQueued, store.SecretRotationScheduleNativeReference, err
+	}
 	if schemaVersionOf(e) != SecretStaticRotationReferenceQueueSchemaVersion {
 		return queued, "", errors.New("projections: unsupported static rotation queue schema")
 	}
@@ -76,6 +92,21 @@ func DecodeSecretStaticRotationQueueSource(e events.Event) (SecretStaticRotation
 		return queued, "", errors.New("projections: static rotation reference evidence has an invalid provider type")
 	}
 	return source.SecretStaticRotationQueued, source.ReferenceProviderType, nil
+}
+
+func DecodeSecretStaticRotationBoundQueueSource(e events.Event) (SecretStaticRotationBoundQueued, error) {
+	var bound SecretStaticRotationBoundQueued
+	if e.Type != EventSecretStaticRotationQueued || schemaVersionOf(e) != SecretStaticRotationBoundQueueSchemaVersion {
+		return bound, errors.New("projections: unexpected bound static rotation queue source")
+	}
+	if err := decode(e, &bound); err != nil {
+		return bound, err
+	}
+	if len(bound.ProviderAuthority) != 64 || bound.ReceiverAuthority != "" && len(bound.ReceiverAuthority) != 64 ||
+		bound.SecretCreatedAt.IsZero() || bound.SecretUpdatedAt.IsZero() || bound.ProviderBinding != "" {
+		return bound, errors.New("projections: incomplete native predecessor authority")
+	}
+	return bound, nil
 }
 
 func DecodeSecretStaticRotationHostedStage(e events.Event) (SecretStaticRotationHostedStaged, error) {

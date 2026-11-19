@@ -5673,7 +5673,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventSecretRotationScheduleResumed:            {1: true, 2: true, SecretRotationScheduleControlViewSchemaVersion: true},
 	EventSecretRotationScheduleRetired:            {1: true, 2: true, SecretRotationScheduleControlViewSchemaVersion: true},
 	EventSecretRotationScheduleRan:                {1: true, rotationcommand.LegacyBoundEventSchemaVersion: true, SecretRotationScheduleRanEventSchemaVersion: true},
-	EventSecretStaticRotationQueued:               {1: true, SecretStaticRotationReferenceQueueSchemaVersion: true},
+	EventSecretStaticRotationQueued:               {1: true, SecretStaticRotationReferenceQueueSchemaVersion: true, SecretStaticRotationBoundQueueSchemaVersion: true},
 	EventSecretStaticRotationAdvanced:             {1: true, 2: true, SecretStaticRotationHostedStageSchemaVersion: true},
 	EventNotificationRead:                         {1: true},
 	EventNotificationChannelUpserted:              {1: true},

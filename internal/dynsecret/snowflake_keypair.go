@@ -36,6 +36,22 @@ func SnowflakeKeyPairUser(binding string) (string, bool) {
 	return strings.ToUpper(fields[1]), true
 }
 
+// SnowflakeKeyPairReferenceMatchesUser checks the public reference shape and
+// its owner. The worker separately checks the fingerprint against the live slot.
+func SnowflakeKeyPairReferenceMatchesUser(user, ref string) bool {
+	_, _, ok := snowflakeKeyPairReference(user, ref)
+	return ok
+}
+
+func snowflakeKeyPairReference(user, ref string) (slot, fingerprint string, ok bool) {
+	owner, rest, _ := strings.Cut(ref, "/")
+	slot, fingerprint, _ = strings.Cut(rest, "/")
+	encoded, sha256 := strings.CutPrefix(fingerprint, "SHA256:")
+	digest, err := base64.StdEncoding.DecodeString(encoded)
+	return slot, fingerprint, user != "" && owner == user && snowflakeKeySlots[slot] != "" &&
+		sha256 && err == nil && len(digest) == 32 && base64.StdEncoding.EncodeToString(digest) == encoded
+}
+
 // userKeyFingerprints reads the fingerprints of the user's two key slots
 // ("" for an empty slot).
 func (b *SnowflakeBackend) userKeyFingerprints(ctx context.Context, user string) (map[string]string, error) {
@@ -60,13 +76,24 @@ func (b *SnowflakeBackend) userKeyFingerprints(ctx context.Context, user string)
 // rotateKeyPair stages a new key pair for user in the slot the predecessor
 // does not hold.
 func (b *SnowflakeBackend) rotateKeyPair(ctx context.Context, user, predecessor string) (string, []byte, error) {
+	var keep, predecessorFingerprint string
+	if predecessor != "" && predecessor != "none" {
+		var ok bool
+		keep, predecessorFingerprint, ok = snowflakeKeyPairReference(user, predecessor)
+		if !ok {
+			return "", nil, errors.New("dynsecret snowflake: predecessor must name a key slot of this role's user")
+		}
+	}
 	slots, err := b.userKeyFingerprints(ctx, user)
 	if err != nil {
 		return "", nil, fmt.Errorf("dynsecret snowflake: read %s's keys: %w", user, err)
 	}
 	target := ""
-	switch keep, _, _ := strings.Cut(strings.TrimPrefix(predecessor, user+"/"), "/"); {
-	case predecessor != "" && predecessor != "none" && strings.HasPrefix(predecessor, user+"/") && snowflakeKeySlots[keep] != "":
+	switch {
+	case keep != "":
+		if slots[keep] != predecessorFingerprint {
+			return "", nil, errors.New("dynsecret snowflake: the named predecessor no longer occupies its key slot")
+		}
 		// The predecessor's slot stays; the other takes the successor.
 		target = map[string]string{"1": "2", "2": "1"}[keep]
 	case slots["1"] == "":
@@ -105,31 +132,22 @@ func (b *SnowflakeBackend) rotateKeyPair(ctx context.Context, user, predecessor 
 
 // retireKeyPair unsets the reference's slot if it still holds the
 // reference's key; a slot already replaced or empty has nothing to retire.
-func (b *SnowflakeBackend) retireKeyPair(ctx context.Context, ref string) error {
-	parts := strings.SplitN(ref, "/", 3)
-	if len(parts) != 3 || !b.rotatesUser(parts[0]) || snowflakeKeySlots[parts[1]] == "" || !strings.HasPrefix(parts[2], "SHA256:") {
-		return fmt.Errorf("dynsecret snowflake: refusing %q, which names no key slot of a user this provider rotates", ref)
+func (b *SnowflakeBackend) retireKeyPair(ctx context.Context, user, ref string) error {
+	slot, fingerprint, ok := snowflakeKeyPairReference(user, ref)
+	if !ok {
+		return errors.New("dynsecret snowflake: retirement must name a key slot of this role's user")
 	}
-	slots, err := b.userKeyFingerprints(ctx, parts[0])
+	slots, err := b.userKeyFingerprints(ctx, user)
 	if err != nil {
-		return fmt.Errorf("dynsecret snowflake: read %s's keys: %w", parts[0], err)
+		return fmt.Errorf("dynsecret snowflake: read %s's keys: %w", user, err)
 	}
-	if slots[parts[1]] != parts[2] {
+	if slots[slot] != fingerprint {
 		return nil
 	}
-	if err := b.execute(ctx, fmt.Sprintf(`ALTER USER "%s" UNSET %s`, parts[0], snowflakeKeySlots[parts[1]])); err != nil {
-		return fmt.Errorf("dynsecret snowflake: unset %s's old key: %w", parts[0], err)
+	if err := b.execute(ctx, fmt.Sprintf(`ALTER USER "%s" UNSET %s`, user, snowflakeKeySlots[slot])); err != nil {
+		return fmt.Errorf("dynsecret snowflake: unset %s's old key: %w", user, err)
 	}
 	return nil
-}
-
-func (b *SnowflakeBackend) rotatesUser(user string) bool {
-	for _, candidate := range b.keyPairUsers {
-		if candidate == user {
-			return true
-		}
-	}
-	return false
 }
 
 // VerifyCredential proves a key pair by running SELECT 1 through the SQL API

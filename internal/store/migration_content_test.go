@@ -1180,6 +1180,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	488: true, // TestMigration0488KeepsEveryReplayRecordAtItsOneUse
 	490: true, // TestMigration0490KeepsCryptoAssetsAsStatedFacts
 	493: true, // TestMigration0493KeepsHistoricalRotationReferenceAuthority
+	494: true, // TestMigration0494KeepsLegacyRollbackPublicationUnknown
 	442: true, // TestMigration0442KeepsSlackInstallsWithNoScopes
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod
 	383: true, // TestMigration0383KeepsDecoyUsesAsFoundByLookup

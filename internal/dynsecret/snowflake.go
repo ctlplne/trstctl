@@ -235,9 +235,6 @@ func (b *SnowflakeBackend) CreateCredential(ctx context.Context, req GenerateReq
 // queries and refuses its logins, then dropped. Only users this provider names
 // are touched; one already gone counts as revoked.
 func (b *SnowflakeBackend) Revoke(ctx context.Context, ref string) error {
-	if strings.Contains(ref, "/") {
-		return b.retireKeyPair(ctx, ref)
-	}
 	if !snowflakeUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
 		return fmt.Errorf("dynsecret snowflake: refusing to drop %q, which this provider did not create", ref)
 	}
@@ -250,6 +247,12 @@ func (b *SnowflakeBackend) Revoke(ctx context.Context, ref string) error {
 		}
 	}
 	return nil
+}
+
+// RevokeStaticRotationCredential retires a key slot only under its role's
+// configured user. Lease revocation has no role-bound slot authority.
+func (b *SnowflakeBackend) RevokeStaticRotationCredential(ctx context.Context, role, ref string) error {
+	return b.retireKeyPair(ctx, b.keyPairUsers[role], ref)
 }
 
 // execute runs one statement through the SQL API as the administrator.

@@ -149,10 +149,10 @@ func TestServerTestPostgresUsesContainerOwnedScratchInDODRunner(t *testing.T) {
 	}
 }
 
-func newServerTestStore(t *testing.T) *store.Store {
+func newServerTestStore(t *testing.T, options ...store.OpenOption) *store.Store {
 	t.Helper()
 	ctx := context.Background()
-	st, err := store.Open(ctx, serverTestPostgresDSN(t))
+	st, err := store.Open(ctx, serverTestPostgresDSN(t), options...)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

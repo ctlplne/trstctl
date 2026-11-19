@@ -42,6 +42,10 @@ var ErrApplicationSecretTenantEpochMismatch = errors.New("store: application-sec
 // see the enclosing ErrIdempotencyConflict.
 var ErrApplicationSecretMutationInFlight = errors.New("store: application-secret mutation is already in flight")
 
+// ErrApplicationSecretLiveVersionMoved reports that a guarded mutation's
+// expected live secret publication is no longer present.
+var ErrApplicationSecretLiveVersionMoved = errors.New("store: application-secret live version changed")
+
 // Secret is a sealed (envelope-encrypted) application secret at rest in the served
 // secret store (GAP-006 / the served secrets API). Sealed holds ciphertext only —
 // the plaintext never lives in the store (AN-8). It is identified within a tenant
@@ -222,10 +226,21 @@ type ApplicationSecretMutationFence struct {
 	Actor            *events.Actor
 	ActorSubjectRef  string
 	CreatedAt        time.Time
+	// RollbackPublicationAuthorized means the worker may replay the exact vault
+	// write after interruption without performing the native inverse again.
+	RollbackPublicationAuthorized bool
 	// Tombstone is the exact kept deletion a restore names (A236-L4). It is
 	// not stored: a first claim checks it under the name's lock, so a purge
 	// either happened before (the claim refuses) or waits behind the fence.
 	Tombstone *ApplicationSecretTombstoneRef
+	// LiveVersion is a first-claim precondition under the secret name lock.
+	LiveVersion *ApplicationSecretLiveVersion
+}
+
+type ApplicationSecretLiveVersion struct {
+	Version   int
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // ApplicationSecretFenceApproval is an exact approval capability with the one
@@ -292,7 +307,8 @@ func scanApplicationSecretMutationFence(row pgx.Row) (ApplicationSecretMutationF
 	err := row.Scan(&out.TenantID, &out.Name, &out.Operation, &out.EventID,
 		&out.EventType, &out.SchemaVersion, &out.ApprovalRequired, &out.RequesterSealed, &out.RequesterRef,
 		&out.RequestBinding, &out.Payload,
-		&out.PayloadDigest, &out.EventTime, &approval, &actor, &out.ActorSubjectRef, &out.CreatedAt)
+		&out.PayloadDigest, &out.EventTime, &approval, &actor, &out.ActorSubjectRef, &out.CreatedAt,
+		&out.RollbackPublicationAuthorized)
 	if err != nil {
 		return ApplicationSecretMutationFence{}, err
 	}
@@ -330,7 +346,8 @@ func scanApplicationSecretMutationFence(row pgx.Row) (ApplicationSecretMutationF
 const applicationSecretMutationFenceColumns = `
 	tenant_id::text, secret_name, operation, event_id::text, event_type,
 		schema_version, approval_required, requester_sealed, coalesce(requester_ref, ''), request_binding, command_payload, payload_sha256,
-	coalesce(event_time, '0001-01-01 00:00:00+00'::timestamptz), approval, actor, coalesce(actor_subject_ref, ''), created_at`
+	coalesce(event_time, '0001-01-01 00:00:00+00'::timestamptz), approval, actor, coalesce(actor_subject_ref, ''), created_at,
+	coalesce(rollback_publication_authorized, false)`
 
 // GetApplicationSecretMutationFence returns the currently reserved command for a
 // tenant/name. Missing uses the store's standard not-found shape.
@@ -429,12 +446,25 @@ func (s *Store) claimApplicationSecretMutationFenceUnbarriered(
 				return err
 			}
 		}
+		if live := candidate.LiveVersion; live != nil {
+			var matches bool
+			if err := tx.QueryRow(ctx, `
+				SELECT EXISTS (SELECT 1 FROM secret_store
+				 WHERE tenant_id = $1 AND name = $2 AND version = $3
+				   AND created_at = $4 AND updated_at = $5)`,
+				candidate.TenantID, candidate.Name, live.Version, live.CreatedAt, live.UpdatedAt).Scan(&matches); err != nil {
+				return err
+			}
+			if !matches {
+				return ErrApplicationSecretLiveVersionMoved
+			}
+		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO application_secret_mutation_fences
 			       (tenant_id, secret_name, operation, event_id, event_type,
 			        schema_version, approval_required, requester_sealed, requester_ref,
-			        request_binding, command_payload, payload_sha256, actor, actor_subject_ref)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), $10, $11, $12, $13::jsonb, NULLIF($14, ''))
+			        request_binding, command_payload, payload_sha256, actor, actor_subject_ref, rollback_publication_authorized)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), $10, $11, $12, $13::jsonb, NULLIF($14, ''), false)
 			ON CONFLICT DO NOTHING`, candidate.TenantID, candidate.Name,
 			candidate.Operation, candidate.EventID, candidate.EventType,
 			candidate.SchemaVersion, candidate.ApprovalRequired, candidate.RequesterSealed, candidate.RequesterRef,
@@ -492,8 +522,8 @@ func (s *Store) claimApplicationSecretMutationFenceUnbarriered(
 				INSERT INTO application_secret_mutation_fences
 				       (tenant_id, secret_name, operation, event_id, event_type,
 				        schema_version, approval_required, requester_sealed, requester_ref,
-				        request_binding, command_payload, payload_sha256, actor, actor_subject_ref)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), $10, $11, $12, $13::jsonb, NULLIF($14, ''))`,
+				        request_binding, command_payload, payload_sha256, actor, actor_subject_ref, rollback_publication_authorized)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), $10, $11, $12, $13::jsonb, NULLIF($14, ''), false)`,
 				candidate.TenantID, candidate.Name, candidate.Operation, candidate.EventID,
 				candidate.EventType, candidate.SchemaVersion, candidate.ApprovalRequired,
 				candidate.RequesterSealed, candidate.RequesterRef, candidate.RequestBinding,

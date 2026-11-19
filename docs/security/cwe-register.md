@@ -789,7 +789,7 @@ not this file.
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_access_explain_served_test.go:100` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
-| `internal/server/secret_integrations.go:1731` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1762` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:140` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:156` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
@@ -940,7 +940,7 @@ not this file.
 | `internal/store/secret_scoped_sync.go:395` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/secret_scoped_sync.go:437` | SQL column list, no credential (CWE-798) |
 | `internal/store/secret_static_rotation.go:429` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
-| `internal/store/secret_store.go:329` | SQL column identifiers only; this constant contains no credential material. |
+| `internal/store/secret_store.go:345` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
 | `internal/store/tenant_name_held.go:43` | table names and read queries, not credentials (CWE-798) |
 | `internal/store/tenant_unique_names_test.go:19` | table names and reasons, not credentials (CWE-798) |
@@ -1219,7 +1219,7 @@ not this file.
 | `internal/agent/sessionobserve/session_test.go:83` | the C field is signed (CWE-190) |
 | `internal/agent/sessionobserve/session_test.go:137` | small test offsets (CWE-190) |
 | `internal/agent/sshkrl/revocations_test.go:167` | test fixture strings are a few bytes, far under the uint32 bound |
-| `internal/api/application_secret_approval.go:420` | ApplicationSecretApprovalBinding just proved the version is positive (CWE-190). |
+| `internal/api/application_secret_approval.go:424` | ApplicationSecretApprovalBinding just proved the version is positive (CWE-190). |
 | `internal/api/machine_sessions_served_test.go:64` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/notifications_helpers_test.go:210` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/secretjson.go:173` | rune already range-checked below 0x20 before hex packing (CWE-190) |
@@ -1723,7 +1723,7 @@ not this file.
 | `internal/dynsecret/rabbitmq.go:177` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/redfish.go:104` | the rotated controller credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/snowflake.go:221` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/snowflake_keypair.go:94` | the rotated key pair is this provider's output: the rotation seals it before storage (CWE-200) |
+| `internal/dynsecret/snowflake_keypair.go:121` | the rotated key pair is this provider's output: the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/supabase.go:61` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/tailscale.go:155` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/unix_accounts.go:143` | the rotated local-account credential; the rotation seals it before storage (CWE-200) |
@@ -1737,8 +1737,8 @@ not this file.
 | `internal/server/pam_gateway_azure_standin_test.go:182` | owned OAuth endpoint returns issued tokens; locked storage and wipeable JSON bytes (CWE-200) |
 | `internal/server/pam_gateway_gcp_standin_test.go:186` | the owned OAuth endpoint must return its issued token; locked storage and wipeable JSON bytes (CWE-200) |
 | `internal/server/secret_integrations_outbox.go:671` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
-| `internal/server/service_account_ad_rollback_served_test.go:179` | byte-backed owned bootstrap sent to the existing sealed-vault API; not logged (CWE-200) |
-| `internal/server/service_account_ad_rollback_served_test.go:259` | synthetic byte-backed Unicode predecessor in the owned native fixture, never logged (CWE-200) |
+| `internal/server/service_account_ad_rollback_served_test.go:182` | byte-backed owned bootstrap sent to the existing sealed-vault API; not logged (CWE-200) |
+| `internal/server/service_account_ad_rollback_served_test.go:262` | synthetic byte-backed Unicode predecessor in the owned native fixture, never logged (CWE-200) |
 | `internal/server/ssh_certificate_provider.go:111` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/server/token_exchange.go:99` | the token endpoint's response is the issued token, returned once to the caller that proved the subject token (CWE-200) |
 
@@ -1841,7 +1841,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4235` | closed test table list above |
+| `internal/store/migration_content_test.go:4236` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
@@ -3109,7 +3109,7 @@ not this file.
 | `internal/server/sdk_registry_install_served_test.go:352` | the test reads what it installed under its own temp dir (CWE-22) |
 | `internal/server/secret_csi_restart_served_test.go:143` | the test's own temp file (CWE-22) |
 | `internal/server/secret_csi_restart_served_test.go:153` | the test's own temp file (CWE-22) |
-| `internal/server/secret_integrations.go:477` | the operator's own administrator DSN names this root file on the control plane's host (CWE-22) |
+| `internal/server/secret_integrations.go:482` | the operator's own administrator DSN names this root file on the control plane's host (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:82` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:105` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:135` | the test's own temp file (CWE-22) |
@@ -3850,7 +3850,7 @@ not this file.
 | `internal/dynsecret/rabbitmq.go:284` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/redfish.go:130` | the operator's configured controller through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/signin_check.go:263` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/snowflake.go:315` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/snowflake.go:318` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/tailscale.go:197` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/vcenter_sso.go:222` | the operator's configured appliance through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/vcenter_sso.go:239` | same configured appliance (CWE-918) |

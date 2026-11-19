@@ -290,6 +290,7 @@ func (a *API) claimApplicationSecretMutationFence(
 	ctx context.Context,
 	tenantID, name, operation, eventID, eventType, requestBinding string,
 	payload projections.ApplicationSecretMutation,
+	liveVersion ...store.ApplicationSecretLiveVersion,
 ) (store.ApplicationSecretMutationFence, projections.ApplicationSecretMutation, error) {
 	payload.Approval = nil
 	raw, err := json.Marshal(payload)
@@ -319,6 +320,9 @@ func (a *API) claimApplicationSecretMutationFence(
 		EventType: eventType, SchemaVersion: projections.ApplicationSecretMutationSchemaVersion,
 		ApprovalRequired: approvalRequired, RequesterSealed: requesterSealed, RequesterRef: requesterRef,
 		RequestBinding: requestBinding, Payload: raw, Actor: applicationSecretActorFromContext(ctx),
+	}
+	if len(liveVersion) != 0 {
+		candidate.LiveVersion = &liveVersion[0]
 	}
 	if payload.Action == "undelete" {
 		// A236-L4: the claim checks the exact kept deletion under the name's
@@ -764,6 +768,15 @@ func (a *API) ReconcileApplicationSecretMutationFences(ctx context.Context) (rec
 				fence.RequestBinding, fence)
 			if err != nil {
 				return reconciled, err
+			}
+			if payload.Surface == staticRotationSurface {
+				// The rotation worker must complete any native effects before
+				// appending publication. This sweep may only replay that source.
+				if _, found, err := a.secrets.be.EventLog.EventByID(ctx, fence.EventID); err != nil {
+					return reconciled, err
+				} else if !found {
+					continue
+				}
 			}
 			// Migration 0152 cannot synthesize the actor of a command that was
 			// already fenced. Retained source history is the only canonical copy.

@@ -1091,6 +1091,12 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 			a.writeError(w, err)
 			return
 		}
+		if isStaticSecretRotation(req.Provider) {
+			if err := a.requireStaticRotationProviderWrite(r.Context(), tenantID, req.Provider); err != nil {
+				a.writeError(w, err)
+				return
+			}
+		}
 	}
 	if isConnectorSecretRotation(req.Provider) {
 		if req.TTLSeconds != nil {
@@ -1208,25 +1214,55 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 		a.writeProblem(w, secretsDisabledProblem())
 		return
 	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutateWithReferenceView(w, r, idempotencyKey, "", func(ctx context.Context, tenantID string) (int, any, error) {
-		var req secretRotationScheduleRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+	if idempotencyKey == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
+		return
+	}
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding, body, err := mutationRequestBinding(r, principal)
+	defer secret.Wipe(body)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	var req secretRotationScheduleRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	provider := strings.TrimSpace(req.Provider)
+	key := strings.TrimSpace(req.Key)
+	oldRef := strings.TrimSpace(req.OldRef)
+	if name == "" || provider == "" || key == "" || oldRef == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "name, provider, key, and old_ref are required"))
+		return
+	}
+	if req.IntervalSeconds <= 0 {
+		a.writeError(w, errStatus(http.StatusBadRequest, "interval_seconds must be greater than zero"))
+		return
+	}
+	if err := a.requireSecretWrite(r.Context(), tenantID, key); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if isStaticSecretRotation(provider) {
+		if err := a.requireStaticRotationProviderWrite(r.Context(), tenantID, provider); err != nil {
+			a.writeError(w, err)
+			return
 		}
-		name := strings.TrimSpace(req.Name)
-		provider := strings.TrimSpace(req.Provider)
-		key := strings.TrimSpace(req.Key)
-		oldRef := strings.TrimSpace(req.OldRef)
-		if name == "" || provider == "" || key == "" || oldRef == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "name, provider, key, and old_ref are required")
-		}
-		if req.IntervalSeconds <= 0 {
-			return 0, nil, errStatus(http.StatusBadRequest, "interval_seconds must be greater than zero")
-		}
-		if err := a.requireSecretWrite(ctx, tenantID, key); err != nil {
-			return 0, nil, err // A235: a scheduled rotation writes the secret
-		}
+	}
+	a.mutateWithReferenceView(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		rotationRequest := secretRotationRequest{Provider: provider, Key: key, OldRef: oldRef}
 		referenceProviderType := ""
 		ttlSeconds := 0
@@ -1263,11 +1299,16 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 			// A15: static providers are scheduled when a configured provider may
 			// mint static credentials for the secret's role; otherwise fail closed.
 			return 0, nil, err
-		} else if err := checkStaticRotationPredecessor(staticProvider, key, oldRef); err != nil {
-			return 0, nil, err
 		} else {
 			referenceProviderType = dynsecret.HostedReferenceProviderType(staticProvider)
 			if referenceProviderType == "" {
+				receiverAuthority, err := resolveStaticRotationReceiverAuthority(ctx, staticProvider)
+				if err != nil {
+					return 0, nil, err
+				}
+				if err := a.checkNativeStaticRotationPredecessor(ctx, tenantID, key, staticProvider, oldRef, receiverAuthority, nil); err != nil {
+					return 0, nil, err
+				}
 				referenceProviderType = store.SecretRotationScheduleNativeReference
 			} else if oldRef != staticRotationNoPredecessor {
 				current, err := a.secrets.be.Store.GetSecret(ctx, tenantID, key)
@@ -1278,7 +1319,7 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 				if err != nil {
 					return 0, nil, err
 				}
-				oldRef, err = a.admitStaticRotationPredecessor(ctx, tenantID, epoch, current, staticProvider, oldRef)
+				oldRef, err = a.admitStaticRotationPredecessor(ctx, tenantID, epoch, current, staticProvider, oldRef, "")
 				if err != nil {
 					return 0, nil, err
 				}
@@ -1385,6 +1426,15 @@ func (a *API) controlSecretRotationScheduleRequest(w http.ResponseWriter, r *htt
 		a.writeProblem(w, secretsDisabledProblem())
 		return
 	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if idempotencyKey == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
+		return
+	}
 	principal, err := requestPrincipalSubject(r.Context())
 	if err != nil {
 		a.writeError(w, err)
@@ -1396,9 +1446,21 @@ func (a *API) controlSecretRotationScheduleRequest(w http.ResponseWriter, r *htt
 		a.writeError(w, err)
 		return
 	}
+	id := r.PathValue("id")
+	schedule, err := a.store.GetSecretRotationSchedule(r.Context(), tenantID, id)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if isStaticSecretRotation(schedule.Provider) {
+		if err := a.requireStaticRotationProviderWrite(r.Context(), tenantID, schedule.Provider); err != nil {
+			a.writeError(w, err)
+			return
+		}
+	}
 	a.mutateWithReferenceView(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
-		return a.controlSecretRotationSchedule(ctx, tenantID, r.PathValue("id"), action, idempotencyKey, binding)
-	}, true, a.scheduleCachedReferenceView(r.PathValue("id"), action, idempotencyKey, binding))
+		return a.controlSecretRotationSchedule(ctx, tenantID, id, action, idempotencyKey, binding)
+	}, true, a.scheduleCachedReferenceView(id, action, idempotencyKey, binding))
 }
 
 func (a *API) controlSecretRotationSchedule(ctx context.Context, tenantID, id, action, idempotencyKey, binding string) (int, any, error) {
@@ -1414,6 +1476,11 @@ func (a *API) controlSecretRotationSchedule(ctx context.Context, tenantID, id, a
 	schedule, err := a.store.GetSecretRotationSchedule(ctx, tenantID, id)
 	if err != nil {
 		return 0, nil, err
+	}
+	if isStaticSecretRotation(schedule.Provider) {
+		if err := a.requireStaticRotationProviderWrite(ctx, tenantID, schedule.Provider); err != nil {
+			return 0, nil, err
+		}
 	}
 	if schedule.RetiredAt != nil {
 		if action == "retire" {

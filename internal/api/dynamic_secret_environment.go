@@ -96,6 +96,14 @@ func (a *API) requireDynamicLeaseProvider(ctx context.Context, tenantID, provide
 	return a.requireDynamicProviderRead(ctx, tenantID, provider, missing)
 }
 
+func (a *API) requireStaticRotationProviderWrite(ctx context.Context, tenantID, providerID string) error {
+	provider, found := a.secrets.configuredDynamicSecretProvider(tenantID, providerID)
+	if !found {
+		return nil // the static provider resolver preserves its unavailable response
+	}
+	return a.requireDynamicProviderWrite(ctx, tenantID, provider, errStatus(http.StatusNotFound, "no such static rotation provider"))
+}
+
 // visibleDynamicSecretProviders leaves out the providers the caller may not
 // see, so listings and Vault engine mounts never name them.
 func (a *API) visibleDynamicSecretProviders(ctx context.Context, tenantID string, providers []dynamicSecretConfiguredProvider) ([]dynamicSecretConfiguredProvider, error) {

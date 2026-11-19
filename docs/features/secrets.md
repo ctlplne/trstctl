@@ -986,15 +986,36 @@ leaking one; **cutover** publishes it as the next secret version through the sam
 fenced `secret.rotated` mutation every write uses and keeps the predecessor value
 sealed; **verify** opens a session with the staged credential (PostgreSQL, MySQL;
 AWS IAM has no side-effect-free proof and records `verify_mode: not_available`);
-**retire** revokes `old_ref` at the provider, or skips when `old_ref` is `none`; a
-provider deletes only principals it issued, so an `old_ref` naming an account someone
-else provisioned is refused and the command ends `retire_pending` with the successor
-live (use `rotation_accounts` to rotate accounts you provision).
+**retire** revokes the predecessor at the provider. For a native provider, use the
+reference recorded for this secret's current version and provider, or a reference
+that the provider can tie to the role's configured account. Use `old_ref: none`
+to start managing a credential without retiring an earlier one. A two-account
+rotation requires the account that consumers currently use. An older command that
+already published its successor keeps that credential live and reports
+`retire_pending` if the worker lacks proof to retire the predecessor.
+Native commands bind the vault publication and the provider configuration at
+queue time. Deleting and recreating a secret starts a new history even if the
+same version number appears. Database commands also bind the exact configured
+connection material. If it changes during a rotation, or a pending command from
+before this check lacks that evidence, reconcile the active credential before
+queuing another command. An older command still waiting to stage also needs a
+recorded provider binding. The worker holds commands that lack this binding for
+operator review before performing a provider action. A worker resuming after an
+interruption checks the vault's pending or committed cutover and rollback before
+verifying or retiring a credential.
+Preview, execution, schedule creation, and schedule controls also require write
+access to the provider's environment when the operator restricts that environment.
 The staged credential and the predecessor value stay sealed under the tenant key
 domain between phases (AN-8). A verification that still fails on its third worker
 attempt rolls back: the predecessor is restored as a new version and the successor
 revoked (`rolled_back`); a restore that fails ends in `rollback_failed`; a retirement
 that exhausts the outbox budget leaves the successor live as `retire_pending`.
+If an inverse succeeds and publication is interrupted, the worker resumes that
+vault write without repeating the inverse. If a restore fails before the worker
+authorizes publication, it releases its unused vault reservation so an authorized
+operator can write a verified replacement. A reservation left by an earlier
+release may lack enough evidence to release automatically. Check the provider's
+active credential and the rotation record before reconciling it.
 `GET /api/v1/secrets/rotations/{id}` and `GET /api/v1/secrets/rotations?key=<name>`
 (CLI `secrets rotations get` / `list`) follow a command to its terminal phase; no
 response carries the credential.
@@ -1245,10 +1266,11 @@ deadline. It is built against a stand-in of the IAM API, with no Google Cloud pr
 slots, `RSA_PUBLIC_KEY` and `RSA_PUBLIC_KEY_2`. The successor goes in the slot the
 predecessor is not in, both keys sign in until retirement unsets the predecessor's slot,
 and only while that slot still holds the predecessor's key; the reference is
-`<NAME>/<slot>/<fingerprint>`. A key pair is proven by running `SELECT 1` as its user
-through the SQL API (`verify_mode: authenticated`). When both slots hold keys, the first
-rotation names the one consumers use in `old_ref`. Built against a stand-in of the SQL
-API, with no Snowflake proof yet.
+`<NAME>/<slot>/<fingerprint>`. The role must name that user. The worker checks the
+slot's live fingerprint before staging a successor and again before unsetting the
+predecessor. A key pair is proven by running `SELECT 1` as its user through the SQL
+API (`verify_mode: authenticated`). When both slots hold keys, name the one
+consumers use in `old_ref`. The integration tests use a stand-in of the SQL API.
 
 The hosted API key providers (A240) share one engine: a lease, or a rotation's
 successor, is a new key created with the administrator's credential under the target
