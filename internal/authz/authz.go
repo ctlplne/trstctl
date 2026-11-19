@@ -13,6 +13,7 @@ package authz
 
 import (
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -319,6 +320,27 @@ func dimensionCovers(grant, target string) bool {
 type Grant struct {
 	Role  Role
 	Scope Scope
+}
+
+// BundleRunSubjectPrefix marks a bundle run's token subject.
+const BundleRunSubjectPrefix = "bundle-run:"
+
+// BundleRunPrincipal returns the principal and whether subject is a bundle run.
+func BundleRunPrincipal(subject string) (string, bool) {
+	principal, ok := strings.CutPrefix(subject, BundleRunSubjectPrefix)
+	return principal, ok && principal != ""
+}
+
+// SameApprovalPrincipal compares requester and reviewer subjects for separation
+// of duties. It unwraps one valid bundle-run prefix and preserves subject case.
+func SameApprovalPrincipal(requester, reviewer string) bool {
+	if principal, ok := BundleRunPrincipal(requester); ok {
+		requester = principal
+	}
+	if principal, ok := BundleRunPrincipal(reviewer); ok {
+		reviewer = principal
+	}
+	return requester == reviewer
 }
 
 // Principal is an authenticated caller with its resolved grants.

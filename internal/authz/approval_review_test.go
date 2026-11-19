@@ -8,6 +8,27 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 )
 
+// CR-101: a bundle run wraps the principal once and preserves the name.
+func TestApprovalPrincipalMatchesOnlyTheBundleRunOwner(t *testing.T) {
+	for _, test := range []struct {
+		requester, reviewer string
+		same                bool
+	}{
+		{"owner", "owner", true},
+		{"bundle-run:owner", "owner", true},
+		{"owner", "bundle-run:owner", true},
+		{"bundle-run:owner", "bundle-run:other", false},
+		{"bundle-run:Owner", "owner", false},
+		{"bundle-run:owner ", "owner", false},
+		{"bundle-run:bundle-run:owner", "owner", false},
+		{"bundle-run:", "", false},
+	} {
+		if got := authz.SameApprovalPrincipal(test.requester, test.reviewer); got != test.same {
+			t.Errorf("SameApprovalPrincipal(%q, %q) = %v, want %v", test.requester, test.reviewer, got, test.same)
+		}
+	}
+}
+
 func TestApprovalReviewPermissionRequiresOneRealDomainApprovalGrant(t *testing.T) {
 	target := authz.Scope{TenantID: "tenant-a"}
 	for _, tc := range []struct {

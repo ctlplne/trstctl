@@ -110,7 +110,7 @@ func (p *Projector) applyOperationApprovalTx(ctx context.Context, tx pgx.Tx, eve
 		if err := validateApprovalActor(event, payload.Approver); err != nil {
 			return true, err
 		}
-		return true, p.store.ApplyOperationApprovalDecisionTx(ctx, tx, store.OperationApprovalDecision{
+		return true, p.store.ApplyRecordedOperationApprovalDecisionTx(ctx, tx, store.OperationApprovalDecision{
 			TenantID: event.TenantID, RequestID: payload.RequestID,
 			IntentDigest: payload.IntentDigest, Approver: payload.Approver,
 			Decision: payload.Decision, Reason: payload.Reason, EventID: event.ID,

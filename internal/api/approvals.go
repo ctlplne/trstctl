@@ -319,8 +319,13 @@ func (a *API) approveIdentityAction(w http.ResponseWriter, r *http.Request) {
 		ExpectedResourceKind: "identity", ExpectedResourceID: r.PathValue("id"),
 		ExpectedAction: body.Action,
 	}
-	if _, err := a.preflightApprovalDecision(r, command); err != nil {
+	record, err := a.preflightApprovalDecision(r, command)
+	if err != nil {
 		a.writeError(w, err)
+		return
+	}
+	if authz.SameApprovalPrincipal(record.Requester, command.Approver) {
+		a.writeError(w, approvalAPIError(store.ErrApprovalSelfDecision))
 		return
 	}
 	binding, err := approvalDecisionBinding(command)
@@ -436,6 +441,11 @@ func (a *API) authorizeGenericApprovalDecision(r *http.Request, record ApprovalR
 		return err
 	} else if !allowed {
 		return errStatus(http.StatusForbidden, "approving a change in a restricted environment needs write access there")
+	}
+	// The requester match is visible only after the caller is allowed to review
+	// this domain and target. A self-decision still stops before idempotency.
+	if authz.SameApprovalPrincipal(record.Requester, command.Approver) {
+		return approvalAPIError(store.ErrApprovalSelfDecision)
 	}
 	// The preflight supplies the immutable target shown to the reviewer. Copy it
 	// into the command so RecordApproval rechecks the exact kind/resource/action

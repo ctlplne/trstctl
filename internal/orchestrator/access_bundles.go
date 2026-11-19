@@ -5,8 +5,8 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -18,13 +18,12 @@ import (
 // were removed, does nothing.
 
 // BundleRunSubjectPrefix marks a run's API token; the rest is the principal.
-const BundleRunSubjectPrefix = "bundle-run:"
+const BundleRunSubjectPrefix = authz.BundleRunSubjectPrefix
 
 // BundleRunPrincipal is the principal a run token acts as, and whether the
 // subject is a run's at all.
 func BundleRunPrincipal(subject string) (string, bool) {
-	principal, ok := strings.CutPrefix(subject, BundleRunSubjectPrefix)
-	return principal, ok && principal != ""
+	return authz.BundleRunPrincipal(subject)
 }
 
 func (o *Orchestrator) emitAccessBundleEvent(ctx context.Context, tenantID, eventType string, payload any) error {

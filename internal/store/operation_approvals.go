@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/authz"
 )
 
 const (
@@ -346,10 +348,20 @@ func (s *Store) ApplyOperationApprovalRequestedTx(ctx context.Context, tx pgx.Tx
 	return nil
 }
 
-// ApplyOperationApprovalDecisionTx projects an exact review decision. All
-// authorization checks live here as well as in the command side, so an imported
-// or replayed malformed event cannot create authority.
+// ApplyOperationApprovalDecisionTx applies a review using the current
+// separation-of-duties rule.
 func (s *Store) ApplyOperationApprovalDecisionTx(ctx context.Context, tx pgx.Tx, d OperationApprovalDecision) error {
+	return s.applyOperationApprovalDecisionTx(ctx, tx, d, false)
+}
+
+// ApplyRecordedOperationApprovalDecisionTx projects a fact from the event log.
+// The command checks the current principal rule before append. Older events
+// retain the exact-subject rule so a rebuild can reproduce their recorded state.
+func (s *Store) ApplyRecordedOperationApprovalDecisionTx(ctx context.Context, tx pgx.Tx, d OperationApprovalDecision) error {
+	return s.applyOperationApprovalDecisionTx(ctx, tx, d, true)
+}
+
+func (s *Store) applyOperationApprovalDecisionTx(ctx context.Context, tx pgx.Tx, d OperationApprovalDecision, recorded bool) error {
 	r, err := scanOperationApproval(tx.QueryRow(ctx,
 		`SELECT `+operationApprovalColumns+` FROM operation_approval_requests r
 		  WHERE r.tenant_id = $1 AND r.id = $2 FOR UPDATE`, d.TenantID, d.RequestID))
@@ -365,7 +377,7 @@ func (s *Store) ApplyOperationApprovalDecisionTx(ctx context.Context, tx pgx.Tx,
 	if d.Approver == "" {
 		return ErrAnonymousIssuanceApproval
 	}
-	if r.Requester == d.Approver {
+	if r.Requester == d.Approver || (!recorded && authz.SameApprovalPrincipal(r.Requester, d.Approver)) {
 		return ErrApprovalSelfDecision
 	}
 	if d.ExpectedResourceKind != "" && d.ExpectedResourceKind != r.ResourceKind ||

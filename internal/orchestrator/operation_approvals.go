@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
@@ -516,7 +517,7 @@ func validateOperationApprovalDecisionTarget(request store.OperationApprovalRequ
 	if request.IntentDigest != decision.IntentDigest {
 		return store.ErrApprovalDigestMismatch
 	}
-	if request.Requester == decision.Approver {
+	if authz.SameApprovalPrincipal(request.Requester, decision.Approver) {
 		return store.ErrApprovalSelfDecision
 	}
 	if decision.ExpectedResourceKind != "" && decision.ExpectedResourceKind != request.ResourceKind ||

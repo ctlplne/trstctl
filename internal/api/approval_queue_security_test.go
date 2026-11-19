@@ -155,6 +155,8 @@ func TestApprovalQueueSyntheticReviewPermissionIsRouteAdmissionOnly(t *testing.T
 
 func TestApprovalQueueRealDomainABACDenyStillFiltersAndRejects(t *testing.T) {
 	records := approvalAuthorizationFixtures()
+	// CR-101: the principal match must not change a domain-denial response.
+	records[3].Requester = orchestrator.BundleRunSubjectPrefix + "reviewer-1"
 	recorder := &approvalQueueRecorder{records: records}
 	overlay := &approvalQueueABAC{denyReasons: map[string]string{
 		string(authz.SecretsWrite): "secret reviews require an active change window",
@@ -187,8 +189,8 @@ func TestApprovalQueueRealDomainABACDenyStillFiltersAndRejects(t *testing.T) {
 		"certificate-secret-reviewer", "reviewer-1", body)
 	decisionRR := httptest.NewRecorder()
 	handler.ServeHTTP(decisionRR, decisionReq)
-	if decisionRR.Code != http.StatusForbidden {
-		t.Fatalf("real-domain ABAC-denied secret approval = %d, want 403: %s", decisionRR.Code, decisionRR.Body.String())
+	if decisionRR.Code != http.StatusForbidden || !strings.Contains(decisionRR.Body.String(), "another review domain") {
+		t.Fatalf("real-domain ABAC-denied secret approval = %d, want the domain refusal: %s", decisionRR.Code, decisionRR.Body.String())
 	}
 	if len(recorder.commands) != 0 {
 		t.Fatalf("real-domain ABAC denial recorded decisions: %+v", recorder.commands)
@@ -197,6 +199,8 @@ func TestApprovalQueueRealDomainABACDenyStillFiltersAndRejects(t *testing.T) {
 
 func TestGenericApprovalDecisionCannotCrossDomainPermission(t *testing.T) {
 	records := approvalAuthorizationFixtures()
+	// CR-101: a caller without review permission learns no requester match.
+	records[3].Requester = orchestrator.BundleRunSubjectPrefix + "cert-reviewer"
 	secret := records[3]
 	recorder := &approvalQueueRecorder{records: records}
 	role := authz.Role{Name: "certificate-reviewer", Permissions: []authz.Permission{authz.CertsIssue}}
@@ -209,11 +213,38 @@ func TestGenericApprovalDecisionCannotCrossDomainPermission(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("certificate-only reviewer approved secret = %d, want 403: %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusForbidden || !strings.Contains(rr.Body.String(), "another review domain") {
+		t.Fatalf("certificate-only review on secret = %d, want the domain refusal: %s", rr.Code, rr.Body.String())
 	}
 	if len(recorder.commands) != 0 {
 		t.Fatalf("unauthorized secret approval recorded commands: %+v", recorder.commands)
+	}
+}
+
+// CR-101: a bundle run and its owner represent one person for review.
+func TestApprovalRoutesRefuseTheOwnerOfTheRequestingRun(t *testing.T) {
+	record := approvalAuthorizationFixtures()[0]
+	record.ResourceID = "6f9a1c2e-0d4b-4b7e-9a1e-000000000001"
+	record.Requester = orchestrator.BundleRunSubjectPrefix + "request-owner"
+	for _, tc := range []struct {
+		name, path, body string
+	}{
+		{"approve", "/api/v1/approval-requests/" + record.ID + "/approvals", `{"intent_digest":"` + record.IntentDigest + `"}`},
+		{"deny", "/api/v1/approval-requests/" + record.ID + "/denials", `{"intent_digest":"` + record.IntentDigest + `","reason":"needs independent review"}`},
+		{"identity compatibility", "/api/v1/identities/" + record.ResourceID + "/approvals", `{"action":"issue","request_id":"` + record.ID + `","intent_digest":"` + record.IntentDigest + `"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := &approvalQueueRecorder{records: []ApprovalRequestRecord{record}}
+			role := authz.Role{Name: "certificate-reviewer", Permissions: []authz.Permission{authz.CertsIssue}}
+			handler := New(nil, orchestrator.NewMemoryIdempotency(), nil,
+				WithInsecureHeaderResolver(), WithRoles(role), WithApprovals(recorder))
+			req := approvalQueueRequest(http.MethodPost, tc.path, role.Name, "request-owner", tc.body)
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if rr.Code != http.StatusForbidden || len(recorder.commands) != 0 {
+				t.Fatalf("owner review returned %d after %d decision calls: %s", rr.Code, len(recorder.commands), rr.Body.String())
+			}
+		})
 	}
 }
 

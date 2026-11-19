@@ -140,3 +140,55 @@ func TestOperationApprovalProjectionReplayAndRebuildDeriveExactState(t *testing.
 		t.Errorf("phantom row survived rebuild: %v, want ErrApprovalRequestNotFound", err)
 	}
 }
+
+// CR-101: rebuilding an existing audit history must retain its recorded
+// decisions even when current review rules would refuse the principal pair.
+func TestOperationApprovalRebuildRetainsRecordedPrincipalForms(t *testing.T) {
+	s := newStore(t)
+	resetOperationApprovalProjectionTables(t, s)
+	log := openLog(t)
+	ctx := t.Context()
+	const (
+		requestID = "77100000-0000-4000-8000-000000000021"
+		digest    = "sha256:retained-approval-intent"
+	)
+	createdAt := time.Date(2026, 8, 10, 13, 0, 0, 0, time.UTC)
+	for _, ev := range []events.Event{
+		{Type: projections.EventTenantRegistered, TenantID: tenantA, Data: tenantRegistered("retained-approval")},
+		{ID: requestID, Type: projections.EventApprovalRequested, TenantID: tenantA,
+			Data: operationApprovalJSON(t, projections.ApprovalRequested{
+				ID: requestID, IntentDigest: digest, ResourceKind: "identity", ResourceID: "identity/history-fixture",
+				Action: "revoke", Requester: "bundle-run:review-origin", FromState: "issued", ToState: "revoked",
+				TargetVersion: 1, RequiredApprovals: 1, CreatedAt: createdAt, ExpiresAt: createdAt.Add(time.Hour),
+			})},
+		{ID: "77100000-0000-4000-8000-000000000121", Type: projections.EventApprovalDecisionRecorded, TenantID: tenantA,
+			Data: operationApprovalJSON(t, projections.ApprovalDecisionRecorded{
+				RequestID: requestID, IntentDigest: digest, Approver: "review-origin",
+				Decision: store.ApprovalDecisionApprove, DecidedAt: createdAt.Add(time.Minute),
+				ExpectedResourceKind: "identity", ExpectedResourceID: "identity/history-fixture", ExpectedAction: "revoke",
+			})},
+	} {
+		if _, err := log.Append(ctx, ev); err != nil {
+			t.Fatalf("append retained %s: %v", ev.Type, err)
+		}
+	}
+	projector := projections.New(s)
+	if err := projector.Project(ctx, log); err != nil {
+		t.Fatalf("project retained approval: %v", err)
+	}
+	if err := projector.Rebuild(ctx, log); err != nil {
+		t.Fatalf("cold rebuild refused retained approval: %v", err)
+	}
+	got, err := s.GetOperationApproval(ctx, tenantA, requestID)
+	if err != nil || got.Requester != "bundle-run:review-origin" ||
+		got.Status != store.ApprovalStatusApproved || got.ApprovalCount != 1 {
+		t.Fatalf("rebuilt historical approval = %+v, err=%v", got, err)
+	}
+	var reviewer string
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT approver FROM operation_approval_decisions WHERE tenant_id = $1 AND request_id = $2`,
+			tenantA, requestID).Scan(&reviewer)
+	}); err != nil || reviewer != "review-origin" {
+		t.Fatalf("retained reviewer = %q, err=%v", reviewer, err)
+	}
+}

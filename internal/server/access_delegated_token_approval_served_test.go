@@ -10,9 +10,67 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/store"
 )
+
+// CR-101: the owner and the owner's active bundle run are not independent
+// reviewers. The fixture records review decisions on inert requests.
+func TestServedApprovalRequiresAReviewerIndependentOfTheBundleRun(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.RequireApproval = true
+		d.EnablePolicyGate = true
+	})
+	ctx := t.Context()
+	x := a251Harness{t: t, h: h}
+	const owner = "review-owner"
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "bundle-admin", "access:read", "access:write", "certs:read", "certs:issue")
+	ownerToken := seedScopedTokenSubject(t, h.store, h.tenant, owner, "access:bundle.run", "certs:issue")
+	reviewerToken := seedScopedTokenSubject(t, h.store, h.tenant, "independent-reviewer", "certs:issue")
+	bundle := x.bundle(admin, "review-bundle", "review-fixture", "certs:read", "certs:issue")
+	x.grant(admin, "review-grant", bundle, "machine", owner)
+	run := x.run(ownerToken, "review-run", map[string]any{"bundle_ids": []string{bundle}, "ttl_seconds": 600})
+	if code := x.status(http.MethodGet, "/api/v1/certificates", run.Token); code != http.StatusOK {
+		t.Fatalf("active bundle run could not read its permitted surface: %d", code)
+	}
+
+	for _, tc := range []struct {
+		name, resource, requester, token, reason string
+	}{
+		{"owner reviews run", "code-signing/run-fixture", orchestrator.BundleRunSubjectPrefix + owner, ownerToken, "own request"},
+		{"run reviews owner", "code-signing/owner-fixture", owner, run.Token, "minted"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request, err := h.srv.orch.EnsureOperationApprovalRequest(ctx, h.tenant, orchestrator.OperationApprovalIntent{
+				ResourceKind: "code_signing", ResourceID: tc.resource, Action: "sign",
+				Requester: tc.requester, FromState: "requested", ToState: "signed",
+				TargetVersion: 1, RequiredApprovals: 1, TTL: time.Hour,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := "/api/v1/approval-requests/" + request.ID + "/approvals"
+			command := map[string]any{"intent_digest": request.IntentDigest}
+			status, body := secretsReq(t, h, http.MethodPost, path, tc.token, command)
+			if status != http.StatusForbidden || !bytes.Contains(body, []byte(tc.reason)) {
+				t.Errorf("same-principal review = %d %s, want a 403 explaining %q", status, body, tc.reason)
+			}
+			got, err := h.store.GetOperationApproval(ctx, h.tenant, request.ID)
+			if err != nil || got.ApprovalCount != 0 || got.Status != store.ApprovalStatusPending {
+				t.Fatalf("same-principal review changed the request: %+v, err=%v", got, err)
+			}
+			status, body = secretsReq(t, h, http.MethodPost, path, reviewerToken, command)
+			if status != http.StatusOK {
+				t.Fatalf("independent reviewer was refused: %d %s", status, body)
+			}
+			got, err = h.store.GetOperationApproval(ctx, h.tenant, request.ID)
+			if err != nil || got.ApprovalCount != 1 || got.Status != store.ApprovalStatusApproved {
+				t.Fatalf("independent reviewer did not reach quorum: %+v, err=%v", got, err)
+			}
+		})
+	}
+}
 
 // F262: a token that one person mints for another subject can do that subject's
 // work, but it never counts as that subject's approval. Otherwise one admin can

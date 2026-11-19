@@ -175,6 +175,34 @@ func TestOperationApprovalAuthorityDecisionReplayAndQuorumAreExact(t *testing.T)
 	}
 }
 
+// CR-101: a current decision cannot count the same principal as the requester.
+func TestOperationApprovalAuthorityRefusesRequesterInEitherPrincipalForm(t *testing.T) {
+	s := newOperationApprovalStore(t)
+	ctx := t.Context()
+	for _, tc := range []struct {
+		name, id, eventID, requester, approver string
+	}{
+		{"owner reviews run", "77000000-0000-4000-8000-000000000041", "77000000-0000-4000-8000-000000000141", "bundle-run:owner", "owner"},
+		{"run reviews owner", "77000000-0000-4000-8000-000000000042", "77000000-0000-4000-8000-000000000142", "owner", "bundle-run:owner"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := operationApprovalRequest(tc.id, tenantA)
+			request.Requester = tc.requester
+			if err := applyOperationApprovalRequest(ctx, s, request); err != nil {
+				t.Fatal(err)
+			}
+			decision := operationApprovalDecision(request, tc.approver, tc.eventID)
+			if err := applyOperationApprovalDecision(ctx, s, decision); !errors.Is(err, store.ErrApprovalSelfDecision) {
+				t.Errorf("same-principal decision = %v, want ErrApprovalSelfDecision", err)
+			}
+			got, err := s.GetOperationApproval(ctx, tenantA, request.ID)
+			if err != nil || got.ApprovalCount != 0 {
+				t.Fatalf("same-principal review count = %d, err=%v", got.ApprovalCount, err)
+			}
+		})
+	}
+}
+
 func TestOperationApprovalAuthorityDecisionReplayUsesPostgresTimestampPrecisionAUD68(t *testing.T) {
 	s := newOperationApprovalStore(t)
 	ctx := context.Background()

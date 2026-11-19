@@ -3741,6 +3741,11 @@
 
 ### Security
 
+- A requester and its bundle-run subject share one identity for separation
+  of duties (CR-101). Approval and denial reject that reviewer before a new
+  decision reaches the event log. Rebuild retains previously recorded
+  decisions and their original audit subjects.
+
 - ACME publishes only the mount default profile in its public directory
   (CR-050 and CR-797). An External Account Binding credential's pin controls
   its orders. Internal-trust issuance requires mandatory EAB and an exact pin

@@ -271,6 +271,10 @@ its approver notification through the transactional outbox. The PAM lane opens a
 short-lived database or SSH session instead of minting a general-purpose certificate.
 All three lanes block self-approval. PAM requires a configurable quorum of distinct
 reviewers with `access:approve` before a target grant or SSH signature can start.
+For operation approvals, a bundle-run subject and its underlying principal
+share one identity. Neither form can approve or deny a request made by the
+other. Audit records keep the original subject strings, and a rebuild
+replays decisions already recorded in the event log.
 
 On `/request`, the requester first reviews an exact, effect-free server preview bound to
 the tenant owner, active profile version, requester, subject, and optional requester-held

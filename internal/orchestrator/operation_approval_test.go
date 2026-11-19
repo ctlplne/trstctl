@@ -250,6 +250,50 @@ func TestOperationApprovalOrchestratorCanonicalRequestDecisionReplayAndQuorum(t 
 	}
 }
 
+// CR-101: the command must refuse both principal forms before appending an event.
+func TestOperationApprovalSamePrincipalNeverAppendsAReview(t *testing.T) {
+	s := newStore(t)
+	resetOrchestratorOperationApprovals(t, s)
+	ctx := t.Context()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "approval-principal"}); err != nil {
+		t.Fatal(err)
+	}
+	log := openLog(t)
+	o := orchestrator.NewOrchestrator(log, s, nil)
+	for _, tc := range []struct {
+		name, resource, requester, approver string
+	}{
+		{"owner reviews run", "code-signing/fixture-one", orchestrator.BundleRunSubjectPrefix + "owner", "owner"},
+		{"run reviews owner", "code-signing/fixture-two", "owner", orchestrator.BundleRunSubjectPrefix + "owner"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request, err := o.EnsureOperationApprovalRequest(ctx, tenantA, orchestrator.OperationApprovalIntent{
+				ResourceKind: "code_signing", ResourceID: tc.resource, Action: "rotate",
+				Requester: tc.requester, FromState: "active", ToState: "rotated",
+				TargetVersion: 1, RequiredApprovals: 1, TTL: time.Hour,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, err := log.LastSequence(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = o.RecordOperationApprovalDecision(ctx, tenantA, orchestrator.OperationApprovalDecision{
+				RequestID: request.ID, IntentDigest: request.IntentDigest,
+				Approver: tc.approver, Decision: store.ApprovalDecisionApprove,
+			})
+			if !errors.Is(err, store.ErrApprovalSelfDecision) {
+				t.Errorf("same-principal decision returned %v, want ErrApprovalSelfDecision", err)
+			}
+			after, err := log.LastSequence(ctx)
+			if err != nil || after != before {
+				t.Fatalf("same-principal decision changed the log head from %d to %d, err=%v", before, after, err)
+			}
+		})
+	}
+}
+
 func TestOperationApprovalDecisionConflictCannotPoisonLogOrColdRebuild(t *testing.T) {
 	s := newStore(t)
 	resetOrchestratorOperationApprovals(t, s)
