@@ -34,9 +34,8 @@ func TestSyslogFeedMutualTLSAgainstRsyslogP5L2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_P5L2_LAB_CA", "env:TRSTCTL_P5L2_LAB_CLIENT"}
-	})
+	h := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("audit_feed", []string{syslogURL}, "env:TRSTCTL_P5L2_LAB_CA", "env:TRSTCTL_P5L2_LAB_CLIENT"))
 	t.Setenv("TRSTCTL_P5L2_LAB_CA", string(caPEM))
 	t.Setenv("TRSTCTL_P5L2_LAB_CLIENT", string(bundle))
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "p5l2-lab-operator", []string{

@@ -137,7 +137,11 @@ func TestServedSecretStoresInfisicalConjurAkeylessBitwardenOD13(t *testing.T) {
 	} {
 		t.Setenv(env, value)
 	}
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_OD13_INF", "env:TRSTCTL_OD13_CJ", "env:TRSTCTL_OD13_AKL", "env:TRSTCTL_OD13_BWS"))
+	h := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("secret_store", []string{inf.URL()}, "env:TRSTCTL_OD13_INF"),
+		bindOutboundEnvCredentialRefs("secret_store", []string{cj.URL()}, "env:TRSTCTL_OD13_CJ"),
+		bindOutboundEnvCredentialRefs("secret_store", []string{akl.URL()}, "env:TRSTCTL_OD13_AKL"),
+		bindOutboundEnvCredentialRefs("secret_store", []string{bws.URL()}, "env:TRSTCTL_OD13_BWS"))
 	o := &od13Harness{t: t, h: h, tok: seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "secrets:read", string(authz.PrivateEgress))}
 	providers := func(inspect bool) []map[string]any {
 		return []map[string]any{
@@ -265,7 +269,9 @@ func TestServedSecretStoresAgainstOfficialInfisicalAndConjurImagesOD13(t *testin
 			t.Skipf("the OD-13 lab is not running (%s unset); runners/od13-lab-proof.sh starts it", name)
 		}
 	}
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_OD13_INFISICAL_CLIENT_SECRET", "env:TRSTCTL_OD13_CONJUR_API_KEY"))
+	h := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("secret_store", []string{os.Getenv("TRSTCTL_OD13_INFISICAL_URL")}, "env:TRSTCTL_OD13_INFISICAL_CLIENT_SECRET"),
+		bindOutboundEnvCredentialRefs("secret_store", []string{os.Getenv("TRSTCTL_OD13_CONJUR_URL")}, "env:TRSTCTL_OD13_CONJUR_API_KEY"))
 	o := &od13Harness{t: t, h: h, tok: seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))}
 	providers := func(inspect bool) []map[string]any {
 		return []map[string]any{

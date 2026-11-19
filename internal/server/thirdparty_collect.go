@@ -25,12 +25,12 @@ func collectThirdParty(ctx context.Context, cfg secretscan.ThirdPartyScanConfig)
 	}
 	var token []byte
 	if c.TokenRef != "" {
-		if token, err = resolveDiscoveryCredentialBytesRef(ctx, c.TokenRef); err != nil {
+		if token, err = resolveBoundCredentialBytesRef(ctx, c.TokenRef, client); err != nil {
 			return secretscan.ThirdPartyTarget{}, scancollect.Result{}, fmt.Errorf("%w: resolve the collection token reference: %v", scancollect.ErrRefused, err)
 		}
 		defer secret.Wipe(token)
 	}
-	username, err := resolveOptionalDiscoveryCredentialRef(ctx, c.UsernameRef)
+	username, err := resolveOptionalBoundCredentialRef(ctx, c.UsernameRef, client)
 	if err != nil {
 		return secretscan.ThirdPartyTarget{}, scancollect.Result{}, fmt.Errorf("%w: resolve the collection username reference: %v", scancollect.ErrRefused, err)
 	}

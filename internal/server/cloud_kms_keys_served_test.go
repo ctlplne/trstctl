@@ -48,11 +48,11 @@ func TestServedCloudKMSKeyInventoryShowsTypeAndRotationX4(t *testing.T) {
 
 	t.Setenv("TRSTCTL_X4_KMS_ACCESS_KEY_ID", "test")
 	t.Setenv("TRSTCTL_X4_KMS_SECRET_ACCESS_KEY", "test")
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+	endpoint := "http://" + address
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_kms_key", []string{endpoint},
 		"env:TRSTCTL_X4_KMS_ACCESS_KEY_ID", "env:TRSTCTL_X4_KMS_SECRET_ACCESS_KEY"))
 	ctx := t.Context()
 	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
-	endpoint := "http://" + address
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", writer, map[string]any{
 		"name": "aws-kms-us-east-1", "kind": "cloud_kms_key", "config": map[string]any{"providers": []map[string]any{{ // #nosec G101 -- credential references only; no credential value enters the config (CWE-798)
 			"provider": "aws-kms", "region": "us-east-1", "endpoint": endpoint, "allow_private_endpoint": true,

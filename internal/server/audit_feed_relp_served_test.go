@@ -30,9 +30,8 @@ func TestServedSyslogAuditFeedOverRELPIsAcknowledgedP5L3(t *testing.T) {
 	restore := syslogFeedTimeout
 	syslogFeedTimeout = 5 * time.Second
 	t.Cleanup(func() { syslogFeedTimeout = restore })
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_P5L3_CA"}
-	})
+	raw, port := reserveLoopbackReceiver(t)
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("audit_feed", []string{"relp+tls://localhost:" + port}, "env:TRSTCTL_P5L3_CA"))
 	t.Setenv("TRSTCTL_P5L3_CA", string(h.caPEM))
 	receiver := &relptest.Receiver{Answer: func(session, n int, _ []byte) int {
 		if session == 1 && n == 2 {
@@ -40,7 +39,7 @@ func TestServedSyslogAuditFeedOverRELPIsAcknowledgedP5L3(t *testing.T) {
 		}
 		return 200
 	}}
-	port := serveP5L3RELP(t, h, receiver)
+	serveP5L3RELP(t, h, receiver, raw)
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "p5l3-operator", []string{
 		string(authz.AuditRead), string(authz.AuditWrite), string(authz.OwnersWrite), string(authz.PrivateEgress),
 	})
@@ -129,7 +128,7 @@ func TestServedSyslogAuditFeedOverRELPIsAcknowledgedP5L3(t *testing.T) {
 
 // serveP5L3RELP runs receiver behind TLS with a certificate the harness CA
 // issued for localhost and returns its port.
-func serveP5L3RELP(t *testing.T, h *servedHarness, receiver *relptest.Receiver) string {
+func serveP5L3RELP(t *testing.T, h *servedHarness, receiver *relptest.Receiver, raw net.Listener) string {
 	t.Helper()
 	key, err := crypto.GenerateHostSubjectKey("localhost", []string{"localhost"})
 	if err != nil {
@@ -153,10 +152,6 @@ func serveP5L3RELP(t *testing.T, h *servedHarness, receiver *relptest.Receiver) 
 		t.Fatal(err)
 	}
 	cert, err := mtls.ServerCertFromFiles(certFile, keyFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}

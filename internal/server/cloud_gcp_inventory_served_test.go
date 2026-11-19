@@ -74,7 +74,7 @@ func TestServedGCPMachineIdentityInventoryA264(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("TRSTCTL_A264_GCP_READER_PATH", path)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A264_GCP_READER_PATH"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("gcp_machine_identity", []string{native.URL}, "env:TRSTCTL_A264_GCP_READER_PATH"))
 	operator := seedScopedTokenSubject(t, h.store, h.tenant, "gcp-inventory-operator", "discovery:read", "discovery:write", "graph:read", "nhi:read", string(authz.PrivateEgress))
 	cfg := map[string]any{"project": "owned-project", "service_accounts": []string{"orders@owned-project.iam.gserviceaccount.com"}, "token_file_ref": strings.Join([]string{"env", "TRSTCTL_A264_GCP_READER_PATH"}, ":"), "iam_endpoint": native.URL, "resource_manager_endpoint": native.URL, "logging_endpoint": native.URL, "activity_lookback_days": 30, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, native.URL)}}
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/sources", operator, "a264-gcp-inventory-source", map[string]any{"kind": "gcp_machine_identity", "name": "Owned GCP workload inventory", "config": cfg})

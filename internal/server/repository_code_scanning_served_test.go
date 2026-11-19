@@ -54,7 +54,7 @@ func TestServedRepositoryFindingIsAnnotatedThroughCodeScanningA174L5(t *testing.
 		EngineVersion: secretscan.GitleaksPinnedVersion, RulesActive: secretscan.GitleaksDefaultRulesActive,
 		Findings: []secretscan.Finding{finding(paymentsFile, "config/deploy.env", 2)}}}
 	t.Setenv("TRSTCTL_A174L5_TOKEN", token)
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), allowOutboundEnvCredentialRefs("env:TRSTCTL_A174L5_TOKEN"),
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), bindOutboundEnvCredentialRefs("secret_repo", []string{stand.URL()}, "env:TRSTCTL_A174L5_TOKEN"),
 		func(d *Deps) { d.SecretScanner = fake })
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "discovery:write", "connectors:write",
 		string(authz.PrivateEgress))

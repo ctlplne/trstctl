@@ -31,6 +31,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secretscan"
@@ -267,6 +268,14 @@ type issuanceDispatcher struct {
 	// egress is the product-wide air-gap guard; with it enforcing, cloud
 	// access-key discovery (M3) reaches only the hosts the operator allowed.
 	egress *egress.Guard
+	// outboundCredentials are the operator's env credential bindings (CR-008).
+	// A worker resolves a tenant-authored env reference only through them, for
+	// the tenant and integration it runs for, pinned to the bound origins.
+	outboundCredentials *outboundcred.Bindings
+	// serviceNowBindings are the operator's ServiceNow bindings; the ticket and
+	// incident-close workers re-match each queued row against them before they
+	// resolve its token (CR-008).
+	serviceNowBindings []api.ServiceNowBinding
 	// billingSync is the Provider's configured billing targets (MSP-2).
 	billingSync config.ProviderBillingSync
 	// alertObservers see each alert before its channels (MSP-3).

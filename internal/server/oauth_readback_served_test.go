@@ -28,7 +28,7 @@ func TestServedOAuthRevokeReadsTheGrantBackA170L2(t *testing.T) {
 	sticky.SeedGraph("sp-sticky", oauthrevoketest.GraphGrant{ID: "g-s", ClientID: "sp-sticky", PrincipalID: "user-hank"})
 	sticky.SetSticky(true)
 	t.Setenv("TRSTCTL_A170L2_ADMIN_TOKEN", adminToken)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A170L2_ADMIN_TOKEN"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("oauth_grant", []string{honest.URL(), sticky.URL()}, "env:TRSTCTL_A170L2_ADMIN_TOKEN"))
 	ctx := t.Context()
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "connectors:write", string(authz.PrivateEgress))
 	finding := func(name string, stand *oauthrevoketest.Server, app, user string) oauthFindingRow {

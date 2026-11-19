@@ -557,10 +557,10 @@ func (a *API) ingestThirdPartySecretScan(w http.ResponseWriter, r *http.Request)
 		if err != nil {
 			return 0, nil, err
 		}
-		if err := a.requireAnnotationAllowed(ctx, tenantID, cfg.Annotation); err != nil {
+		if err := a.requireAnnotationAllowed(ctx, tenantID, secretscan.ThirdPartySourceKind, cfg.Annotation); err != nil {
 			return 0, nil, err
 		}
-		if err := a.requireCollectAllowed(ctx, tenantID, cfg.Collect); err != nil {
+		if err := a.requireCollectAllowed(ctx, tenantID, secretscan.ThirdPartySourceKind, cfg.Collect); err != nil {
 			return 0, nil, err
 		}
 		body, err := json.Marshal(cfg)
@@ -622,7 +622,7 @@ func (a *API) receiveSecretRepoWebhook(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		if err := a.requireAnnotationAllowed(ctx, tenantID, req.Annotation); err != nil {
+		if err := a.requireAnnotationAllowed(ctx, tenantID, secretscan.RepositorySourceKind, req.Annotation); err != nil {
 			return 0, nil, err
 		}
 		return a.queueSecretRepoScan(ctx, tenantID, provider, req)

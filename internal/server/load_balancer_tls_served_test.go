@@ -65,8 +65,9 @@ func TestServedListenerPolicyAllowingTLS10RaisesOneFindingX4(t *testing.T) {
 	t.Setenv("TRSTCTL_X4_ELB_SECRET_ACCESS_KEY", elbSecret)
 	t.Setenv("TRSTCTL_X4_F5_USER", f5User)
 	t.Setenv("TRSTCTL_X4_F5_PASSWORD", f5Pass)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
-		"env:TRSTCTL_X4_ELB_ACCESS_KEY_ID", "env:TRSTCTL_X4_ELB_SECRET_ACCESS_KEY", "env:TRSTCTL_X4_F5_USER", "env:TRSTCTL_X4_F5_PASSWORD"))
+	h := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("load_balancer_tls", []string{elb.URL()}, "env:TRSTCTL_X4_ELB_ACCESS_KEY_ID", "env:TRSTCTL_X4_ELB_SECRET_ACCESS_KEY"),
+		bindOutboundEnvCredentialRefs("load_balancer_tls", []string{f5.URL()}, "env:TRSTCTL_X4_F5_USER", "env:TRSTCTL_X4_F5_PASSWORD"))
 	ctx := t.Context()
 	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "risk:read", string(authz.PrivateEgress))
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", writer, map[string]any{

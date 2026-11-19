@@ -37,7 +37,7 @@ func TestServedScheduledCloudPathRunRevalidatesThePostureA167L4(t *testing.T) {
 	other := computetest.New("a167l4-other", token)
 	t.Cleanup(other.Close)
 	t.Setenv("TRSTCTL_A167L4_GCP_TOKEN", token)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A167L4_GCP_TOKEN"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_network_path", []string{prod.URL(), other.URL()}, "env:TRSTCTL_A167L4_GCP_TOKEN"))
 	ctx := t.Context()
 	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read", string(authz.PrivateEgress))
 	reader := seedScopedToken(t, h.store, h.tenant, "nhi:read")

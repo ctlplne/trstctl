@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/netip"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudentitlements/awspolicy"
 	"trstctl.com/trstctl/internal/cloudentitlements/change"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -148,12 +148,25 @@ func (d *issuanceDispatcher) handleCloudMachineChange(ctx context.Context, messa
 	if err := d.egress.CheckURL(value.Intent.Endpoint); err != nil {
 		return fail(err)
 	}
-	ref, ok := strings.CutPrefix(value.Intent.WriterSessionFileRef, "env:")
-	if !ok {
+	if !strings.HasPrefix(strings.TrimSpace(value.Intent.WriterSessionFileRef), "env:") {
 		return fail(errors.New("writer reference is not an approved env binding"))
 	}
-	path, present := os.LookupEnv(ref)
-	if !present || !filepath.IsAbs(path) {
+	// CR-008: the writer session resolves only for this tenant's cloud machine
+	// changes and reaches only the IAM endpoint its binding names.
+	path, err := boundCredentialEnvValue(d.outboundCredentialScope(ctx, message.TenantID, outboundcred.IntegrationCloudMachineChange),
+		value.Intent.WriterSessionFileRef, value.Intent.Endpoint)
+	if errors.Is(err, outboundcred.ErrNotBound) {
+		// A replace_key past Queued may have published its replacement; a Queued
+		// one only if an earlier attempt stopped after queueing the publication.
+		if value.Intent.Action == change.ReplaceKey {
+			if value.State == change.Queued {
+				return fail(replacementStoppedUnboundBeforePreparing(err))
+			}
+			return fail(replacementStoppedUnbound(err))
+		}
+		return fail(err)
+	}
+	if err != nil || !filepath.IsAbs(path) {
 		return fail(errors.New("writer STS session file is not configured"))
 	}
 	prefixes := make([]netip.Prefix, 0, len(value.Intent.PrivateEgressCIDRs))

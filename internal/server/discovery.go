@@ -301,6 +301,9 @@ func servedDiscoverySourceKinds() []string {
 }
 
 func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
+	// CR-008: every env credential this source names resolves only for this tenant
+	// and this source kind, toward the origins the operator bound it to.
+	ctx = d.outboundCredentialScope(ctx, tenantID, src.Kind)
 	if execute, ok := discoveryRunExecutors[src.Kind]; ok {
 		return execute(d, ctx, tenantID, src, run)
 	}
@@ -1107,16 +1110,16 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		if err != nil {
 			return nil, err
 		}
-		accessKeyID, err := resolveDiscoveryCredentialRef(ctx, p.AccessKeyIDRef)
+		accessKeyID, err := resolveBoundCredentialRef(ctx, p.AccessKeyIDRef, client)
 		if err != nil {
 			return nil, fmt.Errorf("resolve access_key_id_ref: %w", err)
 		}
-		secretAccessKey, err := resolveDiscoveryCredentialBytesRef(ctx, p.SecretAccessKeyRef)
+		secretAccessKey, err := resolveBoundCredentialBytesRef(ctx, p.SecretAccessKeyRef, client)
 		if err != nil {
 			return nil, fmt.Errorf("resolve secret_access_key_ref: %w", err)
 		}
 		defer secret.Wipe(secretAccessKey)
-		sessionToken, err := resolveOptionalDiscoveryCredentialBytesRef(ctx, p.SessionTokenRef)
+		sessionToken, err := resolveOptionalBoundCredentialBytesRef(ctx, p.SessionTokenRef, client)
 		if err != nil {
 			return nil, fmt.Errorf("resolve session_token_ref: %w", err)
 		}
@@ -1141,7 +1144,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 				return nil, err
 			}
 		}
-		token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+		token, err := resolveBoundCredentialRef(ctx, p.TokenRef, client)
 		if err != nil {
 			return nil, fmt.Errorf("resolve token_ref: %w", err)
 		}
@@ -1159,7 +1162,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		if err != nil {
 			return nil, err
 		}
-		token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+		token, err := resolveBoundCredentialRef(ctx, p.TokenRef, client)
 		if err != nil {
 			return nil, fmt.Errorf("resolve token_ref: %w", err)
 		}
@@ -1177,7 +1180,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		if err != nil {
 			return nil, err
 		}
-		token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+		token, err := resolveBoundCredentialRef(ctx, p.TokenRef, client)
 		if err != nil {
 			return nil, fmt.Errorf("resolve token_ref: %w", err)
 		}
@@ -1209,15 +1212,15 @@ func cloudCertificateProvider(ctx context.Context, p cloudCertificateProviderCon
 		if err != nil {
 			return nil, err
 		}
-		accessKeyID, err := resolveDiscoveryCredentialRef(ctx, p.AccessKeyIDRef)
+		accessKeyID, err := resolveBoundCredentialRef(ctx, p.AccessKeyIDRef, client)
 		if err != nil {
 			return nil, fmt.Errorf("resolve access_key_id_ref: %w", err)
 		}
-		secretAccessKey, err := resolveDiscoveryCredentialRef(ctx, p.SecretAccessKeyRef)
+		secretAccessKey, err := resolveBoundCredentialRef(ctx, p.SecretAccessKeyRef, client)
 		if err != nil {
 			return nil, fmt.Errorf("resolve secret_access_key_ref: %w", err)
 		}
-		sessionToken, err := resolveOptionalDiscoveryCredentialRef(ctx, p.SessionTokenRef)
+		sessionToken, err := resolveOptionalBoundCredentialRef(ctx, p.SessionTokenRef, client)
 		if err != nil {
 			return nil, fmt.Errorf("resolve session_token_ref: %w", err)
 		}
@@ -1234,7 +1237,7 @@ func cloudCertificateProvider(ctx context.Context, p cloudCertificateProviderCon
 		if err != nil {
 			return nil, err
 		}
-		token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+		token, err := resolveBoundCredentialRef(ctx, p.TokenRef, client)
 		if err != nil {
 			return nil, fmt.Errorf("resolve token_ref: %w", err)
 		}
@@ -1254,7 +1257,7 @@ func cloudCertificateProvider(ctx context.Context, p cloudCertificateProviderCon
 				return nil, err
 			}
 		}
-		token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+		token, err := resolveBoundCredentialRef(ctx, p.TokenRef, client)
 		if err != nil {
 			return nil, fmt.Errorf("resolve token_ref: %w", err)
 		}
@@ -1329,50 +1332,6 @@ func validateHTTPSEgressEndpoint(endpoint string, allowPrivate bool, opts netsec
 		return netsec.ValidatePublicHTTPSURLWithOptions(endpoint, opts)
 	}
 	return nil
-}
-
-func resolveOptionalDiscoveryCredentialRef(ctx context.Context, ref string) (string, error) {
-	if strings.TrimSpace(ref) == "" {
-		return "", nil
-	}
-	return resolveDiscoveryCredentialRef(ctx, ref)
-}
-
-func resolveOptionalDiscoveryCredentialBytesRef(ctx context.Context, ref string) ([]byte, error) {
-	if strings.TrimSpace(ref) == "" {
-		return nil, nil
-	}
-	return resolveDiscoveryCredentialBytesRef(ctx, ref)
-}
-
-func resolveDiscoveryCredentialBytesRef(ctx context.Context, ref string) ([]byte, error) {
-	value, err := resolveDiscoveryCredentialRef(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
-	return []byte(value), nil
-}
-
-func resolveDiscoveryCredentialRef(ctx context.Context, ref string) (string, error) {
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	ref = strings.TrimSpace(ref)
-	if ref == "" {
-		return "", errors.New("credential reference is required")
-	}
-	if name, ok := strings.CutPrefix(ref, "env:"); ok {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			return "", errors.New("env credential reference is empty")
-		}
-		value, ok := os.LookupEnv(name)
-		if !ok || value == "" {
-			return "", fmt.Errorf("env credential reference %s is not set", name)
-		}
-		return value, nil
-	}
-	return "", fmt.Errorf("unsupported credential reference %q; use env:NAME", ref)
 }
 
 func (d *issuanceDispatcher) recordManualDiscoveryFindings(ctx context.Context, tenantID string, src store.DiscoverySource, runID string) (netscan.Report, error) {

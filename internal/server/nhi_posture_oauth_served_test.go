@@ -75,7 +75,7 @@ func TestServedNHIPostureRuleActsAtTheProviderOnAnAbusiveOAuthGrantA170L3(t *tes
 	t.Setenv("TRSTCTL_A170L3_ADMIN_TOKEN", adminToken)
 	t.Setenv("TRSTCTL_A170L3_WRONG_TOKEN", "not-the-admin-token")
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.EnablePolicyGate = true },
-		allowOutboundEnvCredentialRefs("env:TRSTCTL_A170L3_ADMIN_TOKEN", "env:TRSTCTL_A170L3_WRONG_TOKEN"))
+		bindOutboundEnvCredentialRefs("oauth_grant", []string{stand.URL()}, "env:TRSTCTL_A170L3_ADMIN_TOKEN", "env:TRSTCTL_A170L3_WRONG_TOKEN"))
 	ctx := t.Context()
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "connectors:write", "nhi:read", string(authz.PrivateEgress))
 	author := seedScopedTokenSubject(t, h.store, h.tenant, "oauth-posture-author@example.test", "policy:read", "policy:write")

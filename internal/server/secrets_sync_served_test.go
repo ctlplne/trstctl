@@ -555,14 +555,12 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 
 	h := newServedHarness(t, config.Protocols{},
 		withSecretsEnabled(t, nil),
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{awsDiscovery.URL},
+			"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY"),
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{gcpDiscovery.URL}, "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN"),
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{azureDiscovery.URL}, "env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN"),
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{vaultDiscovery.URL}, "env:TRSTCTL_DISCOVERY_VAULT_TOKEN"),
 		func(d *Deps) {
-			d.OutboundEnvCredentialRefs = []string{
-				"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
-				"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
-				"env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
-				"env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN",
-				"env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
-			}
 			d.TenantSecretSyncTargets = SecretSyncTargetRegistry{servedTestTenant: {
 				"aws-secrets-manager": secretsync.NewAWSSecretsManagerTarget(awsPusher),
 				"gcp-secret-manager":  secretsync.NewGCPSecretManagerTarget(gcpPusher),

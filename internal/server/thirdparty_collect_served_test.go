@@ -175,7 +175,9 @@ func TestServedNativeLeakScanCollectionN6(t *testing.T) {
 	t.Setenv("TRSTCTL_N6_GITLAB", "n6-gitlab-token")
 	scanner := &a174MarkerScanner{marker: "LEAK-N6"}
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil),
-		allowOutboundEnvCredentialRefs("env:TRSTCTL_N6_SLACK", "env:TRSTCTL_N6_JIRA", "env:TRSTCTL_N6_WRONG", "env:TRSTCTL_N6_GITHUB", "env:TRSTCTL_N6_GITLAB"),
+		bindOutboundEnvCredentialRefs("secret_third_party", []string{slack.URL}, "env:TRSTCTL_N6_SLACK", "env:TRSTCTL_N6_WRONG"),
+		bindOutboundEnvCredentialRefs("secret_third_party", []string{jira.URL}, "env:TRSTCTL_N6_JIRA"),
+		bindOutboundEnvCredentialRefs("secret_third_party", []string{ci.URL}, "env:TRSTCTL_N6_GITHUB", "env:TRSTCTL_N6_GITLAB"),
 		func(d *Deps) { d.SecretScanner = scanner })
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", string(authz.PrivateEgress))
 	before, _ := filepath.Glob(filepath.Join(os.TempDir(), "trstctl-collect-*"))

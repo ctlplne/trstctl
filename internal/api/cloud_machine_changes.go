@@ -9,7 +9,9 @@ import (
 
 	googleuuid "github.com/google/uuid"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/cloudentitlements/assessment"
 	"trstctl.com/trstctl/internal/cloudentitlements/change"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -70,7 +72,7 @@ func (a *API) proposeCloudMachineChange(w http.ResponseWriter, r *http.Request) 
 		if !strings.HasPrefix(req.WriterSessionFileRef, "env:") {
 			return 0, nil, errStatus(http.StatusBadRequest, "writer_session_file_ref must be an operator-approved env reference")
 		}
-		if err := a.requireOutboundEnvCredentialRefAllowed(req.WriterSessionFileRef, "writer_session_file_ref"); err != nil {
+		if err := a.requireOutboundEnvCredentialRefBound(tenantID, outboundcred.IntegrationCloudMachineChange, req.WriterSessionFileRef, "writer_session_file_ref"); err != nil {
 			return 0, nil, err
 		}
 		if req.Action == change.ReplaceKey {
@@ -113,6 +115,17 @@ func (a *API) proposeCloudMachineChange(w http.ResponseWriter, r *http.Request) 
 		} else if source, err := a.store.GetDiscoverySource(ctx, tenantID, sourceFinding.SourceID); err != nil {
 			return 0, nil, err
 		} else {
+			// CR-008: the writer session goes to the finding's IAM endpoint, so its
+			// binding must name that origin too. A source whose configuration
+			// cannot be read names no endpoint to check, so the proposal is refused
+			// rather than accepted on the reference alone.
+			cfg, err := assessment.DecodeSource(source.Config)
+			if err != nil {
+				return 0, nil, errStatus(http.StatusBadRequest, "finding_id must name a finding of a readable cloud_machine_entitlement source")
+			}
+			if err := a.requireOutboundEnvCredentialRefBound(tenantID, outboundcred.IntegrationCloudMachineChange, req.WriterSessionFileRef, "writer_session_file_ref", awsIAMSourceEndpoint(cfg)); err != nil {
+				return 0, nil, err
+			}
 			private, err := discoveryPrivateEgressRequested(source.Config)
 			if err != nil {
 				return 0, nil, err

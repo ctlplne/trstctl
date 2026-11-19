@@ -17,7 +17,10 @@ func TestExternalPollersHaveNoControlPlaneHTTPExecutionPath(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, forbidden := range []string{"client.Do(", "resolveDiscoveryCredentialRef("} {
+		// CR-008 renamed the control plane's credential resolvers; every one of
+		// them stays forbidden here.
+		for _, forbidden := range []string{"client.Do(", "resolveDiscoveryCredentialRef(", "resolveBoundCredentialRef(",
+			"resolveBoundCredentialBytesRef(", "resolveOperatorCredentialRef(", "resolveOperatorCredentialBytesRef(", "boundCredentialEnvValue("} {
 			if strings.Contains(string(source), forbidden) {
 				t.Errorf("%s contains %q; scheduled external reads must be durable network-relay jobs", name, forbidden)
 			}

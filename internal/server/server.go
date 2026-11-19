@@ -64,6 +64,7 @@ import (
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/observ/otlp"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/outboxgc"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
@@ -206,9 +207,15 @@ type Deps struct {
 	// AlertObservers see every alert on the notification surface before its
 	// channels (MSP-3: the Provider's PSA tickets). Core attaches none.
 	AlertObservers []AlertObserver
-	// OutboundEnvCredentialRefs are operator-approved env-backed credential refs
-	// that API-authored discovery/response integrations may place into outbox work.
-	OutboundEnvCredentialRefs []string
+	// OutboundEnvCredentialBindings bind each env:NAME credential reference that
+	// API-authored discovery sources, cloud machine changes, audit feeds and
+	// response integrations may name to one tenant, its integration kinds and
+	// exact destination origins (CR-008). The API checks a declaration against
+	// them and the workers check again before they read a value.
+	OutboundEnvCredentialBindings []outboundcred.Binding
+	// LegacyOutboundEnvCredentialRefs is the retired process-wide approval list
+	// (outbound_env_credential_refs). It approves nothing; Build warns about it.
+	LegacyOutboundEnvCredentialRefs []string
 	// FederationFactory is supplied only by the tagged EE attach seam when the
 	// Enterprise HA-support feature is licensed. Leader election, projection
 	// checkpoints, and advisory locks remain core and free.
@@ -977,6 +984,9 @@ type Server struct {
 	// narrowing the grant takes effect on the next sync instead of on the next
 	// time somebody happens to re-save the schedule.
 	serviceNowBindings []api.ServiceNowBinding
+	// outboundCredentials are the operator's env credential bindings (CR-008),
+	// shared by the API's declaration checks and the workers' run-time checks.
+	outboundCredentials *outboundcred.Bindings
 	// decoyLoginWatchInterval paces RunDecoyLoginWatch (Q6).
 	decoyLoginWatchInterval time.Duration
 	// deletedSecretRetention is how long RunDeletedSecretRetention keeps a
@@ -1206,6 +1216,11 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if d.RestoreDrill != nil && d.AuditSigningKey == nil {
 		return nil, errors.New("server: restore drill requires the isolated audit-evidence signer")
 	}
+	outboundCredentials, err := outboundcred.New(d.OutboundEnvCredentialBindings)
+	if err != nil {
+		return nil, fmt.Errorf("server: %w", err)
+	}
+	warnRetiredOutboundEnvCredentialRefs(d.Logger, d.LegacyOutboundEnvCredentialRefs, outboundCredentials)
 	s = &Server{
 		tenantServiceCheck:        d.TenantServiceCheck,
 		machineCredentialUseLimit: d.MachineCredentialUseLimit,
@@ -1228,6 +1243,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		licensedSPIFFESVIDFactory: d.LicensedSPIFFESVIDFactory,
 		licensedBackgroundWorkers: d.LicensedBackgroundWorkers,
 		serviceNowBindings:        d.ServiceNowBindings,
+		outboundCredentials:       outboundCredentials,
 		registry:                  observ.NewRegistry(),
 		egress:                    d.EgressGuard,
 		telemetry:                 d.TelemetryReporter,
@@ -1938,7 +1954,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithNotificationEndpointValidator(s.tenantNotificationEgress.validate),
 		api.WithNotificationOutbox(s.outbox),
 		api.WithServiceNowBindings(d.ServiceNowBindings...),
-		api.WithOutboundEnvCredentialRefs(d.OutboundEnvCredentialRefs...),
+		api.WithOutboundEnvCredentialBindings(s.outboundCredentials),
 		api.WithACMEDNS01CAAResolver(acme.DefaultCAAResolver()),
 		api.WithACMEDNS01TXTResolver(net.DefaultResolver),
 		api.WithACMEARIPosture(s.ACMEARIPosture),
@@ -2438,9 +2454,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{cloudStorePropagationWindow: d.MigrationCloudStorePropagationWindow, decoyValues: s.api.DecoySecretValues, movedSecretValues: s.api.MovedSecretValues, pamSignIns: s.collectPAMSignIns, cmdbExports: s.cmdbExports, observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, slackApprovals: s.slackApprovalPoster(), transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), repoCredentials: integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}.resolve, dns01: s.acmeDNS01, acmeEmail: s.acmeEmail, licensed: licensed, cloudReplacementPrepare: s.api.PrepareCloudReplacement, attackPathEndpoints: s.api.AttackPathEndpoints, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback, validity: d.SecretValidity, egress: d.EgressGuard, billingSync: d.BillingSync, alertObservers: d.AlertObservers, agentEnroll: s.agentEnroll, agentServer: d.AgentChannelPublicAddress, agentServerName: d.AgentChannelServerName}
+		s.obHandler = &issuanceDispatcher{cloudStorePropagationWindow: d.MigrationCloudStorePropagationWindow, decoyValues: s.api.DecoySecretValues, movedSecretValues: s.api.MovedSecretValues, pamSignIns: s.collectPAMSignIns, cmdbExports: s.cmdbExports, observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, slackApprovals: s.slackApprovalPoster(), transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), repoCredentials: integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}.resolve, dns01: s.acmeDNS01, acmeEmail: s.acmeEmail, licensed: licensed, cloudReplacementPrepare: s.api.PrepareCloudReplacement, attackPathEndpoints: s.api.AttackPathEndpoints, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback, validity: d.SecretValidity, egress: d.EgressGuard, outboundCredentials: s.outboundCredentials, serviceNowBindings: s.serviceNowBindings, billingSync: d.BillingSync, alertObservers: d.AlertObservers, agentEnroll: s.agentEnroll, agentServer: d.AgentChannelPublicAddress, agentServerName: d.AgentChannelServerName}
 	default:
-		s.obHandler = &issuanceDispatcher{cloudStorePropagationWindow: d.MigrationCloudStorePropagationWindow, decoyValues: s.api.DecoySecretValues, movedSecretValues: s.api.MovedSecretValues, pamSignIns: s.collectPAMSignIns, cmdbExports: s.cmdbExports, observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, slackApprovals: s.slackApprovalPoster(), transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), repoCredentials: integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}.resolve, dns01: s.acmeDNS01, acmeEmail: s.acmeEmail, licensed: licensed, cloudReplacementPrepare: s.api.PrepareCloudReplacement, attackPathEndpoints: s.api.AttackPathEndpoints, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback, validity: d.SecretValidity, egress: d.EgressGuard, billingSync: d.BillingSync, alertObservers: d.AlertObservers, agentEnroll: s.agentEnroll, agentServer: d.AgentChannelPublicAddress, agentServerName: d.AgentChannelServerName}
+		s.obHandler = &issuanceDispatcher{cloudStorePropagationWindow: d.MigrationCloudStorePropagationWindow, decoyValues: s.api.DecoySecretValues, movedSecretValues: s.api.MovedSecretValues, pamSignIns: s.collectPAMSignIns, cmdbExports: s.cmdbExports, observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, slackApprovals: s.slackApprovalPoster(), transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), repoCredentials: integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}.resolve, dns01: s.acmeDNS01, acmeEmail: s.acmeEmail, licensed: licensed, cloudReplacementPrepare: s.api.PrepareCloudReplacement, attackPathEndpoints: s.api.AttackPathEndpoints, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback, validity: d.SecretValidity, egress: d.EgressGuard, outboundCredentials: s.outboundCredentials, serviceNowBindings: s.serviceNowBindings, billingSync: d.BillingSync, alertObservers: d.AlertObservers, agentEnroll: s.agentEnroll, agentServer: d.AgentChannelPublicAddress, agentServerName: d.AgentChannelServerName}
 	}
 	return nil
 }

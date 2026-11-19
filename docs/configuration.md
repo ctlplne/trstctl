@@ -1058,12 +1058,119 @@ or CIDR. It is intended for disconnected networks and is paired with the Helm
 | `TRSTCTL_AIRGAP_ALLOW_CIDRS` | — | Comma-separated CIDR allowlist for private service ranges, e.g. `10.0.0.0/8,172.16.0.0/12`. Invalid CIDRs fail startup. |
 | `TRSTCTL_TRUST_DISTRUST_FILE` | — | Optional JSON file in the shape of the shipped `internal/crypto/trust/distrust.json` whose entries are added to the runtime distrust list every outbound TLS client checks (a chain through a distrusted root, intermediate or key is refused after normal verification, on resumed sessions too). For deployments that cannot take a release the day a CA is distrusted. The shipped entries always apply and cannot be removed here; a malformed file fails startup. |
 | `TRSTCTL_TRUST_WEAK_KEY_BLOCKLIST_FILES` | — | Comma-separated operator-supplied blocklists of known-compromised RSA keys in Debian's `openssl-blacklist` format (for example the 2008 Debian OpenSSL lists); the weak-key checks flag any key on them. trstctl ships no list. A missing, empty or malformed file fails startup. See [Weak keys](security/weak-keys.md). |
-| `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS` | — | Comma-separated `env:NAME` references that API-authored discovery, response-integration, and scheduled audit-feed requests may use for outbound credentials. Unknown env refs are rejected before event/outbox enqueue. |
+| `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_BINDINGS` | — | JSON array of env credential bindings (see [Outbound env credential bindings](#outbound-env-credential-bindings)): each `env:NAME` reference that API-authored discovery sources, cloud machine changes, audit feeds and response integrations may name, bound to one tenant, its integration kinds and exact destination origins. The API refuses an unbound reference before any event or outbox row (exactly for Azure and Google workload identities, AWS cloud machine entitlements and cloud changes, audit feeds and response integrations; best-effort for the other discovery kinds), and the worker always refuses it. Malformed JSON fails startup. |
+| `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS` | — | Retired. The old comma-separated, process-wide list approves nothing: startup names each entry no binding covers (an entry that is not a well-formed env name is only counted), and every use of a reference no binding covers is refused. |
 
 When `TRSTCTL_AIRGAP_ENABLED=true`, trstctl rejects
 `TRSTCTL_TELEMETRY_ENABLED=true` and `TRSTCTL_AI_MODEL_MODE=cloud` at startup.
 Local OTLP collectors and local AI runtimes are still allowed when their hosts or
 CIDRs are private or explicitly allowlisted.
+
+### Outbound env credential bindings
+
+Some integrations a tenant configures through the API send a credential that only
+the operator holds: a cloud reader token file, an AWS STS session, a Vault, Splunk or
+Jira token. The tenant names it by an `env:NAME` reference; the control-plane process
+holds the value. A binding says which one tenant may name that reference, for which
+integration kinds, and the exact origins its value may be sent to, so no tenant can
+point another tenant's credential, or its own, at a collector the operator never
+approved.
+
+The worker is what guarantees this. Each integration resolves a reference only for the
+tenant and the integration kind it runs for, checks the binding immediately before it
+reads the environment variable, and pins every HTTP client it hands the value to: a
+request to any origin the binding does not name, a redirect or a token service a
+provider points to included, is refused before it is dialed. A declaration stored
+before the operator changed a binding, or by any path that skipped the API's check,
+therefore sends nothing outside its binding; its run fails with the same reason.
+
+The API also checks a declaration before it writes an event. For Azure and Google
+workload identities, AWS cloud machine entitlements and cloud changes, audit feeds and
+response integrations the check is exact: the tenant, the integration kind and the
+origin of every endpoint the reference is sent to, the provider's defaults included,
+must be covered by the tenant's bindings for that reference and integration. For the other discovery kinds it is best-effort: it reads
+`*_ref` keys in their exact case and takes destinations only from sibling endpoint and
+URL keys, while the worker reads keys in any case and derives some destinations from
+other fields (an AWS endpoint from the Region, a provider's default when `endpoint` is
+empty). Such a declaration can be stored, and the worker's pin refuses its run.
+
+| Field | Meaning |
+| --- | --- |
+| `ref` | The `env:NAME` reference (`NAME`: letters, digits and `_`, not starting with a digit). |
+| `tenant_id` | The UUID of the one tenant that may name it. There is no wildcard; to share a reference with a second tenant, add a second binding that names that tenant. |
+| `integrations` | The integration kinds that may use it: a discovery source kind (`azure_machine_identity`, `gcp_machine_identity`, `cloud_machine_entitlement`, `cloud_certificate`, `cloud_secret`, `secret_store`, `cloud_access_key`, `cloud_kms_key`, `load_balancer_tls`, `cloud_network_path`, `oauth_grant`), a secret scan's `secret_third_party` or `secret_repo` connection, `cloud_machine_change` (the writer session of a reviewed cloud change), `audit_feed` or `response_integration`. |
+| `origins` | Every origin the value may be sent to, as `scheme://host[:port]` with no path: `https`, `http`, `syslog+tls` or `relp+tls`. A scheme's default port (443, 80, 6514) may be left out. Name the provider's default endpoints too when the integration uses them, for example `https://graph.microsoft.com` and `https://management.azure.com` for Azure workload identities or `https://secretmanager.googleapis.com` for Google Secret Manager. |
+
+Origins by provider. Bind each origin the integration sends to; when a declaration
+sets an endpoint field, bind that origin instead of the default.
+
+| Provider | Origins |
+| --- | --- |
+| AWS | `https://iam.amazonaws.com`; per Region `https://secretsmanager.<region>.amazonaws.com`, `https://acm.<region>.amazonaws.com`, `https://kms.<region>.amazonaws.com`, `https://ec2.<region>.amazonaws.com` and `https://elasticloadbalancing.<region>.amazonaws.com` (an attack-path source reads both) |
+| Google Cloud | `https://iam.googleapis.com`, `https://cloudresourcemanager.googleapis.com`, `https://logging.googleapis.com` (workload identities with an activity lookback), `https://policyanalyzer.googleapis.com` (a service-account key's last use), `https://secretmanager.googleapis.com`, `https://certificatemanager.googleapis.com`, `https://compute.googleapis.com` |
+| Microsoft | `https://graph.microsoft.com`, `https://management.azure.com` |
+| Code hosts and secret stores | `https://api.github.com`, `https://gitlab.com`, `https://app.infisical.com`, `https://api.akeyless.io`, `https://api.doppler.com`; Bitwarden `https://api.bitwarden.com` and `https://identity.bitwarden.com`, which receives the access token's client secret |
+| Container registries | The registry's origin and the origin of the token service its challenge names |
+| No default | The endpoint the declaration names: Azure Key Vault and HashiCorp Vault `vault_url` (the Key Vault write path too), Conjur and 1Password Connect `endpoint`, BIG-IP `endpoint`, the OAuth admin `base_url`, secret-scan collection and annotation `base_url`, Splunk and Jira `endpoint_url`, an audit feed's `endpoint_url` (a `relp+tls` origin always names its port; `syslog+tls` defaults to 6514) |
+
+A binding limits where a credential goes, not which certificate that origin presents:
+a declaration's `ca_pem` replaces the trust its client uses for the bound origin. A
+binding names the tenant by the UUID its API responses carry as `tenant_id`. Bindings
+load only at startup: a change takes effect after a restart, and every replica of a
+highly available deployment must carry the same bindings.
+
+Bindings live in `outbound_env_credential_bindings` in the configuration file or,
+as the same JSON array, in `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_BINDINGS`, which replaces
+the file's list. For example:
+
+```json
+"outbound_env_credential_bindings": [
+  {"ref": "env:TRSTCTL_ACME_GRAPH_TOKEN_FILE", "tenant_id": "6f0c7d5e-2a8b-4c1d-9e3f-5a6b7c8d9e0f",
+   "integrations": ["azure_machine_identity"], "origins": ["https://graph.microsoft.com"]},
+  {"ref": "env:TRSTCTL_ACME_SPLUNK_TOKEN", "tenant_id": "6f0c7d5e-2a8b-4c1d-9e3f-5a6b7c8d9e0f",
+   "integrations": ["audit_feed", "response_integration"], "origins": ["https://splunk.acme.example:8088"]}
+]
+```
+
+A binding with a missing or malformed field fails startup with its index. A request
+that names an unbound reference gets `400` naming the field and either the integration
+it is not bound for or the refused origin; the message is the same whether or not
+another tenant holds a binding for that reference. A run whose stored declaration names one fails with the same reason,
+and nothing is sent. The retired `outbound_env_credential_refs` list
+(`TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS`) is still parsed so an upgrade starts, but it
+approves nothing: startup logs one warning listing the references no binding covers,
+and every integration that names one fails until the operator binds it. ServiceNow
+ticket destinations keep their own [ITSM bindings](#itsm-and-servicenow-bindings).
+
+Upgrading without bindings stops work that is already queued, and nothing is sent with
+an unbound credential: a queued cloud machine change fails at its writer check; a
+`replace_key` needs both its writer (`cloud_machine_change`) and its role source's
+reader (`cloud_machine_entitlement`) bound. If one is missing, the change fails and
+nothing more is sent; that attempt does not retire the old key. The replacement is
+published by a separate rotation command, named by the change's
+`result.replacement_command_id`. A change stopped while still queued has not recorded
+it: its command is the newest in `GET /api/v1/secrets/rotations?key=<intent.replacement_role>`
+whose `expected_version` is the change's `intent.replacement_expected_version`, and if
+there is none, nothing was published. Once the change has failed, a rotation still
+queued fails, a staged lease is revoked and a cutover rolls back, but a rotation that had
+passed verification still completes, and a rollback whose restore fails leaves the
+replacement current (`rollback_failed`). So bind the references, read the rotation with
+`GET /api/v1/secrets/rotations/{id}` until it is terminal, and propose a `revoke_key` only
+if its `phase` is `completed` and the consumer adopted that version: the change's
+`adoption` receipt, when present, is bound to the consumer's subject; otherwise
+`GET /api/v1/secrets/deliveries?name=<intent.replacement_role>` must list the change's
+`intent.consumer` with a `verified_version` of at least that command's `result_version`
+(`intent.replacement_expected_version` + 1), although that list names a consumer by its
+label, not by who reported. Otherwise propose the `replace_key` again. The change record
+itself is not updated after it fails, so it cannot tell you how the rotation ended. Queued security actions fail
+and must be requested again once bound: OAuth provider revoke, block and unblock,
+access-key deactivation, Key Vault disable (retried, then dead-lettered after 10
+attempts) and scan annotations; a revoke, deactivation or disable that failed leaves
+its credential active.
+Response dispatches dead-letter after 10 attempts; audit feeds retry, then fail, and
+resume from their delivered cursor once bound; scheduled discovery runs fail until
+bound. ServiceNow, the Slack app and Provider-plane integrations are unaffected. Bind
+first, or let queued cloud changes and security actions finish before the upgrade.
 
 ### Scheduled Splunk HEC and Sentinel audit feeds
 
@@ -1079,11 +1186,12 @@ Each request chooses `splunk-hec` or `sentinel`, an absolute endpoint URL, an
 interval of at least 60 seconds, and an exact maximum batch size from 1 through
 500.
 
-The request stores only an `env:NAME` pointer. Put that pointer in
-`TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS`, then inject the named environment variable
-into the control-plane process. The secret value is read only by the delivery
-worker; it never enters the configuration event, projection, API response, log, or
-collector error receipt. Public HTTPS is the default. A private endpoint also
+The request stores only an `env:NAME` pointer. Bind that pointer to the tenant, the
+`audit_feed` integration and the collector's origin in
+[outbound env credential bindings](#outbound-env-credential-bindings), then inject
+the named environment variable into the control-plane process. The secret value is
+read only by the delivery worker; it never enters the configuration event,
+projection, API response, log, or collector error receipt. Public HTTPS is the default. A private endpoint also
 requires the caller's private-egress permission plus exact `private_egress_cidrs`;
 the SSRF-safe client rejects addresses outside that tenant configuration.
 
@@ -1129,6 +1237,14 @@ configuring the tenant schedule through the Ownership console, API or CLI.
 That binding cannot authorize a control-plane ticket or response dispatch.
 The control plane never polls the CMDB directly. The legacy `env:` default
 above is for ticket dispatch and cannot activate CMDB reconciliation.
+
+These bindings name no tenant: every tenant on the control plane may ticket into
+every bound instance, with that binding's token, until per-tenant ServiceNow bindings
+land. Bind only instances every tenant may ticket into. A queued ticket or incident
+closure is matched again against the current bindings when it is delivered, as the
+API matched it: a binding withdrawn, made relay-only, made private or public, or
+naming another token stops it with nothing sent, and a private row reaches only the
+CIDRs its binding grants at that moment.
 
 ## OpenTelemetry export
 

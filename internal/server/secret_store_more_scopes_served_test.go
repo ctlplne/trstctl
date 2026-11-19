@@ -44,7 +44,8 @@ func TestServedGitHubDependabotCodespacesAndGitLabInstanceVariablesOD2(t *testin
 	for env, value := range map[string]string{"TRSTCTL_OD2_GH": "gh-token", "TRSTCTL_OD2_GL_ADMIN": "gl-admin", "TRSTCTL_OD2_GL": "gl-maintainer"} {
 		t.Setenv(env, value)
 	}
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_OD2_GH", "env:TRSTCTL_OD2_GL_ADMIN", "env:TRSTCTL_OD2_GL"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("secret_store", []string{github.URL()}, "env:TRSTCTL_OD2_GH"),
+		bindOutboundEnvCredentialRefs("secret_store", []string{gitlab.URL()}, "env:TRSTCTL_OD2_GL_ADMIN", "env:TRSTCTL_OD2_GL"))
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	at := func(url string, fields map[string]any) map[string]any {

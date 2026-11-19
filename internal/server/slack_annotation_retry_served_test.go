@@ -26,7 +26,7 @@ func TestServedSlackAnnotationRetryNeverPostsTwiceA174L4(t *testing.T) {
 	stand := scanannotatetest.New(token, "")
 	t.Cleanup(stand.Close)
 	t.Setenv("TRSTCTL_A174L4_TOKEN", token)
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), allowOutboundEnvCredentialRefs("env:TRSTCTL_A174L4_TOKEN"),
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), bindOutboundEnvCredentialRefs("secret_third_party", []string{stand.URL()}, "env:TRSTCTL_A174L4_TOKEN"),
 		func(d *Deps) { d.SecretScanner = &a174MarkerScanner{} })
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "connectors:write", string(authz.PrivateEgress))
 	cidr := serviceNowSinkCIDR(t, stand.URL())

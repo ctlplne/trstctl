@@ -151,25 +151,27 @@ func (a *API) findingAnnotationIntent(ctx context.Context, tenantID, findingID, 
 // requireAnnotationAllowed holds an ingest's annotation connection to the
 // same rules as a discovery source's provider connection: a private endpoint
 // needs the private-egress grant and its CIDRs, and every reference must be
-// one the installation allows.
-func (a *API) requireAnnotationAllowed(ctx context.Context, tenantID string, ann *secretscan.AnnotationConfig) error {
+// one the operator bound to this tenant, the scan's source kind and the
+// connection's endpoint (CR-008).
+func (a *API) requireAnnotationAllowed(ctx context.Context, tenantID, kind string, ann *secretscan.AnnotationConfig) error {
 	if ann == nil {
 		return nil
 	}
-	return a.requireConnectionAllowed(ctx, tenantID, ann)
+	return a.requireConnectionAllowed(ctx, tenantID, kind, ann)
 }
 
 // requireCollectAllowed holds a native collection's connection (N6) to the
 // same rules as an annotation's: private egress needs its permission, and its
-// credential references must be operator-approved.
-func (a *API) requireCollectAllowed(ctx context.Context, tenantID string, collect *secretscan.CollectConfig) error {
+// credential references must be bound to this tenant, the scan's source kind
+// and the connection's endpoint.
+func (a *API) requireCollectAllowed(ctx context.Context, tenantID, kind string, collect *secretscan.CollectConfig) error {
 	if collect == nil {
 		return nil
 	}
-	return a.requireConnectionAllowed(ctx, tenantID, collect)
+	return a.requireConnectionAllowed(ctx, tenantID, kind, collect)
 }
 
-func (a *API) requireConnectionAllowed(ctx context.Context, tenantID string, connection any) error {
+func (a *API) requireConnectionAllowed(ctx context.Context, tenantID, kind string, connection any) error {
 	raw, err := json.Marshal(connection)
 	if err != nil {
 		return err
@@ -183,5 +185,5 @@ func (a *API) requireConnectionAllowed(ctx context.Context, tenantID string, con
 			return err
 		}
 	}
-	return a.requireDiscoveryCredentialRefsAllowed(raw)
+	return a.requireDiscoveryCredentialRefsBound(tenantID, kind, raw)
 }

@@ -29,9 +29,7 @@ func TestRsyslogContentPackParsesTheFeedP5L5(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_P5L5_LAB_CA"}
-	})
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("audit_feed", []string{syslogURL}, "env:TRSTCTL_P5L5_LAB_CA"))
 	t.Setenv("TRSTCTL_P5L5_LAB_CA", string(caPEM))
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "p5l5-lab-operator", []string{
 		string(authz.AuditRead), string(authz.AuditWrite), string(authz.OwnersWrite), string(authz.PrivateEgress),

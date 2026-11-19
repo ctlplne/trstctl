@@ -30,13 +30,11 @@ func TestServedCloudSecretRunWithUnresolvableProviderCredentialIsPartialAndNamed
 	// the shipped demo lab.
 	t.Setenv("TRSTCTL_DISCOVERY_GCP_SM_TOKEN", "")
 
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{
-			"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
-			"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
-			"env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
-		}
-	})
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil),
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{awsDiscovery.URL},
+			"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY"),
+		// Google Secret Manager's default endpoint, which the source leaves unset.
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{"https://secretmanager.googleapis.com"}, "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN"))
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{

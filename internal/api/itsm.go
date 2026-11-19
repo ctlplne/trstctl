@@ -118,7 +118,23 @@ func (a *API) createServiceNowTicket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) approvedServiceNowBinding(req serviceNowTicketRequest, relayOnly bool) (ServiceNowBinding, error) {
-	if len(a.serviceNowBindings) == 0 {
+	return matchServiceNowBinding(a.serviceNowBindings, req, relayOnly)
+}
+
+// MatchServiceNowBinding re-matches a queued ServiceNow ticket or incident
+// closure against the operator's ServiceNow bindings as they are now (CR-008),
+// exactly as the API matched it when the row was queued: the normalized
+// instance URL, the trimmed token reference, a binding that is not relay_only
+// and the same allow_private_endpoint. The match carries the binding's current
+// private egress CIDRs, so a narrowed grant applies to queued rows at once and
+// a reordered list changes nothing.
+func MatchServiceNowBinding(bindings []ServiceNowBinding, instanceURL, tokenRef string, allowPrivateEndpoint bool) (ServiceNowBinding, error) {
+	return matchServiceNowBinding(bindings, serviceNowTicketRequest{InstanceURL: instanceURL, TokenRef: tokenRef,
+		AllowPrivateEndpoint: allowPrivateEndpoint}, false)
+}
+
+func matchServiceNowBinding(bindings []ServiceNowBinding, req serviceNowTicketRequest, relayOnly bool) (ServiceNowBinding, error) {
+	if len(bindings) == 0 {
 		return ServiceNowBinding{}, errStatus(http.StatusServiceUnavailable, "ServiceNow ITSM integration is not configured")
 	}
 	instanceURL, err := normalizeServiceNowInstanceURL(req.InstanceURL)
@@ -126,7 +142,7 @@ func (a *API) approvedServiceNowBinding(req serviceNowTicketRequest, relayOnly b
 		return ServiceNowBinding{}, errStatus(http.StatusBadRequest, "instance_url must be an absolute HTTP(S) URL without credentials, query, or fragment")
 	}
 	tokenRef := strings.TrimSpace(req.TokenRef)
-	for _, raw := range a.serviceNowBindings {
+	for _, raw := range bindings {
 		allowedURL, err := normalizeServiceNowInstanceURL(raw.InstanceURL)
 		if err != nil {
 			continue

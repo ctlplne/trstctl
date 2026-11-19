@@ -26,8 +26,8 @@ func TestServedResponseIntegrationsCAPREM03EndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_JIRA_TOKEN", "jira-response-token")
 	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-response-token")
 
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_SPLUNK_TOKEN", "env:TRSTCTL_JIRA_TOKEN"}
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("response_integration", []string{httpSink.URL("/")},
+		"env:TRSTCTL_SPLUNK_TOKEN", "env:TRSTCTL_JIRA_TOKEN"), func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL:          serviceNowSink.URL(),
 			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",

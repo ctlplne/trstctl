@@ -37,15 +37,19 @@ func (d *issuanceDispatcher) handleServiceNowClose(ctx context.Context, m orches
 	if !ok {
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: unsupported ServiceNow table %q", p.Table))
 	}
-	endpoint, err := serviceNowTableEndpoint(p.InstanceURL, table)
+	binding, err := d.currentServiceNowBinding(p.InstanceURL, p.TokenRef, p.AllowPrivateEndpoint)
 	if err != nil {
 		return orchestrator.DefiniteNoEffect(err)
 	}
-	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	endpoint, err := serviceNowTableEndpoint(binding.InstanceURL, table)
+	if err != nil {
+		return orchestrator.DefiniteNoEffect(err)
+	}
+	client, err := cloudHTTPClient(endpoint, binding.AllowPrivateEndpoint, binding.PrivateEgressCIDRs)
 	if err != nil {
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: ServiceNow endpoint rejected: %w", err))
 	}
-	token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+	token, err := resolveOperatorCredentialRef(ctx, binding.TokenRef)
 	if err != nil {
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: resolve ServiceNow token ref: %w", err))
 	}

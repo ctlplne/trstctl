@@ -3741,6 +3741,28 @@
 
 ### Security
 
+- An operator-approved env credential belongs to one tenant, the integrations that may use it and
+  the exact origins it may be sent to (CR-008). The process-wide `outbound_env_credential_refs`
+  list let any tenant name any approved `env:NAME` reference in its own discovery sources, cloud
+  changes, audit feeds and response integrations and send its value to a collector that tenant
+  chose, so one tenant could receive another tenant's cloud reader token, AWS session, Vault, Splunk
+  or Jira token. `outbound_env_credential_bindings` (`TRSTCTL_OUTBOUND_ENV_CREDENTIAL_BINDINGS`)
+  now binds each reference to a tenant, integration kinds and origins. The worker resolves a
+  reference only for the tenant and integration it runs for, checks the binding just before it
+  reads the value and pins every HTTP client it hands the value to, redirects and provider token
+  services included, so a declaration stored earlier sends nothing outside its binding. The API
+  check is exact for workload identities, cloud entitlements and changes, audit feeds and response
+  integrations, and best-effort for the other discovery kinds, whose runs the worker refuses
+  instead. Queued ServiceNow tickets and incident closures are matched again against the current
+  ServiceNow bindings, which still name no tenant: every tenant may ticket into every bound
+  instance until per-tenant bindings land, so bind only instances every tenant may use. A refusal
+  never quotes the reference. Upgrading: the retired list approves nothing, and startup warns about
+  each entry no binding covers. Bind first, or let queued cloud changes and security actions
+  finish: work queued with an unbound reference fails with nothing sent, queued security actions
+  must be requested again, and a stopped `replace_key` does not retire the old key and says to propose
+  a `revoke_key` only once its replacement's publication completed and its consumer adopted it, or the
+  `replace_key` again otherwise (the configuration reference names the check). The upgrade runbook lists the steps.
+
 - A leaf's extended key usages come from its profile, never from the CSR alone, and no leaf carries
   ocspSigning or anyExtendedKeyUsage (CR-052). A profile that listed no allowed_ekus let the CSR
   choose any usage, so a client entitled to an ordinary certificate, such as an ACME client under an

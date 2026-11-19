@@ -5,13 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
-	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/cloudentitlements/bearerhttp"
 	"trstctl.com/trstctl/internal/cloudentitlements/gcpiam"
 	"trstctl.com/trstctl/internal/discovery/netscan"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -30,9 +29,13 @@ func (d *issuanceDispatcher) executeGCPMachineIdentityRun(ctx context.Context, t
 			return report, "failed", err.Error(), nil
 		}
 	}
-	name, ok := strings.CutPrefix(cfg.TokenFileRef, "env:")
-	path, present := os.LookupEnv(name)
-	if !ok || !present || !filepath.IsAbs(path) {
+	// CR-008: the token file reaches only the endpoints its binding names, for
+	// this tenant's gcp_machine_identity sources.
+	path, err := boundCredentialEnvValue(ctx, cfg.TokenFileRef, gcpiam.Endpoints(cfg)...)
+	if errors.Is(err, outboundcred.ErrNotBound) {
+		return report, "failed", err.Error(), nil
+	}
+	if err != nil || !filepath.IsAbs(path) {
 		return report, "failed", "operator-approved GCP reader token file is not configured", nil
 	}
 	values, captureErr := gcpiam.Collect(ctx, cfg, bearerhttp.FileToken(path), time.Now())

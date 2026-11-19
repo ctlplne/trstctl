@@ -281,7 +281,7 @@ func secretsReqKey(t *testing.T, h *servedHarness, method, path, token, idemKey 
 		b, _ := json.Marshal(body)
 		rdr = bytes.NewReader(b)
 	}
-	req, err := http.NewRequest(method, h.ts.URL+path, rdr)
+	req, err := http.NewRequest(method, h.ts.URL+path, rdr) // #nosec G704 -- the harness's own loopback httptest server; the test chooses the path (CWE-918)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -292,7 +292,7 @@ func secretsReqKey(t *testing.T, h *servedHarness, method, path, token, idemKey 
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Idempotency-Key", idemKey)
-	resp, err := h.ts.Client().Do(req)
+	resp, err := h.ts.Client().Do(req) // #nosec G704 -- the harness's own loopback httptest server; the test chooses the path (CWE-918)
 	if err != nil {
 		t.Fatalf("do request: %v", err)
 	}

@@ -44,18 +44,22 @@ func deliverSyslogBatch(ctx context.Context, batch auditsink.FeedBatch, payload 
 	}
 	var caPEM []byte
 	if strings.TrimSpace(batch.TokenRef) != "" {
-		if caPEM, err = resolveDiscoveryCredentialBytesRef(ctx, batch.TokenRef); err != nil {
+		var value string
+		if value, err = boundCredentialEnvValue(ctx, batch.TokenRef, batch.EndpointURL); err != nil {
 			return "", fmt.Errorf("server: resolve audit feed credential reference: %w", err)
 		}
+		caPEM = []byte(value)
 		defer secret.Wipe(caPEM)
 	}
 	// P5-L2: a receiver that requires mutual TLS gets the client certificate
 	// and key client_cert_ref names; the bundle is wiped after the dial.
 	var clientPEM []byte
 	if strings.TrimSpace(batch.ClientCertRef) != "" {
-		if clientPEM, err = resolveDiscoveryCredentialBytesRef(ctx, batch.ClientCertRef); err != nil {
+		var value string
+		if value, err = boundCredentialEnvValue(ctx, batch.ClientCertRef, batch.EndpointURL); err != nil {
 			return "", fmt.Errorf("server: resolve audit feed client certificate reference: %w", err)
 		}
+		clientPEM = []byte(value)
 		defer secret.Wipe(clientPEM)
 	}
 	dialCtx, cancel := context.WithTimeout(ctx, syslogFeedTimeout)

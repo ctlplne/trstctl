@@ -58,9 +58,7 @@ func TestAuditFeedIndexTemplateMapsTheTrailerP5L6(t *testing.T) {
 	const index = "trstctl-audit-p5l6"
 	es(http.MethodDelete, "/"+index, nil)
 
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_P5L6_ES_KEY"}
-	})
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("audit_feed", []string{esURL}, "env:TRSTCTL_P5L6_ES_KEY"))
 	t.Setenv("TRSTCTL_P5L6_ES_KEY", "p5l6-lab-key")
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "p5l6-lab-operator", []string{
 		string(authz.AuditRead), string(authz.AuditWrite), string(authz.OwnersWrite), string(authz.PrivateEgress),

@@ -90,7 +90,7 @@ func TestServedCloudCertificateRevocationIsProbedB13L1(t *testing.T) {
 		"arn:aws:acm:us-east-1:111111111111:certificate/b13l1-edge": {certificatePEM(f.leafDER), certificatePEM(f.caDER)},
 	})
 	t.Cleanup(acm.Close)
-	allow := allowOutboundEnvCredentialRefs("env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID", "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY")
+	allow := bindOutboundEnvCredentialRefs("cloud_certificate", []string{acm.URL}, "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID", "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY")
 
 	// Revocation probes run on an enrolled network agent.
 	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleNetwork}, []string{relay.KindRevocationProbe}, allow,
@@ -132,7 +132,8 @@ func TestServedCloudCertificateRevocationIsProbedB13L1(t *testing.T) {
 		"arn:aws:acm:us-east-1:111111111111:certificate/b13l1-off": {certificatePEM(other.leafDER), certificatePEM(other.caDER)},
 	})
 	t.Cleanup(listed.Close)
-	off := newOperatingServedHarness(t, config.Protocols{}, allow)
+	off := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("cloud_certificate", []string{listed.URL}, "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID", "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY"))
 	offToken := seedScopedToken(t, off.store, off.tenant, "discovery:read", "discovery:write", "certs:read", string(authz.PrivateEgress))
 	runServedACMDiscovery(t, off, listed, offToken, "aws-acm-b13l1-off")
 	if kept, err := off.store.GetCertificateByFingerprint(ctx, off.tenant, other.leaf.SHA256Fingerprint); err != nil || len(kept.CertificateDER) != 0 {

@@ -2390,7 +2390,7 @@ func TestServedCloudCertificateDiscoveryACMEndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID", "AKID")
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY", "SECRET")
 
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_certificate", []string{acm.URL},
 		"env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
 		"env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
 	))
@@ -2551,7 +2551,7 @@ func TestServedCloudSecretDiscoveryAWSSecretsManagerEndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "AKID")
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "SECRET")
 
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_secret", []string{sm.URL},
 		"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
 		"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
 	))
@@ -2723,12 +2723,13 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_GCP_SM_TOKEN", "gcp-token")
 	t.Setenv("TRSTCTL_DISCOVERY_VAULT_TOKEN", "vault-token")
 
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
-		"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
-		"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
-		"env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
-		"env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
-	))
+	h := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{awsSM.URL},
+			"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
+			"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY"),
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{gcpSM.URL}, "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN"),
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{vault.URL}, "env:TRSTCTL_DISCOVERY_VAULT_TOKEN"),
+	)
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{

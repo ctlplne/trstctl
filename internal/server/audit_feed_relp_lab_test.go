@@ -30,9 +30,7 @@ func TestRsyslogRELPContentTakesTheFeedP5L3(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_P5L3_LAB_CA"}
-	})
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("audit_feed", []string{relpURL}, "env:TRSTCTL_P5L3_LAB_CA"))
 	t.Setenv("TRSTCTL_P5L3_LAB_CA", string(caPEM))
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "p5l3-lab-operator", []string{
 		string(authz.AuditRead), string(authz.AuditWrite), string(authz.OwnersWrite), string(authz.PrivateEgress),

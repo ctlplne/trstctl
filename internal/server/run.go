@@ -50,6 +50,7 @@ import (
 	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/observ/otlp"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/ratelimit"
@@ -779,14 +780,15 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		// seven served routes were permanently unavailable with no operator
 		// switch. One line because they are one decision — the surfaces that
 		// mint or broker access, each opted into deliberately.
-		AttestedIssuance:          attestedIssuanceFromConfig(cfg.AttestedIssuance),
-		EphemeralIssuance:         ephemeralIssuanceFromConfig(cfg.EphemeralIssuance),
-		AgentBroker:               agentBrokerFromConfig(cfg.AgentBroker),
-		PAM:                       pamFromConfig(cfg.PAM),
-		OutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),
-		TelemetryReporter:         outbound.telemetryReporter,
-		APIOptions:                []api.Option{kubernetesCSRPostureFromConfig(st), kubernetesCertManagerPostureFromConfig(st), kubernetesTrustBundlePostureFromConfig(st), kubernetesTrustRolloutsFromConfig(st)},
-		CACertFile:                cfg.CA.CertFile, CAPublicCertFile: cfg.CA.PublicCertFile, LeafProfile: leafProfileFromConfig(cfg), HierarchyRevocationBaseURL: cfg.CA.HierarchyRevocationBaseURL, CAHierarchyRequireRevocationPointers: cfg.CA.GovernanceModeValue() == config.GovernanceRegulated, CACeremonyMinApprovals: cfg.CA.CeremonyApprovalFloor(), CARolloverDraftBandMonths: cfg.CA.RolloverDraftBandMonths, APITokenMaxLifetime: apiTokenMaxLifetimeFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
+		AttestedIssuance:                attestedIssuanceFromConfig(cfg.AttestedIssuance),
+		EphemeralIssuance:               ephemeralIssuanceFromConfig(cfg.EphemeralIssuance),
+		AgentBroker:                     agentBrokerFromConfig(cfg.AgentBroker),
+		PAM:                             pamFromConfig(cfg.PAM),
+		OutboundEnvCredentialBindings:   outboundEnvCredentialBindingsFromConfig(cfg.OutboundEnvCredentialBindings),
+		LegacyOutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),
+		TelemetryReporter:               outbound.telemetryReporter,
+		APIOptions:                      []api.Option{kubernetesCSRPostureFromConfig(st), kubernetesCertManagerPostureFromConfig(st), kubernetesTrustBundlePostureFromConfig(st), kubernetesTrustRolloutsFromConfig(st)},
+		CACertFile:                      cfg.CA.CertFile, CAPublicCertFile: cfg.CA.PublicCertFile, LeafProfile: leafProfileFromConfig(cfg), HierarchyRevocationBaseURL: cfg.CA.HierarchyRevocationBaseURL, CAHierarchyRequireRevocationPointers: cfg.CA.GovernanceModeValue() == config.GovernanceRegulated, CACeremonyMinApprovals: cfg.CA.CeremonyApprovalFloor(), CARolloverDraftBandMonths: cfg.CA.RolloverDraftBandMonths, APITokenMaxLifetime: apiTokenMaxLifetimeFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		ABACModule: cfg.Auth.ABAC.Module, EnableABAC: cfg.Auth.ABAC.Enabled, ABACEnvironment: cfg.Auth.ABAC.Environment,
 		BreakglassCACertDER: breakglassCACertDER, BreakglassPublicKeyDER: breakglassPublicKeyDER, BreakglassOfflineKit: breakglassOfflineKit,
@@ -1157,6 +1159,14 @@ func evalProtocolProfileFromConfig(cfg *config.Config) (config.Protocols, error)
 		return config.Protocols{}, fmt.Errorf("protocols: validate profile: %w", err)
 	}
 	return protocols, nil
+}
+
+func outboundEnvCredentialBindingsFromConfig(bindings []config.OutboundEnvCredentialBinding) []outboundcred.Binding {
+	out := make([]outboundcred.Binding, 0, len(bindings))
+	for _, binding := range bindings {
+		out = append(out, binding.Runtime())
+	}
+	return out
 }
 
 func serviceNowBindingsFromConfig(sn config.ServiceNowITSM) []api.ServiceNowBinding {

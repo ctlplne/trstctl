@@ -4,6 +4,7 @@ package demo
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,6 +15,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"trstctl.com/trstctl/internal/config"
 )
 
 type composeDependency struct {
@@ -252,7 +255,6 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":                   "https://127.0.0.1:9443/auth/callback",
 		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":                  "http://127.0.0.1:19081/authorize",
 		"TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT":                 "http://127.0.0.1:19081/token",
-		"TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS":             "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_TOKEN,env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
 		"TRSTCTL_SECRETS_ENABLE_API":                       "true",
 		"TRSTCTL_SECRETS_AUTH_SECRET_FILE":                 "/data/secrets/machine-auth.bin",
 		"TRSTCTL_SECRETS_AUTH_TOKEN_TENANT_ID":             "11111111-1111-4111-8111-111111111111",
@@ -284,6 +286,7 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 			t.Fatalf("demo trstctl env %s = %q, want %q", k, got, want)
 		}
 	}
+	assertDemoEnvCredentialBindings(t, cp)
 	idp := cf.Services["demo-oidc"]
 	if got := idp.NetworkMode; got != "" {
 		t.Fatalf("demo OIDC IdP network_mode = %q, want default project network so host port publishing works", got)
@@ -1888,5 +1891,40 @@ func TestPartnerLabRunnerFailsLoudOnPortCollision(t *testing.T) {
 	build := strings.Index(launcher, "$compose build trstctl demo-seed")
 	if pre < 0 || build < 0 || pre > build {
 		t.Fatal("the port pre-flight must precede the first compose build")
+	}
+}
+
+// CR-008: the demo binds each discovery credential reference to the demo tenant,
+// the source kind that uses it and exact origins; the retired process-wide list
+// is gone because it approves nothing.
+func assertDemoEnvCredentialBindings(t *testing.T, cp composeService) {
+	t.Helper()
+	if _, retired := cp.Environment["TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS"]; retired {
+		t.Fatal("demo trstctl still sets the retired TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS list")
+	}
+	var bindings []config.OutboundEnvCredentialBinding
+	if err := json.Unmarshal([]byte(stringValue(cp.Environment["TRSTCTL_OUTBOUND_ENV_CREDENTIAL_BINDINGS"])), &bindings); err != nil {
+		t.Fatalf("demo TRSTCTL_OUTBOUND_ENV_CREDENTIAL_BINDINGS is not a JSON binding list: %v", err)
+	}
+	want := map[string]string{ // #nosec G101 -- env: reference names mapped to integration kinds; no credential value (CWE-798)
+		"env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID": "cloud_certificate", "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY": "cloud_certificate",
+		"env:TRSTCTL_DISCOVERY_GCP_TOKEN": "cloud_certificate", "env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID": "cloud_secret",
+		"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY": "cloud_secret", "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN": "cloud_secret",
+	}
+	if len(bindings) != len(want) {
+		t.Fatalf("demo binds %d references, want %d", len(bindings), len(want))
+	}
+	seen := map[string]bool{}
+	for _, binding := range bindings {
+		if seen[binding.Ref] {
+			t.Fatalf("demo binds %s twice", binding.Ref)
+		}
+		seen[binding.Ref] = true
+		if err := binding.Runtime().Validate(); err != nil {
+			t.Fatalf("demo binding %s: %v", binding.Ref, err)
+		}
+		if binding.TenantID != "11111111-1111-4111-8111-111111111111" || len(binding.Integrations) != 1 || binding.Integrations[0] != want[binding.Ref] {
+			t.Fatalf("demo binding %+v is not bound to the demo tenant and its one source kind", binding)
+		}
 	}
 }

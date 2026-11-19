@@ -5,8 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/netip"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/awssignin"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -35,9 +36,13 @@ func (d *issuanceDispatcher) replacementRoleReadback(ctx context.Context, tenant
 	if err := d.egress.CheckURL(endpoint); err != nil {
 		return err
 	}
-	ref, ok := strings.CutPrefix(cfg.SessionFileRef, "env:")
-	path, present := os.LookupEnv(ref)
-	if !ok || !present || !filepath.IsAbs(path) {
+	// CR-008: the role source's reader session resolves only for this tenant's
+	// cloud_machine_entitlement sources and reaches only its bound IAM endpoint.
+	path, err := boundCredentialEnvValue(d.outboundCredentialScope(ctx, tenantID, assessment.SourceKind), cfg.SessionFileRef, endpoint)
+	if errors.Is(err, outboundcred.ErrNotBound) {
+		return err
+	}
+	if err != nil || !filepath.IsAbs(path) {
 		return errors.New("replacement role reader file is not configured")
 	}
 	prefixes := make([]netip.Prefix, 0, len(cfg.PrivateEgressCIDRs))
@@ -115,6 +120,38 @@ func (d *issuanceDispatcher) verifyCloudReplacementLease(ctx context.Context, te
 	return native.Expiration, nil
 }
 
+// replacementStoppedUnbound says what an unbound reference leaves behind when it
+// stops a replace_key after publication began (CR-008): the operator withdrew or
+// never bound the writer's or the role reader's reference, so nothing more is
+// sent and this attempt did not retire the old key, but the replacement may
+// already be published. Other errors pass through unchanged.
+func replacementStoppedUnbound(err error) error {
+	if !errors.Is(err, outboundcred.ErrNotBound) {
+		return err
+	}
+	return fmt.Errorf("%w; the replacement may already be published; this attempt did not retire the old key; "+replacementUnboundAdvice, err)
+}
+
+// replacementUnboundAdvice is what to do after an unbound reference stopped a
+// replace_key. Once the change has failed, its replacement rotation still
+// queued fails, a staged lease is revoked and a cutover rolls back, but one past
+// verification still completes and a rollback whose restore fails leaves the
+// replacement current; so revoking the old key is right only once that rotation
+// completed and the consumer verified the replacement.
+const replacementUnboundAdvice = "bind the references, then propose a revoke_key only if the replacement's publication completed and its consumer adopted it, otherwise propose the replace_key again"
+
+// replacementStoppedUnboundBeforePreparing words the same stop for a replace_key
+// still Queued (CR-008). A first delivery has published nothing; only a
+// redelivery after a stop between queueing the publication and recording
+// Preparing may have.
+func replacementStoppedUnboundBeforePreparing(err error) error {
+	if !errors.Is(err, outboundcred.ErrNotBound) {
+		return err
+	}
+	return fmt.Errorf("%w; the replacement was published only if an earlier attempt stopped after queueing it; this attempt did not "+
+		"retire the old key; "+replacementUnboundAdvice, err)
+}
+
 func (d *issuanceDispatcher) handleCloudReplacement(ctx context.Context, message orchestrator.Message, plan change.Record, phase string, writer *awsiam.ChangeClient) error {
 	result := change.Result{CheckedAt: time.Now().UTC()}
 	if plan.Result != nil {
@@ -142,7 +179,7 @@ func (d *issuanceDispatcher) handleCloudReplacement(ctx context.Context, message
 			return nil
 		}
 		if err := d.replacementRoleReadback(ctx, message.TenantID, plan.Intent); err != nil {
-			return fail(err)
+			return fail(replacementStoppedUnboundBeforePreparing(err))
 		}
 		prepared, err := d.cloudReplacementPrepare(ctx, message.TenantID, plan.ID)
 		if err != nil {
@@ -176,7 +213,7 @@ func (d *issuanceDispatcher) handleCloudReplacement(ctx context.Context, message
 			return fail(errors.New("replacement publication lacks the exact native authenticated version"))
 		}
 		if err := d.replacementRoleReadback(ctx, message.TenantID, plan.Intent); err != nil {
-			return fail(err)
+			return fail(replacementStoppedUnbound(err))
 		}
 		nativeExpiry, err := d.verifyCloudReplacementLease(ctx, message.TenantID, plan.Intent, prepared.LeaseID, provider)
 		if err != nil {
@@ -200,7 +237,7 @@ func (d *issuanceDispatcher) handleCloudReplacement(ctx context.Context, message
 			return fail(errors.New("published replacement version drifted before retirement"))
 		}
 		if err := d.replacementRoleReadback(ctx, message.TenantID, plan.Intent); err != nil {
-			return fail(err)
+			return fail(replacementStoppedUnbound(err))
 		}
 		if _, err := d.verifyCloudReplacementLease(ctx, message.TenantID, plan.Intent, result.ReplacementLeaseID, provider); err != nil {
 			return fail(err)

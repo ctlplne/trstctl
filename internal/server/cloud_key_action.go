@@ -60,7 +60,9 @@ func (d *issuanceDispatcher) handleCloudKeyAction(ctx context.Context, m orchest
 			continue
 		}
 		matched++
-		reader, _, err := awsIAMReader(ctx, provider, d.egress)
+		// CR-008: the source's credentials resolve only for this tenant's
+		// cloud_access_key source, toward the origins the operator bound them to.
+		reader, _, err := awsIAMReader(d.outboundCredentialScope(ctx, m.TenantID, source.Kind), provider, d.egress)
 		if err != nil {
 			return fail("open the IAM connection: " + err.Error())
 		}

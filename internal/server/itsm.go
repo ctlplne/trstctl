@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/secrettext"
@@ -26,15 +27,19 @@ func (d *issuanceDispatcher) handleServiceNowTicket(ctx context.Context, m orche
 	if !ok {
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: unsupported ServiceNow table %q", p.Table))
 	}
-	endpoint, err := serviceNowTableEndpoint(p.InstanceURL, table)
+	binding, err := d.currentServiceNowBinding(p.InstanceURL, p.TokenRef, p.AllowPrivateEndpoint)
 	if err != nil {
 		return orchestrator.DefiniteNoEffect(err)
 	}
-	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	endpoint, err := serviceNowTableEndpoint(binding.InstanceURL, table)
+	if err != nil {
+		return orchestrator.DefiniteNoEffect(err)
+	}
+	client, err := cloudHTTPClient(endpoint, binding.AllowPrivateEndpoint, binding.PrivateEgressCIDRs)
 	if err != nil {
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: ServiceNow endpoint rejected: %w", err))
 	}
-	token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+	token, err := resolveOperatorCredentialRef(ctx, binding.TokenRef)
 	if err != nil {
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: resolve ServiceNow token ref: %w", err))
 	}
@@ -87,6 +92,19 @@ func (d *issuanceDispatcher) handleServiceNowTicket(ctx context.Context, m orche
 		return fmt.Errorf("server: ServiceNow ticket request failed with status %d: %s", resp.StatusCode, strings.TrimSpace(string(limited)))
 	}
 	return nil
+}
+
+// currentServiceNowBinding re-matches a queued ServiceNow ticket or incident
+// closure against the operator's ServiceNow bindings as they are now (CR-008).
+// The row was matched when it was queued, but a binding the operator has since
+// withdrawn, made relay-only or made private no longer serves it, and a private
+// row reaches only the CIDRs its binding grants now.
+func (d *issuanceDispatcher) currentServiceNowBinding(instanceURL, tokenRef string, allowPrivateEndpoint bool) (api.ServiceNowBinding, error) {
+	binding, err := api.MatchServiceNowBinding(d.serviceNowBindings, instanceURL, tokenRef, allowPrivateEndpoint)
+	if err != nil {
+		return api.ServiceNowBinding{}, fmt.Errorf("server: the ServiceNow destination this row was queued for no longer matches an operator-approved binding: %w", err)
+	}
+	return binding, nil
 }
 
 func serviceNowTableEndpoint(instanceURL, table string) (string, error) {

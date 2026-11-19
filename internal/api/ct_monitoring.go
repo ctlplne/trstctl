@@ -124,7 +124,7 @@ func (a *API) updateCTMonitoring(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		if err := a.requireDiscoveryCredentialRefsAllowed(cfgJSON); err != nil {
+		if err := a.requireDiscoveryCredentialRefsBound(tenantID, "ct_log", cfgJSON); err != nil {
 			return 0, nil, err
 		}
 		privateEgress, err := discoveryPrivateEgressRequested(cfgJSON)

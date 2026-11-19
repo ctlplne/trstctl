@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboundcred"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
@@ -386,14 +387,14 @@ func WithServiceNowBindings(bindings ...ServiceNowBinding) Option {
 	return func(c *config) { c.serviceNowBindings = append([]ServiceNowBinding(nil), bindings...) }
 }
 
-// WithOutboundEnvCredentialRefs wires the operator-approved env-backed credential
-// references that API-authored outbound integrations may use. ServiceNow uses the
-// stricter endpoint+token binding above; this allowlist covers generic discovery
-// and response-integration refs before they can reach the outbox worker.
-func WithOutboundEnvCredentialRefs(refs ...string) Option {
-	return func(c *config) {
-		c.outboundEnvCredentialRefs = normalizeOutboundEnvCredentialRefs(refs)
-	}
+// WithOutboundEnvCredentialBindings wires the operator's bindings for the env:NAME
+// credential references API-authored discovery sources, cloud machine changes,
+// audit feeds and response integrations may name: each is bound to one tenant,
+// its integration kinds and exact destination origins (CR-008). ServiceNow keeps
+// its own endpoint+token binding above. Without bindings every env reference is
+// refused.
+func WithOutboundEnvCredentialBindings(bindings *outboundcred.Bindings) Option {
+	return func(c *config) { c.outboundCredentials = bindings }
 }
 
 // WithACMEDNS01Providers appends signed, served DNS-provider plugins to the

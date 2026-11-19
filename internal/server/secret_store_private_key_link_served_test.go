@@ -64,7 +64,7 @@ func TestServedStoredPrivateKeyLinksToItsCertificateA172L3(t *testing.T) {
 	}, &vaultSeen)
 	t.Cleanup(vault.Close)
 	t.Setenv("TRSTCTL_A172L3_VAULT_TOKEN", "vault-token")
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A172L3_VAULT_TOKEN"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("secret_store", []string{vault.URL}, "env:TRSTCTL_A172L3_VAULT_TOKEN"))
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "graph:read", string(authz.PrivateEgress))
 
 	notBefore, notAfter := info.NotBefore, info.NotAfter

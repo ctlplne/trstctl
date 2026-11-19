@@ -4,8 +4,8 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/netip"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudentitlements/assessment"
 	"trstctl.com/trstctl/internal/cloudentitlements/awsiam"
 	"trstctl.com/trstctl/internal/discovery/netscan"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -35,9 +36,13 @@ func (d *issuanceDispatcher) executeCloudMachineEntitlementRun(ctx context.Conte
 	if err := d.egress.CheckURL(endpoint); err != nil {
 		return report, "failed", err.Error(), nil
 	}
-	ref := strings.TrimPrefix(cfg.SessionFileRef, "env:")
-	sessionPath, ok := os.LookupEnv(ref)
-	if !ok || !filepath.IsAbs(sessionPath) {
+	// CR-008: the session reaches only the IAM endpoint its binding names, for
+	// this tenant's cloud_machine_entitlement sources.
+	sessionPath, err := boundCredentialEnvValue(ctx, cfg.SessionFileRef, endpoint)
+	if errors.Is(err, outboundcred.ErrNotBound) {
+		return report, "failed", err.Error(), nil
+	}
+	if err != nil || !filepath.IsAbs(sessionPath) {
 		return report, "failed", "operator-approved STS session file path is not configured", nil
 	}
 	prefixes := make([]netip.Prefix, 0, len(cfg.PrivateEgressCIDRs))

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/netip"
 	"net/url"
@@ -34,6 +35,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/trust"
 	"trstctl.com/trstctl/internal/crypto/weakkey"
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/secretscan/validity"
 )
 
@@ -110,7 +112,7 @@ type Config struct {
 	ITSM                      ITSM              `json:"itsm"`
 	AirGap                    AirGap            `json:"air_gap"`
 	Trust                     Trust             `json:"trust"`
-	OutboundEnvCredentialRefs []string          `json:"outbound_env_credential_refs,omitempty"`
+	OutboundEnvCredentialRefs []string          `json:"outbound_env_credential_refs,omitempty"` // retired (CR-008): approves nothing; see OutboundEnvCredentialBindings
 	Telemetry                 Telemetry         `json:"telemetry"`
 	OTLP                      OTLP              `json:"otlp"`
 	Audit                     Audit             `json:"audit"`
@@ -143,6 +145,15 @@ type Config struct {
 	// AgentChannel configures the served agent steady-state mTLS gRPC channel
 	// (WIRE-004 / OPS-005). Off by default.
 	AgentChannel AgentChannel `json:"agent_channel"`
+	// OutboundEnvCredentialBindings are the env:NAME credential references
+	// tenant-authored integrations may name, each bound to one tenant, the
+	// integration kinds that may use it and the exact origins it may be sent to
+	// (CR-008). They replace OutboundEnvCredentialRefs, the retired process-wide
+	// list, which approves nothing any more; startup warns about its entries.
+	OutboundEnvCredentialBindings []OutboundEnvCredentialBinding `json:"outbound_env_credential_bindings,omitempty"`
+	// outboundEnvCredentialBindingsErr keeps a malformed
+	// TRSTCTL_OUTBOUND_ENV_CREDENTIAL_BINDINGS value for Validate to report.
+	outboundEnvCredentialBindingsErr error
 }
 
 // CBOM configures local cryptographic inventory. Tenant requests never select executables.
@@ -1814,6 +1825,24 @@ type AirGap struct {
 	AllowPrivate bool     `json:"allow_private,omitempty"`
 	AllowHosts   []string `json:"allow_hosts,omitempty"`
 	AllowCIDRs   []string `json:"allow_cidrs,omitempty"`
+}
+
+// OutboundEnvCredentialBinding gives one env:NAME credential reference to the one
+// tenant (TenantID) whose discovery sources, cloud machine changes, audit feeds or
+// response integrations may name it, for the integration kinds listed, and only
+// toward the exact origins listed (scheme://host[:port]; default endpoints too).
+// Sharing a reference with a second tenant takes a second binding naming it.
+type OutboundEnvCredentialBinding struct {
+	Ref          string   `json:"ref"`
+	TenantID     string   `json:"tenant_id"`
+	Integrations []string `json:"integrations"`
+	Origins      []string `json:"origins"`
+}
+
+// Runtime returns the binding the API and workers enforce.
+func (b OutboundEnvCredentialBinding) Runtime() outboundcred.Binding {
+	return outboundcred.Binding{Ref: b.Ref, TenantID: b.TenantID,
+		Integrations: append([]string(nil), b.Integrations...), Origins: append([]string(nil), b.Origins...)}
 }
 
 // ITSM configures outbound ticketing integrations. Requests use only these
@@ -3819,6 +3848,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setCSV(getenv, "TRSTCTL_AIRGAP_ALLOW_HOSTS", &c.AirGap.AllowHosts)
 	setCSV(getenv, "TRSTCTL_AIRGAP_ALLOW_CIDRS", &c.AirGap.AllowCIDRs)
 	setCSV(getenv, "TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS", &c.OutboundEnvCredentialRefs)
+	c.applyOutboundEnvCredentialBindingsEnv(getenv)
 	applyTelemetryEnv(getenv, &c.Telemetry, &c.OTLP)
 	setString(getenv, "TRSTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
 	setString(getenv, "TRSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
@@ -5021,6 +5051,7 @@ func validateOptionalServices(c *Config) []error {
 	errs = append(errs, validateTrust(c)...)
 	errs = append(errs, validateITSM(c)...)
 	errs = append(errs, validateOutboundEnvCredentialRefs(c)...)
+	errs = append(errs, validateOutboundEnvCredentialBindings(c)...)
 	if c.OTLP.Enabled {
 		if strings.TrimSpace(c.OTLP.Endpoint) == "" {
 			errs = append(errs, errors.New("otlp.endpoint is required when otlp is enabled"))
@@ -5254,6 +5285,46 @@ func validateITSM(c *Config) []error {
 			if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {
 				errs = append(errs, fmt.Errorf("%s.private_egress_cidrs contains invalid CIDR %q: %w", prefix, raw, err))
 			}
+		}
+	}
+	return errs
+}
+
+// applyOutboundEnvCredentialBindingsEnv overlays
+// TRSTCTL_OUTBOUND_ENV_CREDENTIAL_BINDINGS, a JSON array of
+// {"ref","tenant_id","integrations","origins"} bindings, onto the file's
+// bindings. A malformed value is kept for Validate, so a typo fails startup
+// instead of approving nothing silently.
+func (c *Config) applyOutboundEnvCredentialBindingsEnv(getenv func(string) string) {
+	var raw string
+	setString(getenv, "TRSTCTL_OUTBOUND_ENV_CREDENTIAL_BINDINGS", &raw)
+	if strings.TrimSpace(raw) == "" {
+		return
+	}
+	var bindings []OutboundEnvCredentialBinding
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&bindings); err != nil {
+		c.outboundEnvCredentialBindingsErr = err
+		return
+	}
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		c.outboundEnvCredentialBindingsErr = errors.New("unexpected data after the JSON array")
+		return
+	}
+	c.OutboundEnvCredentialBindings = bindings
+	c.outboundEnvCredentialBindingsErr = nil
+}
+
+func validateOutboundEnvCredentialBindings(c *Config) []error {
+	var errs []error
+	if c.outboundEnvCredentialBindingsErr != nil {
+		errs = append(errs, fmt.Errorf("TRSTCTL_OUTBOUND_ENV_CREDENTIAL_BINDINGS must be a JSON array of {\"ref\",\"tenant_id\",\"integrations\",\"origins\"} bindings: %w", c.outboundEnvCredentialBindingsErr))
+	}
+	for i, binding := range c.OutboundEnvCredentialBindings {
+		if err := binding.Runtime().Validate(); err != nil {
+			errs = append(errs, fmt.Errorf("outbound_env_credential_bindings[%d]: %w", i, err))
 		}
 	}
 	return errs

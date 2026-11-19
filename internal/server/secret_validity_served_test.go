@@ -74,7 +74,7 @@ func TestServedSlackLeakIsCheckedAndLinkedToItsOwnerP14(t *testing.T) {
 	t.Setenv("TRSTCTL_P14_SLACK", "p14-slack-token")
 	checker := validity.New(validity.Config{Endpoints: map[string]string{validity.ProviderAWS: sts.URL},
 		Allowlist: []string{sts.URL}, Rates: map[string]float64{validity.ProviderAWS: 50}, Client: sts.Client()})
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), allowOutboundEnvCredentialRefs("env:TRSTCTL_P14_SLACK"),
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), bindOutboundEnvCredentialRefs("secret_third_party", []string{slack.URL}, "env:TRSTCTL_P14_SLACK"),
 		func(d *Deps) {
 			d.SecretScanner = &a174MarkerScanner{marker: "AKIA", rule: "aws-access-token"}
 			d.SecretValidity = checker

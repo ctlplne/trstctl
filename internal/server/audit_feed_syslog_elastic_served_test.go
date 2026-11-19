@@ -45,10 +45,12 @@ func TestServedAuditFeedsSyslogAndElasticMatchSplunkP5(t *testing.T) {
 
 	hec := newP5HEC(t)
 	es := newP5Elastic(t)
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_P5_HEC_TOKEN", "env:TRSTCTL_P5_ES_KEY", "env:TRSTCTL_P5_SYSLOG_CA"}
-	})
-	syslog := newP5Syslog(t, h)
+	raw, port := reserveLoopbackReceiver(t)
+	h := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("audit_feed", []string{hec.server.URL}, "env:TRSTCTL_P5_HEC_TOKEN"),
+		bindOutboundEnvCredentialRefs("audit_feed", []string{es.server.URL}, "env:TRSTCTL_P5_ES_KEY"),
+		bindOutboundEnvCredentialRefs("audit_feed", []string{"syslog+tls://localhost:" + port}, "env:TRSTCTL_P5_SYSLOG_CA"))
+	syslog := newP5Syslog(t, h, raw)
 	t.Setenv("TRSTCTL_P5_HEC_TOKEN", "p5-hec-token")
 	t.Setenv("TRSTCTL_P5_ES_KEY", "p5-es-key")
 	t.Setenv("TRSTCTL_P5_SYSLOG_CA", string(h.caPEM))
@@ -416,7 +418,7 @@ type p5Syslog struct {
 	seen    map[uint64]bool
 }
 
-func newP5Syslog(t *testing.T, h *servedHarness) *p5Syslog {
+func newP5Syslog(t *testing.T, h *servedHarness, raw net.Listener) *p5Syslog {
 	t.Helper()
 	key, err := crypto.GenerateHostSubjectKey("localhost", []string{"localhost"})
 	if err != nil {
@@ -440,10 +442,6 @@ func newP5Syslog(t *testing.T, h *servedHarness) *p5Syslog {
 		t.Fatal(err)
 	}
 	cert, err := mtls.ServerCertFromFiles(certFile, keyFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -527,4 +525,21 @@ func (r *p5Syslog) sequences() []uint64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]uint64(nil), r.seqs...)
+}
+
+// reserveLoopbackReceiver opens a receiver's loopback listener before the
+// harness exists, so the operator's binding can name its exact origin
+// (CR-008); the receiver serves on it once the harness issues its certificate.
+func reserveLoopbackReceiver(t *testing.T) (net.Listener, string) {
+	t.Helper()
+	raw, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = raw.Close() })
+	_, port, err := net.SplitHostPort(raw.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw, port
 }

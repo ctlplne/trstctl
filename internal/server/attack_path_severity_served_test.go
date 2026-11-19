@@ -36,7 +36,7 @@ func TestServedOpenAttackPathRaisesExposureSeverityA167L3(t *testing.T) {
 		{Name: "default-route-internet", Network: "prod", DestRange: "0.0.0.0/0", Priority: 1000, NextHopGateway: netpath.DefaultInternetGateway},
 	})
 	t.Setenv("TRSTCTL_A167L3_GCP_TOKEN", token)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A167L3_GCP_TOKEN"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_network_path", []string{compute.URL()}, "env:TRSTCTL_A167L3_GCP_TOKEN"))
 	ctx := t.Context()
 	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read", string(authz.PrivateEgress))
 	reader := seedScopedToken(t, h.store, h.tenant, "nhi:read")

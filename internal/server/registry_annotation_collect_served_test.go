@@ -47,12 +47,12 @@ func TestServedCollectedImageIsAnnotatedFromItsCollectionN6L3(t *testing.T) {
 	imageDigest := n6PushImage(t, registry, "team/annotated", "v1", map[string]string{"app/.env": "DB_PASSWORD=LEAK-N6L3-layer\n"}, "LANG=C.UTF-8")
 
 	t.Setenv("TRSTCTL_N6L3_REGISTRY", "n6l3-registry-token")
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil),
-		allowOutboundEnvCredentialRefs("env:TRSTCTL_N6L3_REGISTRY"),
-		func(d *Deps) { d.SecretScanner = &a174MarkerScanner{marker: "LEAK-N6L3"} })
 	// Its own tenant: another test's queued outbox work on the shared tenant
 	// must not hold this one's annotation back.
 	tenant := uuid.NewSHA1(uuid.NameSpaceOID, []byte("n6l3-collected-annotation-tenant")).String()
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil),
+		bindOutboundEnvCredentialRefsFor(tenant, []string{"secret_third_party"}, []string{registry}, "env:TRSTCTL_N6L3_REGISTRY"),
+		func(d *Deps) { d.SecretScanner = &a174MarkerScanner{marker: "LEAK-N6L3"} })
 	registerServedTenantID(t, h, tenant, "N6-L3 collected annotation tenant")
 	tok := seedScopedToken(t, h.store, tenant, "secrets:read", "secrets:write", "discovery:read", "connectors:write", string(authz.PrivateEgress))
 	private := []string{"127.0.0.1/32"}

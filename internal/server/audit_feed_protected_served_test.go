@@ -76,7 +76,7 @@ func TestServedAuditCollectorKeepsSourceAndUsesCurrentProtectedDetails(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies(), events.WithEventProtection(events.EventProtection{Admission: fixture, Keys: keys})}, func(d *Deps) { d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_A233_COLLECTOR_TOKEN"} })
+	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies(), events.WithEventProtection(events.EventProtection{Admission: fixture, Keys: keys})}, bindOutboundEnvCredentialRefs("audit_feed", []string{collector.URL("/")}, "env:TRSTCTL_A233_COLLECTOR_TOKEN"))
 	registerServedTenant(t, h, "Collector fixture")
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "collector-reader", []string{string(authz.AuditRead), string(authz.AuditWrite), string(authz.OwnersWrite), string(authz.PrivateEgress)})
 	status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/owners", token, "collector-private-owner", map[string]any{"kind": "team", "name": "Collector fixture", "email": "collector-private-person@example.invalid"})

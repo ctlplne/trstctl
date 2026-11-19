@@ -162,13 +162,13 @@ func TestServedDiscoveryRunRetryCoversPrimaryCredentialSources(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "test-sm-access-key-id")
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "test-sm-secret-access-key")
 	t.Setenv("TRSTCTL_DISCOVERY_VAULT_TOKEN", "test-vault-token")
-	h := newDiscoveryRelayHarnessWithDeps(t, "recovery-primary-sources", allowOutboundEnvCredentialRefs(
-		"env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
-		"env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
-		"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
-		"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
-		"env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
-	))
+	h := newDiscoveryRelayHarnessWithDeps(t, "recovery-primary-sources",
+		bindOutboundEnvCredentialRefs("cloud_certificate", []string{"https://acm.us-east-1.amazonaws.com"},
+			"env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID", "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY"),
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{"https://secretsmanager.us-east-1.amazonaws.com"},
+			"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY"),
+		bindOutboundEnvCredentialRefs("secret_store", []string{"https://vault.example"}, "env:TRSTCTL_DISCOVERY_VAULT_TOKEN"),
+	)
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
 	cases := []struct {

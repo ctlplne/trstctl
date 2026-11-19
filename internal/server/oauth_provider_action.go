@@ -43,13 +43,15 @@ func (d *issuanceDispatcher) handleOAuthProviderAction(ctx context.Context, m or
 	if err != nil || !found {
 		return fail("the discovery source no longer has an admin connection for " + in.Provider)
 	}
-	token, err := resolveDiscoveryCredentialRef(ctx, conn.TokenRef)
-	if err != nil {
-		return fail("resolve the admin token reference: " + err.Error())
-	}
 	client, err := cloudHTTPClient(conn.BaseURL, conn.AllowPrivateEndpoint, conn.PrivateEgressCIDRs)
 	if err != nil {
 		return fail("the admin connection's endpoint is refused: " + err.Error())
+	}
+	// CR-008: the admin token resolves only for this tenant's oauth_grant source,
+	// and the client goes only to its bound origins.
+	token, err := resolveBoundCredentialRef(d.outboundCredentialScope(ctx, m.TenantID, source.Kind), conn.TokenRef, client)
+	if err != nil {
+		return fail("resolve the admin token reference: " + err.Error())
 	}
 	provider, closeProvider, err := oauthrevoke.New(oauthrevoke.Connection{Provider: conn.Provider, BaseURL: conn.BaseURL, Token: []byte(token), Doer: client})
 	if err != nil {

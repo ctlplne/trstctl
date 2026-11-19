@@ -64,7 +64,8 @@ func TestServedCloudReplacementKeepsStockWorkloadRunningA264(t *testing.T) {
 	registry, _ := nativeReplacementProviderA264(t, endpoint, path, "orders-555")
 	t.Setenv("TRSTCTL_A264_REPLACEMENT_READER_PATH", path)
 	t.Setenv("TRSTCTL_A264_REPLACEMENT_WRITER_PATH", path)
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), allowOutboundEnvCredentialRefs("env:TRSTCTL_A264_REPLACEMENT_READER_PATH", "env:TRSTCTL_A264_REPLACEMENT_WRITER_PATH"), func(d *Deps) { d.TenantDynamicSecretProviders = registry })
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), bindOutboundEnvCredentialRefs("cloud_machine_entitlement", []string{endpoint}, "env:TRSTCTL_A264_REPLACEMENT_READER_PATH"),
+		bindOutboundEnvCredentialRefs("cloud_machine_change", []string{endpoint}, "env:TRSTCTL_A264_REPLACEMENT_WRITER_PATH"), func(d *Deps) { d.TenantDynamicSecretProviders = registry })
 	operator := seedScopedTokenSubject(t, h.store, h.tenant, "replacement-operator", "access:write", "access:read", "discovery:read", "discovery:write", "secrets:read", "secrets:write", string(authz.PrivateEgress))
 	reviewer := seedScopedTokenSubject(t, h.store, h.tenant, "replacement-reviewer", "access:approve", "access:read", "approvals:review")
 	consumer := seedScopedTokenSubject(t, h.store, h.tenant, "replacement-workload", "secrets:read", "secrets:write", "access:read")

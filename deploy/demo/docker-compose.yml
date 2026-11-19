@@ -199,7 +199,16 @@ services:
       TRSTCTL_NATS_URL: "nats://nats:4222"
       TRSTCTL_NATS_REPLICAS: "1"
       TRSTCTL_NATS_ALLOW_SINGLE_REPLICA: "true"
-      TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS: "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_TOKEN,env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN"
+      # Each discovery credential reference is bound to the demo tenant, the one
+      # source kind that uses it and the exact origins it may be sent to: the
+      # loopback LocalStack for AWS and Google's default endpoints for GCP.
+      TRSTCTL_OUTBOUND_ENV_CREDENTIAL_BINDINGS: >-
+        [{"ref":"env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID","tenant_id":"11111111-1111-4111-8111-111111111111","integrations":["cloud_certificate"],"origins":["http://127.0.0.1:4566"]},
+        {"ref":"env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY","tenant_id":"11111111-1111-4111-8111-111111111111","integrations":["cloud_certificate"],"origins":["http://127.0.0.1:4566"]},
+        {"ref":"env:TRSTCTL_DISCOVERY_GCP_TOKEN","tenant_id":"11111111-1111-4111-8111-111111111111","integrations":["cloud_certificate"],"origins":["https://certificatemanager.googleapis.com"]},
+        {"ref":"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID","tenant_id":"11111111-1111-4111-8111-111111111111","integrations":["cloud_secret"],"origins":["http://127.0.0.1:4566"]},
+        {"ref":"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY","tenant_id":"11111111-1111-4111-8111-111111111111","integrations":["cloud_secret"],"origins":["http://127.0.0.1:4566"]},
+        {"ref":"env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN","tenant_id":"11111111-1111-4111-8111-111111111111","integrations":["cloud_secret"],"origins":["https://secretmanager.googleapis.com"]}]
       # LocalStack accepts any well-formed SigV4 credentials; these values let the
       # seeded AWS discovery sources resolve their env credential references and
       # prove the collectors against the emulator (the GCP references stay unset

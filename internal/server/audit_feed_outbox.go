@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
@@ -80,6 +81,9 @@ func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message o
 	if d.audit == nil {
 		return fmt.Errorf("server: collector source reader is unavailable")
 	}
+	// CR-008: the feed's credential references resolve only for this tenant's
+	// audit feeds, toward the origins the operator bound them to.
+	ctx = d.outboundCredentialScope(ctx, message.TenantID, outboundcred.IntegrationAuditFeed)
 	head, err := audit.VerifyChainFrom(batch.PrevHash, batch.Records)
 	if err != nil || head != batch.ChainHead {
 		return fmt.Errorf("server: collector commitment changed")
@@ -107,7 +111,7 @@ func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message o
 	if err != nil {
 		return fmt.Errorf("server: audit feed endpoint rejected: %w", err)
 	}
-	tokenBytes, err := resolveDiscoveryCredentialBytesRef(ctx, batch.TokenRef)
+	tokenBytes, err := resolveBoundCredentialBytesRef(ctx, batch.TokenRef, client)
 	if err != nil {
 		return fmt.Errorf("server: resolve audit feed credential reference: %w", err)
 	}

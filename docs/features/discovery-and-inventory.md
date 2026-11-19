@@ -676,8 +676,9 @@ key-vault-disable <id> -f reason.json`) disables the exact certificate version i
 found as, so the vault stops serving it to the applications that read it there.
 Discovery never writes to a vault: the disable uses a separate `write_token_ref`
 configured beside the vault's `azure-keyvault` entry in a `cloud_certificate` discovery
-source (an operator-approved `env:` reference, like every discovery credential), and a
-vault without one refuses the request. The call runs from an outbox job and counts
+source (an `env:` reference the operator bound to the tenant, the `cloud_certificate`
+integration and the vault's origin, like every discovery credential), and a vault
+without one refuses the request. The call runs from an outbox job and counts
 only when the vault reads the version back disabled. Every answer is labeled: status
 `disabled`, `revoked: false`, and the note that the certificate stays valid until it
 expires or its CA revokes it; the inventory row keeps its status. `GET
@@ -851,6 +852,19 @@ posture. Every finding also becomes a node in the [credential graph](graph-query
 with its provenance and risk score; a related bridge ingests leaked-credential findings
 from scanners (gitleaks, trufflehog) into the same graph, again excluding the secret
 value structurally.
+
+Every `*_ref` credential a source names as `env:NAME` must be bound by the operator to
+the tenant, the source kind and the exact origin of each endpoint it is sent to, a
+provider's default endpoint included (see
+[outbound env credential bindings](../configuration.md#outbound-env-credential-bindings)).
+The worker checks the binding before it reads the value and pins its HTTP client to
+the bound origins, so a run sends the credential nowhere else, not even to a redirect
+or a token service a provider names. The API refuses a source or plan preview that
+names an unbound reference or points a bound one at another origin; for the generic
+kinds that check is best-effort (it reads `*_ref` keys in their exact case and takes
+destinations only from endpoint and URL keys, while the worker also derives some, such
+as an AWS endpoint from the Region), so a declaration it misses is stored and its run
+is refused by the worker.
 
 One worked example — the shape is identical for the other seven kinds; change `kind`
 and `config` (the create → run → findings CLI flow is the same one shown for `network`
@@ -1801,10 +1815,12 @@ that check with explicitly scoped recorded activity. It serves read-only AWS
 capture and advisory findings, plus the reviewed AWS changes below. Native
 GCP/Azure collection is a separate capability.
 
-An operator first approves an environment reference whose value is the absolute
-path to an owner-only standard AWS STS JSON response file. Configure that reference
-in the source, for example `env:TRSTCTL_AWS_READER_SESSION_PATH`. The environment
-value is a path, and the file holds the short-lived credential. Refresh the file
+An operator first binds an environment reference to the tenant, the
+`cloud_machine_entitlement` integration and the IAM endpoint's origin
+(`https://iam.amazonaws.com` unless the source names another); its value is the
+absolute path to an owner-only standard AWS STS JSON response file. Configure that
+reference in the source, for example `env:TRSTCTL_AWS_READER_SESSION_PATH`. The
+environment value is a path, and the file holds the short-lived credential. Refresh the file
 atomically before expiration. Shared, expired, oversized or missing files fail the
 run. The source never accepts a secret access key in its configuration.
 
@@ -1867,9 +1883,12 @@ proof does not establish AWS permission enforcement or live cloud qualification.
 Open a native cloud machine finding in Discovery. Its permission table shows the
 server's decision, policy reasons, activity coverage, and known limits. The change
 wizard selects a captured key or one unused exact permission, records a writer STS
-file reference and workload-impact reason, and shows the exact proposal. Open
-Approvals to inspect the same intent and obtain distinct human reviews. Return to
-the finding to queue the approved change and observe its native postcondition.
+file reference and workload-impact reason, and shows the exact proposal. The writer
+reference must be bound to the tenant, the `cloud_machine_change` integration and the
+finding source's IAM origin; the change worker checks that binding again before it
+reads the session. Open Approvals to inspect the same intent and obtain distinct
+human reviews. Return to the finding to queue the approved change and observe its
+native postcondition.
 
 For automation, write a public proposal body to a file (never credential values):
 
@@ -1952,12 +1971,17 @@ Native AWS authorization and revoked-signature rejection remain live-cloud proof
 ### GCP workload identity inventory
 
 Select **GCP workload identities** when creating a discovery source. Enter the
-project ID, 1–64 selected service-account emails, and an operator-approved
-`env:` reference to a private raw OAuth access-token file. Review the exact plan
-before saving and running it. Optional audit lookback is 1–90 days; 0 disables
-that read. Custom origins, public CA PEM and explicitly approved private CIDRs
-are available for private endpoints and test environments. Token values and
-arbitrary host paths cannot be supplied by a tenant.
+project ID, 1–64 selected service-account emails, and an `env:` reference to a
+private raw OAuth access-token file, bound by the operator to the tenant, the
+`gcp_machine_identity` integration and every endpoint origin the source reads
+(by default `https://iam.googleapis.com` and
+`https://cloudresourcemanager.googleapis.com`, plus `https://logging.googleapis.com`
+with audit lookback). Review the exact plan before saving and running it. Optional
+audit lookback is 1–90 days; 0 disables that read. Custom origins, public CA PEM and
+explicitly approved private CIDRs are available for private endpoints and test
+environments; a custom origin is accepted only when the reference's binding names
+it. Token values, arbitrary host paths and another tenant's references cannot be
+supplied by a tenant.
 
 The reader needs `iam.serviceAccounts.get`, `iam.serviceAccountKeys.list`,
 `iam.serviceAccounts.getIamPolicy`, `resourcemanager.projects.getIamPolicy`, and
@@ -1995,10 +2019,12 @@ OAuth permissions and native behavior in a live GCP account remain Track B proof
 Select **Azure workload identities** in Discover → Sources, or create a discovery
 source with kind `azure_machine_identity` through the existing API/CLI. Supply an
 Azure tenant UUID, subscription UUID, 1–64 service-principal **object** UUIDs and
-separate `graph_token_file_ref` / `arm_token_file_ref` values. Each is an
-operator-approved `env:NAME` whose value names an owner-only file containing a raw
-access token for that API's audience. Tokens are never source configuration values.
-The operator refreshes these files before their short-lived tokens expire.
+separate `graph_token_file_ref` / `arm_token_file_ref` values. Each is an `env:NAME`
+the operator bound to the tenant, the `azure_machine_identity` integration and that
+API's origin (`https://graph.microsoft.com` and `https://management.azure.com` unless
+the source names custom endpoints), whose value names an owner-only file containing
+a raw access token for that API's audience. Tokens are never source configuration
+values. The operator refreshes these files before their short-lived tokens expire.
 
 Graph needs organization ID visibility (`Organization.Read.All` for application
 access), service-principal/application visibility (`Application.Read.All`) and

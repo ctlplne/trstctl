@@ -4,6 +4,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -16,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboundcred"
 )
 
 func TestServedServiceNowITSMTicketCAPDEP04EndToEnd(t *testing.T) {
@@ -246,9 +248,31 @@ func serviceNowOutboxCount(t *testing.T, h *servedHarness) int {
 	return count
 }
 
-func allowOutboundEnvCredentialRefs(refs ...string) func(*Deps) {
+// bindOutboundEnvCredentialRefs binds env credential refs to the served test
+// tenant for one integration kind and the origins of the given collector URLs
+// (CR-008): the operator's approval names the tenant, the integration and every
+// destination the value may be sent to.
+func bindOutboundEnvCredentialRefs(integration string, destinations []string, refs ...string) func(*Deps) {
+	return bindOutboundEnvCredentialRefsFor(servedTestTenant, []string{integration}, destinations, refs...)
+}
+
+// bindOutboundEnvCredentialRefsFor is bindOutboundEnvCredentialRefs for any tenant
+// and several integration kinds.
+func bindOutboundEnvCredentialRefsFor(tenantID string, integrations, destinations []string, refs ...string) func(*Deps) {
+	origins := make([]string, 0, len(destinations))
+	for _, destination := range destinations {
+		origin, err := outboundcred.DestinationOrigin(destination)
+		if err != nil {
+			panic(fmt.Sprintf("binding destination %q: %v", destination, err))
+		}
+		origins = append(origins, origin)
+	}
 	return func(d *Deps) {
-		d.OutboundEnvCredentialRefs = append(d.OutboundEnvCredentialRefs, refs...)
+		for _, ref := range refs {
+			d.OutboundEnvCredentialBindings = append(d.OutboundEnvCredentialBindings, outboundcred.Binding{
+				Ref: ref, TenantID: tenantID, Integrations: append([]string(nil), integrations...), Origins: append([]string(nil), origins...),
+			})
+		}
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
@@ -29,7 +30,7 @@ func (d *issuanceDispatcher) handleSplunkResponseIntegration(ctx context.Context
 	if err != nil {
 		return fmt.Errorf("server: Splunk endpoint rejected: %w", err)
 	}
-	token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+	token, err := resolveBoundCredentialRef(d.outboundCredentialScope(ctx, m.TenantID, outboundcred.IntegrationResponseIntegration), p.TokenRef, client)
 	if err != nil {
 		return fmt.Errorf("server: resolve Splunk token ref: %w", err)
 	}
@@ -72,7 +73,7 @@ func (d *issuanceDispatcher) handleJiraResponseIntegration(ctx context.Context, 
 	if err != nil {
 		return fmt.Errorf("server: Jira endpoint rejected: %w", err)
 	}
-	token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+	token, err := resolveBoundCredentialRef(d.outboundCredentialScope(ctx, m.TenantID, outboundcred.IntegrationResponseIntegration), p.TokenRef, client)
 	if err != nil {
 		return fmt.Errorf("server: resolve Jira token ref: %w", err)
 	}

@@ -38,7 +38,7 @@ func TestServedStaleCloudKeyIsReplacedByADynamicRoleM3L4(t *testing.T) {
 	const signingValue = "m3l4-standin-signing-value" // #nosec G101 -- the test's own stand-in signing value, not a credential (CWE-798)
 	t.Setenv("TRSTCTL_M3L4_IAM_ACCESS_KEY_ID", "m3l4-operator")
 	t.Setenv("TRSTCTL_M3L4_IAM_SECRET_ACCESS_KEY", signingValue)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_access_key", []string{srv.URL},
 		"env:TRSTCTL_M3L4_IAM_ACCESS_KEY_ID", "env:TRSTCTL_M3L4_IAM_SECRET_ACCESS_KEY"), func(d *Deps) {
 		d.EnableSecretsAPI = true
 		resolver := integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}

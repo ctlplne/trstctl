@@ -28,9 +28,7 @@ const (
 // the proposed configuration is structured, but it is not a mutation: no event,
 // projection, idempotency record, outbox intent, or collector call may occur.
 func TestServedAuditFeedPreviewIsEffectFreeAndExactF9(t *testing.T) {
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{"env:F9_SPLUNK_TOKEN"}
-	})
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("audit_feed", []string{"https://splunk.example.test"}, "env:F9_SPLUNK_TOKEN"))
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "f9-audit-operator", []string{
 		string(authz.AuditRead), string(authz.AuditWrite),
 	})
@@ -130,12 +128,10 @@ func TestServedAuditFeedsDeliverSplunkAndSentinelWithRetryAUD52(t *testing.T) {
 	t.Setenv("TRSTCTL_AUD52_SPLUNK_TOKEN", "aud52-splunk-token")
 	t.Setenv("TRSTCTL_AUD52_SENTINEL_TOKEN", "aud52-sentinel-token")
 
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{
-			"env:TRSTCTL_AUD52_SPLUNK_TOKEN",
-			"env:TRSTCTL_AUD52_SENTINEL_TOKEN",
-		}
-	})
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("audit_feed", []string{collector.URL("/")},
+		"env:TRSTCTL_AUD52_SPLUNK_TOKEN",
+		"env:TRSTCTL_AUD52_SENTINEL_TOKEN",
+	))
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "aud52-operator", []string{
 		string(authz.AuditRead), string(authz.AuditWrite), string(authz.OwnersWrite), string(authz.PrivateEgress),
 	})

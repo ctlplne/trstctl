@@ -104,9 +104,12 @@ ServiceNow Table API (`itsm.servicenow`). Each destination carries only endpoint
 metadata plus `token_ref`; token bytes are resolved by the worker at delivery time
 and wiped after the outbound request. ServiceNow destinations reuse the same
 operator-approved binding check as direct ITSM ticket creation. Splunk and Jira
-`token_ref` values must be listed by the operator in
-`TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS`; their private destinations additionally
-require both `egress:private` and a destination CIDR grant on the dispatch request.
+`token_ref` values must be bound by the operator to the dispatching tenant, the
+`response_integration` integration and the destination's origin in
+[outbound env credential bindings](../configuration.md#outbound-env-credential-bindings);
+the dispatch request is refused otherwise, and the worker checks the binding again
+before it reads the token. Their private destinations additionally require both
+`egress:private` and a destination CIDR grant on the dispatch request.
 This is a served dispatch and evidence path, not a promise that trstctl manages the customer's Splunk
 correlation searches, Jira automation rules, Slack app installation, or bidirectional
 ServiceNow state sync.

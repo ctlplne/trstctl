@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/cloudcert"
 	"trstctl.com/trstctl/internal/discovery/cloudcert/kvdisable"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -86,7 +87,9 @@ func (d *issuanceDispatcher) handleKeyVaultDisable(ctx context.Context, m orches
 	if err != nil {
 		return err
 	}
-	token, err := resolveDiscoveryCredentialRef(ctx, route.Provider.WriteTokenRef)
+	// CR-008: the write token resolves only for this tenant's cloud_certificate
+	// source, and the client goes only to its bound origins.
+	token, err := resolveBoundCredentialRef(d.outboundCredentialScope(ctx, m.TenantID, outboundcred.IntegrationCloudCertificate), route.Provider.WriteTokenRef, client)
 	if err != nil {
 		return fmt.Errorf("resolve write_token_ref: %w", err)
 	}

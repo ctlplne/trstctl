@@ -42,8 +42,10 @@ tenant; users allowed to edit searches can change a macro or remove its filter.
 1. Create an HEC input with a restricted token and dedicated default index. Use
    TLS and `/services/collector/event`. Preserve the `trstctl:audit` sourcetype.
    Set the credential in the server's approved secret source; do not put it in a
-   URL or app configuration. Permit its `env:NAME` reference through
-   `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS`.
+   URL or app configuration. Bind its `env:NAME` reference to your tenant, the
+   `audit_feed` integration and the collector's origin in
+   `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_BINDINGS` (see
+   [outbound env credential bindings](../configuration.md#outbound-env-credential-bindings)).
 2. In trstctl's `/audit` workspace, preview and save an audit feed with provider
    `splunk-hec`, the collector endpoint and credential reference. The API is
    `PUT /api/v1/audit/feeds/{id}` with `audit:write` and `Idempotency-Key`. The
@@ -114,8 +116,9 @@ URL. Publish container port8088 to that loopback port (or run the local fixture
 on port20489). Set `TRSTCTL_REQUIRE_SPLUNK_SCAFFOLD=1` to request the test and
 `TRSTCTL_A231_SCAFFOLD_DIR` to an owned directory containing
 `scaffold-token.bin`. The test opens that fixed file through a directory handle
-that refuses path escapes. It creates a unique, operator-allowlisted environment
-reference for the disposable token and removes that reference after the run.
+that refuses path escapes. It creates a unique environment reference for the
+disposable token, bound to the test's tenant and the fixture origin, and removes
+that reference after the run.
 Set `TRSTCTL_A231_EXPECT_ACK_LOSS=1` for a fresh/restarted fixture in the
 deliberate-loss mode.
 The native test log retains an `A231_PUBLIC_PROOF` JSON summary containing only

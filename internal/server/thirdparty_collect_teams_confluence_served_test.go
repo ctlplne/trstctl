@@ -74,7 +74,11 @@ func TestServedTeamsAndConfluenceCollectionOD4(t *testing.T) {
 	t.Setenv("TRSTCTL_OD4_WRONG", "not-the-value")
 	scanner := &a174MarkerScanner{marker: "LEAK-OD4"}
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil),
-		allowOutboundEnvCredentialRefs("env:TRSTCTL_OD4_GRAPH", "env:TRSTCTL_OD4_WIKI", "env:TRSTCTL_OD4_WRONG"),
+		// The off-origin case binds its collector's origin too: what refuses it is
+		// the collector's own next-page origin check.
+		bindOutboundEnvCredentialRefs("secret_third_party", []string{graph.URL, offsite.URL}, "env:TRSTCTL_OD4_GRAPH"),
+		bindOutboundEnvCredentialRefs("secret_third_party", []string{confluence.URL}, "env:TRSTCTL_OD4_WIKI"),
+		bindOutboundEnvCredentialRefs("secret_third_party", []string{graph.URL}, "env:TRSTCTL_OD4_WRONG"),
 		func(d *Deps) { d.SecretScanner = scanner })
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", string(authz.PrivateEgress))
 	owner, err := h.store.CreateOwner(context.Background(), store.Owner{TenantID: h.tenant, Kind: store.OwnerWorkload, Name: "od4 platform", Email: "dev@example.test"})

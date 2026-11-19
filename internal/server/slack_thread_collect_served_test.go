@@ -59,7 +59,7 @@ func TestServedNativeLeakScanReadsSlackThreadRepliesN6L1(t *testing.T) {
 	t.Cleanup(slack.Close)
 	t.Setenv("TRSTCTL_N6L1_SLACK", "n6l1-slack-token")
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil),
-		allowOutboundEnvCredentialRefs("env:TRSTCTL_N6L1_SLACK"),
+		bindOutboundEnvCredentialRefs("secret_third_party", []string{slack.URL}, "env:TRSTCTL_N6L1_SLACK"),
 		func(d *Deps) { d.SecretScanner = &a174MarkerScanner{marker: "LEAK-N6L1"} })
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", string(authz.PrivateEgress))
 

@@ -61,11 +61,14 @@ func (v *kvDouble) serve(w http.ResponseWriter, r *http.Request) {
 // source, from an outbox job — and every answer says it is not revoked: the
 // inventory row stays active.
 func TestServedKeyVaultDisableIsNotARevocationN2(t *testing.T) {
-	h := newOperatingServedHarness(t, config.Protocols{})
-	ctx := t.Context()
 	vault := &kvDouble{enabled: map[string]bool{"web-cert/0123abcd": true}}
 	srv := httptest.NewTLSServer(http.HandlerFunc(vault.serve))
 	t.Cleanup(srv.Close)
+	// CR-008: the vault's read and write credentials are bound to this tenant's
+	// cloud_certificate sources and the vault's origin.
+	h := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("cloud_certificate", []string{srv.URL}, "env:TRSTCTL_TEST_KV_READ", "env:TRSTCTL_TEST_KV_WRITE"))
+	ctx := t.Context()
 	previous := keyVaultDisableClient
 	t.Cleanup(func() { keyVaultDisableClient = previous })
 	keyVaultDisableClient = func(string, bool, []string) (*http.Client, error) { return srv.Client(), nil }

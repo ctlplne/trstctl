@@ -89,7 +89,9 @@ func (d *issuanceDispatcher) handleAttackPathValidate(ctx context.Context, m orc
 	if source.Kind != orchestrator.AttackPathSourceKind {
 		return d.orch.FailAttackPathValidation(ctx, m.TenantID, m.IdempotencyKey, intent, "the source is no longer a cloud_network_path source")
 	}
-	readers, err := attackPathReaders(ctx, source.Config)
+	// CR-008: the source's credentials resolve only for this tenant's
+	// cloud_network_path source, toward the origins the operator bound them to.
+	readers, err := attackPathReaders(d.outboundCredentialScope(ctx, m.TenantID, source.Kind), source.Config)
 	if err != nil {
 		return d.orch.FailAttackPathValidation(ctx, m.TenantID, m.IdempotencyKey, intent, err.Error())
 	}
@@ -155,18 +157,6 @@ func awsAttackPathReaderFor(ctx context.Context, p cloudCertificateProviderConfi
 	if err != nil {
 		return nil, err
 	}
-	accessKeyID, err := resolveDiscoveryCredentialRef(ctx, p.AccessKeyIDRef)
-	if err != nil {
-		return nil, fmt.Errorf("resolve access_key_id_ref: %w", err)
-	}
-	secretAccessKey, err := resolveDiscoveryCredentialRef(ctx, p.SecretAccessKeyRef)
-	if err != nil {
-		return nil, fmt.Errorf("resolve secret_access_key_ref: %w", err)
-	}
-	sessionToken, err := resolveOptionalDiscoveryCredentialRef(ctx, p.SessionTokenRef)
-	if err != nil {
-		return nil, fmt.Errorf("resolve session_token_ref: %w", err)
-	}
 	// A167-L2: load balancers are read from Elastic Load Balancing, through
 	// a client whose endpoint passes the same egress checks.
 	elbEndpoint := strings.TrimSpace(p.ELBEndpoint)
@@ -176,6 +166,18 @@ func awsAttackPathReaderFor(ctx context.Context, p cloudCertificateProviderConfi
 	elbClient, err := cloudHTTPClient(elbEndpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return nil, fmt.Errorf("elb_endpoint: %w", err)
+	}
+	accessKeyID, err := resolveBoundCredentialRef(ctx, p.AccessKeyIDRef, client, elbClient)
+	if err != nil {
+		return nil, fmt.Errorf("resolve access_key_id_ref: %w", err)
+	}
+	secretAccessKey, err := resolveBoundCredentialRef(ctx, p.SecretAccessKeyRef, client, elbClient)
+	if err != nil {
+		return nil, fmt.Errorf("resolve secret_access_key_ref: %w", err)
+	}
+	sessionToken, err := resolveOptionalBoundCredentialRef(ctx, p.SessionTokenRef, client, elbClient)
+	if err != nil {
+		return nil, fmt.Errorf("resolve session_token_ref: %w", err)
 	}
 	reader, err := awsnetpath.New(awsnetpath.Config{Region: region, Endpoint: endpoint, AccessKeyID: accessKeyID,
 		SecretAccessKey: secretAccessKey, SessionToken: sessionToken, HTTPClient: client,
@@ -200,7 +202,7 @@ func gcpAttackPathReader(ctx context.Context, p cloudCertificateProviderConfig) 
 	if err != nil {
 		return nil, err
 	}
-	token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+	token, err := resolveBoundCredentialRef(ctx, p.TokenRef, client)
 	if err != nil {
 		return nil, fmt.Errorf("resolve token_ref: %w", err)
 	}
@@ -222,7 +224,7 @@ func azureAttackPathReader(ctx context.Context, p cloudCertificateProviderConfig
 	if err != nil {
 		return nil, err
 	}
-	token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+	token, err := resolveBoundCredentialRef(ctx, p.TokenRef, client)
 	if err != nil {
 		return nil, fmt.Errorf("resolve token_ref: %w", err)
 	}

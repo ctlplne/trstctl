@@ -78,21 +78,20 @@ func TestServedUnvaultedSecretPostureCAPSECR07EndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_AZURE_KV_TOKEN", "azure-token")
 	t.Setenv("TRSTCTL_DISCOVERY_VAULT_TOKEN", "vault-token")
 
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
-		d.SecretScanner = fake
-		d.OutboundEnvCredentialRefs = []string{
-			"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
-			"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
-			"env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
-			"env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN",
-			"env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
-		}
-		d.SecretSyncTargets = map[string]*secretsync.Target{
-			"aws-secrets-manager": secretsync.NewTarget("aws-secrets-manager", capSECR07NoopPusher{}),
-			"gcp-secret-manager":  secretsync.NewTarget("gcp-secret-manager", capSECR07NoopPusher{}),
-			"azure-key-vault":     secretsync.NewTarget("azure-key-vault", capSECR07NoopPusher{}),
-		}
-	})
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil),
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{awsDiscovery.URL},
+			"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY"),
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{gcpDiscovery.URL}, "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN"),
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{azureDiscovery.URL}, "env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN"),
+		bindOutboundEnvCredentialRefs("cloud_secret", []string{vaultDiscovery.URL}, "env:TRSTCTL_DISCOVERY_VAULT_TOKEN"),
+		func(d *Deps) {
+			d.SecretScanner = fake
+			d.SecretSyncTargets = map[string]*secretsync.Target{
+				"aws-secrets-manager": secretsync.NewTarget("aws-secrets-manager", capSECR07NoopPusher{}),
+				"gcp-secret-manager":  secretsync.NewTarget("gcp-secret-manager", capSECR07NoopPusher{}),
+				"azure-key-vault":     secretsync.NewTarget("azure-key-vault", capSECR07NoopPusher{}),
+			}
+		})
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans/repositories/github/webhook", tok, "cap-secr-07-repo", map[string]any{

@@ -76,7 +76,7 @@ func TestServedCloudAccessKeyDiscoveryReadsGCPServiceAccountKeysM3L1(t *testing.
 	var deny atomic.Bool
 	gcp := m3l1GCPStandIn(t, &deny)
 	t.Setenv("TRSTCTL_M3L1_GCP_TOKEN", "m3l1-read-token")
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_M3L1_GCP_TOKEN"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_access_key", []string{gcp.URL}, "env:TRSTCTL_M3L1_GCP_TOKEN"))
 	ctx := t.Context()
 	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read", string(authz.PrivateEgress))
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", writer, map[string]any{

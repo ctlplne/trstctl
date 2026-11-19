@@ -307,7 +307,7 @@ func (a *slackAppServer) oauthCallback(w http.ResponseWriter, r *http.Request) {
 		slackPage(w, http.StatusBadRequest, "This install link is unknown, expired or already used; start the install again from trstctl.")
 		return
 	}
-	clientSecret, err := resolveDiscoveryCredentialBytesRef(ctx, a.cfg.ClientSecretRef)
+	clientSecret, err := resolveOperatorCredentialBytesRef(ctx, a.cfg.ClientSecretRef)
 	if err != nil {
 		slackPage(w, http.StatusServiceUnavailable, "The Slack app's client secret is not available on this control plane.")
 		return
@@ -343,7 +343,7 @@ func (a *slackAppServer) verified(r *http.Request) ([]byte, error) {
 	if err != nil || len(body) > slackMaxBody {
 		return nil, errors.New("slack request body is too large")
 	}
-	signing, err := resolveDiscoveryCredentialBytesRef(r.Context(), a.cfg.SigningSecretRef)
+	signing, err := resolveOperatorCredentialBytesRef(r.Context(), a.cfg.SigningSecretRef)
 	if err != nil {
 		return nil, errors.New("the Slack signing secret is not available")
 	}
@@ -757,7 +757,7 @@ func (a *slackAppServer) runSocketMode(ctx context.Context) {
 }
 
 func (a *slackAppServer) socketSession(ctx context.Context) error {
-	token, err := resolveDiscoveryCredentialBytesRef(ctx, a.cfg.AppTokenRef)
+	token, err := resolveOperatorCredentialBytesRef(ctx, a.cfg.AppTokenRef)
 	if err != nil {
 		return err
 	}

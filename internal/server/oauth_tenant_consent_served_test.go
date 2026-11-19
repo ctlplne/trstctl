@@ -31,7 +31,7 @@ func TestServedTenantWideAdminConsentIsRevokedA170L1(t *testing.T) {
 		oauthrevoketest.GraphGrant{ID: "g-frank", ClientID: "sp-consented", PrincipalID: "user-frank"})
 	stand.SeedGraph("sp-orphan")
 	t.Setenv("TRSTCTL_A170L1_ADMIN_TOKEN", adminToken)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A170L1_ADMIN_TOKEN"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("oauth_grant", []string{stand.URL()}, "env:TRSTCTL_A170L1_ADMIN_TOKEN"))
 	ctx := t.Context()
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "connectors:write", string(authz.PrivateEgress))
 	grant := func(app, consent string) map[string]any {

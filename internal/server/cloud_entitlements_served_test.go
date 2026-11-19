@@ -26,7 +26,7 @@ func TestServedCloudMachineEntitlementCaptureA264(t *testing.T) {
 		t.Skip("owned LocalStack IAM endpoint and private session file required")
 	}
 	t.Setenv("TRSTCTL_A264_READER_SESSION_PATH", sessionPath)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A264_READER_SESSION_PATH"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_machine_entitlement", []string{endpoint}, "env:TRSTCTL_A264_READER_SESSION_PATH"))
 	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read", "graph:read", "access:write", "access:read", string(authz.PrivateEgress))
 	arn := "arn:aws:iam::000000000000:user/a264-workload"
 	resource := "arn:aws:s3:::a264-workload/note"

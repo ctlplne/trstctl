@@ -37,9 +37,10 @@ func TestAuditFeedsReachRsyslogAndASearchEngineP5(t *testing.T) {
 		t.Fatal(err)
 	}
 	hec := newP5HEC(t)
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_P5_HEC_TOKEN", "env:TRSTCTL_P5_ES_KEY", "env:TRSTCTL_P5_SYSLOG_CA"}
-	})
+	h := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("audit_feed", []string{hec.server.URL}, "env:TRSTCTL_P5_HEC_TOKEN"),
+		bindOutboundEnvCredentialRefs("audit_feed", []string{esURL}, "env:TRSTCTL_P5_ES_KEY"),
+		bindOutboundEnvCredentialRefs("audit_feed", []string{syslogURL}, "env:TRSTCTL_P5_SYSLOG_CA"))
 	esKey := os.Getenv("TRSTCTL_P5_LAB_ES_KEY")
 	t.Setenv("TRSTCTL_P5_HEC_TOKEN", "p5-hec-token")
 	if esKey == "" {

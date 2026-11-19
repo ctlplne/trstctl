@@ -43,7 +43,8 @@ func TestServedSecretStores1PasswordConnectAndDopplerOD14(t *testing.T) {
 	t.Cleanup(dp.Close)
 	t.Setenv("TRSTCTL_OD14_OP", "op-od14")
 	t.Setenv("TRSTCTL_OD14_DP", "dp-od14")
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_OD14_OP", "env:TRSTCTL_OD14_DP"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("secret_store", []string{op.URL()}, "env:TRSTCTL_OD14_OP"),
+		bindOutboundEnvCredentialRefs("secret_store", []string{dp.URL()}, "env:TRSTCTL_OD14_DP"))
 	o := &od13Harness{t: t, h: h, tok: seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "secrets:read", string(authz.PrivateEgress))}
 	providers := func(inspect bool) []map[string]any {
 		return []map[string]any{

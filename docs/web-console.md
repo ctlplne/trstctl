@@ -638,8 +638,9 @@ The same Change history screen configures tenant-scoped scheduled Splunk HEC and
 Microsoft Sentinel feeds inside **Collector delivery**. That section loads only when
 opened. Its table shows the durable delivered cursor, exact queued-record
 lag, retry attempt/time, terminal error code, and collector request ID. The form
-accepts only an operator-allowlisted `env:NAME` credential pointer—never a token
-value—and clearly separates public HTTPS from permission-gated private CIDRs. A
+accepts only an `env:NAME` credential pointer the operator bound to the tenant, audit
+feeds and the collector's origin—never a token value—and clearly separates public
+HTTPS from permission-gated private CIDRs. A
 save records configuration and a same-transaction outbox intent; the browser never
 calls the collector directly. See
 [Policy & governance](features/policy-and-governance.md)

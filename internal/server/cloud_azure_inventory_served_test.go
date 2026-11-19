@@ -124,7 +124,9 @@ func TestServedAzureMachineIdentityInventoryA264(t *testing.T) {
 		t.Setenv(entry.name, path)
 		refs = append(refs, "env:"+entry.name)
 	}
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(refs...))
+	h := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("azure_machine_identity", []string{graph.URL}, refs[0]),
+		bindOutboundEnvCredentialRefs("azure_machine_identity", []string{arm.URL}, refs[1]))
 	operator := seedScopedTokenSubject(t, h.store, h.tenant, "azure-inventory-operator", "discovery:read", "discovery:write", "graph:read", "nhi:read", string(authz.PrivateEgress))
 	cfg := map[string]any{"azure_tenant_id": tenant, "subscription_id": subscription, "service_principal_ids": []string{principal}, "graph_token_file_ref": refs[0], "arm_token_file_ref": refs[1], "graph_endpoint": graph.URL, "arm_endpoint": arm.URL, "read_beta_signins": true, "activity_lookback_days": 30, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, graph.URL)}}
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/sources", operator, "a264-azure-source", map[string]any{"kind": "azure_machine_identity", "name": "Owned Azure workload inventory", "config": cfg})

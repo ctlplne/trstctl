@@ -308,7 +308,7 @@ func doBearer(t *testing.T, ts *httptest.Server, method, path, token, idem strin
 		}
 		rdr = bytes.NewReader(b)
 	}
-	req, err := http.NewRequest(method, ts.URL+path, rdr)
+	req, err := http.NewRequest(method, ts.URL+path, rdr) // #nosec G704 -- the harness's own loopback httptest server; the test chooses the path (CWE-918)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -319,7 +319,7 @@ func doBearer(t *testing.T, ts *httptest.Server, method, path, token, idem strin
 	if idem != "" {
 		req.Header.Set("Idempotency-Key", idem)
 	}
-	resp, err := ts.Client().Do(req)
+	resp, err := ts.Client().Do(req) // #nosec G704 -- the harness's own loopback httptest server; the test chooses the path (CWE-918)
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
 	}

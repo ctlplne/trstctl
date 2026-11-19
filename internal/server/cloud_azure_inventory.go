@@ -5,13 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
-	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/cloudentitlements/azureiam"
 	"trstctl.com/trstctl/internal/cloudentitlements/bearerhttp"
 	"trstctl.com/trstctl/internal/discovery/netscan"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -31,10 +30,17 @@ func (d *issuanceDispatcher) executeAzureMachineIdentityRun(ctx context.Context,
 		}
 	}
 	var borrows []bearerhttp.Borrow
-	for _, ref := range []string{cfg.GraphTokenFileRef, cfg.ARMTokenFileRef} {
-		name, ok := strings.CutPrefix(ref, "env:")
-		path, present := os.LookupEnv(name)
-		if !ok || !present || !filepath.IsAbs(path) {
+	defaults := azureiam.Defaults(cfg)
+	for _, use := range []struct{ ref, endpoint string }{
+		{cfg.GraphTokenFileRef, defaults.GraphEndpoint}, {cfg.ARMTokenFileRef, defaults.ARMEndpoint},
+	} {
+		// CR-008: each token file reaches only the one endpoint its binding names,
+		// for this tenant's azure_machine_identity sources.
+		path, err := boundCredentialEnvValue(ctx, use.ref, use.endpoint)
+		if errors.Is(err, outboundcred.ErrNotBound) {
+			return report, "failed", err.Error(), nil
+		}
+		if err != nil || !filepath.IsAbs(path) {
 			return report, "failed", "operator-approved Azure reader token file is not configured", nil
 		}
 		borrows = append(borrows, bearerhttp.FileToken(path))

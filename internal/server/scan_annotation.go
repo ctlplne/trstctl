@@ -45,19 +45,22 @@ func (d *issuanceDispatcher) handleScanAnnotation(ctx context.Context, m orchest
 		return fail("the scan source no longer has an annotation connection")
 	}
 	conn := cfg.Annotation
-	token, err := resolveDiscoveryCredentialRef(ctx, conn.TokenRef)
+	client, err := cloudHTTPClient(conn.BaseURL, conn.AllowPrivateEndpoint, conn.PrivateEgressCIDRs)
+	if err != nil {
+		return fail("the annotation endpoint is refused: " + err.Error())
+	}
+	// CR-008: the connection's references resolve only for this tenant and the
+	// scan's source kind, and the client goes only to their bound origins.
+	ctx = d.outboundCredentialScope(ctx, m.TenantID, source.Kind)
+	token, err := resolveBoundCredentialRef(ctx, conn.TokenRef, client)
 	if err != nil {
 		return fail("resolve the annotation token reference: " + err.Error())
 	}
 	username := ""
 	if strings.TrimSpace(conn.UsernameRef) != "" {
-		if username, err = resolveDiscoveryCredentialRef(ctx, conn.UsernameRef); err != nil {
+		if username, err = resolveBoundCredentialRef(ctx, conn.UsernameRef, client); err != nil {
 			return fail("resolve the annotation username reference: " + err.Error())
 		}
-	}
-	client, err := cloudHTTPClient(conn.BaseURL, conn.AllowPrivateEndpoint, conn.PrivateEgressCIDRs)
-	if err != nil {
-		return fail("the annotation endpoint is refused: " + err.Error())
 	}
 	annotator, closeAnnotator, err := scanannotate.New(scanannotate.Connection{Provider: in.Provider, BaseURL: conn.BaseURL,
 		Token: []byte(token), Username: username, Doer: client})

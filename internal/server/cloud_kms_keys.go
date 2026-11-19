@@ -123,15 +123,15 @@ func readAWSKMSKeys(ctx context.Context, p cloudCertificateProviderConfig, guard
 	if guard.Enabled() {
 		client.Transport = guard.WrapTransport(client.Transport)
 	}
-	accessKeyID, err := resolveDiscoveryCredentialRef(ctx, p.AccessKeyIDRef)
+	accessKeyID, err := resolveBoundCredentialRef(ctx, p.AccessKeyIDRef, client)
 	if err != nil {
 		return nil, "", fmt.Errorf("resolve access_key_id_ref: %w", err)
 	}
-	secretAccessKey, err := resolveDiscoveryCredentialRef(ctx, p.SecretAccessKeyRef)
+	secretAccessKey, err := resolveBoundCredentialRef(ctx, p.SecretAccessKeyRef, client)
 	if err != nil {
 		return nil, "", fmt.Errorf("resolve secret_access_key_ref: %w", err)
 	}
-	sessionToken, err := resolveOptionalDiscoveryCredentialRef(ctx, p.SessionTokenRef)
+	sessionToken, err := resolveOptionalBoundCredentialRef(ctx, p.SessionTokenRef, client)
 	if err != nil {
 		return nil, "", fmt.Errorf("resolve session_token_ref: %w", err)
 	}

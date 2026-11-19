@@ -114,8 +114,9 @@ func TestSplunkAppScaffoldConsumesProductAuditFeed(t *testing.T) {
 	if health.Model != "trstctl-owned-scaffold-v1" || !health.Ready {
 		t.Fatal("endpoint is not the owned scaffold")
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) { d.OutboundEnvCredentialRefs = []string{fixtureRef} })
-	h.tenant = uuid.NewString()
+	isolatedTenant := uuid.NewString()
+	h := newServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefsFor(isolatedTenant, []string{"audit_feed"}, []string{endpoint}, fixtureRef))
+	h.tenant = isolatedTenant
 	registerServedTenant(t, h, "A231 isolated audit feed")
 	identityID, otherTenant := uuid.NewString(), uuid.NewString()
 	wanted := map[string][]string{}

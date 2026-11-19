@@ -73,11 +73,11 @@ func TestServedCloudAccessKeyDiscoveryFlagsNinetyDaysUnusedM3(t *testing.T) {
 
 	t.Setenv("TRSTCTL_M3_IAM_ACCESS_KEY_ID", "test")
 	t.Setenv("TRSTCTL_M3_IAM_SECRET_ACCESS_KEY", "test")
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+	endpoint := "http://" + address
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_access_key", []string{endpoint},
 		"env:TRSTCTL_M3_IAM_ACCESS_KEY_ID", "env:TRSTCTL_M3_IAM_SECRET_ACCESS_KEY"))
 	ctx := t.Context()
 	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read", string(authz.PrivateEgress))
-	endpoint := "http://" + address
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", writer, map[string]any{
 		"name": "aws-iam-keys", "kind": "cloud_access_key", "config": map[string]any{"providers": []map[string]any{{ // #nosec G101 -- credential references only; no credential value enters the config (CWE-798)
 			"provider": "aws-iam", "endpoint": endpoint, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, endpoint)},
@@ -267,7 +267,7 @@ func TestServedCloudAccessKeyDiscoveryReadsAWSKeysOnAnIAMStandInM3L1(t *testing.
 	const signingSecret = "m3l1-standin-signing-value" // #nosec G101 -- the test's own stand-in signing value, not a credential (CWE-798)
 	t.Setenv("TRSTCTL_M3L1_IAM_ACCESS_KEY_ID", "m3l1-reader")
 	t.Setenv("TRSTCTL_M3L1_IAM_SECRET_ACCESS_KEY", signingSecret)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_access_key", []string{srv.URL},
 		"env:TRSTCTL_M3L1_IAM_ACCESS_KEY_ID", "env:TRSTCTL_M3L1_IAM_SECRET_ACCESS_KEY"))
 	ctx := t.Context()
 	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read", string(authz.PrivateEgress))
@@ -374,7 +374,7 @@ func TestServedCloudAccessKeyActsAsItsIAMUserInTheGraphM3L3(t *testing.T) {
 	const signingSecret = "m3l3-standin-signing-value"        // #nosec G101 -- the test's own stand-in signing value, not a credential (CWE-798)
 	t.Setenv("TRSTCTL_M3L3_IAM_ACCESS_KEY_ID", "m3l1-reader") // the stand-in admits this access key ID
 	t.Setenv("TRSTCTL_M3L3_IAM_SECRET_ACCESS_KEY", signingSecret)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_access_key", []string{srv.URL},
 		"env:TRSTCTL_M3L3_IAM_ACCESS_KEY_ID", "env:TRSTCTL_M3L3_IAM_SECRET_ACCESS_KEY"))
 	ctx := t.Context()
 	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "graph:read", string(authz.PrivateEgress))

@@ -66,7 +66,7 @@ func TestServedLeakedSecretIsCorrelatedWithTheStoredCredentialA172L1(t *testing.
 			at("generic-api-key", "notes.txt", 1, "correct-horse-battery-staple"),
 		},
 	}}
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), allowOutboundEnvCredentialRefs("env:TRSTCTL_A172L1_VAULT_TOKEN"),
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), bindOutboundEnvCredentialRefs("secret_store", []string{vault.URL}, "env:TRSTCTL_A172L1_VAULT_TOKEN"),
 		func(d *Deps) { d.SecretScanner = fake })
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "discovery:write", "graph:read",
 		string(authz.PrivateEgress))

@@ -1208,8 +1208,9 @@ trstctl-cli compliance inventory-report
 # DORA, ISO 27001, FedRAMP, CMMC, eIDAS, and NIS2 evidence refs.
 trstctl-cli compliance nhi-report
 
-# Configure one tenant-scoped Splunk HEC schedule. token_ref is an
-# operator-allowlisted pointer; the credential value never enters the request.
+# Configure one tenant-scoped Splunk HEC schedule. token_ref is a pointer the
+# operator bound to this tenant, audit feeds and the collector's origin
+# (outbound_env_credential_bindings); the credential value never enters the request.
 cat > audit-feed.json <<'JSON'
 {"name":"production-soc","provider":"splunk-hec","endpoint_url":"https://splunk.example.com/services/collector/event","token_ref":"env:SPLUNK_HEC_TOKEN","interval_seconds":300,"batch_size":100,"enabled":true}
 JSON

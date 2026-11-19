@@ -68,7 +68,7 @@ func TestServedCloudAccessKeyDiscoveryReadsAzureAppSecretsM3L2(t *testing.T) {
 	var deny atomic.Bool
 	graph := m3l2GraphStandIn(t, &deny)
 	t.Setenv("TRSTCTL_M3L2_GRAPH_TOKEN", "m3l2-graph-token")
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_M3L2_GRAPH_TOKEN"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_access_key", []string{graph.URL}, "env:TRSTCTL_M3L2_GRAPH_TOKEN"))
 	ctx := t.Context()
 	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read", string(authz.PrivateEgress))
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", writer, map[string]any{

@@ -28,7 +28,7 @@ func TestServedOAuthAppIsUnblockedAtTheProviderA171L1(t *testing.T) {
 	stand.SeedGraph("sp-unblock", oauthrevoketest.GraphGrant{ID: "g-jo", ClientID: "sp-unblock", PrincipalID: "user-jo"})
 	stand.SeedGoogle("kim@example.com", "client-unblock.apps.googleusercontent.com")
 	t.Setenv("TRSTCTL_A171L1_ADMIN_TOKEN", adminToken)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A171L1_ADMIN_TOKEN"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("oauth_grant", []string{stand.URL()}, "env:TRSTCTL_A171L1_ADMIN_TOKEN"))
 	ctx := t.Context()
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "connectors:write", string(authz.PrivateEgress))
 	cidr := serviceNowSinkCIDR(t, stand.URL())

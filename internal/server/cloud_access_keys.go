@@ -170,7 +170,7 @@ func readGCPServiceAccountKeys(ctx context.Context, p cloudCertificateProviderCo
 		client.Transport = guard.WrapTransport(client.Transport)
 		activityClient.Transport = guard.WrapTransport(activityClient.Transport)
 	}
-	token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+	token, err := resolveBoundCredentialRef(ctx, p.TokenRef, client, activityClient)
 	if err != nil {
 		return cloudAccessKeyRead{}, fmt.Errorf("resolve token_ref: %w", err)
 	}
@@ -208,7 +208,7 @@ func readAzureAppSecrets(ctx context.Context, p cloudCertificateProviderConfig, 
 	if guard.Enabled() {
 		client.Transport = guard.WrapTransport(client.Transport)
 	}
-	token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+	token, err := resolveBoundCredentialRef(ctx, p.TokenRef, client)
 	if err != nil {
 		return cloudAccessKeyRead{}, fmt.Errorf("resolve token_ref: %w", err)
 	}
@@ -256,15 +256,15 @@ func awsIAMReader(ctx context.Context, p cloudCertificateProviderConfig, guard *
 	if err != nil {
 		return nil, "", err
 	}
-	accessKeyID, err := resolveDiscoveryCredentialRef(ctx, p.AccessKeyIDRef)
+	accessKeyID, err := resolveBoundCredentialRef(ctx, p.AccessKeyIDRef, client)
 	if err != nil {
 		return nil, "", fmt.Errorf("resolve access_key_id_ref: %w", err)
 	}
-	secretAccessKey, err := resolveDiscoveryCredentialRef(ctx, p.SecretAccessKeyRef)
+	secretAccessKey, err := resolveBoundCredentialRef(ctx, p.SecretAccessKeyRef, client)
 	if err != nil {
 		return nil, "", fmt.Errorf("resolve secret_access_key_ref: %w", err)
 	}
-	sessionToken, err := resolveOptionalDiscoveryCredentialRef(ctx, p.SessionTokenRef)
+	sessionToken, err := resolveOptionalBoundCredentialRef(ctx, p.SessionTokenRef, client)
 	if err != nil {
 		return nil, "", fmt.Errorf("resolve session_token_ref: %w", err)
 	}

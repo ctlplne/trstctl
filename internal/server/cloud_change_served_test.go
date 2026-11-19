@@ -27,7 +27,8 @@ func TestServedApprovedCloudKeyRevocationA264(t *testing.T) {
 	}
 	t.Setenv("TRSTCTL_A264_CHANGE_READER_PATH", path)
 	t.Setenv("TRSTCTL_A264_CHANGE_WRITER_PATH", path)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A264_CHANGE_READER_PATH", "env:TRSTCTL_A264_CHANGE_WRITER_PATH"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_machine_entitlement", []string{endpoint}, "env:TRSTCTL_A264_CHANGE_READER_PATH"),
+		bindOutboundEnvCredentialRefs("cloud_machine_change", []string{endpoint}, "env:TRSTCTL_A264_CHANGE_WRITER_PATH"))
 	operator := seedScopedTokenSubject(t, h.store, h.tenant, "cloud-operator", "access:write", "access:read", "discovery:read", "discovery:write", "graph:read", "approvals:review", "access:approve", string(authz.PrivateEgress))
 	reviewer := seedScopedTokenSubject(t, h.store, h.tenant, "cloud-reviewer", "approvals:review", "access:approve", "access:read", "access:write", string(authz.PrivateEgress))
 	arn := "arn:aws:iam::000000000000:user/a264-change552"

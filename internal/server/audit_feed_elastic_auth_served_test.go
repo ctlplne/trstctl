@@ -22,9 +22,11 @@ import (
 // batch with nothing sent.
 func TestServedElasticAuditFeedAuthSchemesP5L4(t *testing.T) {
 	apiKey, basic, bearer, noColon := newP5Elastic(t), newP5Elastic(t), newP5Elastic(t), newP5Elastic(t)
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_P5L4_KEY", "env:TRSTCTL_P5L4_BASIC", "env:TRSTCTL_P5L4_BEARER", "env:TRSTCTL_P5L4_NOCOLON"}
-	})
+	h := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("audit_feed", []string{apiKey.server.URL}, "env:TRSTCTL_P5L4_KEY"),
+		bindOutboundEnvCredentialRefs("audit_feed", []string{basic.server.URL}, "env:TRSTCTL_P5L4_BASIC"),
+		bindOutboundEnvCredentialRefs("audit_feed", []string{bearer.server.URL}, "env:TRSTCTL_P5L4_BEARER"),
+		bindOutboundEnvCredentialRefs("audit_feed", []string{noColon.server.URL}, "env:TRSTCTL_P5L4_NOCOLON"))
 	t.Setenv("TRSTCTL_P5L4_KEY", "p5l4-key")
 	t.Setenv("TRSTCTL_P5L4_BASIC", "elastic-writer:p5l4-pass")
 	t.Setenv("TRSTCTL_P5L4_BEARER", "p5l4-bearer")

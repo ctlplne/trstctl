@@ -21,9 +21,7 @@ import (
 // log kept an event that no projection could apply, so a rebuild stopped at
 // it.
 func TestServedAuditFeedDuplicateNameIsAConflictA233L3(t *testing.T) {
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{"env:A233_SPLUNK_TOKEN"}
-	})
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("audit_feed", []string{"https://splunk.example.test"}, "env:A233_SPLUNK_TOKEN"))
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "a233-audit-operator", []string{
 		string(authz.AuditRead), string(authz.AuditWrite),
 	})

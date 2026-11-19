@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -158,7 +159,7 @@ func (a *API) previewAuditFeed(w http.ResponseWriter, r *http.Request) {
 		RequiredPermission:    string(authz.AuditWrite),
 		NormalizedRequest:     configuration.Request,
 		Prerequisites: []string{
-			"The credential reference is operator-allowlisted; credential bytes are neither read nor returned by preview.",
+			"The credential reference is one the operator bound to this tenant, audit feeds and this destination; credential bytes are neither read nor returned by preview.",
 			"The destination URL and private-egress boundary satisfy the same server policy used by execution.",
 			"Execution requires audit:write and one Idempotency-Key.",
 		},
@@ -255,7 +256,7 @@ func (a *API) normalizeAuditFeedConfiguration(ctx context.Context, tenantID, raw
 		if !strings.HasPrefix(tokenRef, "env:") {
 			return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "token_ref must be an operator-approved env:NAME credential reference")
 		}
-		if err := a.requireOutboundEnvCredentialRefAllowed(tokenRef, "token_ref"); err != nil {
+		if err := a.requireOutboundEnvCredentialRefBound(tenantID, outboundcred.IntegrationAuditFeed, tokenRef, "token_ref", endpoint); err != nil {
 			return normalizedAuditFeedConfiguration{}, err
 		}
 	}
@@ -271,7 +272,7 @@ func (a *API) normalizeAuditFeedConfiguration(ctx context.Context, tenantID, raw
 		if !strings.HasPrefix(clientCertRef, "env:") {
 			return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "client_cert_ref must be an operator-approved env:NAME credential reference")
 		}
-		if err := a.requireOutboundEnvCredentialRefAllowed(clientCertRef, "client_cert_ref"); err != nil {
+		if err := a.requireOutboundEnvCredentialRefBound(tenantID, outboundcred.IntegrationAuditFeed, clientCertRef, "client_cert_ref", endpoint); err != nil {
 			return normalizedAuditFeedConfiguration{}, err
 		}
 	}

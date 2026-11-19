@@ -26,6 +26,12 @@ var Analyzer = &analysis.Analyzer{
 }
 
 var reviewedDefaultClientUses = map[string]map[string]bool{
+	// PinClient only compares a caller's client with http.DefaultClient so it
+	// can refuse to pin the process-wide client in place; it never sends through
+	// it (CR-008).
+	"internal/outboundcred/outboundcred.go": {
+		"PinClient": true,
+	},
 	"internal/spireupstream/plugin.go": {
 		"New":        true,
 		"httpClient": true,

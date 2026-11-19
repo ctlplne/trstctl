@@ -86,8 +86,11 @@ func TestServedSecretStoreAPIKeyScanning(t *testing.T) {
 	t.Setenv("TRSTCTL_A172_GCP_TOKEN", "gcp-token")
 	t.Setenv("TRSTCTL_A172_AZURE_TOKEN", "azure-token")
 	t.Setenv("TRSTCTL_A172_VAULT_TOKEN", "vault-token")
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A172_AWS_KEY_ID", "env:TRSTCTL_A172_AWS_SECRET",
-		"env:TRSTCTL_A172_GCP_TOKEN", "env:TRSTCTL_A172_AZURE_TOKEN", "env:TRSTCTL_A172_VAULT_TOKEN"))
+	h := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("secret_store", []string{aws.URL}, "env:TRSTCTL_A172_AWS_KEY_ID", "env:TRSTCTL_A172_AWS_SECRET"),
+		bindOutboundEnvCredentialRefs("secret_store", []string{gcp.URL}, "env:TRSTCTL_A172_GCP_TOKEN"),
+		bindOutboundEnvCredentialRefs("secret_store", []string{azure.URL}, "env:TRSTCTL_A172_AZURE_TOKEN"),
+		bindOutboundEnvCredentialRefs("secret_store", []string{vault.URL}, "env:TRSTCTL_A172_VAULT_TOKEN"))
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	providers := func(inspect bool) []map[string]any {

@@ -168,14 +168,14 @@ func readLoadBalancerListeners(ctx context.Context, p loadBalancerTLSProviderCon
 	if provider == lbtls.ProviderF5BIGIP {
 		cfg := bigip.Config{BaseURL: endpoint, HTTPClient: client}
 		if strings.TrimSpace(p.TokenRef) != "" {
-			if cfg.Token, err = resolveDiscoveryCredentialRef(ctx, p.TokenRef); err != nil {
+			if cfg.Token, err = resolveBoundCredentialRef(ctx, p.TokenRef, client); err != nil {
 				return nil, "", fmt.Errorf("resolve token_ref: %w", err)
 			}
 		} else {
-			if cfg.Username, err = resolveDiscoveryCredentialRef(ctx, p.UsernameRef); err != nil {
+			if cfg.Username, err = resolveBoundCredentialRef(ctx, p.UsernameRef, client); err != nil {
 				return nil, "", fmt.Errorf("resolve username_ref: %w", err)
 			}
-			if cfg.Password, err = resolveDiscoveryCredentialRef(ctx, p.PasswordRef); err != nil {
+			if cfg.Password, err = resolveBoundCredentialRef(ctx, p.PasswordRef, client); err != nil {
 				return nil, "", fmt.Errorf("resolve password_ref: %w", err)
 			}
 		}
@@ -186,15 +186,15 @@ func readLoadBalancerListeners(ctx context.Context, p loadBalancerTLSProviderCon
 		listeners, err := reader.Listeners(ctx)
 		return listeners, u.Host, err
 	}
-	accessKeyID, err := resolveDiscoveryCredentialRef(ctx, p.AccessKeyIDRef)
+	accessKeyID, err := resolveBoundCredentialRef(ctx, p.AccessKeyIDRef, client)
 	if err != nil {
 		return nil, "", fmt.Errorf("resolve access_key_id_ref: %w", err)
 	}
-	secretAccessKey, err := resolveDiscoveryCredentialRef(ctx, p.SecretAccessKeyRef)
+	secretAccessKey, err := resolveBoundCredentialRef(ctx, p.SecretAccessKeyRef, client)
 	if err != nil {
 		return nil, "", fmt.Errorf("resolve secret_access_key_ref: %w", err)
 	}
-	sessionToken, err := resolveOptionalDiscoveryCredentialRef(ctx, p.SessionTokenRef)
+	sessionToken, err := resolveOptionalBoundCredentialRef(ctx, p.SessionTokenRef, client)
 	if err != nil {
 		return nil, "", fmt.Errorf("resolve session_token_ref: %w", err)
 	}

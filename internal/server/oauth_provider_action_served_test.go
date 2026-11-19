@@ -41,7 +41,7 @@ func TestServedOAuthGrantRevokedAndAppBlockedAtTheProvider(t *testing.T) {
 	stand.SeedGoogle("erin@example.com", "client-exfil.apps.googleusercontent.com")
 	t.Setenv("TRSTCTL_A170_ADMIN_TOKEN", adminToken)
 	t.Setenv("TRSTCTL_A170_WRONG_TOKEN", "not-the-admin-token")
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A170_ADMIN_TOKEN", "env:TRSTCTL_A170_WRONG_TOKEN"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("oauth_grant", []string{stand.URL()}, "env:TRSTCTL_A170_ADMIN_TOKEN", "env:TRSTCTL_A170_WRONG_TOKEN"))
 	ctx := t.Context()
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "connectors:write", string(authz.PrivateEgress))
 	reader := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")

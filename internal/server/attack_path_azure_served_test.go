@@ -53,7 +53,7 @@ func TestServedAttackPathValidationReadsAnAzureSubscriptionA167L1(t *testing.T) 
 	arm.AddRouteTables(networktest.RouteTable{Name: "rt-inspect", Routes: []networktest.Route{
 		{Name: "default-to-appliance", AddressPrefix: "0.0.0.0/0", NextHopType: "VirtualAppliance"}}})
 	t.Setenv("TRSTCTL_A167L1_ARM_TOKEN", token)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A167L1_ARM_TOKEN"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_network_path", []string{arm.URL()}, "env:TRSTCTL_A167L1_ARM_TOKEN"))
 	ctx := t.Context()
 	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read", string(authz.PrivateEgress))
 	reader := seedScopedToken(t, h.store, h.tenant, "nhi:read")

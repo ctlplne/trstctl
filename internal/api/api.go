@@ -31,6 +31,7 @@ import (
 	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/privacy"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/reportarchive"
@@ -208,7 +209,7 @@ type API struct {
 	codeSigningIdentities              CodeSigningIdentityProvider
 	codeSigningRekorBundles            CodeSigningRekorBundleProvider
 	serviceNowBindings                 []ServiceNowBinding
-	outboundEnvCredentialRefs          map[string]struct{}
+	outboundCredentials                *outboundcred.Bindings
 	acmeDNS01Providers                 []ACMEDNS01ProviderCatalogItem
 	acmeDNS01Qualification             ACMEDNS01QualificationService
 	acmeCAAResolver                    acmesrv.CAAResolver
@@ -387,7 +388,7 @@ type config struct {
 	codeSigningIdentities      CodeSigningIdentityProvider
 	codeSigningRekorBundles    CodeSigningRekorBundleProvider
 	serviceNowBindings         []ServiceNowBinding
-	outboundEnvCredentialRefs  map[string]struct{}
+	outboundCredentials        *outboundcred.Bindings
 	acmeDNS01Providers         []ACMEDNS01ProviderCatalogItem
 	acmeDNS01Qualification     ACMEDNS01QualificationService
 	acmeCAAResolver            acmesrv.CAAResolver
@@ -444,45 +445,6 @@ func WithProviderPlaneAvailable(available bool) Option {
 	return func(c *config) { c.providerPlaneAvailable = available }
 }
 
-func normalizeOutboundEnvCredentialRefs(refs []string) map[string]struct{} {
-	if len(refs) == 0 {
-		return nil
-	}
-	out := make(map[string]struct{}, len(refs))
-	for _, ref := range refs {
-		if norm, ok := normalizeOutboundEnvCredentialRef(ref); ok {
-			out[norm] = struct{}{}
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-func normalizeOutboundEnvCredentialRef(ref string) (string, bool) {
-	name, ok := strings.CutPrefix(strings.TrimSpace(ref), "env:")
-	if !ok {
-		return "", false
-	}
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return "", false
-	}
-	return "env:" + name, true
-}
-
-func copyStringSet(in map[string]struct{}) map[string]struct{} {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]struct{}, len(in))
-	for k := range in {
-		out[k] = struct{}{}
-	}
-	return out
-}
-
 func copySchemaMap(in map[string]*Schema) map[string]*Schema {
 	if len(in) == 0 {
 		return nil
@@ -494,20 +456,21 @@ func copySchemaMap(in map[string]*Schema) map[string]*Schema {
 	return out
 }
 
-func (a *API) requireOutboundEnvCredentialRefAllowed(ref, label string) error {
+// requireOutboundEnvCredentialRefBound admits an env:NAME credential reference only
+// when the operator bound it to this tenant, this integration kind and the origin
+// of every destination the request will send it to (CR-008). Another tenant's
+// reference, another integration's, or an unbound endpoint is refused before any
+// event or outbox row exists; the worker checks again before it reads the value.
+func (a *API) requireOutboundEnvCredentialRefBound(tenantID, integration, ref, label string, destinations ...string) error {
 	ref = strings.TrimSpace(ref)
 	if !strings.HasPrefix(ref, "env:") {
 		return nil
 	}
-	norm, ok := normalizeOutboundEnvCredentialRef(ref)
-	if !ok {
+	if _, ok := outboundcred.NormalizeRef(ref); !ok {
 		return errStatus(http.StatusBadRequest, label+" must be an env:NAME credential reference")
 	}
-	if len(a.outboundEnvCredentialRefs) == 0 {
-		return errStatus(http.StatusBadRequest, label+" must reference an operator-approved env credential")
-	}
-	if _, ok := a.outboundEnvCredentialRefs[norm]; !ok {
-		return errStatus(http.StatusBadRequest, label+" must reference an operator-approved env credential")
+	if _, err := a.outboundCredentials.Authorize(ref, tenantID, integration, destinations...); err != nil {
+		return errStatus(http.StatusBadRequest, label+": "+err.Error()+" (outbound_env_credential_bindings)")
 	}
 	return nil
 }
@@ -750,7 +713,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		codeSigningIdentities:       cfg.codeSigningIdentities,
 		codeSigningRekorBundles:     cfg.codeSigningRekorBundles,
 		serviceNowBindings:          append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
-		outboundEnvCredentialRefs:   copyStringSet(cfg.outboundEnvCredentialRefs),
+		outboundCredentials:         cfg.outboundCredentials,
 		acmeDNS01Providers:          append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
 		acmeDNS01Qualification:      cfg.acmeDNS01Qualification,
 		acmeCAAResolver:             cfg.acmeCAAResolver,

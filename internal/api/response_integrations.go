@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboundcred"
 )
 
 type responseIntegrationDispatchRequest struct {
@@ -140,7 +141,7 @@ func (a *API) responseIntegrationDestinationCommand(ctx context.Context, tenantI
 		if dst.TokenRef == "" {
 			return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "splunk token_ref is required")
 		}
-		if err := a.requireOutboundEnvCredentialRefAllowed(dst.TokenRef, "splunk token_ref"); err != nil {
+		if err := a.requireOutboundEnvCredentialRefBound(tenantID, outboundcred.IntegrationResponseIntegration, dst.TokenRef, "splunk token_ref", dst.EndpointURL); err != nil {
 			return orchestrator.ResponseIntegrationDestination{}, err
 		}
 		if dst.AllowPrivateEndpoint && len(dst.PrivateEgressCIDRs) == 0 {
@@ -158,7 +159,7 @@ func (a *API) responseIntegrationDestinationCommand(ctx context.Context, tenantI
 		if dst.TokenRef == "" {
 			return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "jira token_ref is required")
 		}
-		if err := a.requireOutboundEnvCredentialRefAllowed(dst.TokenRef, "jira token_ref"); err != nil {
+		if err := a.requireOutboundEnvCredentialRefBound(tenantID, outboundcred.IntegrationResponseIntegration, dst.TokenRef, "jira token_ref", dst.EndpointURL); err != nil {
 			return orchestrator.ResponseIntegrationDestination{}, err
 		}
 		if dst.ProjectKey == "" {

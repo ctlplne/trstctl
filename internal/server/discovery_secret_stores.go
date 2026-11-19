@@ -58,12 +58,13 @@ func secretStoreProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 }
 
 // resolvedRef resolves an optional credential reference to a token
-// provider: nil when the reference is empty.
-func resolvedRef(ctx context.Context, name, ref string) (cloudcert.TokenProvider, error) {
+// provider: nil when the reference is empty. client, which the store's
+// requests go through, is pinned to the reference's bound origins (CR-008).
+func resolvedRef(ctx context.Context, name, ref string, client *http.Client) (cloudcert.TokenProvider, error) {
 	if strings.TrimSpace(ref) == "" {
 		return nil, nil
 	}
-	value, err := resolveDiscoveryCredentialRef(ctx, ref)
+	value, err := resolveBoundCredentialRef(ctx, ref, client)
 	if err != nil {
 		return nil, fmt.Errorf("resolve %s: %w", name, err)
 	}
@@ -78,7 +79,7 @@ func buildSecretStoreProvider(ctx context.Context, provider string, p cloudSecre
 		// Conjur and Akeyless sign in with their own credentials; a token_ref
 		// left on them is never resolved.
 		var err error
-		if token, err = resolvedRef(ctx, "token_ref", p.TokenRef); err != nil {
+		if token, err = resolvedRef(ctx, "token_ref", p.TokenRef, client); err != nil {
 			return nil, err
 		}
 		if token == nil && provider != infisical.ProviderName {
@@ -98,7 +99,7 @@ func buildSecretStoreProvider(ctx context.Context, provider string, p cloudSecre
 			Token: token, NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	case infisical.ProviderName:
-		clientSecret, err := resolvedRef(ctx, "client_secret_ref", p.ClientSecretRef)
+		clientSecret, err := resolvedRef(ctx, "client_secret_ref", p.ClientSecretRef, client)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +109,7 @@ func buildSecretStoreProvider(ctx context.Context, provider string, p cloudSecre
 			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	case conjur.ProviderName:
-		apiKey, err := resolvedRef(ctx, "api_key_ref", p.APIKeyRef)
+		apiKey, err := resolvedRef(ctx, "api_key_ref", p.APIKeyRef, client)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +131,7 @@ func buildSecretStoreProvider(ctx context.Context, provider string, p cloudSecre
 			NamePrefix: p.NamePrefix, InspectContent: p.InspectContent, GenericHighEntropy: p.GenericHighEntropy, HTTPClient: client,
 		})
 	case akeyless.ProviderName:
-		accessKey, err := resolvedRef(ctx, "client_secret_ref", p.ClientSecretRef)
+		accessKey, err := resolvedRef(ctx, "client_secret_ref", p.ClientSecretRef, client)
 		if err != nil {
 			return nil, err
 		}

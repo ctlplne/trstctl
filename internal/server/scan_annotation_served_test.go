@@ -136,7 +136,7 @@ func TestServedThirdPartyFindingsAnnotatedAtTheProvider(t *testing.T) {
 	t.Setenv("TRSTCTL_A174_WRONG", "not-the-token")
 	scanner := &a174MarkerScanner{}
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil),
-		allowOutboundEnvCredentialRefs("env:TRSTCTL_A174_TOKEN", "env:TRSTCTL_A174_WRONG"), func(d *Deps) { d.SecretScanner = scanner })
+		bindOutboundEnvCredentialRefs("secret_third_party", []string{stand.URL()}, "env:TRSTCTL_A174_TOKEN", "env:TRSTCTL_A174_WRONG"), func(d *Deps) { d.SecretScanner = scanner })
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "connectors:write", string(authz.PrivateEgress))
 	reader := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read")
 	cidr := serviceNowSinkCIDR(t, stand.URL())

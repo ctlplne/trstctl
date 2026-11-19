@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -177,7 +178,7 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 	if err != nil {
 		return discoveryPlanPreviewResponse{}, err
 	}
-	if err := a.requireDiscoveryCredentialRefsAllowed(cfg); err != nil {
+	if err := a.requireDiscoveryCredentialRefsBound(tenantID, strings.TrimSpace(req.Kind), cfg); err != nil {
 		return discoveryPlanPreviewResponse{}, err
 	}
 	capability, _ := sourcecatalog.Find(strings.TrimSpace(req.Kind))
@@ -943,7 +944,7 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		if err := a.requireDiscoveryCredentialRefsAllowed(cfg); err != nil {
+		if err := a.requireDiscoveryCredentialRefsBound(tenantID, strings.TrimSpace(req.Kind), cfg); err != nil {
 			return 0, nil, err
 		}
 		// A235-L2: an SSH collection key or an AD CS bind password the relay
@@ -1672,38 +1673,97 @@ func discoveryPrivateEgressRequested(cfg json.RawMessage) (bool, error) {
 	return discoveryPrivateEgressRequestedValue(decoded)
 }
 
-func (a *API) requireDiscoveryCredentialRefsAllowed(cfg json.RawMessage) error {
+// requireDiscoveryCredentialRefsBound checks every env:NAME credential reference a
+// discovery configuration of this kind names against the operator's bindings
+// (CR-008): bound to this tenant and this source kind, and to the origin of every
+// endpoint the configuration names beside it. The three cloud machine identity
+// kinds name their endpoints by role and default them, so each of their references
+// is checked against exactly the endpoints it is sent to, defaults included. For
+// every kind the worker checks again before it reads a value, and pins its HTTP
+// clients to the bound origins, which also holds a provider's default endpoints.
+func (a *API) requireDiscoveryCredentialRefsBound(tenantID, kind string, cfg json.RawMessage) error {
+	switch kind {
+	case azureiam.SourceKind:
+		source, err := azureiam.DecodeConfig(cfg)
+		if err != nil {
+			return errStatusFrom(http.StatusBadRequest, err)
+		}
+		source = azureiam.Defaults(source)
+		if err := a.requireOutboundEnvCredentialRefBound(tenantID, kind, source.GraphTokenFileRef, "config.graph_token_file_ref", source.GraphEndpoint); err != nil {
+			return err
+		}
+		return a.requireOutboundEnvCredentialRefBound(tenantID, kind, source.ARMTokenFileRef, "config.arm_token_file_ref", source.ARMEndpoint)
+	case gcpiam.SourceKind:
+		source, err := gcpiam.DecodeConfig(cfg)
+		if err != nil {
+			return errStatusFrom(http.StatusBadRequest, err)
+		}
+		return a.requireOutboundEnvCredentialRefBound(tenantID, kind, source.TokenFileRef, "config.token_file_ref", gcpiam.Endpoints(source)...)
+	case assessment.SourceKind:
+		source, err := assessment.DecodeSource(cfg)
+		if err != nil {
+			return errStatusFrom(http.StatusBadRequest, err)
+		}
+		return a.requireOutboundEnvCredentialRefBound(tenantID, kind, source.SessionFileRef, "config.session_file_ref", awsIAMSourceEndpoint(source))
+	}
 	var decoded any
 	if err := json.Unmarshal(cfg, &decoded); err != nil {
 		return errStatus(http.StatusBadRequest, "config must be a JSON object")
 	}
-	return a.requireDiscoveryCredentialRefsAllowedValue("config", decoded)
+	return a.requireDiscoveryCredentialRefsBoundValue(tenantID, kind, "config", decoded)
 }
 
-func (a *API) requireDiscoveryCredentialRefsAllowedValue(path string, v any) error {
+// awsIAMSourceEndpoint is the IAM endpoint a cloud_machine_entitlement source and
+// its reviewed changes are sent to: the configured one or the AWS default.
+func awsIAMSourceEndpoint(source assessment.SourceConfig) string {
+	if endpoint := strings.TrimSpace(source.Endpoint); endpoint != "" {
+		return endpoint
+	}
+	return "https://iam.amazonaws.com"
+}
+
+func (a *API) requireDiscoveryCredentialRefsBoundValue(tenantID, kind, path string, v any) error {
 	switch x := v.(type) {
 	case map[string]any:
+		keys := make([]string, 0, len(x))
+		var destinations []string
 		for key, child := range x {
+			keys = append(keys, key)
+			if endpoint, ok := child.(string); ok && strings.TrimSpace(endpoint) != "" && discoveryEndpointKey(key) {
+				destinations = append(destinations, endpoint)
+			}
+		}
+		sort.Strings(keys)
+		sort.Strings(destinations)
+		for _, key := range keys {
+			child := x[key]
 			childPath := path + "." + key
 			if strings.HasSuffix(key, "_ref") {
 				if ref, ok := child.(string); ok {
-					if err := a.requireOutboundEnvCredentialRefAllowed(ref, childPath); err != nil {
+					if err := a.requireOutboundEnvCredentialRefBound(tenantID, kind, ref, childPath, destinations...); err != nil {
 						return err
 					}
 				}
 			}
-			if err := a.requireDiscoveryCredentialRefsAllowedValue(childPath, child); err != nil {
+			if err := a.requireDiscoveryCredentialRefsBoundValue(tenantID, kind, childPath, child); err != nil {
 				return err
 			}
 		}
 	case []any:
 		for i, child := range x {
-			if err := a.requireDiscoveryCredentialRefsAllowedValue(fmt.Sprintf("%s[%d]", path, i), child); err != nil {
+			if err := a.requireDiscoveryCredentialRefsBoundValue(tenantID, kind, fmt.Sprintf("%s[%d]", path, i), child); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// discoveryEndpointKey names the configuration keys that hold a destination a
+// credential beside them is sent to: endpoint, url, *_endpoint and *_url (for
+// example vault_url, base_url, elb_endpoint, identity_endpoint).
+func discoveryEndpointKey(key string) bool {
+	return key == "endpoint" || key == "url" || strings.HasSuffix(key, "_endpoint") || strings.HasSuffix(key, "_url")
 }
 
 func discoveryPrivateEgressRequestedValue(v any) (bool, error) {

@@ -29,7 +29,7 @@ func TestServedJiraCSVExportFindingIsAnnotatedOnItsIssueA174L3(t *testing.T) {
 		"rotate keys,OPS-173,10173,plain\n"+
 		"leaked,OPS-174,10174,\"deploy notes\npassword LEAK-A174-csv\nrotate after\"\n")
 	t.Setenv("TRSTCTL_A174L3_TOKEN", token)
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), allowOutboundEnvCredentialRefs("env:TRSTCTL_A174L3_TOKEN"),
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), bindOutboundEnvCredentialRefs("secret_third_party", []string{stand.URL()}, "env:TRSTCTL_A174L3_TOKEN"),
 		func(d *Deps) { d.SecretScanner = &a174MarkerScanner{} })
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "connectors:write", string(authz.PrivateEgress))
 	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans/third-party/jira/ingest", tok, "a174l3-ingest", map[string]any{

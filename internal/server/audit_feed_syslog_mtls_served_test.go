@@ -26,10 +26,10 @@ func TestServedSyslogAuditFeedPresentsAClientCertificateP5L2(t *testing.T) {
 	restore := syslogFeedTimeout
 	syslogFeedTimeout = 2 * time.Second
 	t.Cleanup(func() { syslogFeedTimeout = restore })
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_P5L2_CA", "env:TRSTCTL_P5L2_CLIENT"}
-	})
-	receiver := newP5L2MutualSyslog(t, h)
+	raw, port := reserveLoopbackReceiver(t)
+	h := newOperatingServedHarness(t, config.Protocols{},
+		bindOutboundEnvCredentialRefs("audit_feed", []string{"syslog+tls://localhost:" + port}, "env:TRSTCTL_P5L2_CA", "env:TRSTCTL_P5L2_CLIENT"))
+	receiver := newP5L2MutualSyslog(t, h, raw)
 	const clientName = "trstctl-audit-feed.p5l2.test"
 	key, err := crypto.GenerateHostSubjectKey(clientName, []string{clientName})
 	if err != nil {
@@ -120,7 +120,7 @@ type p5L2MutualSyslog struct {
 	refused  int
 }
 
-func newP5L2MutualSyslog(t *testing.T, h *servedHarness) *p5L2MutualSyslog {
+func newP5L2MutualSyslog(t *testing.T, h *servedHarness, raw net.Listener) *p5L2MutualSyslog {
 	t.Helper()
 	key, err := crypto.GenerateHostSubjectKey("localhost", []string{"localhost"})
 	if err != nil {
@@ -144,10 +144,6 @@ func newP5L2MutualSyslog(t *testing.T, h *servedHarness) *p5L2MutualSyslog {
 		t.Fatal(err)
 	}
 	cert, err := mtls.ServerCertFromFiles(certFile, keyFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}

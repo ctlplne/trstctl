@@ -47,7 +47,8 @@ func TestServedSecretStoreProvidersBeyondCloudSecretManagers(t *testing.T) {
 	for env, value := range map[string]string{"TRSTCTL_A173_GH": "gh-token", "TRSTCTL_A173_GL": "gl-token"} {
 		t.Setenv(env, value)
 	}
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A173_GH", "env:TRSTCTL_A173_GL"))
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("secret_store", []string{github.URL()}, "env:TRSTCTL_A173_GH"),
+		bindOutboundEnvCredentialRefs("secret_store", []string{gitlab.URL()}, "env:TRSTCTL_A173_GL"))
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	at := func(url string, fields map[string]any) map[string]any {

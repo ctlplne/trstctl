@@ -167,6 +167,49 @@ SELECT tenant_id, id, provider, new_ref FROM secret_static_rotation_commands WHE
    without dropping them. Static credentials have no expiry of their own, so the
    minted ones otherwise stay live.
 
+## Outbound env credential bindings across this upgrade
+
+The process-wide `outbound_env_credential_refs` list
+(`TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS`) approves nothing from this release on. Each
+`env:NAME` reference a tenant's discovery sources, cloud changes, audit feeds and
+response integrations name needs a binding to that tenant, its integration kinds and
+the exact origins the value is sent to (see
+[outbound env credential bindings](../configuration.md#outbound-env-credential-bindings)).
+Nothing migrates automatically, because the old list names no tenant or origin.
+
+1. Before upgrading, list the references the old list approves and, for each, the
+   tenant and integrations that use it and the origins they send it to. As a
+   PostgreSQL superuser or a role with `BYPASSRLS`, list the stored declarations
+   that name one:
+
+   ```sql
+   SELECT tenant_id, kind, name FROM discovery_sources WHERE config::text LIKE '%env:%';
+   SELECT tenant_id, name, provider, endpoint_url FROM audit_feed_destinations
+    WHERE token_ref LIKE 'env:%' OR client_cert_ref LIKE 'env:%';
+   SELECT tenant_id, id, state, intent->>'action', intent->>'writer_session_file_ref'
+     FROM cloud_machine_changes
+    WHERE state IN ('awaiting_approval', 'queued', 'preparing_replacement', 'waiting_adoption');
+   ```
+
+   Response integrations name theirs in each request; ask the tenants that use them.
+2. Write the bindings into every replica's configuration before upgrading (the older
+   build ignores them), or let queued cloud changes and security actions finish
+   first. Work queued with an unbound reference fails with nothing sent; the
+   configuration reference lists what each integration does then, including a
+   `replace_key` that stops without retiring the old key.
+3. After the upgrade, startup logs one warning naming the retired references no
+   binding covers. Bind them and restart; request again any security action that
+   failed. For a `replace_key` that failed because a reference was not bound, follow
+   the configuration reference's
+   [outbound env credential bindings](../configuration.md#outbound-env-credential-bindings)
+   section: read its replacement rotation until it is terminal, and propose a
+   `revoke_key` only if that rotation completed and the consumer verified the
+   replacement; otherwise propose the `replace_key` again.
+
+Keep the retired list in the configuration until you no longer plan to roll back: the
+older build ignores the bindings and approves only what that list names, while this
+release only warns about it.
+
 ## Commands: preflight
 
 Render the chart with the exact values file and inspect the agent channel and

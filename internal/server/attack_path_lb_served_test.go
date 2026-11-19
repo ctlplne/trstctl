@@ -67,7 +67,7 @@ func TestServedAttackPathFollowsLoadBalancersNATAndTransitGatewaysA167L2(t *test
 	)
 	t.Setenv("TRSTCTL_A167L2_EC2_ACCESS_KEY_ID", accessKey)
 	t.Setenv("TRSTCTL_A167L2_EC2_SECRET_ACCESS_KEY", secretKey)
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+	h := newOperatingServedHarness(t, config.Protocols{}, bindOutboundEnvCredentialRefs("cloud_network_path", []string{stand.URL()},
 		"env:TRSTCTL_A167L2_EC2_ACCESS_KEY_ID", "env:TRSTCTL_A167L2_EC2_SECRET_ACCESS_KEY"))
 	ctx := t.Context()
 	writer := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read", string(authz.PrivateEgress))
