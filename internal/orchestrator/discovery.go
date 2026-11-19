@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -17,7 +18,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agent/relay"
-	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/discovery"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
@@ -32,7 +32,7 @@ const discoveryRunDestination = "discovery.run"
 
 const (
 	maxDiscoveryRunErrorBytes = 1024
-	discoveryRunErrorWithheld = "withheld: discovery error still contained secret-like material after redaction"
+	discoveryRunErrorWithheld = "discovery detail [REDACTED]"
 )
 
 // ErrDiscoveryScheduleNotDue is the benign loser of a concurrent scheduler
@@ -832,7 +832,7 @@ func (o *Orchestrator) startDiscoveryRun(ctx context.Context, tenantID, runID, e
 
 // RecordDiscoveryFinding records one metadata-only finding for a run.
 func (o *Orchestrator) RecordDiscoveryFinding(ctx context.Context, tenantID string, in store.DiscoveryFinding) (store.DiscoveryFinding, error) {
-	return o.recordDiscoveryFinding(ctx, tenantID, in, "")
+	return o.recordDiscoveryFinding(ctx, tenantID, in, "", false)
 }
 
 // RecordDiscoveryFindingWithEventID appends one receipt-bound observation.
@@ -840,10 +840,18 @@ func (o *Orchestrator) RecordDiscoveryFindingWithEventID(ctx context.Context, te
 	if strings.TrimSpace(eventID) == "" {
 		return store.DiscoveryFinding{}, errors.New("orchestrator: discovery finding event id is required")
 	}
-	return o.recordDiscoveryFinding(ctx, tenantID, in, eventID)
+	return o.recordDiscoveryFinding(ctx, tenantID, in, eventID, false)
 }
 
-func (o *Orchestrator) recordDiscoveryFinding(ctx context.Context, tenantID string, in store.DiscoveryFinding, eventID string) (store.DiscoveryFinding, error) {
+// RecordAttackPathFindingWithEventID records a provider verdict from AttackPathFinding.
+func (o *Orchestrator) RecordAttackPathFindingWithEventID(ctx context.Context, tenantID, eventID string, in store.DiscoveryFinding) (store.DiscoveryFinding, error) {
+	if strings.TrimSpace(eventID) == "" || in.Kind != AttackPathFindingKind {
+		return store.DiscoveryFinding{}, errors.New("orchestrator: attack-path finding kind and event ID are required")
+	}
+	return o.recordDiscoveryFinding(ctx, tenantID, in, eventID, true)
+}
+
+func (o *Orchestrator) recordDiscoveryFinding(ctx context.Context, tenantID string, in store.DiscoveryFinding, eventID string, attackPath bool) (store.DiscoveryFinding, error) {
 	id := in.ID
 	if id == "" {
 		if in.SourceID != "" {
@@ -858,17 +866,29 @@ func (o *Orchestrator) recordDiscoveryFinding(ctx context.Context, tenantID stri
 	if len(meta) == 0 {
 		meta = json.RawMessage(`{}`)
 	}
-	payload, err := json.Marshal(projections.DiscoveryFindingRecorded{
+	recorded := projections.DiscoveryFindingRecorded{
 		ID: id, RunID: in.RunID, SourceID: in.SourceID, Kind: in.Kind, Ref: in.Ref,
 		Provenance: in.Provenance, Fingerprint: in.Fingerprint, RiskScore: in.RiskScore,
 		Metadata: meta,
-	})
+	}
+	var body any = recorded
+	origin := ""
+	if attackPath {
+		origin = discoveryRefusedOrigin(in.AttackPathRefusedOrigin)
+		body = projections.DiscoveryAttackPathFindingRecorded{DiscoveryFindingRecorded: recorded, RefusedOrigin: origin}
+	}
+	payload, err := json.Marshal(body)
 	if err != nil {
 		return store.DiscoveryFinding{}, err
 	}
 	var ev events.Event
 	if eventID == "" {
 		ev, err = o.emit(ctx, projections.EventDiscoveryFindingRecorded, tenantID, payload)
+	} else if attackPath {
+		ev, err = o.emitDiscoveryDiagnosticEvent(ctx, events.Event{
+			ID: eventID, Type: projections.EventDiscoveryFindingRecorded, TenantID: tenantID,
+			SchemaVersion: projections.DiscoveryAttackPathFindingSchemaVersion, Data: payload,
+		}, sameAttackPathFinding)
 	} else {
 		ev, err = o.emitPreparedExact(ctx, events.Event{
 			ID: eventID, Type: projections.EventDiscoveryFindingRecorded, TenantID: tenantID, Data: payload,
@@ -879,6 +899,16 @@ func (o *Orchestrator) recordDiscoveryFinding(ctx context.Context, tenantID stri
 	}
 	out := in
 	out.ID, out.TenantID, out.Metadata, out.DiscoveredAt = id, tenantID, meta, ev.Time
+	out.AttackPathRefusedOrigin = origin
+	if ev.SchemaVersion != projections.DiscoveryAttackPathFindingSchemaVersion {
+		out.AttackPathRefusedOrigin = ""
+	} else {
+		var receipt projections.DiscoveryAttackPathFindingRecorded
+		if err := json.Unmarshal(ev.Data, &receipt); err != nil {
+			return store.DiscoveryFinding{}, err
+		}
+		out.Metadata, out.AttackPathRefusedOrigin = receipt.Metadata, receipt.RefusedOrigin
+	}
 	return out, nil
 }
 
@@ -1169,22 +1199,40 @@ func (o *Orchestrator) RecordSecretScan(ctx context.Context, tenantID, scanner, 
 // CompleteDiscoveryRun records terminal run counts. Status is usually
 // "succeeded" or "failed"; partial scans use "partial".
 func (o *Orchestrator) CompleteDiscoveryRun(ctx context.Context, tenantID string, in store.DiscoveryRun) error {
-	return o.completeDiscoveryRun(ctx, tenantID, in, "")
+	return o.completeDiscoveryRun(ctx, tenantID, in, "", DiscoveryDiagnosticAuthority{})
+}
+
+// CompleteDiscoveryRunWithDiagnostics records approved configuration labels
+// alongside the closed error classes used for provider and relay diagnostics.
+func (o *Orchestrator) CompleteDiscoveryRunWithDiagnostics(ctx context.Context, tenantID string, in store.DiscoveryRun, authority DiscoveryDiagnosticAuthority) error {
+	return o.completeDiscoveryRun(ctx, tenantID, in, "", authority)
 }
 
 // CompleteDiscoveryRunWithEventID is the receipt-bound terminal transition.
 func (o *Orchestrator) CompleteDiscoveryRunWithEventID(ctx context.Context, tenantID, eventID string, in store.DiscoveryRun) error {
+	return o.CompleteDiscoveryRunWithEventIDAndDiagnostics(ctx, tenantID, eventID, in, DiscoveryDiagnosticAuthority{})
+}
+
+// CompleteDiscoveryRunWithEventIDAndDiagnostics binds a terminal transition to
+// its receipt event and renders only the diagnostic evidence the receiver owns.
+func (o *Orchestrator) CompleteDiscoveryRunWithEventIDAndDiagnostics(ctx context.Context, tenantID, eventID string, in store.DiscoveryRun, authority DiscoveryDiagnosticAuthority) error {
 	if strings.TrimSpace(eventID) == "" {
 		return errors.New("orchestrator: discovery completion event id is required")
 	}
-	return o.completeDiscoveryRun(ctx, tenantID, in, eventID)
+	return o.completeDiscoveryRun(ctx, tenantID, in, eventID, authority)
 }
 
-func (o *Orchestrator) completeDiscoveryRun(ctx context.Context, tenantID string, in store.DiscoveryRun, eventID string) error {
-	in.Error = sanitizeDiscoveryRunError(in.Error)
+func (o *Orchestrator) completeDiscoveryRun(ctx context.Context, tenantID string, in store.DiscoveryRun, eventID string, authority DiscoveryDiagnosticAuthority) error {
+	in.TargetResults = append([]store.DiscoveryTargetResult(nil), in.TargetResults...)
+	targetAuthority := authority
+	targetAuthority.KubernetesNotDelivered = 0
 	for i := range in.TargetResults {
-		in.TargetResults[i].Error = sanitizeDiscoveryRunError(in.TargetResults[i].Error)
+		target := &in.TargetResults[i]
+		targetAuthority.KubernetesNamespace = authority.KubernetesNamespaces[target.Target]
+		targetAuthority.refusedOrigin = authority.RefusedOrigins[target.Target]
+		target.Error = targetAuthority.classify(target.Error)
 	}
+	in.Error = withArtifactCleanup(authority.runSummary(in.Error, in.TargetResults), authority.ArtifactCleanup)
 	if err := validateDiscoveryTargetResults(in.TargetResults); err != nil {
 		return err
 	}
@@ -1204,55 +1252,102 @@ func (o *Orchestrator) completeDiscoveryRun(ctx context.Context, tenantID string
 	if err != nil {
 		return err
 	}
-	schemaVersion := 0
-	if len(targetResults) > 0 {
-		schemaVersion = projections.DiscoveryTargetResultsEventSchemaVersion
-	}
-	if eventID == "" {
-		_, err = o.emitVersioned(ctx, projections.EventDiscoveryRunCompleted, tenantID, schemaVersion, payload)
-	} else {
-		_, err = o.emitPreparedExact(ctx, events.Event{
-			ID: eventID, Type: projections.EventDiscoveryRunCompleted, TenantID: tenantID,
-			SchemaVersion: schemaVersion, Data: payload,
-		})
-	}
+	_, err = o.emitDiscoveryDiagnosticEvent(ctx, events.Event{
+		ID: eventID, Type: projections.EventDiscoveryRunCompleted, TenantID: tenantID,
+		SchemaVersion: projections.DiscoveryDiagnosticsSchemaVersion, Data: payload,
+	}, sameDiscoveryCompletion)
 	return err
 }
 
-// sanitizeDiscoveryRunError keeps the operator-useful failure class while
-// refusing to make an upstream body, credential echo, or unbounded transport
-// transcript part of immutable tenant history. The event is the authority, so
-// redaction belongs here before append rather than only in the API renderer.
-func sanitizeDiscoveryRunError(detail string) string {
-	detail = strings.ToValidUTF8(detail, "")
-	detail = strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f {
-			return ' '
-		}
-		return r
-	}, detail)
-	detail = strings.Join(strings.Fields(detail), " ")
-	if detail == "" {
-		return ""
+// Keep the elected privacy operation and active history generation stable
+// across both canonical selection and the SQL commit. A projected diagnostic
+// must never restore a value erased from the authoritative history.
+func (o *Orchestrator) emitDiscoveryDiagnosticEvent(ctx context.Context, next events.Event, matches func(events.Event, events.Event) bool) (events.Event, error) {
+	fenced, release, err := o.beginTenantCommand(ctx, next.TenantID)
+	if err != nil {
+		return events.Event{}, err
 	}
-	detail = aimodel.DefaultRedactor(detail)
-	if aimodel.ResidualSecret(detail) {
-		return discoveryRunErrorWithheld
+	defer release()
+	var canonical events.Event
+	err = o.store.WithPrivacyHistoryProjection(fenced, next.TenantID, func(privacyCtx context.Context, tx pgx.Tx) error {
+		return o.log.WithHistoryRead(privacyCtx, func(readCtx context.Context) error {
+			found := false
+			var err error
+			if next.ID != "" {
+				canonical, found, err = o.log.EventByID(readCtx, next.ID)
+				if err != nil {
+					return err
+				}
+			}
+			if !found {
+				canonical, err = o.log.Append(readCtx, next)
+				if err != nil {
+					return err
+				}
+			}
+			if canonical.TenantID != next.TenantID || canonical.Type != next.Type || canonical.SensitiveErased ||
+				(next.ID != "" && (canonical.ID != next.ID || !matches(canonical, next))) {
+				return fmt.Errorf("%w: canonical discovery diagnostic receipt differs", store.ErrIdempotencyConflict)
+			}
+			return o.proj.ApplyTx(readCtx, tx, canonical)
+		})
+	})
+	if errors.Is(err, store.ErrPrivacyHistoryOperationActive) || errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
+		err = DeferDelivery(err)
 	}
-	if len(detail) <= maxDiscoveryRunErrorBytes {
-		return detail
-	}
-	end := maxDiscoveryRunErrorBytes
-	for end > 0 && !utf8.RuneStart(detail[end]) {
-		end--
-	}
-	return strings.TrimSpace(detail[:end])
+	return canonical, err
 }
 
-// SanitizeDiscoveryRunError is the shared egress guard for historical rows
-// written before discovery errors were sanitized at event append time.
-func SanitizeDiscoveryRunError(detail string) string {
-	return sanitizeDiscoveryRunError(detail)
+func sameDiscoveryCompletion(retained, next events.Event) bool {
+	if retained.SchemaVersion == next.SchemaVersion && bytes.Equal(retained.Data, next.Data) {
+		return true
+	}
+	var prior, candidate projections.DiscoveryRunCompleted
+	if json.Unmarshal(retained.Data, &prior) != nil || json.Unmarshal(next.Data, &candidate) != nil {
+		return false
+	}
+	if retained.SchemaVersion == next.SchemaVersion {
+		return sameErasedDiscoveryCompletion(retained.Data, prior, candidate)
+	}
+	if retained.SchemaVersion >= projections.DiscoveryDiagnosticsSchemaVersion {
+		return false
+	}
+	// The old diagnostic text may differ from the new classifier's output.
+	// Replay compares facts and retains the original event and audit bytes.
+	prior.Error, candidate.Error = "", ""
+	for i := range prior.TargetResults {
+		prior.TargetResults[i].Error = ""
+	}
+	for i := range candidate.TargetResults {
+		candidate.TargetResults[i].Error = ""
+	}
+	return reflect.DeepEqual(prior, candidate)
+}
+
+func sameErasedDiscoveryCompletion(data []byte, prior, candidate projections.DiscoveryRunCompleted) bool {
+	var cleared struct {
+		Error   *string `json:"error"`
+		Targets []struct {
+			Error *string `json:"error"`
+		} `json:"target_results"`
+	}
+	if json.Unmarshal(data, &cleared) != nil || len(prior.TargetResults) != len(candidate.TargetResults) {
+		return false
+	}
+	// The producer omits empty error fields. The history rewrite explicitly
+	// clears the field and keeps its position, restoring all unrelated facts.
+	matchedClear := false
+	if cleared.Error != nil && *cleared.Error == "" {
+		candidate.Error = ""
+		matchedClear = true
+	}
+	for i, outcome := range cleared.Targets {
+		if outcome.Error != nil && *outcome.Error == "" {
+			candidate.TargetResults[i].Error = ""
+			matchedClear = true
+		}
+	}
+	return matchedClear && reflect.DeepEqual(prior, candidate)
 }
 
 func validateDiscoveryTargetResults(results []store.DiscoveryTargetResult) error {

@@ -25,7 +25,7 @@ func (s *Store) LatestAttackPathFindings(ctx context.Context, tenantID string, l
 	// one that does; the reader chooses among them.
 	var out []DiscoveryFinding
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT ON (ref, source_id) id::text, ref, COALESCE(source_id::text, ''), provenance, fingerprint, metadata, last_seen_at
+		rows, err := tx.Query(ctx, `SELECT DISTINCT ON (ref, source_id) id::text, ref, COALESCE(source_id::text, ''), provenance, fingerprint, metadata, last_seen_at, attack_path_refused_origin
 		    FROM discovery_findings
 		   WHERE tenant_id = $1 AND kind = 'nhi-attack-path'
 		   ORDER BY ref, source_id, last_seen_at DESC, id DESC
@@ -36,7 +36,7 @@ func (s *Store) LatestAttackPathFindings(ctx context.Context, tenantID string, l
 		defer rows.Close()
 		for rows.Next() {
 			f := DiscoveryFinding{TenantID: tenantID, Kind: "nhi-attack-path"}
-			if err := rows.Scan(&f.ID, &f.Ref, &f.SourceID, &f.Provenance, &f.Fingerprint, &f.Metadata, &f.LastSeenAt); err != nil {
+			if err := rows.Scan(&f.ID, &f.Ref, &f.SourceID, &f.Provenance, &f.Fingerprint, &f.Metadata, &f.LastSeenAt, &f.AttackPathRefusedOrigin); err != nil {
 				return err
 			}
 			out = append(out, f)

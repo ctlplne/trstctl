@@ -106,8 +106,7 @@ func (d *issuanceDispatcher) deliverKubernetesTLSResource(ctx context.Context, t
 	}
 	identityID := kubernetesTLSStableID(tenantID, src.ID, f.Ref, "identity")
 	if existing, err := d.store.GetIdentity(ctx, tenantID, identityID); err == nil && existing.OwnerID != delivery.OwnerID {
-		return kubernetesTLSNotDelivered, "this resource's identity belongs to another owner; " +
-			"set owner_id back to that owner or retire the identity", nil
+		return kubernetesTLSNotDelivered, k8stls.IdentityOwnerMismatch, nil
 	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return "", "", err
 	}
@@ -133,7 +132,7 @@ func (d *issuanceDispatcher) deliverKubernetesTLSResource(ctx context.Context, t
 			"Kubernetes TLS delivery for "+f.Ref, "k8s-tls-issue:"+src.ID+":"+f.Ref); err != nil {
 			var notReady *store.OwnershipNotReadyError
 			if errors.As(err, &notReady) {
-				return kubernetesTLSNotDelivered, kubernetesTLSOwnershipReason(notReady.Reason, delivery.OwnerID), nil
+				return kubernetesTLSNotDelivered, k8stls.OwnershipDeliveryReason(notReady.Reason, delivery.OwnerID), nil
 			}
 			return kubernetesTLSNotDelivered, "issuance was refused: " + err.Error(), nil
 		}
@@ -151,8 +150,8 @@ func (d *issuanceDispatcher) deliverKubernetesTLSResource(ctx context.Context, t
 // way to the cluster from the agent's own signed receipts, newest first. With
 // none yet the delivery is queued. A delivered or verified receipt means the
 // Secret holds a certificate the agent wrote, as during a renewal. A failed one
-// is not delivered, in the receipt's words, even while the job is retried:
-// queued would claim progress the agent says it has not made.
+// is not delivered even while the job is retried. Discovery classifies the
+// reported detail before publishing the run.
 func (d *issuanceDispatcher) kubernetesTLSDeliveryProgress(ctx context.Context, tenantID, identityID string) (status, reason string, err error) {
 	// Verification and rollback receipts interleave with deploys; a short
 	// window always reaches the newest deploy receipt.
@@ -170,29 +169,11 @@ func (d *issuanceDispatcher) kubernetesTLSDeliveryProgress(ctx context.Context, 
 		case servedstatus.ConnectorFailed:
 			return kubernetesTLSNotDelivered, receipt.Detail, nil
 		case servedstatus.ConnectorVerifyFailed:
-			return kubernetesTLSNotDelivered, "the cluster agent wrote the Secret, but the listener at verify_address " +
-				"did not serve the new certificate", nil
+			return kubernetesTLSNotDelivered, k8stls.ListenerVerificationFailure, nil
 		}
 		break
 	}
 	return kubernetesTLSDeliveryQueued, "", nil
-}
-
-// kubernetesTLSOwnershipReason says what to do when the owner is not ready for
-// these certificates to reach deployment. The gate is resolved before any work
-// is queued, so the agent has generated nothing yet.
-func kubernetesTLSOwnershipReason(code, ownerID string) string {
-	switch code {
-	case "owner_application_model_is_incomplete":
-		return "owner " + ownerID + " has no application ID or environment, which attesting ownership requires: complete " +
-			"the owner, attest it (trstctl-cli owners attest " + ownerID + "), then run the source again"
-	case "owner_application_model_changed_after_attestation":
-		return "owner " + ownerID + " changed after it attested ownership: attest it again (trstctl-cli owners attest " +
-			ownerID + "), then run the source again"
-	default:
-		return "owner " + ownerID + " has not attested ownership, or its attestation is older than the attestation cadence: " +
-			"attest it (trstctl-cli owners attest " + ownerID + ") or record an ownership exception, then run the source again"
-	}
 }
 
 // kubernetesTLSHosts reads the hosts a Kubernetes TLS identity serves, or nil

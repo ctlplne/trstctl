@@ -87,13 +87,18 @@ func (d *issuanceDispatcher) handleAttackPathValidate(ctx context.Context, m orc
 		return err
 	}
 	if source.Kind != orchestrator.AttackPathSourceKind {
-		return d.orch.FailAttackPathValidation(ctx, m.TenantID, m.IdempotencyKey, intent, "the source is no longer a cloud_network_path source")
+		return d.orch.FailAttackPathValidation(ctx, m.TenantID, m.IdempotencyKey, intent,
+			"the source is no longer a cloud_network_path source", orchestrator.DiscoveryDiagnosticAuthority{})
 	}
 	// CR-008: the source's credentials resolve only for this tenant's
 	// cloud_network_path source, toward the origins the operator bound them to.
+	ctx = withDiscoveryCredentialFailures(ctx, m.TenantID, source.ID, source.Kind)
 	readers, err := attackPathReaders(d.outboundCredentialScope(ctx, m.TenantID, source.Kind), source.Config)
 	if err != nil {
-		return d.orch.FailAttackPathValidation(ctx, m.TenantID, m.IdempotencyKey, intent, err.Error())
+		reason, failures := attackPathSetupDiagnostic(err)
+		authority := d.discoveryDiagnosticAuthority(ctx, m.TenantID, source, 0, nil)
+		authority.ProviderFailures = failures
+		return d.orch.FailAttackPathValidation(ctx, m.TenantID, m.IdempotencyKey, intent, reason, authority)
 	}
 	defer closeAttackPathReaders(readers)
 	observed := make([]orchestrator.AttackPathObservation, 0, len(intent.Endpoints))
@@ -120,11 +125,30 @@ func attackPathReaders(ctx context.Context, raw json.RawMessage) ([]attackPathRe
 		if err != nil {
 			// The readers already built hold credentials; wipe them.
 			closeAttackPathReaders(readers)
-			return nil, fmt.Errorf("provider %d: %w", i+1, err)
+			return nil, &attackPathProviderSetupError{ordinal: i + 1, err: err}
 		}
 		readers = append(readers, reader)
 	}
 	return readers, nil
+}
+
+type attackPathProviderSetupError struct {
+	ordinal int
+	err     error
+}
+
+func (e *attackPathProviderSetupError) Error() string {
+	return fmt.Sprintf("provider %d: %v", e.ordinal, e.err)
+}
+
+func (e *attackPathProviderSetupError) Unwrap() error { return e.err }
+
+func attackPathSetupDiagnostic(err error) (string, []netscan.ProviderFailure) {
+	var setup *attackPathProviderSetupError
+	if errors.As(err, &setup) {
+		return "cloud network-path provider setup failed", []netscan.ProviderFailure{discoveryProviderFailure(setup.ordinal, setup.err)}
+	}
+	return err.Error(), nil
 }
 
 // attackPathReaderFor builds the reader for one configured provider.
@@ -153,7 +177,7 @@ func awsAttackPathReaderFor(ctx context.Context, p cloudCertificateProviderConfi
 	if endpoint == "" {
 		endpoint = "https://ec2." + region + ".amazonaws.com"
 	}
-	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	client, err := discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +187,7 @@ func awsAttackPathReaderFor(ctx context.Context, p cloudCertificateProviderConfi
 	if elbEndpoint == "" {
 		elbEndpoint = "https://elasticloadbalancing." + region + ".amazonaws.com"
 	}
-	elbClient, err := cloudHTTPClient(elbEndpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	elbClient, err := discoveryCloudHTTPClient(ctx, elbEndpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return nil, fmt.Errorf("elb_endpoint: %w", err)
 	}
@@ -198,7 +222,7 @@ func gcpAttackPathReader(ctx context.Context, p cloudCertificateProviderConfig) 
 	if endpoint == "" {
 		endpoint = "https://compute.googleapis.com"
 	}
-	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	client, err := discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +244,7 @@ func azureAttackPathReader(ctx context.Context, p cloudCertificateProviderConfig
 	if endpoint == "" {
 		endpoint = "https://management.azure.com"
 	}
-	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	client, err := discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +276,15 @@ func validateAttackPathEndpoint(ctx context.Context, readers []attackPathReader,
 		for _, reader := range readers {
 			judged, found, err := reader.Judge(ctx, ip, port)
 			if err != nil {
-				result = netpath.Result{Verdict: netpath.Unknown, Reason: "the provider could not be read: " + err.Error()}
+				var status *netpath.HTTPStatusError
+				detail := err.Error()
+				obs.RefusedOrigin = discoveryRefusedSourceOrigin(ctx, err)
+				if obs.RefusedOrigin != "" {
+					detail = orchestrator.DiscoveryDestinationPinRefusal
+				} else if errors.As(err, &status) {
+					detail = fmt.Sprintf("HTTP %d", status.StatusCode)
+				}
+				result = netpath.Result{Verdict: netpath.Unknown, Reason: "the provider could not be read: " + detail}
 				break
 			}
 			if found {
@@ -333,7 +365,8 @@ func attackPathMetadata(result netpath.Result) map[string]any {
 func (d *issuanceDispatcher) executeCloudNetworkPathDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
 	readers, err := attackPathReaders(ctx, src.Config)
 	if err != nil {
-		return netscan.Report{}, "failed", err.Error(), nil
+		reason, failures := attackPathSetupDiagnostic(err)
+		return netscan.Report{ProviderFailures: failures}, "failed", reason, nil
 	}
 	defer closeAttackPathReaders(readers)
 	if run.DryRun {
@@ -356,7 +389,7 @@ func (d *issuanceDispatcher) executeCloudNetworkPathDiscoveryRun(ctx context.Con
 			if err != nil {
 				return netscan.Report{}, "", "", err
 			}
-			if _, err := d.orch.RecordDiscoveryFindingWithEventID(ctx, tenantID,
+			if _, err := d.orch.RecordAttackPathFindingWithEventID(ctx, tenantID,
 				orchestrator.DiscoveryRelayEventID(tenantID, run.ID, "attack-path-finding:"+finding.Ref), finding); err != nil {
 				return netscan.Report{}, "", "", err
 			}

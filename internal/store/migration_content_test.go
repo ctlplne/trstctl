@@ -1181,6 +1181,8 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	490: true, // TestMigration0490KeepsCryptoAssetsAsStatedFacts
 	493: true, // TestMigration0493KeepsHistoricalRotationReferenceAuthority
 	494: true, // TestMigration0494KeepsLegacyRollbackPublicationUnknown
+	495: true, // TestMigration0495RetainsUnclassifiedDiscoveryHistory
+	496: true, // TestMigration0496KeepsHistoricalAttackPathMetadataUnverified
 	442: true, // TestMigration0442KeepsSlackInstallsWithNoScopes
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod
 	383: true, // TestMigration0383KeepsDecoyUsesAsFoundByLookup

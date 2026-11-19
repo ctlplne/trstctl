@@ -51,8 +51,8 @@ type PrivacyApprovalSelector struct {
 }
 
 // PrivacyReadModelSelector is a non-PII row key for newer operational read models.
-// Some models have a UUID row id; a small number use a parent id or threshold value
-// because their primary key includes the raw subject being erased.
+// Some models also need a parent id to bind a specific observation, or a
+// threshold value when the primary key includes the raw subject being erased.
 type PrivacyReadModelSelector struct {
 	Table         string `json:"table"`
 	ID            string `json:"id,omitempty"`
@@ -75,7 +75,9 @@ var privacyReadModelSelectorTables = map[string]struct{}{
 	"honey_tokens":                   {},
 	"incident_fleet_reissuance_runs": {}, "ownership_readiness_exceptions": {},
 	// A237-L5: a scoped sync whose secret names hold the subject.
-	"secret_scoped_syncs": {},
+	"secret_scoped_syncs":                 {},
+	discoveryRefusedOriginPrivacySelector: {},
+	discoveryRunDiagnosticPrivacySelector: {},
 }
 
 // ValidatePrivacyErasureSelectorsV3 proves that every selector emitted by the
@@ -134,6 +136,9 @@ func ValidatePrivacyErasureSelectorsV3(selectors PrivacyErasureSelectors) error 
 			}
 		} else if selector.ID == "" || selector.ThresholdDays != 0 {
 			return fmt.Errorf("store: privacy v3 %s selector is incomplete", selector.Table)
+		}
+		if selector.Table == discoveryRefusedOriginPrivacySelector && selector.ParentID == "" {
+			return errors.New("store: privacy v3 refused-origin selector must name its run")
 		}
 	}
 	return nil
@@ -570,6 +575,20 @@ func (s *Store) SelectPrivacySubjectExport(ctx context.Context, tenantID, subjec
 				return err
 			}
 		}
+		findings, err := selectDiscoveryFindingPrivacy(ctx, tx, tenantID, subject, true)
+		if err != nil {
+			return err
+		}
+		for _, match := range findings {
+			out.ReadModels = append(out.ReadModels, match.record)
+		}
+		runs, err := selectDiscoveryRunPrivacy(ctx, tx, tenantID, subject, true)
+		if err != nil {
+			return err
+		}
+		for _, match := range runs {
+			out.ReadModels = append(out.ReadModels, match.record)
+		}
 		return nil
 	})
 	if err != nil {
@@ -764,6 +783,30 @@ func (s *Store) selectPrivacySubjectErasureTx(
 		if err := appendPrivacyReadModelSelectors(ctx, tx, &out.Selectors.ReadModels, q.table, q.sql, q.args...); err != nil {
 			return err
 		}
+	}
+	findings, err := selectDiscoveryFindingPrivacy(ctx, tx, tenantID, subject, false)
+	if err != nil {
+		return err
+	}
+	for _, match := range findings {
+		if match.findingMatches {
+			out.Selectors.ReadModels = append(out.Selectors.ReadModels, PrivacyReadModelSelector{Table: "discovery_findings", ID: match.record.ID})
+		}
+		if match.originMatches {
+			out.Selectors.ReadModels = append(out.Selectors.ReadModels, PrivacyReadModelSelector{
+				Table: discoveryRefusedOriginPrivacySelector, ID: match.record.ID, ParentID: match.record.ParentID,
+			})
+		}
+	}
+	runs, err := selectDiscoveryRunPrivacy(ctx, tx, tenantID, subject, false)
+	if err != nil {
+		return err
+	}
+	for _, match := range runs {
+		if match.requester {
+			out.Selectors.ReadModels = append(out.Selectors.ReadModels, PrivacyReadModelSelector{Table: "discovery_runs", ID: match.record.ID})
+		}
+		out.Selectors.ReadModels = append(out.Selectors.ReadModels, match.diagnostics...)
 	}
 	if out.Selectors.CodeSigningOperationIDs, err = selectLegacyCodeSigningOperationsForSubject(
 		ctx, tx, tenantID, subject,
@@ -2240,17 +2283,6 @@ func basePrivacyReadModelExportQueries(tenantID, subject string) []privacyReadMo
 			args: []any{tenantID, subject},
 		},
 		{
-			table: "discovery_findings",
-			sql: `SELECT id::text, run_id::text,
-				             jsonb_build_object('kind', kind, 'ref', ref, 'metadata', metadata, 'triage_status', triage_status, 'triage_actor', triage_actor, 'triage_reason', triage_reason, 'triaged_at', triaged_at)::text,
-				             discovered_at
-				        FROM discovery_findings
-				       WHERE tenant_id = $1
-				         AND (triage_actor = $2 OR position($2 in triage_reason) > 0 OR ` + discoveryPrivacyJSONStringMatch("metadata", "$2") + `)
-				       ORDER BY id`,
-			args: []any{tenantID, subject},
-		},
-		{
 			table: "notification_threshold_deliveries",
 			sql: `SELECT threshold_days::text || ':' || left(md5(subject || ':' || channel), 12), ''::text,
 			             jsonb_build_object('subject', subject, 'threshold_days', threshold_days, 'channel', channel, 'first_sent_at', first_sent_at, 'last_sent_at', last_sent_at)::text,
@@ -2314,16 +2346,6 @@ func basePrivacyReadModelExportQueries(tenantID, subject string) []privacyReadMo
 			       WHERE tenant_id = $1
 			         AND (approver_subject = $2 OR position($2 in reason) > 0 OR $2 = ANY(decision_evidence_refs))
 			       ORDER BY request_id, approver_subject`,
-			args: []any{tenantID, subject},
-		},
-		{
-			table: "discovery_runs",
-			sql: `SELECT id::text, source_id::text,
-			             jsonb_build_object('status', status, 'dry_run', dry_run, 'requested_by', requested_by, 'targets', targets, 'discovered', discovered, 'failed', failed, 'rejected', rejected, 'error', error, 'started_at', started_at, 'completed_at', completed_at)::text,
-			             created_at
-			        FROM discovery_runs
-			       WHERE tenant_id = $1 AND requested_by = $2
-			       ORDER BY id`,
 			args: []any{tenantID, subject},
 		},
 		{
@@ -2420,14 +2442,12 @@ func basePrivacyReadModelSelectorQueries(tenantID, subject string) []privacyRead
 		{table: "pam_discovered_accounts", sql: `SELECT id::text, ''::text, 0 FROM pam_discovered_accounts WHERE tenant_id = $1 AND (dismissed_by = $2 OR position($2 in dismissed_reason) > 0) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "pam_imported_accounts", sql: `SELECT discovered_account_id::text, ''::text, 0 FROM pam_imported_accounts WHERE tenant_id = $1 AND (imported_by = $2 OR position($2 in reason) > 0) ORDER BY discovered_account_id`, args: []any{tenantID, subject}},
 		{table: "discovery_sources", sql: `SELECT id::text, ''::text, 0 FROM discovery_sources WHERE tenant_id = $1 AND ` + discoveryPrivacyJSONStringMatch("config", "$2") + ` ORDER BY id`, args: []any{tenantID, subject}},
-		{table: "discovery_findings", sql: `SELECT id::text, ''::text, 0 FROM discovery_findings WHERE tenant_id = $1 AND (triage_actor = $2 OR position($2 in triage_reason) > 0 OR ` + discoveryPrivacyJSONStringMatch("metadata", "$2") + `) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "notification_threshold_deliveries", sql: `SELECT ''::text, ''::text, threshold_days FROM notification_threshold_deliveries WHERE tenant_id = $1 AND (subject = $2 OR channel = $2) GROUP BY threshold_days ORDER BY threshold_days`, args: []any{tenantID, subject}},
 		{table: "incident_executions", sql: `SELECT id::text, ''::text, 0 FROM incident_executions WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR position($2 in evidence_bundle) > 0 OR $2 = ANY(failed_targets) OR $2 = ANY(rollback_refs)) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "nhi_access_review_campaigns", sql: `SELECT id::text, ''::text, 0 FROM nhi_access_review_campaigns WHERE tenant_id = $1 AND (reviewer_subject = $2 OR requested_by = $2) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "nhi_access_review_items", sql: `SELECT item_id::text, campaign_id::text, 0 FROM nhi_access_review_items WHERE tenant_id = $1 AND (decision_by = $2 OR position($2 in decision_reason) > 0 OR $2 = ANY(decision_evidence_refs)) ORDER BY campaign_id, item_id`, args: []any{tenantID, subject}},
 		{table: "access_change_requests", sql: `SELECT id::text, ''::text, 0 FROM access_change_requests WHERE tenant_id = $1 AND (requester_subject = $2 OR position($2 in reason) > 0 OR $2 = ANY(evidence_refs)) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "access_change_request_decisions", sql: `SELECT request_id::text, ''::text, 0 FROM access_change_request_decisions WHERE tenant_id = $1 AND (approver_subject = $2 OR position($2 in reason) > 0 OR $2 = ANY(decision_evidence_refs)) GROUP BY request_id ORDER BY request_id`, args: []any{tenantID, subject}},
-		{table: "discovery_runs", sql: `SELECT id::text, ''::text, 0 FROM discovery_runs WHERE tenant_id = $1 AND requested_by = $2 ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "notification_routing_policies", sql: `SELECT id::text, ''::text, 0 FROM notification_routing_policies WHERE tenant_id = $1 AND (scope_ref = $2 OR scope_ref = 'owner/' || $2 OR owner_ref = $2 OR owner_email = $2) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "remediation_playbook_runs", sql: `SELECT id::text, ''::text, 0 FROM remediation_playbook_runs WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR $2 = ANY(evidence_refs) OR $2 = ANY(rollback_refs)) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "compliance_report_schedules", sql: `SELECT id::text, ''::text, 0 FROM compliance_report_schedules WHERE tenant_id = $1 AND recipient_ref = $2 ORDER BY id`, args: []any{tenantID, subject}},
@@ -3049,6 +3069,9 @@ func eraseDiscoverySourcePrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, s
 }
 
 func eraseDiscoveryFindingPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyReadModelSelector) error {
+	if err := eraseDiscoveryRefusedOriginPrivacyRows(ctx, tx, tenantID, selectors); err != nil {
+		return err
+	}
 	ids := readModelIDs(selectors, "discovery_findings")
 	if len(ids) == 0 {
 		return nil
@@ -3480,6 +3503,9 @@ func eraseAccessChangeDecisionPrivacyRows(ctx context.Context, tx pgx.Tx, tenant
 }
 
 func eraseDiscoveryRunPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyReadModelSelector) error {
+	if err := eraseDiscoveryRunDiagnosticPrivacyRows(ctx, tx, tenantID, selectors); err != nil {
+		return err
+	}
 	ids := readModelIDs(selectors, "discovery_runs")
 	if len(ids) == 0 {
 		return nil
@@ -4118,8 +4144,24 @@ func countsForPrivacySelectors(sel PrivacyErasureSelectors) map[string]int {
 		"code_signing_operations": len(sel.CodeSigningOperationIDs),
 		"read_models":             len(sel.ReadModels),
 	}
+	countedDiscovery := make(map[string]struct{})
 	for _, rm := range sel.ReadModels {
-		out[rm.Table]++
+		table := rm.Table
+		switch table {
+		case discoveryRefusedOriginPrivacySelector:
+			table = "discovery_findings"
+		case discoveryRunDiagnosticPrivacySelector:
+			table = "discovery_runs"
+		}
+		if table == "discovery_findings" || table == "discovery_runs" {
+			key := table + "/" + rm.ID
+			if _, counted := countedDiscovery[key]; counted {
+				out["read_models"]--
+				continue
+			}
+			countedDiscovery[key] = struct{}{}
+		}
+		out[table]++
 	}
 	return out
 }

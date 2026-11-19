@@ -396,7 +396,9 @@ import (
 // Version 140 includes rotation reference provenance and the last applied
 // dynamic revocation event. Rebuild older payloads from the retained journal
 // and outbox so a snapshot cannot skip either projection's authority.
-const SnapshotFormatVersion = 140
+// Version 141 carries classified discovery run diagnostics and separately
+// recorded refused origins. Rebuild older snapshots from the event log.
+const SnapshotFormatVersion = 141
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

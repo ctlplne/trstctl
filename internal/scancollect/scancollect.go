@@ -237,11 +237,31 @@ func get(ctx context.Context, req Request, url string, header http.Header) ([]by
 	return body, resp.Header, err
 }
 
-func statusError(code int, url string) error {
-	if code == http.StatusUnauthorized || code == http.StatusForbidden || code == http.StatusNotFound {
-		return fmt.Errorf("%w: HTTP %d from %s", ErrRefused, code, redactQuery(url))
+// HTTPStatusError describes the actual transport response status. Application
+// refusal text can name a number independently of what the transport returned.
+type HTTPStatusError struct {
+	StatusCode int
+	location   string
+}
+
+func (e *HTTPStatusError) Error() string {
+	if refusal := e.Unwrap(); refusal != nil {
+		return fmt.Sprintf("%s: HTTP %d from %s", refusal, e.StatusCode, e.location)
 	}
-	return fmt.Errorf("scancollect: HTTP %d from %s", code, redactQuery(url))
+	return fmt.Sprintf("scancollect: HTTP %d from %s", e.StatusCode, e.location)
+}
+
+func (e *HTTPStatusError) Unwrap() error {
+	switch e.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+		return ErrRefused
+	default:
+		return nil
+	}
+}
+
+func statusError(code int, url string) error {
+	return &HTTPStatusError{StatusCode: code, location: redactQuery(url)}
 }
 
 func redactQuery(u string) string {

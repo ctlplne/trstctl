@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -335,6 +336,80 @@ func TestStandalonePostgresStateSnapshotPinsAfterCrossingPrivacyCutover(t *testi
 	}
 	if artifact.Len() != 0 {
 		t.Fatalf("crossing export wrote %d pre-preparation bytes", artifact.Len())
+	}
+}
+
+func TestPrivacyHistoryProjectionSeesPreparationAfterBackupFence(t *testing.T) {
+	peer := newStore(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	dsn, err := url.Parse(testDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	params := dsn.Query()
+	params.Set("default_transaction_isolation", "repeatable read")
+	// pgx preserves a literal "+" in startup parameters. Encode the space
+	// in the PostgreSQL isolation-level name as a URI escape.
+	dsn.RawQuery = strings.ReplaceAll(params.Encode(), "+", "%20")
+	projection, err := store.Open(ctx, dsn.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(projection.Close)
+	const tenant = "a1140000-0000-4000-8000-000000000117"
+	t.Cleanup(func() {
+		_, _ = peer.SystemPool().Exec(context.Background(), `DELETE FROM privacy_subject_erasure_preparations WHERE tenant_id = $1`, tenant)
+	})
+	if err := projection.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
+		var level string
+		if err := tx.QueryRow(ctx, "SHOW transaction_isolation").Scan(&level); err != nil {
+			return err
+		}
+		if level != "repeatable read" {
+			return errors.New("test database did not supply a repeatable-read default")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fenceEntered, commitPreparation := make(chan struct{}), make(chan struct{})
+	prepared := make(chan error, 1)
+	go func() {
+		prepared <- peer.WithBackupWriteFence(ctx, func(fenceCtx context.Context) error {
+			close(fenceEntered)
+			select {
+			case <-commitPreparation:
+			case <-fenceCtx.Done():
+				return context.Cause(fenceCtx)
+			}
+			return peer.WithTenant(fenceCtx, tenant, func(tx pgx.Tx) error {
+				_, err := tx.Exec(fenceCtx, `INSERT INTO privacy_subject_erasure_preparations
+					(tenant_id, operation_id, request_binding, event_id, rewrite_operation_id, target_generation, subject_ref, erased_at)
+					VALUES ($1, 'fixture-projection', 'binding', 'event', 'rewrite', 'generation', $2, now())`,
+					tenant, strings.Repeat("d", 64))
+				return err
+			})
+		})
+	}()
+	select {
+	case <-fenceEntered:
+	case <-ctx.Done():
+		t.Fatal("backup fence fixture did not start")
+	}
+	published := make(chan error, 1)
+	go func() {
+		published <- projection.WithPrivacyHistoryProjection(ctx, tenant, func(context.Context, pgx.Tx) error {
+			return errors.New("projection callback ran across a committed preparation")
+		})
+	}()
+	waitForAdvisoryLockWaiter(t, peer, store.BackupWriteFenceAdvisoryLockKey)
+	close(commitPreparation)
+	if err := waitHistoryRewriteResult(t, prepared); err != nil {
+		t.Fatal(err)
+	}
+	if err := waitHistoryRewriteResult(t, published); !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
+		t.Fatalf("projection missed the preparation committed while it waited for the backup fence: %v", err)
 	}
 }
 

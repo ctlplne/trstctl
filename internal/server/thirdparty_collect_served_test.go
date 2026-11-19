@@ -103,6 +103,47 @@ func n6PushImage(t *testing.T, registry, repo, tag string, files map[string]stri
 // stand-ins built from their API references — in the layout of each provider's
 // export, so every finding names the object it sat in. The collected content
 // never reaches an event, and the collection's directory is gone after the run.
+// CR-405: a provider can refuse a native read even when the HTTP request succeeds.
+func TestServedThirdPartySecretScanReportsNativeCollectionRefusal(t *testing.T) {
+	const providerDetail = "fixtureopaqueproviderdetail"
+	const envName = "TRSTCTL_FIXTURE_NATIVE_COLLECTION_TOKEN"
+	const ref = "env:" + envName
+	t.Setenv(envName, "fixture-collection-credential")
+	slack := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `{"ok":false,"error":"invalid_auth: HTTP 403 `+providerDetail+`"}`)
+	}))
+	t.Cleanup(slack.Close)
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil),
+		bindOutboundEnvCredentialRefs("secret_third_party", []string{slack.URL}, ref),
+		func(d *Deps) { d.SecretScanner = &a174MarkerScanner{marker: providerDetail} })
+	token := seedScopedToken(t, h.store, h.tenant, "secrets:write", "discovery:read", string(authz.PrivateEgress))
+	status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans/third-party/slack/ingest", token, "fixture-native-refusal", map[string]any{
+		"source": "fixture-native-refusal", "collect": map[string]any{
+			"base_url": slack.URL, "token_ref": ref, "channels": []string{"C0FIXTURE"},
+			"allow_private_endpoint": true, "private_egress_cidrs": []string{"127.0.0.1/32"},
+		},
+	})
+	var receipt struct {
+		RunID string `json:"run_id"`
+	}
+	if status != http.StatusAccepted || json.Unmarshal(raw, &receipt) != nil || receipt.RunID == "" {
+		t.Fatalf("native collection ingestion did not queue: status=%d", status)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	status, raw = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+receipt.RunID, token, nil)
+	var run struct {
+		Status     string `json:"status"`
+		Error      string `json:"error"`
+		Discovered int    `json:"discovered"`
+	}
+	if status != http.StatusOK || json.Unmarshal(raw, &run) != nil || run.Status != "failed" || run.Discovered != 0 ||
+		!strings.Contains(run.Error, "native collection refused") || strings.Contains(run.Error, providerDetail) || strings.Contains(run.Error, "HTTP 403") {
+		t.Errorf("native refusal did not keep its closed diagnostic: HTTP %d, status=%s, diagnostic=%q", status, run.Status, run.Error)
+	}
+}
+
 func TestServedNativeLeakScanCollectionN6(t *testing.T) {
 	if testing.Short() {
 		t.Skip("container acceptance test")

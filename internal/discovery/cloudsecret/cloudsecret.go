@@ -193,6 +193,7 @@ type ProviderOutcome struct {
 	Provider string
 	Status   string // OutcomeSucceeded or OutcomeFailed
 	Error    string
+	Cause    error `json:"-"`
 }
 
 // Provider outcome statuses.
@@ -268,11 +269,15 @@ func (d *Discoverer) Discover(ctx context.Context, providers []Provider) Report 
 		wg sync.WaitGroup
 		mu sync.Mutex
 	)
-	outcome := func(name, status, detail string) {
+	outcome := func(name, status string, cause error) {
+		var detail string
+		if cause != nil {
+			detail = cause.Error()
+		}
 		if status == OutcomeFailed {
 			rep.Failed++
 		}
-		rep.Outcomes = append(rep.Outcomes, ProviderOutcome{Provider: name, Status: status, Error: detail})
+		rep.Outcomes = append(rep.Outcomes, ProviderOutcome{Provider: name, Status: status, Error: detail, Cause: cause})
 	}
 	for _, p := range providers {
 		p := p
@@ -283,22 +288,22 @@ func (d *Discoverer) Discover(ctx context.Context, providers []Provider) Report 
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				outcome(p.Name(), OutcomeFailed, err.Error())
+				outcome(p.Name(), OutcomeFailed, err)
 				return
 			}
 			for _, f := range found {
 				if err := d.sink.Record(ctx, f); err != nil {
-					outcome(p.Name(), OutcomeFailed, err.Error())
+					outcome(p.Name(), OutcomeFailed, err)
 					return
 				}
 				rep.Discovered++
 			}
-			outcome(p.Name(), OutcomeSucceeded, "")
+			outcome(p.Name(), OutcomeSucceeded, nil)
 		}
 		if err := d.submit(ctx, task); err != nil {
 			wg.Done()
 			mu.Lock()
-			outcome(p.Name(), OutcomeFailed, err.Error())
+			outcome(p.Name(), OutcomeFailed, err)
 			mu.Unlock()
 		}
 	}

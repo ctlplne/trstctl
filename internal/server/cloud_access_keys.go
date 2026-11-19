@@ -38,7 +38,6 @@ func (d *issuanceDispatcher) executeCloudAccessKeyDiscoveryRun(ctx context.Conte
 		return netscan.Report{Targets: len(cfg.Providers)}, "succeeded", "", nil
 	}
 	rep := netscan.Report{Targets: len(cfg.Providers)}
-	var failures []string
 	now := time.Now().UTC()
 	if d.accessKeyNow != nil {
 		now = d.accessKeyNow().UTC()
@@ -48,12 +47,12 @@ func (d *issuanceDispatcher) executeCloudAccessKeyDiscoveryRun(ctx context.Conte
 		keys, host, lastUseErr := read.keys, read.host, read.lastUseErr
 		if err != nil {
 			rep.Failed++
-			failures = append(failures, fmt.Sprintf("provider %d: %v", i+1, err))
+			rep.ProviderFailures = append(rep.ProviderFailures, discoveryProviderFailure(i+1, err))
 			continue
 		}
 		if lastUseErr != nil {
 			// The keys are recorded; their last use is unknown, never "never used".
-			failures = append(failures, fmt.Sprintf("provider %d: %v", i+1, lastUseErr))
+			rep.ProviderFailures = append(rep.ProviderFailures, discoveryProviderFailure(i+1, lastUseErr))
 		}
 		for _, k := range keys {
 			meta := map[string]any{
@@ -97,12 +96,12 @@ func (d *issuanceDispatcher) executeCloudAccessKeyDiscoveryRun(ctx context.Conte
 		}
 	}
 	switch {
-	case rep.Failed == 0 && len(failures) > 0:
-		return rep, "partial", "some keys' last use could not be read: " + strings.Join(failures, "; "), nil
+	case rep.Failed == 0 && len(rep.ProviderFailures) > 0:
+		return rep, "partial", "some keys' last use could not be read", nil
 	case rep.Failed > 0 && rep.Discovered > 0:
-		return rep, "partial", "some cloud access-key providers failed: " + strings.Join(failures, "; "), nil
+		return rep, "partial", "some cloud access-key providers failed", nil
 	case rep.Failed > 0:
-		return rep, "failed", "every cloud access-key provider failed: " + strings.Join(failures, "; "), nil
+		return rep, "failed", "every cloud access-key provider failed", nil
 	}
 	return rep, "succeeded", "", nil
 }
@@ -158,11 +157,11 @@ func readGCPServiceAccountKeys(ctx context.Context, p cloudCertificateProviderCo
 	if err != nil || u.Host == "" {
 		return cloudAccessKeyRead{}, fmt.Errorf("gcp-iam endpoint is not a URL")
 	}
-	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	client, err := discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return cloudAccessKeyRead{}, err
 	}
-	activityClient, err := cloudHTTPClient(activity, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	activityClient, err := discoveryCloudHTTPClient(ctx, activity, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return cloudAccessKeyRead{}, err
 	}
@@ -201,7 +200,7 @@ func readAzureAppSecrets(ctx context.Context, p cloudCertificateProviderConfig, 
 	if err != nil || u.Host == "" {
 		return cloudAccessKeyRead{}, fmt.Errorf("azure-entra endpoint is not a URL")
 	}
-	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	client, err := discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return cloudAccessKeyRead{}, err
 	}
@@ -252,7 +251,7 @@ func awsIAMReader(ctx context.Context, p cloudCertificateProviderConfig, guard *
 	if err != nil {
 		return nil, "", err
 	}
-	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	client, err := discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return nil, "", err
 	}

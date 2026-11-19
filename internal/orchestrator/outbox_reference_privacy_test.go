@@ -20,7 +20,12 @@ func TestSecretDeliveryDebugRecordsOnlySafeErrorClass(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	defer slog.SetDefault(previous)
 	outbox := orchestrator.NewOutbox(st, orchestrator.WithMaxAttempts(1))
-	for _, destination := range []string{"dynsecret.issue", "dynsecret.revoke", "secret.static-rotation"} {
+	destinations := []string{
+		"dynsecret.issue", "dynsecret.revoke", "secret.static-rotation", "discovery.run",
+		orchestrator.DestinationResponseSplunk, orchestrator.DestinationResponseJira,
+		orchestrator.DestinationScanAnnotation, orchestrator.DestinationOAuthProviderAction,
+	}
+	for _, destination := range destinations {
 		enqueue(t, st, outbox, orchestrator.Entry{
 			TenantID: tenantA, Destination: destination, IdempotencyKey: "fixture:" + destination, Payload: []byte(`{}`),
 		})
@@ -28,11 +33,11 @@ func TestSecretDeliveryDebugRecordsOnlySafeErrorClass(t *testing.T) {
 	handler := orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error {
 		return errors.New("fixture-provider-detail")
 	})
-	if count, err := outbox.Dispatch(ctx, handler); err != nil || count != 3 {
+	if count, err := outbox.Dispatch(ctx, handler); err != nil || count != len(destinations) {
 		t.Fatalf("dispatch returned count=%d err=%v", count, err)
 	}
 	if bytes.Contains(logged.Bytes(), []byte("fixture-provider-detail")) ||
-		bytes.Count(logged.Bytes(), []byte("level=DEBUG")) < 3 {
+		bytes.Count(logged.Bytes(), []byte("level=DEBUG")) < len(destinations) {
 		t.Fatal("secret delivery DEBUG did not retain only closed error classes")
 	}
 }

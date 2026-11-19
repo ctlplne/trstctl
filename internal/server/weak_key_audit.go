@@ -130,7 +130,7 @@ func (d *issuanceDispatcher) executeWeakKeyAuditRun(ctx context.Context, tenantI
 		recorded++
 	}
 	status, msg := orchestrator.WeakKeyAuditOutcome(leftOut)
-	return netscan.Report{Targets: rep.Distinct, Discovered: recorded}, status, msg, nil
+	return netscan.Report{Targets: rep.Distinct, Discovered: recorded, WeakKeysOmitted: leftOut}, status, msg, nil
 }
 
 // weakKeyAuditFindings collects the tenant's distinct RSA keys, runs batch

@@ -39,6 +39,19 @@ func discoveryTriagePrivacyPolicy() events.PrivacyEventPolicy {
 	)
 }
 
+func discoveryAttackPathFindingPrivacyPolicy() events.PrivacyEventPolicy {
+	policy := discoveryFindingPrivacyPolicy()
+	policy.Rules = append(policy.Rules, privacyRule("/refused_origin", events.PrivacyFieldFreeTextClear))
+	return policy
+}
+
+func discoveryRunDiagnosticsPrivacyPolicy() events.PrivacyEventPolicy {
+	return privacyRules(
+		privacyRule("/error", events.PrivacyFieldFreeTextClear),
+		privacyRule("/target_results/*/error", events.PrivacyFieldFreeTextClear),
+	)
+}
+
 // discoveryProviderActionPrivacyPolicy classifies an action at the provider
 // on a finding (A170, A171): the operator's reason and the provider's detail
 // are free text, the actor is an identity.

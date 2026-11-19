@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/decommission/reprotect"
 	"trstctl.com/trstctl/internal/discovery/adcs"
+	"trstctl.com/trstctl/internal/discovery/k8stls"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/hostaccounts"
@@ -2086,7 +2087,7 @@ func (a *agentService) agentDetailForHistory(ctx context.Context, tenantID, agen
 		if req.Outcome == transport.JobOutcomeFailed && req.Detail == transport.CSRValidityRefusalDetail {
 			kind, err := a.store.AgentJobDestination(ctx, tenantID, req.JobID)
 			if err == nil && kind == agentJobKindEndpointRenew {
-				return "signing: the host reports a certificate-profile validity refusal; review the pinned profile and its NotBefore backdate before scheduling a new issuance or replacement; changing the active profile does not rewrite this job"
+				return k8stls.SigningValidityRefused
 			}
 		}
 		// Old and current host agents send this exact static phrase when the
@@ -2097,7 +2098,7 @@ func (a *agentService) agentDetailForHistory(ctx context.Context, tenantID, agen
 		if req.Outcome == transport.JobOutcomeFailed && req.Detail == "the control plane did not sign this host's request" {
 			kind, err := a.store.AgentJobDestination(ctx, tenantID, req.JobID)
 			if err == nil && kind == agentJobKindEndpointRenew {
-				return "signing: this host did not receive a signed certificate from the control plane; inspect this attempt's issuance job before retrying"
+				return k8stls.SigningResultUnavailable
 			}
 		}
 		redeemed, err := a.store.AgentJobAttemptRedeemedCredential(ctx, tenantID, req.JobID)

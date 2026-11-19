@@ -60,14 +60,13 @@ func (d *issuanceDispatcher) executeLoadBalancerTLSDiscoveryRun(ctx context.Cont
 		return netscan.Report{Targets: len(cfg.Providers)}, "succeeded", "", nil
 	}
 	rep := netscan.Report{Targets: len(cfg.Providers)}
-	var failures []string
 	sink := &eventedCBOMSink{store: d.store, log: d.log, tenantID: tenantID}
 	policy := cbom.DefaultPolicy()
 	for i, p := range cfg.Providers {
 		listeners, host, err := readLoadBalancerListeners(ctx, p, d.egress)
 		if err != nil {
 			rep.Failed++
-			failures = append(failures, fmt.Sprintf("provider %d: %v", i+1, err))
+			rep.ProviderFailures = append(rep.ProviderFailures, discoveryProviderFailure(i+1, err))
 			continue
 		}
 		provider := strings.TrimSpace(p.Provider)
@@ -125,9 +124,9 @@ func (d *issuanceDispatcher) executeLoadBalancerTLSDiscoveryRun(ctx context.Cont
 	}
 	switch {
 	case rep.Failed > 0 && rep.Discovered > 0:
-		return rep, "partial", "some load-balancer TLS providers failed: " + strings.Join(failures, "; "), nil
+		return rep, "partial", "some load-balancer TLS providers failed", nil
 	case rep.Failed > 0:
-		return rep, "failed", "every load-balancer TLS provider failed: " + strings.Join(failures, "; "), nil
+		return rep, "failed", "every load-balancer TLS provider failed", nil
 	}
 	return rep, "succeeded", "", nil
 }
@@ -158,7 +157,7 @@ func readLoadBalancerListeners(ctx context.Context, p loadBalancerTLSProviderCon
 	if err != nil || u.Host == "" {
 		return nil, "", fmt.Errorf("%s endpoint is not a URL", provider)
 	}
-	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	client, err := discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return nil, "", err
 	}

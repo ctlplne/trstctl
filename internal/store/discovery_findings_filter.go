@@ -108,7 +108,7 @@ func (s *Store) ListDiscoveryFindingsFiltered(ctx context.Context, tenantID stri
 		              f.provenance, f.fingerprint, f.risk_score, f.metadata, f.discovered_at,
 		              f.triage_status, f.managed_identity_id::text, f.triage_actor, f.triage_reason, f.triaged_at,
 		              f.first_seen_at, f.last_seen_at, f.seen_count,
-		              f.triage_assignee, f.triage_due_at, f.triage_evidence_ref, f.risk_accepted_until
+		              f.triage_assignee, f.triage_due_at, f.triage_evidence_ref, f.risk_accepted_until, f.attack_path_refused_origin
 		         FROM discovery_findings f
 		        WHERE f.tenant_id = $1 AND f.id > $2`+where+`
 		        ORDER BY f.id LIMIT $3`, args...)
@@ -218,7 +218,7 @@ func (s *Store) ExpiredRiskAcceptances(ctx context.Context, tenantID string, now
 		              f.provenance, f.fingerprint, f.risk_score, f.metadata, f.discovered_at,
 		              f.triage_status, f.managed_identity_id::text, f.triage_actor, f.triage_reason, f.triaged_at,
 		              f.first_seen_at, f.last_seen_at, f.seen_count,
-		              f.triage_assignee, f.triage_due_at, f.triage_evidence_ref, f.risk_accepted_until
+		              f.triage_assignee, f.triage_due_at, f.triage_evidence_ref, f.risk_accepted_until, f.attack_path_refused_origin
 		         FROM discovery_findings f
 		        WHERE f.tenant_id = $1 AND f.triage_status = 'accepted_risk'
 		          AND f.risk_accepted_until IS NOT NULL AND f.risk_accepted_until <= $2

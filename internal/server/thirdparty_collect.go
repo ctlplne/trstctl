@@ -21,18 +21,18 @@ func collectThirdParty(ctx context.Context, cfg secretscan.ThirdPartyScanConfig)
 	c := cfg.Collect
 	client, err := cloudHTTPClient(c.BaseURL, c.AllowPrivateEndpoint, c.PrivateEgressCIDRs)
 	if err != nil {
-		return secretscan.ThirdPartyTarget{}, scancollect.Result{}, fmt.Errorf("%w: the collection endpoint is refused: %v", scancollect.ErrRefused, err)
+		return secretscan.ThirdPartyTarget{}, scancollect.Result{}, fmt.Errorf("%w: the collection endpoint is refused: %w", scancollect.ErrRefused, err)
 	}
 	var token []byte
 	if c.TokenRef != "" {
 		if token, err = resolveBoundCredentialBytesRef(ctx, c.TokenRef, client); err != nil {
-			return secretscan.ThirdPartyTarget{}, scancollect.Result{}, fmt.Errorf("%w: resolve the collection token reference: %v", scancollect.ErrRefused, err)
+			return secretscan.ThirdPartyTarget{}, scancollect.Result{}, fmt.Errorf("%w: resolve the collection token reference: %w", scancollect.ErrRefused, err)
 		}
 		defer secret.Wipe(token)
 	}
 	username, err := resolveOptionalBoundCredentialRef(ctx, c.UsernameRef, client)
 	if err != nil {
-		return secretscan.ThirdPartyTarget{}, scancollect.Result{}, fmt.Errorf("%w: resolve the collection username reference: %v", scancollect.ErrRefused, err)
+		return secretscan.ThirdPartyTarget{}, scancollect.Result{}, fmt.Errorf("%w: resolve the collection username reference: %w", scancollect.ErrRefused, err)
 	}
 	var since time.Time
 	if lookback, err := c.SinceDuration(); err == nil && lookback > 0 {

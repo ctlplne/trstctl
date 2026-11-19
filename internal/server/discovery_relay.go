@@ -85,13 +85,12 @@ func (s *Server) recordDiscoveryScan(ctx context.Context, tenantID, agentName, i
 		// reconstruct lost concurrent findings, so close this run visibly as
 		// failed and import none of its untrustworthy observations. The caller
 		// keeps the original signed receipt and closes the exact job as failed.
-		reason := fmt.Sprintf("relay report rejected: findings count mismatch (reported %d, retained %d); no findings imported; rerun discovery",
-			report.Discovered, len(report.Findings))
-		if err := s.orch.CompleteDiscoveryRunWithEventID(ctx, tenantID,
+		counts := orchestrator.DiscoveryRelayFindingCounts{Reported: report.Discovered, Retained: len(report.Findings)}
+		if err := s.orch.CompleteDiscoveryRunWithEventIDAndDiagnostics(ctx, tenantID,
 			orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "run-completed"), store.DiscoveryRun{
 				ID: intent.ID, Status: "failed", Targets: len(intent.Targets), Rejected: len(intent.Targets),
-				Error: reason, Segment: intent.Segment, ExecutedByAgentID: agentID,
-			}); err != nil {
+				Segment: intent.Segment, ExecutedByAgentID: agentID,
+			}, orchestrator.DiscoveryDiagnosticAuthority{RelayFindingCounts: &counts}); err != nil {
 			return err
 		}
 		return validationErr

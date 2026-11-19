@@ -460,6 +460,11 @@ func TestServedDiscoveryCountMismatchFailsClosedAndUnblocksRelay(t *testing.T) {
 	if statusCode != http.StatusOK || !strings.Contains(string(body), "findings count mismatch") {
 		t.Fatalf("operator API hid the failed run: %d %s", statusCode, body)
 	}
+	for _, proof := range []string{"reported 1, retained 0", "no findings imported"} {
+		if !strings.Contains(string(body), proof) || !strings.Contains(failed.Error, proof) {
+			t.Errorf("relay mismatch diagnostic omitted %q", proof)
+		}
+	}
 	if events := discoveryRelayEventCounts(t, h); events["agent.job.failed"] != 1 {
 		t.Fatalf("signed inconsistent result produced %d agent failure audit events, want 1", events["agent.job.failed"])
 	}

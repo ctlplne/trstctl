@@ -41,6 +41,7 @@ type PostgresHistoryRewriteCoordinator struct {
 
 type historyReadGrantContextKey struct{}
 type historyCutoverGrantContextKey struct{}
+type historyTransactionReadGrantContextKey struct{}
 
 type historyReadLease struct {
 	coordinator *PostgresHistoryRewriteCoordinator
@@ -161,6 +162,14 @@ func (c *PostgresHistoryRewriteCoordinator) WithRead(
 ) error {
 	if fn == nil {
 		return errors.New("store: history read view callback is nil")
+	}
+	if lease, ok := ctx.Value(historyTransactionReadGrantContextKey{}).(*historyReadLease); ok &&
+		lease.coordinator.store == c.store && lease.acquire() {
+		defer lease.release()
+		if err := ctx.Err(); err != nil {
+			return context.Cause(ctx)
+		}
+		return fn(ctx)
 	}
 	cutoverGrant, nestedUnderCutover := ctx.Value(historyCutoverGrantContextKey{}).(historyReadGrant)
 	if nestedUnderCutover &&

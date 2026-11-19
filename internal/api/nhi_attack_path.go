@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"sort"
@@ -180,7 +181,7 @@ func nhiExposureAttackPathRow(finding store.DiscoveryFinding) nhiExposureAttackP
 	row := nhiExposureAttackPathAddress{
 		Address: metadataString(meta, "address"), Status: metadataString(meta, "status"),
 		BlockedBy: metadataString(meta, "blocked_by"), Resource: metadataString(meta, "resource"),
-		Rule: metadataString(meta, "rule"), Reason: metadataString(meta, "reason"), CheckedAt: finding.LastSeenAt.UTC(),
+		Rule: metadataString(meta, "rule"), Reason: orchestrator.AttackPathFindingDisplayReason(metadataString(meta, "reason"), finding.AttackPathRefusedOrigin), CheckedAt: finding.LastSeenAt.UTC(),
 	}
 	if path, ok := meta["path"].([]any); ok {
 		for _, hop := range path {
@@ -190,6 +191,28 @@ func nhiExposureAttackPathRow(finding store.DiscoveryFinding) nhiExposureAttackP
 		}
 	}
 	return row
+}
+
+func attackPathFindingMetadataView(raw json.RawMessage, refusedOrigin string) json.RawMessage {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return raw
+	}
+	_, changed := fields[orchestrator.AttackPathRefusedOriginField]
+	delete(fields, orchestrator.AttackPathRefusedOriginField)
+	var reason string
+	if json.Unmarshal(fields["reason"], &reason) == nil {
+		if safe := orchestrator.AttackPathFindingDisplayReason(reason, refusedOrigin); safe != reason {
+			fields["reason"], _ = json.Marshal(safe)
+			changed = true
+		}
+	}
+	if changed {
+		if rendered, err := json.Marshal(fields); err == nil {
+			return rendered
+		}
+	}
+	return raw
 }
 
 // nhiAttackPathVerdictOutranks reports whether verdict a, from one source,

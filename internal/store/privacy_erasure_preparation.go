@@ -47,9 +47,9 @@ const (
 // fail closed until the exact operation resumes.
 var ErrPrivacySubjectErasurePreparationActive = errors.New("store: privacy subject erasure preparation is active")
 
-// ErrPrivacyHistoryOperationActive means a direct transaction tried to enter a
-// tenant lifecycle erase while an exclusive privacy history operation was
-// already running. The direct path fails fast to preserve the global
+// ErrPrivacyHistoryOperationActive means a direct transaction encountered an
+// active exclusive privacy operation or history cutover. It fails fast to
+// preserve the global
 // privacy-operation -> history-cutover -> backup -> tenant-lifecycle lock order.
 var ErrPrivacyHistoryOperationActive = errors.New("store: privacy history operation is active")
 
@@ -697,6 +697,43 @@ func (s *Store) WithPrivacyRecoveryBarrier(
 			return fn(barrierCtx)
 		},
 	)
+}
+
+// WithPrivacyHistoryProjection keeps the history operation and generation
+// stable through a tenant projection's commit on one bounded SQL connection.
+// It tries both locks while holding the backup write fence, so it cannot wait
+// in the opposite lock order to an erasure or history cutover.
+func (s *Store) WithPrivacyHistoryProjection(ctx context.Context, tenantID string, fn func(context.Context, pgx.Tx) error) error {
+	if fn == nil {
+		return errors.New("store: privacy history projection callback is nil")
+	}
+	// The backup-fence statement can wait across a preparation commit.
+	// Read Committed gives the later preparation check a fresh snapshot,
+	// independent of the database or role's default transaction isolation.
+	return s.withTenantTxOptions(ctx, tenantID, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}, func(tx pgx.Tx) error {
+		var locked bool
+		if err := tx.QueryRow(ctx, `SELECT CASE WHEN pg_try_advisory_xact_lock_shared($1)
+			THEN pg_try_advisory_xact_lock_shared($2) ELSE false END`,
+			HistoryRewriteOperationAdvisoryLockKey, HistoryRewriteBarrierAdvisoryLockKey).Scan(&locked); err != nil {
+			return fmt.Errorf("store: take privacy history projection fences: %w", err)
+		}
+		if !locked {
+			return ErrPrivacyHistoryOperationActive
+		}
+		active, err := hasPrivacySubjectErasurePreparationTx(ctx, tx, tenantID)
+		if err != nil {
+			return err
+		}
+		if active {
+			return ErrPrivacySubjectErasurePreparationActive
+		}
+		// The context reuses the shared generation grant without checking out
+		// another SQL connection. The token expires before commit. PostgreSQL
+		// releases the two transaction locks only after commit or rollback.
+		lease := newHistoryReadLease(NewHistoryRewriteCoordinator(s))
+		defer lease.revokeAndWait()
+		return fn(context.WithValue(ctx, historyTransactionReadGrantContextKey{}, lease), tx)
+	})
 }
 
 // WithPrivacyTenantProjectionRepeatableRead is the short transaction boundary

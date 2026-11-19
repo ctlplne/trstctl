@@ -2134,9 +2134,9 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		"EventDiscoveryRunQueued: {1: true, DiscoveryEnrollmentGroupsQueuedSchemaVersion: true, DiscoveryEndpointProbeQueuedSchemaVersion: true}",
 		"EventADCSInventoryObserved: {1: true, 2: true, adcsdiscovery.InventoryMembershipSchemaVersion: true, adcsdiscovery.InventoryEventSchemaVersion: true}",
 		"EventDiscoveryRunStarted: {1: true}",
-		"EventDiscoveryFindingRecorded: {1: true}",
+		"EventDiscoveryFindingRecorded: {1: true, DiscoveryAttackPathFindingSchemaVersion: true}",
 		"EventDiscoveryFindingTriageChanged: {1: true}",
-		"EventDiscoveryRunCompleted: {1: true, DiscoveryTargetResultsEventSchemaVersion: true}",
+		"EventDiscoveryRunCompleted: {1: true, DiscoveryTargetResultsEventSchemaVersion: true, DiscoveryDiagnosticsSchemaVersion: true}",
 		"EventNotificationRead: {1: true}",
 		"EventNotificationThresholdDelivered: {1: true}",
 		"EventIncidentFleetReissuanceRecorded: {1: true}",
@@ -2369,7 +2369,7 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/backup/backup.go", []string{"trstctl-event-log-backup", "version    = 1", "unsupported backup version"}},
 		{"../internal/backup/full_manifest.go", []string{"trstctl-full-backup", "fullVersion      = 1", "unsupported full backup manifest version"}},
 		{"../internal/backup/postgres_state.go", []string{"trstctl-postgres-state-backup", "postgresStateVersion    = 1", "unsupported postgres-state backup version"}},
-		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 140", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
+		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 141", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
 		{"../internal/projections/broker_issuance_recovery_test.go", []string{"TestBrokerFactsSurviveRediscoverySnapshotAndEventOnlyRebuild", "TestBrokerV35SnapshotCannotSkipIssuanceFacts"}},
 	} {
 		body := read(t, file.path)
@@ -3184,7 +3184,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 
 	snapshotGo := read(t, "../internal/store/snapshot.go")
 	for _, want := range []string{
-		"const SnapshotFormatVersion = 140",
+		"const SnapshotFormatVersion = 141",
 		"func (s *Store) WriteTenantSnapshot(",
 		"func (s *Store) LatestSnapshotOffset(",
 		"func (s *Store) RestoreSnapshotsTx(",

@@ -492,8 +492,8 @@ func TestAUD70ServedCTWatchlistReplacementRetiresDeadLogAndRecovers(t *testing.T
 			return err
 		}
 		if completed.ID == failedRunID || completed.ID == workingRunID {
-			if event.SchemaVersion != projections.DiscoveryTargetResultsEventSchemaVersion {
-				t.Fatalf("CT completion %s schema = %d, want per-target v%d", completed.ID, event.SchemaVersion, projections.DiscoveryTargetResultsEventSchemaVersion)
+			if event.SchemaVersion != projections.DiscoveryDiagnosticsSchemaVersion {
+				t.Fatalf("CT completion %s schema = %d, want classified per-target v%d", completed.ID, event.SchemaVersion, projections.DiscoveryDiagnosticsSchemaVersion)
 			}
 			completionByRun[completed.ID] = completed
 		}

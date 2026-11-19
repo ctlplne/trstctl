@@ -42,14 +42,14 @@ func secretStoreProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 	client := netsec.SafeClient(30 * time.Second)
 	if endpoint != "" {
 		var err error
-		if client, err = cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs); err != nil {
+		if client, err = discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs); err != nil {
 			return nil, true, err
 		}
 	}
 	if identity := strings.TrimSpace(p.IdentityEndpoint); identity != "" {
 		// The client already allows the API endpoint; the identity service
 		// must pass the same egress rules.
-		if _, err := cloudHTTPClient(identity, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs); err != nil {
+		if _, err := discoveryCloudHTTPClient(ctx, identity, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs); err != nil {
 			return nil, true, fmt.Errorf("identity_endpoint: %w", err)
 		}
 	}

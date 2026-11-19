@@ -336,7 +336,7 @@ func (s *Store) ListADCSTemplateDrift(ctx context.Context, tenantID string, limi
 			        provenance, fingerprint, risk_score, metadata, discovered_at,
 			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at,
 		              first_seen_at, last_seen_at, seen_count,
-		              triage_assignee, triage_due_at, triage_evidence_ref, risk_accepted_until
+		              triage_assignee, triage_due_at, triage_evidence_ref, risk_accepted_until, attack_path_refused_origin
 			   FROM discovery_findings
 			  WHERE tenant_id = $1 AND kind = $2
 			  ORDER BY discovered_at DESC, id DESC LIMIT $3`,

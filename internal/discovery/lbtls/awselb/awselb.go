@@ -251,7 +251,7 @@ func (r *Reader) call(ctx context.Context, params url.Values) ([]byte, error) {
 			Code string `xml:"Error>Code"`
 		}
 		_ = xml.Unmarshal(raw, &e)
-		return nil, fmt.Errorf("awselb: %s: status %d %s (response body redacted)", params.Get("Action"), resp.StatusCode, e.Code)
+		return nil, &lbtls.HTTPStatusError{Status: resp.StatusCode, Diagnostic: fmt.Sprintf("awselb: %s: status %d %s (response body redacted)", params.Get("Action"), resp.StatusCode, e.Code)}
 	}
 	return raw, nil
 }

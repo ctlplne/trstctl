@@ -62,7 +62,7 @@ func (s *Store) LatestDiscoveryFindingsOfKind(ctx context.Context, tenantID, kin
 		              f.provenance, f.fingerprint, f.risk_score, f.metadata, f.discovered_at,
 		              f.triage_status, f.managed_identity_id::text, f.triage_actor, f.triage_reason, f.triaged_at,
 		              f.first_seen_at, f.last_seen_at, f.seen_count,
-		              f.triage_assignee, f.triage_due_at, f.triage_evidence_ref, f.risk_accepted_until
+		              f.triage_assignee, f.triage_due_at, f.triage_evidence_ref, f.risk_accepted_until, f.attack_path_refused_origin
 		         FROM discovery_findings f
 		        WHERE f.tenant_id = $1 AND f.kind = $2
 		        ORDER BY f.ref, f.last_seen_at DESC, f.id DESC

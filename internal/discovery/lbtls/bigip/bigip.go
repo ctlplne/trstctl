@@ -235,7 +235,7 @@ func (r *Reader) get(ctx context.Context, pathAndQuery string) ([]byte, error) {
 		return nil, fmt.Errorf("bigip: read response: %w", err)
 	}
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("bigip: GET %s: status %d (response body redacted)", strings.SplitN(pathAndQuery, "?", 2)[0], resp.StatusCode)
+		return nil, &lbtls.HTTPStatusError{Status: resp.StatusCode, Diagnostic: fmt.Sprintf("bigip: GET %s: status %d (response body redacted)", strings.SplitN(pathAndQuery, "?", 2)[0], resp.StatusCode)}
 	}
 	return raw, nil
 }

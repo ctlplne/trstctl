@@ -23,11 +23,22 @@
 package netpath
 
 import (
+	"fmt"
 	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
 )
+
+// HTTPStatusError preserves the transport status without a provider response body.
+type HTTPStatusError struct {
+	Operation  string
+	StatusCode int
+}
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("%s: status %d (response body redacted)", e.Operation, e.StatusCode)
+}
 
 // Verdict is the outcome for one endpoint.
 type Verdict string

@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/discovery"
 	"trstctl.com/trstctl/internal/discovery/ctmonitor"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -523,7 +524,7 @@ func addCTCheckpoint(logs *[]ctMonitoringLogResponse, checkpoint store.CTCheckpo
 		if (*logs)[i].URL != checkpoint.LogURL {
 			continue
 		}
-		(*logs)[i].LastError = checkpoint.LastPollError
+		(*logs)[i].LastError = orchestrator.SanitizeDiscoveryRunError(checkpoint.LastPollError)
 		(*logs)[i].LastPolledAt = checkpoint.LastPolledAt
 		(*logs)[i].RetiredAt = checkpoint.RetiredAt
 		return

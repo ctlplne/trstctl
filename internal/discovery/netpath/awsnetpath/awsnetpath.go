@@ -402,7 +402,7 @@ func (r *Reader) call(ctx context.Context, ep endpoint, version string, params u
 		return fmt.Errorf("awsnetpath: %s: read response: %w", params.Get("Action"), err)
 	}
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("awsnetpath: %s: status %d (response body redacted)", params.Get("Action"), resp.StatusCode)
+		return &netpath.HTTPStatusError{Operation: "awsnetpath: " + params.Get("Action"), StatusCode: resp.StatusCode}
 	}
 	if err := xml.Unmarshal(raw, out); err != nil {
 		return fmt.Errorf("awsnetpath: %s: decode response: %w", params.Get("Action"), err)

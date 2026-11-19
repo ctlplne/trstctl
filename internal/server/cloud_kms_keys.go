@@ -35,12 +35,11 @@ func (d *issuanceDispatcher) executeCloudKMSKeyDiscoveryRun(ctx context.Context,
 		return netscan.Report{Targets: len(cfg.Providers)}, "succeeded", "", nil
 	}
 	rep := netscan.Report{Targets: len(cfg.Providers)}
-	var failures []string
 	for i, p := range cfg.Providers {
 		keys, host, err := readAWSKMSKeys(ctx, p, d.egress)
 		if err != nil {
 			rep.Failed++
-			failures = append(failures, fmt.Sprintf("provider %d: %v", i+1, err))
+			rep.ProviderFailures = append(rep.ProviderFailures, discoveryProviderFailure(i+1, err))
 			continue
 		}
 		region := strings.TrimSpace(p.Region)
@@ -91,9 +90,9 @@ func (d *issuanceDispatcher) executeCloudKMSKeyDiscoveryRun(ctx context.Context,
 	}
 	switch {
 	case rep.Failed > 0 && rep.Discovered > 0:
-		return rep, "partial", "some cloud KMS providers failed: " + strings.Join(failures, "; "), nil
+		return rep, "partial", "some cloud KMS providers failed", nil
 	case rep.Failed > 0:
-		return rep, "failed", "every cloud KMS provider failed: " + strings.Join(failures, "; "), nil
+		return rep, "failed", "every cloud KMS provider failed", nil
 	}
 	return rep, "succeeded", "", nil
 }
@@ -116,7 +115,7 @@ func readAWSKMSKeys(ctx context.Context, p cloudCertificateProviderConfig, guard
 	if err != nil || u.Host == "" {
 		return nil, "", fmt.Errorf("aws-kms endpoint is not a URL")
 	}
-	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+	client, err := discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return nil, "", err
 	}

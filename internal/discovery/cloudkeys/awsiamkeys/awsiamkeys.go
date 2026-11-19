@@ -200,6 +200,8 @@ func (e *StatusError) Error() string {
 	return fmt.Sprintf("awsiamkeys: %s: status %d (response body redacted)", e.Action, e.Status)
 }
 
+func (e *StatusError) HTTPStatusCode() int { return e.Status }
+
 // DeactivateKey sets one user's access key Inactive through IAM's
 // UpdateAccessKey (M3-L4). The key stays and can be activated again; IAM
 // answers 404 when the user or key is gone. It needs iam:UpdateAccessKey.

@@ -365,6 +365,24 @@ type pinnedTransport struct {
 	next    http.RoundTripper
 }
 
+type unboundDestination struct{ origin string }
+
+func (e *unboundDestination) Error() string {
+	return fmt.Sprintf("%s: a request to %s is outside the origins the credential is bound to", ErrNotBound, e.origin)
+}
+
+func (e *unboundDestination) Unwrap() error { return ErrNotBound }
+
+// RefusedDestinationOrigin returns an origin checked by the pinned transport.
+// It never reads an origin from a provider's error text.
+func RefusedDestinationOrigin(err error) string {
+	var refused *unboundDestination
+	if errors.As(err, &refused) {
+		return refused.origin
+	}
+	return ""
+}
+
 func (t *pinnedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req == nil || req.URL == nil {
 		return nil, fmt.Errorf("%w: the request names no destination", ErrNotBound)
@@ -373,9 +391,9 @@ func (t *pinnedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	origin, err := originOf(req.URL)
 	if err != nil || (scheme != "https" && scheme != "http") || !t.allowed[origin] {
 		if origin == "" {
-			origin = "an unbound destination"
+			return nil, fmt.Errorf("%w: a request to an unbound destination is outside the origins the credential is bound to", ErrNotBound)
 		}
-		return nil, fmt.Errorf("%w: a request to %s is outside the origins the credential is bound to", ErrNotBound, origin)
+		return nil, &unboundDestination{origin: origin}
 	}
 	return t.next.RoundTrip(req)
 }

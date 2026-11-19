@@ -68,6 +68,7 @@ type DiscoveryRun struct {
 	Rejected          int
 	Blocked           int
 	Error             string
+	ErrorClassified   bool
 	StartedAt         *time.Time
 	CompletedAt       *time.Time
 	CreatedAt         time.Time
@@ -132,6 +133,9 @@ type DiscoveryFinding struct {
 	// applied sequence so a catch-up replay of an already applied observation
 	// is a no-op instead of a second sighting.
 	ProjectionEventSequence int64
+	// AttackPathRefusedOrigin is projected from the worker receipt, outside
+	// metadata so manual ingestion and triage cannot supply a transport fact.
+	AttackPathRefusedOrigin string `json:"-"`
 }
 
 // ErrDiscoveryFindingConflict means two immutable recorded events claimed the
@@ -182,6 +186,9 @@ type DiscoveryMonitoringSource struct {
 	LastRunID                 string
 	LastRunStatus             string
 	LastRunError              string
+	LastRunErrorClassified    bool
+	LastRunTargets            int
+	LastRunFailed             int
 	LastRunCreatedAt          *time.Time
 	LastRunCompletedAt        *time.Time
 	LastDiscoveryAt           *time.Time
@@ -496,11 +503,11 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 		`INSERT INTO discovery_findings
 		        (id, tenant_id, run_id, source_id, kind, ref, provenance, fingerprint,
 		         risk_score, metadata, discovered_at, recorded_ids, first_seen_at, last_seen_at, seen_count,
-		         projection_event_sequence)
-		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, ARRAY[$12::uuid], $11, $11, 1, $13)
+		         projection_event_sequence, attack_path_refused_origin)
+		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, ARRAY[$12::uuid], $11, $11, 1, $13, $14)
 		 ON CONFLICT DO NOTHING`,
 		f.ID, f.TenantID, f.RunID, f.SourceID, f.Kind, f.Ref, f.Provenance, f.Fingerprint,
-		f.RiskScore, normalizeJSON(f.Metadata), f.DiscoveredAt, recordedID, f.ProjectionEventSequence)
+		f.RiskScore, normalizeJSON(f.Metadata), f.DiscoveredAt, recordedID, f.ProjectionEventSequence, f.AttackPathRefusedOrigin)
 	if err != nil {
 		return err
 	}
@@ -520,7 +527,7 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 		existingTime                                            time.Time
 		existingSequence                                        int64
 		alreadyRecorded                                         bool
-		sameSource, sameKind, sameRef                           bool
+		sameSource, sameKind, sameRef, sameRefusedOrigin        bool
 		sameProvenance, sameFingerprint, sameRisk, sameMetadata bool
 	)
 	err = tx.QueryRow(ctx,
@@ -535,7 +542,8 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 		        provenance = $7,
 		        fingerprint = $8,
 		        risk_score = $9,
-		        metadata = $10::jsonb
+		        metadata = $10::jsonb,
+		        attack_path_refused_origin = $12
 		   FROM discovery_findings
 		  WHERE tenant_id = $1::uuid
 		    AND (id = $2::uuid OR
@@ -544,9 +552,9 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 		  LIMIT 1
 		  FOR UPDATE`,
 		f.TenantID, f.ID, f.RunID, f.SourceID, f.Kind, f.Ref, f.Provenance,
-		f.Fingerprint, f.RiskScore, normalizeJSON(f.Metadata), recordedID).Scan(
+		f.Fingerprint, f.RiskScore, normalizeJSON(f.Metadata), recordedID, f.AttackPathRefusedOrigin).Scan(
 		&existingID, &existingRun, &existingTime, &existingSequence, &alreadyRecorded, &sameSource, &sameKind, &sameRef,
-		&sameProvenance, &sameFingerprint, &sameRisk, &sameMetadata)
+		&sameProvenance, &sameFingerprint, &sameRisk, &sameMetadata, &sameRefusedOrigin)
 	if err != nil {
 		return fmt.Errorf("store: locate conflicted discovery finding: %w", err)
 	}
@@ -584,6 +592,7 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 			        provenance = $4,
 			        risk_score = $5,
 			        metadata = $6::jsonb,
+			        attack_path_refused_origin = $10,
 			        discovered_at = LEAST(discovered_at, $7),
 			        first_seen_at = LEAST(first_seen_at, $7),
 			        last_seen_at = GREATEST(last_seen_at, $7),
@@ -596,12 +605,13 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 			        )
 			  WHERE tenant_id = $1::uuid AND id = $2::uuid`,
 			f.TenantID, existingID, f.RunID, f.Provenance, f.RiskScore, normalizeJSON(f.Metadata),
-			f.DiscoveredAt, recordedID, f.ProjectionEventSequence)
+			f.DiscoveredAt, recordedID, f.ProjectionEventSequence, f.AttackPathRefusedOrigin)
 		return err
 	}
-	differences := make([]string, 0, 3)
+	differences := make([]string, 0, 4)
 	for field, same := range map[string]bool{
 		"provenance": sameProvenance, "risk_score": sameRisk, "metadata": sameMetadata,
+		"attack_path_refused_origin": sameRefusedOrigin,
 	} {
 		if !same {
 			differences = append(differences, field)
@@ -757,10 +767,11 @@ func (s *Store) ApplyDiscoveryRunCompletedTx(ctx context.Context, tx pgx.Tx, run
 		        error = $9,
 		        executed_by_agent_id = NULLIF($10, '')::uuid,
 		        completed_at = $11,
-		        target_results = $12::jsonb
+		        target_results = $12::jsonb,
+		        diagnostics_classified = $13
 		  WHERE tenant_id = $1 AND id = $2`,
 		run.TenantID, run.ID, run.Status, run.Targets, run.Discovered, run.Failed,
-		run.Rejected, run.Blocked, run.Error, run.ExecutedByAgentID, run.CompletedAt, targetResultsJSON)
+		run.Rejected, run.Blocked, run.Error, run.ExecutedByAgentID, run.CompletedAt, targetResultsJSON, run.ErrorClassified)
 	if err != nil {
 		return err
 	}
@@ -963,7 +974,7 @@ func (s *Store) GetDiscoveryRun(ctx context.Context, tenantID, id string) (Disco
 		              requested_by, execution, segment, required_agent_role,
 		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
 		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at,
-		              target_results
+		              target_results, diagnostics_classified
 		         FROM discovery_runs
 		        WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
 	})
@@ -981,7 +992,7 @@ func (s *Store) GetLatestDiscoveryRunForSource(ctx context.Context, tenantID, so
 		              requested_by, execution, segment, required_agent_role,
 		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
 		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at,
-		              target_results
+		              target_results, diagnostics_classified
 		         FROM discovery_runs
 		        WHERE tenant_id = $1 AND source_id = $2
 		     ORDER BY created_at DESC, id DESC
@@ -999,7 +1010,7 @@ func (s *Store) ListDiscoveryRunsPage(ctx context.Context, tenantID, afterID str
 		              requested_by, execution, segment, required_agent_role,
 		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
 		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at,
-		              target_results
+		              target_results, diagnostics_classified
 		         FROM discovery_runs
 		        WHERE tenant_id = $1 AND id > $2
 		     ORDER BY discovery_runs.id LIMIT $3`, tenantID, afterID, limit)
@@ -1030,7 +1041,7 @@ func (s *Store) ListDiscoveryRunsRecentPage(ctx context.Context, tenantID, befor
 		              requested_by, execution, segment, required_agent_role,
 		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
 		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at,
-		              target_results
+		              target_results, diagnostics_classified
 		         FROM discovery_runs
 		        WHERE tenant_id = $1
 		          AND ($2::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR (created_at, id) <
@@ -1067,7 +1078,7 @@ func (s *Store) GetDiscoveryFinding(ctx context.Context, tenantID, id string) (D
 			        provenance, fingerprint, risk_score, metadata, discovered_at,
 			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at,
 			        first_seen_at, last_seen_at, seen_count,
-			        triage_assignee, triage_due_at, triage_evidence_ref, risk_accepted_until
+			        triage_assignee, triage_due_at, triage_evidence_ref, risk_accepted_until, attack_path_refused_origin
 			   FROM discovery_findings
 			  WHERE tenant_id = $1 AND (id = $2 OR $2::uuid = ANY(recorded_ids))`, tenantID, id), &out)
 	})
@@ -1086,7 +1097,7 @@ func (s *Store) ListCTFindingsBySerial(ctx context.Context, tenantID, serial, ex
 			        provenance, fingerprint, risk_score, metadata, discovered_at,
 			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at,
 			        first_seen_at, last_seen_at, seen_count,
-			        triage_assignee, triage_due_at, triage_evidence_ref, risk_accepted_until
+			        triage_assignee, triage_due_at, triage_evidence_ref, risk_accepted_until, attack_path_refused_origin
 			   FROM discovery_findings
 			  WHERE tenant_id = $1 AND kind = 'ct_unexpected_issuance' AND id::text <> $3
 			    AND lower(ltrim(replace(metadata->>'serial', ':', ''), '0')) = lower(ltrim(replace($2, ':', ''), '0'))
@@ -1129,6 +1140,9 @@ func (s *Store) ListDiscoveryMonitoringSources(ctx context.Context, tenantID str
 			        COALESCE(last_run.id, '') AS last_run_id,
 			        COALESCE(last_run.status, '') AS last_run_status,
 			        COALESCE(last_run.error, '') AS last_run_error,
+			        COALESCE(last_run.diagnostics_classified, false),
+			        COALESCE(last_run.targets, 0),
+			        COALESCE(last_run.failed, 0),
 			        last_run.created_at AS last_run_created_at,
 			        last_run.completed_at AS last_run_completed_at,
 			        finding_counts.last_discovery_at,
@@ -1147,7 +1161,7 @@ func (s *Store) ListDiscoveryMonitoringSources(ctx context.Context, tenantID str
 			         LIMIT 1
 		       ) sched ON true
 		  LEFT JOIN LATERAL (
-			        SELECT dr.id::text, dr.status, dr.error, dr.created_at, dr.completed_at
+			        SELECT dr.id::text, dr.status, dr.error, dr.diagnostics_classified, dr.targets, dr.failed, dr.created_at, dr.completed_at
 			          FROM discovery_runs dr
 			         WHERE dr.tenant_id = $1 AND dr.source_id = s.id
 			         ORDER BY dr.created_at DESC, dr.id DESC
@@ -1184,7 +1198,7 @@ func (s *Store) ListDiscoveryMonitoringSources(ctx context.Context, tenantID str
 			if err := rows.Scan(&row.SourceID, &row.TenantID, &row.Kind, &row.Name, &row.Config,
 				&row.CreatedAt, &row.UpdatedAt, &row.ScheduleID, &row.ScheduleEnabled,
 				&row.MonitoringIntervalSeconds, &row.ScheduleUpdatedAt, &row.LastRunID,
-				&row.LastRunStatus, &row.LastRunError, &row.LastRunCreatedAt,
+				&row.LastRunStatus, &row.LastRunError, &row.LastRunErrorClassified, &row.LastRunTargets, &row.LastRunFailed, &row.LastRunCreatedAt,
 				&row.LastRunCompletedAt, &row.LastDiscoveryAt, &row.RunCount,
 				&row.CompletedRunCount, &row.FailedRunCount, &row.FindingCount,
 				&row.OpenFindingCount, &row.CertificateInventoryCount); err != nil {
@@ -1211,7 +1225,7 @@ func scanDiscoveryRun(row rowScanner, run *DiscoveryRun) error {
 	if err := row.Scan(&run.ID, &run.TenantID, &run.SourceID, &run.ScheduleID, &run.RetryOfRunID, &run.Status, &run.DryRun,
 		&run.RequestedBy, &run.Execution, &run.Segment, &run.RequiredAgentRole, &run.RequiredAgentID,
 		&run.ExecutedByAgentID, &run.Targets, &run.Discovered, &run.Failed, &run.Rejected, &run.Blocked, &run.Error,
-		&run.StartedAt, &run.CompletedAt, &run.CreatedAt, &targetResults); err != nil {
+		&run.StartedAt, &run.CompletedAt, &run.CreatedAt, &targetResults, &run.ErrorClassified); err != nil {
 		return err
 	}
 	run.TargetResults = nil
@@ -1229,7 +1243,7 @@ func scanDiscoveryFinding(row rowScanner, f *DiscoveryFinding) error {
 		&f.Provenance, &f.Fingerprint, &f.RiskScore, &meta, &f.DiscoveredAt,
 		&f.TriageStatus, &f.ManagedIdentityID, &f.TriageActor, &f.TriageReason, &f.TriagedAt,
 		&f.FirstSeenAt, &f.LastSeenAt, &f.SeenCount,
-		&f.TriageAssignee, &f.TriageDueAt, &f.TriageEvidenceRef, &f.RiskAcceptedUntil); err != nil {
+		&f.TriageAssignee, &f.TriageDueAt, &f.TriageEvidenceRef, &f.RiskAcceptedUntil, &f.AttackPathRefusedOrigin); err != nil {
 		return err
 	}
 	f.Metadata = json.RawMessage(meta)

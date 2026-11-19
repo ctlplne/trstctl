@@ -3741,6 +3741,17 @@
 
 ### Security
 
+- Discovery records closed run and per-target error diagnostics, and applies
+  the same rules in views of older runs. The diagnostics retain required
+  configuration fields and explain why a relay rejected a findings count.
+  Numbered cloud provider errors keep the transport's HTTP status. Cloud
+  network-path findings classify provider read failures in retained views and
+  preserve source-configured refused origins recorded by the worker.
+  Subject export and erasure cover those run, target, and finding diagnostics.
+  Receipt recovery projects the active event history across an erasure.
+  Roll forward from pre-upgrade read-model snapshots by replaying the log.
+  Relay DEBUG output carries the outbox delivery error class (CR-405, CR-410).
+
 - Static secret rotation checks write access to the provider's environment
   for preview, execution, and schedule changes (CR-231). A native predecessor
   must match the secret's live reference or the role's configured principal.

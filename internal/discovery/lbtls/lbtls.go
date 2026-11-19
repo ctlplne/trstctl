@@ -40,6 +40,15 @@ type Listener struct {
 	Ciphers []string
 }
 
+// HTTPStatusError keeps the wire status separate from a provider's diagnostic.
+type HTTPStatusError struct {
+	Status     int
+	Diagnostic string
+}
+
+func (e *HTTPStatusError) Error() string       { return e.Diagnostic }
+func (e *HTTPStatusError) HTTPStatusCode() int { return e.Status }
+
 // versionOrder is the order versions are compared in.
 var versionOrder = []string{"SSLv3", "TLSv1.0", "TLSv1.1", "TLSv1.2", "TLSv1.3"}
 

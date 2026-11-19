@@ -177,7 +177,7 @@ func (r *Reader) list(ctx context.Context, path string, visit func(json.RawMessa
 			return fmt.Errorf("gcpnetpath: GET %s: read response: %w", path, readErr)
 		}
 		if resp.StatusCode/100 != 2 {
-			return fmt.Errorf("gcpnetpath: GET %s: status %d (response body redacted)", path, resp.StatusCode)
+			return &netpath.HTTPStatusError{Operation: "gcpnetpath: GET " + path, StatusCode: resp.StatusCode}
 		}
 		if err := visit(raw); err != nil {
 			return fmt.Errorf("gcpnetpath: GET %s: decode response: %w", path, err)

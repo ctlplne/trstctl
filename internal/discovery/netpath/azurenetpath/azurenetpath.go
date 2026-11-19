@@ -243,7 +243,7 @@ func (r *Reader) fetch(ctx context.Context, u *url.URL, out any) error {
 		return fmt.Errorf("azurenetpath: GET %s: read response: %w", u.Path, readErr)
 	}
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("azurenetpath: GET %s: status %d (response body redacted)", u.Path, resp.StatusCode)
+		return &netpath.HTTPStatusError{Operation: "azurenetpath: GET " + u.Path, StatusCode: resp.StatusCode}
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
 		return fmt.Errorf("azurenetpath: GET %s: decode response: %w", u.Path, err)

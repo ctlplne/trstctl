@@ -265,6 +265,8 @@ type StatusError struct{ Code int }
 
 func (e *StatusError) Error() string { return fmt.Sprintf("status %d", e.Code) }
 
+func (e *StatusError) HTTPStatusCode() int { return e.Code }
+
 func (r *Reader) get(ctx context.Context, p string, out any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(r.cfg.Endpoint, "/")+p, nil)
 	if err != nil {

@@ -255,6 +255,8 @@ func (e *apiError) Error() string {
 	return fmt.Sprintf("awskms: %s: status %d %s (response body redacted)", e.Op, e.Status, e.Code)
 }
 
+func (e *apiError) HTTPStatusCode() int { return e.Status }
+
 func (r *Reader) call(ctx context.Context, op string, in, out any) error {
 	body, err := json.Marshal(in)
 	if err != nil {

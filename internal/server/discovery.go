@@ -49,6 +49,7 @@ import (
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/pamsignin"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/scancollect"
@@ -193,20 +194,71 @@ func (d *issuanceDispatcher) handleDiscoveryRun(ctx context.Context, m orchestra
 		if err != nil {
 			return nil, err
 		}
+		ctx = withDiscoveryCredentialFailures(ctx, m.TenantID, src.ID, src.Kind)
 		rep, status, msg, err := d.executeDiscoveryRun(ctx, m.TenantID, src, p)
 		if err != nil {
 			return nil, err
 		}
-		if err := d.orch.CompleteDiscoveryRun(ctx, m.TenantID, store.DiscoveryRun{
+		authority := d.discoveryDiagnosticAuthority(ctx, m.TenantID, src, rep.NotDelivered, rep.TargetResults)
+		authority.KubernetesNamespace = rep.NotDeliveredNamespace
+		authority.ArtifactCleanup = rep.ArtifactCleanup
+		authority.ProviderFailures = rep.ProviderFailures
+		authority.WeakKeysOmitted = rep.WeakKeysOmitted
+		if src.Kind == k8stls.SourceKind && rep.Discovered > len(rep.TargetResults) {
+			authority.KubernetesOutcomesListed = len(rep.TargetResults)
+		}
+		if err := d.orch.CompleteDiscoveryRunWithDiagnostics(ctx, m.TenantID, store.DiscoveryRun{
 			ID: p.ID, Status: status, Targets: rep.Targets, Discovered: rep.Discovered,
 			Failed: rep.Failed, Rejected: rep.Rejected, Error: msg,
 			TargetResults: discoveryTargetResults(rep.TargetResults),
-		}); err != nil {
+		}, authority); err != nil {
 			return nil, err
 		}
 		return []byte(status), nil
 	})
 	return err
+}
+
+func (d *issuanceDispatcher) discoveryDiagnosticAuthority(ctx context.Context, tenantID string, src store.DiscoverySource, notDelivered int, targets []netscan.TargetResult) orchestrator.DiscoveryDiagnosticAuthority {
+	var authority orchestrator.DiscoveryDiagnosticAuthority
+	if observed, _ := ctx.Value(discoveryCredentialFailuresKey{}).(*discoveryCredentialFailures); observed != nil &&
+		observed.tenantID == tenantID && observed.sourceID == src.ID && observed.kind == src.Kind {
+		authority.AllowsEnvironmentName = observed.permitsName
+		authority.AllowsRefusedOrigin = observed.permitsOrigin
+	}
+	for _, target := range targets {
+		if target.RefusedOrigin != "" && authority.AllowsRefusedOrigin != nil && authority.AllowsRefusedOrigin(target.RefusedOrigin) {
+			if authority.RefusedOrigins == nil {
+				authority.RefusedOrigins = make(map[string]string)
+			}
+			authority.RefusedOrigins[target.Target] = target.RefusedOrigin
+		}
+	}
+	if src.Kind != k8stls.SourceKind {
+		return authority
+	}
+	settings, err := k8stls.DeliverySettings(src.Config)
+	if err != nil {
+		return authority
+	}
+	authority.KubernetesOwnerID = settings.OwnerID
+	authority.KubernetesNotDelivered = notDelivered
+	authority.KubernetesNamespaces = make(map[string]string)
+	for _, target := range targets {
+		if target.Kind != k8stls.FindingKind {
+			continue
+		}
+		_, address, _ := strings.Cut(target.Target, ":")
+		if namespace, _, ok := strings.Cut(address, "/"); ok {
+			authority.KubernetesNamespaces[target.Target] = namespace
+		}
+	}
+	return authority
+}
+
+func discoveryProviderFailure(ordinal int, err error) netscan.ProviderFailure {
+	var missing *missingEnvironmentCredential
+	return netscan.ProviderFailure{Ordinal: ordinal, Err: err, MissingBoundCredential: errors.As(err, &missing)}
 }
 
 // discoveryRunRelayOwned closes the old production escape hatch too: rows
@@ -354,7 +406,10 @@ func (d *issuanceDispatcher) executeCloudCertificateDiscoveryRun(ctx context.Con
 	rep := discoverer.Discover(ctx, providers)
 	outcomes := append([]cloudProviderOutcome(nil), unbuilt...)
 	for _, o := range rep.Outcomes {
-		outcomes = append(outcomes, cloudProviderOutcome{Provider: o.Provider, Status: o.Status, Error: o.Error})
+		outcomes = append(outcomes, cloudProviderOutcome{
+			Provider: o.Provider, Status: o.Status, Error: orchestrator.SanitizeDiscoveryRunError(o.Error),
+			RefusedOrigin: outboundcred.RefusedDestinationOrigin(o.Cause),
+		})
 	}
 	sortCloudProviderOutcomes(outcomes)
 	failed := rep.Failed + len(unbuilt)
@@ -395,7 +450,10 @@ func (d *issuanceDispatcher) executeCloudSecretDiscoveryRun(ctx context.Context,
 	rep := discoverer.Discover(ctx, providers)
 	outcomes := append([]cloudProviderOutcome(nil), unbuilt...)
 	for _, o := range rep.Outcomes {
-		outcomes = append(outcomes, cloudProviderOutcome{Provider: o.Provider, Status: o.Status, Error: o.Error})
+		outcomes = append(outcomes, cloudProviderOutcome{
+			Provider: o.Provider, Status: o.Status, Error: orchestrator.SanitizeDiscoveryRunError(o.Error),
+			RefusedOrigin: outboundcred.RefusedDestinationOrigin(o.Cause),
+		})
 	}
 	sortCloudProviderOutcomes(outcomes)
 	failed := rep.Failed + len(unbuilt)
@@ -471,9 +529,10 @@ func (d *issuanceDispatcher) executeCTLogDiscoveryRun(ctx context.Context, tenan
 
 // cloudProviderOutcome is one provider's terminal result in a cloud discovery run.
 type cloudProviderOutcome struct {
-	Provider string
-	Status   string
-	Error    string
+	Provider      string
+	Status        string
+	Error         string
+	RefusedOrigin string
 }
 
 // cloudProviderTargetResults carries provider outcomes into the completion
@@ -495,7 +554,7 @@ func cloudProviderTargetResults(outcomes []cloudProviderOutcome) []netscan.Targe
 		if n := seen[target]; n > 1 {
 			target = fmt.Sprintf("%s#%d", target, n)
 		}
-		out = append(out, netscan.TargetResult{Kind: "cloud_provider", Target: target, Status: o.Status, Error: o.Error})
+		out = append(out, netscan.TargetResult{Kind: "cloud_provider", Target: target, Status: o.Status, Error: o.Error, RefusedOrigin: o.RefusedOrigin})
 	}
 	return out
 }
@@ -777,7 +836,7 @@ func (d *issuanceDispatcher) executeKubernetesTLSAutoIssuanceRun(ctx context.Con
 		return netscan.Report{Targets: len(findings)}, "succeeded", "", nil
 	}
 	rep := netscan.Report{Targets: len(findings)}
-	notDelivered, sharedReason := 0, ""
+	sharedReason := ""
 	for _, f := range findings {
 		meta, err := json.Marshal(f.Metadata)
 		if err != nil {
@@ -798,11 +857,15 @@ func (d *issuanceDispatcher) executeKubernetesTLSAutoIssuanceRun(ctx context.Con
 			}
 		}
 		if status == kubernetesTLSNotDelivered {
-			notDelivered++
-			if notDelivered == 1 {
+			rep.NotDelivered++
+			if rep.NotDelivered == 1 {
 				sharedReason = reason
+				rep.NotDeliveredNamespace = f.Namespace
 			} else if sharedReason != reason {
 				sharedReason = ""
+			}
+			if rep.NotDeliveredNamespace != f.Namespace {
+				rep.NotDeliveredNamespace = ""
 			}
 		}
 		if len(rep.TargetResults) < kubernetesTLSOutcomeLimit {
@@ -813,11 +876,11 @@ func (d *issuanceDispatcher) executeKubernetesTLSAutoIssuanceRun(ctx context.Con
 		}
 	}
 	sort.SliceStable(rep.TargetResults, func(i, j int) bool { return rep.TargetResults[i].Target < rep.TargetResults[j].Target })
-	if notDelivered == 0 {
+	if rep.NotDelivered == 0 {
 		return rep, "succeeded", "", nil
 	}
-	summary := fmt.Sprintf("%d Kubernetes TLS resources were not delivered", notDelivered)
-	if notDelivered == 1 {
+	summary := fmt.Sprintf("%d Kubernetes TLS resources were not delivered", rep.NotDelivered)
+	if rep.NotDelivered == 1 {
 		summary = "1 Kubernetes TLS resource was not delivered"
 	}
 	if rep.Discovered > kubernetesTLSOutcomeLimit {
@@ -1106,7 +1169,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		if endpoint == "" {
 			endpoint = "https://secretsmanager." + region + ".amazonaws.com"
 		}
-		client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+		client, err := discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 		if err != nil {
 			return nil, err
 		}
@@ -1139,10 +1202,12 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		client := netsec.SafeClient(30 * time.Second)
 		if endpoint != "" {
 			var err error
-			client, err = cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+			client, err = discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			rememberDiscoverySourceEndpoint(ctx, "https://secretmanager.googleapis.com")
 		}
 		token, err := resolveBoundCredentialRef(ctx, p.TokenRef, client)
 		if err != nil {
@@ -1158,7 +1223,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		if vaultURL == "" {
 			return nil, errors.New("azure-key-vault vault_url is required")
 		}
-		client, err := cloudHTTPClient(vaultURL, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+		client, err := discoveryCloudHTTPClient(ctx, vaultURL, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 		if err != nil {
 			return nil, err
 		}
@@ -1176,7 +1241,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		if vaultURL == "" {
 			return nil, errors.New("hashicorp-vault vault_url is required")
 		}
-		client, err := cloudHTTPClient(vaultURL, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+		client, err := discoveryCloudHTTPClient(ctx, vaultURL, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 		if err != nil {
 			return nil, err
 		}
@@ -1208,7 +1273,7 @@ func cloudCertificateProvider(ctx context.Context, p cloudCertificateProviderCon
 		if endpoint == "" {
 			endpoint = "https://acm." + region + ".amazonaws.com"
 		}
-		client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+		client, err := discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 		if err != nil {
 			return nil, err
 		}
@@ -1233,7 +1298,7 @@ func cloudCertificateProvider(ctx context.Context, p cloudCertificateProviderCon
 		if vaultURL == "" {
 			return nil, errors.New("azure-keyvault vault_url is required")
 		}
-		client, err := cloudHTTPClient(vaultURL, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+		client, err := discoveryCloudHTTPClient(ctx, vaultURL, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 		if err != nil {
 			return nil, err
 		}
@@ -1252,10 +1317,12 @@ func cloudCertificateProvider(ctx context.Context, p cloudCertificateProviderCon
 		client := netsec.SafeClient(30 * time.Second)
 		if endpoint != "" {
 			var err error
-			client, err = cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
+			client, err = discoveryCloudHTTPClient(ctx, endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			rememberDiscoverySourceEndpoint(ctx, "https://certificatemanager.googleapis.com")
 		}
 		token, err := resolveBoundCredentialRef(ctx, p.TokenRef, client)
 		if err != nil {
@@ -1265,6 +1332,17 @@ func cloudCertificateProvider(ctx context.Context, p cloudCertificateProviderCon
 	default:
 		return nil, fmt.Errorf("unsupported cloud certificate provider %q", p.Provider)
 	}
+}
+
+// Only the source's selected endpoints enter diagnostic authority. A URL
+// learned from a provider response can still be refused by the pin, but
+// that refusal carries no authority to display the remote hostname.
+func discoveryCloudHTTPClient(ctx context.Context, endpoint string, allowPrivate bool, privateCIDRs []string) (*http.Client, error) {
+	client, err := cloudHTTPClient(endpoint, allowPrivate, privateCIDRs)
+	if err == nil {
+		rememberDiscoverySourceEndpoint(ctx, endpoint)
+	}
+	return client, err
 }
 
 func cloudHTTPClient(endpoint string, allowPrivate bool, privateCIDRs []string) (*http.Client, error) {
@@ -1527,7 +1605,7 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 		// N6: the content is read from the provider, not an export.
 		target, collected, err = collectThirdParty(ctx, cfg)
 		if errors.Is(err, scancollect.ErrRefused) {
-			return netscan.Report{}, "failed", "native collection refused: " + err.Error(), nil
+			return netscan.Report{}, "failed", nativeCollectionRefusalDiagnostic(err), nil
 		}
 	} else {
 		target, err = secretscan.PrepareThirdPartyTarget(cfg)
@@ -1659,13 +1737,29 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 	if rep.Discovered == 0 && rep.Failed == 0 {
 		msg = "third-party secret scan completed with no findings"
 	}
-	if note := secretscan.RemoveThirdPartyArtifactAfterScan(cfg); note != "" {
-		if msg != "" {
-			msg += "; "
-		}
-		msg += note
+	switch note := secretscan.RemoveThirdPartyArtifactAfterScan(cfg); note {
+	case "":
+	case string(netscan.ArtifactRemoved):
+		rep.ArtifactCleanup = netscan.ArtifactRemoved
+	default:
+		rep.ArtifactCleanup = netscan.ArtifactRemovalFailed
 	}
 	return rep, status, msg, nil
+}
+
+func nativeCollectionRefusalDiagnostic(err error) string {
+	var status *scancollect.HTTPStatusError
+	var missing *missingEnvironmentCredential
+	switch {
+	case errors.As(err, &status):
+		return fmt.Sprintf("HTTP %d", status.StatusCode)
+	case errors.As(err, &missing):
+		return missing.Error()
+	case errors.Is(err, outboundcred.ErrNotBound):
+		return err.Error()
+	default:
+		return "native collection refused: check the source configuration and provider access, then rerun"
+	}
 }
 
 func discoveryRunTerminal(status string) bool {

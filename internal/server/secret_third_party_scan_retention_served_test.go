@@ -7,13 +7,61 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/privacy"
+	"trstctl.com/trstctl/internal/secretscan"
 )
+
+type emptyRetentionScanner struct{}
+
+func (emptyRetentionScanner) Scan(context.Context, string) (secretscan.Report, error) {
+	return secretscan.Report{}, nil
+}
+
+func TestServedThirdPartySecretScanReportsCleanupWithNoFindings(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.SecretScanner = emptyRetentionScanner{}
+	})
+	token := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read")
+	directory := t.TempDir()
+	artifact := writeSecretArtifact(t, t.TempDir(), "export.jsonl", `{}`)
+	missing := filepath.Join(t.TempDir(), "missing-export.jsonl")
+	for _, tc := range []struct{ name, path, result string }{
+		{"removed", artifact, "artifact removed after scan"},
+		{"directory-retained", directory, "artifact not removed after scan"},
+		{"missing", missing, "artifact not removed after scan"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans/third-party/slack/ingest", token, "cleanup-"+tc.name,
+				map[string]any{"source": "fixture/" + tc.name, "artifact_path": tc.path, "delete_artifact_after_scan": true})
+			var queued struct {
+				RunID string `json:"run_id"`
+			}
+			if err := json.Unmarshal(body, &queued); status != http.StatusAccepted || err != nil || queued.RunID == "" {
+				t.Fatalf("queue scan: HTTP %d, err=%v", status, err)
+			}
+			if err := h.srv.Drain(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			run, err := h.store.GetDiscoveryRun(t.Context(), h.tenant, queued.RunID)
+			if err != nil || run.Status != "succeeded" || !strings.Contains(run.Error, "completed with no findings") ||
+				!strings.Contains(run.Error, tc.result) || strings.Contains(run.Error, tc.path) {
+				t.Fatalf("scan did not record the outcome and closed cleanup status: status=%s error=%q err=%v", run.Status, run.Error, err)
+			}
+		})
+	}
+	if _, err := os.Stat(artifact); !os.IsNotExist(err) {
+		t.Fatalf("removed artifact remains: %v", err)
+	}
+	if info, err := os.Stat(directory); err != nil || !info.IsDir() {
+		t.Fatalf("cleanup changed the directory: %v", err)
+	}
+}
 
 // Artifact retention is automated at both ends: an ingest can ask trstctl to
 // remove the operator's export once the scan is terminal, and the redacted

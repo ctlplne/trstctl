@@ -454,7 +454,7 @@ not this file.
 | `internal/projections/discovery_secret_move.go:20` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/discovery_secret_move.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/discovery_secret_move.go:26` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/projections/projections.go:333` | an event type name, not a credential (CWE-798) |
+| `internal/projections/projections.go:339` | an event type name, not a credential (CWE-798) |
 | `internal/projections/secret_deliveries.go:16` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_integrations.go:237` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_integrations.go:239` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -600,9 +600,9 @@ not this file.
 | `internal/server/decoy_secret_scan_served_test.go:29` | fabricated fixture; no value is real (CWE-798) |
 | `internal/server/decoy_secret_scan_served_test.go:57` | a decoy's path and label, no credential value (CWE-798) |
 | `internal/server/destination_first_verification_served_test.go:38` | fabricated test-only credential (CWE-798) |
-| `internal/server/discovery_cloud_outcomes_served_test.go:48` | env credential references and fixture endpoints; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_cloud_outcomes_served_test.go:49` | env credential reference, not a value (CWE-798) |
-| `internal/server/discovery_cloud_outcomes_served_test.go:50` | env credential reference, not a value (CWE-798) |
+| `internal/server/discovery_cloud_outcomes_served_test.go:50` | env credential references and fixture endpoints; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_cloud_outcomes_served_test.go:51` | env credential reference, not a value (CWE-798) |
+| `internal/server/discovery_cloud_outcomes_served_test.go:52` | env credential reference, not a value (CWE-798) |
 | `internal/server/discovery_cloud_unbuilt_provider_served_test.go:44` | env credential references and fixture endpoints; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_cloud_unbuilt_provider_served_test.go:45` | env credential reference, not a value (CWE-798) |
 | `internal/server/discovery_cloud_unbuilt_provider_served_test.go:46` | env credential reference, not a value (CWE-798) |
@@ -861,7 +861,7 @@ not this file.
 | `internal/server/secret_sync_hosted_targets_served_test.go:2451` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/server/secret_sync_hosted_targets_served_test.go:2503` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/server/secret_sync_hosted_targets_served_test.go:2555` | fabricated fixture credentials; no value is real (CWE-798) |
-| `internal/server/secret_third_party_scan_retention_served_test.go:25` | fabricated fixture (CWE-798) |
+| `internal/server/secret_third_party_scan_retention_served_test.go:73` | fabricated fixture (CWE-798) |
 | `internal/server/secret_third_party_scan_served_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:29` | fabricated fixture (CWE-798) |
 | `internal/server/secret_validity_providers_served_test.go:105` | a key file for a key generated at run time for the stand-in, not a credential (CWE-798) |
@@ -894,11 +894,11 @@ not this file.
 | `internal/server/slack_socket_served_test.go:128` | env: references to test-only values, no credential (CWE-798) |
 | `internal/server/slack_thread_collect_served_test.go:66` | an env: reference to a test-only stand-in token, no credential value (CWE-798) |
 | `internal/server/ssh_agentless_collection_served_test.go:27` | public host pin, restricted account and vault-reference fixtures contain no credential value (CWE-798). |
-| `internal/server/thirdparty_collect_served_test.go:200` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
-| `internal/server/thirdparty_collect_served_test.go:201` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
-| `internal/server/thirdparty_collect_served_test.go:202` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
-| `internal/server/thirdparty_collect_served_test.go:203` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
-| `internal/server/thirdparty_collect_served_test.go:204` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
+| `internal/server/thirdparty_collect_served_test.go:241` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
+| `internal/server/thirdparty_collect_served_test.go:242` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
+| `internal/server/thirdparty_collect_served_test.go:243` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
+| `internal/server/thirdparty_collect_served_test.go:244` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
+| `internal/server/thirdparty_collect_served_test.go:245` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
 | `internal/server/thirdparty_collect_teams_confluence_served_test.go:103` | env: references to test-only stand-in values (CWE-798) |
 | `internal/server/thirdparty_collect_teams_confluence_served_test.go:104` | env: references to test-only stand-in values (CWE-798) |
 | `internal/server/thirdparty_collect_teams_confluence_served_test.go:105` | env: references to test-only stand-in values (CWE-798) |
@@ -1387,10 +1387,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7643` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7660` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7673` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7707` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7655` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7672` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7685` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7720` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:250` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:257` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1529,8 +1529,8 @@ not this file.
 | `internal/store/cryptoasset_migration_test.go:73` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/store/deployment_kek_domain.go:153` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/deployment_kek_domain.go:188` | the column holds a non-negative event sequence (CWE-190) |
-| `internal/store/discovery.go:205` | JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190) |
-| `internal/store/discovery.go:255` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
+| `internal/store/discovery.go:212` | JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/store/discovery.go:262` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/discovery_coverage.go:37` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:57` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:81` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -1607,8 +1607,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:411` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:435` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:52` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:961` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:981` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:963` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:983` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1841,7 +1841,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4236` | closed test table list above |
+| `internal/store/migration_content_test.go:4238` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
@@ -2271,7 +2271,7 @@ not this file.
 | `internal/server/sshcollection_openssh_test.go:272` | stock client against an exact owned container with strict host identity and a disposable private test key (CWE-78). |
 | `internal/server/sshcollection_openssh_test.go:282` | stock-client refusal probe forwards only toward the owned SSH test container, with the same strict host pin (CWE-78). |
 | `internal/server/sts_deny_policy_served_test.go:35` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/thirdparty_collect_served_test.go:113` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/thirdparty_collect_served_test.go:154` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/token_exchange_lab_m4_test.go:36` | the runner's own lab cluster (CWE-78) |
 | `internal/server/token_exchange_lab_m4_test.go:70` | the runner's own lab cluster (CWE-78) |
 | `internal/server/vault_compat_served_test.go:178` | test executes a fixed local tool or fixture it built itself (CWE-78) |

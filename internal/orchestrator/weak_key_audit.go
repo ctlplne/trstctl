@@ -112,9 +112,9 @@ func (o *Orchestrator) RecordWeakKeyAudit(ctx context.Context, tenantID string, 
 		recorded++
 	}
 	status, msg := WeakKeyAuditOutcome(leftOut)
-	if err := o.CompleteDiscoveryRun(ctx, tenantID, store.DiscoveryRun{
+	if err := o.CompleteDiscoveryRunWithDiagnostics(ctx, tenantID, store.DiscoveryRun{
 		ID: runID, Status: status, Targets: rep.Distinct, Discovered: recorded, Error: msg,
-	}); err != nil {
+	}, DiscoveryDiagnosticAuthority{WeakKeysOmitted: leftOut}); err != nil {
 		return store.DiscoveryRun{}, err
 	}
 	return store.DiscoveryRun{

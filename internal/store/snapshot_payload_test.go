@@ -5,6 +5,7 @@ package store_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -14,6 +15,35 @@ import (
 
 	"trstctl.com/trstctl/internal/store"
 )
+
+func TestSnapshotBeforeDiscoveryDiagnosticColumnsRequiresReplay(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Fixture tenant"}); err != nil {
+		t.Fatal(err)
+	}
+	offset, err := s.ProjectionCheckpoint(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteTenantSnapshot(ctx, tenantA, offset); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.LatestSnapshotOffset(ctx); err != nil || got != offset {
+		t.Fatalf("current snapshot was not a complete set: offset=%d err=%v", got, err)
+	}
+	if _, err := s.SystemPool().Exec(ctx, `ALTER TABLE read_model_snapshots
+		DROP CONSTRAINT IF EXISTS read_model_snapshots_format_floor_v22`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SystemPool().Exec(ctx, `UPDATE read_model_snapshots SET format_version = 140
+		WHERE tenant_id = $1`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.LatestSnapshotOffset(ctx); !errors.Is(err, store.ErrNoSnapshot) {
+		t.Fatalf("snapshot format 140 remained eligible despite missing the discovery columns: %v", err)
+	}
+}
 
 // This executes PostgreSQL's capture query. Comparing two Go table lists alone
 // did not catch six restore-owned tables missing from the actual saved payload.

@@ -316,7 +316,7 @@ func TestServedKubernetesTLSRunReportsTheClusterAgentsSignedOutcome(t *testing.T
 	sourceID := createKubernetesTLSSource(t, h.servedHarness, tok, map[string]any{
 		"cluster_agent_id": agentID, "owner_id": owner.ID,
 		"verify_address": "ingress-nginx-controller.ingress-nginx.svc:443",
-		"resources": []map[string]any{{"kind": "Ingress", "namespace": "payments", "name": "web",
+		"resources": []map[string]any{{"kind": "Ingress", "namespace": "payments-handshake", "name": "web",
 			"tls_secret_name": "web-tls", "hosts": []string{"web.example.test"}}},
 	})
 	statusOf := func(want string) kubernetesTLSRun {
@@ -331,16 +331,28 @@ func TestServedKubernetesTLSRunReportsTheClusterAgentsSignedOutcome(t *testing.T
 
 	// The agent refuses before generating any key.
 	job := claimOneRenewal(t, ctx, h)
-	refusal := `this agent's profile does not allow writing Secrets in namespace "payments"`
+	refusal := `this agent's profile does not allow writing Secrets in namespace "payments-handshake"`
 	if accepted, err := h.client.ReportJobResult(ctx, h.report(t, job.JobID, job.Attempt, transport.JobOutcomeFailed, refusal, "")); err != nil || !accepted.Accepted {
 		t.Fatalf("failed report = %+v, %v", accepted, err)
 	}
 	run := statusOf("not_delivered")
-	if run.Status != "partial" || !strings.Contains(run.TargetResults[0].Error+" "+run.Error, refusal) {
+	if run.Status != "partial" || !strings.Contains(run.TargetResults[0].Error, refusal) || !strings.Contains(run.Error, refusal) {
 		t.Fatalf("run = %+v, want the agent's refusal as the reason", run)
 	}
 
 	// The retried job generates the key in the cluster, writes and verifies.
+	if _, err := h.store.SystemPool().Exec(ctx, `UPDATE outbox SET agent_next_attempt_at = now() WHERE id = $1`, job.JobID); err != nil {
+		t.Fatal(err)
+	}
+	job = claimOneRenewal(t, ctx, h)
+	if accepted, err := h.client.ReportJobResult(ctx, h.report(t, job.JobID, job.Attempt, transport.JobOutcomeFailed, transport.CSRValidityRefusalDetail, "")); err != nil || !accepted.Accepted {
+		t.Fatalf("signed profile validity refusal was rejected: %v", err)
+	}
+	run = statusOf("not_delivered")
+	const validityGuidance = "review the pinned profile and its NotBefore backdate"
+	if !strings.Contains(run.Error, validityGuidance) || !strings.Contains(run.TargetResults[0].Error, validityGuidance) {
+		t.Error("the run and target must preserve the admitted signing refusal guidance")
+	}
 	if _, err := h.store.SystemPool().Exec(ctx, `UPDATE outbox SET agent_next_attempt_at = now() WHERE id = $1`, job.JobID); err != nil {
 		t.Fatal(err)
 	}
@@ -350,9 +362,23 @@ func TestServedKubernetesTLSRunReportsTheClusterAgentsSignedOutcome(t *testing.T
 		t.Fatal(err)
 	}
 	defer key.Destroy()
+	if _, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{JobID: job.JobID, Attempt: job.Attempt, CSRDER: key.CSRDER}); err != nil {
+		t.Fatalf("sign the cluster agent's CSR: %v", err)
+	}
+	if accepted, err := h.client.ReportJobResult(ctx, h.report(t, job.JobID, job.Attempt, transport.JobOutcomeFailed, transport.RenewInstallFailed, "")); err != nil || !accepted.Accepted {
+		t.Fatalf("signed install failure report was refused: %v", err)
+	}
+	run = statusOf("not_delivered")
+	if !strings.Contains(run.Error, transport.RenewInstallFailed) || !strings.Contains(run.TargetResults[0].Error, transport.RenewInstallFailed) {
+		t.Error("the run and target must identify a failed installation after issuance")
+	}
+	if _, err := h.store.SystemPool().Exec(ctx, `UPDATE outbox SET agent_next_attempt_at = now() WHERE id = $1`, job.JobID); err != nil {
+		t.Fatal(err)
+	}
+	job = claimOneRenewal(t, ctx, h)
 	issued, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{JobID: job.JobID, Attempt: job.Attempt, CSRDER: key.CSRDER})
 	if err != nil {
-		t.Fatalf("sign the cluster agent's CSR: %v", err)
+		t.Fatalf("re-sign after the reported installation failure: %v", err)
 	}
 	detail, digest := simulatedHostVerification(t, h, job, issued.Fingerprint, transport.JobOutcomeVerified)
 	id := h.identity.Identity()

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"trstctl.com/trstctl/internal/outboundcred"
 )
@@ -32,6 +33,48 @@ type outboundCredentialScope struct {
 	bindings    *outboundcred.Bindings
 	tenantID    string
 	integration string
+}
+
+type discoveryCredentialFailuresKey struct{}
+
+// These are locally observed credential failures and the destinations the
+// worker selected independently from provider replies, scoped to one source.
+type discoveryCredentialFailures struct {
+	tenantID, sourceID, kind string
+	missing                  sync.Map
+	origins                  sync.Map
+}
+
+func withDiscoveryCredentialFailures(ctx context.Context, tenantID, sourceID, kind string) context.Context {
+	return context.WithValue(ctx, discoveryCredentialFailuresKey{}, &discoveryCredentialFailures{
+		tenantID: tenantID, sourceID: sourceID, kind: kind,
+	})
+}
+
+func (f *discoveryCredentialFailures) permitsName(name string) bool {
+	_, found := f.missing.Load(name)
+	return found
+}
+
+func (f *discoveryCredentialFailures) permitsOrigin(origin string) bool {
+	_, found := f.origins.Load(origin)
+	return found
+}
+
+func rememberDiscoverySourceEndpoint(ctx context.Context, endpoint string) {
+	if observed, _ := ctx.Value(discoveryCredentialFailuresKey{}).(*discoveryCredentialFailures); observed != nil {
+		if origin, err := outboundcred.DestinationOrigin(endpoint); err == nil {
+			observed.origins.Store(origin, struct{}{})
+		}
+	}
+}
+
+func discoveryRefusedSourceOrigin(ctx context.Context, err error) string {
+	origin := outboundcred.RefusedDestinationOrigin(err)
+	if observed, _ := ctx.Value(discoveryCredentialFailuresKey{}).(*discoveryCredentialFailures); observed != nil && observed.permitsOrigin(origin) {
+		return origin
+	}
+	return ""
 }
 
 // withOutboundCredentialScope records the tenant a worker runs for and the
@@ -85,7 +128,9 @@ func resolveBoundCredentialRef(ctx context.Context, ref string, clients ...*http
 			return "", err
 		}
 	}
-	return lookupEnvCredential(ref)
+	value, err := lookupEnvCredential(ref)
+	recordDiscoveryCredentialFailure(ctx, err)
+	return value, err
 }
 
 func resolveBoundCredentialBytesRef(ctx context.Context, ref string, clients ...*http.Client) ([]byte, error) {
@@ -124,7 +169,9 @@ func boundCredentialEnvValue(ctx context.Context, ref string, destinations ...st
 	if _, err := authorizeBoundCredentialRef(ctx, ref, destinations...); err != nil {
 		return "", err
 	}
-	return lookupEnvCredential(ref)
+	value, err := lookupEnvCredential(ref)
+	recordDiscoveryCredentialFailure(ctx, err)
+	return value, err
 }
 
 // resolveOperatorCredentialRef resolves an env:NAME reference the operator's own
@@ -152,6 +199,23 @@ func resolveOperatorCredentialBytesRef(ctx context.Context, ref string) ([]byte,
 	return []byte(value), nil
 }
 
+type missingEnvironmentCredential struct{ name string }
+
+func (e *missingEnvironmentCredential) Error() string {
+	return "env credential reference " + e.name + " is not set"
+}
+
+// The bound resolvers call this after authorization, origin pinning, and the
+// actual lookup. Only a typed local failure can supply the diagnostic name.
+func recordDiscoveryCredentialFailure(ctx context.Context, err error) {
+	observed, _ := ctx.Value(discoveryCredentialFailuresKey{}).(*discoveryCredentialFailures)
+	scope, _ := ctx.Value(outboundCredentialScopeKey{}).(outboundCredentialScope)
+	var missing *missingEnvironmentCredential
+	if observed != nil && observed.tenantID == scope.tenantID && observed.kind == scope.integration && errors.As(err, &missing) {
+		observed.missing.Store(missing.name, struct{}{})
+	}
+}
+
 func lookupEnvCredential(ref string) (string, error) {
 	name := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(ref), "env:"))
 	if name == "" {
@@ -163,7 +227,7 @@ func lookupEnvCredential(ref string) (string, error) {
 		// only when it is a well-formed environment variable name, so a raw value
 		// pasted where a reference belongs is never echoed (CR-405 class).
 		if outboundcred.ValidEnvName(name) {
-			return "", fmt.Errorf("env credential reference %s is not set", name)
+			return "", &missingEnvironmentCredential{name: name}
 		}
 		return "", errors.New("env credential reference is not set")
 	}

@@ -794,19 +794,13 @@ func (o *Outbox) dispatchClaim(ctx context.Context, h Handler, claim claimedOutb
 	}
 	finalizeErr := o.finalizeClaim(ctx, claim, deliverErr)
 	if deliverErr != nil {
-		// Secret delivery implementations may receive errors containing
-		// credential bytes. Use the same closed class as durable storage at
-		// every level for those destinations.
+		// Delivery errors may contain credential bytes or provider responses.
+		// Use the same closed class as durable storage at every level.
 		logger := slog.Default()
 		class := persistedDeliveryError(deliverErr)
 		logger.Warn("outbox delivery failed", "destination", claim.msg.Destination, "attempt", claim.attempts,
 			"class", class, "deferred", IsDeliveryDeferred(deliverErr))
-		switch claim.msg.Destination {
-		case "dynsecret.issue", "dynsecret.revoke", "secret.static-rotation":
-			logger.Debug("outbox delivery error", "destination", claim.msg.Destination, "attempt", claim.attempts, "class", class)
-		default:
-			logger.Debug("outbox delivery error", "destination", claim.msg.Destination, "attempt", claim.attempts, "error", deliverErr.Error())
-		}
+		logger.Debug("outbox delivery error", "destination", claim.msg.Destination, "attempt", claim.attempts, "class", class)
 	}
 	destroyDeliveryError(deliverErr)
 	return finalizeErr

@@ -1801,6 +1801,12 @@ func isExactExistingPrivacyPlaceholder(value string) bool {
 	return existingPrivacyPlaceholderEnd(value, 0) == len(value)
 }
 
+// PrivacyFreeTextContainsSubject matches a subject in a projected free-text
+// field the same way the event privacy policy does in immutable history.
+func PrivacyFreeTextContainsSubject(value, subject string) bool {
+	return stringContainsUnprotectedSubjectToken(value, subject)
+}
+
 func stringContainsUnprotectedSubjectToken(value, subject string) bool {
 	if subject == "" {
 		return false

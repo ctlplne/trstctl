@@ -102,7 +102,15 @@ func TestServedAgentlessSSHTrustSourceIsExplicitReferenceOnlyAndEffectFree(t *te
 	if _, err := h.client.RedeemJobCredential(t.Context(), &transport.RedeemJobCredentialRequest{JobID: jobID, Attempt: attempt}); err == nil {
 		t.Fatal("altered SQL-only command redeemed credentials")
 	}
-
+	// A failure before any remote readback still tells the operator how to recover.
+	if err := h.srv.recordSSHCollection(t.Context(), h.tenant, h.agent, eventID, payload, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	code, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/discovery/runs/"+command.ID, token, nil)
+	if code != http.StatusOK || !strings.Contains(string(body), "check the vaulted key, maintained lease and restricted helper prerequisites") ||
+		!strings.Contains(string(body), "attempt_failed_before_public_readback") {
+		t.Errorf("served collection failure omitted recovery information: status=%d", code)
+	}
 }
 
 func TestServedAgentlessSSHInventoryCannotForgeCollectorProvenance(t *testing.T) {

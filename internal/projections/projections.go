@@ -143,6 +143,12 @@ const (
 	// to discovery.run.completed. Version 1 remains readable for every historical
 	// aggregate-only completion.
 	DiscoveryTargetResultsEventSchemaVersion = 2
+	// DiscoveryDiagnosticsSchemaVersion records that completion
+	// errors were rendered from closed classifications before reaching the log.
+	DiscoveryDiagnosticsSchemaVersion = 3
+	// DiscoveryAttackPathFindingSchemaVersion carries the observed pin refusal
+	// separately from editable finding metadata.
+	DiscoveryAttackPathFindingSchemaVersion = 2
 
 	// I2: an operator closing an ownership disagreement. An event because the
 	// resolution is a JUDGMENT — which side was right and why — and a
@@ -3029,6 +3035,12 @@ type DiscoveryFindingRecorded struct {
 	Metadata    json.RawMessage `json:"metadata"`
 }
 
+// DiscoveryAttackPathFindingRecorded is the worker's provider-verdict receipt.
+type DiscoveryAttackPathFindingRecorded struct {
+	DiscoveryFindingRecorded
+	RefusedOrigin string `json:"refused_origin,omitempty"`
+}
+
 // DiscoveryFindingProviderAction is the payload of
 // discovery.finding.provider_action (A170, A171).
 type DiscoveryFindingProviderAction struct {
@@ -5638,10 +5650,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryRunQueued:                       {1: true, DiscoveryEnrollmentGroupsQueuedSchemaVersion: true, DiscoveryEndpointProbeQueuedSchemaVersion: true},
 	EventSSHTrustCollectionQueued:                 {1: true},
 	EventDiscoveryRunStarted:                      {1: true},
-	EventDiscoveryFindingRecorded:                 {1: true},
+	EventDiscoveryFindingRecorded:                 {1: true, DiscoveryAttackPathFindingSchemaVersion: true},
 	EventDiscoveryFindingTriageChanged:            {1: true},
 	EventDiscoveryFindingProviderAction:           {1: true},
-	EventDiscoveryRunCompleted:                    {1: true, DiscoveryTargetResultsEventSchemaVersion: true},
+	EventDiscoveryRunCompleted:                    {1: true, DiscoveryTargetResultsEventSchemaVersion: true, DiscoveryDiagnosticsSchemaVersion: true},
 	EventADCSInventoryObserved:                    {1: true, 2: true, adcsdiscovery.InventoryMembershipSchemaVersion: true, adcsdiscovery.InventoryEventSchemaVersion: true},
 	EventADCSTemplateDriftObserved:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
 	EventADCSTemplateDriftWorsened:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
@@ -7696,15 +7708,22 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplyDiscoveryRunStartedTx(ctx, tx, e.TenantID, pl.ID, e.Time)
 	case EventDiscoveryFindingRecorded:
-		var pl DiscoveryFindingRecorded
-		if err := decode(e, &pl); err != nil {
+		var receipt DiscoveryAttackPathFindingRecorded
+		if err := decode(e, &receipt); err != nil {
 			return err
 		}
+		pl := receipt.DiscoveryFindingRecorded
 		finding := store.DiscoveryFinding{
 			ID: pl.ID, TenantID: e.TenantID, RunID: pl.RunID, SourceID: pl.SourceID,
 			Kind: pl.Kind, Ref: pl.Ref, Provenance: pl.Provenance, Fingerprint: pl.Fingerprint,
 			RiskScore: pl.RiskScore, Metadata: pl.Metadata, DiscoveredAt: e.Time,
 			ProjectionEventSequence: int64(e.Sequence), // #nosec G115 -- event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190)
+		}
+		if schemaVersionOf(e) == DiscoveryAttackPathFindingSchemaVersion {
+			if pl.Kind != "nhi-attack-path" {
+				return fmt.Errorf("projections: discovery attack-path receipt has finding kind %q", pl.Kind)
+			}
+			finding.AttackPathRefusedOrigin = receipt.RefusedOrigin
 		}
 		alertDestination, alertPayload, alertKey, err := discoveryUrgentRiskAlert(finding)
 		if err != nil {
@@ -7781,6 +7800,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Discovered: pl.Discovered, Failed: pl.Failed, Rejected: pl.Rejected,
 			Blocked: pl.Blocked, Error: pl.Error, ExecutedByAgentID: pl.ExecutedByAgentID,
 			CompletedAt: &completedAt, TargetResults: targetResults,
+			ErrorClassified: schemaVersionOf(e) >= DiscoveryDiagnosticsSchemaVersion,
 		}); err != nil {
 			return err
 		}

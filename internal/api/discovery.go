@@ -1918,9 +1918,17 @@ func toDiscoveryScheduleResponse(s store.DiscoverySchedule) discoveryScheduleRes
 func toDiscoveryRunResponse(run store.DiscoveryRun) discoveryRunResponse {
 	targetResults := make([]discoveryTargetResultResponse, 0, len(run.TargetResults))
 	for _, result := range run.TargetResults {
+		detail := result.Error
+		if !run.ErrorClassified {
+			detail = orchestrator.SanitizeDiscoveryRunError(detail)
+		}
 		targetResults = append(targetResults, discoveryTargetResultResponse{
-			Kind: result.Kind, Target: result.Target, Status: result.Status, Error: result.Error,
+			Kind: result.Kind, Target: result.Target, Status: result.Status, Error: detail,
 		})
+	}
+	detail := run.Error
+	if !run.ErrorClassified {
+		detail = orchestrator.DiscoveryRunDiagnostic(run)
 	}
 	return discoveryRunResponse{
 		TargetResults: targetResults,
@@ -1930,7 +1938,7 @@ func toDiscoveryRunResponse(run store.DiscoveryRun) discoveryRunResponse {
 		Execution: run.Execution, Segment: run.Segment, RequiredAgentRole: run.RequiredAgentRole,
 		RequiredAgentID: run.RequiredAgentID, ExecutedByAgentID: run.ExecutedByAgentID,
 		Targets: run.Targets, Discovered: run.Discovered, Failed: run.Failed, Rejected: run.Rejected,
-		Blocked: run.Blocked, Error: orchestrator.SanitizeDiscoveryRunError(run.Error), StartedAt: run.StartedAt, CompletedAt: run.CompletedAt, CreatedAt: run.CreatedAt,
+		Blocked: run.Blocked, Error: detail, StartedAt: run.StartedAt, CompletedAt: run.CompletedAt, CreatedAt: run.CreatedAt,
 	}
 }
 
@@ -1938,6 +1946,9 @@ func toDiscoveryFindingResponse(f store.DiscoveryFinding) discoveryFindingRespon
 	meta := f.Metadata
 	if len(meta) == 0 {
 		meta = json.RawMessage(`{}`)
+	}
+	if f.Kind == orchestrator.AttackPathFindingKind {
+		meta = attackPathFindingMetadataView(meta, f.AttackPathRefusedOrigin)
 	}
 	firstSeen, lastSeen, seen := f.FirstSeenAt, f.LastSeenAt, f.SeenCount
 	if firstSeen.IsZero() {
@@ -1962,12 +1973,16 @@ func toDiscoveryFindingResponse(f store.DiscoveryFinding) discoveryFindingRespon
 }
 
 func toDiscoveryMonitoringSource(row store.DiscoveryMonitoringSource) DiscoveryMonitoringSource {
+	detail := row.LastRunError
+	if !row.LastRunErrorClassified {
+		detail = orchestrator.DiscoveryRunDiagnostic(store.DiscoveryRun{Error: detail, Targets: row.LastRunTargets, Failed: row.LastRunFailed})
+	}
 	item := DiscoveryMonitoringSource{
 		SourceID: row.SourceID, Kind: row.Kind, Name: row.Name,
 		BlockedReasons: []string{},
 		Scheduled:      row.ScheduleID != "" && row.ScheduleEnabled,
 		ScheduleID:     row.ScheduleID, MonitoringIntervalSeconds: row.MonitoringIntervalSeconds,
-		LastRunID: row.LastRunID, LastRunStatus: row.LastRunStatus, LastRunError: orchestrator.SanitizeDiscoveryRunError(row.LastRunError),
+		LastRunID: row.LastRunID, LastRunStatus: row.LastRunStatus, LastRunError: detail,
 		LastRunCompletedAt: row.LastRunCompletedAt, LastDiscoveryAt: row.LastDiscoveryAt,
 		RunCount: row.RunCount, CompletedRunCount: row.CompletedRunCount,
 		FailedRunCount: row.FailedRunCount, FindingCount: row.FindingCount,

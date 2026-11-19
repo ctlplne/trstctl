@@ -180,6 +180,15 @@ type Report struct {
 	Failed     int // probe errors (unreachable, no TLS, sink error)
 	Rejected   int // could not be submitted (pool closed or context canceled)
 	Blocked    int // skipped before dialing by the SSRF/reserved-address guard
+	// NotDelivered counts recorded resources that could not be delivered. The
+	// target list can be bounded independently of this count.
+	NotDelivered int `json:"-"`
+	// NotDeliveredNamespace is set only when every undelivered resource
+	// shares one namespace, including resources beyond the target list cap.
+	NotDeliveredNamespace string            `json:"-"`
+	ArtifactCleanup       ArtifactCleanup   `json:"-"`
+	ProviderFailures      []ProviderFailure `json:"-"`
+	WeakKeysOmitted       int               `json:"-"`
 	// TargetResults carries bounded per-target facts to the immutable run
 	// completion event: one entry per submitted address (sorted by target) so a
 	// partial run names which listener failed or was blocked and why. CT
@@ -187,13 +196,30 @@ type Report struct {
 	TargetResults []TargetResult
 }
 
+// ProviderFailure records which entry in an operator's provider list failed.
+// Its error is process-local input to the terminal diagnostic classifier.
+type ProviderFailure struct {
+	Ordinal                int
+	Err                    error
+	MissingBoundCredential bool
+}
+
+// ArtifactCleanup reports a local export cleanup after discovery finishes.
+type ArtifactCleanup string
+
+const (
+	ArtifactRemoved       ArtifactCleanup = "artifact removed after scan"
+	ArtifactRemovalFailed ArtifactCleanup = "artifact not removed after scan"
+)
+
 // TargetResult is one scanner target's terminal outcome.
 type TargetResult struct {
-	Kind   string
-	Target string
-	Status string
-	Cursor int64
-	Error  string
+	Kind          string
+	Target        string
+	Status        string
+	Cursor        int64
+	Error         string
+	RefusedOrigin string `json:"-"`
 }
 
 type config struct {

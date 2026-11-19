@@ -17,6 +17,8 @@ import (
 // both the run's error text and its per-provider outcomes name the provider
 // that failed and why. Secret values never appear.
 func TestServedPartialCloudSecretRunNamesTheFailedProvider(t *testing.T) {
+	const providerMessage = "fixture-provider-handshake-detail"
+	const providerStatus = "HTTP 403 Forbidden"
 	var awsSeen []string
 	awsDiscovery := servedAWSSecretsManagerDouble(map[string]string{
 		"demo/edge-gateway/tls": servedCloudCertPEM(t, "edge-gateway.demo.trstctl.local", "edge-gateway.demo.trstctl.local"),
@@ -27,7 +29,7 @@ func TestServedPartialCloudSecretRunNamesTheFailedProvider(t *testing.T) {
 	// The GCP endpoint answers every request with a permission failure, which the
 	// collector does not retry.
 	gcpDiscovery := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, `{"error":{"status":"PERMISSION_DENIED"}}`, http.StatusForbidden)
+		http.Error(w, `{"error":{"status":"PERMISSION_DENIED","message":"`+providerMessage+`"}}`, http.StatusForbidden)
 	}))
 	t.Cleanup(gcpDiscovery.Close)
 
@@ -100,6 +102,9 @@ func TestServedPartialCloudSecretRunNamesTheFailedProvider(t *testing.T) {
 	if !strings.Contains(run.Error, "gcp-secret-manager (") || strings.Contains(run.Error, "aws-secrets-manager") {
 		t.Fatalf("run error %q should name only the failed provider", run.Error)
 	}
+	if !strings.Contains(run.Error, providerStatus) {
+		t.Errorf("run error %q should preserve the transport status", run.Error)
+	}
 	if len(run.TargetResults) != 2 {
 		t.Fatalf("target results = %+v, want one per provider", run.TargetResults)
 	}
@@ -112,12 +117,18 @@ func TestServedPartialCloudSecretRunNamesTheFailedProvider(t *testing.T) {
 		if result.Target == "gcp-secret-manager" && (result.Status != "failed" || result.Error == "") {
 			t.Fatalf("gcp outcome = %+v, want failed with its reason", result)
 		}
+		if result.Target == "gcp-secret-manager" && result.Error != providerStatus {
+			t.Errorf("gcp failure should carry only %q, got %q", providerStatus, result.Error)
+		}
 	}
 	if outcomes["aws-secrets-manager"] != "succeeded" || outcomes["gcp-secret-manager"] != "failed" {
 		t.Fatalf("outcomes = %v, want aws succeeded and gcp failed", outcomes)
 	}
 	if strings.Contains(string(body), "BEGIN CERTIFICATE") || strings.Contains(string(body), "SECRET") {
 		t.Fatalf("run detail leaked secret material: %s", body)
+	}
+	if strings.Contains(string(body), providerMessage) {
+		t.Error("run detail carried an untrusted provider response body")
 	}
 
 	findings := discoveryFindingsForRun(t, h, tok, queued.ID)

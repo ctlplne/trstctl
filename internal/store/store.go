@@ -493,6 +493,10 @@ func (s *Store) Pool() *pgxpool.Pool { return s.SystemPool() }
 // role and sets the trstctl.tenant_id session variable, so row-level security
 // confines every query in fn to that tenant.
 func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx) error) error {
+	return s.withTenantTxOptions(ctx, tenantID, pgx.TxOptions{}, fn)
+}
+
+func (s *Store) withTenantTxOptions(ctx context.Context, tenantID string, options pgx.TxOptions, fn func(pgx.Tx) error) error {
 	// An exclusive backup-fence callback owns one exact PostgreSQL session. A
 	// nested tenant read must use that same session: asking a second session for
 	// the shared side of the fence would self-deadlock. The private lease is
@@ -511,16 +515,16 @@ func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx)
 	setUp := false
 	switch {
 	case ownsExclusiveFence:
-		tx, err = fenceLease.conn.Begin(ctx)
+		tx, err = fenceLease.conn.BeginTx(ctx, options)
 		if err != nil {
 			return fmt.Errorf("store: begin tenant transaction under backup write fence: %w", err)
 		}
 	default:
-		if setup, ok := tenantTxSetup(tenantID, schema); ok {
+		if setup, ok := tenantTxSetup(tenantID, schema); ok && options == (pgx.TxOptions{}) {
 			tx, err = s.beginTenantTx(ctx, setup)
 			setUp = true
 		} else {
-			tx, err = s.begin(ctx)
+			tx, err = s.beginTx(ctx, options)
 		}
 		if err != nil {
 			return err

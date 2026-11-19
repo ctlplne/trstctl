@@ -4,12 +4,38 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
 )
+
+func TestServedKubernetesTLSRunKeepsFullUndeliveredCount(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	const total = kubernetesTLSOutcomeLimit + 1
+	resources := make([]map[string]any, 0, total)
+	for i := 0; i < total; i++ {
+		name := fmt.Sprintf("fixture-%d", i)
+		namespace := "payments"
+		if i == total-1 {
+			namespace = "outside-listed-results"
+		}
+		resources = append(resources, map[string]any{
+			"kind": "Ingress", "namespace": namespace, "name": name,
+			"tls_secret_name": name + "-tls", "hosts": []string{name + ".example.test"},
+		})
+	}
+	source := createKubernetesTLSSource(t, h, token, map[string]any{"resources": resources})
+	run := runKubernetesTLSSource(t, h, token, source)
+	if run.Status != "partial" || len(run.TargetResults) != kubernetesTLSOutcomeLimit ||
+		!strings.Contains(run.Error, fmt.Sprintf("%d Kubernetes TLS resources were not delivered", total)) ||
+		!strings.Contains(run.Error, fmt.Sprintf("the first %d are listed", kubernetesTLSOutcomeLimit)) {
+		t.Fatalf("bounded outcomes did not preserve the full undelivered total: status=%s count=%d detail=%q", run.Status, len(run.TargetResults), run.Error)
+	}
+}
 
 // Owner decision 2026-10-25 (B15-L1): Kubernetes Ingress and Gateway TLS is
 // delivered the cert-manager way. The in-cluster agent generates the key inside

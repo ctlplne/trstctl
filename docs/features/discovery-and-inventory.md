@@ -169,6 +169,30 @@ protocol hint: when a reachable target rejects a bare TLS ClientHello, the scann
 retries with the PostgreSQL SSLRequest negotiation and inventories the certificate the
 server then presents.
 
+Run and target errors report a failure class such as a TLS handshake failure,
+an unbound credential reference, or a provider HTTP status. Use the named target
+and source configuration to investigate the failure. Configuration errors name
+the required field and, for a list of providers, its position in that list.
+Cloud readers report the HTTP status observed by the transport. Attack-path
+findings can identify the destination origin when the transport rejects it
+under the source's credential binding. A run or finding names the refused
+origin when the worker selected it from the source configuration or a
+provider default. Destinations learned from a provider reply produce the
+refusal class. Subject export and erasure cover matching run, target, and
+finding diagnostics. The first rebuild after this upgrade uses the retained
+event log for snapshots that predate the diagnostic columns.
+A partial weak-key audit reports how many keys exceeded the per-run limit.
+When a signed relay report fails its findings-count check, the run explains
+that it imported zero findings
+and shows the compared counts when they fit the receiver's bound. Rerun discovery
+to collect a new report. Credential names in new
+errors come from failed lookups of operator-bound references. Kubernetes names
+come from the configured resource and owner. Cloud network-path findings
+classify a provider read failure before recording its reason. A credential pin
+refusal identifies the destination origin checked by the transport. Run and CT
+monitoring views use fixed classes for older errors and retain the projected
+CT counts. Relay DEBUG logs use the same delivery error class as the outbox record.
+
 Running the same source again refreshes its findings instead of duplicating them: a
 listener observed by a later run keeps its one finding (and its triage decision) with
 `first_seen_at`, `last_seen_at`, `seen_count`, and `run_id` moved to the latest run,
@@ -1559,7 +1583,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | NHI behavior analytics                                    | **Served** — baseline and anomaly findings for IP, geo, user-agent, usage-spike, and off-hours signals                                                                                   |
 | Compromised-credential detection (CAP-ITDR-02)            | **Served** — honeytoken/leak/replay signals normalized to findings tagged to OWASP NHI2                                                                                                  |
 | Shadow/unmanaged NHI posture                              | **Served** — `/api/v1/nhi/posture/shadow`, `trstctl-cli nhi posture shadow`, and the Discovery console                                                                                   |
-| Kubernetes Ingress/Gateway TLS auto-issuance (CAP-K8S-03) | **Served through an in-cluster agent** — bind a `k8s_ingress_gateway` source to the host-role agent running in the cluster (`cluster_agent_id`, `owner_id`, optional `verify_address`). Each run records every `Ingress`/`Gateway` TLS resource as a finding, keeps one `k8s_secret` destination and one certificate identity per TLS block, and queues the first issuance to that agent: it generates the key inside the cluster, sends only a CSR, writes the TLS Secret, reads it back and returns a signed receipt, so the control plane never generates the key. A resource reports `delivery_queued` until the agent's signed deploy receipt is recorded and `delivered` after; when the agent's latest attempt failed it reports `not_delivered` in the receipt's words while the job is retried. Renewals go to the same agent, and a TLS block with several hosts gets one certificate naming them all. A source without an agent, or with one that cannot deliver, reports each resource `not_delivered` with the reason and makes nothing ([Key custody](../custody.md), [Deliver into a Kubernetes Secret](deployment-connectors.md#deliver-into-a-kubernetes-secret-from-inside-the-cluster)) |
+| Kubernetes Ingress/Gateway TLS auto-issuance (CAP-K8S-03) | **Served through an in-cluster agent** — bind a `k8s_ingress_gateway` source to the host-role agent running in the cluster (`cluster_agent_id`, `owner_id`, optional `verify_address`). Each run records every `Ingress`/`Gateway` TLS resource as a finding, keeps one `k8s_secret` destination and one certificate identity per TLS block, and queues the first issuance to that agent: it generates the key inside the cluster, sends only a CSR, writes the TLS Secret, reads it back and returns a signed receipt, so the control plane never generates the key. A resource reports `delivery_queued` until the agent's signed deploy receipt is recorded and `delivered` after; a failed agent receipt reports `not_delivered` with a failure class and any verified recovery details while the job is retried. Renewals go to the same agent, and a TLS block with several hosts gets one certificate naming them all. A source without an agent, or with one that cannot deliver, reports each resource `not_delivered` with the reason and makes nothing ([Key custody](../custody.md), [Deliver into a Kubernetes Secret](deployment-connectors.md#deliver-into-a-kubernetes-secret-from-inside-the-cluster)) |
 
 NHI policy compliance lives in [Policy & governance](policy-and-governance.md); CT-log
 monitoring and drift detection live in [Observability & risk](observability-and-risk.md)
