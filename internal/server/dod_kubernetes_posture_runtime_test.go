@@ -43,6 +43,7 @@ const (
 	dodKubernetesTenant          = "d0d00000-0000-4000-8000-000000000084"
 	dodKubernetesAgentServerName = "agent.trstctl.local"
 	dodKubernetesNodeImage       = "kindest/node:v1.31.14@sha256:6f86cf509dbb42767b6e79debc3f2c32e4ee01386f0489b3b2be24b0a55aac2b"
+	dodKubernetesTrustNamespace  = "apps" // Local consent for the substrate's TARGET_NAMESPACE.
 	dodKindConfigReadyTimeout    = 6 * time.Minute
 	dodKindConfigAttemptTimeout  = 30 * time.Second
 	dodKindVerifierTimeout       = 90 * time.Second
@@ -488,7 +489,7 @@ func dodReconcileAndReportKubernetesPosture(t *testing.T, srv *Server, agentAddr
 	kind := dodKindClientFromSubstrate(t, external)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	policy, err := agentk8s.ParseTrustDistributionPolicy(false, kind.namespace)
+	policy, err := agentk8s.ParseTrustDistributionPolicy(false, dodKubernetesTrustNamespace)
 	if err != nil {
 		t.Fatal(err)
 	}
