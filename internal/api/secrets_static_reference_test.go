@@ -15,6 +15,31 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+// CR-663. Fresh and recovered unsupported terminals use the same reference
+// guard. A native source cannot authorize a changed predecessor or successor.
+func TestUnsupportedLegacyNativeTerminalChecksTheFrozenReference(t *testing.T) {
+	a := &API{}
+	for _, tc := range []struct {
+		name, frozen, oldRef, newRef string
+		nativeUnsupported, allowed   bool
+	}{
+		{"exact native tuple", "fixture-native", "fixture-native", "", true, true},
+		{"unproved provider", "fixture-native", "fixture-native", "", false, false},
+		{"other predecessor", "fixture-native", "fixture-other", "", true, false},
+		{"unexpected successor", "fixture-native", "fixture-native", "fixture-successor", true, false},
+		{"qualified value", "fixture-binding/fixture-value", "fixture-binding/fixture-value", "", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := a.authorizeScheduledStaticReferences(t.Context(), "fixture-tenant",
+				store.SecretRotationSchedule{Provider: "fixture-native", OldRef: tc.frozen},
+				"fixture-key", "fixture-binding", tc.oldRef, tc.newRef, tc.nativeUnsupported)
+			if (err == nil) != tc.allowed {
+				t.Fatalf("allow=%t, want %t: %v", err == nil, tc.allowed, err)
+			}
+		})
+	}
+}
+
 func TestGuardedStaticStageValidatesStableCiphertextAcrossKeyRewrap(t *testing.T) {
 	log := openApplicationSecretRecoveryLog(t)
 	ctx := t.Context()

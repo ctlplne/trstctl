@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/hostedkey"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/rotation"
 	"trstctl.com/trstctl/internal/rotationcommand"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -860,6 +861,49 @@ func TestDynamicRevocationDifferentKeysRecoverOneAppendedRetry(t *testing.T) {
 func TestNativeScheduleDoesNotChainHistoricalHostedReference(t *testing.T) {
 	assertReplacementScheduleKeepsPredecessor(t, &staticRotationProviderDouble{name: "fixture-native", role: "fixture/rotation"},
 		"fixture-native", "fixture/rotation", 0)
+}
+
+// CR-663. A legacy native engine can terminalize a plain due edge without a
+// provider call. Its name never authorizes a qualified historical reference.
+func TestHistoricalStaticCadenceKeepsOnlyPlainNativeDueEdges(t *testing.T) {
+	const provider = "fixture-historical-static"
+	const qualified = "fixture-binding/fixture-unproved-reference"
+	rotator := &countingRotationRotator{}
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.SecretRotators = map[string]rotation.Rotator{provider: rotator}
+	})
+	registerServedTenant(t, h, "Historical native schedule fixture")
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+	dueAt := time.Now().UTC().Add(-time.Minute)
+	for name, ref := range map[string]string{"native": "fixture-native-ref", "qualified": qualified} {
+		if _, err := h.srv.orch.UpsertSecretRotationSchedule(t.Context(), h.tenant, store.SecretRotationSchedule{
+			Name: name, Provider: provider, Key: "fixture/" + name, OldRef: ref,
+			IntervalSeconds: 1800, NextRunAt: dueAt, Enabled: true,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotation-schedules/run-due", tok, "fixture-historical-native", nil)
+	var reply secretRotationDueRunValue
+	if status != http.StatusOK || json.Unmarshal(body, &reply) != nil || reply.Scanned != 1 ||
+		reply.Ran != 1 || len(reply.Runs) != 1 || reply.Runs[0].Status != "unsupported" ||
+		bytes.Contains(body, []byte(qualified)) || rotator.calls != 0 {
+		t.Fatalf("historical cadence did not terminalize only the native edge: status=%d scanned=%d ran=%d calls=%d",
+			status, reply.Scanned, reply.Ran, rotator.calls)
+	}
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		var copied int
+		if err := tx.QueryRow(t.Context(), `SELECT count(*) FROM secret_rotation_schedule_tick_rows
+			WHERE tenant_id=$1 AND old_ref=$2`, h.tenant, qualified).Scan(&copied); err != nil {
+			return err
+		}
+		if copied != 0 {
+			t.Error("qualified historical reference entered a new snapshot")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestDynamicLeaseScheduleDoesNotChainHistoricalHostedReference(t *testing.T) {

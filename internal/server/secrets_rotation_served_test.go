@@ -1547,8 +1547,8 @@ func TestServedScheduledRotationSameKeyLiveContentionIsNotCachedAUD113(t *testin
 	)
 	if _, err := h.srv.orch.UpsertSecretRotationSchedule(ctx, h.tenant, store.SecretRotationSchedule{
 		ID: scheduleID, Name: "aud113-live-contention", Provider: "historical-static",
-		Key: "rotation/aud113-live", OldRef: "static-v1", IntervalSeconds: 3600,
-		Enabled: true, NextRunAt: time.Now().UTC().Add(-time.Minute),
+		Key: "rotation/aud113-live", OldRef: "static-v1", ReferenceProviderType: store.SecretRotationScheduleNativeReference,
+		IntervalSeconds: 3600, Enabled: true, NextRunAt: time.Now().UTC().Add(-time.Minute),
 	}); err != nil {
 		t.Fatalf("seed live-contention schedule: %v", err)
 	}

@@ -9,8 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
-	"trstctl.com/trstctl/internal/schedulerhistory"
 
 	"github.com/jackc/pgx/v5"
 
@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/rotation"
 	"trstctl.com/trstctl/internal/rotationcommand"
+	"trstctl.com/trstctl/internal/schedulerhistory"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -83,10 +84,21 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 	ownerToken := events.NewID()
 	recoveryCommandLeaseToken := events.NewID()
 	var legacyNativeProviders []string
-	for _, provider := range a.secrets.dynamicProviders(tenantID) {
+	dynamicProviders := a.secrets.dynamicProviders(tenantID)
+	for _, provider := range dynamicProviders {
 		typed, known := provider.(interface{ DynamicSecretProviderType() string })
 		if known && typed.DynamicSecretProviderType() != "" && dynsecret.HostedReferenceProviderType(provider) == "" {
 			legacyNativeProviders = append(legacyNativeProviders, provider.Name())
+		}
+	}
+	// The old static engines are still named by inherited schedules. Admit
+	// their plain references so the due edge can report unsupported and disable
+	// that schedule without invoking an engine. Current providers own their names.
+	for name, rotator := range a.secrets.be.SecretRotators {
+		if rotator != nil && !slices.ContainsFunc(dynamicProviders, func(provider dynsecret.Provider) bool {
+			return provider != nil && provider.Name() == name
+		}) {
+			legacyNativeProviders = append(legacyNativeProviders, name)
 		}
 	}
 	var (
@@ -251,8 +263,9 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 						cause:  errors.New("schedule configuration has no event revision; re-save the schedule before it can run"),
 					}
 				} else {
+					legacyNativeProvider := sched.ReferenceProviderType == "" && slices.Contains(legacyNativeProviders, sched.Provider)
 					run, commandRelease, runErr = a.runSecretRotationSchedule(
-						ctx, tenantID, tick.IdempotencyKey, tick.Scanned+1, sched, commandLeaseToken)
+						ctx, tenantID, tick.IdempotencyKey, tick.Scanned+1, sched, commandLeaseToken, legacyNativeProvider)
 				}
 				if errors.Is(runErr, store.ErrSecretRotationScheduleDueEdgeStale) {
 					// A retained terminal event already owns this exact frozen due edge.
@@ -475,6 +488,7 @@ func (a *API) runSecretRotationSchedule(
 	tickOrdinal int,
 	sched store.SecretRotationSchedule,
 	leaseToken string,
+	legacyNativeProvider bool,
 ) (secretRotationScheduleRunResponse, *store.SecretRotationScheduleCommandLeaseRelease, error) {
 	if tickIdempotencyKey == "" || tickOrdinal <= 0 || leaseToken == "" {
 		return secretRotationScheduleRunResponse{}, nil, fmt.Errorf("%w: scheduler child lease token is required", store.ErrSecretRotationScheduleCommandConflict)
@@ -552,7 +566,8 @@ func (a *API) runSecretRotationSchedule(
 			return secretRotationScheduleRunResponseFromReceipt(sched, retained, true), nil, nil
 		}
 		if claimed.PreparedAt != nil {
-			if err := a.authorizeScheduledStaticReferences(ctx, tenantID, sched, commandKey, requestBinding, sched.OldRef, claimed.PreparedNewRef); err != nil {
+			if err := a.authorizeScheduledStaticReferences(ctx, tenantID, sched, commandKey, requestBinding,
+				sched.OldRef, claimed.PreparedNewRef, legacyNativeProvider && claimed.PreparedStatus == "unsupported"); err != nil {
 				return secretRotationScheduleRunResponse{}, commandRelease, err
 			}
 			retained, recordErr := a.orch.RecordSecretRotationScheduleRun(ctx, tenantID, store.SecretRotationScheduleRun{
@@ -723,7 +738,8 @@ func (a *API) runSecretRotationSchedule(
 	} else if rep.Queued {
 		status = "queued"
 	}
-	if err := a.authorizeScheduledStaticReferences(ctx, tenantID, sched, commandKey, requestBinding, rep.OldRef, rep.NewRef); err != nil {
+	if err := a.authorizeScheduledStaticReferences(ctx, tenantID, sched, commandKey, requestBinding,
+		rep.OldRef, rep.NewRef, legacyNativeProvider && status == "unsupported"); err != nil {
 		return secretRotationScheduleRunResponse{}, commandRelease, err
 	}
 	rotationResp := toSecretRotationResponse(rep)

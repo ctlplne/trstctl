@@ -543,8 +543,14 @@ func (a *API) scheduledStaticProviderMatches(tenantID string, schedule store.Sec
 
 func (a *API) authorizeScheduledStaticReferences(
 	ctx context.Context, tenantID string, schedule store.SecretRotationSchedule, commandKey, binding, oldReference, newReference string,
+	legacyNativeUnsupported bool,
 ) error {
 	if !isStaticSecretRotation(schedule.Provider) || schedule.ReferenceProviderType == store.SecretRotationScheduleNativeReference {
+		return nil
+	}
+	// The frozen tick admitted this plain native predecessor. An unsupported
+	// terminal reuses that exact tuple and establishes no successor.
+	if legacyNativeUnsupported && oldReference == schedule.OldRef && !strings.Contains(oldReference, "/") && newReference == "" {
 		return nil
 	}
 	oldProven := oldReference == "" || oldReference == staticRotationNoPredecessor ||
