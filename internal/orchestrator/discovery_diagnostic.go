@@ -39,6 +39,9 @@ const discoveryRelayCountMismatch = "relay report rejected: findings count misma
 const discoveryOriginPinSuffix = " is outside the origins the credential is bound to"
 const DiscoveryDestinationPinRefusal = "env credential reference is not bound to this use: the destination origin" + discoveryOriginPinSuffix
 
+const DiscoveryGitLabInstanceAdmin = "HTTP 403 Forbidden. GitLab instance variables require an administrator token"
+const DiscoveryCollectionPageOrigin = "native collection refused: next page leaves the configured provider origin"
+
 // DiscoveryRelayFindingCounts are the two counts compared by the relay
 // receiver before it imports any observation from a signed report.
 type DiscoveryRelayFindingCounts struct {
@@ -112,10 +115,13 @@ func (authority DiscoveryDiagnosticAuthority) classifyMessage(detail string) str
 		"conjur api_key_ref is required", "conjur: account, login and api_key_ref are required", "conjur: endpoint is required (the Conjur server URL)",
 		"doppler token_ref is required", "doppler: token_ref is required", "doppler: configs belong to a project; set project",
 		"github-actions token_ref is required", "github-actions: token_ref is required", "github-actions: owner and repo go together",
+		"github-actions: unknown secret store. Set stores to actions, dependabot or codespaces",
+		"github-actions: GitHub never returns Actions secret values (nor Dependabot or Codespaces ones), so content inspection is not available; inventory is metadata only",
 		"github-actions: name a repository (owner and repo), an org, or the token owner's Codespaces secrets",
 		"github-actions: environments belong to a repository; set owner and repo",
 		"github-actions: environments hold Actions secrets only; include actions in stores",
 		"gitlab-ci token_ref is required", "gitlab-ci: token_ref is required", "gitlab-ci: name a project, a group, or the instance",
+		DiscoveryGitLabInstanceAdmin, DiscoveryCollectionPageOrigin,
 		"infisical: use token_ref or client_id with client_secret_ref, not both",
 		"infisical: client_id and client_secret_ref (Universal Auth) or token_ref are required",
 		"infisical: environments belong to a project; set project",

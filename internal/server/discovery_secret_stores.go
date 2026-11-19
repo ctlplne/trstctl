@@ -21,7 +21,16 @@ import (
 	"trstctl.com/trstctl/internal/discovery/cloudsecret/infisical"
 	"trstctl.com/trstctl/internal/discovery/cloudsecret/onepassword"
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
+
+func secretStoreProviderDiagnostic(cause error, detail string) string {
+	var status *cloudcert.HTTPStatusError
+	if errors.Is(cause, gitlabci.ErrInstanceVariables) && errors.As(cause, &status) && status.StatusCode == http.StatusForbidden {
+		return orchestrator.DiscoveryGitLabInstanceAdmin
+	}
+	return orchestrator.SanitizeDiscoveryRunError(detail)
+}
 
 // secretStoreProvider builds the secret stores beyond the cloud secret
 // managers: the code hosts' GitHub Actions, Dependabot and Codespaces

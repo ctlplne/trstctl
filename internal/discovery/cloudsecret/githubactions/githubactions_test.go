@@ -142,8 +142,8 @@ func TestGitHubDependabotAndCodespacesSecretsOD2(t *testing.T) {
 	} {
 		if _, err := githubactions.New(cfg); err == nil {
 			t.Fatalf("%s accepted", name)
-		} else if name == "unknown store" && !strings.Contains(err.Error(), `"packages"`) {
-			t.Fatalf("unknown store error = %v, want it named", err)
+		} else if name == "unknown store" && err.Error() != "github-actions: unknown secret store. Set stores to actions, dependabot or codespaces" {
+			t.Fatalf("unknown store error = %v, want the setting and supported choices", err)
 		}
 	}
 	// The token owner's Codespaces secrets alone are a scope.

@@ -3744,7 +3744,10 @@
 - Discovery records closed run and per-target error diagnostics, and applies
   the same rules in views of older runs. The diagnostics retain required
   configuration fields and explain why a relay rejected a findings count.
-  Numbered cloud provider errors keep the transport's HTTP status. Cloud
+  Numbered cloud provider errors keep the transport's HTTP status. GitHub
+  secret-store errors identify the supported settings and inspection limits.
+  GitLab instance permission errors and blocked collection pagination identify
+  the cause without copying provider text or URLs. Cloud
   network-path findings classify provider read failures in retained views and
   preserve source-configured refused origins recorded by the worker.
   Subject export and erasure cover those run, target, and finding diagnostics.

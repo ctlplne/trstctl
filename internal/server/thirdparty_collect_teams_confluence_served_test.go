@@ -178,7 +178,8 @@ func TestServedTeamsAndConfluenceCollectionOD4(t *testing.T) {
 	if status, detail := runStatus(runs["wrong"]); status != "failed" || !strings.Contains(detail, "401") || strings.Contains(detail, "not-the-value") {
 		t.Fatalf("a wrong Graph token = %s %q", status, detail)
 	}
-	if status, detail := runStatus(runs["offsite"]); status != "failed" || !strings.Contains(detail, "next page leaves") {
+	if status, detail := runStatus(runs["offsite"]); status != "failed" ||
+		detail != "native collection refused: next page leaves the configured provider origin" {
 		t.Fatalf("an off-origin Graph next page = %s %q", status, detail)
 	}
 

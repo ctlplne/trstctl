@@ -122,8 +122,8 @@ func New(cfg Config) (*Enumerator, error) {
 func (e *Enumerator) Name() string { return ProviderName }
 
 // normalizeStores normalizes the chosen stores: trimmed, lowercased, in
-// first mention order, Actions when none is named; an unknown store is
-// refused by name rather than listed as nothing.
+// first mention order, with Actions when none is named. The refusal shows
+// the supported choices without copying the supplied value.
 func normalizeStores(chosen []string) ([]string, error) {
 	var out []string
 	for _, raw := range chosen {
@@ -135,7 +135,7 @@ func normalizeStores(chosen []string) ([]string, error) {
 		case StoreActions, StoreDependabot, StoreCodespaces:
 			out = append(out, t)
 		default:
-			return nil, fmt.Errorf("github-actions: unknown secret store %q (actions, dependabot or codespaces)", raw)
+			return nil, errors.New("github-actions: unknown secret store. Set stores to actions, dependabot or codespaces")
 		}
 	}
 	if len(out) == 0 {

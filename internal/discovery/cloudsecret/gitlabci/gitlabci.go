@@ -31,6 +31,9 @@ import (
 // ProviderName is the discovery provider identifier.
 const ProviderName = "gitlab-ci"
 
+// ErrInstanceVariables identifies the administrator-only listing operation.
+var ErrInstanceVariables = errors.New("gitlab-ci: instance variables (GitLab lists them to an administrator's token only)")
+
 const (
 	defaultBaseURL = "https://gitlab.com"
 	perPage        = 100
@@ -131,7 +134,7 @@ func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error)
 	if e.cfg.Instance {
 		found, err := e.enumerateScope(ctx, "instance", e.host, "/api/v4/admin/ci/variables", "instance/variables/")
 		if err != nil {
-			return nil, fmt.Errorf("gitlab-ci: instance variables (GitLab lists them to an administrator's token only): %w", err)
+			return nil, fmt.Errorf("%w: %w", ErrInstanceVariables, err)
 		}
 		out = append(out, found...)
 	}

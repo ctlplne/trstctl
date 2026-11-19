@@ -451,7 +451,7 @@ func (d *issuanceDispatcher) executeCloudSecretDiscoveryRun(ctx context.Context,
 	outcomes := append([]cloudProviderOutcome(nil), unbuilt...)
 	for _, o := range rep.Outcomes {
 		outcomes = append(outcomes, cloudProviderOutcome{
-			Provider: o.Provider, Status: o.Status, Error: orchestrator.SanitizeDiscoveryRunError(o.Error),
+			Provider: o.Provider, Status: o.Status, Error: secretStoreProviderDiagnostic(o.Cause, o.Error),
 			RefusedOrigin: outboundcred.RefusedDestinationOrigin(o.Cause),
 		})
 	}
@@ -1753,6 +1753,8 @@ func nativeCollectionRefusalDiagnostic(err error) string {
 	switch {
 	case errors.As(err, &status):
 		return fmt.Sprintf("HTTP %d", status.StatusCode)
+	case errors.Is(err, scancollect.ErrPageOrigin):
+		return orchestrator.DiscoveryCollectionPageOrigin
 	case errors.As(err, &missing):
 		return missing.Error()
 	case errors.Is(err, outboundcred.ErrNotBound):

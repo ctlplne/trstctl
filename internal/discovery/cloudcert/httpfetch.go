@@ -24,6 +24,13 @@ type RetryPolicy struct {
 // DefaultRetry is a conservative bounded policy.
 func DefaultRetry() RetryPolicy { return RetryPolicy{Max: 4, Base: 200 * time.Millisecond} }
 
+// HTTPStatusError identifies the status obtained from the transport. Its
+// underlying detail may contain provider text and must be classified for display.
+type HTTPStatusError struct {
+	StatusCode int
+	error
+}
+
 // Fetch issues req (cloning it per attempt and replaying body) and returns the
 // response body, retrying on 429/503 up to the policy, honoring a Retry-After
 // header when present. This is the read-only transport the enumerators share, so
@@ -63,7 +70,10 @@ func Fetch(ctx context.Context, hc *http.Client, req *http.Request, body []byte,
 			return nil, err
 		}
 		if resp.StatusCode/100 != 2 {
-			return nil, fmt.Errorf("cloudcert: status %d: %s", resp.StatusCode, bytes.TrimSpace(data))
+			return nil, &HTTPStatusError{
+				StatusCode: resp.StatusCode,
+				error:      fmt.Errorf("cloudcert: status %d: %s", resp.StatusCode, bytes.TrimSpace(data)),
+			}
 		}
 		return data, nil
 	}

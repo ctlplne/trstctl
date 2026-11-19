@@ -110,7 +110,7 @@ func collectTeams(ctx context.Context, w *writer, req Request) (Result, error) {
 						break
 					}
 					if !sameOrigin(req.BaseURL, more) {
-						return res, fmt.Errorf("%w: Microsoft Graph's next page of replies leaves %s", ErrRefused, redactQuery(req.BaseURL))
+						return res, fmt.Errorf("%w: %w", ErrRefused, ErrPageOrigin)
 					}
 					body, _, err := get(ctx, req, more, authorization(req))
 					if err != nil {
@@ -133,7 +133,7 @@ func collectTeams(ctx context.Context, w *writer, req Request) (Result, error) {
 			}
 			next = page.NextLink
 			if next != "" && !sameOrigin(req.BaseURL, next) {
-				return res, fmt.Errorf("%w: Microsoft Graph's next page leaves %s", ErrRefused, redactQuery(req.BaseURL))
+				return res, fmt.Errorf("%w: %w", ErrRefused, ErrPageOrigin)
 			}
 		}
 		dir := "channel-" + strconv.Itoa(i+1)
@@ -304,7 +304,7 @@ func collectConfluence(ctx context.Context, w *writer, req Request) (Result, err
 			// Confluence names the next page relative to its own site, never
 			// another host.
 			if !strings.HasPrefix(link, "/") || strings.HasPrefix(link, "//") || strings.Contains(link, `\`) {
-				return res, fmt.Errorf("%w: Confluence's next page is not on the site", ErrRefused)
+				return res, fmt.Errorf("%w: Confluence's next page is not on the site: %w", ErrRefused, ErrPageOrigin)
 			}
 			if candidate := req.BaseURL + link; !seen[candidate] {
 				next = candidate

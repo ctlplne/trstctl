@@ -1047,13 +1047,15 @@ source wizard asks for each one's own sign-in.
 
 Each GitHub finding names its store (`store`: `actions`, `dependabot` or `codespaces`) and
 scope (`repository`, `environment`, `organization` or `user`); a user's Codespaces secrets
-are keyed by their login, which the provider reads from `GET /user`. An unknown store, or
-environments without the `actions` store, fails that provider with the reason. Dependabot and
-Codespaces secrets need their own read permissions on the token (for a fine-grained token,
-Dependabot secrets and Codespaces secrets, and Codespaces user secrets for the owner's own).
-A GitLab instance's variables are read from `GET /api/v4/admin/ci/variables`; any other token's
-403 fails that provider saying an administrator's token is required. Like project and group
-variables, their values are wiped once read unless content inspection is chosen.
+are keyed by their login, which the provider reads from `GET /user`. An invalid `stores`
+selection reports the supported choices. Environments without `actions` identify that
+missing setting. Dependabot and Codespaces secrets need their own read permissions on
+the token (for a fine-grained token, Dependabot secrets and Codespaces secrets, and
+Codespaces user secrets for the owner's own).
+A GitLab instance's variables are read from `GET /api/v4/admin/ci/variables`. A 403
+on that request tells the operator that an administrator token is required. Like
+project and group variables, their values are wiped once read unless content
+inspection is chosen.
 
 With `inspect_content: true` on a provider, trstctl also reads each value it is allowed
 to, holds it only in wipeable memory, and looks inside it (A172):

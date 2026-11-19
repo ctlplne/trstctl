@@ -57,6 +57,9 @@ const (
 // missing channel, project or image.
 var ErrRefused = errors.New("scancollect: the provider refused the collection")
 
+// ErrPageOrigin identifies a blocked pagination link without copying its URL.
+var ErrPageOrigin = errors.New("next page leaves the configured provider origin")
+
 // Doer sends one HTTP request. *http.Client satisfies it.
 type Doer interface {
 	Do(*http.Request) (*http.Response, error)

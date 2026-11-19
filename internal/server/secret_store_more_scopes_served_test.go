@@ -21,7 +21,7 @@ import (
 // secrets (metadata only, each naming its store), and a GitLab instance's
 // variables with an administrator's token (values wiped; with content
 // inspection an API key among them becomes a finding and no value is
-// kept). An unknown GitHub store fails that provider naming it, a
+// kept). An unknown GitHub store fails with the supported choices. A
 // maintainer's token listing instance variables fails naming the 403 and
 // why, and the source catalog offers the new fields.
 func TestServedGitHubDependabotCodespacesAndGitLabInstanceVariablesOD2(t *testing.T) {
@@ -154,8 +154,8 @@ func TestServedGitHubDependabotCodespacesAndGitLabInstanceVariablesOD2(t *testin
 		}
 	}
 
-	// An unknown GitHub store fails that provider naming it; a maintainer's
-	// token cannot list instance variables, and the failure says why.
+	// An unknown GitHub store identifies the setting and accepted choices.
+	// A maintainer's token cannot list instance variables.
 	_, run = runSource("od2-refusals",
 		at(github.URL(), map[string]any{"provider": "github-actions", "owner": "acme", "repo": "api", "stores": []string{"packages"}, "token_ref": "env:TRSTCTL_OD2_GH"}), // #nosec G101 -- credential references to fabricated fixture values (CWE-798)
 		at(gitlab.URL(), map[string]any{"provider": "gitlab-ci", "group": "acme", "instance": true, "token_ref": "env:TRSTCTL_OD2_GL"}),                                   // #nosec G101 -- credential references to fabricated fixture values (CWE-798)
@@ -164,8 +164,9 @@ func TestServedGitHubDependabotCodespacesAndGitLabInstanceVariablesOD2(t *testin
 	for _, r := range run.TargetResults {
 		outcomes[r.Target] = r.Status + ": " + r.Error
 	}
-	if run.Status != "failed" || !strings.Contains(outcomes["github-actions"], `unknown secret store "packages"`) ||
-		!strings.Contains(outcomes["gitlab-ci"], "administrator") || !strings.Contains(outcomes["gitlab-ci"], "403") {
+	if run.Status != "failed" ||
+		outcomes["github-actions"] != "failed: github-actions: unknown secret store. Set stores to actions, dependabot or codespaces" ||
+		outcomes["gitlab-ci"] != "failed: HTTP 403 Forbidden. GitLab instance variables require an administrator token" {
 		t.Fatalf("refusals = %s / %+v", run.Status, outcomes)
 	}
 

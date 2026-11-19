@@ -2973,7 +2973,7 @@ not this file.
 | `internal/reconcile/vaultsource.go:411` | operator-configured token file from the reviewed config (CWE-22) |
 | `internal/reportarchive/archive.go:250` | fixed reports path under operator archive root; both path IDs and digest are validated UUID/SHA-256 components. |
 | `internal/reportarchive/archive.go:269` | directory is constructed under the operator archive root and checked as a private real directory. |
-| `internal/scancollect/scancollect.go:203` | a path inside the collection directory, checked by w.path (CWE-22) |
+| `internal/scancollect/scancollect.go:206` | a path inside the collection directory, checked by w.path (CWE-22) |
 | `internal/scancollect/scancollect_test.go:27` | the test's own temp directory (CWE-22) |
 | `internal/secretscan/gitleaks.go:294` | reads the report file this process asked gitleaks to write in its own tempdir (CWE-22) |
 | `internal/secretscan/gitleaks_options_test.go:221` | test reads its own fixture/tempdir path (CWE-22) |
@@ -3832,7 +3832,7 @@ not this file.
 | `internal/crypto/kerberos/client_test.go:125` | the test's own loopback httptest server (CWE-918) |
 | `internal/crypto/windependents/rotation_native_windows_test.go:131` | both exact listener addresses validated as literal loopback before handler installation; only a validated 16-byte hex nonce varies (CWE-918) |
 | `internal/crypto/windependents/rotation_native_windows_test.go:136` | fixed validated loopback origin, bounded client and all redirects refused (CWE-918) |
-| `internal/discovery/cloudcert/httpfetch.go:42` | fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918) |
+| `internal/discovery/cloudcert/httpfetch.go:49` | fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918) |
 | `internal/dynsecret/clickhouse.go:167` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/couchbase.go:184` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/elasticsearch.go:239` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
