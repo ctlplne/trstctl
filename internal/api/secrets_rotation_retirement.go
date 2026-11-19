@@ -151,7 +151,11 @@ func (a *API) holdStaticRotationRetirement(ctx context.Context, cmd store.Secret
 
 // staticRotationView renders a command with its consumer evidence.
 func (a *API) staticRotationView(ctx context.Context, cmd store.SecretStaticRotationCommand) (secretStaticRotationView, error) {
-	view := toSecretStaticRotationView(cmd)
+	safe, err := a.staticRotationReferenceView(ctx, cmd)
+	if err != nil {
+		return secretStaticRotationView{}, err
+	}
+	view := toSecretStaticRotationView(safe)
 	view.ConsumerAdoption = consumerAdoptionNotRequested
 	if provider, _, err := a.staticRotationProvider(cmd.TenantID, cmd.Provider, cmd.Key); err == nil {
 		view.RotationPhase = staticRotationPhase(provider, cmd.Key)

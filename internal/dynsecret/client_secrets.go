@@ -3,6 +3,7 @@
 package dynsecret
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -10,15 +11,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/hostedkey"
 )
-
-// clientSecretID is a vendor's ID for one secret of a client.
-var clientSecretID = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,200}$`)
 
 // clientSecretVendor is one hosted service's API for the secrets of an
 // existing client (A240): a rotation adds a secret beside the one consumers
@@ -120,7 +117,7 @@ func (b *ClientSecretBackend) CreateCredential(ctx context.Context, req Generate
 	if err != nil {
 		return "", nil, err
 	}
-	if !clientSecretID.MatchString(id) {
+	if !validVendorManagementID(b.provider, []byte(id)) {
 		secret.Wipe(credential)
 		return "", nil, fmt.Errorf("dynsecret %s: the vendor returned an unusable secret ID", b.provider)
 	}
@@ -132,12 +129,12 @@ func (b *ClientSecretBackend) CreateCredential(ctx context.Context, req Generate
 // refused.
 func (b *ClientSecretBackend) Revoke(ctx context.Context, ref string) error {
 	cut := strings.LastIndex(ref, "/")
-	refused := fmt.Errorf("dynsecret %s: refusing %q, which names no secret of a bound client", b.provider, ref)
+	refused := fmt.Errorf("dynsecret %s: reference does not name a secret of a bound client", b.provider)
 	if cut <= 0 {
 		return refused
 	}
 	binding, id := ref[:cut], ref[cut+1:]
-	if !clientSecretID.MatchString(id) || !b.bound(binding) {
+	if !validVendorManagementID(b.provider, []byte(id)) || !b.bound(binding) {
 		return refused
 	}
 	present, err := b.vendor.present(ctx, b.api, binding, id)
@@ -221,19 +218,26 @@ func (o oktaVendor) add(ctx context.Context, api hostedAPI, app string) (string,
 		return "", nil, errors.New("dynsecret okta: the app has no OAuth client")
 	}
 	var created struct {
-		ID           string           `json:"id"`
-		ClientSecret secret.JSONBytes `json:"client_secret"`
-		Status       string           `json:"status"`
+		ID           vendorCredentialField     `json:"id"`
+		ClientSecret vendorCredentialField     `json:"client_secret"`
+		Status       uniqueVendorField[string] `json:"status"`
 	}
+	defer func() {
+		secret.Wipe(created.ID.value)
+		secret.Wipe(created.ClientSecret.value)
+	}()
 	if _, err := hostedJSON(ctx, api, http.MethodPost, oktaSecrets(app), map[string]any{}, o.authenticate, &created, http.StatusCreated); err != nil {
 		return "", nil, fmt.Errorf("dynsecret okta: add a secret (an app holds at most two): %w", err)
 	}
-	defer secret.Wipe(created.ClientSecret)
-	if created.ID == "" || len(created.ClientSecret) == 0 || created.Status != "ACTIVE" {
+	if len(created.ClientSecret.value) == 0 || created.Status.value != "ACTIVE" {
 		return "", nil, errors.New("dynsecret okta: the create response carries no active secret")
 	}
-	credential, err := clientSecretDocument(map[string]any{"client_id": clientID, "client_secret": created.ClientSecret, "secret_id": created.ID})
-	return created.ID, credential, err
+	id, err := publicVendorID(api.name, created.ID.value, created.ClientSecret.value)
+	if err != nil {
+		return "", nil, err
+	}
+	credential, err := clientSecretDocument(map[string]any{"client_id": clientID, "client_secret": created.ClientSecret.value, "secret_id": id})
+	return id, credential, err
 }
 
 func (o oktaVendor) present(ctx context.Context, api hostedAPI, app, id string) (bool, error) {
@@ -336,20 +340,27 @@ func (d *databricksVendor) add(ctx context.Context, api hostedAPI, binding strin
 		return "", nil, err
 	}
 	var created struct {
-		ID     string           `json:"id"`
-		Secret secret.JSONBytes `json:"secret"`
+		ID     vendorCredentialField `json:"id"`
+		Secret vendorCredentialField `json:"secret"`
 	}
+	defer func() {
+		secret.Wipe(created.ID.value)
+		secret.Wipe(created.Secret.value)
+	}()
 	if _, err := hostedJSON(ctx, api, http.MethodPost, path, map[string]any{}, auth, &created, http.StatusCreated); err != nil {
 		return "", nil, fmt.Errorf("dynsecret databricks: add a secret (a principal holds at most five): %w", err)
 	}
-	defer secret.Wipe(created.Secret)
-	if created.ID == "" || len(created.Secret) == 0 || principal.ApplicationID == "" {
+	if len(created.Secret.value) == 0 || principal.ApplicationID == "" {
 		return "", nil, errors.New("dynsecret databricks: the create response carries no secret")
 	}
+	id, err := publicVendorID(api.name, created.ID.value, created.Secret.value)
+	if err != nil {
+		return "", nil, err
+	}
 	credential, err := clientSecretDocument(map[string]any{
-		"client_id": principal.ApplicationID, "client_secret": created.Secret, "secret_id": created.ID, "account_id": account,
+		"client_id": principal.ApplicationID, "client_secret": created.Secret.value, "secret_id": id, "account_id": account,
 	})
-	return created.ID, credential, err
+	return id, credential, err
 }
 
 func (d *databricksVendor) present(ctx context.Context, api hostedAPI, binding, id string) (bool, error) {
@@ -359,19 +370,30 @@ func (d *databricksVendor) present(ctx context.Context, api hostedAPI, binding, 
 		return false, err
 	}
 	var listed struct {
-		Secrets []struct {
-			ID string `json:"id"`
-		} `json:"secrets"`
+		Secrets uniqueVendorField[[]struct {
+			ID     vendorCredentialField `json:"id"`
+			Secret vendorCredentialField `json:"secret"`
+		}] `json:"secrets"`
 	}
+	defer func() {
+		for _, candidate := range listed.Secrets.value {
+			secret.Wipe(candidate.ID.value)
+			secret.Wipe(candidate.Secret.value)
+		}
+	}()
 	if _, err := hostedJSON(ctx, api, http.MethodGet, path, nil, auth, &listed); err != nil {
 		return false, err
 	}
-	for _, candidate := range listed.Secrets {
-		if candidate.ID == id {
-			return true, nil
+	found := false
+	for _, candidate := range listed.Secrets.value {
+		if bytes.Equal(candidate.ID.value, []byte(id)) {
+			if _, err := publicVendorID(api.name, candidate.ID.value, candidate.Secret.value); err != nil {
+				return false, err
+			}
+			found = true
 		}
 	}
-	return false, nil
+	return found, nil
 }
 
 func (d *databricksVendor) remove(ctx context.Context, api hostedAPI, binding, id string) error {

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -62,6 +63,17 @@ type cloudflarePolicy struct {
 	Resources        json.RawMessage   `json:"resources"`
 }
 
+type cloudflareTokenIdentity struct {
+	ID    vendorCredentialField     `json:"id"`
+	Value vendorCredentialField     `json:"value"`
+	Name  uniqueVendorField[string] `json:"name"`
+}
+
+func (token cloudflareTokenIdentity) wipe() {
+	secret.Wipe(token.ID.value)
+	secret.Wipe(token.Value.value)
+}
+
 func (c cloudflareVendor) mint(ctx context.Context, api hostedAPI, binding, name string) (string, []byte, error) {
 	path, template, account := cloudflareTarget(binding)
 	var current cloudflareEnvelope[struct {
@@ -96,30 +108,35 @@ func (c cloudflareVendor) mint(ctx context.Context, api hostedAPI, binding, name
 	if len(current.Result.Condition) > 0 && string(current.Result.Condition) != "null" {
 		request["condition"] = current.Result.Condition
 	}
-	var created cloudflareEnvelope[struct {
-		ID    string           `json:"id"`
-		Value secret.JSONBytes `json:"value"`
-	}]
+	var created cloudflareEnvelope[uniqueVendorField[cloudflareTokenIdentity]]
+	token := &created.Result.value
+	defer func() { token.wipe() }()
 	if _, err := hostedJSON(ctx, api, http.MethodPost, path, request, bearerFrom(c.admin), &created); err != nil {
 		return "", nil, err
 	}
-	defer secret.Wipe(created.Result.Value)
-	if !created.Success || created.Result.ID == "" || len(created.Result.Value) == 0 {
+	if !created.Success || len(token.Value.value) == 0 {
 		return "", nil, fmt.Errorf("dynsecret %s: the create response carries no token", api.name)
+	}
+	var secretKey secret.JSONBytes
+	if c.r2 {
+		digest := crypto.SHA256Sum(token.Value.value)
+		defer secret.Wipe(digest)
+		secretKey = make(secret.JSONBytes, hex.EncodedLen(len(digest)))
+		hex.Encode(secretKey, digest)
+		defer secret.Wipe(secretKey)
+	}
+	id, err := publicVendorID(api.name, token.ID.value, token.Value.value, secretKey)
+	if err != nil {
+		return "", nil, err
 	}
 	var document map[string]any
 	if c.r2 {
-		digest := crypto.SHA256Sum(created.Result.Value)
-		defer secret.Wipe(digest)
-		secretKey := make([]byte, hex.EncodedLen(len(digest)))
-		hex.Encode(secretKey, digest)
-		defer secret.Wipe(secretKey)
 		document = map[string]any{
-			"access_key_id": created.Result.ID, "secret_access_key": secret.JSONBytes(secretKey),
+			"access_key_id": id, "secret_access_key": secretKey,
 			"endpoint": "https://" + account + ".r2.cloudflarestorage.com",
 		}
 	} else {
-		document = map[string]any{"api_token": created.Result.Value, "token_id": created.Result.ID}
+		document = map[string]any{"api_token": token.Value.value, "token_id": id}
 		if account != "" {
 			document["account_id"] = account
 		}
@@ -128,47 +145,71 @@ func (c cloudflareVendor) mint(ctx context.Context, api hostedAPI, binding, name
 	if err != nil {
 		return "", nil, err
 	}
-	return created.Result.ID, credential, nil
+	return id, credential, nil
 }
 
 func (c cloudflareVendor) named(ctx context.Context, api hostedAPI, binding, name string) ([]string, error) {
 	path, _, _ := cloudflareTarget(binding)
 	var ids []string
 	for page := 1; page <= cloudflareListPages; page++ {
-		var listed cloudflareEnvelope[[]struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		}]
-		if _, err := hostedJSON(ctx, api, http.MethodGet, path+"?per_page=50&page="+strconv.Itoa(page), nil, bearerFrom(c.admin), &listed); err != nil {
+		matches, pages, err := c.earlierAttemptPage(ctx, api, path, name, page)
+		if err != nil {
 			return nil, err
 		}
-		for _, token := range listed.Result {
-			if token.Name == name && token.ID != "" {
-				ids = append(ids, token.ID)
-			}
-		}
-		if page >= listed.ResultInfo.TotalPages {
+		ids = append(ids, matches...)
+		if page >= pages {
 			return ids, nil
 		}
 	}
 	return nil, fmt.Errorf("dynsecret %s: more than %d tokens to search for an earlier attempt", api.name, cloudflareListPages*50)
 }
 
+func (c cloudflareVendor) earlierAttemptPage(ctx context.Context, api hostedAPI, path, name string, page int) ([]string, int, error) {
+	var listed cloudflareEnvelope[uniqueVendorField[[]cloudflareTokenIdentity]]
+	defer func() {
+		for _, token := range listed.Result.value {
+			token.wipe()
+		}
+	}()
+	if _, err := hostedJSON(ctx, api, http.MethodGet, path+"?per_page=50&page="+strconv.Itoa(page), nil, bearerFrom(c.admin), &listed); err != nil {
+		return nil, 0, err
+	}
+	var ids []string
+	for _, token := range listed.Result.value {
+		if token.Name.value == name {
+			id, err := publicVendorID(api.name, token.ID.value, token.Value.value)
+			if err != nil {
+				return nil, 0, err
+			}
+			ids = append(ids, id)
+		}
+	}
+	return ids, listed.ResultInfo.TotalPages, nil
+}
+
 func (c cloudflareVendor) nameOf(ctx context.Context, api hostedAPI, binding, id string) (string, bool, error) {
+	if !validVendorManagementID("cloudflare", []byte(id)) {
+		return "", false, errors.New("dynsecret cloudflare: unusable management identifier")
+	}
 	path, _, _ := cloudflareTarget(binding)
-	var current cloudflareEnvelope[struct {
-		Name string `json:"name"`
-	}]
-	status, err := hostedJSON(ctx, api, http.MethodGet, path+"/"+id, nil, bearerFrom(c.admin), &current, http.StatusNotFound)
+	var current cloudflareEnvelope[uniqueVendorField[cloudflareTokenIdentity]]
+	defer func() { current.Result.value.wipe() }()
+	status, err := hostedJSON(ctx, api, http.MethodGet, path+"/"+url.PathEscape(id), nil, bearerFrom(c.admin), &current, http.StatusNotFound)
 	if err != nil || status == http.StatusNotFound {
 		return "", false, err
 	}
-	return current.Result.Name, true, nil
+	if _, err := publicVendorID(api.name, []byte(id), current.Result.value.Value.value); err != nil {
+		return "", false, err
+	}
+	return current.Result.value.Name.value, true, nil
 }
 
 func (c cloudflareVendor) remove(ctx context.Context, api hostedAPI, binding, id string) error {
+	if !validVendorManagementID("cloudflare", []byte(id)) {
+		return errors.New("dynsecret cloudflare: unusable management identifier")
+	}
 	path, _, _ := cloudflareTarget(binding)
-	_, err := hostedJSON(ctx, api, http.MethodDelete, path+"/"+id, nil, bearerFrom(c.admin), nil, http.StatusNotFound)
+	_, err := hostedJSON(ctx, api, http.MethodDelete, path+"/"+url.PathEscape(id), nil, bearerFrom(c.admin), nil, http.StatusNotFound)
 	return err
 }
 

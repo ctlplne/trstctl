@@ -5,8 +5,10 @@ package dynsecret
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 
@@ -50,7 +52,7 @@ func (h hostedAPI) send(ctx context.Context, method, path string, body []byte, c
 	}
 	req, err := http.NewRequestWithContext(ctx, method, h.endpoint+path, payload)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, fmt.Errorf("dynsecret %s: invalid management request", h.name)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", contentType)
@@ -58,20 +60,37 @@ func (h hostedAPI) send(ctx context.Context, method, path string, body []byte, c
 	req.Header.Set("Accept", "application/json")
 	if authenticate != nil {
 		if err := authenticate(req.Header); err != nil {
-			return 0, nil, err
+			return 0, nil, hostedTransportError(h.name, "authenticate request", err)
 		}
 	}
 	resp, err := h.client.Do(req) // #nosec G704 -- the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918)
 	if err != nil {
-		return 0, nil, fmt.Errorf("dynsecret %s: %w", h.name, err)
+		return 0, nil, hostedTransportError(h.name, "send request", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	response, err := io.ReadAll(io.LimitReader(resp.Body, hostedAPIResponseLimit))
+	response, err := io.ReadAll(io.LimitReader(resp.Body, hostedAPIResponseLimit+1))
 	if err != nil {
 		secret.Wipe(response)
-		return 0, nil, fmt.Errorf("dynsecret %s: read the response: %w", h.name, err)
+		return 0, nil, hostedTransportError(h.name, "read response", err)
+	}
+	if len(response) > hostedAPIResponseLimit {
+		secret.Wipe(response)
+		return 0, nil, fmt.Errorf("dynsecret %s: response exceeds size limit", h.name)
 	}
 	return resp.StatusCode, response, nil
+}
+
+// Preserve cancellation and timeout classification without returning a URL
+// or an error written by the remote transport.
+func hostedTransportError(provider, action string, err error) error {
+	if errors.Is(err, context.Canceled) {
+		return fmt.Errorf("dynsecret %s: %s: %w", provider, action, context.Canceled)
+	}
+	var networkError net.Error
+	if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &networkError) && networkError.Timeout() {
+		return fmt.Errorf("dynsecret %s: %s: %w", provider, action, context.DeadlineExceeded)
+	}
+	return fmt.Errorf("dynsecret %s: %s failed", provider, action)
 }
 
 // callForm posts a form-encoded body, an OAuth client authentication (A240).

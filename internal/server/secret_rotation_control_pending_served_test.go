@@ -33,7 +33,8 @@ func TestServedSecretRotationDueClaimRefusesUnprojectedPauseOrRetire(t *testing.
 			if _, err := h.srv.orch.UpsertSecretRotationSchedule(t.Context(), h.tenant, store.SecretRotationSchedule{
 				ID: scheduleID, Name: "pause-before-claim", Provider: "historical-static",
 				Key: "rotation/pause-before-claim", OldRef: "static-v1", IntervalSeconds: 3600,
-				Enabled: true, NextRunAt: time.Now().UTC().Add(-time.Minute),
+				ReferenceProviderType: store.SecretRotationScheduleNativeReference,
+				Enabled:               true, NextRunAt: time.Now().UTC().Add(-time.Minute),
 			}); err != nil {
 				t.Fatal(err)
 			}

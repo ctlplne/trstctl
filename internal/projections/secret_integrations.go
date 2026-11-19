@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -204,6 +205,14 @@ const (
 	// only through retained-history lifecycle classification and exact row binding.
 	DynamicSecretEventSchemaVersion = 2
 
+	// DynamicSecretRevocationReferenceSchemaVersion identifies the issued
+	// lease without repeating its provider reference.
+	DynamicSecretRevocationReferenceSchemaVersion = 3
+
+	// DynamicSecretHostedIssuedSchemaVersion attests that a hosted provider
+	// reference passed admission while the original credential was available.
+	DynamicSecretHostedIssuedSchemaVersion = 3
+
 	// DynamicSecretIssuanceFailureEventSchemaVersion is retained as a source-level
 	// compatibility name for the first transition upgraded to the v2 contract.
 	DynamicSecretIssuanceFailureEventSchemaVersion = DynamicSecretEventSchemaVersion
@@ -356,6 +365,11 @@ type DynamicSecretLeaseIssued struct {
 	HardExpiresAt    time.Time `json:"hard_expires_at"`
 }
 
+type DynamicSecretLeaseIssuedV3 struct {
+	DynamicSecretLeaseIssued
+	HostedProviderType string `json:"hosted_provider_type"`
+}
+
 type DynamicSecretLeaseFailure struct {
 	TenantEpoch string `json:"tenant_epoch,omitempty"`
 	ID          string `json:"id"`
@@ -406,6 +420,18 @@ type DynamicSecretLeaseRevocationRetryRequested struct {
 	Provider         string `json:"provider"`
 	BackendRef       string `json:"backend_ref"`
 	PreviousOutboxID int64  `json:"previous_outbox_id"`
+}
+
+type DynamicSecretLeaseRevocationRequestedV3 struct {
+	TenantEpoch string `json:"tenant_epoch"`
+	OperationID string `json:"operation_id"`
+	ID          string `json:"id"`
+	Provider    string `json:"provider"`
+}
+
+type DynamicSecretLeaseRevocationRetryRequestedV3 struct {
+	DynamicSecretLeaseRevocationRequestedV3
+	PreviousAttempt string `json:"previous_attempt"`
 }
 
 // DynamicSecretRevokeCommand preserves the legacy RevokeItem field names while
@@ -582,7 +608,11 @@ func init() {
 	} {
 		knownSchemaVersions[eventType][DynamicSecretEventSchemaVersion] = true
 	}
-	knownSchemaVersions[EventDynamicSecretLeaseRevocationRetryRequested] = map[int]bool{DynamicSecretEventSchemaVersion: true}
+	knownSchemaVersions[EventDynamicSecretLeaseRevocationRequested][DynamicSecretRevocationReferenceSchemaVersion] = true
+	knownSchemaVersions[EventDynamicSecretLeaseIssued][DynamicSecretHostedIssuedSchemaVersion] = true
+	knownSchemaVersions[EventDynamicSecretLeaseRevocationRetryRequested] = map[int]bool{
+		DynamicSecretEventSchemaVersion: true, DynamicSecretRevocationReferenceSchemaVersion: true,
+	}
 }
 
 func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e events.Event) (bool, error) {
@@ -653,8 +683,8 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 			ctx, tx, e.TenantID, tenantEpoch, payload.ID, payload.Provider,
 			payload.SealedPreparation, e.Time)
 	case EventDynamicSecretLeaseIssued:
-		var payload DynamicSecretLeaseIssued
-		if err := decode(e, &payload); err != nil {
+		payload, _, err := DecodeDynamicSecretIssuedSource(e)
+		if err != nil {
 			return true, err
 		}
 		if payload.ID == "" || payload.IdempotencyKey == "" || payload.Provider == "" || payload.Role == "" || payload.BackendRef == "" || len(payload.SealedCredential) == 0 || payload.ExpiresAt.IsZero() || payload.HardExpiresAt.IsZero() {
@@ -720,64 +750,48 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		}
 		return true, p.store.ApplyDynamicSecretLeaseRenewedForEpochTx(
 			ctx, tx, e.TenantID, tenantEpoch, payload.ID, payload.ExpiresAt, e.Time)
-	case EventDynamicSecretLeaseRevocationRequested:
-		var payload DynamicSecretLeaseRevocationRequested
-		if err := decode(e, &payload); err != nil {
+	case EventDynamicSecretLeaseRevocationRequested, EventDynamicSecretLeaseRevocationRetryRequested:
+		source, err := DecodeDynamicSecretRevocationSource(e)
+		if err != nil {
 			return true, err
 		}
-		if payload.ID == "" || payload.Provider == "" || payload.BackendRef == "" ||
-			(schemaVersionOf(e) >= DynamicSecretEventSchemaVersion && payload.OperationID == "") {
-			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
-		}
-		if err := validateDynamicSecretEventIdentity(e, payload.TenantEpoch, "lease-revocation-requested", payload.OperationID); err != nil {
-			return true, err
-		}
-		tenantEpoch, inert, err := p.resolveDynamicSecretEventEpochTx(ctx, tx, e, payload.TenantEpoch)
+		tenantEpoch, inert, err := p.resolveDynamicSecretEventEpochTx(ctx, tx, e, source.TenantEpoch)
 		if inert {
 			return true, nil
 		}
 		if err != nil {
 			return true, err
 		}
-		outboxPayload, err := json.Marshal(DynamicSecretRevokeCommand{
-			TenantEpoch: tenantEpoch, LeaseID: payload.ID,
-			Provider: payload.Provider, BackendRef: payload.BackendRef,
-		})
+		if superseded, err := p.store.GuardDynamicSecretRevocationProjectionTx(ctx, tx, e.TenantID, tenantEpoch, source.LeaseID, e.Sequence); err != nil || superseded {
+			return true, err
+		}
+		command := store.DynamicSecretRevokeOutboxBinding{
+			TenantEpoch: tenantEpoch, LeaseID: source.LeaseID,
+			Provider: source.Provider, BackendRef: source.LegacyRef,
+		}
+		if source.LegacyRef == "" {
+			command.RefSource = store.DynamicSecretRevokeFromIssuedLease
+		}
+		retry := e.Type == EventDynamicSecretLeaseRevocationRetryRequested
+		if retry {
+			command.AttemptID = source.OperationID
+		}
+		payload, err := json.Marshal(command)
 		if err != nil {
 			return true, err
 		}
-		return true, p.store.ApplyDynamicSecretRevocationIntentForEpochTx(
-			ctx, tx, e.TenantID, tenantEpoch, payload.ID, outboxPayload, e.Time,
-			dynamicSecretRevocationNeedsCredential(payload.BackendRef))
-	case EventDynamicSecretLeaseRevocationRetryRequested:
-		var payload DynamicSecretLeaseRevocationRetryRequested
-		if err := decode(e, &payload); err != nil {
-			return true, err
+		defer secret.Wipe(payload)
+		if !retry {
+			return true, p.store.ApplyDynamicSecretRevocationIntentForEpochTx(
+				ctx, tx, e.TenantID, tenantEpoch, source.LeaseID, payload, e.Time,
+				dynamicSecretRevocationNeedsCredential(source.LegacyRef))
 		}
-		if payload.ID == "" || payload.OperationID == "" || payload.Provider == "" ||
-			payload.BackendRef == "" || payload.PreviousOutboxID <= 0 {
-			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
-		}
-		if err := validateDynamicSecretEventIdentity(e, payload.TenantEpoch, "lease-revocation-retry-requested", payload.OperationID); err != nil {
-			return true, err
-		}
-		tenantEpoch, inert, err := p.resolveDynamicSecretEventEpochTx(ctx, tx, e, payload.TenantEpoch)
-		if inert {
-			return true, nil
-		}
-		if err != nil {
-			return true, err
-		}
-		outboxPayload, err := json.Marshal(DynamicSecretRevokeCommand{
-			TenantEpoch: tenantEpoch, LeaseID: payload.ID, Provider: payload.Provider,
-			BackendRef: payload.BackendRef, AttemptID: payload.OperationID,
-		})
-		if err != nil {
-			return true, err
+		if source.PreviousAttempt != "" {
+			return true, p.store.ApplyDynamicSecretRevocationRetryByAttemptForEpochTx(
+				ctx, tx, e.TenantID, tenantEpoch, source.LeaseID, source.OperationID, source.PreviousAttempt, payload)
 		}
 		return true, p.store.ApplyDynamicSecretRevocationRetryIntentForEpochTx(
-			ctx, tx, e.TenantID, tenantEpoch, payload.ID, payload.OperationID,
-			payload.PreviousOutboxID, outboxPayload)
+			ctx, tx, e.TenantID, tenantEpoch, source.LeaseID, source.OperationID, source.PreviousOutboxID, payload)
 	case EventDynamicSecretLeaseRevocationCompleted:
 		var payload DynamicSecretLeaseRevocationCompleted
 		if err := decode(e, &payload); err != nil {
@@ -799,6 +813,14 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		}
 		if err != nil {
 			return true, err
+		}
+		if superseded, err := p.store.GuardDynamicSecretRevocationProjectionTx(ctx, tx, e.TenantID, tenantEpoch, payload.ID, e.Sequence); err != nil || superseded {
+			return true, err
+		}
+		if schemaVersionOf(e) >= DynamicSecretEventSchemaVersion {
+			if err := p.store.RequireDynamicSecretRevocationAttemptTx(ctx, tx, e.TenantID, tenantEpoch, payload.ID, payload.AttemptID); err != nil {
+				return true, err
+			}
 		}
 		return true, p.store.ApplyDynamicSecretLeaseRevocationCompletedForEpochTx(
 			ctx, tx, e.TenantID, tenantEpoch, payload.ID, e.Time, payload.Method)
@@ -823,6 +845,14 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		}
 		if err != nil {
 			return true, err
+		}
+		if superseded, err := p.store.GuardDynamicSecretRevocationProjectionTx(ctx, tx, e.TenantID, tenantEpoch, payload.ID, e.Sequence); err != nil || superseded {
+			return true, err
+		}
+		if schemaVersionOf(e) >= DynamicSecretEventSchemaVersion {
+			if err := p.store.RequireDynamicSecretRevocationAttemptTx(ctx, tx, e.TenantID, tenantEpoch, payload.ID, payload.AttemptID); err != nil {
+				return true, err
+			}
 		}
 		return true, p.store.ApplyDynamicSecretLeaseRevocationFailedForEpochTx(
 			ctx, tx, e.TenantID, tenantEpoch, payload.ID, payload.Error, e.Time)

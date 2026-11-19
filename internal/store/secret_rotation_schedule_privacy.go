@@ -159,6 +159,7 @@ type SecretRotationSchedulePrivacyOuterRequirement struct {
 	TerminalBodyMatch         bool
 	TerminalHTTPStatus        int
 	OriginalTerminalBody      []byte
+	SafeOriginalTerminalBody  []byte
 	RewrittenTerminalBody     []byte
 }
 
@@ -412,6 +413,7 @@ func (s *Store) PrepareSecretRotationSchedulePrivacyErasureTx(
 	}
 
 	resolvedTickKeys := make(map[string]string, len(tickKeys))
+	rewrittenTerminals := make(map[string][]byte, len(tickKeys))
 	ownerErr := func() error {
 		placeholder := privacy.Placeholder(subjectRef)
 		if _, err := tx.Exec(ctx,
@@ -429,6 +431,30 @@ func (s *Store) PrepareSecretRotationSchedulePrivacyErasureTx(
 				tenantID, subject, placeholder, lockedOuters[tickKey], lockedTicks[tickKey])
 			if err != nil {
 				return err
+			}
+			if len(requirement.OriginalTerminalBody) != 0 {
+				safe, changed, err := RenderSecretRotationScheduleTickReferenceViewTx(
+					ctx, tx, tenantID, tickKey, requirement.OriginalTerminalBody)
+				if err != nil {
+					return err
+				}
+				if changed {
+					requirement.SafeOriginalTerminalBody = safe
+					if !requirement.TerminalBodyMatch {
+						requirement.RewrittenTerminalBody = safe
+					}
+					requirement.TerminalBodyMatch = true
+					required = true
+				}
+				if requirement.TerminalBodyMatch {
+					body, _, err := RenderSecretRotationScheduleTickReferenceViewTx(
+						ctx, tx, tenantID, tickKey, requirement.RewrittenTerminalBody)
+					if err != nil {
+						return err
+					}
+					requirement.RewrittenTerminalBody = body
+					rewrittenTerminals[tickKey] = body
+				}
 			}
 			if !required {
 				continue
@@ -464,21 +490,23 @@ func (s *Store) PrepareSecretRotationSchedulePrivacyErasureTx(
 			}
 			var terminalBody []byte
 			if retained.TerminalHTTPStatus != nil {
-				terminalBody, _, err = rewriteSecretRotationSchedulePrivacyReceipt(
-					retained.TerminalBody, subject, placeholder, false, "")
-				if err != nil {
-					return err
+				terminalBody = retained.TerminalBody
+				if rewritten := rewrittenTerminals[tickKey]; len(rewritten) != 0 {
+					terminalBody = rewritten
 				}
+				receipt = terminalBody
 			}
 			tag, err := tx.Exec(ctx,
 				`UPDATE secret_rotation_schedule_ticks
 			    SET phase = 'privacy_erased',
 			        current_schedule_id = NULL, current_due_at = NULL,
 			        current_provider = NULL, current_secret_key = NULL,
-			        current_old_ref = NULL, current_interval_seconds = NULL,
+			        current_old_ref = NULL, current_reference_provider_type = NULL, current_interval_seconds = NULL,
 			        current_config_event_sequence = NULL,
 			        current_command_lease_token = NULL,
 			        receipt = $3::jsonb, owner_token = '',
+			        safe_receipt = NULL, reference_view_version = 0,
+			        legacy_receipt_digest = '', safe_prefix_digest = '',
 			        terminal_http_status = $4, terminal_body = $5,
 			        privacy_rewrite_version = $6, privacy_subject_ref = $7,
 			        privacy_operation_id = $8, privacy_event_id = $9,
@@ -758,7 +786,7 @@ func secretRotationSchedulePrivacyTickMatches(
 			return true, nil
 		}
 	}
-	for _, raw := range [][]byte{tick.Receipt, tick.TerminalBody} {
+	for _, raw := range [][]byte{tick.Receipt, tick.OriginalReceipt, tick.TerminalBody} {
 		if len(raw) == 0 {
 			continue
 		}
@@ -1096,7 +1124,7 @@ func rewriteSecretRotationSchedulePrivacyDeferred(
 		return nil, false, err
 	}
 	switch reason {
-	case "approval_pending", "command_in_flight", "command_claimed", "config_revision_unanchored":
+	case "approval_pending", "command_in_flight", "command_claimed", "config_revision_unanchored", SecretRotationScheduleReferenceReviewRequired:
 	default:
 		return nil, false, fmt.Errorf("%w: scheduler deferral reason is invalid", ErrSecretRotationScheduleTickConflict)
 	}

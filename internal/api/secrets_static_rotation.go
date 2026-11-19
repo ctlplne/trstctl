@@ -170,6 +170,9 @@ func (a *API) queueStaticSecretRotationUnderCatalog(
 	case !errors.Is(err, store.ErrSecretStaticRotationCommandNotFound):
 		return store.SecretStaticRotationCommand{}, err
 	}
+	if recovered, found, err := a.recoverStaticRotationQueueSource(ctx, tenantID, epoch, id, keyDigest, requestBinding, scheduleID, req); err != nil || found {
+		return recovered, err
+	}
 	if _, prepared := provider.(dynsecret.PreparedStaticRotationProvider); prepared && staticRotationPhase(provider, req.Key) == dynsecret.RotationSinglePhase {
 		account, selected, e := a.store.SelectedServiceDependentAccount(ctx, tenantID, req.Provider, req.OldRef)
 		if e != nil {
@@ -188,6 +191,10 @@ func (a *API) queueStaticSecretRotationUnderCatalog(
 	} else if found && !latest.Terminal() {
 		return store.SecretStaticRotationCommand{}, errStatus(http.StatusConflict, staticRotationInFlightDetail)
 	}
+	oldRef, err := a.admitStaticRotationPredecessor(ctx, tenantID, epoch, current, provider, req.OldRef)
+	if err != nil {
+		return store.SecretStaticRotationCommand{}, err
+	}
 	providerBinding := ""
 	if prepared, ok := provider.(dynsecret.PreparedStaticRotationProvider); ok && staticRotationPhase(provider, req.Key) == dynsecret.RotationSinglePhase {
 		providerBinding = prepared.StaticRotationBinding(req.Key)
@@ -196,12 +203,20 @@ func (a *API) queueStaticSecretRotationUnderCatalog(
 		}
 	}
 	payload := projections.SecretStaticRotationQueued{
-		ID: id, TenantEpoch: epoch, Provider: req.Provider, Key: req.Key, OldRef: req.OldRef, ProviderBinding: providerBinding,
+		ID: id, TenantEpoch: epoch, Provider: req.Provider, Key: req.Key, OldRef: oldRef, ProviderBinding: providerBinding,
 		ExpectedVersion: current.Version, IdempotencyKeyDigest: keyDigest, RequestBinding: requestBinding,
 		ScheduleID: scheduleID, Consumers: req.Consumers, RetireAfterSeconds: req.RetireAfterSeconds, RetireApprovedBy: approvedBy,
 		SinglePhaseAcknowledged: req.AcknowledgeSinglePhase && staticRotationPhase(provider, req.Key) == dynsecret.RotationSinglePhase,
 	}
-	if err := a.appendAndProjectStaticRotation(ctx, tenantID, id, projections.EventSecretStaticRotationQueued, payload); err != nil {
+	var eventPayload any = payload
+	// Prepared native rotation agents bind the original queue envelope and its
+	// native provider binding before redeeming staged material.
+	if providerBinding == "" {
+		eventPayload = projections.SecretStaticRotationReferenceQueued{
+			SecretStaticRotationQueued: payload, ReferenceProviderType: staticReferenceProviderType(provider),
+		}
+	}
+	if err := a.appendAndProjectStaticRotation(ctx, tenantID, id, projections.EventSecretStaticRotationQueued, eventPayload); err != nil {
 		return store.SecretStaticRotationCommand{}, err
 	}
 	return a.store.GetSecretStaticRotationCommand(ctx, tenantID, id)
@@ -219,8 +234,15 @@ func (a *API) appendAndProjectStaticRotation(ctx context.Context, tenantID, even
 	}
 	defer secret.Wipe(raw)
 	schemaVersion := 1
-	if advance, ok := payload.(projections.SecretStaticRotationAdvanced); ok && advance.WindowsLocalIntent != nil {
-		schemaVersion = 2
+	switch source := payload.(type) {
+	case projections.SecretStaticRotationAdvanced:
+		if source.WindowsLocalIntent != nil {
+			schemaVersion = 2
+		}
+	case projections.SecretStaticRotationReferenceQueued:
+		schemaVersion = projections.SecretStaticRotationReferenceQueueSchemaVersion
+	case projections.SecretStaticRotationHostedStaged:
+		schemaVersion = projections.SecretStaticRotationHostedStageSchemaVersion
 	}
 	ev := events.Event{ID: eventID, Type: eventType, TenantID: tenantID, Time: time.Now().UTC(), SchemaVersion: schemaVersion, Data: raw}
 	if actor, ok := events.ActorFromContext(ctx); ok {
@@ -403,7 +425,7 @@ func (a *API) FailStaticSecretRotation(ctx context.Context, tenantID, commandID 
 			return a.rollbackStaticRotation(ctx, cmd, provider)
 		}
 		if providerErr == nil && cmd.NewRef != "" {
-			_ = provider.Revoke(ctx, cmd.NewRef) // best effort: the successor was never published
+			_ = a.revokeStaticRotationReference(ctx, cmd, provider, false) // best effort: the successor was never published
 		}
 		return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationFailed, Error: staticRotationRetryExhaustedDetail})
 	case store.SecretStaticRotationCutover:
@@ -422,7 +444,15 @@ func (a *API) FailStaticSecretRotation(ctx context.Context, tenantID, commandID 
 // and the staged event replaces the same principal instead of leaking one. A
 // two-user role stages the account its predecessor does not name instead.
 func (a *API) stageStaticRotation(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider) error {
-	cred, err := provider.Generate(ctx, dynsecret.GenerateRequest{Role: cmd.Key, LeaseID: cmd.ID, Static: true, Predecessor: cmd.OldRef, TenantEpoch: cmd.TenantEpoch})
+	kind := dynsecret.HostedReferenceProviderType(provider)
+	predecessor := cmd.OldRef
+	if kind != "" {
+		if found, err := a.recoverHostedStaticStage(ctx, cmd, kind); err != nil || found {
+			return err
+		}
+		predecessor = ""
+	}
+	cred, err := provider.Generate(ctx, dynsecret.GenerateRequest{Role: cmd.Key, LeaseID: cmd.ID, Static: true, Predecessor: predecessor, TenantEpoch: cmd.TenantEpoch})
 	if err != nil {
 		return fmt.Errorf("api: static rotation stage: %w", err)
 	}
@@ -430,9 +460,19 @@ func (a *API) stageStaticRotation(ctx context.Context, cmd store.SecretStaticRot
 	if cred.BackendRef == "" || len(cred.Secret) == 0 {
 		return errors.New("api: static rotation stage: provider returned no credential")
 	}
+	if err := dynsecret.ValidateIssuedHostedReference(provider, cmd.Key, cred.BackendRef, cred.Secret); err != nil {
+		return err
+	}
 	sealed, err := a.secrets.seal(ctx, cmd.TenantID, cred.Secret, staticRotationAAD(cmd.TenantID, cmd.ID, "new"))
 	if err != nil {
 		return err
+	}
+	if kind != "" {
+		return a.appendAndProjectStaticRotation(ctx, cmd.TenantID, staticRotationEventID(cmd, store.SecretStaticRotationStaged),
+			projections.EventSecretStaticRotationAdvanced, projections.SecretStaticRotationHostedStaged{
+				ID: cmd.ID, TenantEpoch: cmd.TenantEpoch, FromPhase: cmd.Phase, Phase: store.SecretStaticRotationStaged,
+				ProviderType: kind, NewRef: cred.BackendRef, SealedNew: sealed,
+			})
 	}
 	return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{
 		Phase: store.SecretStaticRotationStaged, ProviderType: cred.Metadata["provider_type"],
@@ -454,7 +494,7 @@ func (a *API) cutoverStaticRotation(ctx context.Context, cmd store.SecretStaticR
 	}
 	if current.Version != cmd.ExpectedVersion {
 		// Someone else moved the secret: do not publish over their version.
-		_ = provider.Revoke(ctx, cmd.NewRef)
+		_ = a.revokeStaticRotationReference(ctx, cmd, provider, false)
 		return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationFailed, Error: staticRotationVersionMovedDetail})
 	}
 	old, err := a.secrets.open(ctx, cmd.TenantID, current.Sealed, sealAAD(cmd.TenantID, cmd.Key))
@@ -615,7 +655,7 @@ func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStatic
 	}
 	detail := staticRotationVerifyFailedDetail
 	if !nativeRestore && cmd.NewRef != "" {
-		if err := provider.Revoke(ctx, cmd.NewRef); err != nil {
+		if err := a.revokeStaticRotationReference(ctx, cmd, provider, false); err != nil {
 			detail = staticRotationVerifyFailedRevokeDetail
 		}
 	}
@@ -649,7 +689,7 @@ func (a *API) retireStaticRotation(ctx context.Context, cmd store.SecretStaticRo
 		}
 	}
 	if !nativeHost && !coordinatedInPlace && cmd.OldRef != staticRotationNoPredecessor {
-		if err := provider.Revoke(ctx, cmd.OldRef); err != nil {
+		if err := a.revokeStaticRotationReference(ctx, cmd, provider, true); err != nil {
 			return fmt.Errorf("api: static rotation retire: %w", err)
 		}
 	}
@@ -859,8 +899,14 @@ func (a *API) vaultedAccountPredecessor(ctx context.Context, tenantID, providerI
 	case found && latest.Phase == store.SecretStaticRotationRollbackFailed:
 		return "", errStatus(http.StatusConflict, staticRotationUnresolvedDetail)
 	}
-	if live := staticRotationLiveRef(latest); found && live != "" {
-		return live, nil
+	if found {
+		live, err := a.liveStaticRotationPredecessor(ctx, tenantID, key, provider, latest)
+		if err != nil {
+			return "", errStatus(http.StatusConflict, staticReferenceReviewDetail)
+		}
+		if live != "" {
+			return live, nil
+		}
 	}
 	if pair, ok := staticRotationTwoUserAccounts(provider, key); ok {
 		if currentAccount != pair[0] && currentAccount != pair[1] {

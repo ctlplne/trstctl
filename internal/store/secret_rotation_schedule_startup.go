@@ -612,6 +612,12 @@ func validateSecretRotationScheduleStartupAggregateTx(
 		return err
 	}
 
+	if tick.ReferenceViewVersion != 0 {
+		if err := validateSecretRotationScheduleTickReferenceViewTx(ctx, tx, tick); err != nil {
+			return err
+		}
+	}
+
 	cursorNamesTick := cursorExists && cursor.ActiveTickKey == tick.IdempotencyKey
 	switch tick.Phase {
 	case "ready", "row_started":

@@ -27,6 +27,8 @@ var (
 	ErrSecretRotationScheduleScanLeaseConflict = errors.New("store: secret rotation schedule scan lease conflicts with retained authority")
 )
 
+const SecretRotationScheduleNativeReference = "native"
+
 // SecretRotationSchedule is a tenant-owned cadence for durable connector-backed
 // application-secret rotation. Historical rows may name static providers, but
 // the served scheduler terminally disables them without invoking provider code.
@@ -44,6 +46,8 @@ type SecretRotationSchedule struct {
 	Provider                        string
 	Key                             string
 	OldRef                          string
+	ReferenceProviderType           string
+	ReferenceViewVersion            int
 	IntervalSeconds                 int
 	// ConfigEventSequence is the immutable event revision of the configuration
 	// tuple. Zero is reserved for rows projected before migration 0155.
@@ -201,8 +205,8 @@ func (s *Store) ApplySecretRotationScheduleUpsertedTx(ctx context.Context, tx pg
 		`INSERT INTO secret_rotation_schedules
 		        (id, tenant_id, name, provider, secret_key, old_ref, interval_seconds,
 		         config_event_sequence, enabled, next_run_at, created_at, updated_at, consumers, retire_after_seconds,
-		         single_phase_acknowledged, ttl_seconds)
-		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		         single_phase_acknowledged, ttl_seconds, reference_provider_type)
+		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		      SET name = EXCLUDED.name,
 		          provider = EXCLUDED.provider,
@@ -213,6 +217,7 @@ func (s *Store) ApplySecretRotationScheduleUpsertedTx(ctx context.Context, tx pg
 		          retire_after_seconds = EXCLUDED.retire_after_seconds,
 		          single_phase_acknowledged = EXCLUDED.single_phase_acknowledged,
 		          ttl_seconds = EXCLUDED.ttl_seconds,
+		          reference_provider_type = EXCLUDED.reference_provider_type,
 		          config_event_sequence = EXCLUDED.config_event_sequence,
 		          enabled = CASE
 		              WHEN secret_rotation_schedules.retired_at IS NOT NULL OR
@@ -227,7 +232,7 @@ func (s *Store) ApplySecretRotationScheduleUpsertedTx(ctx context.Context, tx pg
 		sched.ID, sched.TenantID, sched.Name, sched.Provider, sched.Key, sched.OldRef,
 		sched.IntervalSeconds, sched.ConfigEventSequence, sched.Enabled, sched.NextRunAt,
 		sched.CreatedAt, sched.UpdatedAt, nonNilStrings(sched.Consumers), sched.RetireAfterSeconds,
-		sched.SinglePhaseAcknowledged, sched.TTLSeconds)
+		sched.SinglePhaseAcknowledged, sched.TTLSeconds, sched.ReferenceProviderType)
 	return err
 }
 
@@ -1278,6 +1283,22 @@ func (s *Store) PurgeVerifiedSecretRotationScheduleCommand(
 	return deleted, err
 }
 
+// ValidateScheduleSnapshot checks the immutable schedule portion of the child
+// tuple. A recovered child can belong to an earlier outer tick for this edge.
+func (command SecretRotationScheduleCommand) ValidateScheduleSnapshot(schedule SecretRotationSchedule) error {
+	if command.TenantID != schedule.TenantID || command.IdentityVersion != schedule.IdentityVersion ||
+		command.TenantRegistrationEventID != schedule.TenantRegistrationEventID ||
+		command.TenantRegistrationEventSequence != schedule.TenantRegistrationEventSequence ||
+		command.ScheduleID != schedule.ID || !command.DueAt.Equal(schedule.NextRunAt) ||
+		command.Provider != schedule.Provider || command.Key != schedule.Key || command.OldRef != schedule.OldRef ||
+		command.IntervalSeconds != schedule.IntervalSeconds || command.ConfigEventSequence != schedule.ConfigEventSequence ||
+		command.RequestBinding == "" || !rotationcommand.Matches(command.TenantID, command.TenantRegistrationEventSequence,
+		command.ScheduleID, command.RunID, command.DueAt, command.CommandKey, command.TerminalEventID) {
+		return fmt.Errorf("%w: retained child differs from the frozen schedule revision", ErrSecretRotationScheduleCommandConflict)
+	}
+	return nil
+}
+
 func validateSecretRotationScheduleCommandDueEdge(got, want SecretRotationScheduleCommand) error {
 	if got.TenantID != want.TenantID || got.IdentityVersion != want.IdentityVersion ||
 		got.TenantRegistrationEventID != want.TenantRegistrationEventID ||
@@ -1337,7 +1358,7 @@ func (s *Store) ListSecretRotationSchedulesPage(ctx context.Context, tenantID, a
 			`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
 		        enabled, next_run_at, control_event_sequence, retired_at,
 		        last_run_id::text, last_run_at, last_run_status,
-			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged, ttl_seconds
+			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged, ttl_seconds, reference_provider_type
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND id > $2
 			  ORDER BY secret_rotation_schedules.id LIMIT $3`, tenantID, afterID, limit)
@@ -1379,7 +1400,7 @@ func (s *Store) ListDueSecretRotationSchedulesPage(
 			`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
 		        enabled, next_run_at, control_event_sequence, retired_at,
 		        last_run_id::text, last_run_at, last_run_status,
-			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged, ttl_seconds
+			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged, ttl_seconds, reference_provider_type
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND enabled AND next_run_at <= $2
 			    AND (next_run_at > $3 OR (next_run_at = $3 AND id::text > $4))
@@ -1425,7 +1446,7 @@ func (s *Store) ListDueSecretRotationSchedulesRingPage(
 			`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
 		        enabled, next_run_at, control_event_sequence, retired_at,
 		        last_run_id::text, last_run_at, last_run_status,
-			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged, ttl_seconds
+			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged, ttl_seconds, reference_provider_type
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND enabled AND next_run_at <= $2
 			    AND id > $3::uuid
@@ -1456,7 +1477,7 @@ func (s *Store) GetSecretRotationSchedule(ctx context.Context, tenantID, id stri
 			`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
 		        enabled, next_run_at, control_event_sequence, retired_at,
 		        last_run_id::text, last_run_at, last_run_status,
-			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged, ttl_seconds
+			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged, ttl_seconds, reference_provider_type
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
 	})
@@ -1474,7 +1495,7 @@ func (s *Store) GetSecretRotationScheduleForControlTx(
 		`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
 		        enabled, next_run_at, control_event_sequence, retired_at,
 		        last_run_id::text, last_run_at, last_run_status,
-		        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged, ttl_seconds
+		        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged, ttl_seconds, reference_provider_type
 		   FROM secret_rotation_schedules
 		  WHERE tenant_id = $1 AND id = $2::uuid FOR UPDATE`, tenantID, id), &out)
 	return out, err
@@ -1486,7 +1507,7 @@ func scanSecretRotationSchedule(row rowScanner, sched *SecretRotationSchedule) e
 		&sched.ControlEventSequence, &sched.RetiredAt,
 		&sched.LastRunID, &sched.LastRunAt, &sched.LastRunStatus, &sched.LastNewRef,
 		&sched.LastError, &sched.CreatedAt, &sched.UpdatedAt, &sched.Consumers, &sched.RetireAfterSeconds,
-		&sched.SinglePhaseAcknowledged, &sched.TTLSeconds); err != nil {
+		&sched.SinglePhaseAcknowledged, &sched.TTLSeconds, &sched.ReferenceProviderType); err != nil {
 		return err
 	}
 	// Existing installations can have v1 rows written before scheduler errors

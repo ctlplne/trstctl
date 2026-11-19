@@ -3741,6 +3741,13 @@
 
 ### Security
 
+- Hosted credential adapters validate public management identifiers before
+  publishing lease or rotation metadata (CR-663, CR-962 and CR-588). LiteLLM
+  uses SHA-256 handles, revocation dispatch binds the issued lease and exact
+  attempt, and legacy static and scheduler responses elide unproved references.
+  See the [hosted credential upgrade procedure](docs/runbooks/upgrade-rollback.md#hosted-credential-references)
+  for writer fencing, older retries and vendor-side recovery.
+
 - Kubernetes agents distribute canonical public TrustBundles only to locally
   allowed namespaces and agent-owned targets (CR-431 and CR-759). Remote
   rollouts require explicit controller and CSI opt-in. The agent protects

@@ -2801,6 +2801,7 @@ func (l *Log) publishToActive(
 	options ...jetstream.PublishOpt,
 ) (*jetstream.PubAck, error) {
 	const attempts = 8
+	position, conditional := ctx.Value(appendSubjectPositionKey{}).(AppendSubjectPosition)
 	var lastErr error
 	for attempt := 0; attempt < attempts; attempt++ {
 		// This hook announces an attempted cross-cutover append. Keep it before
@@ -2811,6 +2812,9 @@ func (l *Log) publishToActive(
 		}
 		name, stream, err := l.resolveActiveStream(ctx)
 		if err == nil {
+			if conditional && (name != position.stream || subject != position.subject) {
+				return nil, ErrAppendPositionChanged
+			}
 			// The metadata check gives ordinary retries the fixed fail-closed
 			// error. The broker route installed in the same UpdateStream as the
 			// binding is the race-free authority: if another replica binds after
@@ -2821,12 +2825,18 @@ func (l *Log) publishToActive(
 				}
 				opts := append([]jetstream.PublishOpt{}, options...)
 				opts = append(opts, jetstream.WithExpectStream(name))
+				if conditional {
+					opts = append(opts, jetstream.WithExpectLastSequencePerSubject(position.sequence))
+				}
 				ack, publishErr := l.js.Publish(ctx, subject, payload, opts...)
 				if publishErr == nil {
 					if active, streamErr := l.js.Stream(ctx, ack.Stream); streamErr == nil {
 						l.setActiveStreamNamed(ack.Stream, active)
 					}
 					return ack, nil
+				}
+				if conditional && appendPositionConflict(publishErr) {
+					return nil, ErrAppendPositionChanged
 				}
 				err = publishErr
 			}

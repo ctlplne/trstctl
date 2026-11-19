@@ -33,6 +33,7 @@ import (
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/hostedkey"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -514,11 +515,18 @@ func (p *configuredDynamicProvider) DynamicSecretKubernetesScope() (namespace, a
 }
 
 // DynamicSecretBindsRole reports whether role binds exactly this
-// provider-native authority (the IAM role ARN an AWS role assumes), without
-// handing the binding across the API seam.
+// provider-native authority without handing the configured binding across the
+// API seam. Hosted adapters use the same canonical binding as their key API.
 func (p *configuredDynamicProvider) DynamicSecretBindsRole(role, binding string) bool {
 	configured, ok := p.cfg.RoleBindings[role]
-	return ok && configured != "" && configured == binding
+	if !ok || configured == "" {
+		return false
+	}
+	if _, hosted := hostedkey.Providers[p.cfg.Type]; hosted {
+		canonical, err := hostedkey.ParseBinding(p.cfg.Type, configured)
+		return err == nil && canonical == binding
+	}
+	return configured == binding
 }
 
 // MaximumTTL is the provider credential's hard native-validity bound. The

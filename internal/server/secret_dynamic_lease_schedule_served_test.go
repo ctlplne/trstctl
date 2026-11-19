@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -149,7 +150,7 @@ func TestServedScheduledDynamicLeaseRotationRevokesTheOldLeaseA201L1(t *testing.
 			time.Sleep(50 * time.Millisecond)
 		}
 	}
-	tick := func(n int) scheduledLeaseCommandView {
+	tick := func(n int, wantPredecessor string) scheduledLeaseCommandView {
 		t.Helper()
 		for {
 			status, body := secretsReq(t, h, http.MethodGet, "/api/v1/secrets/rotation-schedules/"+created.ID, tok, nil)
@@ -166,9 +167,15 @@ func TestServedScheduledDynamicLeaseRotationRevokesTheOldLeaseA201L1(t *testing.
 			}
 			break
 		}
-		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotation-schedules/run-due", tok, fmt.Sprintf("a201l1-tick-%d", n), nil)
-		if status != http.StatusOK || !strings.Contains(string(body), `"status":"queued"`) {
+		key := fmt.Sprintf("a201l1-tick-%d", n)
+		const path = "/api/v1/secrets/rotation-schedules/run-due"
+		status, body := secretsReqKey(t, h, http.MethodPost, path, tok, key, nil)
+		if status != http.StatusOK || !strings.Contains(string(body), `"status":"queued"`) ||
+			!strings.Contains(string(body), `"old_ref":"`+wantPredecessor+`"`) {
 			t.Fatalf("tick %d: %d %s", n, status, body)
+		}
+		if status, replay := secretsReqKey(t, h, http.MethodPost, path, tok, key, nil); status != http.StatusOK || !bytes.Equal(replay, body) {
+			t.Fatalf("tick %d replay lost the admitted reference: HTTP %d", n, status)
 		}
 		status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/rotations?key="+url.QueryEscape(role), tok, nil)
 		var list struct {
@@ -180,11 +187,11 @@ func TestServedScheduledDynamicLeaseRotationRevokesTheOldLeaseA201L1(t *testing.
 		return follow(list.Items[0].ID)
 	}
 
-	one := tick(1)
+	one := tick(1, first.ID)
 	if one.Phase != "completed" || one.OldRef != first.ID || one.NewRef == "" || one.TTLSeconds != 1200 {
 		t.Fatalf("first scheduled rotation = %+v, want completed from the first lease with a 1200 s lease", one)
 	}
-	two := tick(2)
+	two := tick(2, one.NewRef)
 	if two.Phase != "completed" || two.OldRef != one.NewRef || two.NewRef == "" || two.NewRef == one.NewRef || two.TTLSeconds != 1200 {
 		t.Fatalf("second scheduled rotation = %+v, want completed from the lease the first one left live", two)
 	}

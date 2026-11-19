@@ -168,7 +168,7 @@ type servedLiteLLM struct {
 func (l *servedLiteLLM) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	master := r.Header.Get("Authorization") == "Bearer sk-served-master"
+	master := r.Header.Get("Authorization") == "Bearer fixture-master"
 	if r.URL.Path == "/key/info" && r.URL.Query().Get("key") == "" {
 		for token, key := range l.keys {
 			if r.Header.Get("Authorization") == "Bearer "+key[1] {
@@ -194,7 +194,8 @@ func (l *servedLiteLLM) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		l.serial++
-		token, key := fmt.Sprintf("%064x", l.serial), fmt.Sprintf("sk-served-%04d", l.serial)
+		key := fmt.Sprintf("fixture-key-%04d", l.serial)
+		token := crypto.SHA256Hex([]byte(key))
 		l.keys[token] = [3]string{body.KeyAlias, key, strings.Join(body.Models, ",")}
 		hostedJSONReply(w, http.StatusOK, map[string]any{"key": key, "token": token, "key_alias": body.KeyAlias, "models": body.Models})
 	case r.Method == http.MethodGet && r.URL.Path == "/key/list":
@@ -241,7 +242,7 @@ func TestServedLiteLLMVirtualKeysLeaseAndRotateA240(t *testing.T) {
 	hostedKeyProof{
 		provider: config.DynamicSecretProviderConfig{
 			TenantID: servedTestTenant, ID: "litellm-proxy", Type: "litellm", Endpoint: stand.URL,
-			APIKeyRef:    writeServedCredentialFile(t, "litellm-master", "sk-served-master"),
+			APIKeyRef:    writeServedCredentialFile(t, "litellm-master", "fixture-master"),
 			AllowedRoles: []string{"litellm/app"}, RoleBindings: map[string]string{"litellm/app": "models openai/gpt-4o,claude-sonnet"},
 			MaxTTL: "1h", AllowStaticRotation: true, AllowInsecureLoopback: true,
 		},

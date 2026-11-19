@@ -139,6 +139,47 @@ An ordinary restart or read-model rebuild retaining the same registration event
 does not authorize a new tenant generation. Missing registration history requires
 source recovery before enrollment can proceed.
 
+## Hosted credential references
+
+New hosted leases and rotations store public management identifiers in their
+metadata. LiteLLM references use the role binding and a SHA-256 management handle.
+New lease revocation intents carry the tenant registration, lease, provider and
+attempt identity. The worker loads the issued credential reference from that
+exact lease. A failed retry remains tied to its own attempt.
+If a competing revocation write is still being recorded, retry with the same
+`Idempotency-Key`. trstctl recovers the recorded attempt before choosing another.
+
+1. Pause affected schedules and record their IDs and in-flight command IDs.
+   Drain pending work, then stop every control-plane replica, scheduler,
+   projector and delivery worker that can write to the database or event stream.
+   Verify their connections and write endpoints have closed. Back up PostgreSQL,
+   including delivery outbox row identities, together with the event journal.
+2. Upgrade the writers together, apply the migrations and verify readiness.
+   Inspect pending and failed revocations by lease and command ID. An older
+   numeric retry can require the original outbox row from the matching backup.
+   A recreated row with a different ID cannot prove which attempt it replaces.
+   If the provider name now identifies a different backend, use the original
+   vendor and lease ID to reconcile any revocation awaiting reference evidence.
+3. Inspect schedules with missing references or `reference_review_required`.
+   Use the original schedule, run and command IDs to identify the exact secret
+   version and provider scope. If trstctl cannot verify the old management
+   identifier, coordinate retirement with the vendor administrator and verify
+   the replacement works before retiring an active predecessor. Pause or retire
+   the original schedule. Create a newly named schedule with a verified
+   predecessor, or use `none` after arranging retirement outside trstctl.
+   Older OpenRouter and Cloudflare R2 records may lack the source fields needed
+   to prove a safe predecessor.
+4. Treat previously stored or exported bearer material as potentially exposed.
+   Use the matching vendor account to revoke or replace affected credentials
+   and verify the dependent applications. Follow your retention and incident
+   procedures for existing exports and archives.
+
+Before the first upgraded write, an older release can run with the affected
+hosted issuance and rotation disabled. Inspect pending work first. After new
+versioned events have been written, use a compatible patched binary for
+rollback, or restore the coordinated backup in an isolated environment. Keep
+old writers fenced from the active database and stream during restore.
+
 ## Dynamic-secret principal names across this upgrade
 
 Each dynamic-secret lease names its principal (a database role or user, a

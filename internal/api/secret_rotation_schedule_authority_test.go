@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func TestSecretRotationScheduleTickAuthorityUsesVerifiedRegistrationSequenceNotEventID(t *testing.T) {
@@ -52,5 +53,20 @@ func TestSecretRotationScheduleTickAuthorityUsesVerifiedRegistrationSequenceNotE
 	if strings.Contains(firstKey, rawKey) || strings.Contains(firstBinding, rawKey) ||
 		strings.Contains(nextKey, rawKey) || strings.Contains(nextBinding, rawKey) {
 		t.Fatal("raw Idempotency-Key leaked into persisted scheduler authority")
+	}
+}
+
+func TestReconciledLegacyStaticRunKeepsReceiptWithoutUnprovedSuccessor(t *testing.T) {
+	const oldRef = "none"
+	const marker = "unlimited/fixture-earlier-result"
+	sched := store.SecretRotationSchedule{
+		ID: "fixture-schedule", Provider: "fixture-reconfigured-provider",
+		Key: "fixture/rotation", OldRef: oldRef,
+	}
+	run := store.SecretRotationScheduleRun{RunID: "fixture-run", Status: "queued", NewRef: marker}
+	view := secretRotationScheduleRunResponseFromReceipt(sched, run, true)
+	if view.Rotation.NewRef != "" || view.Rotation.OldRef != oldRef || !view.Rotation.Queued ||
+		view.RunID != run.RunID || !view.Reconciled {
+		t.Fatal("retained result must keep its identity, status and explicit predecessor while omitting an unproved successor")
 	}
 }

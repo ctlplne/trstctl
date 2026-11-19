@@ -794,14 +794,19 @@ func (o *Outbox) dispatchClaim(ctx context.Context, h Handler, claim claimedOutb
 	}
 	finalizeErr := o.finalizeClaim(ctx, claim, deliverErr)
 	if deliverErr != nil {
-		// The persisted column holds only the closed error class so provider or
-		// storage text never lands in a tenant row; the log carries the class at
-		// WARN for every failure and the error text only at DEBUG, so an operator
-		// can find why a worker rejects a command without reading the database.
+		// Secret delivery implementations may receive errors containing
+		// credential bytes. Use the same closed class as durable storage at
+		// every level for those destinations.
 		logger := slog.Default()
+		class := persistedDeliveryError(deliverErr)
 		logger.Warn("outbox delivery failed", "destination", claim.msg.Destination, "attempt", claim.attempts,
-			"class", persistedDeliveryError(deliverErr), "deferred", IsDeliveryDeferred(deliverErr))
-		logger.Debug("outbox delivery error", "destination", claim.msg.Destination, "attempt", claim.attempts, "error", deliverErr.Error())
+			"class", class, "deferred", IsDeliveryDeferred(deliverErr))
+		switch claim.msg.Destination {
+		case "dynsecret.issue", "dynsecret.revoke", "secret.static-rotation":
+			logger.Debug("outbox delivery error", "destination", claim.msg.Destination, "attempt", claim.attempts, "class", class)
+		default:
+			logger.Debug("outbox delivery error", "destination", claim.msg.Destination, "attempt", claim.attempts, "error", deliverErr.Error())
+		}
 	}
 	destroyDeliveryError(deliverErr)
 	return finalizeErr

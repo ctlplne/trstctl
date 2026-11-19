@@ -556,20 +556,23 @@ func (l *durableDynamicSecretLifecycle) resumeRenewal(ctx context.Context, op st
 }
 
 func (l *durableDynamicSecretLifecycle) Revoke(ctx context.Context, leaseID string) error {
-	record, err := l.store.GetDynamicSecretLease(ctx, l.tenantID, leaseID)
-	if err != nil {
-		return leaseStoreError(err, leaseID)
-	}
-	if record.State == store.DynamicSecretLeaseRevoked {
-		return nil
-	}
-	if record.State != store.DynamicSecretLeaseActive {
-		return fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, leaseID)
-	}
-	operationID := "legacy-revoke:" + record.ID
-	return l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, record.TenantEpoch, "lease-revocation-requested", operationID), projections.EventDynamicSecretLeaseRevocationRequested, projections.DynamicSecretLeaseRevocationRequested{
-		TenantEpoch: record.TenantEpoch, OperationID: operationID,
-		ID: record.ID, Provider: record.Provider, BackendRef: record.BackendRef,
+	return l.store.WithDynamicSecretRevocationPublication(ctx, l.tenantID, leaseID, func(ctx context.Context) error {
+		record, err := l.store.GetDynamicSecretLease(ctx, l.tenantID, leaseID)
+		if err != nil {
+			return leaseStoreError(err, leaseID)
+		}
+		if record.State == store.DynamicSecretLeaseRevoked {
+			return nil
+		}
+		if record.State != store.DynamicSecretLeaseActive {
+			return fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, leaseID)
+		}
+		operationID := "legacy-revoke:" + record.ID
+		if found, err := l.recoverDynamicSecretRevocation(ctx, record, operationID); err != nil || found {
+			return err
+		}
+		return l.publishDynamicSecretRevocationIntent(ctx, record, dynamicSecretEventID(l.tenantID, record.TenantEpoch, "lease-revocation-requested", operationID),
+			projections.EventDynamicSecretLeaseRevocationRequested, dynamicSecretRevocationRequest(record, operationID))
 	})
 }
 
@@ -651,22 +654,37 @@ func (l *durableDynamicSecretLifecycle) resumeRevocation(ctx context.Context, op
 	default:
 		return dynsecret.Lease{}, fmt.Errorf("dynsecret: unsupported revoke operation state %q", op.Status)
 	}
+	if err := l.store.WithDynamicSecretRevocationPublication(ctx, l.tenantID, op.LeaseID, func(ctx context.Context) error {
+		return l.resumePendingRevocation(ctx, op)
+	}); err != nil {
+		return dynsecret.Lease{}, err
+	}
+	l.wake()
+	if err := l.completeDynamicSecretOperation(ctx, op); err != nil {
+		return dynsecret.Lease{}, err
+	}
+	return response, nil
+}
+
+func (l *durableDynamicSecretLifecycle) resumePendingRevocation(ctx context.Context, op store.DynamicSecretOperation) error {
 	record, err := l.store.GetDynamicSecretLease(ctx, l.tenantID, op.LeaseID)
 	if err != nil {
-		return dynsecret.Lease{}, leaseStoreError(err, op.LeaseID)
+		return leaseStoreError(err, op.LeaseID)
 	}
 	if record.TenantEpoch != op.TenantEpoch {
-		return dynsecret.Lease{}, store.ErrDynamicSecretTenantEpochMismatch
+		return store.ErrDynamicSecretTenantEpochMismatch
+	}
+	if found, err := l.recoverDynamicSecretRevocation(ctx, record, op.OperationID); err != nil {
+		return err
+	} else if found {
+		return nil
 	}
 	switch record.State {
 	case store.DynamicSecretLeaseActive:
-		if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, op.TenantEpoch, "lease-revocation-requested", op.OperationID), projections.EventDynamicSecretLeaseRevocationRequested, projections.DynamicSecretLeaseRevocationRequested{
-			TenantEpoch: op.TenantEpoch, OperationID: op.OperationID,
-			ID: record.ID, Provider: record.Provider, BackendRef: record.BackendRef,
-		}); err != nil {
-			return dynsecret.Lease{}, err
+		if err := l.publishDynamicSecretRevocationIntent(ctx, record, dynamicSecretEventID(l.tenantID, op.TenantEpoch, "lease-revocation-requested", op.OperationID),
+			projections.EventDynamicSecretLeaseRevocationRequested, dynamicSecretRevocationRequest(record, op.OperationID)); err != nil {
+			return err
 		}
-		l.wake()
 	case store.DynamicSecretLeaseRevoked:
 		// A crash after projecting the outbox intent lands here. Do not enqueue or
 		// call the provider again unless an operator supplied a fresh bound
@@ -674,27 +692,22 @@ func (l *durableDynamicSecretLifecycle) resumeRevocation(ctx context.Context, op
 		// event and outbox row; an exact Idempotency-Key replay only reads it.
 		switch record.RevocationStatus {
 		case store.DynamicSecretRevocationFailed:
-			if record.RevokeOutboxID == nil {
-				return dynsecret.Lease{}, errors.New("dynsecret: failed revocation has no provider command")
+			predecessor, err := l.failedRevocationPredecessor(ctx, record)
+			if err != nil {
+				return err
 			}
-			if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, op.TenantEpoch, "lease-revocation-retry-requested", op.OperationID), projections.EventDynamicSecretLeaseRevocationRetryRequested, projections.DynamicSecretLeaseRevocationRetryRequested{
-				TenantEpoch: op.TenantEpoch, OperationID: op.OperationID,
-				ID: record.ID, Provider: record.Provider, BackendRef: record.BackendRef,
-				PreviousOutboxID: *record.RevokeOutboxID,
-			}); err != nil {
-				return dynsecret.Lease{}, err
+			if err := l.publishDynamicSecretRevocationIntent(ctx, record, dynamicSecretEventID(l.tenantID, op.TenantEpoch, "lease-revocation-retry-requested", op.OperationID),
+				projections.EventDynamicSecretLeaseRevocationRetryRequested, projections.DynamicSecretLeaseRevocationRetryRequestedV3{
+					DynamicSecretLeaseRevocationRequestedV3: dynamicSecretRevocationRequest(record, op.OperationID),
+					PreviousAttempt:                         predecessor,
+				}); err != nil {
+				return err
 			}
-			l.wake()
-		case store.DynamicSecretRevocationPending:
-			l.wake()
 		}
 	default:
-		return dynsecret.Lease{}, fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, op.LeaseID)
+		return fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, op.LeaseID)
 	}
-	if err := l.completeDynamicSecretOperation(ctx, op); err != nil {
-		return dynsecret.Lease{}, err
-	}
-	return response, nil
+	return nil
 }
 
 func (l *durableDynamicSecretLifecycle) GetLease(leaseID string) (dynsecret.Lease, error) {
@@ -779,7 +792,7 @@ func (l *durableDynamicSecretLifecycle) appendAndProjectIssueRequest(ctx context
 	return projections.New(l.store).Apply(ctx, canonical)
 }
 
-func (l *durableDynamicSecretLifecycle) appendAndProjectID(ctx context.Context, eventID, eventType string, payload any) error {
+func (l *durableDynamicSecretLifecycle) appendAndProjectID(ctx context.Context, eventID, eventType string, payload any, position ...events.AppendSubjectPosition) error {
 	if eventID == "" {
 		return errors.New("server: dynamic-secret event identity is empty")
 	}
@@ -799,7 +812,11 @@ func (l *durableDynamicSecretLifecycle) appendAndProjectID(ctx context.Context, 
 		return err
 	}
 	if !found {
-		canonical, err = l.log.Append(ctx, candidate)
+		if len(position) == 1 {
+			canonical, err = l.log.AppendAtSubjectPosition(ctx, candidate, position[0])
+		} else {
+			canonical, err = l.log.Append(ctx, candidate)
+		}
 		if err != nil {
 			return err
 		}
@@ -881,6 +898,10 @@ func dynamicSecretEventID(tenantID, tenantEpoch, purpose, operationID string) st
 }
 
 func dynamicSecretEventSchemaVersion(eventType string) int {
+	switch eventType {
+	case projections.EventDynamicSecretLeaseRevocationRequested, projections.EventDynamicSecretLeaseRevocationRetryRequested:
+		return projections.DynamicSecretRevocationReferenceSchemaVersion
+	}
 	return projections.DynamicSecretEventSchemaVersion
 }
 

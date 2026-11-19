@@ -52,13 +52,23 @@ func (o *Orchestrator) UpsertSecretRotationSchedule(ctx context.Context, tenantI
 	if id == "" {
 		id = uuid.NewString()
 	}
-	payload, err := json.Marshal(projections.SecretRotationScheduleUpserted{
+	source := projections.SecretRotationScheduleUpserted{
 		ID: id, Name: strings.TrimSpace(in.Name), Provider: strings.TrimSpace(in.Provider),
 		Key: strings.TrimSpace(in.Key), OldRef: strings.TrimSpace(in.OldRef),
 		IntervalSeconds: in.IntervalSeconds, Enabled: in.Enabled, NextRunAt: in.NextRunAt,
 		Consumers: in.Consumers, RetireAfterSeconds: in.RetireAfterSeconds,
 		SinglePhaseAcknowledged: in.SinglePhaseAcknowledged, TTLSeconds: in.TTLSeconds,
-	})
+	}
+	var eventPayload any = source
+	schemaVersion := 1
+	if in.ReferenceProviderType != "" {
+		eventPayload = projections.SecretRotationScheduleReferenceUpserted{
+			SecretRotationScheduleUpserted: source,
+			ReferenceProviderType:          in.ReferenceProviderType,
+		}
+		schemaVersion = projections.SecretRotationScheduleReferenceSchemaVersion
+	}
+	payload, err := json.Marshal(eventPayload)
 	if err != nil {
 		return store.SecretRotationSchedule{}, err
 	}
@@ -69,7 +79,7 @@ func (o *Orchestrator) UpsertSecretRotationSchedule(ctx context.Context, tenantI
 		if err := o.store.EnsureTenantNameAvailable(ctx, "secret_rotation_schedules", tenantID, id, strings.TrimSpace(in.Name)); err != nil {
 			return err
 		}
-		_, err := o.emit(ctx, projections.EventSecretRotationScheduleUpserted, tenantID, payload)
+		_, err := o.emitVersioned(ctx, projections.EventSecretRotationScheduleUpserted, tenantID, schemaVersion, payload)
 		return err
 	}); err != nil {
 		return store.SecretRotationSchedule{}, err
@@ -87,17 +97,9 @@ func (o *Orchestrator) UpsertSecretRotationSchedule(ctx context.Context, tenantI
 func (o *Orchestrator) RecoverSecretRotationScheduleControl(
 	ctx context.Context, tenantID, id, action, idempotencyKey, binding string,
 ) (store.SecretRotationSchedule, bool, error) {
-	eventType, eventID, err := secretRotationScheduleControlIdentity(tenantID, action, idempotencyKey, binding)
-	if err != nil {
-		return store.SecretRotationSchedule{}, false, err
-	}
-	retained, found, err := o.log.EventByID(ctx, eventID)
+	result, retained, found, err := o.readRetainedSecretRotationScheduleControl(ctx, tenantID, id, action, idempotencyKey, binding)
 	if err != nil || !found {
-		return store.SecretRotationSchedule{}, false, err
-	}
-	receipt, err := decodeSecretRotationScheduleControlReceipt(retained, tenantID, id, action, binding, eventType)
-	if err != nil {
-		return store.SecretRotationSchedule{}, true, err
+		return store.SecretRotationSchedule{}, found, err
 	}
 	err = o.withTenantCommand(ctx, tenantID, func(fenced context.Context, tx pgx.Tx) error {
 		current, err := o.store.GetSecretRotationScheduleForControlTx(fenced, tx, tenantID, id)
@@ -112,7 +114,34 @@ func (o *Orchestrator) RecoverSecretRotationScheduleControl(
 	if err != nil {
 		return store.SecretRotationSchedule{}, true, err
 	}
-	return secretRotationScheduleFromControlResult(receipt.Result), true, nil
+	return result, true, nil
+}
+
+// ReadRetainedSecretRotationScheduleControl reads immutable receipt evidence
+// for displaying a completed HTTP replay. It does not project an operation.
+func (o *Orchestrator) ReadRetainedSecretRotationScheduleControl(
+	ctx context.Context, tenantID, id, action, idempotencyKey, binding string,
+) (store.SecretRotationSchedule, bool, error) {
+	result, _, found, err := o.readRetainedSecretRotationScheduleControl(ctx, tenantID, id, action, idempotencyKey, binding)
+	return result, found, err
+}
+
+func (o *Orchestrator) readRetainedSecretRotationScheduleControl(
+	ctx context.Context, tenantID, id, action, idempotencyKey, binding string,
+) (store.SecretRotationSchedule, events.Event, bool, error) {
+	eventType, eventID, err := secretRotationScheduleControlIdentity(tenantID, action, idempotencyKey, binding)
+	if err != nil {
+		return store.SecretRotationSchedule{}, events.Event{}, false, err
+	}
+	retained, found, err := o.log.EventByID(ctx, eventID)
+	if err != nil || !found {
+		return store.SecretRotationSchedule{}, retained, found, err
+	}
+	receipt, err := decodeSecretRotationScheduleControlReceipt(retained, tenantID, id, action, binding, eventType)
+	if err != nil {
+		return store.SecretRotationSchedule{}, retained, true, err
+	}
+	return secretRotationScheduleFromControlResult(receipt.Result, retained.SchemaVersion), retained, true, nil
 }
 
 // GuardUnprojectedSecretRotationScheduleControl runs while the schedule row is
@@ -197,7 +226,7 @@ func (o *Orchestrator) ControlSecretRotationSchedule(
 					return err
 				}
 			}
-			result = secretRotationScheduleFromControlResult(receipt.Result)
+			result = secretRotationScheduleFromControlResult(receipt.Result, retained.SchemaVersion)
 			return nil
 		}
 		if err := o.GuardUnprojectedSecretRotationScheduleControl(fenced, tenantID, id,
@@ -218,6 +247,12 @@ func (o *Orchestrator) ControlSecretRotationSchedule(
 				result.RetiredAt = &at
 			}
 		}
+		version := 2
+		if !store.SecretRotationScheduleHasNamespacedReference(result.Provider) {
+			result = store.SecretRotationScheduleReferenceView(result)
+			result.ReferenceViewVersion = 1
+			version = projections.SecretRotationScheduleControlViewSchemaVersion
+		}
 		payload, err := json.Marshal(projections.SecretRotationScheduleControlledV2{
 			ID: id, Action: action, ReasonCode: reasonCode, Binding: binding,
 			Applied: applied, Result: secretRotationScheduleControlResult(result),
@@ -226,12 +261,12 @@ func (o *Orchestrator) ControlSecretRotationSchedule(
 			return err
 		}
 		ev, err := o.log.Append(fenced, events.Event{
-			ID: eventID, Type: eventType, TenantID: tenantID, SchemaVersion: 2, Time: at, Data: payload,
+			ID: eventID, Type: eventType, TenantID: tenantID, SchemaVersion: version, Time: at, Data: payload,
 		})
 		if err != nil {
 			return err
 		}
-		if ev.ID != eventID || ev.Type != eventType || ev.TenantID != tenantID || ev.SchemaVersion != 2 ||
+		if ev.ID != eventID || ev.Type != eventType || ev.TenantID != tenantID || ev.SchemaVersion != version ||
 			!bytes.Equal(ev.Data, payload) {
 			return store.ErrIdempotencyConflict
 		}
@@ -260,7 +295,8 @@ func decodeSecretRotationScheduleControlReceipt(
 	event events.Event, tenantID, id, action, binding, eventType string,
 ) (projections.SecretRotationScheduleControlledV2, error) {
 	var receipt projections.SecretRotationScheduleControlledV2
-	if event.TenantID != tenantID || event.Type != eventType || event.SchemaVersion != 2 ||
+	if event.TenantID != tenantID || event.Type != eventType ||
+		(event.SchemaVersion != 2 && event.SchemaVersion != projections.SecretRotationScheduleControlViewSchemaVersion) ||
 		json.Unmarshal(event.Data, &receipt) != nil || receipt.ID != id || receipt.Action != action ||
 		receipt.ReasonCode != "operator_request" || receipt.Binding != binding ||
 		receipt.Result.ID != id || receipt.Result.TenantID != tenantID ||
@@ -284,8 +320,8 @@ func secretRotationScheduleControlResult(s store.SecretRotationSchedule) project
 	}
 }
 
-func secretRotationScheduleFromControlResult(r projections.SecretRotationScheduleControlResult) store.SecretRotationSchedule {
-	return store.SecretRotationSchedule{
+func secretRotationScheduleFromControlResult(r projections.SecretRotationScheduleControlResult, version int) store.SecretRotationSchedule {
+	result := store.SecretRotationSchedule{
 		ID: r.ID, TenantID: r.TenantID, Name: r.Name, Provider: r.Provider, Key: r.Key,
 		OldRef: r.OldRef, IntervalSeconds: r.IntervalSeconds, Enabled: r.Enabled,
 		NextRunAt: r.NextRunAt, RetiredAt: r.RetiredAt,
@@ -293,6 +329,10 @@ func secretRotationScheduleFromControlResult(r projections.SecretRotationSchedul
 		LastNewRef: r.LastNewRef, LastError: r.LastError,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
+	if version == projections.SecretRotationScheduleControlViewSchemaVersion {
+		result.ReferenceViewVersion = 1
+	}
+	return store.SecretRotationScheduleReferenceView(result)
 }
 
 // RecordSecretRotationScheduleRun records the outcome of one due scheduled
@@ -360,7 +400,7 @@ func (o *Orchestrator) RecordSecretRotationScheduleRun(ctx context.Context, tena
 	}
 	if preparedCommand.Status != "claimed" {
 		retained, found, reconcileErr := o.reconcileSecretRotationScheduleRun(
-			ctx, tenantID, in.ScheduleID, in.RunID, wantEventID, time.Time{})
+			ctx, tenantID, in.ScheduleID, in.RunID, wantEventID, time.Time{}, nil)
 		if reconcileErr != nil {
 			return store.SecretRotationScheduleRun{}, reconcileErr
 		}
@@ -414,13 +454,22 @@ func (o *Orchestrator) ReconcileSecretRotationScheduleRun(
 	dueAt time.Time,
 ) (store.SecretRotationScheduleRun, bool, error) {
 	return o.reconcileSecretRotationScheduleRun(ctx, tenantID, scheduleID, runID,
-		SecretRotationScheduleRunEventID(runID), dueAt)
+		SecretRotationScheduleRunEventID(runID), dueAt, nil)
+}
+
+// ReconcileSecretRotationScheduleSnapshotRun requires the retained child to
+// match the frozen revision before projecting even an existing terminal event.
+func (o *Orchestrator) ReconcileSecretRotationScheduleSnapshotRun(
+	ctx context.Context, schedule store.SecretRotationSchedule, runID string,
+) (store.SecretRotationScheduleRun, bool, error) {
+	return o.reconcileSecretRotationScheduleRun(ctx, schedule.TenantID, schedule.ID, runID,
+		SecretRotationScheduleRunEventID(runID), schedule.NextRunAt, &schedule)
 }
 
 func (o *Orchestrator) reconcileSecretRotationScheduleRun(
 	ctx context.Context,
 	tenantID, scheduleID, runID, eventID string,
-	dueAt time.Time,
+	dueAt time.Time, snapshot *store.SecretRotationSchedule,
 ) (store.SecretRotationScheduleRun, bool, error) {
 	ctx, releaseTenant, admissionErr := o.beginTenantCommand(ctx, tenantID)
 	if admissionErr != nil {
@@ -436,6 +485,11 @@ func (o *Orchestrator) reconcileSecretRotationScheduleRun(
 		ctx, tenantID, "secret rotation scheduler terminal replay", func(barrierCtx context.Context) error {
 			command, commandErr := o.store.GetSecretRotationScheduleCommand(
 				barrierCtx, tenantID, scheduleID, runID)
+			if commandErr == nil && snapshot != nil {
+				if err := command.ValidateScheduleSnapshot(*snapshot); err != nil {
+					return err
+				}
+			}
 			var (
 				ev        events.Event
 				lookupErr error

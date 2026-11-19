@@ -393,7 +393,10 @@ import (
 // (pam_account_health_checks): an older payload has none, and a restore from
 // it would leave a sign-in collection only each account's latest check while
 // its covered offset skipped the earlier checks' events.
-const SnapshotFormatVersion = 139
+// Version 140 includes rotation reference provenance and the last applied
+// dynamic revocation event. Rebuild older payloads from the retained journal
+// and outbox so a snapshot cannot skip either projection's authority.
+const SnapshotFormatVersion = 140
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

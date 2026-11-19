@@ -2299,6 +2299,15 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 	}
 	addOperatorRecordPrivacyShapes(shapes)
 	addTransparencyPrivacyShapes(shapes)
+	shapes[privacyEventPolicyKey{EventSecretStaticRotationQueued, SecretStaticRotationReferenceQueueSchemaVersion}] = privacyPayloadShape[SecretStaticRotationReferenceQueued]()
+	shapes[privacyEventPolicyKey{EventSecretStaticRotationAdvanced, SecretStaticRotationHostedStageSchemaVersion}] = privacyPayloadShape[SecretStaticRotationHostedStaged]()
+	shapes[privacyEventPolicyKey{EventSecretRotationScheduleUpserted, SecretRotationScheduleReferenceSchemaVersion}] = privacyPayloadShape[SecretRotationScheduleReferenceUpserted]()
+	shapes[privacyEventPolicyKey{EventSecretRotationSchedulePaused, SecretRotationScheduleControlViewSchemaVersion}] = privacyPayloadShape[SecretRotationScheduleControlledV2]()
+	shapes[privacyEventPolicyKey{EventSecretRotationScheduleResumed, SecretRotationScheduleControlViewSchemaVersion}] = privacyPayloadShape[SecretRotationScheduleControlledV2]()
+	shapes[privacyEventPolicyKey{EventSecretRotationScheduleRetired, SecretRotationScheduleControlViewSchemaVersion}] = privacyPayloadShape[SecretRotationScheduleControlledV2]()
+	shapes[privacyEventPolicyKey{EventDynamicSecretLeaseIssued, DynamicSecretHostedIssuedSchemaVersion}] = privacyPayloadShape[privacyDynamicSecretLeaseIssuedV3]()
+	shapes[privacyEventPolicyKey{EventDynamicSecretLeaseRevocationRequested, DynamicSecretRevocationReferenceSchemaVersion}] = privacyPayloadShape[DynamicSecretLeaseRevocationRequestedV3]()
+	shapes[privacyEventPolicyKey{EventDynamicSecretLeaseRevocationRetryRequested, DynamicSecretRevocationReferenceSchemaVersion}] = privacyPayloadShape[DynamicSecretLeaseRevocationRetryRequestedV3]()
 	return shapes
 }
 

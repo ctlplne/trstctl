@@ -153,6 +153,11 @@ func (b *HostedKeyBackend) CreateCredential(ctx context.Context, req GenerateReq
 		return "", nil, fmt.Errorf("dynsecret %s: look for an earlier attempt's key: %w", b.provider, err)
 	}
 	for _, id := range earlier {
+		if !validVendorManagementID(b.provider, []byte(id)) {
+			return "", nil, fmt.Errorf("dynsecret %s: earlier attempt has an unusable management identifier", b.provider)
+		}
+	}
+	for _, id := range earlier {
 		if err := b.vendor.remove(ctx, b.api, binding, id); err != nil {
 			return "", nil, fmt.Errorf("dynsecret %s: replace an earlier attempt's key: %w", b.provider, err)
 		}
@@ -161,7 +166,7 @@ func (b *HostedKeyBackend) CreateCredential(ctx context.Context, req GenerateReq
 	if err != nil {
 		return "", nil, err
 	}
-	if !hostedKeyID.MatchString(id) {
+	if !validVendorManagementID(b.provider, []byte(id)) {
 		secret.Wipe(credential)
 		return "", nil, fmt.Errorf("dynsecret %s: the vendor returned an unusable key ID", b.provider)
 	}
@@ -173,12 +178,23 @@ func (b *HostedKeyBackend) CreateCredential(ctx context.Context, req GenerateReq
 // counts as revoked.
 func (b *HostedKeyBackend) Revoke(ctx context.Context, ref string) error {
 	cut := strings.LastIndex(ref, "/")
-	refused := fmt.Errorf("dynsecret %s: refusing %q, which names no key of a bound target", b.provider, ref)
+	refused := fmt.Errorf("dynsecret %s: reference does not name a key of a bound target", b.provider)
 	if cut <= 0 {
 		return refused
 	}
 	binding, id := ref[:cut], ref[cut+1:]
-	if !hostedKeyID.MatchString(id) || !b.bound(binding) {
+	if !b.bound(binding) {
+		return refused
+	}
+	if b.provider == "litellm" {
+		raw := []byte(id)
+		canonical, err := liteLLMManagementID(raw)
+		secret.Wipe(raw)
+		if err != nil {
+			return err
+		}
+		id = canonical
+	} else if !validVendorManagementID(b.provider, []byte(id)) {
 		return refused
 	}
 	name, found, err := b.vendor.nameOf(ctx, b.api, binding, id)
@@ -189,7 +205,7 @@ func (b *HostedKeyBackend) Revoke(ctx context.Context, ref string) error {
 		return nil
 	}
 	if !issuedPrincipalNameWith(b.prefix, name, b.nameSep[0]) {
-		return fmt.Errorf("dynsecret %s: refusing to delete key %s, which this provider did not create", b.provider, id)
+		return fmt.Errorf("dynsecret %s: refusing to delete a key this provider did not create", b.provider)
 	}
 	return b.vendor.remove(ctx, b.api, binding, id)
 }
@@ -225,6 +241,7 @@ func hostedJSON(ctx context.Context, api hostedAPI, method, path string, body an
 			return 0, err
 		}
 	}
+	defer secret.Wipe(payload)
 	status, response, err := api.call(ctx, method, path, payload, authenticate)
 	if err != nil {
 		return 0, err
@@ -235,7 +252,7 @@ func hostedJSON(ctx context.Context, api hostedAPI, method, path string, body an
 		accepted = accepted || status == code
 	}
 	if !accepted {
-		return status, fmt.Errorf("dynsecret %s: %s %s: HTTP %d", api.name, method, strings.SplitN(path, "?", 2)[0], status)
+		return status, fmt.Errorf("dynsecret %s: management %s: HTTP %d", api.name, method, status)
 	}
 	if out != nil && status != http.StatusNotFound && len(response) > 0 {
 		if err := json.Unmarshal(response, out); err != nil {

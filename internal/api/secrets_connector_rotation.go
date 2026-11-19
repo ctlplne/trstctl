@@ -128,6 +128,11 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 	}
 	if isStaticSecretRotation(req.Provider) {
 		// A14: the static plan names the durable phases the worker will run.
+		predecessor := "predecessor"
+		plan.OldRef = a.previewStaticRotationReference(tenantID, req)
+		if plan.OldRef != "" {
+			predecessor += " " + plan.OldRef
+		}
 		plan.ExecuteWrites = []string{
 			"append one immutable secret.static_rotation.queued event and its single outbox intent",
 			"project each worker phase (staged, cutover, verified, completed) as an immutable secret.static_rotation.advanced event with the staged credential sealed under the tenant key domain",
@@ -136,7 +141,7 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 		plan.ExecuteExternalEffects = []string{
 			"mint a long-lived credential for role " + req.Key + " at provider " + req.Provider,
 			"verify the staged credential at provider " + req.Provider + " before retiring anything",
-			"retire predecessor " + req.OldRef + " at provider " + req.Provider + " after verification",
+			"retire " + predecessor + " at provider " + req.Provider + " after verification",
 		}
 		plan.RecoverySteps = []string{
 			"retry the same command with the same Idempotency-Key after a transient failure",

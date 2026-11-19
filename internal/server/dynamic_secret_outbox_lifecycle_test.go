@@ -926,6 +926,19 @@ func TestFailedDynamicSecretRevocationCanBeRetriedWithNewBoundCommand(t *testing
 	if err != nil || retried.RevocationStatus != store.DynamicSecretRevocationPending || retried.RevokeOutboxID == nil || *retried.RevokeOutboxID == first.ID {
 		t.Fatalf("failed removal was not requeued as a new bound provider command: %+v, %v", retried, err)
 	}
+	firstOutcomeID := dynamicSecretEventID(tenant, failed.TenantEpoch, "provider-revocation-failed", lease.ID)
+	firstOutcome, found, err := log.EventByID(ctx, firstOutcomeID)
+	if err != nil || !found {
+		t.Fatalf("read first settled attempt: found=%t err=%v", found, err)
+	}
+	if err := projections.New(st).Apply(ctx, firstOutcome); err != nil {
+		t.Fatalf("earlier terminal replay should acknowledge exact settled history: %v", err)
+	}
+	stillPending, err := st.GetDynamicSecretLease(ctx, tenant, lease.ID)
+	if err != nil || stillPending.RevocationStatus != store.DynamicSecretRevocationPending ||
+		stillPending.RevokeOutboxID == nil || *stillPending.RevokeOutboxID != *retried.RevokeOutboxID {
+		t.Fatalf("earlier terminal proof modified the active retry: %v", err)
+	}
 	second, err := outbox.Get(ctx, tenant, *retried.RevokeOutboxID)
 	if err != nil {
 		t.Fatal(err)
@@ -956,6 +969,26 @@ func TestFailedDynamicSecretRevocationCanBeRetriedWithNewBoundCommand(t *testing
 	if err != nil || completed.RevocationStatus != store.DynamicSecretRevocationCompleted || len(provider.Revocations()) != 1 {
 		t.Fatalf("retry did not complete exactly one provider removal: %+v revocations=%v err=%v", completed, provider.Revocations(), err)
 	}
+	setRecordedMethod := func(method string) {
+		t.Helper()
+		if err := st.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE dynamic_secret_leases SET revocation_method = $3
+				WHERE tenant_id = $1 AND id = $2`, tenant, lease.ID, method)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	completedMessage := orchestrator.Message{ID: third.ID, TenantID: tenant, Destination: third.Destination,
+		IdempotencyKey: third.IdempotencyKey, Payload: third.Payload, Attempts: 2}
+	setRecordedMethod("native_expiry")
+	if handled, err := dispatcher.Deliver(ctx, completedMessage); !handled || !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Errorf("settled replay accepted a different completion method: handled=%t err=%v", handled, err)
+	}
+	if len(provider.Revocations()) != 1 {
+		t.Fatal("a settled outcome replay repeated provider delivery")
+	}
+	setRecordedMethod("")
 	if _, err := lifecycle.RevokeBound(ctx, lease.ID, "retry-revoke-after-repair", "sha256:retry-revoke-after-repair"); err != nil {
 		t.Fatalf("exact retry replay: %v", err)
 	}

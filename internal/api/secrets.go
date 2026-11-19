@@ -1164,7 +1164,7 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 			a.writeError(w, err)
 			return
 		}
-		a.mutateBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+		a.mutateWithReferenceView(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
 			if tenantID != bindingTenantID {
 				return 0, nil, errors.New("api: static rotation binding tenant changed")
 			}
@@ -1185,8 +1185,12 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, applicationSecretMutationError(err)
 			}
 			a.auditSecret(ctx, "secret.rotation.queued", tenantID, req.Key, 0)
-			return http.StatusOK, toStaticSecretRotationResponse(cmd), nil
-		})
+			safe, err := a.staticRotationReferenceView(ctx, cmd)
+			if err != nil {
+				return 0, nil, err
+			}
+			return http.StatusOK, toStaticSecretRotationResponse(safe), nil
+		}, false, a.staticRotationCachedReferenceView(req.Provider, req.Key, requestBinding))
 		return
 	}
 	a.writeError(w, errStatus(http.StatusBadRequest, "provider must be connector:<target>, dynamic-lease:<provider>, or a configured static provider"))
@@ -1205,7 +1209,7 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateWithReferenceView(w, r, idempotencyKey, "", func(ctx context.Context, tenantID string) (int, any, error) {
 		var req secretRotationScheduleRequest
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
@@ -1224,6 +1228,7 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 			return 0, nil, err // A235: a scheduled rotation writes the secret
 		}
 		rotationRequest := secretRotationRequest{Provider: provider, Key: key, OldRef: oldRef}
+		referenceProviderType := ""
 		ttlSeconds := 0
 		if isDynamicLeaseRotation(provider) {
 			if req.TTLSeconds == nil || *req.TTLSeconds <= 0 {
@@ -1260,6 +1265,24 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 			return 0, nil, err
 		} else if err := checkStaticRotationPredecessor(staticProvider, key, oldRef); err != nil {
 			return 0, nil, err
+		} else {
+			referenceProviderType = dynsecret.HostedReferenceProviderType(staticProvider)
+			if referenceProviderType == "" {
+				referenceProviderType = store.SecretRotationScheduleNativeReference
+			} else if oldRef != staticRotationNoPredecessor {
+				current, err := a.secrets.be.Store.GetSecret(ctx, tenantID, key)
+				if err != nil {
+					return 0, nil, err
+				}
+				epoch, err := a.applicationSecretTenantEpoch(ctx, tenantID)
+				if err != nil {
+					return 0, nil, err
+				}
+				oldRef, err = a.admitStaticRotationPredecessor(ctx, tenantID, epoch, current, staticProvider, oldRef)
+				if err != nil {
+					return 0, nil, err
+				}
+			}
 		}
 		if err := refuseRetirementGateOutsideStatic(provider, req.Consumers, req.RetireAfterSeconds); err != nil {
 			return 0, nil, err
@@ -1281,7 +1304,7 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 			nextRunAt = req.NextRunAt.UTC()
 		}
 		sched, err := a.orch.UpsertSecretRotationSchedule(ctx, tenantID, store.SecretRotationSchedule{
-			Name: name, Provider: provider, Key: key, OldRef: oldRef,
+			Name: name, Provider: provider, Key: key, OldRef: oldRef, ReferenceProviderType: referenceProviderType,
 			IntervalSeconds: req.IntervalSeconds, Enabled: enabled, NextRunAt: nextRunAt,
 			Consumers: req.Consumers, RetireAfterSeconds: req.RetireAfterSeconds,
 			SinglePhaseAcknowledged: req.AcknowledgeSinglePhase, TTLSeconds: ttlSeconds,
@@ -1290,7 +1313,7 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 			return 0, nil, err
 		}
 		return http.StatusCreated, toSecretRotationScheduleResponse(sched), nil
-	})
+	}, false, a.scheduleCachedReferenceView("", "", "", ""))
 }
 
 func (a *API) listSecretRotationSchedules(w http.ResponseWriter, r *http.Request) {
@@ -1373,9 +1396,9 @@ func (a *API) controlSecretRotationScheduleRequest(w http.ResponseWriter, r *htt
 		a.writeError(w, err)
 		return
 	}
-	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateWithReferenceView(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		return a.controlSecretRotationSchedule(ctx, tenantID, r.PathValue("id"), action, idempotencyKey, binding)
-	})
+	}, true, a.scheduleCachedReferenceView(r.PathValue("id"), action, idempotencyKey, binding))
 }
 
 func (a *API) controlSecretRotationSchedule(ctx context.Context, tenantID, id, action, idempotencyKey, binding string) (int, any, error) {
@@ -1656,13 +1679,18 @@ func toSecretRotationResponse(rep rotation.Report) secretRotationResponse {
 }
 
 func toSecretRotationScheduleResponse(s store.SecretRotationSchedule) secretRotationScheduleResponse {
+	s = store.SecretRotationScheduleReferenceView(s)
+	lastError := store.CanonicalSecretRotationScheduleError(s.LastRunStatus, s.LastError)
+	if s.OldRef == "" && isStaticSecretRotation(s.Provider) && lastError == "" {
+		lastError = store.SecretRotationScheduleReferenceReviewRequired
+	}
 	return secretRotationScheduleResponse{
 		ID: s.ID, TenantID: s.TenantID, Name: s.Name, Provider: s.Provider, Key: s.Key,
 		OldRef: s.OldRef, IntervalSeconds: s.IntervalSeconds, Enabled: s.Enabled,
 		NextRunAt: s.NextRunAt, LastRunID: s.LastRunID, LastRunAt: s.LastRunAt,
 		RetiredAt:     s.RetiredAt,
 		LastRunStatus: s.LastRunStatus, LastNewRef: s.LastNewRef,
-		LastError: store.CanonicalSecretRotationScheduleError(s.LastRunStatus, s.LastError),
+		LastError: lastError,
 		Consumers: s.Consumers, RetireAfterSeconds: s.RetireAfterSeconds, SinglePhaseAcknowledged: s.SinglePhaseAcknowledged,
 		TTLSeconds: s.TTLSeconds, CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}

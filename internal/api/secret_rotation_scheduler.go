@@ -3,6 +3,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/rotation"
@@ -80,10 +82,26 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 	)
 	ownerToken := events.NewID()
 	recoveryCommandLeaseToken := events.NewID()
+	var legacyNativeProviders []string
+	for _, provider := range a.secrets.dynamicProviders(tenantID) {
+		typed, known := provider.(interface{ DynamicSecretProviderType() string })
+		if known && typed.DynamicSecretProviderType() != "" && dynsecret.HostedReferenceProviderType(provider) == "" {
+			legacyNativeProviders = append(legacyNativeProviders, provider.Name())
+		}
+	}
 	var (
 		tick       store.SecretRotationScheduleTick
 		claimState store.SecretRotationScheduleTickClaimState
 	)
+	present := func(ctx context.Context, tenantID string, body []byte) ([]byte, error) {
+		var view []byte
+		err := a.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			var err error
+			view, _, err = store.RenderSecretRotationScheduleTickReferenceViewTx(ctx, tx, tenantID, outerKey, body)
+			return err
+		})
+		return view, err
+	}
 	a.mutatePreparedDurableBound(
 		w, r, outerKey, requestBinding,
 		func(ctx context.Context, preparedTenantID string, tx pgx.Tx) (orchestrator.PreparedDurableEffectClaim, error) {
@@ -93,7 +111,7 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 			prepared, err := a.store.PrepareSecretRotationScheduleTickTx(
 				ctx, tx, tenantID, outerKey, requestBinding,
 				registration.EventID, registration.EventSequence, ownerToken,
-				recoveryCommandLeaseToken, tickLeaseDuration)
+				recoveryCommandLeaseToken, tickLeaseDuration, legacyNativeProviders...)
 			if err != nil {
 				return orchestrator.PreparedDurableEffectClaim{}, err
 			}
@@ -132,7 +150,7 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 			}
 			return a.store.VerifySecretRotationScheduleTickTerminalTx(
 				ctx, tx, tenantID, outerKey, requestBinding,
-				registration.EventID, registration.EventSequence, cached.Status, cached.Body)
+				registration.EventID, registration.EventSequence, cached.Status, cached.Body, cached.SchedulerTerminalDigest)
 		},
 		func(ctx context.Context, tenantID string) (int, any, error) {
 			switch claimState {
@@ -140,7 +158,16 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 				if tick.TerminalHTTPStatus == nil || len(tick.TerminalBody) == 0 || !json.Valid(tick.TerminalBody) {
 					return 0, nil, fmt.Errorf("%w: terminal scheduler tick lacks canonical HTTP bytes", store.ErrSecretRotationScheduleTickConflict)
 				}
-				return *tick.TerminalHTTPStatus, json.RawMessage(append([]byte(nil), tick.TerminalBody...)), nil
+				body, err := present(ctx, tenantID, tick.TerminalBody)
+				if err != nil {
+					return 0, nil, err
+				}
+				if !bytes.Equal(body, tick.TerminalBody) {
+					return *tick.TerminalHTTPStatus, preparedSchedulerResponseView{
+						body: body, terminalDigest: store.SecretRotationScheduleTerminalReferenceSource(tick.TerminalBody),
+					}, nil
+				}
+				return *tick.TerminalHTTPStatus, json.RawMessage(body), nil
 			case store.SecretRotationScheduleTickAcquired:
 			default:
 				return 0, nil, fmt.Errorf("%w: unknown scheduler tick claim state %q", store.ErrSecretRotationScheduleTickConflict, claimState)
@@ -180,6 +207,7 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 			for tick.Ran < runLimit && tick.Scanned < tick.SnapshotCount && tick.Scanned < scanLimit {
 				var sched store.SecretRotationSchedule
 				commandLeaseToken := ""
+				unstarted := false
 				if tick.CurrentSchedule != nil {
 					sched = *tick.CurrentSchedule
 					if tick.CurrentCommandLeaseToken == "" {
@@ -194,11 +222,15 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 						return fail("", err, nil)
 					}
 					commandLeaseToken = events.NewID()
-					tick, err = a.store.StartSecretRotationScheduleTickRow(
-						ctx, tick, ownerToken, tick.OwnerGeneration, sched,
-						commandLeaseToken, tickLeaseDuration)
-					if err != nil {
-						return 0, nil, err
+					if store.SecretRotationScheduleReferenceCanSnapshot(sched, legacyNativeProviders) {
+						tick, err = a.store.StartSecretRotationScheduleTickRow(
+							ctx, tick, ownerToken, tick.OwnerGeneration, sched,
+							commandLeaseToken, tickLeaseDuration)
+						if err != nil {
+							return 0, nil, err
+						}
+					} else {
+						unstarted = true
 					}
 				}
 
@@ -208,7 +240,9 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 					outcome        store.SecretRotationScheduleTickRowOutcome
 					runErr         error
 				)
-				if sched.ConfigEventSequence == 0 {
+				if !store.SecretRotationScheduleReferenceCanSnapshot(sched, legacyNativeProviders) {
+					run, commandRelease, runErr = a.recoverFencedRotationSchedule(ctx, tenantID, sched, commandLeaseToken, unstarted)
+				} else if sched.ConfigEventSequence == 0 {
 					// Migration 0155 cannot invent the event sequence that created an
 					// already-projected schedule. Consume and diagnose that immutable
 					// snapshot row, but never claim a child command or call a provider.
@@ -245,9 +279,14 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 					}
 				}
 				resp.Scanned++
-				tick, err = a.store.CompleteSecretRotationScheduleTickRowOutcome(
-					ctx, tick, ownerToken, tick.OwnerGeneration, outcome,
-					commandRelease, tickLeaseDuration)
+				if unstarted {
+					tick, err = a.store.CompleteUnstartedSecretRotationScheduleTickRow(
+						ctx, tick, ownerToken, tick.OwnerGeneration, sched, outcome, tickLeaseDuration)
+				} else {
+					tick, err = a.store.CompleteSecretRotationScheduleTickRowOutcome(
+						ctx, tick, ownerToken, tick.OwnerGeneration, outcome,
+						commandRelease, tickLeaseDuration)
+				}
 				if err != nil {
 					return 0, nil, err
 				}
@@ -270,7 +309,7 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 				return fail("", err, nil)
 			}
 			return finalize(http.StatusOK, nil)
-		})
+		}, present)
 }
 
 func markSecretRotationScheduleDueRunFailed(
@@ -440,6 +479,9 @@ func (a *API) runSecretRotationSchedule(
 	if tickIdempotencyKey == "" || tickOrdinal <= 0 || leaseToken == "" {
 		return secretRotationScheduleRunResponse{}, nil, fmt.Errorf("%w: scheduler child lease token is required", store.ErrSecretRotationScheduleCommandConflict)
 	}
+	if !a.scheduledStaticProviderMatches(tenantID, sched) {
+		return a.recoverFencedRotationSchedule(ctx, tenantID, sched, leaseToken, false)
+	}
 	ctx = secretRotationScheduleContext(ctx, tenantID, sched)
 	runID := orchestrator.SecretRotationScheduleRunID(
 		tenantID, sched.TenantRegistrationEventSequence, sched.ID, sched.NextRunAt)
@@ -510,6 +552,9 @@ func (a *API) runSecretRotationSchedule(
 			return secretRotationScheduleRunResponseFromReceipt(sched, retained, true), nil, nil
 		}
 		if claimed.PreparedAt != nil {
+			if err := a.authorizeScheduledStaticReferences(ctx, tenantID, sched, commandKey, requestBinding, sched.OldRef, claimed.PreparedNewRef); err != nil {
+				return secretRotationScheduleRunResponse{}, commandRelease, err
+			}
 			retained, recordErr := a.orch.RecordSecretRotationScheduleRun(ctx, tenantID, store.SecretRotationScheduleRun{
 				ScheduleID: sched.ID, RunID: runID,
 				Status: claimed.PreparedStatus, NewRef: claimed.PreparedNewRef, Error: claimed.PreparedError,
@@ -552,7 +597,7 @@ func (a *API) runSecretRotationSchedule(
 			// at the bounded next cadence so one broken schedule cannot starve newer work.
 			err = applicationSecretMutationError(err)
 		}
-	} else if _, _, providerErr := a.staticRotationProvider(tenantID, sched.Provider, sched.Key); isStaticSecretRotation(sched.Provider) && providerErr != nil {
+	} else if provider, _, providerErr := a.staticRotationProvider(tenantID, sched.Provider, sched.Key); isStaticSecretRotation(sched.Provider) && providerErr != nil {
 		// A schedule row whose provider no longer (or never) allows static
 		// rotation executes no provider phase: a terminal unsupported event
 		// advances and disables the schedule truthfully.
@@ -573,9 +618,17 @@ func (a *API) runSecretRotationSchedule(
 			// is live is not knowable here, so the edge fails until an operator
 			// resolves the command.
 			err = errStatus(http.StatusConflict, staticRotationUnresolvedDetail)
-		} else if live := staticRotationLiveRef(latest); found && live != "" {
-			request.OldRef = live
-			rep.OldRef = live
+		} else if found {
+			live, lookupErr := a.liveStaticRotationPredecessor(ctx, tenantID, sched.Key, provider, latest)
+			if lookupErr != nil {
+				return secretRotationScheduleRunResponse{}, commandRelease, secretRotationScheduleDeferredError{
+					reason: store.SecretRotationScheduleReferenceReviewRequired, cause: errors.New(staticReferenceReviewDetail),
+				}
+			}
+			if live != "" {
+				request.OldRef = live
+				rep.OldRef = live
+			}
 		}
 		if err == nil {
 			var cmd store.SecretStaticRotationCommand
@@ -615,9 +668,18 @@ func (a *API) runSecretRotationSchedule(
 			}
 		} else if found && latest.Phase == store.SecretStaticRotationRollbackFailed {
 			err = errStatus(http.StatusConflict, staticRotationUnresolvedDetail)
-		} else if live := staticRotationLiveRef(latest); found && live != "" {
-			request.OldRef = live
-			rep.OldRef = live
+		} else if found {
+			live, lookupErr := a.liveRotationReference(ctx, tenantID, sched.Provider, sched.Key, latest)
+			if lookupErr != nil {
+				return secretRotationScheduleRunResponse{}, commandRelease, lookupErr
+			}
+			if live != "" {
+				err = a.checkDynamicLeaseRotationPredecessor(ctx, tenantID, dynamicLeaseRotationProviderName(sched.Provider), sched.Key, live)
+				if err == nil {
+					request.OldRef = live
+					rep.OldRef = live
+				}
+			}
 		}
 		if err == nil {
 			var cmd store.SecretStaticRotationCommand
@@ -660,6 +722,9 @@ func (a *API) runSecretRotationSchedule(
 		status = "completed"
 	} else if rep.Queued {
 		status = "queued"
+	}
+	if err := a.authorizeScheduledStaticReferences(ctx, tenantID, sched, commandKey, requestBinding, rep.OldRef, rep.NewRef); err != nil {
+		return secretRotationScheduleRunResponse{}, commandRelease, err
 	}
 	rotationResp := toSecretRotationResponse(rep)
 	if rotationResp.RollbackError != "" {
@@ -748,6 +813,12 @@ func secretRotationScheduleRunResponseFromReceipt(
 ) secretRotationScheduleRunResponse {
 	closedError := store.CanonicalSecretRotationScheduleError(run.Status, run.Error)
 	rep := rotation.Report{Key: sched.Key, OldRef: sched.OldRef, NewRef: run.NewRef}
+	if isStaticSecretRotation(sched.Provider) && sched.ReferenceProviderType == "" {
+		if rep.OldRef != staticRotationNoPredecessor {
+			rep.OldRef = ""
+		}
+		rep.NewRef = ""
+	}
 	switch run.Status {
 	case "completed":
 		rep.Completed = true

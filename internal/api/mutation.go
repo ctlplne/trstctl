@@ -23,10 +23,17 @@ import (
 // cachedResponse is the response envelope stored by the idempotency recorder so
 // a replayed key returns the identical status and body.
 type cachedResponse struct {
-	Status      int             `json:"s"`
-	Body        json.RawMessage `json:"b"`
-	Binding     string          `json:"h,omitempty"`
-	ContentType string          `json:"c,omitempty"`
+	Status                  int             `json:"s"`
+	Body                    json.RawMessage `json:"b"`
+	Binding                 string          `json:"h,omitempty"`
+	ContentType             string          `json:"c,omitempty"`
+	SchedulerTerminalDigest string          `json:"t,omitempty"`
+	RotationReferenceView   int             `json:"r,omitempty"`
+}
+
+type preparedSchedulerResponseView struct {
+	body           json.RawMessage
+	terminalDigest string
 }
 
 func cachedResponseContentType(body any) string {
@@ -94,7 +101,7 @@ func (a *API) mutateDurableBound(w http.ResponseWriter, r *http.Request, idempot
 // does under mutate, so a response recorded before a route moved here still
 // replays.
 func (a *API) mutateWithBodyLimit(w http.ResponseWriter, r *http.Request, idempotencyKey string, bodyLimit int64, fn func(ctx context.Context, tenantID string) (int, any, error)) {
-	a.mutateWithRecorderLimit(w, r, idempotencyKey, "", fn, false, bodyLimit)
+	a.mutateWithRecorderLimit(w, r, idempotencyKey, "", fn, false, bodyLimit, nil)
 }
 
 // mutatePublicTenantBound applies AN-5 to a deliberately public credential
@@ -125,6 +132,7 @@ func (a *API) mutatePreparedDurableBound(
 	prepare func(context.Context, string, pgx.Tx) (orchestrator.PreparedDurableEffectClaim, error),
 	verifyTerminal func(context.Context, string, pgx.Tx, []byte) error,
 	fn func(context.Context, string) (int, any, error),
+	present func(context.Context, string, []byte) ([]byte, error),
 ) {
 	tenantID, ok := a.tenant(r)
 	if !ok {
@@ -144,6 +152,11 @@ func (a *API) mutatePreparedDurableBound(
 		if err != nil {
 			return nil, err
 		}
+		digest := ""
+		if view, ok := body.(preparedSchedulerResponseView); ok {
+			body = view.body
+			digest = view.terminalDigest
+		}
 		bodyJSON := json.RawMessage("null")
 		if body != nil {
 			encoded, err := json.Marshal(body)
@@ -155,7 +168,7 @@ func (a *API) mutatePreparedDurableBound(
 		}
 		return json.Marshal(cachedResponse{
 			Status: status, Body: bodyJSON, Binding: binding,
-			ContentType: cachedResponseContentType(body),
+			ContentType: cachedResponseContentType(body), SchedulerTerminalDigest: digest,
 		})
 	}
 	raw, err := a.idem.DoPreparedDurableEffectBound(
@@ -190,19 +203,41 @@ func (a *API) mutatePreparedDurableBound(
 		w.WriteHeader(cached.Status)
 		return
 	}
+	body := []byte(cached.Body)
+	if present != nil && cached.SchedulerTerminalDigest == "" {
+		var err error
+		body, err = present(r.Context(), tenantID, cached.Body)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+	}
 	if err := writeCachedResponseContentType(w, cached.ContentType); err != nil {
 		a.writeError(w, err)
 		return
 	}
 	w.WriteHeader(cached.Status)
-	_, _ = w.Write(cached.Body)
+	_, _ = w.Write(body)
 }
 
 func (a *API) mutateWithRecorder(w http.ResponseWriter, r *http.Request, idempotencyKey, binding string, fn func(ctx context.Context, tenantID string) (int, any, error), durable bool) {
-	a.mutateWithRecorderLimit(w, r, idempotencyKey, binding, fn, durable, defaultRESTJSONBodyLimit)
+	a.mutateWithRecorderLimit(w, r, idempotencyKey, binding, fn, durable, defaultRESTJSONBodyLimit, nil)
 }
 
-func (a *API) mutateWithRecorderLimit(w http.ResponseWriter, r *http.Request, idempotencyKey, binding string, fn func(ctx context.Context, tenantID string) (int, any, error), durable bool, bodyLimit int64) {
+// mutationResponseView applies a route-specific display policy after the
+// original protected response and authenticated request binding are verified.
+// Its route must render newly recorded successful results using the current
+// reference view before returning them to the recorder.
+type mutationResponseView func(context.Context, string, []byte) ([]byte, error)
+
+func (a *API) mutateWithReferenceView(
+	w http.ResponseWriter, r *http.Request, idempotencyKey, binding string,
+	fn func(context.Context, string) (int, any, error), durable bool, present mutationResponseView,
+) {
+	a.mutateWithRecorderLimit(w, r, idempotencyKey, binding, fn, durable, defaultRESTJSONBodyLimit, present)
+}
+
+func (a *API) mutateWithRecorderLimit(w http.ResponseWriter, r *http.Request, idempotencyKey, binding string, fn func(ctx context.Context, tenantID string) (int, any, error), durable bool, bodyLimit int64, present mutationResponseView) {
 	tenantID, ok := a.tenant(r)
 	if !ok {
 		a.writeProblem(w, problem.New(http.StatusUnauthorized, "missing or invalid tenant"))
@@ -244,9 +279,13 @@ func (a *API) mutateWithRecorderLimit(w http.ResponseWriter, r *http.Request, id
 			defer secret.Wipe(bj)
 			bodyJSON = bj
 		}
+		referenceVersion := 0
+		if present != nil && status >= 200 && status < 300 {
+			referenceVersion = 1
+		}
 		return json.Marshal(cachedResponse{
 			Status: status, Body: bodyJSON, Binding: binding,
-			ContentType: cachedResponseContentType(body),
+			ContentType: cachedResponseContentType(body), RotationReferenceView: referenceVersion,
 		})
 	}
 	var (
@@ -281,12 +320,20 @@ func (a *API) mutateWithRecorderLimit(w http.ResponseWriter, r *http.Request, id
 		w.WriteHeader(c.Status)
 		return
 	}
+	body := []byte(c.Body)
+	if present != nil && c.RotationReferenceView != 1 && c.Status >= 200 && c.Status < 300 {
+		body, err = present(r.Context(), tenantID, c.Body)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+	}
 	if err := writeCachedResponseContentType(w, c.ContentType); err != nil {
 		a.writeError(w, err)
 		return
 	}
 	w.WriteHeader(c.Status)
-	_, _ = w.Write(c.Body)
+	_, _ = w.Write(body)
 }
 
 // mutationRequestBinding scopes a raw Idempotency-Key to the authenticated

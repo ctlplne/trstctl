@@ -4,9 +4,12 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
+
 	"trstctl.com/trstctl/internal/cloudentitlements/change"
 	"trstctl.com/trstctl/internal/crypto"
 
@@ -131,6 +134,14 @@ func SecretStaticRotationOutboxIdempotencyKey(tenantEpoch, id string) string {
 	return SecretStaticRotationDestination + ":" + tenantEpoch + ":" + id
 }
 
+// SecretStaticRotationDispatch is the command identity carried by the
+// outbox. The worker loads the authenticated command and its reference.
+type SecretStaticRotationDispatch struct {
+	ID              string `json:"id"`
+	TenantEpoch     string `json:"tenant_epoch"`
+	DispatchVersion int    `json:"dispatch_version"`
+}
+
 // ApplySecretStaticRotationQueuedTx projects the queued event: the command row
 // and its single outbox intent commit together. Replaying the event finds the
 // same row and the same outbox identity and changes nothing.
@@ -199,15 +210,74 @@ func (s *Store) ApplySecretStaticRotationQueuedTx(ctx context.Context, tx pgx.Tx
 		nonNilStrings(cmd.Consumers), cmd.RetireAfterSeconds, cmd.RetireApprovedBy, cmd.SinglePhaseAcknowledged, cloudChangeID, cmd.ProviderBinding, dependentChangeID); err != nil {
 		return err
 	}
-	outboxID, err := ensureSecretIntegrationOutboxTx(ctx, tx, cmd.TenantID, SecretStaticRotationDestination,
-		"dynsecret.provider:"+cmd.Provider, SecretStaticRotationOutboxIdempotencyKey(cmd.TenantEpoch, cmd.ID), outboxPayload)
+	retained, err := scanSecretStaticRotationCommand(tx.QueryRow(ctx,
+		`SELECT `+secretStaticRotationColumns+` FROM secret_static_rotation_commands
+		 WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, cmd.TenantID, cmd.ID))
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx,
+	if retained.TenantEpoch != cmd.TenantEpoch || retained.Provider != cmd.Provider || retained.Key != cmd.Key ||
+		retained.OldRef != cmd.OldRef || retained.ExpectedVersion != cmd.ExpectedVersion ||
+		retained.IdempotencyKeyDigest != cmd.IdempotencyKeyDigest || retained.RequestBinding != cmd.RequestBinding ||
+		retained.ScheduleID != cmd.ScheduleID || retained.TTLSeconds != cmd.TTLSeconds ||
+		!slices.Equal(retained.Consumers, cmd.Consumers) || retained.RetireAfterSeconds != cmd.RetireAfterSeconds ||
+		retained.RetireApprovedBy != cmd.RetireApprovedBy || retained.SinglePhaseAcknowledged != cmd.SinglePhaseAcknowledged ||
+		retained.ProviderBinding != cmd.ProviderBinding || retained.CloudChangeID != cmd.CloudChangeID ||
+		retained.DependentChangeID != cmd.DependentChangeID || !sameDynamicSecretTime(retained.CreatedAt, cmd.CreatedAt) {
+		return fmt.Errorf("%w: retained static rotation command differs from its queue source", ErrIdempotencyConflict)
+	}
+	if retained.Terminal() {
+		return nil
+	}
+	dispatch, err := json.Marshal(SecretStaticRotationDispatch{
+		ID: cmd.ID, TenantEpoch: cmd.TenantEpoch, DispatchVersion: 2,
+	})
+	if err != nil {
+		return err
+	}
+	outboxID, err := ensureSecretIntegrationOutboxEncodingTx(ctx, tx, cmd.TenantID, SecretStaticRotationDestination,
+		"dynsecret.provider:"+cmd.Provider, SecretStaticRotationOutboxIdempotencyKey(cmd.TenantEpoch, cmd.ID), dispatch, outboxPayload, nil)
+	if err != nil {
+		return err
+	}
+	if outboxID == retained.OutboxID {
+		return nil
+	}
+	tag, err := tx.Exec(ctx,
 		`UPDATE secret_static_rotation_commands SET outbox_id = $3
-		  WHERE tenant_id = $1 AND id = $2 AND outbox_id IS NULL`, cmd.TenantID, cmd.ID, outboxID)
-	return err
+		  WHERE tenant_id = $1 AND id = $2
+		    AND (outbox_id IS NULL OR (outbox_id = $4 AND NOT EXISTS (
+		        SELECT 1 FROM outbox WHERE tenant_id = $1 AND id = $4
+		    )))`, cmd.TenantID, cmd.ID, outboxID, retained.OutboxID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("%w: a different static rotation outbox still owns the command", ErrIdempotencyConflict)
+	}
+	return nil
+}
+
+func (s *Store) ValidateStaticRotationOutboxClaim(ctx context.Context, cmd SecretStaticRotationCommand, payload []byte, legacy bool) error {
+	return s.WithTenant(ctx, cmd.TenantID, func(tx pgx.Tx) error {
+		if err := s.ValidateApplicationSecretTenantEpochTx(ctx, tx, cmd.TenantID, cmd.TenantEpoch); err != nil {
+			return err
+		}
+		var matches bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (
+			SELECT 1 FROM outbox WHERE tenant_id = $1 AND id = $2
+			AND destination = $3 AND idempotency_key = $4 AND payload = $5
+			AND (effect_lane = $6 OR ($7 AND effect_lane = ''))
+		)`, cmd.TenantID, cmd.OutboxID, SecretStaticRotationDestination,
+			SecretStaticRotationOutboxIdempotencyKey(cmd.TenantEpoch, cmd.ID), payload,
+			"dynsecret.provider:"+cmd.Provider, legacy).Scan(&matches); err != nil {
+			return err
+		}
+		if !matches {
+			return fmt.Errorf("%w: static rotation claim differs from its outbox row", ErrIdempotencyConflict)
+		}
+		return nil
+	})
 }
 
 // ApplySecretStaticRotationAdvancedTx projects one phase transition. The update

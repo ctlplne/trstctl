@@ -49,7 +49,6 @@ func TestDynamicSecretIssuanceFailureProducersCarryLiveTenantEpochAUD108(t *test
 		projections.EventDynamicSecretLeasePrepared,
 		projections.EventDynamicSecretLeaseIssued,
 		projections.EventDynamicSecretLeaseRenewed,
-		projections.EventDynamicSecretLeaseRevocationRequested,
 		projections.EventDynamicSecretLeaseRevocationCompleted,
 		projections.EventDynamicSecretLeaseRevocationFailed,
 		projections.EventDynamicSecretOperationRequested,
@@ -57,6 +56,14 @@ func TestDynamicSecretIssuanceFailureProducersCarryLiveTenantEpochAUD108(t *test
 	} {
 		if got := dynamicSecretEventSchemaVersion(eventType); got != projections.DynamicSecretEventSchemaVersion {
 			t.Fatalf("%s schema = %d, want epoch-bound v%d", eventType, got, projections.DynamicSecretEventSchemaVersion)
+		}
+	}
+	for _, eventType := range []string{
+		projections.EventDynamicSecretLeaseRevocationRequested,
+		projections.EventDynamicSecretLeaseRevocationRetryRequested,
+	} {
+		if got := dynamicSecretEventSchemaVersion(eventType); got != projections.DynamicSecretRevocationReferenceSchemaVersion {
+			t.Fatalf("%s schema = %d, want epoch-bound reference-free v%d", eventType, got, projections.DynamicSecretRevocationReferenceSchemaVersion)
 		}
 	}
 }

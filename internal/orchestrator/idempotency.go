@@ -244,9 +244,10 @@ func (i *Idempotency) openResult(ctx context.Context, tenantID, key, binding, co
 // names are a durable storage contract: the scheduler's terminal tick stores
 // the exact Body and Status that this protected envelope must authenticate.
 type schedulerPrivacyCachedResponse struct {
-	Status  int             `json:"s"`
-	Body    json.RawMessage `json:"b"`
-	Binding string          `json:"h,omitempty"`
+	Status                  int             `json:"s"`
+	Body                    json.RawMessage `json:"b"`
+	Binding                 string          `json:"h,omitempty"`
+	SchedulerTerminalDigest string          `json:"t,omitempty"`
 }
 
 // ResolveSecretRotationSchedulePrivacyOuter is the generic idempotency
@@ -308,7 +309,7 @@ func (i *Idempotency) ResolveSecretRotationSchedulePrivacyOuter(
 	case "bound":
 		if !requirement.RawKeyTokenMatch || requirement.TerminalBodyMatch ||
 			requirement.TerminalHTTPStatus != 0 || len(requirement.OriginalTerminalBody) != 0 ||
-			len(requirement.RewrittenTerminalBody) != 0 || codec == "" || len(protected) != 0 {
+			len(requirement.RewrittenTerminalBody) != 0 || len(requirement.SafeOriginalTerminalBody) != 0 || codec == "" || len(protected) != 0 {
 			return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, fmt.Errorf(
 				"%w: bound scheduler privacy outer has terminal result evidence",
 				store.ErrSecretRotationScheduleTickConflict,
@@ -367,9 +368,18 @@ func (i *Idempotency) ResolveSecretRotationSchedulePrivacyOuter(
 		)
 	}
 	defer secret.Wipe(cached.Body)
+	expectedBody := requirement.OriginalTerminalBody
+	if cached.SchedulerTerminalDigest != "" {
+		if len(requirement.SafeOriginalTerminalBody) == 0 ||
+			cached.SchedulerTerminalDigest != store.SecretRotationScheduleTerminalReferenceSource(requirement.OriginalTerminalBody) {
+			return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, fmt.Errorf(
+				"%w: protected scheduler reference view differs from its source", store.ErrSecretRotationScheduleTickConflict)
+		}
+		expectedBody = requirement.SafeOriginalTerminalBody
+	}
 	if cached.Status != requirement.TerminalHTTPStatus ||
 		!crypto.ConstantTimeEqual([]byte(cached.Binding), []byte(binding)) ||
-		!bytes.Equal(cached.Body, requirement.OriginalTerminalBody) {
+		!bytes.Equal(cached.Body, expectedBody) {
 		return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, fmt.Errorf(
 			"%w: protected scheduler response differs from exact terminal tick bytes",
 			store.ErrSecretRotationScheduleTickConflict,
@@ -389,6 +399,7 @@ func (i *Idempotency) ResolveSecretRotationSchedulePrivacyOuter(
 		rewrittenBody := append(json.RawMessage(nil), requirement.RewrittenTerminalBody...)
 		defer secret.Wipe(rewrittenBody)
 		cached.Body = rewrittenBody
+		cached.SchedulerTerminalDigest = ""
 		rewritten, err = json.Marshal(cached)
 		if err != nil {
 			return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, err

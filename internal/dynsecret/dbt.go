@@ -40,22 +40,25 @@ func (d dbtVendor) mint(ctx context.Context, api hostedAPI, binding, name string
 		grant["project_id"] = project
 	}
 	var created struct {
-		Data struct {
-			ID          int64            `json:"id"`
-			TokenString secret.JSONBytes `json:"token_string"`
-		} `json:"data"`
+		Data uniqueVendorField[dbtToken] `json:"data"`
 	}
+	token := &created.Data.value
+	defer func() { secret.Wipe(token.TokenString.value) }()
 	request := map[string]any{"name": name, "permission_grants": []any{grant}}
 	if _, err := hostedJSON(ctx, api, http.MethodPost, dbtTokens(binding), request, bearerFrom(d.token), &created, http.StatusCreated); err != nil {
 		return "", nil, err
 	}
-	defer secret.Wipe(created.Data.TokenString)
-	if created.Data.ID <= 0 || len(created.Data.TokenString) == 0 {
+	if len(token.TokenString.value) == 0 {
 		return "", nil, errors.New("dynsecret dbt: the create response carries no token")
 	}
-	id := strconv.FormatInt(created.Data.ID, 10)
+	candidate := strconv.AppendInt(nil, token.ID.value, 10)
+	defer secret.Wipe(candidate)
+	id, err := publicVendorID(api.name, candidate, token.TokenString.value)
+	if err != nil {
+		return "", nil, err
+	}
 	credential, err := json.Marshal(map[string]any{ // #nosec G117 -- the new token is this provider's output: the outbox seals it and only its readers open it (CWE-200)
-		"token": created.Data.TokenString, "token_id": id, "account_id": parts[0],
+		"token": token.TokenString.value, "token_id": id, "account_id": parts[0],
 	})
 	if err != nil {
 		return "", nil, err
@@ -64,22 +67,34 @@ func (d dbtVendor) mint(ctx context.Context, api hostedAPI, binding, name string
 }
 
 type dbtToken struct {
-	ID    int64  `json:"id"`
-	Name  string `json:"name"`
-	State int    `json:"state"`
+	ID          uniqueVendorField[int64]  `json:"id"`
+	Name        uniqueVendorField[string] `json:"name"`
+	State       uniqueVendorField[int]    `json:"state"`
+	TokenString vendorCredentialField     `json:"token_string"`
 }
 
 func (d dbtVendor) named(ctx context.Context, api hostedAPI, binding, name string) ([]string, error) {
 	var listed struct {
-		Data []dbtToken `json:"data"`
+		Data uniqueVendorField[[]dbtToken] `json:"data"`
 	}
+	defer func() {
+		for _, token := range listed.Data.value {
+			secret.Wipe(token.TokenString.value)
+		}
+	}()
 	if _, err := hostedJSON(ctx, api, http.MethodGet, dbtTokens(binding), nil, bearerFrom(d.token), &listed); err != nil {
 		return nil, err
 	}
 	var ids []string
-	for _, token := range listed.Data {
-		if token.Name == name && token.State == dbtActive && token.ID > 0 {
-			ids = append(ids, strconv.FormatInt(token.ID, 10))
+	for _, token := range listed.Data.value {
+		if token.Name.value == name && token.State.value == dbtActive {
+			candidate := strconv.AppendInt(nil, token.ID.value, 10)
+			id, err := publicVendorID(api.name, candidate, token.TokenString.value)
+			secret.Wipe(candidate)
+			if err != nil {
+				return nil, err
+			}
+			ids = append(ids, id)
 		}
 	}
 	return ids, nil
@@ -91,13 +106,21 @@ func (d dbtVendor) nameOf(ctx context.Context, api hostedAPI, binding, id string
 		return "", false, errors.New("dynsecret dbt: a service token ID is a number")
 	}
 	var current struct {
-		Data dbtToken `json:"data"`
+		Data uniqueVendorField[dbtToken] `json:"data"`
 	}
+	defer func() { secret.Wipe(current.Data.value.TokenString.value) }()
 	status, err := hostedJSON(ctx, api, http.MethodGet, dbtTokens(binding)+id+"/", nil, bearerFrom(d.token), &current, http.StatusNotFound)
-	if err != nil || status == http.StatusNotFound || current.Data.State != dbtActive {
+	if err != nil || status == http.StatusNotFound || current.Data.value.State.value != dbtActive {
 		return "", false, err
 	}
-	return current.Data.Name, true, nil
+	entry := current.Data.value
+	if entry.ID.seen && strconv.FormatInt(entry.ID.value, 10) != id {
+		return "", false, errors.New("dynsecret dbt: lookup returned a different management identity")
+	}
+	if err := validatePublicVendorID(api.name, []byte(id), entry.TokenString.value); err != nil {
+		return "", false, err
+	}
+	return current.Data.value.Name.value, true, nil
 }
 
 func (d dbtVendor) remove(ctx context.Context, api hostedAPI, binding, id string) error {

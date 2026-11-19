@@ -38,6 +38,17 @@ const (
 	DynamicSecretRevocationFailed    DynamicSecretRevocationStatus = "failed"
 )
 
+// ValidDynamicSecretRevocationMethod defines the methods retained in a
+// completed provider outcome. An empty method is the original delete result.
+func ValidDynamicSecretRevocationMethod(method string) bool {
+	switch method {
+	case "", "deny_policy", "native_expiry", "token_revoked":
+		return true
+	default:
+		return false
+	}
+}
+
 // DynamicSecretLease is the event-projected metadata for one generated
 // credential. BackendRef is an opaque provider revocation handle (for example a
 // database username or cloud access-key id), never the generated credential.
@@ -91,8 +102,9 @@ type DynamicSecretLease struct {
 	RevocationCompletedAt *time.Time
 	// RevocationMethod is how a completed revocation ended an AWS STS
 	// session: deny_policy or native_expiry; empty for other providers (N3).
-	RevocationMethod string
-	UpdatedAt        time.Time
+	RevocationMethod        string
+	RevocationEventSequence uint64
+	UpdatedAt               time.Time
 }
 
 // ApplyDynamicSecretLeasePendingTx projects a dynsecret.lease.pending event before
@@ -565,7 +577,7 @@ func (s *Store) ApplyDynamicSecretLeaseRevocationCompletedForEpochTx(ctx context
 	if tenantID == "" || leaseID == "" || completedAt.IsZero() {
 		return errors.New("store: dynamic-secret revocation completion is incomplete")
 	}
-	if method != "" && method != "deny_policy" && method != "native_expiry" && method != "token_revoked" {
+	if !ValidDynamicSecretRevocationMethod(method) {
 		return fmt.Errorf("store: dynamic-secret revocation method %q is not deny_policy, native_expiry or token_revoked", method)
 	}
 	if err := s.ValidateDynamicSecretTenantEpochTx(ctx, tx, tenantID, tenantEpoch); err != nil {
@@ -573,16 +585,17 @@ func (s *Store) ApplyDynamicSecretLeaseRevocationCompletedForEpochTx(ctx context
 	}
 	var status DynamicSecretRevocationStatus
 	var retainedCompletedAt *time.Time
+	var retainedMethod string
 	if err := tx.QueryRow(ctx, `
-		SELECT revocation_status, revocation_completed_at
+		SELECT revocation_status, revocation_completed_at, revocation_method
 		  FROM dynamic_secret_leases
 		 WHERE tenant_id = $1 AND tenant_epoch = $2 AND id = $3 AND state = 'revoked'
-		 FOR UPDATE`, tenantID, tenantEpoch, leaseID).Scan(&status, &retainedCompletedAt); err != nil {
+		 FOR UPDATE`, tenantID, tenantEpoch, leaseID).Scan(&status, &retainedCompletedAt, &retainedMethod); err != nil {
 		return err
 	}
 	switch status {
 	case DynamicSecretRevocationCompleted:
-		if retainedCompletedAt == nil || !sameDynamicSecretTime(*retainedCompletedAt, completedAt) {
+		if retainedCompletedAt == nil || !sameDynamicSecretTime(*retainedCompletedAt, completedAt) || retainedMethod != method {
 			return fmt.Errorf("%w: terminal dynamic-secret revocation completion has no exact replay proof", ErrIdempotencyConflict)
 		}
 		return nil
@@ -674,7 +687,7 @@ const dynamicSecretLeaseAuthoritySelect = `SELECT id, tenant_id::text, tenant_ep
        sealed_credential, revocation_sealed_credential, sealed_preparation, preparation_digest, prepared_at,
        credential_digest, state, issue_outbox_id, revocation_status,
        revoke_outbox_id, last_error, issued_at, expires_at, hard_expires_at,
-       revoked_at, revocation_completed_at, revocation_method, updated_at, requested_by
+       revoked_at, revocation_completed_at, revocation_method, updated_at, requested_by, revocation_event_sequence
   FROM dynamic_secret_leases
  WHERE tenant_id = $1`
 
@@ -707,7 +720,7 @@ func scanDynamicSecretLeaseAuthority(row rowScanner, lease *DynamicSecretLease) 
 		&lease.RevokeOutboxID, &lease.LastError,
 		&lease.IssuedAt, &lease.ExpiresAt, &lease.HardExpiresAt,
 		&lease.RevokedAt, &lease.RevocationCompletedAt, &lease.RevocationMethod, &lease.UpdatedAt,
-		&lease.RequestedBy,
+		&lease.RequestedBy, &lease.RevocationEventSequence,
 	)
 }
 

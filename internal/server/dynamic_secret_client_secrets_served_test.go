@@ -139,7 +139,7 @@ func TestServedOktaClientSecretsRotateA240(t *testing.T) {
 			AllowedRoles: []string{"okta/portal"}, RoleBindings: map[string]string{"okta/portal": "0oa1b2c3d4e5f6g7h8i9"},
 			MaxTTL: "1h", AllowStaticRotation: true, AllowInsecureLoopback: true,
 		},
-		role: "okta/portal", seed: `{"client_id":"0oaclient123","client_secret":"original-okta-secret-value"}`,
+		role: "okta/portal", seed: `{"client_id":"0oaclient123","client_secret":"original-okta-secret-value","secret_id":"ocs-original"}`,
 		firstOldRef: "0oa1b2c3d4e5f6g7h8i9/ocs-original",
 		keyOf:       hostedKeyOf("client_secret"), authenticates: authenticates,
 		newRefPrefix: "0oa1b2c3d4e5f6g7h8i9/ocs", wantVerifyMode: "authenticated",

@@ -5668,13 +5668,13 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventWorkloadAttesterTrustSourceDeleted:       {1: true},
 	EventComplianceReportScheduleUpserted:         {1: true},
 	EventComplianceReportRunRecorded:              {1: true},
-	EventSecretRotationScheduleUpserted:           {1: true},
-	EventSecretRotationSchedulePaused:             {1: true, 2: true},
-	EventSecretRotationScheduleResumed:            {1: true, 2: true},
-	EventSecretRotationScheduleRetired:            {1: true, 2: true},
+	EventSecretRotationScheduleUpserted:           {1: true, SecretRotationScheduleReferenceSchemaVersion: true},
+	EventSecretRotationSchedulePaused:             {1: true, 2: true, SecretRotationScheduleControlViewSchemaVersion: true},
+	EventSecretRotationScheduleResumed:            {1: true, 2: true, SecretRotationScheduleControlViewSchemaVersion: true},
+	EventSecretRotationScheduleRetired:            {1: true, 2: true, SecretRotationScheduleControlViewSchemaVersion: true},
 	EventSecretRotationScheduleRan:                {1: true, rotationcommand.LegacyBoundEventSchemaVersion: true, SecretRotationScheduleRanEventSchemaVersion: true},
-	EventSecretStaticRotationQueued:               {1: true},
-	EventSecretStaticRotationAdvanced:             {1: true, 2: true},
+	EventSecretStaticRotationQueued:               {1: true, SecretStaticRotationReferenceQueueSchemaVersion: true},
+	EventSecretStaticRotationAdvanced:             {1: true, 2: true, SecretStaticRotationHostedStageSchemaVersion: true},
 	EventNotificationRead:                         {1: true},
 	EventNotificationChannelUpserted:              {1: true},
 	EventNotificationChannelDeleted:               {1: true},
@@ -8287,14 +8287,23 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			CreatedAt: pl.CreatedAt, UpdatedAt: e.Time,
 		})
 	case EventSecretStaticRotationQueued:
-		var pl SecretStaticRotationQueued
-		if err := decode(e, &pl); err != nil {
+		pl, _, err := DecodeSecretStaticRotationQueueSource(e)
+		if err != nil {
 			return err
 		}
 		return p.applySecretStaticRotationQueuedTx(ctx, tx, e, pl)
 	case EventSecretStaticRotationAdvanced:
 		var pl SecretStaticRotationAdvanced
-		if err := decode(e, &pl); err != nil {
+		if schemaVersionOf(e) == SecretStaticRotationHostedStageSchemaVersion {
+			stage, err := DecodeSecretStaticRotationHostedStage(e)
+			if err != nil {
+				return err
+			}
+			pl = SecretStaticRotationAdvanced{
+				ID: stage.ID, TenantEpoch: stage.TenantEpoch, FromPhase: stage.FromPhase, Phase: stage.Phase,
+				ProviderType: stage.ProviderType, NewRef: stage.NewRef, SealedNew: stage.SealedNew,
+			}
+		} else if err := decode(e, &pl); err != nil {
 			return err
 		}
 		if pl.ID == "" || pl.FromPhase == "" || pl.Phase == "" {
@@ -8320,8 +8329,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return nil
 	case EventSecretRotationScheduleUpserted:
-		var pl SecretRotationScheduleUpserted
-		if err := decode(e, &pl); err != nil {
+		pl, referenceProviderType, err := decodeSecretRotationScheduleReference(e)
+		if err != nil {
 			return err
 		}
 		if pl.ID == "" || pl.Name == "" || pl.Provider == "" || pl.Key == "" || pl.OldRef == "" || pl.IntervalSeconds <= 0 {
@@ -8333,7 +8342,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplySecretRotationScheduleUpsertedTx(ctx, tx, store.SecretRotationSchedule{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Provider: pl.Provider,
-			Key: pl.Key, OldRef: pl.OldRef, IntervalSeconds: pl.IntervalSeconds,
+			Key: pl.Key, OldRef: pl.OldRef, ReferenceProviderType: referenceProviderType, IntervalSeconds: pl.IntervalSeconds,
 			ConfigEventSequence: e.Sequence, Enabled: pl.Enabled, NextRunAt: nextRunAt,
 			CreatedAt: e.Time, UpdatedAt: e.Time, Consumers: pl.Consumers, RetireAfterSeconds: pl.RetireAfterSeconds,
 			SinglePhaseAcknowledged: pl.SinglePhaseAcknowledged, TTLSeconds: pl.TTLSeconds,
@@ -8344,7 +8353,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			EventSecretRotationScheduleResumed: "resume",
 			EventSecretRotationScheduleRetired: "retire",
 		}[e.Type]
-		if schemaVersionOf(e) == 2 {
+		if schemaVersionOf(e) >= 2 {
 			var pl SecretRotationScheduleControlledV2
 			if err := decode(e, &pl); err != nil {
 				return err

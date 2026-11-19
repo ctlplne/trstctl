@@ -1320,6 +1320,23 @@ advances `old_ref`; a connector whose local version committed before terminal
 delivery failure also advances to that committed version so later cadences cannot
 stale-loop.
 
+Hosted static rotation accepts `old_ref` when trstctl can tie the public
+management identifier to the role and the protected credential it replaces.
+For LiteLLM this is the token's SHA-256 management handle under its configured
+role binding. Audit, command and schedule metadata use the handle. The bearer
+key is available through the credential's normal secret access path.
+
+Older static schedules whose predecessor cannot be verified keep their cadence
+and history visible. A cadence can advance to a previous command's result only
+when it matches the current secret version and provider. A dynamic-lease cadence
+also checks that the predecessor is an active lease for the configured role.
+A new tick leaves an unproved reference out of its work
+snapshot. An already-started tick can report `reference_review_required` and
+retain the existing command for inspection. Keep the schedule and command IDs
+for recovery. Historical responses may show an empty reference while preserving
+status and the original result ID. For an unproved legacy credential, follow the
+[hosted credential upgrade procedure](../runbooks/upgrade-rollback.md#hosted-credential-references).
+
 An operator can read one schedule at `GET /api/v1/secrets/rotation-schedules/{id}`
 and use `POST .../{id}/pause`, `.../{id}/resume`, or `.../{id}/retire` with a fresh
 `Idempotency-Key` and `secrets:write`. The console exposes these actions in the

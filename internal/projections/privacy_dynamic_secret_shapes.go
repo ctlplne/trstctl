@@ -122,6 +122,11 @@ type privacyDynamicSecretLeaseIssuedV2 struct {
 	HardExpiresAt    time.Time `json:"hard_expires_at"`
 }
 
+type privacyDynamicSecretLeaseIssuedV3 struct {
+	privacyDynamicSecretLeaseIssuedV2
+	HostedProviderType string `json:"hosted_provider_type"`
+}
+
 type privacyDynamicSecretLeaseFailureV2 struct {
 	TenantEpoch string `json:"tenant_epoch"`
 	ID          string `json:"id"`

@@ -112,6 +112,90 @@ func classifyDynamicSecretLifecycleThrough(
 	return authority, nil
 }
 
+// ValidateRetainedDynamicSecretRevocationSource checks a recovered request at
+// its original position in the tenant's lease history, before today's lease
+// state can have advanced to a different attempt.
+func ValidateRetainedDynamicSecretRevocationSource(ctx context.Context, log *events.Log, retained events.Event) error {
+	source, err := DecodeDynamicSecretRevocationSource(retained)
+	if err != nil {
+		return err
+	}
+	authority := newDynamicSecretLifecycleAuthority()
+	var matched bool
+	types := []string{
+		EventTenantRegistered, EventTenantOffboarded,
+		EventDynamicSecretLeasePending, EventDynamicSecretLeasePrepared, EventDynamicSecretLeaseIssued,
+		EventDynamicSecretLeaseIssuanceFailed, EventDynamicSecretLeaseRenewed,
+		EventDynamicSecretLeaseRevocationRequested, EventDynamicSecretLeaseRevocationRetryRequested,
+		EventDynamicSecretLeaseRevocationCompleted, EventDynamicSecretLeaseRevocationFailed,
+	}
+	if err := log.ReplayTenantTypesThrough(ctx, retained.TenantID, 0, retained.Sequence, types, func(event events.Event) error {
+		match, err := dynamicSecretLifecycleEventForLease(event, source.LeaseID)
+		if err != nil || !match {
+			return err
+		}
+		skip, err := authority.observe(event)
+		if err != nil {
+			return err
+		}
+		if event.Sequence == retained.Sequence {
+			matched = !skip && sameDynamicSecretLifecycleEnvelope(event, retained, false)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if !matched {
+		return fmt.Errorf("%w: retained revoke source lacks its exact lease authority", store.ErrIdempotencyConflict)
+	}
+	return nil
+}
+
+// FindLegacyDynamicSecretIssuedSource resolves the issued result from writers
+// that assigned a random event ID. The same lifecycle classifier used for
+// rebuild verifies its preceding command and excludes erased registrations.
+func FindLegacyDynamicSecretIssuedSource(ctx context.Context, log *events.Log, tenantID, leaseID string) (events.Event, bool, error) {
+	authority := newDynamicSecretLifecycleAuthority()
+	types := []string{EventTenantRegistered, EventTenantOffboarded, EventDynamicSecretLeasePending, EventDynamicSecretLeaseIssued}
+	err := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		head, err := projectionHistoryHead(readCtx, log)
+		if err != nil {
+			return err
+		}
+		return log.ReplayTenantTypesThrough(readCtx, tenantID, 0, head, types, func(event events.Event) error {
+			match, err := dynamicSecretLifecycleEventForLease(event, leaseID)
+			if err != nil || !match {
+				return err
+			}
+			_, err = authority.observe(event)
+			return err
+		})
+	})
+	if err != nil {
+		return events.Event{}, false, err
+	}
+	lifecycle := authority.lifecycles[tenantID]
+	lease := lifecycle.leases[leaseID]
+	if !lifecycle.registered || lifecycle.offboarded || lease == nil || lease.issued == nil ||
+		schemaVersionOf(*lease.issued) != events.DefaultSchemaVersion {
+		return events.Event{}, false, nil
+	}
+	return *lease.issued, true, nil
+}
+
+func dynamicSecretLifecycleEventForLease(event events.Event, leaseID string) (bool, error) {
+	if event.Type == EventTenantRegistered || event.Type == EventTenantOffboarded {
+		return true, nil
+	}
+	var identity struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(event.Data, &identity); err != nil {
+		return false, err
+	}
+	return identity.ID == leaseID, nil
+}
+
 func (a *dynamicSecretLifecycleAuthority) skip(event events.Event) (bool, error) {
 	if event.Sequence <= a.head {
 		_, skip := a.skipSequences[event.Sequence]
@@ -259,8 +343,8 @@ func (a *dynamicSecretLifecycleAuthority) observeTransition(
 		}
 		return recordDynamicSecretSingleton(event, &lease.prepared, lease.sequences, "preparation")
 	case EventDynamicSecretLeaseIssued:
-		var payload DynamicSecretLeaseIssued
-		if err := decode(event, &payload); err != nil {
+		payload, _, err := DecodeDynamicSecretIssuedSource(event)
+		if err != nil {
 			return false, err
 		}
 		if payload.ID == "" || payload.IdempotencyKey == "" || payload.Provider == "" || payload.Role == "" ||
@@ -343,47 +427,42 @@ func (a *dynamicSecretLifecycleAuthority) observeTransition(
 		lease.expiresAt = payload.ExpiresAt
 		lease.sequences[event.Sequence] = struct{}{}
 		return false, nil
-	case EventDynamicSecretLeaseRevocationRequested:
-		var payload DynamicSecretLeaseRevocationRequested
-		if err := decode(event, &payload); err != nil {
+	case EventDynamicSecretLeaseRevocationRequested, EventDynamicSecretLeaseRevocationRetryRequested:
+		source, err := DecodeDynamicSecretRevocationSource(event)
+		if err != nil {
 			return false, err
 		}
-		if payload.ID == "" || payload.Provider == "" || payload.BackendRef == "" ||
-			(schema >= DynamicSecretEventSchemaVersion && payload.OperationID == "") {
-			return false, fmt.Errorf("projections: %s payload is incomplete", event.Type)
-		}
-		if err := validateDynamicSecretLifecycleIdentity(event, payload.TenantEpoch, "lease-revocation-requested", payload.OperationID); err != nil {
-			return false, err
-		}
-		lease, skip, err := a.dynamicSecretLeaseForTransition(event, lifecycle, payload.TenantEpoch, payload.ID)
+		lease, skip, err := a.dynamicSecretLeaseForTransition(event, lifecycle, source.TenantEpoch, source.LeaseID)
 		if err != nil || skip {
 			return skip, err
 		}
-		if lease.issued == nil || lease.provider != payload.Provider || lease.backendRef != payload.BackendRef {
+		if lease.issued == nil || lease.provider != source.Provider ||
+			(source.LegacyRef != "" && lease.backendRef != source.LegacyRef) {
 			return false, fmt.Errorf("%w: dynamic-secret revocation does not own its issued result", store.ErrIdempotencyConflict)
 		}
-		return recordDynamicSecretSingleton(event, &lease.revocationRequested, lease.sequences, "revocation request")
-	case EventDynamicSecretLeaseRevocationRetryRequested:
-		var payload DynamicSecretLeaseRevocationRetryRequested
-		if err := decode(event, &payload); err != nil {
-			return false, err
+		if event.Type == EventDynamicSecretLeaseRevocationRequested {
+			return recordDynamicSecretSingleton(event, &lease.revocationRequested, lease.sequences, "revocation request")
 		}
-		if payload.ID == "" || payload.OperationID == "" || payload.Provider == "" ||
-			payload.BackendRef == "" || payload.PreviousOutboxID <= 0 {
-			return false, fmt.Errorf("projections: %s payload is incomplete", event.Type)
+		failed := lease.revocationFailed
+		if lease.retryRequested != nil {
+			failed = lease.retryOutcome
 		}
-		if err := validateDynamicSecretLifecycleIdentity(event, payload.TenantEpoch, "lease-revocation-retry-requested", payload.OperationID); err != nil {
-			return false, err
-		}
-		lease, skip, err := a.dynamicSecretLeaseForTransition(event, lifecycle, payload.TenantEpoch, payload.ID)
-		if err != nil || skip {
-			return skip, err
-		}
-		if lease.issued == nil || lease.provider != payload.Provider || lease.backendRef != payload.BackendRef ||
-			lease.revocationRequested == nil || lease.revocationCompleted != nil ||
-			(lease.revocationFailed == nil && (lease.retryOutcome == nil || lease.retryOutcome.Type != EventDynamicSecretLeaseRevocationFailed)) ||
-			(lease.retryRequested != nil && lease.retryOutcome == nil) {
+		if lease.revocationRequested == nil || lease.revocationCompleted != nil ||
+			failed == nil || failed.Type != EventDynamicSecretLeaseRevocationFailed {
 			return false, fmt.Errorf("%w: dynamic-secret retry has no failed provider removal predecessor", store.ErrIdempotencyConflict)
+		}
+		if source.PreviousAttempt != "" {
+			var previous DynamicSecretLeaseFailure
+			if err := decode(*failed, &previous); err != nil {
+				return false, err
+			}
+			attempt := previous.AttemptID
+			if attempt == "" {
+				attempt = store.DynamicSecretInitialRevokeAttempt
+			}
+			if attempt != source.PreviousAttempt {
+				return false, fmt.Errorf("%w: dynamic-secret retry names another failed attempt", store.ErrIdempotencyConflict)
+			}
 		}
 		copyEvent := event
 		lease.retryRequested = &copyEvent
@@ -584,8 +663,8 @@ func dynamicSecretRetryOutcomeMatches(lease *dynamicSecretLifecycleLease, attemp
 	if lease == nil || lease.retryRequested == nil || lease.retryOutcome != nil || attemptID == "" {
 		return false
 	}
-	var request DynamicSecretLeaseRevocationRetryRequested
-	return json.Unmarshal(lease.retryRequested.Data, &request) == nil && request.OperationID == attemptID
+	request, err := DecodeDynamicSecretRevocationSource(*lease.retryRequested)
+	return err == nil && request.OperationID == attemptID
 }
 
 func sameDynamicSecretEpoch(schema int, eventEpoch, sourceEpoch string) bool {

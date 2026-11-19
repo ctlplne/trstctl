@@ -78,6 +78,10 @@ type SecretRotationScheduleTick struct {
 	Scanned                         int
 	SnapshotCount                   int
 	Receipt                         json.RawMessage
+	OriginalReceipt                 json.RawMessage
+	ReferenceViewVersion            int
+	LegacyReceiptDigest             string
+	SafePrefixDigest                string
 	OwnerToken                      string
 	OwnerGeneration                 int64
 	TerminalHTTPStatus              *int
@@ -165,6 +169,14 @@ func initialSecretRotationScheduleTickReceipt() ([]byte, error) {
 }
 
 func decodeSecretRotationScheduleTickReceipt(raw []byte) (secretRotationScheduleTickReceipt, error) {
+	receipt, err := decodeSecretRotationScheduleTickReceiptShape(raw)
+	if err != nil {
+		return receipt, err
+	}
+	return receipt, validateSecretRotationScheduleTickErrorVocabulary(receipt)
+}
+
+func decodeSecretRotationScheduleTickReceiptShape(raw []byte) (secretRotationScheduleTickReceipt, error) {
 	var receipt secretRotationScheduleTickReceipt
 	// The privacy rewriter and the runtime receiver intentionally share one
 	// closed JSON schema. Passing an empty subject performs validation only: it
@@ -181,9 +193,6 @@ func decodeSecretRotationScheduleTickReceipt(raw []byte) (secretRotationSchedule
 	}
 	if json.Unmarshal(raw, &receipt) != nil || receipt.Runs == nil || receipt.Deferred == nil {
 		return receipt, fmt.Errorf("%w: scheduler receipt is not a complete JSON object", ErrSecretRotationScheduleTickConflict)
-	}
-	if err := validateSecretRotationScheduleTickErrorVocabulary(receipt); err != nil {
-		return receipt, err
 	}
 	return receipt, nil
 }
@@ -392,6 +401,9 @@ func validateSecretRotationScheduleTickContinuation(
 		retained.Ran != presented.Ran || retained.Scanned != presented.Scanned ||
 		retained.SnapshotCount != presented.SnapshotCount ||
 		retained.AfterScheduleID != presented.AfterScheduleID ||
+		retained.ReferenceViewVersion != presented.ReferenceViewVersion ||
+		retained.LegacyReceiptDigest != presented.LegacyReceiptDigest ||
+		retained.SafePrefixDigest != presented.SafePrefixDigest ||
 		!bytes.Equal(retained.Receipt, presented.Receipt) {
 		return fmt.Errorf("%w: scheduler caller no longer presents the last store-returned progress",
 			ErrSecretRotationScheduleTickConflict)
@@ -576,10 +588,11 @@ const secretRotationScheduleTickSelect = `SELECT tenant_id::text, identity_versi
        idempotency_key, request_binding,
        due_through, start_schedule_id::text, after_schedule_id::text,
        wrapped, phase, current_schedule_id::text, current_due_at,
-       current_provider, current_secret_key, current_old_ref,
+       current_provider, current_secret_key, current_old_ref, current_reference_provider_type,
 	       current_interval_seconds, current_config_event_sequence,
 	       current_command_lease_token,
-	       ran, scanned, snapshot_count, receipt, owner_token, owner_generation,
+	       ran, scanned, snapshot_count, receipt, safe_receipt, reference_view_version,
+	       legacy_receipt_digest, safe_prefix_digest, owner_token, owner_generation,
 	       terminal_http_status, terminal_body,
 	       privacy_rewrite_version, privacy_subject_ref, privacy_operation_id, privacy_event_id,
 	       created_at, updated_at, completed_at
@@ -588,11 +601,11 @@ const secretRotationScheduleTickSelect = `SELECT tenant_id::text, identity_versi
 
 func scanSecretRotationScheduleTick(row rowScanner, tick *SecretRotationScheduleTick) error {
 	var (
-		currentID, provider, key, oldRef, commandLeaseToken *string
-		currentDueAt                                        *time.Time
-		currentInterval                                     *int
-		currentConfigEventSequence                          *uint64
-		terminalBody                                        []byte
+		currentID, provider, key, oldRef, referenceProviderType, commandLeaseToken *string
+		currentDueAt                                                               *time.Time
+		currentInterval                                                            *int
+		currentConfigEventSequence                                                 *uint64
+		terminalBody, originalReceipt, safeReceipt                                 []byte
 	)
 	if err := row.Scan(
 		&tick.TenantID, &tick.IdentityVersion,
@@ -600,14 +613,18 @@ func scanSecretRotationScheduleTick(row rowScanner, tick *SecretRotationSchedule
 		&tick.IdempotencyKey, &tick.RequestBinding,
 		&tick.DueThrough, &tick.StartScheduleID, &tick.AfterScheduleID,
 		&tick.Wrapped, &tick.Phase, &currentID, &currentDueAt,
-		&provider, &key, &oldRef, &currentInterval, &currentConfigEventSequence, &commandLeaseToken,
-		&tick.Ran, &tick.Scanned, &tick.SnapshotCount, &tick.Receipt, &tick.OwnerToken, &tick.OwnerGeneration,
+		&provider, &key, &oldRef, &referenceProviderType, &currentInterval, &currentConfigEventSequence, &commandLeaseToken,
+		&tick.Ran, &tick.Scanned, &tick.SnapshotCount, &originalReceipt, &safeReceipt, &tick.ReferenceViewVersion,
+		&tick.LegacyReceiptDigest, &tick.SafePrefixDigest, &tick.OwnerToken, &tick.OwnerGeneration,
 		&tick.TerminalHTTPStatus, &terminalBody,
 		&tick.PrivacyRewriteVersion, &tick.PrivacySubjectRef, &tick.PrivacyOperationID, &tick.PrivacyEventID,
 		&tick.CreatedAt, &tick.UpdatedAt, &tick.CompletedAt,
 	); err != nil {
 		return err
 	}
+	tick.CurrentSchedule = nil
+	tick.CurrentCommandLeaseToken = ""
+	tick.TerminalBody = nil
 	if currentID != nil && currentDueAt != nil && provider != nil && key != nil && oldRef != nil && currentInterval != nil && currentConfigEventSequence != nil {
 		tick.CurrentSchedule = &SecretRotationSchedule{
 			ID: *currentID, TenantID: tick.TenantID,
@@ -618,6 +635,15 @@ func scanSecretRotationScheduleTick(row rowScanner, tick *SecretRotationSchedule
 			Key:                             *key, OldRef: *oldRef, IntervalSeconds: *currentInterval,
 			Enabled: true, NextRunAt: *currentDueAt, ConfigEventSequence: *currentConfigEventSequence,
 		}
+	}
+	if tick.CurrentSchedule != nil && referenceProviderType != nil {
+		tick.CurrentSchedule.ReferenceProviderType = *referenceProviderType
+	}
+	tick.OriginalReceipt = nil
+	tick.Receipt = originalReceipt
+	if tick.ReferenceViewVersion != 0 {
+		tick.OriginalReceipt = originalReceipt
+		tick.Receipt = safeReceipt
 	}
 	if commandLeaseToken != nil {
 		tick.CurrentCommandLeaseToken = *commandLeaseToken
@@ -698,6 +724,7 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 	tenantRegistrationEventSequence uint64,
 	ownerToken, currentCommandLeaseToken string,
 	leaseDuration time.Duration,
+	legacyNativeProviders ...string,
 ) (SecretRotationScheduleTickPreparation, error) {
 	prepared := SecretRotationScheduleTickPreparation{State: SecretRotationScheduleTickAcquired}
 	if tx == nil || tenantID == "" || idempotencyKey == "" || requestBinding == "" || ownerToken == "" ||
@@ -803,6 +830,11 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 	if tickExists && tick.Phase == "privacy_erased" {
 		return prepared, ErrSecretRotationScheduleTickPrivacyErased
 	}
+	if tickExists && tick.Phase == "terminal" && tick.ReferenceViewVersion != 0 {
+		if err := validateSecretRotationScheduleTickReferenceViewTx(ctx, tx, tick); err != nil {
+			return prepared, err
+		}
+	}
 	if outerExists && outerStatus == "completed" {
 		if !tickExists || tick.Phase != "terminal" || tick.TerminalHTTPStatus == nil || len(tick.TerminalBody) == 0 || len(protectedResult) == 0 {
 			return prepared, fmt.Errorf("%w: completed outer key lacks its exact terminal scheduler receiver", ErrSecretRotationScheduleTickConflict)
@@ -864,9 +896,30 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 				cursor.LeaseToken == "" || cursor.LeaseUntil == nil {
 				return prepared, fmt.Errorf("%w: expired cursor and tick disagree", ErrSecretRotationScheduleTickConflict)
 			}
-			if superseded.Phase == "row_started" && superseded.CurrentSchedule != nil {
+			if superseded.Phase == "row_started" && superseded.CurrentSchedule != nil &&
+				SecretRotationScheduleReferenceCanSnapshot(*superseded.CurrentSchedule, legacyNativeProviders) {
 				copySchedule := *superseded.CurrentSchedule
 				carried = &copySchedule
+			}
+			if err := upgradeSecretRotationScheduleTickReferenceViewTx(ctx, tx, &superseded); err != nil {
+				return prepared, err
+			}
+			if carried == nil && superseded.Phase == "row_started" && superseded.CurrentSchedule != nil {
+				row := superseded.CurrentSchedule
+				deferred, err := json.Marshal(struct {
+					ScheduleID string    `json:"schedule_id"`
+					DueAt      time.Time `json:"due_at"`
+					Reason     string    `json:"reason"`
+				}{row.ID, row.NextRunAt, SecretRotationScheduleReferenceReviewRequired})
+				if err != nil {
+					return prepared, err
+				}
+				superseded.Receipt, superseded.Ran, superseded.Scanned, err = appendSecretRotationScheduleTickRowOutcome(
+					superseded, SecretRotationScheduleTickRowOutcome{Deferred: deferred})
+				if err != nil {
+					return prepared, err
+				}
+				superseded.AfterScheduleID = row.ID
 			}
 			body, err := indeterminateSecretRotationScheduleTickReceipt(superseded)
 			if err != nil {
@@ -877,10 +930,12 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 			}
 			tag, err := tx.Exec(ctx,
 				`UPDATE secret_rotation_schedule_ticks
-				    SET phase = 'terminal', receipt = $4::jsonb,
+					    SET phase = 'terminal', scanned = $8, after_schedule_id = $9::uuid,
+			        receipt = CASE WHEN reference_view_version = 0 THEN $4::jsonb ELSE receipt END,
+			        safe_receipt = CASE WHEN reference_view_version = 1 THEN $4::jsonb ELSE safe_receipt END,
 				        current_schedule_id = NULL, current_due_at = NULL,
 				        current_provider = NULL, current_secret_key = NULL,
-				        current_old_ref = NULL, current_interval_seconds = NULL,
+				        current_old_ref = NULL, current_reference_provider_type = NULL, current_interval_seconds = NULL,
 				        current_config_event_sequence = NULL,
 				        current_command_lease_token = NULL,
 				        owner_token = '', terminal_http_status = 503,
@@ -899,7 +954,7 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 				           AND cursor.lease_until <= clock_timestamp()
 				    )`,
 				tenantID, superseded.IdempotencyKey, superseded.RequestBinding,
-				body, body, superseded.OwnerToken, superseded.OwnerGeneration)
+				body, body, superseded.OwnerToken, superseded.OwnerGeneration, superseded.Scanned, superseded.AfterScheduleID)
 			if err != nil {
 				return prepared, err
 			}
@@ -952,7 +1007,7 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 		snapshotCount, err := insertSecretRotationScheduleTickSnapshotTx(
 			ctx, tx, tenantID, idempotencyKey,
 			tenantRegistrationEventID, tenantRegistrationEventSequence,
-			dueThrough, startID, carried)
+			dueThrough, startID, carried, legacyNativeProviders)
 		if err != nil {
 			return prepared, err
 		}
@@ -1011,6 +1066,9 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 		 AND idempotency_key = $2`, tenantID, idempotencyKey), &prepared.Tick); err != nil {
 		return prepared, err
 	}
+	if err := upgradeSecretRotationScheduleTickReferenceViewTx(ctx, tx, &prepared.Tick); err != nil {
+		return prepared, err
+	}
 	if err := validateSecretRotationScheduleTickSnapshotTx(ctx, tx, prepared.Tick); err != nil {
 		return prepared, err
 	}
@@ -1026,6 +1084,7 @@ func insertSecretRotationScheduleTickSnapshotTx(
 	dueThrough time.Time,
 	startID string,
 	carried *SecretRotationSchedule,
+	legacyNativeProviders []string,
 ) (int, error) {
 	offset := 0
 	excludedID := ""
@@ -1043,12 +1102,12 @@ func insertSecretRotationScheduleTickSnapshotTx(
 			        (tenant_id, identity_version, tenant_registration_event_id,
 			         tenant_registration_event_sequence,
 			         idempotency_key, ordinal, schedule_id, due_at,
-			         provider, secret_key, old_ref, interval_seconds, config_event_sequence)
-			 VALUES ($1, $2, $3, $4, $5, 1, $6::uuid, $7, $8, $9, $10, $11, $12)`,
+			         provider, secret_key, old_ref, interval_seconds, config_event_sequence, reference_provider_type)
+			 VALUES ($1, $2, $3, $4, $5, 1, $6::uuid, $7, $8, $9, $10, $11, $12, $13)`,
 			tenantID, SecretRotationScheduleIdentityVersion,
 			tenantRegistrationEventID, tenantRegistrationEventSequence,
 			idempotencyKey, carried.ID, carried.NextRunAt, carried.Provider,
-			carried.Key, carried.OldRef, carried.IntervalSeconds, carried.ConfigEventSequence); err != nil {
+			carried.Key, carried.OldRef, carried.IntervalSeconds, carried.ConfigEventSequence, carried.ReferenceProviderType); err != nil {
 			return 0, err
 		}
 		offset = 1
@@ -1057,12 +1116,16 @@ func insertSecretRotationScheduleTickSnapshotTx(
 	tag, err := tx.Exec(ctx,
 		`WITH ring AS (
 		    SELECT id, next_run_at, provider, secret_key, old_ref,
-		           interval_seconds, config_event_sequence,
+		           interval_seconds, config_event_sequence, reference_provider_type,
 		           CASE WHEN id > $4::uuid THEN 0 ELSE 1 END AS segment
 		      FROM secret_rotation_schedules
 		     WHERE tenant_id = $1 AND enabled AND next_run_at <= $3
 		       AND (config_event_sequence = 0 OR config_event_sequence > $10)
 		       AND ($5 = '' OR id <> NULLIF($5, '')::uuid)
+		       AND (reference_provider_type <> '' OR old_ref = 'none'
+		            OR (left(provider, 10) = 'connector:' AND length(provider) > 10)
+		            OR (left(provider, 14) = 'dynamic-lease:' AND length(provider) > 14)
+		            OR (provider = ANY($11::text[]) AND position('/' in old_ref) = 0))
 		), bounded AS (
 		    SELECT *, row_number() OVER (ORDER BY segment, id)::integer + $6 AS ordinal
 		      FROM ring
@@ -1073,14 +1136,14 @@ func insertSecretRotationScheduleTickSnapshotTx(
 		       (tenant_id, identity_version, tenant_registration_event_id,
 		        tenant_registration_event_sequence,
 		        idempotency_key, ordinal, schedule_id, due_at,
-		        provider, secret_key, old_ref, interval_seconds, config_event_sequence)
+		        provider, secret_key, old_ref, interval_seconds, config_event_sequence, reference_provider_type)
 		SELECT $1, $8, $9, $10, $2, ordinal, id, next_run_at, provider, secret_key, old_ref,
-		       interval_seconds, config_event_sequence
+		       interval_seconds, config_event_sequence, reference_provider_type
 		  FROM bounded
 		 ORDER BY ordinal`,
 		tenantID, idempotencyKey, dueThrough, startID, excludedID, offset, 500-offset,
 		SecretRotationScheduleIdentityVersion, tenantRegistrationEventID,
-		tenantRegistrationEventSequence)
+		tenantRegistrationEventSequence, legacyNativeProviders)
 	if err != nil {
 		return 0, err
 	}
@@ -1105,7 +1168,8 @@ func validateSecretRotationScheduleTickSnapshotTx(ctx context.Context, tx pgx.Tx
 			return fmt.Errorf("%w: started row is outside the immutable snapshot", ErrSecretRotationScheduleTickConflict)
 		}
 		row, err := getSecretRotationScheduleTickRowTx(ctx, tx, tick.TenantID, tick.IdempotencyKey, tick.Scanned+1)
-		if err != nil || !sameSecretRotationScheduleSnapshot(row, *tick.CurrentSchedule) {
+		if err != nil || !sameSecretRotationScheduleSnapshot(row, *tick.CurrentSchedule) ||
+			row.ReferenceProviderType != tick.CurrentSchedule.ReferenceProviderType {
 			return fmt.Errorf("%w: started row differs from immutable ordinal: %v", ErrSecretRotationScheduleTickConflict, err)
 		}
 	}
@@ -1131,14 +1195,14 @@ func getSecretRotationScheduleTickRowTx(
 	err := tx.QueryRow(ctx,
 		`SELECT schedule_id::text, tenant_id::text, identity_version,
 		        tenant_registration_event_id, tenant_registration_event_sequence,
-		        provider, secret_key, old_ref,
+		        provider, secret_key, old_ref, reference_provider_type,
 		        interval_seconds, config_event_sequence, due_at
 		   FROM secret_rotation_schedule_tick_rows
 		  WHERE tenant_id = $1 AND idempotency_key = $2 AND ordinal = $3`,
 		tenantID, idempotencyKey, ordinal).Scan(
 		&schedule.ID, &schedule.TenantID, &schedule.IdentityVersion,
 		&schedule.TenantRegistrationEventID, &schedule.TenantRegistrationEventSequence,
-		&schedule.Provider, &schedule.Key, &schedule.OldRef,
+		&schedule.Provider, &schedule.Key, &schedule.OldRef, &schedule.ReferenceProviderType,
 		&schedule.IntervalSeconds, &schedule.ConfigEventSequence, &schedule.NextRunAt)
 	schedule.Enabled = err == nil
 	return schedule, err
@@ -1209,7 +1273,8 @@ func (s *Store) StartSecretRotationScheduleTickRow(
 			}
 			expected, err := getSecretRotationScheduleTickRowTx(
 				ctx, tx, retained.TenantID, retained.IdempotencyKey, retained.Scanned+1)
-			if err != nil || !sameSecretRotationScheduleSnapshot(expected, schedule) {
+			if err != nil || !sameSecretRotationScheduleSnapshot(expected, schedule) ||
+				expected.ReferenceProviderType != schedule.ReferenceProviderType {
 				return fmt.Errorf("%w: row differs from immutable tick ordinal: %v", ErrSecretRotationScheduleTickConflict, err)
 			}
 			tag, err := tx.Exec(ctx,
@@ -1220,6 +1285,7 @@ func (s *Store) StartSecretRotationScheduleTickRow(
 			        current_interval_seconds = $9,
 			        current_config_event_sequence = $10,
 			        current_command_lease_token = $11,
+			        current_reference_provider_type = $14,
 			        updated_at = clock_timestamp()
 			  WHERE tenant_id = $1 AND idempotency_key = $2
 			    AND request_binding = $3 AND phase = 'ready'
@@ -1236,7 +1302,7 @@ func (s *Store) StartSecretRotationScheduleTickRow(
 				retained.TenantID, retained.IdempotencyKey, retained.RequestBinding,
 				schedule.ID, schedule.NextRunAt, schedule.Provider, schedule.Key,
 				schedule.OldRef, schedule.IntervalSeconds, schedule.ConfigEventSequence, commandLeaseToken,
-				ownerToken, ownerGeneration)
+				ownerToken, ownerGeneration, schedule.ReferenceProviderType)
 			if err != nil {
 				return err
 			}
@@ -1369,7 +1435,7 @@ func (s *Store) CompleteSecretRotationScheduleTickRow(
 	}
 	return s.completeSecretRotationScheduleTickRow(
 		ctx, tick, ownerToken, ownerGeneration, receipt, ran, scanned,
-		nil, commandRelease, leaseDuration)
+		nil, nil, commandRelease, leaseDuration)
 }
 
 // CompleteSecretRotationScheduleTickRowOutcome appends only the current row's
@@ -1388,7 +1454,17 @@ func (s *Store) CompleteSecretRotationScheduleTickRowOutcome(
 ) (SecretRotationScheduleTick, error) {
 	return s.completeSecretRotationScheduleTickRow(
 		ctx, tick, ownerToken, ownerGeneration, nil, 0, 0,
-		&outcome, commandRelease, leaseDuration)
+		&outcome, nil, commandRelease, leaseDuration)
+}
+
+// CompleteUnstartedSecretRotationScheduleTickRow records the exact deferred
+// or already-retained row without copying its reference into the live cursor.
+func (s *Store) CompleteUnstartedSecretRotationScheduleTickRow(
+	ctx context.Context, tick SecretRotationScheduleTick, ownerToken string, ownerGeneration int64,
+	schedule SecretRotationSchedule, outcome SecretRotationScheduleTickRowOutcome, leaseDuration time.Duration,
+) (SecretRotationScheduleTick, error) {
+	return s.completeSecretRotationScheduleTickRow(ctx, tick, ownerToken, ownerGeneration, nil, 0, 0,
+		&outcome, &schedule, nil, leaseDuration)
 }
 
 func (s *Store) completeSecretRotationScheduleTickRow(
@@ -1399,6 +1475,7 @@ func (s *Store) completeSecretRotationScheduleTickRow(
 	receipt []byte,
 	ran, scanned int,
 	outcome *SecretRotationScheduleTickRowOutcome,
+	unstarted *SecretRotationSchedule,
 	commandRelease *SecretRotationScheduleCommandLeaseRelease,
 	leaseDuration time.Duration,
 ) (SecretRotationScheduleTick, error) {
@@ -1430,6 +1507,7 @@ func (s *Store) completeSecretRotationScheduleTickRow(
 			if err := validateSecretRotationScheduleTickSnapshotTx(ctx, tx, retained); err != nil {
 				return err
 			}
+			phase := retained.Phase
 			if outcome == nil {
 				if err := validateSecretRotationScheduleTickProgress(retained, receipt, ran, scanned); err != nil {
 					return err
@@ -1437,6 +1515,26 @@ func (s *Store) completeSecretRotationScheduleTickRow(
 			} else {
 				if err := validateSecretRotationScheduleTickContinuation(retained, tick); err != nil {
 					return err
+				}
+				if unstarted != nil {
+					if phase != "ready" || retained.CurrentSchedule != nil || retained.Ran >= 50 || retained.Scanned >= retained.SnapshotCount {
+						return fmt.Errorf("%w: tick cannot consume an unstarted row", ErrSecretRotationScheduleTickConflict)
+					}
+					expected, err := getSecretRotationScheduleTickRowTx(ctx, tx, retained.TenantID, retained.IdempotencyKey, retained.Scanned+1)
+					if err != nil || !sameSecretRotationScheduleSnapshot(expected, *unstarted) ||
+						expected.ReferenceProviderType != unstarted.ReferenceProviderType {
+						return fmt.Errorf("%w: unstarted row differs from its exact ordinal", ErrSecretRotationScheduleTickConflict)
+					}
+					if len(outcome.Deferred) != 0 {
+						var deferral struct {
+							Reason string `json:"reason"`
+						}
+						if json.Unmarshal(outcome.Deferred, &deferral) != nil || deferral.Reason != SecretRotationScheduleReferenceReviewRequired {
+							return fmt.Errorf("%w: unstarted row has an unrelated deferral reason", ErrSecretRotationScheduleTickConflict)
+						}
+					}
+					retained.CurrentSchedule = &expected
+					retained.Phase = "row_started" // local validation only
 				}
 				var err error
 				receipt, ran, scanned, err = appendSecretRotationScheduleTickRowOutcome(retained, *outcome)
@@ -1455,13 +1553,15 @@ func (s *Store) completeSecretRotationScheduleTickRow(
 			    SET phase = 'ready', after_schedule_id = $4::uuid,
 			        current_schedule_id = NULL, current_due_at = NULL,
 			        current_provider = NULL, current_secret_key = NULL,
-			        current_old_ref = NULL, current_interval_seconds = NULL,
+			        current_old_ref = NULL, current_reference_provider_type = NULL, current_interval_seconds = NULL,
 			        current_config_event_sequence = NULL,
 			        current_command_lease_token = NULL,
-			        ran = $5, scanned = $6, receipt = $7::jsonb,
+			        ran = $5, scanned = $6,
+			        receipt = CASE WHEN reference_view_version = 0 THEN $7::jsonb ELSE receipt END,
+			        safe_receipt = CASE WHEN reference_view_version = 1 THEN $7::jsonb ELSE safe_receipt END,
 			        updated_at = clock_timestamp()
 			  WHERE tenant_id = $1 AND idempotency_key = $2 AND request_binding = $3
-			    AND phase = 'row_started' AND owner_token = $8 AND owner_generation = $9
+			    AND phase = $10 AND owner_token = $8 AND owner_generation = $9
 			    AND EXISTS (
 			        SELECT 1 FROM secret_rotation_schedule_scan_cursors AS cursor
 			         WHERE cursor.tenant_id = $1
@@ -1472,7 +1572,7 @@ func (s *Store) completeSecretRotationScheduleTickRow(
 			           AND cursor.lease_until > clock_timestamp()
 			    )`,
 				retained.TenantID, retained.IdempotencyKey, retained.RequestBinding,
-				retained.CurrentSchedule.ID, ran, scanned, receipt, ownerToken, ownerGeneration)
+				retained.CurrentSchedule.ID, ran, scanned, receipt, ownerToken, ownerGeneration, phase)
 			if err != nil {
 				return err
 			}
@@ -1571,10 +1671,12 @@ func (s *Store) FinalizeSecretRotationScheduleTick(
 			}
 			tag, err := tx.Exec(ctx,
 				`UPDATE secret_rotation_schedule_ticks
-			    SET phase = 'terminal', receipt = $4::jsonb,
+			    SET phase = 'terminal',
+			        receipt = CASE WHEN reference_view_version = 0 THEN $4::jsonb ELSE receipt END,
+			        safe_receipt = CASE WHEN reference_view_version = 1 THEN $4::jsonb ELSE safe_receipt END,
 			        current_schedule_id = NULL, current_due_at = NULL,
 			        current_provider = NULL, current_secret_key = NULL,
-			        current_old_ref = NULL, current_interval_seconds = NULL,
+			        current_old_ref = NULL, current_reference_provider_type = NULL, current_interval_seconds = NULL,
 			        current_config_event_sequence = NULL,
 			        current_command_lease_token = NULL,
 			        owner_token = '', terminal_http_status = $5,
@@ -1639,6 +1741,7 @@ func (s *Store) VerifySecretRotationScheduleTickTerminalTx(
 	tenantRegistrationEventSequence uint64,
 	httpStatus int,
 	body []byte,
+	sourceDigest string,
 ) error {
 	if tx == nil || tenantID == "" || idempotencyKey == "" || requestBinding == "" || len(body) == 0 {
 		return fmt.Errorf("%w: terminal cache verification requires exact authority and bytes", ErrSecretRotationScheduleTickConflict)
@@ -1662,12 +1765,32 @@ func (s *Store) VerifySecretRotationScheduleTickTerminalTx(
 		retained.TenantRegistrationEventID != tenantRegistrationEventID ||
 		retained.TenantRegistrationEventSequence != tenantRegistrationEventSequence ||
 		retained.RequestBinding != requestBinding || retained.Phase != "terminal" ||
-		retained.TerminalHTTPStatus == nil || *retained.TerminalHTTPStatus != httpStatus ||
-		!bytes.Equal(retained.TerminalBody, body) {
+		retained.TerminalHTTPStatus == nil || *retained.TerminalHTTPStatus != httpStatus {
 		return fmt.Errorf("%w: outer result differs from terminal scheduler receipt", ErrSecretRotationScheduleTickConflict)
 	}
 	if err := validateSecretRotationScheduleTickRetainedTerminal(retained); err != nil {
 		return err
+	}
+	if retained.ReferenceViewVersion != 0 {
+		if err := validateSecretRotationScheduleTickReferenceViewTx(ctx, tx, retained); err != nil {
+			return err
+		}
+	}
+	switch {
+	case sourceDigest == "":
+		if !bytes.Equal(retained.TerminalBody, body) {
+			return fmt.Errorf("%w: outer result differs from terminal scheduler receipt", ErrSecretRotationScheduleTickConflict)
+		}
+	case sourceDigest == SecretRotationScheduleTerminalReferenceSource(retained.TerminalBody):
+		view, changed, err := RenderSecretRotationScheduleTickReferenceViewTx(ctx, tx, tenantID, idempotencyKey, retained.TerminalBody)
+		if err != nil {
+			return err
+		}
+		if !changed || !bytes.Equal(view, body) {
+			return fmt.Errorf("%w: outer reference view differs from its exact terminal source", ErrSecretRotationScheduleTickConflict)
+		}
+	default:
+		return fmt.Errorf("%w: outer result has an invalid terminal source digest", ErrSecretRotationScheduleTickConflict)
 	}
 	return validateSecretRotationScheduleTickSnapshotTx(ctx, tx, retained)
 }

@@ -219,9 +219,9 @@ func (d *secretIntegrationOutboxDispatcher) Deliver(ctx context.Context, m orche
 		if d.staticRotation == nil {
 			return true, errors.New("server: static rotation worker is not configured")
 		}
-		var command projections.SecretStaticRotationQueued
-		if err := json.Unmarshal(m.Payload, &command); err != nil || command.ID == "" {
-			return true, errors.New("server: static rotation outbox payload is invalid")
+		command, err := d.bindStaticRotationOutbox(ctx, m)
+		if err != nil {
+			return true, err
 		}
 		return true, d.staticRotation(ctx, m.TenantID, command.ID, m.Attempts)
 	case m.Destination == store.AWSHoneyScanDestination:
@@ -274,9 +274,9 @@ func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.C
 		if d.staticRotationFailure == nil {
 			return true, errors.New("server: static rotation worker is not configured")
 		}
-		var command projections.SecretStaticRotationQueued
-		if err := json.Unmarshal(m.Payload, &command); err != nil || command.ID == "" {
-			return true, errors.New("server: terminal static rotation payload is invalid")
+		command, err := d.bindStaticRotationOutbox(ctx, m)
+		if err != nil {
+			return true, err
 		}
 		return true, d.staticRotationFailure(ctx, m.TenantID, command.ID)
 	case m.Destination == dynamicSecretIssueDestination:
@@ -317,25 +317,12 @@ func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.C
 		return true, d.appendAndProjectID(ctx, dynamicSecretEventID(m.TenantID, command.TenantEpoch, "provider-issue-failed", command.ID), m.TenantID, projections.EventDynamicSecretLeaseIssuanceFailed,
 			projections.DynamicSecretLeaseIssuanceFailure{TenantEpoch: record.TenantEpoch, ID: command.ID, Error: failure})
 	case m.Destination == dynamicSecretRevokeDestination:
-		var item dynsecret.RevokeItem
-		if err := json.Unmarshal(m.Payload, &item); err != nil || item.TenantEpoch == "" || item.LeaseID == "" {
-			return true, errors.New("server: terminal dynamic-secret revocation payload is invalid")
-		}
-		if d.store == nil {
-			return true, errors.New("server: terminal dynamic-secret revocation requires tenant epoch authority")
-		}
-		record, err := d.store.GetDynamicSecretLease(ctx, m.TenantID, item.LeaseID)
+		item, record, err := d.bindDynamicSecretRevokeOutbox(ctx, m)
 		if err != nil {
 			return true, err
 		}
-		if m.IdempotencyKey != store.DynamicSecretRevokeOutboxIdempotencyKeyForAttempt(item.TenantEpoch, item.LeaseID, item.AttemptID) ||
-			record.TenantEpoch != item.TenantEpoch || record.RevokeOutboxID == nil ||
-			*record.RevokeOutboxID != m.ID || record.Provider != item.Provider ||
-			record.BackendRef != item.BackendRef || record.State != store.DynamicSecretLeaseRevoked {
-			return true, errors.New("server: terminal dynamic-secret revocation does not match its projected command")
-		}
-		if record.RevocationStatus != store.DynamicSecretRevocationPending {
-			return true, nil
+		if settled, _, err := d.recoverDynamicSecretRevocationOutcome(ctx, m, item, record); err != nil || settled {
+			return true, err
 		}
 		outcomeID := item.LeaseID
 		if item.AttemptID != "" {
@@ -401,6 +388,40 @@ func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.C
 	default:
 		return false, nil
 	}
+}
+
+func (d *secretIntegrationOutboxDispatcher) bindStaticRotationOutbox(ctx context.Context, m orchestrator.Message) (store.SecretStaticRotationCommand, error) {
+	var command store.SecretStaticRotationCommand
+	var wire store.SecretStaticRotationDispatch
+	if d.store == nil || json.Unmarshal(m.Payload, &wire) != nil || wire.ID == "" || wire.TenantEpoch == "" {
+		return command, errors.New("server: static rotation dispatch lacks its command identity")
+	}
+	legacy := wire.DispatchVersion == 0
+	if !legacy {
+		canonical, err := json.Marshal(wire)
+		if err != nil || wire.DispatchVersion != 2 || !bytes.Equal(canonical, m.Payload) {
+			return command, errors.New("server: static rotation dispatch shape is invalid")
+		}
+	}
+	command, err := d.store.GetSecretStaticRotationCommand(ctx, m.TenantID, wire.ID)
+	if err != nil {
+		return command, err
+	}
+	if command.TenantEpoch != wire.TenantEpoch || command.OutboxID != m.ID ||
+		m.Destination != store.SecretStaticRotationDestination ||
+		m.IdempotencyKey != store.SecretStaticRotationOutboxIdempotencyKey(wire.TenantEpoch, wire.ID) ||
+		(m.EffectLane != "" && m.EffectLane != "dynsecret.provider:"+command.Provider) {
+		return command, errors.New("server: static rotation dispatch does not match its projected command")
+	}
+	if legacy {
+		var old projections.SecretStaticRotationQueued
+		if json.Unmarshal(m.Payload, &old) != nil || old.Provider != command.Provider || old.Key != command.Key ||
+			old.OldRef != command.OldRef || old.RequestBinding != command.RequestBinding ||
+			old.ExpectedVersion != command.ExpectedVersion || old.IdempotencyKeyDigest != command.IdempotencyKeyDigest {
+			return command, errors.New("server: legacy static rotation dispatch differs from its source")
+		}
+	}
+	return command, d.store.ValidateStaticRotationOutboxClaim(ctx, command, m.Payload, legacy)
 }
 
 // awsSTSIndeterminateIssue is the terminal text of an AWS STS issuance whose
@@ -560,16 +581,24 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 		return fmt.Errorf("server: lock generated dynamic-secret credential: %w", err)
 	}
 	defer locked.Destroy()
+	if err := dynsecret.ValidateIssuedHostedReference(provider, command.Role, credential.BackendRef, locked.Bytes()); err != nil {
+		return err
+	}
 	sealedCredential, err := sealTenantValue(ctx, d.tenantCrypto, d.kek, m.TenantID, locked.Bytes(), dynamicSecretCredentialAAD(m.TenantID, command.ID, command.Provider))
 	if err != nil {
 		return fmt.Errorf("server: seal dynamic-secret credential result: %w", err)
 	}
-	return d.appendAndProjectID(ctx, issuedEventID, m.TenantID, projections.EventDynamicSecretLeaseIssued, projections.DynamicSecretLeaseIssued{
+	issued := projections.DynamicSecretLeaseIssued{
 		TenantEpoch: command.TenantEpoch, ID: command.ID, IdempotencyKey: command.IdempotencyKey,
 		RequestBinding: command.RequestBinding, Provider: command.Provider,
 		Role: command.Role, BackendRef: credential.BackendRef, SealedCredential: sealedCredential,
 		ExpiresAt: command.ExpiresAt, HardExpiresAt: command.HardExpiresAt,
-	})
+	}
+	if kind := dynsecret.HostedReferenceProviderType(provider); kind != "" {
+		return d.appendAndProjectID(ctx, issuedEventID, m.TenantID, projections.EventDynamicSecretLeaseIssued,
+			projections.DynamicSecretLeaseIssuedV3{DynamicSecretLeaseIssued: issued, HostedProviderType: kind})
+	}
+	return d.appendAndProjectID(ctx, issuedEventID, m.TenantID, projections.EventDynamicSecretLeaseIssued, issued)
 }
 
 // verifyCanonicalDynamicSecretIssue binds an old outbox row to its immutable issue event
@@ -754,12 +783,14 @@ func (d *secretIntegrationOutboxDispatcher) recoverDynamicSecretIssued(ctx conte
 		expectedActor = &actor
 	}
 	if canonical.ID != eventID || canonical.Type != projections.EventDynamicSecretLeaseIssued ||
-		canonical.TenantID != tenantID || canonical.SchemaVersion != projections.DynamicSecretEventSchemaVersion ||
+		canonical.TenantID != tenantID ||
+		(canonical.SchemaVersion != projections.DynamicSecretEventSchemaVersion &&
+			canonical.SchemaVersion != projections.DynamicSecretHostedIssuedSchemaVersion) ||
 		canonical.Time.IsZero() || !reflect.DeepEqual(canonical.Actor, expectedActor) {
 		return true, fmt.Errorf("%w: canonical dynamic-secret issued event envelope differs", store.ErrIdempotencyConflict)
 	}
-	var issued projections.DynamicSecretLeaseIssued
-	if err := json.Unmarshal(canonical.Data, &issued); err != nil ||
+	issued, _, err := projections.DecodeDynamicSecretIssuedSource(canonical)
+	if err != nil ||
 		issued.TenantEpoch != command.TenantEpoch || issued.ID != command.ID ||
 		issued.IdempotencyKey != command.IdempotencyKey || issued.RequestBinding != command.RequestBinding ||
 		issued.Provider != command.Provider || issued.Role != command.Role || issued.BackendRef == "" ||
@@ -830,37 +861,113 @@ func dynamicSecretPersistedTimeEqual(persisted, command time.Time) bool {
 	return persisted.UTC().Truncate(time.Microsecond).Equal(command.UTC().Truncate(time.Microsecond))
 }
 
-func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Context, m orchestrator.Message) error {
+func (d *secretIntegrationOutboxDispatcher) bindDynamicSecretRevokeOutbox(
+	ctx context.Context, m orchestrator.Message,
+) (store.DynamicSecretRevokeOutboxBinding, store.DynamicSecretLease, error) {
+	var lease store.DynamicSecretLease
+	var binding store.DynamicSecretRevokeOutboxBinding
 	if d.store == nil || d.log == nil {
-		return errors.New("server: dynamic-secret revocation requires store, event log, and tenant epoch authority")
+		return binding, lease, errors.New("server: dynamic-secret revocation requires store, event log, and tenant epoch authority")
 	}
-	var item dynsecret.RevokeItem
-	if err := json.Unmarshal(m.Payload, &item); err != nil {
-		return fmt.Errorf("server: decode dynamic-secret revocation: %w", err)
+	item, err := store.DecodeDynamicSecretRevokeOutboxBinding(m.Payload)
+	if err != nil {
+		return binding, lease, err
 	}
-	if item.TenantEpoch == "" || item.LeaseID == "" || item.Provider == "" || item.BackendRef == "" {
-		return errors.New("server: dynamic-secret revocation payload is incomplete")
+	if m.Destination != dynamicSecretRevokeDestination ||
+		m.IdempotencyKey != store.DynamicSecretRevokeOutboxIdempotencyKeyForAttempt(item.TenantEpoch, item.LeaseID, item.AttemptID) ||
+		(m.EffectLane != "" && m.EffectLane != "dynsecret.provider:"+item.Provider) {
+		return binding, lease, errors.New("server: dynamic-secret revocation outbox identity is mismatched")
 	}
-	if m.IdempotencyKey != store.DynamicSecretRevokeOutboxIdempotencyKeyForAttempt(item.TenantEpoch, item.LeaseID, item.AttemptID) {
-		return errors.New("server: dynamic-secret revocation outbox identity is mismatched")
+	_, row, err := d.store.GetDynamicSecretRevocationOutboxRow(ctx, m.TenantID, m.ID)
+	defer secret.Wipe(row.Payload)
+	if err != nil {
+		return binding, lease, err
+	}
+	if row.Destination != m.Destination || row.IdempotencyKey != m.IdempotencyKey ||
+		(row.EffectLane != "" && m.EffectLane != "" && row.EffectLane != m.EffectLane) || !bytes.Equal(row.Payload, m.Payload) {
+		return binding, lease, errors.New("server: dynamic-secret revocation claim differs from its outbox row")
 	}
 	record, err := d.store.GetDynamicSecretLease(ctx, m.TenantID, item.LeaseID)
 	if err != nil {
-		return fmt.Errorf("server: load dynamic-secret revocation binding: %w", err)
+		return binding, lease, fmt.Errorf("server: load dynamic-secret revocation binding: %w", err)
 	}
 	if record.TenantEpoch != item.TenantEpoch || record.State != store.DynamicSecretLeaseRevoked ||
-		record.RevokeOutboxID == nil || *record.RevokeOutboxID != m.ID ||
-		record.Provider != item.Provider || record.BackendRef != item.BackendRef {
-		return errors.New("server: dynamic-secret revocation outbox does not match its projected lease")
+		record.RevokeOutboxID == nil ||
+		record.Provider != item.Provider || record.BackendRef == "" ||
+		(item.RefSource == "" && record.BackendRef != item.BackendRef) {
+		return binding, lease, errors.New("server: dynamic-secret revocation outbox does not match its projected lease")
+	}
+	return item, record, nil
+}
+
+func (d *secretIntegrationOutboxDispatcher) recoverDynamicSecretRevocationOutcome(
+	ctx context.Context, m orchestrator.Message, item store.DynamicSecretRevokeOutboxBinding, record store.DynamicSecretLease,
+) (settled, failed bool, err error) {
+	current := record.RevokeOutboxID != nil && *record.RevokeOutboxID == m.ID
+	retained, found, err := retainedDynamicSecretRevocationOutcome(ctx, d.log, m.TenantID, item)
+	if err != nil {
+		return false, false, err
+	}
+	if !current {
+		if !found || retained.Type != projections.EventDynamicSecretLeaseRevocationFailed || retained.Sequence < 2 {
+			return false, false, errors.New("server: superseded revoke attempt has no exact retained failure")
+		}
+		request, previousAttempt, err := findRetainedDynamicSecretRevocationIntent(ctx, d.log, record, 1, retained.Sequence-1)
+		if err != nil {
+			return false, false, err
+		}
+		if request.Sequence == 0 || previousAttempt != item.AttemptID {
+			return false, false, store.ErrIdempotencyConflict
+		}
+		if err := projections.ValidateRetainedDynamicSecretRevocationSource(ctx, d.log, request); err != nil {
+			return false, false, err
+		}
+		return true, true, nil
 	}
 	switch record.RevocationStatus {
 	case store.DynamicSecretRevocationCompleted:
-		return nil
+		if found {
+			var outcome projections.DynamicSecretLeaseRevocationCompleted
+			if retained.Type != projections.EventDynamicSecretLeaseRevocationCompleted ||
+				json.Unmarshal(retained.Data, &outcome) != nil || record.RevocationMethod != outcome.Method ||
+				record.RevocationCompletedAt == nil || !dynamicSecretPersistedTimeEqual(*record.RevocationCompletedAt, retained.Time) {
+				return false, false, store.ErrIdempotencyConflict
+			}
+		}
+		return true, false, nil
 	case store.DynamicSecretRevocationFailed:
-		return errors.New("server: refusing provider call for failed dynamic-secret revocation")
+		if found {
+			var outcome projections.DynamicSecretLeaseFailure
+			if retained.Type != projections.EventDynamicSecretLeaseRevocationFailed ||
+				json.Unmarshal(retained.Data, &outcome) != nil || record.LastError != outcome.Error ||
+				!dynamicSecretPersistedTimeEqual(record.UpdatedAt, retained.Time) {
+				return false, false, store.ErrIdempotencyConflict
+			}
+		}
+		return true, true, nil
 	case store.DynamicSecretRevocationPending:
+		if !found {
+			return false, false, nil
+		}
+		if err := projections.New(d.store).Apply(ctx, retained); err != nil {
+			return false, false, err
+		}
+		return true, retained.Type == projections.EventDynamicSecretLeaseRevocationFailed, nil
 	default:
-		return fmt.Errorf("server: dynamic-secret revocation has invalid projected status %q", record.RevocationStatus)
+		return false, false, errors.New("server: dynamic-secret revocation has an invalid projected status")
+	}
+}
+
+func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Context, m orchestrator.Message) error {
+	item, record, err := d.bindDynamicSecretRevokeOutbox(ctx, m)
+	if err != nil {
+		return err
+	}
+	if settled, failed, err := d.recoverDynamicSecretRevocationOutcome(ctx, m, item, record); err != nil || settled {
+		if err == nil && failed {
+			return errors.New("server: refusing provider call for failed dynamic-secret revocation")
+		}
+		return err
 	}
 	outcomeID := item.LeaseID
 	if item.AttemptID != "" {
@@ -868,25 +975,19 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Cont
 	}
 	completedEventID := dynamicSecretEventID(
 		m.TenantID, item.TenantEpoch, "provider-revocation-completed", outcomeID)
-	if _, found, err := d.log.EventByID(ctx, completedEventID); err != nil {
-		return err
-	} else if found {
-		err := d.appendAndProjectID(ctx, completedEventID, m.TenantID,
-			projections.EventDynamicSecretLeaseRevocationCompleted,
-			projections.DynamicSecretLeaseRevocationCompleted{
-				TenantEpoch: item.TenantEpoch, ID: item.LeaseID, AttemptID: item.AttemptID,
-			})
-		return err
-	}
 	for _, provider := range d.dynamicProvidersForTenant(m.TenantID) {
 		if provider.Name() == item.Provider {
-			method, err := d.revokeDynamicSecretAtProvider(ctx, m.TenantID, provider, record, item.BackendRef)
+			reference, err := d.dynamicSecretRevokeReference(ctx, m.TenantID, provider, record)
+			if err != nil {
+				return err
+			}
+			method, err := d.revokeDynamicSecretAtProvider(ctx, m.TenantID, provider, record, reference)
 			if err != nil {
 				if errors.Is(err, dynsecret.ErrNativeExpiryPending) {
 					// The provider did no remote I/O. Keep revocation visibly
 					// pending until the credential's own expiry, without using
 					// the retry budget or claiming early invalidation.
-					if expiration, ok := dynsecret.NativeExpiration(item.BackendRef); ok {
+					if expiration, ok := dynsecret.NativeExpiration(reference); ok {
 						return orchestrator.DeferDeliveryUntil(err, expiration)
 					}
 					return orchestrator.DeferDelivery(err)
@@ -1744,6 +1845,9 @@ func (d *secretIntegrationOutboxDispatcher) appendAndProjectID(ctx context.Conte
 	candidate := events.Event{
 		ID: eventID, Type: eventType, TenantID: tenantID,
 		SchemaVersion: dynamicSecretEventSchemaVersion(eventType), Data: data,
+	}
+	if _, ok := payload.(projections.DynamicSecretLeaseIssuedV3); ok && eventType == projections.EventDynamicSecretLeaseIssued {
+		candidate.SchemaVersion = projections.DynamicSecretHostedIssuedSchemaVersion
 	}
 	if actor, ok := events.ActorFromContext(ctx); ok {
 		candidate.Actor = &actor

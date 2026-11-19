@@ -641,11 +641,13 @@ func TestSecretRotationScheduleTickRecoveredBudgetCannotExceedBoundsAUD113(t *te
 			         idempotency_key, ordinal, schedule_id, due_at,
 			         provider, secret_key, old_ref, interval_seconds, config_event_sequence)
 			 SELECT $1, 3, $2, $3, $4, ordinal,
-			        ('00000000-0000-4000-8000-' || lpad(ordinal::text, 12, '0'))::uuid,
-			        $5, 'connector:ci', 'rotation/fixture', 'version:1', 3600, 2
+			        (CASE WHEN ordinal <= 49 THEN '11310000-0000-4000-8000-'
+			              ELSE '00000000-0000-4000-8000-' END || lpad(ordinal::text, 12, '0'))::uuid,
+			        CASE WHEN ordinal <= 49 THEN $5::timestamptz - (ordinal + 1) * interval '1 minute'
+			             ELSE $5::timestamptz - interval '1 hour' END, 'connector:ci', 'rotation/fixture', 'version:1', 3600, 2
 			   FROM generate_series(1, 499) AS ordinal`,
 			tenantA, testRotationTenantRegistrationID, testRotationTenantRegistrationSequence,
-			key, cutoff.Add(-time.Hour)); err != nil {
+			key, cutoff); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx,
@@ -963,5 +965,224 @@ func TestSecretRotationScheduleCommandLeaseUsesPostgresClockAndExactAggregateTok
 		ctx, command, aggregateToken, 30*time.Second, noPendingSecretRotationControlForStoreTest)
 	if err != nil || !acquired || takenOver.LeaseToken != aggregateToken {
 		t.Fatalf("expired command lease takeover=%+v acquired=%t err=%v", takenOver, acquired, err)
+	}
+}
+
+// CR-663: the original ordered progress remains authoritative while an old
+// static reference disappears from subsequent writes and outgoing responses.
+func TestSecretRotationScheduleTickResumesLegacyReferencePrefix(t *testing.T) {
+	for _, replaceKey := range []bool{false, true} {
+		name := "same-key"
+		if replaceKey {
+			name = "new-key"
+		}
+		t.Run(name, func(t *testing.T) {
+			s := newStore(t)
+			seedTwoTenants(t, s)
+			seedRotationTickRegistration(t, s, tenantA)
+			ctx := t.Context()
+			const key = "fixture-legacy-tick"
+			const binding = "fixture-legacy-binding"
+			const id = "11300000-0000-4000-8000-000000000091"
+			const marker = "unlimited/fixture-legacy-reference"
+			dueAt := time.Now().UTC().Add(-time.Minute).Truncate(time.Microsecond)
+			seedSecretRotationSchedule(t, s, store.SecretRotationSchedule{
+				ID: id, TenantID: tenantA, Name: "legacy-reference", Provider: "connector:fixture",
+				Key: "rotation/fixture", OldRef: "version:1", IntervalSeconds: 3600, Enabled: true,
+				NextRunAt: dueAt, CreatedAt: dueAt, UpdatedAt: dueAt,
+			})
+			tick, state, err := s.ClaimSecretRotationScheduleTick(ctx, tenantA, key, binding,
+				testRotationTenantRegistrationID, testRotationTenantRegistrationSequence,
+				"fixture-owner-one", "fixture-child-one", time.Minute)
+			if err != nil || state != store.SecretRotationScheduleTickAcquired {
+				t.Fatalf("claim tick: state=%s err=%v", state, err)
+			}
+			snapshot, err := s.GetSecretRotationScheduleTickRow(ctx, tenantA, key, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tick, err = s.StartSecretRotationScheduleTickRow(ctx, tick, tick.OwnerToken, tick.OwnerGeneration,
+				snapshot, "fixture-child-one", time.Minute)
+			if err != nil {
+				t.Fatal(err)
+			}
+			runID := orchestrator.SecretRotationScheduleRunID(tenantA, testRotationTenantRegistrationSequence, id, dueAt)
+			run := marshalRotationTickRun(t, id, runID, dueAt, "queued")
+			progress := rotationTickReceiptFixture{Ran: 1, Scanned: 1, Runs: []json.RawMessage{run}}
+			if _, err := s.CompleteSecretRotationScheduleTickRow(ctx, tick, tick.OwnerToken, tick.OwnerGeneration,
+				marshalRotationTickReceipt(t, progress), 1, 1, nil, time.Minute); err != nil {
+				t.Fatal(err)
+			}
+			progress.Runs[0] = bytes.ReplaceAll(run, []byte(`"version:1"`), []byte(`"`+marker+`"`))
+			original := marshalRotationTickReceipt(t, progress)
+			if err := s.WithTenantProjection(ctx, tenantA, func(tx pgx.Tx) error {
+				if _, err := tx.Exec(ctx, `UPDATE secret_rotation_schedule_tick_rows SET provider = 'fixture-static', old_ref = $3
+					WHERE tenant_id = $1 AND idempotency_key = $2`, tenantA, key, marker); err != nil {
+					return err
+				}
+				if _, err := tx.Exec(ctx, `UPDATE secret_rotation_schedule_ticks SET receipt = $3::jsonb
+					WHERE tenant_id = $1 AND idempotency_key = $2`, tenantA, key, original); err != nil {
+					return err
+				}
+				_, err := tx.Exec(ctx, `UPDATE secret_rotation_schedule_scan_cursors
+					SET lease_until = clock_timestamp() - interval '1 second' WHERE tenant_id = $1`, tenantA)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			nextKey := key
+			if replaceKey {
+				nextKey = "fixture-next-tick"
+			}
+			recovered, state, err := s.ClaimSecretRotationScheduleTick(ctx, tenantA, nextKey, binding,
+				testRotationTenantRegistrationID, testRotationTenantRegistrationSequence,
+				"fixture-owner-two", "fixture-child-two", time.Minute)
+			if err != nil || state != store.SecretRotationScheduleTickAcquired {
+				t.Fatalf("restore expired aggregation: state=%s err=%v", state, err)
+			}
+			old, err := s.GetSecretRotationScheduleTick(ctx, tenantA, key)
+			if err != nil || old.ReferenceViewVersion != 1 || old.Ran != 1 || old.Scanned != 1 ||
+				!rotationTickJSONEqual(old.OriginalReceipt, original) || !bytes.Contains(old.Receipt, []byte(runID)) ||
+				bytes.Contains(old.Receipt, []byte(marker)) || bytes.Contains(old.Receipt, []byte("version:2")) {
+				t.Fatalf("old receipt prefix was rewritten or copied: %v", err)
+			}
+			if replaceKey {
+				if old.TerminalHTTPStatus == nil || *old.TerminalHTTPStatus != 503 ||
+					bytes.Contains(old.TerminalBody, []byte(marker)) || !bytes.Contains(old.TerminalBody, []byte(runID)) {
+					t.Fatal("expired tick did not finalize from its safe progress")
+				}
+				return
+			}
+			var safe rotationTickReceiptFixture
+			if err := json.Unmarshal(recovered.Receipt, &safe); err != nil {
+				t.Fatal(err)
+			}
+			safe.Complete = true
+			terminal, err := s.FinalizeSecretRotationScheduleTick(ctx, recovered, recovered.OwnerToken,
+				recovered.OwnerGeneration, 200, marshalRotationTickReceipt(t, safe), nil)
+			if err != nil || bytes.Contains(terminal.TerminalBody, []byte(marker)) || !bytes.Contains(terminal.TerminalBody, []byte(runID)) {
+				t.Fatalf("resumed tick lost the stable safe prefix: %v", err)
+			}
+		})
+	}
+}
+
+func TestSecretRotationScheduleTickDefersUnstartedHistoricalReference(t *testing.T) {
+	s := newStore(t)
+	seedTwoTenants(t, s)
+	seedRotationTickRegistration(t, s, tenantA)
+	ctx := t.Context()
+	const key = "fixture-unstarted-tick"
+	const id = "11300000-0000-4000-8000-000000000092"
+	const oldRef = "unlimited/fixture-unproved-predecessor"
+	dueAt := time.Now().UTC().Add(-time.Minute).Truncate(time.Microsecond)
+	seedSecretRotationSchedule(t, s, store.SecretRotationSchedule{
+		ID: id, TenantID: tenantA, Name: "unstarted-reference", Provider: "connector:fixture",
+		Key: "rotation/fixture", OldRef: "version:1", IntervalSeconds: 3600, Enabled: true,
+		NextRunAt: dueAt, CreatedAt: dueAt, UpdatedAt: dueAt,
+	})
+	tick, state, err := s.ClaimSecretRotationScheduleTick(ctx, tenantA, key, "fixture-binding",
+		testRotationTenantRegistrationID, testRotationTenantRegistrationSequence,
+		"fixture-owner", "fixture-child", time.Minute)
+	if err != nil || state != store.SecretRotationScheduleTickAcquired {
+		t.Fatalf("claim tick: state=%s err=%v", state, err)
+	}
+	if err := s.WithTenantProjection(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE secret_rotation_schedule_tick_rows SET provider = 'fixture-static', old_ref = $3
+			WHERE tenant_id = $1 AND idempotency_key = $2`, tenantA, key, oldRef)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := s.GetSecretRotationScheduleTickRow(ctx, tenantA, key, 1)
+	if err != nil || expected.OldRef != oldRef {
+		t.Fatalf("restore historical work membership: %v", err)
+	}
+	deferred := func(reason string) store.SecretRotationScheduleTickRowOutcome {
+		return store.SecretRotationScheduleTickRowOutcome{Deferred: json.RawMessage(fmt.Sprintf(
+			`{"schedule_id":%q,"reason":%q,"due_at":%q}`, id, reason, dueAt.Format(time.RFC3339Nano)))}
+	}
+	if _, err := s.CompleteUnstartedSecretRotationScheduleTickRow(ctx, tick, tick.OwnerToken, tick.OwnerGeneration,
+		expected, deferred("approval_pending"), time.Minute); !errors.Is(err, store.ErrSecretRotationScheduleTickConflict) {
+		t.Fatalf("unstarted reference review accepted unrelated deferral: %v", err)
+	}
+	wrongRevision := expected
+	wrongRevision.ConfigEventSequence++
+	if _, err := s.CompleteUnstartedSecretRotationScheduleTickRow(ctx, tick, tick.OwnerToken, tick.OwnerGeneration,
+		wrongRevision, deferred(store.SecretRotationScheduleReferenceReviewRequired), time.Minute); !errors.Is(err, store.ErrSecretRotationScheduleTickConflict) {
+		t.Fatalf("unstarted transition accepted a different frozen revision: %v", err)
+	}
+	completed, err := s.CompleteUnstartedSecretRotationScheduleTickRow(ctx, tick, tick.OwnerToken, tick.OwnerGeneration,
+		expected, deferred(store.SecretRotationScheduleReferenceReviewRequired), time.Minute)
+	if err != nil || completed.Phase != "ready" || completed.CurrentSchedule != nil || completed.Scanned != 1 || completed.Ran != 0 ||
+		bytes.Contains(completed.Receipt, []byte(oldRef)) || !bytes.Contains(completed.Receipt, []byte(store.SecretRotationScheduleReferenceReviewRequired)) {
+		t.Fatalf("unstarted transition must record only one safe deferral: %v", err)
+	}
+	var copies int
+	if err := s.SystemPool().QueryRow(ctx, `SELECT count(*) FROM secret_rotation_schedule_commands
+		WHERE tenant_id = $1 AND tick_idempotency_key = $2`, tenantA, key).Scan(&copies); err != nil || copies != 0 {
+		t.Fatalf("fenced unstarted row created a child command: count=%d err=%v", copies, err)
+	}
+}
+
+func TestSecretRotationScheduleExpiredTickDoesNotCarryFencedStartedRow(t *testing.T) {
+	s := newStore(t)
+	seedTwoTenants(t, s)
+	seedRotationTickRegistration(t, s, tenantA)
+	ctx := t.Context()
+	const oldKey = "fixture-expired-tick"
+	const nextKey = "fixture-new-tick"
+	const id = "11300000-0000-4000-8000-000000000093"
+	const marker = "unlimited/fixture-unproved-current-reference"
+	dueAt := time.Now().UTC().Add(-time.Minute).Truncate(time.Microsecond)
+	seedSecretRotationSchedule(t, s, store.SecretRotationSchedule{
+		ID: id, TenantID: tenantA, Name: "expired-reference", Provider: "connector:fixture",
+		Key: "rotation/fixture", OldRef: "version:1", IntervalSeconds: 3600, Enabled: true,
+		NextRunAt: dueAt, CreatedAt: dueAt, UpdatedAt: dueAt,
+	})
+	tick, state, err := s.ClaimSecretRotationScheduleTick(ctx, tenantA, oldKey, "fixture-binding",
+		testRotationTenantRegistrationID, testRotationTenantRegistrationSequence,
+		"fixture-owner-one", "fixture-child-one", time.Minute)
+	if err != nil || state != store.SecretRotationScheduleTickAcquired {
+		t.Fatalf("claim original work: state=%s err=%v", state, err)
+	}
+	row, err := s.GetSecretRotationScheduleTickRow(ctx, tenantA, oldKey, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.StartSecretRotationScheduleTickRow(ctx, tick, tick.OwnerToken, tick.OwnerGeneration, row,
+		"fixture-child-one", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WithTenantProjection(ctx, tenantA, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE secret_rotation_schedule_tick_rows SET provider='fixture-static', old_ref=$3
+			WHERE tenant_id=$1 AND idempotency_key=$2`, tenantA, oldKey, marker); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE secret_rotation_schedule_ticks SET current_provider='fixture-static', current_old_ref=$3
+			WHERE tenant_id=$1 AND idempotency_key=$2`, tenantA, oldKey, marker); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `UPDATE secret_rotation_schedule_scan_cursors
+			SET lease_until=clock_timestamp()-interval '1 second' WHERE tenant_id=$1`, tenantA)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	next, state, err := s.ClaimSecretRotationScheduleTick(ctx, tenantA, nextKey, "fixture-other-binding",
+		testRotationTenantRegistrationID, testRotationTenantRegistrationSequence,
+		"fixture-owner-two", "fixture-child-two", time.Minute)
+	if err != nil || state != store.SecretRotationScheduleTickAcquired || next.SnapshotCount != 1 {
+		t.Fatalf("new work could not retain its own eligible snapshot: state=%s count=%d err=%v", state, next.SnapshotCount, err)
+	}
+	nextRow, err := s.GetSecretRotationScheduleTickRow(ctx, tenantA, nextKey, 1)
+	if err != nil || nextRow.OldRef != "version:1" || nextRow.Provider != "connector:fixture" {
+		t.Fatalf("new work absorbed the expired fenced tuple: %v", err)
+	}
+	prior, err := s.GetSecretRotationScheduleTick(ctx, tenantA, oldKey)
+	if err != nil || prior.TerminalHTTPStatus == nil || *prior.TerminalHTTPStatus != 503 || prior.Scanned != 1 ||
+		!bytes.Contains(prior.TerminalBody, []byte(store.SecretRotationScheduleReferenceReviewRequired)) ||
+		bytes.Contains(prior.TerminalBody, []byte(marker)) {
+		t.Fatalf("expired fenced row did not retain a safe deferral: %v", err)
 	}
 }

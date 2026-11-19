@@ -456,8 +456,8 @@ not this file.
 | `internal/projections/discovery_secret_move.go:26` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/projections.go:333` | an event type name, not a credential (CWE-798) |
 | `internal/projections/secret_deliveries.go:16` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/projections/secret_integrations.go:228` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/projections/secret_integrations.go:230` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_integrations.go:237` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_integrations.go:239` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_migration.go:21` | event type name, no credential (CWE-798) |
 | `internal/projections/secret_migration.go:22` | event type name, no credential (CWE-798) |
 | `internal/projections/secret_migration.go:23` | event type name, no credential (CWE-798) |
@@ -788,7 +788,7 @@ not this file.
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_access_explain_served_test.go:100` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
-| `internal/server/secret_integrations.go:1723` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1731` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:140` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:156` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
@@ -927,18 +927,18 @@ not this file.
 | `internal/store/decoy_secret_privacy_test.go:123` | a decoy names a fabricated test secret, no credential value (CWE-798) |
 | `internal/store/discovery_secret_move.go:58` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/discovery_secret_move.go:61` | SQL column list, no credential (CWE-798) */ `m.finding_id::text, m.secret_name, m.secret_version, m.moved_by, m.moved_at, m.residue, |
-| `internal/store/dynamic_secret_lease.go:671` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
+| `internal/store/dynamic_secret_lease.go:684` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
 | `internal/store/honey_token.go:76` | SQL column names only; this string contains no credential material. |
 | `internal/store/migration_0359_content_test.go:50` | a query naming the hash column; no credential value (CWE-798) |
 | `internal/store/migration_0435_content_test.go:50` | a query naming the hash column; no credential value (CWE-798) |
 | `internal/store/privacy_erasure_preparation.go:28` | this is a bounded privacy evidence label, not a credential. |
 | `internal/store/privacy_erasure_preparation.go:177` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_migrations.go:223` | SQL column list, no credential (CWE-798) */ `id::text, project, state, digest, plan, accepted_open, created_by, created_at, staged_at, staged_by, |
-| `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
+| `internal/store/secret_rotation_schedule_privacy.go:722` | SQL authority columns are names, not embedded credentials (CWE-798). |
 | `internal/store/secret_scoped_sync.go:21` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/secret_scoped_sync.go:395` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/secret_scoped_sync.go:437` | SQL column list, no credential (CWE-798) |
-| `internal/store/secret_static_rotation.go:359` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
+| `internal/store/secret_static_rotation.go:429` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
 | `internal/store/secret_store.go:329` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
 | `internal/store/tenant_name_held.go:43` | table names and read queries, not credentials (CWE-798) |
@@ -1374,7 +1374,7 @@ not this file.
 | `internal/orchestrator/main_test.go:74` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/orchestrator/operation_approvals.go:440` | a tombstone version is positive (CHECK version > 0) (CWE-190). |
 | `internal/orchestrator/operation_approvals.go:450` | a negative stored version is classified as drift before conversion (CWE-190). |
-| `internal/orchestrator/secret_rotation.go:574` | the positive int64 value always fits exactly in uint64 (CWE-190). |
+| `internal/orchestrator/secret_rotation.go:628` | the positive int64 value always fits exactly in uint64 (CWE-190). |
 | `internal/orchestrator/tenant_registration_test.go:242` | bounded test sequence. |
 | `internal/orchestrator/tenant_registration_test.go:323` | test event sequence is PostgreSQL bigint-bounded. |
 | `internal/outboxgc/outboxgc_test.go:37` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1391,8 +1391,8 @@ not this file.
 | `internal/projections/projections.go:7673` | checked against MaxInt64 above. |
 | `internal/projections/projections.go:7707` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
-| `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
+| `internal/projections/secret_integrations.go:250` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
+| `internal/projections/secret_integrations.go:257` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations_test.go:659` | embedded JetStream fixture sequences are bounded far below MaxInt64 (CWE-190). |
 | `internal/projections/secret_integrations_test.go:812` | fixture sequence is tiny and asserted positive above. |
 | `internal/projections/secret_sync_lifecycle.go:318` | observe checked the explicit PostgreSQL bigint bound. |
@@ -1444,8 +1444,8 @@ not this file.
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:482` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:256` | bounded small ints from config (CWE-190) |
-| `internal/server/secret_integrations_outbox.go:1159` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:1163` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:1260` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:1264` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_sync_source_sequence_test.go:56` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:67` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:72` | this fixture appends exactly two events. |
@@ -1599,15 +1599,15 @@ not this file.
 | `internal/store/rehearsals.go:64` | bounded above (CWE-190) |
 | `internal/store/scanned_certificate_chain.go:23` | event sequences fit int64 (CWE-190) |
 | `internal/store/secret_projects.go:74` | bounded to int64 above (CWE-190) |
-| `internal/store/secret_rotation_schedule.go:257` | checked against MaxInt64 above (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:270` | checked against MaxInt64 above (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:297` | checked against MaxInt64 above (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:310` | checked against MaxInt64 above (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:406` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:430` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:262` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:275` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:302` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:315` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:411` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:435` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:52` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:958` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:978` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:961` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:981` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1687,15 +1687,15 @@ not this file.
 | `internal/dynsecret/aws_sts.go:242` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
 | `internal/dynsecret/cassandra.go:179` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/clickhouse.go:131` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/client_secrets.go:183` | the new secret is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
-| `internal/dynsecret/cloudflare.go:127` | the new token is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
-| `internal/dynsecret/convex.go:50` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/client_secrets.go:180` | the new secret is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/cloudflare.go:144` | the new token is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/convex.go:55` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/couchbase.go:145` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/datadog.go:179` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
-| `internal/dynsecret/dbt.go:57` | the new token is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/dbt.go:60` | the new token is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/elasticsearch.go:187` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/esxi.go:110` | the rotated host credential; the rotation seals it before storage (CWE-200) |
-| `internal/dynsecret/fireworks.go:56` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/fireworks.go:72` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/github_app.go:228` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/hana.go:186` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/ibm_api_connect.go:152` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
@@ -1704,7 +1704,7 @@ not this file.
 | `internal/dynsecret/kafka.go:339` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/ldap.go:359` | the reveal-once LDAP lease credential; the caller seals it before storage (CWE-200) |
 | `internal/dynsecret/ldap.go:389` | the staged two-user credential; the rotation seals it before storage (CWE-200) |
-| `internal/dynsecret/litellm.go:40` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/litellm.go:53` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/milvus.go:126` | the new user's password goes to the Milvus API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/milvus.go:138` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/mongodb_atlas.go:155` | the new user's password goes to the Atlas Admin API over the guarded client and is not kept (CWE-200) |
@@ -1715,7 +1715,7 @@ not this file.
 | `internal/dynsecret/network_device.go:125` | the rotated device credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/oauth_client_credentials.go:311` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/openai.go:125` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
-| `internal/dynsecret/openrouter.go:59` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/openrouter.go:67` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/oracle.go:262` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/providers_real.go:1641` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:150` | the new user's password goes to the management API over the guarded client and is not kept (CWE-200) |
@@ -1723,7 +1723,7 @@ not this file.
 | `internal/dynsecret/redfish.go:104` | the rotated controller credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/snowflake.go:221` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/snowflake_keypair.go:94` | the rotated key pair is this provider's output: the rotation seals it before storage (CWE-200) |
-| `internal/dynsecret/supabase.go:53` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
+| `internal/dynsecret/supabase.go:61` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/tailscale.go:155` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/unix_accounts.go:143` | the rotated local-account credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/vcenter_sso.go:133` | the rotated SSO credential; the rotation seals it before storage (CWE-200) |
@@ -1735,7 +1735,7 @@ not this file.
 | `internal/server/pam_gateway_azure_standin_test.go:110` | owned Graph addPassword protocol fixture; secret response bytes are wiped and held locked (CWE-200) |
 | `internal/server/pam_gateway_azure_standin_test.go:182` | owned OAuth endpoint returns issued tokens; locked storage and wipeable JSON bytes (CWE-200) |
 | `internal/server/pam_gateway_gcp_standin_test.go:186` | the owned OAuth endpoint must return its issued token; locked storage and wipeable JSON bytes (CWE-200) |
-| `internal/server/secret_integrations_outbox.go:642` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
+| `internal/server/secret_integrations_outbox.go:671` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
 | `internal/server/service_account_ad_rollback_served_test.go:179` | byte-backed owned bootstrap sent to the existing sealed-vault API; not logged (CWE-200) |
 | `internal/server/service_account_ad_rollback_served_test.go:259` | synthetic byte-backed Unicode predecessor in the owned native fixture, never logged (CWE-200) |
 | `internal/server/ssh_certificate_provider.go:111` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
@@ -1840,7 +1840,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4234` | closed test table list above |
+| `internal/store/migration_content_test.go:4235` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
@@ -3109,7 +3109,7 @@ not this file.
 | `internal/server/sdk_registry_install_served_test.go:352` | the test reads what it installed under its own temp dir (CWE-22) |
 | `internal/server/secret_csi_restart_served_test.go:143` | the test's own temp file (CWE-22) |
 | `internal/server/secret_csi_restart_served_test.go:153` | the test's own temp file (CWE-22) |
-| `internal/server/secret_integrations.go:476` | the operator's own administrator DSN names this root file on the control plane's host (CWE-22) |
+| `internal/server/secret_integrations.go:477` | the operator's own administrator DSN names this root file on the control plane's host (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:82` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:105` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:135` | the test's own temp file (CWE-22) |
@@ -3837,7 +3837,7 @@ not this file.
 | `internal/dynsecret/elasticsearch.go:239` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/esxi.go:160` | the operator's configured host through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/github_app.go:327` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/hosted_api.go:64` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/hosted_api.go:66` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/ibm_api_connect.go:239` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/milvus.go:180` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/mongodb_atlas.go:233` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |

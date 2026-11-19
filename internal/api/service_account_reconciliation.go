@@ -76,7 +76,19 @@ func (a *API) staticRotationCommandProvider(ctx context.Context, cmd store.Secre
 		return nil, nil, err
 	}
 	if cmd.DependentChangeID == "" {
-		return a.staticRotationProvider(cmd.TenantID, cmd.Provider, cmd.Key)
+		provider, verifier, err := a.staticRotationProvider(cmd.TenantID, cmd.Provider, cmd.Key)
+		if err != nil {
+			return nil, nil, err
+		}
+		kind, err := a.staticRotationQueueReferenceType(ctx, cmd)
+		if err != nil {
+			return nil, nil, err
+		}
+		currentKind := staticReferenceProviderType(provider)
+		if kind != "" && currentKind != kind || !staticRotationProviderKeepsReferenceAuthority(cmd, provider, currentKind, kind) {
+			return nil, nil, errStatus(http.StatusConflict, staticReferenceReviewDetail)
+		}
+		return provider, verifier, nil
 	}
 	parent, err := a.dependentRotationParent(ctx, cmd)
 	if err != nil {
