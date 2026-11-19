@@ -75,6 +75,15 @@ func TestGitleaksConfigHasNoPathBasedTestSourceExemption(t *testing.T) {
 		t.Error("generated Journey allowance must remain rule-specific and require the exact path AND static bodyKey match")
 	}
 
+	// The Vault-style rule stays exactly as reviewed and carries no allowlist:
+	// the two allowlist blocks above are the only ones.
+	if strings.Count(cfg, "id = \"hashicorp-vault-style-token\"") != 1 ||
+		!strings.Contains(cfg, "regex = '''\\bhv[sbr]\\.[A-Za-z0-9_-]{20,}'''") ||
+		!strings.Contains(cfg, "keywords = [\"hvs.\", \"hvb.\", \"hvr.\"]") ||
+		strings.Count(cfg, "[[rules.allowlists]]") != 2 {
+		t.Error(".gitleaks.toml must keep the hashicorp-vault-style-token rule's exact regex and keywords, with no allowlist")
+	}
+
 	if want := "'''" + conformanceKeyBody() + "'''"; !strings.Contains(cfg, want) {
 		t.Errorf(".gitleaks.toml must keep the exact-key-body allowance %s for the published connector conformance vector", want)
 	}
@@ -254,6 +263,57 @@ func TestServedGitleaksScanDetectsPlantedSecretInTestSource(t *testing.T) {
 	}
 	if byRule["private-key"] != 2 {
 		t.Errorf("private-key findings in unlisted test source = %d, want 2; an exact published vector must not be allowed in an arbitrary file. findings=%v", byRule["private-key"], seen)
+	}
+}
+
+// The repository config also flags HashiCorp Vault-style tokens (hvs., hvb.
+// and hvr. followed by 20 or more token characters): GitHub push protection
+// blocks that shape, and gitleaks' default Vault rule only matches much longer
+// tokens, so a fake fixture could pass the local scan and still stop a push.
+// The planted values are assembled at run time, as above.
+func TestServedGitleaksRepoConfigFlagsShortVaultStyleTokens(t *testing.T) {
+	bin, err := NewGitleaksRunner("").resolveBinary()
+	if err != nil {
+		if strings.TrimSpace(os.Getenv("TRSTCTL_GITLEAKS_BIN")) != "" {
+			t.Fatalf("TRSTCTL_GITLEAKS_BIN is set but no gitleaks binary resolved: %v", err)
+		}
+		t.Skip("requires the pinned Gitleaks binary; run tools/gitleaks/install.sh or set TRSTCTL_GITLEAKS_BIN")
+	}
+	target := t.TempDir()
+	root := filepath.Clean(filepath.Join("..", ".."))
+	if err := os.WriteFile(filepath.Join(target, ".gitleaks.toml"), []byte(readRepoFile(t, root, ".gitleaks.toml")), 0o600); err != nil {
+		t.Fatalf("stage the repository gitleaks config: %v", err)
+	}
+	vault := func(kind, tail string) string { return strings.Join([]string{"hv" + kind, tail}, ".") }
+	fixture := "package fixture\n\n" +
+		"const serviceToken = \"" + vault("s", "PlantedServiceValue00001") + "\"\n" +
+		"const batchToken = \"" + vault("b", "PlantedBatchValue0000002") + "\"\n" +
+		// Exactly 20 token characters: the rule's lower bound.
+		"const recoveryToken = \"" + vault("r", "PlantedRecoveryVal20") + "\"\n" +
+		// Not findings: a plain value, and a tail one character too short.
+		"const plainValue = \"test-vault-value\"\n" +
+		"const shortTail = \"" + vault("s", "nineteenCharsTail19") + "\"\n"
+	const plantedName = "planted_vault_test.go"
+	if err := os.WriteFile(filepath.Join(target, plantedName), []byte(fixture), 0o600); err != nil {
+		t.Fatalf("write the planted fixture: %v", err)
+	}
+	report, err := (&GitleaksRunner{Binary: bin, AllowedRoots: []string{target}}).ScanWithOptions(context.Background(), target, ScanOptions{})
+	if err != nil {
+		t.Fatalf("scan the planted fixture: %v", err)
+	}
+	lines := map[int]bool{}
+	for _, f := range report.Findings {
+		if f.RuleID != "hashicorp-vault-style-token" {
+			continue
+		}
+		if filepath.ToSlash(f.File) != plantedName {
+			t.Errorf("Vault-style finding outside the planted fixture: %s", f.CredentialRef)
+			continue
+		}
+		lines[f.Line] = true
+	}
+	if len(lines) != 3 || !lines[3] || !lines[4] || !lines[5] {
+		t.Fatalf("Vault-style findings on lines %v, want 3, 4 and 5 (hvs., hvb., and hvr. at the 20-character bound) and none for the plain value or the short tail", lines)
 	}
 }
 

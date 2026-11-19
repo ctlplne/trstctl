@@ -20,8 +20,19 @@
 #     AND-scoped allowlist instead.
 #   - internal/secretscan tests check the exact config shape and run the pinned
 #     scanner over planted credentials in test source and a generated chunk.
+#   - The HashiCorp Vault-style rule below catches hvs., hvb. and hvr. tokens of
+#     20 or more token characters: GitHub push protection blocks that shape,
+#     while the default rules match only far longer hvs. and hvb. tokens and no
+#     hvr. token. It carries no allowlist; test fixtures use plain values such as
+#     "test-vault-value".
 [extend]
 useDefault = true
+
+[[rules]]
+id = "hashicorp-vault-style-token"
+description = "HashiCorp Vault-style token: hvs., hvb. or hvr. and 20 or more token characters"
+regex = '''\bhv[sbr]\.[A-Za-z0-9_-]{20,}'''
+keywords = ["hvs.", "hvb.", "hvr."]
 
 [[rules]]
 id = "private-key"

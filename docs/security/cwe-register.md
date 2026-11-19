@@ -2981,7 +2981,7 @@ not this file.
 | `internal/secretscan/locate_test.go:14` | test fixture under t.TempDir (CWE-22) |
 | `internal/secretscan/repository_credential_test.go:144` | the test's own clone (CWE-22) |
 | `internal/secretscan/repository_credential_test.go:147` | the test's own clone (CWE-22) |
-| `internal/secretscan/secretscan_test.go:124` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/secretscan/secretscan_test.go:125` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/secretscan/thirdparty.go:110` | operator-owned artifact path from the reviewed source config, bounded by size above (CWE-22) |
 | `internal/secretscan/thirdparty.go:114` | operator-owned signature path from the reviewed source config (CWE-22) |
 | `internal/secretscan/thirdparty_signature_test.go:47` | test-owned temp path |

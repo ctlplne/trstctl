@@ -287,10 +287,14 @@ merely reports:
 - **Secret scanning — gitleaks** (`.github/workflows/security.yml`,
   `.gitleaks.toml`, `.gitleaksignore`): installs the same checksum-verified
   Gitleaks `v8.27.2` release used by the served scanner, then scans the
-  full history against gitleaks' default ruleset. No path is exempt from any
+  full history against gitleaks' default ruleset plus one rule of its own for
+  HashiCorp Vault-style tokens (`hvs.`, `hvb.` or `hvr.` and 20 or more token
+  characters), the shorter shape GitHub push protection blocks and the default
+  rules miss; test fixtures use plain values. No path is exempt from any
   rule — `_test.go` sources and `testdata/` fixtures are scanned exactly like
-  production source. The only standing allowlist is the exact key body of the
-  published connector conformance keypair; every other known false positive is
+  production source. The standing allowlists are the exact key body of the
+  published connector conformance keypair in its five named files and the static
+  journey `bodyKey` lookups in generated console chunks; every other known false positive is
   pinned one finding at a time in `.gitleaksignore` by exact
   commit/path/rule/line fingerprint, so any other hardcoded secret fails CI.
 - **Dependency vulnerabilities**: the pinned `govulncheck` job (above) plus

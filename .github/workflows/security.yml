@@ -64,7 +64,7 @@ jobs:
       - name: Served Gitleaks scan smoke
         env:
           TRSTCTL_GITLEAKS_BIN: ${{ steps.install-gitleaks.outputs.bin }}
-        run: go test ./internal/secretscan ./internal/server -run 'Test(ServedGitleaksScanDetectsPlantedSecret|ServedDeepSecretScanCAPSCAN03UsesHistoryAndCustomRules|ParseGitleaks)' -count=1
+        run: go test ./internal/secretscan ./internal/server -run 'Test(ServedGitleaksScanDetectsPlantedSecret|ServedGitleaksRepoConfigFlagsShortVaultStyleTokens|ServedDeepSecretScanCAPSCAN03UsesHistoryAndCustomRules|ParseGitleaks)' -count=1
 
       # `detect` scans the committed history; `--no-banner --redact` keeps logs
       # clean and never echoes a matched secret. Non-zero exit (a finding) fails

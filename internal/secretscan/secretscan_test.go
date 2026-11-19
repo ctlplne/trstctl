@@ -79,7 +79,8 @@ func TestParseGitleaksInstallerProvisioningPinned(t *testing.T) {
 		"tools/gitleaks/install.sh",
 		"Served Gitleaks scan smoke",
 		"TRSTCTL_GITLEAKS_BIN",
-		"Test(ServedGitleaksScanDetectsPlantedSecret|ServedDeepSecretScanCAPSCAN03UsesHistoryAndCustomRules|ParseGitleaks)",
+		// The smoke step also runs the repository config's Vault-style rule check.
+		"Test(ServedGitleaksScanDetectsPlantedSecret|ServedGitleaksRepoConfigFlagsShortVaultStyleTokens|ServedDeepSecretScanCAPSCAN03UsesHistoryAndCustomRules|ParseGitleaks)",
 	} {
 		if !strings.Contains(workflow, want) {
 			t.Fatalf("security workflow missing %q", want)

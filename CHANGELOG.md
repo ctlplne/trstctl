@@ -3741,6 +3741,12 @@
 
 ### Security
 
+- The repository's secret scan also flags HashiCorp Vault-style tokens: `hvs.`, `hvb.` or `hvr.` and 20
+  or more token characters. GitHub push protection blocks that shape, while gitleaks' default rules match
+  only far longer `hvs.` and `hvb.` tokens and no `hvr.` token, so a fabricated test fixture could pass
+  the local scan and still stop a push. Test fixtures use plain values such as `test-vault-value`; a test
+  that must exercise a vendor shape assembles it at run time.
+
 - An operator-approved env credential belongs to one tenant, the integrations that may use it and
   the exact origins it may be sent to (CR-008). The process-wide `outbound_env_credential_refs`
   list let any tenant name any approved `env:NAME` reference in its own discovery sources, cloud
