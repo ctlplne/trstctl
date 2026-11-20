@@ -3745,6 +3745,11 @@
   `appliance_key_generation`).
 
 ### Security
+- Fresh Compose socket volumes now inherit the SPIFFE directory's `0700` mode.
+  Copying the runtime directory's parent preserves its child permissions; an
+  empty child copied by itself became `0755` and stopped the eval control plane
+  at startup. The SPIFFE worker is again registered through the named runtime
+  worker entry, so the worker census checks it in CI.
 - The control-plane SPIFFE Workload API socket now defaults to
   `/run/trstctl-spiffe/workload.sock` (CR-175). Startup verifies a `0700`
   directory owned by the service uid and refuses unsafe ancestors, symlinks,

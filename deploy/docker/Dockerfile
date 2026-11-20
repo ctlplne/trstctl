@@ -213,8 +213,10 @@ COPY --from=trust /out/trust/ca-certificates.crt /etc/ssl/certs/ca-certificates.
 # keystore, and the UDS. (Kubernetes uses fsGroup/securityContext instead; these
 # pre-created dirs are harmless there.)
 COPY --from=build --chown=65532:65532 /mnt-skel/data /data
-COPY --from=build --chown=65532:65532 /mnt-skel/run/trstctl /run/trstctl
-COPY --from=build --chown=65532:65532 /mnt-skel/run/trstctl-spiffe /run/trstctl-spiffe
+# Copy the parent so Docker preserves each nested directory's 0700 mode. A
+# direct COPY of an empty child creates its destination as 0755, and a fresh
+# named volume inherits that unsafe mode.
+COPY --from=build --chown=65532:65532 /mnt-skel/run /run
 COPY --from=build --chown=65532:65532 /mnt-skel/public-trust /public-trust
 
 # 65532 is distroless' "nonroot" uid:gid — the process never runs as root.

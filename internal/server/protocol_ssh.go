@@ -524,10 +524,17 @@ type spiffeProtocol struct {
 }
 
 // RunSPIFFE serves the SPIFFE Workload API gRPC server on its UDS until ctx is
-// canceled (EXC-WIRE-02 / INTEROP-004). The production runtime calls runSPIFFE
-// directly and treats any bind or serve failure as fatal.
+// canceled (EXC-WIRE-02 / INTEROP-004). The production runtime prebinds the
+// socket, then starts this worker; an unexpected serve failure stops HTTP.
 func (s *Server) RunSPIFFE(ctx context.Context) {
-	if err := s.runSPIFFE(ctx, nil); err != nil && ctx.Err() == nil {
+	if err := s.runSPIFFE(ctx, s.spiffeBoundListener); err != nil && ctx.Err() == nil {
+		if s.spiffeRuntimeFailure != nil {
+			select {
+			case s.spiffeRuntimeFailure <- fmt.Errorf("SPIFFE Workload API: %w", err):
+			default:
+			}
+			return
+		}
 		s.logger.Error("spiffe workload API server stopped", "error", err.Error())
 	}
 }

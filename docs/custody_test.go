@@ -111,8 +111,11 @@ func TestSPIFFECustodyRowsFollowBothProductionSockets(t *testing.T) {
 	controlPlaneStart := goFunction(t, "../internal/server/run.go", "startBackgroundRuntime")
 	requireCallBefore(t, controlPlaneStart, "spiffe.ListenWorkloadAPI", "startRuntimeWorker",
 		"an active compatibility socket must bind before background serving starts")
-	requireCall(t, controlPlaneStart, "srv.runSPIFFE",
-		"the production worker must serve the bound compatibility socket")
+	requireCallWithArg(t, controlPlaneStart, "startRuntimeWorker", "srv.RunSPIFFE",
+		"the production worker must start the declared compatibility socket entry point")
+	controlPlaneWorker := goFunction(t, "../internal/server/protocol_ssh.go", "RunSPIFFE")
+	requireCallWithArg(t, controlPlaneWorker, "s.runSPIFFE", "s.spiffeBoundListener",
+		"the declared worker must serve the prebound compatibility socket")
 	controlPlaneRun := goFunction(t, "../internal/server/protocol_ssh.go", "runSPIFFE")
 	requireCall(t, controlPlaneRun, "spiffe.ServeWorkloadAPIListener",
 		"the bound compatibility socket must reach the Workload API server")
@@ -260,6 +263,26 @@ func requireCall(t *testing.T, fn *ast.FuncDecl, want, why string) {
 	t.Helper()
 	if len(callPositions(fn, want)) == 0 {
 		t.Errorf("%s does not call %s: %s", fn.Name.Name, want, why)
+	}
+}
+
+func requireCallWithArg(t *testing.T, fn *ast.FuncDecl, wantCall, wantArg, why string) {
+	t.Helper()
+	found := false
+	ast.Inspect(fn.Body, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok || callName(call.Fun) != wantCall {
+			return true
+		}
+		for _, arg := range call.Args {
+			if callName(arg) == wantArg {
+				found = true
+			}
+		}
+		return true
+	})
+	if !found {
+		t.Errorf("%s does not call %s with %s: %s", fn.Name.Name, wantCall, wantArg, why)
 	}
 }
 

@@ -1733,14 +1733,9 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 	signerW := startRuntimeWorker(ctx, srv.RunSignerMonitor)
 	fleetW := startRuntimeWorker(ctx, srv.RunAgentFleetMonitor)
 	runtimeFailure := make(chan error, 1)
-	spiffeW := startRuntimeWorker(ctx, func(workCtx context.Context) {
-		if err := srv.runSPIFFE(workCtx, spiffeListener); err != nil && workCtx.Err() == nil {
-			select {
-			case runtimeFailure <- fmt.Errorf("SPIFFE Workload API: %w", err):
-			default:
-			}
-		}
-	})
+	srv.spiffeBoundListener = spiffeListener
+	srv.spiffeRuntimeFailure = runtimeFailure
+	spiffeW := startRuntimeWorker(ctx, srv.RunSPIFFE)
 	agentW := startRuntimeWorker(ctx, srv.RunAgentChannel)
 	agentHTTPRenewalW := startRuntimeWorker(ctx, srv.RunAgentHTTPRenewal)
 	estMTLSW := startRuntimeWorker(ctx, srv.RunESTMTLS)

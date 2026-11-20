@@ -908,6 +908,10 @@ type Server struct {
 	// disabled. Every protocol mints through the signer-backed, tenant-scoped,
 	// event-sourced, idempotent issuance seam (protocolIssuer).
 	protocols *servedProtocols
+	// Production binds the private Workload API socket before HTTP readiness.
+	// RunSPIFFE takes ownership of this listener after worker startup.
+	spiffeBoundListener  net.Listener
+	spiffeRuntimeFailure chan<- error
 	// protocolProfile is non-nil only for the explicit eval preset. It owns the
 	// event-replayed activation gate exposed to the first-run wizard.
 	protocolProfile *evalProtocolProfileControl

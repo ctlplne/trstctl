@@ -349,6 +349,11 @@ startup if it cannot bind the enabled Workload API. On a nonroot installation,
 create and own `/run/trstctl-spiffe` before enabling SPIFFE, or configure an
 absolute private path the service can create. Update each local workload's
 `SPIFFE_ENDPOINT_SOCKET` when moving from the former `/tmp` default.
+The Compose image copies the parent `/run` tree so fresh `spiffesock` volumes
+inherit the child directory's `0700` mode and uid `65532`. A volume created by
+an older image may still have mode `0755`; correct that exact volume's root to
+`0700` owned by the runtime uid before restarting the control plane. Startup
+reports the unsafe directory and keeps the endpoint closed until it is fixed.
 
 The X.509-SVID stream stays open after its first response. The server sends a
 fresh key and certificate after roughly two thirds of the current certificate's

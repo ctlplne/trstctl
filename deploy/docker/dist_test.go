@@ -114,10 +114,10 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 		t.Error("Dockerfile runtime must set WORKDIR / so relative data/* defaults resolve inside the persistent /data mount")
 	}
 	mustContainAll(t, "Dockerfile prepares nonroot UDS volume roots", df,
+		"RUN install -d -m 0700 -o 65532 -g 65532",
 		"/mnt-skel/run/trstctl",
 		"/mnt-skel/run/trstctl-spiffe",
-		"COPY --from=build --chown=65532:65532 /mnt-skel/run/trstctl /run/trstctl",
-		"COPY --from=build --chown=65532:65532 /mnt-skel/run/trstctl-spiffe /run/trstctl-spiffe")
+		"COPY --from=build --chown=65532:65532 /mnt-skel/run /run")
 	mustContainAll(t, "Dockerfile prepares a nonroot public-only trust volume root", df,
 		"install -d -m 0750 -o 65532 -g 65532 /mnt-skel/public-trust",
 		"COPY --from=build --chown=65532:65532 /mnt-skel/public-trust /public-trust")
