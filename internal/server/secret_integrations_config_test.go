@@ -251,8 +251,12 @@ func TestConfiguredBackendOpenersConstructEveryNetworklessProvider(t *testing.T)
 		t.Fatal(err)
 	}
 	credentialRef := "file:" + credentialPath
+	dsnPath := filepath.Join(dir, "postgresql-dsn")
+	if err := os.WriteFile(dsnPath, []byte("postgres://operator:authority@localhost:5432/app?sslmode=disable"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	tests := []config.DynamicSecretProviderConfig{
-		{Type: "postgresql", AdminDSNRef: credentialRef, Database: "app"},
+		{Type: "postgresql", AdminDSNRef: "file:" + dsnPath, Database: "app"},
 		{Type: "redis", Addr: "redis.internal:6379", PasswordRef: credentialRef, RedisTLSServerName: "redis.internal",
 			RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"app:"}, Commands: []string{"get"}}}},
 		{Type: "kubernetes", Endpoint: "https://kubernetes.example.test", Namespace: "apps", KubernetesAudience: "https://kubernetes.default.svc", BearerTokenRef: credentialRef},
