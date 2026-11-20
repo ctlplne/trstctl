@@ -60,9 +60,9 @@ const (
 	// tsaSignerHandle is the fixed signer handle for the RFC 3161 timestamping key.
 	tsaSignerHandle = "tsa-timestamping"
 	// defaultSPIFFESocket is the default UDS path the SPIFFE Workload API binds when
-	// the operator does not configure one. It matches the SPIRE-style default
-	// location a spiffe-helper / Envoy SDS client looks for.
-	defaultSPIFFESocket = "/tmp/trstctl-spiffe-workload.sock"
+	// the operator does not configure one. Its parent is a private runtime
+	// directory owned by the control-plane uid, not a shared temporary directory.
+	defaultSPIFFESocket = "/run/trstctl-spiffe/workload.sock"
 )
 
 // servedProtocols holds the issuance-protocol servers the control plane mounts on

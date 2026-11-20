@@ -1290,7 +1290,7 @@ func (k ACMEExternalAccountBindingKey) NotAfterTime() (time.Time, error) {
 type SPIFFEProtocol struct {
 	Enabled     bool   `json:"enabled,omitempty"`
 	TenantID    string `json:"tenant_id,omitempty"`
-	SocketPath  string `json:"socket_path,omitempty"`  // UDS path; empty uses a default under the data dir
+	SocketPath  string `json:"socket_path,omitempty"`  // UDS path; empty uses /run/trstctl-spiffe/workload.sock
 	TrustDomain string `json:"trust_domain,omitempty"` // e.g. "example.org"; empty disables (no default trust domain)
 	// HybridSVIDs sends an additional post-quantum key pair on the Workload API.
 	// Stock go-spiffe cannot parse that private key, so operators must opt in only

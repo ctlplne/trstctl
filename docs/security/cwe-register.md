@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3538 annotated sites across 35 rules. Each row is
+3549 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1444,7 +1444,7 @@ not this file.
 | `internal/server/protocol_mounts.go:1046` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:482` | value reduced modulo the shard count before conversion (CWE-190) |
-| `internal/server/run.go:256` | bounded small ints from config (CWE-190) |
+| `internal/server/run.go:257` | bounded small ints from config (CWE-190) |
 | `internal/server/secret_integrations_outbox.go:1260` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_integrations_outbox.go:1264` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_sync_source_sequence_test.go:56` | this fixture appends exactly two events. |
@@ -2382,7 +2382,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:238` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G302 — CWE-276 Incorrect default permissions (chmod) (58 sites)
+### G302 — CWE-276 Incorrect default permissions (chmod) (68 sites)
 
 | Location | Reason |
 |---|---|
@@ -2411,6 +2411,10 @@ not this file.
 | `internal/crypto/secretfile/secretfile_test.go:67` | restores the fixture dir so t.TempDir cleanup can remove it (CWE-276) |
 | `internal/kms/tpm/swtpm_services_l2_test.go:155` | the tpm2 provider config is not secret (CWE-276) |
 | `internal/objectstore/objectstore_test.go:310` | the test loosens the mode on purpose to prove a world-readable secret file is refused (CWE-276) |
+| `internal/protocols/spiffe/private_socket_test.go:38` | directory execute bit is needed to reach the test socket |
+| `internal/protocols/spiffe/private_socket_test.go:46` | deliberately unsafe directory is the rejected test input |
+| `internal/protocols/spiffe/private_socket_test.go:49` | restore owner-only test directory for cleanup |
+| `internal/protocols/spiffe/private_socket_test.go:65` | deliberately unsafe ancestor is the rejected test input |
 | `internal/server/bundled_pg_start_test.go:30` | adversarial test anchor must be writable to prove the verifier rejects it (CWE-732) |
 | `internal/server/bundled_pg_start_test.go:33` | restore the private directory's required execute bit (CWE-732) |
 | `internal/server/bundled_pg_start_test.go:114` | the source is read-only, as a mount another user owns would be (CWE-732) |
@@ -2424,6 +2428,12 @@ not this file.
 | `internal/server/evidence_reports_served_test.go:39` | owner execute is required to traverse this private test directory. |
 | `internal/server/external_ca_config_test.go:189` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/managed_key_signer_config.go:27` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `internal/server/private_workload_socket_test.go:30` | deliberately unsafe directory tests fail-closed startup |
+| `internal/server/private_workload_socket_test.go:33` | restore owner-only test directory for cleanup |
+| `internal/server/private_workload_socket_test.go:53` | owner-only socket fixture |
+| `internal/server/private_workload_socket_test.go:106` | owner-only socket fixture before activation |
+| `internal/server/private_workload_socket_test.go:149` | unsafe directory triggers the required fail-closed shutdown |
+| `internal/server/private_workload_socket_test.go:152` | restore owner-only test directory for cleanup |
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/report_schedule_name_conflict_served_test.go:33` | owner execute is required to traverse this private test directory. |
 | `internal/server/tenant_baseline_served_test.go:61` | owner execute is required to traverse this private test directory. |
@@ -2445,7 +2455,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (829 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (830 sites)
 
 | Location | Reason |
 |---|---|
@@ -2960,6 +2970,7 @@ not this file.
 | `internal/protocols/scep/sscep_client_test.go:200` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/scep/sscep_client_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/scep/sscep_client_test.go:233` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/protocols/spiffe/private_socket_test.go:100` | exact test-created file, checked after refusal |
 | `internal/protocols/ssh/krl_binary_test.go:315` | test-owned file under t.TempDir |
 | `internal/reconcile/awskmssource.go:343` | operator-configured credential file path (CWE-22) |
 | `internal/reconcile/casource.go:61` | operator-configured CA certificate bundle path (CWE-22) |
@@ -3095,10 +3106,10 @@ not this file.
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/restore_consistency.go:76` | the restored backup set's own event log, under the isolated target (CWE-22) |
 | `internal/server/restore_consistency.go:123` | the restored issuing CA certificate under the isolated target (CWE-22) |
-| `internal/server/run.go:590` | operator-configured public recovery kit (CWE-22) |
-| `internal/server/run.go:1225` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1412` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1873` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:591` | operator-configured public recovery kit (CWE-22) |
+| `internal/server/run.go:1226` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1413` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1906` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:92` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/scan_annotation_served_test.go:48` | test fixture under t.TempDir (CWE-22) |
@@ -3763,7 +3774,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:778` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
-| `internal/server/run.go:1225` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1226` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/secret_dynamic_lease_rotation_served_test.go:58` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/secret_render_served_test.go:69` | the test's own temp file or the lab directory the runner created (CWE-22) |
 | `internal/server/secret_render_served_test.go:146` | the test's own temp file or the lab directory the runner created (CWE-22) |

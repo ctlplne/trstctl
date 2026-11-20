@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -523,21 +524,34 @@ type spiffeProtocol struct {
 }
 
 // RunSPIFFE serves the SPIFFE Workload API gRPC server on its UDS until ctx is
-// canceled (EXC-WIRE-02 / INTEROP-004). It is a no-op when SPIFFE is not enabled or
-// no issuing CA is provisioned, so it is always safe to start in its own goroutine.
+// canceled (EXC-WIRE-02 / INTEROP-004). The production runtime calls runSPIFFE
+// directly and treats any bind or serve failure as fatal.
 func (s *Server) RunSPIFFE(ctx context.Context) {
+	if err := s.runSPIFFE(ctx, nil); err != nil && ctx.Err() == nil {
+		s.logger.Error("spiffe workload API server stopped", "error", err.Error())
+	}
+}
+
+func (s *Server) runSPIFFE(ctx context.Context, bound net.Listener) error {
 	if s.protocols == nil || s.protocols.spiffe == nil {
-		return
+		if bound != nil {
+			_ = bound.Close()
+		}
+		return nil
 	}
 	if !s.protocols.activation.Wait(ctx) {
-		return
+		if bound != nil {
+			_ = bound.Close()
+		}
+		return nil
 	}
 	sp := s.protocols.spiffe
 	sp.running.Store(true)
 	defer sp.running.Store(false)
-	if err := spiffe.ServeWorkloadAPI(ctx, sp.socket, sp.server); err != nil && ctx.Err() == nil {
-		s.logger.Warn("spiffe workload API server stopped", "error", err.Error())
+	if bound != nil {
+		return spiffe.ServeWorkloadAPIListener(ctx, bound, sp.server)
 	}
+	return spiffe.ServeWorkloadAPI(ctx, sp.socket, sp.server)
 }
 
 // SPIFFESocket returns the UDS path the SPIFFE Workload API is served on, or "" when

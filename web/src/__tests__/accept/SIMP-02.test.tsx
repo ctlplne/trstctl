@@ -78,7 +78,7 @@ describe("SIMP-02 lean protocol setup", () => {
         { protocol: "cmp", endpoint: "/cmp", enabled: true, served: true, status_code: 405, detail: "CMP route is mounted and expects a PKIMessage request." },
         {
           protocol: "spiffe",
-          endpoint: "unix:///tmp/trstctl-spiffe-workload.sock",
+          endpoint: "unix:///run/trstctl-spiffe/workload.sock",
           enabled: true,
           served: true,
           status_code: 0,
@@ -130,7 +130,7 @@ describe("SIMP-02 lean protocol setup", () => {
       "/.well-known/est/cacerts",
       "/scep?operation=GetCACaps",
       "/cmp",
-      "unix:///tmp/trstctl-spiffe-workload.sock",
+      "unix:///run/trstctl-spiffe/workload.sock",
       "/ssh/ca",
       "/tsa",
     ]) {

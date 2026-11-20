@@ -340,6 +340,16 @@ JWT-SVIDs use the signer-backed JWT handle and validate against the served JWT b
 The Workload-API gRPC/protobuf contract is vendored verbatim from go-spiffe, so the
 wire format is byte-identical.
 
+The control-plane socket defaults to `/run/trstctl-spiffe/workload.sock`. Its
+directory is owned by the control-plane uid with mode `0700`, so another local
+user cannot replace the socket while it is being bound. An operator-supplied
+socket path must have the same private directory and trusted parent ownership.
+The control plane refuses an existing file or live socket at that path and stops
+startup if it cannot bind the enabled Workload API. On a nonroot installation,
+create and own `/run/trstctl-spiffe` before enabling SPIFFE, or configure an
+absolute private path the service can create. Update each local workload's
+`SPIFFE_ENDPOINT_SOCKET` when moving from the former `/tmp` default.
+
 The X.509-SVID stream stays open after its first response. The server sends a
 fresh key and certificate after roughly two thirds of the current certificate's
 remaining lifetime, before expiry. A stock go-spiffe source can consume those

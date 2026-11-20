@@ -484,7 +484,7 @@ describe("protocol surface", () => {
         },
         {
           protocol: "spiffe",
-          endpoint: "unix:///tmp/trstctl-spiffe-workload.sock",
+          endpoint: "unix:///run/trstctl-spiffe/workload.sock",
           enabled: true,
           served: true,
           status_code: 0,
@@ -1281,7 +1281,7 @@ describe("protocol surface", () => {
     expect(dnsConfigSection?.querySelector('[data-state-primitive="error"]')).not.toBeInTheDocument();
     expect(mdmSection?.querySelector('[data-state-primitive="error"]')).not.toBeInTheDocument();
     expect(screen.getAllByText("Not browser-readable").length).toBeGreaterThan(0);
-    expect(screen.getByText("unix:///tmp/trstctl-spiffe-workload.sock")).toBeInTheDocument();
+    expect(screen.getByText("unix:///run/trstctl-spiffe/workload.sock")).toBeInTheDocument();
     expect(screen.getByText("Unknown")).toBeInTheDocument();
   });
 
@@ -1611,9 +1611,10 @@ describe("protocol surface", () => {
 
     expect(screen.getAllByText("Workload API socket issuing X.509-SVID and JWT-SVID credentials").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Trust domain").length).toBeGreaterThan(0);
-    expect(screen.getByText("unix:///tmp/trstctl-spiffe-workload.sock")).toBeInTheDocument();
+    expect(screen.getByText("unix:///run/trstctl-spiffe/workload.sock")).toBeInTheDocument();
     expect(screen.getByText("Workload API socket configured.")).toBeInTheDocument();
     expect(screen.getByText(/X.509-SVID and JWT-SVID support/i)).toBeInTheDocument();
+    expect(screen.getByText("SPIFFE_ENDPOINT_SOCKET=unix:///run/trstctl-spiffe/workload.sock spiffe-helper -config ./spiffe-helper.conf")).toBeInTheDocument();
 
     expect(screen.getAllByText("SSH CA public key, user/host certificate issuance, and revocation list flow").length).toBeGreaterThan(0);
     expect(screen.getByText("SSH CA public-key endpoint responded.")).toBeInTheDocument();

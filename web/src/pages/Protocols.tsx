@@ -189,12 +189,12 @@ const protocolSurfaces: ProtocolSurface[] = [
     snippets: [
       {
         label: translateNow("source.spiffe.helper.7ba7061b6b"),
-        command: "SPIFFE_ENDPOINT_SOCKET=unix:///tmp/trstctl-spiffe-workload.sock spiffe-helper -config ./spiffe-helper.conf",
+        command: "SPIFFE_ENDPOINT_SOCKET=unix:///run/trstctl-spiffe/workload.sock spiffe-helper -config ./spiffe-helper.conf",
       },
       {
         label: translateNow("source.go.spiffe.7ccff8bcaf"),
         command:
-          'source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr("unix:///tmp/trstctl-spiffe-workload.sock")))',
+          'source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr("unix:///run/trstctl-spiffe/workload.sock")))',
       },
     ],
   },
@@ -1427,7 +1427,7 @@ function ProtocolStatusBadge({ status }: { status: ProtocolRuntimeStatus | undef
 }
 
 function protocolEndpointFallback(protocol: string): string {
-  if (protocol === "spiffe") return "unix:///tmp/trstctl-spiffe-workload.sock";
+  if (protocol === "spiffe") return "unix:///run/trstctl-spiffe/workload.sock";
   return "No browser-readable route";
 }
 

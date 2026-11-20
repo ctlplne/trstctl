@@ -281,7 +281,7 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 // local filesystem. The rest of the proof state intentionally lives on the
 // parent-owned receipt mount, but Docker Desktop bind mounts are not a valid
 // host-local Unix-socket substrate and can reject listen/chmod operations. This
-// mirrors the production default (/tmp/trstctl-spiffe-workload.sock) while using
+// mirrors the production socket basename while using a private test directory
 // a unique directory so concurrent proof processes cannot collide.
 func dodEvalLocalSocketPath(t *testing.T) string {
 	t.Helper()

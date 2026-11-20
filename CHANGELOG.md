@@ -3745,6 +3745,14 @@
   `appliance_key_generation`).
 
 ### Security
+- The control-plane SPIFFE Workload API socket now defaults to
+  `/run/trstctl-spiffe/workload.sock` (CR-175). Startup verifies a `0700`
+  directory owned by the service uid and refuses unsafe ancestors, symlinks,
+  regular files, foreign-owned sockets, and live listeners. It removes only an
+  owned stale socket. A bind failure stops the control plane instead of leaving
+  the documented identity endpoint unserved. Operators using the former `/tmp`
+  default must update local Workload API clients and prepare a private runtime
+  directory for nonroot deployments.
 - Database providers parse bounded connection profiles before native drivers
   can use them. The provider governs file-backed CA trust and each resolved TCP
   destination. PostgreSQL and MongoDB gateway credentials carry no CA path.

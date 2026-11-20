@@ -53,6 +53,7 @@ import (
 	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/privacy"
+	"trstctl.com/trstctl/internal/protocols/spiffe"
 	"trstctl.com/trstctl/internal/ratelimit"
 	"trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/secretscan/validity"
@@ -187,12 +188,12 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 		_ = srv.Shutdown(ctx)
 		return err
 	}
-	stopBackground, err := startBackgroundRuntime(ctx, cfg, srv, st, logger)
+	stopBackground, runtimeFailure, err := startBackgroundRuntime(ctx, cfg, srv, st, logger)
 	if err != nil {
 		_ = srv.Shutdown(ctx)
 		return err
 	}
-	return serveRuntime(ctx, cfg, srv, logger, stopBackground)
+	return serveRuntime(ctx, cfg, srv, logger, stopBackground, runtimeFailure)
 }
 
 // openArchiveObjectStore opens the object store when the deployment archives
@@ -1694,15 +1695,34 @@ func licensedWorkerTelemetry(name string) (feature, action string, ok bool) {
 	}
 }
 
-func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server, st *store.Store, logger *slog.Logger) (func(), error) {
+func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server, st *store.Store, logger *slog.Logger) (func(), <-chan error, error) {
+	var campaign time.Duration
+	if cfg.HA.LeaderElectionEnabled() {
+		var err error
+		campaign, err = cfg.HA.LeaderCampaignIntervalDuration()
+		if err != nil {
+			return nil, nil, fmt.Errorf("ha leader campaign interval: %w", err)
+		}
+	}
+	// Bind an active Workload API before the HTTP listener can advertise it.
+	// A dormant eval profile keeps the socket absent until activation, but its
+	// directory and any existing path are checked before startup proceeds.
+	var spiffeListener net.Listener
+	if srv.protocols != nil && srv.protocols.spiffe != nil {
+		var err error
+		path := srv.protocols.spiffe.socket
+		if srv.protocols.activation == nil || srv.protocols.activation.Active() {
+			spiffeListener, err = spiffe.ListenWorkloadAPI(path)
+		} else {
+			err = spiffe.PrepareWorkloadSocket(path)
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("start enabled SPIFFE Workload API: %w", err)
+		}
+	}
 	leaderCtx, stopLeader := context.WithCancel(ctx)
 	leaderDone := make(chan struct{})
 	if cfg.HA.LeaderElectionEnabled() {
-		campaign, err := cfg.HA.LeaderCampaignIntervalDuration()
-		if err != nil {
-			stopLeader()
-			return nil, fmt.Errorf("ha leader campaign interval: %w", err)
-		}
 		elector := leader.New(st, leaderRuntimeWork(srv), leader.WithLogger(logger), leader.WithInterval(campaign))
 		go func() { defer close(leaderDone); elector.Run(leaderCtx) }()
 		logger.Info("leader election enabled; continuous background workers run on the elected leader only (RESIL-004)")
@@ -1712,7 +1732,15 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 	}
 	signerW := startRuntimeWorker(ctx, srv.RunSignerMonitor)
 	fleetW := startRuntimeWorker(ctx, srv.RunAgentFleetMonitor)
-	spiffeW := startRuntimeWorker(ctx, srv.RunSPIFFE)
+	runtimeFailure := make(chan error, 1)
+	spiffeW := startRuntimeWorker(ctx, func(workCtx context.Context) {
+		if err := srv.runSPIFFE(workCtx, spiffeListener); err != nil && workCtx.Err() == nil {
+			select {
+			case runtimeFailure <- fmt.Errorf("SPIFFE Workload API: %w", err):
+			default:
+			}
+		}
+	})
 	agentW := startRuntimeWorker(ctx, srv.RunAgentChannel)
 	agentHTTPRenewalW := startRuntimeWorker(ctx, srv.RunAgentHTTPRenewal)
 	estMTLSW := startRuntimeWorker(ctx, srv.RunESTMTLS)
@@ -1733,7 +1761,7 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 		kmipW.Stop()
 		acmeEmailW.Stop()
 		usageW.Stop()
-	}, nil
+	}, runtimeFailure, nil
 }
 
 func logMountedSurfaces(srv *Server, logger *slog.Logger) {
@@ -1766,7 +1794,7 @@ func logMountedSurfaces(srv *Server, logger *slog.Logger) {
 	}
 }
 
-func serveRuntime(ctx context.Context, cfg *config.Config, srv *Server, logger *slog.Logger, stopBackground func()) error {
+func serveRuntime(ctx context.Context, cfg *config.Config, srv *Server, logger *slog.Logger, stopBackground func(), runtimeFailure <-chan error) error {
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	ln, err := net.Listen("tcp", cfg.Server.Addr)
 	if err != nil {
@@ -1778,6 +1806,11 @@ func serveRuntime(ctx context.Context, cfg *config.Config, srv *Server, logger *
 	go func() { serveErr <- serveControlPlane(httpSrv, ln, cfg.Server.TLS, os.Stderr) }()
 	select {
 	case <-ctx.Done():
+	case err := <-runtimeFailure:
+		_ = httpSrv.Close() // stop accepting requests before draining workers
+		stopBackground()
+		_ = srv.Shutdown(context.Background())
+		return err
 	case err := <-serveErr:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			stopBackground()

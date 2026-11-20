@@ -105,9 +105,19 @@ func TestSPIFFECustodyRowsFollowBothProductionSockets(t *testing.T) {
 	controlPlaneBuild := goFunction(t, "../internal/server/protocol_mounts.go", "buildSPIFFE")
 	requireCall(t, controlPlaneBuild, "spiffe.NewWorkloadAPIServer",
 		"the retained control-plane compatibility socket must stay explicit while it exists")
-	controlPlaneRun := goFunction(t, "../internal/server/protocol_ssh.go", "RunSPIFFE")
+	productionRun := goFunction(t, "../internal/server/run.go", "RunWithExtraMigrations")
+	requireCallBefore(t, productionRun, "startBackgroundRuntime", "serveRuntime",
+		"the Workload API must bind before the control plane serves HTTP")
+	controlPlaneStart := goFunction(t, "../internal/server/run.go", "startBackgroundRuntime")
+	requireCallBefore(t, controlPlaneStart, "spiffe.ListenWorkloadAPI", "startRuntimeWorker",
+		"an active compatibility socket must bind before background serving starts")
+	requireCall(t, controlPlaneStart, "srv.runSPIFFE",
+		"the production worker must serve the bound compatibility socket")
+	controlPlaneRun := goFunction(t, "../internal/server/protocol_ssh.go", "runSPIFFE")
+	requireCall(t, controlPlaneRun, "spiffe.ServeWorkloadAPIListener",
+		"the bound compatibility socket must reach the Workload API server")
 	requireCall(t, controlPlaneRun, "spiffe.ServeWorkloadAPI",
-		"the compatibility Workload API must be reachable from the production server composition")
+		"a dormant eval profile must serve the Workload API after activation")
 
 	custody := read(t, "custody.md")
 	requireCustodyRow(t, custody, "SPIFFE X.509-SVID, host-agent Workload API", "host agent", "No")

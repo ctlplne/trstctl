@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"net"
-	"os"
 	"time"
 	"trstctl.com/trstctl/internal/auditsink"
 
@@ -550,24 +549,22 @@ func concatDER(blocks [][]byte) []byte {
 }
 
 // ServeWorkloadAPI registers the Workload API service on a new gRPC server and serves
-// it on the given Unix domain socket until ctx is canceled. It removes a stale
-// socket file first and sets 0600 perms so only the owning user can dial (the UDS
-// peer-trust boundary; AN-1's tenant scoping is enforced inside the wrapped Server).
+// it on the given Unix domain socket until ctx is canceled. The socket lives in
+// a verified owner-only directory (the UDS peer-trust boundary; AN-1's tenant
+// scoping is enforced inside the wrapped Server).
 // It is the served entry point cmd/trstctl uses when protocols.spiffe.enabled.
 func ServeWorkloadAPI(ctx context.Context, socketPath string, srv *WorkloadAPIServer) error {
-	if socketPath == "" {
-		return fmt.Errorf("spiffe: workload API socket path required")
-	}
-	_ = os.Remove(socketPath)
-	ln, err := net.Listen("unix", socketPath)
+	ln, err := ListenWorkloadAPI(socketPath)
 	if err != nil {
-		return fmt.Errorf("spiffe: listen on %s: %w", socketPath, err)
+		return err
 	}
-	// Restrict the socket to the owning user; the Workload API is host-local.
-	if err := os.Chmod(socketPath, 0o600); err != nil {
-		_ = ln.Close()
-		return fmt.Errorf("spiffe: chmod socket: %w", err)
-	}
+	return ServeWorkloadAPIListener(ctx, ln, srv)
+}
+
+// ServeWorkloadAPIListener serves an already bound and verified socket. The
+// production startup path uses it after binding before the HTTP listener opens.
+func ServeWorkloadAPIListener(ctx context.Context, ln net.Listener, srv *WorkloadAPIServer) error {
+	defer func() { _ = ln.Close() }()
 	gs := grpc.NewServer()
 	workloadpb.RegisterSpiffeWorkloadAPIServer(gs, srv)
 	go func() {
