@@ -1613,6 +1613,10 @@ A Windows provider can use its enrolled host agent to change a discovered local
 administrator password. Each rotation retains one successor under tenant
 custody, queues one exact-host job and waits for the host's signed proof that the
 successor authenticates as the selected SID and the predecessor is refused.
+After a control-plane restart, replay of a prepared rotation restores that
+exact-host job even when an older event has finer timestamp precision than the
+database stores. A prior failed provider delivery stays in the delivery record;
+the vault still waits for the host's proof before publishing the successor.
 
 Set `windows_host_agent_id` on a `windows` dynamic provider, opt into
 `allow_static_rotation`, and map each allowed secret role to its exact local

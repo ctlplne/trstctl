@@ -79,7 +79,7 @@ func CanonicalWindowsLocalRotation(ctx context.Context, s *store.Store, log *eve
 		return v, cmd, err
 	}
 	var p SecretStaticRotationAdvanced
-	if !found || prepared.TenantID != tenantID || prepared.Type != EventSecretStaticRotationAdvanced || prepared.SchemaVersion != 2 || prepared.Sequence <= queued.Sequence || json.Unmarshal(prepared.Data, &p) != nil || p.ID != id || p.TenantEpoch != cmd.TenantEpoch || p.FromPhase != store.SecretStaticRotationQueued || p.Phase != store.SecretStaticRotationPrepared || p.WindowsLocalIntent == nil || *p.WindowsLocalIntent != v.Intent || v.Intent.TenantID != tenantID || v.Intent.RotationID != id || !prepared.Time.Equal(v.PreparedAt) || !bytes.Equal(p.SealedPreparation, cmd.SealedPreparation) || !bytes.Equal(p.SealedOld, cmd.SealedOld) {
+	if !found || prepared.TenantID != tenantID || prepared.Type != EventSecretStaticRotationAdvanced || prepared.SchemaVersion != 2 || prepared.Sequence <= queued.Sequence || json.Unmarshal(prepared.Data, &p) != nil || p.ID != id || p.TenantEpoch != cmd.TenantEpoch || p.FromPhase != store.SecretStaticRotationQueued || p.Phase != store.SecretStaticRotationPrepared || p.WindowsLocalIntent == nil || *p.WindowsLocalIntent != v.Intent || v.Intent.TenantID != tenantID || v.Intent.RotationID != id || !prepared.Time.UTC().Truncate(time.Microsecond).Equal(v.PreparedAt) || !bytes.Equal(p.SealedPreparation, cmd.SealedPreparation) || !bytes.Equal(p.SealedOld, cmd.SealedOld) {
 		return v, cmd, fail
 	}
 	if v.ObservedEventID == "" {

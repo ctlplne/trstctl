@@ -258,10 +258,12 @@ func (a *API) appendAndProjectStaticRotation(ctx context.Context, tenantID, even
 	}
 	defer secret.Wipe(raw)
 	schemaVersion := 1
+	eventTime := time.Now().UTC()
 	switch source := payload.(type) {
 	case projections.SecretStaticRotationAdvanced:
 		if source.WindowsLocalIntent != nil {
 			schemaVersion = 2
+			eventTime = eventTime.Truncate(time.Microsecond)
 		}
 	case projections.SecretStaticRotationReferenceQueued:
 		schemaVersion = projections.SecretStaticRotationReferenceQueueSchemaVersion
@@ -270,7 +272,7 @@ func (a *API) appendAndProjectStaticRotation(ctx context.Context, tenantID, even
 	case projections.SecretStaticRotationHostedStaged:
 		schemaVersion = projections.SecretStaticRotationHostedStageSchemaVersion
 	}
-	ev := events.Event{ID: eventID, Type: eventType, TenantID: tenantID, Time: time.Now().UTC(), SchemaVersion: schemaVersion, Data: raw}
+	ev := events.Event{ID: eventID, Type: eventType, TenantID: tenantID, Time: eventTime, SchemaVersion: schemaVersion, Data: raw}
 	if actor, ok := events.ActorFromContext(ctx); ok {
 		ev.Actor = &actor
 	}

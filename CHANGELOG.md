@@ -2011,6 +2011,11 @@
   runbooks join the upgrade and disaster-recovery runbooks.
 
 ### Fixed
+- Windows local administrator rotations can replay a prepared event recorded with
+  nanosecond precision after a restart. The projection and retained-source check
+  compare the instant at PostgreSQL's microsecond precision, and new native
+  preparation events use that precision at creation (CR-156). The exact host job
+  can resume without treating the same event as a conflicting generation.
 - After a containment, the replacement preview lists `nginx-upgrade` among the deploy
   actions of an nginx target whose profile requires TPM-held keys, so a recovery
   action pinned to it reads as one the replacement runs (TPM-O1-L3-L1). The TPM docs

@@ -170,6 +170,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 	defer cancel()
 	if _, err := st.SystemPool().Exec(ctx,
 		`TRUNCATE tenants, browser_sessions, idempotency_keys, outbox, rate_limits, deployment_kek_domain,
+		          windows_local_account_scans, windows_local_account_rotations,
 		          owners, issuers, identities, identity_transitions, deployment_target_revisions, deployment_targets,
 		          agents, agent_cert_revocations, agent_role_grants, kmip_clients, agent_removal_commands, agent_bootstrap_tokens, kubernetes_controller_posture, ssh_trust_fleet_hosts, ssh_trust_fleet_rollouts, kubernetes_trust_rollout_clusters, kubernetes_trust_rollouts, audit_anchors, tsa_certificates, policy_bindings, tenant_members, attestations, api_tokens, api_token_revocation_commands, oidc_session_locators, oidc_logout_receipts, certificates, acme_upstream_ari, certificate_metadata_watermarks, certificate_metadata_receipts,
 		          identity_terminal_commands, identity_terminal_receipts,

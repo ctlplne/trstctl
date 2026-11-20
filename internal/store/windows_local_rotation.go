@@ -147,7 +147,7 @@ func (s *Store) ApplyWindowsLocalRotationPreparedTx(ctx context.Context, tx pgx.
 	if e != nil {
 		return e
 	}
-	if saved.Intent != i || saved.PreparedEventID != eventID || !saved.PreparedAt.Equal(at) {
+	if saved.Intent != i || saved.PreparedEventID != eventID || !saved.PreparedAt.Equal(at.UTC().Truncate(time.Microsecond)) {
 		return ErrIdempotencyConflict
 	}
 	if saved.Observation != nil && (saved.Observation.Report.Status == "succeeded" || saved.Observation.Report.Status == "not_applied") || cmd.Phase != SecretStaticRotationPrepared {

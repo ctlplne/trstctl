@@ -164,6 +164,11 @@ func TestServedPreparedWindowsLocalRotationA268(t *testing.T) {
 	if e != nil || !found {
 		t.Fatal("prepared source lost", e)
 	}
+	// CR-156: new native preparation events use PostgreSQL's timestamp
+	// precision so the same source projects on Linux and on replay.
+	if preparedEvent.Time.Nanosecond()%1000 != 0 {
+		t.Fatalf("prepared event time is finer than PostgreSQL stores: %s", preparedEvent.Time)
+	}
 	if e = projections.New(h.store).Apply(ctx, preparedEvent); e != nil {
 		t.Fatal(e)
 	}
