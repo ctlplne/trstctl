@@ -5,6 +5,8 @@ package dynsecret
 import (
 	"strings"
 	"testing"
+
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 )
 
 // Q6: the decoy's DSN names its own database and the login, and nothing in it
@@ -33,6 +35,14 @@ func TestPostgresDecoyDSNNamesTheDecoyDatabaseAndNothingSaysDecoy(t *testing.T) 
 			}
 			if !strings.Contains(string(got), tc.want) || strings.Contains(string(got), "adminpw") || strings.Contains(strings.ToLower(string(got)), "decoy") {
 				t.Fatalf("decoy DSN = %q; want it to contain %q, no admin password and no hint of a decoy", got, tc.want)
+			}
+			target, err := dbdsn.Parse(dbdsn.Postgres, got, dbdsn.Credential)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer target.Wipe()
+			if target.Database != DecoyDatabaseName(role) || target.User != role {
+				t.Fatal("the admitted decoy profile lost its isolated database or login")
 			}
 		})
 	}

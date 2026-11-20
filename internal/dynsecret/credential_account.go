@@ -4,16 +4,14 @@ package dynsecret
 
 import (
 	"encoding/json"
-	"github.com/go-sql-driver/mysql"
-	"github.com/jackc/pgx/v5/pgconn"
 	"strings"
 
-	"trstctl.com/trstctl/internal/secrettext"
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 )
 
 // CredentialAccount returns the account a database DSN or desktop JSON
 // credential signs in as: a vaulted two-account role's live account (A261). The
-// string is parsed only; nothing connects.
+// credential is parsed without opening files or a connection.
 func CredentialAccount(providerType string, credential []byte) (string, bool) {
 	var user string
 	switch providerType {
@@ -25,18 +23,13 @@ func CredentialAccount(providerType string, credential []byte) (string, bool) {
 			return "", false
 		}
 		user = c.Username
-	case "postgresql":
-		config, err := pgconn.ParseConfig(secrettext.String(credential))
+	case dbdsn.Postgres, dbdsn.MySQL:
+		target, err := dbdsn.Parse(providerType, credential, dbdsn.Credential)
 		if err != nil {
 			return "", false
 		}
-		user = config.User
-	case "mysql":
-		config, err := mysql.ParseDSN(secrettext.String(credential))
-		if err != nil {
-			return "", false
-		}
-		user = config.User
+		defer target.Wipe()
+		user = target.User
 	}
 	return user, user != ""
 }

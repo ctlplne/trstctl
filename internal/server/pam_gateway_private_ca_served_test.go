@@ -125,7 +125,7 @@ func TestServedGatewaySignsInToAPrivateCAPostgresWithoutARootFileA256L1(t *testi
 	gatewayAddr := raw.Addr().String()
 	gatewayID := agentRowID(servedTestTenant, "role-agent")
 	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleGateway}, []string{relay.KindAccessGatewaySession}, func(d *Deps) {
-		wirePAMPostgresProvider(d, adminDSNRef, time.Minute)
+		wirePAMPostgresProvider(d, adminDSNRef, time.Minute, filepath.Dir(pg.caFile))
 		d.PAM = PAMConfig{
 			Enabled: true, DefaultTTL: 30 * time.Second, MaxTTL: time.Minute, ExpiryInterval: 50 * time.Millisecond,
 			Attestors: []attest.Attestor{servedPAMAttestor{}},
@@ -190,10 +190,9 @@ func TestServedGatewaySignsInToAPrivateCAPostgresWithoutARootFileA256L1(t *testi
 		t.Fatal(err)
 	}
 	login := parsed.User.Username()
-	// The session's credential verifies as its administrator DSN does: a root
-	// file the gateway's host does not have.
-	if parsed.Query().Get("sslmode") != "verify-full" || parsed.Query().Get("sslrootcert") != pg.caFile {
-		t.Fatalf("the session credential does not name the control plane's root file")
+	// The gateway requires verified TLS and its credential carries no path.
+	if parsed.Query().Get("sslmode") != "verify-full" || parsed.Query().Has("sslrootcert") {
+		t.Fatal("the session credential must require verified TLS without a file path")
 	}
 	a201Await(t, "the gateway holds the session", func() bool {
 		for _, id := range gw.Sessions() {

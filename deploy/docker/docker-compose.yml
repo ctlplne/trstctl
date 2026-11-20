@@ -234,7 +234,7 @@ services:
       TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT: "http://127.0.0.1:18081/token"
       TRSTCTL_AUTH_OIDC_REDIRECT_URI: "https://localhost:8443/auth/callback"
       TRSTCTL_AUTH_OIDC_JWKS_FILE: /local-oidc-public/jwks.json
-      TRSTCTL_AUTH_OIDC_SESSION_SECRET_FILE: /data/secrets/oidc-session.secret
+      TRSTCTL_AUTH_OIDC_SESSION_SECRET_FILE: /data/oidc-session.secret
       TRSTCTL_AUTH_OIDC_SESSION_TTL: 8h
       TRSTCTL_AUTH_OIDC_LOGIN_REDIRECT: /
       TRSTCTL_AUTH_OIDC_TENANT_CLAIM: tenant
@@ -245,7 +245,7 @@ services:
     volumes:
       - signersock:/run/trstctl   # reach the signer over the shared UDS
       - spiffesock:/run/trstctl-spiffe # mount this volume into a workload container to use the SPIFFE Workload API
-      - secrets:/data/secrets     # the same deployment KEK as the signer
+      - secrets:/data/secrets:ro  # signer owns the deployment KEK and socket auth
       - trstctldata:/data         # CA cert + audit key persistence
       - publictrust:/public-trust # certificate-only trust publication; no private TLS state
       - evaloidcpublic:/local-oidc-public:ro # public JWKS only; the IdP private volume is not mounted here

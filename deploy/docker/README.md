@@ -74,6 +74,12 @@ bundled NATS service is still one server, so Compose explicitly sets
 external NATS should leave the default three replicas and will fail
 startup/readiness if JetStream cannot honor them.
 
+The signer creates the shared KEK and signer-channel authentication material.
+The control plane and the opt-in backup worker mount `/data/secrets` read-only.
+Compose keeps the evaluation OIDC cookie key under writable application data
+at `/data/oidc-session.secret`. Existing evaluation users may need to sign in
+again after upgrading.
+
 ## Back up the evaluation stack
 
 The full backup must see the signer's sealed key-store volume as well as the

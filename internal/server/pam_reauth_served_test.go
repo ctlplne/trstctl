@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -19,6 +20,8 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestServedHighRiskSessionNeedsAFreshSignInA277 is A277 part 2's Done-when:
@@ -212,5 +215,57 @@ func TestServedHighRiskSessionNeedsAFreshSignInA277(t *testing.T) {
 	var opened servedPAMSessionResponse
 	if status != http.StatusCreated || json.Unmarshal(body, &opened) != nil || opened.Status != "active" || opened.Postgres == nil {
 		t.Fatalf("activation after the fresh sign-in = %d %s, want the session active", status, body)
+	}
+
+	// The same subject can hold both an old and a fresh browser session.
+	// A completed gateway activation must perform the current step-up check
+	// even when its protected HTTP reference is already cached.
+	gatewayID := uuid.NewString()
+	if err := h.store.UpsertAgent(t.Context(), store.Agent{ID: gatewayID, TenantID: h.tenant, Name: "a277-gateway",
+		Status: "active", Version: "review", Roles: []string{mtls.AgentRoleGateway}}); err != nil {
+		t.Fatal(err)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/access/targets", admin, "a277r-register-gateway",
+		map[string]any{"id": "orders-gateway", "target_type": "postgres", "provider_id": "pam-pg-provider",
+			"allowed_roles": []string{"readonly"}, "gateway_agent_id": gatewayID, "gateway_address": "127.0.0.1:4444"})
+	if status != http.StatusCreated {
+		t.Fatalf("register gateway target: %d %s", status, body)
+	}
+	gatewayRequest := maps.Clone(session)
+	delete(gatewayRequest, "approval_request_id")
+	delete(gatewayRequest, "intent_digest")
+	gatewayRequest["request_id"], gatewayRequest["target_id"] = uuid.NewString(), "orders-gateway"
+	status, _, body = viaSession(jar, "/api/v1/access/session-requests", "a277r-request-gateway", gatewayRequest)
+	pending = api.PAMApprovalRequest{}
+	if status != http.StatusAccepted || json.Unmarshal(body, &pending) != nil || pending.ApprovalRequestID == "" {
+		t.Fatalf("request gateway approval: %d %s", status, body)
+	}
+	for i, reviewer := range reviewers {
+		if status, _ := secretsReqKey(t, h, http.MethodPost, "/api/v1/approval-requests/"+pending.ApprovalRequestID+"/approvals", reviewer,
+			"a277r-review-gateway-"+string(rune('1'+i)), map[string]any{"intent_digest": pending.IntentDigest}); status != http.StatusOK {
+			t.Fatalf("review gateway approval %d: HTTP %d", i+1, status)
+		}
+	}
+	gatewayRequest["approval_request_id"], gatewayRequest["intent_digest"] = pending.ApprovalRequestID, pending.IntentDigest
+	const gatewayOpenKey = "a277r-open-gateway"
+	status, _, body = viaSession(jar, "/api/v1/access/sessions", gatewayOpenKey, gatewayRequest)
+	var gatewaySession servedPAMSessionResponse
+	if status != http.StatusCreated || json.Unmarshal(body, &gatewaySession) != nil || gatewaySession.Gateway == nil || gatewaySession.Gateway.Ticket == "" {
+		t.Fatalf("fresh gateway activation failed with HTTP %d", status)
+	}
+	staleJar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status, _, _ := signIn(staleJar, "code-stale", false); status != http.StatusFound {
+		t.Fatalf("open a separate stale sign-in: HTTP %d", status)
+	}
+	status, header, body = viaSession(staleJar, "/api/v1/access/sessions", gatewayOpenKey, gatewayRequest)
+	stepUp("cached gateway open on a stale sign-in", status, header, body)
+	status, _, body = viaSession(jar, "/api/v1/access/sessions", gatewayOpenKey, gatewayRequest)
+	var replayed servedPAMSessionResponse
+	if status != http.StatusCreated || json.Unmarshal(body, &replayed) != nil || replayed.ID != gatewaySession.ID ||
+		replayed.Gateway == nil || replayed.Gateway.Ticket != gatewaySession.Gateway.Ticket {
+		t.Fatalf("fresh gateway replay did not return the original session and ticket (HTTP %d)", status)
 	}
 }

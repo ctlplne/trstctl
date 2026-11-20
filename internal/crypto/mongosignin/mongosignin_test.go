@@ -25,6 +25,9 @@ func TestParseURIReadsTheProviderCredential(t *testing.T) {
 		t.Fatalf("target = %+v", target)
 	}
 	plain, err := ParseURI([]byte("mongodb://u:p@127.0.0.1:27017"))
+	if plain != nil {
+		defer plain.Wipe()
+	}
 	if err != nil || plain.AuthSource != "admin" || plain.TLS {
 		t.Fatalf("plain = %+v %v", plain, err)
 	}
@@ -66,8 +69,7 @@ func TestBSONRoundTrip(t *testing.T) {
 
 // TestConnectVerifiesThePrivateCATheSessionCarriesA256L1 is A256-L1: a
 // tls=true target behind a private CA verifies against the CA the session
-// carries, ahead of a tlsCAFile that names a path on the control plane's
-// host; without it the handshake does not verify.
+// carries. The credential itself cannot supply a trust file path.
 func TestConnectVerifiesThePrivateCATheSessionCarriesA256L1(t *testing.T) {
 	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("mongo.private.test")
 	if err != nil {
@@ -98,12 +100,20 @@ func TestConnectVerifiesThePrivateCATheSessionCarriesA256L1(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	dial := (&net.Dialer{}).DialContext
-	carried := &Target{TLS: true, TLSCAFile: "/nonexistent/on/this/host/ca.pem", rootPEM: caPEM, serverName: "mongo.private.test"}
+	carried := &Target{TLS: true, rootPEM: caPEM, serverName: "mongo.private.test"}
 	conn, err := connect(ctx, dial, ln.Addr().String(), carried)
 	if err != nil {
 		t.Fatalf("the carried CA: %v", err)
 	}
 	_ = conn.Close()
+	forbidden := Options{RootCAPEM: caPEM, ServerName: "mongo.private.test",
+		Dial: func(context.Context, string, string) (net.Conn, error) {
+			t.Fatal("a session carrying a path reached the dialer")
+			return nil, nil
+		}}
+	if _, err := SignIn(ctx, []byte("mongodb://review:plain@db.test/orders?tls=true&tlsCAFile=unused"), forbidden); err == nil {
+		t.Fatal("the gateway accepted a DSN path alongside its trusted CA")
+	}
 	if _, err := connect(ctx, dial, ln.Addr().String(), &Target{TLS: true}); err == nil || !strings.Contains(err.Error(), "does not verify") {
 		t.Fatalf("a private CA without the carried CA = %v, want unverified", err)
 	}

@@ -45,12 +45,15 @@ const (
 // server's OK and relays commands and results. COM_CHANGE_USER, which would
 // sign the connection in as another account, is refused. The client never
 // receives the DSN.
-func serveMySQL(ctx context.Context, client net.Conn, dsn []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder, guards ...*commandConnection) error {
+func serveMySQL(ctx context.Context, client net.Conn, dsn []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), database string, rec *connRecorder, guards ...*commandConnection) error {
 	target, err := mysqlsignin.ParseDSN(dsn)
 	if err != nil {
 		return err
 	}
 	defer target.Wipe()
+	if database != "" {
+		target.Database = database
+	}
 	signInCtx, cancel := context.WithDeadline(ctx, earliest(deadline, time.Now().Add(30*time.Second)))
 	defer cancel()
 	if dial == nil {

@@ -18,6 +18,7 @@ import (
 	"unicode"
 
 	"trstctl.com/trstctl/internal/credref"
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/dbaccess"
 	"trstctl.com/trstctl/internal/hostedkey"
 	"trstctl.com/trstctl/internal/netsec"
@@ -219,6 +220,10 @@ type DynamicSecretProviderConfig struct {
 	TLSCARef       string `json:"tls_ca_ref,omitempty"`
 	TLSServerName  string `json:"tls_server_name,omitempty"`
 	AllowPlaintext bool   `json:"allow_plaintext,omitempty"`
+	// DatabaseCAFileRoot confines legacy CA paths from operator-file DSNs.
+	// DatabaseRoutingEndpoints names optional SQL Server redirect listeners.
+	DatabaseCAFileRoot       string   `json:"database_ca_file_root,omitempty"`
+	DatabaseRoutingEndpoints []string `json:"database_routing_endpoints,omitempty"`
 	// StartTLS (ldap) connects to the directory's plain LDAP port and
 	// upgrades with StartTLS, verifying tls_server_name against tls_ca_ref
 	// (or system roots) before the administrator binds; it never falls back
@@ -1399,8 +1404,34 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "kubernetes" && (c.KubernetesAudience != "" || c.KubernetesTLSCARef != "" || c.KubernetesTLSServerName != "") {
 		errs = append(errs, fmt.Errorf("%s Kubernetes audience and TLS settings are only valid for kubernetes", where))
 	}
-	if !tlsProviderTypes[c.Type] && (c.TLSCARef != "" || c.TLSServerName != "" || c.AllowPlaintext) {
+	if !tlsProviderTypes[c.Type] && (c.AllowPlaintext || !dbdsn.IsDriver(c.Type) && (c.TLSCARef != "" || c.TLSServerName != "")) {
 		errs = append(errs, fmt.Errorf("%s tls_ca_ref, tls_server_name and allow_plaintext are not valid for %s", where, c.Type))
+	}
+	if dbdsn.IsDriver(c.Type) {
+		if c.TLSCARef != "" && (!strings.HasPrefix(strings.TrimSpace(c.TLSCARef), "file:") || validateCredentialRef(c.TLSCARef) != nil) {
+			errs = append(errs, fmt.Errorf("%s tls_ca_ref must name a public CA in an absolute operator file", where))
+		}
+		if c.TLSServerName != "" {
+			if _, err := dbdsn.HostName(c.TLSServerName); err != nil {
+				errs = append(errs, fmt.Errorf("%s tls_server_name must name the certificate host", where))
+			}
+		}
+	}
+	if c.DatabaseCAFileRoot != "" && (!dbdsn.IsDriver(c.Type) || !filepath.IsAbs(c.DatabaseCAFileRoot) || !strings.HasPrefix(strings.TrimSpace(c.AdminDSNRef), "file:")) {
+		errs = append(errs, fmt.Errorf("%s database_ca_file_root must be absolute and applies only to operator-file database DSNs", where))
+	}
+	if len(c.DatabaseRoutingEndpoints) > 0 {
+		if c.Type != "mssql" && c.Type != "azure-sql" || len(c.DatabaseRoutingEndpoints) > dbdsn.MaxHosts {
+			errs = append(errs, fmt.Errorf("%s database_routing_endpoints only supports bounded SQL Server listener lists", where))
+		} else {
+			for _, endpoint := range c.DatabaseRoutingEndpoints {
+				host, port, err := net.SplitHostPort(endpoint)
+				if _, addressErr := dbdsn.TCPAddress(host, port); err != nil || addressErr != nil {
+					errs = append(errs, fmt.Errorf("%s database_routing_endpoints must use host and numeric port", where))
+					break
+				}
+			}
+		}
 	}
 	errs = append(errs, validateADReconcile(where, c)...)
 	if c.StartTLS && c.Type != "ldap" {

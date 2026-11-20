@@ -469,13 +469,17 @@ func NewAgentClient(cc *grpc.ClientConn, opts ...ClientOption) *AgentClient {
 }
 
 func (c *AgentClient) withProtocol(ctx context.Context) context.Context {
+	return c.withProtocolCapabilities(ctx, agentCapabilitiesValue)
+}
+
+func (c *AgentClient) withProtocolCapabilities(ctx context.Context, capabilities string) context.Context {
 	version := protocol.Version
 	if c.protocolVersionSet {
 		version = c.protocolVersion
 	}
 	pairs := []string{
 		protocol.MetadataAgentProtocol, strconv.Itoa(version),
-		protocol.MetadataAgentCapabilities, agentCapabilitiesValue,
+		protocol.MetadataAgentCapabilities, capabilities,
 	}
 	if c.agentVersion != "" {
 		pairs = append(pairs, protocol.MetadataAgentVersion, c.agentVersion)
@@ -1261,8 +1265,12 @@ func (c *AgentClient) ClaimJobs(ctx context.Context, req *ClaimJobsRequest) (*Cl
 // caller must move each returned value into a locked buffer and wipe it when
 // the attempt ends.
 func (c *AgentClient) RedeemJobCredential(ctx context.Context, req *RedeemJobCredentialRequest) (*RedeemJobCredentialResponse, error) {
+	capabilities := agentCapabilitiesValue
+	if ctx.Value(guardedDatabaseRedemptionKey{}) == true {
+		capabilities += "," + guardedDatabaseRedemption
+	}
 	out := new(RedeemJobCredentialResponse)
-	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodRedeemJobCredential, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+	if err := c.cc.Invoke(c.withProtocolCapabilities(ctx, capabilities), fullMethodRedeemJobCredential, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil

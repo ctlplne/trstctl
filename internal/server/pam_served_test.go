@@ -683,6 +683,12 @@ func servedPAMOpen(t *testing.T, h *servedHarness, token, idemKey string, req ma
 
 func servedPAMReviewedOpen(t *testing.T, h *servedHarness, requester, reviewerOne, reviewerTwo, idemKey string, req map[string]any) servedPAMSessionResponse {
 	t.Helper()
+	servedPAMApproveOpen(t, h, requester, reviewerOne, reviewerTwo, idemKey, req)
+	return servedPAMOpen(t, h, requester, idemKey, req)
+}
+
+func servedPAMApproveOpen(t *testing.T, h *servedHarness, requester, reviewerOne, reviewerTwo, idemKey string, req map[string]any) {
+	t.Helper()
 	req["request_id"] = uuid.NewString()
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/session-requests", requester,
 		idemKey+"-request", req)
@@ -707,7 +713,6 @@ func servedPAMReviewedOpen(t *testing.T, h *servedHarness, requester, reviewerOn
 	}
 	req["approval_request_id"] = pending.ApprovalRequestID
 	req["intent_digest"] = pending.IntentDigest
-	return servedPAMOpen(t, h, requester, idemKey, req)
 }
 
 func startPAMPostgres(t *testing.T) (string, func()) {
@@ -749,11 +754,14 @@ func pamPostgresAdminFileRef(t *testing.T, dsn string) string {
 	return "file:" + path
 }
 
-func wirePAMPostgresProvider(d *Deps, adminDSNRef string, maxTTL time.Duration) {
+func wirePAMPostgresProvider(d *Deps, adminDSNRef string, maxTTL time.Duration, caDirectory ...string) {
 	cfg := config.DynamicSecretProviderConfig{
 		TenantID: servedTestTenant, ID: "pam-pg-provider", Type: "postgresql",
 		AdminDSNRef: adminDSNRef, Database: "postgres", Schema: "public",
 		UsernamePrefix: "trstctl_pam", AllowedRoles: []string{"readonly"}, MaxTTL: maxTTL.String(),
+	}
+	if len(caDirectory) > 0 {
+		cfg.DatabaseCAFileRoot = caDirectory[0]
 	}
 	provider := newConfiguredDynamicProvider(cfg, map[string]bool{"readonly": true}, maxTTL,
 		integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}, nil)

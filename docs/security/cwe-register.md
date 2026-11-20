@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3541 annotated sites across 35 rules. Each row is
+3538 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -162,8 +162,8 @@ not this file.
 | `internal/agent/relay/ticketnote_test.go:23` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
 | `internal/agent/secretrender/secretrender_test.go:126` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/agent/transport/agentservice.go:960` | an RPC method name, not a credential. The material this |
-| `internal/agent/transport/agentservice.go:967` | an RPC method name. This call carries a CSR up and returns |
+| `internal/agent/transport/agentservice.go:964` | an RPC method name, not a credential. The material this |
+| `internal/agent/transport/agentservice.go:971` | an RPC method name. This call carries a CSR up and returns |
 | `internal/agent/transport/receipt.go:226` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt.go:271` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt_custody_test.go:15` | the credential fingerprint is public fixture metadata, not a credential (CWE-798). |
@@ -396,8 +396,8 @@ not this file.
 | `internal/dynsecret/oauth_client_credentials.go:81` | a registered URN naming the assertion type, not a credential (CWE-798) |
 | `internal/dynsecret/oauth_client_credentials_test.go:29` | fabricated lab client secret, form-encoded (CWE-798) |
 | `internal/dynsecret/oauth_client_credentials_test.go:190` | fabricated fixture secret; the case fails on its scope (CWE-798) |
-| `internal/dynsecret/postgres_decoy_test.go:15` | placeholder test DSNs, not credentials (CWE-798) |
-| `internal/dynsecret/postgres_decoy_test.go:19` | placeholder test DSNs, not credentials (CWE-798) |
+| `internal/dynsecret/postgres_decoy_test.go:17` | placeholder test DSNs, not credentials (CWE-798) |
+| `internal/dynsecret/postgres_decoy_test.go:21` | placeholder test DSNs, not credentials (CWE-798) |
 | `internal/dynsecret/rabbitmq_test.go:34` | fabricated lab administrator password (CWE-798) |
 | `internal/dynsecret/tailscale_test.go:30` | fabricated stand-in API token (CWE-798) |
 | `internal/dynsecret/totp_test.go:13` | the RFC 6238 test-vector seed, not a credential (CWE-798) |
@@ -789,7 +789,7 @@ not this file.
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_access_explain_served_test.go:100` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
-| `internal/server/secret_integrations.go:1764` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1750` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:140` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_reference_scope_served_test.go:156` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
@@ -1134,7 +1134,7 @@ not this file.
 | `internal/agent/accessgateway/mongo.go:179` | bounded by the message it came from (CWE-190) |
 | `internal/agent/accessgateway/mongo.go:390` | a BSON datetime's two's-complement bits (CWE-190) |
 | `internal/agent/accessgateway/mongocommand.go:120` | request ID's two's-complement bits (CWE-190) |
-| `internal/agent/accessgateway/mysql.go:565` | bounded by mysqlMaxLenenc just above (CWE-190) |
+| `internal/agent/accessgateway/mysql.go:568` | bounded by mysqlMaxLenenc just above (CWE-190) |
 | `internal/agent/accessgateway/mysql_test.go:44` | the 3-byte little-endian packet length (CWE-190) |
 | `internal/agent/accessgateway/mysql_test.go:47` | test strings are under 251 bytes (CWE-190) |
 | `internal/agent/accessgateway/mysql_test.go:74` | one short ERR packet (CWE-190) |
@@ -1143,7 +1143,7 @@ not this file.
 | `internal/agent/accessgateway/pgrecord.go:183` | the wire field is a signed length (-1 is NULL) (CWE-190) |
 | `internal/agent/accessgateway/pgrecord_test.go:21` | test rows are small (CWE-190) |
 | `internal/agent/accessgateway/pgrecord_test.go:23` | test values are small (CWE-190) |
-| `internal/agent/accessgateway/postgres.go:137` | gateway-built messages are small (CWE-190) |
+| `internal/agent/accessgateway/postgres.go:140` | gateway-built messages are small (CWE-190) |
 | `internal/agent/accessgateway/sftp_test.go:17` | test packets are small (CWE-190) |
 | `internal/agent/accessgateway/sftp_test.go:21` | test strings are small (CWE-190) |
 | `internal/agent/decoy/watch_linux.go:112` | the kernel's signed file descriptor field (CWE-190) |
@@ -1267,27 +1267,27 @@ not this file.
 | `internal/crypto/mongosignin/bson.go:81` | a command document is short (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:194` | a BSON int32's two's-complement bits (CWE-190) |
 | `internal/crypto/mongosignin/bson.go:196` | a BSON int64's two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:389` | a message length is bounded by its reader (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:390` | a request id is its two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:391` | a request id is its two's-complement bits (CWE-190) |
-| `internal/crypto/mongosignin/mongosignin.go:392` | an op code is a small constant (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:135` | the 3-byte little-endian length of a payload checked above (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:197` | the capability flags' lower half (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:200` | the capability flags' upper half (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:470` | bounded by maxLenenc just above (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:483` | a one-byte length below 251 (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:485` | a two-byte length below 1<<16 (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:487` | the three bytes of a value under 1<<24 (CWE-190) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:489` | a length, never negative (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:313` | a message length is bounded by its reader (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:314` | a request id is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:315` | a request id is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:316` | an op code is a small constant (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:126` | the 3-byte little-endian length of a payload checked above (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:188` | the capability flags' lower half (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:191` | the capability flags' upper half (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:461` | bounded by maxLenenc just above (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:474` | a one-byte length below 251 (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:476` | a two-byte length below 1<<16 (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:478` | the three bytes of a value under 1<<24 (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:480` | a length, never negative (CWE-190) |
 | `internal/crypto/pfx/certonly.go:178` | r is at most 0xFFFF here, so its two bytes are exact (CWE-190) |
 | `internal/crypto/pfx/certonly.go:190` | id is the KDF purpose, 1 to 3 (CWE-190) |
 | `internal/crypto/pfx/certonly.go:226` | RFC 7292 B.2 adds modulo 2^(8v): keeping the low byte and carrying is the algorithm (CWE-190) |
 | `internal/crypto/pfx/certonly.go:400` | pad is at most the block size (CWE-190) |
 | `internal/crypto/pfx/rc2.go:55` | 255 modulo a power of two up to 256 fits a byte (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:149` | a startup message is a few hundred bytes (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:160` | a startup message is a few hundred bytes (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:349` | a SCRAM client-first message is under 100 bytes (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:407` | sign-in messages are bounded and small (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin_test.go:101` | a fake server's messages are a few bytes (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin_test.go:102` | a fake server's messages are a few bytes (CWE-190) |
 | `internal/crypto/quicinitial/quicinitial.go:108` | the token length was checked against the datagram above (CWE-190) |
 | `internal/crypto/quicinitial/quicinitial.go:118` | the length was checked against the datagram above (CWE-190) |
 | `internal/crypto/quicinitial/quicinitial.go:122` | the length was checked against the datagram above (CWE-190) |
@@ -1341,10 +1341,10 @@ not this file.
 | `internal/dynsecret/active_directory_reset_native_lab_test.go:305` | preparation is checked at <=64KiB before conversion (CWE-190) |
 | `internal/dynsecret/active_directory_reset_native_lab_test.go:306` | predecessor is checked at <=1024 bytes before conversion (CWE-190) |
 | `internal/dynsecret/active_directory_signin.go:187` | unix is within year 1970..9999, so the FILETIME fits (CWE-190) |
-| `internal/dynsecret/drivers.go:321` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/drivers.go:329` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/providers_real.go:1837` | a string length is never negative (CWE-190) |
-| `internal/dynsecret/providers_real_test.go:688` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/dynsecret/drivers.go:284` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
+| `internal/dynsecret/drivers.go:292` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
+| `internal/dynsecret/providers_real.go:1855` | a string length is never negative (CWE-190) |
+| `internal/dynsecret/providers_real_test.go:733` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/dynsecret/totp.go:127` | step = now / period with now checked non-negative above (CWE-190) |
 | `internal/dynsecret/totp.go:161` | s is checked non-negative above (CWE-190) |
 | `internal/dynsecret/totp_verify_test.go:37` | a positive clock step in a test (CWE-190) |
@@ -1439,7 +1439,7 @@ not this file.
 | `internal/server/pam_gateway_mongo_served_test.go:106` | a request id's two's-complement bits (CWE-190) |
 | `internal/server/pam_gateway_private_ca_served_test.go:71` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_health.go:100` | a positive interval in nanoseconds, never negative (CWE-190) |
-| `internal/server/pam_served_test.go:731` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/server/pam_served_test.go:736` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/protocol_mounts.go:1044` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/protocol_mounts.go:1046` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
@@ -1698,7 +1698,7 @@ not this file.
 | `internal/dynsecret/esxi.go:110` | the rotated host credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/fireworks.go:72` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/github_app.go:228` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/hana.go:186` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
+| `internal/dynsecret/hana.go:187` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/ibm_api_connect.go:152` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/ibm_api_connect.go:202` | the platform credentials go to the token endpoint over the guarded client and are not kept (CWE-200) |
 | `internal/dynsecret/idp_admin.go:172` | the rotated administrator credential; the rotation seals it before storage (CWE-200) |
@@ -1710,15 +1710,15 @@ not this file.
 | `internal/dynsecret/milvus.go:138` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/mongodb_atlas.go:155` | the new user's password goes to the Atlas Admin API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/mongodb_atlas.go:184` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/mssql.go:266` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/mssql.go:321` | the staged credential is this provider's output: the outbox seals it and only an authorized read opens it (CWE-200) |
+| `internal/dynsecret/mssql.go:270` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
+| `internal/dynsecret/mssql.go:325` | the staged credential is this provider's output: the outbox seals it and only an authorized read opens it (CWE-200) |
 | `internal/dynsecret/network_api.go:137` | the rotated device credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/network_device.go:125` | the rotated device credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/oauth_client_credentials.go:311` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/openai.go:125` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/openrouter.go:67` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
-| `internal/dynsecret/oracle.go:262` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/providers_real.go:1641` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/dynsecret/oracle.go:233` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
+| `internal/dynsecret/providers_real.go:1659` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:150` | the new user's password goes to the management API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:177` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/redfish.go:104` | the rotated controller credential; the rotation seals it before storage (CWE-200) |
@@ -1847,7 +1847,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/dynsecret/discover_accounts.go:131` | fixed column names, no input (CWE-89) |
+| `internal/dynsecret/discover_accounts.go:128` | fixed column names, no input (CWE-89) |
 | `internal/store/migrate.go:678` | a quoted identifier from the migration file, never input (CWE-89) |
 
 ### G203 — CWE-? (unmapped rule) (3 sites)
@@ -2182,8 +2182,8 @@ not this file.
 | `internal/server/pam_health_served_test.go:35` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_recording_served_test.go:196` | the stock ssh client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_recording_served_test.go:208` | the stock sftp client against the test's own tunnel (CWE-78) |
-| `internal/server/pam_served_test.go:918` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:949` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_served_test.go:926` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_served_test.go:957` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_signin_served_test.go:43` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_signin_served_test.go:46` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_signin_served_test.go:51` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2338,9 +2338,9 @@ not this file.
 | `internal/api/vault_compat_contract_test.go:246` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:173` | non-secret fixture directory in t.TempDir (CWE-22, CWE-276) |
 | `internal/crypto/secretfile/secretfile_test.go:61` | deliberately loose fixture dir; secretfile must refuse it (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:676` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:679` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:682` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:721` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:724` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:727` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/kms/tpm/swtpm_services_l2_test.go:33` | the container's D-Bus runtime directory (CWE-276) |
 | `internal/projections/golden_events_test.go:107` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/sshdiscovery_store_test.go:92` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2358,7 +2358,7 @@ not this file.
 | `internal/server/java_sdk_served_test.go:45` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:245` | the container's keycloak user must read the import directory (CWE-276) |
 | `internal/server/pam_gateway_private_ca_served_test.go:64` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/pam_served_test.go:724` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/pam_served_test.go:729` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:137` | a disposable lab certificate the Envoy container reads |
 | `internal/server/protocols_served_stock_clients_test.go:51` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:93` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2445,7 +2445,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (832 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (829 sites)
 
 | Location | Reason |
 |---|---|
@@ -2494,8 +2494,8 @@ not this file.
 | `cmd/trstctl-agent/factory_test.go:32` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
 | `cmd/trstctl-agent/inventory_hostcrypto.go:78` | operator-configured keystore password file (CWE-22) |
-| `cmd/trstctl-agent/main.go:1392` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:2062` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1395` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:2065` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/observe.go:104` | the operator names the capture file on the command line (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:477` | operator-supplied runtime configuration path (CWE-22) |
@@ -2858,7 +2858,6 @@ not this file.
 | `internal/crypto/jose/jsf_test.go:287` | the repository's own fixture (CWE-22) |
 | `internal/crypto/kerberos/client_test.go:87` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
-| `internal/crypto/mongosignin/mongosignin.go:251` | the session's URI names the CA file on the gateway's host, as a driver's tlsCAFile does (CWE-22) |
 | `internal/crypto/mtls/agent.go:215` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/agent.go:233` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/server.go:240` | operator-selected public certificate path, validated as a regular file (CWE-22) |
@@ -2876,7 +2875,6 @@ not this file.
 | `internal/crypto/pfx/certonly_test.go:259` | the test's own file (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:43` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/crypto/pgsignin/pgsignin.go:233` | the session's DSN names the root file on the gateway's host, as libpq's sslrootcert does (CWE-22) |
 | `internal/crypto/possession_openssl_test.go:39` | the test's own temporary file (CWE-22) |
 | `internal/crypto/possession_openssl_test.go:81` | the test's own temporary file (CWE-22) |
 | `internal/crypto/possession_openssl_test.go:85` | the test's own temporary file (CWE-22) |
@@ -2906,7 +2904,7 @@ not this file.
 | `internal/dynsecret/active_directory_signin_lab_test.go:39` | the lab runner's own CA file (CWE-22) |
 | `internal/dynsecret/active_directory_signin_lab_test.go:43` | the lab runner's own protected password file (CWE-22) |
 | `internal/dynsecret/ldap_dynamic_lab_test.go:33` | the lab runner's own protected password file (CWE-22) |
-| `internal/dynsecret/providers_real_test.go:258` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/dynsecret/providers_real_test.go:303` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/eventprotect/verification_keys_file.go:52` | Operator-pinned absolute public trust path is canonicalized outside managed restore roots; only a bounded regular file is read. |
 | `internal/events/protect_schema005_guard_test.go:138` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/events/protect_schema005_guard_test.go:157` | fixed repository source anchor, not caller input (CWE-22) |
@@ -3070,7 +3068,7 @@ not this file.
 | `internal/server/pam_gateway_private_ca_served_test.go:84` | the fixture's own data directory (CWE-22) |
 | `internal/server/pam_gateway_served_test.go:228` | the test's own temporary files (CWE-22) |
 | `internal/server/pam_gateway_ssh_served_test.go:282` | the test's own temporary files (CWE-22) |
-| `internal/server/pam_served_test.go:921` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/pam_served_test.go:929` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/plugins.go:199` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/plugins.go:203` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/pqc_pilot_refusal_served_test.go:187` | the lab's own temporary certificate (CWE-22) |
@@ -3109,7 +3107,6 @@ not this file.
 | `internal/server/sdk_registry_install_served_test.go:352` | the test reads what it installed under its own temp dir (CWE-22) |
 | `internal/server/secret_csi_restart_served_test.go:143` | the test's own temp file (CWE-22) |
 | `internal/server/secret_csi_restart_served_test.go:153` | the test's own temp file (CWE-22) |
-| `internal/server/secret_integrations.go:484` | the operator's own administrator DSN names this root file on the control plane's host (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:82` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:105` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_lease_renew_served_test.go:135` | the test's own temp file (CWE-22) |
@@ -3393,8 +3390,8 @@ not this file.
 | `internal/server/lab_openldap_test.go:106` | the container's directory server reads it; the key is a throwaway lab key (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:248` | public realm configuration the container reads (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:252` | public cache configuration the container reads (CWE-276) |
-| `internal/server/pam_served_test.go:845` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/pam_served_test.go:857` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/pam_served_test.go:853` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/pam_served_test.go:865` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:60` | public lab inputs the containers read (CWE-22) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:527` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:581` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -3440,14 +3437,14 @@ not this file.
 | `internal/crypto/deviceattest/cvc.go:370` | verifying a CV signature that names SHA-1 (CWE-327) |
 | `internal/crypto/jks/jceks.go:68` | the JCEKS integrity digest is SHA-1 by definition; verification only (CWE-328) |
 | `internal/crypto/leafca.go:773` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:379` | mysql_native_password, when the server demands it (CWE-327) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:380` | mysql_native_password (CWE-327) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:381` | mysql_native_password (CWE-327) |
-| `internal/crypto/mysqlsignin/mysqlsignin.go:417` | the OAEP hash MySQL servers use (CWE-327) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:370` | mysql_native_password, when the server demands it (CWE-327) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:371` | mysql_native_password (CWE-327) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:372` | mysql_native_password (CWE-327) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:408` | the OAEP hash MySQL servers use (CWE-327) |
 | `internal/crypto/opaque_x509.go:274` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/pgsignin/pgsignin.go:308` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
 | `internal/crypto/pgsignin/pgsignin.go:313` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
-| `internal/crypto/pgsignin/pgsignin_test.go:166` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin_test.go:167` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
 | `internal/crypto/pqc_x509.go:96` | key identifier, not integrity (CWE-328) |
 | `internal/crypto/thumbprint.go:15` | an identifier a CA API requires, not integrity (CWE-328) |
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
@@ -3496,7 +3493,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:946` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:949` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |
@@ -3845,11 +3842,11 @@ not this file.
 | `internal/dynsecret/mongodb_atlas.go:260` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/network_api.go:158` | the operator's configured device endpoint through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/oauth_client_credentials.go:436` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/providers_real.go:1762` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/providers_real.go:1780` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:240` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:284` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/redfish.go:130` | the operator's configured controller through the pinned, egress-guarded client (CWE-918) |
-| `internal/dynsecret/signin_check.go:263` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/signin_check.go:264` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/snowflake.go:318` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/tailscale.go:197` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/vcenter_sso.go:222` | the operator's configured appliance through the pinned, egress-guarded client (CWE-918) |

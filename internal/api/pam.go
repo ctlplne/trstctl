@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -215,24 +216,27 @@ func WithPAM(svc PAMService) Option {
 
 type PAMSessionRequest struct {
 	// Resolved metadata is filled by the server; the HTTP request type cannot supply it.
-	ResolvedCommandPolicy  *accessrules.Policy
-	ResolvedWebSignIn      *accessweb.SignIn
-	ResolvedTemplateRefs   []string
-	TemplateResolved       bool
-	OriginalTemplateReason string
-	RequestID              string
-	ApprovalRequestID      string
-	IntentDigest           string
-	TargetType             string
-	TargetID               string
-	Role                   string
-	Reason                 string
-	Method                 string
-	Payload                []byte
-	TTLSeconds             int64
-	SSHPublicKey           []byte
-	SSHPrincipal           string
-	TemplateID             string
+	ResolvedCommandPolicy *accessrules.Policy
+	ResolvedWebSignIn     *accessweb.SignIn
+	ResolvedTemplateRefs  []string
+	// ResolvedDatabaseGatewayRequestDigest is set by the control plane before
+	// template resolution, from the decoded command and authenticated requester.
+	ResolvedDatabaseGatewayRequestDigest string
+	TemplateResolved                     bool
+	OriginalTemplateReason               string
+	RequestID                            string
+	ApprovalRequestID                    string
+	IntentDigest                         string
+	TargetType                           string
+	TargetID                             string
+	Role                                 string
+	Reason                               string
+	Method                               string
+	Payload                              []byte
+	TTLSeconds                           int64
+	SSHPublicKey                         []byte
+	SSHPrincipal                         string
+	TemplateID                           string
 	// Browser is set on an open for the browser (A259); it is not part of
 	// the reviewed command.
 	Browser bool
@@ -333,6 +337,8 @@ type PAMSession struct {
 	// its ticket is returned once, by the open. Such a session never carries
 	// Postgres or SSH credentials.
 	Gateway *PAMGatewayDelivery `json:"gateway,omitempty"`
+	// DatabaseGatewayReplay selects ticket-free HTTP idempotency storage.
+	DatabaseGatewayReplay bool `json:"-"`
 	// Delivery is "direct" or "gateway".
 	Delivery string `json:"delivery,omitempty"`
 	// GatewayEnd (A255) is the gateway's own report that it ended the
@@ -407,6 +413,9 @@ func (r *PAMSession) wipeSecrets() {
 	}
 	if r.SSH != nil {
 		r.SSH.Certificate.wipe()
+	}
+	if r.Gateway != nil {
+		secret.Wipe(r.Gateway.Ticket)
 	}
 }
 
@@ -485,14 +494,46 @@ func decodePAMSessionRequest(r *http.Request) (PAMSessionRequest, error) {
 	}, nil
 }
 
+// pamDatabaseGatewayResponse records a reference for AN-5. The presentation
+// step derives its ticket only after checking the retained activation.
+type pamDatabaseGatewayResponse struct {
+	SessionID string `json:"database_gateway_session_id"`
+}
+
+type pamDatabaseGatewayReplay interface {
+	ReplayDatabaseGatewayPAMSession(ctx context.Context, tenantID, idempotencyKey, requester, sessionID string, req PAMSessionRequest) (PAMSession, error)
+}
+
 // openPAMSession opens a short-lived brokered access session for a configured
-// target. Mutations run through mutate(), so AN-5 replay returns the identical
-// credential response without re-running backend grant creation.
+// target. Exact replays return the original grant without creating a new one.
 //
 //trstctl:mutation
 func (a *API) openPAMSession(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	var decoded PAMSessionRequest
+	decodedRequest := false
+	defer func() { secret.Wipe(decoded.Payload) }()
+	readRequest := func(ctx context.Context, tenantID string) (PAMSessionRequest, string, error) {
+		if !decodedRequest {
+			var err error
+			decoded, err = decodePAMSessionRequest(r)
+			if err != nil {
+				return PAMSessionRequest{}, "", err
+			}
+			decodedRequest = true
+		}
+		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		if principal.Subject == "" {
+			return PAMSessionRequest{}, "", errStatus(http.StatusUnauthorized, "an authenticated requester is required")
+		}
+		req := decoded
+		if err := a.requireDelegatedAccount(ctx, tenantID, principal, req); err != nil {
+			return PAMSessionRequest{}, "", err
+		}
+		req.SignedInAt, req.RunID = principal.AuthTime, principal.RunID
+		return req, principal.Subject, nil
+	}
+	open := func(ctx context.Context, tenantID string) (int, any, error) {
 		start := time.Now()
 		var opErr error
 		defer func() { a.observeFeature("pam", "open_session", start, opErr) }()
@@ -500,36 +541,59 @@ func (a *API) openPAMSession(w http.ResponseWriter, r *http.Request) {
 			opErr = ErrPAMUnavailable
 			return 0, nil, ErrPAMUnavailable
 		}
-		req, err := decodePAMSessionRequest(r)
+		req, requester, err := readRequest(ctx, tenantID)
 		if err != nil {
 			opErr = err
 			return 0, nil, err
 		}
-		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-		if principal.Subject == "" {
-			opErr = errors.New("an authenticated requester is required")
-			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated requester is required")
-		}
-		if err := a.requireDelegatedAccount(ctx, tenantID, principal, req); err != nil {
-			opErr = err
-			return 0, nil, err
-		}
-		req.SignedInAt = principal.AuthTime
-		session, err := a.pam.OpenPAMSession(ctx, tenantID, idempotencyKey, principal.Subject, req)
+		session, err := a.pam.OpenPAMSession(ctx, tenantID, idempotencyKey, requester, req)
 		if err != nil {
 			opErr = err
 			return 0, nil, err
+		}
+		if session.DatabaseGatewayReplay {
+			session.wipeSecrets()
+			return http.StatusCreated, pamDatabaseGatewayResponse{SessionID: session.ID}, nil
 		}
 		if req.Browser {
 			// A259: the control plane keeps a browser session's ticket for
 			// its opener; the reply, and its cached replay, carry none.
-			if err := a.holdBrowserTicket(tenantID, principal.Subject, &session); err != nil {
+			if err := a.holdBrowserTicket(tenantID, requester, &session); err != nil {
 				opErr = err
 				return 0, nil, err
 			}
 		}
 		return http.StatusCreated, &session, nil
-	})
+	}
+	present := func(ctx context.Context, tenantID string, body []byte, _ bool) ([]byte, error) {
+		var cached pamDatabaseGatewayResponse
+		if err := json.Unmarshal(body, &cached); err != nil {
+			return nil, err
+		}
+		if cached.SessionID == "" {
+			return body, nil
+		}
+		replay, ok := a.pam.(pamDatabaseGatewayReplay)
+		if !ok {
+			return nil, ErrPAMUnavailable
+		}
+		req, requester, err := readRequest(ctx, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		session, err := replay.ReplayDatabaseGatewayPAMSession(ctx, tenantID, idempotencyKey, requester, cached.SessionID, req)
+		if err != nil {
+			return nil, err
+		}
+		defer session.wipeSecrets()
+		if req.Browser {
+			if err := a.holdBrowserTicket(tenantID, requester, &session); err != nil {
+				return nil, err
+			}
+		}
+		return json.Marshal(&session)
+	}
+	a.mutateWithReferenceView(w, r, idempotencyKey, "", open, false, present)
 }
 
 func (a *API) listPAMSessions(w http.ResponseWriter, r *http.Request) {

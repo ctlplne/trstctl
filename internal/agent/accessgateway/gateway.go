@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/mongosignin"
 	"trstctl.com/trstctl/internal/crypto/mysqlsignin"
 	"trstctl.com/trstctl/internal/crypto/pgsignin"
@@ -20,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/redissignin"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/sshgateway"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // SSHKeySigner is the part of the agent channel that certifies an SSH
@@ -38,7 +41,9 @@ type Config struct {
 	Listener net.Listener
 	// Dial reaches upstream targets; nil uses a plain dialer.
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
-	Now  func() time.Time
+	// DatabaseEgress further restricts the guarded database sockets.
+	DatabaseEgress *netsec.RelayEgress
+	Now            func() time.Time
 	// ClaimInterval paces the claim loop; ExtendInterval the lease extensions.
 	ClaimInterval, ExtendInterval time.Duration
 	// MaxSessions bounds the sessions held at once; MaxConnections the
@@ -64,11 +69,12 @@ type Gateway struct {
 }
 
 type session struct {
-	console  *consoleState
-	web      *webConsoleState
-	intent   SessionIntent
-	job      relay.Job
-	material relay.Material
+	console      *consoleState
+	web          *webConsoleState
+	intent       SessionIntent
+	job          relay.Job
+	material     relay.Material
+	databaseDial databaseDialFunc
 	// sshKey is an SSH session's certified per-session key.
 	sshKey *sshgateway.SessionKey
 	// recorder records the session when the control plane asks (A255).
@@ -229,7 +235,18 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 			recorder: g.recorderFor(ctx, intent, job), conns: map[net.Conn]struct{}{}, ended: make(chan struct{})})
 		return
 	}
-	items, err := g.cfg.Channel.RedeemJobCredential(ctx, job.JobID, job.Attempt)
+	redeemCtx := ctx
+	var databaseDial databaseDialFunc
+	if dbdsn.GatewayDriver(intent.TargetType) != "" {
+		var err error
+		databaseDial, err = g.bindDatabaseDial(intent)
+		if err != nil {
+			g.report(ctx, job, relay.OutcomeFailed, sessionReport(intent.SessionID, "policy_unavailable", 0))
+			return
+		}
+		redeemCtx = transport.WithGuardedDatabaseRedemption(ctx)
+	}
+	items, err := g.cfg.Channel.RedeemJobCredential(redeemCtx, job.JobID, job.Attempt)
 	if err != nil {
 		g.report(ctx, job, relay.OutcomeFailed, sessionReport(intent.SessionID, "credential_unavailable", 0))
 		return
@@ -240,6 +257,11 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 			destroy()
 		}
 		g.report(ctx, job, relay.OutcomeFailed, sessionReport(intent.SessionID, "credential_unavailable", 0))
+		return
+	}
+	if databaseDial != nil && intent.CheckDatabaseCredential(material[intent.CredentialRef]) != nil {
+		destroy()
+		g.report(ctx, job, relay.OutcomeFailed, sessionReport(intent.SessionID, "policy_unavailable", 0))
 		return
 	}
 	// The session's own password is masked wherever it shows up.
@@ -299,7 +321,7 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 		destroy = func() { web.destroy(); destroyMaterial() }
 	}
 
-	g.holdSession(ctx, &session{intent: intent, job: job, material: material, destroy: destroy, console: console, web: web,
+	g.holdSession(ctx, &session{intent: intent, job: job, material: material, databaseDial: databaseDial, destroy: destroy, console: console, web: web,
 		recorder: g.recorderFor(ctx, intent, job, secrets...), conns: map[net.Conn]struct{}{}, ended: make(chan struct{})})
 	for _, b := range secrets {
 		secret.Wipe(b)
@@ -504,6 +526,9 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 	case !g.cfg.Now().Before(s.intent.ExpiresAt):
 		g.deny(conn, "session expired")
 		return
+	case dbdsn.GatewayDriver(s.intent.TargetType) != "" && s.databaseDial == nil:
+		g.deny(conn, "database route unavailable")
+		return
 	}
 	var host *sshgateway.HostKey
 	answer := "OK\n"
@@ -559,7 +584,7 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 			g.cfg.Logf("accessgateway: session %s: command enforcement unavailable", s.intent.SessionID)
 			return
 		}
-		if err := servePostgres(ctx, conn, dsn, s.intent.ExpiresAt, g.cfg.Dial, s.intent.upstreamTrust(), rec, guard); err != nil {
+		if err := servePostgres(ctx, conn, dsn, s.intent.ExpiresAt, s.databaseDial, s.intent.upstreamTrust(), rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetRedis:
@@ -581,7 +606,7 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		}
 		dsn := s.credential()
 		defer secret.Wipe(dsn)
-		if err := serveMySQL(ctx, conn, dsn, s.intent.ExpiresAt, g.cfg.Dial, rec, guard); err != nil {
+		if err := serveMySQL(ctx, conn, dsn, s.intent.ExpiresAt, s.databaseDial, s.intent.DatabaseRoute.Database, rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetMongo:
@@ -592,7 +617,7 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		}
 		uri := s.credential()
 		defer secret.Wipe(uri)
-		if err := serveMongo(ctx, conn, uri, s.intent.ExpiresAt, g.cfg.Dial, s.intent.upstreamTrust(), rec, guard); err != nil {
+		if err := serveMongo(ctx, conn, uri, s.intent.ExpiresAt, s.databaseDial, s.intent.upstreamTrust(), rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetClickHouse:

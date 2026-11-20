@@ -15,10 +15,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +28,7 @@ import (
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dbaccess"
@@ -87,6 +90,7 @@ type MongoAdmin interface {
 // PostgresConfig configures a PostgreSQL dynamic-secret backend.
 type PostgresConfig struct {
 	DSN            []byte
+	Transport      *DatabaseTransport
 	Database       string
 	Schema         string
 	UsernamePrefix string
@@ -134,6 +138,7 @@ func (a DatabaseRoleAccess) clone() DatabaseRoleAccess {
 // PostgresBackend creates scoped PostgreSQL login roles and revokes them.
 type PostgresBackend struct {
 	dsn              *secret.Buffer
+	transport        *DatabaseTransport
 	database         string
 	schema           string
 	usernamePrefix   string
@@ -174,6 +179,7 @@ func NewPostgresBackend(cfg PostgresConfig) (*PostgresBackend, error) {
 	}
 	return &PostgresBackend{
 		dsn:              dsn,
+		transport:        cfg.Transport,
 		database:         cfg.Database,
 		schema:           cfg.Schema,
 		usernamePrefix:   cfg.UsernamePrefix,
@@ -215,7 +221,17 @@ func (b *PostgresBackend) stageTwoUser(ctx context.Context, account string) (str
 		return "", nil, err
 	}
 	defer secret.Wipe(password)
-	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
+	secretDSN, err := checkedPostgresCredential(b.dsn.Bytes(), account, password, "")
+	if err != nil {
+		return "", nil, err
+	}
+	issued := false
+	defer func() {
+		if !issued {
+			secret.Wipe(secretDSN)
+		}
+	}()
+	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes(), b.transport)
 	if err != nil {
 		return "", nil, err
 	}
@@ -223,10 +239,7 @@ func (b *PostgresBackend) stageTwoUser(ctx context.Context, account string) (str
 	if err := setPostgresRolePassword(ctx, conn, account, password); err != nil {
 		return "", nil, err
 	}
-	secretDSN, err := postgresCredentialDSN(b.dsn.Bytes(), account, password)
-	if err != nil {
-		return "", nil, err
-	}
+	issued = true
 	return account, secretDSN, nil
 }
 
@@ -239,7 +252,7 @@ func (b *PostgresBackend) retireTwoUser(ctx context.Context, account string) err
 		return err
 	}
 	defer secret.Wipe(scrambled)
-	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
+	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes(), b.transport)
 	if err != nil {
 		return err
 	}
@@ -276,6 +289,21 @@ func (b *PostgresBackend) CreateCredential(ctx context.Context, req GenerateRequ
 	if err != nil {
 		return "", nil, err
 	}
+	password, err := randomSecretHex(24)
+	if err != nil {
+		return "", nil, err
+	}
+	defer secret.Wipe(password)
+	secretDSN, err := checkedPostgresCredential(b.dsn.Bytes(), user, password, "")
+	if err != nil {
+		return "", nil, err
+	}
+	issued := false
+	defer func() {
+		if !issued {
+			secret.Wipe(secretDSN)
+		}
+	}()
 	if req.LeaseID != "" {
 		// A pending lease may be resumed after the provider succeeded but before
 		// the issued event committed. The lost password cannot be recovered, so
@@ -284,13 +312,7 @@ func (b *PostgresBackend) CreateCredential(ctx context.Context, req GenerateRequ
 			return "", nil, fmt.Errorf("dynsecret postgres: clean interrupted role: %w", err)
 		}
 	}
-	password, err := randomSecretHex(24)
-	if err != nil {
-		return "", nil, err
-	}
-	defer secret.Wipe(password)
-
-	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
+	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes(), b.transport)
 	if err != nil {
 		return "", nil, err
 	}
@@ -324,11 +346,7 @@ func (b *PostgresBackend) CreateCredential(ctx context.Context, req GenerateRequ
 			return "", nil, fmt.Errorf("dynsecret postgres: create role %s: %w", user, err)
 		}
 	}
-	secretDSN, err := postgresCredentialDSN(b.dsn.Bytes(), user, password)
-	if err != nil {
-		_ = b.Revoke(ctx, user)
-		return "", nil, err
-	}
+	issued = true
 	return user, secretDSN, nil
 }
 
@@ -352,7 +370,7 @@ func (b *PostgresBackend) Revoke(ctx context.Context, ref string) error {
 		// DROP OWNED would take every object the role owns with it.
 		return fmt.Errorf("dynsecret postgres: refusing to drop %q, which this provider did not create", ref)
 	}
-	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
+	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes(), b.transport)
 	if err != nil {
 		return err
 	}
@@ -2033,17 +2051,43 @@ func postgresDatabaseFromDSN(dsn []byte) string {
 }
 
 func postgresCredentialDSN(adminDSN []byte, user string, password []byte) ([]byte, error) {
+	return postgresCredentialWithDatabase(adminDSN, user, password, "")
+}
+
+func checkedPostgresCredential(adminDSN []byte, user string, password []byte, database string) ([]byte, error) {
+	admin, err := dbdsn.Parse(dbdsn.Postgres, adminDSN, dbdsn.Admin)
+	if err != nil {
+		return nil, err
+	}
+	defer admin.Wipe()
+	var out []byte
+	if database == "" {
+		out, err = postgresCredentialDSN(adminDSN, user, password)
+		database = admin.Database
+	} else {
+		out, err = postgresCredentialWithDatabase(adminDSN, user, password, database)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return checkPostgresWorkloadProfile(out, admin, user, database)
+}
+
+func postgresCredentialWithDatabase(adminDSN []byte, user string, password []byte, database string) ([]byte, error) {
 	scheme, authorityStart, authorityEnd, hostStart, ok := splitURIAuthority(adminDSN)
 	if ok && (bytes.EqualFold(scheme, []byte("postgres")) || bytes.EqualFold(scheme, []byte("postgresql"))) {
-		if hostStart >= authorityEnd {
-			return nil, errors.New("dynsecret postgres: DSN host required")
-		}
 		out := make([]byte, 0, len(adminDSN)+len(user)+len(password)+4)
 		out = append(out, adminDSN[:authorityStart]...)
 		out = appendURIUserinfo(out, user, password)
 		out = append(out, '@')
 		out = append(out, adminDSN[hostStart:authorityEnd]...)
-		out = appendPostgresURISuffix(out, adminDSN[authorityEnd:])
+		suffix := adminDSN[authorityEnd:]
+		if database != "" {
+			out = append(out, '/')
+			out = appendPercentEncoded(out, []byte(database))
+			suffix = suffix[indexURIPathEnd(suffix, 0):]
+		}
+		out = appendPostgresURISuffix(out, suffix, database != "")
 		return out, nil
 	}
 
@@ -2053,8 +2097,16 @@ func postgresCredentialDSN(adminDSN []byte, user string, password []byte) ([]byt
 	}
 	out := make([]byte, 0, len(adminDSN)+len(user)+len(password)+24)
 	for _, token := range tokens {
-		if postgresAuthParameter(token.key) {
+		if postgresAuthParameter(token.key) || database != "" && postgresDatabaseParameter(token.key) {
 			continue
+		}
+		if bytes.Equal(token.key, []byte("sslrootcert")) {
+			value, ok := decodePGConnValue(token.raw)
+			system := ok && bytes.Equal(value, []byte("system"))
+			secret.Wipe(value)
+			if !system {
+				continue
+			}
 		}
 		if len(out) > 0 {
 			out = append(out, ' ')
@@ -2064,10 +2116,27 @@ func postgresCredentialDSN(adminDSN []byte, user string, password []byte) ([]byt
 	if len(out) > 0 {
 		out = append(out, ' ')
 	}
+	if database != "" {
+		out = append(out, "dbname="...)
+		out = append(out, database...)
+		out = append(out, ' ')
+	}
 	out = append(out, "user="...)
 	out = appendPGConnValue(out, []byte(user))
 	out = append(out, " password="...)
 	out = appendPGConnValue(out, password)
+	return out, nil
+}
+
+func checkPostgresWorkloadProfile(out []byte, admin dbdsn.Target, user, database string) ([]byte, error) {
+	target, err := dbdsn.Parse(dbdsn.Postgres, out, dbdsn.Credential)
+	defer target.Wipe()
+	if err != nil || target.User != user || target.Database != database ||
+		!slices.Equal(target.Hosts, admin.Hosts) || !maps.Equal(target.Options, admin.Options) ||
+		target.SystemRoots != admin.SystemRoots {
+		secret.Wipe(out)
+		return nil, errors.New("dynsecret postgres: could not build a credential for the admitted listener")
+	}
 	return out, nil
 }
 
@@ -2318,7 +2387,7 @@ func appendPGConnValue(dst, value []byte) []byte {
 	return append(dst, '\'')
 }
 
-func appendPostgresURISuffix(dst, suffix []byte) []byte {
+func appendPostgresURISuffix(dst, suffix []byte, replaceDatabase bool) []byte {
 	queryStart := bytes.IndexByte(suffix, '?')
 	if queryStart < 0 {
 		return append(dst, suffix...)
@@ -2337,12 +2406,18 @@ func appendPostgresURISuffix(dst, suffix []byte) []byte {
 		} else {
 			query = nil
 		}
-		key := part
-		if equals := bytes.IndexByte(part, '='); equals >= 0 {
-			key = part[:equals]
-		}
-		if len(part) == 0 || postgresAuthParameter(key) {
+		rawKey, rawValue, _ := bytes.Cut(part, []byte{'='})
+		key, ok := percentDecode(rawKey)
+		if len(part) == 0 || !ok || postgresAuthParameter(key) || replaceDatabase && postgresDatabaseParameter(key) {
 			continue
+		}
+		if bytes.Equal(key, []byte("sslrootcert")) {
+			value, ok := percentDecode(rawValue)
+			system := ok && bytes.Equal(value, []byte("system"))
+			secret.Wipe(value)
+			if !system {
+				continue
+			}
 		}
 		if !wrote {
 			dst = append(dst, '?')
@@ -2353,6 +2428,10 @@ func appendPostgresURISuffix(dst, suffix []byte) []byte {
 		wrote = true
 	}
 	return append(dst, suffix[queryEnd:]...)
+}
+
+func postgresDatabaseParameter(key []byte) bool {
+	return bytes.Equal(key, []byte("dbname")) || bytes.Equal(key, []byte("database"))
 }
 
 func postgresAuthParameter(key []byte) bool {
@@ -2368,7 +2447,7 @@ func postgresAuthParameter(key []byte) bool {
 }
 
 func isASCIISpace(b byte) bool {
-	return b == ' ' || b == '\t' || b == '\r' || b == '\n'
+	return b == ' ' || b == '\t' || b == '\r' || b == '\n' || b == '\v' || b == '\f'
 }
 
 func appendMongoQuery(dst, query []byte, database string) []byte {
@@ -2376,16 +2455,14 @@ func appendMongoQuery(dst, query []byte, database string) []byte {
 	wrote := false
 	for len(query) > 0 {
 		part := query
-		if amp := bytes.IndexByte(query, '&'); amp >= 0 {
+		if amp := bytes.IndexAny(query, "&;"); amp >= 0 {
 			part, query = query[:amp], query[amp+1:]
 		} else {
 			query = nil
 		}
-		key := part
-		if equals := bytes.IndexByte(part, '='); equals >= 0 {
-			key = part[:equals]
-		}
-		if len(part) == 0 || mongoAuthQueryKey(key) {
+		rawKey, _, _ := bytes.Cut(part, []byte{'='})
+		key, ok := percentDecode(rawKey)
+		if len(part) == 0 || !ok || mongoAuthQueryKey(key) || bytes.EqualFold(key, []byte("tlsCAFile")) {
 			continue
 		}
 		if wrote {

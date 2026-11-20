@@ -47,7 +47,7 @@ var ErrDecoyAuthLogUnavailable = errors.New("dynsecret postgres: the server writ
 // server rotated away from is read to its end before the new one; a partial
 // last line waits for the next read.
 func (b *PostgresBackend) DecoyFailedLogins(ctx context.Context, cursor DecoyLogCursor, roles map[string]bool) ([]DecoyFailedLogin, DecoyLogCursor, error) {
-	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
+	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes(), b.transport)
 	if err != nil {
 		return nil, cursor, err
 	}

@@ -3,7 +3,6 @@
 package dynsecret
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/binary"
@@ -12,22 +11,20 @@ import (
 	"strconv"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/secrettext"
 )
 
-// connectPostgresAdmin is the final pgx compatibility edge. pgx accepts a DSN
-// only as string, so the operator-owned byte buffer is converted immediately at
-// the call and the connection is kept only for this one create/revoke operation.
-// Generated passwords never pass through this edge.
-func connectPostgresAdmin(ctx context.Context, adminDSN []byte) (*pgx.Conn, error) {
-	conn, err := pgx.Connect(ctx, secrettext.String(adminDSN))
+func connectPostgresAdmin(ctx context.Context, adminDSN []byte, transport *DatabaseTransport) (*pgx.Conn, error) {
+	config, err := postgresDriverConfig(adminDSN, transport, dbdsn.Admin)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := pgx.ConnectConfig(ctx, config)
 	if err != nil {
 		return nil, errors.New("dynsecret postgres: connect failed")
 	}
@@ -108,24 +105,7 @@ $trstctl$`
 // Callers close the returned pool immediately after one create/revoke operation;
 // this keeps the authority-bearing admin DSN out of long-lived process state.
 func OpenMySQLExecutor(ctx context.Context, adminDSN []byte) (*sql.DB, error) {
-	// A mode-0600 file: reference written by a shell commonly ends in LF.
-	// Remove only the terminal line ending; interior credential bytes remain
-	// untouched, and the caller wipes its resolved buffer after this attempt.
-	adminDSN = bytes.TrimRight(adminDSN, "\r\n")
-	if len(adminDSN) == 0 {
-		return nil, errors.New("dynsecret mysql: admin DSN required")
-	}
-	db, err := sql.Open("mysql", secrettext.String(adminDSN))
-	if err != nil {
-		return nil, errors.New("dynsecret mysql: open admin connection failed")
-	}
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		// The class (refused, expired, locked, unreachable) carries no
-		// credential; the credential health check reads it (A258).
-		return nil, fmt.Errorf("dynsecret mysql: ping admin connection failed: %w", classifyMySQLSignIn(err))
-	}
-	return db, nil
+	return OpenMySQLExecutorWithTransport(ctx, adminDSN, nil)
 }
 
 // createMySQLUser keeps the generated password as a []byte bind while handling
@@ -192,21 +172,7 @@ type MongoDriverAdmin struct {
 // OpenMongoAdmin connects and pings a MongoDB deployment using an operator-owned
 // admin URI. The driver receives the URI only for the lifetime of this adapter.
 func OpenMongoAdmin(ctx context.Context, adminURI []byte) (*MongoDriverAdmin, error) {
-	// File references commonly carry a terminal shell line ending. MongoDB URI
-	// syntax does not include it; preserve every interior credential byte.
-	adminURI = bytes.TrimRight(adminURI, "\r\n")
-	if len(adminURI) == 0 {
-		return nil, errors.New("dynsecret mongodb: admin URI required")
-	}
-	client, err := mongo.Connect(options.Client().ApplyURI(secrettext.String(adminURI)))
-	if err != nil {
-		return nil, errors.New("dynsecret mongodb: connect failed")
-	}
-	if err := client.Ping(ctx, nil); err != nil {
-		_ = client.Disconnect(context.Background())
-		return nil, fmt.Errorf("dynsecret mongodb: ping failed: %w", classifyMongoSignIn(err))
-	}
-	return &MongoDriverAdmin{client: client}, nil
+	return OpenMongoAdminWithTransport(ctx, adminURI, nil)
 }
 
 // CreateUser implements MongoAdmin with MongoDB's native createUser command.
@@ -252,18 +218,15 @@ func mongoUpdateUserPasswordCommand(user string, password []byte) []byte {
 // VerifyMongoCredential proves a credential URI opens a session: the driver
 // connects with it and pings its database (A240).
 func VerifyMongoCredential(ctx context.Context, credential []byte) error {
-	uri := bytes.TrimRight(credential, "\r\n")
-	if len(uri) == 0 {
-		return errors.New("dynsecret mongodb: the credential is not a URI")
-	}
-	client, err := mongo.Connect(options.Client().ApplyURI(secrettext.String(uri)).SetServerSelectionTimeout(5 * time.Second))
+	return VerifyMongoCredentialWithTransport(ctx, credential, nil)
+}
+
+func VerifyMongoCredentialWithTransport(ctx context.Context, credential []byte, transport *DatabaseTransport) error {
+	client, err := openMongoProfile(ctx, credential, transport, dbdsn.Credential)
 	if err != nil {
-		return errors.New("dynsecret mongodb: connect with the credential failed")
-	}
-	defer func() { _ = client.Disconnect(context.Background()) }()
-	if err := client.Ping(ctx, nil); err != nil {
 		return errors.New("dynsecret mongodb: the credential does not authenticate")
 	}
+	closeMongoClient(client)
 	return nil
 }
 
@@ -354,6 +317,8 @@ func (a *MongoDriverAdmin) Close(ctx context.Context) error {
 	if a == nil || a.client == nil {
 		return nil
 	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	err := a.client.Disconnect(ctx)
 	a.client = nil
 	return err

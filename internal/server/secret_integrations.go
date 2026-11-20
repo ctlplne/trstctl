@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -26,9 +25,8 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/mongosignin"
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/mtls"
-	"trstctl.com/trstctl/internal/crypto/pgsignin"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
@@ -40,7 +38,6 @@ import (
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
-	"trstctl.com/trstctl/internal/rotation"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/synctarget"
@@ -91,10 +88,21 @@ type integrationCredentialResolver struct {
 // opened with the same AAD used by the served secret store. The result is a
 // locked/non-dumpable lease; the caller must Destroy it on every path.
 func (r integrationCredentialResolver) resolve(ctx context.Context, tenantID, ref string) (*secret.Buffer, error) {
+	return r.resolveBounded(ctx, tenantID, ref, 0)
+}
+
+func (r integrationCredentialResolver) resolveBounded(ctx context.Context, tenantID, ref string, limit int) (*secret.Buffer, error) {
 	ref = strings.TrimSpace(ref)
 	switch {
 	case strings.HasPrefix(ref, "file:"):
-		value, err := secretfile.Load(strings.TrimSpace(strings.TrimPrefix(ref, "file:")))
+		path := strings.TrimSpace(strings.TrimPrefix(ref, "file:"))
+		var value []byte
+		var err error
+		if limit > 0 {
+			value, err = secretfile.LoadBounded(path, limit)
+		} else {
+			value, err = secretfile.Load(path)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("load credential file: %w", err)
 		}
@@ -124,6 +132,10 @@ func (r integrationCredentialResolver) resolve(ctx context.Context, tenantID, re
 		})
 		if err != nil {
 			return nil, fmt.Errorf("open tenant credential %q: %w", name, err)
+		}
+		if limit > 0 && len(value) > limit {
+			secret.Wipe(value)
+			return nil, errors.New("server: tenant credential exceeds its byte bound")
 		}
 		locked, lockErr := secret.NewFrom(value)
 		secret.Wipe(value)
@@ -429,63 +441,31 @@ func (p *configuredDynamicProvider) DynamicSecretGatewayUpstream(ctx context.Con
 }
 
 // DynamicSecretGatewayTLS is how an access gateway verifies a database
-// target's TLS when it signs in for a session (A256-L1): the CA and the
-// certificate name the provider itself trusts. A Redis provider names them
-// (redis_tls_ca_ref, redis_tls_server_name); a PostgreSQL or MongoDB
-// provider's administrator connection names its root file (sslrootcert,
-// tlsCAFile), a path on the control plane's host that the gateway's host may
-// not share, so the file is read here and carried with the session. A CA
-// certificate is public. Nothing named: none, and the gateway verifies
-// against what the session's credential names, or the system roots.
+// target's TLS when it signs in for a session (A256-L1). The job carries
+// bounded public trust, independently of the session credential.
 func (p *configuredDynamicProvider) DynamicSecretGatewayTLS(ctx context.Context) ([]byte, string, error) {
 	switch p.cfg.Type {
 	case "redis":
 		if p.cfg.RedisTLSCARef == "" {
 			return nil, p.cfg.RedisTLSServerName, nil
 		}
-		caPEM, err := p.publicCredential(ctx, p.cfg.RedisTLSCARef)
+		caPEM, err := p.boundedDatabaseCA(ctx, p.cfg.RedisTLSCARef)
 		if err != nil {
-			return nil, "", fmt.Errorf("the Redis CA: %w", err)
-		}
-		return caPEM, p.cfg.RedisTLSServerName, nil
-	case "postgresql", "mongodb":
-		if p.cfg.AdminDSNRef == "" {
-			return nil, "", nil
-		}
-		buf, err := p.credentials.resolve(ctx, p.tenantID, p.cfg.AdminDSNRef)
-		if err != nil {
-			return nil, "", fmt.Errorf("the administrator connection: %w", err)
-		}
-		defer buf.Destroy()
-		var rootFile string
-		err = buf.Use(func(dsn []byte) error {
-			if p.cfg.Type == "postgresql" {
-				target, err := pgsignin.ParseDSN(dsn)
-				if err != nil {
-					return nil // a DSN the sign-in can't read names no root file
-				}
-				defer target.Wipe()
-				if target.SSLRootCert != "system" {
-					rootFile = target.SSLRootCert
-				}
-				return nil
-			}
-			target, err := mongosignin.ParseURI(dsn)
-			if err != nil {
-				return nil
-			}
-			defer target.Wipe()
-			rootFile = target.TLSCAFile
-			return nil
-		})
-		if err != nil || rootFile == "" {
 			return nil, "", err
 		}
-		caPEM, err := os.ReadFile(rootFile) // #nosec G304 -- the operator's own administrator DSN names this root file on the control plane's host (CWE-22)
+		return dbdsn.NormalizeTrust(caPEM, p.cfg.RedisTLSServerName)
+	case "postgresql", "mongodb":
+		buf, err := p.resolveAdminDSN(ctx)
 		if err != nil {
-			return nil, "", fmt.Errorf("the administrator connection's root file cannot be read")
+			return nil, "", err
 		}
-		return caPEM, "", nil
+		defer buf.Destroy()
+		profile, err := dbdsn.Parse(p.cfg.Type, buf.Bytes(), dbdsn.Admin)
+		if err != nil {
+			return nil, "", err
+		}
+		defer profile.Wipe()
+		return p.databaseTrust(ctx, profile)
 	}
 	return nil, "", nil
 }
@@ -859,7 +839,13 @@ func (o *configuredDynamicBackendOpener) resolve(ref string) ([]byte, error) {
 	if strings.TrimSpace(ref) == "" {
 		return nil, nil
 	}
-	value, err := o.provider.credentials.resolve(o.ctx, o.provider.tenantID, ref)
+	var value *secret.Buffer
+	var err error
+	if ref == o.provider.cfg.AdminDSNRef && dbdsn.IsDriver(o.provider.cfg.Type) {
+		value, err = o.provider.resolveAdminDSN(o.ctx)
+	} else {
+		value, err = o.provider.credentials.resolve(o.ctx, o.provider.tenantID, ref)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -906,12 +892,12 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 	cfg := o.provider.cfg
 	switch cfg.Type {
 	case "postgresql":
-		dsn, err := o.resolve(cfg.AdminDSNRef)
+		dsn, transport, err := o.databaseConnection()
 		if err != nil {
 			return o.fail(err)
 		}
 		backend, err := dynsecret.NewPostgresBackend(dynsecret.PostgresConfig{
-			DSN: dsn, Database: cfg.Database, Schema: cfg.Schema, UsernamePrefix: cfg.UsernamePrefix,
+			DSN: dsn, Transport: transport, Database: cfg.Database, Schema: cfg.Schema, UsernamePrefix: cfg.UsernamePrefix,
 			RotationAccounts: o.provider.rotationAccountPairs(), DatabaseRoleAccess: o.provider.databaseRoleAccess(),
 		})
 		if err != nil {
@@ -919,11 +905,11 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 		}
 		return backend, o.closeWith(backend, nil), nil
 	case "mysql":
-		dsn, err := o.resolve(cfg.AdminDSNRef)
+		dsn, transport, err := o.databaseConnection()
 		if err != nil {
 			return o.fail(err)
 		}
-		db, err := dynsecret.OpenMySQLExecutor(o.ctx, dsn)
+		db, err := dynsecret.OpenMySQLExecutorWithTransport(o.ctx, dsn, transport)
 		if err != nil {
 			return o.fail(err)
 		}
@@ -940,11 +926,11 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 	case "mssql", "azure-sql", "oracle", "hana":
 		return openConfiguredSQLDriverBackend(o)
 	case "mongodb":
-		uri, err := o.resolve(cfg.AdminDSNRef)
+		uri, transport, err := o.databaseConnection()
 		if err != nil {
 			return o.fail(err)
 		}
-		admin, err := dynsecret.OpenMongoAdmin(o.ctx, uri)
+		admin, err := dynsecret.OpenMongoAdminWithTransport(o.ctx, uri, transport)
 		if err != nil {
 			return o.fail(err)
 		}
@@ -2102,7 +2088,7 @@ func (p *configuredDynamicProvider) StaticRotationRequiresReceiverBinding() bool
 }
 
 func (p *configuredDynamicProvider) ResolveStaticRotationReceiverAuthority(ctx context.Context) (string, error) {
-	value, err := p.credentials.resolve(ctx, p.tenantID, p.cfg.AdminDSNRef)
+	value, err := p.resolveAdminDSN(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -2233,10 +2219,8 @@ func (p *configuredDynamicProvider) VerifyLeaseCredential(ctx context.Context, c
 	switch strings.TrimSpace(p.cfg.Type) {
 	case "aws-sts":
 		return p.verifySTSLeaseCredential(ctx, credential)
-	case "postgresql":
-		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
-	case "mysql":
-		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
+	case "postgresql", "mysql":
+		return "connected", p.verifyDatabaseWorkload(ctx, credential)
 	case "redis", "datadog", "openai", "azure-entra", "openrouter", "fireworks", "litellm", "supabase", "convex", "dbt", "cloudflare", "cloudflare-r2":
 		return p.verifyWithBackend(ctx, credential)
 	case "oracle", "mssql", "azure-sql":
@@ -2252,13 +2236,8 @@ func (p *configuredDynamicProvider) VerifyLeaseCredential(ctx context.Context, c
 // new key, so the mode is reported as not available and the worker records it.
 func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, _ string, credential []byte) (string, error) {
 	switch strings.TrimSpace(p.cfg.Type) {
-	case "postgresql":
-		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
-	case "mysql":
-		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
-	case "mongodb":
-		// A MongoDB credential is a URI: connect with it and ping (A240).
-		return "connected", dynsecret.VerifyMongoCredential(ctx, credential)
+	case "postgresql", "mysql", "mongodb":
+		return "connected", p.verifyDatabaseWorkload(ctx, credential)
 	case "oracle", "mssql", "azure-sql":
 		// An Oracle or SQL Server credential connects at the administrator's
 		// address (Oracle's service, SQL Server's database) and runs a

@@ -235,17 +235,17 @@ func openConfiguredSQLDriverBackend(o *configuredDynamicBackendOpener) (requestD
 	cfg := o.provider.cfg
 	switch cfg.Type {
 	case "mssql", "azure-sql":
-		dsn, err := o.resolve(cfg.AdminDSNRef)
+		dsn, transport, err := o.databaseConnection()
 		if err != nil {
 			return o.fail(err)
 		}
-		db, err := dynsecret.OpenMSSQLExecutor(o.ctx, dsn)
+		db, err := dynsecret.OpenMSSQLExecutorWithTransport(o.ctx, dsn, transport)
 		if err != nil {
 			return o.fail(err)
 		}
 		backend, err := dynsecret.NewMSSQLBackend(db, dynsecret.MSSQLConfig{
 			Contained: cfg.Type == "azure-sql", Database: cfg.Database, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
-			RotationAccounts: o.provider.rotationAccountPairs(), AdminDSN: dsn,
+			RotationAccounts: o.provider.rotationAccountPairs(), AdminDSN: dsn, Transport: transport,
 		})
 		if err != nil {
 			_ = db.Close()
@@ -253,16 +253,16 @@ func openConfiguredSQLDriverBackend(o *configuredDynamicBackendOpener) (requestD
 		}
 		return backend, o.closeWith(backend, func() { _ = db.Close() }), nil
 	case "hana":
-		dsn, err := o.resolve(cfg.AdminDSNRef)
+		dsn, transport, err := o.databaseConnection()
 		if err != nil {
 			return o.fail(err)
 		}
-		db, err := dynsecret.OpenHANAExecutor(o.ctx, dsn)
+		db, err := dynsecret.OpenHANAExecutorWithTransport(o.ctx, dsn, transport)
 		if err != nil {
 			return o.fail(err)
 		}
 		backend, err := dynsecret.NewHANABackend(db, dynsecret.HANAConfig{
-			AdminDSN: dsn, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
+			AdminDSN: dsn, Transport: transport, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
 		})
 		if err != nil {
 			_ = db.Close()
@@ -270,16 +270,16 @@ func openConfiguredSQLDriverBackend(o *configuredDynamicBackendOpener) (requestD
 		}
 		return backend, o.closeWith(backend, func() { _ = db.Close() }), nil
 	case "oracle":
-		dsn, err := o.resolve(cfg.AdminDSNRef)
+		dsn, transport, err := o.databaseConnection()
 		if err != nil {
 			return o.fail(err)
 		}
-		db, err := dynsecret.OpenOracleExecutor(o.ctx, dsn)
+		db, err := dynsecret.OpenOracleExecutorWithTransport(o.ctx, dsn, transport)
 		if err != nil {
 			return o.fail(err)
 		}
 		backend, err := dynsecret.NewOracleBackend(db, dynsecret.OracleConfig{
-			AdminDSN: dsn, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
+			AdminDSN: dsn, Transport: transport, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
 			RotationAccounts: o.provider.rotationAccountPairs(),
 		})
 		if err != nil {

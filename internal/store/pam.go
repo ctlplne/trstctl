@@ -453,6 +453,16 @@ func (s *Store) RecallPAMGatewayJob(ctx context.Context, tenantID, sessionID, de
 // ListActiveGatewayPAMSessions lists active gateway-delivered sessions across
 // tenants, for the expiry worker's job check.
 func (s *Store) ListActiveGatewayPAMSessions(ctx context.Context, now time.Time, limit int) ([]PAMSession, error) {
+	return s.listActiveGatewayPAMSessions(ctx, now, limit, false)
+}
+
+// ListPAMGatewaySessionsForJobRepair excludes the database sessions whose
+// start projection already commits their job. They cannot fill the repair page.
+func (s *Store) ListPAMGatewaySessionsForJobRepair(ctx context.Context, now time.Time, limit int) ([]PAMSession, error) {
+	return s.listActiveGatewayPAMSessions(ctx, now, limit, true)
+}
+
+func (s *Store) listActiveGatewayPAMSessions(ctx context.Context, now time.Time, limit int, jobRepair bool) ([]PAMSession, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 200
 	}
@@ -463,8 +473,9 @@ func (s *Store) ListActiveGatewayPAMSessions(ctx context.Context, now time.Time,
 		        COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal, command_policy, web_sign_in
 		   FROM pam_sessions
 		  WHERE delivery = 'gateway' AND status = 'active' AND expires_at > $1
+		    AND (NOT $3::bool OR target_type NOT IN ('postgres', 'mongodb', 'mysql'))
 		  ORDER BY expires_at, id
-		  LIMIT $2`, now.UTC(), limit)
+		  LIMIT $2`, now.UTC(), limit, jobRepair)
 	if err != nil {
 		return nil, err
 	}

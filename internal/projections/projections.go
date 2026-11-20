@@ -5736,7 +5736,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAWSHoneyScanPage:                         {1: true},
 	EventAWSHoneyTrailObjectScanned:               {1: true},
 	EventAWSHoneyTokenRearmed:                     {1: true},
-	EventPAMSessionStarted:                        {1: true, PAMCommandRulesEventSchemaVersion: true},
+	EventPAMSessionStarted:                        {1: true, PAMCommandRulesEventSchemaVersion: true, PAMDatabaseGatewayStartSchemaVersion: true},
 	EventPAMTargetRegistered:                      {1: true},
 	EventPAMTargetDisabled:                        {1: true},
 	EventPAMRecordingChunkStored:                  {1: true},
@@ -9793,7 +9793,14 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyPAMTargetDisabledTx(ctx, tx, e.TenantID, pl.TargetType, pl.ID, pl.DisabledBy, pl.Reason, e.Time)
 	case EventPAMSessionStarted:
 		var pl PAMSessionStarted
-		if err := decodePAMSessionVersion(e, &pl); err != nil {
+		var gatewayStarted *PAMDatabaseGatewayStarted
+		if schemaVersionOf(e) == PAMDatabaseGatewayStartSchemaVersion {
+			gatewayStarted = new(PAMDatabaseGatewayStarted)
+			if err := decodeClosedPAMCommand(e, gatewayStarted); err != nil {
+				return err
+			}
+			pl = gatewayStarted.PAMSessionStarted
+		} else if err := decodePAMSessionVersion(e, &pl); err != nil {
 			return err
 		}
 		if pl.ID == "" || pl.TargetType == "" || pl.TargetID == "" || pl.Status == "" || pl.Subject == "" || pl.ExpiresAt.IsZero() {
@@ -9842,7 +9849,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 				approvalID, approvalLink = derived, store.PAMApprovalLinkDerived
 			}
 		}
-		return p.store.ApplyPAMSessionStartedTx(ctx, tx, store.PAMSession{
+		session := store.PAMSession{
 			TenantID: e.TenantID, ID: pl.ID, TargetType: pl.TargetType, TargetID: pl.TargetID,
 			Role: pl.Role, Status: pl.Status, Subject: pl.Subject, RequestedBy: pl.RequestedBy,
 			Reason: pl.Reason, AttestationID: pl.AttestationID, Attestation: attestation, BackendRef: pl.BackendRef,
@@ -9850,7 +9857,11 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Audit: pl.Audit, StartedAt: startedAt, ExpiresAt: pl.ExpiresAt, ApprovalRequestID: approvalID, ApprovalLink: approvalLink,
 			Delivery: pl.Delivery, GatewayAgentID: pl.GatewayAgentID, GatewayTicketDigest: pl.GatewayTicketDigest,
 			SSHPrincipal: pl.SSHPrincipal, CommandPolicy: pl.CommandPolicy, WebSignIn: pl.WebSignIn, AccountRotationProvider: pl.AccountRotationProvider,
-		})
+		}
+		if gatewayStarted != nil {
+			return p.applyPAMDatabaseGatewayStarted(ctx, tx, session, *gatewayStarted)
+		}
+		return p.store.ApplyPAMSessionStartedTx(ctx, tx, session)
 	case EventPAMSessionExpired:
 		var pl PAMSessionExpired
 		if err := decode(e, &pl); err != nil {

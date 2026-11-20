@@ -45,6 +45,9 @@ func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline ti
 			runtime = append(runtime, p)
 		}
 	}
+	if trust.database != "" {
+		database = trust.database
+	}
 	signInCtx, cancel := context.WithDeadline(ctx, earliest(deadline, time.Now().Add(30*time.Second)))
 	defer cancel()
 	upstream, err := pgsignin.SignIn(signInCtx, dsn, pgsignin.Options{Dial: dial, Database: database, Runtime: runtime,

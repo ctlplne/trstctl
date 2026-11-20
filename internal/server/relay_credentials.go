@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"trstctl.com/trstctl/internal/agent/accessgateway"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
@@ -57,7 +58,7 @@ type relayCredentialResolver struct {
 	// pamGatewayCredential reopens a gateway session's upstream credential
 	// from its lease for the session's own gateway (A254); nil when PAM is
 	// not served.
-	pamGatewayCredential func(ctx context.Context, tenantID, sessionID string) ([]byte, error)
+	pamGatewayCredential func(ctx context.Context, tenantID string, intent accessgateway.SessionIntent) ([]byte, error)
 }
 
 // redeemedMaterial is one resolved attempt's material plus the wipe that ends

@@ -117,9 +117,26 @@ func TestServedBrowserDatabaseConsoleA259(t *testing.T) {
 	f := startGatewayFixture(t, gatewayFixtureOptions{})
 	h := f.h
 
-	opened := f.open("a259-console", map[string]any{"target_type": "postgres", "target_id": "pg-gw", "role": "readonly", "ttl_seconds": 50, "browser": true})
+	request := map[string]any{"target_type": "postgres", "target_id": "pg-gw", "role": "readonly", "ttl_seconds": 50, "browser": true}
+	opened := f.open("a259-console", request)
 	if opened.Delivery != "gateway" || opened.Gateway == nil || opened.Gateway.Ticket != "" {
 		t.Fatalf("a browser open's reply carries a ticket or no gateway: %+v", opened.Gateway)
+	}
+	// A worker or process can lose its held browser ticket while the
+	// protected HTTP result survives. Exact replay must hold it again.
+	key := pamBrowserKey{h.tenant, opened.ID}
+	browser := h.srv.pam.browser
+	browser.mu.Lock()
+	held := browser.tickets[key]
+	delete(browser.tickets, key)
+	browser.mu.Unlock()
+	if held == nil {
+		t.Fatal("the first browser open did not hold the gateway ticket")
+	}
+	held.ticket.Destroy()
+	replayed := servedPAMOpen(t, h.servedHarness, f.requester, "a259-console", request)
+	if replayed.ID != opened.ID || replayed.Gateway == nil || replayed.Gateway.Ticket != "" {
+		t.Fatal("the cached browser open changed the session or exposed its held ticket")
 	}
 	dsn, err := h.srv.pam.gatewaySessionCredential(f.ctx, h.tenant, opened.ID)
 	if err != nil {

@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -704,6 +705,14 @@ func (s *Server) OpenPAMSession(ctx context.Context, tenantID, idempotencyKey, r
 	return s.pam.OpenPAMSession(ctx, tenantID, idempotencyKey, requester, req)
 }
 
+func (s *Server) ReplayDatabaseGatewayPAMSession(ctx context.Context, tenantID, idempotencyKey, requester, id string,
+	req api.PAMSessionRequest) (api.PAMSession, error) {
+	if s.pam == nil {
+		return api.PAMSession{}, api.ErrPAMUnavailable
+	}
+	return s.pam.ReplayDatabaseGatewayPAMSession(ctx, tenantID, idempotencyKey, requester, id, req)
+}
+
 func (s *Server) RequestPAMSession(ctx context.Context, tenantID, requester string, req api.PAMSessionRequest) (api.PAMApprovalRequest, error) {
 	if s.pam == nil {
 		return api.PAMApprovalRequest{}, api.ErrPAMUnavailable
@@ -1040,29 +1049,53 @@ func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, request
 	return current, nil
 }
 
-func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKey, requester string, req api.PAMSessionRequest) (api.PAMSession, error) {
+func (s *pamService) preparePAMSessionOpen(ctx context.Context, tenantID, idempotencyKey, requester string, req api.PAMSessionRequest) (api.PAMSessionRequest, error) {
+	var requestDigest string
+	if dbdsn.GatewayDriver(req.TargetType) != "" {
+		// Direct PostgreSQL sessions do not need a gateway response key.
+		// Gateway admission below requires the digest before it issues.
+		requestDigest, _ = s.databaseGatewayRequestDigest(tenantID, requester, req)
+	}
 	req, _, _, err := s.withTemplate(ctx, tenantID, req)
 	if err != nil {
-		return api.PAMSession{}, err
+		return api.PAMSessionRequest{}, err
 	}
 	// A277: a high-risk template's session starts only after a fresh
 	// sign-in, before any attestation is bound or target touched.
 	if err := s.requireFreshSignIn(req.ResolvedReauthenticateWithin, req.SignedInAt); err != nil {
-		return api.PAMSession{}, err
+		return api.PAMSessionRequest{}, err
 	}
 	if err := s.validate(ctx, tenantID, idempotencyKey, requester, req); err != nil {
-		return api.PAMSession{}, err
+		return api.PAMSessionRequest{}, err
 	}
 	if _, err := uuid.Parse(req.RequestID); err != nil {
-		return api.PAMSession{}, fmt.Errorf("%w: request_id must be a UUID", api.ErrPAMInvalid)
+		return api.PAMSessionRequest{}, fmt.Errorf("%w: request_id must be a UUID", api.ErrPAMInvalid)
 	}
 	if _, err := uuid.Parse(req.ApprovalRequestID); err != nil || req.IntentDigest == "" {
-		return api.PAMSession{}, fmt.Errorf("%w: an exact approval_request_id and intent_digest are required", api.ErrPAMInvalid)
+		return api.PAMSessionRequest{}, fmt.Errorf("%w: an exact approval_request_id and intent_digest are required", api.ErrPAMInvalid)
+	}
+	req.ResolvedDatabaseGatewayRequestDigest = requestDigest
+	return req, nil
+}
+
+func pamSessionID(tenantID, idempotencyKey string) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl-pam-session\x00"+tenantID+"\x00"+idempotencyKey)).String()
+}
+
+func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKey, requester string, req api.PAMSessionRequest) (api.PAMSession, error) {
+	req, err := s.preparePAMSessionOpen(ctx, tenantID, idempotencyKey, requester, req)
+	if err != nil {
+		return api.PAMSession{}, err
 	}
 	// The HTTP result cache is time-bounded, while a PAM session is retained for
 	// audit. Once that cache has aged out, the same key must never mint another
 	// SSH certificate or reopen a PostgreSQL grant under the old session ID.
-	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl-pam-session\x00"+tenantID+"\x00"+idempotencyKey)).String()
+	id := pamSessionID(tenantID, idempotencyKey)
+	if dbdsn.GatewayDriver(req.TargetType) != "" {
+		if session, found, err := s.replayDatabaseGatewayStart(ctx, tenantID, idempotencyKey, requester, id, req); found || err != nil {
+			return session, err
+		}
+	}
 	if _, err := s.store.GetPAMSession(ctx, tenantID, id); err == nil {
 		return api.PAMSession{}, fmt.Errorf("%w: PAM session already exists for this key", orchestrator.ErrIdempotencyConflict)
 	} else if !store.IsNotFound(err) {
@@ -1096,6 +1129,27 @@ func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKe
 		return session, nil
 	}
 	return s.activatePAMSession(ctx, tenantID, idempotencyKey, requester, id, verifier, att, req)
+}
+
+// ReplayDatabaseGatewayPAMSession presents only the retained, bound start.
+// A reference from the HTTP result cache has no authority to issue a login.
+func (s *pamService) ReplayDatabaseGatewayPAMSession(ctx context.Context, tenantID, idempotencyKey, requester, id string,
+	req api.PAMSessionRequest) (api.PAMSession, error) {
+	req, err := s.preparePAMSessionOpen(ctx, tenantID, idempotencyKey, requester, req)
+	if err != nil {
+		return api.PAMSession{}, err
+	}
+	if id != pamSessionID(tenantID, idempotencyKey) || dbdsn.GatewayDriver(req.TargetType) == "" {
+		return api.PAMSession{}, orchestrator.ErrIdempotencyConflict
+	}
+	session, found, err := s.replayDatabaseGatewayStart(ctx, tenantID, idempotencyKey, requester, id, req)
+	if err != nil {
+		return api.PAMSession{}, err
+	}
+	if !found {
+		return api.PAMSession{}, api.ErrPAMTerminal
+	}
+	return session, nil
 }
 
 func (s *pamService) activatePAMSession(ctx context.Context, tenantID, idempotencyKey, requester, id string, verifier *attest.Verifier, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
@@ -1526,12 +1580,40 @@ func (s *pamService) openDatabaseProvider(ctx context.Context, tenantID, idempot
 		// target builder already refuses any other type without a gateway.
 		return api.PAMSession{}, fmt.Errorf("%w: %s target %q has no access gateway", api.ErrPAMRejected, req.TargetType, req.TargetID)
 	}
+	var databaseBinding *projections.PAMDatabaseGatewayBinding
+	if target.cfg.GatewayAgentID != "" && dbdsn.GatewayDriver(req.TargetType) != "" {
+		var err error
+		if req.ResolvedDatabaseGatewayRequestDigest == "" {
+			req.ResolvedDatabaseGatewayRequestDigest, err = s.databaseGatewayRequestDigest(tenantID, requester, req)
+			if err != nil {
+				return api.PAMSession{}, err
+			}
+		}
+		databaseBinding, err = s.databaseGatewayBinding(ctx, tenantID, target.cfg.ProviderID)
+		if err != nil {
+			return api.PAMSession{}, fmt.Errorf("%w: %w", api.ErrPAMRejected, dbdsn.ErrGatewayRoute)
+		}
+	}
 	if target.cfg.AccountSecret != "" {
 		// A261: a vaulted account. The session mints nothing: the gateway
 		// signs in as the account with the secret's current value when it
 		// claims the session, and nobody else ever receives it.
 		start := gatewayStart{backendRef: pamVaultedRef + target.cfg.AccountSecret, agentID: target.cfg.GatewayAgentID,
-			address: target.cfg.GatewayAddress, undo: func() {}}
+			address: target.cfg.GatewayAddress, database: databaseBinding, undo: func() {}}
+		if databaseBinding != nil {
+			if s.secretReader == nil {
+				return api.PAMSession{}, fmt.Errorf("%w: the gateway account is unavailable", api.ErrPAMRejected)
+			}
+			value, _, err := s.secretReader(ctx, tenantID, target.cfg.AccountSecret)
+			if err == nil {
+				err = databaseBinding.Route.CheckCredential(dbdsn.GatewayDriver(req.TargetType), value,
+					databaseBinding.CAPEM != "" || databaseBinding.ServerName != "")
+			}
+			secret.Wipe(value)
+			if err != nil {
+				return api.PAMSession{}, fmt.Errorf("%w: %w", api.ErrPAMRejected, dbdsn.ErrGatewayRoute)
+			}
+		}
 		if req.TargetType == pamTargetWebConsole {
 			// A273-O4: the console's account rotates after the session.
 			start.accountRotationProvider = target.cfg.ProviderID
@@ -1560,10 +1642,20 @@ func (s *pamService) openDatabaseProvider(ctx context.Context, tenantID, idempot
 	if target.cfg.GatewayAgentID != "" {
 		// A254: the requester receives a ticket for the target's gateway,
 		// never this credential; the gateway reopens it from the lease.
+		start := gatewayStart{backendRef: lease.ID, agentID: target.cfg.GatewayAgentID, address: target.cfg.GatewayAddress,
+			database: databaseBinding, undo: func() { _ = lifecycle.Revoke(context.Background(), lease.ID) }}
+		if databaseBinding != nil {
+			err = databaseBinding.Route.CheckCredential(dbdsn.GatewayDriver(req.TargetType), credential,
+				databaseBinding.CAPEM != "" || databaseBinding.ServerName != "")
+			// A prior attempt can have appended its start before SQL caught up.
+			// Keep this lease for recovery or its normal expiry on every error.
+			start.undo = func() {}
+		}
 		secret.Wipe(credential)
-		return s.startGatewaySession(ctx, tenantID, idempotencyKey, requester, id, now, lease.ExpiresAt, att, req,
-			gatewayStart{backendRef: lease.ID, agentID: target.cfg.GatewayAgentID, address: target.cfg.GatewayAddress,
-				undo: func() { _ = lifecycle.Revoke(context.Background(), lease.ID) }})
+		if err != nil {
+			return api.PAMSession{}, fmt.Errorf("%w: %w", api.ErrPAMRejected, dbdsn.ErrGatewayRoute)
+		}
+		return s.startGatewaySession(ctx, tenantID, idempotencyKey, requester, id, now, lease.ExpiresAt, att, req, start)
 	}
 	session, payload := s.startedPayload(tenantID, idempotencyKey, requester, id, now, lease.ExpiresAt, att, req, lease.ID, "", 0)
 	if err := s.appendProject(ctx, tenantID, projections.EventPAMSessionStarted, payload); err != nil {

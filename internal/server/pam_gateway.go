@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -54,7 +55,10 @@ func (r *relayCredentialResolver) resolveGatewaySession(ctx context.Context, ten
 		// (SignJobSSHKey); there is no credential to redeem.
 		return redeemedMaterial{}, errors.New("an SSH gateway session redeems no credential")
 	}
-	credential, err := r.pamGatewayCredential(ctx, tenantID, intent.SessionID)
+	if dbdsn.GatewayDriver(intent.TargetType) != "" && (intent.DatabaseRoute == nil || !transport.HasGuardedDatabaseRedemption(ctx)) {
+		return redeemedMaterial{}, dbdsn.ErrGatewayRoute
+	}
+	credential, err := r.pamGatewayCredential(ctx, tenantID, intent)
 	if err != nil {
 		return redeemedMaterial{}, err
 	}
@@ -176,6 +180,9 @@ func (s *pamService) enqueueGatewaySession(ctx context.Context, tenantID string,
 // target's address, the principal and the pinned host keys, and redeems
 // nothing: its gateway certifies a key of its own.
 func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSession) (accessgateway.SessionIntent, error) {
+	if dbdsn.GatewayDriver(rec.TargetType) != "" {
+		return accessgateway.SessionIntent{}, dbdsn.ErrGatewayRoute
+	}
 	intent := accessgateway.SessionIntent{SessionID: rec.ID, TargetType: rec.TargetType, TargetID: rec.TargetID,
 		ExpiresAt: rec.ExpiresAt, TicketDigest: rec.GatewayTicketDigest, RequiredAgentID: rec.GatewayAgentID,
 		Record: s.recordings != nil, CommandPolicy: rec.CommandPolicy}
@@ -184,7 +191,7 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 		// A256-L1: a database target's TLS is verified against its provider's
 		// CA, carried with the job; no root file need sit on the gateway's
 		// host.
-		if rec.TargetType == pamTargetPostgres || rec.TargetType == pamTargetRedis || rec.TargetType == pamTargetMongo {
+		if rec.TargetType == pamTargetRedis {
 			caPEM, serverName, err := s.databaseTLS(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
 			if err != nil {
 				return accessgateway.SessionIntent{}, err
@@ -462,11 +469,11 @@ func (s *pamService) gatewaySessionCredential(ctx context.Context, tenantID, ses
 
 // pamGatewayCredential is the job resolver's hook into PAM, nil when PAM is
 // not served (the resolver then refuses gateway redemptions).
-func (s *Server) pamGatewayCredential() func(ctx context.Context, tenantID, sessionID string) ([]byte, error) {
+func (s *Server) pamGatewayCredential() func(ctx context.Context, tenantID string, intent accessgateway.SessionIntent) ([]byte, error) {
 	if s.pam == nil {
 		return nil
 	}
-	return s.pam.gatewaySessionCredential
+	return s.pam.gatewayCredentialForJob
 }
 
 // gatewayStart is what a gateway-delivered session starts with: the
@@ -476,6 +483,7 @@ func (s *Server) pamGatewayCredential() func(ctx context.Context, tenantID, sess
 type gatewayStart struct {
 	backendRef, agentID, address string
 	sshKeyID, sshPrincipal       string
+	database                     *projections.PAMDatabaseGatewayBinding
 	// accountRotationProvider (A273-O4) rotates a web console's account
 	// once after the session ends.
 	accountRotationProvider string
@@ -488,12 +496,17 @@ type gatewayStart struct {
 // could not be queued now is queued by the expiry worker's next pass.
 func (s *pamService) startGatewaySession(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time,
 	att attest.Attestation, req api.PAMSessionRequest, start gatewayStart) (api.PAMSession, error) {
+	if dbdsn.GatewayDriver(req.TargetType) != "" && start.database == nil {
+		return api.PAMSession{}, dbdsn.ErrGatewayRoute
+	}
 	// A278: a pooled gateway shares its targets' sessions; the member the
 	// session starts on owns it, and a lost or draining one is passed over.
 	provisional := store.PAMSession{TenantID: tenantID, ID: id, TargetType: req.TargetType, TargetID: req.TargetID, Role: req.Role,
 		ExpiresAt: expiresAt, GatewayAgentID: start.agentID, SSHPrincipal: start.sshPrincipal, CommandPolicy: req.ResolvedCommandPolicy}
 	needKind := ""
-	if intent, err := s.gatewaySessionIntent(ctx, provisional); err == nil {
+	if start.database != nil {
+		needKind = pamSessionNeedsExecutor(accessgateway.SessionIntent{TargetType: req.TargetType, CommandPolicy: req.ResolvedCommandPolicy})
+	} else if intent, err := s.gatewaySessionIntent(ctx, provisional); err == nil {
 		needKind = pamSessionNeedsExecutor(intent)
 	}
 	agentID, address, err := s.chooseGateway(ctx, tenantID, start.agentID, start.address, needKind)
@@ -502,6 +515,13 @@ func (s *pamService) startGatewaySession(ctx context.Context, tenantID, idempote
 		return api.PAMSession{}, err
 	}
 	start.agentID, start.address = agentID, address
+	session, payload := s.startedPayload(tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, start.backendRef, start.sshKeyID, 0)
+	payload.Delivery, payload.GatewayAgentID = "gateway", start.agentID
+	payload.SSHPrincipal = start.sshPrincipal
+	payload.AccountRotationProvider = start.accountRotationProvider
+	if start.database != nil {
+		return s.startDatabaseGateway(ctx, tenantID, payload, *start.database, start.address, req.ResolvedDatabaseGatewayRequestDigest)
+	}
 	ticket, err := newGatewayTicket()
 	if err != nil {
 		start.undo()
@@ -512,10 +532,7 @@ func (s *pamService) startGatewaySession(ctx context.Context, tenantID, idempote
 		start.undo()
 		return api.PAMSession{}, err
 	}
-	session, payload := s.startedPayload(tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, start.backendRef, start.sshKeyID, 0)
-	payload.Delivery, payload.GatewayAgentID, payload.GatewayTicketDigest = "gateway", start.agentID, accessgateway.TicketDigest(ticket)
-	payload.SSHPrincipal = start.sshPrincipal
-	payload.AccountRotationProvider = start.accountRotationProvider
+	payload.GatewayTicketDigest = accessgateway.TicketDigest(ticket)
 	if req.TargetType == pamTargetSSH {
 		// The deterministic SSH started event completes the activation the
 		// open recorded, exactly as a direct SSH session's does, so the
@@ -549,7 +566,7 @@ func (s *pamService) startGatewaySession(ctx context.Context, tenantID, idempote
 // that has none (an open interrupted between its event and its job). The job
 // key is the session, so a queued job is never queued twice.
 func (s *pamService) ensureGatewayJobs(ctx context.Context) {
-	sessions, err := s.store.ListActiveGatewayPAMSessions(ctx, s.clock().UTC(), 200)
+	sessions, err := s.store.ListPAMGatewaySessionsForJobRepair(ctx, s.clock().UTC(), 200)
 	if err != nil {
 		return
 	}

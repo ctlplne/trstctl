@@ -807,8 +807,8 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	if o.relayCABundle != "" && !o.relayClaim {
 		return errors.New("--relay-ca-bundle requires --relay-claim")
 	}
-	if o.relayEgressAllow != "" && !o.relayClaim {
-		return errors.New("--relay-egress-allow requires --relay-claim")
+	if o.relayEgressAllow != "" && !o.relayClaim && strings.TrimSpace(*accessGatewayListen) == "" {
+		return errors.New("--relay-egress-allow requires --relay-claim or --access-gateway-listen")
 	}
 	if o.deployFailureLog != "" && !o.relayClaim {
 		return errors.New("--deploy-failure-log requires --relay-claim")
@@ -816,20 +816,23 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	relay.CertutilPath = o.adcsCertutil
 	var relayClient *http.Client
 	var relayCAStatus func() *transport.RelayCABundleReport
-	if o.relayClaim {
-		egress, err := netsec.ParseRelayEgress(strings.Split(o.relayEgressAllow, ","))
+	var databaseEgress *netsec.RelayEgress
+	if o.relayClaim || strings.TrimSpace(*accessGatewayListen) != "" {
+		databaseEgress, err = netsec.ParseRelayEgress(strings.Split(o.relayEgressAllow, ","))
 		if err != nil {
 			return fmt.Errorf("--relay-egress-allow: %w", err)
 		}
-		relay.SetEgressPolicy(egress)
-		fmt.Fprintln(os.Stderr, "trstctl-agent: relay egress policy:", egress.String())
+	}
+	if o.relayClaim {
+		relay.SetEgressPolicy(databaseEgress)
+		fmt.Fprintln(os.Stderr, "trstctl-agent: relay egress policy:", databaseEgress.String())
 		failures, err := relay.OpenDeployFailureLog(deployFailureLogPath(o.deployFailureLog, o.keyPath), relay.DefaultDeployFailureEntries)
 		if err != nil {
 			return fmt.Errorf("--deploy-failure-log: %w", err)
 		}
 		relay.SetDeployFailureLog(failures)
 		fmt.Fprintln(os.Stderr, "trstctl-agent: failed deploys are kept in", failures.Path())
-		relayClient, err = relayHTTPClient(o.relayCABundle, egress)
+		relayClient, err = relayHTTPClient(o.relayCABundle, databaseEgress)
 		if err != nil {
 			return err
 		}
@@ -1058,7 +1061,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		if relayTimer == nil {
 			relayTimer = time.NewTimer(0)
 		}
-		stopGateway := startGateway(ctx, a, reporter, caPEM) // A254: brokered access sessions, gateway role only
+		stopGateway := startGateway(ctx, a, reporter, caPEM, databaseEgress) // A254: brokered access sessions, gateway role only
 		defer stopGateway()
 	}
 	var hostRollback *relay.HostRollbackStore

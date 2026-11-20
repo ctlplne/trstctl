@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/certtest"
 )
 
 // TestDatabaseSessionCarriesItsProvidersCAA256L1 is A256-L1: a PostgreSQL,
@@ -15,9 +17,13 @@ import (
 // No other session type carries them, and a database session still names no
 // HTTP upstream.
 func TestDatabaseSessionCarriesItsProvidersCAA256L1(t *testing.T) {
+	ca, _, _, err := certtest.PrivateCAServer("db.private.test")
+	if err != nil {
+		t.Fatal(err)
+	}
 	base := SessionIntent{SessionID: "s", TargetID: "db", ExpiresAt: time.Now(),
 		TicketDigest: TicketDigest("t"), CredentialRef: CredentialRef("s"), RequiredAgentID: "gw",
-		DatabaseCAPEM: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n", DatabaseServerName: "db.private.test"}
+		DatabaseCAPEM: string(ca), DatabaseServerName: "db.private.test"}
 	for _, target := range []string{TargetPostgres, TargetRedis, TargetMongo} {
 		in := base
 		in.TargetType = target

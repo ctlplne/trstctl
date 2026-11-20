@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/rdp"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 var (
@@ -38,7 +39,7 @@ var (
 // agent holds the gateway role; the returned function stops it. Its serving
 // certificate is signed by the agent CA for the bound host names and renewed
 // before it ends; caPEM (the agent channel's CA) verifies what comes back.
-func startGateway(ctx context.Context, a *agent.Agent, ch relayChannel, caPEM []byte) func() {
+func startGateway(ctx context.Context, a *agent.Agent, ch relayChannel, caPEM []byte, databaseEgress *netsec.RelayEgress) func() {
 	addr := strings.TrimSpace(*accessGatewayListen)
 	if addr == "" {
 		return func() {}
@@ -82,7 +83,8 @@ func startGateway(ctx context.Context, a *agent.Agent, ch relayChannel, caPEM []
 		fmt.Fprintln(os.Stderr, "trstctl-agent: access gateway:", err)
 		return func() {}
 	}
-	gw, err := accessgateway.New(accessgateway.Config{Channel: ch, Listener: ln, DesktopHelper: strings.TrimSpace(*accessGatewayDesktopHelper), MaxDesktopConnections: *accessGatewayDesktopLimit,
+	gw, err := accessgateway.New(accessgateway.Config{Channel: ch, Listener: ln, DatabaseEgress: databaseEgress,
+		DesktopHelper: strings.TrimSpace(*accessGatewayDesktopHelper), MaxDesktopConnections: *accessGatewayDesktopLimit,
 		Logf: func(format string, args ...any) { fmt.Fprintf(os.Stderr, "trstctl-agent: "+format+"\n", args...) }})
 	if err != nil {
 		cancel()

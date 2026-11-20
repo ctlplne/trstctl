@@ -8,11 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
-
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/pamsignin"
-	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // A274: bypass detection. A backend that can read its target's sign-in
@@ -76,7 +73,7 @@ func (b *PostgresBackend) ReadSignIns(ctx context.Context, accounts []string, si
 	if err := pamsignin.ValidAccounts(accounts); err != nil {
 		return nil, "", err
 	}
-	conn, err := pgconn.Connect(ctx, secrettext.String(b.dsn.Bytes()))
+	conn, err := b.connectDriver(ctx)
 	if err != nil {
 		return nil, "", classifyPostgresSignIn(err)
 	}

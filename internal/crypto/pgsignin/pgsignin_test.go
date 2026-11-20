@@ -48,6 +48,7 @@ func TestParseDSNKeepsThePasswordInBytes(t *testing.T) {
 		})
 	}
 	quoted, err := ParseDSN([]byte(`host=h user=u password='a \'b\' c' dbname=d`))
+	defer quoted.Wipe()
 	if err != nil || string(quoted.Password) != "a 'b' c" {
 		t.Fatalf("quoted password = %q, %v", quoted.Password, err)
 	}
@@ -169,9 +170,8 @@ func md5Hex(s string) string {
 
 // TestSignInVerifiesThePrivateCATheSessionCarriesA256L1 is A256-L1: a
 // database behind a private CA verifies against the CA the session carries,
-// with no root file on the gateway's host, and that CA takes precedence over
-// a DSN's sslrootcert (a path on the control plane's host). Without it the
-// handshake does not verify; a CA with no certificate is refused.
+// with no root file on the gateway's host. An external root path is refused
+// even when a job supplies trusted roots. Missing and malformed roots fail.
 func TestSignInVerifiesThePrivateCATheSessionCarriesA256L1(t *testing.T) {
 	caPEM, certPEM, keyPEM, err := certtest.PrivateCAServer("db.private.test")
 	if err != nil {
@@ -189,18 +189,21 @@ func TestSignInVerifiesThePrivateCATheSessionCarriesA256L1(t *testing.T) {
 		return []byte("host=" + host + " port=" + port + " user=u password=p dbname=d sslmode=verify-full" + extra)
 	}
 	carried := Options{RootCAPEM: caPEM, ServerName: "db.private.test"}
-	for name, extra := range map[string]string{
-		"no root file":                 "",
-		"a control-plane path ignored": " sslrootcert=/nonexistent/on/this/host/root.pem",
-	} {
-		session, err := SignIn(ctx, dsn(fakePostgres(t, 0, 'S', nil, serverTLS), extra), carried)
-		if err != nil {
-			t.Fatalf("%s: %v", name, err)
-		}
-		if _, ok := session.Conn.(*tls.Conn); !ok || session.ProcessID != 7 {
-			t.Fatalf("%s: session = %+v", name, session)
-		}
-		_ = session.Conn.Close()
+	session, err := SignIn(ctx, dsn(fakePostgres(t, 0, 'S', nil, serverTLS), ""), carried)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := session.Conn.(*tls.Conn); !ok || session.ProcessID != 7 {
+		t.Fatalf("session = %+v", session)
+	}
+	_ = session.Conn.Close()
+	forbidden := carried
+	forbidden.Dial = func(context.Context, string, string) (net.Conn, error) {
+		t.Fatal("a session carrying a path reached the dialer")
+		return nil, nil
+	}
+	if _, err := SignIn(ctx, dsn("db.private.test:5432", " sslrootcert=unused"), forbidden); err == nil {
+		t.Fatal("the gateway accepted a DSN path alongside its trusted CA")
 	}
 	if _, err := SignIn(ctx, dsn(fakePostgres(t, 0, 'S', nil, serverTLS), ""), Options{}); err == nil || !strings.Contains(err.Error(), "does not verify") {
 		t.Fatalf("a private CA without the carried CA = %v, want unverified", err)

@@ -13,7 +13,6 @@
 package mongosignin
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -22,12 +21,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/url"
-	"os"
-	"strconv"
-	"strings"
 	"sync/atomic"
 
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/scram"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -56,99 +52,32 @@ type Target struct {
 	Password   []byte
 	AuthSource string
 	TLS        bool
-	TLSCAFile  string
-	// rootPEM and serverName are the target's CA and certificate name as the
-	// session carries them (A256-L1); they take precedence over TLSCAFile
-	// and the host's name.
-	rootPEM    []byte
-	serverName string
+	// rootPEM and serverName are public trust from the session (A256-L1).
+	rootPEM       []byte
+	serverName    string
+	passwordOwner *dbdsn.Target
 }
 
 // Wipe clears the password.
-func (t *Target) Wipe() { secret.Wipe(t.Password) }
+func (t *Target) Wipe() {
+	if t.passwordOwner != nil {
+		t.passwordOwner.Wipe()
+		t.passwordOwner = nil
+	} else {
+		secret.Wipe(t.Password)
+	}
+	t.Password = nil
+}
 
-// ParseURI reads a session credential: mongodb://user:password@host[:port]
-// [,host...]/database?options. tls (or ssl), tlsCAFile, authSource and
-// authMechanism are read; mongodb+srv and mechanisms other than
-// SCRAM-SHA-256 are refused.
+// ParseURI admits an explicit, bounded TCP host list and an optional TLS
+// decision. The job supplies private CA material by value.
 func ParseURI(credential []byte) (*Target, error) {
-	rest, ok := bytes.CutPrefix(credential, []byte("mongodb://"))
-	if !ok {
-		if bytes.HasPrefix(credential, []byte("mongodb+srv://")) {
-			return nil, errors.New("mongosignin: a mongodb+srv:// credential is not served through the gateway")
-		}
-		return nil, errors.New("mongosignin: the credential is not a mongodb:// URI")
-	}
-	end := bytes.IndexAny(rest, "/?")
-	authority, tail := rest, []byte(nil)
-	if end >= 0 {
-		authority, tail = rest[:end], rest[end:]
-	}
-	at := bytes.LastIndexByte(authority, '@')
-	if at <= 0 {
-		return nil, errors.New("mongosignin: the credential names no user")
-	}
-	userinfo, hostlist := authority[:at], string(authority[at+1:])
-	colon := bytes.IndexByte(userinfo, ':')
-	if colon <= 0 {
-		return nil, errors.New("mongosignin: the credential has no user and password")
-	}
-	user, ok := percentDecode(userinfo[:colon])
-	if !ok || len(user) == 0 {
-		return nil, errors.New("mongosignin: the credential's user is not percent-encoded")
-	}
-	password, ok := percentDecode(userinfo[colon+1:])
-	if !ok || len(password) == 0 {
-		secret.Wipe(password)
-		return nil, errors.New("mongosignin: the credential's password is not percent-encoded")
-	}
-	t := &Target{User: string(user), Password: password, AuthSource: "admin"}
-	for _, host := range strings.Split(hostlist, ",") {
-		if _, _, err := net.SplitHostPort(host); err != nil {
-			host = net.JoinHostPort(strings.Trim(host, "[]"), "27017")
-		}
-		h, port, err := net.SplitHostPort(host)
-		if n, perr := strconv.Atoi(port); err != nil || h == "" || perr != nil || n < 1 || n > 65535 {
-			t.Wipe()
-			return nil, errors.New("mongosignin: the credential's hosts are not host[:port]")
-		}
-		t.Hosts = append(t.Hosts, host)
-	}
-	path, query, _ := strings.Cut(string(tail), "?")
-	if db := strings.TrimPrefix(path, "/"); db != "" {
-		decoded, err := url.PathUnescape(db)
-		if err != nil {
-			t.Wipe()
-			return nil, errors.New("mongosignin: the credential's database is not percent-encoded")
-		}
-		t.AuthSource = decoded
-	}
-	options, err := url.ParseQuery(query)
+	profile, err := dbdsn.Parse(dbdsn.Mongo, credential, dbdsn.Gateway)
 	if err != nil {
-		t.Wipe()
-		return nil, errors.New("mongosignin: the credential's options are malformed")
+		return nil, err
 	}
-	for key, values := range options {
-		value := values[len(values)-1]
-		switch strings.ToLower(key) {
-		case "authsource":
-			if value == "" {
-				t.Wipe()
-				return nil, errors.New("mongosignin: the credential's authSource is empty")
-			}
-			t.AuthSource = value
-		case "tls", "ssl":
-			t.TLS = value == "true"
-		case "tlscafile":
-			t.TLSCAFile = value
-		case "authmechanism":
-			if value != "SCRAM-SHA-256" {
-				t.Wipe()
-				return nil, fmt.Errorf("mongosignin: authMechanism %q is not served through the gateway", value)
-			}
-		}
-	}
-	return t, nil
+	return &Target{Hosts: profile.Hosts, User: profile.User, Password: profile.Password,
+		AuthSource: profile.AuthSource, TLS: profile.Options["tls"] == "true", passwordOwner: &profile}, nil
 }
 
 // Options shape one sign-in.
@@ -157,11 +86,12 @@ type Options struct {
 	Dial func(ctx context.Context, network, address string) (net.Conn, error)
 	// RootCAPEM is the target's CA as the control plane carries it with the
 	// session (A256-L1): a private CA verifies the server without a CA file
-	// on the gateway's host, and takes precedence over the URI's tlsCAFile.
+	// on the gateway's host.
 	// ServerName, when set, is the certificate name to verify instead of the
 	// host's.
 	RootCAPEM  []byte
 	ServerName string
+	AuthSource string
 }
 
 // SignIn connects to the credential's primary and authenticates as its
@@ -176,6 +106,12 @@ func SignIn(ctx context.Context, credential []byte, opts Options) (net.Conn, err
 		return nil, err
 	}
 	defer target.Wipe()
+	if opts.AuthSource != "" && opts.AuthSource != target.AuthSource {
+		return nil, dbdsn.ErrGatewayRoute
+	}
+	if !target.TLS && (len(opts.RootCAPEM) > 0 || opts.ServerName != "") {
+		return nil, errors.New("mongosignin: explicit trust requires TLS")
+	}
 	target.rootPEM, target.serverName = opts.RootCAPEM, opts.ServerName
 	dial := opts.Dial
 	if dial == nil {
@@ -239,26 +175,14 @@ func connect(ctx context.Context, dial func(context.Context, string, string) (ne
 		name = target.serverName
 	}
 	config := &tls.Config{ServerName: name, MinVersion: tls.VersionTLS12}
-	switch {
-	case len(target.rootPEM) > 0:
+	if len(target.rootPEM) > 0 {
 		roots := x509.NewCertPool()
 		if !roots.AppendCertsFromPEM(target.rootPEM) {
 			_ = conn.Close()
 			return nil, errors.New("mongosignin: the session's CA holds no certificate")
 		}
 		config.RootCAs = roots
-	case target.TLSCAFile != "":
-		pemBytes, err := os.ReadFile(target.TLSCAFile) // #nosec G304 -- the session's URI names the CA file on the gateway's host, as a driver's tlsCAFile does (CWE-22)
-		if err != nil {
-			_ = conn.Close()
-			return nil, errors.New("mongosignin: tlsCAFile cannot be read on the gateway's host")
-		}
-		roots := x509.NewCertPool()
-		if !roots.AppendCertsFromPEM(pemBytes) {
-			_ = conn.Close()
-			return nil, errors.New("mongosignin: tlsCAFile holds no certificate")
-		}
-		config.RootCAs = roots
+
 	}
 	tlsConn := tls.Client(conn, config)
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
@@ -390,39 +314,4 @@ func MessageHeader(length int, requestID, responseTo int32, opCode int32) []byte
 	h = binary.LittleEndian.AppendUint32(h, uint32(requestID))  // #nosec G115 -- a request id is its two's-complement bits (CWE-190)
 	h = binary.LittleEndian.AppendUint32(h, uint32(responseTo)) // #nosec G115 -- a request id is its two's-complement bits (CWE-190)
 	return binary.LittleEndian.AppendUint32(h, uint32(opCode))  // #nosec G115 -- an op code is a small constant (CWE-190)
-}
-
-func percentDecode(value []byte) ([]byte, bool) {
-	out := make([]byte, 0, len(value))
-	for i := 0; i < len(value); i++ {
-		if value[i] != '%' {
-			out = append(out, value[i])
-			continue
-		}
-		if i+2 >= len(value) {
-			secret.Wipe(out)
-			return nil, false
-		}
-		hi, ok1 := unhex(value[i+1])
-		lo, ok2 := unhex(value[i+2])
-		if !ok1 || !ok2 {
-			secret.Wipe(out)
-			return nil, false
-		}
-		out = append(out, hi<<4|lo)
-		i += 2
-	}
-	return out, true
-}
-
-func unhex(c byte) (byte, bool) {
-	switch {
-	case c >= '0' && c <= '9':
-		return c - '0', true
-	case c >= 'a' && c <= 'f':
-		return c - 'a' + 10, true
-	case c >= 'A' && c <= 'F':
-		return c - 'A' + 10, true
-	}
-	return 0, false
 }

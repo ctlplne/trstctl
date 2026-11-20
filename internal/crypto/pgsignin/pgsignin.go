@@ -24,10 +24,10 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/scram"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -36,19 +36,26 @@ import (
 type Target struct {
 	Host, Port, User, Database string
 	Password                   []byte
-	// SSLMode is libpq's sslmode ("prefer" when the DSN names none);
-	// SSLRootCert a PEM file of trusted roots on the gateway's host, or
-	// "system".
-	SSLMode, SSLRootCert string
+	// SSLMode is libpq's sslmode ("prefer" when the DSN names none).
+	SSLMode     string
+	SystemRoots bool
 	// rootPEM and serverName are the target's CA and certificate name as the
-	// session carries them (A256-L1); they take precedence over SSLRootCert
-	// and Host.
-	rootPEM    []byte
-	serverName string
+	// session carries them (A256-L1).
+	rootPEM       []byte
+	serverName    string
+	passwordOwner *dbdsn.Target
 }
 
 // Wipe clears the password.
-func (t *Target) Wipe() { secret.Wipe(t.Password) }
+func (t *Target) Wipe() {
+	if t.passwordOwner != nil {
+		t.passwordOwner.Wipe()
+		t.passwordOwner = nil
+	} else {
+		secret.Wipe(t.Password)
+	}
+	t.Password = nil
+}
 
 // Session is a signed-in connection, ready for queries.
 type Session struct {
@@ -69,10 +76,8 @@ type Options struct {
 	// client_encoding, ...) into the startup message; see RuntimeParameter.
 	Runtime [][2]string
 	// RootCAPEM is the target's CA as the control plane carries it with the
-	// session (A256-L1): a private CA verifies the database without a root
-	// file on the gateway's host, and takes precedence over the DSN's
-	// sslrootcert, a path on the control plane's host. ServerName, when set,
-	// is the certificate name to verify instead of the DSN's host.
+	// session (A256-L1). ServerName, when set, is the certificate name to
+	// verify in place of the DSN's host.
 	RootCAPEM  []byte
 	ServerName string
 }
@@ -108,6 +113,12 @@ func SignIn(ctx context.Context, dsn []byte, opts Options) (*Session, error) {
 	}
 	if target.User == "" || target.Database == "" {
 		return nil, errors.New("pgsignin: the session's DSN names no login or database")
+	}
+	if len(opts.RootCAPEM) > 0 || opts.ServerName != "" || target.SystemRoots {
+		if target.SSLMode == "disable" || target.SSLMode == "allow" {
+			return nil, errors.New("pgsignin: explicit trust requires TLS")
+		}
+		target.SSLMode = "verify-full"
 	}
 	dial := opts.Dial
 	if dial == nil {
@@ -222,21 +233,10 @@ func negotiateTLS(conn net.Conn, target *Target) (net.Conn, error) {
 	if target.serverName != "" {
 		config.ServerName = target.serverName
 	}
-	switch {
-	case len(target.rootPEM) > 0:
+	if len(target.rootPEM) > 0 {
 		roots := x509.NewCertPool()
 		if !roots.AppendCertsFromPEM(target.rootPEM) {
 			return nil, errors.New("pgsignin: the session's CA holds no certificate")
-		}
-		config.RootCAs = roots
-	case target.SSLRootCert != "" && target.SSLRootCert != "system":
-		pemBytes, err := os.ReadFile(target.SSLRootCert) // #nosec G304 -- the session's DSN names the root file on the gateway's host, as libpq's sslrootcert does (CWE-22)
-		if err != nil {
-			return nil, errors.New("pgsignin: sslrootcert cannot be read on the gateway's host")
-		}
-		roots := x509.NewCertPool()
-		if !roots.AppendCertsFromPEM(pemBytes) {
-			return nil, errors.New("pgsignin: sslrootcert holds no certificate")
 		}
 		config.RootCAs = roots
 	}

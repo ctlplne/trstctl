@@ -3,7 +3,6 @@
 package dynsecret
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -17,8 +16,8 @@ import (
 	mssql "github.com/microsoft/go-mssqldb"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/secrettext"
 )
 
 var (
@@ -117,6 +116,7 @@ type MSSQLConfig struct {
 	// administrator's DSN, whose address a staged credential is verified at.
 	RotationAccounts map[string][2]string
 	AdminDSN         []byte
+	Transport        *DatabaseTransport
 }
 
 // MSSQLBackend issues SQL Server logins (or contained database users) with
@@ -129,6 +129,7 @@ type MSSQLBackend struct {
 	prefix           string
 	rotationAccounts map[string][2]string
 	verifyURL        *url.URL
+	transport        *DatabaseTransport
 }
 
 // NewMSSQLBackend validates cfg; exec runs as an administrator allowed to
@@ -161,13 +162,16 @@ func NewMSSQLBackend(exec SQLExecutor, cfg MSSQLConfig) (*MSSQLBackend, error) {
 		return nil, errors.New("dynsecret mssql: every allowed role needs database roles in role_bindings or two rotation_accounts")
 	}
 	if len(cfg.AdminDSN) > 0 {
-		parsed, err := url.Parse(secrettext.String(bytes.TrimRight(cfg.AdminDSN, "\r\n")))
-		if err != nil || parsed.Scheme != "sqlserver" || parsed.Host == "" {
-			return nil, errors.New("dynsecret mssql: the admin DSN must be a sqlserver:// URL with a host")
+		target, err := dbdsn.Parse(dbdsn.MSSQL, cfg.AdminDSN, dbdsn.Admin)
+		if err != nil {
+			return nil, err
 		}
-		parsed.User = nil
-		mssqlBoundConnection(parsed)
-		b.verifyURL = parsed
+		target.Wipe()
+		if target.CAFile != "" && len(databaseTransport(cfg.Transport).CAPEM) == 0 {
+			return nil, dbdsn.ErrTrust
+		}
+		b.verifyURL = mssqlProfileURL(target, cfg.Database)
+		b.transport = cfg.Transport
 	}
 	return b, nil
 }
@@ -186,10 +190,10 @@ const (
 
 func mssqlBoundConnection(target *url.URL) {
 	query := target.Query()
-	if query.Get("dial timeout") == "" {
+	if query.Get("dial timeout") == "" || query.Get("dial timeout") == "0" {
 		query.Set("dial timeout", mssqlDefaultDialTimeout)
 	}
-	if query.Get("connection timeout") == "" {
+	if query.Get("connection timeout") == "" || query.Get("connection timeout") == "0" {
 		query.Set("connection timeout", mssqlDefaultConnectionTimeout)
 	}
 	target.RawQuery = query.Encode()
@@ -371,14 +375,10 @@ func (b *MSSQLBackend) VerifyCredential(ctx context.Context, credential []byte) 
 		return errors.New("dynsecret mssql: the credential is not a username and password")
 	}
 	defer secret.Wipe(parsed.Password)
-	target := *b.verifyURL
-	target.User = url.UserPassword(parsed.Username, secrettext.String(parsed.Password))
-	if parsed.Database != "" {
-		query := target.Query()
-		query.Set("database", parsed.Database)
-		target.RawQuery = query.Encode()
+	if parsed.Database != "" && parsed.Database != b.database {
+		return errors.New("dynsecret mssql: the credential names a different database")
 	}
-	db, err := sql.Open("sqlserver", target.String())
+	db, err := mssqlProfileDB(b.verifyURL, parsed.Username, parsed.Password, b.transport)
 	if err != nil {
 		return errors.New("dynsecret mssql: open the credential's connection failed")
 	}
@@ -408,24 +408,7 @@ func mssqlErrorNumber(err error) string {
 // (sqlserver://user:password@host:1433?database=master). Callers close it after
 // the operation, keeping the authority-bearing DSN out of long-lived state.
 func OpenMSSQLExecutor(ctx context.Context, adminDSN []byte) (*sql.DB, error) {
-	adminDSN = bytes.TrimRight(adminDSN, "\r\n")
-	if len(adminDSN) == 0 {
-		return nil, errors.New("dynsecret mssql: admin DSN required")
-	}
-	target, err := url.Parse(secrettext.String(adminDSN))
-	if err != nil || target.Scheme != "sqlserver" || target.Host == "" {
-		return nil, errors.New("dynsecret mssql: the admin DSN must be a sqlserver:// URL with a host")
-	}
-	mssqlBoundConnection(target)
-	db, err := sql.Open("sqlserver", target.String())
-	if err != nil {
-		return nil, errors.New("dynsecret mssql: open admin connection failed")
-	}
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, errors.New("dynsecret mssql: ping admin connection failed")
-	}
-	return db, nil
+	return OpenMSSQLExecutorWithTransport(ctx, adminDSN, nil)
 }
 
 // randomPolicyPassword returns n characters drawn uniformly from upper and

@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/jackc/pgx/v5"
-
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dbaccess"
 	"trstctl.com/trstctl/internal/dynsecret"
@@ -250,21 +248,28 @@ func NewPostgresRotator(cfg PostgresConfig) (*BackendRotator, error) {
 }
 
 type postgresVerifier struct {
-	query string
+	query     string
+	transport *dynsecret.DatabaseTransport
 }
 
 func (v postgresVerifier) VerifyCredential(ctx context.Context, _, _ string, credential []byte) error {
-	conn, err := pgx.Connect(ctx, secrettext.String(credential))
+	conn, err := dynsecret.OpenPostgresCredential(ctx, credential, v.transport)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = conn.Close(ctx) }()
 	rows, err := conn.Query(ctx, v.query)
-	if err != nil {
-		return err
+	if err == nil {
+		rows.Close()
+		err = rows.Err()
 	}
-	rows.Close()
-	return rows.Err()
+	if err == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return errors.New("rotation: PostgreSQL verification query failed")
 }
 
 // MySQLConfig configures the concrete MySQL static-credential rotator.
@@ -322,19 +327,27 @@ func NewAWSIAMRotator(cfg AWSIAMConfig) (*BackendRotator, error) {
 // connect and run query; the static-rotation worker uses it before retiring the
 // predecessor.
 func VerifyPostgresCredential(ctx context.Context, credential []byte, query string) error {
+	return VerifyPostgresCredentialWithTransport(ctx, credential, query, nil)
+}
+
+func VerifyPostgresCredentialWithTransport(ctx context.Context, credential []byte, query string, transport *dynsecret.DatabaseTransport) error {
 	if query == "" {
 		query = "SELECT 1"
 	}
-	return postgresVerifier{query: query}.VerifyCredential(ctx, "", "", credential)
+	return postgresVerifier{query: query, transport: transport}.VerifyCredential(ctx, "", "", credential)
 }
 
 // VerifyMySQLCredential proves a staged MySQL credential (user:password@tcp(host)/db)
 // can open a session.
 func VerifyMySQLCredential(ctx context.Context, credential []byte) error {
-	db, err := dynsecret.OpenMySQLExecutor(ctx, credential)
+	return VerifyMySQLCredentialWithTransport(ctx, credential, nil)
+}
+
+func VerifyMySQLCredentialWithTransport(ctx context.Context, credential []byte, transport *dynsecret.DatabaseTransport) error {
+	db, err := dynsecret.OpenMySQLExecutorWithTransport(ctx, credential, transport)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = db.Close() }()
-	return db.PingContext(ctx)
+	return nil
 }

@@ -19,7 +19,6 @@ import (
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // A258: a brokered account's health is whether the credential the broker
@@ -121,8 +120,10 @@ func classifyPostgresSignIn(err error) error {
 		switch pgErr.Code {
 		case "28P01", "28000":
 			return ErrSignInRejected
+		case "08006":
+			return errors.New("dynsecret postgres: sign-in failed with SQLSTATE 08006")
 		}
-		return fmt.Errorf("dynsecret postgres: sign-in failed with SQLSTATE %s", pgErr.Code)
+		return errors.New("dynsecret postgres: sign-in failed")
 	}
 	if class := classifyNetwork(err); class != nil {
 		return class
@@ -175,7 +176,7 @@ func classifyMongoSignIn(err error) error {
 // CheckSignIn signs in with the admin DSN on a new connection and runs
 // SELECT 1.
 func (b *PostgresBackend) CheckSignIn(ctx context.Context) error {
-	conn, err := pgconn.Connect(ctx, secrettext.String(b.dsn.Bytes()))
+	conn, err := b.connectDriver(ctx)
 	if err != nil {
 		return classifyPostgresSignIn(err)
 	}

@@ -3,7 +3,6 @@
 package dynsecret
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -59,7 +58,18 @@ func (b *PostgresBackend) createDecoyCredential(ctx context.Context, req Generat
 		return "", nil, err
 	}
 	defer secret.Wipe(password)
-	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
+	database := DecoyDatabaseName(user)
+	dsn, err := postgresDecoyDSN(b.dsn.Bytes(), user, password, database)
+	if err != nil {
+		return "", nil, err
+	}
+	issued := false
+	defer func() {
+		if !issued {
+			secret.Wipe(dsn)
+		}
+	}()
+	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes(), b.transport)
 	if err != nil {
 		return "", nil, err
 	}
@@ -68,7 +78,6 @@ func (b *PostgresBackend) createDecoyCredential(ctx context.Context, req Generat
 	if ttl <= 0 {
 		ttl = 24 * time.Hour
 	}
-	database := DecoyDatabaseName(user)
 	// CREATE DATABASE cannot run inside a transaction. A database left by an
 	// interrupted attempt for this same lease is reused, never a second one.
 	var exists bool
@@ -91,11 +100,7 @@ func (b *PostgresBackend) createDecoyCredential(ctx context.Context, req Generat
 		_ = b.Revoke(ctx, user)
 		return "", nil, errPostgresDecoyCreate
 	}
-	dsn, err := postgresDecoyDSN(b.dsn.Bytes(), user, password, database)
-	if err != nil {
-		_ = b.Revoke(ctx, user)
-		return "", nil, err
-	}
+	issued = true
 	return user, dsn, nil
 }
 
@@ -143,7 +148,7 @@ func (b *PostgresBackend) DecoySessions(ctx context.Context, role string) (int64
 // DecoyCounter reads the decoy database's session counter with its last
 // statistics reset, in one read (Q6-L7), and whether the database exists.
 func (b *PostgresBackend) DecoyCounter(ctx context.Context, role string) (DecoyCounter, bool, error) {
-	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
+	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes(), b.transport)
 	if err != nil {
 		return DecoyCounter{}, false, err
 	}
@@ -170,7 +175,7 @@ func (b *PostgresBackend) DecoyCounter(ctx context.Context, role string) (DecoyC
 // so the watcher reads the server's live sessions for the role as well. A
 // session that opens and closes between two checks is not seen.
 func (b *PostgresBackend) DecoyElsewhere(ctx context.Context, role string) ([]string, error) {
-	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
+	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes(), b.transport)
 	if err != nil {
 		return nil, err
 	}
@@ -200,24 +205,5 @@ func (b *PostgresBackend) DecoyElsewhere(ctx context.Context, role string) ([]st
 // postgresDecoyDSN is the credential DSN with the decoy database in place of
 // the admin database: the URI path is replaced, a keyword DSN gets dbname.
 func postgresDecoyDSN(adminDSN []byte, user string, password []byte, database string) ([]byte, error) {
-	dsn, err := postgresCredentialDSN(adminDSN, user, password)
-	if err != nil {
-		return nil, err
-	}
-	scheme, _, authorityEnd, _, ok := splitURIAuthority(dsn)
-	if !ok || (!bytes.EqualFold(scheme, []byte("postgres")) && !bytes.EqualFold(scheme, []byte("postgresql"))) {
-		return append(dsn, []byte(" dbname="+database)...), nil
-	}
-	rest := dsn[authorityEnd:]
-	tail := bytes.IndexAny(rest, "?#")
-	if tail < 0 {
-		tail = len(rest)
-	}
-	out := make([]byte, 0, len(dsn)+len(database)+1)
-	out = append(out, dsn[:authorityEnd]...)
-	out = append(out, '/')
-	out = append(out, database...)
-	out = append(out, rest[tail:]...)
-	secret.Wipe(dsn)
-	return out, nil
+	return checkedPostgresCredential(adminDSN, user, password, database)
 }

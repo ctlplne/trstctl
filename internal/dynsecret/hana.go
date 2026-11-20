@@ -3,21 +3,19 @@
 package dynsecret
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"regexp"
 	"strings"
 	"time"
 
 	hdb "github.com/SAP/go-hdb/driver"
 
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // hanaName is a role name this provider quotes (ESCAPE_DOUBLE_QUOTES) as SAP
@@ -95,7 +93,8 @@ const HANAProbeUpsertUser = hanaUpsertUser
 type HANAConfig struct {
 	// AdminDSN is the administrator's go-hdb URL (hdb://user:password@host:port),
 	// whose address and options a credential is verified at.
-	AdminDSN []byte
+	AdminDSN  []byte
+	Transport *DatabaseTransport
 	// RoleBindings maps each allowed role to the existing HANA roles its
 	// users are granted, comma separated, for example "ORDERS_READER".
 	RoleBindings   map[string]string
@@ -107,7 +106,8 @@ type HANABackend struct {
 	exec      SQLExecutor
 	roles     map[string][]string
 	prefix    string
-	verifyURL *url.URL
+	profile   dbdsn.Target
+	transport *DatabaseTransport
 }
 
 // NewHANABackend validates cfg; exec runs as an administrator allowed to
@@ -119,12 +119,13 @@ func NewHANABackend(exec SQLExecutor, cfg HANAConfig) (*HANABackend, error) {
 		return nil, errors.New("dynsecret hana: executor required")
 	}
 	b := &HANABackend{exec: exec, roles: map[string][]string{}, prefix: cfg.UsernamePrefix}
-	parsed, err := url.Parse(secrettext.String(bytes.TrimRight(cfg.AdminDSN, "\r\n")))
-	if err != nil || parsed.Scheme != "hdb" || parsed.Host == "" {
-		return nil, errors.New("dynsecret hana: the admin DSN must be an hdb:// URL with a host")
+	target, err := dbdsn.Parse(dbdsn.HANA, cfg.AdminDSN, dbdsn.Admin)
+	if err != nil {
+		return nil, err
 	}
-	parsed.User = nil
-	b.verifyURL = parsed
+	target.Wipe()
+	target.User, target.Password = "", nil
+	b.profile, b.transport = target, cfg.Transport
 	for role, binding := range cfg.RoleBindings {
 		for _, name := range strings.Split(binding, ",") {
 			name = strings.TrimSpace(name)
@@ -217,9 +218,9 @@ func (b *HANABackend) VerifyCredential(ctx context.Context, credential []byte) e
 		return errors.New("dynsecret hana: the credential is not a username and password")
 	}
 	defer secret.Wipe(parsed.Password)
-	target := *b.verifyURL
-	target.User = url.UserPassword(parsed.Username, secrettext.String(parsed.Password))
-	db, err := sql.Open(hdb.DriverName, target.String())
+	target := b.profile
+	target.User, target.Password = parsed.Username, parsed.Password
+	db, err := hanaProfileDB(target, b.transport)
 	if err != nil {
 		return errors.New("dynsecret hana: open the credential's connection failed")
 	}
@@ -250,17 +251,5 @@ func hanaErrorCode(err error) string {
 // (hdb://user:password@host:port). Callers close it after the operation,
 // keeping the authority-bearing URL out of long-lived state.
 func OpenHANAExecutor(ctx context.Context, adminDSN []byte) (*sql.DB, error) {
-	adminDSN = bytes.TrimRight(adminDSN, "\r\n")
-	if len(adminDSN) == 0 {
-		return nil, errors.New("dynsecret hana: admin DSN required")
-	}
-	db, err := sql.Open(hdb.DriverName, secrettext.String(adminDSN))
-	if err != nil {
-		return nil, errors.New("dynsecret hana: open admin connection failed")
-	}
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("dynsecret hana: ping admin connection failed (%s)", hanaErrorCode(err))
-	}
-	return db, nil
+	return OpenHANAExecutorWithTransport(ctx, adminDSN, nil)
 }

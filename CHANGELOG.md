@@ -3740,6 +3740,16 @@
   `appliance_key_generation`).
 
 ### Security
+- Database providers parse bounded connection profiles before native drivers
+  can use them. The provider governs file-backed CA trust and each resolved TCP
+  destination. PostgreSQL and MongoDB gateway credentials carry no CA path.
+  PostgreSQL, MongoDB and MySQL gateway starts record a reviewed route with
+  their redemption jobs and require an upgraded agent. An exact retry can
+  recover an active database gateway's original ticket after an interrupted
+  response. See the database
+  connection authority section in `docs/configuration.md` for upgrade order
+  and private CA configuration. The Compose control plane mounts signing
+  secrets read-only.
 
 - Stored credential references use one parser for configuration, authorization,
   and redemption (CR-060). Connector, relay, and integration readers use the

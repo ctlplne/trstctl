@@ -2951,6 +2951,74 @@ PostgreSQL, MySQL, and MongoDB admin connection files may end in shell-added
 CR/LF line endings; the provider strips only those terminal bytes before parsing
 the connection value and creating a workload credential.
 
+### Database connection authority
+
+PostgreSQL, MySQL, MongoDB, Oracle, SQL Server, Azure SQL and SAP HANA
+providers accept a bounded TCP administrator connection profile. The control
+plane reads and validates the current `admin_dsn_ref` before each use. A tenant
+can update the bytes behind a `secret://` reference. The provider's operator
+configuration continues to determine which files, trust roots and network
+destinations the connection may use.
+
+- Prefer `tls_ca_ref: file:/absolute/path/to/ca.pem` for a private database CA.
+  The file must pass the operator credential file's ownership and mode checks.
+  Use `tls_server_name` when the certificate names a different DNS name than
+  the configured listener. Oracle uses the listener's name directly. The
+  bundle must contain public `CERTIFICATE` PEM blocks and fit within 256 KiB.
+- To keep a legacy CA option in an operator `file:` DSN, set
+  `database_ca_file_root` to an absolute directory owned by the deployment.
+  Keep the CA within that directory. This applies to PostgreSQL `sslrootcert`,
+  MongoDB `tlsCAFile`, SQL Server `certificate` and HANA `TLSRootCAFile`.
+  Choose either the legacy CA option or `tls_ca_ref`. PostgreSQL still accepts
+  `sslrootcert=system` to select system roots. A `secret://` DSN uses the
+  separate operator CA configuration. Issued credentials omit host CA paths.
+  Direct database clients configure their own trusted CA bundle.
+- When a native PostgreSQL connection negotiates TLS, trstctl verifies the
+  certificate chain and server name. Provide the CA or a matching certificate
+  name for installations that previously used encryption-only `require` or
+  chain-only `verify-ca`. With `sslmode=prefer`, plaintext startup requires
+  an explicit TLS refusal from the same network endpoint. A failed certificate
+  check ends the TLS attempt without permitting plaintext there.
+- For a tenant-held DSN that needs a private network, set
+  `allow_private_endpoint: true` and list the specific `private_egress_cidrs`.
+  The socket checks the actual IP chosen by DNS on every attempt. The air-gap
+  allowlist also checks the destination name before resolution. Operator
+  file DSNs can name a local TCP listener. Discovered private MongoDB members
+  require the explicit CIDR grant. Link-local and metadata destinations stay
+  blocked.
+- Use explicit TCP listeners and password-authenticated logins. Local sockets,
+  file-backed authentication, host tracing, and MySQL's unrestricted local-file
+  transfer are rejected. Unknown and repeated effective DSN options fail
+  validation. The DSN limit is 64 KiB, with up to 64 settings and 16 candidate
+  endpoints. MongoDB's `directConnection=true` uses only its configured host.
+- For Oracle, configure a directly reachable TCP listener and service. For
+  HANA, use the tenant database's SQL port and configure a default schema as
+  needed. For SQL Server use a TCP port. Installations that use a TDS routing
+  hop list the permitted `host:port` values in `database_routing_endpoints`.
+
+PostgreSQL, MongoDB and MySQL access gateways use a reviewed workload route
+from the provider. MySQL's `addr` and `database` select this route separately
+from its administrator DSN. PostgreSQL and MongoDB gateways require verified
+TLS when configured with an explicit CA or certificate name. Existing MySQL
+gateway sessions use their plaintext database transport inside the configured
+network scope. At redemption, the control plane checks the current credential
+against the recorded route. A change of route or trust requires a fresh session.
+Gateway agents can further limit database sockets with `--relay-egress-allow`.
+PostgreSQL gateway targets use the standard TLS request. Native-only negotiation
+and startup settings such as `sslnegotiation=direct` and `target_session_attrs`
+are refused before a gateway lease is issued.
+
+If a database gateway open is interrupted, retry the same approved request with
+its original idempotency key. An active activation returns the original ticket
+and gateway. Recall, expiry or a finished gateway job ends ticket recovery.
+
+To upgrade an existing database gateway deployment, drain its PostgreSQL,
+MongoDB and MySQL sessions and stop the old gateway processes. Upgrade all
+control-plane writers, redemption servers and event projectors before allowing
+them to write new database gateway starts. Upgrade the affected gateway agents
+and reopen sessions. A legacy database gateway job lacks the required route
+revision. The current agent and control plane refuse its redemption.
+
 ```json
 {
   "secrets": {"enable_api": true},

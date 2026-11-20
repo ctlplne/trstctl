@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/accessweb"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 )
 
 const (
@@ -134,13 +135,11 @@ type SessionIntent struct {
 	WebSignInServerName string `json:"web_sign_in_server_name,omitempty"`
 	// DatabaseCAPEM and DatabaseServerName (A256-L1) are how the gateway
 	// verifies a PostgreSQL, Redis or MongoDB target's TLS: its provider's
-	// CA, carried with the job, so a private CA needs no file on the
-	// gateway's host, and the certificate name to verify. Empty: the
-	// credential's own setting (a root file its DSN names) or the system
-	// roots. A gateway that predates them ignores them and verifies as
-	// before.
-	DatabaseCAPEM      string `json:"database_ca_pem,omitempty"`
-	DatabaseServerName string `json:"database_server_name,omitempty"`
+	// CA and certificate name carried with the job. Empty roots use system
+	// trust. The credential cannot supply a gateway filesystem path.
+	DatabaseCAPEM      string              `json:"database_ca_pem,omitempty"`
+	DatabaseServerName string              `json:"database_server_name,omitempty"`
+	DatabaseRoute      *dbdsn.GatewayRoute `json:"database_route,omitempty"`
 	// Record asks the gateway to record the session (A255): masked, and
 	// uploaded over its agent channel as the session runs.
 	Record bool `json:"record,omitempty"`
@@ -189,6 +188,19 @@ func ValidateSessionIntent(in SessionIntent) error {
 	}
 	if (in.DatabaseCAPEM != "" || in.DatabaseServerName != "") && in.TargetType != TargetPostgres && in.TargetType != TargetRedis && in.TargetType != TargetMongo {
 		return errors.New("accessgateway: only a PostgreSQL, Redis or MongoDB session carries a database CA")
+	}
+	if len(in.DatabaseCAPEM) > dbdsn.MaxTrustBytes {
+		return dbdsn.ErrTrust
+	}
+	if in.DatabaseCAPEM != "" || in.DatabaseServerName != "" {
+		if _, _, err := dbdsn.NormalizeTrust([]byte(in.DatabaseCAPEM), in.DatabaseServerName); err != nil {
+			return err
+		}
+	}
+	if in.DatabaseRoute != nil {
+		if err := in.DatabaseRoute.Validate(dbdsn.GatewayDriver(in.TargetType), in.explicitDatabaseTrust()); err != nil {
+			return err
+		}
 	}
 	if in.TargetType == TargetRDP {
 		if in.Desktop == nil || in.Desktop.Validate() != nil || in.CommandPolicy != nil {
@@ -367,11 +379,27 @@ func KindForIntent(in SessionIntent) string {
 type upstreamTrust struct {
 	caPEM      []byte
 	serverName string
+	database   string
 }
 
 func (in SessionIntent) upstreamTrust() upstreamTrust {
-	if strings.TrimSpace(in.DatabaseCAPEM) == "" && in.DatabaseServerName == "" {
-		return upstreamTrust{}
+	trust := upstreamTrust{serverName: in.DatabaseServerName}
+	if in.DatabaseCAPEM != "" {
+		trust.caPEM = []byte(in.DatabaseCAPEM)
 	}
-	return upstreamTrust{caPEM: []byte(in.DatabaseCAPEM), serverName: in.DatabaseServerName}
+	if in.DatabaseRoute != nil {
+		trust.database = in.DatabaseRoute.Database
+	}
+	return trust
+}
+
+func (in SessionIntent) explicitDatabaseTrust() bool {
+	return in.DatabaseCAPEM != "" || in.DatabaseServerName != ""
+}
+
+func (in SessionIntent) CheckDatabaseCredential(value []byte) error {
+	if in.DatabaseRoute == nil {
+		return dbdsn.ErrGatewayRoute
+	}
+	return in.DatabaseRoute.CheckCredential(dbdsn.GatewayDriver(in.TargetType), value, in.explicitDatabaseTrust())
 }

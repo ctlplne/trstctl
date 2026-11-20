@@ -106,7 +106,7 @@ func (b *PostgresBackend) ResolveAccess(ctx context.Context, backendRef string) 
 	if access.Login == "" {
 		return access, fmt.Errorf("%w: the lease names no login role", ErrAccessLoginMissing)
 	}
-	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
+	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes(), b.transport)
 	if err != nil {
 		return access, ErrAccessUnreachable
 	}

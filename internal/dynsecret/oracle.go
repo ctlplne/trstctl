@@ -3,24 +3,19 @@
 package dynsecret
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
-	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
-	go_ora "github.com/sijms/go-ora/v2"
 	"github.com/sijms/go-ora/v2/network"
 
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // oracleName is a user or role name this provider passes to
@@ -100,7 +95,8 @@ type OracleConfig struct {
 	// AdminDSN is the administrator's go-ora URL
 	// (oracle://user:password@host:1521/service), whose address and options a
 	// credential is verified against.
-	AdminDSN []byte
+	AdminDSN  []byte
+	Transport *DatabaseTransport
 	// RoleBindings maps each allowed role to the existing Oracle roles its
 	// users are granted, comma separated, for example "ORDERS_READER"; the
 	// roles carry CREATE SESSION and the lease's privileges.
@@ -118,10 +114,8 @@ type OracleBackend struct {
 	roles            map[string][]string
 	prefix           string
 	rotationAccounts map[string][2]string
-	host             string
-	port             int
-	service          string
-	options          map[string]string
+	profile          dbdsn.Target
+	transport        *DatabaseTransport
 	retryWait        time.Duration
 }
 
@@ -134,9 +128,13 @@ func NewOracleBackend(exec SQLExecutor, cfg OracleConfig) (*OracleBackend, error
 	}
 	b := &OracleBackend{exec: exec, roles: map[string][]string{}, prefix: cfg.UsernamePrefix,
 		rotationAccounts: map[string][2]string{}, retryWait: 500 * time.Millisecond}
-	if err := b.parseAddress(cfg.AdminDSN); err != nil {
+	target, err := dbdsn.Parse(dbdsn.Oracle, cfg.AdminDSN, dbdsn.Admin)
+	if err != nil {
 		return nil, err
 	}
+	target.Wipe()
+	target.User, target.Password = "", nil
+	b.profile, b.transport = target, cfg.Transport
 	for role, binding := range cfg.RoleBindings {
 		for _, name := range strings.Split(binding, ",") {
 			name = strings.TrimSpace(name)
@@ -156,33 +154,6 @@ func NewOracleBackend(exec SQLExecutor, cfg OracleConfig) (*OracleBackend, error
 		return nil, errors.New("dynsecret oracle: every allowed role needs Oracle roles in role_bindings or two rotation_accounts")
 	}
 	return b, nil
-}
-
-// parseAddress keeps the admin URL's address, service and options, never
-// its credentials, so a leased credential can be verified at the same place.
-func (b *OracleBackend) parseAddress(adminDSN []byte) error {
-	adminDSN = bytes.TrimRight(adminDSN, "\r\n")
-	parsed, err := url.Parse(secrettext.String(adminDSN))
-	if err != nil || parsed.Scheme != "oracle" || parsed.Host == "" {
-		return errors.New("dynsecret oracle: admin DSN must be oracle://user:password@host:port/service")
-	}
-	host, portText, err := net.SplitHostPort(parsed.Host)
-	if err != nil {
-		host, portText = parsed.Host, "1521"
-	}
-	port, err := strconv.Atoi(portText)
-	if err != nil || host == "" || port < 1 || port > 65535 {
-		return errors.New("dynsecret oracle: admin DSN needs host:port")
-	}
-	b.host, b.port, b.service = host, port, strings.TrimPrefix(parsed.Path, "/")
-	if b.service == "" {
-		return errors.New("dynsecret oracle: admin DSN needs a service name")
-	}
-	b.options = map[string]string{}
-	for key, values := range parsed.Query() {
-		b.options[key] = strings.Join(values, ",")
-	}
-	return nil
 }
 
 // Create implements Backend.
@@ -331,8 +302,9 @@ func (b *OracleBackend) VerifyCredential(ctx context.Context, credential []byte)
 		return errors.New("dynsecret oracle: the credential is not a username and password")
 	}
 	defer secret.Wipe(parsed.Password)
-	connURL := go_ora.BuildUrl(b.host, b.port, b.service, parsed.Username, secrettext.String(parsed.Password), b.options)
-	db, err := sql.Open("oracle", connURL)
+	target := b.profile
+	target.User, target.Password = parsed.Username, parsed.Password
+	db, err := oracleProfileDB(target, b.transport)
 	if err != nil {
 		return errors.New("dynsecret oracle: open the credential's connection failed")
 	}
@@ -371,17 +343,5 @@ func oracleErrorCode(err error) string {
 // (oracle://user:password@host:1521/service). Callers close it after the
 // operation, keeping the authority-bearing URL out of long-lived state.
 func OpenOracleExecutor(ctx context.Context, adminDSN []byte) (*sql.DB, error) {
-	adminDSN = bytes.TrimRight(adminDSN, "\r\n")
-	if len(adminDSN) == 0 {
-		return nil, errors.New("dynsecret oracle: admin DSN required")
-	}
-	db, err := sql.Open("oracle", secrettext.String(adminDSN))
-	if err != nil {
-		return nil, errors.New("dynsecret oracle: open admin connection failed")
-	}
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("dynsecret oracle: ping admin connection failed (%s)", oracleErrorCode(err))
-	}
-	return db, nil
+	return OpenOracleExecutorWithTransport(ctx, adminDSN, nil)
 }

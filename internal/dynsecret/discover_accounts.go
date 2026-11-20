@@ -8,11 +8,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgconn"
-
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/pamdiscovery"
-	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // A260: privileged account discovery. A provider whose administrator
@@ -52,7 +49,7 @@ FROM pg_roles r WHERE r.rolname NOT LIKE 'pg\_%' ORDER BY r.rolname`
 // superuser or a powerful predefined role, or own a database. A superuser's
 // memberships are not listed: PostgreSQL counts it a member of every role.
 func (b *PostgresBackend) DiscoverPrivilegedAccounts(ctx context.Context) ([]pamdiscovery.Account, error) {
-	conn, err := pgconn.Connect(ctx, secrettext.String(b.dsn.Bytes()))
+	conn, err := b.connectDriver(ctx)
 	if err != nil {
 		return nil, classifyPostgresSignIn(err)
 	}

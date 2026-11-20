@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/redisacl"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 )
@@ -66,6 +67,50 @@ func TestPostgresBackendCreatesUsableLoginAndRevokes(t *testing.T) {
 	_ = userConn.Close(ctx)
 	if got != 1 {
 		t.Fatalf("count = %d, want 1", got)
+	}
+	// CR-251 / PLAN-SIB-12: drive pgx and pgconn independently through the
+	// production constructors. PostgreSQL starts without TLS in this fixture.
+	preferred := []byte(strings.Replace(dsn, "sslmode=disable", "sslmode=prefer", 1))
+	for _, open := range []struct {
+		name string
+		run  func(*DatabaseTransport) error
+	}{
+		{name: "pgx", run: func(transport *DatabaseTransport) error {
+			conn, err := connectPostgresAdmin(ctx, preferred, transport)
+			if err != nil {
+				return err
+			}
+			return conn.Close(ctx)
+		}},
+		{name: "pgconn", run: func(transport *DatabaseTransport) error {
+			b, err := NewPostgresBackend(PostgresConfig{DSN: preferred, Database: "postgres", Schema: "public", Transport: transport})
+			if err != nil {
+				return err
+			}
+			defer b.Close()
+			conn, err := b.connectDriver(ctx)
+			if err != nil {
+				return err
+			}
+			return conn.Close(ctx)
+		}},
+	} {
+		t.Run(open.name, func(t *testing.T) {
+			checked := false
+			guarded := &DatabaseTransport{Dialer: netsec.NewDatabaseDialer(netsec.DatabaseDialOptions{
+				OperatorFile: true, CheckName: func(host string) error {
+					checked = true
+					return netsec.ErrSSRFBlocked
+				},
+			})}
+			if err := open.run(guarded); err == nil || !checked {
+				t.Fatal("native open did not enforce its explicit egress guard")
+			}
+			allowed := &DatabaseTransport{Dialer: netsec.NewDatabaseDialer(netsec.DatabaseDialOptions{OperatorFile: true})}
+			if err := open.run(allowed); err != nil {
+				t.Fatalf("native open lost supported fallback after a PostgreSQL TLS refusal: %v", err)
+			}
+		})
 	}
 	if err := backend.Revoke(ctx, ref); err != nil {
 		t.Fatal(err)

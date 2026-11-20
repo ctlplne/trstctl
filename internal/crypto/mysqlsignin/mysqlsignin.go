@@ -23,9 +23,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strconv"
 	"strings"
 
+	"trstctl.com/trstctl/internal/crypto/dbdsn"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -63,36 +63,27 @@ const maxPacket = 1 << 16
 type Target struct {
 	Address, User, Database string
 	Password                []byte
+	passwordOwner           *dbdsn.Target
 }
 
 // Wipe clears the password.
-func (t *Target) Wipe() { secret.Wipe(t.Password) }
+func (t *Target) Wipe() {
+	if t.passwordOwner != nil {
+		t.passwordOwner.Wipe()
+		t.passwordOwner = nil
+	} else {
+		secret.Wipe(t.Password)
+	}
+	t.Password = nil
+}
 
-// ParseDSN reads a session DSN, user:password@tcp(host:port)/database, with
-// optional parameters after "?" (ignored: the sign-in sets its own).
+// ParseDSN admits only the MySQL profile this sign-in can honor.
 func ParseDSN(dsn []byte) (*Target, error) {
-	at := bytes.LastIndex(dsn, []byte("@tcp("))
-	if at <= 0 {
-		return nil, errors.New("mysqlsignin: the DSN is not user:password@tcp(host:port)/database")
+	profile, err := dbdsn.Parse(dbdsn.MySQL, dsn, dbdsn.Gateway)
+	if err != nil {
+		return nil, err
 	}
-	userinfo, rest := dsn[:at], dsn[at+len("@tcp("):]
-	colon := bytes.IndexByte(userinfo, ':')
-	if colon <= 0 || colon == len(userinfo)-1 {
-		return nil, errors.New("mysqlsignin: the DSN has no user and password")
-	}
-	closing := bytes.IndexByte(rest, ')')
-	if closing <= 0 || len(rest) <= closing+1 || rest[closing+1] != '/' {
-		return nil, errors.New("mysqlsignin: the DSN's address is not tcp(host:port)/")
-	}
-	address := string(rest[:closing])
-	host, port, err := net.SplitHostPort(address)
-	if n, perr := strconv.Atoi(port); err != nil || host == "" || perr != nil || n < 1 || n > 65535 {
-		return nil, errors.New("mysqlsignin: the DSN's address is not host:port")
-	}
-	database, _, _ := strings.Cut(string(rest[closing+2:]), "?")
-	password := make([]byte, len(userinfo)-colon-1)
-	copy(password, userinfo[colon+1:])
-	return &Target{Address: address, User: string(userinfo[:colon]), Database: database, Password: password}, nil
+	return &Target{Address: profile.Hosts[0], User: profile.User, Database: profile.Database, Password: profile.Password, passwordOwner: &profile}, nil
 }
 
 // Handshake is a server's initial handshake (protocol version 10).

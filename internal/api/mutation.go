@@ -331,6 +331,7 @@ func (a *API) writeBoundMutationResponse(w http.ResponseWriter, ctx context.Cont
 			return
 		}
 		body = view
+		defer secret.Wipe(view)
 	}
 	if err := writeCachedResponseContentType(w, c.ContentType); err != nil {
 		a.writeError(w, err)
