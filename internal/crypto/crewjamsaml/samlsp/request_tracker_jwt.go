@@ -37,7 +37,7 @@ func (s JWTTrackedRequestCodec) Encode(value TrackedRequest) (string, error) {
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.MaxAge)),
 			IssuedAt:  jwt.NewNumericDate(now),
 			Issuer:    s.Issuer,
-			NotBefore: jwt.NewNumericDate(now), // TODO(ross): correct for clock skew
+			NotBefore: jwt.NewNumericDate(now), // TODO(ross): correct for clock skew; owner: trstctl security (vendored upstream note)
 			Subject:   value.Index,
 		},
 		TrackedRequest:   value,

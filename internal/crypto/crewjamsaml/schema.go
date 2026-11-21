@@ -48,7 +48,7 @@ type AuthnRequest struct {
 	NameIDPolicy          *NameIDPolicy `xml:"urn:oasis:names:tc:SAML:2.0:protocol NameIDPolicy"`
 	Conditions            *Conditions
 	RequestedAuthnContext *RequestedAuthnContext
-	// Scoping               *Scoping // TODO
+	// Scoping               *Scoping // TODO; owner: trstctl security (vendored upstream note)
 
 	ForceAuthn                     *bool  `xml:",attr"`
 	IsPassive                      *bool  `xml:",attr"`
@@ -494,10 +494,10 @@ type Response struct {
 	Signature    *etree.Element
 	Status       Status `xml:"urn:oasis:names:tc:SAML:2.0:protocol Status"`
 
-	// TODO(ross): more than one EncryptedAssertion is allowed
+	// TODO(ross): more than one EncryptedAssertion is allowed; owner: trstctl security (vendored upstream note)
 	EncryptedAssertion *etree.Element `xml:"urn:oasis:names:tc:SAML:2.0:assertion EncryptedAssertion"`
 
-	// TODO(ross): more than one Assertion is allowed
+	// TODO(ross): more than one Assertion is allowed; owner: trstctl security (vendored upstream note)
 	Assertion *Assertion `xml:"urn:oasis:names:tc:SAML:2.0:assertion Assertion"`
 }
 
@@ -617,7 +617,7 @@ func (s *StatusCode) Element() *etree.Element {
 
 // StatusSuccess means the request succeeded. Additional information MAY be returned in the <StatusMessage> and/or <StatusDetail> elements.
 //
-// TODO(ross): this value is mostly constant, but is mutated in tests. Fix the hacky test so this can be const.
+// TODO(ross): this value is mostly constant, but is mutated in tests. Fix the hacky test so this can be const.; owner: trstctl security (vendored upstream note)
 var StatusSuccess = "urn:oasis:names:tc:SAML:2.0:status:Success"
 
 const (
@@ -652,7 +652,7 @@ const (
 	StatusNoAvailableIDP = "urn:oasis:names:tc:SAML:2.0:status:NoAvailableIDP"
 
 	// StatusNoPassive means Indicates the responding provider cannot authenticate the principal passively, as has been requested.
-	StatusNoPassive = "urn:oasis:names:tc:SAML:2.0:status:NoPassive" //nolint:gosec
+	StatusNoPassive = "urn:oasis:names:tc:SAML:2.0:status:NoPassive" // #nosec G101 -- fixed public SAML status URI, not a credential (CWE-798)
 
 	// StatusNoSupportedIDP is used by an intermediary to indicate that none of the identity providers in an <IDPList> are supported by the intermediary.
 	StatusNoSupportedIDP = "urn:oasis:names:tc:SAML:2.0:status:NoSupportedIDP"
@@ -670,7 +670,7 @@ const (
 	StatusRequestUnsupported = "urn:oasis:names:tc:SAML:2.0:status:RequestUnsupported"
 
 	// StatusRequestVersionDeprecated means the SAML responder cannot process any requests with the protocol version specified in the request.
-	StatusRequestVersionDeprecated = "urn:oasis:names:tc:SAML:2.0:status:RequestVersionDeprecated" //nolint:gosec
+	StatusRequestVersionDeprecated = "urn:oasis:names:tc:SAML:2.0:status:RequestVersionDeprecated" // #nosec G101 -- fixed public SAML status URI, not a credential (CWE-798)
 
 	// StatusRequestVersionTooHigh means the SAML responder cannot process the request because the protocol version specified in the request message is a major upgrade from the highest protocol version supported by the responder.
 	StatusRequestVersionTooHigh = "urn:oasis:names:tc:SAML:2.0:status:RequestVersionTooHigh"
@@ -795,9 +795,9 @@ func (a *Assertion) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 // See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf §2.4.1
 type Subject struct {
 	XMLName xml.Name `xml:"urn:oasis:names:tc:SAML:2.0:assertion Subject"`
-	// BaseID               *BaseID  ... TODO
+	// BaseID               *BaseID  ... TODO; owner: trstctl security (vendored upstream note)
 	NameID *NameID
-	// EncryptedID          *EncryptedID  ... TODO
+	// EncryptedID          *EncryptedID  ... TODO; owner: trstctl security (vendored upstream note)
 	SubjectConfirmations []SubjectConfirmation `xml:"SubjectConfirmation"`
 }
 
@@ -885,9 +885,9 @@ func (s *SessionIndex) Element() *etree.Element {
 // See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf §2.4.1.1
 type SubjectConfirmation struct {
 	Method string `xml:",attr"`
-	// BaseID               *BaseID  ... TODO
+	// BaseID               *BaseID  ... TODO; owner: trstctl security (vendored upstream note)
 	NameID *NameID
-	// EncryptedID          *EncryptedID  ... TODO
+	// EncryptedID          *EncryptedID  ... TODO; owner: trstctl security (vendored upstream note)
 	SubjectConfirmationData *SubjectConfirmationData
 }
 
@@ -1174,9 +1174,9 @@ func (a *SubjectLocality) Element() *etree.Element {
 // See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf §2.7.2.2
 type AuthnContext struct {
 	AuthnContextClassRef *AuthnContextClassRef
-	// AuthnContextDecl          *AuthnContextDecl        ... TODO
-	// AuthnContextDeclRef       *AuthnContextDeclRef     ... TODO
-	// AuthenticatingAuthorities []AuthenticatingAuthority... TODO
+	// AuthnContextDecl          *AuthnContextDecl        ... TODO; owner: trstctl security (vendored upstream note)
+	// AuthnContextDeclRef       *AuthnContextDeclRef     ... TODO; owner: trstctl security (vendored upstream note)
+	// AuthenticatingAuthorities []AuthenticatingAuthority... TODO; owner: trstctl security (vendored upstream note)
 }
 
 // Element returns an etree.Element representing the object in XML form.

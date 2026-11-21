@@ -16,6 +16,12 @@ Parser changes touch four upstream Go files:
 - `xmlenc/gcm.go` refuses ciphertext shorter than the nonce.
 - `xmlenc/cbc.go` refuses a missing or partial encrypted block.
 
+Repository integration also labels the upstream debt comments with the local
+security owner, replaces old gosec suppression comments with registered
+`#nosec` reasons for fixed protocol constants and legacy digest support, and
+keeps the runtime source under the repository's architecture checks. These
+comment-only adaptations do not change parser behavior.
+
 The full patched upstream source, tests, examples, and fixtures are retained in
 `../r2/evidence/crewjamsaml-v0.5.1-patched-tests.tar.gz` (SHA-256
 `012307ea4e17f01a6cff5fb45c477f7cb6f7536dc3569e3f6facfa90e6912414`).

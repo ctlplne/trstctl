@@ -211,7 +211,7 @@ func (idp *IdentityProvider) ServeMetadata(w http.ResponseWriter, _ *http.Reques
 // ServeSSO handles SAML auth requests.
 //
 // When it gets a request for a user that does not have a valid session,
-// then it prompts the user via XXX.
+// then it prompts the user via XXX.; owner: trstctl security (vendored upstream note)
 //
 // If the session already exists, then it produces a SAML assertion and
 // returns an HTTP response according to the specified binding. The
@@ -239,7 +239,7 @@ func (idp *IdentityProvider) ServeSSO(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO(ross): we must check that the request ID has not been previously
+	// TODO(ross): we must check that the request ID has not been previously; owner: trstctl security (vendored upstream note)
 	//   issued.
 
 	session := idp.SessionProvider.GetSession(w, r, req)
@@ -408,7 +408,7 @@ func (req *IdpAuthnRequest) Validate() error {
 	}
 	idpSsoDescriptor := req.IDP.Metadata().IDPSSODescriptors[0]
 
-	// TODO(ross): support signed authn requests
+	// TODO(ross): support signed authn requests; owner: trstctl security (vendored upstream note)
 	// For now we do the safe thing and fail in the case where we think
 	// requests might be signed.
 	if idpSsoDescriptor.WantAuthnRequestsSigned != nil && *idpSsoDescriptor.WantAuthnRequestsSigned {
@@ -1018,7 +1018,7 @@ func (req *IdpAuthnRequest) getSPEncryptionCert() (*x509.Certificate, error) {
 
 // unmarshalEtreeHack parses `el` and sets values in the structure `v`.
 //
-// This is a hack -- it first serializes the element, then uses xml.Unmarshal.
+// This is a hack -- it first serializes the element, then uses xml.Unmarshal.; owner: trstctl security (vendored upstream note)
 func unmarshalEtreeHack(el *etree.Element, v interface{}) error {
 	doc := etree.NewDocument()
 	doc.SetRoot(el)

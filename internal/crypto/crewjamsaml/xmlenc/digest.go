@@ -1,12 +1,12 @@
 package xmlenc
 
 import (
-	"crypto/sha1" //nolint:gosec // required for protocol support
+	"crypto/sha1" // #nosec G505 -- legacy SAML XML Encryption digest interoperability only (CWE-327)
 	"crypto/sha256"
 	"crypto/sha512"
 	"hash"
 
-	//nolint:staticcheck,gosec // We should support this for legacy reasons.
+	//nolint:staticcheck // legacy SAML XML Encryption digest interoperability
 	"golang.org/x/crypto/ripemd160"
 )
 

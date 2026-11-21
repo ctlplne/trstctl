@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3549 annotated sites across 35 rules. Each row is
+3553 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (893 sites)
+### G101 — CWE-798 Use of hardcoded credentials (895 sites)
 
 | Location | Reason |
 |---|---|
@@ -196,8 +196,8 @@ not this file.
 | `internal/api/itsm_test.go:76` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/managedkeys_test.go:225` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/nhi_inventory.go:206` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/notifications.go:907` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/notifications.go:1289` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/notifications.go:910` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/notifications.go:1292` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications_helpers_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/openapi.go:291` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secret_scan_hooks_od3_test.go:26` | fabricated fixture signing token (CWE-798) |
@@ -244,8 +244,8 @@ not this file.
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:14` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:21` | test-only file reference path (CWE-798) |
-| `internal/config/config.go:3718` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:4527` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3730` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:4551` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:28` | credential file paths only, no credential value (CWE-798) |
@@ -350,6 +350,8 @@ not this file.
 | `internal/connector/gcpcm/gcpcm_test.go:18` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/kemp/kemp_test.go:65` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/paloalto/paloalto_test.go:29` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `internal/crypto/crewjamsaml/schema.go:655` | fixed public SAML status URI, not a credential (CWE-798) |
+| `internal/crypto/crewjamsaml/schema.go:673` | fixed public SAML status URI, not a credential (CWE-798) |
 | `internal/crypto/jks/jceks_test.go:22` | a fixture file path, not a credential (CWE-798) |
 | `internal/crypto/pfx/keyentries_test.go:20` | keytool's published default store password on a test fixture; not a credential (CWE-798) |
 | `internal/crypto/ssh_account_password.go:43` | a command path the profile runs, not a credential (CWE-798) |
@@ -791,9 +793,9 @@ not this file.
 | `internal/server/secret_access_explain_served_test.go:100` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_integrations.go:1750` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_parameter_store_drift_served_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
-| `internal/server/secret_reference_scope_served_test.go:140` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
-| `internal/server/secret_reference_scope_served_test.go:156` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
-| `internal/server/secret_reference_scope_served_test.go:174` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
+| `internal/server/secret_reference_scope_served_test.go:150` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
+| `internal/server/secret_reference_scope_served_test.go:166` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
+| `internal/server/secret_reference_scope_served_test.go:184` | a secret:// reference or secret name in a test fixture, not a credential value (CWE-798) |
 | `internal/server/secret_render_served_test.go:326` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_repository_private_clone_served_test.go:73` | fabricated fixture token for the stand-in host (CWE-798) |
 | `internal/server/secret_repository_private_clone_served_test.go:120` | credential references to fabricated fixture values (CWE-798) |
@@ -966,7 +968,7 @@ not this file.
 | `internal/netconfine/netconfine_linux_test.go:100` | the outside listener answers on every address so the test proves the confined command reaches none of them |
 | `internal/server/spire_jwt_authorities_container_test.go:258` | the test's containers reach the served API through the Docker host gateway (CWE-200) |
 
-### G103 — CWE-? (unmapped rule) (79 sites)
+### G103 — CWE-? (unmapped rule) (80 sites)
 
 | Location | Reason |
 |---|---|
@@ -1022,6 +1024,7 @@ not this file.
 | `internal/crypto/windependents/automation_windows.go:270` | exact live native VARIANT layout; native allocator clears non-text result ownership, text is wiped separately (CWE-242) |
 | `internal/crypto/windependents/automation_windows.go:286` | live fixed IDispatch vtable, public method name, sized GUID/DISPID outputs and one bounded name (CWE-242) |
 | `internal/crypto/windependents/automation_windows.go:310` | exact IDispatch ABI, at most 16 reversed typed arguments and live sized result/exception outputs; password BSTR lease remains locked (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:332` | QueryInterface on the live returned IUnknown, exact IDispatch IID and sized output; VariantClear below releases the original reference (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:135` | SDK USER_INFO_1 points only to the owned public name and live locked password buffer (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:138` | exact SDK USER_INFO_1 and output scalar for a synchronous local test-account creation; password stays locked (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:144` | exact name of the successfully created test-owned account; no enumeration or global cleanup (CWE-242) |
@@ -1034,12 +1037,12 @@ not this file.
 | `internal/crypto/windependents/services_native_windows_test.go:233` | exact test-owned user, SDK level 1003 and live locked UTF-16 password; no password string or file (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:247` | one bounded sign-in for the test-owned local account using a live locked UTF-16 password and token output (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:343` | exact new fixture service and live locked initial UTF-16 credential; only owned service is created (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:57` | owned nonempty native query buffer address; only offset arithmetic, never converted back to a pointer (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:58` | SDK-returned UTF-16 pointer is range/alignment/termination checked against the owned buffer before a byte view (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:67` | exact SDK status struct size and lifetime for a synchronous local status call (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:88` | page-aligned locked 64 KiB query buffer exceeds the SDK struct and remains alive through all bounded field reads (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:197` | SDK count is bounded by both returned-buffer capacity and total census before creating the native entry view (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:259` | password pointer borrows the locked UTF-16 buffer through Use; frozen account pointer stays in the live locked query buffer (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:58` | owned nonempty native query buffer address; only offset arithmetic, never converted back to a pointer (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:59` | SDK-returned UTF-16 pointer is range/alignment/termination checked against the owned buffer before a byte view (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:68` | exact SDK status struct size and lifetime for a synchronous local status call (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:89` | page-aligned locked 64 KiB query buffer exceeds the SDK struct and remains alive through all bounded field reads (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:201` | SDK count is bounded by both returned-buffer capacity and total census before creating the native entry view (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:263` | password pointer borrows the locked UTF-16 buffer through Use; frozen account pointer stays in the live locked query buffer (CWE-242) |
 | `internal/crypto/windependents/task_events_windows.go:32` | fixed local scheduler channel; live UTF-16 public path and native handle (CWE-242) |
 | `internal/crypto/windependents/task_events_windows.go:39` | exact 16-byte EVT_VARIANT output and size for the fixed Enabled property (CWE-242) |
 | `internal/crypto/windependents/task_events_windows.go:57` | owned nonempty bounded native render buffer; only checked offset arithmetic (CWE-242) |
@@ -1110,9 +1113,9 @@ not this file.
 | Location | Reason |
 |---|---|
 | `clients/signing/cmd/trstctl-ksp-register/cng_windows.go:76` | NTSTATUS and SECURITY_STATUS are 32-bit values |
-| `clients/signing/ksp/module.go:364` | RSA and P-256 key sizes fit 32 bits |
-| `clients/signing/ksp/module.go:626` | RSA sizes fit 32 bits |
-| `clients/signing/ksp/module.go:717` | a signature length fits 32 bits |
+| `clients/signing/ksp/module.go:369` | RSA and P-256 key sizes fit 32 bits |
+| `clients/signing/ksp/module.go:631` | RSA sizes fit 32 bits |
+| `clients/signing/ksp/module.go:722` | a signature length fits 32 bits |
 | `cmd/trstctl-agent/main.go:638` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1778` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1643,14 +1646,14 @@ not this file.
 | `scripts/perf/cmd/spineburst/main.go:676` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `scripts/perf/cmd/spineburst/main.go:700` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/proof/launched.go:497` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:1252` | bounded process identity comparison (CWE-190) |
-| `tools/dodcensus/proof/launched.go:1284` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:1385` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:1850` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:1887` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:2087` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:2091` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:2741` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:1349` | bounded process identity comparison (CWE-190) |
+| `tools/dodcensus/proof/launched.go:1381` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:1482` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:1947` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:1984` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:2184` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:2188` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:2838` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:193` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:199` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:205` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1669,7 +1672,7 @@ not this file.
 |---|---|
 | `internal/agent/accessgateway/azure_test.go:25` | owned provider-envelope fixture; locked on parse and scratch wiped (CWE-200) |
 | `internal/agent/accessgateway/console.go:85` | native federation Session grant; scratch wiped and request serialized from locked bytes (CWE-200) |
-| `internal/agent/accessgateway/console_test.go:24` | owned STS-envelope fixture; parsed into locked bytes and scratch wiped (CWE-200) |
+| `internal/agent/accessgateway/console_test.go:25` | owned STS-envelope fixture; parsed into locked bytes and scratch wiped (CWE-200) |
 | `internal/agent/accessgateway/gcp_test.go:35` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
 | `internal/agent/accessgateway/gcp_test.go:166` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
 | `internal/dynsecret/active_directory.go:123` | byte-backed rotated credential is sealed by the existing outbox rotation worker (CWE-200) |
@@ -1677,7 +1680,7 @@ not this file.
 | `internal/dynsecret/active_directory_prepared_test.go:17` | synthetic byte-backed parser fixture, wiped and never logged (CWE-200) |
 | `internal/dynsecret/active_directory_prepared_test.go:31` | synthetic rejected credential fixture, wiped and never logged (CWE-200) |
 | `internal/dynsecret/active_directory_prepared_test.go:59` | synthetic byte-backed fuzz/parser seed, never logged (CWE-200) |
-| `internal/dynsecret/active_directory_prepared_test.go:75` | synthetic byte-backed fuzz/parser seed, never logged (CWE-200) |
+| `internal/dynsecret/active_directory_prepared_test.go:76` | synthetic byte-backed fuzz/parser seed, never logged (CWE-200) |
 | `internal/dynsecret/active_directory_restore_test.go:41` | byte-backed synthetic credential DTO exercises rejected native recovery; never logged or persisted (CWE-200) |
 | `internal/dynsecret/active_directory_signin_test.go:37` | a test's own fixture credential (CWE-200) |
 | `internal/dynsecret/auth0.go:108` | the rotated client secret is this provider's output: the outbox seals it and only the secret's readers open it (CWE-200) |
@@ -1976,7 +1979,7 @@ not this file.
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
 | `internal/cli/cbom_scan.go:91` | the operator names the scanner and its arguments; running it is the command's purpose (CWE-78) |
 | `internal/cli/cli_test.go:2634` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/connector/localops.go:455` | operator-configured local-ops action command; running it is the feature (CWE-78) |
+| `internal/connector/localops.go:464` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/connector/wasm/host/host_test.go:44` | fixed toolchain and package; output confined to the temp dir (CWE-78). |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/crypto/pfx/alias_test.go:92` | runs the locally installed JDK tool with fixed arguments (CWE-78). |
@@ -2301,13 +2304,13 @@ not this file.
 | `tools/dodcensus/managed_key_manifest_test.go:599` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/managed_key_manifest_test.go:635` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/launched.go:285` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/dodcensus/proof/launched.go:649` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/dodcensus/proof/launched.go:1407` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/dodcensus/proof/launched.go:1443` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/dodcensus/proof/launched.go:656` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/dodcensus/proof/launched.go:1504` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/dodcensus/proof/launched.go:1540` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/proof.go:331` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/dodcensus/proof/proof_test.go:1173` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/proof/proof_test.go:1215` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/proof/proof_test.go:1211` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/proof/proof_test.go:1253` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/proof/proof_test.go:1337` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/substrate_broker.go:229` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/pqclab/main.go:361` | developer tool running fixed toolchain commands over the repo (CWE-78) |
@@ -2442,10 +2445,10 @@ not this file.
 | `internal/signing/socket_mode_unix_test.go:206` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/tsa/http_test.go:112` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `tools/dodcensus/proof/artifact_watch_linux_test.go:97` | adversarial mutation fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:869` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:889` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:899` | deliberately unsafe fixture mode (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:932` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:907` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:927` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:937` | deliberately unsafe fixture mode (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:970` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/runtime_runner_test.go:196` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/runtime_runner_test.go:202` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/runtime_runner_test.go:219` | private fixture-directory mode is the behavior under test (CWE-276) |
@@ -2849,13 +2852,13 @@ not this file.
 | `internal/cloudauth/cloudauth.go:402` | operator-configured projected token path (CWE-22) |
 | `internal/cloudauth/gcp_token_source.go:115` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:3813` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:5176` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5195` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:3825` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:5200` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5219` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
-| `internal/connector/localops.go:331` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
-| `internal/connector/localops.go:423` | clean is confined to operator-approved local roots above (CWE-22) |
+| `internal/connector/localops.go:340` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
+| `internal/connector/localops.go:432` | clean is confined to operator-approved local roots above (CWE-22) |
 | `internal/connector/localops_sync_other.go:10` | path is the parent of an operator-approved local connector target (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/host_test.go:51` | the file this test just built (CWE-22). |
@@ -3224,18 +3227,18 @@ not this file.
 | `tools/dodcensus/managed_key_manifest_test.go:477` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:664` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/proof/launched.go:420` | gate-owned private directory created above (CWE-22) |
-| `tools/dodcensus/proof/launched.go:592` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:1324` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2103` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2217` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2312` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2459` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2538` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2792` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:599` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:1421` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2200` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2314` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2409` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2556` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2635` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2889` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:213` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:322` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/proof/proof_test.go:1086` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/proof/proof_test.go:1224` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/proof/proof_test.go:1124` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/proof/proof_test.go:1262` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/runtime.go:133` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime.go:154` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime.go:225` | developer tool reading the repo paths it is pointed at (CWE-22) |
@@ -3556,11 +3559,12 @@ not this file.
 | `internal/secretscan/repository_credential_test.go:11` | test-only stand-in host: serves the local git-http-backend; the toolchain is far past the CVE-2016-5386 fix (CWE-284) |
 | `internal/server/secret_repository_private_clone_served_test.go:14` | test-only stand-in host: serves the local git-http-backend; the toolchain is far past the CVE-2016-5386 fix (CWE-284) |
 
-### G505 — CWE-328 Weak hash import (SHA-1) (16 sites)
+### G505 — CWE-328 Weak hash import (SHA-1) (17 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:15` | SHA-1 only for the conventional certificate fingerprint identifier, never integrity (CWE-328) |
+| `internal/crypto/crewjamsaml/xmlenc/digest.go:4` | legacy SAML XML Encryption digest interoperability only (CWE-327) |
 | `internal/crypto/deviceattest/cvc.go:11` | a card-verifiable certificate may name ECDSA/RSA with SHA-1; verified only, never produced (CWE-327) |
 | `internal/crypto/jks/jceks.go:7` | a JCEKS keystore's integrity digest is defined over SHA-1; this only verifies existing files (CWE-328) |
 | `internal/crypto/leafca.go:7` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
@@ -3643,9 +3647,9 @@ not this file.
 | `internal/server/ssh_certificate_lease_served_test.go:62` | test executes a fixed local tool on its own temp files (CWE-78) |
 | `internal/server/token_exchange_lab_m4_test.go:36` | the runner's own lab cluster (CWE-78) |
 | `internal/server/token_exchange_lab_m4_test.go:70` | the runner's own lab cluster (CWE-78) |
-| `tools/dodcensus/proof/proof_test.go:1173` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/proof/proof_test.go:1215` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/proof/proof_test.go:1211` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/proof/proof_test.go:1253` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/proof/proof_test.go:1337` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
 ### G703 — CWE-22 Path traversal (taint) (172 sites)
@@ -3694,8 +3698,8 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
-| `internal/config/config.go:5176` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5195` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5200` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5219` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |
@@ -3812,11 +3816,11 @@ not this file.
 | `tools/dodcensus/managed_key_manifest_test.go:436` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:485` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:676` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/proof/launched.go:1243` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
+| `tools/dodcensus/proof/launched.go:1340` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/proof/proof.go:98` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:218` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:327` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/proof/proof_test.go:1329` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/proof/proof_test.go:1367` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/runtime_runner.go:941` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:392` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:543` | test path inside its own tempdir/checkout (CWE-22) |
@@ -3882,7 +3886,7 @@ not this file.
 | `internal/server/spire_jwt_authorities_container_test.go:242` | test calls its own served harness (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:175` | test calls the cluster its runner named (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |
-| `tools/dodcensus/proof/launched.go:1770` | developer tool calling the endpoint it was pointed at (CWE-918) |
+| `tools/dodcensus/proof/launched.go:1867` | developer tool calling the endpoint it was pointed at (CWE-918) |
 
 ### G705 — CWE-79 Cross-site scripting (taint) (39 sites)
 

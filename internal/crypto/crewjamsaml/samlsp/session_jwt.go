@@ -96,7 +96,7 @@ func (c JWTSessionCodec) Decode(signed string) (Session, error) {
 	_, err := parser.ParseWithClaims(signed, &claims, func(*jwt.Token) (interface{}, error) {
 		return c.Key.Public(), nil
 	})
-	// TODO(ross): check for errors due to bad time and return ErrNoSession
+	// TODO(ross): check for errors due to bad time and return ErrNoSession; owner: trstctl security (vendored upstream note)
 	if err != nil {
 		return nil, err
 	}

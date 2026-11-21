@@ -87,21 +87,21 @@
 //	func main() {
 //		keyPair, err := tls.LoadX509KeyPair("myservice.cert", "myservice.key")
 //		if err != nil {
-//			panic(err) // TODO handle error
+//			panic(err) // TODO handle error; owner: trstctl security (vendored upstream note)
 //		}
 //		keyPair.Leaf, err = x509.ParseCertificate(keyPair.Certificate[0])
 //		if err != nil {
-//			panic(err) // TODO handle error
+//			panic(err) // TODO handle error; owner: trstctl security (vendored upstream note)
 //		}
 //
 //		idpMetadataURL, err := url.Parse("https://samltest.id/saml/idp")
 //		if err != nil {
-//			panic(err) // TODO handle error
+//			panic(err) // TODO handle error; owner: trstctl security (vendored upstream note)
 //		}
 //
 //		rootURL, err := url.Parse("http://localhost:8000")
 //		if err != nil {
-//			panic(err) // TODO handle error
+//			panic(err) // TODO handle error; owner: trstctl security (vendored upstream note)
 //		}
 //
 //		samlSP, _ := samlsp.New(samlsp.Options{

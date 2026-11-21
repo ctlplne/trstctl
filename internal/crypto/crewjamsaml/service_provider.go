@@ -538,7 +538,7 @@ func (sp *ServiceProvider) MakeAuthenticationRequest(idpURL string, binding stri
 		},
 		NameIDPolicy: &NameIDPolicy{
 			AllowCreate: &allowCreate,
-			// TODO(ross): figure out exactly policy we need
+			// TODO(ross): figure out exactly policy we need; owner: trstctl security (vendored upstream note)
 			// urn:mace:shibboleth:1.0:nameIdentifier
 			// urn:oasis:names:tc:SAML:2.0:nameid-format:transient
 			Format: &nameIDFormat,
@@ -562,7 +562,7 @@ func GetSigningContext(sp *ServiceProvider) (*dsig.SigningContext, error) {
 		PrivateKey:  sp.Key,
 		Leaf:        sp.Certificate,
 	}
-	// TODO: add intermediates for SP
+	// TODO: add intermediates for SP; owner: trstctl security (vendored upstream note)
 	// for _, cert := range sp.Intermediates {
 	// 	keyPair.Certificate = append(keyPair.Certificate, cert.Raw)
 	// }
@@ -995,7 +995,7 @@ func (sp *ServiceProvider) parseResponse(responseEl *etree.Element, possibleRequ
 
 		// Note: we're deferring taking action on the signature validation until after we've
 		// processed the request attributes, because certain test cases seem to require this mis-feature.
-		// TODO(ross): adjust the test cases so that we can abort here if the Response signature is invalid.
+		// TODO(ross): adjust the test cases so that we can abort here if the Response signature is invalid.; owner: trstctl security (vendored upstream note)
 	}
 
 	// validate request attributes
@@ -1664,7 +1664,7 @@ func (sp *ServiceProvider) ValidateLogoutResponseForm(postFormData string) error
 	}
 	retErr.Response = string(rawResponseBuf)
 
-	// TODO(ross): add test case for this (SLO does not have tests right now)
+	// TODO(ross): add test case for this (SLO does not have tests right now); owner: trstctl security (vendored upstream note)
 	if err := xrv.Validate(bytes.NewReader(rawResponseBuf)); err != nil {
 		return fmt.Errorf("response contains invalid XML: %s", err)
 	}

@@ -108,7 +108,7 @@ func validateRSAKeyIfPresent(key interface{}, encryptedKey *etree.Element) (*rsa
 			return nil, fmt.Errorf("certificate does not match provided key")
 		}
 	} else if el = encryptedKey.FindElement("./KeyInfo/X509Data/X509IssuerSerial"); el != nil {
-		// TODO: determine how to validate the issuer serial information
+		// TODO: determine how to validate the issuer serial information; owner: trstctl security (vendored upstream note)
 	}
 	return rsaKey, nil
 }

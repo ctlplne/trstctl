@@ -29,7 +29,7 @@ type Options struct {
 	IDPMetadata           *saml.EntityDescriptor
 	SignRequest           bool
 	UseArtifactResponse   bool
-	ForceAuthn            bool // TODO(ross): this should be *bool
+	ForceAuthn            bool // TODO(ross): this should be *bool; owner: trstctl security (vendored upstream note)
 	RequestedAuthnContext *saml.RequestedAuthnContext
 	CookieSameSite        http.SameSite
 	CookieName            string
