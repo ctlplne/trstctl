@@ -516,6 +516,8 @@ class FakeKey:
         self.key_id = key_id
         self.tags = dict(tags or {})
         self.state = state
+        self.created_at = 1700000000
+        self.deleted_at = 0
         self.public_der = b"d" * 256
         self.public_pem = Path(tempfile.mkdtemp()) / "public.pem"
         self.public_pem.write_text("PUBLIC")
@@ -580,6 +582,17 @@ assert status == 200 and found["attributes"]["enabled"] is True
 state.keys["trstctl-generate-proof"].state = "revoked"
 request.do_GET()
 assert responses.pop()[1]["attributes"]["enabled"] is False
+request.path = "/deletedkeys/trstctl-generate-proof?api-version=7.4"
+request.authenticated = lambda _body: True
+request.do_GET()
+assert responses.pop()[0] == 404
+state.keys["trstctl-generate-proof"].state = "zeroized"
+state.keys["trstctl-generate-proof"].deleted_at = 1700000100
+request.do_GET()
+status, deleted = responses.pop()
+assert status == 200 and deleted["attributes"]["created"] == 1700000000
+assert deleted["deletedDate"] == 1700000100
+assert deleted["scheduledPurgeDate"] == 1700000100 + 90 * 24 * 60 * 60
 
 # GCP uses deterministic crypto-key GET and version-state GET around mutations.
 state, request, responses = handler("hsm_kms.gcp_kms")
