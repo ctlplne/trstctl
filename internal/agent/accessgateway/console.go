@@ -171,6 +171,12 @@ func validConsoleProof(material *awsGatewayMaterial, intent SessionIntent, host 
 	if err != nil || len(raw) != 56 {
 		return false
 	}
+	canonical := base64.RawURLEncoding.AppendEncode(nil, raw)
+	canonicalEncoding := bytes.Equal(canonical, proof)
+	secret.Wipe(canonical)
+	if !canonicalEncoding {
+		return false
+	}
 	encodedExpiry := binary.BigEndian.Uint64(raw[:8])
 	if encodedExpiry > math.MaxInt64 {
 		return false

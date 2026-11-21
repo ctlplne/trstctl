@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -59,6 +60,34 @@ func TestConsoleProofBindsSessionHostAndDeadline(t *testing.T) {
 	m.destroy()
 	if validConsoleProof(m, intent, "127.0.0.1:8000", proof, now) {
 		t.Fatal("destroyed material authenticated a console proof")
+	}
+}
+
+func TestConsoleProofRejectsNonCanonicalBase64Alias(t *testing.T) {
+	m := consoleTestMaterial(t)
+	now := time.Now().Truncate(time.Second)
+	intent := SessionIntent{SessionID: "owned-session", ExpiresAt: now.Add(2 * time.Minute)}
+	proof, err := consoleProof(m, intent, "127.0.0.1:8000", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(proof)
+	if !validConsoleProof(m, intent, "127.0.0.1:8000", proof, now) {
+		t.Fatal("own canonical proof failed")
+	}
+	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	alias := bytes.Clone(proof)
+	defer secret.Wipe(alias)
+	last := strings.IndexByte(alphabet, alias[len(alias)-1])
+	if last < 0 || last&3 != 0 {
+		t.Fatalf("invalid canonical base64 tail: %d", last)
+	}
+	alias[len(alias)-1] = alphabet[last|1] // flip one unused low bit of a two-byte tail
+	if bytes.Equal(alias, proof) {
+		t.Fatal("alias equals canonical proof")
+	}
+	if validConsoleProof(m, intent, "127.0.0.1:8000", alias, now) {
+		t.Fatal("non-canonical encoding authenticated the same console proof")
 	}
 }
 func TestConsoleStateReplaysOneMintAndNeverRetriesAmbiguousOutcome(t *testing.T) {
@@ -179,6 +208,7 @@ func FuzzConsoleProof(f *testing.F) {
 	key, err := secret.NewFrom([]byte("owned-fuzz-proof-authority"))
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	defer key.Destroy()
 	material := &awsGatewayMaterial{key: key}
@@ -187,6 +217,7 @@ func FuzzConsoleProof(f *testing.F) {
 	proof, err := consoleProof(material, intent, "127.0.0.1:8000", now)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	defer secret.Wipe(proof)
 	f.Add(proof)
