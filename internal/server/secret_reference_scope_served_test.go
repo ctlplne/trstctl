@@ -121,10 +121,20 @@ func TestServedSecretReferencesIntoRestrictedEnvironmentsNeedAGrantA235L2(t *tes
 		status, raw := secretsReq(t, h, s.method, s.path, tok, s.body(ref))
 		return status == http.StatusForbidden && strings.Contains(string(raw), refusal), status, string(raw)
 	}
+	malformedNotificationAliases := map[string]bool{
+		"secret:///vault235/prod/token/": true,
+		"secret://vault235/prod%2Ftoken": true,
+		"secret://vault235/prod/%74oken": true,
+	}
 	for _, s := range surfaces {
 		for _, ref := range prodRefs {
-			if ok, status, raw := refused(outsider, s, ref); !ok {
-				t.Fatalf("%s: a non-member set up %q: HTTP %d %s", s.name, ref, status, raw)
+			status, raw := secretsReq(t, h, s.method, s.path, outsider, s.body(ref))
+			if s.name == "notification channel credential" && malformedNotificationAliases[ref] {
+				if status != http.StatusBadRequest || !strings.Contains(string(raw), "credential_ref must name a canonical tenant secret") {
+					t.Fatalf("%s: malformed alias %q was not refused at the format boundary: HTTP %d %s", s.name, ref, status, raw)
+				}
+			} else if status != http.StatusForbidden || !strings.Contains(string(raw), refusal) {
+				t.Fatalf("%s: a non-member set up %q or missed the exact restriction refusal: HTTP %d %s", s.name, ref, status, raw)
 			}
 		}
 		if ok, status, raw := refused(member, s, "secret://vault235/prod/token"); ok {
