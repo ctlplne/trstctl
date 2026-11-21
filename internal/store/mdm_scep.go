@@ -64,8 +64,9 @@ func (s *Store) ApplyMDMSCEPPolicyUpsertedTx(ctx context.Context, tx pgx.Tx, p M
 	// The legacy table has a global id primary key plus a redundant
 	// (tenant_id, id) unique constraint. The request-time projector and durable
 	// event-tail projector may race on the same immutable event. Serialize this
-	// policy ID, then use the actual primary key as the conflict arbiter. The
-	// tenant predicate makes a cross-tenant UUID collision fail closed.
+	// policy ID. DO NOTHING leaves an existing row untouched, including one
+	// hidden by RLS. A tenant-filtered UPDATE below handles only a same-tenant
+	// replay; a cross-tenant UUID collision has no updateable row and fails.
 	if _, err := tx.Exec(ctx,
 		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
 		"mdm-scep-policy:"+p.ID); err != nil {
@@ -84,28 +85,31 @@ func (s *Store) ApplyMDMSCEPPolicyUpsertedTx(ctx context.Context, tx pgx.Tx, p M
 		     created_at, updated_at, challenge_credential_ref)
 		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb,
 		         $11, $12, $13, $14, $15)
-		 ON CONFLICT (id) DO UPDATE SET
-		     name = EXCLUDED.name,
-		     provider = EXCLUDED.provider,
-		     scep_profile = EXCLUDED.scep_profile,
-		     scep_endpoint = EXCLUDED.scep_endpoint,
-		     expected_audience = EXCLUDED.expected_audience,
-		     challenge_mode = EXCLUDED.challenge_mode,
-		     trust_anchor_refs = EXCLUDED.trust_anchor_refs,
-		     challenge_credential_ref = EXCLUDED.challenge_credential_ref,
-		     profile_guidance = EXCLUDED.profile_guidance,
-		     enabled = EXCLUDED.enabled,
-		     rotation_version = GREATEST(mdm_scep_policies.rotation_version, EXCLUDED.rotation_version),
-		     created_at = mdm_scep_policies.created_at,
-		     updated_at = EXCLUDED.updated_at
-		 WHERE mdm_scep_policies.tenant_id = EXCLUDED.tenant_id`,
+		 ON CONFLICT (id) DO NOTHING`,
 		p.ID, p.TenantID, p.Name, p.Provider, p.SCEPProfile, p.SCEPEndpoint, p.ExpectedAudience,
 		p.ChallengeMode, p.TrustAnchorRefs, p.ProfileGuidance, p.Enabled, p.RotationVersion,
 		p.CreatedAt, p.UpdatedAt, p.ChallengeCredentialRef)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+	tag, err = tx.Exec(ctx,
+		`UPDATE mdm_scep_policies SET
+		     name = $3, provider = $4, scep_profile = $5, scep_endpoint = $6,
+		     expected_audience = $7, challenge_mode = $8, trust_anchor_refs = $9::jsonb,
+		     profile_guidance = $10::jsonb, enabled = $11,
+		     rotation_version = GREATEST(rotation_version, $12), updated_at = $13,
+		     challenge_credential_ref = $14
+		 WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		p.ID, p.TenantID, p.Name, p.Provider, p.SCEPProfile, p.SCEPEndpoint, p.ExpectedAudience,
+		p.ChallengeMode, p.TrustAnchorRefs, p.ProfileGuidance, p.Enabled, p.RotationVersion,
+		p.UpdatedAt, p.ChallengeCredentialRef)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
 		return ErrMDMSCEPPolicyTenantCollision
 	}
 	return nil

@@ -128,32 +128,35 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 		     self_authenticating, allowed_owners, allowed_owner_ids, allowed_repository_ids)
 		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8,
 		         $9, $10, $11, $12, $13, $14, $15, $16, $17)
-		 ON CONFLICT (id) DO UPDATE SET
-		     name = EXCLUDED.name,
-		     method = EXCLUDED.method,
-		     issuer = EXCLUDED.issuer,
-		     audience = EXCLUDED.audience,
-		     jwks = EXCLUDED.jwks,
-		     root_certs_pem = EXCLUDED.root_certs_pem,
-		     expected_nonce_base64 = EXCLUDED.expected_nonce_base64,
-		     enabled = EXCLUDED.enabled,
-		     self_authenticating = EXCLUDED.self_authenticating,
-		     allowed_owners = EXCLUDED.allowed_owners,
-		     allowed_owner_ids = EXCLUDED.allowed_owner_ids,
-		     allowed_repository_ids = EXCLUDED.allowed_repository_ids,
-		     revoked_at = NULL,
-		     revoked_reason = '',
-		     rotation_version = GREATEST(workload_attester_trust_sources.rotation_version, EXCLUDED.rotation_version),
-		     created_at = workload_attester_trust_sources.created_at,
-		     updated_at = EXCLUDED.updated_at
-		 WHERE workload_attester_trust_sources.tenant_id = EXCLUDED.tenant_id`,
+		 ON CONFLICT (id) DO NOTHING`,
 		ts.ID, ts.TenantID, ts.Name, ts.Method, ts.Issuer, ts.Audience, jsonbOrEmpty(ts.JWKS),
 		ts.RootCertsPEM, ts.ExpectedNonceBase64, ts.Enabled, ts.RotationVersion, ts.CreatedAt, ts.UpdatedAt,
 		ts.SelfAuthenticating, ts.AllowedOwners, ts.AllowedOwnerIDs, ts.AllowedRepositoryIDs)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+	// The conflict may be a same-tenant replay or another tenant's row hidden
+	// by RLS. The explicit tenant filter updates only the former; the latter
+	// returns zero rows without granting read or write access to its contents.
+	tag, err = tx.Exec(ctx,
+		`UPDATE workload_attester_trust_sources SET
+		     name = $3, method = $4, issuer = $5, audience = $6,
+		     jwks = $7::jsonb, root_certs_pem = $8, expected_nonce_base64 = $9,
+		     enabled = $10, rotation_version = GREATEST(rotation_version, $11),
+		     updated_at = $12, self_authenticating = $13, allowed_owners = $14,
+		     allowed_owner_ids = $15, allowed_repository_ids = $16,
+		     revoked_at = NULL, revoked_reason = ''
+		 WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		ts.ID, ts.TenantID, ts.Name, ts.Method, ts.Issuer, ts.Audience, jsonbOrEmpty(ts.JWKS),
+		ts.RootCertsPEM, ts.ExpectedNonceBase64, ts.Enabled, ts.RotationVersion, ts.UpdatedAt,
+		ts.SelfAuthenticating, ts.AllowedOwners, ts.AllowedOwnerIDs, ts.AllowedRepositoryIDs)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
 		return ErrWorkloadAttesterTrustSourceTenantCollision
 	}
 	return nil
