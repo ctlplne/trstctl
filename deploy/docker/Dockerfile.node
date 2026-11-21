@@ -32,10 +32,10 @@ RUN mkdir -p /out/trust \
 FROM scratch AS patches
 # The pinned Alpine packages in this stage come from ALPINE_MIRROR (TOOL-O1).
 ARG ALPINE_MIRROR=https://dl-cdn.alpinelinux.org/alpine
-ADD --checksum=sha256:6632d758d8f5e9ea3b650fe966f23bbf9a202f8b8dceecac93da135dec5e3689 ${ALPINE_MIRROR}/v3.24/main/x86_64/libcrypto3-3.5.9-r0.apk /amd64/libcrypto3-3.5.9-r0.apk
-ADD --checksum=sha256:05e3393fb95aa5751ca2f9d242f659f6cff82c1cc7767cc2df4a086f7ad01877 ${ALPINE_MIRROR}/v3.24/main/x86_64/libssl3-3.5.9-r0.apk /amd64/libssl3-3.5.9-r0.apk
-ADD --checksum=sha256:2676a2b0b6e23ea2edccf3ee982b9842a665d52603d047de3d0a185dc316d983 ${ALPINE_MIRROR}/v3.24/main/aarch64/libcrypto3-3.5.9-r0.apk /arm64/libcrypto3-3.5.9-r0.apk
-ADD --checksum=sha256:20ac252b276d73f2c69c1d25f84537c7fba81caefc026c6be1094b394af2082e ${ALPINE_MIRROR}/v3.24/main/aarch64/libssl3-3.5.9-r0.apk /arm64/libssl3-3.5.9-r0.apk
+ADD --checksum=sha256:042026082cc9bc7872d1baa81755c50efa70b05f03b5369fdc5f0a1303009720 ${ALPINE_MIRROR}/v3.24/main/x86_64/libcrypto3-3.5.9-r1.apk /amd64/libcrypto3-3.5.9-r1.apk
+ADD --checksum=sha256:18c5778cbe52e1991303f8531970b05d4e6e036ea08349322f7422f42a689dc7 ${ALPINE_MIRROR}/v3.24/main/x86_64/libssl3-3.5.9-r1.apk /amd64/libssl3-3.5.9-r1.apk
+ADD --checksum=sha256:58ea027d8bd64fffac7d2106a9034341d6735387298a5e01b551429c73a13c71 ${ALPINE_MIRROR}/v3.24/main/aarch64/libcrypto3-3.5.9-r1.apk /arm64/libcrypto3-3.5.9-r1.apk
+ADD --checksum=sha256:4aff30f84e7ac922b026f8b2dd574d91bb3bb01d22767a8a9a0a10c5ef64a44b ${ALPINE_MIRROR}/v3.24/main/aarch64/libssl3-3.5.9-r1.apk /arm64/libssl3-3.5.9-r1.apk
 
 FROM node:24.21.0-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81
 ARG TARGETARCH

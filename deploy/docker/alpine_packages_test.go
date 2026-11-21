@@ -103,6 +103,30 @@ func TestAlpinePackageInputsAreTheManifestFetchedThroughTheMirrorArgTOOLO1(t *te
 	}
 }
 
+// Alpine v3.24 replaced OpenSSL 3.5.9-r0 with r1 and removed the old APK URLs.
+// These are the official x86_64/aarch64 APKINDEX entries and the SHA-256 of
+// their corresponding APKs, checked on 2026-11-21. The Dockerfile/manifest
+// equality test above then holds every image to these live, content-pinned inputs.
+func TestCurrentAlpineOpenSSLRebuildPins(t *testing.T) {
+	manifest := readAlpinePackages(t, "../supply-chain/alpine-packages.json")
+	got := map[string]string{}
+	for _, p := range manifest.Packages {
+		got[p.Path] = p.SHA256
+	}
+	for path, want := range map[string]string{
+		"v3.24/main/x86_64/libcrypto3-3.5.9-r1.apk":  "042026082cc9bc7872d1baa81755c50efa70b05f03b5369fdc5f0a1303009720",
+		"v3.24/main/x86_64/libssl3-3.5.9-r1.apk":     "18c5778cbe52e1991303f8531970b05d4e6e036ea08349322f7422f42a689dc7",
+		"v3.24/main/x86_64/openssl-3.5.9-r1.apk":     "ed11241475e5757ce8eb9788b18116a804a579395d4813605df12989a2acbabf",
+		"v3.24/main/aarch64/libcrypto3-3.5.9-r1.apk": "58ea027d8bd64fffac7d2106a9034341d6735387298a5e01b551429c73a13c71",
+		"v3.24/main/aarch64/libssl3-3.5.9-r1.apk":    "4aff30f84e7ac922b026f8b2dd574d91bb3bb01d22767a8a9a0a10c5ef64a44b",
+		"v3.24/main/aarch64/openssl-3.5.9-r1.apk":    "4f5adffa94887a87807d9222cf26930e906ae47e6a15ee9b8d1da034d695614d",
+	} {
+		if got[path] != want {
+			t.Errorf("official Alpine APK %s: manifest has %q, want %q", path, got[path], want)
+		}
+	}
+}
+
 // TestAlpineMirrorFetchVerifiesDigestsAndFallsBackTOOLO1: the mirror tool
 // keeps every pinned package at its Alpine path: from the mirror when it has
 // the pinned bytes, else from the upstream; a download that is not the

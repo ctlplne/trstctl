@@ -3066,7 +3066,7 @@ jobs:
           set -euo pipefail
           for package in libcrypto3 libssl3; do
             body="$(mktemp "${RUNNER_TEMP}/alpine-${package}.XXXXXX")"
-            url="https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/${package}-3.5.9-r0.apk"
+            url="https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/${package}-3.5.9-r1.apk"
             set +e
             response="$(curl --location --silent --show-error --max-time 30 --max-filesize 10000000 \
               --output "$body" --write-out '%{http_code} %{content_type}' "$url")"

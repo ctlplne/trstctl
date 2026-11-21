@@ -205,7 +205,10 @@ func TestDockerfileStagesLocalModuleReplacementsBeforeDownload(t *testing.T) {
 		if _, err := os.Stat(filepath.Join("..", "..", filepath.FromSlash(moduleDir), "go.mod")); err != nil {
 			t.Fatalf("local replacement %s has no go.mod: %v", moduleDir, err)
 		}
-		want := "COPY " + moduleDir + "/go.mod ./" + moduleDir + "/"
+		if _, err := os.Stat(filepath.Join("..", "..", filepath.FromSlash(moduleDir), "go.sum")); err != nil {
+			t.Fatalf("local replacement %s has no go.sum: %v", moduleDir, err)
+		}
+		want := "COPY " + moduleDir + "/go.mod " + moduleDir + "/go.sum ./" + moduleDir + "/"
 		copyAt := strings.Index(dockerfile, want)
 		if copyAt < 0 || copyAt > downloadAt {
 			t.Errorf("Dockerfile must stage local replacement before module download: %s", want)
