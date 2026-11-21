@@ -22,6 +22,7 @@ type onlineCompatibilityPlan struct {
 	name, digest, table, expandSQL, index, createSQL, predicate, validateSQL string
 	columns                                                                  []onlineCompatibilityColumn
 	indexColumns                                                             []string
+	unique                                                                   bool
 }
 
 type onlineCompatibilityColumn struct {
@@ -83,11 +84,49 @@ func historicalOnlinePlan(name string, body []byte) (*onlineCompatibilityPlan, e
 			 ON public.pam_sessions (tenant_id,revocation_requested_at,id)
 			 WHERE status='revoking'`,
 		}
+	case "0416_pam_discovery_outbox.sql":
+		p = onlineCompatibilityPlan{
+			name: name, digest: "sha256:c6dafc6f1a4a0ad247f7033a9dc4605e7ac9a01fdc367f7e147deb7f09e743ba",
+			table: "public.pam_discovery_runs", index: "pam_discovery_runs_pending_source_idx", unique: true,
+			columns: []onlineCompatibilityColumn{
+				{name: "scan_intent", dataType: "jsonb"},
+				{name: "outbox_id", dataType: "bigint"},
+			},
+			indexColumns: []string{"tenant_id", "provider_id"},
+			predicate:    "status = 'queued'::text",
+			createSQL: `CREATE UNIQUE INDEX CONCURRENTLY pam_discovery_runs_pending_source_idx
+			 ON public.pam_discovery_runs(tenant_id,provider_id) WHERE status='queued'`,
+		}
+	case "0417_service_account_rotation.sql":
+		p = onlineCompatibilityPlan{
+			name: name, digest: "sha256:e38f4b750e0096d0a093261c7119b12ca574667f637222fd9fc012f987381338",
+			table: "public.secret_static_rotation_commands", index: "secret_static_rotation_dependent_parent_idx", unique: true,
+			columns:      []onlineCompatibilityColumn{{name: "dependent_change_id", dataType: "uuid"}},
+			indexColumns: []string{"tenant_id", "dependent_change_id"},
+			predicate:    "dependent_change_id IS NOT NULL",
+			createSQL: `CREATE UNIQUE INDEX CONCURRENTLY secret_static_rotation_dependent_parent_idx
+			 ON public.secret_static_rotation_commands(tenant_id,dependent_change_id) WHERE dependent_change_id IS NOT NULL`,
+		}
 	default:
 		return nil, nil
 	}
 	if migrationChecksum(body) != p.digest {
 		return nil, fmt.Errorf("%w: online execution of %s requires its immutable shipped bytes", ErrMigrationChecksumMismatch, name)
+	}
+	// The old migration remains the ledger identity. Only its index statement is
+	// moved out of the expansion transaction; all other shipped DDL runs together.
+	if name == "0416_pam_discovery_outbox.sql" || name == "0417_service_account_rotation.sql" {
+		old := "CREATE UNIQUE INDEX " + p.index
+		start := strings.Index(string(body), old)
+		if start < 0 {
+			return nil, fmt.Errorf("store: online migration %s has no expected shipped index", name)
+		}
+		end := strings.IndexByte(string(body)[start:], ';')
+		if end < 0 || strings.Count(string(body), old) != 1 {
+			return nil, fmt.Errorf("store: online migration %s has an ambiguous shipped index", name)
+		}
+		end += start + 1
+		p.expandSQL = string(body[:start]) + string(body[end:])
 	}
 	return &p, nil
 }
@@ -149,14 +188,57 @@ func (p *onlineCompatibilityPlan) checkConstraint(ctx context.Context, q onlineC
 	return valid, nil
 }
 
+// A retry can arrive after expansion committed but before the concurrent index
+// finished. Verify the other objects before treating that expansion as complete.
+func (p *onlineCompatibilityPlan) verifyExpansion(ctx context.Context, q onlineCompatibilityQuery) error {
+	switch p.name {
+	case "0416_pam_discovery_outbox.sql":
+		var nullable, checkValid bool
+		var kind, expression string
+		err := q.QueryRow(ctx,
+			//trstctl:system-query — online migration checks catalog metadata for one schema-qualified table, not tenant rows (AN-1 exemption).
+			`SELECT NOT a.attnotnull,c.contype::text,c.convalidated,pg_get_expr(c.conbin,c.conrelid)
+			 FROM pg_attribute a JOIN pg_constraint c ON c.conrelid=a.attrelid
+			 WHERE a.attrelid='public.pam_discovery_runs'::regclass AND a.attname='finished_at'
+			 AND c.conname='pam_discovery_runs_status_check'`).Scan(&nullable, &kind, &checkValid, &expression)
+		if err != nil {
+			return fmt.Errorf("store: online migration %s cannot verify discovery expansion: %w", p.name, err)
+		}
+		if !nullable || kind != "c" || !checkValid ||
+			!strings.Contains(expression, "'queued'::text") || !strings.Contains(expression, "'completed'::text") || !strings.Contains(expression, "'failed'::text") {
+			return fmt.Errorf("store: online migration %s refuses incomplete discovery run constraint/column", p.name)
+		}
+	case "0417_service_account_rotation.sql":
+		var rotations, steps, observed bool
+		err := q.QueryRow(ctx,
+			//trstctl:system-query — online migration checks only exact schema objects and RLS flags, never tenant rows (AN-1 exemption).
+			`SELECT EXISTS(SELECT 1 FROM pg_class WHERE oid=to_regclass('public.service_account_rotations')
+			 AND relkind='r' AND relrowsecurity AND relforcerowsecurity),
+			 EXISTS(SELECT 1 FROM pg_class WHERE oid=to_regclass('public.service_account_rotation_steps')
+			 AND relkind='r' AND relrowsecurity AND relforcerowsecurity),
+			 EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.service_account_host_scans')
+			 AND attname='observed_event_id' AND atttypid='text'::regtype AND NOT attnotnull AND NOT attisdropped)`).
+			Scan(&rotations, &steps, &observed)
+		if err != nil {
+			return fmt.Errorf("store: online migration %s cannot verify rotation expansion: %w", p.name, err)
+		}
+		if !rotations || !steps || !observed {
+			return fmt.Errorf("store: online migration %s refuses incomplete rotation expansion", p.name)
+		}
+	}
+	return nil
+}
+
 func (p *onlineCompatibilityPlan) expand(ctx context.Context, conn *pgxpool.Conn) error {
 	present, err := p.columnsPresent(ctx, conn)
 	if err != nil {
 		return err
 	}
 	if present {
-		_, err := p.checkConstraint(ctx, conn)
-		return err
+		if _, err := p.checkConstraint(ctx, conn); err != nil {
+			return err
+		}
+		return p.verifyExpansion(ctx, conn)
 	}
 	tx, err := conn.Begin(ctx)
 	if err != nil {
@@ -174,6 +256,9 @@ func (p *onlineCompatibilityPlan) expand(ctx context.Context, conn *pgxpool.Conn
 		return fmt.Errorf("store: online migration %s did not establish its exact columns", p.name)
 	}
 	if _, err := p.checkConstraint(ctx, tx); err != nil {
+		return err
+	}
+	if err := p.verifyExpansion(ctx, tx); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -200,7 +285,7 @@ func (p *onlineCompatibilityPlan) indexState(ctx context.Context, conn *pgxpool.
 	if err != nil {
 		return false, false, err
 	}
-	if kind != "i" || !rightTable || method != "btree" || unique || primary || exclusion || !noExpressions || keyCount != len(p.indexColumns) || totalCount != keyCount || !slices.Equal(columns, p.indexColumns) || strings.Join(strings.Fields(predicate), " ") != p.predicate {
+	if kind != "i" || !rightTable || method != "btree" || unique != p.unique || primary || exclusion || !noExpressions || keyCount != len(p.indexColumns) || totalCount != keyCount || !slices.Equal(columns, p.indexColumns) || strings.Join(strings.Fields(predicate), " ") != p.predicate {
 		return true, false, fmt.Errorf("store: online migration %s refuses same-name index with a different definition", p.name)
 	}
 	return true, valid && ready, nil

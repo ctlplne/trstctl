@@ -19,10 +19,11 @@ import (
 // writer must still proceed, and the ledger must retain the shipped SQL digest.
 func TestHistoricalIndexMigrationRetryKeepsApplicationWritesAvailable(t *testing.T) {
 	for _, tc := range []struct {
-		version int
-		index   string
-		seed    string
-		write   string
+		version        int
+		index          string
+		seed           string
+		write          string
+		afterExpansion string
 	}{
 		{
 			version: 211, index: "connector_rollback_receipts_unordered",
@@ -44,6 +45,22 @@ func TestHistoricalIndexMigrationRetryKeepsApplicationWritesAvailable(t *testing
 			 (subject,tenant_id,display_name,roles,source,status,created_at,updated_at)
 			 VALUES ($1,$2,'original member',ARRAY['operator'],'manual','active',now(),now())`,
 			write: `UPDATE tenant_members SET display_name=display_name || ' updated' WHERE tenant_id=$1 AND subject=$2`,
+		},
+		{
+			version: 416, index: "pam_discovery_runs_pending_source_idx",
+			seed: `INSERT INTO pam_discovery_runs
+			 (id,tenant_id,provider_id,status,started_at,finished_at,requested_by)
+			 VALUES ($1,$2,'source','completed',now(),now(),'operator')`,
+			write:          `UPDATE pam_discovery_runs SET started_at=now() WHERE tenant_id=$1 AND id=$2`,
+			afterExpansion: `UPDATE pam_discovery_runs SET status='queued' WHERE tenant_id=$1 AND id=$2`,
+		},
+		{
+			version: 417, index: "secret_static_rotation_dependent_parent_idx",
+			seed: `INSERT INTO secret_static_rotation_commands
+			 (id,tenant_id,tenant_epoch,provider,secret_key,old_ref,phase,idempotency_key_digest,request_binding,created_at,updated_at)
+			 VALUES ($1,$2,'epoch','postgresql','service/account','secret://old','queued','digest','binding',now(),now())`,
+			write:          `UPDATE secret_static_rotation_commands SET updated_at=now() WHERE tenant_id=$1 AND id=$2`,
+			afterExpansion: `UPDATE secret_static_rotation_commands SET dependent_change_id=id WHERE tenant_id=$1 AND id=$2`,
 		},
 		{
 			version: 229, index: "certificate_receipt_issuance_origin",
@@ -92,13 +109,35 @@ func TestHistoricalIndexMigrationRetryKeepsApplicationWritesAvailable(t *testing
 					statements = append(statements, statement)
 				}
 			}
-			if tc.version == 221 || tc.version == 229 {
+			switch tc.version {
+			case 221, 229:
 				// Column expansion is already committed by the prefix. The
 				// separate online migration must not hold a transaction open.
 				if !target.noTx {
 					t.Fatal("index must be a no-transaction migration")
 				}
-			} else {
+			case 416, 417:
+				execution, err := store.OnlineMigrationExecutionSQLForTest(target.name, []byte(target.body))
+				if err != nil {
+					t.Fatal(err)
+				}
+				expansion, _, ok := strings.Cut(execution, "DROP INDEX CONCURRENTLY")
+				if !ok {
+					t.Fatal("online plan has no post-expansion index phase")
+				}
+				if _, err := pool.Exec(ctx, expansion); err != nil {
+					t.Fatalf("interrupted expansion: %v", err)
+				}
+				for _, tenant := range []string{tenantA, tenantB} {
+					id := firstID
+					if tenant == tenantB {
+						id = secondID
+					}
+					if _, err := pool.Exec(ctx, tc.afterExpansion, tenant, id); err != nil {
+						t.Fatal(err)
+					}
+				}
+			default:
 				if len(statements) != 2 || !strings.Contains(statements[0].sql, "ADD COLUMN") {
 					t.Fatal("historical migration fixture changed")
 				}
