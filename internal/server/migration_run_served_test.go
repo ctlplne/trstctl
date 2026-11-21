@@ -163,7 +163,7 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	}
 	profile := connector.LocalOpsConfig{
 		AllowedRoots: []string{root},
-		Actions:      []connector.LocalAction{{LogicalName: "nginx", Command: "/usr/bin/true", Timeout: 5 * time.Second}},
+		Actions:      []connector.LocalAction{{LogicalName: "nginx", Command: regularHostCommand(t, "/usr/bin/true"), Timeout: 5 * time.Second}},
 	}
 	channel := &servedHostRelayChannel{client: h.client, identity: h.identity}
 	// The predecessor was installed while API issuance was the served default.

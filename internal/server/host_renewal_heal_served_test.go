@@ -165,7 +165,7 @@ func TestServedHostRenewalHealsAfterAnOutageA36(t *testing.T) {
 		t.Fatal(err)
 	}
 	profile := connector.LocalOpsConfig{AllowedRoots: []string{root},
-		Actions: []connector.LocalAction{{LogicalName: "nginx", Command: "/usr/bin/true", Timeout: 5 * time.Second}}}
+		Actions: []connector.LocalAction{{LogicalName: "nginx", Command: regularHostCommand(t, "/usr/bin/true"), Timeout: 5 * time.Second}}}
 	startServedExternalCADispatcher(t, h.servedHarness)
 	token := seedScopedToken(t, h.store, h.tenant, "identities:read", "identities:write", "certs:issue", "connectors:read", "connectors:write")
 

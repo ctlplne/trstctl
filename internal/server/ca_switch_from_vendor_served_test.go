@@ -234,7 +234,7 @@ func TestServedPlannedSwitchRevokesAVendorPredecessorAtTheVendorP3L2(t *testing.
 	}
 	profile := connector.LocalOpsConfig{
 		AllowedRoots: []string{root},
-		Actions:      []connector.LocalAction{{LogicalName: "nginx", Command: "/usr/bin/true", Timeout: 5 * time.Second}},
+		Actions:      []connector.LocalAction{{LogicalName: "nginx", Command: regularHostCommand(t, "/usr/bin/true"), Timeout: 5 * time.Second}},
 	}
 	channel := &servedHostRelayChannel{client: h.client, identity: h.identity}
 	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeExecuted) // the new root is trusted first

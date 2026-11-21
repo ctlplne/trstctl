@@ -81,7 +81,7 @@ func TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41(t *testing.T) {
 	failure := newIncidentMigrationFixtureAUD41(t, h, "failure", "41410000-0000-4000-8000-000000000042", "production", true)
 	profile := connector.LocalOpsConfig{
 		AllowedRoots: []string{success.root, failure.root},
-		Actions:      []connector.LocalAction{{LogicalName: "nginx", Command: "/usr/bin/true", Timeout: 5 * time.Second}},
+		Actions:      []connector.LocalAction{{LogicalName: "nginx", Command: regularHostCommand(t, "/usr/bin/true"), Timeout: 5 * time.Second}},
 	}
 	channel := &servedHostRelayChannel{client: h.client, identity: h.identity}
 

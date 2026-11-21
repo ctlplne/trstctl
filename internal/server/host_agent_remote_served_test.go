@@ -372,7 +372,7 @@ func TestServedHostAgentOwnsDeployAndReloadsRemoteListenerAUD30(t *testing.T) {
 	profileJSON, err := json.Marshal(agentrelay.HostProfile{
 		AllowedRoots: []string{root},
 		Actions: []agentrelay.HostAction{{
-			LogicalName: "nginx", Command: "/usr/bin/touch", Args: []string{reloadMarker}, TimeoutSecs: 5,
+			LogicalName: "nginx", Command: regularHostCommand(t, "/usr/bin/touch"), Args: []string{reloadMarker}, TimeoutSecs: 5,
 		}},
 	})
 	if err != nil {
@@ -601,7 +601,7 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 	profilePath := filepath.Join(root, "host-profile.json")
 	profileJSON, err := json.Marshal(agentrelay.HostProfile{
 		AllowedRoots: []string{root},
-		Actions:      []agentrelay.HostAction{{LogicalName: "nginx", Command: "/usr/bin/touch", Args: []string{reloadMarker}, TimeoutSecs: 5}},
+		Actions:      []agentrelay.HostAction{{LogicalName: "nginx", Command: regularHostCommand(t, "/usr/bin/touch"), Args: []string{reloadMarker}, TimeoutSecs: 5}},
 	})
 	if err != nil {
 		t.Fatal(err)

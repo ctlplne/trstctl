@@ -87,8 +87,8 @@ func newIncidentLab(t *testing.T, name string) evaluate.Options {
 	profileJSON, err := json.Marshal(map[string]any{
 		"allowed_roots": []string{root},
 		"actions": []map[string]any{
-			{"logical_name": "nginx", "command": "/usr/bin/touch", "args": []string{filepath.Join(root, "reloaded")}, "timeout_seconds": 5},
-			{"logical_name": "lab-stop", "logical_args": []string{}, "command": "/usr/bin/touch", "args": []string{stopFile}, "timeout_seconds": 5},
+			{"logical_name": "nginx", "command": regularHostCommand(t, "/usr/bin/touch"), "args": []string{filepath.Join(root, "reloaded")}, "timeout_seconds": 5},
+			{"logical_name": "lab-stop", "logical_args": []string{}, "command": regularHostCommand(t, "/usr/bin/touch"), "args": []string{stopFile}, "timeout_seconds": 5},
 		},
 		"containments": []agentrelay.HostContainment{{TargetID: target.ID, Address: listener.Addr().String(), ServerName: name, Action: "lab-stop"}},
 	})

@@ -76,7 +76,7 @@ func TestServedEvaluationJourneyA188(t *testing.T) {
 	profileJSON, err := json.Marshal(agentrelay.HostProfile{
 		AllowedRoots: []string{root},
 		Actions: []agentrelay.HostAction{{
-			LogicalName: "nginx", Command: "/usr/bin/touch", Args: []string{filepath.Join(root, "reloaded")}, TimeoutSecs: 5,
+			LogicalName: "nginx", Command: regularHostCommand(t, "/usr/bin/touch"), Args: []string{filepath.Join(root, "reloaded")}, TimeoutSecs: 5,
 		}},
 	})
 	if err != nil {

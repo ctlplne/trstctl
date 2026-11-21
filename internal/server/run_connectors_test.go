@@ -62,7 +62,7 @@ func TestConnectorRegistryFromConfigBuildsTargetScopedLocalFactory(t *testing.T)
 			"shared-volume": {
 				AllowedRoots: []string{root},
 				Actions: []config.LocalConnectorAction{{
-					LogicalName: "nginx", Command: "/usr/bin/true", PassArgs: true,
+					LogicalName: "nginx", Command: regularHostCommand(t, "/usr/bin/true"), PassArgs: true,
 				}},
 			},
 		},

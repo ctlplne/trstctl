@@ -1128,13 +1128,23 @@ func hostProfileForNginx(t *testing.T, root string) connector.LocalOpsConfig {
 }
 
 // trueAction is a local action whose command exits 0 and does nothing:
-// /usr/bin/true on Unix. Windows ships no such .exe, so there it is this test
+// the resolved regular executable for `true` on Unix. Some runners make
+// /usr/bin/true a symlink, which the product correctly refuses as host
+// authority. Windows ships no such .exe, so there it is this test
 // binary running no test, "--" ending its flags so the arguments a connector
 // passes are ignored (owner decision 2026-11-02, item 2g b: OS-appropriate
 // absolute paths).
 func trueAction(logicalName string, passArgs bool) connector.LocalAction {
 	if runtime.GOOS != "windows" {
-		return connector.LocalAction{LogicalName: logicalName, Command: "/usr/bin/true", PassArgs: passArgs}
+		exe, err := filepath.EvalSymlinks("/usr/bin/true")
+		if err != nil {
+			panic(err)
+		}
+		info, err := os.Stat(exe)
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+			panic("true action is not an executable regular file")
+		}
+		return connector.LocalAction{LogicalName: logicalName, Command: exe, PassArgs: passArgs}
 	}
 	exe, err := os.Executable()
 	if err != nil {
