@@ -547,9 +547,29 @@ spine-burst: ## Capture and analyze an event-spine burst artifact (SPINE-002; de
 perf-scale: ## Run the enterprise-scale harness once (A266): switching-kit inventory, a fleet on ACM targets, a renewal storm (SCALE_INVENTORY, SCALE_RENEWALS, SCALE_CLIENTS, SCALE_OUT)
 	scripts/perf/run-scale.sh
 
-.PHONY: lint lint-partial
+.PHONY: lint lint-partial lint-go
 lint-partial: ## Run gofmt, go vet, architecture lint, and action-pin checks; warn if optional lint tools (golangci-lint, actionlint, node for the web console checks) are absent
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) lint LINT_ALLOW_PARTIAL=1
+
+lint-go: ## Run both Go modules through golangci-lint; any failure stops the gate
+	@set -e; golangci_lint=""; \
+	if command -v golangci-lint >/dev/null 2>&1; then golangci_lint="golangci-lint"; \
+	elif [ -x "$(GO_TOOL_BIN)/golangci-lint" ]; then golangci_lint="$(GO_TOOL_BIN)/golangci-lint"; fi; \
+	if [ -n "$$golangci_lint" ]; then \
+		echo ">> golangci-lint"; \
+		if [ "$$golangci_lint" = "golangci-lint" ]; then golangci-lint run $(GO_PACKAGE_DIRS); else "$$golangci_lint" run $(GO_PACKAGE_DIRS); fi; \
+		echo ">> golangci-lint (Go SDK module, from its own root; A250-L1)"; \
+		(cd clients/sdk/go && if [ "$$golangci_lint" = "golangci-lint" ]; then golangci-lint run ./...; else "$$golangci_lint" run ./...; fi); \
+	elif [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \
+		echo "!! ============================================================"; \
+		echo "!! WARNING: golangci-lint NOT installed — SKIPPING it (CODE-005)."; \
+		echo "!! errcheck / staticcheck / unused did NOT run; this is a PARTIAL"; \
+		echo "!! lint. Run 'make tools' and then 'make lint' for the full gate."; \
+		echo "!! ============================================================"; \
+	else \
+		echo "FAIL: golangci-lint is not installed, so make lint would skip errcheck/staticcheck/unused. Run 'make tools' or use 'make lint-partial' deliberately." >&2; \
+		exit 1; \
+	fi
 
 lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint, actionlint, web console eslint/prettier/embed-freshness, and action-pin checks
 	@echo ">> gofmt"
@@ -573,24 +593,8 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@# When it is missing we must NOT pass silently (CODE-005): make lint is the
 	@# full gate and fails closed by default. Developers who explicitly want only
 	@# the cheap local subset must run the intentionally named make lint-partial.
-	@golangci_lint=""; \
-	if command -v golangci-lint >/dev/null 2>&1; then golangci_lint="golangci-lint"; \
-	elif [ -x "$(GO_TOOL_BIN)/golangci-lint" ]; then golangci_lint="$(GO_TOOL_BIN)/golangci-lint"; fi; \
-	if [ -n "$$golangci_lint" ]; then \
-		echo ">> golangci-lint"; \
-		if [ "$$golangci_lint" = "golangci-lint" ]; then golangci-lint run $(GO_PACKAGE_DIRS); else "$$golangci_lint" run $(GO_PACKAGE_DIRS); fi; \
-		echo ">> golangci-lint (Go SDK module, from its own root; A250-L1)"; \
-		(cd clients/sdk/go && if [ "$$golangci_lint" = "golangci-lint" ]; then golangci-lint run ./...; else "$$golangci_lint" run ./...; fi); \
-	elif [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \
-		echo "!! ============================================================"; \
-		echo "!! WARNING: golangci-lint NOT installed — SKIPPING it (CODE-005)."; \
-		echo "!! errcheck / staticcheck / unused did NOT run; this is a PARTIAL"; \
-		echo "!! lint. Run 'make tools' and then 'make lint' for the full gate."; \
-		echo "!! ============================================================"; \
-	else \
-		echo "FAIL: golangci-lint is not installed, so make lint would skip errcheck/staticcheck/unused. Run 'make tools' or use 'make lint-partial' deliberately." >&2; \
-		exit 1; \
-	fi
+	@python3 scripts/ci/lint_go_gate_test.py
+	@$(MAKE) --no-print-directory lint-go
 	@actionlint_bin=$$(command -v actionlint 2>/dev/null || true); \
 	if [ -z "$$actionlint_bin" ] && [ -x "$(GO_TOOL_BIN)/actionlint" ]; then actionlint_bin="$(GO_TOOL_BIN)/actionlint"; fi; \
 	if [ -n "$$actionlint_bin" ]; then \
