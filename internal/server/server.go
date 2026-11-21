@@ -3818,6 +3818,28 @@ func (s *Server) outboxGCOnce(ctx context.Context) {
 	}
 }
 
+// RunOutboxReceiptReconciliation retires source-verified, replayed outbox
+// intents through the orchestrator. The projected intermediate state prevents
+// another external call while this single bounded worker awaits its next tick.
+func (s *Server) RunOutboxReceiptReconciliation(ctx context.Context) {
+	if s.outbox == nil {
+		return
+	}
+	const interval = time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		if _, err := s.outbox.ReconcileObservedReceipts(ctx); err != nil && ctx.Err() == nil {
+			s.logger.Warn("outbox source receipt reconciliation failed", slog.String("error", err.Error()))
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
 // RunProjectionTail runs the tailing projection worker until ctx is canceled
 // (SPINE-009): a durable consumer that projects any event appended out of band and
 // keeps the projection-lag gauge current. The worker is submitted to the

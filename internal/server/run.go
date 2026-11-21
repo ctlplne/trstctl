@@ -1537,6 +1537,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunApplicationSecretMutationReconciler),
 			startRuntimeWorker(workCtx, srv.RunIdempotencyGC),
 			startRuntimeWorker(workCtx, srv.RunOutboxGC),
+			startRuntimeWorker(workCtx, srv.RunOutboxReceiptReconciliation),
 			// A236-L4: deleted secrets kept past secrets.deleted_retention go.
 			startRuntimeWorker(workCtx, srv.RunDeletedSecretRetention),
 			startRuntimeWorker(workCtx, srv.RunProjectionTail),

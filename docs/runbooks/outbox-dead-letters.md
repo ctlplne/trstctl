@@ -14,6 +14,15 @@ terminal projected job retain the outcome/order. Migration-derived negative-orde
 rows remain as FIFO evidence until tenant offboarding, and failed secret-sync
 evidence remains visible.
 
+`receipt_observed` is a separate, temporary state for an external effect whose
+signed source receipt was recovered during event replay. It is excluded from
+both dispatcher and agent claims. The leader's bounded outbox receipt worker
+normally advances it to `delivered` within its next one-second sweep and records
+the destination's circuit success. If rows remain in that state, inspect
+`outbox source receipt reconciliation failed` in the control-plane logs and
+restore database access; do not reset them to `pending` because that can repeat
+an effect already proved by its receipt.
+
 ## Triage
 
 1. Take `destination` from the alert labels and list the affected tenants

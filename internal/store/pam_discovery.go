@@ -99,10 +99,11 @@ func (s *Store) ApplyPAMDiscoveryRunTx(ctx context.Context, tx pgx.Tx, tenantID 
 	if err != nil || tag.RowsAffected() == 0 {
 		return err
 	}
-	// A live dispatcher acknowledges its own lease; source replay retires only
-	// the recreated unclaimed operational intent.
-	if _, err = tx.Exec(ctx, `UPDATE outbox SET status='delivered',delivered_at=COALESCE(delivered_at,$4),worker_id=NULL,lease_until=NULL
- WHERE tenant_id=$1 AND destination=$2 AND idempotency_key=$3 AND status='pending' AND delivered_at IS NULL AND claimed_by_agent_id IS NULL AND worker_id IS NULL`, tenantID, pamdiscovery.ScanDestination, "pam-discovery:"+run.ID, run.FinishedAt); err != nil {
+	// A live dispatcher acknowledges its own lease. A source receipt stages only
+	// the recreated unclaimed intent; the orchestrator later records delivery
+	// and circuit success. The intermediate status blocks a second external call.
+	if _, err = tx.Exec(ctx, `UPDATE outbox SET status='receipt_observed'
+ WHERE tenant_id=$1 AND destination=$2 AND idempotency_key=$3 AND status='pending' AND delivered_at IS NULL AND claimed_by_agent_id IS NULL AND worker_id IS NULL`, tenantID, pamdiscovery.ScanDestination, "pam-discovery:"+run.ID); err != nil {
 		return err
 	}
 	if run.Status != "completed" {

@@ -1249,9 +1249,10 @@ func (o *Outbox) CompleteAgentJobClaim(ctx context.Context, tenantID, agentID st
 }
 
 // CompleteByKey marks the tenant's (destination, idempotencyKey) entry delivered on
-// behalf of an in-request drainer that performed the external call itself instead of
-// going through DispatchScoped. It is the general non-claim completion outside
-// finalizeClaim; CompleteAgentJobClaim is the narrower signed agent-result path.
+// behalf of an in-request drainer that performed the external call itself or a
+// source-receipt reconciler retiring an already observed external effect. It is
+// the general non-claim completion outside finalizeClaim; CompleteAgentJobClaim
+// is the narrower signed agent-result path.
 // CompleteByKey carries the same two invariants:
 //
 //   - The lease predicate. finalizeClaim completes only a row this worker leased
@@ -1320,6 +1321,54 @@ func (o *Outbox) CompleteByKey(ctx context.Context, tenantID, destination, idemp
 	}
 	o.recordCircuitSuccess(msg, now)
 	return true, nil
+}
+
+// ReconcileObservedReceipts retires source-verified effects that projection
+// replay found behind a recreated, unclaimed outbox intent. Projection changes
+// pending to receipt_observed in the same transaction as the signed result, so
+// neither the dispatcher nor an agent can perform the effect a second time.
+// The orchestrator alone turns that staged row into delivered and records the
+// destination's circuit success. A bounded page keeps this worker independent
+// from the external-call pools and makes a long restore drain incrementally.
+func (o *Outbox) ReconcileObservedReceipts(ctx context.Context) (int, error) {
+	const pageSize = 64
+	rows, err := o.store.SystemPool().Query(ctx,
+		//trstctl:system-query — source-receipt reconciliation scans only exact staged outbox identities across tenants; each completion re-enters the tenant's RLS transaction.
+		`SELECT tenant_id::text, destination, idempotency_key
+		   FROM outbox
+		  WHERE status = 'receipt_observed'
+		    AND claimed_by_agent_id IS NULL
+		    AND delivered_at IS NULL
+		  ORDER BY id LIMIT $1`, pageSize)
+	if err != nil {
+		return 0, fmt.Errorf("orchestrator: list observed outbox receipts: %w", err)
+	}
+	type identity struct{ tenantID, destination, key string }
+	var batch []identity
+	for rows.Next() {
+		var item identity
+		if err := rows.Scan(&item.tenantID, &item.destination, &item.key); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		batch = append(batch, item)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return 0, err
+	}
+	completed := 0
+	for _, item := range batch {
+		changed, err := o.CompleteByKey(ctx, item.tenantID, item.destination, item.key)
+		if err != nil {
+			return completed, fmt.Errorf("orchestrator: complete observed outbox receipt: %w", err)
+		}
+		if changed {
+			completed++
+		}
+	}
+	return completed, nil
 }
 
 // persistedDeliveryError is deliberately closed-set. An external system may echo

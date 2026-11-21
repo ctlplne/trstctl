@@ -209,7 +209,7 @@ func (s *Store) ApplyWindowsLocalAccountScanObservedTx(ctx context.Context, tx p
 		return err
 	}
 	if v.OutboxID != nil {
-		_, err = tx.Exec(ctx, `UPDATE outbox SET status='delivered',delivered_at=COALESCE(delivered_at,$3),worker_id=NULL,lease_until=NULL WHERE tenant_id=$1 AND id=$2 AND status='pending' AND delivered_at IS NULL AND claimed_by_agent_id IS NULL`, tenantID, *v.OutboxID, at)
+		_, err = tx.Exec(ctx, `UPDATE outbox SET status='receipt_observed' WHERE tenant_id=$1 AND id=$2 AND status='pending' AND delivered_at IS NULL AND claimed_by_agent_id IS NULL AND worker_id IS NULL`, tenantID, *v.OutboxID)
 	}
 	return err
 }

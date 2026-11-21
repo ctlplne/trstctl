@@ -457,9 +457,10 @@ func (s *Store) ApplyServiceDependentStepObservedTx(ctx context.Context, tx pgx.
 	if e != nil {
 		return e
 	}
-	// Replay may recreate a different unclaimed operational row. Signed source
-	// preserves the historical job identity; never reclaim its already observed work.
-	_, e = tx.Exec(ctx, `UPDATE outbox SET status='delivered',delivered_at=$4 WHERE tenant_id=$1 AND destination=$2 AND idempotency_key=$3 AND claimed_by_agent_id IS NULL AND status='pending'`, tenantID, servicedependents.RotationDestination, "service-dependent-step:"+report.RotationID+":"+report.StepID, at)
+	// Replay may recreate a different unclaimed operational row. Stage its
+	// signed receipt for orchestrator completion; never redo observed work.
+	_, e = tx.Exec(ctx, `UPDATE outbox SET status='receipt_observed'
+ WHERE tenant_id=$1 AND destination=$2 AND idempotency_key=$3 AND claimed_by_agent_id IS NULL AND worker_id IS NULL AND status='pending' AND delivered_at IS NULL`, tenantID, servicedependents.RotationDestination, "service-dependent-step:"+report.RotationID+":"+report.StepID)
 	return e
 }
 
