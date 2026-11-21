@@ -366,7 +366,10 @@ func TestEveryShippedKindIsActuallyClaimed(t *testing.T) {
 	// A254's access gateway holds each session for its lifetime in a claim
 	// loop of its own, started by --access-gateway-listen on a gateway-role
 	// agent; a held session must never occupy the shared relay pool.
-	for _, kind := range accessgateway.ClaimableKinds() {
+	// The operator-enabled desktop helper adds two conditional kinds. Use the
+	// same function as the gateway claim loop so shipped desktop work must stay
+	// reachable without making no-helper gateways claim it.
+	for _, kind := range accessgateway.ClaimableKindsWithDesktop(true) {
 		if claimed[kind] {
 			t.Fatalf("gateway sessions also enter the shared relay pool: %s", kind)
 		}

@@ -25,6 +25,19 @@ type fakeChannel struct {
 	reports  []string
 }
 
+func TestDesktopClaimsRequireConfiguredHelper(t *testing.T) {
+	base := ClaimableKindsWithDesktop(false)
+	for _, kind := range base {
+		if kind == KindSessionDesktop || kind == KindSessionADDesktop {
+			t.Fatalf("gateway without desktop helper claimed %s", kind)
+		}
+	}
+	withHelper := ClaimableKindsWithDesktop(true)
+	if len(withHelper) != len(base)+2 || withHelper[len(base)] != KindSessionDesktop || withHelper[len(base)+1] != KindSessionADDesktop {
+		t.Fatalf("gateway with desktop helper claims %v, want both native desktop kinds after %v", withHelper, base)
+	}
+}
+
 func (f *fakeChannel) ClaimJobs(context.Context, []string, int, int) ([]relay.Job, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

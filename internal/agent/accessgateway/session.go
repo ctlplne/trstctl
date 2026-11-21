@@ -158,6 +158,17 @@ func ClaimableKinds() []string {
 	return []string{KindSession, KindSessionRules, KindSessionSSHRules, KindSessionMySQLRules, KindSessionRedisRules, KindSessionMongoRules, KindSessionClickHouseRules, KindSessionNetDevice, KindSessionNetDeviceRules, KindSessionWeb}
 }
 
+// ClaimableKindsWithDesktop is the exact claim set when the operator has
+// installed and selected the native desktop helper. Without it, asking for a
+// desktop session would reserve work this gateway cannot execute.
+func ClaimableKindsWithDesktop(helperConfigured bool) []string {
+	out := ClaimableKinds()
+	if helperConfigured {
+		out = append(out, KindSessionDesktop, KindSessionADDesktop)
+	}
+	return out
+}
+
 // JobKey is the one outbox key a session's job carries.
 func JobKey(sessionID string) string { return "pam-gateway:" + sessionID }
 
