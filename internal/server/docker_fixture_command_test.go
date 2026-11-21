@@ -44,25 +44,34 @@ func dockerFixtureCleanup(args ...string) {
 }
 
 func TestDockerFixtureCommandHonorsCancellation(t *testing.T) {
-	sleep, err := exec.LookPath("sleep")
+	exe, err := os.Executable()
 	if err != nil {
-		t.Skip("native cancellation fixture needs sleep")
+		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	if err := os.Symlink(sleep, filepath.Join(dir, "docker")); err != nil {
+	if err := os.Symlink(exe, filepath.Join(dir, "docker")); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("TRSTCTL_DOCKER_FIXTURE_HELPER", "1")
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	_, err = dockerFixtureOutput(ctx, "60")
+	_, err = dockerFixtureOutput(ctx, "-test.run=^TestDockerFixtureCommandHelper$")
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("unresponsive process did not report its deadline: %v", err)
 	}
 	if elapsed := time.Since(started); elapsed > 2*time.Second {
 		t.Fatalf("unresponsive process exceeded cancellation bound: %s", elapsed)
 	}
+}
+
+func TestDockerFixtureCommandHelper(t *testing.T) {
+	if os.Getenv("TRSTCTL_DOCKER_FIXTURE_HELPER") != "1" {
+		return
+	}
+	// The parent must terminate this child before the sleep completes.
+	time.Sleep(5 * time.Second)
 }
 
 func TestDockerFixtureCommandRefusesExpiredContext(t *testing.T) {
