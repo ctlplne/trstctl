@@ -2870,6 +2870,8 @@ type Bulkheads struct {
 	Outbox                    BulkheadLimit  `json:"outbox"`
 	OutboxExternalCA          *BulkheadLimit `json:"outbox_external_ca,omitempty"`
 	OutboxConnectors          *BulkheadLimit `json:"outbox_connectors,omitempty"`
+	OutboxCloudMachine        *BulkheadLimit `json:"outbox_cloud_machine,omitempty"`
+	OutboxPAMDiscovery        *BulkheadLimit `json:"outbox_pam_discovery,omitempty"`
 	OutboxSecrets             *BulkheadLimit `json:"outbox_secrets,omitempty"`
 	OutboxSecretSync          *BulkheadLimit `json:"outbox_secret_sync,omitempty"`
 	OutboxManagedKeys         *BulkheadLimit `json:"outbox_managed_keys,omitempty"`
@@ -2892,9 +2894,10 @@ type Bulkheads struct {
 	// lane was registered in bulkhead.DefaultConfigs(), so the production
 	// config-derived set had no kmip pool and the runtime silently fell back
 	// to the shared protocols pool (AUD-201 follow-up A2/V11).
-	KMIP  BulkheadLimit `json:"kmip"`
-	Agent BulkheadLimit `json:"agent"`
-	CBOM  BulkheadLimit `json:"cbom"`
+	KMIP            BulkheadLimit `json:"kmip"`
+	Agent           BulkheadLimit `json:"agent"`
+	GatewayCommands BulkheadLimit `json:"gateway_commands"`
+	CBOM            BulkheadLimit `json:"cbom"`
 }
 
 type bulkheadLimitItem struct {
@@ -2913,6 +2916,10 @@ func defaultBulkheads() Bulkheads {
 			out.Projections = limit
 		case bulkhead.SubsystemOutbox:
 			out.Outbox = limit
+		case bulkhead.SubsystemOutboxCloudMachine:
+			out.OutboxCloudMachine = &limit
+		case bulkhead.SubsystemOutboxPAMDiscovery:
+			out.OutboxPAMDiscovery = &limit
 		case bulkhead.SubsystemSigning:
 			out.Signing = limit
 		case bulkhead.SubsystemQuery:
@@ -2925,6 +2932,8 @@ func defaultBulkheads() Bulkheads {
 			out.KMIP = limit
 		case bulkhead.SubsystemAgent:
 			out.Agent = limit
+		case bulkhead.SubsystemGatewayCommands:
+			out.GatewayCommands = limit
 		case bulkhead.SubsystemCBOM:
 			out.CBOM = limit
 		}
@@ -2945,6 +2954,8 @@ func (b Bulkheads) items() []bulkheadLimitItem {
 		{name: bulkhead.SubsystemOutbox, limit: b.Outbox},
 		{name: bulkhead.SubsystemOutboxExternalCA, limit: familyLimit(b.OutboxExternalCA)},
 		{name: bulkhead.SubsystemOutboxConnectors, limit: familyLimit(b.OutboxConnectors)},
+		{name: bulkhead.SubsystemOutboxCloudMachine, limit: familyLimit(b.OutboxCloudMachine)},
+		{name: bulkhead.SubsystemOutboxPAMDiscovery, limit: familyLimit(b.OutboxPAMDiscovery)},
 		{name: bulkhead.SubsystemOutboxSecrets, limit: familyLimit(b.OutboxSecrets)},
 		{name: bulkhead.SubsystemOutboxSecretSync, limit: familyLimit(b.OutboxSecretSync)},
 		{name: bulkhead.SubsystemOutboxManagedKeys, limit: familyLimit(b.OutboxManagedKeys)},
@@ -2963,6 +2974,7 @@ func (b Bulkheads) items() []bulkheadLimitItem {
 		{name: bulkhead.SubsystemProtocols, limit: b.Protocols},
 		{name: bulkhead.SubsystemKMIP, limit: b.KMIP},
 		{name: bulkhead.SubsystemAgent, limit: b.Agent},
+		{name: bulkhead.SubsystemGatewayCommands, limit: b.GatewayCommands},
 		{name: bulkhead.SubsystemCBOM, limit: b.CBOM},
 	}
 }
@@ -4415,6 +4427,16 @@ func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
 	setInt(getenv, "TRSTCTL_BULKHEAD_OUTBOX_QUEUE", &b.Outbox.Queue)
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_EXTERNAL_CA", b.Outbox, &b.OutboxExternalCA)
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_CONNECTORS", b.Outbox, &b.OutboxConnectors)
+	cloudMachineBase := b.Outbox
+	if b.OutboxCloudMachine != nil {
+		cloudMachineBase = *b.OutboxCloudMachine
+	}
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_CLOUD_MACHINE", cloudMachineBase, &b.OutboxCloudMachine)
+	pamDiscoveryBase := b.Outbox
+	if b.OutboxPAMDiscovery != nil {
+		pamDiscoveryBase = *b.OutboxPAMDiscovery
+	}
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_PAM_DISCOVERY", pamDiscoveryBase, &b.OutboxPAMDiscovery)
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_SECRETS", b.Outbox, &b.OutboxSecrets)
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_SECRET_SYNC", b.Outbox, &b.OutboxSecretSync)
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_MANAGED_KEYS", b.Outbox, &b.OutboxManagedKeys)
@@ -4438,6 +4460,8 @@ func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
 	setInt(getenv, "TRSTCTL_BULKHEAD_KMIP_QUEUE", &b.KMIP.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_AGENT_WORKERS", &b.Agent.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_AGENT_QUEUE", &b.Agent.Queue)
+	setInt(getenv, "TRSTCTL_BULKHEAD_GATEWAY_COMMANDS_WORKERS", &b.GatewayCommands.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_GATEWAY_COMMANDS_QUEUE", &b.GatewayCommands.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_CBOM_WORKERS", &b.CBOM.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_CBOM_QUEUE", &b.CBOM.Queue)
 }

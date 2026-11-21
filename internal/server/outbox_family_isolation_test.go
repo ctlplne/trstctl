@@ -41,6 +41,8 @@ func TestOutboxConnectorSaturationDoesNotStarveOtherFamilies(t *testing.T) {
 	set := bulkhead.NewSet(
 		bulkhead.Config{Name: bulkhead.SubsystemAPI, Workers: 2, Queue: 8},
 		bulkhead.Config{Name: bulkhead.SubsystemOutbox, Workers: 1, Queue: 4},
+		bulkhead.Config{Name: bulkhead.SubsystemOutboxPAMDiscovery, Workers: 1, Queue: 4},
+		bulkhead.Config{Name: bulkhead.SubsystemOutboxCloudMachine, Workers: 1, Queue: 4},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxExternalCA, Workers: 1, Queue: 4},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxConnectors, Workers: 2, Queue: 0},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxSecrets, Workers: 1, Queue: 4},

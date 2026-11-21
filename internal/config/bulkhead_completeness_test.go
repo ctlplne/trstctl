@@ -63,3 +63,43 @@ func TestBulkheadKMIPEnvOverrides(t *testing.T) {
 		t.Fatalf("Configs() kmip lane = %+v, want workers 5 queue 23", found)
 	}
 }
+
+func TestBulkheadNewLanesKeepIndependentDefaultsAndOverrides(t *testing.T) {
+	want := map[string]bulkhead.Config{}
+	for _, registered := range bulkhead.DefaultConfigs() {
+		want[registered.Name] = registered
+	}
+	got := map[string]BulkheadLimit{}
+	for _, item := range defaultBulkheads().items() {
+		got[item.name] = item.limit
+	}
+	for _, name := range []string{bulkhead.SubsystemOutboxCloudMachine, bulkhead.SubsystemOutboxPAMDiscovery, bulkhead.SubsystemGatewayCommands} {
+		limit, ok := got[name]
+		if !ok || limit.Workers != want[name].Workers || limit.Queue != want[name].Queue {
+			t.Errorf("%s default = %+v, present=%t; want independent %+v", name, limit, ok, want[name])
+		}
+	}
+	env := map[string]string{
+		"TRSTCTL_BULKHEAD_OUTBOX_CLOUD_MACHINE_WORKERS": "3",
+		"TRSTCTL_BULKHEAD_OUTBOX_PAM_DISCOVERY_QUEUE":   "17",
+		"TRSTCTL_BULKHEAD_GATEWAY_COMMANDS_WORKERS":     "6",
+	}
+	cfg, err := Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual := map[string]bulkhead.Config{}
+	for _, item := range cfg.Bulkheads.Configs() {
+		actual[item.Name] = item
+	}
+	for name, expected := range map[string]bulkhead.Config{
+		bulkhead.SubsystemOutboxCloudMachine: {Workers: 3, Queue: want[bulkhead.SubsystemOutboxCloudMachine].Queue},
+		bulkhead.SubsystemOutboxPAMDiscovery: {Workers: want[bulkhead.SubsystemOutboxPAMDiscovery].Workers, Queue: 17},
+		bulkhead.SubsystemGatewayCommands:    {Workers: 6, Queue: want[bulkhead.SubsystemGatewayCommands].Queue},
+	} {
+		value, ok := actual[name]
+		if !ok || value.Workers != expected.Workers || value.Queue != expected.Queue {
+			t.Errorf("%s config override = %+v, present=%t; want %+v", name, value, ok, expected)
+		}
+	}
+}
