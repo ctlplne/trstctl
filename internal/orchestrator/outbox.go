@@ -1333,7 +1333,7 @@ func (o *Outbox) CompleteByKey(ctx context.Context, tenantID, destination, idemp
 func (o *Outbox) ReconcileObservedReceipts(ctx context.Context) (int, error) {
 	const pageSize = 64
 	rows, err := o.store.SystemPool().Query(ctx,
-		//trstctl:system-query — source-receipt reconciliation scans only exact staged outbox identities across tenants; each completion re-enters the tenant's RLS transaction.
+		//trstctl:system-query — cross-tenant source-receipt reconciliation scans only exact staged outbox identities (tenant_id, destination, idempotency_key); each completion re-enters the tenant's RLS context without reading payload bytes.
 		`SELECT tenant_id::text, destination, idempotency_key
 		   FROM outbox
 		  WHERE status = 'receipt_observed'
