@@ -196,7 +196,7 @@ func (p *onlineCompatibilityPlan) verifyExpansion(ctx context.Context, q onlineC
 		var nullable, checkValid bool
 		var kind, expression string
 		err := q.QueryRow(ctx,
-			//trstctl:system-query — online migration checks catalog metadata for one schema-qualified table, not tenant rows (AN-1 exemption).
+			//trstctl:system-query — cross-tenant system migration verifies one exact schema-qualified constraint; catalog metadata contains no tenant_id or tenant row values (AN-1 exemption).
 			`SELECT NOT a.attnotnull,c.contype::text,c.convalidated,pg_get_expr(c.conbin,c.conrelid)
 			 FROM pg_attribute a JOIN pg_constraint c ON c.conrelid=a.attrelid
 			 WHERE a.attrelid='public.pam_discovery_runs'::regclass AND a.attname='finished_at'
@@ -211,7 +211,7 @@ func (p *onlineCompatibilityPlan) verifyExpansion(ctx context.Context, q onlineC
 	case "0417_service_account_rotation.sql":
 		var rotations, steps, observed bool
 		err := q.QueryRow(ctx,
-			//trstctl:system-query — online migration checks only exact schema objects and RLS flags, never tenant rows (AN-1 exemption).
+			//trstctl:system-query — cross-tenant system migration verifies only exact schema objects and RLS flags; no tenant_id or tenant row values leave PostgreSQL (AN-1 exemption).
 			`SELECT EXISTS(SELECT 1 FROM pg_class WHERE oid=to_regclass('public.service_account_rotations')
 			 AND relkind='r' AND relrowsecurity AND relforcerowsecurity),
 			 EXISTS(SELECT 1 FROM pg_class WHERE oid=to_regclass('public.service_account_rotation_steps')
