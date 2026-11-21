@@ -130,19 +130,18 @@ type IssuanceBindingRecorder interface {
 // error (ErrTTLCeilingExceeded) — the caller asked for more than the chain allows.
 func SubHourCeiling(chain []RecordEnvelope, now time.Time, requestedTTL time.Duration) (time.Duration, error) {
 	ceiling := maxSubHour
-	nowUnix := now.Unix()
 	for _, env := range chain {
-		na := env.Record.Validity.NotAfter
-		if na == 0 {
-			continue // an open-ended hop imposes no ceiling of its own
-		}
-		remain := time.Duration(na-nowUnix) * time.Second
-		if remain <= 0 {
-			// An already-expired hop cannot justify any live credential.
-			return 0, fmt.Errorf("%w: a chain hop has already expired", ErrTTLCeilingExceeded)
-		}
-		if remain < ceiling {
-			ceiling = remain
+		for _, window := range []Window{env.Record.Validity, env.Record.Authority.Validity} {
+			if window.NotAfter == 0 {
+				continue // an open-ended window imposes no expiry ceiling
+			}
+			remain := time.Unix(window.NotAfter, 0).Sub(now)
+			if remain <= 0 {
+				return 0, fmt.Errorf("%w: a chain hop or its conferred authority has expired", ErrTTLCeilingExceeded)
+			}
+			if remain < ceiling {
+				ceiling = remain
+			}
 		}
 	}
 	if requestedTTL > 0 {

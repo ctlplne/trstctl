@@ -39,7 +39,12 @@ the worker computes the reachability verdict, calls the signer over
 `GatedIssue`, records the attestation binding, and stores the returned public
 credential material. The signer refuses before keygen if the root anchor is
 absent, a hop widens authority, attestation fails, reachability is outside
-the ceiling, or the requested TTL exceeds the sub-hour ceiling.
+the ceiling, a hop's conferred authority is outside its validity window, or the
+requested TTL exceeds the earliest record or authority expiry or the sub-hour
+ceiling. The signer checks the lifetime again before key generation and checks
+the signed certificate's actual expiry before releasing it. An agent-stack
+representation without a chain needs verified attestation; a representation
+alone cannot authorize issuance.
 
 The signer’s public-trust floors live under the **signer process's** key store
 (`TRSTCTL_SIGNER_KEY_STORE_DIR`, default `data/signer/keys`). The root-anchor API
@@ -268,8 +273,10 @@ agent than it meant to are refused. Finding A2A endpoints is not part of this.
 
 - Provisioning-gated: the routes attach in every build, but a chain-bound request
   is refused until the signer trust floors above are provisioned.
-- The TTL ceiling is sub-hour by design; a request above it is refused, not
-  clamped.
+- The TTL ceiling is sub-hour by design and also ends at the earliest record or
+  conferred-authority expiry. A request above it or already expired is refused.
+  A request without an explicit expiry receives a conservative lifetime within
+  that ceiling; when less than a usable second remains, issuance is refused.
 - Register root anchors through the API, CLI, or console. The signer stores its
   public root floor under its own durable key store; an absent anchor is a
   refusal, not a fallback. The control plane provisions and reads back the

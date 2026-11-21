@@ -5,6 +5,7 @@ package delegation
 import (
 	"testing"
 
+	"trstctl.com/trstctl/internal/agentid/agentstack"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/signing"
 )
@@ -23,6 +24,19 @@ func FuzzGate_PreconditionDecode(f *testing.F) {
 	f.Add([]byte(`{"chain":[]}`), []byte(`{}`), []byte(`{"method":"tpm"}`))
 	f.Add([]byte(`{"chain":[{"record":{}}]}`), []byte(`{"system_prompt_digest":"AA=="}`), []byte(`{"payload":"AAAA"}`))
 	f.Add([]byte(`{"designated_class":"x"}`), []byte("\x00\x01\x02"), []byte("\xff\xfe"))
+	repr, err := agentstack.New([]byte("fuzz representation"), agentstack.NewToolManifest("search"), agentstack.Model{
+		Form: agentstack.ModelFormProviderID, ProviderModelID: "provider/model", ModelVersion: "1",
+	})
+	if err != nil {
+		f.Fatal(err)
+		return
+	}
+	reprBytes, err := jsonMarshal(repr)
+	if err != nil {
+		f.Fatal(err)
+		return
+	}
+	f.Add([]byte(`{"designated_class":"tenant-admin"}`), reprBytes, []byte(nil))
 
 	// A gate over an empty trust store and no attestor: fuzz can never satisfy the
 	// root-anchor or attestation checks, so nothing untrusted should be approved unless

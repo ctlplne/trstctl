@@ -161,6 +161,11 @@ func (op *IssuanceKeyOp) MintApprovedCredential(_ context.Context, req signing.I
 	if err != nil {
 		return signing.IssuedCredential{}, fmt.Errorf("delegation: decode approved binding material: %w", err)
 	}
+	issuedAt := op.cfg.Clock()
+	ttlSeconds := issuanceTTLSeconds(req, issuedAt)
+	if ttlSeconds <= 0 {
+		return signing.IssuedCredential{}, fmt.Errorf("delegation: requested credential lifetime is expired or exceeds its chain ceiling")
+	}
 
 	op.mu.Lock()
 	custody := op.custody
@@ -196,7 +201,6 @@ func (op *IssuanceKeyOp) MintApprovedCredential(_ context.Context, req signing.I
 	// extension carrying the approved binding material. Only digests cross into the crypto
 	// boundary; the leaf is verified against the CA before return (bind.MintCredential fails
 	// closed on an unverifiable signature).
-	ttlSeconds := issuanceTTLSeconds(req, op.cfg.Clock())
 	subjectCN := issuanceSubjectCN(req)
 	agentDigestSigner, err := digestSignerOf(agentSigner)
 	if err != nil {
@@ -205,6 +209,30 @@ func (op *IssuanceKeyOp) MintApprovedCredential(_ context.Context, req signing.I
 	credDER, err := MintCredential(caDER, caSigner, agentDigestSigner, subjectCN, ttlSeconds, bm)
 	if err != nil {
 		return signing.IssuedCredential{}, fmt.Errorf("delegation: certify agent credential: %w", err)
+	}
+	// X.509 signing reads the clock again after key generation. Verify the actual
+	// signed expiry against the absolute delegation/request ceiling so slow
+	// signing cannot add lifetime beyond a hop's authority.
+	body, err := decodePreconditions(req.Preconditions)
+	if err != nil {
+		return signing.IssuedCredential{}, fmt.Errorf("delegation: recheck issuance chain: %w", err)
+	}
+	if len(body.Chain) > 0 {
+		requested := time.Duration(0)
+		if req.NotAfter != 0 {
+			requested = time.Unix(req.NotAfter, 0).Sub(issuedAt)
+		}
+		ceiling, err := SubHourCeiling(body.Chain, issuedAt, requested)
+		if err != nil {
+			return signing.IssuedCredential{}, fmt.Errorf("delegation: recheck issuance ceiling: %w", err)
+		}
+		_, signedNotAfter, err := crypto.CertValidity(credDER)
+		if err != nil {
+			return signing.IssuedCredential{}, fmt.Errorf("delegation: inspect signed credential expiry: %w", err)
+		}
+		if signedNotAfter.After(issuedAt.Add(ceiling)) {
+			return signing.IssuedCredential{}, fmt.Errorf("delegation: signed credential expiry %s exceeds chain ceiling %s", signedNotAfter.UTC(), issuedAt.Add(ceiling).UTC())
+		}
 	}
 
 	return signing.IssuedCredential{
@@ -327,17 +355,37 @@ func digestSignerOf(s crypto.Signer) (crypto.DigestSigner, error) {
 	return nil, fmt.Errorf("delegation: signer-held key does not expose a digest-signing view")
 }
 
-// issuanceTTLSeconds derives the credential validity in seconds from the request's asserted
-// bounds when present (NotAfter - now), else falls back to the AGID default. The gate has
-// already enforced the sub-hour ceiling for chain-bound issuance; this is the certify-time
-// TTL and never widens the gate's decision.
+// issuanceTTLSeconds gives the key op a conservative lifetime. A chain-bound
+// certificate loses one second to signing latency, then the key op checks the
+// final signed expiry before the result leaves the signer.
+// Zero means refusal, never the 24-hour MintCredential fallback.
 func issuanceTTLSeconds(req signing.IssuancePreconditions, now time.Time) int64 {
-	if req.NotAfter > 0 {
-		if secs := req.NotAfter - now.Unix(); secs > 0 {
-			return secs
+	body, err := decodePreconditions(req.Preconditions)
+	if err != nil {
+		return 0
+	}
+	requested := time.Duration(0)
+	if req.NotAfter != 0 {
+		requested = time.Unix(req.NotAfter, 0).Sub(now)
+		if requested <= 0 {
+			return 0
 		}
 	}
-	return CredentialTTL
+	if len(body.Chain) == 0 {
+		if req.NotAfter == 0 {
+			return CredentialTTL
+		}
+		return int64(requested / time.Second)
+	}
+	ceiling, err := SubHourCeiling(body.Chain, now, requested)
+	if err != nil {
+		return 0
+	}
+	seconds := int64(ceiling/time.Second) - 1
+	if seconds <= 0 {
+		return 0
+	}
+	return seconds
 }
 
 // issuanceSubjectCN derives the leaf subject common name from the request's asserted trust

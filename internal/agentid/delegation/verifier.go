@@ -366,6 +366,9 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 		if nres := g.verifyNarrowing(body.Chain); nres.refused {
 			return nres
 		}
+		if issuanceTTLSeconds(req, now) <= 0 {
+			return refusal(CheckExpiry, len(body.Chain)-1, "requested credential expiry is past or exceeds the delegation ceiling")
+		}
 	}
 
 	// (3) Attestation + min-attestation-class gate (AGID-claim-10).
@@ -421,6 +424,9 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 	// representation must be present (AGID-claims-31/32 fallbacks each satisfy exactly one).
 	if len(chainHeadDigest) == 0 && len(reprBytes) == 0 {
 		return verifyResult{refused: true, check: CheckBindingTarget, hopIndex: -1, detail: "no chain and no agent-stack representation"}
+	}
+	if len(chainHeadDigest) == 0 && len(attestationDigest) == 0 {
+		return refusal(CheckBindingTarget, -1, "agent-stack representation without a chain requires verified attestation")
 	}
 
 	bm, err := NewBindingMaterial(chainHeadDigest, reprBytes, body.DesignatedClass, attestationDigest, rootAuthRef, taskEnvelopeDigest)
@@ -521,6 +527,9 @@ func (g *Gate) verifyChain(tenantID string, chain []RecordEnvelope, now time.Tim
 		// Validity: this hop's validity window must contain now (non-expiry / not-yet).
 		if !withinNow(rec.Validity, now) {
 			return refusal(CheckExpiry, i, "hop validity window does not contain the issuance time")
+		}
+		if !withinNow(rec.Authority.Validity, now) {
+			return refusal(CheckExpiry, i, "conferred authority validity does not contain the issuance time")
 		}
 
 		// Depth accounting: a child must have strictly less remaining depth than its
