@@ -6,6 +6,7 @@ package windependents
 import (
 	"context"
 	"errors"
+	"fmt"
 	"golang.org/x/sys/windows"
 	"runtime"
 	"strings"
@@ -187,7 +188,7 @@ func (driver nativeServiceDriver) discover(ctx context.Context, sid string) ([]S
 		var needed, count uint32
 		err := windows.EnumServicesStatusEx(scm, 0, windows.SERVICE_WIN32, windows.SERVICE_STATE_ALL, &raw[0], 512<<10, &needed, &count, &resume, nil)
 		if err != nil && !errors.Is(err, windows.ERROR_MORE_DATA) {
-			return nil, errors.New("windows service: enumeration failed; coverage is incomplete")
+			return nil, fmt.Errorf("windows service: enumeration failed; coverage is incomplete: %w", err)
 		}
 		entrySize := uint32(unsafe.Sizeof(windows.ENUM_SERVICE_STATUS_PROCESS{}))
 		if count > (512<<10)/entrySize || total+count > 8192 {

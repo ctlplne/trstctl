@@ -66,11 +66,11 @@ foreach ($file in $candidates) {
 }
 if (-not $changed) { Write-Host '>> no AllowGroups directive found in the sshd configuration' }
 # The administrator's key logon was accepted and the connection then closed
-# while the rotation opened its session ("unexpected packet in response to
-# channel open"), with nothing more in the Operational log. Debug logging,
-# first in the file so no Match block scopes it, says why.
+# while the rotation opened its session. Windows ETW omits the DEBUG3 detail;
+# LOCAL0 writes it to the lab runner's own ProgramData log file. Print only
+# fixed error categories below, never raw lines that might contain a command.
 $labStarted = Get-Date
-Set-Content -Path $config -Value (@('LogLevel DEBUG3') + (Get-Content -Path $config)) -Encoding ascii
+Set-Content -Path $config -Value (@('SyslogFacility LOCAL0', 'LogLevel DEBUG3') + (Get-Content -Path $config)) -Encoding ascii
 Restart-Service sshd
 $deadline = (Get-Date).AddSeconds(30)
 while (-not (Get-NetTCPConnection -LocalPort 22 -State Listen -ErrorAction SilentlyContinue)) {
@@ -102,6 +102,21 @@ $log = Join-Path $work 'lab.log'
 & go test -count=1 -timeout 20m -run '^TestWindowsLocalAccountsLabA240$' -v ./internal/dynsecret/ 2>&1 | Tee-Object -FilePath $log
 $status = $LASTEXITCODE
 if ($status -ne 0 -or -not (Select-String -Path $log -Pattern 'A240_WINDOWS_OK' -Quiet)) {
+    $sshdFile = Join-Path $env:ProgramData 'ssh\logs\sshd.log'
+    if (Test-Path $sshdFile) {
+        $raw = Get-Content -Path $sshdFile
+        $categories = [ordered]@{
+            create_process_as_user = @($raw | Where-Object { $_ -match 'CreateProcessAsUserW failed error:\d+' }).Count
+            fork_failed = @($raw | Where-Object { $_ -match 'fork of unprivileged child failed' }).Count
+            session_failed = @($raw | Where-Object { $_ -match 'failed to (start|create) (a )?session' }).Count
+            profile_failed = @($raw | Where-Object { $_ -match '(?i)(load|create).*profile.*fail|profile.*fail' }).Count
+            total_error_or_fatal = @($raw | Where-Object { $_ -match '(?i)\b(error|fatal):' }).Count
+        }
+        Write-Host (">> sshd file diagnostic categories: {0}" -f ($categories | ConvertTo-Json -Compress))
+        $codes = @($raw | Select-String -Pattern 'CreateProcessAsUserW failed error:(\d+)' -AllMatches |
+            ForEach-Object { foreach ($match in $_.Matches) { $match.Groups[1].Value } } | Sort-Object -Unique)
+        if ($codes.Count -gt 0) { Write-Host (">> sshd CreateProcessAsUserW Win32 codes: {0}" -f ($codes -join ',')) }
+    } else { Write-Host '>> sshd LOCAL0 log was not created' }
     # Why a logon was refused, without any password: sshd's own log and the
     # Security log's failed-logon status codes.
     Write-Host '>> OpenSSH/Operational since the lab started, oldest first (sshd at LogLevel DEBUG3):'

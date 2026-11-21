@@ -313,7 +313,7 @@ func (o *automationObject) call(name string, flags uint16, args ...automationVar
 	exception.destroy()
 	if automationFailed(result) {
 		value.destroy()
-		return automationVariant{}, automationHRESULT(result)
+		return automationVariant{}, fmt.Errorf("windows Automation %s: %w; native exception status 0x%08x", name, automationHRESULT(result), uint32(exception.status))
 	}
 	if err := o.ctx.Err(); err != nil {
 		value.destroy()
@@ -327,8 +327,9 @@ func (o *automationObject) object(name string, flags uint16, args ...automationV
 		return nil, err
 	}
 	if value.VT != 9 || value.Value == 0 {
+		kind := value.VT
 		value.destroy()
-		return nil, errors.New("windows Automation: expected native object")
+		return nil, fmt.Errorf("windows Automation %s: expected native object, got type %d", name, kind)
 	}
 	return &automationObject{pointer: value.Value, ctx: o.ctx}, nil
 }

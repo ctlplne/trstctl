@@ -96,15 +96,20 @@ func TestServedPrivilegedAccountDiscoverySQLServerA260(t *testing.T) {
 		t.Helper()
 		status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/discovery/sources/a260-mssql/runs", operator, key, nil)
 		var r struct {
+			ID      string `json:"id"`
 			Status  string `json:"status"`
 			Failure string `json:"failure"`
 			Added   int    `json:"added"`
 			Removed int    `json:"removed"`
 		}
-		if status != http.StatusCreated || json.Unmarshal(body, &r) != nil || r.Status != "completed" {
+		if status != http.StatusAccepted || json.Unmarshal(body, &r) != nil || r.Status != "queued" || r.ID == "" {
 			t.Fatalf("scan = %d %s", status, body)
 		}
-		return r.Added, r.Removed
+		completed := awaitQueuedDiscoveryProofA267(t, h.servedHarness, operator, r.ID)
+		if completed.Status != "completed" {
+			t.Fatalf("SQL Server worker scan failed: %+v", completed)
+		}
+		return completed.Added, completed.Removed
 	}
 	accounts := func() map[string]string {
 		t.Helper()
