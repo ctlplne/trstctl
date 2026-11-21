@@ -308,8 +308,8 @@ func dodBuildManagedKeyArtifacts(t *testing.T, platform string) dodManagedKeyArt
 	trustedKey := base64.StdEncoding.EncodeToString(publicKey)
 	signerLDFlags := "-s -w -buildid= -X trstctl.com/trstctl/internal/license.builtinPubKeysB64=" + trustedKey
 	goVersion := dodManagedKeyToolchainVersion(t, repo)
-	buildBase := dodPinnedBaseImage(t, "golang:"+goVersion+"-bookworm", "golang", platform)
-	runtimeBase := dodPinnedBaseImage(t, "debian:bookworm-slim", "debian", platform)
+	buildBase := dodPinnedBaseImage(t, "golang:"+goVersion+"-bookworm", "golang", platform, "GOLANG_"+strings.ReplaceAll(goVersion, ".", "_")+"_BOOKWORM")
+	runtimeBase := dodPinnedBaseImage(t, "debian:bookworm-slim", "debian", platform, "DEBIAN_BOOKWORM_SLIM")
 	dodRunCommandAt(t, repo, "build shipped cgo signer image", "docker", "build", "--platform", platform, "-f", "deploy/docker/Dockerfile.signer-hsm", "--build-arg", "BUILD_IMAGE="+buildBase, "--build-arg", "BASE_IMAGE="+runtimeBase, "--build-arg", "LDFLAGS="+signerLDFlags, "-t", "trstctl-signer-hsm:dod", ".")
 	signerImage := dodBuiltImageID(t, "trstctl-signer-hsm:dod", platform)
 	// BuildKit resolves a bare sha256 image ID as a registry repository name.
@@ -1663,7 +1663,7 @@ func (r *dodManagedKeyRuntime) approveManagedKeyAction(keyID, action string) {
 		IntentDigest      string `json:"intent_digest"`
 	}
 	if err := json.Unmarshal(deniedBody, &pending); err != nil || pending.Code != "managed_key_approval_pending" || pending.ApprovalRequestID == "" || pending.IntentDigest == "" {
-		r.t.Fatalf("unapproved managed-key %s did not return a durable pending authority: %v body=%s", action, err, deniedBody)
+		r.t.Fatalf("unapproved managed-key %s did not return a durable pending authority: %v body=%s approval_storage_log=%q", action, err, deniedBody, r.approvalStorageDiagnostic())
 	}
 	r.requireManagedKeyCommandAbsent(action)
 
@@ -1710,6 +1710,16 @@ func (r *dodManagedKeyRuntime) approveManagedKeyAction(keyID, action string) {
 		}
 	}
 	r.requireManagedKeyCommandAbsent(action)
+}
+
+func (r *dodManagedKeyRuntime) approvalStorageDiagnostic() string {
+	var last string
+	for _, line := range strings.Split(r.control.Logs(), "\n") {
+		if strings.Contains(line, "approval request persistence failed") {
+			last = line
+		}
+	}
+	return dodManagedKeyCompactDiagnostic(last)
 }
 
 func (r *dodManagedKeyRuntime) pendingManagedKeyApproval(keyID, action, requestID string) dodManagedKeyApprovalAuthority {
@@ -2499,37 +2509,46 @@ func dodManagedKeyToolchainVersion(t *testing.T, repo string) string {
 	return ""
 }
 
-func dodPinnedBaseImage(t *testing.T, taggedImage, repository, platform string) string {
+func dodPinnedBaseImage(t *testing.T, taggedImage, repository, platform, pinKey string) string {
 	t.Helper()
-	if repository == "" || strings.ContainsAny(repository, "@:\t\r\n ") {
+	if repository == "" || strings.ContainsAny(repository, "@:\t\r\n ") || !strings.HasPrefix(taggedImage, repository+":") {
 		t.Fatalf("invalid pinned base repository %q", repository)
 	}
-	command := exec.Command("docker", "pull", "--platform", platform, taggedImage)
-	output, err := command.CombinedOutput()
+	pins, err := os.ReadFile(filepath.Join(dodManagedKeyRepoRoot(t), ".github", "base-image-digests.env"))
 	if err != nil {
-		t.Fatalf("pull exact-platform base for %s: %v output=%s", taggedImage, err, output)
+		t.Fatalf("read reviewed base-image pins: %v", err)
 	}
-	command = exec.Command("docker", "image", "inspect", "--format={{json .RepoDigests}}", taggedImage)
-	output, err = command.CombinedOutput()
-	if err != nil {
-		t.Fatalf("inspect immutable base for %s: %v output=%s", taggedImage, err, output)
-	}
-	var repoDigests []string
-	if err := json.Unmarshal(bytes.TrimSpace(output), &repoDigests); err != nil {
-		t.Fatalf("decode immutable base digests for %s: %v output=%s", taggedImage, err, output)
-	}
-	prefix := repository + "@"
-	for _, reference := range repoDigests {
-		if !strings.HasPrefix(reference, prefix) {
-			continue
-		}
-		digest, parseErr := dodParseContentImageID(strings.TrimPrefix(reference, prefix))
-		if parseErr == nil {
-			return prefix + digest
+	digest := ""
+	for _, line := range strings.Split(string(pins), "\n") {
+		if value, ok := strings.CutPrefix(line, pinKey+"="); ok {
+			if digest != "" {
+				t.Fatalf("duplicate reviewed base-image pin %s", pinKey)
+			}
+			digest = strings.TrimSpace(value)
 		}
 	}
-	t.Fatalf("pulled base %s has no exact %s@sha256 RepoDigest: %v", taggedImage, repository, repoDigests)
-	return ""
+	if _, err := dodParseContentImageID(digest); err != nil {
+		t.Fatalf("missing or malformed reviewed base-image pin %s for %s: %v", pinKey, taggedImage, err)
+	}
+	ref := repository + "@" + digest
+	inspect := func() ([]byte, error) {
+		return exec.Command("docker", "image", "inspect", "--format={{.Os}}/{{.Architecture}}", ref).CombinedOutput()
+	}
+	output, err := inspect()
+	if err != nil {
+		command := exec.Command("docker", "pull", "--platform", platform, ref)
+		if pullOutput, pullErr := command.CombinedOutput(); pullErr != nil {
+			t.Fatalf("pull reviewed exact-platform base %s: %v output=%s", ref, pullErr, pullOutput)
+		}
+		output, err = inspect()
+		if err != nil {
+			t.Fatalf("inspect pulled exact base %s: %v output=%s", ref, err, output)
+		}
+	}
+	if strings.TrimSpace(string(output)) != platform {
+		t.Fatalf("reviewed base %s has platform %q, want %s", ref, strings.TrimSpace(string(output)), platform)
+	}
+	return ref
 }
 
 func dodParseContentImageID(raw string) (string, error) {

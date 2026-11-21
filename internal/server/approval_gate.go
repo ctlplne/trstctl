@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -94,7 +95,7 @@ func buildMutationGate(d Deps, bulk *bulkhead.Set, outbox approvalOutbox, orch *
 		if orch == nil {
 			return api.MutationGate{}, nil, fmt.Errorf("server: approval authority requires the event-sourced orchestrator")
 		}
-		gate.Checker = storeApprovalChecker{store: d.Store, orch: orch, required: required}
+		gate.Checker = storeApprovalChecker{store: d.Store, orch: orch, required: required, logger: d.Logger}
 		recorder = storeApprovalRecorder{store: d.Store, orch: orch}
 		if d.RequireApproval {
 			gate.RequireApproval = true
@@ -113,6 +114,7 @@ type storeApprovalChecker struct {
 	store    *store.Store
 	orch     *orchestrator.Orchestrator
 	required int
+	logger   *slog.Logger
 }
 
 // IsApproved is the legacy resource/action-only seam. It deliberately cannot
@@ -142,6 +144,11 @@ func (c storeApprovalChecker) AuthorizeApproval(ctx context.Context, intent api.
 		RequiredApprovals: required, TTL: intent.TTL,
 	})
 	if err != nil {
+		// Keep the public denial generic. The operator log identifies the failed
+		// storage step without printing the request body, token, or key material.
+		if c.logger != nil {
+			c.logger.Error("approval request persistence failed", slog.String("error", err.Error()))
+		}
 		return api.ApprovalAuthority{}, false, "could not record the immutable approval request"
 	}
 	use, err := store.OperationApprovalUseFromRequest(request)
