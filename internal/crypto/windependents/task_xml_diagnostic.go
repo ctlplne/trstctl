@@ -37,11 +37,12 @@ func taskXMLSegments(raw []byte) []taskXMLSegment {
 				name = append(name, ch)
 				continue
 			}
-			if !((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-				(ch >= '0' && ch <= '9') || ch == ':' || ch == '_' || ch == '-' || ch == '.') {
-				break
+			if (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+				(ch >= '0' && ch <= '9') || ch == ':' || ch == '_' || ch == '-' || ch == '.' {
+				name = append(name, ch)
+				continue
 			}
-			name = append(name, ch)
+			break
 		}
 		if len(name) > 0 {
 			segments = append(segments, taskXMLSegment{tag: string(name), digest: sha256.Sum256(raw[start:end]), bytes: end - start})

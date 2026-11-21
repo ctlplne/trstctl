@@ -6,6 +6,7 @@ package windependents
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 const nativeIISRoot = "MACHINE/WEBROOT/APPHOST"
@@ -124,18 +125,21 @@ func snapshotNativePool(object *automationObject, selectedSID string) (nativePoo
 	if err != nil {
 		return nativePoolSnapshot{}, err
 	}
-	snapshot.EncryptionProvider, err = iisPublicMetadata(snapshot.password, "encryptionProvider")
-	if err != nil || snapshot.EncryptionProvider == "" {
-		return nativePoolSnapshot{}, errors.New("windows pool: native credential encryption provider is unavailable")
-	}
 	protected, err := iisMetadata(snapshot.password, "isPropertyEncrypted")
 	if err != nil {
-		return nativePoolSnapshot{}, err
+		return nativePoolSnapshot{}, fmt.Errorf("windows pool: native credential encrypted-state readback unavailable: %w", err)
 	}
 	snapshot.PasswordProtected, err = protected.boolean()
 	protected.destroy()
 	if err != nil {
 		return nativePoolSnapshot{}, err
+	}
+	snapshot.EncryptionProvider, err = iisPublicMetadata(snapshot.password, "encryptionProvider")
+	if err != nil {
+		return nativePoolSnapshot{}, fmt.Errorf("windows pool: native credential encryption provider unavailable (protected=%t): %w", snapshot.PasswordProtected, err)
+	}
+	if snapshot.EncryptionProvider == "" {
+		return nativePoolSnapshot{}, fmt.Errorf("windows pool: native credential encryption provider is empty (protected=%t)", snapshot.PasswordProtected)
 	}
 	state, err := iisIntegerProperty(object, "state")
 	if err != nil || (state != 1 && state != 3) {
