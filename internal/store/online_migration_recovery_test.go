@@ -174,10 +174,17 @@ func TestHistoricalOnlineMigrationRecoversInterruptedBuilds(t *testing.T) {
 					remove = "-ARRAY['routing_source','routing_policy_id','routing_policy_scope','routing_policy_digest']"
 				case 253:
 					// Migrate applies the whole remaining sequence. Remove the
-					// additive 0253, 0254, 0355, 0388 and 0389 (A254 gateway
-					// delivery) and 0391 (A255 gateway end) fields before
-					// comparing N-1 content.
-					remove = "-ARRAY['revocation_requested_by','revocation_reason','revocation_requested_at','revocation_idempotency_key','revocation_failure','revocation_failed_at','approval_request_id','delivery','gateway_agent_id','gateway_ticket_digest','ssh_principal','gateway_ended_at','gateway_ended']"
+					// additive fields introduced after 0253 before comparing
+					// N-1 content. Assert the later columns' exact defaults first,
+					// so dropping them from the comparison cannot hide a rewrite.
+					var defaultsOK bool
+					if err := pool.QueryRow(ctx, `SELECT bool_and(command_policy='{}'::jsonb
+						AND web_sign_in='{}'::jsonb AND account_rotation_provider=''
+						AND account_rotation_command_id='' AND approval_link IS NULL)
+						FROM pam_sessions WHERE tenant_id IN ($1::uuid,$2::uuid)`, tenantA, tenantB).Scan(&defaultsOK); err != nil || !defaultsOK {
+						t.Fatalf("later PAM columns did not retain their documented defaults: ok=%t err=%v", defaultsOK, err)
+					}
+					remove = "-ARRAY['revocation_requested_by','revocation_reason','revocation_requested_at','revocation_idempotency_key','revocation_failure','revocation_failed_at','approval_request_id','delivery','gateway_agent_id','gateway_ticket_digest','ssh_principal','gateway_ended_at','gateway_ended','command_policy','web_sign_in','account_rotation_provider','account_rotation_command_id','approval_link']"
 				}
 				afterSQL := strings.Replace(beforeSQL, "to_jsonb(o)::text", "(to_jsonb(o)"+remove+")::text", 1)
 				afterCount, afterChecksum := checksumQuery(t, ctx, pool, afterSQL)

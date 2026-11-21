@@ -231,6 +231,12 @@ func TestShortSubjectDoesNotCollideWithOpaqueKnownSchemaValues(t *testing.T) {
 	for eventType, knownVersions := range knownSchemaVersions {
 		for version := range knownVersions {
 			data := []byte(`{"status":"active","algorithm":"saml","digest":"aa4a","kind":"ca","protocol":"data"}`)
+			if eventType == EventCloudMachineChangeProposed {
+				// This event is a closed nested record. Keep the short-subject
+				// collision check on a payload its projector can actually emit.
+				data = []byte(completePrivacyFixture[CloudMachineChangeProposed](t,
+					`{"record":{"intent":{"action":"revoke_key","principal_kind":"ca"},"state":"awaiting_approval","requested_by":"opaque"}}`))
+			}
 			if isLifecycleEvent(eventType) {
 				switch version {
 				case 1:
