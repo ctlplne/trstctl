@@ -350,8 +350,8 @@ not this file.
 | `internal/connector/gcpcm/gcpcm_test.go:18` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/kemp/kemp_test.go:65` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/paloalto/paloalto_test.go:29` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
-| `internal/crypto/crewjamsaml/schema.go:655` | fixed public SAML status URI, not a credential (CWE-798) |
-| `internal/crypto/crewjamsaml/schema.go:673` | fixed public SAML status URI, not a credential (CWE-798) |
+| `internal/crypto/crewjamsaml/schema.go:657` | fixed public SAML status URI, not a credential (CWE-798) |
+| `internal/crypto/crewjamsaml/schema.go:675` | fixed public SAML status URI, not a credential (CWE-798) |
 | `internal/crypto/jks/jceks_test.go:22` | a fixture file path, not a credential (CWE-798) |
 | `internal/crypto/pfx/keyentries_test.go:20` | keytool's published default store password on a test fixture; not a credential (CWE-798) |
 | `internal/crypto/ssh_account_password.go:43` | a command path the profile runs, not a credential (CWE-798) |
@@ -2302,8 +2302,8 @@ not this file.
 | `tools/dodcensus/external_ca_substrate_test.go:168` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/kmip_substrate_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/main.go:322` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/dodcensus/managed_key_manifest_test.go:602` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/managed_key_manifest_test.go:638` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/managed_key_manifest_test.go:606` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/managed_key_manifest_test.go:642` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/launched.go:285` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/launched.go:656` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/launched.go:1504` | developer tool running fixed toolchain commands over the repo (CWE-78) |
@@ -3218,15 +3218,15 @@ not this file.
 | `tools/dodcensus/main_test.go:1180` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/managed_key_closure.go:56` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:149` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:214` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:294` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:320` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:345` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:400` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:411` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:434` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:480` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:667` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:218` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:298` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:324` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:349` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:404` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:415` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:438` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:484` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:671` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/proof/launched.go:420` | gate-owned private directory created above (CWE-22) |
 | `tools/dodcensus/proof/launched.go:599` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/proof/launched.go:1421` | developer tool reading the repo paths it is pointed at (CWE-22) |
@@ -3565,7 +3565,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:15` | SHA-1 only for the conventional certificate fingerprint identifier, never integrity (CWE-328) |
-| `internal/crypto/crewjamsaml/xmlenc/digest.go:4` | legacy SAML XML Encryption digest interoperability only (CWE-327) |
+| `internal/crypto/crewjamsaml/xmlenc/digest.go:6` | legacy SAML XML Encryption digest interoperability only (CWE-327) |
 | `internal/crypto/deviceattest/cvc.go:11` | a card-verifiable certificate may name ECDSA/RSA with SHA-1; verified only, never produced (CWE-327) |
 | `internal/crypto/jks/jceks.go:7` | a JCEKS keystore's integrity digest is defined over SHA-1; this only verifies existing files (CWE-328) |
 | `internal/crypto/leafca.go:7` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
@@ -3812,11 +3812,11 @@ not this file.
 | `tools/dodcensus/main_test.go:667` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/main_test.go:721` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/main_test.go:1482` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:222` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:302` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:439` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:488` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:679` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:226` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:306` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:443` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:492` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:683` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/proof/launched.go:1340` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/proof/proof.go:98` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:218` | test path inside its own tempdir/checkout (CWE-22) |
