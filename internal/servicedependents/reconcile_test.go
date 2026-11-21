@@ -9,7 +9,7 @@ import (
 )
 
 func TestReconcileIntentPinsSeparateAuthorityAndPreservesLegacyDigestA267(t *testing.T) {
-	original, inputs := workflowFixture(t)
+	original, inputs := workflowFixture()
 	legacy, err := json.Marshal(struct {
 		Plan            RotationPlan   `json:"plan"`
 		ExpectedVersion int            `json:"expected_version"`

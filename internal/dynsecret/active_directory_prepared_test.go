@@ -59,6 +59,7 @@ func FuzzADStaticPreparationA267(f *testing.F) {
 	raw, err := json.Marshal(adPreparationFixture()) // #nosec G117 -- synthetic byte-backed fuzz/parser seed, never logged (CWE-200)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(raw)
 	f.Add([]byte(`{"version":1,"password":"owned"}`))

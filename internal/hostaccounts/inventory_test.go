@@ -87,11 +87,13 @@ func FuzzLocalAdministratorInventoryReportA268(f *testing.F) {
 	intent, err := NewInventoryIntent("33333333-3333-4333-8333-333333333333", "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222")
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	accepted := InventoryReport{RunID: intent.RunID, BindingDigest: intent.BindingDigest, ObservedAt: time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC), Status: "complete", Inventory: &winaccounts.Inventory{Machine: winaccounts.Machine{Name: "OWNED", SID: "S-1-5-21-1-2-3", Role: 3}, Accounts: []winaccounts.Account{}}}
 	encoded, err := json.Marshal(accepted)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(encoded)
 	f.Add([]byte(`{}`))

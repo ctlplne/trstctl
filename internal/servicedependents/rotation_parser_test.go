@@ -12,7 +12,7 @@ import (
 )
 
 func TestDependentStepAuthorityMutationPropertyA267(t *testing.T) {
-	intent, inputs := workflowFixture(t)
+	intent, inputs := workflowFixture()
 	steps, err := intent.Steps(inputs, Forward)
 	if err != nil {
 		t.Fatal(err)
@@ -49,10 +49,11 @@ func TestDependentStepAuthorityMutationPropertyA267(t *testing.T) {
 // continuous execution. Accepted inputs still cannot acquire an unknown field,
 // duplicate interpretation or a changed authority under the retained step ID.
 func FuzzDependentRotationWireA267(f *testing.F) {
-	intent, inputs := workflowFixture(f)
+	intent, inputs := workflowFixture()
 	steps, err := intent.Steps(inputs, Forward)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	step := steps[0]
 	step.Challenge = "88888888-8888-4888-8888-888888888888"
@@ -61,21 +62,25 @@ func FuzzDependentRotationWireA267(f *testing.F) {
 	seed, err := json.Marshal(step)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(seed)
 	step.ManifestPosition = &ManifestPosition{Stage: step.Action, EntryOrdinal: 0, PageNumber: 0, EntryIndex: 0}
 	pagedSeed, err := json.Marshal(step)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(pagedSeed)
 	recovery, err := NewInverseRecoveryStep(ownedRecoveryStep(), "57800000-0000-4000-8000-000000000006", ownedRecoveryStep().Deadline.Add(time.Hour))
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	recoverySeed, err := json.Marshal(recovery)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(recoverySeed)
 	f.Add([]byte(`{"status":"failed","status":"succeeded"}`))

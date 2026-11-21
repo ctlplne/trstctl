@@ -131,7 +131,7 @@ func FuzzLocalSAMInventoryPublicFieldsA268(f *testing.F) {
 	f.Fuzz(func(t *testing.T, name, sid string) {
 		fixture := ownedInventoryFixture()
 		fixture.users[ownedMachineSID+"-500"] = Account{Name: name, SID: sid, Enabled: true, PasswordRequired: true}
-		result, err := (Adapter{driver: fixture}).Inventory(t.Context())
+		result, err := (Adapter{driver: fixture}).Inventory(context.Background())
 		if err == nil && (len(result.Accounts) != 1 || result.Accounts[0].SID != ownedMachineSID+"-500" || result.Accounts[0].Name != name) {
 			t.Fatal("native public input substituted account authority")
 		}

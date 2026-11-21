@@ -10,16 +10,15 @@ import (
 	"time"
 )
 
-func manifestFixture(t testing.TB) (RotationManifestHeader, RotationManifestEntry) {
-	t.Helper()
-	intent, inputs := workflowFixture(t)
+func manifestFixture() (RotationManifestHeader, RotationManifestEntry) {
+	intent, inputs := workflowFixture()
 	input := inputs[0]
 	header := RotationManifestHeader{Version: 1, ID: intent.Plan.ID, Account: intent.Plan.Account, SecretName: intent.Plan.SecretName, ExpectedVersion: intent.ExpectedVersion, ProviderBinding: intent.ProviderBinding, CreatedAt: intent.Plan.CreatedAt, ExpiresAt: intent.Plan.CreatedAt.Add(RotationInventoryMaxAge)}
 	entry := RotationManifestEntry{Host: RotationManifestHost{Binding: input.Binding, InventoryRunID: input.Inventory.RunID, InventoryDigest: input.InventoryDigest, ObservedAt: input.Inventory.ObservedAt}, Ref: intent.Plan.Order[0], ProbeID: intent.Probes[0].ProbeID}
 	return header, entry
 }
 func TestPagedDependentReviewExceedsOneEventWithoutIncreasingPageBoundA267(t *testing.T) {
-	header, entry := manifestFixture(t)
+	header, entry := manifestFixture()
 	previousDigest, err := header.Digest()
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +62,7 @@ func TestPagedDependentReviewExceedsOneEventWithoutIncreasingPageBoundA267(t *te
 	}
 }
 func TestManifestChainRefusesChangedAuthorityAndAmbiguousWireA267(t *testing.T) {
-	header, entry := manifestFixture(t)
+	header, entry := manifestFixture()
 	digest, err := header.Digest()
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +115,7 @@ func TestManifestChainRefusesChangedAuthorityAndAmbiguousWireA267(t *testing.T) 
 	}
 }
 func TestManifestHeaderMutationChangesEveryPageAuthorityPropertyA267(t *testing.T) {
-	header, entry := manifestFixture(t)
+	header, entry := manifestFixture()
 	digest, err := header.Digest()
 	if err != nil {
 		t.Fatal(err)
@@ -137,18 +136,21 @@ func TestManifestHeaderMutationChangesEveryPageAuthorityPropertyA267(t *testing.
 	}
 }
 func FuzzRotationManifestPageA267(f *testing.F) {
-	header, entry := manifestFixture(f)
+	header, entry := manifestFixture()
 	digest, err := header.Digest()
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	page, err := NewRotationManifestPage(header, 0, digest, []RotationManifestEntry{entry})
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	raw, err := json.Marshal(page)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(raw)
 	f.Add([]byte(`{"page_number":0,"page_number":1}`))
@@ -171,7 +173,7 @@ func FuzzRotationManifestPageA267(f *testing.F) {
 }
 
 func TestManifestSealBindsCountsTailAndEarliestExpiryA267(t *testing.T) {
-	header, entry := manifestFixture(t)
+	header, entry := manifestFixture()
 	digest, err := header.Digest()
 	if err != nil {
 		t.Fatal(err)
@@ -209,7 +211,7 @@ func TestManifestSealBindsCountsTailAndEarliestExpiryA267(t *testing.T) {
 }
 
 func TestManifestKeepsSelectedHostsThatHaveNoNativeDependentsA267(t *testing.T) {
-	header, entry := manifestFixture(t)
+	header, entry := manifestFixture()
 	digest, err := header.Digest()
 	if err != nil {
 		t.Fatal(err)
@@ -232,7 +234,7 @@ func TestManifestKeepsSelectedHostsThatHaveNoNativeDependentsA267(t *testing.T) 
 }
 
 func TestManifestPageInputRejectsAliasesAndUnknownAuthorityA267(t *testing.T) {
-	header, entry := manifestFixture(t)
+	header, entry := manifestFixture()
 	digest, err := header.Digest()
 	if err != nil {
 		t.Fatal(err)
@@ -257,14 +259,16 @@ func TestManifestPageInputRejectsAliasesAndUnknownAuthorityA267(t *testing.T) {
 	}
 }
 func FuzzRotationManifestPageInputA267(f *testing.F) {
-	header, entry := manifestFixture(f)
+	header, entry := manifestFixture()
 	digest, err := header.Digest()
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	raw, err := json.Marshal(RotationManifestPageInput{HeaderDigest: digest, PreviousDigest: digest, Entries: []RotationManifestEntry{entry}})
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(raw)
 	f.Add(append(append([]byte(nil), raw[:len(raw)-1]...), []byte(",\"unknown\":\"\xff\"}")...))

@@ -44,11 +44,13 @@ func FuzzDecrypt(f *testing.F) {
 	key, err := KeyFromBytes(bytes.Repeat([]byte{7}, 64))
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Cleanup(key.Destroy)
 	valid, err := key.Encrypt([]byte("seed"))
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(valid)
 	f.Add("2.!!!|!!!|!!!")

@@ -10,14 +10,13 @@ import (
 	"trstctl.com/trstctl/internal/crypto/windependents"
 )
 
-func workflowFixture(t testing.TB) (RotationIntent, []RotationHostInput) {
-	t.Helper()
+func workflowFixture() (RotationIntent, []RotationHostInput) {
 	now := time.Now().UTC()
 	account := AccountBinding{AccountID: "11111111-1111-4111-8111-111111111111", ProviderID: "directory", Name: "svc", DN: "CN=svc,DC=lab,DC=test", SID: "S-1-5-21-1-2-3-1001", GUID: strings.Repeat("a", 32)}
 	binding := HostBinding{Account: account, AgentID: "22222222-2222-4222-8222-222222222222", Revision: 1, Enabled: true}
 	scan, e := NewInventoryIntent("33333333-3333-4333-8333-333333333333", binding)
 	if e != nil {
-		t.Fatal(e)
+		panic(e) // a broken fixed fixture must fail tests and fuzz setup
 	}
 	report := InventoryReport{RunID: scan.RunID, BindingDigest: scan.BindingDigest, ObservedAt: now, Coverage: []FamilyCoverage{{Family: "services", Status: "complete"}, {Family: "tasks", Status: "complete"}, {Family: "iis", Status: "complete"}}, Services: []windependents.Service{
 		{Name: "base", AccountSID: account.SID, ConfigSHA256: strings.Repeat("b", 64), WasRunning: true},
@@ -25,13 +24,13 @@ func workflowFixture(t testing.TB) (RotationIntent, []RotationHostInput) {
 	}, Tasks: []windependents.Task{{Path: "\\owned\\work", AccountSID: account.SID, ConfigSHA256: strings.Repeat("d", 64), Enabled: true, LogonType: 1, ActionCount: 1}}, Pools: []windependents.Pool{{Name: "web", AccountSID: account.SID, ConfigSHA256: strings.Repeat("e", 64), EncryptionProvider: "native", PasswordProtected: true, WasStarted: true}}}
 	raw, e := json.Marshal(report)
 	if e != nil {
-		t.Fatal(e)
+		panic(e) // a broken fixed fixture must fail tests and fuzz setup
 	}
 	input := []RotationHostInput{{Binding: binding, Inventory: report, InventoryDigest: crypto.SHA256Hex(raw)}}
 	order := []DependentRef{{binding.AgentID, "services", "base"}, {binding.AgentID, "services", "child"}, {binding.AgentID, "tasks", "\\owned\\work"}, {binding.AgentID, "iis", "web"}}
 	plan, e := NewRotationPlan("44444444-4444-4444-8444-444444444444", account, "app/credential", input, order, now)
 	if e != nil {
-		t.Fatal(e)
+		panic(e) // a broken fixed fixture must fail tests and fuzz setup
 	}
 	intent := RotationIntent{Plan: plan, ExpectedVersion: 7, ProviderBinding: strings.Repeat("f", 64)}
 	for _, ref := range order {
@@ -41,7 +40,7 @@ func workflowFixture(t testing.TB) (RotationIntent, []RotationHostInput) {
 }
 
 func TestRotationIntentRequiresFunctionalBindingAndServiceOrder(t *testing.T) {
-	intent, inputs := workflowFixture(t)
+	intent, inputs := workflowFixture()
 	if e := intent.Validate(inputs); e != nil {
 		t.Fatal(e)
 	}
@@ -100,7 +99,7 @@ func TestRotationIntentRequiresFunctionalBindingAndServiceOrder(t *testing.T) {
 }
 
 func TestDependentStepReportCannotClaimUsefulWorkFromIdentityOnly(t *testing.T) {
-	intent, inputs := workflowFixture(t)
+	intent, inputs := workflowFixture()
 	steps, e := intent.Steps(inputs, Forward)
 	if e != nil {
 		t.Fatal(e)
@@ -125,7 +124,7 @@ func TestDependentStepReportCannotClaimUsefulWorkFromIdentityOnly(t *testing.T) 
 }
 
 func TestDependentTaskProbeRefusesAnUndatedNativeInstanceA267(t *testing.T) {
-	intent, inputs := workflowFixture(t)
+	intent, inputs := workflowFixture()
 	steps, e := intent.Steps(inputs, Forward)
 	if e != nil {
 		t.Fatal(e)

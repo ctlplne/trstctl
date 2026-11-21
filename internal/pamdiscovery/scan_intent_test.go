@@ -50,6 +50,7 @@ func FuzzDiscoveryScanIntentA267(f *testing.F) {
 	valid, err := json.Marshal(scanIntentFixtureA267())
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(valid)
 	f.Add([]byte("{}"))

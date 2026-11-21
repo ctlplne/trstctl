@@ -15,7 +15,7 @@ func cursorFixture(t testing.TB, width int, empty bool) (RotationIntent, []Rotat
 }
 func cursorFixtureWithState(t testing.TB, width int, empty, inactive, nonpassword bool) (RotationIntent, []RotationHostInput, RotationManifestResolver) {
 	t.Helper()
-	legacy, inputs := workflowFixture(t)
+	legacy, inputs := workflowFixture()
 	if inactive {
 		inputs[0].Inventory.Services[0].WasRunning = false
 		inputs[0].Inventory.Services[1].WasRunning = false
@@ -34,7 +34,7 @@ func cursorFixtureWithState(t testing.TB, width int, empty, inactive, nonpasswor
 	if e != nil {
 		t.Fatal(e)
 	}
-	h, entry := manifestFixture(t)
+	h, entry := manifestFixture()
 	// Use one exact native inventory for both the old and paged algorithms.
 	h.ID = legacy.Plan.ID
 	h.Account = legacy.Plan.Account
@@ -94,7 +94,7 @@ func TestManifestCursorPreservesGlobalNativeOrderAndExactSnapshotsA267(t *testin
 				for _, inactive := range []bool{false, true} {
 					for _, nonpassword := range []bool{false, true} {
 						intent, inputs, r := cursorFixtureWithState(t, width, empty, inactive, nonpassword)
-						legacy, _ := workflowFixture(t)
+						legacy, _ := workflowFixture()
 						// Recreate the comparison using the same exact input and plan identity/time.
 						legacy.Plan.ID = intent.Plan.ID
 						legacy.Plan.CreatedAt = intent.Plan.CreatedAt
@@ -198,7 +198,7 @@ func TestManifestCursorRefusesSubstitutionAndMalformedPositionsA267(t *testing.T
 	if len(raw) > 4096 {
 		t.Fatal("root expanded into native arrays")
 	}
-	legacy, _ := workflowFixture(t)
+	legacy, _ := workflowFixture()
 	raw, _ = json.Marshal(legacy)
 	if string(raw) == "" {
 		t.Fatal("empty legacy intent")

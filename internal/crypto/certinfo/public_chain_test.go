@@ -4,8 +4,8 @@ package certinfo
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/pem"
-	"os"
 	"testing"
 	"testing/quick"
 )
@@ -106,13 +106,11 @@ func TestNormalizePublicCertificatePEM(t *testing.T) {
 	}
 }
 
+//go:embed testdata/der-whitespace/signature-09.pem
+var fuzzPublicCertificateSeed []byte
+
 func FuzzNormalizePublicCertificatePEM(f *testing.F) {
-	seed, err := os.ReadFile("testdata/der-whitespace/signature-09.pem")
-	if err != nil {
-		f.Fatal(err)
-		return
-	}
-	f.Add(seed)
+	f.Add(bytes.Clone(fuzzPublicCertificateSeed))
 	f.Add([]byte("fixture public notes"))
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		got, err := NormalizePublicCertificatePEM(raw)

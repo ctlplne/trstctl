@@ -64,6 +64,7 @@ func FuzzADRestoreCredentialA267(f *testing.F) {
 	backend, err := NewLDAPBackend(LDAPConfig{DirectoryMode: "active_directory", Addr: "127.0.0.1:1", TLSServerName: "owned.test", BindDN: "CN=admin,DC=example,DC=test", BindPassword: []byte("owned-test-administrator"), UsersDN: "OU=services,DC=example,DC=test", RoleGroups: map[string]string{"service": account}})
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Cleanup(backend.Close)
 	ctx, cancel := context.WithCancel(context.Background())

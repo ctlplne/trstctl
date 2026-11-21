@@ -12,23 +12,22 @@ import (
 	"trstctl.com/trstctl/internal/crypto/windependents"
 )
 
-func inventoryFixtureIntent(t testing.TB) InventoryIntent {
-	t.Helper()
+func inventoryFixtureIntent() InventoryIntent {
 	binding := HostBinding{Account: AccountBinding{AccountID: "11111111-1111-4111-8111-111111111111", ProviderID: "ad-services", Name: "service", DN: "CN=service,OU=services,DC=lab,DC=test", SID: "S-1-5-21-1-2-3-1001", GUID: strings.Repeat("a", 32)}, AgentID: "22222222-2222-4222-8222-222222222222", Revision: 1, Enabled: true}
 	intent, err := NewInventoryIntent("33333333-3333-4333-8333-333333333333", binding)
 	if err != nil {
-		t.Fatal(err)
+		panic(err) // a broken fixed fixture must fail tests and fuzz setup
 	}
 	return intent
 }
-func inventoryFixtureReport(t testing.TB) InventoryReport {
-	intent := inventoryFixtureIntent(t)
+func inventoryFixtureReport() InventoryReport {
+	intent := inventoryFixtureIntent()
 	sid := intent.Binding.Account.SID
 	return InventoryReport{RunID: intent.RunID, BindingDigest: intent.BindingDigest, ObservedAt: time.Now().UTC(), Coverage: []FamilyCoverage{{Family: "services", Status: "complete"}, {Family: "tasks", Status: "complete"}, {Family: "iis", Status: "complete"}}, Services: []windependents.Service{{Name: "orders", AccountSID: sid, ConfigSHA256: strings.Repeat("b", 64)}}, Tasks: []windependents.Task{{Path: "\\owned\\work", AccountSID: sid, ConfigSHA256: strings.Repeat("c", 64), Enabled: true, LogonType: 1, ActionCount: 1}}, Pools: []windependents.Pool{{Name: "orders-pool", AccountSID: sid, ConfigSHA256: strings.Repeat("d", 64), EncryptionProvider: "owned-native-provider", PasswordProtected: true}}}
 }
 func TestInventoryBindingAndNativeFamilyCoverageA267(t *testing.T) {
-	intent := inventoryFixtureIntent(t)
-	report := inventoryFixtureReport(t)
+	intent := inventoryFixtureIntent()
+	report := inventoryFixtureReport()
 	if err := report.Validate(intent); err != nil || !report.Complete() {
 		t.Fatal("complete exact native inventory refused", err)
 	}
@@ -44,13 +43,13 @@ func TestInventoryBindingAndNativeFamilyCoverageA267(t *testing.T) {
 		func(r *InventoryReport) { r.Tasks = append(r.Tasks, r.Tasks[0]) },
 		func(r *InventoryReport) { r.Pools = append(r.Pools, r.Pools[0]) },
 	} {
-		candidate := inventoryFixtureReport(t)
+		candidate := inventoryFixtureReport()
 		change(&candidate)
 		if candidate.Validate(intent) == nil {
 			t.Fatal("foreign/incomplete native inventory admitted")
 		}
 	}
-	report = inventoryFixtureReport(t)
+	report = inventoryFixtureReport()
 	report.Pools = nil
 	report.Coverage[2] = FamilyCoverage{Family: "iis", Status: "unavailable", Failure: "not_installed"}
 	if err := report.Validate(intent); err != nil || report.Complete() {
@@ -64,9 +63,10 @@ func TestInventoryBindingAndNativeFamilyCoverageA267(t *testing.T) {
 }
 func FuzzInventoryReportBindingA267(f *testing.F) {
 	f.Add([]byte("{}"))
-	valid, err := json.Marshal(inventoryFixtureReport(f))
+	valid, err := json.Marshal(inventoryFixtureReport())
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(valid)
 	f.Fuzz(func(t *testing.T, raw []byte) {
@@ -77,7 +77,7 @@ func FuzzInventoryReportBindingA267(f *testing.F) {
 		if json.Unmarshal(raw, &report) != nil {
 			return
 		}
-		intent := inventoryFixtureIntent(t)
+		intent := inventoryFixtureIntent()
 		if err := report.Validate(intent); err == nil {
 			if report.RunID != intent.RunID || report.BindingDigest != intent.BindingDigest || len(report.Coverage) != 3 {
 				t.Fatal("unbound report admitted")
@@ -95,9 +95,10 @@ func TestInventoryDecoderRejectsAmbiguousFieldsA267(t *testing.T) {
 }
 func FuzzInventoryDecoderA267(f *testing.F) {
 	f.Add([]byte("{}"))
-	valid, err := json.Marshal(inventoryFixtureReport(f))
+	valid, err := json.Marshal(inventoryFixtureReport())
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(valid)
 	f.Fuzz(func(t *testing.T, raw []byte) {
@@ -106,21 +107,21 @@ func FuzzInventoryDecoderA267(f *testing.F) {
 		}
 		report, err := DecodeInventoryReport(raw)
 		if err == nil {
-			_ = report.Validate(inventoryFixtureIntent(t))
+			_ = report.Validate(inventoryFixtureIntent())
 		}
 	})
 }
 
 func TestInventoryGeneratedNativeBindingsA267(t *testing.T) {
 	property := func(rid uint32, revision uint16) bool {
-		binding := inventoryFixtureIntent(t).Binding
+		binding := inventoryFixtureIntent().Binding
 		binding.Account.SID = "S-1-5-21-1-2-3-" + strconv.FormatUint(uint64(rid)%4294967295+1, 10)
 		binding.Revision = int64(revision) + 1
 		intent, err := NewInventoryIntent("33333333-3333-4333-8333-333333333333", binding)
 		if err != nil {
 			return false
 		}
-		report := inventoryFixtureReport(t)
+		report := inventoryFixtureReport()
 		report.BindingDigest = intent.BindingDigest
 		for i := range report.Services {
 			report.Services[i].AccountSID = binding.Account.SID

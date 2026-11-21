@@ -11,8 +11,8 @@ import (
 )
 
 func TestRotationPlanFreezesEveryReviewedNativeDependentA267(t *testing.T) {
-	intent := inventoryFixtureIntent(t)
-	report := inventoryFixtureReport(t)
+	intent := inventoryFixtureIntent()
+	report := inventoryFixtureReport()
 	observed := time.Now().UTC()
 	report.ObservedAt = observed
 	input := RotationHostInput{Binding: intent.Binding, Inventory: report, InventoryDigest: strings.Repeat("a", 64)}

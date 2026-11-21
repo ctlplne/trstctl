@@ -9,7 +9,7 @@ import (
 )
 
 func TestSealedManifestIntentBindsOneAccountWithoutInlineArraysA267(t *testing.T) {
-	header, entry := manifestFixture(t)
+	header, entry := manifestFixture()
 	digest, err := header.Digest()
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +58,7 @@ func TestSealedManifestIntentBindsOneAccountWithoutInlineArraysA267(t *testing.T
 			t.Fatalf("mixed or changed sealed authority accepted: %s", change)
 		}
 	}
-	legacy, _ := workflowFixture(t)
+	legacy, _ := workflowFixture()
 	raw, err := json.Marshal(legacy)
 	if err != nil {
 		t.Fatal(err)
