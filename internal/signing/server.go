@@ -85,7 +85,8 @@ type Server struct {
 
 	// kemCustody, when non-nil, is the attached KEM private-key custody surface for
 	// PCAS re-wrap. KEM keys are deliberately separate from signing keys: Sign cannot
-	// address them, and the only private-key operation exposed is Decapsulate.
+	// address them. The custody methods re-wrap and verify data keys inside the
+	// signer and return only ciphertext or a digest to the control plane.
 	kemCustody KEMCustody
 
 	// tenantKEK, when non-nil, holds tenant domain KEKs under operator HSM
