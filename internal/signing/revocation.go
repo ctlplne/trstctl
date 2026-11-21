@@ -303,6 +303,37 @@ func (s *Server) lookupSigning(h *signerpb.KeyHandle) (*heldKey, error) {
 	return held, nil
 }
 
+// revocationCheckedSigner is the signer-side view handed to in-process
+// extensions. Those extensions may cache it for a tenant CA's whole lifetime.
+// Re-read signer custody on each signature so an administrative RevokeKey (or a
+// destroy on another signer sharing the keystore) stops that cached view too.
+type revocationCheckedSigner struct {
+	server *Server
+	handle string
+	public crypto.PublicKey
+	alg    crypto.Algorithm
+}
+
+func (s *Server) revocationCheckedView(handle string, key crypto.DigestSigner) crypto.DigestSigner {
+	public := key.Public()
+	public.DER = append([]byte(nil), public.DER...)
+	return revocationCheckedSigner{server: s, handle: handle, public: public, alg: key.Algorithm()}
+}
+
+func (v revocationCheckedSigner) Public() crypto.PublicKey {
+	return crypto.PublicKey{Algorithm: v.public.Algorithm, DER: append([]byte(nil), v.public.DER...)}
+}
+
+func (v revocationCheckedSigner) Algorithm() crypto.Algorithm { return v.alg }
+
+func (v revocationCheckedSigner) SignDigest(digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	held, err := v.server.lookupSigning(&signerpb.KeyHandle{Id: v.handle})
+	if err != nil {
+		return nil, err
+	}
+	return held.signer.SignDigest(digest, opts)
+}
+
 // validOperationID accepts a printable operation identifier of at most 128
 // bytes: a ceremony ID, or any caller operation that names a request.
 func validOperationID(value string) bool {

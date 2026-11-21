@@ -96,7 +96,7 @@ func (s *Server) signAuditEvidenceArtifact(req ArtifactSignRequest) (ArtifactSig
 	if req.TenantID != "deployment" || req.AuthorityID != "audit-evidence" || req.KeyID != "audit-export" {
 		return ArtifactSignature{}, errors.New("audit evidence requires deployment/audit-evidence authority and audit-export key")
 	}
-	held, err := s.lookup(&signerpb.KeyHandle{Id: "audit-export"})
+	held, err := s.lookupSigning(&signerpb.KeyHandle{Id: "audit-export"})
 	if err != nil {
 		return ArtifactSignature{}, err
 	}
@@ -107,7 +107,7 @@ func (s *Server) signAuditEvidenceArtifact(req ArtifactSignRequest) (ArtifactSig
 	}); err != nil {
 		return ArtifactSignature{}, err
 	}
-	key, err := jose.NewDigestSigningKey("audit-export", held.signer)
+	key, err := jose.NewDigestSigningKey("audit-export", s.revocationCheckedView("audit-export", held.signer))
 	if err != nil {
 		return ArtifactSignature{}, err
 	}

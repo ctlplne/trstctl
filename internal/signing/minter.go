@@ -148,7 +148,7 @@ func (s *Server) ResolvePredecessor(handle string) (crypto.Signer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return crypto.SignerFromDigestSigner(held.signer), nil
+	return crypto.SignerFromDigestSigner(s.revocationCheckedView(handle, held.signer)), nil
 }
 
 // GenerateSuccessorKey generates a key of alg INSIDE the signer keystore under the
@@ -182,7 +182,7 @@ func (s *Server) GenerateSuccessorKey(handle string, alg crypto.Algorithm) (cryp
 		}
 		return nil, fmt.Errorf("signing: persist successor key: %w", err)
 	}
-	return crypto.SignerFromDigestSigner(ls), nil
+	return crypto.SignerFromDigestSigner(s.revocationCheckedView(handle, ls)), nil
 }
 
 // bindMinterCustody injects this signer's key custody into the attached minter, if

@@ -227,9 +227,10 @@ wrapper, key, or ciphertext detail.
 
 `RevokeKey` (A128) revokes a key administratively. The key stays in custody,
 so `GetPublicKey` still returns its public half (now with `revoked: true`) and
-a gated destruction can still retire it, but every operation that signs with
-it — `Sign`, and resolving it as a succession predecessor — answers
-`FAILED_PRECONDITION` from the next request on. A persistent signer writes the
+a gated destruction can still retire it. `Sign`, audit-evidence `SignArtifact`,
+and signer-internal CA or predecessor views check revocation when they actually
+sign. An AGID issuance operation may cache a CA view, but its next certificate
+signature fails after revocation. A persistent signer writes the
 revocation as a small non-secret mark beside the sealed key (the operation ID,
 a lower-case reason code and the time), linked into place whole, so every
 signer process sharing the keystore refuses the key and a restarted signer
