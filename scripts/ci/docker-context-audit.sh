@@ -11,6 +11,10 @@ command -v rg >/dev/null 2>&1 || {
   echo "docker-context-audit: rg is required" >&2
   exit 1
 }
+command -v jq >/dev/null 2>&1 || {
+  echo "docker-context-audit: jq is required to check capability evidence" >&2
+  exit 1
+}
 
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/trstctl-docker-context.XXXXXX")"
 install -d -m 0700 "$root/.sandbox-build"
@@ -37,6 +41,18 @@ if rg -a -q --fixed-strings "$canary" "$scratch/export"; then
   echo "docker-context-audit: planted secret canary entered a Docker stage" >&2
   exit 1
 fi
+
+# The console's capability-contract build checks existence of cited tests.
+# Keep precisely those test witnesses while excluding all other Go tests from
+# the production build context; a new citation must update .dockerignore.
+jq -r '.. | strings | select(endswith("_test.go"))' \
+  "$root/internal/featureparity/feature-map-backlog.json" | sort -u >"$scratch/feature-test-evidence.txt"
+while IFS= read -r evidence; do
+  if [[ "$evidence" == /* || "$evidence" == *".."* || ! -f "$scratch/export/context/$evidence" ]]; then
+    echo "docker-context-audit: capability test evidence missing from filtered context: $evidence" >&2
+    exit 1
+  fi
+done <"$scratch/feature-test-evidence.txt"
 
 context_kib="$(bash "$root/scripts/ci/docker-context-size.sh" "$scratch/export/context")"
 max_context_kib=$((96 * 1024))
