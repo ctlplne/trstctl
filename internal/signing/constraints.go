@@ -3,11 +3,23 @@
 package signing
 
 import (
+	"strings"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
+
+// Historical custody-minted keys were sealed before custodyOnly existed. Their
+// production handle namespaces remain reserved, so generic Sign refuses them
+// even when an older sealed file does not carry the new flag. The sealed flag
+// covers new custody keys regardless of the handle chosen by the minter.
+func isCustodyHandleNamespace(handle string) bool {
+	return strings.HasPrefix(handle, "agid-issuing-ca-") ||
+		strings.HasPrefix(handle, "agid-agent:") ||
+		strings.HasPrefix(handle, "pcas:")
+}
 
 // keyConstraints are the signer-enforceable usage limits attached to a key at
 // creation (design §4.5, SIGNER-002/003). They are the one cheap defense the
@@ -36,6 +48,10 @@ type keyConstraints struct {
 	// break-glass procedure after it verifies custodian signatures. Generic Sign
 	// must refuse them even when a socket caller knows the handle.
 	offlineOnly bool
+	// custodyOnly marks keys created by the in-signer succession/issuance
+	// custody seam. The returned in-process signer may sign for its checked
+	// operation, but a peer on the signer socket may not use generic Sign.
+	custodyOnly bool
 	// importReceipt binds a v2 imported key to one exact approved request.
 	importReceipt [32]byte
 }
@@ -78,6 +94,9 @@ func constraintsFromGenerate(req *signerpb.GenerateKeyRequest) (keyConstraints, 
 func (kc keyConstraints) check(req *signerpb.SignRequest) error {
 	if kc.offlineOnly {
 		return status.Error(codes.FailedPrecondition, "offline recovery key cannot be used through generic Sign")
+	}
+	if kc.custodyOnly {
+		return status.Error(codes.FailedPrecondition, "custody-minted key cannot be used through generic Sign")
 	}
 	if len(kc.purposes) > 0 {
 		p := req.GetPurpose()

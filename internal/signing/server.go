@@ -352,6 +352,9 @@ func (s *Server) Sign(ctx context.Context, req *signerpb.SignRequest) (*signerpb
 	if err != nil {
 		return nil, err
 	}
+	if isCustodyHandleNamespace(req.GetHandle().GetId()) {
+		return nil, status.Error(codes.FailedPrecondition, "custody key handle cannot be used through generic Sign")
+	}
 	if err := held.constraints.check(req); err != nil {
 		return nil, err
 	}

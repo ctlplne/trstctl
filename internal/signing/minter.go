@@ -171,7 +171,7 @@ func (s *Server) GenerateSuccessorKey(handle string, alg crypto.Algorithm) (cryp
 		ls.Destroy()
 		return nil, fmt.Errorf("signing: successor key ceremony check: %w", err)
 	}
-	held := &heldKey{signer: ls}
+	held := &heldKey{signer: ls, constraints: keyConstraints{custodyOnly: true}}
 	// Persist BEFORE publishing, with the lock held across both — via the ONE
 	// shared mint path (mintHeldKey), so the ordering cannot diverge between
 	// this and the GenerateKey RPC again (AUD-201 follow-up C1/V19).

@@ -101,7 +101,8 @@ func (s *Server) MigrateLegacySigningKeyFile(path, handle string, allowedPurpose
 }
 
 func sameKeyConstraints(a, b keyConstraints) bool {
-	if a.requireAuth != b.requireAuth || len(a.purposes) != len(b.purposes) || len(a.hashes) != len(b.hashes) {
+	if a.requireAuth != b.requireAuth || a.offlineOnly != b.offlineOnly || a.custodyOnly != b.custodyOnly ||
+		a.importReceipt != b.importReceipt || len(a.purposes) != len(b.purposes) || len(a.hashes) != len(b.hashes) {
 		return false
 	}
 	for purpose := range a.purposes {

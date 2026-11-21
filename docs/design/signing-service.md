@@ -146,6 +146,14 @@ fully mitigate; defense in depth lives upstream and around it:
   restarts; the verifier lives behind the single crypto boundary in mlock'd,
   wipeable memory. A signer with no verifier, or a control plane with no
   independent token provider, fails closed.
+- Keys minted through the signer's in-process succession and issuance custody
+  seam carry a sealed `custodyOnly` flag. Their returned in-signer signing view
+  remains usable by the checked mint or issuance operation, including after a
+  restart. The generic `Sign` RPC refuses those handles for every asserted
+  purpose, so an on-socket peer cannot submit its own digest under an AGID
+  issuing CA key, agent key, or PCAS successor key. Existing sealed keys from
+  before this flag also refuse generic `Sign` when their handles use the
+  reserved AGID or PCAS custody namespaces (CR-188).
 
 What the signer guarantees is narrower and absolute: the private key bytes
 never leave the process, even under full control-plane compromise. A

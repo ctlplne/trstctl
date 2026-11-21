@@ -110,6 +110,7 @@ const importReceiptMetaVersion = 4
 // flagRequireAuth is bit 0 of the v2 flags byte: the key is dual-control.
 const flagRequireAuth = 1 << 0
 const flagOfflineOnly = 1 << 1
+const flagCustodyOnly = 1 << 2
 
 // encodeConstraintMeta frames the usage constraints into a deterministic,
 // non-secret header: magic | version | nPurposes | purposes... | nHashes |
@@ -139,6 +140,9 @@ func encodeConstraintMeta(kc keyConstraints, algorithm signerpb.Algorithm) []byt
 	}
 	if kc.offlineOnly {
 		flags |= flagOfflineOnly
+	}
+	if kc.custodyOnly {
+		flags |= flagCustodyOnly
 	}
 	out = append(out, flags)
 	out = append(out, byte(algorithm)) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
@@ -208,6 +212,7 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, signerpb.Algorithm,
 		}
 		kc.requireAuth = plaintext[off]&flagRequireAuth != 0
 		kc.offlineOnly = plaintext[off]&flagOfflineOnly != 0
+		kc.custodyOnly = plaintext[off]&flagCustodyOnly != 0
 		off++
 	}
 	alg := signerpb.Algorithm_ALGORITHM_UNSPECIFIED
@@ -223,7 +228,7 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, signerpb.Algorithm,
 			return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: truncated key import receipt")
 		}
 		off += copy(kc.importReceipt[:], plaintext[off:])
-		if kc.importReceipt == [32]byte{} || !kc.requireAuth || kc.offlineOnly || len(kc.hashes) != 0 ||
+		if kc.importReceipt == [32]byte{} || !kc.requireAuth || kc.offlineOnly || kc.custodyOnly || len(kc.hashes) != 0 ||
 			len(kc.purposes) != 1 || !kc.purposes[signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN] {
 			return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: invalid key import receipt or constraints")
 		}
