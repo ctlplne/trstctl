@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -22,16 +23,17 @@ import (
 const Supported = true
 
 // Isolate makes cmd start in a new user namespace, mapped to the caller's own
-// user and group, and a new network namespace, with only the capability it
-// needs to bring that network's loopback up; the helper drops it before it
-// runs the command. The child is killed if its launcher dies.
+// user and group as namespace UID/GID 0, and a new network namespace. UID 0
+// retains CAP_NET_ADMIN across the helper's exec so it can bring loopback up;
+// the helper permanently disables root privilege on exec and drops its
+// capabilities before it starts the command. The child is killed if its
+// launcher dies.
 func Isolate(cmd *exec.Cmd) error {
 	uid, gid := os.Getuid(), os.Getgid()
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags:  syscall.CLONE_NEWUSER | syscall.CLONE_NEWNET,
-		UidMappings: []syscall.SysProcIDMap{{ContainerID: uid, HostID: uid, Size: 1}},
-		GidMappings: []syscall.SysProcIDMap{{ContainerID: gid, HostID: gid, Size: 1}},
-		AmbientCaps: []uintptr{unix.CAP_NET_ADMIN},
+		UidMappings: []syscall.SysProcIDMap{{ContainerID: 0, HostID: uid, Size: 1}},
+		GidMappings: []syscall.SysProcIDMap{{ContainerID: 0, HostID: gid, Size: 1}},
 		Pdeathsig:   syscall.SIGKILL,
 	}
 	return nil
@@ -62,10 +64,25 @@ func RunHelper(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		go forward(ctx, ln, f.Socket)
 	}
-	// The command gets no capability: clear the ambient set, so its execve
-	// keeps none of this process's.
+	// Capability state belongs to an OS thread. Keep this thread through
+	// fork/exec so the child inherits the restrictions before any command runs.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	// Lock the securebits before clearing permitted caps: namespace UID 0 must
+	// never regain them on exec. no_new_privs also blocks file capabilities.
+	const securebits = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 6) | (1 << 7)
+	if err := unix.Prctl(unix.PR_SET_SECUREBITS, securebits, 0, 0, 0); err != nil {
+		return fail(fmt.Errorf("lock privilege drop: %w", err))
+	}
+	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
+		return fail(fmt.Errorf("disable privilege gain: %w", err))
+	}
 	if err := unix.Prctl(unix.PR_CAP_AMBIENT, unix.PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0); err != nil {
 		return fail(fmt.Errorf("drop capabilities: %w", err))
+	}
+	caps := [2]unix.CapUserData{}
+	if err := unix.Capset(&unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_3}, &caps[0]); err != nil {
+		return fail(fmt.Errorf("clear permitted capabilities: %w", err))
 	}
 	cmd := exec.Command(argv[0], argv[1:]...) // #nosec G204 G702 -- runs the launcher's own command line verbatim, without a shell, inside the confined network (CWE-78)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr

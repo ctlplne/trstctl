@@ -141,6 +141,10 @@ func TestPostgreSQLHostPreviewAndPostDeployNegotiateSSLRequest(t *testing.T) {
 	if err != nil {
 		t.Skip("host exec profile requires a local true command")
 	}
+	command, err = filepath.EvalSymlinks(command)
+	if err != nil {
+		t.Fatal(err)
+	}
 	config, err := json.Marshal(HostTargetConfig{CertPath: certPath, KeyPath: keyPath})
 	if err != nil {
 		t.Fatal(err)

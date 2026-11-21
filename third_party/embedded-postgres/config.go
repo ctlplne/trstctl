@@ -46,7 +46,7 @@ func DefaultConfig() Config {
 		password:            "postgres",
 		startTimeout:        15 * time.Second,
 		logger:              os.Stdout,
-		binaryRepositoryURL: "https://repo1.maven.org/maven2",
+		binaryRepositoryURL: "https://repo.maven.apache.org/maven2",
 	}
 }
 

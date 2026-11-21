@@ -4,6 +4,7 @@ package dynsecret
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -109,16 +110,17 @@ func TestADPreparationRetainsEveryResetGenerationA267(t *testing.T) {
 	if e != nil {
 		t.Fatal("complete durable reset preparation refused", e)
 	}
-	final, forward, inverse := parsed.Password, parsed.ForwardIntermediate, parsed.InverseIntermediate
-	if !bytes.Equal(final, p.Password) || !bytes.Equal(forward, p.ForwardIntermediate) || !bytes.Equal(inverse, p.InverseIntermediate) || parsed.KeyVersion != 48 || parsed.DCInvocationID != p.DCInvocationID {
+	if !bytes.Equal(parsed.Password, p.Password) || !bytes.Equal(parsed.ForwardIntermediate, p.ForwardIntermediate) || !bytes.Equal(parsed.InverseIntermediate, p.InverseIntermediate) || parsed.KeyVersion != 48 || parsed.DCInvocationID != p.DCInvocationID {
 		t.Fatal("sealed reset preparation lost a generation or native authority")
 	}
+	held := []*secret.Buffer{parsed.held, parsed.forwardHeld, parsed.inverseHeld}
 	parsed.destroy()
-	for _, held := range [][]byte{final, forward, inverse} {
-		for _, v := range held {
-			if v != 0 {
-				t.Fatal("destroyed preparation retained reset material")
-			}
+	if parsed.Password != nil || parsed.ForwardIntermediate != nil || parsed.InverseIntermediate != nil || parsed.held != nil || parsed.forwardHeld != nil || parsed.inverseHeld != nil {
+		t.Fatal("destroyed preparation retained reset material or buffer ownership")
+	}
+	for _, b := range held {
+		if b == nil || b.Len() != 0 || b.Bytes() != nil || !errors.Is(b.Use(func([]byte) error { return nil }), secret.ErrDestroyed) {
+			t.Fatal("destroyed preparation left a reset generation accessible")
 		}
 	}
 	for _, mutate := range []func(*adStaticPreparation){

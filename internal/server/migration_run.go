@@ -187,7 +187,7 @@ func validateVerifiedMigrationReport(
 		}
 		result := observed.Results[0]
 		if !result.Transcript.Reached || result.Transcript.Mismatch != "" ||
-			result.Transcript.Digest() != strings.ToLower(strings.TrimSpace(evidenceDigest)) {
+			relay.DeploymentEvidenceDigest(result) != strings.ToLower(strings.TrimSpace(evidenceDigest)) {
 			return errors.New("server: migration listener transcript is not a verified signed observation")
 		}
 		if claim.stage == migration.StageSuccessor {

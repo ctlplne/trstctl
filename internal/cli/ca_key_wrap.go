@@ -24,14 +24,14 @@ import (
 // 'ca authorities import-key' takes, carrying only the sealed key.
 
 func caWrapKeyUsage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "Usage: trstctl-cli ca authorities wrap-key --offer <file> --key <file> --request <file> --tenant-id <uuid> --signer-fingerprint <sha256> [--out <file>]")
+	_, _ = fmt.Fprintln(w, "Usage: trstctl ca authorities wrap-key --offer <file> --key <file> --request <file> --tenant-id <uuid> --signer-fingerprint <sha256> [--out <file>]")
 	_, _ = fmt.Fprintln(w, "\nSeals a CA's existing private key to a key offer, on this machine. --offer is the JSON 'ca authorities key-offer'")
 	_, _ = fmt.Fprintln(w, "printed; --key is the CA's PKCS#8 private key in PEM ('openssl pkcs8 -topk8 -nocrypt' converts other forms);")
 	_, _ = fmt.Fprintln(w, "--request is the import request (ceremony_id, certificate_pem, spec and any parent_id the ceremony approved).")
 	_, _ = fmt.Fprintln(w, "Obtain the signer fingerprint directly from the signer host over a separate trusted channel.")
 	_, _ = fmt.Fprintln(w, "The key must be the one the certificate names. The output is the request with sealed_key_v2 added, for")
 	_, _ = fmt.Fprintln(w, "'ca authorities import-key'. The private key itself is never sent.")
-	_, _ = fmt.Fprintln(w, "\nExample: trstctl-cli ca authorities wrap-key --offer offer.json --key ca-key.pem --request import.json --tenant-id \"$tenant_id\" --signer-fingerprint \"$signer_fingerprint\" --out import-sealed.json")
+	_, _ = fmt.Fprintln(w, "\nExample: trstctl ca authorities wrap-key --offer offer.json --key ca-key.pem --request import.json --tenant-id \"$tenant_id\" --signer-fingerprint \"$signer_fingerprint\" --out import-sealed.json")
 }
 
 func runCAWrapKey(args []string, stdout, stderr io.Writer) int {

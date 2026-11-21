@@ -22,7 +22,7 @@ import (
 // would cross in clear text. The production relay then redeems the client
 // secret, exchanges it at the Jamf Pro stand-in for an access token, reads the
 // inventory with it, and later pushes an approved device check-in with a
-// token from a fresh exchange: the stand-in answers only the exchanged token,
+// token kept from the same client's still-valid exchange: the stand-in answers only the exchanged token,
 // and the secret is sent nowhere but the token endpoint.
 func TestServedJamfScheduleReadsAndChecksInThroughAnAPIClientA156L1(t *testing.T) {
 	const (
@@ -137,7 +137,8 @@ func TestServedJamfScheduleReadsAndChecksInThroughAnAPIClientA156L1(t *testing.T
 		t.Fatalf("devices after the read = %s; want the computer the API client's token read", devices)
 	}
 
-	// The check-in: approved, then one fresh exchange and one blank push.
+	// The check-in: approved, reuses this same client's still-valid exchanged
+	// token, then sends exactly one authenticated blank push.
 	type approval struct {
 		ID     string `json:"approval_request_id"`
 		Digest string `json:"approval_intent_digest"`
@@ -157,7 +158,7 @@ func TestServedJamfScheduleReadsAndChecksInThroughAnAPIClientA156L1(t *testing.T
 		t.Fatalf("queued check-in = %+v %v", queued, err)
 	}
 	runRelay("the check-in")
-	if got := standCalls(); len(got) != 4 || got[2] != "POST /api/oauth/token" || got[3] != "POST /JSSResource/computercommands/command/BlankPush/id/417" {
+	if got := standCalls(); len(got) != 3 || got[2] != "POST /JSSResource/computercommands/command/BlankPush/id/417" {
 		t.Fatalf("Jamf calls for the check-in = %v", got)
 	}
 	var list struct {

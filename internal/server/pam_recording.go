@@ -745,7 +745,7 @@ func (s *Server) TerminatePAMSession(ctx context.Context, tenantID, id, actor, r
 // deployment's retention that no legal hold keeps (A255); the index and its
 // manifest digest stay, marked deleted.
 func (s *pamService) deleteExpiredRecordings(ctx context.Context) {
-	if s.recordings == nil || s.recordingRetention <= 0 {
+	if s.recordingRetention <= 0 || s.recordings == nil {
 		return
 	}
 	expired, err := s.store.ListExpiredPAMRecordings(ctx, s.clock().UTC().Add(-s.recordingRetention), 50)
