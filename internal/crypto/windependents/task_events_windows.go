@@ -107,7 +107,15 @@ func resolveNativeTaskSID(account string) (string, error) {
 		}
 		return value.String(), nil
 	}
-	value, _, _, err := windows.LookupSID("", account)
+	lookup := account
+	if strings.HasPrefix(account, `.\`) {
+		computer, err := windows.ComputerName()
+		if err != nil {
+			return "", errors.New("windows task: local computer name unavailable for account SID")
+		}
+		lookup = serviceLookupAccountName(account, computer)
+	}
+	value, _, _, err := windows.LookupSID("", lookup)
 	if err != nil {
 		return "", errors.New("windows task: native account SID could not be resolved")
 	}
