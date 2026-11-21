@@ -3,8 +3,12 @@ package ldapbind
 
 import (
 	"bytes"
-	"github.com/go-asn1-ber/asn1-ber"
+	"errors"
 	"testing"
+
+	"github.com/go-asn1-ber/asn1-ber"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 func TestADPasswordPacketIsBoundedUTF16AndWiped(t *testing.T) {
@@ -44,11 +48,18 @@ func TestADPasswordPacketIsBoundedUTF16AndWiped(t *testing.T) {
 		t.Fatal("password is not quoted UTF-16LE")
 	}
 	packet.Destroy()
-	for _, v := range wire {
-		if v != 0 {
-			t.Fatal("locked wire retained material")
-		}
+	// Destroy wipes and releases the locked region. The earlier assertion read
+	// wire after that release, which dereferenced unmapped memory on Linux.
+	// The wipe primitive and release ordering are tested in secret; here the
+	// LDAP packet must expose no usable material after its lifetime ends.
+	if packet.Bytes() != nil || packet.Len() != 0 {
+		t.Fatal("destroyed LDAP packet still exposes locked wire")
 	}
+	called := false
+	if err := packet.Use(func(_ []byte) error { called = true; return nil }); !errors.Is(err, secret.ErrDestroyed) || called {
+		t.Fatalf("destroyed LDAP packet borrow = %v, called=%t; want ErrDestroyed without access", err, called)
+	}
+	packet.Destroy() // release is idempotent
 	for _, raw := range [][]byte{nil, []byte("short"), bytes.Repeat([]byte{'A'}, 1025), append(bytes.Repeat([]byte{'A'}, 16), 0), append(bytes.Repeat([]byte{'A'}, 16), 255)} {
 		if p, e := newADPasswordPacket("CN=owned", raw); e == nil {
 			p.Destroy()

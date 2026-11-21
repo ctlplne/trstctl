@@ -17,21 +17,22 @@ func leaseFixture() []byte {
 }
 func TestSTSLeaseByteCustodyAndAmbiguityA264(t *testing.T) {
 	now := time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC)
-	var borrowed awssignin.Credentials
+	calls := 0
 	if err := UseLeaseCredential(leaseFixture(), now, func(c awssignin.Credentials) error {
-		borrowed = c
-		if !bytes.Equal(c.SessionToken, []byte("fixture-session-material")) {
+		calls++
+		if !bytes.Equal(c.AccessKeyID, []byte("ASIAEXAMPLE")) || !bytes.Equal(c.SecretAccessKey, []byte("fixture-signing-material")) || !bytes.Equal(c.SessionToken, []byte("fixture-session-material")) {
 			t.Fatal("credential changed")
 		}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	for _, raw := range [][]byte{borrowed.AccessKeyID, borrowed.SecretAccessKey, borrowed.SessionToken} {
-		if !bytes.Equal(raw, make([]byte, len(raw))) {
-			t.Fatal("borrowed credential remained after callback")
-		}
+	if calls != 1 {
+		t.Fatalf("valid lease borrowed %d times, want once", calls)
 	}
+	// Borrowed slices are invalid after the callback: secret.Buffer.Destroy
+	// zeroes and unmaps their backing pages on Linux. The secret package tests
+	// the post-destroy state through Buffer instead of dereferencing freed RAM.
 	for _, raw := range [][]byte{bytes.Replace(leaseFixture(), []byte(`"expiration"`), []byte(`"session_token":"other","expiration"`), 1), bytes.Replace(leaseFixture(), []byte("session_token"), []byte("SESSION_TOKEN"), 1), bytes.Replace(leaseFixture(), []byte("2026-11-05T01"), []byte("2026-11-04T01"), 1), bytes.Replace(leaseFixture(), []byte("fixture-session-material"), []byte(""), 1), append(leaseFixture(), []byte(` {}`)...)} {
 		if err := UseLeaseCredential(raw, now, func(awssignin.Credentials) error { t.Error("invalid temporary credential reached signer"); return nil }); err == nil {
 			t.Fatal("ambiguous, expired or incomplete credential accepted")
@@ -90,22 +91,15 @@ func FuzzSTSLeaseCredential(f *testing.F) {
 			return
 		}
 		calls := 0
-		var borrowed awssignin.Credentials
 		err := UseLeaseCredential(raw, time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC), func(c awssignin.Credentials) error {
 			calls++
-			borrowed = c
 			if len(c.AccessKeyID) == 0 || len(c.SecretAccessKey) == 0 || len(c.SessionToken) == 0 {
 				t.Fatal("incomplete temporary credential")
 			}
 			return nil
 		})
-		if err == nil && calls != 1 {
-			t.Fatal("successful borrow did not invoke exactly once")
-		}
-		for _, value := range [][]byte{borrowed.AccessKeyID, borrowed.SecretAccessKey, borrowed.SessionToken} {
-			if !bytes.Equal(value, make([]byte, len(value))) {
-				t.Fatal("borrow survived callback")
-			}
+		if err == nil && calls != 1 || err != nil && calls != 0 {
+			t.Fatalf("lease borrow count %d did not match parse result %v", calls, err)
 		}
 	})
 }
