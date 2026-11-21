@@ -730,6 +730,44 @@ func TestCompanionFDPrimitiveAuditRejectsEveryBypassFamily(t *testing.T) {
 	}
 }
 
+func TestReviewedRDPHelperAllowsOnlyItsOwnExecutableFD(t *testing.T) {
+	const source = `package rdp
+import (
+    "context"
+    "os"
+    "os/exec"
+)
+func nativeCommand(ctx context.Context, binary *os.File) *exec.Cmd {
+    cmd := exec.CommandContext(ctx, "/proc/self/fd/3")
+    cmd.ExtraFiles = []*os.File{binary}
+    return cmd
+}`
+	for name, change := range map[string]func(string) string{
+		"reviewed executable": func(s string) string { return s },
+		"different child":     func(s string) string { return strings.Replace(s, `"/proc/self/fd/3"`, `"/tmp/trstctl-signer"`, 1) },
+		"foreign descriptor":  func(s string) string { return strings.Replace(s, "{binary}", "{listener}", 1) },
+		"second descriptor":   func(s string) string { return strings.Replace(s, "{binary}", "{binary, listener}", 1) },
+		"second transfer": func(s string) string {
+			return strings.Replace(s, "    return cmd", "    cmd.ExtraFiles = nil\n    return cmd", 1)
+		},
+		"alternate helper": func(s string) string { return s + "\nfunc bypass(cmd *exec.Cmd) { cmd.ExtraFiles = nil }\n" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			parsed, err := parser.ParseFile(token.NewFileSet(), name+".go", change(source), 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			allowed, err := reviewedRDPHelperExtraFiles("internal/crypto/rdp/process_linux.go", parsed)
+			if err == nil {
+				err = auditCompanionFDPrimitives(parsed, allowed)
+			}
+			if (err == nil) != (name == "reviewed executable") {
+				t.Fatalf("RDP FD transfer gate: %v", err)
+			}
+		})
+	}
+}
+
 func TestBoundedResponseDiagnosticIsSanitizedAndBounded(t *testing.T) {
 	body, err := json.Marshal(map[string]any{
 		"type":   "urn:trstctl:test\nproblem",

@@ -569,6 +569,13 @@ func validateCompanionFDIsolationClosure(audit companionSourceAudit) error {
 		if err != nil {
 			return fmt.Errorf("audit production dependency %s: %w", source.relative, err)
 		}
+		rdpExtraFiles, err := reviewedRDPHelperExtraFiles(source.relative, parsed)
+		if err != nil {
+			return fmt.Errorf("audit production dependency %s: %w", source.relative, err)
+		}
+		for selector := range rdpExtraFiles {
+			allowedExtraFiles[selector] = true
+		}
 		if source.relative == filepath.Join("internal", "signing", "supervisor.go") {
 			if err := validateReviewedSupervisorLaunch(parsed); err != nil {
 				return fmt.Errorf("audit shipped signer supervisor: %w", err)
@@ -963,6 +970,96 @@ func selectorXIdentifier(selector *ast.SelectorExpr) (string, bool) {
 		return "", false
 	}
 	return identifier.Name, true
+}
+
+// The RDP helper executes one already-open, protected executable through its
+// own FD 3. This is a separate child process from the signer. Review the exact
+// launch and one-file transfer before allowing that selector in the closure;
+// a second transfer or a changed executable path remains fatal.
+func reviewedRDPHelperExtraFiles(relative string, file *ast.File) (map[*ast.SelectorExpr]bool, error) {
+	allowed := map[*ast.SelectorExpr]bool{}
+	if filepath.ToSlash(relative) != "internal/crypto/rdp/process_linux.go" {
+		return allowed, nil
+	}
+	imports, err := sourceImportAliases(file)
+	if err != nil {
+		return nil, err
+	}
+	execAlias := importAliasForPath(imports, "os/exec")
+	osAlias := importAliasForPath(imports, "os")
+	if execAlias == "" || osAlias == "" {
+		return nil, fmt.Errorf("reviewed RDP helper imports are missing")
+	}
+	var native *ast.FuncDecl
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if ok && fn.Name.Name == "nativeCommand" {
+			if native != nil || fn.Recv != nil {
+				return nil, fmt.Errorf("reviewed RDP helper command is ambiguous")
+			}
+			native = fn
+		}
+	}
+	if native == nil || native.Body == nil || len(native.Type.Params.List) != 2 ||
+		len(native.Type.Params.List[0].Names) != 1 || native.Type.Params.List[0].Names[0].Name != "ctx" ||
+		len(native.Type.Params.List[1].Names) != 1 || native.Type.Params.List[1].Names[0].Name != "binary" {
+		return nil, fmt.Errorf("reviewed RDP helper command parameters changed")
+	}
+	var launchPos, transferPos token.Pos
+	for _, stmt := range native.Body.List {
+		assign, ok := stmt.(*ast.AssignStmt)
+		if !ok || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
+			continue
+		}
+		if expressionIdentifier(assign.Lhs[0]) == "cmd" {
+			if launchPos != token.NoPos || assign.Tok != token.DEFINE {
+				return nil, fmt.Errorf("reviewed RDP helper command is reassigned")
+			}
+			call, ok := assign.Rhs[0].(*ast.CallExpr)
+			if !ok || len(call.Args) != 2 || expressionIdentifier(call.Args[0]) != "ctx" {
+				return nil, fmt.Errorf("reviewed RDP helper launch changed")
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || expressionIdentifier(selector.X) != execAlias || selector.Sel.Name != "CommandContext" {
+				return nil, fmt.Errorf("reviewed RDP helper launch changed")
+			}
+			path, ok := call.Args[1].(*ast.BasicLit)
+			if !ok || path.Kind != token.STRING || path.Value != `"/proc/self/fd/3"` {
+				return nil, fmt.Errorf("reviewed RDP helper executable is not FD 3")
+			}
+			launchPos = stmt.Pos()
+			continue
+		}
+		selector, ok := assign.Lhs[0].(*ast.SelectorExpr)
+		if !ok || expressionIdentifier(selector.X) != "cmd" || selector.Sel.Name != "ExtraFiles" {
+			continue
+		}
+		if transferPos != token.NoPos || assign.Tok != token.ASSIGN {
+			return nil, fmt.Errorf("reviewed RDP helper has multiple FD transfers")
+		}
+		files, ok := assign.Rhs[0].(*ast.CompositeLit)
+		if !ok || len(files.Elts) != 1 || expressionIdentifier(files.Elts[0]) != "binary" {
+			return nil, fmt.Errorf("reviewed RDP helper transfers more than its protected executable")
+		}
+		array, ok := files.Type.(*ast.ArrayType)
+		if !ok || array.Len != nil {
+			return nil, fmt.Errorf("reviewed RDP helper FD array changed")
+		}
+		pointer, ok := array.Elt.(*ast.StarExpr)
+		if !ok {
+			return nil, fmt.Errorf("reviewed RDP helper FD type changed")
+		}
+		fileType, ok := pointer.X.(*ast.SelectorExpr)
+		if !ok || expressionIdentifier(fileType.X) != osAlias || fileType.Sel.Name != "File" {
+			return nil, fmt.Errorf("reviewed RDP helper FD type changed")
+		}
+		transferPos = stmt.Pos()
+		allowed[selector] = true
+	}
+	if launchPos == token.NoPos || transferPos == token.NoPos || launchPos >= transferPos || len(allowed) != 1 {
+		return nil, fmt.Errorf("reviewed RDP helper FD 3 launch is incomplete")
+	}
+	return allowed, nil
 }
 
 // shellca legitimately passes only fresh os.Pipe read ends to its configured
