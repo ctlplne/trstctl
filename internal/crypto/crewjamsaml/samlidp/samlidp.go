@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSD-2-Clause
+
 // Package samlidp a rudimentary SAML identity provider suitable for
 // testing or as a starting point for a more complex service.
 package samlidp

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSD-2-Clause
+
 // Package samlsp provides helpers that can be used to protect web services using SAML.
 package samlsp
 

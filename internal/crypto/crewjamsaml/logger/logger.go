@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSD-2-Clause
+
 // Package logger provides a logging interface.
 package logger
 

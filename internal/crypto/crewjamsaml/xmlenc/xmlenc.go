@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSD-2-Clause
+
 // Package xmlenc is a partial implementation of the xmlenc standard
 // as described in https://www.w3.org/TR/2002/REC-xmlenc-core-20021210/Overview.html.
 // The purpose of this implementation is to support encrypted SAML assertions.
