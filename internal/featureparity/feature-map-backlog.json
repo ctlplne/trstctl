@@ -11558,6 +11558,8 @@
             "api_na": "",
             "cli_surface": [
                 "identities application",
+                "identities application approvals",
+                "identities application alerts",
                 "identities deployment-evidence",
                 "identities list",
                 "identities transition",
@@ -16415,6 +16417,7 @@
                 "secrets projects environments rename",
                 "secrets projects members grant",
                 "secrets projects members revoke",
+                "secrets projects members access",
                 "secrets projects promote preview",
                 "secrets projects promote apply",
                 "secrets projects restore preview",

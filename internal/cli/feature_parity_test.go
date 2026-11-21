@@ -449,9 +449,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `access bundles standing-approvals list`, `grant` and `revoke` (900).
 	// A236-L4 adds `secrets deleted list`, `restore` and `purge` (903).
 	// M3-L4 adds `discovery findings replace-cloud-key` (904). M4-L3 adds
-	// `workloads tokens introspect` (905).
-	if len(out) != 905 {
-		t.Fatalf("CLI commands = %d, want 905", len(out))
+	// `workloads tokens introspect` (905). Three missing read paths for the
+	// application view and project member access bring the served set to 908.
+	if len(out) != 908 {
+		t.Fatalf("CLI commands = %d, want 908", len(out))
 	}
 	return out
 }
