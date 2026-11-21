@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ReactNode } from "react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { axe } from "vitest-axe";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
@@ -54,7 +55,7 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderShell(initialEntries = ["/"]) {
+function renderShell(initialEntries = ["/"], indexElement: ReactNode = <h1>Overview</h1>) {
   return render(
     <ThemeProvider>
       <AppQueryProvider>
@@ -62,7 +63,22 @@ function renderShell(initialEntries = ["/"]) {
           <MemoryRouter initialEntries={initialEntries}>
             <Routes>
               <Route element={<AppShell />}>
-                <Route index element={<h1>Overview</h1>} />
+                <Route index element={indexElement} />
+                <Route
+                  path="focusable"
+                  element={
+                    <h1>
+                      <button type="button" tabIndex={0}>
+                        Focusable route
+                      </button>
+                    </h1>
+                  }
+                />
+                <Route path="discovery" element={<h1>Discovery inventory</h1>} />
+                <Route path="journeys" element={<h1>Journey list</h1>} />
+                <Route path="no-heading" element={<p>This route is still loading its heading.</p>} />
+                <Route path="wizard" element={<h1>Setup wizard</h1>} />
+                <Route path="styleguide" element={<h1>Design system</h1>} />
                 <Route path="certificates" element={<h1>Certificates</h1>} />
                 <Route path="identities" element={<h1>Identities</h1>} />
                 <Route path="admin/access" element={<AdminAccess />} />
@@ -499,6 +515,12 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByRole("dialog", { name: "Primary navigation" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Open primary navigation" }));
+    const homeDrawer = screen.getByRole("dialog", { name: "Primary navigation" });
+    await user.click(within(homeDrawer).getByRole("button", { name: "Home" }));
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Primary navigation" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open primary navigation" }));
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Primary navigation" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open primary navigation" })).toHaveFocus();
@@ -624,6 +646,114 @@ describe("app shell accessibility and theme", () => {
     await user.click(screen.getByRole("button", { name: "Open keyboard shortcuts" }));
     overlay = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
     expect(within(overlay).getByText("Close open overlay")).toBeInTheDocument();
+  });
+
+  it("returns shortcut focus to a persistent control when the active element is an SVG", async () => {
+    renderShell();
+    const accountTrigger = await screen.findByRole("button", { name: "Account and preferences" });
+    const graphic = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    graphic.setAttribute("tabindex", "0");
+    document.body.append(graphic);
+    try {
+      graphic.focus();
+      expect(document.activeElement).toBe(graphic);
+      fireEvent.keyDown(graphic, { key: "?" });
+      expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toBeInTheDocument();
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
+      expect(accountTrigger).toHaveFocus();
+    } finally {
+      graphic.remove();
+    }
+  });
+
+  it("returns command palette focus to the visible mobile opener", async () => {
+    resizeViewport(380);
+    const user = userEvent.setup();
+    renderShell();
+    const openers = await screen.findAllByRole("button", { name: "Open task search" });
+    const mobileOpener = openers[0];
+    expect(mobileOpener).not.toHaveClass("hidden");
+    await user.click(mobileOpener);
+    expect(await screen.findByRole("dialog", { name: "What do you need?" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "What do you need?" })).not.toBeInTheDocument();
+    expect(mobileOpener).toHaveFocus();
+  });
+
+  it("keeps a heading's interactive child in the tab order after SPA navigation", async () => {
+    const user = userEvent.setup();
+    renderShell(
+      ["/"],
+      <>
+        <h1>Overview</h1>
+        <Link to="/focusable">Open focusable route</Link>
+      </>,
+    );
+    await screen.findByRole("button", { name: "Account and preferences" });
+    await user.click(screen.getByRole("link", { name: "Open focusable route" }));
+    const heading = await screen.findByRole("heading", { name: "Focusable route" });
+    expect(heading).toHaveAttribute("tabindex", "-1");
+    expect(heading).toHaveFocus();
+    expect(within(heading).getByRole("button", { name: "Focusable route" })).toHaveAttribute("tabindex", "0");
+  });
+
+  it("uses the navigation label when naming a discovery route after SPA navigation", async () => {
+    const user = userEvent.setup();
+    renderShell(
+      ["/"],
+      <>
+        <h1>Overview</h1>
+        <Link to="/discovery">Open discovery</Link>
+      </>,
+    );
+    await screen.findByRole("button", { name: "Account and preferences" });
+    await user.click(screen.getByRole("link", { name: "Open discovery" }));
+    expect(await screen.findByRole("heading", { name: "Discovery inventory" })).toHaveFocus();
+    await waitFor(() => expect(document.title).toBe("Discover · trstctl"));
+    expect(screen.getByTestId("route-announcer")).toHaveTextContent("Discover");
+  });
+
+  it("uses the primary navigation label when naming the journeys route", async () => {
+    const user = userEvent.setup();
+    renderShell(
+      ["/"],
+      <>
+        <h1>Overview</h1>
+        <Link to="/journeys">Open journeys</Link>
+      </>,
+    );
+    await screen.findByRole("button", { name: "Account and preferences" });
+    await user.click(screen.getByRole("link", { name: "Open journeys" }));
+    expect(await screen.findByRole("heading", { name: "Journey list" })).toHaveFocus();
+    await waitFor(() => expect(document.title).toBe("Guided setup · trstctl"));
+  });
+
+  it("focuses the main landmark when a newly opened route has no heading yet", async () => {
+    const user = userEvent.setup();
+    renderShell(
+      ["/"],
+      <>
+        <h1>Overview</h1>
+        <Link to="/no-heading">Open pending route</Link>
+      </>,
+    );
+    await screen.findByRole("button", { name: "Account and preferences" });
+    await user.click(screen.getByRole("link", { name: "Open pending route" }));
+    expect(await screen.findByText("This route is still loading its heading.")).toBeInTheDocument();
+    expect(screen.getByRole("main")).toHaveFocus();
+    expect(screen.getByTestId("route-announcer")).toHaveTextContent("No Heading");
+  });
+
+  it("gives the setup wizard and design system their intended browser titles", async () => {
+    const guide = renderShell(["/styleguide"]);
+    await screen.findByRole("heading", { name: "Design system" });
+    await waitFor(() => expect(document.title).toBe("Design system · trstctl"));
+    guide.unmount();
+
+    renderShell(["/wizard"]);
+    await screen.findByRole("heading", { name: "Setup wizard" });
+    await waitFor(() => expect(document.title).toBe("Set up trstctl · trstctl"));
   });
 
   it("uses fallback route titles while ignoring shortcut keys typed in editable fields", async () => {

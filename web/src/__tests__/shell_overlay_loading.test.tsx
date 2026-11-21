@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { expect, it, vi } from "vitest";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AppShell } from "@/components/AppShell";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppQueryProvider } from "@/lib/query";
 
 const delayed = vi.hoisted(() => {
@@ -18,6 +19,20 @@ vi.mock("@/components/CommandPalette", async (original) => {
   await delayed.pending;
   const module = await original();
   delayed.finished = true;
+  return module;
+});
+const delayedShortcuts = vi.hoisted(() => {
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { pending, release, started: false, finished: false };
+});
+vi.mock("@/components/ShortcutsHelp", async (original) => {
+  delayedShortcuts.started = true;
+  await delayedShortcuts.pending;
+  const module = await original();
+  delayedShortcuts.finished = true;
   return module;
 });
 vi.mock("@/lib/bootstrapApi", async (original) => {
@@ -62,4 +77,35 @@ it("does not fetch the palette before use or reopen it after Escape during its r
   await user.keyboard("{Escape}");
   expect(screen.queryByRole("dialog", { name: "What do you need?" })).not.toBeInTheDocument();
   expect(opener).toHaveFocus();
+});
+
+it("cancels shortcuts while its module is loading and restores focus to the persistent account trigger", async () => {
+  const user = userEvent.setup();
+  render(
+    <ThemeProvider>
+      <AppQueryProvider>
+        <AuthProvider>
+          <MemoryRouter>
+            <AppShell />
+          </MemoryRouter>
+        </AuthProvider>
+      </AppQueryProvider>
+    </ThemeProvider>,
+  );
+  const accountTrigger = await screen.findByRole("button", { name: "Account and preferences" });
+  await user.click(accountTrigger);
+  const opener = screen.getByRole("button", { name: "Open keyboard shortcuts" });
+  expect(delayedShortcuts.started).toBe(false);
+  await user.click(opener);
+  await waitFor(() => expect(delayedShortcuts.started).toBe(true));
+  expect(screen.getByRole("status")).toHaveTextContent("Loading");
+  fireEvent.keyDown(document, { key: "Enter" });
+  expect(screen.getByRole("status")).toHaveTextContent("Loading");
+  fireEvent.keyDown(document, { key: "Escape" });
+  await act(async () => {
+    delayedShortcuts.release();
+  });
+  await waitFor(() => expect(delayedShortcuts.finished).toBe(true));
+  expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
+  expect(accountTrigger).toHaveFocus();
 });

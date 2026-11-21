@@ -63,7 +63,7 @@ const ShortcutsHelp = lazy(() => import("@/components/ShortcutsHelp").then((modu
 function OverlayLoading({ onCancel, returnFocusRef }: { onCancel: () => void; returnFocusRef: RefObject<HTMLElement | null> }) {
   const { t } = useTranslation();
   useEffect(() => {
-    const returnTarget = returnFocusRef.current ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    const returnTarget = returnFocusRef.current;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       event.preventDefault();
@@ -455,9 +455,15 @@ function useRouteFocus(mainRef: RefObject<HTMLElement | null>, t: I18nContextVal
   const [announcement, setAnnouncement] = useState("");
   const isFirstRender = useRef(true);
 
+  // Public branding resolves after the shell mounts. Update the browser title
+  // when it arrives without treating that data change as a route navigation.
   useEffect(() => {
     const label = routeLabel(location.pathname, t);
     document.title = `${label} · ${productName || t("app.brand.name")}`;
+  }, [location.pathname, productName, t]);
+
+  useEffect(() => {
+    const label = routeLabel(location.pathname, t);
     // Skip stealing focus on the very first mount: the user has not navigated
     // yet, and an initial focus jump would fight the browser's own restore.
     if (isFirstRender.current) {
@@ -490,8 +496,10 @@ export function AppShell() {
   const { locale, setLocale, t } = useTranslation();
   const isDesktop = useIsDesktop();
   const commandButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileCommandButtonRef = useRef<HTMLButtonElement>(null);
   const mobileNavButtonRef = useRef<HTMLButtonElement>(null);
-  const shortcutsButtonRef = useRef<HTMLButtonElement>(null);
+  const accountButtonRef = useRef<HTMLButtonElement>(null);
+  const shortcutsReturnFocusRef = useRef<HTMLElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   // MSP-1: a white-labeled tenant's brand in the header, always beside
   // "Powered by trstctl".
@@ -536,6 +544,7 @@ export function AppShell() {
       }
       if (event.key === "?" && !isEditableTarget(event.target)) {
         event.preventDefault();
+        shortcutsReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : accountButtonRef.current;
         setShortcutsOpen(true);
       }
     }
@@ -604,7 +613,14 @@ export function AppShell() {
         </div>
         <div className="flex min-w-0 items-center gap-2">
           {!isDesktop && (
-            <Button type="button" size="icon" variant="ghost" aria-label={t("shell.openCommandPalette")} onClick={() => setCommandPaletteOpen(true)}>
+            <Button
+              ref={mobileCommandButtonRef}
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label={t("shell.openCommandPalette")}
+              onClick={() => setCommandPaletteOpen(true)}
+            >
               <Search className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
@@ -625,6 +641,7 @@ export function AppShell() {
           {user && (
             <div className="relative">
               <Button
+                ref={accountButtonRef}
                 type="button"
                 size={isDesktop ? "sm" : "icon"}
                 variant="ghost"
@@ -673,12 +690,12 @@ export function AppShell() {
                   <div className="flex items-center justify-between gap-2">
                     <ThemeToggle />
                     <Button
-                      ref={shortcutsButtonRef}
                       type="button"
                       size="icon"
                       variant="ghost"
                       aria-label={t("shell.openKeyboardShortcuts")}
                       onClick={() => {
+                        shortcutsReturnFocusRef.current = accountButtonRef.current;
                         setAccountOpen(false);
                         setShortcutsOpen(true);
                       }}
@@ -779,13 +796,20 @@ export function AppShell() {
         {routeAnnouncement}
       </div>
       {commandPaletteOpen && (
-        <Suspense fallback={<OverlayLoading onCancel={() => setCommandPaletteOpen(false)} returnFocusRef={commandButtonRef} />}>
-          <CommandPalette open onClose={() => setCommandPaletteOpen(false)} returnFocusRef={commandButtonRef} user={user} />
+        <Suspense
+          fallback={<OverlayLoading onCancel={() => setCommandPaletteOpen(false)} returnFocusRef={isDesktop ? commandButtonRef : mobileCommandButtonRef} />}
+        >
+          <CommandPalette
+            open
+            onClose={() => setCommandPaletteOpen(false)}
+            returnFocusRef={isDesktop ? commandButtonRef : mobileCommandButtonRef}
+            user={user}
+          />
         </Suspense>
       )}
       {shortcutsOpen && (
-        <Suspense fallback={<OverlayLoading onCancel={() => setShortcutsOpen(false)} returnFocusRef={shortcutsButtonRef} />}>
-          <ShortcutsHelp open onClose={() => setShortcutsOpen(false)} returnFocusRef={shortcutsButtonRef} />
+        <Suspense fallback={<OverlayLoading onCancel={() => setShortcutsOpen(false)} returnFocusRef={shortcutsReturnFocusRef} />}>
+          <ShortcutsHelp open onClose={() => setShortcutsOpen(false)} returnFocusRef={shortcutsReturnFocusRef} />
         </Suspense>
       )}
     </div>

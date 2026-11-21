@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
@@ -118,9 +118,18 @@ describe("MSP-1 Powered by trstctl", () => {
     expect(screen.getByTestId("powered-by-trstctl")).toBeInTheDocument();
     expect(screen.getByTestId("tenant-brand-logo")).toHaveAttribute("src", hostileBrand.logo_data_uri);
     const root = document.documentElement.style;
-    expect(root.getPropertyValue("--foreground")).toBe("0 0% 100%");
+    await waitFor(() => expect(root.getPropertyValue("--foreground")).toBe("0 0% 100%"));
     expect(root.getPropertyValue("--primary")).toBe("");
     expect(brandTokenOverrides(hostileBrand).map(([name]) => name)).toEqual(["--background", "--foreground", "--font-size-caption"]);
+  });
+
+  it("keeps the white-label attribution visible when the customer supplies no logo", async () => {
+    apiMock.getPublicBrand.mockResolvedValue({ product_name: "Northwind Managed PKI", custom: true });
+    renderShell();
+    expect(await screen.findByText("Northwind Managed PKI")).toBeInTheDocument();
+    expect(screen.queryByTestId("tenant-brand-logo")).not.toBeInTheDocument();
+    expect(screen.getByTestId("powered-by-trstctl")).toHaveTextContent("Powered by trstctl");
+    await waitFor(() => expect(document.title).toBe("Home · Northwind Managed PKI"));
   });
 
   it("puts the mark above the fold on a white-labeled sign-in page", async () => {
