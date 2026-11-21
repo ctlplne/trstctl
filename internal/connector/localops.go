@@ -23,7 +23,6 @@ import (
 	"trstctl.com/trstctl/internal/crypto/localexec"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
-	"trstctl.com/trstctl/internal/hostaccounts"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
 
@@ -59,7 +58,7 @@ type LocalOpsConfig struct {
 	WindowsLocalAccountsInventory bool
 	// WindowsLocalAccountWrites grants native password-only operations to exact
 	// tenant/host/local-SAM tuples. Inventory reads never imply this grant.
-	WindowsLocalAccountWrites []hostaccounts.RotationGrant
+	WindowsLocalAccountWrites []LocalAccountWriteGrant
 	WindowsDependentWrites    []WindowsDependentWriteGrant
 	WindowsDependentProbes    []WindowsDependentProbe
 	// WindowsDependentSIDs authorizes only native account-dependent reads.
@@ -84,6 +83,16 @@ type LocalOpsConfig struct {
 	// key was made in it. Like the roots and actions it comes only from the
 	// operator's profile.
 	HostKeyTPM *HostKeyTPMConfig
+}
+
+// LocalAccountWriteGrant carries an already validated host profile tuple to the
+// relay job runner. The connector itself cannot grant or perform a password
+// write; native validation stays in the host-account worker.
+type LocalAccountWriteGrant struct {
+	TenantID   string
+	AgentID    string
+	MachineSID string
+	AccountSID string
 }
 
 // HostKeyTPMConfig names this host's TPM for host renewal keys (TPM-O1).

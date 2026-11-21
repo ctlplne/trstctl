@@ -234,7 +234,7 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 				return connector.LocalOpsConfig{}, err
 			}
 		}
-		return connector.LocalOpsConfig{WindowsLocalAccountsInventory: profile.WindowsLocalAccountsInventory, WindowsLocalAccountWrites: profile.WindowsLocalAccountWrites, KubernetesSecretNamespaces: namespaces, TLSProbeOpenSSL: profile.TLSProbeOpenSSL, WindowsDependentSIDs: profile.WindowsDependentSIDs, WindowsDependentWrites: profile.WindowsDependentWrites, WindowsDependentProbes: profile.WindowsDependentProbes}, nil
+		return connector.LocalOpsConfig{WindowsLocalAccountsInventory: profile.WindowsLocalAccountsInventory, WindowsLocalAccountWrites: neutralLocalAccountGrants(profile.WindowsLocalAccountWrites), KubernetesSecretNamespaces: namespaces, TLSProbeOpenSSL: profile.TLSProbeOpenSSL, WindowsDependentSIDs: profile.WindowsDependentSIDs, WindowsDependentWrites: profile.WindowsDependentWrites, WindowsDependentProbes: profile.WindowsDependentProbes}, nil
 	}
 	if profile.TLSProbeOpenSSL != "" {
 		if err := tlsprobe.ValidateOpenSSLExecutable(profile.TLSProbeOpenSSL); err != nil {
@@ -263,12 +263,22 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 			ServerName: binding.ServerName, Action: binding.Action, RecoveryAction: binding.RecoveryAction,
 		})
 	}
-	configured := connector.LocalOpsConfig{WindowsLocalAccountsInventory: profile.WindowsLocalAccountsInventory, WindowsLocalAccountWrites: profile.WindowsLocalAccountWrites, WindowsDependentWrites: profile.WindowsDependentWrites, WindowsDependentProbes: profile.WindowsDependentProbes, WindowsDependentSIDs: profile.WindowsDependentSIDs, AllowedRoots: profile.AllowedRoots, Actions: actions,
+	configured := connector.LocalOpsConfig{WindowsLocalAccountsInventory: profile.WindowsLocalAccountsInventory, WindowsLocalAccountWrites: neutralLocalAccountGrants(profile.WindowsLocalAccountWrites), WindowsDependentWrites: profile.WindowsDependentWrites, WindowsDependentProbes: profile.WindowsDependentProbes, WindowsDependentSIDs: profile.WindowsDependentSIDs, AllowedRoots: profile.AllowedRoots, Actions: actions,
 		Containments: containments, TLSProbeOpenSSL: profile.TLSProbeOpenSSL, KubernetesSecretNamespaces: namespaces, HostKeyTPM: hostKeyTPM}
 	if _, err := connector.NewLocalOps(configured); err != nil {
 		return connector.LocalOpsConfig{}, fmt.Errorf("relay: invalid host profile: %w", err)
 	}
 	return configured, nil
+}
+
+func neutralLocalAccountGrants(grants []hostaccounts.RotationGrant) []connector.LocalAccountWriteGrant {
+	out := make([]connector.LocalAccountWriteGrant, 0, len(grants))
+	for _, grant := range grants {
+		out = append(out, connector.LocalAccountWriteGrant{
+			TenantID: grant.TenantID, AgentID: grant.AgentID, MachineSID: grant.MachineSID, AccountSID: grant.AccountSID,
+		})
+	}
+	return out
 }
 
 // HostTargetConfig is the host-side view of a deployment target: the paths and

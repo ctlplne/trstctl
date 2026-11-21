@@ -85,7 +85,7 @@ func runWindowsLocalAccountRotation(ctx context.Context, ch Channel, profile con
 	}
 	granted := false
 	for _, grant := range profile.WindowsLocalAccountWrites {
-		if grant.Allows(intent) {
+		if (hostaccounts.RotationGrant{TenantID: grant.TenantID, AgentID: grant.AgentID, MachineSID: grant.MachineSID, AccountSID: grant.AccountSID}).Allows(intent) {
 			granted = true
 			break
 		}

@@ -29,7 +29,7 @@ func localRotationIntent(t *testing.T) hostaccounts.RotationIntent {
 	return i
 }
 func localRotationProfile(i hostaccounts.RotationIntent) connector.LocalOpsConfig {
-	return connector.LocalOpsConfig{WindowsLocalAccountWrites: []hostaccounts.RotationGrant{{TenantID: i.TenantID, AgentID: i.AgentID, MachineSID: i.Native.Machine.SID, AccountSID: i.Native.Account.SID}}}
+	return connector.LocalOpsConfig{WindowsLocalAccountWrites: []connector.LocalAccountWriteGrant{{TenantID: i.TenantID, AgentID: i.AgentID, MachineSID: i.Native.Machine.SID, AccountSID: i.Native.Account.SID}}}
 }
 
 type localRotationNative struct {
@@ -254,7 +254,7 @@ func TestLocalAccountRotationUnexpectedMaterialIsWipedWithoutNativeEffectA268(t 
 }
 func TestLocalAccountRotationProfileAndHostClaimAreNarrowA268(t *testing.T) {
 	i := localRotationIntent(t)
-	profile := HostProfile{WindowsLocalAccountWrites: localRotationProfile(i).WindowsLocalAccountWrites}
+	profile := HostProfile{WindowsLocalAccountWrites: []hostaccounts.RotationGrant{{TenantID: i.TenantID, AgentID: i.AgentID, MachineSID: i.Native.Machine.SID, AccountSID: i.Native.Account.SID}}}
 	raw, _ := json.Marshal(profile)
 	name := filepath.Join(t.TempDir(), "host.json")
 	root, e := os.OpenRoot(filepath.Dir(name))
