@@ -82,6 +82,11 @@ func status(code uint32) C.KSP_STATUS { return C.KSP_STATUS(int32(code)) }
 
 func main() {}
 
+//export GetKeyStorageInterface
+func GetKeyStorageInterface(providerName C.KSP_LPCWSTR, table **C.KSP_FUNCTION_TABLE, flags C.KSP_DWORD) C.KSP_STATUS {
+	return C.kspGetKeyStorageInterface(providerName, table, flags)
+}
+
 // signingKey is one opened key container: a trstctl code-signing key with
 // its certificate chain.
 type signingKey struct {

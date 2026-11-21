@@ -102,6 +102,19 @@ var reviewedAmbientHTTPClients = map[string]map[string]bool{
 }
 
 var reviewedExecUses = map[string]map[string]bool{
+	// The RDP helper executes only its already-open, protected regular file
+	// through /proc/self/fd/3. Its environment and one inherited descriptor
+	// are pinned by process_linux_test.go and the signer FD audit.
+	"internal/crypto/rdp/process_linux.go": {
+		"nativeCommand": true,
+	},
+	// The CLI confinement helper receives the launcher's argv after a --
+	// separator and executes it without a shell in a private user/network
+	// namespace after dropping CAP_NET_ADMIN. The Linux integration test proves
+	// only operator-declared loopback forwards remain reachable.
+	"internal/netconfine/netconfine_linux.go": {
+		"RunHelper": true,
+	},
 	// Native certificate inventory needs separate stdout/stderr evidence, which
 	// the activation-only localOps executor deliberately does not return. This
 	// boundary accepts an operator-owned absolute regular executable, builds

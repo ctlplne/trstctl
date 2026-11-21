@@ -114,5 +114,6 @@ typedef struct {
 #endif
 
 KSP_EXPORT KSP_STATUS GetKeyStorageInterface(KSP_LPCWSTR pszProviderName, KSP_FUNCTION_TABLE **ppFunctionTable, KSP_DWORD dwFlags);
+KSP_STATUS kspGetKeyStorageInterface(KSP_LPCWSTR pszProviderName, KSP_FUNCTION_TABLE **ppFunctionTable, KSP_DWORD dwFlags);
 
 #endif

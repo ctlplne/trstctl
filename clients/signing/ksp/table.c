@@ -37,7 +37,7 @@ static KSP_FUNCTION_TABLE trstctl_ksp_table = {
 	kspFreeSecret,
 };
 
-KSP_EXPORT KSP_STATUS GetKeyStorageInterface(KSP_LPCWSTR pszProviderName, KSP_FUNCTION_TABLE **ppFunctionTable, KSP_DWORD dwFlags) {
+KSP_STATUS kspGetKeyStorageInterface(KSP_LPCWSTR pszProviderName, KSP_FUNCTION_TABLE **ppFunctionTable, KSP_DWORD dwFlags) {
 	(void)pszProviderName;
 	(void)dwFlags;
 	if (ppFunctionTable == NULL) {
