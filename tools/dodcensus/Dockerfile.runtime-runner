@@ -67,6 +67,7 @@ ENV OPENSSL_CONF=/dev/null
 # runtime UID may read this cache but cannot replace already-verified source and
 # trick a fresh Go build into compiling bytes that differ from go.sum.
 COPY go.mod go.sum /runtime-modules/
+COPY internal/crypto/crewjamsaml/go.mod internal/crypto/crewjamsaml/go.sum /runtime-modules/internal/crypto/crewjamsaml/
 RUN cd /runtime-modules \
  && GOFLAGS=-mod=readonly go mod download all \
  && chown -R 0:0 /go \

@@ -20,6 +20,7 @@ func postgresPatchConstructionErrors(df string) []string {
 	var problems []string
 	required := []string{
 		"ARG TARGETARCH",
+		"COPY internal/crypto/crewjamsaml/go.mod internal/crypto/crewjamsaml/go.sum ./internal/crypto/crewjamsaml/",
 		"FROM scratch AS patches",
 		// TOOL-O1: each fetching stage takes its base from ALPINE_MIRROR, the
 		// Alpine CDN by default; the checksums hold whichever serves them.
@@ -48,7 +49,7 @@ func postgresPatchConstructionErrors(df string) []string {
 			problems = append(problems, "missing immutable PostgreSQL package construction: "+want)
 		}
 	}
-	if strings.Count(df, "ADD ") != 7 || strings.Count(df, "COPY ") != 6 || strings.Count(df, " apk add ") != 1 {
+	if strings.Count(df, "ADD ") != 7 || strings.Count(df, "COPY ") != 7 || strings.Count(df, " apk add ") != 1 {
 		problems = append(problems, "unexpected PostgreSQL package input or installation command")
 	}
 	for _, line := range strings.Split(df, "\n") {

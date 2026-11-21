@@ -18,6 +18,7 @@ ARG BASE_IMAGE
 FROM ${BUILD_IMAGE} AS build
 WORKDIR /src
 COPY go.mod go.sum ./
+COPY internal/crypto/crewjamsaml/go.mod internal/crypto/crewjamsaml/go.sum ./internal/crypto/crewjamsaml/
 # Retries a transient module-proxy failure (see deploy/docker/Dockerfile).
 RUN go mod download || { sleep 10; go mod download; } || { sleep 30; go mod download; }
 COPY . .

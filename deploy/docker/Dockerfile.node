@@ -21,6 +21,7 @@ ADD --checksum=sha256:bb008f6d214b6af7576324659856fb63dc8dcb4373f8345ff706388696
 FROM --platform=$BUILDPLATFORM golang:1.26.11-bookworm@sha256:dc40a13b61304647ed7e5d581d246b86413dfc29d63c6d018310feb93cd98fc0 AS trust
 WORKDIR /src
 COPY go.mod go.sum ./
+COPY internal/crypto/crewjamsaml/go.mod internal/crypto/crewjamsaml/go.sum ./internal/crypto/crewjamsaml/
 COPY internal/crypto/trust ./internal/crypto/trust
 COPY cmd/trstctl-trustbundle ./cmd/trstctl-trustbundle
 COPY --from=trust-source /ca-certificates-bundle-20261020-r0.apk /tmp/trust/ca-certificates-bundle.apk

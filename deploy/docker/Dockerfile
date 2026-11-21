@@ -63,6 +63,7 @@ WORKDIR /src
 # rehearsal's image build on CI 41661778120) retries twice, 10 s and then 30 s
 # later; a missing module or a go.sum mismatch fails all three the same way.
 COPY go.mod go.sum ./
+COPY internal/crypto/crewjamsaml/go.mod internal/crypto/crewjamsaml/go.sum ./internal/crypto/crewjamsaml/
 RUN go mod download || { sleep 10; go mod download; } || { sleep 30; go mod download; }
 
 COPY . .
