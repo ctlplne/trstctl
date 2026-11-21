@@ -1,5 +1,8 @@
 module trstctl.com/trstctl
 
+// CR-651: local copy of the exact v0.5.1 source, with narrow parser fixes.
+replace github.com/crewjam/saml => ./internal/crypto/crewjamsaml
+
 go 1.26.0
 
 toolchain go1.26.11

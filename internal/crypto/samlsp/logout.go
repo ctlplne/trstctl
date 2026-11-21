@@ -62,7 +62,7 @@ func (p *ServiceProvider) VerifyLogoutResponse(r *http.Request, requestID string
 	if !p.slo {
 		return errors.New("samlsp: single logout is not enabled for this service provider")
 	}
-	if err := p.sp.ValidateLogoutResponseRequest(r); err != nil {
+	if err := p.validateLogoutResponseSafely(r); err != nil {
 		var invalid *saml.InvalidResponseError
 		if errors.As(err, &invalid) && invalid.PrivateErr != nil {
 			return fmt.Errorf("samlsp: verify logout response: %w: %v", err, invalid.PrivateErr)
@@ -81,6 +81,15 @@ func (p *ServiceProvider) VerifyLogoutResponse(r *http.Request, requestID string
 		return fmt.Errorf("samlsp: logout response answers %q, not this sign-out's request", resp.InResponseTo)
 	}
 	return nil
+}
+
+func (p *ServiceProvider) validateLogoutResponseSafely(r *http.Request) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = errors.New("samlsp: malformed logout response caused a parser failure")
+		}
+	}()
+	return p.sp.ValidateLogoutResponseRequest(r)
 }
 
 // VerifyLogoutRequest validates an IdP-initiated LogoutRequest delivered by

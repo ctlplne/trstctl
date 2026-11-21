@@ -267,7 +267,7 @@ func (p *ServiceProvider) VerifyResponse(r *http.Request, possibleRequestIDs []s
 	if r.Form.Get("SAMLart") == "" && r.Form.Get("SAMLResponse") == "" {
 		return Assertion{}, errors.New("samlsp: the ACS request carries neither SAMLResponse nor SAMLart")
 	}
-	assertion, err := p.sp.ParseResponse(r, possibleRequestIDs)
+	assertion, err := p.parseResponseSafely(r, possibleRequestIDs)
 	if err != nil {
 		var invalid *saml.InvalidResponseError
 		if errors.As(err, &invalid) && invalid.PrivateErr != nil {
@@ -275,7 +275,24 @@ func (p *ServiceProvider) VerifyResponse(r *http.Request, possibleRequestIDs []s
 		}
 		return Assertion{}, err
 	}
+	if assertion == nil {
+		return Assertion{}, errors.New("samlsp: response has no verified assertion")
+	}
 	return normalizeAssertion(assertion), nil
+}
+
+// Keep a malformed parser input from escaping as a successful empty HTTP
+// response when the caller runs inside the API bulkhead. The parser guards in
+// our pinned SAML module reject the known shapes; this catches any remaining
+// library panic at the same trust boundary.
+func (p *ServiceProvider) parseResponseSafely(r *http.Request, possibleRequestIDs []string) (assertion *saml.Assertion, err error) {
+	defer func() {
+		if recover() != nil {
+			assertion = nil
+			err = errors.New("samlsp: malformed response caused a parser failure")
+		}
+	}()
+	return p.sp.ParseResponse(r, possibleRequestIDs)
 }
 
 func parseAbsoluteURL(raw, name string) (url.URL, error) {
