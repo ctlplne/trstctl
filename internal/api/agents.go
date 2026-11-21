@@ -893,6 +893,11 @@ func (a *API) parseEnrollmentTokenGrant(r *http.Request) (enrollmentTokenRequest
 		}
 	}
 	req.AllowedIdentity = strings.TrimSpace(req.AllowedIdentity)
+	if req.AllowedIdentity != "" {
+		if err := mtls.ValidateAgentCommonName(req.AllowedIdentity); err != nil {
+			return enrollmentTokenRequest{}, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+	}
 	roles, err := normalizeEnrollmentRoles(req.Roles)
 	if err != nil {
 		return enrollmentTokenRequest{}, nil, errWithStatus(http.StatusBadRequest, err)

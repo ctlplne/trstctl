@@ -293,6 +293,16 @@ func TestAllowedIdentityPin(t *testing.T) {
 	}
 }
 
+func TestCR015AuthorityRefusesRolePathTokenPin(t *testing.T) {
+	a, err := enroll.NewAuthority("cp", enroll.NewMemoryTokenStore())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token, err := a.IssueBootstrapTokenWithRoles(t.Context(), tenantA, "host/role/network", nil); err == nil || len(token) != 0 {
+		t.Fatalf("role-shaped identity received a bootstrap token: token=%t error=%v", len(token) != 0, err)
+	}
+}
+
 // TestTwoTenantsGetDistinctAttribution: tokens minted under different tenants
 // yield certificates attributed to their respective tenants — no cross-tenant
 // bleed in the issued credential (AN-1).

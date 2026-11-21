@@ -56,6 +56,24 @@ func TestAgentBootstrapRejectsRolePathWithoutConsumingToken(t *testing.T) {
 	}
 }
 
+func TestCR015TokenPlanRejectsRolePathIdentityBeforeMint(t *testing.T) {
+	h := newRoleHarnessNamedWithEventOptions(t, "cr015-token-plan-anchor",
+		[]string{mtls.AgentRoleHost}, nil, nil, withIsolatedTenant)
+	writer := seedScopedToken(t, h.store, h.tenant, "agents:write")
+	for _, path := range []string{"/api/v1/agents/enrollment-tokens/preview", "/api/v1/agents/enrollment-tokens"} {
+		status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, path, writer, "cr015-invalid-"+path,
+			map[string]any{"allowed_identity": "host-a/role/network"})
+		if status != http.StatusBadRequest {
+			t.Errorf("%s accepted a token pinned to a role-forging identity: HTTP %d %s", path, status, body)
+		}
+	}
+	status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/agents/enrollment-tokens", writer,
+		"cr015-valid", map[string]any{"allowed_identity": "host-a"})
+	if status != http.StatusCreated {
+		t.Fatalf("valid agent identity refused after invalid plans: HTTP %d %s", status, body)
+	}
+}
+
 func v8Dial(t *testing.T, h *roleHarness, id *mtls.AgentIdentity) *transport.AgentClient {
 	t.Helper()
 	creds, err := mtls.AgentClientCredentials(id, h.srv.AgentCACertPEM(), h.serverName, nil)
@@ -106,10 +124,12 @@ func TestV8L1ForgedRoleSurvivesRenewalAndOperatorRoleRemoval(t *testing.T) {
 			relay = id
 		}
 	}
-	// A token the same principal pins to a role-forging name is accepted too.
-	pinned := mintServedEnrollmentToken(t, h.servedHarness, writer, "v8-l1-pinned", "v8-l1-pinned/role/gateway")
-	if id, st, _ := v8Enroll(t, h.servedHarness, pinned, "v8-l1-pinned/role/gateway"); st == http.StatusOK && slices.Contains(id.Roles(), mtls.AgentRoleGateway) {
-		forged = append(forged, "gateway(pinned token)")
+	// A token pinned to a role-forging name must be refused at mint, before the
+	// operator can mistake the preview for a host-only plan.
+	st, pinnedBody := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/agents/enrollment-tokens", writer,
+		"v8-l1-pinned", map[string]any{"allowed_identity": "v8-l1-pinned/role/gateway"})
+	if st != http.StatusBadRequest {
+		t.Errorf("role-forging pinned identity was minted: HTTP %d %s", st, pinnedBody)
 	}
 	if len(forged) > 0 {
 		t.Errorf("V8-L1: host-only tokens minted by an agents:write principal produced certificates carrying %v", forged)

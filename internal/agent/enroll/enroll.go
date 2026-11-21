@@ -260,6 +260,11 @@ func (a *Authority) IssueBootstrapTokenWithRoles(
 	if tenantID == "" {
 		return nil, errors.New("enroll: refusing to mint a bootstrap token without a tenant")
 	}
+	if allowedIdentity != "" {
+		if err := mtls.ValidateAgentCommonName(allowedIdentity); err != nil {
+			return nil, fmt.Errorf("enroll: invalid allowed agent identity: %w", err)
+		}
+	}
 	for _, role := range roles {
 		if !mtls.ValidAgentRole(role) {
 			return nil, fmt.Errorf("enroll: unknown agent role %q", role)

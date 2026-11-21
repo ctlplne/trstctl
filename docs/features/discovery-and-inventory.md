@@ -323,7 +323,9 @@ Enrollment is deliberately two steps in **Agents → Add agent**:
    browser does not save it to local or session storage.
 
 Leaving the identity blank means any agent identity in the caller's tenant may use the
-token. Selecting **Network relay**, **Observer**, **Access gateway** or **Session
+token. A named identity is checked during both preview and mint: an invalid SPIFFE
+path segment is refused before a token is created. Selecting **Network relay**,
+**Observer**, **Access gateway** or **Session
 observer** also requires `agents:relay.grant`; ordinary `agents:write` authority cannot
 silently turn a host agent into a relay or an observer. If the public
 agent address or TLS name is missing, preview says exactly what must be configured and
