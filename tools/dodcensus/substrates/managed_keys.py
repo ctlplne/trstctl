@@ -244,6 +244,8 @@ class Key:
         run_openssl(["pkey", "-in", str(self.private), "-pubout", "-out", str(self.public_pem)])
         self.public_der = run_openssl(["pkey", "-in", str(self.private), "-pubout", "-outform", "DER"])
         self.state = "active"
+        self.created_at = int(time.time())
+        self.deleted_at = 0
         self.signature = b""
         self.digest = b""
         self.tags = dict(tags or {})
@@ -478,6 +480,22 @@ def handler_for(state: State):
                 })
                 return
             state.observe_provider_request(self.command, self.path, self.headers.get("X-Amz-Target", ""))
+            if state.mode == "azure" and parsed.path.startswith("/deletedkeys/"):
+                if not self.authenticated(b""):
+                    self.send_json(401, {"error": {"code": "Unauthorized"}})
+                    return
+                parts = parsed.path.strip("/").split("/")
+                key = state.key(parts[1] if len(parts) == 2 else "")
+                if key is None or key.state != "zeroized" or not key.deleted_at:
+                    self.send_json(404, {"error": {"code": "KeyNotFound"}})
+                    return
+                self.send_json(200, {
+                    "recoveryId": f"https://dod.managedhsm.azure.net/deletedkeys/{key.key_id}",
+                    "attributes": {"created": key.created_at},
+                    "deletedDate": key.deleted_at,
+                    "scheduledPurgeDate": key.deleted_at + 90 * 24 * 60 * 60,
+                })
+                return
             if state.mode == "azure" and parsed.path.startswith("/keys/"):
                 if not self.authenticated(b""):
                     self.send_json(401, {"error": {"code": "Unauthorized"}})
@@ -490,7 +508,7 @@ def handler_for(state: State):
                 self.send_json(200, {
                     "key": {"kid": f"https://dod.managedhsm.azure.net/keys/{key.key_id}/v1"},
                     "der": base64.b64encode(key.public_der).decode(),
-                    "attributes": {"enabled": key.state == "active"},
+                    "attributes": {"enabled": key.state == "active", "created": key.created_at},
                 })
                 return
             if state.mode == "gcp" and "/cryptoKeys/" in parsed.path:
@@ -587,6 +605,7 @@ def handler_for(state: State):
                 self.send_json(404, {"error": {"code": "KeyNotFound"}})
                 return
             key.state = "zeroized"
+            key.deleted_at = int(time.time())
             with state.lock:
                 state.zeroize_count += 1
             self.send_json(200, {"recoveryId": "deleted/" + key_id})
@@ -676,7 +695,7 @@ def handler_for(state: State):
                 self.send_json(200, {
                     "key": {"kid": f"https://dod.managedhsm.azure.net/keys/{key.key_id}/v1"},
                     "der": base64.b64encode(key.public_der).decode(),
-                    "attributes": {"enabled": True},
+                    "attributes": {"enabled": True, "created": key.created_at},
                 })
                 return
             if path.endswith("/sign"):
