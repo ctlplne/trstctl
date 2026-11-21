@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
@@ -15,11 +17,35 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
 const dualControlManagedKeyProvider = "test-managed-key-provider"
+
+func TestManagedKeyApprovalCheckerRetainsDiagnosticLogger(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	factoryCalled := false
+	d := Deps{
+		Store:  &store.Store{},
+		Logger: logger,
+		ManagedKeyFactory: func(md ManagedKeyServiceDeps) (api.ManagedKeyService, error) {
+			factoryCalled = true
+			checker, ok := md.ApprovalChecker.(storeApprovalChecker)
+			if !ok || checker.logger != logger {
+				t.Fatalf("managed-key approval failures must retain the operator diagnostic logger")
+			}
+			return fakeManagedKeyService{}, nil
+		},
+	}
+	if _, err := buildManagedKeyService(d, nil, &orchestrator.Outbox{}, &orchestrator.Orchestrator{}); err != nil {
+		t.Fatal(err)
+	}
+	if !factoryCalled {
+		t.Fatal("managed-key service factory was not called")
+	}
+}
 
 type fakeManagedKeyService struct{}
 

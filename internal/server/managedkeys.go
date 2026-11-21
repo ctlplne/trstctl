@@ -34,7 +34,7 @@ func buildManagedKeyService(d Deps, idem *orchestrator.Idempotency, outbox appro
 	if required < defaultRequiredApprovals {
 		required = defaultRequiredApprovals
 	}
-	checker := storeApprovalChecker{store: d.Store, orch: orch, required: required}
+	checker := storeApprovalChecker{store: d.Store, orch: orch, required: required, logger: d.Logger}
 	return d.ManagedKeyFactory(ManagedKeyServiceDeps{
 		Store:           d.Store,
 		Log:             d.Log,
