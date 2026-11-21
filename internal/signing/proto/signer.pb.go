@@ -2640,8 +2640,9 @@ func (x *DecapsulateRequest) GetCiphertext() []byte {
 }
 
 type DecapsulateResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SharedSecret  []byte                 `protobuf:"bytes,1,opt,name=shared_secret,json=sharedSecret,proto3" json:"shared_secret,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Reserved for old peers; the served signer never populates this field.
+	SharedSecret  []byte `protobuf:"bytes,1,opt,name=shared_secret,json=sharedSecret,proto3" json:"shared_secret,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
