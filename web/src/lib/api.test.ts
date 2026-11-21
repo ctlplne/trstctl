@@ -40,6 +40,31 @@ afterEach(() => {
 });
 
 describe("api error handling (SURFACE-007)", () => {
+  it("sends complete inventory filters in the URL without mutation headers", async () => {
+    mockFetch(200, "{}");
+    await api.members({ limit: 0, cursor: "next/member", includeOffboarded: true });
+    await api.apiTokens({ limit: 0, cursor: "next/token", subject: "alice@example.test", includeRevoked: true });
+    await api.brokerAgentIdentities({ limit: 0, cursor: "next/broker", q: "edge agent", method: "tpm", state: "revoked" });
+    await api.ctMonitoring({ limit: 0, cursor: "next/ct", triageStatus: "unmanaged" });
+    await api.identityPage({ limit: 0, cursor: "next/identity", query: "edge agent", kind: "x509_certificate" });
+    await api.acmeARIPosture({ limit: 0, cursor: "next/ari" });
+    await api.acmeARIPosture();
+
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([
+      "/api/v1/access/members?limit=0&cursor=next%2Fmember&include_offboarded=true",
+      "/api/v1/access/api-tokens?limit=0&cursor=next%2Ftoken&subject=alice%40example.test&include_revoked=true",
+      "/api/v1/broker/agent-identities?limit=0&cursor=next%2Fbroker&q=edge+agent&method=tpm&state=revoked",
+      "/api/v1/discovery/ct-monitoring?limit=0&cursor=next%2Fct&triage_status=unmanaged",
+      "/api/v1/identities?limit=0&cursor=next%2Fidentity&q=edge+agent&kind=x509_certificate",
+      "/api/v1/acme/ari/posture?limit=0&cursor=next%2Fari",
+      "/api/v1/acme/ari/posture",
+    ]);
+    for (const [, init] of vi.mocked(fetch).mock.calls) {
+      expect(init?.method).toBeUndefined();
+      expect((init?.headers as Record<string, string>)["Idempotency-Key"]).toBeUndefined();
+    }
+  });
+
   it("reads an independent reconciliation page without a mutation key", async () => {
     mockFetch(200, JSON.stringify({ page_number: 2, entries: [], digest: "exact-page" }));
     const page = await api.pamServiceReconciliationReviewPage("review/one", 2);

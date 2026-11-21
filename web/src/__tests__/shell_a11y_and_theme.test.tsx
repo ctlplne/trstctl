@@ -79,6 +79,16 @@ function renderShell(initialEntries = ["/"]) {
                         Route search
                         <input type="search" />
                       </label>
+                      <label>
+                        Operator notes
+                        <textarea />
+                      </label>
+                      <label>
+                        Target group
+                        <select defaultValue="">
+                          <option value="">Choose a group</option>
+                        </select>
+                      </label>
                     </form>
                   }
                 />
@@ -624,6 +634,10 @@ describe("app shell accessibility and theme", () => {
     await waitFor(() => expect(document.title).toBe("Custom Tools · trstctl"));
 
     await user.type(screen.getByRole("searchbox", { name: "Route search" }), "?");
+    expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Operator notes" }), { key: "?" });
+    expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Target group" }), { key: "?" });
     expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
   });
 

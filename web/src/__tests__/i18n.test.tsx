@@ -100,6 +100,9 @@ describe("i18n boundary", () => {
     expect(values).toContain("en-US");
     expect(values).not.toContain("es-ES");
     expect(values).not.toContain("de-DE");
+    expect(values).toContain("en-XA");
+    fireEvent.change(selector, { target: { value: "en-XA" } });
+    expect(await screen.findByText(pseudoLocalize("Needs action"))).toBeInTheDocument();
   });
 
   function setViewportWidth(width: number) {
@@ -163,6 +166,24 @@ describe("i18n boundary", () => {
     fireEvent.click(within(drawer).getByRole("link", { name: new RegExp(pseudoLocalize("Certificates").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }));
 
     expect(screen.queryByRole("dialog", { name: pseudoLocalize("Primary navigation") })).not.toBeInTheDocument();
+    setViewportWidth(1024);
+  });
+
+  it("closes the mobile navigation with its own close control", () => {
+    setViewportWidth(380);
+    render(
+      <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
+        <ThemeProvider>
+          <MemoryRouter>
+            <AppShell />
+          </MemoryRouter>
+        </ThemeProvider>
+      </IntlProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open primary navigation" }));
+    const drawer = screen.getByRole("dialog", { name: "Primary navigation" });
+    fireEvent.click(within(drawer).getByRole("button", { name: "Close primary navigation" }));
+    expect(screen.queryByRole("dialog", { name: "Primary navigation" })).not.toBeInTheDocument();
     setViewportWidth(1024);
   });
 
