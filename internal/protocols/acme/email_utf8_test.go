@@ -74,3 +74,15 @@ func TestEmailIdentifiersTakeNonASCIILocalPartsP15L4(t *testing.T) {
 		}
 	}
 }
+
+func TestCR165EmailDomainRejectsInvalidUTF8AndUnstableALabel(t *testing.T) {
+	for _, domain := range []string{"bad\xff.example", "0.xn--0-p10i"} {
+		address := "operator@" + domain
+		if normalized, err := NormalizeEmailIdentifier(address); err == nil {
+			t.Fatalf("invalid domain %q normalized to %q", domain, normalized)
+		}
+	}
+	if got, err := NormalizeEmailIdentifier("operator@bücher.example"); err != nil || got != "operator@xn--bcher-kva.example" {
+		t.Fatalf("valid IDN changed: %q, %v", got, err)
+	}
+}

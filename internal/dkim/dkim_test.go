@@ -15,6 +15,18 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+func TestCR165DomainALabelsRejectInvalidUTF8(t *testing.T) {
+	if got := aLabels("bad\xff.example"); got != "" {
+		t.Fatalf("invalid UTF-8 domain normalized to %q", got)
+	}
+	if got := aLabels("0.xn--0-p10i"); got != "" {
+		t.Fatalf("unstable A-label domain normalized to %q", got)
+	}
+	if got := aLabels("bücher.example"); got != "xn--bcher-kva.example" {
+		t.Fatalf("valid IDN changed to %q", got)
+	}
+}
+
 // dkimpyVectors are messages signed by an independent implementation
 // (Debian's python3-dkim 1.1.4, dkimpy) with fresh keys, generated in a lab
 // container: rsa-sha256 and ed25519-sha256, relaxed and simple, and one

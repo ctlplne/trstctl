@@ -219,11 +219,19 @@ func CanonicalLocalPartContent(content string) (string, error) {
 // §3): a U-label is converted (IDNA2008 with UTS #46 mapping for lookup) and
 // an A-label checked.
 func emailDomainALabels(domain string) (string, error) {
+	if !utf8.ValidString(domain) {
+		return "", errors.New("acme: an email identifier's domain is not UTF-8")
+	}
 	ascii, err := idna.Lookup.ToASCII(domain)
-	if err != nil || !validEmailDomain(strings.ToLower(ascii)) {
+	ascii = strings.ToLower(ascii)
+	if err != nil || !validEmailDomain(ascii) {
 		return "", errors.New("acme: an email identifier's domain is not a DNS name")
 	}
-	return strings.ToLower(ascii), nil
+	stable, err := idna.Lookup.ToASCII(ascii)
+	if err != nil || strings.ToLower(stable) != ascii {
+		return "", errors.New("acme: an email identifier's A-label is not stable")
+	}
+	return ascii, nil
 }
 
 func validEmailDomain(domain string) bool {

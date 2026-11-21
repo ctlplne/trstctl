@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/net/idna"
 
@@ -276,16 +277,19 @@ func (v Verifier) key(ctx context.Context, sig signature) (string, []byte, error
 // with the From domain and the key query use the A-label form (P15-L4). A
 // name that does not convert compares equal to nothing.
 func aLabels(name string) string {
-	for i := 0; i < len(name); i++ {
-		if name[i] >= 0x80 {
-			ascii, err := idna.Lookup.ToASCII(name)
-			if err != nil {
-				return ""
-			}
-			return strings.ToLower(ascii)
-		}
+	if !utf8.ValidString(name) {
+		return ""
 	}
-	return strings.ToLower(name)
+	ascii, err := idna.Lookup.ToASCII(name)
+	if err != nil {
+		return ""
+	}
+	ascii = strings.ToLower(ascii)
+	stable, err := idna.Lookup.ToASCII(ascii)
+	if err != nil || strings.ToLower(stable) != ascii {
+		return ""
+	}
+	return ascii
 }
 
 // splitMessage splits msg into header fields and body (RFC 5322 §2.1).

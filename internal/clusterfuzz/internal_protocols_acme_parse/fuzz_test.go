@@ -99,7 +99,7 @@ func FuzzParseOrderRequest(f *testing.F) {
 // bounded ASCII dot-atom addr-spec with a lowercase DNS domain, never a
 // wildcard, and normalizing it again changes nothing (P15).
 func FuzzNormalizeEmailIdentifier(f *testing.F) {
-	for _, seed := range []string{"alice@example.com", "Alice.B+tag@Example.COM", "*@example.com", "a@b", "\"q\"@example.com", "a..b@example.com", ""} {
+	for _, seed := range []string{"alice@example.com", "Alice.B+tag@Example.COM", "*@example.com", "a@b", "\"q\"@example.com", "a..b@example.com", "0@0.xn--0-p10i", "operator@bad\xff.example", ""} {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, raw string) {
