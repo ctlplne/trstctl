@@ -11,7 +11,11 @@
 set -euo pipefail
 
 listing="${1:?usage: check-ksp-dll.sh <objdump -p listing of trstctl-ksp.dll>}"
-if ! grep -Eq '^[[:space:]]+\[ *[0-9]+\] GetKeyStorageInterface$' "$listing"; then
+if ! awk '
+  /^[[:space:]]*\[Ordinal\/Name Pointer\] Table[[:space:]]*$/ { exports=1; next }
+  exports && /^[[:space:]]*\[[[:space:]]*[0-9]+\][[:space:]]+\+base\[[[:space:]]*[0-9]+\][[:space:]]+[[:xdigit:]]+[[:space:]]+GetKeyStorageInterface[[:space:]]*$/ { found=1 }
+  END { exit !found }
+' "$listing"; then
   echo "trstctl-ksp.dll does not export GetKeyStorageInterface" >&2
   echo "bounded PE export diagnostics:" >&2
   awk '/\[Ordinal\/Name Pointer\] Table/ { show=1; next } show && count++ < 35 { print }' "$listing" >&2

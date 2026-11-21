@@ -167,6 +167,7 @@ signing-ksp-windows: ## Cross-compile the Windows signing adapter (trstctl-ksp.d
 	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=$(MINGW_CC) $(GO) build -C clients/signing -trimpath -buildmode=c-shared -o $(CURDIR)/$(BIN_DIR)/trstctl-ksp.dll ./ksp
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -C clients/signing -trimpath -o $(CURDIR)/$(BIN_DIR)/trstctl-ksp-register.exe ./cmd/trstctl-ksp-register
 	$(MINGW_OBJDUMP) -p $(BIN_DIR)/trstctl-ksp.dll > $(BIN_DIR)/trstctl-ksp.objdump
+	bash scripts/ci/check-ksp-dll-test.sh
 	scripts/ci/check-ksp-dll.sh $(BIN_DIR)/trstctl-ksp.objdump
 
 .PHONY: sessionobserve-bpf
