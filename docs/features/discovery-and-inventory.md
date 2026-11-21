@@ -287,6 +287,11 @@ The agent enrolls into the control plane with a one-time bootstrap token
 `POST /api/v1/agents/{id}/offboard` emits an `agent.offboarded` event, keeps the row
 visible as a tombstone with actor/reason evidence, and causes the agent's mTLS
 certificate to be rejected on future heartbeat, renewal, and inventory RPCs.
+An agent name is one SPIFFE path segment: it cannot be empty, padded, or contain
+`/`, `\`, `%`, `?`, `#`, or control characters. A CSR with such a name gets HTTP
+400 before its bootstrap token is spent; correct the name and retry with that
+token. The channel also refuses a previously issued certificate with such a name;
+enroll that agent again under a valid name.
 `POST /api/v1/agents/{id}/cert-revocations` takes the exact client-certificate
 serial, SHA-256 fingerprint, or both. The control plane commits an independent
 tenant-scoped denial before publishing either removal event, so an already-open

@@ -224,9 +224,12 @@ func (i agentCAIssuer) SignClientCSRWithTenant(
 	ttl time.Duration,
 	authorityURIs ...string,
 ) ([]byte, error) {
-	cn := ""
-	if parsed, err := mtls.CSRCommonName(csrDER); err == nil {
-		cn = parsed
+	cn, err := mtls.CSRCommonName(csrDER)
+	if err != nil {
+		return nil, err
+	}
+	if err := mtls.ValidateAgentCommonName(cn); err != nil {
+		return nil, err
 	}
 	spiffeURI := mtls.AgentSPIFFEID(tenantID, cn)
 	// The capability SANs (epic A2) are built from the roles the CALLER was

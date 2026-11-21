@@ -366,7 +366,7 @@ func (c *CA) SignClientCSRWithTenant(
 	// back as a `network` grant — an agent could self-grant relay capability by
 	// choosing its own CSR subject. Roles come from the caller's grant, never
 	// the CSR (see below); this is what makes that true.
-	if err := validateAgentCommonName(csr.Subject.CommonName); err != nil {
+	if err := ValidateAgentCommonName(csr.Subject.CommonName); err != nil {
 		return nil, err
 	}
 	spiffeURI, err := url.Parse(AgentSPIFFEID(tenantID, csr.Subject.CommonName))
@@ -552,6 +552,9 @@ func PeerCertInfoFromDER(der []byte) (PeerCertInfo, error) {
 	leaf, err := x509.ParseCertificate(der)
 	if err != nil {
 		return PeerCertInfo{}, fmt.Errorf("mtls: parse agent certificate: %w", err)
+	}
+	if err := ValidateAgentCommonName(leaf.Subject.CommonName); err != nil {
+		return PeerCertInfo{}, err
 	}
 	tenantID, err := TenantFromClientCert(leaf.Raw)
 	if err != nil {
@@ -898,15 +901,23 @@ func AgentRolesFromClientCert(der []byte) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mtls: parse agent certificate: %w", err)
 	}
+	if err := ValidateAgentCommonName(cert.Subject.CommonName); err != nil {
+		return nil, err
+	}
+	tenantID, err := TenantFromClientCert(der)
+	if err != nil {
+		return nil, err
+	}
+	rolePrefix := "/tenant/" + tenantID + "/agent/" + cert.Subject.CommonName + "/role/"
 	var roles []string
 	for _, uri := range cert.URIs {
 		if uri == nil || uri.Scheme != "spiffe" || uri.Host != tenantTrustDomain {
 			continue
 		}
-		_, role, found := strings.Cut(uri.Path, "/role/")
-		if !found {
+		if !strings.HasPrefix(uri.Path, rolePrefix) {
 			continue
 		}
+		role := strings.TrimPrefix(uri.Path, rolePrefix)
 		if ValidAgentRole(role) {
 			roles = append(roles, strings.TrimSpace(role))
 		}
@@ -953,7 +964,7 @@ func AgentRolesBeyond(requested, signed []string) []string {
 	return beyond
 }
 
-// validateAgentCommonName rejects a CSR subject that would change the STRUCTURE
+// ValidateAgentCommonName rejects an agent subject that would change the STRUCTURE
 // of the SPIFFE ID built from it, rather than merely naming the agent.
 //
 // The identity path is /tenant/<id>/agent/<cn>, and capabilities are additional
@@ -961,7 +972,7 @@ func AgentRolesBeyond(requested, signed []string) []string {
 // the CA never granted. Percent, backslash and control characters are refused
 // for the same reason: they can survive URL parsing into a different path than
 // the one that was reviewed.
-func validateAgentCommonName(cn string) error {
+func ValidateAgentCommonName(cn string) error {
 	trimmed := strings.TrimSpace(cn)
 	if trimmed == "" {
 		return errors.New("mtls: agent CSR has no common name")

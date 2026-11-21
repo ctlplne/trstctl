@@ -25,6 +25,10 @@ import (
 // transport stack (the same decoupling as BootstrapTokenIssuer).
 var ErrInvalidBootstrapToken = errors.New("api: invalid or already-used bootstrap token")
 
+// ErrInvalidAgentCSR is a malformed agent identity in an otherwise parseable CSR.
+// The bootstrap token is not consumed for this client error.
+var ErrInvalidAgentCSR = errors.New("api: invalid agent CSR")
+
 // ErrUnauthenticatedAgentRenewal is what a renewal-capable enroller returns when a
 // request is not authenticated by a verified current agent client certificate.
 var ErrUnauthenticatedAgentRenewal = errors.New("api: agent renewal requires a verified client certificate")
@@ -166,6 +170,10 @@ func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, ErrInvalidBootstrapToken) {
 			a.writeError(w, errStatus(http.StatusUnauthorized, "invalid or already-used bootstrap token"))
+			return
+		}
+		if errors.Is(err, ErrInvalidAgentCSR) {
+			a.writeError(w, errStatus(http.StatusBadRequest, "agent CSR has an invalid identity"))
 			return
 		}
 		a.writeError(w, err)

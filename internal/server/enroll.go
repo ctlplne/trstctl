@@ -48,6 +48,9 @@ func (e enrollAuthority) EnrollBootstrap(ctx context.Context, token []byte, csrD
 	if errors.Is(err, enroll.ErrBadToken) {
 		return nil, fmt.Errorf("%w", api.ErrInvalidBootstrapToken)
 	}
+	if errors.Is(err, enroll.ErrInvalidAgentIdentity) {
+		return nil, fmt.Errorf("%w: %v", api.ErrInvalidAgentCSR, err)
+	}
 	return chain, err
 }
 

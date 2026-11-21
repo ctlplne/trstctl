@@ -36,6 +36,10 @@ import (
 // used. It is deliberately coarse so a caller cannot distinguish those cases.
 var ErrBadToken = errors.New("enroll: invalid, expired, or already-used bootstrap token")
 
+// ErrInvalidAgentIdentity leaves the bootstrap token usable when a CSR's name
+// would forge SPIFFE identity or capability path segments.
+var ErrInvalidAgentIdentity = errors.New("enroll: invalid agent identity")
+
 // DefaultTokenTTL is how long a freshly minted bootstrap token is redeemable. A
 // bootstrap token is meant to be used promptly during provisioning, so the window
 // is short.
@@ -293,6 +297,13 @@ func (a *Authority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []
 	// operator can retry with a sound key (owner decision, batch 11).
 	if err := a.refuseAgentKey(ctx, "", csrDER); err != nil {
 		return nil, err
+	}
+	name, err := mtls.CSRCommonName(csrDER)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidAgentIdentity, err)
+	}
+	if err := mtls.ValidateAgentCommonName(name); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidAgentIdentity, err)
 	}
 	hash := bootstrapLookupHash(token)
 	redeemed, err := a.store.Redeem(ctx, hash)

@@ -4,6 +4,9 @@ package mtls
 
 import (
 	"testing"
+	"time"
+
+	boundary "trstctl.com/trstctl/internal/crypto"
 )
 
 // TestAgentCommonNameCannotForgeRoleSegments is the regression guard for the
@@ -23,14 +26,14 @@ func TestAgentCommonNameCannotForgeRoleSegments(t *testing.T) {
 		"agent1?x=1",
 		"agent1#frag",
 	} {
-		if err := validateAgentCommonName(cn); err == nil {
+		if err := ValidateAgentCommonName(cn); err == nil {
 			t.Errorf("common name %q was accepted; it can forge SPIFFE path segments", cn)
 		}
 	}
 
 	// Empty, padded and control-character subjects are refused too.
 	for _, cn := range []string{"", "   ", " agent1", "agent1 ", "agent\x001"} {
-		if err := validateAgentCommonName(cn); err == nil {
+		if err := ValidateAgentCommonName(cn); err == nil {
 			t.Errorf("common name %q was accepted", cn)
 		}
 	}
@@ -46,8 +49,47 @@ func TestAgentCommonNameAcceptsOrdinarySubjects(t *testing.T) {
 		"agent.eu-west-1.prod",
 		"AGENT-42",
 	} {
-		if err := validateAgentCommonName(cn); err != nil {
+		if err := ValidateAgentCommonName(cn); err != nil {
 			t.Errorf("ordinary agent name %q was refused: %v", cn, err)
 		}
+	}
+}
+
+// Certificates minted before the served issuer used the common-name guard must
+// not keep a forged capability alive through a channel connection or renewal.
+func TestPreviouslyIssuedRolePathCertificateIsRejected(t *testing.T) {
+	const tenant = "11111111-1111-1111-1111-111111111111"
+	const forgedName = "host-a/role/network"
+	caKey, err := boundary.GenerateLockedKey(boundary.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer caKey.Destroy()
+	caDER, err := boundary.SelfSignedCACert(caKey, "legacy agent CA", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentKey, err := boundary.GenerateLockedKey(boundary.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer agentKey.Destroy()
+	csr, err := boundary.CreateCertificateRequest(boundary.CertificateRequestTemplate{CommonName: forgedName}, agentKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain, err := boundary.SignAgentClientCSR(caDER, caKey, csr, AgentSPIFFEID(tenant, forgedName), nil, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafDER, err := FirstCertDER(chain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PeerCertInfoFromDER(leafDER); err == nil {
+		t.Fatal("channel accepted a previously issued agent certificate with forged role segments")
+	}
+	if _, err := AgentRolesFromClientCert(leafDER); err == nil {
+		t.Fatal("role reader accepted a previously issued agent certificate with forged role segments")
 	}
 }
