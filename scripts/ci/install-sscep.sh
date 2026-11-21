@@ -17,6 +17,7 @@ tar -xzf "${archive}" -C "${tmp}"
 
 cmake -S "${tmp}/sscep-${version}" -B "${tmp}/build" \
 	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
 	-DCMAKE_INSTALL_PREFIX="${prefix}" \
 	-DENABLE_ENGINES=OFF
 cmake --build "${tmp}/build" --parallel 2
