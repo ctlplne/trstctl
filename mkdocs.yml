@@ -175,6 +175,7 @@ nav:
   - Feature reference:
       - All features: features.md
       - Discovery and inventory: features/discovery-and-inventory.md
+      - Cloud machine entitlement changes: design/cloud-machine-entitlements.md
       - Observability and risk: features/observability-and-risk.md
       - Issuance and certificate authorities: features/issuance-and-cas.md
       - ACME and DNS validation: features/acme-and-dns.md

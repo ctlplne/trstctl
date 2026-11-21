@@ -3593,6 +3593,23 @@ containment, enabled with `endpoint.contain`), `endpoint.purge`, `connector.take
 post-upgrade functional check every polling agent answers, A71) —
 all have shipped executors. Enabling a kind exposes that already-built executor; it
 does not turn a placeholder into work.
+
+The native Windows jobs are `host.windows_local_accounts.inventory`,
+`host.windows_local_accounts.rotate`, `host.windows_dependents.inventory`, and
+`host.windows_dependents.rotation`. The first pair reads and rotates an exact
+local SAM account; the second inventories and updates the services, tasks, and
+IIS pools bound to that account. Their operator-owned host profile names the
+account SID and the specific changes the agent may make.
+
+Gateway sessions use separate held-job kinds: `access.gateway.session.rules.v1`,
+`access.gateway.session.rules.ssh.v1`, `access.gateway.session.rules.mysql.v1`,
+`access.gateway.session.rules.redis.v1`, `access.gateway.session.rules.mongodb.v1`,
+`access.gateway.session.rules.clickhouse.v1`, `access.gateway.session.netdevice.v1`,
+`access.gateway.session.rules.netdevice.v1`, and `access.gateway.session.web.v1`.
+The native desktop kinds `access.gateway.session.desktop.v1` and
+`access.gateway.session.desktop.ad.v1` are claimed only when the gateway
+operator configures the desktop helper; an ordinary gateway does not reserve
+work it cannot execute.
 Anything outside that allowlist is dropped even if an operator names it in
 configuration, so `ca.issue` and `notification.expiry` cannot be moved onto a host:
 those are the control plane's own effects and CA-adjacent work does not belong in
