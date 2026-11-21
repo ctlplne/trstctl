@@ -3,6 +3,7 @@
 package signing
 
 import (
+	"strconv"
 	"strings"
 
 	"google.golang.org/grpc/codes"
@@ -18,7 +19,53 @@ import (
 func isCustodyHandleNamespace(handle string) bool {
 	return strings.HasPrefix(handle, "agid-issuing-ca-") ||
 		strings.HasPrefix(handle, "agid-agent:") ||
-		strings.HasPrefix(handle, "pcas:")
+		(strings.HasPrefix(handle, "pcas:") && !isGenericPCASBootstrapHandle(handle))
+}
+
+// PCAS bootstrap predates the typed custody minter: its tenant trust root,
+// epoch-zero identity key and delegation receipt are generated through the
+// generic key RPC and use generic Sign during initial registration. Successor
+// keys are minted through GenerateSuccessorKey (and carry custodyOnly), while
+// their legacy epoch handles stay denied here even if the sealed flag is absent.
+// Keep this compatibility aperture to three exact, fixed-shape handle classes.
+func isGenericPCASBootstrapHandle(handle string) bool {
+	if handle == "pcas:delegation:receipt:v1" {
+		return true
+	}
+	if digest, ok := strings.CutPrefix(handle, "pcas:tenant-root:v1:"); ok {
+		return isLowerHexSHA256(digest)
+	}
+	if digest, ok := strings.CutPrefix(handle, "pcas:v2:"); ok {
+		if identityDigest, found := strings.CutSuffix(digest, ":0"); found {
+			return isLowerHexSHA256(identityDigest)
+		}
+	}
+	return false
+}
+
+func isLowerHexSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, c := range value {
+		if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// isPCASGenericPairedHandle recognizes the older KEM rewrap's explicit
+// GenerateKey route. A successor minted by GenerateSuccessorKey never receives
+// this provenance flag, even if it uses the same per-epoch handle shape.
+func isPCASGenericPairedHandle(handle string) bool {
+	parts := strings.Split(handle, ":")
+	if len(parts) != 4 || parts[0] != "pcas" || parts[1] != "v2" || !isLowerHexSHA256(parts[2]) {
+		return false
+	}
+	epoch, err := strconv.ParseUint(parts[3], 10, 64)
+	return err == nil && epoch > 0 && strconv.FormatUint(epoch, 10) == parts[3]
 }
 
 // keyConstraints are the signer-enforceable usage limits attached to a key at
@@ -52,6 +99,10 @@ type keyConstraints struct {
 	// custody seam. The returned in-process signer may sign for its checked
 	// operation, but a peer on the signer socket may not use generic Sign.
 	custodyOnly bool
+	// genericPCAS records that GenerateKey explicitly created a PCAS paired
+	// signer, whose existing KEM rewrap path still uses generic signing. Legacy
+	// unmarked PCAS successors stay denied by the reserved namespace rule.
+	genericPCAS bool
 	// importReceipt binds a v2 imported key to one exact approved request.
 	importReceipt [32]byte
 }

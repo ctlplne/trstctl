@@ -151,9 +151,16 @@ fully mitigate; defense in depth lives upstream and around it:
   remains usable by the checked mint or issuance operation, including after a
   restart. The generic `Sign` RPC refuses those handles for every asserted
   purpose, so an on-socket peer cannot submit its own digest under an AGID
-  issuing CA key, agent key, or PCAS successor key. Existing sealed keys from
-  before this flag also refuse generic `Sign` when their handles use the
-  reserved AGID or PCAS custody namespaces (CR-188).
+  issuing CA key, agent key, or custody-minted PCAS successor key. Existing
+  sealed AGID keys and unmarked PCAS successor handles also refuse generic
+  `Sign`. PCAS bootstrap uses three fixed-shape generic handles (tenant trust
+  root, epoch-zero key, delegation receipt). The older paired KEM rewrap path
+  explicitly generates its signing successor through `GenerateKey`; that origin
+  is sealed as `genericPCAS` so a restart does not confuse it with an unmarked
+  custody key. This paired path can still sign caller-provided digests through
+  generic `Sign`. Moving it into a typed signer-side PCAS ceremony remains open
+  under CR-188; the origin bit preserves the existing workflow but is not a
+  replacement for that security boundary.
 
 What the signer guarantees is narrower and absolute: the private key bytes
 never leave the process, even under full control-plane compromise. A
