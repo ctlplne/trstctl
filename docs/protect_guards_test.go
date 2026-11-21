@@ -3678,7 +3678,7 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 		`"linux-amd64"`,
 		`"linux-arm64v8"`,
 		`"darwin-arm64v8"`,
-		`const bundledPGVersion = "16.15.0"`,
+		`const bundledPGVersion = "16.16.0"`,
 	)
 	verifyPG := read(t, "../internal/server/bundled_pg_verify.go")
 	check("internal/server/bundled_pg_verify.go", verifyPG,

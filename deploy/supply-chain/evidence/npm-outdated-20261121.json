@@ -1,0 +1,240 @@
+{
+  "@eslint/js": {
+    "current": "9.39.5",
+    "wanted": "9.39.5",
+    "latest": "10.0.1",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@eslint/js"
+  },
+  "@fontsource-variable/sora": {
+    "current": "5.2.8",
+    "wanted": "5.2.8",
+    "latest": "5.3.0",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@fontsource-variable/sora"
+  },
+  "@fontsource-variable/syne": {
+    "current": "5.2.7",
+    "wanted": "5.2.7",
+    "latest": "5.3.0",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@fontsource-variable/syne"
+  },
+  "@fontsource/dm-mono": {
+    "current": "5.2.7",
+    "wanted": "5.2.7",
+    "latest": "5.3.0",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@fontsource/dm-mono"
+  },
+  "@hookform/resolvers": {
+    "current": "5.4.0",
+    "wanted": "5.4.0",
+    "latest": "7.0.8",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@hookform/resolvers"
+  },
+  "@playwright/test": {
+    "current": "1.61.1",
+    "wanted": "1.61.1",
+    "latest": "1.65.1",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@playwright/test"
+  },
+  "@size-limit/file": {
+    "current": "12.1.0",
+    "wanted": "12.1.0",
+    "latest": "14.3.0",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@size-limit/file"
+  },
+  "@storybook/addon-a11y": {
+    "current": "10.6.3",
+    "wanted": "10.6.3",
+    "latest": "10.6.8",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@storybook/addon-a11y"
+  },
+  "@storybook/react-vite": {
+    "current": "10.6.3",
+    "wanted": "10.6.3",
+    "latest": "10.6.8",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@storybook/react-vite"
+  },
+  "@tailwindcss/postcss": {
+    "current": "4.3.3",
+    "wanted": "4.3.3",
+    "latest": "4.3.5",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@tailwindcss/postcss"
+  },
+  "@tanstack/react-query": {
+    "current": "5.101.4",
+    "wanted": "5.101.4",
+    "latest": "5.108.2",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@tanstack/react-query"
+  },
+  "@testing-library/jest-dom": {
+    "current": "6.9.1",
+    "wanted": "6.9.1",
+    "latest": "8.0.0",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@testing-library/jest-dom"
+  },
+  "@testing-library/react": {
+    "current": "16.3.2",
+    "wanted": "16.3.2",
+    "latest": "16.3.3",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@testing-library/react"
+  },
+  "@testing-library/user-event": {
+    "current": "14.6.1",
+    "wanted": "14.6.1",
+    "latest": "14.6.13",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@testing-library/user-event"
+  },
+  "@types/node": {
+    "current": "22.20.5",
+    "wanted": "22.20.5",
+    "latest": "26.6.6",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@types/node"
+  },
+  "@vitejs/plugin-react": {
+    "current": "6.0.4",
+    "wanted": "6.0.4",
+    "latest": "6.3.0",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@vitejs/plugin-react"
+  },
+  "@vitest/coverage-v8": {
+    "current": "5.0.5",
+    "wanted": "5.0.5",
+    "latest": "5.1.1",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/@vitest/coverage-v8"
+  },
+  "eslint": {
+    "current": "9.39.5",
+    "wanted": "9.39.5",
+    "latest": "10.15.0",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/eslint"
+  },
+  "globals": {
+    "current": "16.5.0",
+    "wanted": "16.5.0",
+    "latest": "17.14.0",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/globals"
+  },
+  "jsdom": {
+    "current": "25.0.1",
+    "wanted": "25.0.1",
+    "latest": "31.0.1",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/jsdom"
+  },
+  "lucide-react": {
+    "current": "0.454.0",
+    "wanted": "0.454.0",
+    "latest": "1.77.0",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/lucide-react"
+  },
+  "postcss": {
+    "current": "8.5.23",
+    "wanted": "8.5.23",
+    "latest": "8.5.33",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/postcss"
+  },
+  "prettier": {
+    "current": "3.8.4",
+    "wanted": "3.8.4",
+    "latest": "3.10.1",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/prettier"
+  },
+  "react-hook-form": {
+    "current": "7.82.0",
+    "wanted": "7.82.0",
+    "latest": "7.92.0",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/react-hook-form"
+  },
+  "react-router-dom": {
+    "current": "7.18.4",
+    "wanted": "7.18.4",
+    "latest": "7.18.6",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/react-router-dom"
+  },
+  "size-limit": {
+    "current": "12.1.0",
+    "wanted": "12.1.0",
+    "latest": "14.3.0",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/size-limit"
+  },
+  "storybook": {
+    "current": "10.6.3",
+    "wanted": "10.6.3",
+    "latest": "10.6.8",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/storybook"
+  },
+  "tailwind-merge": {
+    "current": "3.7.0",
+    "wanted": "3.7.0",
+    "latest": "3.7.1",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/tailwind-merge"
+  },
+  "tailwindcss": {
+    "current": "4.3.3",
+    "wanted": "4.3.3",
+    "latest": "4.3.5",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/tailwindcss"
+  },
+  "terser": {
+    "current": "5.51.2",
+    "wanted": "5.51.2",
+    "latest": "5.51.4",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/terser"
+  },
+  "typescript": {
+    "current": "6.0.3",
+    "wanted": "6.0.3",
+    "latest": "7.0.2",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/typescript"
+  },
+  "typescript-eslint": {
+    "current": "8.65.0",
+    "wanted": "8.65.0",
+    "latest": "8.73.0",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/typescript-eslint"
+  },
+  "vite": {
+    "current": "8.3.5",
+    "wanted": "8.3.5",
+    "latest": "8.3.8",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/vite"
+  },
+  "vitest": {
+    "current": "5.0.5",
+    "wanted": "5.0.5",
+    "latest": "5.1.1",
+    "dependent": "web",
+    "location": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl/web/node_modules/vitest"
+  }
+}

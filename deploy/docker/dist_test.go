@@ -1061,7 +1061,7 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 	// (3) The embedded-postgres runtime binary is given provenance and a scan: a
 	// committed manifest pins the version + source, and CI verifies its checksum.
 	manifest := repoFile(t, "deploy", "supply-chain", "embedded-postgres.json")
-	mustContainAll(t, "embedded-postgres manifest", manifest, "16.15.0", "sha256")
+	mustContainAll(t, "embedded-postgres manifest", manifest, "16.16.0", "sha256")
 	mustContainAll(t, "embedded-postgres scanner receipt policy", manifest,
 		"receiptArtifact", "embedded-postgres-trivy-receipt", "failOnFixableHighOrCritical",
 		"PostgreSQL Global Development Group CVE Numbering Authority", "exactVersionRequired",

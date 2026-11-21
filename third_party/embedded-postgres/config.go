@@ -31,7 +31,7 @@ type Config struct {
 
 // DefaultConfig provides a default set of configuration to be used "as is" or modified using the provided builders.
 // The following can be assumed as defaults:
-// Version:      16.15.0 (the independently pinned evaluation archive)
+// Version:      16.16.0 (the independently pinned evaluation archive)
 // Port:         5432
 // Database:     postgres
 // Username:     postgres
@@ -166,7 +166,7 @@ type PostgresVersion string
 const (
 	V18 = PostgresVersion("18.3.0")
 	V17 = PostgresVersion("17.5.0")
-	V16 = PostgresVersion("16.15.0")
+	V16 = PostgresVersion("16.16.0")
 	V15 = PostgresVersion("15.13.0")
 	V14 = PostgresVersion("14.18.0")
 	V13 = PostgresVersion("13.21.0")

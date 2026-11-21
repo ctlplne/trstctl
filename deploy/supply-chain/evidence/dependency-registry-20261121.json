@@ -1,0 +1,1451 @@
+{
+  "observed_at": "2026-11-21",
+  "sources": {
+    "@vitest/coverage-v8": {
+      "response": {
+        "_hasShrinkwrap": false,
+        "_id": "@vitest/coverage-v8@5.1.1",
+        "_nodeVersion": "24.22.2",
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/coverage-v8_5.1.1_1794987310090_0.983155950845142"
+        },
+        "_npmUser": {
+          "approver": {
+            "email": "hi.ogawa.zz@gmail.com",
+            "name": "hiogawa"
+          },
+          "email": "npm-oidc-no-reply@github.com",
+          "name": "GitHub Actions",
+          "trustedPublisher": {
+            "id": "github",
+            "oidcConfigId": "20ee9559-b9b1-495e-8ed2-682389c4d2a2"
+          }
+        },
+        "author": "Anthony Fu <anthonyfu117@hotmail.com>",
+        "bugs": {
+          "url": "https://github.com/vitest-dev/vitest/issues"
+        },
+        "dependencies": {
+          "@bcoe/v8-coverage": "^1.0.2",
+          "@vitest/istanbul-lib-coverage": "^2.1.0",
+          "@vitest/istanbul-lib-report": "^2.1.0",
+          "ast-v8-to-istanbul": "^1.0.7",
+          "magicast": "^0.5.5",
+          "obug": "^3.0.0",
+          "std-env": "^4.3.0",
+          "tinyrainbow": "^3.2.0"
+        },
+        "description": "V8 coverage provider for Vitest",
+        "devDependencies": {
+          "@vitest/browser": "5.1.1",
+          "@vitest/browser-playwright": "5.1.1",
+          "pathe": "^2.0.3",
+          "vitest": "5.1.1"
+        },
+        "directories": {},
+        "dist": {
+          "attestations": {
+            "provenance": {
+              "predicateType": "https://slsa.dev/provenance/v1"
+            },
+            "url": "https://registry.npmjs.org/-/npm/v1/attestations/@vitest%2fcoverage-v8@5.1.1"
+          },
+          "fileCount": 11,
+          "integrity": "sha512-xL4NkbVx/UqqDHaXSOyvB8qsSoLQ+dVNGR9H2Bh/4ggQtmaPFNPUC9gZQwKZePLOQ6WDcgwXVnPulFW9eCHt0w==",
+          "shasum": "fa9ffc8dcec22ff0bde88df1d4db376c72e37801",
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEQCIQCnizKCJv52vZS6k0gFo5aM5lFDGDlWT5yzkdJRqT5+6QIfZXJi9vT8LIzTVdCK51C13HlOOmZwQAnAC2/tykSMcw=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/@vitest/coverage-v8/-/coverage-v8-5.1.1.tgz",
+          "unpackedSize": 30434
+        },
+        "exports": {
+          ".": {
+            "default": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+          },
+          "./*": "./*",
+          "./browser": {
+            "default": "./dist/browser.js",
+            "types": "./dist/browser.d.ts"
+          }
+        },
+        "funding": "https://opencollective.com/vitest",
+        "homepage": "https://vitest.dev/guide/coverage",
+        "keywords": [
+          "vite",
+          "vitest",
+          "test",
+          "coverage",
+          "v8"
+        ],
+        "license": "MIT",
+        "main": "./dist/index.js",
+        "maintainers": [
+          {
+            "email": "ari.perkkio@gmail.com",
+            "name": "ariperkkio"
+          },
+          {
+            "email": "anthonyfu117@hotmail.com",
+            "name": "antfu"
+          },
+          {
+            "email": "hi.ogawa.zz@gmail.com",
+            "name": "hiogawa"
+          },
+          {
+            "email": "foxzdavinci@gmail.com",
+            "name": "oreanno"
+          },
+          {
+            "email": "yyx990803@gmail.com",
+            "name": "yyx990803"
+          }
+        ],
+        "module": "./dist/index.js",
+        "name": "@vitest/coverage-v8",
+        "peerDependencies": {
+          "@vitest/browser": "5.1.1",
+          "vitest": "5.1.1"
+        },
+        "peerDependenciesMeta": {
+          "@vitest/browser": {
+            "optional": true
+          }
+        },
+        "repository": {
+          "directory": "packages/coverage-v8",
+          "type": "git",
+          "url": "git+https://github.com/vitest-dev/vitest.git"
+        },
+        "scripts": {
+          "build": "premove dist && rollup -c",
+          "dev": "rollup -c --watch --watch.include 'src/**'"
+        },
+        "sideEffects": false,
+        "type": "module",
+        "types": "./dist/index.d.ts",
+        "version": "5.1.1"
+      },
+      "sha256": "f575a03ebc2bb05592effc1fbc398f6c6fa0301b6a56758388c0f85e361ad30f",
+      "url": "https://registry.npmjs.org/%40vitest%2Fcoverage-v8/latest",
+      "version": "5.1.1"
+    },
+    "github.com/fergusstrange/embedded-postgres": {
+      "response": {
+        "Origin": {
+          "Hash": "490777eebf4d3fe8615496cd4fc8430f5b93379d",
+          "Ref": "refs/tags/v1.34.0",
+          "URL": "https://github.com/fergusstrange/embedded-postgres",
+          "VCS": "git"
+        },
+        "Time": "2026-03-17T23:51:44Z",
+        "Version": "v1.34.0"
+      },
+      "sha256": "b765ffb6436a71c5bae0b6cc112169de3782065f5dcae7e00d0fd4f52a824481",
+      "url": "https://proxy.golang.org/github.com/fergusstrange/embedded-postgres/@latest",
+      "version": "v1.34.0"
+    },
+    "github.com/jackc/pgx/v5": {
+      "response": {
+        "Origin": {
+          "Hash": "1e38d71d74e94fd3b35cbe5b3415109a870d5b91",
+          "Ref": "refs/tags/v5.13.0",
+          "URL": "https://github.com/jackc/pgx",
+          "VCS": "git"
+        },
+        "Time": "2026-11-11T18:26:18Z",
+        "Version": "v5.13.0"
+      },
+      "sha256": "12f2e46dac897ac9d8f9c27842c3b937ef26c38700b94fd477f7375a9566a50f",
+      "url": "https://proxy.golang.org/github.com/jackc/pgx/v5/@latest",
+      "version": "v5.13.0"
+    },
+    "github.com/nats-io/nats-server/v2": {
+      "response": {
+        "Origin": {
+          "Hash": "2a9066eb57ff4aa50d8e6a979bdfbd6a8b9db251",
+          "Ref": "refs/heads/release/v2.15.3",
+          "URL": "https://github.com/nats-io/nats-server",
+          "VCS": "git"
+        },
+        "Time": "2026-11-11T11:09:33Z",
+        "Version": "v2.15.3"
+      },
+      "sha256": "8b509e1ce20a89aa45cc964dbe49b46416bd8641d6896dfa6d9dd46fd1909d13",
+      "url": "https://proxy.golang.org/github.com/nats-io/nats-server/v2/@latest",
+      "version": "v2.15.3"
+    },
+    "github.com/open-policy-agent/opa": {
+      "response": {
+        "Origin": {
+          "Hash": "ba39415db4b3c90cd68942a74b3cc2223ec2b23c",
+          "Ref": "refs/tags/v1.22.4",
+          "URL": "https://github.com/open-policy-agent/opa",
+          "VCS": "git"
+        },
+        "Time": "2026-11-12T10:00:27Z",
+        "Version": "v1.22.4"
+      },
+      "sha256": "0df95004a461202e6e2d38dae6c1d0e6fe7abecfc753694a54828e3e249c1210",
+      "url": "https://proxy.golang.org/github.com/open-policy-agent/opa/@latest",
+      "version": "v1.22.4"
+    },
+    "github.com/tetratelabs/wazero": {
+      "response": {
+        "Origin": {
+          "Hash": "2ab480b55fa408d6b35df97fe32a60d08bd6e201",
+          "Ref": "refs/tags/v1.12.0",
+          "URL": "https://github.com/tetratelabs/wazero",
+          "VCS": "git"
+        },
+        "Time": "2026-05-28T15:27:49Z",
+        "Version": "v1.12.0"
+      },
+      "sha256": "1b1d8728bff93e522a788d13f46f6e0f5e5b52a0fc9c3f3a6a1c68b3cf6fdefc",
+      "url": "https://proxy.golang.org/github.com/tetratelabs/wazero/@latest",
+      "version": "v1.12.0"
+    },
+    "google.golang.org/grpc": {
+      "response": {
+        "Origin": {
+          "Hash": "c9ab42cdb0a2b3e7b9d5510ebbc999638ee41eb7",
+          "Ref": "refs/tags/v1.85.0",
+          "URL": "https://github.com/grpc/grpc-go",
+          "VCS": "git"
+        },
+        "Time": "2026-10-27T09:27:04Z",
+        "Version": "v1.85.0"
+      },
+      "sha256": "ffd2a76523eacaef63716e117aa6825a71cd390e8bdceb77d00ead2f151201a3",
+      "url": "https://proxy.golang.org/google.golang.org/grpc/@latest",
+      "version": "v1.85.0"
+    },
+    "react": {
+      "response": {
+        "_hasShrinkwrap": false,
+        "_id": "react@19.3.1",
+        "_nodeVersion": "24.21.0",
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/react_19.3.1_1791996435215_0.328829163279329"
+        },
+        "_npmUser": {
+          "email": "npm-oidc-no-reply@github.com",
+          "name": "GitHub Actions",
+          "trustedPublisher": {
+            "id": "github",
+            "oidcConfigId": "19f8086e-9f33-439e-8cce-d73997f53038"
+          }
+        },
+        "_npmVersion": "11.19.0",
+        "bugs": {
+          "url": "https://github.com/react/react/issues"
+        },
+        "description": "React is a JavaScript library for building user interfaces.",
+        "directories": {},
+        "dist": {
+          "attestations": {
+            "provenance": {
+              "predicateType": "https://slsa.dev/provenance/v1"
+            },
+            "url": "https://registry.npmjs.org/-/npm/v1/attestations/react@19.3.1"
+          },
+          "fileCount": 27,
+          "integrity": "sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw==",
+          "shasum": "26e9523fc36ea06be5050ebb780249a133260ad7",
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEUCIDFKwsaTXLOJNpD3WJ6dy5E7wkTf2QNrZgmlItJn3Cy4AiEAoAvLd5MEj+CHKGO1a81NFTiC79fQLibq7JqAPGvPC0w="
+            },
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEQCIG60Jz/rQm93/m8ZTZvxX3fxIhTqB5EnASV642pG4n94AiA8XxzTRyCDS6L54HKPSciJX3l/dcW5MjgnFd4plotjSg=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/react/-/react-19.3.1.tgz",
+          "unpackedSize": 178663
+        },
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "exports": {
+          ".": {
+            "default": "./index.js",
+            "react-server": "./react.react-server.js"
+          },
+          "./compiler-runtime": {
+            "default": "./compiler-runtime.js",
+            "react-server": "./compiler-runtime.js"
+          },
+          "./jsx-dev-runtime": {
+            "default": "./jsx-dev-runtime.js",
+            "react-server": "./jsx-dev-runtime.react-server.js"
+          },
+          "./jsx-runtime": {
+            "default": "./jsx-runtime.js",
+            "react-server": "./jsx-runtime.react-server.js"
+          },
+          "./package.json": "./package.json"
+        },
+        "gitHead": "61aa00df822d0eb76d0362eb8b6fdd3527693efe",
+        "homepage": "https://react.dev/",
+        "keywords": [
+          "react"
+        ],
+        "license": "MIT",
+        "main": "index.js",
+        "maintainers": [
+          {
+            "email": "opensource+npm@fb.com",
+            "name": "fb"
+          },
+          {
+            "email": "react-core@meta.com",
+            "name": "react-bot"
+          }
+        ],
+        "name": "react",
+        "repository": {
+          "directory": "packages/react",
+          "type": "git",
+          "url": "git+https://github.com/react/react.git"
+        },
+        "version": "19.3.1"
+      },
+      "sha256": "ecf8c02b9096a7813842d87fae50a707a8809c5c3d0ec6b359ac51d40188ff6f",
+      "url": "https://registry.npmjs.org/react/latest",
+      "version": "19.3.1"
+    },
+    "react-dom": {
+      "response": {
+        "_hasShrinkwrap": false,
+        "_id": "react-dom@19.3.1",
+        "_nodeVersion": "24.21.0",
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/react-dom_19.3.1_1791996549929_0.009845542040066046"
+        },
+        "_npmUser": {
+          "email": "npm-oidc-no-reply@github.com",
+          "name": "GitHub Actions",
+          "trustedPublisher": {
+            "id": "github",
+            "oidcConfigId": "d9cd0825-8595-47d6-b8ae-76fbc589cbd8"
+          }
+        },
+        "_npmVersion": "11.19.0",
+        "browser": {
+          "./server.js": "./server.browser.js",
+          "./static.js": "./static.browser.js"
+        },
+        "bugs": {
+          "url": "https://github.com/react/react/issues"
+        },
+        "dependencies": {
+          "scheduler": "^0.28.0"
+        },
+        "description": "React package for working with the DOM.",
+        "directories": {},
+        "dist": {
+          "attestations": {
+            "provenance": {
+              "predicateType": "https://slsa.dev/provenance/v1"
+            },
+            "url": "https://registry.npmjs.org/-/npm/v1/attestations/react-dom@19.3.1"
+          },
+          "fileCount": 43,
+          "integrity": "sha512-Y0bARz53lhEC1NMCASs0/j+faB/zqt3R8hpvg1e8+61ZVJ4UL0UdC4cBbXfZMcIuhrfgeILTLe+ZeBCavQPtKQ==",
+          "shasum": "b384c53cfcbe9c2a5d09d863b98455de9d68afe2",
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEYCIQDKhj2WJ0+n7p8mYN1rC0wCt9+cD0S58A7JGp6iSDsusgIhAIzdEcBxzxMDJ5pGXlJ1Qw+Utal8MwAbfud/9Fm04N1N"
+            },
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEYCIQCVaB5TV8fUMl1DUqtKZxsqf+6v/itdKfx9lY/4yHu8kwIhANkvM3hU52XEwXbe6/xrseK88Q6blbENfk+peCPY6Ih4"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/react-dom/-/react-dom-19.3.1.tgz",
+          "unpackedSize": 8067632
+        },
+        "exports": {
+          ".": {
+            "default": "./index.js",
+            "react-server": "./react-dom.react-server.js"
+          },
+          "./client": {
+            "default": "./client.js",
+            "react-server": "./client.react-server.js"
+          },
+          "./package.json": "./package.json",
+          "./profiling": {
+            "default": "./profiling.js",
+            "react-server": "./profiling.react-server.js"
+          },
+          "./server": {
+            "browser": "./server.browser.js",
+            "bun": "./server.bun.js",
+            "default": "./server.node.js",
+            "deno": "./server.node.js",
+            "edge-light": "./server.edge.js",
+            "node": "./server.node.js",
+            "react-server": "./server.react-server.js",
+            "worker": "./server.browser.js",
+            "workerd": "./server.edge.js"
+          },
+          "./server.browser": {
+            "default": "./server.browser.js",
+            "react-server": "./server.react-server.js"
+          },
+          "./server.bun": {
+            "default": "./server.bun.js",
+            "react-server": "./server.react-server.js"
+          },
+          "./server.edge": {
+            "default": "./server.edge.js",
+            "react-server": "./server.react-server.js"
+          },
+          "./server.node": {
+            "default": "./server.node.js",
+            "react-server": "./server.react-server.js"
+          },
+          "./static": {
+            "browser": "./static.browser.js",
+            "default": "./static.node.js",
+            "deno": "./static.browser.js",
+            "edge-light": "./static.edge.js",
+            "node": "./static.node.js",
+            "react-server": "./static.react-server.js",
+            "worker": "./static.browser.js",
+            "workerd": "./static.edge.js"
+          },
+          "./static.browser": {
+            "default": "./static.browser.js",
+            "react-server": "./static.react-server.js"
+          },
+          "./static.edge": {
+            "default": "./static.edge.js",
+            "react-server": "./static.react-server.js"
+          },
+          "./static.node": {
+            "default": "./static.node.js",
+            "react-server": "./static.react-server.js"
+          },
+          "./test-utils": "./test-utils.js"
+        },
+        "gitHead": "61aa00df822d0eb76d0362eb8b6fdd3527693efe",
+        "homepage": "https://react.dev/",
+        "keywords": [
+          "react"
+        ],
+        "license": "MIT",
+        "main": "index.js",
+        "maintainers": [
+          {
+            "email": "opensource+npm@fb.com",
+            "name": "fb"
+          },
+          {
+            "email": "react-core@meta.com",
+            "name": "react-bot"
+          }
+        ],
+        "name": "react-dom",
+        "peerDependencies": {
+          "react": "^19.3.1"
+        },
+        "repository": {
+          "directory": "packages/react-dom",
+          "type": "git",
+          "url": "git+https://github.com/react/react.git"
+        },
+        "scripts": {
+          "start": "node server.js"
+        },
+        "version": "19.3.1"
+      },
+      "sha256": "2d72d7d33a8b0fea5614e1b415d06470877efa8eebbdf638cee04e5b83c2c7a5",
+      "url": "https://registry.npmjs.org/react-dom/latest",
+      "version": "19.3.1"
+    },
+    "react-router-dom": {
+      "response": {
+        "_from": "file:react-router-dom-7.18.6.tgz",
+        "_hasShrinkwrap": false,
+        "_id": "react-router-dom@7.18.6",
+        "_integrity": "sha512-a8JzFsKEY3EY9QL7t4T1b1OhuY0ngEfwMzXQNgBO/2cuIW9028JbVq3uk2rKnjLredzcIoDKLzUkguIq6fnkFA==",
+        "_nodeVersion": "24.22.2",
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/react-router-dom_7.18.6_1795023359864_0.12307485506563609"
+        },
+        "_npmUser": {
+          "email": "npm-oidc-no-reply@github.com",
+          "name": "GitHub Actions",
+          "trustedPublisher": {
+            "id": "github",
+            "oidcConfigId": "73c5f91d-9b75-44a5-83e3-0981a0f92690"
+          }
+        },
+        "_npmVersion": "11.19.1",
+        "_resolved": "/tmp/ef3bea0a1e8af27dc0c1f557b7968891/react-router-dom-7.18.6.tgz",
+        "author": {
+          "email": "hello@remix.run",
+          "name": "Remix Software"
+        },
+        "bugs": {
+          "url": "https://github.com/remix-run/react-router/issues"
+        },
+        "dependencies": {
+          "react-router": "7.18.6"
+        },
+        "description": "Declarative routing for React web applications",
+        "devDependencies": {
+          "react": "^19.2.3",
+          "react-dom": "^19.2.3",
+          "tsup": "^8.3.0",
+          "typescript": "^5.4.5",
+          "wireit": "0.14.9"
+        },
+        "directories": {},
+        "dist": {
+          "attestations": {
+            "provenance": {
+              "predicateType": "https://slsa.dev/provenance/v1"
+            },
+            "url": "https://registry.npmjs.org/-/npm/v1/attestations/react-router-dom@7.18.6"
+          },
+          "fileCount": 7,
+          "integrity": "sha512-a8JzFsKEY3EY9QL7t4T1b1OhuY0ngEfwMzXQNgBO/2cuIW9028JbVq3uk2rKnjLredzcIoDKLzUkguIq6fnkFA==",
+          "shasum": "f924708031845e12158c5c63302dc644b3ede88e",
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEUCIQCxgfUrx5oiCRepTp5uDsTOuL7xwUXI+OPmoEMKP+80SgIgXJ8F9D5ZSQM/tGGJftgsO5vprM9BDC6PUKrOJsz3n+U="
+            },
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEUCIEShkLn4YiTTRKqvMi7s6Wr8cRyn3d0A29X7lXmYHa5EAiEAn0oTglbPt2Jwnl1/LAn71VAj0r9VEyjgu74XZMQWBxE="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/react-router-dom/-/react-router-dom-7.18.6.tgz",
+          "unpackedSize": 5398
+        },
+        "engines": {
+          "node": ">=20.0.0"
+        },
+        "exports": {
+          ".": {
+            "default": {
+              "default": "./dist/index.js",
+              "types": "./dist/index.d.ts"
+            },
+            "import": {
+              "default": "./dist/index.mjs",
+              "types": "./dist/index.d.mts"
+            },
+            "node": {
+              "default": "./dist/index.js",
+              "module-sync": "./dist/index.mjs",
+              "types": "./dist/index.d.ts"
+            }
+          },
+          "./package.json": "./package.json"
+        },
+        "homepage": "https://github.com/remix-run/react-router#readme",
+        "keywords": [
+          "react",
+          "router",
+          "route",
+          "routing",
+          "history",
+          "link"
+        ],
+        "license": "MIT",
+        "main": "./dist/index.js",
+        "maintainers": [
+          {
+            "email": "matt@brophy.org",
+            "name": "brophdawg11"
+          },
+          {
+            "email": "mjijackson+npm@gmail.com",
+            "name": "mjackson"
+          }
+        ],
+        "module": "./dist/index.mjs",
+        "name": "react-router-dom",
+        "peerDependencies": {
+          "react": ">=18",
+          "react-dom": ">=18"
+        },
+        "repository": {
+          "directory": "packages/react-router-dom",
+          "type": "git",
+          "url": "git+https://github.com/remix-run/react-router.git"
+        },
+        "scripts": {
+          "build": "wireit",
+          "typecheck": "tsc"
+        },
+        "sideEffects": false,
+        "types": "./dist/index.d.ts",
+        "version": "7.18.6",
+        "wireit": {
+          "build": {
+            "command": "tsup",
+            "files": [
+              "../../pnpm-workspace.yaml",
+              "*.ts",
+              "tsconfig.json",
+              "package.json"
+            ],
+            "output": [
+              "dist/**"
+            ]
+          }
+        }
+      },
+      "sha256": "2d858b794efe01612dda367a7957f7230635a4ed2e8f67baa053c79a89fef1b8",
+      "url": "https://registry.npmjs.org/react-router-dom/latest",
+      "version": "7.18.6"
+    },
+    "tailwindcss": {
+      "response": {
+        "_hasShrinkwrap": false,
+        "_id": "tailwindcss@4.3.5",
+        "_nodeVersion": "24.22.2",
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/tailwindcss_4.3.5_1793978161930_0.35110761430411863"
+        },
+        "_npmUser": {
+          "email": "npm-oidc-no-reply@github.com",
+          "name": "GitHub Actions",
+          "trustedPublisher": {
+            "id": "github",
+            "oidcConfigId": "72852a6c-a580-4195-8806-e04d3bdc8c7b"
+          }
+        },
+        "bugs": "https://github.com/tailwindlabs/tailwindcss/issues",
+        "description": "A utility-first CSS framework for rapidly building custom user interfaces.",
+        "devDependencies": {
+          "@jridgewell/remapping": "^2.3.5",
+          "@tailwindcss/oxide": "^4.3.5",
+          "@types/node": "22.20.1",
+          "dedent": "1.7.2",
+          "lightningcss": "1.33.0",
+          "magic-string": "^1.1.0",
+          "source-map-js": "^1.2.1"
+        },
+        "directories": {},
+        "dist": {
+          "attestations": {
+            "provenance": {
+              "predicateType": "https://slsa.dev/provenance/v1"
+            },
+            "url": "https://registry.npmjs.org/-/npm/v1/attestations/tailwindcss@4.3.5"
+          },
+          "fileCount": 34,
+          "integrity": "sha512-FcQk9BuffmEHJP2G0XmB2SplU1aLTI7j07Kunk+U74Ny+XiWOtzXz9aujFZ/avntw1e2cOv/3PkgzflQ7gX2vQ==",
+          "shasum": "91ac1f2486f3dff8747aebd0a687abd5955035b8",
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEYCIQDElqLSck5B/npxu47VIE//KIg+yTdR6b5rqhcZZwrtaQIhAO0xK9w2fnbaFwfDMcz35fzNNR2Ob8X0WRSkPakFMfam"
+            },
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEYCIQDGuyITEgAZ7anRBZwSksnV7fl5Bda2r/VDD1vnmlBqVQIhAIw83RztFQteE8UfdFYml0TipB444WSEZHmmIwtDsHZx"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/tailwindcss/-/tailwindcss-4.3.5.tgz",
+          "unpackedSize": 787200
+        },
+        "exports": {
+          ".": {
+            "import": "./dist/lib.mjs",
+            "require": "./dist/lib.js",
+            "style": "./index.css",
+            "types": "./dist/lib.d.mts"
+          },
+          "./colors": {
+            "import": "./dist/colors.mjs",
+            "require": "./dist/colors.js"
+          },
+          "./colors.js": {
+            "import": "./dist/colors.mjs",
+            "require": "./dist/colors.js"
+          },
+          "./defaultTheme": {
+            "import": "./dist/default-theme.mjs",
+            "require": "./dist/default-theme.js"
+          },
+          "./defaultTheme.js": {
+            "import": "./dist/default-theme.mjs",
+            "require": "./dist/default-theme.js"
+          },
+          "./index": "./index.css",
+          "./index.css": "./index.css",
+          "./lib/util/flattenColorPalette": {
+            "import": "./dist/flatten-color-palette.mjs",
+            "require": "./dist/flatten-color-palette.js"
+          },
+          "./lib/util/flattenColorPalette.js": {
+            "import": "./dist/flatten-color-palette.mjs",
+            "require": "./dist/flatten-color-palette.js"
+          },
+          "./package.json": "./package.json",
+          "./plugin": {
+            "import": "./dist/plugin.mjs",
+            "require": "./dist/plugin.js"
+          },
+          "./plugin.js": {
+            "import": "./dist/plugin.mjs",
+            "require": "./dist/plugin.js"
+          },
+          "./preflight": "./preflight.css",
+          "./preflight.css": "./preflight.css",
+          "./theme": "./theme.css",
+          "./theme.css": "./theme.css",
+          "./utilities": "./utilities.css",
+          "./utilities.css": "./utilities.css"
+        },
+        "homepage": "https://tailwindcss.com",
+        "license": "MIT",
+        "maintainers": [
+          {
+            "email": "malfait.robin@gmail.com",
+            "name": "malfaitrobin"
+          },
+          {
+            "email": "adam@adamwathan.me",
+            "name": "adamwathan"
+          },
+          {
+            "email": "jonathan@reinink.ca",
+            "name": "reinink"
+          }
+        ],
+        "name": "tailwindcss",
+        "publishConfig": {
+          "access": "public",
+          "provenance": true
+        },
+        "repository": {
+          "directory": "packages/tailwindcss",
+          "type": "git",
+          "url": "https://github.com/tailwindlabs/tailwindcss.git"
+        },
+        "scripts": {
+          "build": "tsup-node --env.NODE_ENV production",
+          "dev": "tsup-node --env.NODE_ENV development --watch",
+          "lint": "tsc --noEmit",
+          "test:ui": "playwright test"
+        },
+        "style": "index.css",
+        "version": "4.3.5"
+      },
+      "sha256": "7ae9a23d9bbd2e7a7b1fb22a05283670a575b69694ea70bd8813b17e60e1de44",
+      "url": "https://registry.npmjs.org/tailwindcss/latest",
+      "version": "4.3.5"
+    },
+    "typescript": {
+      "response": {
+        "_from": "file:M:\\SvcFab\\_App\\MS.Ess.PackageManager.Publisher_App1\\temp\\2a631491-44e7-41b1-8b99-87b20578c02f\\typescript.tgz",
+        "_hasShrinkwrap": false,
+        "_id": "typescript@7.0.2",
+        "_integrity": "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==",
+        "_nodeVersion": "18.5.0",
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/typescript_7.0.2_1783526118240_0.6935539106833353"
+        },
+        "_npmUser": {
+          "email": "npmjs@microsoft.com",
+          "name": "microsoft1es"
+        },
+        "_resolved": "M:\\SvcFab\\_App\\MS.Ess.PackageManager.Publisher_App1\\temp\\2a631491-44e7-41b1-8b99-87b20578c02f\\typescript.tgz",
+        "author": {
+          "name": "Microsoft Corp."
+        },
+        "bin": {
+          "tsc": "bin/tsc"
+        },
+        "bugs": {
+          "url": "https://github.com/microsoft/TypeScript/issues"
+        },
+        "dependencies": {
+          "@typescript/typescript-aix-ppc64": "7.0.2",
+          "@typescript/typescript-darwin-arm64": "7.0.2",
+          "@typescript/typescript-darwin-x64": "7.0.2",
+          "@typescript/typescript-freebsd-arm64": "7.0.2",
+          "@typescript/typescript-freebsd-x64": "7.0.2",
+          "@typescript/typescript-linux-arm": "7.0.2",
+          "@typescript/typescript-linux-arm64": "7.0.2",
+          "@typescript/typescript-linux-loong64": "7.0.2",
+          "@typescript/typescript-linux-mips64el": "7.0.2",
+          "@typescript/typescript-linux-ppc64": "7.0.2",
+          "@typescript/typescript-linux-riscv64": "7.0.2",
+          "@typescript/typescript-linux-s390x": "7.0.2",
+          "@typescript/typescript-linux-x64": "7.0.2",
+          "@typescript/typescript-netbsd-arm64": "7.0.2",
+          "@typescript/typescript-netbsd-x64": "7.0.2",
+          "@typescript/typescript-openbsd-arm64": "7.0.2",
+          "@typescript/typescript-openbsd-x64": "7.0.2",
+          "@typescript/typescript-sunos-x64": "7.0.2",
+          "@typescript/typescript-win32-arm64": "7.0.2",
+          "@typescript/typescript-win32-x64": "7.0.2"
+        },
+        "description": "TypeScript is a language for application scale JavaScript development",
+        "directories": {},
+        "dist": {
+          "fileCount": 416,
+          "integrity": "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==",
+          "shasum": "9ec773d7954a8c182c17cc5bbd575aa28bc51582",
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEUCIHn8lVrLBbTJToaOcV3IJ0oVPREmFT5BhqmO2niVNCaSAiEAjbubGExGAYMSJN39iEgX/eDYhwBGnh/iyyGTRigXGjY="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/typescript/-/typescript-7.0.2.tgz",
+          "unpackedSize": 2497498
+        },
+        "engines": {
+          "node": ">=16.20.0"
+        },
+        "exports": {
+          ".": "./lib/version.cjs",
+          "./package.json": "./package.json",
+          "./unstable/ast": "./dist/ast/index.js",
+          "./unstable/ast/clone": "./dist/ast/clone.js",
+          "./unstable/ast/factory": "./dist/ast/factory.generated.js",
+          "./unstable/ast/is": "./dist/ast/is.js",
+          "./unstable/ast/scanner": "./dist/ast/scanner.js",
+          "./unstable/ast/utils": "./dist/ast/utils.js",
+          "./unstable/ast/visitor": "./dist/ast/visitor.js",
+          "./unstable/async": "./dist/api/async/api.js",
+          "./unstable/fs": "./dist/api/fs.js",
+          "./unstable/proto": "./dist/api/proto.js",
+          "./unstable/sync": "./dist/api/sync/api.js"
+        },
+        "gitHead": "2bd066d87f5bafd315be9f40889d0a60b9e58e0b",
+        "homepage": "https://www.typescriptlang.org/",
+        "imports": {
+          "#enums/*": {
+            "default": "./dist/enums/*.js",
+            "types": "./dist/enums/*.enum.d.ts"
+          },
+          "#getExePath": "./lib/getExePath.js",
+          "#vscode-jsonrpc/node": "./vendor/vscode-jsonrpc/lib/node/main.js"
+        },
+        "keywords": [
+          "TypeScript",
+          "Microsoft",
+          "compiler",
+          "language",
+          "javascript"
+        ],
+        "license": "Apache-2.0",
+        "maintainers": [
+          {
+            "email": "npmjs@microsoft.com",
+            "name": "microsoft1es"
+          },
+          {
+            "email": "typescript@microsoft.com",
+            "name": "typescript-bot"
+          },
+          {
+            "email": "wwigham@gmail.com",
+            "name": "weswigham"
+          },
+          {
+            "email": "andrew@wheream.io",
+            "name": "andrewbranch"
+          },
+          {
+            "email": "typescript-design@microsoft.com",
+            "name": "typescript-deploys"
+          },
+          {
+            "email": "microsoft-oss-publishing@microsoft.com",
+            "name": "microsoft-oss-releases"
+          },
+          {
+            "email": "jacob.b.bailey@gmail.com",
+            "name": "jakebailey"
+          }
+        ],
+        "name": "typescript",
+        "optionalDependencies": {
+          "@typescript/typescript-aix-ppc64": "7.0.2",
+          "@typescript/typescript-darwin-arm64": "7.0.2",
+          "@typescript/typescript-darwin-x64": "7.0.2",
+          "@typescript/typescript-freebsd-arm64": "7.0.2",
+          "@typescript/typescript-freebsd-x64": "7.0.2",
+          "@typescript/typescript-linux-arm": "7.0.2",
+          "@typescript/typescript-linux-arm64": "7.0.2",
+          "@typescript/typescript-linux-loong64": "7.0.2",
+          "@typescript/typescript-linux-mips64el": "7.0.2",
+          "@typescript/typescript-linux-ppc64": "7.0.2",
+          "@typescript/typescript-linux-riscv64": "7.0.2",
+          "@typescript/typescript-linux-s390x": "7.0.2",
+          "@typescript/typescript-linux-x64": "7.0.2",
+          "@typescript/typescript-netbsd-arm64": "7.0.2",
+          "@typescript/typescript-netbsd-x64": "7.0.2",
+          "@typescript/typescript-openbsd-arm64": "7.0.2",
+          "@typescript/typescript-openbsd-x64": "7.0.2",
+          "@typescript/typescript-sunos-x64": "7.0.2",
+          "@typescript/typescript-win32-arm64": "7.0.2",
+          "@typescript/typescript-win32-x64": "7.0.2"
+        },
+        "preferUnplugged": true,
+        "publishConfig": {
+          "access": "public",
+          "tag": "latest"
+        },
+        "repository": {
+          "type": "git",
+          "url": "git+https://github.com/microsoft/TypeScript.git"
+        },
+        "tag": "latest",
+        "type": "module",
+        "version": "7.0.2"
+      },
+      "sha256": "28a8ef314c6bbc3fddb831088f80eb2fcac6351cb618c8ac029f7229f587b8aa",
+      "url": "https://registry.npmjs.org/typescript/latest",
+      "version": "7.0.2"
+    },
+    "vite": {
+      "response": {
+        "//": "READ CONTRIBUTING.md to understand what to put under deps vs. devDeps!",
+        "_hasShrinkwrap": false,
+        "_id": "vite@8.3.8",
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/vite_8.3.8_1794365386300_0.2350678815425249"
+        },
+        "_npmUser": {
+          "email": "npm-oidc-no-reply@github.com",
+          "name": "GitHub Actions",
+          "trustedPublisher": {
+            "id": "github",
+            "oidcConfigId": "a2e674b1-239b-4e35-a07f-7b43debc0a8c"
+          }
+        },
+        "author": "Evan You",
+        "bin": {
+          "vite": "bin/vite.js"
+        },
+        "bugs": {
+          "url": "https://github.com/vitejs/vite/issues"
+        },
+        "dependencies": {
+          "lightningcss": "^1.33.0",
+          "picomatch": "^4.0.7",
+          "postcss": "^8.5.32",
+          "rolldown": "~1.2.18",
+          "tinyglobby": "^0.2.17"
+        },
+        "description": "Native-ESM powered web dev build tool",
+        "devDependencies": {
+          "@babel/parser": "^7.29.13",
+          "@jridgewell/remapping": "^2.3.5",
+          "@jridgewell/trace-mapping": "^0.3.31",
+          "@polka/compression": "^1.0.0-next.25",
+          "@rollup/plugin-alias": "^6.0.1",
+          "@rollup/plugin-dynamic-import-vars": "2.1.4",
+          "@rollup/pluginutils": "^5.5.1",
+          "@types/escape-html": "^1.0.4",
+          "@types/pnpapi": "^0.0.5",
+          "@vitejs/devtools": "^0.8.2",
+          "@vitest/utils": "^4.1.12",
+          "@voidzero-dev/vite-task-client": "^0.2.0",
+          "artichokie": "^0.4.5",
+          "baseline-browser-mapping": "^2.11.35",
+          "cac": "^7.1.0",
+          "chokidar": "^3.6.0",
+          "connect": "^3.7.0",
+          "convert-source-map": "^2.0.0",
+          "cors": "^2.8.6",
+          "dotenv-expand": "^13.0.0",
+          "es-module-lexer": "^2.3.2",
+          "esbuild": "^0.28.2",
+          "escape-html": "^1.0.3",
+          "estree-walker": "^3.0.3",
+          "etag": "^1.8.1",
+          "fresh-import": "^0.2.1",
+          "host-validation-middleware": "^0.1.4",
+          "http-proxy-3": "^1.23.3",
+          "launch-editor-middleware": "^2.14.2",
+          "magic-string": "^1.4.5",
+          "mlly": "^1.8.2",
+          "mrmime": "^2.0.1",
+          "nanoid": "^5.1.16",
+          "obug": "^1.0.2",
+          "open": "^10.2.0",
+          "parse5": "^8.1.1",
+          "pathe": "^2.0.3",
+          "periscopic": "^4.0.3",
+          "picocolors": "^1.1.1",
+          "postcss-import": "^16.2.0",
+          "postcss-load-config": "^6.0.1",
+          "postcss-modules": "^9.0.1",
+          "premove": "^4.0.0",
+          "resolve.exports": "^2.0.4",
+          "rolldown-plugin-dts": "^0.29.0",
+          "rollup": "^4.59.0",
+          "rollup-plugin-license": "^3.7.1",
+          "sass": "^1.108.1",
+          "sass-embedded": "^1.108.1",
+          "sirv": "^3.0.2",
+          "std-env": "^4.3.0",
+          "strip-literal": "^4.0.0",
+          "terser": "^5.51.2",
+          "tinyexec": "^1.3.1",
+          "ufo": "^1.6.4",
+          "ws": "^8.22.2"
+        },
+        "directories": {},
+        "dist": {
+          "attestations": {
+            "provenance": {
+              "predicateType": "https://slsa.dev/provenance/v1"
+            },
+            "url": "https://registry.npmjs.org/-/npm/v1/attestations/vite@8.3.8"
+          },
+          "fileCount": 37,
+          "integrity": "sha512-LzOn3h9rG/0vhLdXrV4yJ4QFA9eEoqCl+Yx+kGJd7aB9w6nfNgVHKSYwLPZUHrz4ZGa+t+kXjV9itvcHDLQouA==",
+          "shasum": "ad713bf2e46c241f344b5e50401297b77a08621d",
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEUCIAb30s2ngsUhJH8f88SekTPwXwpHFaKciSR2/BqZ8I+kAiEA4CmowZn0Dn4zGxVQZtBLlQrprvINx5XZvp+KCaALqnU="
+            },
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEYCIQCY4ih3Q/Akd3iyT0BlfojGL694FtI44uFZr3IECNUtSgIhAKGpRaO34C4yFh9+gunvi2UmhKQvK+vHUzvqhnIltka0"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/vite/-/vite-8.3.8.tgz",
+          "unpackedSize": 2405422
+        },
+        "engines": {
+          "node": "^20.19.0 || >=22.12.0"
+        },
+        "exports": {
+          ".": "./dist/node/index.js",
+          "./client": {
+            "types": "./client.d.ts"
+          },
+          "./dist/client/*": "./dist/client/*",
+          "./internal": "./dist/node/internal.js",
+          "./module-runner": "./dist/node/module-runner.js",
+          "./package.json": "./package.json",
+          "./types/*": {
+            "types": "./types/*"
+          },
+          "./types/internal/*": null
+        },
+        "funding": "https://github.com/vitejs/vite?sponsor=1",
+        "homepage": "https://vite.dev",
+        "imports": {
+          "#dep-types/*": "./src/types/*.d.ts",
+          "#module-sync-enabled": {
+            "default": "./misc/false.js",
+            "module-sync": "./misc/true.js"
+          },
+          "#types/*": "./types/*.d.ts"
+        },
+        "keywords": [
+          "build-tool",
+          "dev-server",
+          "framework",
+          "frontend",
+          "hmr",
+          "vite"
+        ],
+        "license": "MIT",
+        "maintainers": [
+          {
+            "email": "yyx990803@gmail.com",
+            "name": "yyx990803"
+          },
+          {
+            "email": "vite@voidzero.dev",
+            "name": "vitebot"
+          }
+        ],
+        "name": "vite",
+        "optionalDependencies": {
+          "fsevents": "~2.3.3"
+        },
+        "peerDependencies": {
+          "@types/node": "^20.19.0 || >=22.12.0",
+          "@vitejs/devtools": "^0.7.1 || ^0.8.0",
+          "esbuild": "^0.27.0 || ^0.28.0",
+          "jiti": ">=1.21.0",
+          "less": "^4.0.0",
+          "sass": "^1.70.0",
+          "sass-embedded": "^1.70.0",
+          "stylus": ">=0.54.8",
+          "sugarss": "^5.0.0",
+          "terser": "^5.16.0",
+          "tsx": "^4.8.1",
+          "yaml": "^2.4.2"
+        },
+        "peerDependenciesMeta": {
+          "@types/node": {
+            "optional": true
+          },
+          "@vitejs/devtools": {
+            "optional": true
+          },
+          "esbuild": {
+            "optional": true
+          },
+          "jiti": {
+            "optional": true
+          },
+          "less": {
+            "optional": true
+          },
+          "sass": {
+            "optional": true
+          },
+          "sass-embedded": {
+            "optional": true
+          },
+          "stylus": {
+            "optional": true
+          },
+          "sugarss": {
+            "optional": true
+          },
+          "terser": {
+            "optional": true
+          },
+          "tsx": {
+            "optional": true
+          },
+          "yaml": {
+            "optional": true
+          }
+        },
+        "repository": {
+          "directory": "packages/vite",
+          "type": "git",
+          "url": "git+https://github.com/vitejs/vite.git"
+        },
+        "scripts": {
+          "build": "premove dist && pnpm build-bundle && pnpm build-types",
+          "build-bundle": "rolldown --config rolldown.config.ts",
+          "build-types": "pnpm build-types-roll && pnpm build-types-check",
+          "build-types-check": "tsc --project tsconfig.check.json",
+          "build-types-roll": "rolldown --config rolldown.dts.config.ts",
+          "dev": "premove dist && pnpm build-bundle -w",
+          "format": "oxfmt",
+          "generate-target": "tsx scripts/generateTarget.ts",
+          "lint": "oxlint src",
+          "typecheck": "tsc && tsc -p src/node && tsc -p src/client && tsc -p src/module-runner && tsc -p src/shared && tsc -p src/node/__tests_dts__ && tsc -p src/module-runner/__tests_dts__"
+        },
+        "type": "module",
+        "version": "8.3.8"
+      },
+      "sha256": "bb08dd028e86d7299ed19aae42b95584dd29f451570943eb91aef623eb0c8084",
+      "url": "https://registry.npmjs.org/vite/latest",
+      "version": "8.3.8"
+    },
+    "vitest": {
+      "response": {
+        "_hasShrinkwrap": false,
+        "_id": "vitest@5.1.1",
+        "_nodeVersion": "24.22.2",
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/vitest_5.1.1_1794987325109_0.5359486996849455"
+        },
+        "_npmUser": {
+          "approver": {
+            "email": "hi.ogawa.zz@gmail.com",
+            "name": "hiogawa"
+          },
+          "email": "npm-oidc-no-reply@github.com",
+          "name": "GitHub Actions",
+          "trustedPublisher": {
+            "id": "github",
+            "oidcConfigId": "1f286ab6-26e9-44a1-ba48-3a20cbe590fd"
+          }
+        },
+        "author": "Anthony Fu <anthonyfu117@hotmail.com>",
+        "bin": {
+          "vitest": "./vitest.mjs"
+        },
+        "bugs": {
+          "url": "https://github.com/vitest-dev/vitest/issues"
+        },
+        "dependencies": {
+          "@types/chai": "^5.2.2",
+          "@vitest/mocker": "5.1.1",
+          "chai": "^6.3.0",
+          "es-module-lexer": "^2.3.2",
+          "expect-type": "^1.4.0",
+          "magic-string": "^1.4.5",
+          "obug": "^3.0.0",
+          "picomatch": "^4.0.7",
+          "std-env": "^4.3.0",
+          "tinybench": "^6.2.3",
+          "tinyexec": "^1.3.1",
+          "tinyglobby": "^0.2.17",
+          "why-is-node-running": "3.2.1"
+        },
+        "description": "Next generation testing framework powered by Vite",
+        "devDependencies": {
+          "@antfu/install-pkg": "^2.1.0",
+          "@bomb.sh/tab": "^0.0.22",
+          "@edge-runtime/vm": "^5.0.0",
+          "@jridgewell/trace-mapping": "0.3.31",
+          "@opentelemetry/api": "^1.10.0",
+          "@sinonjs/fake-timers": "15.4.0",
+          "@types/jsdom": "^30.0.0",
+          "@types/node": "^26.6.6",
+          "@types/picomatch": "^4.0.3",
+          "@types/prompts": "^2.4.9",
+          "@types/ws": "^8.18.2",
+          "@vitest/expect": "5.1.1",
+          "@vitest/istanbul-lib-coverage": "^2.1.0",
+          "@vitest/istanbul-lib-report": "^2.1.0",
+          "@vitest/pretty-format": "5.1.1",
+          "@vitest/snapshot": "5.1.1",
+          "@vitest/spy": "5.1.1",
+          "@vitest/utils": "5.1.1",
+          "acorn": "8.11.3",
+          "acorn-walk": "^8.3.5",
+          "birpc": "^4.2.0",
+          "cac": "^6.7.14",
+          "flatted": "^3.4.4",
+          "happy-dom": "^21.0.4",
+          "jsdom": "^30.1.3",
+          "local-pkg": "^1.2.1",
+          "mime": "^4.1.2",
+          "pathe": "^2.0.3",
+          "prompts": "^2.4.2",
+          "strip-literal": "^4.0.0",
+          "tinyhighlight": "^0.3.2",
+          "tinyrainbow": "^3.2.0",
+          "vite": "^6.4.0 || ^7.0.0 || ^8.0.0",
+          "ws": "^8.22.1"
+        },
+        "directories": {},
+        "dist": {
+          "attestations": {
+            "provenance": {
+              "predicateType": "https://slsa.dev/provenance/v1"
+            },
+            "url": "https://registry.npmjs.org/-/npm/v1/attestations/vitest@5.1.1"
+          },
+          "fileCount": 106,
+          "integrity": "sha512-trVmzUFOSraCZcI3uZIMD5FqBh4atFkC/XuJP/IU7qtyQay0FCs3Ia+0QiQ2JJwGyWG/xrcBoJNel2+O7kEZ0g==",
+          "shasum": "6e823eba09e832ccdf85c00b9702e6eef9dab370",
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEYCIQCirW4heC4xs+NOYB/R3+yEFuljsyY3cLRwimP7dGZjXAIhAKsys7Iv8qgjcj3AWd/lZ9r6fu3yFkG9J+E0RqlnMSCN"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/vitest/-/vitest-5.1.1.tgz",
+          "unpackedSize": 2899804
+        },
+        "engines": {
+          "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
+        },
+        "exports": {
+          ".": {
+            "__vitest_source__": "./src/public/index.ts",
+            "import": {
+              "default": "./dist/index.js",
+              "types": "./dist/index.d.ts"
+            },
+            "require": {
+              "default": "./index.cjs",
+              "types": "./index.d.cts"
+            }
+          },
+          "./browser": {
+            "default": "./browser/context.js",
+            "types": "./browser/context.d.ts"
+          },
+          "./config": {
+            "__vitest_source__": "./src/public/config.ts",
+            "default": "./dist/config.js",
+            "require": "./dist/config.cjs",
+            "types": "./config.d.ts"
+          },
+          "./globals": {
+            "types": "./globals.d.ts"
+          },
+          "./import-meta": {
+            "types": "./import-meta.d.ts"
+          },
+          "./importMeta": {
+            "types": "./importMeta.d.ts"
+          },
+          "./internal/browser": {
+            "__vitest_source__": "./src/public/browser.ts",
+            "default": "./dist/browser.js",
+            "types": "./dist/browser.d.ts"
+          },
+          "./internal/traces": {
+            "__vitest_source__": "./src/utils/traces.ts",
+            "default": "./dist/traces.js"
+          },
+          "./jsdom": {
+            "types": "./jsdom.d.ts"
+          },
+          "./node": {
+            "__vitest_source__": "./src/public/node.ts",
+            "default": "./dist/node.js",
+            "types": "./dist/node.d.ts"
+          },
+          "./optional-runtime-types.js": {
+            "types": "./optional-runtime-types.d.ts"
+          },
+          "./optional-types.js": {
+            "types": "./optional-types.d.ts"
+          },
+          "./package.json": "./package.json",
+          "./runtime": {
+            "__vitest_source__": "./src/public/runtime.ts",
+            "default": "./dist/runtime.js",
+            "types": "./dist/runtime.d.ts"
+          },
+          "./worker": {
+            "__vitest_source__": "./src/public/worker.ts",
+            "default": "./dist/worker.js",
+            "types": "./worker.d.ts"
+          }
+        },
+        "funding": "https://opencollective.com/vitest",
+        "homepage": "https://vitest.dev",
+        "imports": {
+          "#module-evaluator": {
+            "__vitest_source__": "./src/runtime/moduleRunner/moduleEvaluator.ts",
+            "default": "./dist/module-evaluator.js",
+            "types": "./dist/module-evaluator.d.ts"
+          },
+          "#nodejs-worker-loader": "./dist/nodejs-worker-loader.js"
+        },
+        "keywords": [
+          "vite",
+          "vitest",
+          "test",
+          "jest"
+        ],
+        "license": "MIT",
+        "main": "./dist/index.js",
+        "maintainers": [
+          {
+            "email": "ari.perkkio@gmail.com",
+            "name": "ariperkkio"
+          },
+          {
+            "email": "anthonyfu117@hotmail.com",
+            "name": "antfu"
+          },
+          {
+            "email": "hi.ogawa.zz@gmail.com",
+            "name": "hiogawa"
+          },
+          {
+            "email": "foxzdavinci@gmail.com",
+            "name": "oreanno"
+          },
+          {
+            "email": "yyx990803@gmail.com",
+            "name": "yyx990803"
+          }
+        ],
+        "module": "./dist/index.js",
+        "name": "vitest",
+        "peerDependencies": {
+          "@edge-runtime/vm": "*",
+          "@opentelemetry/api": "^1.9.0",
+          "@types/node": "^22.0.0 || >=24.0.0",
+          "@vitest/browser-playwright": "5.1.1",
+          "@vitest/browser-preview": "5.1.1",
+          "@vitest/browser-webdriverio": "^5.0.0-beta.5 || >=5.0.0",
+          "@vitest/coverage-istanbul": "5.1.1",
+          "@vitest/coverage-v8": "5.1.1",
+          "@vitest/ui": "5.1.1",
+          "happy-dom": "*",
+          "jsdom": "*",
+          "vite": "^6.4.0 || ^7.0.0 || ^8.0.0"
+        },
+        "peerDependenciesMeta": {
+          "@edge-runtime/vm": {
+            "optional": true
+          },
+          "@opentelemetry/api": {
+            "optional": true
+          },
+          "@types/node": {
+            "optional": true
+          },
+          "@vitest/browser-playwright": {
+            "optional": true
+          },
+          "@vitest/browser-preview": {
+            "optional": true
+          },
+          "@vitest/browser-webdriverio": {
+            "optional": true
+          },
+          "@vitest/coverage-istanbul": {
+            "optional": true
+          },
+          "@vitest/coverage-v8": {
+            "optional": true
+          },
+          "@vitest/ui": {
+            "optional": true
+          },
+          "happy-dom": {
+            "optional": true
+          },
+          "jsdom": {
+            "optional": true
+          },
+          "vite": {
+            "optional": false
+          }
+        },
+        "repository": {
+          "directory": "packages/vitest",
+          "type": "git",
+          "url": "git+https://github.com/vitest-dev/vitest.git"
+        },
+        "scripts": {
+          "build": "premove dist && rollup -c",
+          "dev": "NODE_OPTIONS=\"--max-old-space-size=8192\" rollup -c --watch -m inline"
+        },
+        "sideEffects": false,
+        "type": "module",
+        "types": "./dist/index.d.ts",
+        "version": "5.1.1"
+      },
+      "sha256": "479e90d305f58a02f3d824435f10d9a580d265952c2f65a28df1988d5cb0c72a",
+      "url": "https://registry.npmjs.org/vitest/latest",
+      "version": "5.1.1"
+    }
+  }
+}

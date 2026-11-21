@@ -21,12 +21,12 @@ package server
 // segment, i.e. `<os>-<arch>` where <arch> follows the library's naming
 // (amd64, arm64v8, …) — see archiveArch().
 var bundledPGTxzSHA256 = map[string]string{
-	// PostgreSQL 16.15.0, linux/amd64 — the single-node/eval default.
-	"linux-amd64": "bda67fe32e23b049c25db4b98132d154a4fa824c44e1bd8fd01b0236f4676c24",
-	// PostgreSQL 16.15.0, linux/arm64 (zonky names it arm64v8).
-	"linux-arm64v8": "e66afbea65a143aa6cda8d5a56c2aea9985d1d9649dfb29ba487363844fd1f81",
-	// PostgreSQL 16.15.0, darwin/arm64 (zonky names it arm64v8).
-	"darwin-arm64v8": "07f29aed5baae53962b0ab80c901763b490b5692cf6a730cb3ece6bf455567af",
+	// PostgreSQL 16.16.0, linux/amd64 — the single-node/eval default.
+	"linux-amd64": "5249931b61bf525f65bc79c5e108f83393351c40bd9e1a2f7fd0608f1ef553e5",
+	// PostgreSQL 16.16.0, linux/arm64 (zonky names it arm64v8).
+	"linux-arm64v8": "b62bf0b4094df8e6bedb66b7aaaf81526f7f9cec227542ac99ce64ec836be784",
+	// PostgreSQL 16.16.0, darwin/arm64 (zonky names it arm64v8).
+	"darwin-arm64v8": "4b1a2377d4d647bde3ff5581c9d1af48aae3a57f5cd4e00171007555c47bcba3",
 }
 
 // bundledPGVersion is the pinned PostgreSQL version. It must equal
@@ -35,10 +35,10 @@ var bundledPGTxzSHA256 = map[string]string{
 //
 // startBundledPostgres passes this constant to embeddedpostgres.Version()
 // DIRECTLY, and deliberately not the library's embeddedpostgres.V16 constant.
-// The fork's V16 now also names 16.15.0, but it remains a SECOND source of truth: bundledPGCacheArchive
+// The fork's V16 now also names 16.16.0, but it remains a SECOND source of truth: bundledPGCacheArchive
 // builds the cache filename from bundledPGVersion, so if the two ever disagreed
 // the library would download and cache under a different name, the provenance
 // check would find nothing at the pinned path. A missing archive is explicitly
 // unverified: the served wrapper acquires it and requires a second true result
 // before Start. One version source also keeps acquisition and the pin aligned.
-const bundledPGVersion = "16.15.0"
+const bundledPGVersion = "16.16.0"

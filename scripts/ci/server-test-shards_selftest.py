@@ -385,7 +385,7 @@ class IsolationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source, destination = root / 'source', root / 'dest'
-            relative = Path('trstctl-pg-archives') / ('linux-arm64v8-16.15.0-' + 'a' * 64) / 'embedded-postgres-binaries-linux-arm64v8-16.15.0.txz'
+            relative = Path('trstctl-pg-archives') / ('linux-arm64v8-16.16.0-' + 'a' * 64) / 'embedded-postgres-binaries-linux-arm64v8-16.16.0.txz'
             archive = source / relative
             archive.parent.mkdir(parents=True)
             archive.write_bytes(b'compressed archive; runtime verifies the pin')
@@ -405,7 +405,7 @@ class IsolationTests(unittest.TestCase):
             source, destination, library = root / 'source', root / 'dest', root / 'library'
             source.mkdir()
             library.mkdir()
-            archive = library / 'embedded-postgres-binaries-linux-amd64-16.15.0.txz'
+            archive = library / 'embedded-postgres-binaries-linux-amd64-16.16.0.txz'
             archive.write_bytes(b'compressed archive; runtime verifies the pin')
             (library / 'embedded-postgres-binaries-linux-amd64-17.0.0.txz').symlink_to(archive)
             (library / 'postgres').write_bytes(b'executable must not be shared')

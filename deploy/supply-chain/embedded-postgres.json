@@ -1,46 +1,46 @@
 {
-  "_comment": "Provenance and vulnerability policy for the served single-node/evaluation PostgreSQL archive, acquired from Maven Central outside go.sum. Runtime execution requires a committed independent TXZ pin (SUPPLY-003). Explicit V16=16.15.0 legacy integration-test fixtures are a separate acquisition scope. See deploy/supply-chain/README.md and docs/supply-chain.md.",
+  "_comment": "Provenance and vulnerability policy for the served single-node/evaluation PostgreSQL archive, acquired from Maven Central outside go.sum. Runtime execution requires a committed independent TXZ pin (SUPPLY-003). Explicit V16=16.16.0 legacy integration-test fixtures are a separate acquisition scope. See deploy/supply-chain/README.md and docs/supply-chain.md.",
   "module": "github.com/fergusstrange/embedded-postgres",
   "moduleVersion": "v1.34.0",
   "modulePatch": "third_party/embedded-postgres is compiled inside the root module. It uses github.com/jackc/pgx/v5/stdlib, requires bounded Maven transport-integrity checks, routes SHA-256 through internal/crypto, and provides the served authenticated acquisition/extraction/publication path. See PATCHES.md and the shipped dependency-closure gate.",
-  "postgresVersion": "16.15.0",
-  "pinnedBy": "internal/server/bundled_pg_pins.go supplies bundledPGVersion and the per-platform TXZ digest. The served path resolves that exact identity before acquisition and execution; the archive cache is keyed by platform, version and digest, and existing extracted binaries are never trusted. SCOPE: tests and developer performance tools explicitly selecting embeddedpostgres.V16 now request 16.15.0, but their legacy NewDatabase acquisition does not enforce the served manifest's independent runtime pin.",
+  "postgresVersion": "16.16.0",
+  "pinnedBy": "internal/server/bundled_pg_pins.go supplies bundledPGVersion and the per-platform TXZ digest. The served path resolves that exact identity before acquisition and execution; the archive cache is keyed by platform, version and digest, and existing extracted binaries are never trusted. SCOPE: tests and developer performance tools explicitly selecting embeddedpostgres.V16 now request 16.16.0, but their legacy NewDatabase acquisition does not enforce the served manifest's independent runtime pin.",
   "runtimeEnforced": true,
   "shippedInReleaseImage": false,
   "source": {
     "registry": "Maven Central",
     "group": "io.zonky.test.postgres",
     "artifact": "embedded-postgres-binaries-<os>-<arch>",
-    "version": "16.15.0",
-    "urlTemplate": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-<os>-<arch>/16.15.0/embedded-postgres-binaries-<os>-<arch>-16.15.0.jar"
+    "version": "16.16.0",
+    "urlTemplate": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-<os>-<arch>/16.16.0/embedded-postgres-binaries-<os>-<arch>-16.16.0.jar"
   },
   "checksum": {
     "algorithm": "sha256",
-    "sha256": "653abc065c682b85d3da50168fb95dc524bd85426cdec9ce3695a550ef431df2",
+    "sha256": "585c1697098e5fbc8716b26901cdb3a829e6f3be5b5efa13dfe87b7e5cc55f5b",
     "subject": "linux-amd64 jar (the production single-node/eval default)",
     "policy": "The supply-chain script verifies the JAR against this committed value. Runtime startup independently authenticates the inner TXZ against archives[].txz_sha256 before extraction or any PostgreSQL executable runs. A self-consistent Maven JAR and checksum sidecar cannot replace this trust decision. A missing archive is unverified and must be acquired and authenticated first."
   },
   "archives": [
     {
       "arch": "linux-amd64",
-      "jar_sha256": "653abc065c682b85d3da50168fb95dc524bd85426cdec9ce3695a550ef431df2",
-      "txz_sha256": "bda67fe32e23b049c25db4b98132d154a4fa824c44e1bd8fd01b0236f4676c24",
+      "jar_sha256": "585c1697098e5fbc8716b26901cdb3a829e6f3be5b5efa13dfe87b7e5cc55f5b",
+      "txz_sha256": "5249931b61bf525f65bc79c5e108f83393351c40bd9e1a2f7fd0608f1ef553e5",
       "txz_name": "postgres-linux-x86_64.txz",
-      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-amd64/16.15.0/embedded-postgres-binaries-linux-amd64-16.15.0.jar"
+      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-amd64/16.16.0/embedded-postgres-binaries-linux-amd64-16.16.0.jar"
     },
     {
       "arch": "linux-arm64v8",
-      "jar_sha256": "f846a9989d686b7977d6eca9bc9d8b2b69e3f70c7eb60e032197d9c574a6136c",
-      "txz_sha256": "e66afbea65a143aa6cda8d5a56c2aea9985d1d9649dfb29ba487363844fd1f81",
+      "jar_sha256": "7cdd4ec403fda0ddfceca8862efad3b319b2e45bf7bee63235c632b8d45e3536",
+      "txz_sha256": "b62bf0b4094df8e6bedb66b7aaaf81526f7f9cec227542ac99ce64ec836be784",
       "txz_name": "postgres-linux-arm_64.txz",
-      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-arm64v8/16.15.0/embedded-postgres-binaries-linux-arm64v8-16.15.0.jar"
+      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-arm64v8/16.16.0/embedded-postgres-binaries-linux-arm64v8-16.16.0.jar"
     },
     {
       "arch": "darwin-arm64v8",
-      "jar_sha256": "65b953905f0a4d46030767a6b44a52360170d69a7985f1b02aa435f2f6256a83",
-      "txz_sha256": "07f29aed5baae53962b0ab80c901763b490b5692cf6a730cb3ece6bf455567af",
+      "jar_sha256": "f8c8cbd962a25a15e918fe094813a9ad48e6c99e0c9e93a1cf98b986cb840dd7",
+      "txz_sha256": "4b1a2377d4d647bde3ff5581c9d1af48aae3a57f5cd4e00171007555c47bcba3",
       "txz_name": "postgres-darwin-arm_64.txz",
-      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-darwin-arm64v8/16.15.0/embedded-postgres-binaries-darwin-arm64v8-16.15.0.jar"
+      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-darwin-arm64v8/16.16.0/embedded-postgres-binaries-darwin-arm64v8-16.16.0.jar"
     }
   ],
   "scan": {
@@ -60,7 +60,7 @@
     },
     "receiptArtifact": "embedded-postgres-trivy-receipt-<arch>",
     "policy": "recorded CI gate: scripts/supply-chain/verify-embedded-postgres.sh writes the raw Trivy report/version metadata, the raw official PostgreSQL security page, its normalized exact-version catalog, and embedded-postgres-trivy-receipt.json for every archives[] architecture. Trivy must explicitly name the server package or a fresh official catalog must independently cover the exact pin. Fixable Trivy HIGH/CRITICAL findings, absent/stale/mismatched authority, or an official HIGH/CRITICAL advisory fixed after the pin fail. The checksum and runtime provenance checks remain independent hard gates.",
-    "lastResult": "On 2026-09-01 the live official PostgreSQL 16 catalog was evaluated against pinned 16.15.0 after Maven Central published all three supported Zonky wrapper architectures. Each JAR was verified against its Maven SHA-256 sidecar and each inner TXZ was independently hashed before these pins were committed."
+    "lastResult": "On 2026-11-21 the live official PostgreSQL 16 catalog was evaluated against pinned 16.16.0 after Maven Central published all three supported Zonky wrapper architectures. Each JAR was verified against its Maven SHA-256 sidecar and each inner TXZ was independently hashed before these pins were committed."
   },
-  "notes": "PostgreSQL 16.15.0 is the pinned evaluation datastore; production uses TRSTCTL_POSTGRES_MODE=external. The existing platform pins and vulnerability policy are unchanged by the provenance repair. Each served start derives a fresh private executable tree from independently authenticated archive bytes, enforces rooted extraction and expansion bounds, and atomically publishes only a complete tree. Platform/version/digest cache identity prevents pin updates from reusing stale executables. Legacy extracted caches and persistent database data are preserved. The manifest consistency test proves declaration agreement; actual wrapper ordering, cache tamper, extraction and cleanup tests provide separate regression evidence. Native execution and vulnerability coverage on each supported platform remain separate requirements. The bundled archive is not shipped in the distroless image; it is acquired when the evaluation path needs it."
+  "notes": "PostgreSQL 16.16.0 is the pinned evaluation datastore; production uses TRSTCTL_POSTGRES_MODE=external. This update changes the platform pins while retaining the vulnerability policy. Each served start derives a fresh private executable tree from independently authenticated archive bytes, enforces rooted extraction and expansion bounds, and atomically publishes only a complete tree. Platform/version/digest cache identity prevents pin updates from reusing stale executables. Legacy extracted caches and persistent database data are preserved. The manifest consistency test proves declaration agreement; actual wrapper ordering, cache tamper, extraction and cleanup tests provide separate regression evidence. Native execution and vulnerability coverage on each supported platform remain separate requirements. The bundled archive is not shipped in the distroless image; it is acquired when the evaluation path needs it."
 }

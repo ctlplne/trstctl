@@ -12,7 +12,7 @@ new version constants and nested runtime directory creation are included.
 The upstream archive fetch's nil-response fix is subsumed by the fork's bounded,
 fail-closed fetch. The fork's legacy `pg_ctl` options use v1.34.0 double-quote
 semantics for Windows. Its default and `V16` select the committed, separately
-vetted PostgreSQL 16.15.0 archive instead of upstream's unpinned 18.3.0 default
+vetted PostgreSQL 16.16.0 archive instead of upstream's unpinned 18.3.0 default
 and 16.9.0 V16. The served wrapper passes `bundledPGVersion` explicitly and
 does not trust this mutable library constant as its archive identity.
 
@@ -37,15 +37,16 @@ binaries from being accepted on a later start. Existing data and legacy caches
 are preserved. Failure cleanup removes only resources created by this path.
 
 The legacy `NewDatabase` API remains separately scoped to existing test fixtures
-and developer performance tools, including explicit `V16` (16.15.0) users. It
+and developer performance tools, including explicit `V16` (16.16.0) users. It
 does not acquire the served path's provenance guarantee by sharing this source
 directory. The startup-order regressions exercise `startBundledPostgres`; they
 do not establish provenance or extraction safety for those legacy callers.
 
 The source version and PostgreSQL executable version are independent pins. The
-v1.34.0 source rebase leaves the served 16.15.0 binary and its committed
-per-platform archive digests unchanged; the source upgrade does not authorize a
-new archive. Keep this patch while upstream still imports `lib/pq`, and retain
+v1.34.0 source rebase initially left the served 16.15.0 binary unchanged. The
+subsequent 16.16.0 security update independently verified the new JARs and inner
+archives before changing the per-platform pins. Keep this patch while upstream
+still imports `lib/pq`, and retain
 separate checksum, official advisory and Trivy gates for the actual archive.
 
 The served wrapper additionally holds an `OpenVerifiedCache` namespace through acquisition/startup. The operator-selected temporary anchor must be private, or root/current-user-owned and sticky; rooted child creation rejects links, foreign ownership and shared write access. Generic legacy `NewDatabase` cache behavior remains a separate finding. Actual wrapper regressions check ancestor rejection before acquisition, invalid port rejection, and native Stop errors.

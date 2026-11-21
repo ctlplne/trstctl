@@ -154,10 +154,10 @@ path described below. Its vendor wrapper is pinned independently, and the
 supply-chain gate stays red whenever the official PostgreSQL catalog reports a
 HIGH/CRITICAL advisory fixed after that exact pin.
 
-The served single-node/evaluation path downloads the pinned PostgreSQL 16.15.0
+The served single-node/evaluation path downloads the pinned PostgreSQL 16.16.0
 archive from Maven Central, outside `go.sum`. Its committed checksum is a runtime
 execution gate. Tests and developer performance tools that explicitly select
-the library's `V16` constant now request 16.15.0; those legacy acquisition paths are not
+the library's `V16` constant now request 16.16.0; those legacy acquisition paths are not
 covered by the served archive pin or its assurance claims. Tests can run on a
 developer's machine as well as in CI.
 
@@ -165,7 +165,7 @@ developer's machine as well as in CI.
   Maven coordinates, source URLs, and a committed per-arch SHA-256 pin for
   both the Maven jar and the inner `.txz` archive, covering linux/amd64,
   linux/arm64, and darwin/arm64. The pin is populated, so the gate is a
-  hard fail, not a no-op. The 16.15.0 pins were captured only after Maven
+  hard fail, not a no-op. The 16.16.0 pins were captured only after Maven
   Central published all three architectures; each jar matched its Maven
   SHA-256 sidecar and each inner `.txz` was hashed independently.
 - Before downloading or launching PostgreSQL, the served path resolves its

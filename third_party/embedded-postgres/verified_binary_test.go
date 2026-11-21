@@ -23,7 +23,7 @@ import (
 var verifiedFixtureArchive []byte
 
 func verifiedTestConfig(dir string) Config {
-	return DefaultConfig().Version("16.15.0").Port(0).DataPath(filepath.Join(dir, "data")).
+	return DefaultConfig().Version("16.16.0").Port(0).DataPath(filepath.Join(dir, "data")).
 		RuntimePath(filepath.Join(dir, "old-runtime")).BinariesPath(filepath.Join(dir, "old-binaries")).CachePath(filepath.Join(dir, "cache"))
 }
 
@@ -91,7 +91,7 @@ func TestVerifiedArchiveIdentityRejectsMissingAndWrongScope(t *testing.T) {
 			}
 		})
 	}
-	if V16 != "16.15.0" {
+	if V16 != "16.16.0" {
 		t.Fatal("default and fixture version must match the independently pinned archive")
 	}
 }
