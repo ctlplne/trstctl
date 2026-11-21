@@ -19,7 +19,7 @@ func TestReviewedExecAllowlistPinsPerfLiveSampler(t *testing.T) {
 
 func TestReviewedExecAllowlistPinsNativeRDPAndConfinedCLI(t *testing.T) {
 	want := map[string]map[string]bool{
-		"internal/crypto/rdp/process_linux.go": {"nativeCommand": true},
+		"internal/crypto/rdp/process_linux.go":    {"nativeCommand": true},
 		"internal/netconfine/netconfine_linux.go": {"RunHelper": true},
 	}
 	for file, functions := range want {
