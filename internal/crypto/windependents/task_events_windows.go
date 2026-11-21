@@ -48,7 +48,7 @@ func taskEventsEnabled() error {
 	return nil
 }
 func taskEventPointerOffset(raw []byte, value taskEventVariant, need int) (int, error) {
-	if value.Count != 0 || need < 0 || need > len(raw) || len(raw) == 0 {
+	if need < 0 || need > len(raw) || len(raw) == 0 {
 		return 0, errors.New("windows task: invalid native metadata view")
 	}
 	pointer := uintptr(value.Value)
@@ -62,7 +62,7 @@ func taskEventPointerOffset(raw []byte, value taskEventVariant, need int) (int, 
 	return int(pointer - base), nil
 }
 func taskEventText(raw []byte, value taskEventVariant) (string, error) {
-	if value.Type != 1 || value.Count != 0 {
+	if !value.scalarText() {
 		return "", fmt.Errorf("windows task: native event text has type %d and count %d, want one string", value.Type, value.Count)
 	}
 	offset, err := taskEventPointerOffset(raw, value, 2)

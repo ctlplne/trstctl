@@ -13,6 +13,11 @@ type taskEventVariant struct {
 	Count, Type uint32
 }
 
+// EVT_VARIANT.Count is meaningful only when the array bit is set. Windows
+// can return a nonzero Count for a scalar EvtVarTypeString; Type still proves
+// whether Value is one bounded UTF-16 pointer.
+func (v taskEventVariant) scalarText() bool { return v.Type == 1 }
+
 func (v taskEventVariant) unsigned() (uint64, error) {
 	if v.Count != 0 {
 		return 0, errors.New("windows task: unexpected native event array")

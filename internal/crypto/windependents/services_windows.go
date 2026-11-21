@@ -126,7 +126,14 @@ func inspectServiceHandle(ctx context.Context, handle windows.Handle, name, sele
 	case "nt authority\\networkservice", "networkservice":
 		sid = "S-1-5-20"
 	default:
-		value, _, _, e := windows.LookupSID("", accountName)
+		computer := ""
+		if strings.HasPrefix(accountName, `.\`) {
+			computer, err = windows.ComputerName()
+			if err != nil {
+				return nativeServiceSnapshot{}, errors.New("windows service: local computer name unavailable; coverage is incomplete")
+			}
+		}
+		value, _, _, e := windows.LookupSID("", serviceLookupAccountName(accountName, computer))
 		if e != nil {
 			return nativeServiceSnapshot{}, errors.New("windows service: logon account SID could not be resolved; coverage is incomplete")
 		}

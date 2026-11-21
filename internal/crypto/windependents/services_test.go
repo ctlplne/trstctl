@@ -101,3 +101,15 @@ func TestServiceNativeRejectsAlteredDependencyOrderA267(t *testing.T) {
 		t.Fatal("altered restart dependencies reached a native password effect")
 	}
 }
+
+func TestServiceLocalAccountQualificationA267(t *testing.T) {
+	for _, tc := range []struct{ configured, computer, want string }{
+		{`.\trst267`, `RUNNER-1`, `RUNNER-1\trst267`},
+		{`DOMAIN\alice`, `RUNNER-1`, `DOMAIN\alice`},
+		{`alice@example.test`, `RUNNER-1`, `alice@example.test`},
+	} {
+		if got := serviceLookupAccountName(tc.configured, tc.computer); got != tc.want {
+			t.Fatalf("qualified service account %q = %q, want %q", tc.configured, got, tc.want)
+		}
+	}
+}

@@ -53,3 +53,19 @@ func TestNativeTaskEventTimeA267(t *testing.T) {
 		}
 	}
 }
+
+func TestTaskEventScalarStringCountA267(t *testing.T) {
+	for _, tc := range []struct {
+		value taskEventVariant
+		want  bool
+	}{
+		{taskEventVariant{Type: 1, Count: 27}, true},
+		{taskEventVariant{Type: 1, Count: 0}, true},
+		{taskEventVariant{Type: 0x81, Count: 1}, false},
+		{taskEventVariant{Type: 2, Count: 27}, false},
+	} {
+		if got := tc.value.scalarText(); got != tc.want {
+			t.Fatalf("native event type=%d count=%d scalar text=%t, want %t", tc.value.Type, tc.value.Count, got, tc.want)
+		}
+	}
+}

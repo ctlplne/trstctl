@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"golang.org/x/sys/windows"
 	"io"
 	"net"
@@ -303,6 +304,7 @@ func nativeIISWork(t *testing.T, ctx context.Context, address, sid string) nativ
 	client := &http.Client{Transport: &http.Transport{Proxy: nil}, Timeout: 3 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("owned IIS probe refuses redirects") }}
 	defer client.CloseIdleConnections()
 	deadline := time.Now().Add(45 * time.Second)
+	last := "no HTTP response"
 	for time.Now().Before(deadline) {
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+"/default.aspx?nonce="+nonce, nil)
 		if err != nil {
@@ -316,6 +318,9 @@ func nativeIISWork(t *testing.T, ctx context.Context, address, sid string) nativ
 			if response.StatusCode == 200 && decodeErr == nil && receipt.Nonce == nonce && receipt.SID == sid && receipt.PID != 0 && receipt.Result == crypto.SHA256Hex([]byte("pool-work:"+nonce)) {
 				return receipt
 			}
+			last = fmt.Sprintf("HTTP %d, JSON error %v, nonce match %t, SID match %t, PID nonzero %t, result match %t", response.StatusCode, decodeErr, receipt.Nonce == nonce, receipt.SID == sid, receipt.PID != 0, receipt.Result == crypto.SHA256Hex([]byte("pool-work:"+nonce)))
+		} else {
+			last = err.Error()
 		}
 		select {
 		case <-ctx.Done():
@@ -323,7 +328,7 @@ func nativeIISWork(t *testing.T, ctx context.Context, address, sid string) nativ
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
-	t.Fatal("fresh native IIS worker did not complete functional HTTP work")
+	t.Fatalf("fresh native IIS worker did not complete functional HTTP work: %s", last)
 	return nativePoolWorkReceipt{}
 }
 

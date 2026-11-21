@@ -53,6 +53,16 @@ func validServiceName(name string) bool {
 	}
 	return true
 }
+
+// QueryServiceConfig may spell a local account as .\name. Resolve that
+// identity with this host's explicit name so LookupAccountName does not
+// search a domain for an unqualified account.
+func serviceLookupAccountName(configured, computer string) string {
+	if strings.HasPrefix(configured, `.\`) && computer != "" {
+		return computer + `\` + strings.TrimPrefix(configured, `.\`)
+	}
+	return configured
+}
 func validAccountSID(sid string) bool {
 	if len(sid) > 184 {
 		return false
