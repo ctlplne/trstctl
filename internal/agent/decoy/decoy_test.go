@@ -6,8 +6,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
 
 // Q6-O1: a decoy is planted only where no file is, as an SSH private key the
@@ -22,8 +25,15 @@ func TestPlantWritesADecoyKeyOnlyWhereNoFileIsQ6O1(t *testing.T) {
 		t.Fatalf("Plant = %+v, %v", decoys, err)
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0o600 {
+	if err != nil {
 		t.Fatalf("decoy file = %v, %v", info, err)
+	}
+	private, err := secretfile.IsPrivate(path)
+	if err != nil || !private {
+		t.Fatalf("decoy private custody = %t, %v", private, err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
+		t.Fatalf("decoy mode = %o, want 0600", info.Mode().Perm())
 	}
 	body, err := os.ReadFile(path) // #nosec G304 -- the test's own decoy (CWE-22)
 	if err != nil || !strings.HasPrefix(string(body), "-----BEGIN OPENSSH PRIVATE KEY-----") {

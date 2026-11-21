@@ -3,6 +3,7 @@
 package secretrender
 
 import (
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -13,10 +14,11 @@ import (
 // Windows); as root, numeric IDs are taken as written and names come from the
 // system database; an unknown name is refused, and only the set half changes.
 func TestTemplateOwnershipNeedsRootA238L2(t *testing.T) {
-	base := Config{Server: "unused", TokenFile: "unused", Consumer: "web-1/app", StateDir: t.TempDir()}
+	root := t.TempDir()
+	base := Config{Server: "unused", TokenFile: filepath.Join(root, "token"), Consumer: "web-1/app", StateDir: root}
 	withTemplate := func(owner, group string) *Config {
 		c := base
-		c.Templates = []Template{{Name: "app", Destination: "/etc/app/secret", Text: "x", Owner: owner, Group: group}}
+		c.Templates = []Template{{Name: "app", Destination: filepath.Join(root, "secret"), Text: "x", Owner: owner, Group: group}}
 		return &c
 	}
 	if runtime.GOOS == "windows" {

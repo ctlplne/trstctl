@@ -9,7 +9,9 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -94,18 +96,46 @@ func (r *attestedRenewChannel) SignJobCSRWithKeyAttestation(ctx context.Context,
 
 // tpmRenewProfile is a host profile whose nginx and nginx-upgrade actions
 // record their arguments in dir/actions.log; withTPM names the host's TPM.
-func tpmRenewProfile(t *testing.T, dir string, withTPM bool) connector.LocalOpsConfig {
+func tpmActionFixture(t *testing.T, dir, name string) string {
 	t.Helper()
-	nginx := filepath.Join(dir, "nginx")
-	script := []byte("#!/bin/sh\necho \"$(basename \"$0\") $*\" >> " + filepath.Join(dir, "actions.log") + "\nexit 0\n")
-	for _, name := range []string{"nginx", "nginx-upgrade"} {
-		if err := os.WriteFile(filepath.Join(dir, name), script, 0o755); err != nil { // #nosec G306,G703 -- the fixture IS an executable, in the test's own temp directory (CWE-276, CWE-22)
+	if runtime.GOOS == "windows" {
+		// The host-action boundary accepts native .exe files on Windows. Build
+		// one owned test program instead of presenting a Unix shell script as
+		// an executable; it records exactly the same action name and argv.
+		source := filepath.Join(dir, "action.go")
+		program := `package main
+import ("fmt"; "os"; "path/filepath"; "strings")
+func main() {
+ f, err := os.OpenFile(filepath.Join(filepath.Dir(os.Args[0]), "actions.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+ if err != nil { os.Exit(1) }
+ defer f.Close()
+ name := strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe")
+ if _, err := fmt.Fprintf(f, "%s %s\n", name, strings.Join(os.Args[1:], " ")); err != nil { os.Exit(1) }
+}`
+		if err := os.WriteFile(source, []byte(program), 0o600); err != nil {
 			t.Fatal(err)
 		}
+		path := filepath.Join(dir, name+".exe")
+		if out, err := exec.Command("go", "build", "-trimpath", "-o", path, source).CombinedOutput(); err != nil { // #nosec G204 -- fixed Go tool compiles this test's owned source and output (CWE-78)
+			t.Fatalf("build native action fixture: %v: %s", err, out)
+		}
+		return path
 	}
+	path := filepath.Join(dir, name)
+	script := []byte("#!/bin/sh\necho \"$(basename \"$0\") $*\" >> " + filepath.Join(dir, "actions.log") + "\nexit 0\n")
+	if err := os.WriteFile(path, script, 0o755); err != nil { // #nosec G306,G703 -- owned executable fixture (CWE-276, CWE-22)
+		t.Fatal(err)
+	}
+	return path
+}
+
+func tpmRenewProfile(t *testing.T, dir string, withTPM bool) connector.LocalOpsConfig {
+	t.Helper()
+	nginx := tpmActionFixture(t, dir, "nginx")
+	upgrade := tpmActionFixture(t, dir, "nginx-upgrade")
 	profile := connector.LocalOpsConfig{AllowedRoots: []string{dir},
 		Actions: []connector.LocalAction{{LogicalName: "nginx", Command: nginx, PassArgs: true},
-			{LogicalName: "nginx-upgrade", Command: filepath.Join(dir, "nginx-upgrade")}}}
+			{LogicalName: "nginx-upgrade", Command: upgrade}}}
 	if withTPM {
 		profile.HostKeyTPM = &connector.HostKeyTPMConfig{AttestationKey: filepath.Join(dir, "ak.json"), AttestationCertChain: filepath.Join(dir, "ak.pem")}
 	}
@@ -278,9 +308,10 @@ func TestHostKeyTPMProfileNeedsItsAttestationFilesTPMO1(t *testing.T) {
 		}
 		return path
 	}
-	good := map[string]any{"tpm_path": "/dev/tpmrm0", "attestation_key": "/etc/trstctl/ak.json", "attestation_cert_chain": "/etc/trstctl/ak.pem"}
+	device, attestationKey, attestationChain := filepath.Join(dir, "tpmrm0"), filepath.Join(dir, "ak.json"), filepath.Join(dir, "ak.pem")
+	good := map[string]any{"tpm_path": device, "attestation_key": attestationKey, "attestation_cert_chain": attestationChain}
 	loaded, err := relay.LoadHostProfile(write(map[string]any{"allowed_roots": []string{dir}, "host_key_tpm": good}))
-	if err != nil || loaded.HostKeyTPM == nil || loaded.HostKeyTPM.AttestationKey != "/etc/trstctl/ak.json" || loaded.HostKeyTPM.Path != "/dev/tpmrm0" {
+	if err != nil || loaded.HostKeyTPM == nil || loaded.HostKeyTPM.AttestationKey != attestationKey || loaded.HostKeyTPM.Path != device {
 		t.Fatalf("loaded %+v: %v", loaded.HostKeyTPM, err)
 	}
 	for _, tc := range []struct {
@@ -288,8 +319,8 @@ func TestHostKeyTPMProfileNeedsItsAttestationFilesTPMO1(t *testing.T) {
 		profile map[string]any
 		want    string
 	}{
-		{"no attestation chain", map[string]any{"allowed_roots": []string{dir}, "host_key_tpm": map[string]any{"attestation_key": "/etc/trstctl/ak.json"}}, "needs attestation_key and attestation_cert_chain"},
-		{"a relative path", map[string]any{"allowed_roots": []string{dir}, "host_key_tpm": map[string]any{"attestation_key": "ak.json", "attestation_cert_chain": "/etc/trstctl/ak.pem"}}, "is not absolute"},
+		{"no attestation chain", map[string]any{"allowed_roots": []string{dir}, "host_key_tpm": map[string]any{"attestation_key": attestationKey}}, "needs attestation_key and attestation_cert_chain"},
+		{"a relative path", map[string]any{"allowed_roots": []string{dir}, "host_key_tpm": map[string]any{"attestation_key": "ak.json", "attestation_cert_chain": attestationChain}}, "is not absolute"},
 		{"no roots", map[string]any{"kubernetes_secrets": map[string]any{"namespaces": []string{"web"}}, "host_key_tpm": good}, "must name the allowed roots"},
 	} {
 		if _, err := relay.LoadHostProfile(write(tc.profile)); err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -385,12 +416,8 @@ func tpmServiceProfile(t *testing.T, dir string, names ...string) connector.Loca
 	t.Helper()
 	profile := connector.LocalOpsConfig{AllowedRoots: []string{dir},
 		HostKeyTPM: &connector.HostKeyTPMConfig{AttestationKey: filepath.Join(dir, "ak.json"), AttestationCertChain: filepath.Join(dir, "ak.pem")}}
-	script := []byte("#!/bin/sh\necho \"$(basename \"$0\") $*\" >> " + filepath.Join(dir, "actions.log") + "\nexit 0\n")
 	for _, name := range names {
-		if err := os.WriteFile(filepath.Join(dir, name), script, 0o755); err != nil { // #nosec G306,G703 -- the fixture IS an executable, in the test's own temp directory (CWE-276, CWE-22)
-			t.Fatal(err)
-		}
-		profile.Actions = append(profile.Actions, connector.LocalAction{LogicalName: name, Command: filepath.Join(dir, name), PassArgs: true})
+		profile.Actions = append(profile.Actions, connector.LocalAction{LogicalName: name, Command: tpmActionFixture(t, dir, name), PassArgs: true})
 	}
 	return profile
 }

@@ -23,6 +23,7 @@ import (
 
 	cryptoboundary "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
 
 // The inventory source and finding kinds decoys report under.
@@ -134,15 +135,10 @@ func Plant(paths []string, statePath string) ([]Decoy, error) {
 
 // writeNew creates path (and no other file) with mode 0600 and writes b.
 func writeNew(path string, b []byte) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- an operator-configured decoy path, created exclusively (CWE-22)
-	if err != nil {
+	if err := secretfile.Create(path, b); err != nil {
 		return fmt.Errorf("decoy: create %s: %w", path, err)
 	}
-	if _, err := f.Write(b); err != nil {
-		_ = f.Close()
-		return fmt.Errorf("decoy: write %s: %w", path, err)
-	}
-	return f.Close()
+	return nil
 }
 
 func saveState(statePath string, state map[string]Decoy) error {

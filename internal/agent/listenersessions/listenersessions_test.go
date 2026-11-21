@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -63,10 +64,18 @@ func fakeProc(t *testing.T, boot int64, tcp, tcp6 []string, procs []fakeProcess)
 			t.Fatal(err)
 		}
 		if p.private {
-			if err := os.Chmod(fd, 0o000); err != nil {
-				t.Fatal(err)
+			if runtime.GOOS == "windows" {
+				// Go's Unix mode bits do not restrict NTFS reads. A missing fd
+				// directory forces the same read-error branch on this fixture.
+				if err := os.RemoveAll(fd); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := os.Chmod(fd, 0o000); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(fd, 0o700) }) // #nosec G302 -- a test directory restored so TempDir can remove it
 			}
-			t.Cleanup(func() { _ = os.Chmod(fd, 0o700) }) // #nosec G302 -- a test directory restored so TempDir can remove it
 		}
 	}
 	return root
