@@ -5,6 +5,7 @@ package crypto
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/pem"
 	"io"
 	"net"
@@ -17,6 +18,40 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
+
+func TestSSHAccountSessionOutlivesHandshakeDeadlineA240(t *testing.T) {
+	adminKey, err := GenerateLockedKey(ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer adminKey.Destroy()
+	adminPublic, err := SSHPublicKeyFromSigner(adminKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, _, _, _, err := ssh.ParseAuthorizedKey(adminPublic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	address, fingerprint, _ := startAccountHost(t, admin)
+	target := SSHAccountTarget{Address: address, HostKeyFingerprint: fingerprint}
+	signer, err := sshSignerFromDigestSigner(adminKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const handshakeTimeout = 2 * time.Second
+	client, closeClient, _, err := dialPinnedSSHWithHandshakeTimeout(context.Background(), target, "root", nil, []ssh.AuthMethod{ssh.PublicKeys(signer)}, handshakeTimeout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeClient()
+	time.Sleep(handshakeTimeout + 100*time.Millisecond)
+	session, err := client.NewSession()
+	if err != nil {
+		t.Fatalf("an authenticated SSH session expired with its handshake timer: %v", err)
+	}
+	_ = session.Close()
+}
 
 // accountHost is an in-process SSH host for the rotation profile: the
 // administrator's key may run only chpasswd (or sudo -n chpasswd), which sets

@@ -206,7 +206,11 @@ func dialPinnedSSH(ctx context.Context, target SSHAccountTarget, user string, au
 // preference); offeredOther reports that the host presented a key other than
 // the pinned one, or none of the algorithms, before any credential was sent.
 func dialPinnedSSHWith(ctx context.Context, target SSHAccountTarget, user string, algorithms []string, auth []ssh.AuthMethod) (*ssh.Client, func(), bool, error) {
-	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
+	return dialPinnedSSHWithHandshakeTimeout(ctx, target, user, algorithms, auth, 30*time.Second)
+}
+
+func dialPinnedSSHWithHandshakeTimeout(ctx context.Context, target SSHAccountTarget, user string, algorithms []string, auth []ssh.AuthMethod, handshakeTimeout time.Duration) (*ssh.Client, func(), bool, error) {
+	bounded, cancel := context.WithTimeout(ctx, handshakeTimeout)
 	dialer := net.Dialer{Timeout: 5 * time.Second, Control: target.DialControl}
 	conn, err := dialer.DialContext(bounded, "tcp", target.Address)
 	if err != nil {
@@ -215,16 +219,9 @@ func dialPinnedSSHWith(ctx context.Context, target SSHAccountTarget, user string
 	}
 	deadline, _ := bounded.Deadline()
 	_ = conn.SetDeadline(deadline)
-	stopped := make(chan struct{})
-	go func() {
-		select {
-		case <-bounded.Done():
-			_ = conn.Close()
-		case <-stopped:
-		}
-	}()
+	stopOnCancel := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	release := func() {
-		close(stopped)
+		stopOnCancel()
 		cancel()
 		_ = conn.Close()
 	}
@@ -259,6 +256,16 @@ func dialPinnedSSHWith(ctx context.Context, target SSHAccountTarget, user string
 		}
 		return nil, nil, mismatched || !verified, errors.New("SSH account rotation host identity or authentication failed")
 	}
+	// Authentication's short deadline must not close a live session while a
+	// Windows host starts the administrator profile or runs Set-LocalUser. The
+	// caller's context still closes the socket, and the operation has its own
+	// bounded deadline even when the caller supplied no deadline.
+	cancel()
+	operationDeadline := time.Now().Add(2 * time.Minute)
+	if parentDeadline, ok := ctx.Deadline(); ok && parentDeadline.Before(operationDeadline) {
+		operationDeadline = parentDeadline
+	}
+	_ = conn.SetDeadline(operationDeadline)
 	client := ssh.NewClient(connection, channels, requests)
 	return client, func() { _ = client.Close(); release() }, false, nil
 }
