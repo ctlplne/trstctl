@@ -75,7 +75,10 @@ func inspectServiceHandle(ctx context.Context, handle windows.Handle, name, sele
 	if err := ctx.Err(); err != nil {
 		return nativeServiceSnapshot{}, err
 	}
-	held, err := secret.New(64 << 10)
+	// QueryServiceConfigW caps this buffer at 8 KiB. A larger allocation is
+	// rejected by the SCM even when the returned configuration is small.
+	const configBytes = 8 << 10
+	held, err := secret.New(configBytes)
 	if err != nil {
 		return nativeServiceSnapshot{}, err
 	}
@@ -86,10 +89,10 @@ func inspectServiceHandle(ctx context.Context, handle windows.Handle, name, sele
 		}
 	}()
 	raw := held.Bytes()
-	config := (*windows.QUERY_SERVICE_CONFIG)(unsafe.Pointer(&raw[0])) // #nosec G103 -- page-aligned locked 64 KiB query buffer exceeds the SDK struct and remains alive through all bounded field reads (CWE-242)
+	config := (*windows.QUERY_SERVICE_CONFIG)(unsafe.Pointer(&raw[0])) // #nosec G103 -- page-aligned locked 8 KiB SDK-bounded query buffer exceeds the struct and remains alive through all bounded field reads (CWE-242)
 	var needed uint32
-	if err := windows.QueryServiceConfig(handle, config, 64<<10, &needed); err != nil {
-		return nativeServiceSnapshot{}, errors.New("windows service: native configuration unavailable")
+	if err := windows.QueryServiceConfig(handle, config, configBytes, &needed); err != nil {
+		return nativeServiceSnapshot{}, fmt.Errorf("windows service: native configuration unavailable (needed=%d): %w", needed, err)
 	}
 	if config.ServiceType&windows.SERVICE_WIN32 == 0 || config.ServiceType&windows.SERVICE_DRIVER != 0 {
 		return nativeServiceSnapshot{}, errors.New("windows service: selected object is not a user service")
@@ -210,7 +213,7 @@ func (driver nativeServiceDriver) discover(ctx context.Context, sid string) ([]S
 			}
 			target, e := driver.inspectSelected(ctx, name, sid)
 			if e != nil {
-				return nil, e
+				return nil, fmt.Errorf("windows service: inspect %q: %w", name, e)
 			}
 			if target.AccountSID == sid {
 				found = append(found, target)

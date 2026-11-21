@@ -314,7 +314,7 @@ func TestNativeWindowsTaskLifecycleA267(t *testing.T) {
 	firstNonce := nativeTaskNewPublicNonce(t, work)
 	first, err := adapter.RunAndVerify(ctx, target)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("native task run: %v (cause: %v)", err, errors.Unwrap(err))
 	}
 	nativeTaskVerifyWork(t, work, firstNonce, sid.String())
 	altered := target

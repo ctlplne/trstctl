@@ -133,10 +133,10 @@ func createOwnedIISPool(t *testing.T, ctx context.Context, name, account string,
 			return err
 		}
 		defer property.destroy()
-		provider, err := iisPublicMetadata(property, "encryptionProvider")
-		if err != nil || provider == "" {
-			return errors.New("owned native IIS encryption provider unavailable")
-		}
+		// A newly created pool has no persisted per-property metadata yet.
+		// IIS documents this provider for applicationHost secrets; set it
+		// explicitly, then let the native readback verify the persisted value.
+		provider := "IISWASOnlyRsaProvider"
 		key, err := newAutomationPublicString("encryptionProvider")
 		if err != nil {
 			return err
