@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
@@ -204,6 +205,11 @@ func (r *StoreChannelResolver) ResolveNotificationChannels(ctx context.Context, 
 func (r *StoreChannelResolver) build(ctx context.Context, tenantID, id string, ch store.NotificationChannel) Notifier {
 	var credential *secret.Buffer
 	if ref := strings.TrimSpace(ch.CredentialRef); ref != "" {
+		// A historical row or replay can bypass today's API validation. Never
+		// pass its reference to the generic resolver, which also opens files.
+		if _, err := credref.Parse(ref); err != nil {
+			return failingChannel{id: id, reason: "the credential reference must name a canonical tenant secret"}
+		}
 		if r.credentials == nil {
 			return failingChannel{id: id, reason: "a credential reference is set but no credential resolver is configured"}
 		}

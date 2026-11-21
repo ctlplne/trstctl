@@ -18,6 +18,7 @@ import (
 	guuid "github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
@@ -395,8 +396,10 @@ func notificationChannelFromRequest(tenantID, pathID string, req notificationCha
 		return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "notification channel label must be 120 characters or fewer")
 	}
 	credentialRef := strings.TrimSpace(req.CredentialRef)
-	if credentialRef != "" && !strings.Contains(credentialRef, "://") {
-		return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "credential_ref must be an opaque URI reference")
+	if credentialRef != "" {
+		if _, err := credref.Parse(credentialRef); err != nil {
+			return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "credential_ref must name a canonical tenant secret")
+		}
 	}
 	return store.NotificationChannel{
 		TenantID:      tenantID,

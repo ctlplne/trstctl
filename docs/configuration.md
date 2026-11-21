@@ -796,8 +796,10 @@ Tenants install the app themselves (see approvals in
 Notification channels are off until an operator configures them. When enabled, lifecycle
 expiry alerts are written to the `notification.*` outbox first, then delivered by the
 registered channel workers. Tenant-scoped routing policy authoring and channel-test
-delivery are served from the console; channel secrets remain in operator-managed secret
-references or files.
+delivery are served from the console. Tenant-authored channel credentials must use
+canonical `secret://name` references in that tenant's secret store; a channel row
+cannot name a control-plane file or environment variable. Process-configured
+bootstrap channels can still use operator-managed secret files.
 
 A tenant can deliver to a private HTTPS receiver after the deployment operator
 adds a grant for that tenant. This grants network reachability; the receiver's

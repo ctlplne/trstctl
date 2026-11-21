@@ -917,8 +917,8 @@ owner/contact plus active approver recipients. Tenants manage channels at
 metadata and credential references only, redact those in responses, and rebuild from
 `notification.channel.*` events. The outbox dispatcher resolves enabled tenant-authored
 channels at delivery time into their family's own transport (Slack and Teams incoming
-webhooks, PagerDuty Events v2 and OpsGenie with the key the row's `credential_ref`
-names in the tenant's secret store, an HMAC-signed webhook, a bearer-authenticated
+webhooks, PagerDuty Events v2 and OpsGenie with the key the row's canonical
+`secret://` `credential_ref` names in the tenant's secret store, an HMAC-signed webhook, a bearer-authenticated
 SIEM event), opening the credential only for that delivery; email and SMS remain
 operator-configured because a tenant row cannot carry their SMTP or gateway settings.
 Process-configured channels remain supported for bootstrap.
