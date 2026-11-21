@@ -225,8 +225,13 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		"internal/perf/live.go": 2,
 		// finalizeClaim records its outcome — one UPDATE of the claimed row by
 		// id, tenant and lease worker, never a payload — through WithSystemFirst
-		// (CI-L37 d′), once per outcome: that is two of the three.
-		"internal/orchestrator/outbox.go": 3,
+		// (CI-L37 d′), once per outcome: those are two calls. The third
+		// system-pool call is claimOne's cross-tenant lease recovery and fair
+		// claim transaction, with each row still selected by its tenant and ID.
+		// The fourth scans one bounded page of receipt_observed row identities
+		// (tenant_id, destination, idempotency_key) and then completes each
+		// through its tenant RLS transaction; no payload or secret is read.
+		"internal/orchestrator/outbox.go": 4,
 		// A98-L1: the lease hold moves a live claim's lease_until ahead while
 		// its worker delivers it — the same one-row UPDATE by id, tenant, lease
 		// worker and attempt as finalizeClaim, through WithSystemFirst, reading
