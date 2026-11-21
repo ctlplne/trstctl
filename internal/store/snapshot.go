@@ -398,7 +398,10 @@ import (
 // and outbox so a snapshot cannot skip either projection's authority.
 // Version 141 carries classified discovery run diagnostics and separately
 // recorded refused origins. Rebuild older snapshots from the event log.
-const SnapshotFormatVersion = 141
+// Version 142 carries agent certificate/name bindings. Restoring an older
+// snapshot and skipping its covered enrollment and renewal events would reopen
+// the same-name clone path, so the old snapshot must trigger a full replay.
+const SnapshotFormatVersion = 142
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -445,6 +448,7 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	// (parent_id, replaces_id) and both always point at strictly older rows,
 	// so creation order is insertion-safe.
 	"tenant_members", "ca_authorities", "agent_cert_revocations",
+	"agent_certificate_bindings",
 	"owner_ownership_conflicts", "cmdb_ci_inventory", "cmdb_reconcile_schedules", "issuance_requests",
 	"mdm_device_correlations", "agent_upgrade_campaigns", "agent_upgrade_dispatches",
 	// Format 14: the I5 poll schedule joined ReadModelTables, so it must join
@@ -956,7 +960,8 @@ SELECT jsonb_build_object(
   'ssh_certificate_revocations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM ssh_certificate_revocations t),
   'listener_session_observations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM listener_session_observations t),
   'pam_session_approval_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_session_approval_links t),
-  'pam_account_health_checks', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_account_health_checks t)
+  'pam_account_health_checks', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_account_health_checks t),
+  'agent_certificate_bindings', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agent_certificate_bindings t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL,

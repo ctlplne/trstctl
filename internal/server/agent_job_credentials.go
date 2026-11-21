@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/sshcollection"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // RedeemJobCredential hands a claimed job's credential material to the agent
@@ -62,6 +63,9 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 		return nil, status.Errorf(codes.Internal, "load job for redemption: %v", err)
 	}
 	if !held || job.ClaimAttempts != req.Attempt {
+		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+	}
+	if job.RequiredAgentRole != "" && !agentHasRole(info.Roles, job.RequiredAgentRole) {
 		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 	}
 	if job.Destination == relay.KindWindowsDependentRotation {
@@ -148,7 +152,8 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 	// Secret resolution may take long enough for the lease or authorization to
 	// change. Grant against the same snapshot using the time after resolution.
 	now = time.Now().UTC()
-	redemption, granted, err := a.store.RedeemAgentJobCredential(ctx, info.TenantID, agentID, req.JobID, req.Attempt, job, binding, now)
+	redemption, granted, err := a.store.RedeemAgentJobCredential(ctx, info.TenantID, agentID, req.JobID, req.Attempt, job, binding, now,
+		store.AgentPeerAuthorization{Serial: info.Serial, Fingerprint: info.FingerprintSHA256, Roles: info.Roles})
 	if err != nil {
 		material.wipe()
 		return nil, status.Errorf(codes.Internal, "record redemption: %v", err)

@@ -16,6 +16,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
@@ -127,15 +128,19 @@ func TestServedRoleGrantMakesAHostAgentARelayAtItsNextRenewal(t *testing.T) {
 	}
 	var renewal projections.AgentCertRenewed
 	if err := h.log.Replay(ctx, 0, func(e events.Event) error {
-		if e.Type == projections.EventAgentCertRenewed && e.TenantID == h.tenant && e.SchemaVersion == projections.AgentCertRenewedRolesSchemaVersion {
+		if e.Type == projections.EventAgentCertRenewed && e.TenantID == h.tenant && e.SchemaVersion == projections.AgentCertRenewedBindingSchemaVersion {
 			return json.Unmarshal(e.Data, &renewal)
 		}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if renewal.NewSerial != renewed.Serial() || renewal.RoleGrantEventID != stored.EventID || !slices.Equal(renewal.Roles, []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork}) {
-		t.Fatalf("renewal event = %+v; want the signed roles and the grant it applied", renewal)
+	issued, err := certinfo.Inspect(renewed.CertificateDER())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renewal.NewSerial != renewed.Serial() || renewal.NewFingerprint != issued.SHA256Fingerprint || !renewal.NotAfter.Equal(issued.NotAfter) || renewal.RoleGrantEventID != stored.EventID || !slices.Equal(renewal.Roles, []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork}) {
+		t.Fatalf("renewal event = %+v; want the exact signed certificate, roles and applied grant", renewal)
 	}
 	if resp := beat(h.client); resp.RenewCertificate {
 		t.Fatal("the heartbeat still asks for a renewal after the grant was signed")

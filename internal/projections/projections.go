@@ -230,6 +230,8 @@ const (
 	EventCRLPublished                   = "ca.crl.published"
 	EventOCSPResponderRotated           = "ca.ocsp_responder.rotated"
 	EventAgentHeartbeat                 = "agent.heartbeat"
+	EventAgentCertEnrolled              = "agent.cert.enrolled"
+	EventAgentCertLegacyBound           = "agent.cert.legacy_bound"
 	EventAgentCertRenewed               = "agent.cert.renewed"
 	EventAgentCertRevoked               = "agent.cert.revoked"
 	EventAgentOffboarded                = "agent.offboarded"
@@ -2790,6 +2792,17 @@ type EnrollmentProxyReport struct {
 	LastFailoverAt     *time.Time `json:"last_failover_at,omitempty"`
 }
 
+// AgentCertEnrolled binds one fresh agent identity to its CA-issued certificate.
+// A name cannot gain a second active bootstrap certificate by presenting a new
+// token. Serial and fingerprint are public metadata, never private key bytes.
+type AgentCertEnrolled struct {
+	ID          string    `json:"id"`
+	Agent       string    `json:"agent"`
+	Serial      string    `json:"serial"`
+	Fingerprint string    `json:"fingerprint"`
+	NotAfter    time.Time `json:"not_after"`
+}
+
 // AgentCertRenewed is the payload of an agent.cert.renewed event. The projector
 // uses it as a liveness touch; certificate inventory itself is represented by the
 // public renewal event and the renewed cert returned to the agent.
@@ -2798,17 +2811,25 @@ type EnrollmentProxyReport struct {
 // renewal signed an operator's grant, the grant's event ID, which marks that
 // grant applied. Schema 1 carries neither.
 type AgentCertRenewed struct {
-	ID               string   `json:"id"`
-	Agent            string   `json:"agent"`
-	OldSerial        string   `json:"old_serial"`
-	NewSerial        string   `json:"new_serial"`
-	Roles            []string `json:"roles,omitempty"`
-	RoleGrantEventID string   `json:"role_grant_event_id,omitempty"`
+	ID               string     `json:"id"`
+	Agent            string     `json:"agent"`
+	OldSerial        string     `json:"old_serial"`
+	OldFingerprint   string     `json:"old_fingerprint,omitempty"`
+	OldNotAfter      *time.Time `json:"old_not_after,omitempty"`
+	NewSerial        string     `json:"new_serial"`
+	NewFingerprint   string     `json:"new_fingerprint,omitempty"`
+	NotAfter         *time.Time `json:"not_after,omitempty"`
+	Roles            []string   `json:"roles,omitempty"`
+	RoleGrantEventID string     `json:"role_grant_event_id,omitempty"`
 }
 
 // AgentCertRenewedRolesSchemaVersion is the agent.cert.renewed schema that
 // records the renewed certificate's roles (A191).
 const AgentCertRenewedRolesSchemaVersion = 2
+
+// Schema 3 also binds the newly issued certificate, including its exact DER
+// fingerprint and expiry, to the already authenticated agent identity.
+const AgentCertRenewedBindingSchemaVersion = 3
 
 // AgentRolesGranted is the payload of an agent.roles.granted event (A191): the
 // complete role set the agent's next certificate carries. It grants nothing by
@@ -5624,7 +5645,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCRLPublished:                             {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:                     {1: true},
 	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true, AgentHeartbeatSSHKRLSchemaVersion: true, AgentHeartbeatClockSchemaVersion: true, AgentHeartbeatSSHTrustSchemaVersion: true, AgentHeartbeatRelayEgressSchemaVersion: true},
-	EventAgentCertRenewed:                         {1: true, AgentCertRenewedRolesSchemaVersion: true},
+	EventAgentCertEnrolled:                        {1: true},
+	EventAgentCertLegacyBound:                     {1: true},
+	EventAgentCertRenewed:                         {1: true, AgentCertRenewedRolesSchemaVersion: true, AgentCertRenewedBindingSchemaVersion: true},
 	EventAgentRolesGranted:                        {1: true},
 	EventKMIPClientRegistered:                     {1: true},
 	EventKMIPClientEnrollmentIssued:               {1: true},
@@ -7473,6 +7496,15 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			row.RevocationCachesReportedAt = &reported
 		}
 		return p.store.ApplyAgentHeartbeatTx(ctx, tx, row)
+	case EventAgentCertEnrolled, EventAgentCertLegacyBound:
+		var pl AgentCertEnrolled
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyAgentCertificateBindingTx(ctx, tx, store.AgentCertificateBinding{
+			TenantID: e.TenantID, AgentID: pl.ID, Serial: pl.Serial,
+			Fingerprint: pl.Fingerprint, NotAfter: pl.NotAfter, EventSeq: e.Sequence,
+		})
 	case EventAgentCertRenewed:
 		var pl AgentCertRenewed
 		if err := decode(e, &pl); err != nil {
@@ -7484,6 +7516,28 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			LastSeenAt: &lastSeen, CreatedAt: e.Time,
 		}); err != nil {
 			return err
+		}
+		if e.SchemaVersion >= AgentCertRenewedBindingSchemaVersion {
+			if pl.NotAfter == nil || pl.NotAfter.IsZero() {
+				return errors.New("agent renewal binding requires certificate expiry")
+			}
+			if pl.OldFingerprint != "" {
+				if pl.OldNotAfter == nil || pl.OldNotAfter.IsZero() {
+					return errors.New("agent renewal binding requires prior certificate expiry")
+				}
+				if err := p.store.ApplyAgentCertificateBindingTx(ctx, tx, store.AgentCertificateBinding{
+					TenantID: e.TenantID, AgentID: pl.ID, Serial: pl.OldSerial,
+					Fingerprint: pl.OldFingerprint, NotAfter: *pl.OldNotAfter, EventSeq: e.Sequence,
+				}); err != nil {
+					return err
+				}
+			}
+			if err := p.store.ApplyAgentCertificateBindingTx(ctx, tx, store.AgentCertificateBinding{
+				TenantID: e.TenantID, AgentID: pl.ID, Serial: pl.NewSerial,
+				Fingerprint: pl.NewFingerprint, NotAfter: *pl.NotAfter, EventSeq: e.Sequence,
+			}); err != nil {
+				return err
+			}
 		}
 		if e.SchemaVersion < AgentCertRenewedRolesSchemaVersion {
 			return nil

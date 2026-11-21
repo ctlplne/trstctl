@@ -120,18 +120,27 @@ type CAIssuer interface {
 // signs CSRs through its CA issuer — stamping the redeemed tenant into the issued
 // certificate.
 type Authority struct {
-	tenantServiceCheck tenancy.ServiceCheck
-	tenantServiceWork  tenancy.ServiceWork
-	certificateBinding ClientCertificateBinding
-	keyGuard           SubjectKeyGuard
-	ca                 CAIssuer
-	store              TokenStore
-	ttl                time.Duration
+	tenantServiceCheck  tenancy.ServiceCheck
+	tenantServiceWork   tenancy.ServiceWork
+	certificateBinding  ClientCertificateBinding
+	certificateRecorded CertificateRecorded
+	keyGuard            SubjectKeyGuard
+	ca                  CAIssuer
+	store               TokenStore
+	ttl                 time.Duration
 }
 
 // SubjectKeyGuard refuses an agent key the tenant has recorded as
 // compromised (owner decision, batch 11).
 type SubjectKeyGuard func(ctx context.Context, tenantID string, spkiDER []byte) error
+
+// CertificateRecorded records the public leaf through the immutable event log
+// before enrollment returns it. previous is nil for a bootstrap certificate.
+type CertificateRecorded func(ctx context.Context, tenantID, name string, previous, leafDER []byte) error
+
+func WithCertificateRecorded(record CertificateRecorded) Option {
+	return func(a *Authority) { a.certificateRecorded = record }
+}
 
 // WithSubjectKeyGuard checks the agent's key against the tenant's recorded
 // compromises before bootstrap or renewal signs it. A bootstrap refused here
@@ -347,7 +356,18 @@ func (a *Authority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []
 	if err != nil {
 		return nil, err
 	}
-	return a.ca.SignClientCSRWithTenant(csrDER, redeemed.TenantID, redeemed.Roles, mtls.ClientCertTTL, bindings...)
+	chain, err := a.ca.SignClientCSRWithTenant(csrDER, redeemed.TenantID, redeemed.Roles, mtls.ClientCertTTL, bindings...)
+	if err != nil || a.certificateRecorded == nil {
+		return chain, err
+	}
+	leaf, err := mtls.FirstCertDER(chain)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.certificateRecorded(ctx, redeemed.TenantID, name, nil, leaf); err != nil {
+		return nil, err
+	}
+	return chain, nil
 }
 
 // ErrUnauthenticatedRenewal is returned when a renewal arrives without a verified
@@ -432,7 +452,18 @@ func (a *Authority) EnrollRenewal(ctx context.Context, peerCertsDER [][]byte, cs
 	if err != nil {
 		return nil, err
 	}
-	return a.ca.SignClientCSRWithTenant(csrDER, tenantID, roles, mtls.ClientCertTTL, bindings...)
+	chain, err := a.ca.SignClientCSRWithTenant(csrDER, tenantID, roles, mtls.ClientCertTTL, bindings...)
+	if err != nil || a.certificateRecorded == nil {
+		return chain, err
+	}
+	leaf, err := mtls.FirstCertDER(chain)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.certificateRecorded(ctx, tenantID, peer.CommonName, peerCertsDER[0], leaf); err != nil {
+		return nil, err
+	}
+	return chain, nil
 }
 
 // CABundlePEM is the CA certificate (PEM) an agent trusts to verify the control

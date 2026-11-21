@@ -391,9 +391,29 @@ func TestRedeemAgentJobCredentialIsSingleUsePerAttempt(t *testing.T) {
 	}
 	job := claimed[0]
 	binding := []byte("test-binding-digest")
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts,
+		redemptionSnapshot(job), binding, now, store.AgentPeerAuthorization{Serial: "good-serial", Fingerprint: "good-fingerprint", Roles: []string{"network"}}); err != nil || ok {
+		t.Fatalf("unbound certificate redeemed network work: ok=%v err=%v", ok, err)
+	}
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO agent_certificate_bindings
+			(tenant_id, agent_id, serial, fingerprint, not_after, event_seq)
+			VALUES ($1,$2,'good-serial','good-fingerprint',$3,1)`, tenantID, holder, now.Add(time.Hour))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID,
+		job.ClaimAttempts, redemptionSnapshot(job), binding, now, store.AgentPeerAuthorization{}); err != nil || ok {
+		t.Fatalf("holder without the network role redeemed network work: ok=%v err=%v", ok, err)
+	}
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts,
+		redemptionSnapshot(job), binding, now, store.AgentPeerAuthorization{Serial: "clone-serial", Fingerprint: "clone-fingerprint", Roles: []string{"network"}}); err != nil || ok {
+		t.Fatalf("same-name clone redeemed with the right role but wrong certificate: ok=%v err=%v", ok, err)
+	}
 
 	// First redemption by the lease holder at the current attempt: granted.
-	first, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts, redemptionSnapshot(job), binding, now)
+	first, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts, redemptionSnapshot(job), binding, now, store.AgentPeerAuthorization{Serial: "good-serial", Fingerprint: "good-fingerprint", Roles: []string{"network"}})
 	if err != nil || !ok {
 		t.Fatalf("first redemption refused: ok=%v err=%v", ok, err)
 	}
@@ -405,7 +425,7 @@ func TestRedeemAgentJobCredentialIsSingleUsePerAttempt(t *testing.T) {
 	}
 
 	// Replay by the same holder: refused, and classified as replayed.
-	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts, redemptionSnapshot(job), binding, now); err != nil || ok {
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts, redemptionSnapshot(job), binding, now, store.AgentPeerAuthorization{}); err != nil || ok {
 		t.Fatalf("replayed redemption was granted: ok=%v err=%v", ok, err)
 	}
 	if reason, err := st.AgentJobRedemptionRefusalReason(ctx, tenantID, holder, job.ID, job.ClaimAttempts, now); err != nil || reason != store.AgentRedemptionRefusedReplayed {
@@ -413,12 +433,12 @@ func TestRedeemAgentJobCredentialIsSingleUsePerAttempt(t *testing.T) {
 	}
 
 	// A second agent that does not hold the lease: refused, lease-not-held.
-	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, impostor, job.ID, job.ClaimAttempts, redemptionSnapshot(job), binding, now); err != nil || ok {
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, impostor, job.ID, job.ClaimAttempts, redemptionSnapshot(job), binding, now, store.AgentPeerAuthorization{}); err != nil || ok {
 		t.Fatalf("impostor redemption was granted: ok=%v err=%v", ok, err)
 	}
 
 	// A stale attempt from the holder: refused, attempt-stale.
-	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts+7, redemptionSnapshot(job), binding, now); err != nil || ok {
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts+7, redemptionSnapshot(job), binding, now, store.AgentPeerAuthorization{}); err != nil || ok {
 		t.Fatalf("stale-attempt redemption was granted: ok=%v err=%v", ok, err)
 	}
 	if reason, err := st.AgentJobRedemptionRefusalReason(ctx, tenantID, holder, job.ID, job.ClaimAttempts+7, now); err != nil || reason != store.AgentRedemptionRefusedAttemptStale {
@@ -459,13 +479,21 @@ func TestRedemptionAfterLeaseLapseGoesToTheNewHolder(t *testing.T) {
 	if fresh.ClaimAttempts != firstClaim[0].ClaimAttempts+1 {
 		t.Fatalf("reclaim attempt = %d, want %d", fresh.ClaimAttempts, firstClaim[0].ClaimAttempts+1)
 	}
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO agent_certificate_bindings
+			(tenant_id, agent_id, serial, fingerprint, not_after, event_seq)
+			VALUES ($1,$2,'alive-serial','alive-fingerprint',$3,1)`, tenantID, alive, after.Add(time.Hour))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	// The dead agent's redemption at its old attempt: refused.
-	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, dead, fresh.ID, firstClaim[0].ClaimAttempts, redemptionSnapshot(firstClaim[0]), []byte("b"), after); err != nil || ok {
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, dead, fresh.ID, firstClaim[0].ClaimAttempts, redemptionSnapshot(firstClaim[0]), []byte("b"), after, store.AgentPeerAuthorization{}); err != nil || ok {
 		t.Fatalf("dead agent redeemed after losing the lease: ok=%v err=%v", ok, err)
 	}
 	// The live holder's redemption at the fresh attempt: granted.
-	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, alive, fresh.ID, fresh.ClaimAttempts, redemptionSnapshot(fresh), []byte("b"), after); err != nil || !ok {
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, alive, fresh.ID, fresh.ClaimAttempts, redemptionSnapshot(fresh), []byte("b"), after, store.AgentPeerAuthorization{Serial: "alive-serial", Fingerprint: "alive-fingerprint", Roles: []string{"network"}}); err != nil || !ok {
 		t.Fatalf("new holder's redemption refused: ok=%v err=%v", ok, err)
 	}
 }

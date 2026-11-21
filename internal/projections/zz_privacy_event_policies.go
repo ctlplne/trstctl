@@ -46,6 +46,15 @@ type privacyAgentCertRenewedV1 struct {
 	NewSerial string `json:"new_serial"`
 }
 
+type privacyAgentCertRenewedV2 struct {
+	ID               string   `json:"id"`
+	Agent            string   `json:"agent"`
+	OldSerial        string   `json:"old_serial"`
+	NewSerial        string   `json:"new_serial"`
+	Roles            []string `json:"roles,omitempty"`
+	RoleGrantEventID string   `json:"role_grant_event_id,omitempty"`
+}
+
 // Version-one member events predate explicit provisioning identities. Keep
 // their historical payloads closed instead of silently extending schema one.
 type privacyTenantMemberUpsertedV1 struct {
@@ -595,6 +604,11 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/ssh_krl/signer_fingerprint", opaque),
 		privacyRule("/agent_time_unix_ms", opaque),
 	)
+	agentCertEnrolled := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/agent", exact),
+		privacyRule("/serial", opaque), privacyRule("/fingerprint", opaque),
+		privacyRule("/not_after", opaque),
+	)
 	agentCertRenewed := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/agent", exact),
 		privacyRule("/old_serial", opaque), privacyRule("/new_serial", opaque),
@@ -602,6 +616,13 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	agentCertRenewedRoles := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/agent", exact),
 		privacyRule("/old_serial", opaque), privacyRule("/new_serial", opaque),
+		privacyRule("/roles", opaque), privacyRule("/role_grant_event_id", opaque),
+	)
+	agentCertRenewedBinding := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/agent", exact),
+		privacyRule("/old_serial", opaque), privacyRule("/new_serial", opaque),
+		privacyRule("/old_fingerprint", opaque), privacyRule("/old_not_after", opaque),
+		privacyRule("/new_fingerprint", opaque), privacyRule("/not_after", opaque),
 		privacyRule("/roles", opaque), privacyRule("/role_grant_event_id", opaque),
 	)
 	agentRolesGranted := privacyRules(
@@ -1243,8 +1264,11 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventAgentHeartbeat, AgentHeartbeatExecutorCensusSchemaVersion}:  agentHeartbeat,
 		{EventAgentHeartbeat, AgentHeartbeatSSHKRLSchemaVersion}:          agentHeartbeat,
 		{EventAgentHeartbeat, AgentHeartbeatClockSchemaVersion}:           agentHeartbeat,
+		{EventAgentCertEnrolled, 1}:                                       agentCertEnrolled,
+		{EventAgentCertLegacyBound, 1}:                                    agentCertEnrolled,
 		{EventAgentCertRenewed, 1}:                                        agentCertRenewed,
 		{EventAgentCertRenewed, AgentCertRenewedRolesSchemaVersion}:       agentCertRenewedRoles,
+		{EventAgentCertRenewed, AgentCertRenewedBindingSchemaVersion}:     agentCertRenewedBinding,
 		{EventAgentRolesGranted, 1}:                                       agentRolesGranted,
 		{EventKMIPClientRegistered, 1}:                                    kmipClientRegistered,
 		{EventKMIPClientEnrollmentIssued, 1}:                              kmipClientEnrollmentIssued,
@@ -1882,8 +1906,11 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventAgentHeartbeat, AgentHeartbeatExecutorCensusSchemaVersion}:                     privacyPayloadShape[agentHeartbeatBeforeSSHTrust](),
 		{EventAgentHeartbeat, AgentHeartbeatSSHKRLSchemaVersion}:                             privacyPayloadShape[agentHeartbeatBeforeSSHTrust](),
 		{EventAgentHeartbeat, AgentHeartbeatClockSchemaVersion}:                              privacyPayloadShape[agentHeartbeatBeforeSSHTrust](),
+		{EventAgentCertEnrolled, 1}:                                                          privacyPayloadShape[AgentCertEnrolled](),
+		{EventAgentCertLegacyBound, 1}:                                                       privacyPayloadShape[AgentCertEnrolled](),
 		{EventAgentCertRenewed, 1}:                                                           privacyPayloadShape[privacyAgentCertRenewedV1](),
-		{EventAgentCertRenewed, AgentCertRenewedRolesSchemaVersion}:                          privacyPayloadShape[AgentCertRenewed](),
+		{EventAgentCertRenewed, AgentCertRenewedRolesSchemaVersion}:                          privacyPayloadShape[privacyAgentCertRenewedV2](),
+		{EventAgentCertRenewed, AgentCertRenewedBindingSchemaVersion}:                        privacyPayloadShape[AgentCertRenewed](),
 		{EventAgentRolesGranted, 1}:                                                          privacyPayloadShape[AgentRolesGranted](),
 		{EventKMIPClientRegistered, 1}:                                                       privacyPayloadShape[KMIPClientRegistered](),
 		{EventKMIPClientEnrollmentIssued, 1}:                                                 privacyPayloadShape[KMIPClientEnrollmentIssued](),

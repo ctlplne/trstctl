@@ -572,9 +572,18 @@ type AgentJobRedemption struct {
 // detail. The row is the audit trail: append-only, RLS-confined, its expiry
 // bound to the claim lease so redeemed material can never outlive the claim.
 //
+// AgentPeerAuthorization contains only verified certificate facts. It is used
+// again in the hand-over transaction so a certificate replaced during secret
+// resolution cannot redeem against a stale precheck.
+type AgentPeerAuthorization struct {
+	Serial, Fingerprint string
+	Roles               []string
+}
+
 // binding is the caller-computed, non-secret digest tying this redemption to
 // the exact work it authorizes; it is stored as evidence, not consulted as a
-// key.
+// key. roles come only from the verified peer certificate. The same transaction
+// that records the one-time hand-over rechecks the row's current role demand.
 func (s *Store) RedeemAgentJobCredential(
 	ctx context.Context,
 	tenantID, agentID string,
@@ -583,6 +592,7 @@ func (s *Store) RedeemAgentJobCredential(
 	expected AgentJobForRedemption,
 	binding []byte,
 	now time.Time,
+	peer AgentPeerAuthorization,
 ) (AgentJobRedemption, bool, error) {
 	var out AgentJobRedemption
 	ok := false
@@ -632,6 +642,12 @@ func (s *Store) RedeemAgentJobCredential(
 			           AND o.agent_recalled_at IS NULL
 			           AND o.claim_expires_at > $6
 			           AND o.claim_attempts = $4
+			   AND (o.required_agent_role = '' OR o.required_agent_role = ANY($14::text[]))
+			   AND EXISTS (
+			       SELECT 1 FROM agent_certificate_bindings b
+			        WHERE b.tenant_id=$1 AND b.agent_id=$3::uuid
+			          AND b.serial=$15 AND b.fingerprint=$16 AND b.not_after > $6
+			   )
 			           AND ($11::text = '' OR EXISTS (
 			               SELECT 1 FROM deployment_targets dt
 			                WHERE dt.tenant_id = $1 AND dt.id::text = $11
@@ -673,7 +689,7 @@ func (s *Store) RedeemAgentJobCredential(
 			 )
 			 SELECT audit_ref, expires_at FROM ins`,
 			tenantID, jobID, agentID, attempt, binding, now.UTC(), expected.Destination,
-			expected.IdempotencyKey, expected.Payload, expected.RequiredAgentID, host.TargetID, host.Connector, host.IdentityID).
+			expected.IdempotencyKey, expected.Payload, expected.RequiredAgentID, host.TargetID, host.Connector, host.IdentityID, peer.Roles, peer.Serial, peer.Fingerprint).
 			Scan(&out.AuditRef, &out.ExpiresAt)
 		if errors.Is(scanErr, pgx.ErrNoRows) {
 			return nil
@@ -747,12 +763,13 @@ const (
 // the payload here is still sealed.
 type AgentJobForRedemption struct {
 	// ID is the exact operational claim whose current attempt may redeem.
-	ID              int64
-	RequiredAgentID string
-	Destination     string
-	IdempotencyKey  string
-	Payload         []byte
-	ClaimAttempts   int
+	ID                int64
+	RequiredAgentID   string
+	RequiredAgentRole string
+	Destination       string
+	IdempotencyKey    string
+	Payload           []byte
+	ClaimAttempts     int
 }
 
 // GetAgentJobForRedemption loads a job's sealed payload if — at this instant —
@@ -769,7 +786,8 @@ func (s *Store) GetAgentJobForRedemption(
 	found := false
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		scanErr := tx.QueryRow(ctx,
-			`SELECT destination, idempotency_key, payload, claim_attempts, COALESCE(required_agent_id::text, '')
+			`SELECT destination, idempotency_key, payload, claim_attempts,
+			        COALESCE(required_agent_id::text, ''), required_agent_role
 			   FROM outbox
 			  WHERE tenant_id = $1 AND id = $2
 			    AND claimed_by_agent_id = $3::uuid
@@ -778,7 +796,8 @@ func (s *Store) GetAgentJobForRedemption(
 			    AND agent_recalled_at IS NULL
 			    AND claim_expires_at > $4`,
 			tenantID, jobID, agentID, now.UTC()).
-			Scan(&out.Destination, &out.IdempotencyKey, &out.Payload, &out.ClaimAttempts, &out.RequiredAgentID)
+			Scan(&out.Destination, &out.IdempotencyKey, &out.Payload, &out.ClaimAttempts,
+				&out.RequiredAgentID, &out.RequiredAgentRole)
 		if errors.Is(scanErr, pgx.ErrNoRows) {
 			return nil
 		}

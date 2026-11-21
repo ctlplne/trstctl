@@ -20,6 +20,7 @@ func TestHostRedemptionGrantRechecksResolvedJobAndCurrentAuthority(t *testing.T)
 	tenantID := tenantA
 	const agentID = "bbbbbbbb-0000-0000-0000-000000000001"
 	const targetID = "bbbbbbbb-0000-0000-0000-000000000002"
+	seedRedemptionTestBinding(t, st, tenantID, agentID)
 	for _, mode := range []string{"unchanged", "cancelled", "different payload", "different destination", "different idempotency key", "different assignment", "disabled target", "reassigned target", "missing target", "expired lease", "pending terminal"} {
 		t.Run(mode, func(t *testing.T) {
 			identityID := googleuuid.NewString()
@@ -80,7 +81,7 @@ func TestHostRedemptionGrantRechecksResolvedJobAndCurrentAuthority(t *testing.T)
 			}); err != nil {
 				t.Fatal(err)
 			}
-			_, granted, err := st.RedeemAgentJobCredential(ctx, tenantID, agentID, id, job.ClaimAttempts, job, []byte("test-binding"), now)
+			_, granted, err := st.RedeemAgentJobCredential(ctx, tenantID, agentID, id, job.ClaimAttempts, job, []byte("test-binding"), now, store.AgentPeerAuthorization{Serial: "host-serial", Fingerprint: "host-fingerprint", Roles: []string{"host"}})
 			if err != nil || granted != (mode == "unchanged") {
 				t.Fatalf("grant=%v err=%v", granted, err)
 			}
@@ -112,6 +113,7 @@ func TestHostDeployRedemptionBindsTheAssignedAgentNotTheKeyCustodyMarker(t *test
 	tenantID := tenantA
 	const agentID = "bbbbbbbb-0000-0000-0000-000000000011"
 	const otherAgentID = "bbbbbbbb-0000-0000-0000-000000000019"
+	seedRedemptionTestBinding(t, st, tenantID, agentID)
 	for _, tc := range []struct {
 		name    string
 		config  string
@@ -144,10 +146,22 @@ func TestHostDeployRedemptionBindsTheAssignedAgentNotTheKeyCustodyMarker(t *test
 			if err != nil || !held {
 				t.Fatalf("snapshot: held=%v %v", held, err)
 			}
-			_, granted, err := st.RedeemAgentJobCredential(ctx, tenantID, agentID, id, job.ClaimAttempts, job, []byte("test-binding"), now)
+			_, granted, err := st.RedeemAgentJobCredential(ctx, tenantID, agentID, id, job.ClaimAttempts, job, []byte("test-binding"), now, store.AgentPeerAuthorization{Serial: "host-serial", Fingerprint: "host-fingerprint", Roles: []string{"host"}})
 			if err != nil || granted != tc.granted {
 				t.Fatalf("grant=%v err=%v, want %v", granted, err, tc.granted)
 			}
 		})
+	}
+}
+
+func seedRedemptionTestBinding(t *testing.T, st *store.Store, tenantID, agentID string) {
+	t.Helper()
+	if err := st.WithTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `INSERT INTO agent_certificate_bindings
+			(tenant_id, agent_id, serial, fingerprint, not_after, event_seq)
+			VALUES ($1,$2,'host-serial','host-fingerprint',$3,1)`, tenantID, agentID, time.Now().UTC().Add(time.Hour))
+		return err
+	}); err != nil {
+		t.Fatal(err)
 	}
 }

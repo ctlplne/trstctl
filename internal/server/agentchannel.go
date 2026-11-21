@@ -60,6 +60,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/dependencyobs"
 	"trstctl.com/trstctl/internal/events"
@@ -668,6 +669,12 @@ func (a *agentService) checkedPeerIdentity(ctx context.Context, info mtls.PeerCe
 	if offboarded {
 		return mtls.PeerCertInfo{}, status.Error(codes.PermissionDenied, "agent has been offboarded")
 	}
+	if err := ensureAgentCertificateBinding(ctx, a.store, a.log, info); err != nil {
+		if errors.Is(err, errAgentCertificateNotEnrolled) {
+			return mtls.PeerCertInfo{}, status.Error(codes.PermissionDenied, "agent certificate is not enrolled for this name")
+		}
+		return mtls.PeerCertInfo{}, status.Error(codes.Unavailable, "agent certificate binding is unavailable")
+	}
 	return info, nil
 }
 
@@ -1162,14 +1169,22 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 		// AN-2: record the renewal as an event (no key material — only the public
 		// identity + serial). The read model can project agent cert state from it.
 		if a.log != nil {
-			serial := ""
-			if leafDER, derr := mtls.FirstCertDER(chainPEM); derr == nil {
-				if rs, rerr := mtls.CertSerialHex(leafDER); rerr == nil {
-					serial = rs
-				}
+			leafDER, derr := mtls.FirstCertDER(chainPEM)
+			if derr != nil {
+				return nil, derr
+			}
+			issued, derr := certinfo.Inspect(leafDER)
+			if derr != nil {
+				return nil, derr
+			}
+			previous, derr := certinfo.Inspect(info.LeafDER)
+			if derr != nil {
+				return nil, derr
 			}
 			payload, perr := json.Marshal(projections.AgentCertRenewed{
-				ID: agentRowID(info.TenantID, info.CommonName), Agent: info.CommonName, OldSerial: info.Serial, NewSerial: serial,
+				ID: agentRowID(info.TenantID, info.CommonName), Agent: info.CommonName, OldSerial: info.Serial,
+				OldFingerprint: info.FingerprintSHA256, OldNotAfter: &previous.NotAfter,
+				NewSerial: issued.SerialNumber, NewFingerprint: issued.SHA256Fingerprint, NotAfter: &issued.NotAfter,
 				Roles: roles, RoleGrantEventID: grantEventID,
 			})
 			if perr != nil {
@@ -1177,7 +1192,7 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 			}
 			ev, aerr := a.log.Append(ctx, events.Event{
 				Type: projections.EventAgentCertRenewed, TenantID: info.TenantID,
-				SchemaVersion: projections.AgentCertRenewedRolesSchemaVersion, Data: payload,
+				SchemaVersion: projections.AgentCertRenewedBindingSchemaVersion, Data: payload,
 			})
 			if aerr != nil {
 				return nil, aerr

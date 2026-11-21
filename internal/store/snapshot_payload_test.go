@@ -109,6 +109,12 @@ func TestSnapshotCaptureIncludesEveryRestoreTableAndTenantRows(t *testing.T) {
 			if err := s.ApplyKubernetesCertificateProvenanceTx(ctx, tx, provenance); err != nil {
 				return err
 			}
+			if err := s.ApplyAgentCertificateBindingTx(ctx, tx, store.AgentCertificateBinding{
+				TenantID: tenantID, AgentID: uuid(tenantID, 9106), Serial: "a1",
+				Fingerprint: "snapshot-agent-fingerprint", NotAfter: at.Add(time.Hour), EventSeq: 44,
+			}); err != nil {
+				return err
+			}
 			rows, err := tx.Query(ctx, `
 SELECT 'notification_routing_policies', to_jsonb(t.*)
 FROM notification_routing_policies t WHERE tenant_id = $1
@@ -123,7 +129,10 @@ SELECT 'breakglass_issue_receipts', to_jsonb(t.*)
 FROM breakglass_issue_receipts t WHERE tenant_id = $1
 UNION ALL
 SELECT 'breakglass_authority_receipts', to_jsonb(t.*)
-FROM breakglass_authority_receipts t WHERE tenant_id = $1`, tenantID)
+FROM breakglass_authority_receipts t WHERE tenant_id = $1
+UNION ALL
+SELECT 'agent_certificate_bindings', to_jsonb(t.*)
+FROM agent_certificate_bindings t WHERE tenant_id = $1`, tenantID)
 			if err != nil {
 				return err
 			}
@@ -147,8 +156,8 @@ FROM breakglass_authority_receipts t WHERE tenant_id = $1`, tenantID)
 		}); err != nil {
 			t.Fatalf("seed tenant-scoped capture fixtures: %v", err)
 		}
-		if len(expected[tenantID]) != 5 {
-			t.Fatalf("fixture inventory for %s = %d, want five nonempty tables", tenantID, len(expected[tenantID]))
+		if len(expected[tenantID]) != 6 {
+			t.Fatalf("fixture inventory for %s = %d, want six nonempty tables", tenantID, len(expected[tenantID]))
 		}
 	}
 	if count, err := s.WriteReadModelSnapshots(ctx); err != nil || count != 2 {

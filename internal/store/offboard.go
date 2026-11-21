@@ -350,6 +350,7 @@ var TenantScopedTables = []string{
 	"deployment_target_revisions",
 	"deployment_targets",
 	"agent_cert_revocations",
+	"agent_certificate_bindings",
 	// A191: the roles operators granted its agents.
 	"agent_role_grants",
 	// A197: its self-service KMIP client registrations.

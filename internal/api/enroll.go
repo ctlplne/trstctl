@@ -29,6 +29,14 @@ var ErrInvalidBootstrapToken = errors.New("api: invalid or already-used bootstra
 // The bootstrap token is not consumed for this client error.
 var ErrInvalidAgentCSR = errors.New("api: invalid agent CSR")
 
+// ErrAgentNameAlreadyEnrolled means a live identity already owns the name.
+var ErrAgentNameAlreadyEnrolled = errors.New("api: agent name already enrolled")
+
+// ErrAgentEnrollmentBusy means another request is deciding this name's first
+// certificate. The caller must check the agent's status before minting a new
+// token; the presented one-time token may already have been consumed.
+var ErrAgentEnrollmentBusy = errors.New("api: agent enrollment is in progress")
+
 // ErrUnauthenticatedAgentRenewal is what a renewal-capable enroller returns when a
 // request is not authenticated by a verified current agent client certificate.
 var ErrUnauthenticatedAgentRenewal = errors.New("api: agent renewal requires a verified client certificate")
@@ -174,6 +182,14 @@ func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, ErrInvalidAgentCSR) {
 			a.writeError(w, errStatus(http.StatusBadRequest, "agent CSR has an invalid identity"))
+			return
+		}
+		if errors.Is(err, ErrAgentNameAlreadyEnrolled) {
+			a.writeError(w, errStatus(http.StatusConflict, "agent name already has a live enrollment"))
+			return
+		}
+		if errors.Is(err, ErrAgentEnrollmentBusy) {
+			a.writeError(w, errStatus(http.StatusConflict, "agent enrollment is in progress; check the enrolled agent before minting another token"))
 			return
 		}
 		a.writeError(w, err)

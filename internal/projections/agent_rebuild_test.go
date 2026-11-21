@@ -19,6 +19,43 @@ import (
 
 const replayAgentID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 
+func TestCR016AgentCertificateBindingsRebuildFromEvents(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration: embedded PostgreSQL + NATS")
+	}
+	ctx := context.Background()
+	s := newStore(t)
+	log := openLog(t)
+	appendJSONEvent(t, log, projections.EventTenantRegistered, tenantA, map[string]string{"name": "Acme"})
+	expires := time.Now().UTC().Add(time.Hour)
+	appendJSONEvent(t, log, projections.EventAgentCertEnrolled, tenantA, projections.AgentCertEnrolled{
+		ID: replayAgentID, Agent: "edge-replay-1", Serial: "a1", Fingerprint: "original-fingerprint", NotAfter: expires,
+	})
+	wire, err := json.Marshal(projections.AgentCertRenewed{ID: replayAgentID, Agent: "edge-replay-1",
+		OldSerial: "a1", OldFingerprint: "original-fingerprint", OldNotAfter: &expires,
+		NewSerial: "b2", NewFingerprint: "renewed-fingerprint", NotAfter: &expires})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(ctx, events.Event{Type: projections.EventAgentCertRenewed, TenantID: tenantA,
+		SchemaVersion: projections.AgentCertRenewedBindingSchemaVersion, Data: wire}); err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(s).Rebuild(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	for _, cert := range []struct{ serial, fingerprint string }{{"a1", "original-fingerprint"}, {"b2", "renewed-fingerprint"}} {
+		bound, matches, err := s.AgentCertificateMatches(ctx, tenantA, replayAgentID, cert.serial, cert.fingerprint)
+		if err != nil || !bound || !matches {
+			t.Fatalf("replayed certificate %s: bound=%v matches=%v err=%v", cert.serial, bound, matches, err)
+		}
+	}
+	bound, matches, err := s.AgentCertificateMatches(ctx, tenantA, replayAgentID, "clone", "clone-fingerprint")
+	if err != nil || !bound || matches {
+		t.Fatalf("same-name clone after rebuild: bound=%v matches=%v err=%v", bound, matches, err)
+	}
+}
+
 func appendJSONEvent(t *testing.T, log *events.Log, typ, tenantID string, payload any) events.Event {
 	t.Helper()
 	data, err := json.Marshal(payload)

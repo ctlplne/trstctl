@@ -285,7 +285,12 @@ split into two steps:
 If setup fails, dismiss the token, review the current plan again, and mint one
 replacement. A lost, expired, or already-used token cannot be recovered. If a machine
 that enrolled successfully is no longer trusted, revoke its current certificate or
-offboard it from **Agents** before enrolling a replacement. Headless operators use
+offboard it from **Agents** before enrolling a replacement under a new agent name.
+Reusing a live name returns HTTP `409` even before its first heartbeat; a token
+presented to that attempt is consumed. Keep the existing key for authenticated
+renewal, or review the replacement's host-pinned assignments when its name
+changes. A pre-upgrade certificate with no retained heartbeat or renewal chain
+cannot claim the old name automatically. Headless operators use
 `trstctl agents enroll-token-preview` before `trstctl agents enroll-token`; the same
 server-owned blockers protect both console and direct API mutation.
 

@@ -78,6 +78,17 @@ identity. The issued key and certificate persist on the node at
 DaemonSet initContainer prepares that host directory for the non-root agent uid
 before the steady-state agent starts.
 
+An agent name has one live bootstrap certificate. A second token for that name
+returns HTTP `409`, including before the first heartbeat; the attempted token is
+spent. Keep the existing agent key and use authenticated certificate renewal.
+If that key is lost or untrusted, revoke or offboard the old identity, provision
+the replacement under a new agent name, and review any host-pinned target and
+job assignments before resuming work. Never copy the old agent's private key to
+the replacement. On upgrade, an agent with retained heartbeat or renewal
+history binds its current certificate on the first channel call. If the history
+is missing or contains unlinked certificates under one name, the channel refuses
+that name until the operator provisions a replacement.
+
 Canary by node label when the cluster is large. Patch the DaemonSet with a
 temporary `nodeSelector`, wait for one node to heartbeat, then remove the selector
 and continue the rollout.
