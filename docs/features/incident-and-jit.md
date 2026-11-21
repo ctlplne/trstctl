@@ -1896,10 +1896,12 @@ otherwise is refused. A provider that asks for a second factor, or that answers 
 with a page needing its scripts (such as SAML's self-submitting POST form), is refused.
 
 A console under a path is reached only under it. The tunnel's root leads there. Any other
-path on its host is refused at the gateway and recorded, including one that would climb out
-through a dot segment, an encoded slash or a backslash. The template's sign-in page must
-lie under the path, because the gateway posts the account's password there. A session
-requested through a template that signs in elsewhere is refused.
+path on its host is refused at the gateway and recorded, including one with a dot segment,
+servlet path parameter, encoded path, or backslash that could resolve outside the reviewed
+path. The gateway sends the checked path to the console, and browser-readable cookies stay
+on that path. The template's sign-in page must lie under the path, because the gateway posts
+the account's password there. A session requested through a template that signs in elsewhere
+is refused.
 
 Many consoles write their own origin into what they send. The gateway rewrites it to the
 tunnel's origin, the one the browser is on, so a link followed as written stays on the

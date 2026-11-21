@@ -403,7 +403,7 @@ func TestWebConsoleUnderAPathStaysUnderItA273O3(t *testing.T) {
 	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/console/settings?saved=1" || console.Banner() != "under a path" {
 		t.Fatalf("the task under the path: %d, Location %q, banner %q", resp.StatusCode, resp.Header.Get("Location"), console.Banner())
 	}
-	for _, outside := range []string{"/other-app", "/console/../other-app", "/console/..%2fother-app", "/consoles/x"} {
+	for _, outside := range []string{"/other-app", "/console/../other-app", "/console/..%2fother-app", "/console/..;/other-app", "/console/..;jsessionid=x/other-app", "/console/%2e%2e;/other-app", "/consoles/x"} {
 		if status, page := browser.get(t, outside); status != http.StatusForbidden || strings.Contains(page, "another application") {
 			t.Fatalf("%s outside the console's path: %d %s", outside, status, page)
 		}
@@ -423,5 +423,26 @@ func TestWebConsoleUnderAPathStaysUnderItA273O3(t *testing.T) {
 	defer func() { _ = browserEnd.Close() }()
 	if err := serveWebConsole(ctx, gatewayEnd, []byte(credential), outside, newWebConsoleState(), nil, nil); err == nil || !strings.Contains(err.Error(), "outside its reviewed path") {
 		t.Fatalf("a sign-in page outside the console's path opened the session: %v", err)
+	}
+}
+
+func TestCR915BrowserCookieKeepsReviewedPath(t *testing.T) {
+	c := &webConsoleClient{
+		target: &url.URL{Scheme: "https", Host: "console.internal.example"},
+		home:   "/console/",
+		in:     accessweb.SignIn{Mode: accessweb.SignInBasic, BrowserCookies: []string{"XSRF"}},
+	}
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Set-Cookie": {"XSRF=token; Path=/"}},
+		Body:       http.NoBody,
+		Request:    &http.Request{Method: http.MethodGet, URL: &url.URL{Scheme: "https", Host: "console.internal.example", Path: "/console/"}},
+	}
+	if err := c.response(resp, newWebConsoleState(), nil); err != nil {
+		t.Fatal(err)
+	}
+	cookies := resp.Cookies()
+	if len(cookies) != 1 || cookies[0].Path != "/console/" {
+		t.Fatalf("browser cookie escaped console path: %v", resp.Header.Values("Set-Cookie"))
 	}
 }

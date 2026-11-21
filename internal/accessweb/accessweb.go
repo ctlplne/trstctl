@@ -231,14 +231,14 @@ func (r Route) Prefix() string {
 
 // Within reports whether a request path stays under the console's path. A
 // console at its origin takes every path. Under a path, it takes that path
-// and what lies below it, never with a dot segment or a backslash that a
-// server could resolve to climb out of it (A273-O3).
+// and what lies below it, never with a dot segment, servlet path parameter,
+// escape, or backslash that a server could resolve differently (A273-O3).
 func (r Route) Within(p string) bool {
 	prefix := r.Prefix()
 	if prefix == "/" {
 		return true
 	}
-	if strings.ContainsRune(p, '\\') {
+	if strings.ContainsAny(p, "\\;%") {
 		return false
 	}
 	for _, segment := range strings.Split(p, "/") {
@@ -247,6 +247,16 @@ func (r Route) Within(p string) bool {
 		}
 	}
 	return strings.HasPrefix(p, prefix)
+}
+
+// WithinURL checks both the decoded path and the bytes forwarded to a
+// path-scoped console. Escaped paths are refused there because a second
+// decode by the upstream could resolve a different application (CR-915).
+func (r Route) WithinURL(u *url.URL) bool {
+	if u == nil || !r.Within(u.Path) {
+		return false
+	}
+	return r.Prefix() == "/" || !strings.ContainsRune(u.EscapedPath(), '%')
 }
 
 // SignsInWithin reports whether a sign-in stays under the console's path: a
@@ -263,7 +273,7 @@ func (r Route) SignsInThrough(s SignIn) bool {
 }
 
 func validPath(p string) error {
-	if p == "" || len(p) > 512 || p[0] != '/' || strings.HasPrefix(p, "//") || strings.ContainsAny(p, "?#\\\r\n\x00 ") {
+	if p == "" || len(p) > 512 || p[0] != '/' || strings.HasPrefix(p, "//") || strings.ContainsAny(p, "?#\\;%\r\n\x00 ") {
 		return errors.New("invalid path")
 	}
 	u, err := url.Parse(p)

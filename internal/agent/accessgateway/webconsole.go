@@ -857,7 +857,7 @@ func serveWebConsole(ctx context.Context, client net.Conn, raw []byte, intent Se
 		ErrorLog: log.New(io.Discard, "", 0),
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !reviewed.Within(r.URL.Path) {
+		if !reviewed.WithinURL(r.URL) {
 			// The tunnel's root leads to the console's path; any other path
 			// on the console's host is not the reviewed console.
 			if r.URL.Path == "/" || r.URL.Path+"/" == home {
@@ -910,6 +910,9 @@ func serveWebConsole(ctx context.Context, client net.Conn, raw []byte, intent Se
 // the browser sent, and same-origin checks see the console's origin.
 func (c *webConsoleClient) rewrite(r *httputil.ProxyRequest, state *webConsoleState, authorization string) {
 	r.SetURL(c.target)
+	// The upstream receives the decoded path that passed WithinURL, encoded
+	// once by net/http; never forward a browser-supplied RawPath (CR-915).
+	r.Out.URL.RawPath = ""
 	r.Out.Host = c.target.Host
 	var browser []*http.Cookie
 	for _, cookie := range r.In.Cookies() {
@@ -959,7 +962,7 @@ func (c *webConsoleClient) response(resp *http.Response, state *webConsoleState,
 	}
 	resp.Header.Del("Set-Cookie")
 	for _, cookie := range browser {
-		pass := &http.Cookie{Name: cookie.Name, Value: cookie.Value, Path: "/", MaxAge: cookie.MaxAge, Expires: cookie.Expires, HttpOnly: cookie.HttpOnly, SameSite: http.SameSiteStrictMode} // #nosec G124 -- the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614)
+		pass := &http.Cookie{Name: cookie.Name, Value: cookie.Value, Path: c.home, MaxAge: cookie.MaxAge, Expires: cookie.Expires, HttpOnly: cookie.HttpOnly, SameSite: http.SameSiteStrictMode} // #nosec G124 -- the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614)
 		if v := pass.String(); v != "" {
 			resp.Header.Add("Set-Cookie", v)
 		}

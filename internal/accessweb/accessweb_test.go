@@ -122,6 +122,42 @@ func TestRoutePathA273O3(t *testing.T) {
 	}
 }
 
+func TestCR915ServletPathParametersCannotEscapeConsole(t *testing.T) {
+	route := Route{URL: "https://apps.internal.example/console/"}
+	for _, path := range []string{
+		"/console/..;/manager", "/console/.;jsessionid=x/manager",
+		"/console/..;jsessionid=x/manager", "/console/%2e%2e;/manager",
+	} {
+		if route.Within(path) {
+			t.Errorf("servlet path %q escaped the reviewed console", path)
+		}
+	}
+	for _, raw := range []string{
+		"/console/%2e%2e;/manager", "/console/%2f..;/manager",
+		"/console/%252e%252e%253b/manager", "/console/settings%2ejson",
+	} {
+		u, err := url.Parse(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if route.WithinURL(u) {
+			t.Errorf("encoded request path %q escaped the reviewed console", raw)
+		}
+	}
+	if u, err := url.Parse("/console/settings"); err != nil || !route.WithinURL(u) {
+		t.Fatalf("ordinary request under console refused: %v", err)
+	}
+	for _, path := range []string{"/console/..;/manager", "/console/.;jsessionid=x/login"} {
+		signIn := SignIn{Mode: SignInForm, LoginPath: path, UsernameField: "user", PasswordField: "pass"}
+		if signIn.Validate() == nil {
+			t.Errorf("form sign-in accepted servlet path %q", path)
+		}
+		if route.SignsInWithin(signIn) {
+			t.Errorf("form sign-in %q escaped the reviewed console", path)
+		}
+	}
+}
+
 // TestSingleSignOnRouteA273O1: a single sign-on template fills the identity
 // provider's form fields and starts at the console's sign-in page; a route
 // names its identity provider as another https origin (loopback only in a
