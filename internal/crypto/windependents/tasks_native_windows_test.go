@@ -296,7 +296,9 @@ func TestNativeWindowsTaskLifecycleA267(t *testing.T) {
 	nativeGrantOwnedAccountRight(t, sid, "SeBatchLogonRight")
 	binary := nativeOwnedServiceBinary(t, suffix, sid.String())
 	work := nativeOwnedTaskWorkDirectory(t, suffix, sid.String())
-	path := nativeCreateOwnedTask(t, ctx, taskName, ".\\"+name, binary, work, old.Bytes())
+	// The owned SID is the stable principal; a relative .\\name relies on the
+	// runner's local account-name mapping and can fail before task registration.
+	path := nativeCreateOwnedTask(t, ctx, taskName, sid.String(), binary, work, old.Bytes())
 	adapter, err := NewTasks(TaskExecutionPolicy{VerificationPaths: []string{path}})
 	if err != nil {
 		t.Fatal(err)

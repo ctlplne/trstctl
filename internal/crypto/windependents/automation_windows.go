@@ -326,6 +326,16 @@ func (o *automationObject) object(name string, flags uint16, args ...automationV
 	if err != nil {
 		return nil, err
 	}
+	if value.VT == 13 && value.Value != 0 { // VT_UNKNOWN: IIS returns IAppHostElement this way.
+		unknown := &automationObject{pointer: value.Value}
+		var dispatch uintptr
+		result, _, _ := syscall.SyscallN(unknown.method(0), unknown.pointer, uintptr(unsafe.Pointer(&automationDispatchIID)), uintptr(unsafe.Pointer(&dispatch))) // #nosec G103 -- QueryInterface on the live returned IUnknown, exact IDispatch IID and sized output; VariantClear below releases the original reference (CWE-242)
+		value.destroy()
+		if automationFailed(result) || dispatch == 0 {
+			return nil, fmt.Errorf("windows Automation %s: native object has no IDispatch interface (0x%08x)", name, result&0xffffffff)
+		}
+		return &automationObject{pointer: dispatch, ctx: o.ctx}, nil
+	}
 	if value.VT != 9 || value.Value == 0 {
 		kind := value.VT
 		value.destroy()

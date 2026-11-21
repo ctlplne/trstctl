@@ -222,7 +222,7 @@ func nativeDependentExecutorScenario(t *testing.T, executable, failure string) {
 	_, initial := nativeCreateOwnedServiceFixture(t, ctx, name, "trstctl-a267-"+suffix, binary, serviceAddress, sid.String(), old.Bytes())
 	nativeFunctionalWork(t, ctx, serviceAddress, initial)
 	work := nativeOwnedTaskWorkDirectory(t, suffix, sid.String())
-	taskPath := nativeCreateOwnedTask(t, ctx, "trstctl-a267-task-"+suffix, ".\\"+name, binary, work, old.Bytes())
+	taskPath := nativeCreateOwnedTask(t, ctx, "trstctl-a267-task-"+suffix, sid.String(), binary, work, old.Bytes())
 	taskAdapter, e := NewTasks(TaskExecutionPolicy{VerificationPaths: []string{taskPath}})
 	if e != nil {
 		t.Fatal(e)

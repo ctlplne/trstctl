@@ -177,7 +177,10 @@ func (driver nativeServiceDriver) discover(ctx context.Context, sid string) ([]S
 		return nil, errors.New("windows service: local enumeration unavailable")
 	}
 	defer func() { _ = windows.CloseServiceHandle(scm) }()
-	raw := make([]byte, 512<<10)
+	// EnumServicesStatusExW accepts at most 256 KiB, even when more services
+	// remain. Its resume handle pages through the rest of the census.
+	const pageBytes = 256 << 10
+	raw := make([]byte, pageBytes)
 	var resume uint32
 	var found []Service
 	total := uint32(0)
@@ -186,12 +189,12 @@ func (driver nativeServiceDriver) discover(ctx context.Context, sid string) ([]S
 			return nil, err
 		}
 		var needed, count uint32
-		err := windows.EnumServicesStatusEx(scm, 0, windows.SERVICE_WIN32, windows.SERVICE_STATE_ALL, &raw[0], 512<<10, &needed, &count, &resume, nil)
+		err := windows.EnumServicesStatusEx(scm, 0, windows.SERVICE_WIN32, windows.SERVICE_STATE_ALL, &raw[0], pageBytes, &needed, &count, &resume, nil)
 		if err != nil && !errors.Is(err, windows.ERROR_MORE_DATA) {
 			return nil, fmt.Errorf("windows service: enumeration failed; coverage is incomplete: %w", err)
 		}
 		entrySize := uint32(unsafe.Sizeof(windows.ENUM_SERVICE_STATUS_PROCESS{}))
-		if count > (512<<10)/entrySize || total+count > 8192 {
+		if count > pageBytes/entrySize || total+count > 8192 {
 			return nil, errors.New("windows service: enumeration exceeds bound")
 		}
 		total += count
