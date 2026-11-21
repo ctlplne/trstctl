@@ -5,7 +5,9 @@ package windependents
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -18,6 +20,7 @@ type nativeTaskSnapshot struct {
 	object, definition, principal *automationObject
 	user, sddl                    *automationBSTR
 	allowDemand                   bool
+	xmlDigest, sddlDigest         [32]byte
 }
 
 func (s *nativeTaskSnapshot) destroy() {
@@ -152,6 +155,8 @@ func snapshotNativeTask(object *automationObject, selectedSID string) (nativeTas
 	}
 	// Close private XML before allocating any password BSTR. The existing native
 	// definition object is reused for updates; no XML/arguments become strings.
+	snapshot.xmlDigest = sha256.Sum256(xml.raw)
+	snapshot.sddlDigest = sha256.Sum256(snapshot.sddl.raw)
 	snapshot.ConfigSHA256 = nativeConfigurationHash("trstctl/windows-task/config/v1", path, sid, []uint32{snapshot.LogonType, snapshot.ActionCount, enabledFlag}, [][]byte{xml.raw, snapshot.sddl.raw})
 	if err := xml.destroy(); err != nil {
 		return nativeTaskSnapshot{}, err
@@ -292,7 +297,11 @@ func (nativeTaskDriver) update(ctx context.Context, expected Task, password []by
 		}
 		defer readback.destroy()
 		if !sameTaskBinding(expected, readback.Task) {
-			return errors.New("windows task: native definition/security readback differs after password update")
+			return fmt.Errorf("windows task: native definition/security readback differs after password update (path=%t account=%t logon=%t actions=%t enabled=%t xml=%t security=%t)",
+				expected.Path == readback.Path, expected.AccountSID == readback.AccountSID,
+				expected.LogonType == readback.LogonType, expected.ActionCount == readback.ActionCount,
+				expected.Enabled == readback.Enabled, snapshot.xmlDigest == readback.xmlDigest,
+				snapshot.sddlDigest == readback.sddlDigest)
 		}
 		return nil
 	})

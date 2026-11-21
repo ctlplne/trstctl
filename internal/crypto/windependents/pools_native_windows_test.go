@@ -67,7 +67,11 @@ func nativeOwnedIISDirectory(t *testing.T, suffix, sid string) string {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, "trstctl-a267-iis-"+suffix)
-	descriptor, err := windows.SecurityDescriptorFromString("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;GRGX;;;" + sid + ")")
+	// IIS authenticates anonymous requests as its fixed IUSR SID before the
+	// ASP.NET worker (which still runs as the selected pool account) executes.
+	// The fixture page and config contain no credential; grant IUSR read/execute
+	// only, while the selected account and administrators retain their own ACEs.
+	descriptor, err := windows.SecurityDescriptorFromString("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;GRGX;;;" + sid + ")(A;OICI;GRGX;;;S-1-5-17)")
 	if err != nil {
 		t.Fatal(err)
 	}

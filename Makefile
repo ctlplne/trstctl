@@ -378,6 +378,7 @@ dod-cache:
 dod-selftests: dod-cache ## The census tool's own tests and the production-assembly canary
 	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) test ./tools/dodcensus/... -count=1
 	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) test ./internal/server -run '^TestDODGateProductionAssemblyCanary$$' -count=1
+	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) test -tags 'trstctl_dodproof trstctl_dodprojectiontest' ./internal/server -run '^TestDODPendingManagedKeyApprovalWaitsForProjection$$' -count=1
 
 .PHONY: dod-census-shard
 dod-census-shard: dod-cache ## Run census shard DOD_SHARD of DOD_SHARDS into wiring-census.part-DOD_SHARD.json
