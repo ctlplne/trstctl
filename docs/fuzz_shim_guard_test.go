@@ -373,22 +373,37 @@ func TestFuzzBuildsCompileOnlyReviewedThirdPartyGofuzzFiles(t *testing.T) {
 	if len(dirs) == 0 {
 		t.Fatal("found no fuzz targets")
 	}
-	var pkgs []string
+	var pkgs, crewjamPkgs []string
 	for dir := range dirs {
-		pkgs = append(pkgs, dir)
+		if relative, ok := strings.CutPrefix(dir, "./../internal/crypto/crewjamsaml/"); ok {
+			crewjamPkgs = append(crewjamPkgs, "./"+relative)
+		} else {
+			pkgs = append(pkgs, dir)
+		}
 	}
 	sort.Strings(pkgs)
+	sort.Strings(crewjamPkgs)
 	files := func(tags ...string) map[string]bool {
 		args := append([]string{"list"}, tags...)
 		args = append(args, "-deps", "-f", `{{if not .Standard}}{{$p := .ImportPath}}{{range .GoFiles}}{{$p}}/{{.}}{{"\n"}}{{end}}{{end}}`)
-		out, err := exec.Command("go", append(args, pkgs...)...).Output() // #nosec G204 -- the go tool with fixed flags over this repository's own package directories (CWE-78)
-		if err != nil {
-			t.Fatalf("go %s: %v", strings.Join(args, " "), err)
-		}
 		set := map[string]bool{}
-		for _, file := range strings.Fields(string(out)) {
-			if !strings.HasPrefix(file, "trstctl.com/") {
-				set[file] = true
+		for _, group := range []struct {
+			dir  string
+			pkgs []string
+		}{{dir: ".", pkgs: pkgs}, {dir: "../internal/crypto/crewjamsaml", pkgs: crewjamPkgs}} {
+			if len(group.pkgs) == 0 {
+				continue
+			}
+			cmd := exec.Command("go", append(args, group.pkgs...)...) // #nosec G204 -- fixed flags over discovered repository fuzz package directories (CWE-78)
+			cmd.Dir = group.dir
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("go %s in %s: %v: %s", strings.Join(args, " "), group.dir, err, out)
+			}
+			for _, file := range strings.Fields(string(out)) {
+				if !strings.HasPrefix(file, "trstctl.com/") && !strings.HasPrefix(file, "github.com/crewjam/saml/") {
+					set[file] = true
+				}
 			}
 		}
 		return set

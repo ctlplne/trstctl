@@ -450,7 +450,11 @@ fuzz-smoke: ## Run every Go fuzz target for a short budget against its committed
 	while read -r pkg fn; do \
 		echo ">> $$pkg $$fn"; \
 		out="$$(mktemp)"; status=0; \
-		$(GO) test "$$pkg" -run='^$$' -fuzz="^$$fn$$" -fuzztime=$(FUZZ_SMOKE_TIME) -parallel=$(FUZZ_SMOKE_PARALLEL) 2>&1 | tee "$$out" || status=$$?; \
+		if [[ "$$pkg" == ./internal/crypto/crewjamsaml/* ]]; then \
+			(cd internal/crypto/crewjamsaml && $(GO) test "./$${pkg#./internal/crypto/crewjamsaml/}" -run='^$$' -fuzz="^$$fn$$" -fuzztime=$(FUZZ_SMOKE_TIME) -parallel=$(FUZZ_SMOKE_PARALLEL)) 2>&1 | tee "$$out" || status=$$?; \
+		else \
+			$(GO) test "$$pkg" -run='^$$' -fuzz="^$$fn$$" -fuzztime=$(FUZZ_SMOKE_TIME) -parallel=$(FUZZ_SMOKE_PARALLEL) 2>&1 | tee "$$out" || status=$$?; \
+		fi; \
 		python3 scripts/ci/fuzz-outcome.py --target "$$fn" --status "$$status" --budget "$(FUZZ_SMOKE_TIME)" < "$$out" || fail=1; \
 		rm -f "$$out"; \
 	done < <( \

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3553 annotated sites across 35 rules. Each row is
+3554 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -73,7 +73,7 @@ not this file.
 | `deploy/deploycheck_test.go:1587` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1589` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1609` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/docker/dist_test.go:425` | names are non-secret evaluation OIDC configuration keys (CWE-798) |
+| `deploy/docker/dist_test.go:428` | names are non-secret evaluation OIDC configuration keys (CWE-798) |
 | `deploy/elastic/content_test.go:94` | a test batch naming an env: reference, not a credential (CWE-798) |
 | `deploy/helm/helm_test.go:164` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:603` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1037,21 +1037,21 @@ not this file.
 | `internal/crypto/windependents/services_native_windows_test.go:233` | exact test-owned user, SDK level 1003 and live locked UTF-16 password; no password string or file (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:247` | one bounded sign-in for the test-owned local account using a live locked UTF-16 password and token output (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:343` | exact new fixture service and live locked initial UTF-16 credential; only owned service is created (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:58` | owned nonempty native query buffer address; only offset arithmetic, never converted back to a pointer (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:59` | SDK-returned UTF-16 pointer is range/alignment/termination checked against the owned buffer before a byte view (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:68` | exact SDK status struct size and lifetime for a synchronous local status call (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:89` | page-aligned locked 64 KiB query buffer exceeds the SDK struct and remains alive through all bounded field reads (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:201` | SDK count is bounded by both returned-buffer capacity and total census before creating the native entry view (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:263` | password pointer borrows the locked UTF-16 buffer through Use; frozen account pointer stays in the live locked query buffer (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:32` | fixed local scheduler channel; live UTF-16 public path and native handle (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:39` | exact 16-byte EVT_VARIANT output and size for the fixed Enabled property (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:57` | owned nonempty bounded native render buffer; only checked offset arithmetic (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:134` | complete SID revision/subauthority length is checked inside the live owned render buffer (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:178` | eight fixed metadata-only XPath selectors, live through synchronous context creation (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:193` | owned locked 64 KiB buffer and sized metadata-only EVT_VARIANT outputs (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:197` | exact eight 16-byte native variants validated against returned property count and buffer length (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:248` | validated GUID/fixed schema structured query, local channel only, used and closed on this OS thread (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:265` | fixed 16-handle output array, zero wait and sized count; every returned native event is closed (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:65` | owned nonempty native query buffer address; only offset arithmetic, never converted back to a pointer (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:66` | SDK-returned UTF-16 pointer is range/alignment/termination checked against the owned buffer before a byte view (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:75` | exact SDK status struct size and lifetime for a synchronous local status call (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:99` | page-aligned locked 8 KiB SDK-bounded query buffer exceeds the struct and remains alive through all bounded field reads (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:218` | SDK count is bounded by both returned-buffer capacity and total census before creating the native entry view (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:283` | password pointer borrows the locked UTF-16 buffer through Use; frozen account pointer stays in the live locked query buffer (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:33` | fixed local scheduler channel; live UTF-16 public path and native handle (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:40` | exact 16-byte EVT_VARIANT output and size for the fixed Enabled property (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:58` | owned nonempty bounded native render buffer; only checked offset arithmetic (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:143` | complete SID revision/subauthority length is checked inside the live owned render buffer (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:187` | eight fixed metadata-only XPath selectors, live through synchronous context creation (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:202` | owned locked 64 KiB buffer and sized metadata-only EVT_VARIANT outputs (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:206` | exact eight 16-byte native variants validated against returned property count and buffer length (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:257` | validated GUID/fixed schema structured query, local channel only, used and closed on this OS thread (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:274` | fixed 16-handle output array, zero wait and sized count; every returned native event is closed (CWE-242) |
 
 ### G104 — CWE-? (unmapped rule) (1 sites)
 
@@ -1677,10 +1677,10 @@ not this file.
 | `internal/agent/accessgateway/gcp_test.go:166` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
 | `internal/dynsecret/active_directory.go:123` | byte-backed rotated credential is sealed by the existing outbox rotation worker (CWE-200) |
 | `internal/dynsecret/active_directory_prepared_json.go:107` | all three secret generations are cleared before marshaling public metadata (CWE-200) |
-| `internal/dynsecret/active_directory_prepared_test.go:17` | synthetic byte-backed parser fixture, wiped and never logged (CWE-200) |
-| `internal/dynsecret/active_directory_prepared_test.go:31` | synthetic rejected credential fixture, wiped and never logged (CWE-200) |
-| `internal/dynsecret/active_directory_prepared_test.go:59` | synthetic byte-backed fuzz/parser seed, never logged (CWE-200) |
-| `internal/dynsecret/active_directory_prepared_test.go:76` | synthetic byte-backed fuzz/parser seed, never logged (CWE-200) |
+| `internal/dynsecret/active_directory_prepared_test.go:18` | synthetic byte-backed parser fixture, wiped and never logged (CWE-200) |
+| `internal/dynsecret/active_directory_prepared_test.go:32` | synthetic rejected credential fixture, wiped and never logged (CWE-200) |
+| `internal/dynsecret/active_directory_prepared_test.go:60` | synthetic byte-backed fuzz/parser seed, never logged (CWE-200) |
+| `internal/dynsecret/active_directory_prepared_test.go:77` | synthetic byte-backed fuzz/parser seed, never logged (CWE-200) |
 | `internal/dynsecret/active_directory_restore_test.go:41` | byte-backed synthetic credential DTO exercises rejected native recovery; never logged or persisted (CWE-200) |
 | `internal/dynsecret/active_directory_signin_test.go:37` | a test's own fixture credential (CWE-200) |
 | `internal/dynsecret/auth0.go:108` | the rotated client secret is this provider's output: the outbox seals it and only the secret's readers open it (CWE-200) |
@@ -1802,7 +1802,7 @@ not this file.
 | `ee/provider/saml_authenticator.go:234` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
 | `ee/provider/saml_authenticator.go:338` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:345` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
-| `internal/agent/accessgateway/webconsole.go:962` | the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614) |
+| `internal/agent/accessgateway/webconsole.go:965` | the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614) |
 | `internal/api/auth.go:1242` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
 | `internal/api/auth.go:1253` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth.go:1277` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
@@ -1861,7 +1861,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (452 sites)
+### G204 — CWE-78 OS command injection (453 sites)
 
 | Location | Reason |
 |---|---|
@@ -1889,13 +1889,13 @@ not this file.
 | `deploy/deploycheck_test.go:119` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/deploycheck_test.go:442` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/deploycheck_test.go:452` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/alpine_packages_test.go:152` | fixed interpreter and the repository's own script (CWE-78) |
+| `deploy/docker/alpine_packages_test.go:176` | fixed interpreter and the repository's own script (CWE-78) |
 | `deploy/docker/context_size_test.go:20` | fixed repository script; the test-owned directory is a separate argv value, never shell code (CWE-78). |
 | `deploy/docker/context_size_test.go:66` | fixed repository script; the test-owned directory is a separate argv value, never shell code (CWE-78). |
-| `deploy/docker/dist_test.go:738` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:867` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:1182` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:1248` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:741` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:870` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:1185` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:1251` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/docker/reproducible_test.go:64` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/docker/reproducible_test.go:97` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/airgap_bundle_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1917,7 +1917,7 @@ not this file.
 | `docs/cwe_register_test.go:18` | test runs the repo's own committed generator (CWE-78) |
 | `docs/cwe_register_test.go:40` | test runs the repo's own committed generator against a tempdir fixture (CWE-78) |
 | `docs/docs_drift_test.go:192` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `docs/fuzz_shim_guard_test.go:384` | the go tool with fixed flags over this repository's own package directories (CWE-78) |
+| `docs/fuzz_shim_guard_test.go:397` | fixed flags over discovered repository fuzz package directories (CWE-78) |
 | `docs/lint_failure_test.go:59` | fixed timeout regression over an owned Python child (CWE-78) |
 | `docs/lint_failure_test.go:232` | fixed local Make target in an owned test fixture (CWE-78) |
 | `docs/lint_gate_test.go:25` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1949,6 +1949,7 @@ not this file.
 | `internal/agent/relay/adcs_restrictions_windows.go:46` | CWE-78: the Windows SDK supplies System32, certutil.exe and command switches are fixed, and the bounded validated CA selector is one argv value; no shell or credentials are used. |
 | `internal/agent/relay/adcsdatabase.go:314` | reviewed SEC-005 argv: fixed action flags built here; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
 | `internal/agent/relay/adcsdatabase.go:322` | reviewed SEC-005 argv: fixed flags built by this package; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
+| `internal/agent/relay/hostrenew_tpm_test.go:119` | fixed Go tool compiles this test's owned source and output (CWE-78) |
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
 | `internal/agent/relay/native_probe_host_test.go:81` | fixed stock command against owned loopback fixtures. |
 | `internal/agent/relay/swtpm_host_key_journey_test.go:198` | fixed tool and arguments (CWE-78) |
@@ -2022,7 +2023,7 @@ not this file.
 | `internal/kms/wrapadapter/localstack_signer_test.go:215` | builds the repository's own command (CWE-78) |
 | `internal/kms/wrapadapter/softhsm_signer_container_test.go:30` | fixed docker invocation for the acceptance test (CWE-78) |
 | `internal/kms/wrapadapter/softhsm_signer_real_test.go:114` | fixed SoftHSM tool inside the test container (CWE-78) |
-| `internal/netconfine/netconfine_linux.go:70` | runs the launcher's own command line verbatim, without a shell, inside the confined network (CWE-78) |
+| `internal/netconfine/netconfine_linux.go:87` | runs the launcher's own command line verbatim, without a shell, inside the confined network (CWE-78) |
 | `internal/netconfine/netconfine_linux_test.go:126` | the test re-runs its own binary through Wrap |
 | `internal/objectstore/minio_lock_test.go:43` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:48` | test removes the container it started (CWE-78) |
@@ -2301,8 +2302,8 @@ not this file.
 | `tools/dodcensus/external_ca_substrate_test.go:168` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/kmip_substrate_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/main.go:322` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/dodcensus/managed_key_manifest_test.go:599` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/managed_key_manifest_test.go:635` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/managed_key_manifest_test.go:602` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/managed_key_manifest_test.go:638` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/launched.go:285` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/launched.go:656` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/launched.go:1504` | developer tool running fixed toolchain commands over the repo (CWE-78) |
@@ -2327,7 +2328,7 @@ not this file.
 | `clients/embedded/est_client_test.go:199` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:111` | deliberately loose, to prove it is tightened (CWE-276) |
 | `cmd/trstctl-trustbundle/main.go:85` | build-time output path named by the image build (CWE-22) |
-| `deploy/docker/dist_test.go:1112` | npm fixture tree in t.TempDir; mirrors a real package layout, nothing secret (CWE-276) |
+| `deploy/docker/dist_test.go:1115` | npm fixture tree in t.TempDir; mirrors a real package layout, nothing secret (CWE-276) |
 | `ee/provider/oidc_login_keycloak_test.go:74` | the container's keycloak user must read the import directory (CWE-276) |
 | `internal/agent/csitrust/driver.go:147` | the volume holds public CA certificates the pod's containers read (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:79` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2399,7 +2400,7 @@ not this file.
 | `internal/agent/destination/fs_unix_test.go:82` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:28` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:53` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
-| `internal/agent/listenersessions/listenersessions_test.go:69` | a test directory restored so TempDir can remove it |
+| `internal/agent/listenersessions/listenersessions_test.go:77` | a test directory restored so TempDir can remove it |
 | `internal/agent/relay/selfupgrade.go:224` | the file IS the executable being installed; 0755 is its required mode (CWE-276) |
 | `internal/agent/relay/swtpm_host_key_l2_journey_test.go:96` | the tpm2 provider config is not secret (CWE-276) |
 | `internal/agent/secretrender/replace_windows_test.go:41` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2574,11 +2575,12 @@ not this file.
 | `deploy/deploycheck_test.go:1246` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:1429` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:1673` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/docker/alpine_packages_test.go:165` | the test's own temp directory (CWE-22) |
+| `deploy/docker/alpine_packages_test.go:189` | the test's own temp directory (CWE-22) |
 | `deploy/docker/context_size_test.go:28` | fixed filename below this test's private t.TempDir (CWE-22). |
 | `deploy/docker/dist_test.go:25` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/docker/dist_test.go:1199` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/docker/dist_test.go:1202` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/reproducible_test.go:35` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/docker/saml_local_module_inputs_test.go:23` | fixed repository Dockerfile list (CWE-22) |
 | `deploy/helm/airgap_bundle_test.go:62` | bundle is created inside this test's TempDir (CWE-22). |
 | `deploy/helm/airgap_bundle_test.go:69` | bundle is created inside this test's TempDir (CWE-22). |
 | `deploy/helm/airgap_bundle_test.go:186` | the call log path is created inside this test's private temporary directory. |
@@ -2633,10 +2635,9 @@ not this file.
 | `internal/agent/csisecrets/driver_test.go:660` | the test's own temp file (CWE-22) |
 | `internal/agent/csitrust/driver.go:151` | path is the kubelet's target directory joined with a validated file name (CWE-22) |
 | `internal/agent/csitrust/driver_test.go:120` | the file the driver wrote under this test's temp dir (CWE-22) |
-| `internal/agent/decoy/decoy.go:90` | the agent's own decoy state file (CWE-22) |
-| `internal/agent/decoy/decoy.go:137` | an operator-configured decoy path, created exclusively (CWE-22) |
-| `internal/agent/decoy/decoy_test.go:28` | the test's own decoy (CWE-22) |
-| `internal/agent/decoy/decoy_test.go:46` | the test's own file (CWE-22) |
+| `internal/agent/decoy/decoy.go:91` | the agent's own decoy state file (CWE-22) |
+| `internal/agent/decoy/decoy_test.go:38` | the test's own decoy (CWE-22) |
+| `internal/agent/decoy/decoy_test.go:56` | the test's own file (CWE-22) |
 | `internal/agent/decoy/watch_linux.go:198` | the kernel's process table (CWE-22) |
 | `internal/agent/desktop/stock_served_test.go:137` | owned unique task filename under the fixed lab account home (CWE-22) |
 | `internal/agent/desktop/stock_served_test.go:154` | exact child PID and fixed metadata filenames created by this test (CWE-22) |
@@ -2682,24 +2683,24 @@ not this file.
 | `internal/agent/relay/host_renew_pending_replay_test.go:52` | test-owned directory |
 | `internal/agent/relay/hostexec.go:180` | operator-supplied profile path, read at their instruction (CWE-22) |
 | `internal/agent/relay/hostposture_store_test.go:34` | test-owned directory |
-| `internal/agent/relay/hostrenew_tpm_test.go:167` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/hostrenew_tpm_test.go:334` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/hostrenew_tpm_test.go:461` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/hostrenew_tpm_test.go:462` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/hostrenew_tpm_test.go:479` | the test's own temp directory (CWE-22) |
-| `internal/agent/relay/hostrenew_tpm_test.go:484` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:197` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:365` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:488` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:489` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:506` | the test's own temp directory (CWE-22) |
+| `internal/agent/relay/hostrenew_tpm_test.go:511` | the test's own temp directory (CWE-22) |
 | `internal/agent/relay/hostrollback.go:915` | validated agent-local state directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:193` | test-owned state root (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:300` | test-owned state root (CWE-22) |
 | `internal/agent/relay/k8ssecret_kind_e2e_test.go:84` | the cluster CA file the kind job exports (CWE-22) |
-| `internal/agent/relay/mysql_verification_test.go:177` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
+| `internal/agent/relay/mysql_verification_test.go:181` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
 | `internal/agent/relay/plugin_modules.go:43` | the operator's own approval record beside the agent key (CWE-22) |
 | `internal/agent/relay/plugins.go:255` | operator-configured plugin directory (CWE-22) |
 | `internal/agent/relay/plugins.go:259` | sibling of an operator-configured module (CWE-22) |
 | `internal/agent/relay/plugins.go:271` | sibling of an operator-configured module (CWE-22) |
 | `internal/agent/relay/plugins.go:276` | sibling of an operator-configured module (CWE-22) |
-| `internal/agent/relay/postgresql_verification_test.go:154` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
+| `internal/agent/relay/postgresql_verification_test.go:158` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
 | `internal/agent/relay/recovery_check.go:278` | the host operator's own pinned executable from the host profile (CWE-22) |
 | `internal/agent/relay/relay_test.go:675` | certPath is created beneath this test's private t.TempDir, |
 | `internal/agent/relay/relay_test.go:1106` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
@@ -3221,11 +3222,11 @@ not this file.
 | `tools/dodcensus/managed_key_manifest_test.go:294` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:320` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:345` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:397` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:408` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:431` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:477` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:664` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:400` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:411` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:434` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:480` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:667` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/proof/launched.go:420` | gate-owned private directory created above (CWE-22) |
 | `tools/dodcensus/proof/launched.go:599` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/proof/launched.go:1421` | developer tool reading the repo paths it is pointed at (CWE-22) |
@@ -3315,9 +3316,9 @@ not this file.
 | `cmd/trstctl-trustbundle/main.go:96` | build evidence at a build-time path, not a secret (CWE-276) |
 | `cmd/trstctl-trustbundle/main.go:185` | audit evidence at an operator path (CWE-276) |
 | `cmd/trstctl/backup_cmd_test.go:31` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `deploy/docker/dist_test.go:1115` | non-secret npm fixture manifest in t.TempDir (CWE-276) |
-| `deploy/docker/dist_test.go:1118` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `deploy/docker/dist_test.go:1158` | fake npm shim in a test tempdir must be executable (CWE-276) |
+| `deploy/docker/dist_test.go:1118` | non-secret npm fixture manifest in t.TempDir (CWE-276) |
+| `deploy/docker/dist_test.go:1121` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `deploy/docker/dist_test.go:1161` | fake npm shim in a test tempdir must be executable (CWE-276) |
 | `deploy/helm/airgap_bundle_test.go:149` | the executable is a disposable fake Docker client inside this test's private temporary directory. |
 | `docs/lint_gate_test.go:91` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `ee/managedkeys/signerwiring/tenantkek_kms_test.go:61` | fixture script in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -3590,7 +3591,7 @@ not this file.
 | `internal/crypto/quicinitial/quicinitial.go:156` | i < pnLen <= 4, and the mask is one 16-byte AES block (CWE-129) |
 | `internal/projections/graph_api_test.go:268` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
-| `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
+| `tools/dodcensus/managed_key_closure.go:736` | fixed-shape data inside a developer tool (CWE-118) |
 
 ### G702 — CWE-78 OS command injection (taint) (55 sites)
 
@@ -3604,7 +3605,7 @@ not this file.
 | `internal/crypto/windependents/rotation_native_windows_test.go:279` | exact compiler-output digest verified by the parent; absolute regular lab binary, fixed argv, no shell or credential argument (CWE-78) |
 | `internal/dynsecret/active_directory_signin_lab_test.go:64` | the lab runner's own container and stock Samba tools; no credential arguments (CWE-78) |
 | `internal/dynsecret/active_directory_signin_lab_test.go:91` | the lab runner's own container, stock OpenLDAP tool, a deliberately wrong lab password (CWE-78) |
-| `internal/netconfine/netconfine_linux.go:70` | runs the launcher's own command line verbatim, without a shell, inside the confined network (CWE-78) |
+| `internal/netconfine/netconfine_linux.go:87` | runs the launcher's own command line verbatim, without a shell, inside the confined network (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:43` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/protocols/est/differential_test.go:101` | test executes a fixed local tool or fixture it built itself (CWE-78) (-g: get cacerts) |
 | `internal/server/archive_minio_served_test.go:45` | test runs a fixed local tool with the image the operator named (CWE-78) |
@@ -3813,9 +3814,9 @@ not this file.
 | `tools/dodcensus/main_test.go:1482` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:222` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:302` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:436` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:485` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:676` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:439` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:488` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:679` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/proof/launched.go:1340` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/proof/proof.go:98` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:218` | test path inside its own tempdir/checkout (CWE-22) |
