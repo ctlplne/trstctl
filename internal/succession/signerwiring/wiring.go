@@ -122,16 +122,24 @@ func NewProductionMinter(cfg Config) (*ProductionMinter, error) {
 // accepts the signer's own key custody as its predecessor resolver at attach time,
 // via the signer's resolver-injection seam (INT-02). A bare minter.Minter is not
 // resolver-aware and keeps whatever resolver it was built with.
-type ProductionMinter struct{ *minter.Minter }
+type ProductionMinter struct {
+	*minter.Minter
+	pairedMu sync.Mutex
+	custody  signing.SignerCustody
+	kem      signing.KEMCustody
+}
 
 // UseSignerCustody binds the signer's key custody into this minter: predecessor
 // handles resolve against keys the signer holds, and successor keys are generated
 // and PERSISTED in the signer keystore under their per-epoch handle (INT-03). The
 // signer calls it once at construction, before serving.
 func (p *ProductionMinter) UseSignerCustody(c signing.SignerCustody) {
+	p.custody = c
 	p.SetPredecessorResolver(predecessorResolverAdapter{r: c})
 	p.SetSuccessorKeyStore(c)
 }
+
+func (p *ProductionMinter) UseKEMCustody(c signing.KEMCustody) { p.kem = c }
 
 // predecessorResolverAdapter adapts the signer's PredecessorResolver to the minter's
 // KeyResolver — both resolve a handle to a message Signer.

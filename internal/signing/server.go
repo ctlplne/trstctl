@@ -233,9 +233,9 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 		id = hex.EncodeToString(raw)
 	}
 	if isPCASGenericPairedHandle(id) {
-		// Existing paired KEM rewrap creates this key with GenerateKey. Seal
-		// that origin so a later signer restart can distinguish it from a
-		// custody-minted or pre-marker PCAS successor using the same namespace.
+		// Older paired KEM rewraps created this key with GenerateKey. Keep
+		// its sealed origin for historical readback, but generic Sign refuses
+		// all successor handles regardless of that legacy marker.
 		constraints.genericPCAS = true
 	}
 
@@ -358,7 +358,7 @@ func (s *Server) Sign(ctx context.Context, req *signerpb.SignRequest) (*signerpb
 	if err != nil {
 		return nil, err
 	}
-	if isCustodyHandleNamespace(req.GetHandle().GetId()) && !held.constraints.genericPCAS {
+	if isCustodyHandleNamespace(req.GetHandle().GetId()) {
 		return nil, status.Error(codes.FailedPrecondition, "custody key handle cannot be used through generic Sign")
 	}
 	if err := held.constraints.check(req); err != nil {

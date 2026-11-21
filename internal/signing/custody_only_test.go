@@ -125,7 +125,7 @@ func TestCR188LegacyCustodyHandleNamespacesRefuseGenericSign(t *testing.T) {
 	}
 }
 
-func TestCR188ExplicitGenericPCASPairedKeySurvivesRestartWithoutOpeningCustodyKey(t *testing.T) {
+func TestCR188LegacyGenericPCASPairedKeyCannotSignAfterRestart(t *testing.T) {
 	dir := t.TempDir()
 	wrapper, err := kek.LoadOrCreate(filepath.Join(dir, "kek.bin"))
 	if err != nil {
@@ -150,8 +150,8 @@ func TestCR188ExplicitGenericPCASPairedKeySurvivesRestartWithoutOpeningCustodyKe
 		return &signerpb.SignRequest{Handle: &signerpb.KeyHandle{Id: handle},
 			Digest: crypto.SHA256Sum([]byte("paired KEM commitment")), Hash: signerpb.Hash_HASH_SHA256}
 	}
-	if _, err := first.Sign(context.Background(), request(generic)); err != nil {
-		t.Fatalf("explicitly generic paired key cannot sign: %v", err)
+	if _, err := first.Sign(context.Background(), request(generic)); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("legacy paired key signed through generic RPC: %v", err)
 	}
 	if _, err := first.Sign(context.Background(), request(custody)); status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("custody-minted successor signed through generic RPC: %v", err)
@@ -162,10 +162,46 @@ func TestCR188ExplicitGenericPCASPairedKeySurvivesRestartWithoutOpeningCustodyKe
 		t.Fatal(err)
 	}
 	defer second.Shutdown()
-	if _, err := second.Sign(context.Background(), request(generic)); err != nil {
-		t.Fatalf("restored explicit generic paired key cannot sign: %v", err)
+	if _, err := second.Sign(context.Background(), request(generic)); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("restored legacy paired key signed through generic RPC: %v", err)
 	}
 	if _, err := second.Sign(context.Background(), request(custody)); status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("restored custody-minted successor signed through generic RPC: %v", err)
+	}
+}
+
+func TestCR188PCASPairedSuccessorRefusesAttackerDigestAcrossRestart(t *testing.T) {
+	dir := t.TempDir()
+	wrapper, err := kek.LoadOrCreate(filepath.Join(dir, "kek.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wrapper.Destroy()
+	const handle = "pcas:v2:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:2"
+	first, err := NewPersistentServer(NewKeyStore(filepath.Join(dir, "keys"), wrapper))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := first.GenerateKey(context.Background(), &signerpb.GenerateKeyRequest{
+		Algorithm: signerpb.Algorithm_ALGORITHM_ECDSA_P256, RequestedId: handle,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	request := &signerpb.SignRequest{
+		Handle: &signerpb.KeyHandle{Id: handle},
+		Digest: crypto.SHA256Sum([]byte("attacker-selected certificate TBS")),
+		Hash:   signerpb.Hash_HASH_SHA256, Purpose: signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN,
+	}
+	if _, err := first.Sign(context.Background(), request); status.Code(err) != codes.FailedPrecondition {
+		t.Errorf("paired successor signed attacker digest before restart: %v", err)
+	}
+	first.Shutdown()
+	second, err := NewPersistentServer(NewKeyStore(filepath.Join(dir, "keys"), wrapper))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Shutdown()
+	if _, err := second.Sign(context.Background(), request); status.Code(err) != codes.FailedPrecondition {
+		t.Errorf("paired successor signed attacker digest after restart: %v", err)
 	}
 }

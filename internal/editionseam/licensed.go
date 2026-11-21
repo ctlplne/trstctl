@@ -124,6 +124,9 @@ type IssuanceGate interface {
 }
 
 type KEMCustody interface {
+	MintPairedKEM(ctx context.Context, req signing.PairedKEMMintRequest) ([]byte, error)
+	PrepareRecoverySuccessor(ctx context.Context, req signing.RecoveryPrepareRequest) ([]byte, error)
+	MintRecovery(ctx context.Context, req signing.RecoveryMintRequest) ([]byte, error)
 	SignerForHandle(ctx context.Context, handle string) (*signing.RemoteSigner, error)
 	SignerForHandleWithPurpose(ctx context.Context, handle string, purpose signing.KeyPurpose) (*signing.RemoteSigner, error)
 	GenerateKeyHandle(ctx context.Context, algorithm crypto.Algorithm, handle string) (*signing.RemoteSigner, error)

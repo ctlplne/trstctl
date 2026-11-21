@@ -99,9 +99,9 @@ type keyConstraints struct {
 	// custody seam. The returned in-process signer may sign for its checked
 	// operation, but a peer on the signer socket may not use generic Sign.
 	custodyOnly bool
-	// genericPCAS records that GenerateKey explicitly created a PCAS paired
-	// signer, whose existing KEM rewrap path still uses generic signing. Legacy
-	// unmarked PCAS successors stay denied by the reserved namespace rule.
+	// genericPCAS records the historical GenerateKey origin of a PCAS paired
+	// signer. The marker remains decodeable for stored-key compatibility; it
+	// grants no permission to call generic Sign.
 	genericPCAS bool
 	// importReceipt binds a v2 imported key to one exact approved request.
 	importReceipt [32]byte

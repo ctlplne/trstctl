@@ -140,6 +140,10 @@ type custodyAwareMinter interface {
 	UseSignerCustody(SignerCustody)
 }
 
+type kemCustodyAwareMinter interface {
+	UseKEMCustody(KEMCustody)
+}
+
 // ResolvePredecessor returns a message-Signer view of a held key by handle, so the
 // attached succession minter can use it as a predecessor. Private key bytes never
 // leave the signer: signing goes through the in-signer DigestSigner.
@@ -194,5 +198,8 @@ func (s *Server) bindMinterCustody() {
 	}
 	if ca, ok := s.minter.(custodyAwareMinter); ok {
 		ca.UseSignerCustody(s)
+	}
+	if ca, ok := s.minter.(kemCustodyAwareMinter); ok && s.kemCustody != nil {
+		ca.UseKEMCustody(s.kemCustody)
 	}
 }

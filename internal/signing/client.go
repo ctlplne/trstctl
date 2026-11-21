@@ -196,6 +196,49 @@ func (c *Client) MintSuccessor(ctx context.Context, req MintRequest) (MintResult
 	return mintResultFromProto(resp), nil
 }
 
+// MintPairedKEM requests the fixed, signer-local PCAS KEM ceremony. The wire
+// carries no digest or private key; the result is a public paired record.
+func (c *Client) MintPairedKEM(ctx context.Context, req PairedKEMMintRequest) ([]byte, error) {
+	alg := algorithmToProto(req.SigningAlgorithm)
+	if alg == signerpb.Algorithm_ALGORITHM_UNSPECIFIED {
+		return nil, fmt.Errorf("signing: unsupported paired signer algorithm %q", req.SigningAlgorithm)
+	}
+	resp, err := c.svc.MintPairedKEM(ctx, &signerpb.MintPairedKEMRequest{
+		TenantId: req.TenantID, IdentityId: req.IdentityID, RequestId: req.RequestID,
+		PredecessorEpoch: req.PredecessorEpoch, SigningAlgorithm: alg, KemAlgorithm: req.KEMAlgorithm,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetEncodedRecord(), nil
+}
+
+func (c *Client) PrepareRecoverySuccessor(ctx context.Context, req RecoveryPrepareRequest) ([]byte, error) {
+	alg := algorithmToProto(req.Algorithm)
+	if alg == signerpb.Algorithm_ALGORITHM_UNSPECIFIED {
+		return nil, fmt.Errorf("signing: unsupported recovery successor algorithm %q", req.Algorithm)
+	}
+	resp, err := c.svc.PrepareRecoverySuccessor(ctx, &signerpb.PrepareRecoverySuccessorRequest{
+		TenantId: req.TenantID, IdentityId: req.IdentityID, DeploymentScope: req.DeploymentScope,
+		RequestId: req.RequestID, Epoch: req.Epoch, Algorithm: alg,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetEncodedReceipt(), nil
+}
+
+func (c *Client) MintRecovery(ctx context.Context, req RecoveryMintRequest) ([]byte, error) {
+	resp, err := c.svc.MintRecovery(ctx, &signerpb.MintRecoveryRequest{
+		CommitmentFieldsJson: req.CommitmentFieldsJSON, AuthorizationJson: req.AuthorizationJSON,
+		TrustRootPublicDer: req.TrustRootPublicDER, HighWaterEpoch: req.HighWaterEpoch,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetEncodedRecord(), nil
+}
+
 // GatedIssue asks the isolated signer to drive a gated agent-credential issuance over the
 // authenticated transport (AGID-INT-WIRE). The request carries no private key material --
 // the delegation chain / attestation / agent-stack representation are opaque bytes the

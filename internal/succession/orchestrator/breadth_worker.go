@@ -13,8 +13,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -167,36 +165,22 @@ func (w *BreadthWorker) handleRecoverySuccessorPrepare(ctx context.Context, tena
 		return w.verifyPreparedSuccessorReadback(ctx, prior, tenantID, p.IdentityID,
 			p.Epoch, p.Algorithm, p.DeploymentScope, handle)
 	}
-	remote, err := w.kem.SignerForHandle(ctx, handle)
-	if status.Code(err) == codes.NotFound {
-		remote, err = w.kem.GenerateKeyHandle(ctx, crypto.Algorithm(p.Algorithm), handle)
-		if status.Code(err) == codes.AlreadyExists {
-			remote, err = w.kem.SignerForHandle(ctx, handle)
-		}
-	}
-	if err != nil {
-		return fmt.Errorf("pcas recovery prepare: signer key: %w", err)
-	}
-	if string(remote.Algorithm()) != p.Algorithm {
-		return errors.New("pcas recovery prepare: existing signer key uses a different algorithm")
-	}
-	receipt := succession.RecoverySuccessorPreparedV1{
+	encodedReceipt, err := w.kem.PrepareRecoverySuccessor(ctx, signing.RecoveryPrepareRequest{
 		TenantID: tenantID, IdentityID: p.IdentityID, Epoch: p.Epoch,
-		Algorithm: p.Algorithm, Handle: handle, PublicKeyDER: remote.Public().DER,
-		DeploymentScope: p.DeploymentScope, RequestID: env.RequestID,
-	}
-	message, err := succession.RecoverySuccessorSigningMessage(receipt)
+		Algorithm: crypto.Algorithm(p.Algorithm), DeploymentScope: p.DeploymentScope,
+		RequestID: env.RequestID,
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("pcas recovery prepare: signer ceremony: %w", err)
 	}
-	digest, err := crypto.Digest(crypto.SHA256, message)
-	if err != nil {
-		return err
+	var receipt succession.RecoverySuccessorPreparedV1
+	if err := json.Unmarshal(encodedReceipt, &receipt); err != nil {
+		return fmt.Errorf("pcas recovery prepare: decode signer receipt: %w", err)
 	}
-	receipt.SignerSignature, err = remote.SignDigestForOperation(
-		"pcas-recovery-prepare:"+eventID, digest, crypto.SignOptions{Hash: crypto.SHA256})
-	if err != nil {
-		return fmt.Errorf("pcas recovery prepare: signer receipt: %w", err)
+	if receipt.TenantID != tenantID || receipt.IdentityID != p.IdentityID || receipt.Epoch != p.Epoch ||
+		receipt.Algorithm != p.Algorithm || receipt.Handle != handle ||
+		receipt.DeploymentScope != p.DeploymentScope || receipt.RequestID != env.RequestID {
+		return errors.New("pcas recovery prepare: signer receipt differs from request")
 	}
 	if err := succession.VerifyRecoverySuccessorPrepared(receipt); err != nil {
 		return err
@@ -301,38 +285,25 @@ func (w *BreadthWorker) handleKEMRewrap(ctx context.Context, tenantID string, pa
 		}
 		return w.rewrapDataKeys(ctx, tenantID, p, env.RequestID, requestDigest)
 	}
-	predRemote, err := w.kem.SignerForHandle(ctx, p.PredecessorHandle)
-	if err != nil {
-		return fmt.Errorf("pcas KEM rewrap: bind predecessor handle: %w", err)
-	}
-	predecessor := crypto.SignerFromDigestSigner(predRemote)
-	now := time.Now().UTC()
-	fields := succession.CommitmentFields{
-		DeploymentScope:   "pcas-kem-rewrap",
-		IdentityID:        p.IdentityID,
-		TenantID:          tenantID,
-		PredecessorEpoch:  p.PredecessorEpoch,
-		Epoch:             p.PredecessorEpoch + 1,
-		PredecessorAlg:    predecessor.Algorithm(),
-		PredecessorPub:    predecessor.Public().DER,
-		PolicyRef:         "pcas:kem-rewrap:" + env.RequestID,
-		HashAlg:           succession.HashAlgSHA256,
-		NotBefore:         now.Unix(),
-		NotAfter:          now.Add(365 * 24 * time.Hour).Unix(),
-		CommitmentVersion: 2,
-	}
-	rec, err := pcaskem.MintPairedThroughSigner(fields, predecessor, signerKEMAdapter{ctx: ctx, custody: w.kem, signingAlg: crypto.Algorithm(p.SigningAlgorithm)}, p.SuccessorSignHandle, p.SuccessorKEMHandle, p.KEMAlgorithm)
+	// The signer derives the commitment and performs all three private-key
+	// signatures behind its typed ceremony. No caller-chosen digest crosses the
+	// socket, including when a prior paired key is resumed after a lost reply.
+	encoded, err := w.kem.MintPairedKEM(ctx, signing.PairedKEMMintRequest{
+		TenantID: tenantID, IdentityID: p.IdentityID, RequestID: env.RequestID,
+		PredecessorEpoch: p.PredecessorEpoch, SigningAlgorithm: crypto.Algorithm(p.SigningAlgorithm),
+		KEMAlgorithm: eepqc.KEMAlgorithmToProto(crypto.Algorithm(p.KEMAlgorithm)),
+	})
 	if err != nil {
 		return fmt.Errorf("pcas KEM rewrap: mint paired successor: %w", err)
+	}
+	var rec pcaskem.PairedRecord
+	if err := json.Unmarshal(encoded, &rec); err != nil {
+		return fmt.Errorf("pcas KEM rewrap: decode signer record: %w", err)
 	}
 	if err := pcaskem.VerifyPaired(rec); err != nil {
 		return fmt.Errorf("pcas KEM rewrap: verify paired record: %w", err)
 	}
 	if err := w.proveSignerDecapsulation(ctx, p.SuccessorKEMHandle, p.KEMAlgorithm, rec.KEMPub); err != nil {
-		return err
-	}
-	encoded, err := json.Marshal(rec)
-	if err != nil {
 		return err
 	}
 	if err := w.recordKEMRewrap(ctx, tenantID, rec.Base.Fields, encoded, env.RequestID, requestDigest, p.Stages); err != nil {
@@ -472,41 +443,6 @@ func (w *BreadthWorker) appendOrRecover(ctx context.Context, ev events.Event) (e
 	return recorded, nil
 }
 
-type signerKEMAdapter struct {
-	ctx        context.Context
-	custody    editionseam.KEMCustody
-	signingAlg crypto.Algorithm
-}
-
-func (a signerKEMAdapter) GeneratePairedSigningKey(handle string) (crypto.Signer, error) {
-	rs, err := a.custody.SignerForHandle(a.ctx, handle)
-	if status.Code(err) == codes.NotFound {
-		rs, err = a.custody.GenerateKeyHandle(a.ctx, a.signingAlg, handle)
-		if status.Code(err) == codes.AlreadyExists {
-			rs, err = a.custody.SignerForHandle(a.ctx, handle)
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	if rs.Algorithm() != a.signingAlg {
-		return nil, fmt.Errorf("pcas KEM rewrap: paired signer handle uses %s, want %s", rs.Algorithm(), a.signingAlg)
-	}
-	return crypto.SignerFromDigestSigner(rs), nil
-}
-
-func (a signerKEMAdapter) GenerateKEMSuccessor(handle, kemAlg string) ([]byte, error) {
-	protoAlg := eepqc.KEMAlgorithmToProto(crypto.Algorithm(kemAlg))
-	if protoAlg == signing.KEMAlgorithm(0) {
-		return nil, fmt.Errorf("pcas KEM rewrap: unsupported KEM algorithm %q", kemAlg)
-	}
-	pub, err := a.custody.GenerateSuccessorKEM(a.ctx, handle, protoAlg)
-	if err != nil {
-		return nil, err
-	}
-	return pub.PublicDER, nil
-}
-
 func (w *BreadthWorker) proveSignerDecapsulation(ctx context.Context, handle, kemAlg string, pubDER []byte) error {
 	ct, want, err := eepqc.Encapsulate(crypto.PublicKey{Algorithm: crypto.Algorithm(kemAlg), DER: pubDER})
 	if err != nil {
@@ -632,7 +568,6 @@ func (w *BreadthWorker) handleRecovery(ctx context.Context, tenantID string, pay
 		!bytes.Equal(successorRemote.Public().DER, auth.Statement.SuccessorPub) {
 		return errors.New("pcas recovery: prepared signer key differs from signed approval")
 	}
-	successor := crypto.SignerFromDigestSigner(successorRemote)
 	now := time.Now().UTC()
 	fields := succession.CommitmentFields{
 		DeploymentScope:   p.DeploymentScope,
@@ -649,13 +584,23 @@ func (w *BreadthWorker) handleRecovery(ctx context.Context, tenantID string, pay
 		CommitmentVersion: 2,
 		RecordType:        succession.RecordType("recovery"),
 	}
-	rec, err := recovery.Mint(fields, auth, p.TrustRootDER, successor, highWater)
-	if err != nil {
-		return fmt.Errorf("pcas recovery: mint: %w", err)
-	}
-	encoded, err := json.Marshal(rec)
+	fieldsJSON, err := json.Marshal(fields)
 	if err != nil {
 		return err
+	}
+	encoded, err := w.kem.MintRecovery(ctx, signing.RecoveryMintRequest{
+		CommitmentFieldsJSON: fieldsJSON, AuthorizationJSON: p.Authorization,
+		TrustRootPublicDER: p.TrustRootDER, HighWaterEpoch: highWater,
+	})
+	if err != nil {
+		return fmt.Errorf("pcas recovery: signer ceremony: %w", err)
+	}
+	var rec recovery.RecoveryRecord
+	if err := json.Unmarshal(encoded, &rec); err != nil {
+		return fmt.Errorf("pcas recovery: decode signer record: %w", err)
+	}
+	if err := recovery.VerifyRecord(rec, p.TrustRootDER); err != nil {
+		return fmt.Errorf("pcas recovery: signer record: %w", err)
 	}
 	source, err := succession.Encode(succession.RecoveryRecordedV1{
 		TenantID: tenantID, IdentityID: p.IdentityID, Epoch: p.Epoch,

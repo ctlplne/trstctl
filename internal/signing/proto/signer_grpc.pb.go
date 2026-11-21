@@ -42,6 +42,9 @@ const (
 	SignerService_SignManagedKey_FullMethodName                = "/trstctl.signing.v1.SignerService/SignManagedKey"
 	SignerService_Health_FullMethodName                        = "/trstctl.signing.v1.SignerService/Health"
 	SignerService_MintSuccessor_FullMethodName                 = "/trstctl.signing.v1.SignerService/MintSuccessor"
+	SignerService_MintPairedKEM_FullMethodName                 = "/trstctl.signing.v1.SignerService/MintPairedKEM"
+	SignerService_PrepareRecoverySuccessor_FullMethodName      = "/trstctl.signing.v1.SignerService/PrepareRecoverySuccessor"
+	SignerService_MintRecovery_FullMethodName                  = "/trstctl.signing.v1.SignerService/MintRecovery"
 	SignerService_ApplyDelegation_FullMethodName               = "/trstctl.signing.v1.SignerService/ApplyDelegation"
 	SignerService_GenerateSuccessorKEM_FullMethodName          = "/trstctl.signing.v1.SignerService/GenerateSuccessorKEM"
 	SignerService_Decapsulate_FullMethodName                   = "/trstctl.signing.v1.SignerService/Decapsulate"
@@ -134,6 +137,15 @@ type SignerServiceClient interface {
 	// control plane requests a succession without ever obtaining private key
 	// material (claims 1/12/49): the control plane can request, but cannot forge.
 	MintSuccessor(ctx context.Context, in *MintSuccessorRequest, opts ...grpc.CallOption) (*MintSuccessorResponse, error)
+	// MintPairedKEM forms the fixed PCAS KEM rewrap commitment and all three
+	// signatures inside signer custody. The caller supplies identity, epoch and
+	// algorithms, never a digest or a signing key. Generic Sign cannot use the
+	// paired successor handle.
+	MintPairedKEM(ctx context.Context, in *MintPairedKEMRequest, opts ...grpc.CallOption) (*MintPairedKEMResponse, error)
+	// Prepare and mint a PCAS recovery with a signer-held successor. Both
+	// operations form their own signed bytes inside the attached PCAS minter.
+	PrepareRecoverySuccessor(ctx context.Context, in *PrepareRecoverySuccessorRequest, opts ...grpc.CallOption) (*PrepareRecoverySuccessorResponse, error)
+	MintRecovery(ctx context.Context, in *MintRecoveryRequest, opts ...grpc.CallOption) (*MintRecoveryResponse, error)
 	// ApplyDelegation durably enforces a tenant-bound PCAS scope or floor inside
 	// signer custody and returns a signed readback. Operation ID makes retries
 	// exact after a lost worker response.
@@ -354,6 +366,36 @@ func (c *signerServiceClient) MintSuccessor(ctx context.Context, in *MintSuccess
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MintSuccessorResponse)
 	err := c.cc.Invoke(ctx, SignerService_MintSuccessor_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) MintPairedKEM(ctx context.Context, in *MintPairedKEMRequest, opts ...grpc.CallOption) (*MintPairedKEMResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MintPairedKEMResponse)
+	err := c.cc.Invoke(ctx, SignerService_MintPairedKEM_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) PrepareRecoverySuccessor(ctx context.Context, in *PrepareRecoverySuccessorRequest, opts ...grpc.CallOption) (*PrepareRecoverySuccessorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareRecoverySuccessorResponse)
+	err := c.cc.Invoke(ctx, SignerService_PrepareRecoverySuccessor_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) MintRecovery(ctx context.Context, in *MintRecoveryRequest, opts ...grpc.CallOption) (*MintRecoveryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MintRecoveryResponse)
+	err := c.cc.Invoke(ctx, SignerService_MintRecovery_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -657,6 +699,15 @@ type SignerServiceServer interface {
 	// control plane requests a succession without ever obtaining private key
 	// material (claims 1/12/49): the control plane can request, but cannot forge.
 	MintSuccessor(context.Context, *MintSuccessorRequest) (*MintSuccessorResponse, error)
+	// MintPairedKEM forms the fixed PCAS KEM rewrap commitment and all three
+	// signatures inside signer custody. The caller supplies identity, epoch and
+	// algorithms, never a digest or a signing key. Generic Sign cannot use the
+	// paired successor handle.
+	MintPairedKEM(context.Context, *MintPairedKEMRequest) (*MintPairedKEMResponse, error)
+	// Prepare and mint a PCAS recovery with a signer-held successor. Both
+	// operations form their own signed bytes inside the attached PCAS minter.
+	PrepareRecoverySuccessor(context.Context, *PrepareRecoverySuccessorRequest) (*PrepareRecoverySuccessorResponse, error)
+	MintRecovery(context.Context, *MintRecoveryRequest) (*MintRecoveryResponse, error)
 	// ApplyDelegation durably enforces a tenant-bound PCAS scope or floor inside
 	// signer custody and returns a signed readback. Operation ID makes retries
 	// exact after a lost worker response.
@@ -795,6 +846,15 @@ func (UnimplementedSignerServiceServer) Health(context.Context, *HealthRequest) 
 }
 func (UnimplementedSignerServiceServer) MintSuccessor(context.Context, *MintSuccessorRequest) (*MintSuccessorResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MintSuccessor not implemented")
+}
+func (UnimplementedSignerServiceServer) MintPairedKEM(context.Context, *MintPairedKEMRequest) (*MintPairedKEMResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MintPairedKEM not implemented")
+}
+func (UnimplementedSignerServiceServer) PrepareRecoverySuccessor(context.Context, *PrepareRecoverySuccessorRequest) (*PrepareRecoverySuccessorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareRecoverySuccessor not implemented")
+}
+func (UnimplementedSignerServiceServer) MintRecovery(context.Context, *MintRecoveryRequest) (*MintRecoveryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MintRecovery not implemented")
 }
 func (UnimplementedSignerServiceServer) ApplyDelegation(context.Context, *ApplyDelegationRequest) (*ApplyDelegationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ApplyDelegation not implemented")
@@ -1087,6 +1147,60 @@ func _SignerService_MintSuccessor_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SignerServiceServer).MintSuccessor(ctx, req.(*MintSuccessorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_MintPairedKEM_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MintPairedKEMRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).MintPairedKEM(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_MintPairedKEM_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).MintPairedKEM(ctx, req.(*MintPairedKEMRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_PrepareRecoverySuccessor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareRecoverySuccessorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).PrepareRecoverySuccessor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_PrepareRecoverySuccessor_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).PrepareRecoverySuccessor(ctx, req.(*PrepareRecoverySuccessorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_MintRecovery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MintRecoveryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).MintRecovery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_MintRecovery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).MintRecovery(ctx, req.(*MintRecoveryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1555,6 +1669,18 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MintSuccessor",
 			Handler:    _SignerService_MintSuccessor_Handler,
+		},
+		{
+			MethodName: "MintPairedKEM",
+			Handler:    _SignerService_MintPairedKEM_Handler,
+		},
+		{
+			MethodName: "PrepareRecoverySuccessor",
+			Handler:    _SignerService_PrepareRecoverySuccessor_Handler,
+		},
+		{
+			MethodName: "MintRecovery",
+			Handler:    _SignerService_MintRecovery_Handler,
 		},
 		{
 			MethodName: "ApplyDelegation",

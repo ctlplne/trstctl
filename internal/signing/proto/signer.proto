@@ -89,6 +89,17 @@ service SignerService {
   // material (claims 1/12/49): the control plane can request, but cannot forge.
   rpc MintSuccessor(MintSuccessorRequest) returns (MintSuccessorResponse);
 
+  // MintPairedKEM forms the fixed PCAS KEM rewrap commitment and all three
+  // signatures inside signer custody. The caller supplies identity, epoch and
+  // algorithms, never a digest or a signing key. Generic Sign cannot use the
+  // paired successor handle.
+  rpc MintPairedKEM(MintPairedKEMRequest) returns (MintPairedKEMResponse);
+
+  // Prepare and mint a PCAS recovery with a signer-held successor. Both
+  // operations form their own signed bytes inside the attached PCAS minter.
+  rpc PrepareRecoverySuccessor(PrepareRecoverySuccessorRequest) returns (PrepareRecoverySuccessorResponse);
+  rpc MintRecovery(MintRecoveryRequest) returns (MintRecoveryResponse);
+
   // ApplyDelegation durably enforces a tenant-bound PCAS scope or floor inside
   // signer custody and returns a signed readback. Operation ID makes retries
   // exact after a lost worker response.
@@ -542,6 +553,46 @@ message MintSuccessorResponse {
   Algorithm successor_algorithm = 2;
   bytes successor_public_key = 3; // PKIX/DER (SubjectPublicKeyInfo)
   bytes encoded_record = 4;       // opaque dual-signed succession record
+}
+
+message MintPairedKEMRequest {
+  string tenant_id = 1;
+  string identity_id = 2;
+  uint64 predecessor_epoch = 3;
+  Algorithm signing_algorithm = 4;
+  Algorithm kem_algorithm = 5;
+  string request_id = 6;
+}
+
+message MintPairedKEMResponse {
+  // Public, dual-signed PCAS record with the KEM public key and its binding.
+  bytes encoded_record = 1;
+}
+
+message PrepareRecoverySuccessorRequest {
+  string tenant_id = 1;
+  string identity_id = 2;
+  uint64 epoch = 3;
+  Algorithm algorithm = 4;
+  string deployment_scope = 5;
+  string request_id = 6;
+}
+
+message PrepareRecoverySuccessorResponse {
+  bytes encoded_receipt = 1;
+}
+
+message MintRecoveryRequest {
+  // Public typed PCAS fields and recovery authorization. The signer parses
+  // them, checks their bindings and constructs the possession signature.
+  bytes commitment_fields_json = 1;
+  bytes authorization_json = 2;
+  bytes trust_root_public_der = 3;
+  uint64 high_water_epoch = 4;
+}
+
+message MintRecoveryResponse {
+  bytes encoded_record = 1;
 }
 
 message ApplyDelegationRequest {
