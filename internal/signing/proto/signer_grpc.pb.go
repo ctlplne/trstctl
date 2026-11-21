@@ -143,10 +143,8 @@ type SignerServiceClient interface {
 	// it is held in a signer-side KEM custody store and can be used only through the
 	// KEM-specific RPCs below.
 	GenerateSuccessorKEM(ctx context.Context, in *GenerateSuccessorKEMRequest, opts ...grpc.CallOption) (*GenerateSuccessorKEMResponse, error)
-	// Decapsulate derives a shared secret from a signer-held KEM private key and a
-	// ciphertext. The private key never leaves the signer. The returned shared
-	// secret is byte-native secret material for immediate re-wrap use and callers
-	// must wipe it after use.
+	// Legacy method, always denied. KEM shared secrets never leave signer
+	// custody; use VerifyKEMDataKey for a possession proof.
 	Decapsulate(ctx context.Context, in *DecapsulateRequest, opts ...grpc.CallOption) (*DecapsulateResponse, error)
 	// RewrapKEMDataKey moves one KEM-wrapped data key from the predecessor KEM
 	// key to the successor without the data key leaving signer custody.
@@ -668,10 +666,8 @@ type SignerServiceServer interface {
 	// it is held in a signer-side KEM custody store and can be used only through the
 	// KEM-specific RPCs below.
 	GenerateSuccessorKEM(context.Context, *GenerateSuccessorKEMRequest) (*GenerateSuccessorKEMResponse, error)
-	// Decapsulate derives a shared secret from a signer-held KEM private key and a
-	// ciphertext. The private key never leaves the signer. The returned shared
-	// secret is byte-native secret material for immediate re-wrap use and callers
-	// must wipe it after use.
+	// Legacy method, always denied. KEM shared secrets never leave signer
+	// custody; use VerifyKEMDataKey for a possession proof.
 	Decapsulate(context.Context, *DecapsulateRequest) (*DecapsulateResponse, error)
 	// RewrapKEMDataKey moves one KEM-wrapped data key from the predecessor KEM
 	// key to the successor without the data key leaving signer custody.

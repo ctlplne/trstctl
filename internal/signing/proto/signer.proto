@@ -100,10 +100,8 @@ service SignerService {
   // KEM-specific RPCs below.
   rpc GenerateSuccessorKEM(GenerateSuccessorKEMRequest) returns (GenerateSuccessorKEMResponse);
 
-  // Decapsulate derives a shared secret from a signer-held KEM private key and a
-  // ciphertext. The private key never leaves the signer. The returned shared
-  // secret is byte-native secret material for immediate re-wrap use and callers
-  // must wipe it after use.
+  // Legacy method, always denied. KEM shared secrets never leave signer
+  // custody; use VerifyKEMDataKey for a possession proof.
   rpc Decapsulate(DecapsulateRequest) returns (DecapsulateResponse);
   // RewrapKEMDataKey moves one KEM-wrapped data key from the predecessor KEM
   // key to the successor without the data key leaving signer custody.
@@ -576,6 +574,7 @@ message DecapsulateRequest {
 }
 
 message DecapsulateResponse {
+  // Reserved for old peers; the served signer never populates this field.
   bytes shared_secret = 1;
 }
 

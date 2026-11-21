@@ -216,8 +216,10 @@ tenant's domain KEK, returns only its HSM-wrapped container, and for each later
 call opens the KEK inside the signer, wraps or unwraps one 32-byte data key, and
 destroys it; the KEK never crosses the transport. The one secret that does is
 `UnwrapTenantDataKey`'s data key: the control plane generated it, asked the
-signer to wrap it, and needs it back to decrypt tenant data, as `Decapsulate`
-returns a shared secret for re-wrap. A signer without the custody answers
+signer to wrap it, and needs it back to decrypt tenant data. PCAS KEM
+decapsulation is different: the signer denies its legacy `Decapsulate` RPC and
+uses `RewrapKEMDataKey` and `VerifyKEMDataKey` so neither a stored data key nor
+its KEM shared secret crosses the signer socket. A signer without the custody answers
 `UNIMPLEMENTED`, and custody failures cross as fixed codes (`NOT_FOUND` for an
 unknown wrapper, `UNAVAILABLE` for the HSM key or token, `DATA_LOSS` for a
 corrupt container, `FAILED_PRECONDITION` for an authentication failure) with no

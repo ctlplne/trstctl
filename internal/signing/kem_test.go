@@ -11,7 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -87,14 +89,8 @@ func TestServerKEMCustodyHandlers(t *testing.T) {
 	}
 
 	ss, err := s.Decapsulate(ctx, &signerpb.DecapsulateRequest{Handle: "kem-1", Ciphertext: []byte("ct")})
-	if err != nil {
-		t.Fatalf("Decapsulate: %v", err)
-	}
-	if !bytes.Equal(ss.GetSharedSecret(), []byte("shared:kem-1:ct")) {
-		t.Fatalf("shared secret = %q", ss.GetSharedSecret())
-	}
-	if custody.decapHandle != "kem-1" || !bytes.Equal(custody.decapCiphertext, []byte("ct")) {
-		t.Fatalf("custody decap saw handle=%q ciphertext=%q", custody.decapHandle, custody.decapCiphertext)
+	if ss != nil || status.Code(err) != codes.PermissionDenied || custody.decapHandle != "" || len(custody.decapCiphertext) != 0 {
+		t.Fatalf("deprecated decapsulation leaked to a signer peer: response=%v error=%v custody=%q", ss, err, custody.decapHandle)
 	}
 
 	if _, err := s.ZeroizeKey(ctx, &signerpb.ZeroizeKeyRequest{Handle: "kem-1"}); err != nil {
@@ -143,8 +139,8 @@ func TestServerKEMCustodyRejectsBadRequestsAndMissingCustody(t *testing.T) {
 	if _, err := fail.GenerateSuccessorKEM(ctx, &signerpb.GenerateSuccessorKEMRequest{Handle: "kem", Algorithm: signerpb.Algorithm_ALGORITHM_LICENSED_1}); status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("GenerateSuccessorKEM(failing custody) = %v, want FailedPrecondition", status.Code(err))
 	}
-	if _, err := fail.Decapsulate(ctx, &signerpb.DecapsulateRequest{Handle: "kem", Ciphertext: []byte("ct")}); status.Code(err) != codes.FailedPrecondition {
-		t.Fatalf("Decapsulate(failing custody) = %v, want FailedPrecondition", status.Code(err))
+	if _, err := fail.Decapsulate(ctx, &signerpb.DecapsulateRequest{Handle: "kem", Ciphertext: []byte("ct")}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("Decapsulate(failing custody) = %v, want PermissionDenied before custody access", status.Code(err))
 	}
 	if _, err := fail.ZeroizeKey(ctx, &signerpb.ZeroizeKeyRequest{Handle: "kem"}); status.Code(err) != codes.Internal {
 		t.Fatalf("ZeroizeKey(failing custody) = %v, want Internal", status.Code(err))
@@ -196,11 +192,17 @@ func TestClientKEMCustodyRPCs(t *testing.T) {
 		t.Fatalf("bad client KEM public result: %+v", pub)
 	}
 	ss, err := client.Decapsulate(ctx, "kem-rpc", []byte("ciphertext"))
-	if err != nil {
-		t.Fatalf("client Decapsulate: %v", err)
+	if ss != nil || status.Code(err) != codes.PermissionDenied || custody.decapHandle != "" {
+		t.Fatalf("deprecated RPC leaked shared secret: result=%q error=%v custody=%q", ss, err, custody.decapHandle)
 	}
-	if !bytes.Equal(ss, []byte("shared:kem-rpc:ciphertext")) {
-		t.Fatalf("client shared secret = %q", ss)
+	rawConn, err := grpc.NewClient("unix://"+socket, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rawConn.Close() }()
+	rawResponse, err := signerpb.NewSignerServiceClient(rawConn).Decapsulate(ctx, &signerpb.DecapsulateRequest{Handle: "kem-rpc", Ciphertext: []byte("ciphertext")})
+	if rawResponse != nil || status.Code(err) != codes.PermissionDenied || custody.decapHandle != "" {
+		t.Fatalf("raw signer-socket RPC leaked shared secret: response=%v error=%v custody=%q", rawResponse, err, custody.decapHandle)
 	}
 	if err := client.ZeroizeKey(ctx, "kem-rpc"); err != nil {
 		t.Fatalf("client ZeroizeKey: %v", err)
@@ -220,5 +222,18 @@ func TestClientKEMCustodyRPCs(t *testing.T) {
 	}
 	if !custody.destroyed {
 		t.Fatal("served shutdown did not destroy KEM custody")
+	}
+}
+
+func TestCR185SignerPeerCannotExportKEMSharedSecret(t *testing.T) {
+	ctx := context.Background()
+	custody := &fakeKEMCustody{}
+	s := signing.NewServer(signing.WithKEMCustody(custody))
+	response, err := s.Decapsulate(ctx, &signerpb.DecapsulateRequest{Handle: "kem-1", Ciphertext: []byte("ciphertext")})
+	if response != nil || status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("signer peer received KEM decapsulation result: response=%v error=%v", response, err)
+	}
+	if custody.decapHandle != "" || len(custody.decapCiphertext) != 0 {
+		t.Fatal("denied peer still reached private KEM decapsulation")
 	}
 }

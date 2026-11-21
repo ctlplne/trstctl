@@ -513,13 +513,22 @@ func (w *BreadthWorker) proveSignerDecapsulation(ctx context.Context, handle, ke
 		return fmt.Errorf("pcas KEM rewrap: encapsulate proof challenge: %w", err)
 	}
 	defer secret.Wipe(want)
-	got, err := w.kem.Decapsulate(ctx, handle, ct)
+	dek, err := crypto.RandomBytes(32)
 	if err != nil {
-		return fmt.Errorf("pcas KEM rewrap: signer decapsulation proof: %w", err)
+		return fmt.Errorf("pcas KEM rewrap: generate possession challenge: %w", err)
 	}
-	defer secret.Wipe(got)
-	if !bytes.Equal(got, want) {
-		return errors.New("pcas KEM rewrap: signer decapsulation proof mismatch")
+	defer secret.Wipe(dek)
+	aad := []byte("trstctl/pcas/kem-possession/v1\x00" + handle)
+	wrapped, err := crypto.KEMDataKeySeal(want, dek, aad)
+	if err != nil {
+		return fmt.Errorf("pcas KEM rewrap: seal possession challenge: %w", err)
+	}
+	got, err := w.kem.VerifyDataKey(ctx, handle, ct, wrapped, aad)
+	if err != nil {
+		return fmt.Errorf("pcas KEM rewrap: signer possession proof: %w", err)
+	}
+	if !bytes.Equal(got, crypto.SHA256Sum(dek)) {
+		return errors.New("pcas KEM rewrap: signer possession proof mismatch")
 	}
 	return nil
 }

@@ -18,7 +18,6 @@ import (
 // signing keys and are unreachable through Sign.
 type KEMCustody interface {
 	GenerateSuccessorKEM(ctx context.Context, handle string, alg signerpb.Algorithm) (signerpb.Algorithm, []byte, error)
-	Decapsulate(ctx context.Context, handle string, ciphertext []byte) ([]byte, error)
 	// RewrapDataKey opens a KEM-wrapped data key under the predecessor handle
 	// and seals it again for the successor handle's own public key. The data
 	// key never leaves custody; only ciphertext and its SHA-256 return.
@@ -92,11 +91,9 @@ func (s *Server) Decapsulate(ctx context.Context, req *signerpb.DecapsulateReque
 	if custody == nil {
 		return nil, status.Error(codes.Unimplemented, ErrNoKEMCustody.Error())
 	}
-	ss, err := custody.Decapsulate(ctx, req.GetHandle(), req.GetCiphertext())
-	if err != nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "decapsulate: %v", err)
-	}
-	return &signerpb.DecapsulateResponse{SharedSecret: ss}, nil
+	// Legacy peers may still call this wire method. A raw shared secret would
+	// open any stored data-key envelope outside signer custody (CR-185).
+	return nil, status.Error(codes.PermissionDenied, "raw KEM decapsulation is not an exportable signer operation")
 }
 
 func (s *Server) RewrapKEMDataKey(ctx context.Context, req *signerpb.RewrapKEMDataKeyRequest) (*signerpb.RewrapKEMDataKeyResponse, error) {
@@ -172,15 +169,10 @@ func (c *Client) GenerateSuccessorKEM(ctx context.Context, handle string, alg si
 	return KEMPublicKey{Handle: resp.GetHandle(), Algorithm: resp.GetAlgorithm(), PublicDER: resp.GetPublicKey()}, nil
 }
 
-// Decapsulate asks the signer to perform decapsulation against a held KEM private
-// key. The returned shared secret is secret material; callers must wipe it once
-// the re-wrap step is complete.
-func (c *Client) Decapsulate(ctx context.Context, handle string, ciphertext []byte) ([]byte, error) {
-	resp, err := c.svc.Decapsulate(ctx, &signerpb.DecapsulateRequest{Handle: handle, Ciphertext: ciphertext})
-	if err != nil {
-		return nil, err
-	}
-	return resp.GetSharedSecret(), nil
+// Decapsulate is a denied legacy RPC kept only for wire compatibility. Use
+// VerifyDataKey for a possession proof; no shared secret leaves custody.
+func (c *Client) Decapsulate(context.Context, string, []byte) ([]byte, error) {
+	return nil, status.Error(codes.PermissionDenied, "raw KEM decapsulation is not an exportable signer operation")
 }
 
 // RewrapDataKey asks the signer to move one KEM-wrapped data key from the
