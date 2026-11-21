@@ -2,6 +2,8 @@ import { useId } from "react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
 import { useTranslation } from "@/i18n/I18nProvider";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 
 // A274: a pam_signin source names the dynamic-secret provider whose static
 // accounts it watches for sign-ins outside trstctl, read through the
@@ -29,7 +31,7 @@ export function PAMSignInSourceFields({
       <p className="text-sm text-muted-foreground">{t("discovery.pamSignIn.help")}</p>
       <label className="grid gap-1 text-sm font-medium">
         {t("discovery.pamSignIn.provider")}
-        <select className="ui-input" value={providerID} onChange={(event) => onProvider(event.target.value)} required>
+        <Select value={providerID} onChange={(event) => onProvider(event.target.value)} required>
           <option value="" disabled>
             {t("discovery.pamSignIn.chooseProvider")}
           </option>
@@ -38,13 +40,12 @@ export function PAMSignInSourceFields({
               {t("discovery.pamSignIn.providerOption", { label: provider.label, type: provider.type })}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <div className="grid gap-1 text-sm font-medium">
         <label htmlFor={lookbackID}>{t("discovery.pamSignIn.lookback")}</label>
-        <input
+        <Input
           id={lookbackID}
-          className="ui-input"
           type="number"
           min={300}
           max={604800}

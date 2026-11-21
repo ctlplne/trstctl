@@ -1,5 +1,6 @@
 import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "@/i18n/I18nProvider";
+import { Select } from "@/components/ui/select";
 
 export type OfflineCAForm = { certificatePEM: string; commonName: string; dnsDomains: string; maxPathLen: string; ttlDays: string; signatureAlgorithm: string };
 
@@ -30,14 +31,14 @@ export function LabeledSelect({
       <label className="text-sm font-medium" htmlFor={id}>
         {label}
       </label>
-      <select
+      <Select
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="rounded-control border border-border bg-background px-3 py-2 outline-hidden transition-colors focus:border-focus focus:ring-2 focus:ring-focus/20"
       >
         {children}
-      </select>
+      </Select>
     </div>
   );
 }

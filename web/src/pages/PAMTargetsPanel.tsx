@@ -486,7 +486,7 @@ export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canMana
               </label>
               <label className="grid gap-1 text-sm">
                 {t("admin.access.webconsole.caPEM")}
-                <textarea className="min-h-20 rounded-md border border-input bg-background p-2 font-mono text-caption" {...register("web_ca_pem")} />
+                <textarea className="min-h-20 rounded-md border border-border bg-background p-2 font-mono text-caption" {...register("web_ca_pem")} />
               </label>
               <label className="grid gap-1 text-sm">
                 {t("admin.access.webconsole.serverName")}

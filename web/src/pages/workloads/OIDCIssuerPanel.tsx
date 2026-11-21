@@ -45,7 +45,8 @@ export function OIDCIssuerPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rotated, setRotated] = useState(false);
-  const pending = (keys.data?.keys ?? []).find((k) => k.state === "next");
+  const keyRows = Array.isArray(keys.data?.keys) ? keys.data.keys : [];
+  const pending = keyRows.find((k) => k.state === "next");
 
   const edit = (next: Partial<typeof draft>) => {
     setDraft({ ...draft, ...next });
@@ -103,16 +104,16 @@ export function OIDCIssuerPanel() {
           <dt className="font-medium">{t("workloads.oidcIssuer.jwks")}</dt>
           <dd className="break-all font-mono text-xs">{issuer.data.jwks_uri}</dd>
           <dt className="font-medium">{t("workloads.oidcIssuer.algorithms")}</dt>
-          <dd>{issuer.data.algorithms.join(", ")}</dd>
+          <dd>{Array.isArray(issuer.data.algorithms) ? issuer.data.algorithms.join(", ") : ""}</dd>
           <dt className="font-medium">{t("workloads.oidcIssuer.tokenEndpoint")}</dt>
           <dd className="break-all font-mono text-xs">{issuer.data.token_endpoint}</dd>
-          {issuer.data.issued_token_types?.length ? (
+          {Array.isArray(issuer.data.issued_token_types) && issuer.data.issued_token_types.length ? (
             <>
               <dt className="font-medium">{t("workloads.oidcIssuer.tokenTypes")}</dt>
               <dd>{issuer.data.issued_token_types.map((type) => (tokenTypeLabel[type] ? t(tokenTypeLabel[type]) : type)).join(", ")}</dd>
             </>
           ) : null}
-          {issuer.data.opaque_token_audiences?.length ? (
+          {Array.isArray(issuer.data.opaque_token_audiences) && issuer.data.opaque_token_audiences.length ? (
             <>
               <dt className="font-medium">{t("workloads.oidcIssuer.opaqueAudiences")}</dt>
               <dd className="break-all font-mono text-xs">{issuer.data.opaque_token_audiences.join(", ")}</dd>
@@ -122,13 +123,13 @@ export function OIDCIssuerPanel() {
           ) : null}
         </dl>
       ) : null}
-      {issuer.data && !issuer.data.algorithms.includes("RS256") ? (
+      {issuer.data && Array.isArray(issuer.data.algorithms) && !issuer.data.algorithms.includes("RS256") ? (
         <p className="max-w-3xl text-sm text-muted-foreground">{t("workloads.oidcIssuer.rs256Hint")}</p>
       ) : null}
 
       <h3 className="font-medium">{t("workloads.jwtKeys.heading")}</h3>
       {keys.error ? <p className="text-sm text-muted-foreground">{keys.error}</p> : null}
-      {keys.data ? (
+      {keys.data && Array.isArray(keys.data.keys) ? (
         <div className="min-w-0 overflow-x-auto">
           <table className="w-full text-sm">
             <caption className="sr-only">{t("workloads.jwtKeys.caption")}</caption>
@@ -141,7 +142,7 @@ export function OIDCIssuerPanel() {
               </tr>
             </thead>
             <tbody>
-              {keys.data.keys.map((k) => (
+              {keyRows.map((k) => (
                 <tr key={k.key_id} className="align-top">
                   <td className="font-mono text-xs">{k.key_id}</td>
                   <td>{t(keyStateLabel[k.state] ?? "workloads.jwtKeys.state.active")}</td>
@@ -154,7 +155,7 @@ export function OIDCIssuerPanel() {
         </div>
       ) : null}
 
-      {canRotate && keys.data ? (
+      {canRotate && keys.data && Array.isArray(keys.data.keys) ? (
         <section className="grid gap-3 md:grid-cols-3" aria-labelledby="jwt-key-rotate-heading">
           <h4 id="jwt-key-rotate-heading" className="font-medium md:col-span-3">
             {t("workloads.jwtKeys.rotate.heading")}

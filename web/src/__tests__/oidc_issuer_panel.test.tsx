@@ -48,6 +48,13 @@ const rotatedKeys = {
   ],
 };
 
+it("keeps the issuer panel usable when a key-list response has the wrong shape", async () => {
+  apiMock.oidcIssuer.mockResolvedValue(issuer);
+  apiMock.workloadJWTKeys.mockResolvedValue([]);
+  renderPanel();
+  expect(await screen.findByText(issuer.issuer)).toBeInTheDocument();
+});
+
 function renderPanel() {
   return render(
     <IntlProvider initialLocale="en-US" initialTimeZone="UTC">

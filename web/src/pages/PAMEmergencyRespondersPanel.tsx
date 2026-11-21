@@ -90,7 +90,7 @@ export function PAMEmergencyRespondersPanel({ canManage }: { canManage: boolean 
             <label htmlFor={editorID}>{t("admin.access.responders.editor")}</label>
             <textarea
               id={editorID}
-              className="min-h-24 rounded-md border border-input bg-background p-2 font-mono text-xs"
+              className="min-h-24 rounded-md border border-border bg-background p-2 font-mono text-xs"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
             />

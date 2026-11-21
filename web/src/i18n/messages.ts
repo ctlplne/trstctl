@@ -513,7 +513,10 @@ export const messages = {
       "Publish a temporary session for the captured native role, wait for the named authenticated consumer to verify the exact secret version, then retire and independently read back the old key. Missing adoption, drift or expiry stops retirement. This receipt does not prove a live workload or automatic refresh by itself.",
     description: "Exact cloud replacement effect and proof limit.",
   },
-  "discovery.machine.writerExample": { defaultMessage: "env:TRSTCTL_AWS_WRITER_SESSION_PATH", description: "Example reference name; no credential value." },
+  "discovery.machine.writerExample": {
+    defaultMessage: "Stored writer session reference",
+    description: "Prompt for the saved writer session reference, never a credential value.",
+  },
   "discovery.machine.approveRevoke": { defaultMessage: "Revoke a captured key for {resource}", description: "Exact cloud key approval action." },
   "discovery.machine.approveTighten": { defaultMessage: "Restrict a captured permission for {resource}", description: "Exact cloud policy approval action." },
   "discovery.machine.uncertain": {

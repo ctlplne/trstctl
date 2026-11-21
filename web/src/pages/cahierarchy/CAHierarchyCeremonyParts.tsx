@@ -6,6 +6,7 @@ import { CredentialChip } from "@/components/CredentialChip";
 import { Dialog } from "@/components/Dialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 import type { CAAuthority, CAAuthorityRotationPlanPreview, CACeremonyPlanPreview, CACeremonyStartRequest, CAKeyCeremony } from "@/lib/api";
 
@@ -82,14 +83,14 @@ export function ManagedIntermediateCeremonyForm({
       <p className="text-sm text-muted-foreground">{t("caHierarchy.managedIntermediate.help")}</p>
       <label className="grid gap-1 text-sm font-medium">
         {t("caHierarchy.managedIntermediate.parent")}
-        <select className="ui-input" {...register("parent_id")}>
+        <Select {...register("parent_id")}>
           <option value="">{t("caHierarchy.managedIntermediate.selectParent")}</option>
           {parents.map((parent) => (
             <option key={parent.id} value={parent.id}>
               {parent.common_name} ({parent.kind}, {parent.status})
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       {errors.parent_id ? (
         <p role="alert" className="text-sm text-destructive">

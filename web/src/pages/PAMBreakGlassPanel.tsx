@@ -6,6 +6,7 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import { formatDateTime, type FormatPolicy } from "@/i18n/format";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog } from "@/components/Dialog";
 import { CredentialChip } from "@/components/CredentialChip";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
@@ -135,9 +136,9 @@ export function PAMBreakGlassPanel({ subject, canRelease, canReview }: { subject
               ))}
             </Select>
             <label htmlFor={ids.reason}>{t("admin.access.breakglass.reason")}</label>
-            <textarea
+            <Textarea
               id={ids.reason}
-              className="min-h-16 rounded-md border border-input bg-background p-2"
+              className="min-h-16"
               required
               value={form.reason}
               onChange={(event) => setForm({ ...form, reason: event.target.value })}
@@ -245,9 +246,9 @@ export function PAMBreakGlassPanel({ subject, canRelease, canReview }: { subject
             <option value="unjustified">{t("admin.access.breakglass.unjustified")}</option>
           </Select>
           <label htmlFor={ids.notes}>{t("admin.access.breakglass.notes")}</label>
-          <textarea
+          <Textarea
             id={ids.notes}
-            className="min-h-16 rounded-md border border-input bg-background p-2"
+            className="min-h-16"
             required
             value={reviewing.notes}
             onChange={(event) => setReviewing({ ...reviewing, notes: event.target.value })}

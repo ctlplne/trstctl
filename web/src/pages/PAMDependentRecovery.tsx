@@ -8,6 +8,7 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import { Dialog } from "@/components/Dialog";
 import { CredentialChip } from "@/components/CredentialChip";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -116,7 +117,7 @@ export function PAMDependentRecovery({ id, stepID, intentDigest }: { id: string;
                 {(control) => <Textarea {...control} {...form.register("reason")} disabled={busy} />}
               </Field>
               <label className="flex items-start gap-2">
-                <input type="checkbox" {...form.register("acknowledge")} disabled={busy} />
+                <Checkbox {...form.register("acknowledge")} disabled={busy} />
                 <span>{t("admin.access.rotation.recovery.ack")}</span>
               </label>
               <Button
