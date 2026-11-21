@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"golang.org/x/sys/windows"
 	"runtime"
 	"strconv"
@@ -62,7 +63,7 @@ func taskEventPointerOffset(raw []byte, value taskEventVariant, need int) (int, 
 }
 func taskEventText(raw []byte, value taskEventVariant) (string, error) {
 	if value.Type != 1 || value.Count != 0 {
-		return "", errors.New("windows task: native event text has an unexpected type")
+		return "", fmt.Errorf("windows task: native event text has type %d and count %d, want one string", value.Type, value.Count)
 	}
 	offset, err := taskEventPointerOffset(raw, value, 2)
 	if err != nil {
@@ -205,7 +206,7 @@ func renderNativeTaskEvent(contextHandle, eventHandle uintptr) (nativeTaskEvent,
 	}
 	path, err := taskEventText(raw, values[2])
 	if err != nil {
-		return nativeTaskEvent{}, err
+		return nativeTaskEvent{}, fmt.Errorf("windows task: event %d task name: %w", id, err)
 	}
 	instanceValue := values[4]
 	if id == 201 {
@@ -213,7 +214,7 @@ func renderNativeTaskEvent(contextHandle, eventHandle uintptr) (nativeTaskEvent,
 	}
 	instance, err := taskEventInstance(raw, instanceValue)
 	if err != nil {
-		return nativeTaskEvent{}, err
+		return nativeTaskEvent{}, fmt.Errorf("windows task: event %d instance: %w", id, err)
 	}
 	createdAt, err := values[7].fileTime()
 	if err != nil {
@@ -223,13 +224,13 @@ func renderNativeTaskEvent(contextHandle, eventHandle uintptr) (nativeTaskEvent,
 	if id == 100 {
 		event.AccountSID, err = taskEventAccountSID(raw, values[3])
 		if err != nil {
-			return nativeTaskEvent{}, err
+			return nativeTaskEvent{}, fmt.Errorf("windows task: event %d account SID: %w", id, err)
 		}
 	}
 	if id == 201 {
 		event.ResultCode, event.ResultPresent, err = taskEventResult(raw, values[6])
 		if err != nil {
-			return nativeTaskEvent{}, err
+			return nativeTaskEvent{}, fmt.Errorf("windows task: event %d action result: %w", id, err)
 		}
 	}
 	return event, nil

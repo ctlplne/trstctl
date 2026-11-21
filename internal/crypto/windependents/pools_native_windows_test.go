@@ -133,25 +133,9 @@ func createOwnedIISPool(t *testing.T, ctx context.Context, name, account string,
 			return err
 		}
 		defer property.destroy()
-		// A newly created pool has no persisted per-property metadata yet.
-		// IIS documents this provider for applicationHost secrets; set it
-		// explicitly, then let the native readback verify the persisted value.
-		provider := "IISWASOnlyRsaProvider"
-		key, err := newAutomationPublicString("encryptionProvider")
-		if err != nil {
-			return err
-		}
-		defer func() { _ = key.destroy() }()
-		providerName, err := newAutomationPublicString(provider)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = providerName.destroy() }()
-		value, err := property.call("SetMetadata", 1, key.variant(), providerName.variant())
-		value.destroy()
-		if err != nil {
-			return err
-		}
+		// The password attribute has no encryption metadata before the new
+		// pool is persisted. Let IIS apply its configured password provider,
+		// then require the persisted encrypted metadata in native readback.
 		credential, err := newAutomationPassword(password)
 		if err != nil {
 			return err
@@ -163,7 +147,7 @@ func createOwnedIISPool(t *testing.T, ctx context.Context, name, account string,
 		if err := addIISFixtureElement(collection, pool); err != nil {
 			return err
 		}
-		value, err = manager.call("CommitChanges", 1)
+		value, err := manager.call("CommitChanges", 1)
 		value.destroy()
 		return err
 	})

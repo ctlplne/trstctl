@@ -458,3 +458,22 @@ func TestNativeWindowsServiceLifecycleA267(t *testing.T) {
 	}
 	t.Log("A267_WINDOWS_SERVICE_OK: native discovery, credential update, fresh process SID, functional work and recovery; local SAM is not an AD forest")
 }
+
+func TestServicePasswordCensusExcludesSessionServicesA267(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		serviceType uint32
+		want        bool
+	}{
+		{"ordinary own-process service", windows.SERVICE_WIN32_OWN_PROCESS, true},
+		{"ordinary shared-process service", windows.SERVICE_WIN32_SHARE_PROCESS, true},
+		{"per-user service", windows.SERVICE_WIN32_OWN_PROCESS | 0x40, false},
+		{"driver", windows.SERVICE_KERNEL_DRIVER, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := passwordManagedServiceType(tc.serviceType); got != tc.want {
+				t.Fatalf("password-managed service type = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}

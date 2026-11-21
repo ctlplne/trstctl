@@ -17,6 +17,13 @@ import (
 
 type nativeServiceDriver struct{}
 
+// Windows creates SERVICE_USER_SERVICE (0x40) instances for signed-in user
+// sessions. Their identity comes from that session, not a stored service logon
+// password; they are outside the service-password rotation census.
+func passwordManagedServiceType(serviceType uint32) bool {
+	return serviceType&windows.SERVICE_WIN32 != 0 && serviceType&windows.SERVICE_DRIVER == 0 && serviceType&0x40 == 0
+}
+
 func newNativeServiceDriver() serviceDriver { return nativeServiceDriver{} }
 func openLocalSCM(access uint32) (windows.Handle, error) {
 	return windows.OpenSCManager(nil, nil, access)
@@ -94,8 +101,8 @@ func inspectServiceHandle(ctx context.Context, handle windows.Handle, name, sele
 	if err := windows.QueryServiceConfig(handle, config, configBytes, &needed); err != nil {
 		return nativeServiceSnapshot{}, fmt.Errorf("windows service: native configuration unavailable (needed=%d): %w", needed, err)
 	}
-	if config.ServiceType&windows.SERVICE_WIN32 == 0 || config.ServiceType&windows.SERVICE_DRIVER != 0 {
-		return nativeServiceSnapshot{}, errors.New("windows service: selected object is not a user service")
+	if !passwordManagedServiceType(config.ServiceType) {
+		return nativeServiceSnapshot{}, errors.New("windows service: selected object is not a password-managed service")
 	}
 	pointers := []*uint16{config.BinaryPathName, config.LoadOrderGroup, config.Dependencies, config.ServiceStartName, config.DisplayName}
 	fields := make([][]byte, len(pointers))
@@ -203,6 +210,9 @@ func (driver nativeServiceDriver) discover(ctx context.Context, sid string) ([]S
 		total += count
 		entries := unsafe.Slice((*windows.ENUM_SERVICE_STATUS_PROCESS)(unsafe.Pointer(&raw[0])), int(count)) // #nosec G103 -- SDK count is bounded by both returned-buffer capacity and total census before creating the native entry view (CWE-242)
 		for _, entry := range entries {
+			if !passwordManagedServiceType(entry.ServiceStatusProcess.ServiceType) {
+				continue
+			}
 			encoded, e := nativeStringAt(raw, entry.ServiceName, false)
 			if e != nil {
 				return nil, e

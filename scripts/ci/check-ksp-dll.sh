@@ -12,7 +12,7 @@ set -euo pipefail
 
 listing="${1:?usage: check-ksp-dll.sh <objdump -p listing of trstctl-ksp.dll>}"
 if ! awk '
-  /^[[:space:]]*\[Ordinal\/Name Pointer\] Table[[:space:]]*$/ { exports=1; next }
+  /\[Ordinal\/Name Pointer\] Table/ { exports=1; next }
   exports && /^[[:space:]]*\[[[:space:]]*[0-9]+\][[:space:]]+\+base\[[[:space:]]*[0-9]+\][[:space:]]+[[:xdigit:]]+[[:space:]]+GetKeyStorageInterface[[:space:]]*$/ { found=1 }
   END { exit !found }
 ' "$listing"; then
