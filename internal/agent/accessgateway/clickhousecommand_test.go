@@ -41,6 +41,15 @@ func TestClickHouseRuleSQLCombinesPartsAndExcludesAuthentication(t *testing.T) {
 	}
 }
 
+func TestCR006ClickHouseUnknownQueryParameterIsReviewedAsControl(t *testing.T) {
+	request := &http.Request{Method: http.MethodGet, URL: &url.URL{Path: "/", RawQuery: "QUERY=TRUNCATE+TABLE+victim"}, Header: make(http.Header)}
+	sql, phase, _ := clickhouseRuleSQL(request, nil)
+	defer secret.Wipe(sql)
+	if phase != "control" {
+		t.Fatalf("case-variant QUERY parameter passed as ordinary SQL phase %q", phase)
+	}
+}
+
 type clickhouseRejectBodyReader struct{ reads int }
 
 func (r *clickhouseRejectBodyReader) Read([]byte) (int, error) {

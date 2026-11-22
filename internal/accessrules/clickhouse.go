@@ -20,7 +20,7 @@ func ClickHouseOperations(raw []byte) ([]string, error) {
 	for i := 0; i < len(raw); {
 		switch {
 		case raw[i] == '-' && i+1 < len(raw) && raw[i+1] == '-' || raw[i] == '/' && i+1 < len(raw) && raw[i+1] == '/' || raw[i] == '#' && i+1 < len(raw) && (raw[i+1] == '!' || raw[i+1] == ' '):
-			for i < len(raw) && raw[i] != '\n' && raw[i] != '\r' {
+			for i < len(raw) && raw[i] != '\n' {
 				i++
 			}
 		case raw[i] == '/' && i+1 < len(raw) && raw[i+1] == '*':

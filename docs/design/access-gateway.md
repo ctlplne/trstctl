@@ -729,9 +729,12 @@ the request for the same independent quorum and deadline described above.
 
 Supported rule-bearing input is a GET or POST to `/`, with at most 64 KiB of
 headers and 1 MiB of combined SQL. Chunked HTTP bodies are fully bounded and
-normalized before forwarding. Ambiguous repeated `query` parameters, compressed
+normalized before forwarding. Ambiguous repeated or case-variant `query`
+parameters (such as `QUERY`), compressed
 or multipart input, `decompress`, SQL `FORMAT` data and `EXECUTE` controls are
 refused. These restrictions apply even if no configured operation matches.
+The classifier treats a line comment as ending at LF; a preceding CR stays
+inside the comment, so a statement after the LF is still reviewed.
 Ordinary sessions keep their existing protocol behavior. Use an unruled session
 only when its separate authorization and target permissions permit it.
 

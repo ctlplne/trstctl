@@ -39,6 +39,20 @@ func TestClickHouseSQLClassesExcludeValuesAndComments(t *testing.T) {
 		t.Fatalf("allocations grow with repeated traffic: %v", n)
 	}
 }
+
+func TestCR006ClickHouseLineCommentEndsOnlyAtLF(t *testing.T) {
+	for _, sql := range []string{
+		"--\r'\nTRUNCATE TABLE victim\n--'",
+		"//\r'\nTRUNCATE TABLE victim\n//'",
+		"# \r'\nTRUNCATE TABLE victim\n# '",
+	} {
+		ops, err := ClickHouseOperations([]byte(sql))
+		if err != nil || !slices.Contains(ops, "TRUNCATE") {
+			t.Errorf("ClickHouse executes TRUNCATE after LF in %q; classifier returned %v, %v", sql, ops, err)
+		}
+	}
+}
+
 func FuzzClickHouseOperationMetadata(f *testing.F) {
 	for _, raw := range []string{"TRUNCATE TABLE notes", "SELECT 'TRUNCATE value'", "/* a /* b */ c */ TRUNCATE notes", "INSERT INTO notes FORMAT CSV", "SELECT $tag$value$tag$"} {
 		f.Add([]byte(raw))

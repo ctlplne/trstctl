@@ -156,6 +156,14 @@ func clickhouseRuleSQL(request *http.Request, body []byte) ([]byte, string, stri
 	if err != nil || len(query["query"]) > 1 {
 		return nil, "uninspectable", ""
 	}
+	// ClickHouse recognizes only the exact lowercase query parameter. A
+	// case-variant is an upstream setting, so review it as a control request
+	// instead of classifying an empty SQL body and forwarding it unseen.
+	for key := range query {
+		if key != "query" && strings.EqualFold(key, "query") {
+			return nil, "control", ""
+		}
+	}
 	if request.Method != http.MethodGet && request.Method != http.MethodPost || request.URL.Path != "/" || len(request.Header.Values("Content-Encoding")) > 1 || request.Header.Get("Content-Encoding") != "" && !strings.EqualFold(request.Header.Get("Content-Encoding"), "identity") || strings.HasPrefix(strings.ToLower(request.Header.Get("Content-Type")), "multipart/") || query.Has("decompress") {
 		return nil, "control", ""
 	}
