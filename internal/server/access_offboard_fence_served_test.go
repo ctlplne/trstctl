@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
@@ -34,7 +35,11 @@ func TestServedMemberOffboardDeniesBearerDuringProjectionGap(t *testing.T) {
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "offboard gap"}); err != nil {
 		t.Fatal(err)
 	}
-	admin := seedServedAPIToken(t, ctx, st, tenantID, "qa-offboard-admin", []string{"access:read", "access:write", "access:role.assign"})
+	adminScopes := []string{"access:read", "access:write", "access:role.assign"}
+	for _, p := range authz.BuiltinRoles()["viewer"].Permissions {
+		adminScopes = append(adminScopes, string(p))
+	}
+	admin := seedServedAPIToken(t, ctx, st, tenantID, "qa-offboard-admin", adminScopes)
 	memberToken := seedServedAPIToken(t, ctx, st, tenantID, subject, []string{"access:read"})
 	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {

@@ -51,12 +51,20 @@ func TestServedAccessAdminOnboardsAndOffboardsDistinctApprover(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed owner: %v", err)
 	}
-	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "platform-admin", []string{
+	adminScopes := []string{
 		string(authz.AccessRead), string(authz.AccessWrite),
 		string(authz.AccessRoleAssign),
 		string(authz.IdentitiesRead), string(authz.IdentitiesWrite),
 		string(authz.CertsRequest), string(authz.CertsIssue),
-	})
+	}
+	// This bootstrap principal onboards operator and RA roles. It must hold
+	// every permission in those roles before it can grant them (CR-023).
+	for _, roleName := range []string{"operator", "ra-officer"} {
+		for _, p := range authz.BuiltinRoles()[roleName].Permissions {
+			adminScopes = append(adminScopes, string(p))
+		}
+	}
+	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "platform-admin", adminScopes)
 
 	log, err := events.Open(
 		ctx,

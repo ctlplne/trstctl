@@ -558,8 +558,8 @@ credential or password-bearing connection string anywhere in it; name a stored s
 `notifications:write`, `audit:write` (report schedules), `agents:relay.grant` (agent roles) or
 `access:write` (secrets projects) — and a member grant
 gets the same checks as `PUT /api/v1/access/members/{subject}` (no self-assignment; only an
-administrator grants an all-permissions role; a custom role only by someone holding all of
-it). Then it lists, per object, whether applying creates, updates or leaves it alone, and
+administrator grants an all-permissions role; any other built-in or custom role only by
+someone holding every permission it grants). Then it lists, per object, whether applying creates, updates or leaves it alone, and
 exactly what that involves: the identities (the member, or how many identities are issued
 under a CA, deploy to a target or belong to an owner), credentials (the public certificates
 in a chain; the stored secrets a target names), grants (the roles, and the roles held now),

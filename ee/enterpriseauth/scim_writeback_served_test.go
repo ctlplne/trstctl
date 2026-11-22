@@ -16,7 +16,6 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
-	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
@@ -119,7 +118,7 @@ func TestServedSCIMWritebackPushesLocalMemberChangesToTheDirectory(t *testing.T)
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "writeback"}); err != nil {
 		t.Fatal(err)
 	}
-	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "platform-admin", []string{string(authz.AccessRead), string(authz.AccessWrite), "access:role.assign"})
+	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "platform-admin", roleAssignerScopes("viewer"))
 	dir := t.TempDir()
 	if err := writeSecretFile(dir+"/scim.token", []byte(scimToken)); err != nil {
 		t.Fatal(err)

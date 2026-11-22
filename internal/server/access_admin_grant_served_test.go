@@ -26,7 +26,11 @@ func TestServedOnlyAdministratorsGrantTheAdminRole(t *testing.T) {
 	for _, p := range authz.BuiltinRoles()["operator"].Permissions {
 		operatorScopes = append(operatorScopes, string(p))
 	}
-	provisioner := seedServedAPIToken(t, ctx, h.store, h.tenant, "role-provisioner", []string{"access:read", "access:write", "access:role.assign"})
+	provisionerScopes := []string{"access:write", "access:role.assign"}
+	for _, p := range authz.BuiltinRoles()["viewer"].Permissions {
+		provisionerScopes = append(provisionerScopes, string(p))
+	}
+	provisioner := seedServedAPIToken(t, ctx, h.store, h.tenant, "role-provisioner", provisionerScopes)
 	operator := seedServedAPIToken(t, ctx, h.store, h.tenant, "operator-grantor", operatorScopes)
 	administrator := seedServedAPIToken(t, ctx, h.store, h.tenant, "tenant-admin", []string{"*"})
 	deniedBefore := countRoleAssignDenialsF266(t, h)
@@ -151,6 +155,27 @@ func TestServedMemberUpsertRequiresExplicitRolesForEveryEffect(t *testing.T) {
 	if code, body := doBearer(t, h.ts, http.MethodPut, path, admin, "cr091-rehire-allowed",
 		map[string]any{"roles": []string{"viewer"}}); code != http.StatusOK {
 		t.Fatalf("administrator rehired member with explicit roles = HTTP %d %s", code, body)
+	}
+}
+
+func TestServedBuiltinRoleGrantRefusalIsRecordedCR023(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	var scopes []string
+	for _, p := range authz.BuiltinRoles()["operator"].Permissions {
+		scopes = append(scopes, string(p))
+	}
+	operator := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "cr023-operator", scopes)
+	deniedBefore := countRoleAssignDenialsF266(t, h)
+	if code, body := doBearer(t, h.ts, http.MethodPut, "/api/v1/access/members/cr023-auditor", operator,
+		"cr023-auditor", map[string]any{"roles": []string{"auditor"}}); code != http.StatusForbidden || !bytes.Contains(body, []byte(string(authz.AuditRead))) {
+		t.Fatalf("operator granted auditor without audit:read: HTTP %d %s", code, body)
+	}
+	if got := countRoleAssignDenialsF266(t, h) - deniedBefore; got != 1 {
+		t.Fatalf("built-in grant refusal recorded %d role decisions, want 1", got)
+	}
+	if code, body := doBearer(t, h.ts, http.MethodPut, "/api/v1/access/members/cr023-peer", operator,
+		"cr023-peer", map[string]any{"roles": []string{"operator"}}); code != http.StatusOK {
+		t.Fatalf("operator could not grant permissions it holds: HTTP %d %s", code, body)
 	}
 }
 

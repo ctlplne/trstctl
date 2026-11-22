@@ -67,7 +67,7 @@ func TestServedLDAPWritebackAppliesRoleGroupsToTheDirectory(t *testing.T) {
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = httpSrv.Serve(ln) }()
 	defer func() { _ = httpSrv.Close() }()
-	token := seedServedScopedToken(t, st, tenantID, "access:write", "access:read", "access:role.assign")
+	token := seedServedScopedToken(t, st, tenantID, roleAssignerScopes("viewer")...)
 
 	const alice = "uid=alice,ou=people,dc=example,dc=org"
 	call := func(method, path, body string) (int, string) {

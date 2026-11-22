@@ -40,9 +40,9 @@ func TestCustomRolesNeedTheCallersOwnPermissions(t *testing.T) {
 	if err := requireHeldPermissions(wide, tenantID, []string{"certs:read", "certs:request"}, "define"); err != nil {
 		t.Fatalf("defining within the caller's permissions = %v", err)
 	}
-	// Built-in roles keep their own rule: role.assign suffices for operator.
-	if err := a.authorizeRoleAssignment(narrow, tenantID, "bob", []string{"operator"}, true); err != nil {
-		t.Fatalf("assigning a built-in role = %v", err)
+	// Built-in roles obey the same hold-what-you-grant rule.
+	if err := a.authorizeRoleAssignment(narrow, tenantID, "bob", []string{"operator"}, true); err == nil {
+		t.Fatal("narrow caller granted built-in operator without its permissions")
 	}
 	if err := a.validateRoleNameShapes([]string{"viewer", "payments-ops-reader"}); err != nil {
 		t.Fatalf("baseline role names = %v", err)

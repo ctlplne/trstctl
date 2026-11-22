@@ -97,10 +97,10 @@ not this file.
 | `ee/enterpriseauth/scim_served_test.go:34` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `ee/enterpriseauth/scim_subject_binding_served_test.go:38` | fabricated local fixture, not a credential (CWE-798) |
 | `ee/enterpriseauth/scim_writeback_private_test.go:50` | fabricated fixture credential (CWE-798) |
-| `ee/enterpriseauth/scim_writeback_rotation_served_test.go:36` | fabricated fixture credential (CWE-798) |
-| `ee/enterpriseauth/scim_writeback_rotation_served_test.go:37` | fabricated fixture credentials (CWE-798) |
+| `ee/enterpriseauth/scim_writeback_rotation_served_test.go:35` | fabricated fixture credential (CWE-798) |
+| `ee/enterpriseauth/scim_writeback_rotation_served_test.go:36` | fabricated fixture credentials (CWE-798) |
+| `ee/enterpriseauth/scim_writeback_served_test.go:109` | fabricated fixture credential (CWE-798) |
 | `ee/enterpriseauth/scim_writeback_served_test.go:110` | fabricated fixture credential (CWE-798) |
-| `ee/enterpriseauth/scim_writeback_served_test.go:111` | fabricated fixture credential (CWE-798) |
 | `ee/governance/misuse/misuse.go:40` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `ee/managedkeys/signerwiring/gcp_workload_test.go:46` | a stand-in fixture value, not a credential (CWE-798) |
 | `ee/provider/aud58_test.go:173` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
@@ -3881,8 +3881,8 @@ not this file.
 | `internal/scanannotate/registry_stock_test.go:43` | the loopback stock registry the operator names in TRSTCTL_A174L2_REGISTRY for this env-gated test (CWE-918) |
 | `internal/scanannotate/registry_stock_test.go:66` | the loopback stock registry the operator names in TRSTCTL_A174L2_REGISTRY for this env-gated test (CWE-918) |
 | `internal/scanannotate/registry_stock_test.go:68` | the loopback stock registry the operator names in TRSTCTL_A174L2_REGISTRY for this env-gated test (CWE-918) |
-| `internal/server/access_admin_served_test.go:311` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
-| `internal/server/access_admin_served_test.go:322` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
+| `internal/server/access_admin_served_test.go:319` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
+| `internal/server/access_admin_served_test.go:330` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
 | `internal/server/audit_feed_index_template_lab_test.go:33` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_index_template_lab_test.go:38` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:54` | the runner's own lab search engine (CWE-918) |

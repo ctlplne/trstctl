@@ -37,12 +37,16 @@ func TestAUD69APIExplorerRequestAndTokenJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed owner: %v", err)
 	}
-	admin := seedServedAPIToken(t, ctx, st, tenantID, "platform-admin", []string{
+	adminScopes := []string{
 		string(authz.AccessRead), string(authz.AccessWrite),
 		string(authz.AccessRoleAssign),
 		string(authz.IdentitiesRead), string(authz.IdentitiesWrite),
 		string(authz.CertsRead),
-	})
+	}
+	for _, p := range authz.BuiltinRoles()["operator"].Permissions {
+		adminScopes = append(adminScopes, string(p))
+	}
+	admin := seedServedAPIToken(t, ctx, st, tenantID, "platform-admin", adminScopes)
 
 	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {

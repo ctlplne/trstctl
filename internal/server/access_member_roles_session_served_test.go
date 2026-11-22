@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -74,7 +75,13 @@ func TestServedMemberRolesReplaceSignInRoles(t *testing.T) {
 	ts.Start()
 	defer ts.Close()
 
-	adminToken := seedServedAPIToken(t, ctx, srv.store, tenantID, "people-admin", []string{"access:read", "access:write", "access:role.assign"})
+	adminScopes := []string{"access:write", "access:role.assign"}
+	for _, roleName := range []string{"viewer", "auditor"} {
+		for _, p := range authz.BuiltinRoles()[roleName].Permissions {
+			adminScopes = append(adminScopes, string(p))
+		}
+	}
+	adminToken := seedServedAPIToken(t, ctx, srv.store, tenantID, "people-admin", adminScopes)
 	upsertMember(t, ts, adminToken, "reader", []string{"viewer"})
 	upsertMember(t, ts, adminToken, "mapped", []string{"viewer"})
 	if code, body := doBearer(t, ts, http.MethodPut, "/api/v1/access/members/profile-only", adminToken, "member-profile-only",

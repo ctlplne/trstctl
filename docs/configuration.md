@@ -2296,7 +2296,8 @@ optional `description` (`trstctl-cli access roles define NAME -f role.json`, or
 **People and roles → Define custom role**). Defining needs `access:write` and every
 permission the role grants, so nobody can define a role broader than themselves;
 assigning one to a member also needs `access:role.assign` and every permission it
-grants. Names are 2 to 63 lowercase letters, digits or hyphens; built-in names are
+grants. The same hold-what-you-grant rule applies when assigning a built-in role.
+Names are 2 to 63 lowercase letters, digits or hyphens; built-in names are
 taken, and the wildcard and the agent channel's machine permissions are never
 grantable. A role resolves on every request, so redefining it changes what its
 holders can do at once on every replica. `DELETE /api/v1/access/roles/{name}`

@@ -47,8 +47,8 @@ func TestAuthorizeRoleAssignmentRequiresDedicatedPermission(t *testing.T) {
 		Subject:  "carol",
 		Grants:   []authz.Grant{{Role: roleAssigner, Scope: scope}},
 	})
-	if err := a.authorizeRoleAssignment(assignerCtx, tenantID, "bob", []string{"operator"}, true); err != nil {
-		t.Fatalf("role.assign holder denied: %v", err)
+	if err := a.authorizeRoleAssignment(assignerCtx, tenantID, "bob", []string{"operator"}, true); err == nil {
+		t.Fatal("role.assign holder granted operator without holding its permissions")
 	}
 	// F266: access:role.assign alone does not let a caller create an administrator;
 	// only a caller that holds every permission may grant a role that holds it.
@@ -63,6 +63,14 @@ func TestAuthorizeRoleAssignmentRequiresDedicatedPermission(t *testing.T) {
 	})
 	if err := a.authorizeRoleAssignment(adminCtx, tenantID, "bob", []string{"admin"}, true); err != nil {
 		t.Fatalf("administrator granting admin denied: %v", err)
+	}
+	operatorCtx := context.WithValue(context.Background(), principalCtxKey, authz.Principal{
+		TenantID: tenantID,
+		Subject:  "eve",
+		Grants:   []authz.Grant{{Role: authz.BuiltinRoles()["operator"], Scope: scope}},
+	})
+	if err := a.authorizeRoleAssignment(operatorCtx, tenantID, "bob", []string{"operator"}, true); err != nil {
+		t.Fatalf("operator granting only its own permissions denied: %v", err)
 	}
 	if err := a.authorizeRoleAssignment(assignerCtx, tenantID, "carol", []string{"admin"}, true); err == nil {
 		t.Fatal("self role assignment succeeded; want self-escalation denial")

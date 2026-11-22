@@ -316,13 +316,11 @@ func (a *API) roleAssignmentRefusal(ctx context.Context, tenantID string, princi
 			if role.Allows(authz.Wildcard) {
 				return "only an administrator can grant the " + role.Name + " role, which holds every permission", nil
 			}
-			if _, builtin := authz.BuiltinRoles()[role.Name]; !builtin {
-				// A207: a custom role is assignable only by a caller holding
-				// every permission it grants.
-				for _, p := range role.Permissions {
-					if !principal.Can(p, target) {
-						return "granting the " + role.Name + " role needs " + string(p) + ", which you do not hold", nil
-					}
+			// A207/CR-023: the same hold-what-you-grant rule applies to
+			// built-in and custom roles. Built-in names are not trusted grants.
+			for _, p := range role.Permissions {
+				if !principal.Can(p, target) {
+					return "granting the " + role.Name + " role needs " + string(p) + ", which you do not hold", nil
 				}
 			}
 		}
