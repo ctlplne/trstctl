@@ -2803,6 +2803,61 @@ type AgentCertEnrolled struct {
 	NotAfter    time.Time `json:"not_after"`
 }
 
+// AgentCertEnrolledPublicIDsSchemaVersion separates public certificate hex into
+// short chunks on the event wire. The projector restores the exact identifiers
+// before applying the binding; version-one events remain replayable unchanged.
+const AgentCertEnrolledPublicIDsSchemaVersion = 2
+
+// AgentCertEnrolledPublicWire prepares a newly issued certificate's public
+// identifiers for an event payload without long runs that resemble secrets.
+func AgentCertEnrolledPublicWire(value AgentCertEnrolled) AgentCertEnrolled {
+	value.Serial = chunkAgentCertPublicHex(value.Serial)
+	value.Fingerprint = chunkAgentCertPublicHex(value.Fingerprint)
+	return value
+}
+
+func chunkAgentCertPublicHex(value string) string {
+	if len(value) < 24 {
+		return value
+	}
+	var out strings.Builder
+	out.Grow(len(value) + len(value)/16)
+	for start := 0; start < len(value); start += 16 {
+		if start > 0 {
+			out.WriteByte(':')
+		}
+		end := min(start+16, len(value))
+		out.WriteString(value[start:end])
+	}
+	return out.String()
+}
+
+func canonicalAgentCertEnrolledV2(value *AgentCertEnrolled) error {
+	serial, err := canonicalAgentCertPublicHex(value.Serial, 1, 32)
+	if err != nil {
+		return fmt.Errorf("agent enrollment serial: %w", err)
+	}
+	fingerprint, err := canonicalAgentCertPublicHex(value.Fingerprint, 64, 64)
+	if err != nil {
+		return fmt.Errorf("agent enrollment fingerprint: %w", err)
+	}
+	value.Serial, value.Fingerprint = serial, fingerprint
+	return nil
+}
+
+func canonicalAgentCertPublicHex(wire string, minLength, maxLength int) (string, error) {
+	plain := strings.ReplaceAll(wire, ":", "")
+	if len(plain) < minLength || len(plain) > maxLength || chunkAgentCertPublicHex(plain) != wire {
+		return "", errors.New("invalid public certificate identifier encoding")
+	}
+	for _, digit := range plain {
+		if (digit < '0' || digit > '9') && (digit < 'a' || digit > 'f') {
+			return "", errors.New("invalid public certificate identifier encoding")
+		}
+	}
+	return plain, nil
+}
+
 // AgentCertRenewed is the payload of an agent.cert.renewed event. The projector
 // uses it as a liveness touch; certificate inventory itself is represented by the
 // public renewal event and the renewed cert returned to the agent.
@@ -5645,7 +5700,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCRLPublished:                             {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:                     {1: true},
 	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true, AgentHeartbeatSSHKRLSchemaVersion: true, AgentHeartbeatClockSchemaVersion: true, AgentHeartbeatSSHTrustSchemaVersion: true, AgentHeartbeatRelayEgressSchemaVersion: true},
-	EventAgentCertEnrolled:                        {1: true},
+	EventAgentCertEnrolled:                        {1: true, AgentCertEnrolledPublicIDsSchemaVersion: true},
 	EventAgentCertLegacyBound:                     {1: true},
 	EventAgentCertRenewed:                         {1: true, AgentCertRenewedRolesSchemaVersion: true, AgentCertRenewedBindingSchemaVersion: true},
 	EventAgentRolesGranted:                        {1: true},
@@ -7500,6 +7555,11 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		var pl AgentCertEnrolled
 		if err := decode(e, &pl); err != nil {
 			return err
+		}
+		if e.Type == EventAgentCertEnrolled && e.SchemaVersion >= AgentCertEnrolledPublicIDsSchemaVersion {
+			if err := canonicalAgentCertEnrolledV2(&pl); err != nil {
+				return err
+			}
 		}
 		return p.store.ApplyAgentCertificateBindingTx(ctx, tx, store.AgentCertificateBinding{
 			TenantID: e.TenantID, AgentID: pl.ID, Serial: pl.Serial,

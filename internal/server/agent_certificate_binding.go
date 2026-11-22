@@ -75,9 +75,9 @@ func agentCertificateRecorded(st *store.Store, log *events.Log) enroll.Certifica
 				if !available {
 					return store.ErrAgentNameAlreadyEnrolled
 				}
-				eventType, schema = projections.EventAgentCertEnrolled, 1
-				payload = projections.AgentCertEnrolled{ID: agentID, Agent: name,
-					Serial: issued.SerialNumber, Fingerprint: issued.SHA256Fingerprint, NotAfter: issued.NotAfter}
+				eventType, schema = projections.EventAgentCertEnrolled, projections.AgentCertEnrolledPublicIDsSchemaVersion
+				payload = projections.AgentCertEnrolledPublicWire(projections.AgentCertEnrolled{ID: agentID, Agent: name,
+					Serial: issued.SerialNumber, Fingerprint: issued.SHA256Fingerprint, NotAfter: issued.NotAfter})
 			} else {
 				old, err := certinfo.Inspect(previous)
 				if err != nil || old.CommonName != name {
