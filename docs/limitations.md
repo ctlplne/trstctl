@@ -7269,27 +7269,12 @@ signer.
 The CDP/AIA pointers stamped on issued leaves are operator-configured
 (`ca.crl_distribution_points` / `ca.ocsp_servers`) because the externally
 reachable URL is deployment-specific; point them at the binary's
-`/ocsp/{tenant}`, `/crl/{tenant}` (behind your ingress) so relying parties
+`/ocsp/{tenant}`, `/crl/{tenant}`, and, where clients support it, the
+shard/delta distribution URLs (behind your ingress) so relying parties
 discover and fetch revocation status automatically. Existing leaf
 certificates keep the URLs they were issued with until reissued. trstctl
 revocation is both authoritative in the product's own inventory/records
 and publishable to external relying parties over served OCSP/CRL.
-
-For the built-in CA, configure paths with `{tenant_id}` as the final route
-segment, for example `https://pki.example.internal/crl/{tenant_id}` and
-`https://pki.example.internal/ocsp/{tenant_id}`. The issued leaf receives its
-tenant's concrete URLs. Legacy configured URLs ending in another tenant UUID
-are rebound at issuance. The complete CRL's signed, critical issuing
-distribution point names its tenant-route CDP URLs; shard CRLs have a distinct
-scope, and delta CRLs require their base list. A shard or delta URL is not a complete
-leaf CDP. Previously issued leaves with a wrong static tenant pointer must be
-reissued or renewed; their signed extensions cannot be changed in place.
-
-If the built-in CA has no tenant route in its configured CDPs, its published
-per-tenant CRL carries a tenant-specific URN scope. An external issuer-wide
-CDP is not treated as the scope of trstctl's partial tenant CRL; that external
-responder must publish an actual issuer-wide list. Configure a tenant route for
-clients that need to consume trstctl's own CRL.
 
 Signer-backed CA hierarchy leaves use their own tenant-and-authority status
 routes (`/crl/{tenant}/authorities/{ca-id}` and

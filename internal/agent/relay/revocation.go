@@ -246,12 +246,6 @@ func evaluateCRL(body []byte, target revocationhealth.Target, staleWithin time.D
 		finding.Detail = "the distribution point answered but did not serve a valid CRL for this issuer"
 		return finding
 	}
-	if info.HasDeltaCRLIndicator || (len(info.IssuingDistributionPointURLs) != 0 && !slices.Contains(info.IssuingDistributionPointURLs, target.Endpoint)) {
-		finding.Status = RevocationUnparseable
-		finding.DetailCode = "crl_scope_mismatch"
-		finding.Detail = "the signed CRL is a delta or is scoped to a different distribution point"
-		return finding
-	}
 	finding.SignatureVerified = len(target.IssuerDER) > 0
 	finding.RevokedCount = len(info.RevokedSerials)
 	if serial := strings.ToLower(strings.TrimSpace(target.CertificateSerial)); serial != "" {

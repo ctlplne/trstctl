@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -282,8 +281,7 @@ func TestServedPostQuantumHierarchyBesideClassical(t *testing.T) {
 	crlURL := h.ts.URL + "/crl/" + h.tenant + "/authorities/" + pqInter.ID
 	ocspURL := h.ts.URL + "/ocsp/" + h.tenant + "/authorities/" + pqInter.ID
 	crlDER := fetchServedBytes(t, crlURL, "", nil)
-	if info, err := crypto.ParseCRL(crlDER, pqInterDER); err != nil || protoContains(info.RevokedSerials, ecdsaSerial) ||
-		!slices.Equal(info.IssuingDistributionPointURLs, []string{"https://status.example.test/crl/" + h.tenant + "/authorities/" + pqInter.ID}) {
+	if info, err := crypto.ParseCRL(crlDER, pqInterDER); err != nil || protoContains(info.RevokedSerials, ecdsaSerial) {
 		t.Fatalf("initial served CRL = %+v err=%v", info, err)
 	}
 	crlPath := writeFile("pq.crl", crlDER)

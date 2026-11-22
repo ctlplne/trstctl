@@ -84,14 +84,13 @@ func TestServedRevocationOpenSSLInterop(t *testing.T) {
 		},
 	}
 	svc := &revocationService{
-		store:       st,
-		caID:        IssuingCAID(),
-		caSigner:    caKey,
-		caCertDER:   caDER,
-		ocspSigner:  responderKey,
-		ocspCache:   newOCSPResponseCache(),
-		now:         func() time.Time { return now },
-		fullCRLURLs: func(string) []string { return leafInfo.CRLDistributionPoints },
+		store:      st,
+		caID:       IssuingCAID(),
+		caSigner:   caKey,
+		caCertDER:  caDER,
+		ocspSigner: responderKey,
+		ocspCache:  newOCSPResponseCache(),
+		now:        func() time.Time { return now },
 	}
 	if _, err := svc.generateCRL(ctx, publicCRLTestTenant); err != nil {
 		t.Fatalf("generate CRL: %v", err)
@@ -111,10 +110,6 @@ func TestServedRevocationOpenSSLInterop(t *testing.T) {
 	writePEMBlock(t, leafPath, "CERTIFICATE", leafDER)
 
 	servedCRLDER := fetchServedCRL(t, server, publicCRLTestTenant)
-	if scoped, err := crypto.ParseCRL(servedCRLDER, caDER); err != nil || len(scoped.IssuingDistributionPointURLs) != 1 ||
-		scoped.IssuingDistributionPointURLs[0] != leafInfo.CRLDistributionPoints[0] {
-		t.Fatalf("full CRL IDP %v does not match the leaf CDP %v: %v", scoped.IssuingDistributionPointURLs, leafInfo.CRLDistributionPoints, err)
-	}
 	if err := os.WriteFile(crlDERPath, servedCRLDER, 0o600); err != nil {
 		t.Fatalf("write served CRL DER: %v", err)
 	}
@@ -131,36 +126,6 @@ func TestServedRevocationOpenSSLInterop(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(verifyOut), "certificate revoked") {
 		t.Fatalf("openssl verify did not report certificate revoked; err=%v output:\n%s", verifyErr, verifyOut)
-	}
-	// A CA-signed shard omits this serial. OpenSSL must reject it for the
-	// leaf's CDP instead of accepting it as a newer complete CRL.
-	var emptyShard []byte
-	for index := 0; index < crlMinShardCount; index++ {
-		shard, found, err := st.LatestCRLShard(ctx, publicCRLTestTenant, IssuingCAID(), index)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !found {
-			continue
-		}
-		info, err := crypto.ParseCRL(shard.DER, caDER)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(info.RevokedSerials) == 0 {
-			emptyShard = shard.DER
-			break
-		}
-	}
-	if len(emptyShard) == 0 {
-		t.Fatal("issuer did not publish an empty shard for the scope rejection proof")
-	}
-	shardPath := filepath.Join(tmp, "shard.pem")
-	writePEMBlock(t, shardPath, "X509 CRL", emptyShard)
-	shardOut, shardErr := runOpenSSLMaybeError(openssl, "verify", "-CAfile", caPath,
-		"-crl_check", "-CRLfile", shardPath, leafPath)
-	if shardErr == nil || strings.Contains(strings.ToLower(shardOut), "certificate revoked") {
-		t.Fatalf("OpenSSL treated a shard as this leaf's complete CRL: err=%v output:\n%s", shardErr, shardOut)
 	}
 
 	ocspOut := runOpenSSL(t, openssl,

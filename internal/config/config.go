@@ -3462,10 +3462,8 @@ type CA struct {
 	// can locate revocation status and build the chain. They are operator-supplied
 	// because the URLs are deployment-specific; the Subject Key Identifier is always
 	// set regardless. The binary now serves OCSP at /ocsp/{tenant} and a CRL at
-	// /crl/{tenant} (EXC-REVOKE-01). Use {tenant_id} in the configured route;
-	// issuance expands it for each tenant. A legacy route ending in a tenant UUID
-	// is also rebound to the issuing tenant. Issuer-wide external responders
-	// retain their configured URLs.
+	// /crl/{tenant} (EXC-REVOKE-01), so point CRLDistributionPoints/OCSPServers at
+	// those routes (behind your ingress) — or at an external responder you prefer.
 	CRLDistributionPoints []string `json:"crl_distribution_points,omitempty"`
 	OCSPServers           []string `json:"ocsp_servers,omitempty"`
 	IssuerURLs            []string `json:"issuer_urls,omitempty"`

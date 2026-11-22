@@ -370,7 +370,7 @@ func knownDetailCode(code string) bool {
 	switch code {
 	case "invalid_endpoint", "unsupported_scheme", "issuer_unavailable",
 		"request_build_failed", "transport_failed", "http_status", "body_read_failed", "body_too_large",
-		"invalid_crl", "crl_scope_mismatch", "certificate_unavailable", "request_invalid", "invalid_content_type", "invalid_ocsp",
+		"invalid_crl", "certificate_unavailable", "request_invalid", "invalid_content_type", "invalid_ocsp",
 		"serial_mismatch", "this_update_future", "ocsp_unknown", "next_update_missing", "next_update_passed",
 		"next_update_near", "fresh",
 		// A107: LDAP distribution points read through an AD CS binding.

@@ -275,11 +275,7 @@ and tenant into each signed leaf's CRL and OCSP URLs:
 Publish those paths at the configured origin without client authentication;
 relying parties use them to check status. The built-in issuer's
 `ca.crl_distribution_points` and `ca.ocsp_servers` are separate and are never
-copied onto a managed-CA leaf. Configure the built-in issuer with
-`https://pki.example.internal/crl/{tenant_id}` and
-`https://pki.example.internal/ocsp/{tenant_id}`; issuance expands the tenant ID
-before signing each leaf. Existing leaves keep their signed URLs until reissued.
-In regulated governance mode, managed-CA leaf
+copied onto a managed-CA leaf. In regulated governance mode, managed-CA leaf
 issuance refuses to sign until the hierarchy origin is configured. In standard
 mode without this setting, issued leaves omit automatic status pointers;
 configure each relying party with the exact issuer endpoints or reissue after

@@ -33,13 +33,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"slices"
-	"strings"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -55,10 +50,7 @@ var ErrNoFreshCRL = errors.New("revcache: no CRL fresh enough to serve")
 // Cache holds one tenant's CRL and serves it while it is fresh.
 type Cache struct {
 	upstream string
-	// A trstctl tenant route must never accept an old issuer-signed CRL with
-	// no tenant IDP, even on the first cache fill when no serial history exists.
-	requireScope bool
-	client       *http.Client
+	client   *http.Client
 	// issuerDER is the CA certificate the cached CRL must verify against.
 	//
 	// Held so the relay can refuse to cache a CRL that does not verify. That is
@@ -101,7 +93,7 @@ func New(upstream string, issuerDER []byte, opts Options) (*Cache, error) {
 		return nil, errors.New("revcache: an issuer certificate is required to validate fetched CRLs")
 	}
 	c := &Cache{
-		upstream: upstream, requireScope: tenantCRLRoute(upstream), issuerDER: issuerDER,
+		upstream: upstream, issuerDER: issuerDER,
 		grace: opts.Grace, client: opts.Client, now: time.Now,
 	}
 	return c, nil
@@ -142,77 +134,20 @@ func (c *Cache) Refresh(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("revcache: fetched CRL does not verify against the issuer: %w", err)
 	}
-	if info.NumberBig == nil || info.NumberBig.Sign() < 0 {
-		return errors.New("revcache: CRL has no valid number")
-	}
-	if info.HasDeltaCRLIndicator {
-		return errors.New("revcache: delta CRL cannot replace a complete CRL")
-	}
-	if c.requireScope && len(info.IssuingDistributionPointURLs) == 0 {
-		return errors.New("revcache: tenant CRL route returned a list without a signed distribution-point scope")
-	}
-	if scopes := info.IssuingDistributionPointURLs; len(scopes) != 0 && !slices.Contains(scopes, c.upstream) {
-		return fmt.Errorf("revcache: CRL scope %q does not match distribution point %q", scopes, c.upstream)
-	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	// A CRL number that went BACKWARD is a rollback, and the cache refuses it.
 	// Whoever served it is either badly out of date or replaying an older list
 	// to un-revoke something, and neither is a reason to replace a newer one.
-	if len(c.der) > 0 && info.NumberBig.Cmp(c.info.NumberBig) < 0 {
-		return fmt.Errorf("revcache: refusing CRL number %s, older than the cached %s",
-			info.NumberBig, c.info.NumberBig)
-	}
-	if len(c.der) > 0 && !slices.Equal(c.info.IssuingDistributionPointURLs, info.IssuingDistributionPointURLs) {
-		return errors.New("revcache: refusing a change in CRL distribution-point scope")
-	}
-	// The issuer never removes a revoked serial from its full list. This also
-	// protects a running relay from older, unscoped shard artifacts that were
-	// signed before shard IDPs were introduced.
-	if len(c.der) > 0 {
-		present := make(map[string]struct{}, len(info.RevokedSerials))
-		for _, serial := range info.RevokedSerials {
-			present[serial] = struct{}{}
-		}
-		for _, serial := range c.info.RevokedSerials {
-			if _, ok := present[serial]; !ok {
-				return fmt.Errorf("revcache: CRL omits previously revoked serial %s", serial)
-			}
-		}
+	if len(c.der) > 0 && info.Number < c.info.Number {
+		return fmt.Errorf("revcache: refusing CRL number %d, older than the cached %d",
+			info.Number, c.info.Number)
 	}
 	c.der = der
 	c.info = info
 	c.fetched = c.now()
 	return nil
-}
-
-func tenantCRLRoute(raw string) bool {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return false
-	}
-	parts := strings.Split(u.Path, "/")
-	for i := 0; i+1 < len(parts); i++ {
-		if parts[i] != "crl" {
-			continue
-		}
-		tenant := strings.TrimSuffix(parts[i+1], ".crl")
-		if _, err := uuid.Parse(tenant); err != nil {
-			continue
-		}
-		if i+2 == len(parts) {
-			return true
-		}
-		if i+3 == len(parts) && parts[i+2] == "" {
-			return true
-		}
-		if i+4 == len(parts) && parts[i+2] == "authorities" {
-			_, err := uuid.Parse(parts[i+3])
-			return err == nil
-		}
-	}
-	return false
 }
 
 // Serve returns the cached CRL if it is fresh enough to serve.

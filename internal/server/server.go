@@ -2346,9 +2346,6 @@ func (s *Server) configureRevocationSurface(ctx context.Context, d Deps) (func(c
 		s.revoc = newRevocationService(d.Store, d.Log, IssuingCAID(), s.caSigner, s.caCertDER, ocspSigner)
 		if s.revoc != nil {
 			s.revoc.ocspMetrics = observ.NewOCSPMetrics(s.registry)
-			s.revoc.fullCRLURLs = func(tenantID string) []string {
-				return platformFullCRLScopes(s.leafProfile, tenantID)
-			}
 		}
 	}
 	if s.revoc == nil {
