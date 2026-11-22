@@ -20,14 +20,17 @@ import (
 // structs ever diverge this projection (and thus the byte-equality assertions) breaks.
 func boundFromBinding(bm delegation.BindingMaterial) carriage.BoundValues {
 	return carriage.BoundValues{
-		ChainHeadDigest:    bm.ChainHeadDigest,
-		AgentStackDigest:   bm.AgentStackDigest,
-		AgentStackRepr:     bm.AgentStackRepr,
-		DesignatedClass:    bm.DesignatedClass,
-		AttestationDigest:  bm.AttestationDigest,
-		ComparatorVersion:  bm.ComparatorVersion,
-		RootAnchorAuthRef:  bm.RootAnchorAuthRef,
-		TaskEnvelopeDigest: bm.TaskEnvelopeDigest,
+		ChainHeadDigest:              bm.ChainHeadDigest,
+		AgentStackDigest:             bm.AgentStackDigest,
+		AgentStackRepr:               bm.AgentStackRepr,
+		DesignatedClass:              bm.DesignatedClass,
+		VerifiedHeadScopes:           append([]string(nil), bm.VerifiedHeadScopes...),
+		VerifiedHeadTools:            append([]string(nil), bm.VerifiedHeadTools...),
+		VerifiedHeadAuthorityClasses: append([]string(nil), bm.VerifiedHeadAuthorityClasses...),
+		AttestationDigest:            bm.AttestationDigest,
+		ComparatorVersion:            bm.ComparatorVersion,
+		RootAnchorAuthRef:            bm.RootAnchorAuthRef,
+		TaskEnvelopeDigest:           bm.TaskEnvelopeDigest,
 	}
 }
 
@@ -70,8 +73,12 @@ func bindingCases(t *testing.T) []bindingCase {
 	chainHead := bytes.Repeat([]byte{0xA1}, 32)
 	att := bytes.Repeat([]byte{0xB2}, 32)
 	taskEnv := bytes.Repeat([]byte{0xC3}, 32)
+	full := mustBinding(t, chainHead, repr, "class-a", att, "fido2:root", taskEnv)
+	full.VerifiedHeadScopes = []string{"read"}
+	full.VerifiedHeadTools = []string{"search"}
+	full.VerifiedHeadAuthorityClasses = []string{"class-a"}
 	return []bindingCase{
-		{"full", mustBinding(t, chainHead, repr, "class-a", att, "fido2:root", taskEnv)},
+		{"full", full},
 		{"chain-only", mustBinding(t, chainHead, nil, "", nil, "", nil)},
 		{"agent-stack-only", mustBinding(t, nil, repr, "class-b", nil, "webauthn:root", nil)},
 	}
@@ -97,6 +104,13 @@ func assertCarriedEqualsBound(t *testing.T, form string, got carriage.BoundValue
 	}
 	if got.DesignatedClass != bm.DesignatedClass {
 		t.Fatalf("%s: designated class = %q, want bound %q", form, got.DesignatedClass, bm.DesignatedClass)
+	}
+	if !reflect.DeepEqual(got.VerifiedHeadScopes, bm.VerifiedHeadScopes) ||
+		!reflect.DeepEqual(got.VerifiedHeadTools, bm.VerifiedHeadTools) ||
+		!reflect.DeepEqual(got.VerifiedHeadAuthorityClasses, bm.VerifiedHeadAuthorityClasses) {
+		t.Fatalf("%s: verified head authority = (%v, %v, %v), want bound (%v, %v, %v)",
+			form, got.VerifiedHeadScopes, got.VerifiedHeadTools, got.VerifiedHeadAuthorityClasses,
+			bm.VerifiedHeadScopes, bm.VerifiedHeadTools, bm.VerifiedHeadAuthorityClasses)
 	}
 	if !eqBytes(got.AttestationDigest, bm.AttestationDigest) {
 		t.Fatalf("%s: attestation digest = %x, want bound %x", form, got.AttestationDigest, bm.AttestationDigest)

@@ -71,13 +71,18 @@ var (
 // least one of ChainHeadDigest / AgentStackDigest is present (enforced by
 // NewBindingMaterial); a credential that binds neither is never minted.
 type BindingMaterial struct {
-	ChainHeadDigest   []byte `json:"chain_head_digest,omitempty"`
-	AgentStackDigest  []byte `json:"agent_stack_digest,omitempty"`
-	AgentStackRepr    []byte `json:"agent_stack_repr,omitempty"`
-	DesignatedClass   string `json:"designated_class,omitempty"`
-	AttestationDigest []byte `json:"attestation_digest,omitempty"`
-	ComparatorVersion string `json:"comparator_version"`
-	RootAnchorAuthRef string `json:"root_anchor_auth_ref,omitempty"`
+	ChainHeadDigest  []byte `json:"chain_head_digest,omitempty"`
+	AgentStackDigest []byte `json:"agent_stack_digest,omitempty"`
+	AgentStackRepr   []byte `json:"agent_stack_repr,omitempty"`
+	DesignatedClass  string `json:"designated_class,omitempty"`
+	// VerifiedHead* are the normalized limits from the signature-verified chain
+	// head. The signer, not the requester, sets them before minting.
+	VerifiedHeadScopes           []string `json:"verified_head_scopes,omitempty"`
+	VerifiedHeadTools            []string `json:"verified_head_tools,omitempty"`
+	VerifiedHeadAuthorityClasses []string `json:"verified_head_authority_classes,omitempty"`
+	AttestationDigest            []byte   `json:"attestation_digest,omitempty"`
+	ComparatorVersion            string   `json:"comparator_version"`
+	RootAnchorAuthRef            string   `json:"root_anchor_auth_ref,omitempty"`
 	// TaskEnvelopeDigest is the canonical digest of the task envelope the chain head
 	// references (AGID-05, AGID-claim-2 / INV-A4), bound ALONGSIDE the chain-head digest and
 	// the agent-stack representation (INV-A3 is additive, not replaced). Empty when no
@@ -151,9 +156,15 @@ func (bm BindingMaterial) CanonicalBytes() ([]byte, error) {
 	// length. This is a v1 binding-format extension: the ComparatorVersion carried in the
 	// binding still pins the exact decision semantics a relying party reproduces, and the
 	// AGID-04b GATE BEHAVIOR (which fields are populated for an envelope-free chain) is
-	// unchanged -- TaskEnvelopeDigest is simply empty there.
+	// unchanged -- TaskEnvelopeDigest is simply empty there. The v2 verified-head
+	// fields follow only when present, so earlier binding preimages stay stable.
 	writeField(&b, "task_envelope_digest")
 	writeBytes(&b, bm.TaskEnvelopeDigest)
+	if len(bm.VerifiedHeadScopes) != 0 || len(bm.VerifiedHeadTools) != 0 || len(bm.VerifiedHeadAuthorityClasses) != 0 {
+		writeStrSet(&b, "verified_head_scopes", bm.VerifiedHeadScopes)
+		writeStrSet(&b, "verified_head_tools", bm.VerifiedHeadTools)
+		writeStrSet(&b, "verified_head_authority_classes", bm.VerifiedHeadAuthorityClasses)
+	}
 	return b.Bytes(), nil
 }
 
