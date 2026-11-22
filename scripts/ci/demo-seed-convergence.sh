@@ -89,6 +89,39 @@ stable_snapshot() {
   fail "assembled demo did not reach a stable inventory/event checkpoint"
 }
 
+seed_actor_events() {
+  # A running demo has background workers. Their legitimate, actorless events
+  # can advance all three JetStream streams during the repeat run. Query the
+  # event-backed audit view inside the seed's own trust boundary and compare the
+  # exact IDs attributed to its bootstrap subjects instead of global counts.
+  docker compose -f "$compose_file" run --rm --no-deps --entrypoint node demo-seed -e '
+    const { readFileSync } = require("node:fs");
+    const subjects = new Set([
+      "demo-seeder", "demo-key-custodian-one", "demo-key-custodian-two",
+      "ci-release-bot", "incident-rotator",
+    ]);
+    (async () => {
+      const token = readFileSync(process.env.TRSTCTL_DEMO_BOOTSTRAP_TOKEN_FILE, "utf8").trim();
+      if (!token) throw new Error("demo bootstrap token is empty");
+      const url = new URL("/api/v1/audit/events", process.env.TRSTCTL_SERVER);
+      const response = await fetch(url, {headers: {authorization: `Bearer ${token}`}});
+      if (!response.ok) throw new Error(`demo audit query failed: HTTP ${response.status}`);
+      const body = await response.json();
+      if (!Array.isArray(body.events) || !Array.isArray(body.readable_events || [])) {
+        throw new Error("demo audit response has no event array");
+      }
+      const readable = new Map((body.readable_events || []).map(event => [event.id, event.actor?.subject]));
+      const ids = body.events
+        .filter(event => subjects.has(event.actor?.subject || readable.get(event.id)))
+        .map(event => event.id).sort();
+      if (ids.length === 0 || ids.some(id => typeof id !== "string" || !id)) {
+        throw new Error("demo audit response has no valid seed-attributed event IDs");
+      }
+      console.log(JSON.stringify(ids));
+    })().catch(error => { console.error(error.message); process.exitCode = 1; });
+  '
+}
+
 wait_for_seed() {
   local container_id state exit_code
   container_id="$(docker compose -f "$compose_file" ps -aq demo-seed)"
@@ -109,6 +142,7 @@ wait_for_seed() {
 
 wait_for_seed
 first="$(stable_snapshot)"
+first_seed_events="$(seed_actor_events)"
 
 first_owner_count="$(jq -r '.postgres.owner_count' <<<"$first")"
 first_logical_count="$(jq -r '.postgres.owner_logical_count' <<<"$first")"
@@ -121,10 +155,19 @@ first_logical_count="$(jq -r '.postgres.owner_logical_count' <<<"$first")"
 # events and contaminates this seed-only idempotency oracle.
 docker compose -f "$compose_file" run --rm --no-deps demo-seed
 second="$(stable_snapshot)"
+second_seed_events="$(seed_actor_events)"
 
-if [[ "$first" != "$second" ]]; then
+if [[ "$(jq -c '.postgres' <<<"$first")" != "$(jq -c '.postgres' <<<"$second")" ||
+      "$first_seed_events" != "$second_seed_events" ]] ||
+   ! jq -en --argjson before "$first" --argjson after "$second" '
+     ($before.jetstream_streams | keys) == ($after.jetstream_streams | keys) and
+     ($after.jetstream_message_count >= $before.jetstream_message_count) and
+     all($before.jetstream_streams | keys[];
+         $after.jetstream_streams[.] >= $before.jetstream_streams[.])
+   ' >/dev/null; then
   diff -u <(jq -S . <<<"$first") <(jq -S . <<<"$second") || true
+  diff -u <(jq -S . <<<"$first_seed_events") <(jq -S . <<<"$second_seed_events") || true
   fail "seed snapshot changed across the preserved-volume rerun"
 fi
 
-echo "demo seed convergence passed: preserved inventory, owner uniqueness, outbox count, and JetStream message count are unchanged"
+echo "demo seed convergence passed: preserved inventory, owner uniqueness, outbox count, and seed-attributed event IDs are unchanged"
