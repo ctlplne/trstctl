@@ -29,7 +29,13 @@ func TestServedMemberUpdatePreservesCreationAndRetryResponse(t *testing.T) {
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "timestamp-tenant"}); err != nil {
 		t.Fatal(err)
 	}
-	token := seedServedAPIToken(t, ctx, st, tenantID, "member-admin", []string{string(authz.AccessRead), string(authz.AccessWrite), string(authz.AccessRoleAssign)})
+	memberAdminScopes := []string{string(authz.AccessRead), string(authz.AccessWrite), string(authz.AccessRoleAssign)}
+	for _, role := range []string{"viewer", "operator"} {
+		for _, permission := range authz.BuiltinRoles()[role].Permissions {
+			memberAdminScopes = append(memberAdminScopes, string(permission))
+		}
+	}
+	token := seedServedAPIToken(t, ctx, st, tenantID, "member-admin", memberAdminScopes)
 	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 )
 
 // TestServedCertificationCampaignCertifiesAccountsAndApproversWithASignedResultA276:
@@ -29,8 +30,12 @@ func TestServedCertificationCampaignCertifiesAccountsAndApproversWithASignedResu
 	f := startGatewayFixture(t, gatewayFixtureOptions{vaulted: true})
 	h := f.h
 	ctx := context.Background()
-	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a276-cert-admin", "access:read", "access:write", "access:targets.write", "access:role.assign",
-		"owners:read", "owners:write", "secrets:read", "secrets:write", "graph:read")
+	adminScopes := []string{"access:read", "access:write", "access:targets.write", "access:role.assign",
+		"owners:read", "owners:write", "secrets:read", "secrets:write", "graph:read"}
+	for _, permission := range authz.BuiltinRoles()["operator"].Permissions {
+		adminScopes = append(adminScopes, string(permission))
+	}
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a276-cert-admin", adminScopes...)
 	reviewer := seedScopedTokenSubject(t, h.store, h.tenant, "a276-cert-reviewer", "access:read", "access:write")
 	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/secrets/store", admin, "a276c-seed",
 		map[string]any{"name": twoUserRole, "value": f.vaultDSN}); status != http.StatusCreated && status != http.StatusOK {

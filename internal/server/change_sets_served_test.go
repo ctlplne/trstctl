@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/certtest"
 	"trstctl.com/trstctl/internal/store"
@@ -45,7 +46,12 @@ func changeSetServedFixture(t *testing.T) api.ChangeSet {
 // plans to the same digests.
 func TestServedReviewedChangeSetsA248(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
-	author := seedScopedTokenSubject(t, h.store, h.tenant, "change-author", "changes:write",
+	authorScopes := []string{"changes:write", "profiles:write", "issuers:write", "connectors:write", "access:role.assign", "owners:write"}
+	for _, permission := range authz.BuiltinRoles()["viewer"].Permissions {
+		authorScopes = append(authorScopes, string(permission))
+	}
+	author := seedScopedTokenSubject(t, h.store, h.tenant, "change-author", authorScopes...)
+	missingViewerRead := seedScopedTokenSubject(t, h.store, h.tenant, "change-author-no-viewer-read", "changes:write",
 		"profiles:write", "issuers:write", "connectors:write", "access:role.assign", "owners:write", "owners:read")
 	narrow := seedScopedTokenSubject(t, h.store, h.tenant, "narrow-author", "changes:write", "profiles:write", "owners:write")
 	unprivileged := seedScopedTokenSubject(t, h.store, h.tenant, "profile-writer", "profiles:write", "owners:write")
@@ -121,6 +127,9 @@ func TestServedReviewedChangeSetsA248(t *testing.T) {
 	}
 	if code, _, body := plan(narrow, cs); code != http.StatusForbidden || !strings.Contains(body, "access:role.assign") {
 		t.Fatalf("a set beyond its author's permissions = %d %s", code, body)
+	}
+	if code, _, body := plan(missingViewerRead, cs); code != http.StatusForbidden || !strings.Contains(body, "needs issuers:read") {
+		t.Fatalf("a viewer grant without the held read permission = %d %s", code, body)
 	}
 	if code, _, body := plan(unprivileged, cs); code != http.StatusForbidden {
 		t.Fatalf("a caller without changes:write = %d %s", code, body)

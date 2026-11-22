@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 )
 
@@ -156,8 +157,11 @@ func TestServedChangeSetDraftsA248(t *testing.T) {
 // GitOps paths plan and apply as before.
 func TestServedChangeSetsWorkWithoutAModelA248(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
-	author := seedScopedTokenSubject(t, h.store, h.tenant, "plain-author", "changes:write",
-		"profiles:write", "owners:write", "access:role.assign")
+	authorScopes := []string{"changes:write", "profiles:write", "owners:write", "access:role.assign"}
+	for _, permission := range authz.BuiltinRoles()["viewer"].Permissions {
+		authorScopes = append(authorScopes, string(permission))
+	}
+	author := seedScopedTokenSubject(t, h.store, h.tenant, "plain-author", authorScopes...)
 	if code, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/changes/draft", author, "", map[string]any{"request": "onboard billing"}); code != http.StatusServiceUnavailable || !strings.Contains(string(body), "form, API or GitOps") {
 		t.Fatalf("draft without a model = %d %s", code, body)
 	}

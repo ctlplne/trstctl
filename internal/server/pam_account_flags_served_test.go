@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 )
 
 // TestServedOrphanedAccountActionIsApprovedAppliedAndReadBackA276: a
@@ -29,7 +30,11 @@ func TestServedOrphanedAccountActionIsApprovedAppliedAndReadBackA276(t *testing.
 	f := startGatewayFixture(t, gatewayFixtureOptions{vaulted: true})
 	h := f.h
 	custodian := seedScopedTokenSubject(t, h.store, h.tenant, "a276-secrets", "secrets:read", "secrets:write")
-	steward := seedScopedTokenSubject(t, h.store, h.tenant, "a276-steward", "access:read", "access:write", "access:targets.write", "access:role.assign", "owners:read", "owners:write")
+	stewardScopes := []string{"access:read", "access:write", "access:targets.write", "access:role.assign", "owners:read", "owners:write"}
+	for _, permission := range authz.BuiltinRoles()["viewer"].Permissions {
+		stewardScopes = append(stewardScopes, string(permission))
+	}
+	steward := seedScopedTokenSubject(t, h.store, h.tenant, "a276-steward", stewardScopes...)
 	reviewers := []string{
 		seedScopedTokenSubject(t, h.store, h.tenant, "a276-reviewer-1", "access:read", "access:approve"),
 		seedScopedTokenSubject(t, h.store, h.tenant, "a276-reviewer-2", "access:read", "access:approve"),
