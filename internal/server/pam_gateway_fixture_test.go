@@ -114,6 +114,9 @@ type gatewayFixtureOptions struct {
 	maxTTL time.Duration
 	// notificationChannels are the deployment's alert channels (A275).
 	notificationChannels []notify.Notifier
+	// autoApprovalAlone lets a matching automatic approval rule approve a
+	// request by itself (CR-001, pam.auto_approval_alone).
+	autoApprovalAlone bool
 }
 
 func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixture {
@@ -235,7 +238,7 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 			maxTTL = opts.maxTTL
 		}
 		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: maxTTL, ExpiryInterval: 50 * time.Millisecond,
-			RecordingRetention: opts.recordingRetention, Attestors: []attest.Attestor{servedPAMAttestor{}},
+			RecordingRetention: opts.recordingRetention, AutoApprovalAlone: opts.autoApprovalAlone, Attestors: []attest.Attestor{servedPAMAttestor{}},
 			PostgresTargets: []PAMPostgresTarget{{TenantID: servedTestTenant, ID: "pg-gw", ProviderID: "pam-pg-provider",
 				AllowedRoles: []string{"readonly"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr}},
 			DatabaseTargets: databaseTargets}
