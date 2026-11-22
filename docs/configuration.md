@@ -2525,6 +2525,13 @@ auth:
         roles: [admin]
 ```
 
+LDAP login can map several groups to one tenant. When `writeback.enabled` is
+true, all mappings (including an allowed default tenant) must name that same
+tenant. Startup refuses writeback for multiple tenants because one shared
+`role_groups` map would let a role change in one tenant add or remove a member
+of a group that grants access in another. Multi-tenant LDAP login remains
+available with writeback disabled. This also covers nested group mappings.
+
 ## ABAC deny overlay
 
 ABAC is an optional deny-only overlay on top of RBAC. RBAC must grant the permission

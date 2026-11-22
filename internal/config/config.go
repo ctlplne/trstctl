@@ -6488,6 +6488,20 @@ func (l LDAP) validate() []error {
 	req(l.URL, "url")
 	req(l.SessionSecretFile, "session_secret_file")
 	if l.Writeback.Enabled {
+		// One role-group map is shared by every mapped tenant. A write from one
+		// tenant would change a directory group that can authorize another.
+		tenants := map[string]bool{}
+		for _, mapping := range l.TenantMappings {
+			if tenant := strings.TrimSpace(mapping.TenantID); tenant != "" {
+				tenants[tenant] = true
+			}
+		}
+		if l.AllowDefaultTenant && strings.TrimSpace(l.DefaultTenant) != "" {
+			tenants[strings.TrimSpace(l.DefaultTenant)] = true
+		}
+		if len(tenants) > 1 {
+			errs = append(errs, errors.New("auth.ldap.writeback refuses multiple tenants sharing one directory role-group map; disable writeback for multi-tenant LDAP login"))
+		}
 		if strings.TrimSpace(l.BindDN) == "" || strings.TrimSpace(l.BindPasswordFile) == "" {
 			errs = append(errs, errors.New("auth.ldap.writeback needs bind_dn and bind_password_file: the service account writes the groups"))
 		}

@@ -55,6 +55,9 @@ func (w *ldapWriteback) Deliver(ctx context.Context, m orchestrator.Message) err
 	if !ok {
 		return orchestrator.DefiniteNoEffect(errors.New("enterpriseauth: this tenant has no LDAP writeback"))
 	}
+	if len(w.targets) > 1 {
+		return orchestrator.DefiniteNoEffect(errors.New("enterpriseauth: LDAP writeback refuses multiple tenants sharing one directory role-group map"))
+	}
 	if w.deps.Store == nil || w.deps.Orchestrator == nil {
 		return errors.New("enterpriseauth: LDAP writeback is not wired to the store")
 	}
