@@ -70,7 +70,7 @@ not this file.
 | `cmd/trstctl/reconcile_gcp_azure_kms_mapping_test.go:18` | credential file paths only, no credential value (CWE-798) |
 | `deploy/demo/demo_test.go:244` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/demo/demo_test.go:370` | fixture paths name files; no credential value is embedded. |
-| `deploy/demo/demo_test.go:1909` | env: reference names mapped to integration kinds; no credential value (CWE-798) |
+| `deploy/demo/demo_test.go:1910` | env: reference names mapped to integration kinds; no credential value (CWE-798) |
 | `deploy/deploycheck_test.go:1587` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1589` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1609` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |

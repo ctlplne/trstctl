@@ -254,6 +254,9 @@ services:
       # server creates this root 0600 on first boot in the existing secrets
       # volume; it is never placed inline in Compose or rendered by the UI.
       TRSTCTL_SECRETS_AUTH_SECRET_FILE: /data/secrets/machine-auth.bin
+      # The seeded drift source may inspect only this disposable demo tree.
+      # Its watch is still checked again by the worker before every read.
+      TRSTCTL_SECRETS_DRIFT_ROOTS: "/etc/trstctl/demo"
       # Machine tokens must be tenant-bound and least-privilege at startup. A
       # run-local override used to supply these two facts, which meant the
       # checked-in demo failed closed when started on its own.
@@ -326,6 +329,7 @@ services:
       - publictrust:/public-trust
       - demoidp:/demo-oidc:ro
       - managedkeys:/demo-managed-keys:ro
+      - ./drift-demo:/etc/trstctl/demo:ro
     ports:
       # Automatic demo administration is safe only on the same workstation.
       - "127.0.0.1:9443:8443"

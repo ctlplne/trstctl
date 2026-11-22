@@ -1557,6 +1557,7 @@ func validateDemoSeedCustody(cf composeFile) error {
 		"publictrust:/public-trust",
 		"demoidp:/demo-oidc:ro",
 		"managedkeys:/demo-managed-keys:ro",
+		"./drift-demo:/etc/trstctl/demo:ro",
 	}
 	if !sameStringSet(cp.Volumes, wantControlVolumes) {
 		return fmt.Errorf("demo custody: trstctl volumes=%v, want exact control custody mount allowlist %v (signerkeys forbidden)", cp.Volumes, wantControlVolumes)
