@@ -50,6 +50,19 @@ jobs:
       - name: Prefetch dependencies (retries a transient module-proxy failure)
         run: scripts/ci/go-mod-download.sh
 
+      # The served smoke below starts a real embedded PostgreSQL. Restore the
+      # same independently pinned archive used by the Go test lanes, then
+      # verify and offer it to legacy fixtures before the smoke runs.
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
+
       - name: Install gitleaks with trstctl installer
         id: install-gitleaks
         env:

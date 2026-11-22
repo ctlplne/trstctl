@@ -509,6 +509,42 @@ func TestEveryPostgresArchiveRestoreSeedsTheBundledSource(t *testing.T) {
 	}
 }
 
+// The security workflow's served Gitleaks smoke starts embedded PostgreSQL.
+// Without the pinned archive cache, the legacy fixture tries Maven and a
+// mirror failure makes the secret scan red before scanning any commit.
+func TestSecurityServedSecretScanRestoresPinnedPostgresArchive(t *testing.T) {
+	var wf ciWorkflow
+	if err := yaml.Unmarshal([]byte(read(t, "../.github/workflows/security.yml")), &wf); err != nil {
+		t.Fatalf("parse security workflow: %v", err)
+	}
+	job, ok := wf.Jobs["gitleaks"]
+	if !ok {
+		t.Fatal("security workflow has no gitleaks job")
+	}
+	restore, seed, smoke := -1, -1, -1
+	for i, step := range job.Steps {
+		switch step.Name {
+		case "Restore the pinned embedded PostgreSQL archive":
+			restore = i
+			if step.Uses != "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9" ||
+				!strings.Contains(fmt.Sprint(step.With["key"]), "hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go')") ||
+				!strings.Contains(fmt.Sprint(step.With["path"]), "~/.embedded-postgres-go") {
+				t.Error("security archive restore must use the pinned action, manifest-derived key and legacy cache path")
+			}
+		case "Offer the restored PostgreSQL archive to the bundled server":
+			seed = i
+			if strings.TrimSpace(step.Run) != "scripts/ci/seed-bundled-pg-archive.sh" {
+				t.Error("security archive seed must use the committed pin verifier")
+			}
+		case "Served Gitleaks scan smoke":
+			smoke = i
+		}
+	}
+	if restore < 0 || seed != restore+1 || smoke <= seed {
+		t.Errorf("security served scan needs archive restore and seed before smoke: restore=%d seed=%d smoke=%d", restore, seed, smoke)
+	}
+}
+
 // TestEverySetupGoStepRestoresItsCacheBeforeAToolchainSwitch keeps the fix for a
 // cache restore that failed on every job: setup-go installs go.mod's `go`
 // version, and with GOTOOLCHAIN=auto its own `go env` fetched the newer
