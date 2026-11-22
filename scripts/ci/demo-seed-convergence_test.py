@@ -12,7 +12,7 @@ SCRIPT = Path(__file__).with_name("demo-seed-convergence.sh")
 
 
 class DemoSeedConvergenceTest(unittest.TestCase):
-    def run_convergence(self, *, notification_destination="notification.expiry", other_active=False, event_on_rerun=False):
+    def run_convergence(self, *, notification_destination="notification.expiry", other_active=False, event_on_rerun=False, late_background_event=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             docker = root / "docker"
@@ -41,6 +41,12 @@ elif 'exec' in args and 'postgres' in args:
         api_token_count=0, outbox_count=1, outbox_active_retry_count=active)))
 elif 'exec' in args and 'nats' in args:
     count = 8 if os.environ.get('FAKE_EVENT_ON_RERUN') == '1' and Path(os.environ['FAKE_DOCKER_STATE']).exists() else 7
+    if os.environ.get('FAKE_LATE_BACKGROUND_EVENT') == '1':
+        counter = Path(os.environ['FAKE_DOCKER_STATE'] + '.nats_reads')
+        reads = int(counter.read_text()) + 1 if counter.exists() else 1
+        counter.write_text(str(reads))
+        if reads > 3:
+            count = 8
     print(json.dumps({'account_details': [{'stream_detail': [
         {'config': {'name': 'TRSTCTL_EVENTS'}, 'state': {'messages': count}},
         {'config': {'name': 'TRSTCTL_EVENT_ID_INDEX'}, 'state': {'messages': 2}},
@@ -52,7 +58,7 @@ else:
 """
             )
             docker.chmod(0o755)
-            (root / "seq").write_text("#!/bin/sh\nprintf '1\\n2\\n3\\n4\\n'\n")
+            (root / "seq").write_text("#!/bin/sh\n/usr/bin/seq 1 100\n")
             (root / "sleep").write_text("#!/bin/sh\nexit 0\n")
             (root / "seq").chmod(0o755)
             (root / "sleep").chmod(0o755)
@@ -60,6 +66,7 @@ else:
                    "FAKE_OTHER_ACTIVE": str(int(other_active)),
                    "FAKE_NOTIFICATION_DESTINATION": notification_destination,
                    "FAKE_EVENT_ON_RERUN": str(int(event_on_rerun)),
+                   "FAKE_LATE_BACKGROUND_EVENT": str(int(late_background_event)),
                    "FAKE_DOCKER_STATE": str(root / "reran")}
             return subprocess.run(
                 ["bash", str(SCRIPT)], env=env, text=True,
@@ -87,6 +94,10 @@ else:
         self.assertIn("seed snapshot changed", result.stderr)
         self.assertIn('"TRSTCTL_EVENTS": 7', result.stdout)
         self.assertIn('"TRSTCTL_EVENTS": 8', result.stdout)
+
+    def test_checkpoint_waits_through_delayed_background_event(self):
+        result = self.run_convergence(late_background_event=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

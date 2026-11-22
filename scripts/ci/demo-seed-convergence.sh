@@ -65,7 +65,10 @@ stable_snapshot() {
       stable=0
     elif [[ "$current" == "$previous" ]]; then
       stable=$((stable + 1))
-      if [[ "$stable" -ge 2 ]]; then
+      # Two matching 2-second reads can land between a worker's delayed
+      # event append and its next retry. Require a continuous 30-second quiet
+      # window before treating the event stream as settled.
+      if [[ "$stable" -ge 15 ]]; then
         printf '%s\n' "$current"
         return 0
       fi
