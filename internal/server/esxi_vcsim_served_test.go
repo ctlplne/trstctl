@@ -217,7 +217,7 @@ func writeVcsimPassword(t *testing.T, password string) string {
 }
 
 // vcsimProviderHarness serves an ESXi provider pointed at the simulator.
-func vcsimProviderHarness(t *testing.T, sim stockVcsim, adminPassword string) (*servedHarness, string) {
+func vcsimProviderHarness(t *testing.T, sim stockVcsim, adminPassword, agentName string) (*servedHarness, string) {
 	t.Helper()
 	cfg := config.DynamicSecretProviderConfig{TenantID: servedTestTenant, ID: "vcsim-esx", Type: "esxi", Endpoint: sim.endpoint,
 		TLSCARef: writeServedCredentialFile(t, "a271o1-vcsim-ca", string(sim.caPEM)), AllowPrivate: true, PrivateEgressCIDRs: []string{"127.0.0.1/32"},
@@ -230,7 +230,7 @@ func vcsimProviderHarness(t *testing.T, sim stockVcsim, adminPassword string) (*
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newRoleHarnessWithDeps(t, nil, nil, withSecretsEnabled(t, nil), func(d *Deps) {
+	h := newRoleHarnessNamedWithEventOptions(t, agentName, nil, nil, nil, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.TenantDynamicSecretProviders = DynamicSecretProviderRegistry{servedTestTenant: registry.ForTenant(servedTestTenant)}
 		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, ExpiryInterval: time.Second,
 			Attestors: []attest.Attestor{servedPAMAttestor{}}}
@@ -263,7 +263,7 @@ func vcsimDiscovery(t *testing.T, sh *servedHarness, tok, key string) a260Run {
 // password reaches an event.
 func TestServedESXiProviderAgainstStockVcsimA271O1(t *testing.T) {
 	sim := startStockVcsim(t, "", "")
-	sh, tok := vcsimProviderHarness(t, sim, "vcsim-admin-password-1")
+	sh, tok := vcsimProviderHarness(t, sim, "vcsim-admin-password-1", "vcsim-success-agent")
 	ctx := context.Background()
 	seed, _ := json.Marshal(map[string]string{"username": "ops", "password": "vcsim-ops-password-1"}) // #nosec G101 -- fabricated test-only password for the simulator (CWE-798)
 	if status, body := secretsReqKey(t, sh, http.MethodPost, "/api/v1/secrets/store", tok, "a271o1-seed",
@@ -355,7 +355,7 @@ func TestServedESXiProviderAgainstStockVcsimA271O1(t *testing.T) {
 func TestServedESXiProviderNamesStockVcsimsLoginFaultA271O1(t *testing.T) {
 	const adminPassword = "vcsim-admin-password-2" // #nosec G101 -- fabricated test-only password for the simulator (CWE-798)
 	sim := startStockVcsim(t, "root", writeVcsimPassword(t, adminPassword))
-	sh, tok := vcsimProviderHarness(t, sim, "not-the-admin-password")
+	sh, tok := vcsimProviderHarness(t, sim, "not-the-admin-password", "vcsim-refused-agent")
 	run := vcsimDiscovery(t, sh, tok, "a271o1-wrong")
 	if run.Status != "failed" || run.Failure != "rejected" || run.Accounts != 0 || len(run.Changes) != 0 {
 		t.Fatalf("a scan with the wrong administrator password: %+v, want failed as rejected with nothing found", run)
@@ -377,7 +377,7 @@ func TestServedESXiProviderNamesStockVcsimsLoginFaultA271O1(t *testing.T) {
 		t.Fatalf("%d vcsim sessions were left open", open)
 	}
 
-	right, rightTok := vcsimProviderHarness(t, sim, adminPassword)
+	right, rightTok := vcsimProviderHarness(t, sim, adminPassword, "vcsim-recovery-agent")
 	if run := vcsimDiscovery(t, right, rightTok, "a271o1-right"); run.Status != "completed" || run.Accounts != 2 {
 		t.Fatalf("the scan with the right administrator password: %+v, want completed with vcsim's two users", run)
 	}
