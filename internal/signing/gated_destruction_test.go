@@ -429,6 +429,35 @@ func TestGatedDestroyProtoRoundTripAndValidation(t *testing.T) {
 	}
 }
 
+func TestCR012GatedDestroyJournalIdentitySurvivesApprovalTokenRotation(t *testing.T) {
+	request := GatedDestroyRequest{
+		TenantID: "11111111-1111-4111-8111-111111111111", Handle: "ca-handle",
+		SubjectRef: "ca-authority", AssertedFinalEpoch: 1, LedgerPosition: 2,
+		SatisfactionEvidence: []byte("frozen ledger"), Context: []byte("finalization"),
+		Authorization: []byte("first independently approved token"),
+	}
+	first, err := gatedDestroyOperationID(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Authorization = []byte("rotated approval token for the same frozen request")
+	second, err := gatedDestroyOperationID(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatalf("approval token rotation changed the durable destruction operation: %s != %s", first, second)
+	}
+	request.Context = []byte("a different command")
+	changed, err := gatedDestroyOperationID(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == changed {
+		t.Fatal("a changed frozen destruction request reused the journal identity")
+	}
+}
+
 func generateGatedDestroyKey(t *testing.T, ctx context.Context, s *Server, handle string) {
 	t.Helper()
 	_, err := s.GenerateKey(ctx, &signerpb.GenerateKeyRequest{

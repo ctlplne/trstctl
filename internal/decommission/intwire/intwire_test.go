@@ -37,6 +37,7 @@ import (
 	"trstctl.com/trstctl/internal/decommission/jobmodel"
 	"trstctl.com/trstctl/internal/decommission/record"
 	"trstctl.com/trstctl/internal/decommission/retirement"
+	"trstctl.com/trstctl/internal/decommission/retirementwire"
 	"trstctl.com/trstctl/internal/decommission/signerwiring"
 	decstore "trstctl.com/trstctl/internal/decommission/store"
 	vdecverify "trstctl.com/trstctl/internal/decommission/verify"
@@ -181,7 +182,7 @@ func TestVDEC_ServedRetirementRefusesThenProjectsOfflineRecordAcrossRestart(t *t
 		t.Fatalf("UpsertTenant: %v", err)
 	}
 	handle := "vdec-served-retirement-handle"
-	if _, err := h.signer.GenerateKeyHandle(h.ctx, crypto.ECDSAP256, handle); err != nil {
+	if _, err := h.signer.GenerateOwnedDualControlCAKeyHandle(h.ctx, h.tenant, crypto.ECDSAP256, handle, h.approval); err != nil {
 		t.Fatalf("GenerateKeyHandle: %v", err)
 	}
 	authority, err := h.store.InsertCAAuthority(h.ctx, corestore.CAAuthority{
@@ -231,7 +232,7 @@ func TestVDEC_ServedRetirementRefusesThenProjectsOfflineRecordAcrossRestart(t *t
 		t.Fatal("bounded retirement recovery is missing from the served licensed OpenAPI contract")
 	}
 	licensedHandler, err := runtime.RetirementOutboxFactory(editionseam.LicensedOutboxDeps{
-		Store: h.store, Log: h.log, GatedDestruction: h.signer,
+		Store: h.store, Log: h.log, GatedDestruction: h.signer, DestructionAuthorizer: h.approval,
 	})
 	if err != nil {
 		t.Fatalf("RetirementOutboxFactory: %v", err)
@@ -564,10 +565,12 @@ type harness struct {
 	repo  *decstore.Repo
 	log   *events.Log
 
-	natsDir string
-	bin     string
-	keyDir  string
-	kekFile string
+	natsDir  string
+	bin      string
+	keyDir   string
+	kekFile  string
+	authFile string
+	approval *crypto.SignAuthorizer
 
 	signer   *signing.Client
 	stopSign func()
@@ -623,7 +626,13 @@ func newHarness(t *testing.T) *harness {
 		bin:            buildSignerBinary(t),
 		keyDir:         filepath.Join(t.TempDir(), "signer-keys"),
 		kekFile:        filepath.Join(t.TempDir(), "signer.kek"),
+		authFile:       filepath.Join(t.TempDir(), "signer-auth.bin"),
 	}
+	h.approval, err = signing.LoadOrCreateAuthorizer(h.authFile)
+	if err != nil {
+		t.Fatalf("load signer approval authority: %v", err)
+	}
+	t.Cleanup(h.approval.Destroy)
 	h.openEventLog(t)
 	h.startSigner(t)
 	t.Cleanup(func() {
@@ -806,7 +815,15 @@ func (h *harness) gateRequest(t *testing.T, handle string, events []eventspec.Ev
 	if err != nil {
 		t.Fatalf("EncodeLedgerSegment: %v", err)
 	}
-	return signing.GatedDestroyRequest{
+	completionDigest, err := vdecverify.CompletionEventsDigest(h.tenant, h.keyID, finalEpochWire, h.completionEvidence())
+	if err != nil {
+		t.Fatalf("completion evidence digest: %v", err)
+	}
+	finalization, err := retirementwire.Encode("intwire-gate-command", "ca-signing-key", completionDigest, crypto.SHA256Sum([]byte("no revocations")))
+	if err != nil {
+		t.Fatalf("finalization context: %v", err)
+	}
+	request := signing.GatedDestroyRequest{
 		TenantID:             h.tenant,
 		Handle:               handle,
 		SubjectRef:           h.keyID,
@@ -816,13 +833,23 @@ func (h *harness) gateRequest(t *testing.T, handle string, events []eventspec.Ev
 		RequiredSetDigest:    requiredDigest,
 		SatisfactionEvidence: segment,
 		AuditChainHead:       gate.AuditChainHead(events),
+		Context:              finalization,
 	}
+	intent, err := signing.GatedDestroyIntent(request)
+	if err != nil {
+		t.Fatalf("gated destruction intent: %v", err)
+	}
+	request.Authorization, err = h.approval.Authorize(intent)
+	if err != nil {
+		t.Fatalf("authorize gated destruction: %v", err)
+	}
+	return request
 }
 
 func (h *harness) generateSubjectHandle(t *testing.T) string {
 	t.Helper()
 	handle := "vdec-intwire:" + h.keyID
-	if _, err := h.signer.GenerateKeyHandle(h.ctx, crypto.ECDSAP256, handle); err != nil {
+	if _, err := h.signer.GenerateOwnedDualControlCAKeyHandle(h.ctx, h.tenant, crypto.ECDSAP256, handle, h.approval); err != nil {
 		t.Fatalf("GenerateKeyHandle subject: %v", err)
 	}
 	return handle
@@ -830,54 +857,23 @@ func (h *harness) generateSubjectHandle(t *testing.T) string {
 
 func (h *harness) signDestructionRecord(t *testing.T, gateReq signing.GatedDestroyRequest, evs []eventspec.Event, decision signing.GatedDestroyDecision, completion vdecverify.CompletionEvidence) record.SignedRecord {
 	t.Helper()
-	successor, err := h.signer.GenerateKeyHandle(h.ctx, crypto.ECDSAP384, "vdec-intwire:"+h.successorKeyID)
+	rec, err := record.DecodeRecord(decision.Evidence)
 	if err != nil {
-		t.Fatalf("GenerateKeyHandle successor: %v", err)
+		t.Fatalf("decode signer-gated destruction record: %v", err)
+	}
+	if err := record.VerifyRecord(rec, publicKey(rec.AttestationAlgorithm, rec.AttestationPublicKeyDER)); err != nil {
+		t.Fatalf("verify signer-gated destruction record: %v", err)
 	}
 	completionDigest, err := vdecverify.CompletionEventsDigest(h.tenant, h.keyID, finalEpochWire, completion)
 	if err != nil {
-		t.Fatalf("CompletionEventsDigest: %v", err)
+		t.Fatalf("completion digest: %v", err)
 	}
-	proofNode, err := vdecverify.EncodeProofNode(vdecverify.ProofRight, crypto.SHA256Sum([]byte("vdec-intwire-proof-sibling")))
-	if err != nil {
-		t.Fatalf("EncodeProofNode: %v", err)
-	}
-	destroyEvidence := destructionEvidence(h.tenant, h.keyID, decision)
-	mint := record.MintRequest{
-		TenantID:                    h.tenant,
-		StableKeyID:                 h.keyID,
-		FinalEpoch:                  finalEpochWire,
-		CompletionEventsDigest:      completionDigest,
-		RequiredSetDigest:           gateReq.RequiredSetDigest,
-		DestructionEvidence:         record.EvidenceFromDestruction(destroyEvidence),
-		AuditChainHead:              fmt.Sprintf("%x", gate.AuditChainHead(evs)),
-		Successors:                  []record.SuccessorKey{{ID: h.successorKeyID, Epoch: finalEpochWire + 1, Algorithm: successor.Algorithm(), PublicDER: successor.Public().DER}},
-		PolicyRef:                   "policy://vdec/intwire/retire-root-ca",
-		PolicyDecisionDigest:        crypto.SHA256Sum([]byte("vdec-intwire-policy-decision")),
-		RevocationCompletionDigest:  crypto.SHA256Sum([]byte("vdec-intwire-revocation-completions")),
-		TransparencyLogID:           "vdec-intwire-transparency",
-		TransparencyInclusionProof:  [][]byte{proofNode},
-		TransparencyTreeSize:        2,
-		TransparencyCheckpointEpoch: lastSeq(evs),
-	}
-	payload, err := json.Marshal(mint)
-	if err != nil {
-		t.Fatalf("marshal mint request: %v", err)
-	}
-	before := time.Now().UTC().Unix()
-	sig, err := h.signer.SignArtifact(h.ctx, signing.ArtifactSignRequest{
-		Kind:        signerwiring.ArtifactKindDestructionRecord,
-		TenantID:    h.tenant,
-		AuthorityID: "vdec-record-minter",
-		Payload:     payload,
-	})
-	after := time.Now().UTC().Unix()
-	if err != nil {
-		t.Fatalf("SignArtifact destruction record: %v", err)
-	}
-	rec, err := reconstructDestructionRecord(mint, sig, before, after)
-	if err != nil {
-		t.Fatalf("reconstruct signer-minted destruction record: %v", err)
+	if rec.Commitment.TenantID != h.tenant || rec.Commitment.StableKeyID != h.keyID ||
+		rec.Commitment.FinalEpoch != finalEpochWire ||
+		!bytes.Equal(rec.Commitment.RequiredSetDigest, gateReq.RequiredSetDigest) ||
+		!bytes.Equal(rec.Commitment.CompletionEventsDigest, completionDigest) ||
+		rec.Commitment.AuditChainHead != fmt.Sprintf("%x", gate.AuditChainHead(evs)) {
+		t.Fatalf("signer-gated record is not bound to the exact key and frozen ledger: %+v", rec.Commitment)
 	}
 	return rec
 }
@@ -911,52 +907,6 @@ func (h *harness) signAggregateRecord(t *testing.T, rec record.SignedRecord, evs
 		t.Fatalf("reconstruct signer-minted aggregate record: %v", err)
 	}
 	return agg
-}
-
-func reconstructDestructionRecord(req record.MintRequest, sig signing.ArtifactSignature, before, after int64) (record.SignedRecord, error) {
-	for ts := before - 1; ts <= after+1; ts++ {
-		c := record.Commitment{
-			TenantID:                   req.TenantID,
-			StableKeyID:                req.StableKeyID,
-			FinalEpoch:                 req.FinalEpoch,
-			CompletionEventsDigest:     cloneBytes(req.CompletionEventsDigest),
-			RequiredSetDigest:          cloneBytes(req.RequiredSetDigest),
-			QuorumEvidence:             req.QuorumEvidence,
-			RevocationCompletionDigest: cloneBytes(req.RevocationCompletionDigest),
-			DestructionEvidence:        req.DestructionEvidence,
-			AuditChainHead:             req.AuditChainHead,
-			Successors:                 append([]record.SuccessorKey(nil), req.Successors...),
-			PolicyRef:                  req.PolicyRef,
-			PolicyDecisionDigest:       cloneBytes(req.PolicyDecisionDigest),
-			MintedAtUnix:               ts,
-			Transparency: record.TransparencyProof{
-				LogID:           req.TransparencyLogID,
-				TreeSize:        req.TransparencyTreeSize,
-				CheckpointEpoch: req.TransparencyCheckpointEpoch,
-				RootDigest:      cloneBytes(req.TransparencyRootDigest),
-				Proof:           clone2D(req.TransparencyInclusionProof),
-			},
-		}
-		digest, err := record.CommitmentDigest(c)
-		if err != nil {
-			return record.SignedRecord{}, err
-		}
-		c.Transparency.LeafDigest = digest
-		rec := record.SignedRecord{
-			Version:                 record.SchemaV1,
-			Type:                    record.TypeDestructionRecord,
-			Commitment:              c,
-			CommitmentDigest:        digest,
-			SignerID:                "trstctl-signer",
-			AttestationAlgorithm:    sig.Algorithm,
-			AttestationPublicKeyDER: cloneBytes(sig.PublicKeyDER),
-			Signature:               cloneBytes(sig.Signature),
-		}
-		if err := record.VerifyRecord(rec, publicKey(sig.Algorithm, sig.PublicKeyDER)); err == nil {
-			return rec, nil
-		}
-	}
-	return record.SignedRecord{}, errors.New("no timestamp in signer window verified against artifact signature")
 }
 
 func reconstructAggregateRecord(req aggregate.MintRequest, sig signing.ArtifactSignature, rec record.SignedRecord, before, after int64) (aggregate.SignedRecord, error) {
@@ -1017,37 +967,6 @@ func reconstructAggregateRecord(req aggregate.MintRequest, sig signing.ArtifactS
 		}
 	}
 	return aggregate.SignedRecord{}, errors.New("no timestamp in signer window verified aggregate signature")
-}
-
-func destructionEvidence(tenantID, keyID string, decision signing.GatedDestroyDecision) gate.DestructionEvidence {
-	body := struct {
-		Kind                string `json:"kind"`
-		TenantID            string `json:"tenant_id"`
-		StableKeyID         string `json:"stable_key_id"`
-		FinalEpoch          uint64 `json:"final_epoch"`
-		GateEvidenceDigest  []byte `json:"gate_evidence_digest"`
-		GateDecisionDigest  []byte `json:"gate_decision_digest"`
-		SignerDestroyMethod string `json:"signer_destroy_method"`
-	}{
-		Kind:                gate.TypeCustodyZeroized,
-		TenantID:            tenantID,
-		StableKeyID:         keyID,
-		FinalEpoch:          finalEpochWire,
-		GateEvidenceDigest:  crypto.SHA256Sum(decision.Evidence),
-		GateDecisionDigest:  crypto.SHA256Sum(decision.Authorization),
-		SignerDestroyMethod: "signing.GatedDestroy over real trstctl-signer UDS",
-	}
-	raw, _ := json.Marshal(body)
-	return gate.DestructionEvidence{
-		Kind:               gate.TypeCustodyZeroized,
-		TenantID:           tenantID,
-		StableKeyID:        keyID,
-		FinalEpoch:         finalEpochWire,
-		AttestationClass:   gate.ClassSoftwareZeroize,
-		AttestationClassID: gate.ClassSoftwareZeroize.ID(),
-		Record:             raw,
-		Digest:             crypto.SHA256Sum(raw),
-	}
 }
 
 func (h *harness) completionEvidence() vdecverify.CompletionEvidence {
@@ -1111,7 +1030,7 @@ func (h *harness) startSigner(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
-	args := []string{"--keystore", h.keyDir, "--kek", h.kekFile}
+	args := []string{"--keystore", h.keyDir, "--kek", h.kekFile, "--auth-secret", h.authFile}
 	if runtime.GOOS != "linux" {
 		args = append([]string{"--allow-insecure-dev-nonlinux"}, args...)
 	}

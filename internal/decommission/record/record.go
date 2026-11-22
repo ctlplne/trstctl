@@ -35,6 +35,9 @@ type Config struct {
 	SignerID  string
 	Algorithm crypto.Algorithm
 	Now       func() time.Time
+	// AttestationKey is signer-held locked custody supplied by a durable key
+	// store. NewMinter owns and destroys it after a successful construction.
+	AttestationKey *crypto.LockedSigner
 }
 
 type Minter struct {
@@ -47,12 +50,22 @@ type Minter struct {
 
 func NewMinter(cfg Config) (*Minter, error) {
 	alg := cfg.Algorithm
+	if alg == "" && cfg.AttestationKey != nil {
+		alg = cfg.AttestationKey.Algorithm()
+	}
 	if alg == "" {
 		alg = crypto.ECDSAP256
 	}
-	key, err := crypto.GenerateLockedKey(alg)
-	if err != nil {
-		return nil, fmt.Errorf("destruction record: generate attestation key: %w", err)
+	key := cfg.AttestationKey
+	if key != nil && key.Algorithm() != alg {
+		return nil, fmt.Errorf("destruction record: retained attestation key algorithm %s differs from %s", key.Algorithm(), alg)
+	}
+	if key == nil {
+		var err error
+		key, err = crypto.GenerateLockedKey(alg)
+		if err != nil {
+			return nil, fmt.Errorf("destruction record: generate attestation key: %w", err)
+		}
 	}
 	signerID := strings.TrimSpace(cfg.SignerID)
 	if signerID == "" {

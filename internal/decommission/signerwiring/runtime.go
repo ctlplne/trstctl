@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/decommission/aggregate"
 	"trstctl.com/trstctl/internal/decommission/gate"
 	"trstctl.com/trstctl/internal/decommission/record"
@@ -22,6 +23,7 @@ import (
 )
 
 var ErrSignerRuntimeUnavailable = errors.New("vdec signer runtime: required custody backend is not configured")
+var ErrDestructionRecordRequiresGate = errors.New("vdec signer runtime: destruction records require completed gated destruction")
 
 const (
 	ArtifactKindDestructionRecord      = "vdec-destruction-record"
@@ -37,6 +39,7 @@ const (
 type Config struct {
 	SignerID string
 	FloorDir string
+	Wrapper  seal.KeyWrapper
 }
 
 // Runtime is retained by the signer through signing.WithGatedDestruction and
@@ -56,6 +59,19 @@ type Runtime struct {
 	ControlPlaneOutageCeremony *gate.CeremonySigner
 	Countersigner              *crypto.LockedSigner
 	Sink                       gate.RefusalAppendSink
+}
+
+func (*Runtime) RequiresGatedDestroyAuthorization() bool { return true }
+
+func (*Runtime) ValidateGatedDestroyRequest(req signing.GatedDestroyRequest) error {
+	finalization, err := retirementwire.Decode(req.Context)
+	if err != nil {
+		return err
+	}
+	if finalization.KeyClass != "ca-signing-key" {
+		return retirementwire.ErrInvalidContext
+	}
+	return nil
 }
 
 func NewRuntime(cfg Config) (*Runtime, error) {
@@ -81,8 +97,18 @@ func NewRuntime(cfg Config) (*Runtime, error) {
 	if err != nil {
 		return nil, fmt.Errorf("vdec signer runtime: build HSM custody boundary: %w", err)
 	}
-	recordMinter, err := record.NewMinter(record.Config{SignerID: signerID})
+	var recordKey *crypto.LockedSigner
+	if cfg.FloorDir != "" {
+		recordKey, err = loadOrCreateDestructionRecordKey(cfg.FloorDir, cfg.Wrapper)
+		if err != nil {
+			return nil, fmt.Errorf("vdec signer runtime: load destruction-record authority: %w", err)
+		}
+	}
+	recordMinter, err := record.NewMinter(record.Config{SignerID: signerID, AttestationKey: recordKey})
 	if err != nil {
+		if recordKey != nil {
+			recordKey.Destroy()
+		}
 		return nil, fmt.Errorf("vdec signer runtime: build destruction-record minter: %w", err)
 	}
 	aggregateMinter, err := aggregate.NewMinter(aggregate.Config{SignerID: signerID})
@@ -145,6 +171,9 @@ func (r *Runtime) FinalizeGatedDestroy(ctx context.Context, req signing.GatedDes
 	if err != nil {
 		return signing.GatedDestroyDecision{}, err
 	}
+	if finalization.KeyClass != "ca-signing-key" {
+		return signing.GatedDestroyDecision{}, retirementwire.ErrInvalidContext
+	}
 	var quorumEvidence *gate.QuorumEvidence
 	if len(decision.Authorization) != 0 {
 		decoded, err := gate.DecodeQuorumEvidence(decision.Authorization)
@@ -185,6 +214,11 @@ func (r *Runtime) FinalizeGatedDestroy(ctx context.Context, req signing.GatedDes
 		RevocationCompletionDigest: finalization.RevocationCompletionDigest,
 		DestructionEvidence:        record.EvidenceFromDestruction(evidence),
 		AuditChainHead:             hex.EncodeToString(req.AuditChainHead), PolicyRef: finalization.PolicyRef,
+		// Each completed signer journal operation is a durable one-record
+		// publication. Its one-leaf head can be pinned by an offline verifier;
+		// the command ID prevents one operation from impersonating another.
+		TransparencyLogID:    "trstctl/vdec/signer-operation/" + finalization.CommandEventID,
+		TransparencyTreeSize: 1, TransparencyCheckpointEpoch: req.LedgerPosition,
 	})
 	if err != nil {
 		return signing.GatedDestroyDecision{}, err
@@ -206,22 +240,20 @@ func (r *Runtime) SignArtifact(ctx context.Context, req signing.ArtifactSignRequ
 	}
 	switch req.Kind {
 	case ArtifactKindDestructionRecord:
-		var mint record.MintRequest
-		if err := json.Unmarshal(req.Payload, &mint); err != nil {
-			return signing.ArtifactSignature{}, fmt.Errorf("vdec signer runtime: decode destruction record request: %w", err)
-		}
-		rec, err := r.RecordMinter.Mint(ctx, mint)
-		if err != nil {
-			return signing.ArtifactSignature{}, err
-		}
-		return artifactSignature(req.KeyID, defaultDestructionRecordKeyID, rec.AttestationAlgorithm, rec.AttestationPublicKeyDER, rec.Signature), nil
+		// A success record is minted only by FinalizeGatedDestroy after the
+		// signer has irreversibly destroyed the named custody handle. The
+		// generic artifact RPC carries no proof of that operation.
+		return signing.ArtifactSignature{}, ErrDestructionRecordRequiresGate
 	case ArtifactKindRecordCountersignature:
-		if r.Countersigner == nil || r.Sink == nil {
+		if r.Countersigner == nil || r.Sink == nil || r.RecordMinter == nil {
 			return signing.ArtifactSignature{}, ErrSignerRuntimeUnavailable
 		}
 		var rec record.SignedRecord
 		if err := json.Unmarshal(req.Payload, &rec); err != nil {
 			return signing.ArtifactSignature{}, fmt.Errorf("vdec signer runtime: decode countersignature record: %w", err)
+		}
+		if err := record.VerifyRecord(rec, r.RecordMinter.PublicKey()); err != nil {
+			return signing.ArtifactSignature{}, fmt.Errorf("vdec signer runtime: untrusted destruction record: %w", err)
 		}
 		signed, err := record.AttachCountersignature(ctx, rec, record.CountersignatureRequest{
 			AuthorityID: authorityID(req.AuthorityID),
@@ -238,12 +270,17 @@ func (r *Runtime) SignArtifact(ctx context.Context, req signing.ArtifactSignRequ
 		cs := signed.Countersignatures[len(signed.Countersignatures)-1]
 		return artifactSignature(cs.KeyID, defaultCountersignatureKeyID, cs.Algorithm, cs.PublicKeyDER, cs.Signature), nil
 	case ArtifactKindAggregateRecord:
-		if r.AggregateMinter == nil {
+		if r.AggregateMinter == nil || r.RecordMinter == nil {
 			return signing.ArtifactSignature{}, ErrSignerRuntimeUnavailable
 		}
 		var mint aggregate.MintRequest
 		if err := json.Unmarshal(req.Payload, &mint); err != nil {
 			return signing.ArtifactSignature{}, fmt.Errorf("vdec signer runtime: decode aggregate record request: %w", err)
+		}
+		for _, leaf := range mint.Records {
+			if err := record.VerifyRecord(leaf.Record, r.RecordMinter.PublicKey()); err != nil {
+				return signing.ArtifactSignature{}, fmt.Errorf("vdec signer runtime: untrusted aggregate leaf: %w", err)
+			}
 		}
 		rec, err := r.AggregateMinter.Mint(ctx, mint)
 		if err != nil {

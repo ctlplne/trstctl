@@ -81,6 +81,23 @@ func TestGate_StreamKeepsUnaryDecisionAndRejectsTruncatedHistory(t *testing.T) {
 	}
 }
 
+func TestCR012StreamGateRejectsASubjectAbsentFromTheLedger(t *testing.T) {
+	segment, err := EncodeLedgerSegment(1, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := signing.GatedDestroyRequest{
+		TenantID: testTenant, Handle: testHandle, SubjectRef: "never-registered-subject",
+		LedgerPosition: 1, AssertedFinalEpoch: 1,
+		SatisfactionEvidenceDigest: crypto.SHA256Sum(segment), AuditChainHead: AuditChainHead(nil),
+	}
+	gate := newTestGate(t, NewMemorySink())
+	decision, err := gate.VerifyGatedDestroyStream(context.Background(), request, bytes.NewReader(segment))
+	if err == nil || decision.Approved {
+		t.Fatalf("stream accepted absent subject on an empty fabricated ledger: approved=%v err=%v", decision.Approved, err)
+	}
+}
+
 func TestGate_SetDifferenceEmptyRequired(t *testing.T) {
 	ctx := context.Background()
 	g := newTestGate(t, NewMemorySink())

@@ -107,7 +107,7 @@ func (g *Gate) VerifyGatedDestroyStream(ctx context.Context, req signing.GatedDe
 	}
 	state, found := folder.Snapshot()
 	if !found {
-		state = depstate.KeyState{TenantID: req.TenantID, KeyID: req.SubjectRef, LedgerPosition: req.LedgerPosition}
+		return signing.GatedDestroyDecision{}, fmt.Errorf("%w: subject has no registered dependency evidence", ErrInvalidEvidence)
 	}
 	return g.verifyGatedDestroyState(ctx, req, state)
 }

@@ -99,7 +99,7 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 	}
 	opts = append(opts, signing.WithOperationGate(xrecPlanGate))
 
-	vdecRuntime, err := vdecsigner.NewRuntime(vdecsigner.Config{SignerID: "trstctl-signer", FloorDir: floorDir})
+	vdecRuntime, err := vdecsigner.NewRuntime(vdecsigner.Config{SignerID: "trstctl-signer", FloorDir: floorDir, Wrapper: wrapper})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: build VDEC signer runtime: %v\n", err)
 		os.Exit(1)

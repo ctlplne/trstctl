@@ -118,7 +118,7 @@ func (g *Gate) VerifyGatedDestroy(ctx context.Context, req signing.GatedDestroyR
 	}
 	state, ok := proj.Lookup(req.TenantID, req.SubjectRef)
 	if !ok {
-		state = depstate.KeyState{TenantID: req.TenantID, KeyID: req.SubjectRef, LedgerPosition: req.LedgerPosition}
+		return signing.GatedDestroyDecision{}, fmt.Errorf("%w: subject has no registered dependency evidence", ErrInvalidEvidence)
 	}
 	return g.verifyGatedDestroyState(ctx, req, state)
 }

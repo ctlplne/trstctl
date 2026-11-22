@@ -5069,8 +5069,18 @@ than sending an operator looking for a credential that was never there.
   outbox intent. The outbox worker replays that frozen event prefix and calls
   `GatedDestroy` over the signer UDS; a frozen public event segment that exceeds
   the signer's 1 MiB unary receive limit uses 128 KiB streamed frames. The signer
-  keeps that segment in an unlinked, local spool with a 512 MiB total cap, hashes
-  its exact bytes into the durable operation identity, and folds only the target
+  requires independent sign-token approval over the exact tenant, signer handle,
+  subject, epoch, ledger position, evidence digest, approvals, audit head and
+  finalization context. Configure `signer.auth_token_command` for production;
+  its intent uses reserved purpose `-12` so the approval service can distinguish
+  destruction from ordinary signing. A missing approval source leaves the
+  retirement outbox awaiting retry and never destroys a handle. The signer
+  also requires a tenant-owned CA handle and the `ca-signing-key` context before
+  verification. Its sealed
+  destruction-record attestation key persists across signer restarts, and the
+  generic artifact-signing RPC cannot mint a destruction record. The signer
+  keeps the event segment in an unlinked, local spool with a 512 MiB total cap,
+  hashes its exact bytes into the durable operation identity, and folds only the target
   key's dependency state. The API process never receives a private key
   or a key-backend destruction handle. Incomplete evidence produces a signed
   refusal and leaves the key alive. Complete evidence destroys the signer-local

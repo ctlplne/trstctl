@@ -198,6 +198,9 @@ type LicensedOutboxDeps struct {
 	// GatedDestruction is the out-of-process signer narrowed to the generic
 	// verify-then-destroy RPC. nil makes VDEC retirement fail closed.
 	GatedDestruction GatedDestruction
+	// DestructionAuthorizer obtains independent approval for the exact frozen
+	// VDEC evidence and handle before the isolated signer may destroy custody.
+	DestructionAuthorizer signing.SignTokenProvider
 	// Transit is the core envelope/transit service. Licensed outbox handlers may use
 	// it for public ciphertext re-wrap operations; nil means those operations fail
 	// closed instead of inventing a non-durable substitute.

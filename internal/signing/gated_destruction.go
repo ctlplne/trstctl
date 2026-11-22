@@ -4,8 +4,12 @@ package signing
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
+
+	"trstctl.com/trstctl/internal/crypto"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // GatedDestroyer is a generic destruction-precondition extension attached to the
@@ -14,6 +18,64 @@ import (
 // and may return an opaque signed refusal record.
 type GatedDestroyer interface {
 	VerifyGatedDestroy(context.Context, GatedDestroyRequest) (GatedDestroyDecision, error)
+}
+
+// GatedDestroyAuthorizationRequired marks a gate whose evidence must be
+// approved by the independent sign-token authority before custody is touched.
+type GatedDestroyAuthorizationRequired interface {
+	RequiresGatedDestroyAuthorization() bool
+}
+
+// GatedDestroyRequestValidator checks edition-specific bindings that must be
+// settled before the signer records an approved irreversible operation.
+type GatedDestroyRequestValidator interface {
+	ValidateGatedDestroyRequest(GatedDestroyRequest) error
+}
+
+// GatedDestroyIntent commits an independent approval to the exact public
+// destruction request. Purpose -12 is reserved for this operation and cannot
+// authorize Sign on the required purpose-bound tenant CA handle. The evidence
+// digest is computed here for unary callers
+// and by the signer from the received bytes for streamed callers.
+func GatedDestroyIntent(req GatedDestroyRequest) (crypto.SignIntent, error) {
+	if req.TenantID == "" || req.Handle == "" || req.SubjectRef == "" ||
+		req.LedgerPosition == 0 || req.AssertedFinalEpoch == 0 || len(req.Context) == 0 {
+		return crypto.SignIntent{}, errors.New("signing: incomplete gated destruction intent")
+	}
+	evidenceDigest := req.SatisfactionEvidenceDigest
+	if len(req.SatisfactionEvidence) != 0 {
+		computed := crypto.SHA256Sum(req.SatisfactionEvidence)
+		if len(evidenceDigest) != 0 && !crypto.ConstantTimeEqual(evidenceDigest, computed) {
+			return crypto.SignIntent{}, errors.New("signing: gated destruction evidence digest mismatch")
+		}
+		evidenceDigest = computed
+	}
+	if len(evidenceDigest) != 32 {
+		return crypto.SignIntent{}, errors.New("signing: missing gated destruction evidence digest")
+	}
+	const domain = "trstctl/gated-destruction-authorization/v1"
+	canonical, err := json.Marshal(struct {
+		Domain            string `json:"domain"`
+		TenantID          string `json:"tenant_id"`
+		Handle            string `json:"handle"`
+		SubjectRef        string `json:"subject_ref"`
+		FinalEpoch        uint64 `json:"final_epoch"`
+		LedgerPosition    uint64 `json:"ledger_position"`
+		RequiredSet       []byte `json:"required_set"`
+		RequiredSetDigest []byte `json:"required_set_digest"`
+		SatisfiedSet      []byte `json:"satisfied_set"`
+		EvidenceDigest    []byte `json:"evidence_digest"`
+		Approvals         []byte `json:"approvals"`
+		AuditChainHead    []byte `json:"audit_chain_head"`
+		Context           []byte `json:"context"`
+	}{domain, req.TenantID, req.Handle, req.SubjectRef, req.AssertedFinalEpoch,
+		req.LedgerPosition, req.RequiredSet, req.RequiredSetDigest, req.SatisfiedSet,
+		evidenceDigest, req.Approvals, req.AuditChainHead, req.Context})
+	if err != nil {
+		return crypto.SignIntent{}, err
+	}
+	return crypto.SignIntent{KeyHandle: req.Handle, Purpose: -12, Hash: crypto.SHA256,
+		Digest: crypto.SHA256Sum(canonical)}, nil
 }
 
 // GatedDestructionFinalizer is the optional second half of one signer-local
@@ -108,6 +170,32 @@ func (s *Server) gatedDestroy(ctx context.Context, req GatedDestroyRequest, dest
 }
 
 func (s *Server) gatedDestroyWithEvidence(ctx context.Context, req GatedDestroyRequest, evidence io.Reader, destroy func(context.Context, string) error, durable bool) (GatedDestroyDecision, error) {
+	s.mu.Lock()
+	gate := s.gatedDestroyer
+	s.mu.Unlock()
+	if protected, ok := gate.(GatedDestroyAuthorizationRequired); ok && protected.RequiresGatedDestroyAuthorization() {
+		validator, ok := gate.(GatedDestroyRequestValidator)
+		if !ok {
+			return GatedDestroyDecision{}, errors.New("signing: protected destruction gate lacks request validator")
+		}
+		if err := validator.ValidateGatedDestroyRequest(req); err != nil {
+			return GatedDestroyDecision{}, err
+		}
+		intent, err := GatedDestroyIntent(req)
+		if err != nil || !s.authorizer.Verify(intent, req.Authorization) {
+			return GatedDestroyDecision{}, errors.New("signing: gated destruction lacks exact independent authorization")
+		}
+		if reservedTenantCAHandle(req.Handle) || !canonicalKeyOwnerTenant(req.TenantID) {
+			return GatedDestroyDecision{}, errors.New("signing: gated destruction requires tenant-owned CA custody")
+		}
+		held, err := s.lookup(&signerpb.KeyHandle{Id: req.Handle})
+		if err != nil {
+			return GatedDestroyDecision{}, err
+		}
+		if !held.constraints.isTenantCAFor(req.TenantID) {
+			return GatedDestroyDecision{}, errors.New("signing: gated destruction handle is not owned by the requested tenant")
+		}
+	}
 	var operationID string
 	var decision GatedDestroyDecision
 	var err error

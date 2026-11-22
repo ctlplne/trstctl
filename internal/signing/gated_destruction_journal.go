@@ -25,8 +25,9 @@ type gatedDestroyJournalRecord struct {
 	Decision    GatedDestroyDecision `json:"decision"`
 }
 
-// Every field is public evidence. The fixed struct makes the request hash
-// independent of Go field layout and binds newly added fields deliberately.
+// The fixed struct makes the request hash independent of Go field layout and
+// binds newly added evidence fields deliberately. Authorization is excluded
+// before hashing because it is a renewable capability for the same operation.
 type gatedDestroyJournalIntent struct {
 	TenantID                   string `json:"tenant_id"`
 	Handle                     string `json:"handle"`
@@ -45,6 +46,11 @@ type gatedDestroyJournalIntent struct {
 }
 
 func gatedDestroyRequestHash(req GatedDestroyRequest) (string, error) {
+	// Authorization is a capability for this exact request, not part of the
+	// immutable operation. A renewed approval token must find the same fsynced
+	// decision after a lost response or signer restart. Verification happens
+	// before journal lookup on gates that require independent approval.
+	req.Authorization = nil
 	raw, err := json.Marshal(gatedDestroyJournalIntent(req))
 	if err != nil {
 		return "", err

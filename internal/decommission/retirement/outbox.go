@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/decommission/depstate"
 	"trstctl.com/trstctl/internal/decommission/gate"
 	"trstctl.com/trstctl/internal/decommission/record"
@@ -29,11 +30,12 @@ type Handler struct {
 	log        *events.Log
 	projection *Projection
 	signer     editionseam.GatedDestruction
+	authorizer signing.SignTokenProvider
 }
 
 func NewOutboxFactory(projection *Projection) editionseam.LicensedOutboxFactory {
 	return func(deps editionseam.LicensedOutboxDeps) (editionseam.LicensedOutboxHandler, error) {
-		return &Handler{log: deps.Log, projection: projection, signer: deps.GatedDestruction}, nil
+		return &Handler{log: deps.Log, projection: projection, signer: deps.GatedDestruction, authorizer: deps.DestructionAuthorizer}, nil
 	}
 }
 
@@ -90,14 +92,15 @@ func (h *Handler) DeliverLicensed(ctx context.Context, message orchestrator.Mess
 	if err != nil {
 		return true, err
 	}
-	decision, err := h.signer.GatedDestroy(ctx, signing.GatedDestroyRequest{
+	request := signing.GatedDestroyRequest{
 		TenantID: payload.Requested.TenantID, Handle: payload.Requested.SignerHandle,
 		SubjectRef: payload.Requested.KeyID, AssertedFinalEpoch: payload.Requested.FinalEpoch,
 		LedgerPosition: payload.Requested.LedgerPosition,
 		RequiredSet:    payload.Requested.RequiredSet, RequiredSetDigest: payload.Requested.RequiredSetDigest,
 		SatisfactionEvidence: segment, Approvals: approvals,
 		AuditChainHead: payload.Requested.AuditChainHead, Context: finalization,
-	})
+	}
+	decision, err := h.authorizeAndDestroy(ctx, request)
 	if err != nil {
 		return true, err
 	}
@@ -138,6 +141,24 @@ func (h *Handler) DeliverLicensed(ctx context.Context, message orchestrator.Mess
 	event.ID = TerminalEventID(payload.CommandEventID, StatusDestroyed)
 	_, err = h.appendAndProject(ctx, event)
 	return true, err
+}
+
+func (h *Handler) authorizeAndDestroy(ctx context.Context, request signing.GatedDestroyRequest) (signing.GatedDestroyDecision, error) {
+	if h == nil || h.signer == nil || h.authorizer == nil {
+		return signing.GatedDestroyDecision{}, fmt.Errorf("%w: independent destruction authorizer or signer is unavailable", ErrSignerUnavailable)
+	}
+	intent, err := signing.GatedDestroyIntent(request)
+	if err != nil {
+		return signing.GatedDestroyDecision{}, err
+	}
+	token, err := h.authorizer.Authorize(intent)
+	if err != nil {
+		return signing.GatedDestroyDecision{}, err
+	}
+	request.Authorization = token
+	decision, err := h.signer.GatedDestroy(ctx, request)
+	secret.Wipe(token)
+	return decision, err
 }
 
 func (h *Handler) replayEvidence(ctx context.Context, requested RequestedV1) ([]eventspec.Event, bool, error) {
