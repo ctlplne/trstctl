@@ -134,10 +134,6 @@ type PAMConfig struct {
 	ExpiryInterval    time.Duration
 	ApprovalTTL       time.Duration
 	RequiredApprovals int
-	// AutoApprovalAlone lets a matching automatic approval rule approve a
-	// request by itself (CR-001); off, the rule's approval is one of the
-	// request's required approvals and reviewers give the rest.
-	AutoApprovalAlone bool
 	// RecordingRetention keeps sealed gateway session recordings this long
 	// (A255); zero keeps them.
 	RecordingRetention time.Duration
@@ -257,9 +253,6 @@ type pamService struct {
 	orch              *orchestrator.Orchestrator
 	approvalTTL       time.Duration
 	requiredApprovals int
-	// autoApprovalAlone lets a matching automatic approval rule approve a
-	// request by itself (CR-001, pam.auto_approval_alone).
-	autoApprovalAlone bool
 	targetDeps        pamDeps
 	// agentCAPEM returns the agent CA PEM a client verifies a gateway's
 	// certificate against (A254); nil when no agent channel is served.
@@ -452,7 +445,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
 		sshTargets: sshTargets, sshCA: d.SSHCA, sshProtocol: d.SSHProtocol, defaultTTL: defaultTTL,
 		maxTTL: maxTTL, expiryInterval: expiryInterval, clock: clock,
-		orch: d.Orch, approvalTTL: approvalTTL, requiredApprovals: requiredApprovals, autoApprovalAlone: cfg.AutoApprovalAlone,
+		orch: d.Orch, approvalTTL: approvalTTL, requiredApprovals: requiredApprovals,
 		targetDeps: d, agentCAPEM: d.AgentCAPEM, secretReader: d.SecretReader, rotation: d.AccountRotation,
 	}, nil
 }
@@ -1973,7 +1966,7 @@ func jsonMap(raw []byte) map[string]any {
 // broker. The provider's protected administrator ref stays in its own config;
 // tenant-managed attester trust is resolved per request.
 func pamFromConfig(c config.PAM) PAMConfig {
-	out := PAMConfig{Enabled: c.Enabled, RequiredApprovals: c.RequiredApprovals, AutoApprovalAlone: c.AutoApprovalAlone}
+	out := PAMConfig{Enabled: c.Enabled, RequiredApprovals: c.RequiredApprovals}
 	if d, err := time.ParseDuration(strings.TrimSpace(c.DefaultTTL)); err == nil {
 		out.DefaultTTL = d
 	}

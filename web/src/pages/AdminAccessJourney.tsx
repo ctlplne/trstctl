@@ -973,12 +973,7 @@ export function AdminAccess() {
               </section>
               {pamRows ? (
                 <>
-                  {/* CR-001: a rule approves in reviewers' place, so changing one needs access:approve as well as access:write. */}
-                  <PAMAutoApprovalPanel
-                    canManage={
-                      !!user?.permissions?.includes("*") || (!!user?.permissions?.includes("access:write") && !!user?.permissions?.includes("access:approve"))
-                    }
-                  />
+                  <PAMAutoApprovalPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:write")} />
                   <PAMFoldersPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")} />
                   <PAMGatewayPoolsPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")} />
                   <PAMTargetsPanel

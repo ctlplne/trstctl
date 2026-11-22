@@ -200,10 +200,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Save a scoped automatic access review rule at the revision read; needs access:approve too (a rule never approves its author's own requests) */
+        /** Save a scoped automatic access review rule at the revision read */
         put: operations["savePAMAutoApprovalRule"];
         post?: never;
-        /** Delete an automatic review rule at the revision read; needs access:approve too */
+        /** Delete an automatic review rule at the revision read */
         delete: operations["deletePAMAutoApprovalRule"];
         options?: never;
         head?: never;

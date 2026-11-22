@@ -25,12 +25,10 @@ import (
 
 // An auto-approval is a recorded policy decision, not a skipped review. A
 // request outside any one of the rule's criteria still needs human review.
-// The rules' author may approve access (CR-001), and this deployment lets a
-// matching rule approve alone (pam.auto_approval_alone).
 func TestServedAutoApprovalRulesMatchOnlyTheirCriteriaA261(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{vaulted: true, autoApprovalAlone: true})
+	f := startGatewayFixture(t, gatewayFixtureOptions{vaulted: true})
 	h := f.h
-	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a261-rules-admin", "access:read", "access:write", "access:approve", "access:targets.write")
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a261-rules-admin", "access:read", "access:write", "access:targets.write")
 	sessionOnly := seedScopedTokenSubject(t, h.store, h.tenant, "a261-rules-session-only", "access:read", "access:sessions.open")
 	auditor := seedScopedTokenSubject(t, h.store, h.tenant, "a261-rules-auditor", "audit:read")
 	call := func(method, path, key string, body any) (int, []byte) {
@@ -154,9 +152,9 @@ func TestServedAutoApprovalRulesMatchOnlyTheirCriteriaA261(t *testing.T) {
 // and expiry, even when submitted under a fresh HTTP idempotency key.
 func TestServedAutoApprovalRecoversDecisionAndChecksOutA261(t *testing.T) {
 	const duplicateWindow = 100 * time.Millisecond
-	f := startGatewayFixture(t, gatewayFixtureOptions{vaulted: true, duplicateWindow: duplicateWindow, autoApprovalAlone: true})
+	f := startGatewayFixture(t, gatewayFixtureOptions{vaulted: true, duplicateWindow: duplicateWindow})
 	h := f.h
-	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a261-auto-recovery-admin", "access:read", "access:write", "access:approve", "access:targets.write")
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a261-auto-recovery-admin", "access:read", "access:write", "access:targets.write")
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "a261-auto-recovery-user", "access:read", "access:sessions.open")
 	ruleID := uuid.NewString()
 	a261CleanupRule(t, h, admin, ruleID)
@@ -310,7 +308,7 @@ func TestServedAutoApprovalRuleCapacityIsBoundedA261(t *testing.T) {
 	if err := h.store.UpsertTenant(f.ctx, store.Tenant{TenantID: tenant, Name: "A261 capacity"}); err != nil {
 		t.Fatal(err)
 	}
-	admin := seedScopedTokenSubject(t, h.store, tenant, "a261-capacity-admin", "access:read", "access:write", "access:approve")
+	admin := seedScopedTokenSubject(t, h.store, tenant, "a261-capacity-admin", "access:read", "access:write")
 	body := map[string]any{"name": "Routine read", "applies_to": []string{"session"}, "target_ids": []string{"pg-gw"}, "max_ttl_seconds": 120, "enabled": false, "revision": 0}
 	first := ""
 	ownedIDs := []string{}

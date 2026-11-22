@@ -3511,13 +3511,6 @@ expired or locked, is not signed in with again until it changes (or an operator 
 `trstctl-cli access targets health-check <type> <id>`), so a check never adds to an
 account's failed sign-ins. Each target's health shows on `GET /api/v1/access/targets`.
 
-`pam.auto_approval_alone` (a boolean; default `false`) lets a matching automatic approval rule
-approve a privileged access request by itself. Off, the rule's approval is one of the request's
-required approvals (its access template's, or `required_approvals`) and reviewers give the
-rest, so a rule never lowers the quorum. Turn it on only where a rule written by an approver
-should stand in for every reviewer; either way a rule never approves its own author's requests
-(see [automatic approval rules](features/incident-and-jit.md)).
-
 `pam.web_console_allow_loopback` (a boolean; default `false`) admits `webconsole` targets
 (A273) whose route is a loopback address, for a lab's stand-in console. Leave it off in
 production: the access gateway is then never pointed at its own host's services, and it also

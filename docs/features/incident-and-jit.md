@@ -823,12 +823,9 @@ trstctl-cli access auto-approval-rules delete RULE_UUID --revision 1 --force
 ```
 
 A new rule uses revision 0; an edit or deletion must name the revision read. Deleted rule IDs
-cannot be reused. At most 256 live rules are allowed per tenant. A rule approves requests in
-reviewers' place, so saving or deleting one needs `access:approve` as well as `access:write`,
-as granting a standing approval does; a token someone else minted for its subject and an access
-bundle run are refused with 403, and the console offers rule changes only to principals that
-hold both. Listing needs `access:read`. Review the exact criteria in the console before
-saving: the rule can approve future requests in place of a reviewer. Example `rule.json`:
+cannot be reused. At most 256 live rules are allowed per tenant. The policy author needs
+`access:write`; listing needs `access:read`. Review the exact criteria in the console before
+saving: the rule can approve future requests without a human vote. Example `rule.json`:
 
 ```json
 {
@@ -855,21 +852,7 @@ approval in another system. The requested lifetime must be within the rule's max
 
 Rules are tried in ID order; the first complete match records one policy approval as
 `auto-approval:RULE_UUID`, with `pam.auto_approval.applied` naming the rule revision, target,
-requester and matched facts. A nonmatch keeps the ordinary human quorum.
-
-A rule is held to what binds a reviewer. It never approves a request its own author makes
-(`saved_by`, the author of the revision in force), and it applies only while its author may
-still approve access. That is read again each time a request is first evaluated, from what the
-control plane records: the roles the author's member record names (built-in roles, or the
-tenant's custom roles as they are defined then) or the author's own live API tokens; a token
-someone else minted for the author counts for nothing. Offboarding the author, or lowering
-its role to one without `access:approve`, stops its rules from applying. Roles a sign-in takes
-from the identity provider's mapping are not recorded, so they cannot be read again: an
-author whose `access:approve` comes only from them is refused when saving (403) and needs a
-member role that grants it. A rule's approval is one of the request's required approvals,
-its template's or `pam.required_approvals`, and reviewers give the rest; a deployment that
-sets `pam.auto_approval_alone` lets a matching rule approve a request by itself (see
-[Configuration](../configuration.md)). The first evaluation,
+requester and matched facts. A nonmatch keeps the ordinary human quorum. The first evaluation,
 including no-match, is frozen in `pam.auto_approval.evaluated` for that request UUID: retries
 keep the decision and original deadline through a crash or a rule edit. Edits and deletion
 apply to new request UUIDs; they do not withdraw an existing approval or alter a live session.
