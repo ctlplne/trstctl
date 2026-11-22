@@ -450,6 +450,7 @@ func TestFullRestoreArtifactPairPreflightRequiresMatchingCuts(t *testing.T) {
 	if err := verifyFullRestoreArtifactPair(
 		bytes.NewReader(eventArtifact),
 		bytes.NewReader(matchedPostgres),
+		nil,
 		backup.PostgresStateIdentity{},
 	); err != nil {
 		t.Fatalf("matching full-restore artifacts rejected: %v", err)
@@ -459,6 +460,7 @@ func TestFullRestoreArtifactPairPreflightRequiresMatchingCuts(t *testing.T) {
 	err := verifyFullRestoreArtifactPair(
 		bytes.NewReader(eventArtifact),
 		bytes.NewReader(mismatchedPostgres),
+		nil,
 		backup.PostgresStateIdentity{},
 	)
 	if err == nil {

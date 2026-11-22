@@ -390,7 +390,11 @@ trstctl \
 # -> "restored full backup from ... (<N> independent PostgreSQL rows)"
 ```
 
-`--full-restore-dir` verifies the manifest hashes for captured keys/certs and the
+`--full-restore-dir` requires the original deployment KEK. It checks the HMAC on
+both `events.jsonl` and `postgres-state.jsonl` before restoring either artifact,
+and checks the PostgreSQL HMAC again when reopening the file for import. A
+recomputed SHA-256 or edited manifest cannot authorize added database rows.
+The command also verifies the manifest hashes for captured keys/certs and the
 signer key-store tree, decrypts encrypted sensitive artifacts with the backup
 encryption key, restores the event log, rebuilds the read model from that log,
 verifies `postgres-state.jsonl`, imports the admitted independent PostgreSQL rows, and then

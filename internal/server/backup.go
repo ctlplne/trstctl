@@ -781,21 +781,21 @@ func runFullRestore(
 	if err := requireExistingFile(cfg.Secrets.KEKFile, "deployment KEK"); err != nil {
 		return result, err
 	}
+	key, err := backupIntegrityKey(cfg)
+	if err != nil {
+		return result, err
+	}
+	defer secret.Wipe(key)
+	if len(key) == 0 {
+		return result, errors.New("full restore requires the deployment KEK for authenticated backup verification")
+	}
 	if err := verifyFullRestoreManifestArtifacts(manifest, dir); err != nil {
 		return result, err
 	}
-	// A full restore targets a FRESH deployment, whose KEK — and therefore whose
-	// backupIntegrityKey — is by definition not the one that sealed the artifact.
-	// So no destination-derived key is passed here, exactly as the event-log
-	// restore in this same path does not pass one. The artifacts remain
-	// tamper-EVIDENT (SHA-256 trailer plus the signed manifest) but are not
-	// authenticated against a secret on this path.
-	//
-	// Closing that properly needs an OPERATOR-SUPPLIED restore key carried with
-	// the backup rather than derived from the destination; see the H5 follow-up.
-	// The write side now emits an HMAC (postgresStateTrailer.HMACSHA256) so that
-	// key has something to verify against once it exists.
-	if err := verifyFullRestoreArtifactFiles(dir, manifestIdentity); err != nil {
+	// Event restore already requires the original deployment KEK and verifies
+	// its HMAC with this key. Authenticate the paired PostgreSQL artifact before
+	// any restore mutation, then use the same key at import after reopening it.
+	if err := verifyFullRestoreArtifactFiles(dir, key, manifestIdentity); err != nil {
 		return result, err
 	}
 	if err := restoreFullBackupFileArtifacts(manifest, dir, cfg, enc.key); err != nil {
@@ -837,7 +837,7 @@ func runFullRestore(
 			return eventprivacy.SourcePostgresProtection{Policy: current.policy, Custody: current.custody, Cut: summary.EventCutSequence}, closeCurrent, nil
 		}
 	}
-	summary, err := backup.RestorePostgresStateWithKey(ctx, st, f, nil, manifestIdentity)
+	summary, err := backup.RestorePostgresStateWithKey(ctx, st, f, key, manifestIdentity)
 	if err != nil {
 		result.Postgres = summary
 		return result, err
@@ -932,7 +932,7 @@ func verifyFullRestoreManifestArtifacts(manifest backup.FullManifest, dir string
 	return verifyFileArtifact(manifest, "postgres-state", filepath.Join(dir, "postgres-state.jsonl"))
 }
 
-func verifyFullRestoreArtifactFiles(dir string, id backup.PostgresStateIdentity) error {
+func verifyFullRestoreArtifactFiles(dir string, key []byte, id backup.PostgresStateIdentity) error {
 	eventFile, err := os.Open(filepath.Join(dir, "events.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return fmt.Errorf("open event log for full-restore preflight: %w", err)
@@ -942,7 +942,7 @@ func verifyFullRestoreArtifactFiles(dir string, id backup.PostgresStateIdentity)
 		_ = eventFile.Close()
 		return fmt.Errorf("open postgres state for full-restore preflight: %w", err)
 	}
-	preflightErr := verifyFullRestoreArtifactPair(eventFile, postgresFile, id)
+	preflightErr := verifyFullRestoreArtifactPair(eventFile, postgresFile, key, id)
 	eventCloseErr := eventFile.Close()
 	postgresCloseErr := postgresFile.Close()
 	if preflightErr != nil {
@@ -1047,15 +1047,16 @@ func proveFullRestoreRuntime(
 func verifyFullRestoreArtifactPair(
 	eventArtifact io.Reader,
 	postgresArtifact io.Reader,
+	key []byte,
 	id backup.PostgresStateIdentity,
 ) error {
-	postgresSummary, err := backup.VerifyPostgresStateWithKey(postgresArtifact, nil, id)
+	postgresSummary, err := backup.VerifyPostgresStateWithKey(postgresArtifact, key, id)
 	if err != nil {
 		return fmt.Errorf("full restore postgres-state preflight: %w", err)
 	}
 	eventSummary, err := backup.VerifyEventLogBackupWithAuditCheckpoints(
 		eventArtifact,
-		nil,
+		key,
 		postgresSummary.AuditCheckpoints,
 	)
 	if err != nil {
