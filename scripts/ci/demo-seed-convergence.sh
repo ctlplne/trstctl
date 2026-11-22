@@ -29,7 +29,7 @@ postgres_snapshot() {
         'outbox_count', (SELECT count(*) FROM outbox WHERE tenant_id = '${tenant_id}'),
         'outbox_active_retry_count', (SELECT count(*) FROM outbox
              WHERE tenant_id = '${tenant_id}'
-               AND NOT (destination = 'notification.expiry' AND status = 'pending'
+               AND NOT (destination LIKE 'notification.%' AND status = 'pending'
                         AND last_error = 'notification_receiver_not_configured')
                AND (status = 'processing' OR (status = 'pending'
                     AND COALESCE(last_error, '') <> 'delivery_deferred')))
@@ -52,7 +52,7 @@ snapshot() {
 
 stable_snapshot() {
   local previous="" current="" stable=0
-  # An unconfigured expiry notification remains pending through long retry
+  # An unconfigured notification remains pending through long retry
   # backoffs. Its known no-receiver refusal only updates its outbox row; it
   # does not change the inventory, outbox row count, or JetStream count. A
   # processing row or any different failure must still settle before comparison.

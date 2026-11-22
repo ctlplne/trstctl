@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the preserved-volume check with a retrying expiry notification."""
+"""Exercise the preserved-volume check with retrying notifications."""
 
 import os
 from pathlib import Path
@@ -12,7 +12,7 @@ SCRIPT = Path(__file__).with_name("demo-seed-convergence.sh")
 
 
 class DemoSeedConvergenceTest(unittest.TestCase):
-    def run_convergence(self, *, other_active=False, event_on_rerun=False):
+    def run_convergence(self, *, notification_destination="notification.expiry", other_active=False, event_on_rerun=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             docker = root / "docker"
@@ -29,10 +29,12 @@ elif 'ps' in args:
     print('seed-container')
 elif 'exec' in args and 'postgres' in args:
     sql = args[args.index('-c') + 1]
-    # Model one pending notification.expiry row and no other active work.
+    # Model one pending, unconfigured notification row and no other active work.
     active = int(os.environ.get('FAKE_OTHER_ACTIVE', '0'))
-    if "destination = 'notification.expiry' AND status = 'pending'" not in sql or \
-            "last_error = 'notification_receiver_not_configured'" not in sql:
+    destination = os.environ.get('FAKE_NOTIFICATION_DESTINATION', 'notification.expiry')
+    excluded = "destination LIKE 'notification.%'" in sql or (destination == 'notification.expiry' and \
+            "destination = 'notification.expiry'" in sql)
+    if not excluded or "last_error = 'notification_receiver_not_configured'" not in sql:
         active += 1
     print(json.dumps(dict(owners=[], owner_count=0, owner_logical_count=0,
         identities=[], certificates=0, members=[], secrets=[],
@@ -53,6 +55,7 @@ else:
             (root / "sleep").chmod(0o755)
             env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ["PATH"],
                    "FAKE_OTHER_ACTIVE": str(int(other_active)),
+                   "FAKE_NOTIFICATION_DESTINATION": notification_destination,
                    "FAKE_EVENT_ON_RERUN": str(int(event_on_rerun)),
                    "FAKE_DOCKER_STATE": str(root / "reran")}
             return subprocess.run(
@@ -62,6 +65,11 @@ else:
 
     def test_unconfigured_expiry_retry_does_not_block_seed_checkpoint(self):
         result = self.run_convergence()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("convergence passed", result.stdout)
+
+    def test_unconfigured_risk_retry_does_not_block_seed_checkpoint(self):
+        result = self.run_convergence(notification_destination="notification.risk")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("convergence passed", result.stdout)
 
