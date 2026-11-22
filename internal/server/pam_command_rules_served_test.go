@@ -18,10 +18,9 @@ import (
 )
 
 func TestServedGatewayCommandRuleBlocksAndAuditsPostgresA262(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true})
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, unrecorded: true})
 	// Use the real unrecorded gateway path: command authorization must not be a
 	// side effect of enabling the separate recording store.
-	f.h.srv.pam.recordings = nil
 	ruleID := uuid.NewString()
 	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-block-template", map[string]any{
 		"name": "a262-block-truncate", "reason": "Production maintenance", "required_approvals": 2, "max_ttl_seconds": 60,
@@ -154,8 +153,7 @@ func TestServedGatewayCommandRuleBlocksAndAuditsPostgresA262(t *testing.T) {
 }
 
 func TestServedGatewayCommandRuleWaitsForDistinctHumanReviewA262(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true})
-	f.h.srv.pam.recordings = nil
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, unrecorded: true})
 	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-review-template", map[string]any{
 		"name": "a262-review-drop", "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 60,
 		"command_rules": []map[string]any{{"id": uuid.NewString(), "name": "Review direct deletion", "enabled": true, "protocol": "postgres", "operations": []string{"DROP"}, "effect": "require_approval", "required_approvals": 2, "review_ttl_seconds": 40}},
@@ -297,8 +295,7 @@ func TestServedGatewayCommandRuleWaitsForDistinctHumanReviewA262(t *testing.T) {
 }
 
 func TestServedGatewayCommandReviewDenyA262(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true})
-	f.h.srv.pam.recordings = nil
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, unrecorded: true})
 	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-review-deny-template", map[string]any{
 		"name": "a262-review-deny-drop", "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 60,
 		"command_rules": []map[string]any{{"id": uuid.NewString(), "name": "Review direct deletion", "enabled": true, "protocol": "postgres", "operations": []string{"DROP"}, "effect": "require_approval", "required_approvals": 2, "review_ttl_seconds": 5}},
@@ -427,8 +424,7 @@ func TestServedGatewayCommandReviewDenyA262(t *testing.T) {
 }
 
 func TestServedGatewayCommandReviewExpireA262(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true})
-	f.h.srv.pam.recordings = nil
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, unrecorded: true})
 	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-review-expire-template", map[string]any{
 		"name": "a262-review-expire-drop", "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 60,
 		"command_rules": []map[string]any{{"id": uuid.NewString(), "name": "Review direct deletion", "enabled": true, "protocol": "postgres", "operations": []string{"DROP"}, "effect": "require_approval", "required_approvals": 2, "review_ttl_seconds": 5}},
@@ -553,8 +549,7 @@ func TestServedGatewayCommandReviewExpireA262(t *testing.T) {
 }
 
 func TestServedGatewayCommandReviewDisconnectA262(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true})
-	f.h.srv.pam.recordings = nil
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, unrecorded: true})
 	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-review-disconnect-template", map[string]any{
 		"name": "a262-review-disconnect-drop", "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 60,
 		"command_rules": []map[string]any{{"id": uuid.NewString(), "name": "Review direct deletion", "enabled": true, "protocol": "postgres", "operations": []string{"UPDATE"}, "effect": "require_approval", "required_approvals": 2, "review_ttl_seconds": 5}},
@@ -684,8 +679,7 @@ func TestServedGatewayCommandReviewDisconnectA262(t *testing.T) {
 }
 
 func TestServedGatewayPreparedCommandNeedsFreshReviewForEveryBindingA262(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true})
-	f.h.srv.pam.recordings = nil
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, unrecorded: true})
 	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-prepared-review-template", map[string]any{
 		"name": "a262-prepared-review-drop", "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 60,
 		"command_rules": []map[string]any{{"id": uuid.NewString(), "name": "Review direct deletion", "enabled": true, "protocol": "postgres", "operations": []string{"UPDATE"}, "effect": "require_approval", "required_approvals": 2, "review_ttl_seconds": 40}},
