@@ -22,7 +22,7 @@ func TestMakeLintFailsClosedWithoutOptionalTools(t *testing.T) {
 		"TMPDIR="+t.TempDir(),
 	)
 
-	cmd := exec.Command(makePath, "-f", "../Makefile", "lint") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+	cmd := exec.Command(makePath, "-C", "..", "-f", "Makefile", "lint") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -36,7 +36,7 @@ func TestMakeLintFailsClosedWithoutOptionalTools(t *testing.T) {
 		t.Fatalf("make lint used the partial-warning path instead of failing closed:\n%s", got)
 	}
 
-	cmd = exec.Command(makePath, "-f", "../Makefile", "lint-partial") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+	cmd = exec.Command(makePath, "-C", "..", "-f", "Makefile", "lint-partial") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Env = env
 	out, err = cmd.CombinedOutput()
 	if err != nil {
@@ -73,6 +73,9 @@ exec `+realBash+` "$@"
 	writeExecutable(t, filepath.Join(dir, "xargs"), "#!/bin/sh\nexit 0\n")
 	writeExecutable(t, filepath.Join(dir, "gofmt"), "#!/bin/sh\nexit 0\n")
 	writeExecutable(t, filepath.Join(dir, "go"), "#!/bin/sh\nexit 0\n")
+	// The architecture target uses Python to assemble its fixed input list. Keep
+	// that prerequisite present so this test reaches the optional lint tools.
+	writeExecutable(t, filepath.Join(dir, "python3"), "#!/bin/sh\nexit 0\n")
 	writeExecutable(t, filepath.Join(dir, "mktemp"), `#!/bin/sh
 template="${1:-${TMPDIR:-/tmp}/tmp.XXXXXX}"
 case "$template" in
