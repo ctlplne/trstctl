@@ -456,7 +456,7 @@ not this file.
 | `internal/projections/discovery_secret_move.go:20` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/discovery_secret_move.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/discovery_secret_move.go:26` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/projections/projections.go:339` | an event type name, not a credential (CWE-798) |
+| `internal/projections/projections.go:341` | an event type name, not a credential (CWE-798) |
 | `internal/projections/secret_deliveries.go:16` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_integrations.go:237` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_integrations.go:239` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -1390,10 +1390,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7655` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7672` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7685` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7720` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7709` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7726` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7739` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7774` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:250` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:257` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1455,11 +1455,11 @@ not this file.
 | `internal/server/secret_sync_source_sequence_test.go:72` | this fixture appends exactly two events. |
 | `internal/server/secrets_rotation_served_test.go:2589` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/totp_seed_replace_served_test.go:76` | a positive clock step in a test (CWE-190) |
-| `internal/signing/keystore.go:128` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:130` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:132` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:134` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
-| `internal/signing/keystore.go:144` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/signing/keystore.go:136` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/signing/keystore.go:152` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/slackapp/socket.go:207` | bounded by maxSocketMessage above (CWE-190) |
 | `internal/slackapp/socket.go:231` | n <= 0xFFFF here (CWE-190) |
 | `internal/slackapp/socket.go:234` | a length is non-negative (CWE-190) |
@@ -1610,8 +1610,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:411` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:435` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:52` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:963` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:983` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:968` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:988` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1782,8 +1782,8 @@ not this file.
 | `internal/server/secret_validity_providers_served_test.go:36` | test fixture under t.TempDir (CWE-22) |
 | `internal/signing/design_test.go:137` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/store/store_isolation_test.go:423` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/store/store_isolation_test.go:471` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:428` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:476` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 
 ### G124 — CWE-1004 Sensitive cookie without protective attributes (50 sites)
 
@@ -1844,7 +1844,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4239` | closed test table list above |
+| `internal/store/migration_content_test.go:4240` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
@@ -2302,8 +2302,8 @@ not this file.
 | `tools/dodcensus/external_ca_substrate_test.go:168` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/kmip_substrate_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/main.go:322` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/dodcensus/managed_key_manifest_test.go:606` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/managed_key_manifest_test.go:642` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/managed_key_manifest_test.go:619` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/managed_key_manifest_test.go:655` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/launched.go:285` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/launched.go:656` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/launched.go:1504` | developer tool running fixed toolchain commands over the repo (CWE-78) |
@@ -3006,7 +3006,7 @@ not this file.
 | `internal/server/agent_roles_served_test.go:535` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_roles_served_test.go:539` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
-| `internal/server/agentchannel.go:147` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
+| `internal/server/agentchannel.go:148` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/audit_archive_download_served_test.go:180` | the test's own archive (CWE-22) |
 | `internal/server/audit_feed_index_template_lab_test.go:50` | the repository's own shipped content (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:35` | the runner's lab CA (CWE-22) |
@@ -3113,7 +3113,7 @@ not this file.
 | `internal/server/run.go:591` | operator-configured public recovery kit (CWE-22) |
 | `internal/server/run.go:1226` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run.go:1413` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1901` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1902` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:92` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/scan_annotation_served_test.go:48` | test fixture under t.TempDir (CWE-22) |
@@ -3154,7 +3154,7 @@ not this file.
 | `internal/signing/design_test.go:137` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:252` | exact signer-owned journal path. |
 | `internal/signing/hardening_contract_test.go:55` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/signing/keystore.go:510` | path joins a sanitized handle to the signer-owned 0700 keystore (CWE-22). |
+| `internal/signing/keystore.go:523` | path joins a sanitized handle to the signer-owned 0700 keystore (CWE-22). |
 | `internal/signing/keystore_test.go:139` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/keystore_test.go:229` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/legacy_migration.go:35` | signer operator supplies the one legacy migration path |
@@ -3172,8 +3172,8 @@ not this file.
 | `internal/store/dynamic_secret_lock_order_test.go:124` | fixed sibling path inside this package's own directory (CWE-22) |
 | `internal/store/keyset_order_test.go:43` | the package's own source files (CWE-22) |
 | `internal/store/migration_safety_test.go:87` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/store/store_isolation_test.go:423` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/store/store_isolation_test.go:471` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:428` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:476` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/succession/delegation/durable.go:253` | signer-owned keystore directory selected at signer startup; fsync makes the scope rename durable (CWE-22) |
 | `internal/succession/minter/spentstore.go:70` | signer-owned custody directory selected at signer startup (CWE-22). |
 | `internal/succession/minter/spentstore.go:113` | claim path is signer-owned custody dir plus a fixed SHA-256 hex nonce digest (CWE-22). |
@@ -3226,7 +3226,7 @@ not this file.
 | `tools/dodcensus/managed_key_manifest_test.go:415` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:438` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:484` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:671` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:684` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/proof/launched.go:420` | gate-owned private directory created above (CWE-22) |
 | `tools/dodcensus/proof/launched.go:599` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/proof/launched.go:1421` | developer tool reading the repo paths it is pointed at (CWE-22) |
@@ -3795,9 +3795,9 @@ not this file.
 | `internal/server/ssh_trust_fleet_openssh_test.go:215` | retain the owned generated public certificate beside its fixture key; no external path input (CWE-22). |
 | `internal/server/vault_compat_served_test.go:195` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:156` | test reads the cluster CA its runner wrote (CWE-22) |
-| `internal/signing/keystore.go:354` | both absolute paths passed the explicit signer-keystore confinement check above (CWE-22) |
-| `internal/signing/keystore.go:365` | tmpPath passed the explicit signer-keystore confinement check above (CWE-22) |
-| `internal/signing/keystore.go:536` | path passed the explicit signer-keystore confinement check above (CWE-22) |
+| `internal/signing/keystore.go:367` | both absolute paths passed the explicit signer-keystore confinement check above (CWE-22) |
+| `internal/signing/keystore.go:378` | tmpPath passed the explicit signer-keystore confinement check above (CWE-22) |
+| `internal/signing/keystore.go:549` | path passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/keystore_test.go:233` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/signing/revocation.go:148` | path passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/testutil/openssltest/openssltest.go:89` | test-support helper probing fixed well-known openssl paths; not linked into served binaries (CWE-22) |
@@ -3816,7 +3816,7 @@ not this file.
 | `tools/dodcensus/managed_key_manifest_test.go:306` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:443` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:492` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/managed_key_manifest_test.go:683` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/managed_key_manifest_test.go:696` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/proof/launched.go:1340` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/proof/proof.go:98` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:218` | test path inside its own tempdir/checkout (CWE-22) |
