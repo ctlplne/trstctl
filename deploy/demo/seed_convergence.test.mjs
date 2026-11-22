@@ -5,14 +5,27 @@ import test from "node:test";
 
 import {
   advanceIdentity,
+  buildDemoHistory,
   checkpointSource,
   checkpointDisposition,
+  discoverySourceConfig,
   findUniqueLogicalRecord,
   seedInventoryDigest,
   seedCompletionSummary,
   stableDemoValue,
   stableSeedSemantics,
 } from "./seed.mjs";
+
+test("CI demo cloud-secret config has only fields admitted by the typed API", () => {
+  const definition = buildDemoHistory().discoverySources.find((source) => source.kind === "cloud_secret");
+  assert.ok(definition, "the seeded cloud-secret source must exist");
+  assert.deepEqual(discoverySourceConfig(definition), definition.config);
+  assert.deepEqual(Object.keys(discoverySourceConfig(definition)), ["providers"]);
+  assert.deepEqual(discoverySourceConfig({ ...definition, kind: "secret_store" }), definition.config);
+  const network = discoverySourceConfig({ kind: "network", daysAgo: 49, config: { targets: ["trstctl:8443"] } });
+  assert.deepEqual(network.targets, ["trstctl:8443"]);
+  assert.match(network.demo_observed_at, /^\d{4}-\d{2}-\d{2}T/);
+});
 
 test("demo completion summary never renders one-time credential material", () => {
   const sentinel = "trst_should-never-reach-logs";

@@ -912,6 +912,16 @@ async function ensureSecret(name, valueLabel, wantedVersion, ownerID, secretItem
   return existing;
 }
 
+function discoverySourceConfig(sourceDef) {
+  // The cloud-secret and secret-store API decoders admit only their exact
+  // typed provider schema. The demo's observation clock is synthetic history,
+  // not a provider setting; its separate history events retain that timestamp.
+  if (sourceDef.kind === "cloud_secret" || sourceDef.kind === "secret_store") {
+    return { ...sourceDef.config };
+  }
+  return { ...sourceDef.config, demo_observed_at: daysAgo(sourceDef.daysAgo) };
+}
+
 async function ensureDiscoverySource(sourceDef, sourceItems) {
   const existing = findUniqueLogicalRecord(
     sourceItems,
@@ -928,10 +938,7 @@ async function ensureDiscoverySource(sourceDef, sourceItems) {
   const created = await api("POST", "/api/v1/discovery/sources", {
     name: sourceDef.name,
     kind: sourceDef.kind,
-    config: {
-      ...sourceDef.config,
-      demo_observed_at: daysAgo(sourceDef.daysAgo),
-    },
+    config: discoverySourceConfig(sourceDef),
   }, stableKey(`discovery-source-${sourceDef.key}`));
   sourceItems.push(created);
   return created;
@@ -1481,8 +1488,10 @@ function seedCompletionSummary({ url, tenant, plannedEvents, owners, certificate
 
 export {
   advanceIdentity,
+  buildDemoHistory,
   checkpointSource,
   checkpointDisposition,
+  discoverySourceConfig,
   findUniqueLogicalRecord,
   seedInventoryDigest,
   seedCompletionSummary,
