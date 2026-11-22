@@ -179,6 +179,7 @@ func UnsupportedPostgresControlStatement(sql []byte, operations []string) bool {
 			return true
 		}
 	}
+	auditedLogSetting := PostgresAuditedLogSetting(sql, operations)
 	for _, backslash := range []bool{false, true} {
 		var tokens []sqlToken
 		if err := sqlRiskTokens(sql, false, backslash, 0, &tokens); err != nil {
@@ -196,10 +197,41 @@ func UnsupportedPostgresControlStatement(sql []byte, operations []string) bool {
 			if firstWord == "" {
 				firstWord = token.text
 			}
-			if token.text == "set" && firstWord != "update" {
+			if token.text == "set" && firstWord != "update" && !auditedLogSetting {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// PostgresAuditedLogSetting recognizes only one complete SET log_statement
+// command. It may pass the control fence only when the gateway has a matching
+// command rule; the independent gateway recording then remains authoritative
+// even if PostgreSQL logging is disabled. Encoding and other SET commands stay
+// inside the unconditional control fence.
+func PostgresAuditedLogSetting(sql []byte, operations []string) bool {
+	if !slices.Contains(operations, "SET") || !slices.Contains(operations, RiskAuditTampering) {
+		return false
+	}
+	for _, backslash := range []bool{false, true} {
+		var tokens []sqlToken
+		if err := sqlRiskTokens(sql, false, backslash, 0, &tokens); err != nil {
+			return false
+		}
+		if n := len(tokens); n > 0 && tokens[n-1].kind == 'p' && tokens[n-1].text == ";" {
+			tokens = tokens[:n-1]
+		}
+		if len(tokens) != 4 {
+			return false
+		}
+		assignment := tokens[2].kind == 'p' && tokens[2].text == "=" || tokens[2].kind == 'w' && tokens[2].text == "to"
+		if tokens[0].kind != 'w' || tokens[0].text != "set" ||
+			tokens[1].kind != 'w' || tokens[1].text != "log_statement" ||
+			!assignment ||
+			(tokens[3].kind != 'w' && tokens[3].kind != 's') {
+			return false
+		}
+	}
+	return true
 }

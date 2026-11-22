@@ -122,6 +122,32 @@ func TestA262UpdateSetDoesNotBypassOrTriggerSessionControlFence(t *testing.T) {
 	}
 }
 
+func TestA275OnlyAuditedLogStatementSettingMayReachACommandRule(t *testing.T) {
+	for _, tc := range []struct {
+		sql             string
+		auditable, deny bool
+	}{
+		{"SET log_statement = 'none'", true, false},
+		{"SeT /* reviewed */ log_statement TO 'none'", true, false},
+		{"SET log_statement = 'none'; SET client_encoding TO 'SJIS'", false, true},
+		{"SET client_encoding TO 'SJIS'", false, true},
+		{"SET search_path TO public", false, true},
+		{"SET log_min_duration_statement TO -1", false, true},
+		{"UPDATE public.notes SET log_statement='none'", false, false},
+	} {
+		ops, err := PostgresRuleOperations([]byte(tc.sql))
+		if err != nil {
+			t.Fatalf("classify %q: %v", tc.sql, err)
+		}
+		if got := PostgresAuditedLogSetting([]byte(tc.sql), ops); got != tc.auditable {
+			t.Errorf("audited setting %q = %t, want %t", tc.sql, got, tc.auditable)
+		}
+		if got := UnsupportedPostgresControlStatement([]byte(tc.sql), ops); got != tc.deny {
+			t.Errorf("control refusal %q = %t, want %t", tc.sql, got, tc.deny)
+		}
+	}
+}
+
 func FuzzPostgresOperationMetadata(f *testing.F) {
 	for _, sql := range []string{"TRUNCATE notes", "SELECT 'TRUNCATE'", "DO $$ BEGIN EXECUTE 'DROP TABLE notes'; END $$", "/* a /* b */ c */ DROP TABLE notes", "SELECT E'a\\\\b'", "UPDATE notes SET value=1", "UPDATE notes SET value=1; SET client_encoding TO 'SJIS'", strings.Repeat("$", 300)} {
 		f.Add([]byte(sql))

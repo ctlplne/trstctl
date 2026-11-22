@@ -212,6 +212,37 @@ func TestServedGatewayCommandAlertRaisesOneAlertWithTheRecordingA275(t *testing.
 	}
 }
 
+func TestA275AuditedLogSettingWithoutMatchingRuleIsRefused(t *testing.T) {
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true})
+	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator,
+		"a275-unmatched-template", map[string]any{
+			"name": "a275-unmatched", "reason": "Control fence proof", "required_approvals": 2, "max_ttl_seconds": 60,
+			"command_rules": []map[string]any{{"id": uuid.NewString(), "name": "Unrelated delete rule", "enabled": true,
+				"protocol": "postgres", "operations": []string{"DELETE"}, "effect": "block"}},
+		})
+	var template struct {
+		ID string `json:"id"`
+	}
+	if status != http.StatusCreated || json.Unmarshal(body, &template) != nil || template.ID == "" {
+		t.Fatalf("save unrelated template = %d %s", status, body)
+	}
+	session := f.open("a275-unmatched-open", map[string]any{
+		"target_type": "postgres", "target_id": "pg-gw", "role": "readonly", "ttl_seconds": 60,
+		"template_id": template.ID,
+	})
+	local, stop := f.postgresTunnel(session)
+	defer stop()
+	conn, err := pgconn.Connect(f.ctx, "postgres://uncredentialed-client@"+local+"/postgres?sslmode=disable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	_, err = conn.Exec(f.ctx, "SET log_statement = 'none'").ReadAll()
+	if err == nil || !strings.Contains(err.Error(), "TRSTCTL_POLICY_BLOCKED") {
+		t.Fatalf("unmatched audit-setting control reached PostgreSQL: %v", err)
+	}
+}
+
 // TestServedRiskCategoriesAlertAndBlockA275: a template's rules name risk
 // categories the gateway reads from the statement or command itself. Over
 // PostgreSQL a credential read and an audit-setting change are alerted
