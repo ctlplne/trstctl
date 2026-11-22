@@ -165,3 +165,41 @@ func UnsupportedPostgresControl(operations []string) bool {
 	}
 	return false
 }
+
+// UnsupportedPostgresControlStatement keeps the session-control fence while
+// distinguishing a top-level SET command from UPDATE's required SET clause.
+// Both PostgreSQL string-escape modes must parse cleanly, and either mode may
+// reveal a control command. Other fenced keywords retain their broad refusal.
+func UnsupportedPostgresControlStatement(sql []byte, operations []string) bool {
+	if len(sql) > MaxStatementBytes || !utf8.Valid(sql) || bytes.IndexByte(sql, 0) >= 0 {
+		return true
+	}
+	for _, operation := range []string{"PREPARE", "EXECUTE", "RESET", "DISCARD"} {
+		if slices.Contains(operations, operation) {
+			return true
+		}
+	}
+	for _, backslash := range []bool{false, true} {
+		var tokens []sqlToken
+		if err := sqlRiskTokens(sql, false, backslash, 0, &tokens); err != nil {
+			return true
+		}
+		firstWord := ""
+		for _, token := range tokens {
+			if token.kind == 'p' && token.text == ";" {
+				firstWord = ""
+				continue
+			}
+			if token.kind != 'w' {
+				continue
+			}
+			if firstWord == "" {
+				firstWord = token.text
+			}
+			if token.text == "set" && firstWord != "update" {
+				return true
+			}
+		}
+	}
+	return false
+}

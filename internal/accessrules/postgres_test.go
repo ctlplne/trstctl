@@ -95,8 +95,35 @@ func TestCR004PostgresEncodingControlsAreUnsupported(t *testing.T) {
 	}
 }
 
+func TestA262UpdateSetDoesNotBypassOrTriggerSessionControlFence(t *testing.T) {
+	for _, tc := range []struct {
+		name, sql string
+		refuse    bool
+	}{
+		{"ordinary update", "UPDATE public.a262_counter SET value=$1::integer WHERE $2::text IS NOT NULL RETURNING value", false},
+		{"quoted control name", `UPDATE public.notes SET "set"=$1`, false},
+		{"session control after update", "UPDATE public.notes SET value=1; /* between */ SET client_encoding TO 'SJIS'", true},
+		{"session control before update", "/* before */ SET client_encoding TO 'SJIS'; UPDATE public.notes SET value=1", true},
+		{"prepare control", "PREPARE hidden AS UPDATE public.notes SET value=1", true},
+		{"other control after update", "UPDATE public.notes SET value=1; EXECUTE hidden", true},
+		{"reset control", "RESET client_encoding", true},
+		{"discard control", "DISCARD ALL", true},
+		{"uninspectable input", "UPDATE public.notes SET value='unterminated", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			operations, err := PostgresRuleOperations([]byte(tc.sql))
+			if err != nil && tc.name != "uninspectable input" {
+				t.Fatal(err)
+			}
+			if got := UnsupportedPostgresControlStatement([]byte(tc.sql), operations); got != tc.refuse {
+				t.Fatalf("control fence = %t for %q (%v), want %t", got, tc.sql, operations, tc.refuse)
+			}
+		})
+	}
+}
+
 func FuzzPostgresOperationMetadata(f *testing.F) {
-	for _, sql := range []string{"TRUNCATE notes", "SELECT 'TRUNCATE'", "DO $$ BEGIN EXECUTE 'DROP TABLE notes'; END $$", "/* a /* b */ c */ DROP TABLE notes", "SELECT E'a\\\\b'", strings.Repeat("$", 300)} {
+	for _, sql := range []string{"TRUNCATE notes", "SELECT 'TRUNCATE'", "DO $$ BEGIN EXECUTE 'DROP TABLE notes'; END $$", "/* a /* b */ c */ DROP TABLE notes", "SELECT E'a\\\\b'", "UPDATE notes SET value=1", "UPDATE notes SET value=1; SET client_encoding TO 'SJIS'", strings.Repeat("$", 300)} {
 		f.Add([]byte(sql))
 	}
 	f.Fuzz(func(t *testing.T, raw []byte) {
@@ -114,6 +141,15 @@ func FuzzPostgresOperationMetadata(f *testing.F) {
 		for i, op := range ops {
 			if !knownPostgresOperation(op) || i > 0 && ops[i-1] == op {
 				t.Fatalf("unsafe or repeated metadata = %q", op)
+			}
+		}
+		ruleOps, err := PostgresRuleOperations(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, control := range []string{"PREPARE", "EXECUTE", "RESET", "DISCARD"} {
+			if slices.Contains(ruleOps, control) && !UnsupportedPostgresControlStatement(raw, ruleOps) {
+				t.Fatalf("control %s escaped the statement fence", control)
 			}
 		}
 	})
