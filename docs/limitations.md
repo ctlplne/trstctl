@@ -2540,8 +2540,9 @@ Debian 12's OpenSSL 3.0.22, tpm2-openssl 1.1.1, nginx 1.22.1, HAProxy 2.6.12, Po
 no ECDSA suite; `TestSwtpmHostKeyServesTLSThroughTheTPM2ProviderTPMO1` checks this
 and fails when a package changes it. nginx serves the key with one worker and is
 re-executed, not reloaded, for each deploy (TPM-O1-L3): its workers share the master's
-provider context, so two workers fail concurrent handshakes, and an in-place reload
-leaves it failing its handshakes or serving the previous certificate;
+provider context, so two workers intermittently fail concurrent handshakes (a single
+eight-handshake burst can pass), and an in-place reload leaves it failing its
+handshakes or serving the previous certificate;
 `TestSwtpmNginxCannotReloadATPMHeldKeyInPlaceOrShareItAcrossWorkersTPMO1L3` checks
 both. A re-execution without an outage is proven with Debian's init script; under
 systemd the profile maps a restart, and the upgrade there is part of the real-host

@@ -15,7 +15,7 @@ RUN apt-get update \
         libtss2-tcti-tabrmd0 \
         tpm2-abrmd \
         dbus \
-        nginx \
+        nginx=1.22.1-9+deb12u11 \
         openssl \
         gcc \
         libc6-dev \

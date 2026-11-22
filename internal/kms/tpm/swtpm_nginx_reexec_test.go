@@ -77,9 +77,10 @@ func concurrentHandshakes(addr string, n int, leaf []byte) int {
 // the single-process mode the TPM-O1 journey ran, leaves nginx failing its
 // handshakes or still serving the previous certificate; and two nginx workers,
 // which share the master's tpm2 provider context, fail concurrent handshakes.
-// Each check fails when a package changes the behavior, so the requirements
-// in docs/features/deployment-connectors.md can be revisited. The working
-// path, a re-execution of nginx, is the relay's journey.
+// A single eight-handshake burst can happen to succeed, so repeat bounded
+// bursts until the shared-provider failure is observed or 64 handshakes pass.
+// Each check fails if the observed behavior changes; the working path, a
+// re-execution of nginx, is the relay's journey.
 func TestSwtpmNginxCannotReloadATPMHeldKeyInPlaceOrShareItAcrossWorkersTPMO1L3(t *testing.T) {
 	sock := os.Getenv("TRSTCTL_SWTPM_PATH")
 	if sock == "" || os.Getenv("TRSTCTL_TPM2_PROVIDER") != "1" || os.Getenv("TRSTCTL_SWTPM_INNER") != "1" {
@@ -205,11 +206,15 @@ http {
 		t.Fatalf("nginx with two workers served another certificate\n%s", logs())
 	}
 	pids, _ := os.ReadFile(filepath.Join(dir, "nginx.pid")) // #nosec G304 -- the test's own temp directory (CWE-22)
-	ok := concurrentHandshakes(addr, 8, leaf1)
-	if ok == 8 {
-		t.Fatal("two nginx workers now serve a TPM-held key to concurrent handshakes: revisit the TPM-O1-L3 worker requirement in docs/features/deployment-connectors.md")
+	total, ok := 0, 0
+	for batch := 0; batch < 8 && total-ok < 8; batch++ {
+		total += 8
+		ok += concurrentHandshakes(addr, 8, leaf1)
 	}
-	t.Logf("two workers (master %s): %d of 8 concurrent handshakes completed", strings.TrimSpace(string(pids)), ok)
+	if total-ok < 8 {
+		t.Fatalf("two nginx workers completed %d of %d TPM handshakes with fewer than 8 failures: revisit the TPM-O1-L3 worker requirement in docs/features/deployment-connectors.md", ok, total)
+	}
+	t.Logf("two workers (master %s): %d of %d concurrent handshakes completed; %d failed", strings.TrimSpace(string(pids)), ok, total, total-ok)
 	stop()
 	t.Log("TPMO1L3_TWO_WORKERS_FAIL_AS_DOCUMENTED")
 }

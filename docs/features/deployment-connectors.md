@@ -1148,8 +1148,10 @@ Second, the kernel's TPM resource manager `/dev/tpmrm0`, the provider's default 
 `tpm2-abrmd`). Third, TLS 1.3 enabled: with the preference, OpenSSL 3.0 offers no
 ECDSA suite in TLS 1.2 for the TPM-held P-256 key. Fourth, one worker
 (`worker_processes 1;`, where Debian's `nginx.conf` says `auto`): nginx's workers
-share the master's provider context, and with two workers most concurrent handshakes
-fail. Fifth, a re-execution of nginx for each deploy instead of a reload (TPM-O1-L3):
+share the master's provider context, and with two workers concurrent handshakes
+fail intermittently; the lab repeats bounded bursts because one eight-handshake
+burst can pass. Fifth, a re-execution of nginx for each deploy instead of a reload
+(TPM-O1-L3):
 an in-place reload, `nginx -s reload` or `systemctl reload`, leaves nginx failing its
 handshakes or still serving the previous certificate. For a TPM-held key the agent
 runs the host profile's `nginx-upgrade` action where it would reload. Debian's
