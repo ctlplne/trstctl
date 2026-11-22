@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/url"
 	"sync"
 	"time"
 
@@ -90,16 +91,27 @@ func (c *CA) IssueServerCertificate(dnsNames []string, ttl time.Duration) (tls.C
 	if len(dnsNames) > 0 {
 		cn = dnsNames[0]
 	}
-	return c.issue(cn, dnsNames, ttl, x509.ExtKeyUsageServerAuth)
+	return c.issue(cn, dnsNames, nil, ttl, x509.ExtKeyUsageServerAuth)
+}
+
+// IssueAgentControlPlaneServerCertificate adds the role SAN agents require
+// in addition to the normal CA chain and DNS name checks.
+func (c *CA) IssueAgentControlPlaneServerCertificate(dnsNames []string, ttl time.Duration) (tls.Certificate, error) {
+	cn := ""
+	if len(dnsNames) > 0 {
+		cn = dnsNames[0]
+	}
+	uri := &url.URL{Scheme: "spiffe", Host: "trstctl", Path: "/system/agent-channel"}
+	return c.issue(cn, dnsNames, []*url.URL{uri}, ttl, x509.ExtKeyUsageServerAuth)
 }
 
 // IssueClientCertificate issues a client (ClientAuth) certificate for the given
 // common name (the agent identity), valid for ttl.
 func (c *CA) IssueClientCertificate(commonName string, ttl time.Duration) (tls.Certificate, error) {
-	return c.issue(commonName, nil, ttl, x509.ExtKeyUsageClientAuth)
+	return c.issue(commonName, nil, nil, ttl, x509.ExtKeyUsageClientAuth)
 }
 
-func (c *CA) issue(cn string, dnsNames []string, ttl time.Duration, eku x509.ExtKeyUsage) (tls.Certificate, error) {
+func (c *CA) issue(cn string, dnsNames []string, uris []*url.URL, ttl time.Duration, eku x509.ExtKeyUsage) (tls.Certificate, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return tls.Certificate{}, err
@@ -117,6 +129,7 @@ func (c *CA) issue(cn string, dnsNames []string, ttl time.Duration, eku x509.Ext
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{eku},
 		DNSNames:              dnsNames,
+		URIs:                  uris,
 		BasicConstraintsValid: true,
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, c.cert, &key.PublicKey, c.key)

@@ -453,7 +453,7 @@ func (c *CA) BundlePEM() []byte {
 // transport credentials that present it and require client certs from this CA —
 // so the control plane wires mutual TLS without naming crypto/* itself.
 func (c *CA) ServerCredentials(dnsNames []string, ttl time.Duration) (credentials.TransportCredentials, error) {
-	serverCert, err := c.IssueServerCertificate(dnsNames, ttl)
+	serverCert, err := c.IssueAgentControlPlaneServerCertificate(dnsNames, ttl)
 	if err != nil {
 		return nil, err
 	}
@@ -491,15 +491,40 @@ func (s *SwappableSource) ClientCertificate() (*tls.Certificate, error) {
 	return src.ClientCertificate()
 }
 
+// AgentControlPlaneServerURI marks the control plane's own agent-channel server
+// certificate. A tenant gateway certificate carries its agent SPIFFE ID instead.
+const AgentControlPlaneServerURI = "spiffe://trstctl/system/agent-channel"
+
 // AgentClientCredentials builds gRPC client credentials for an agent from the
-// control-plane CA certificate (PEM) — so the agent trusts the CP without naming
-// crypto/* itself.
+// control-plane CA certificate (PEM) and requires the control-plane role SAN.
 func AgentClientCredentials(src ClientCertSource, serverCAPEM []byte, serverName string, pin *Pin) (credentials.TransportCredentials, error) {
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(serverCAPEM) {
 		return nil, errors.New("mtls: no CA certificates in the provided PEM")
 	}
-	return ClientCredentials(src, pool, serverName, pin), nil
+	return credentials.NewTLS(agentServerTLSConfig(src, pool, serverName, pin)), nil
+}
+
+func agentServerTLSConfig(src ClientCertSource, roots *x509.CertPool, name string, pin *Pin) *tls.Config {
+	cfg := clientTLSConfig(src, roots, name, pin)
+	prior := cfg.VerifyConnection
+	cfg.VerifyConnection = func(state tls.ConnectionState) error {
+		if prior != nil {
+			if err := prior(state); err != nil {
+				return err
+			}
+		}
+		if len(state.PeerCertificates) == 0 {
+			return errors.New("mtls: agent channel has no server certificate")
+		}
+		for _, uri := range state.PeerCertificates[0].URIs {
+			if uri.String() == AgentControlPlaneServerURI {
+				return nil
+			}
+		}
+		return errors.New("mtls: server certificate is not the control plane agent channel")
+	}
+	return cfg
 }
 
 // PeerCertInfo is the identity the control plane derives from an agent's VERIFIED

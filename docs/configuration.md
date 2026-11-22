@@ -5014,6 +5014,11 @@ from the existing agent CA. Each listener renews when half of its current leaf's
 remaining validity has elapsed. Certificate renewal retains the same local
 transport key and CA trust; connected agents do not need new trust bundles.
 The transport key is held in locked memory and destroyed when the listener stops.
+The gRPC agent verifies the CA chain, configured server name, and the control
+plane's `spiffe://trstctl/system/agent-channel` URI SAN. Gateway serving
+certificates carry their gateway agent URI instead, and the gateway issuer
+reserves the configured agent-channel server name. Upgrade the control plane
+before agents that require this URI SAN.
 
 A failed signer request keeps the previous certificate until its actual expiry.
 One worker per listener retries between once a second and once every 30 seconds;

@@ -51,7 +51,8 @@ func TestRenewingServerCertificateRetainsTrustAcrossOutageAndExpiry(t *testing.T
 		if outage.Load() {
 			return nil, errors.New("test signer unavailable")
 		}
-		return boundary.SignServerCertFromCSR(der, key, csr, []string{"localhost"}, 6*time.Second)
+		return boundary.SignServerCertFromCSRWithURIs(der, key, csr, []string{"localhost"},
+			[]string{AgentControlPlaneServerURI}, 6*time.Second)
 	})
 	if err != nil {
 		t.Fatal(err)

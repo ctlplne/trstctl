@@ -50,6 +50,9 @@ func (a *agentService) SignGatewayServerCertificate(ctx context.Context, req *tr
 	hosts := make([]string, 0, len(req.Hosts))
 	for _, h := range req.Hosts {
 		h = strings.TrimSpace(h)
+		if a.controlPlaneServerName != "" && strings.EqualFold(strings.TrimSuffix(h, "."), strings.TrimSuffix(a.controlPlaneServerName, ".")) {
+			return nil, status.Error(codes.PermissionDenied, "gateway serving certificate cannot use the control-plane agent-channel name")
+		}
 		if h == "" || !slices.Contains(bound, h) {
 			return nil, status.Errorf(codes.PermissionDenied, "host %q is not the address of a target bound to this gateway", h)
 		}

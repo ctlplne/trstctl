@@ -281,7 +281,8 @@ type agentService struct {
 	// gatewayBoundHosts lists the host names of the targets bound to one
 	// gateway-role agent, and signGatewayServerCSR signs its listener's CSR
 	// with the agent CA (A254); nil when access gateways are not served.
-	gatewayBoundHosts func(ctx context.Context, tenantID, agentID string) ([]string, error)
+	gatewayBoundHosts      func(ctx context.Context, tenantID, agentID string) ([]string, error)
+	controlPlaneServerName string
 	// withholdGatewayUpgrade (A278) keeps a pooled gateway's agent.upgrade
 	// job from it while it owns live sessions; nil when PAM is not served.
 	withholdGatewayUpgrade func(ctx context.Context, tenantID, agentID string) bool
@@ -1475,7 +1476,8 @@ func inlineAgentInventorySecretKey(key string) bool {
 // boundary; the agent CA private key stays in the signer process.
 func (s *Server) agentChannelServerCertificate(hosts []string, lifetime time.Duration) (*mtls.RenewingServerCertificate, error) {
 	return mtls.NewRenewingServerCertificate(s.AgentCACertPEM(), hosts, func(csr []byte) ([]byte, error) {
-		return crypto.SignServerCertFromCSR(s.agentCACertDER, s.agentCASigner, csr, hosts, lifetime)
+		return crypto.SignServerCertFromCSRWithURIs(s.agentCACertDER, s.agentCASigner, csr, hosts,
+			[]string{mtls.AgentControlPlaneServerURI}, lifetime)
 	})
 }
 
