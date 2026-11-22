@@ -553,10 +553,12 @@ func TestAUD70ServedCTWatchlistReplacementRetiresDeadLogAndRecovers(t *testing.T
 }
 
 func TestServedDriftRemediationDashboardRecordsOperatorDecision(t *testing.T) {
-	h := newOperatingServedHarness(t, config.Protocols{})
+	dir := t.TempDir()
+	// CR-415 requires a separate operator grant for the file the dashboard
+	// watches. Grant only this test's disposable directory.
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.DriftRoots = []string{dir} })
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
-	dir := t.TempDir()
 	path := filepath.Join(dir, "leaf.pem")
 	declared := []byte("declared certificate bytes")
 	if err := os.WriteFile(path, []byte("drifted certificate bytes"), 0o600); err != nil {
