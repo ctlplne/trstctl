@@ -36,18 +36,20 @@ postgres_snapshot() {
       );"
 }
 
-jetstream_message_count() {
+jetstream_snapshot() {
   docker compose -f "$compose_file" exec -T nats \
     wget -qO- 'http://localhost:8222/jsz?streams=true' |
-    jq -er '[.account_details[]?.stream_detail[]?.state.messages] | add // 0'
+    jq -ec '[.account_details[]?.stream_detail[]?] |
+      {total: ([.[].state.messages] | add // 0),
+       streams: (map({key: (.config.name // .name // "unknown"), value: .state.messages}) | from_entries)}'
 }
 
 snapshot() {
-  local postgres_json jetstream_messages
+  local postgres_json jetstream_json
   postgres_json="$(postgres_snapshot)"
-  jetstream_messages="$(jetstream_message_count)"
-  jq -cn --argjson postgres "$postgres_json" --argjson events "$jetstream_messages" \
-    '{postgres:$postgres,jetstream_message_count:$events}'
+  jetstream_json="$(jetstream_snapshot)"
+  jq -cn --argjson postgres "$postgres_json" --argjson jetstream "$jetstream_json" \
+    '{postgres:$postgres,jetstream_message_count:$jetstream.total,jetstream_streams:$jetstream.streams}'
 }
 
 stable_snapshot() {

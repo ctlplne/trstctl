@@ -41,7 +41,10 @@ elif 'exec' in args and 'postgres' in args:
         api_token_count=0, outbox_count=1, outbox_active_retry_count=active)))
 elif 'exec' in args and 'nats' in args:
     count = 8 if os.environ.get('FAKE_EVENT_ON_RERUN') == '1' and Path(os.environ['FAKE_DOCKER_STATE']).exists() else 7
-    print(json.dumps({'account_details': [{'stream_detail': [{'state': {'messages': count}}]}]}))
+    print(json.dumps({'account_details': [{'stream_detail': [
+        {'config': {'name': 'TRSTCTL_EVENTS'}, 'state': {'messages': count}},
+        {'config': {'name': 'TRSTCTL_EVENT_ID_INDEX'}, 'state': {'messages': 2}},
+    ]}]}))
 elif 'run' in args:
     Path(os.environ['FAKE_DOCKER_STATE']).touch()
 else:
@@ -82,6 +85,8 @@ else:
         result = self.run_convergence(event_on_rerun=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("seed snapshot changed", result.stderr)
+        self.assertIn('"TRSTCTL_EVENTS": 7', result.stdout)
+        self.assertIn('"TRSTCTL_EVENTS": 8', result.stdout)
 
 
 if __name__ == "__main__":
