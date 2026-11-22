@@ -76,16 +76,22 @@ func (a *API) normalizeEphemeralAPIKeyRequest(
 	tenantID string,
 	req ephemeralAPIKeyJSON,
 ) (normalizedEphemeralAPIKeyRequest, error) {
-	principal, err := requestPrincipalSubject(ctx)
+	principal, err := requestAuthzPrincipal(ctx)
 	if err != nil {
 		return normalizedEphemeralAPIKeyRequest{}, err
 	}
 	subject := strings.TrimSpace(req.Subject)
 	if subject == "" {
-		subject = principal
+		subject = principal.Subject
 	}
 	if subject == "" {
 		return normalizedEphemeralAPIKeyRequest{}, errStatus(http.StatusBadRequest, "subject is required")
+	}
+	if principal.RunID != "" {
+		return normalizedEphemeralAPIKeyRequest{}, errStatus(http.StatusForbidden, "an access bundle run cannot mint another API key")
+	}
+	if subject != principal.Subject {
+		return normalizedEphemeralAPIKeyRequest{}, errStatus(http.StatusForbidden, "ephemeral API-key subject must be your authenticated subject; authenticate as the service identity to mint its key")
 	}
 	scopes, err := normalizeEphemeralAPIKeyScopes(req.Scopes)
 	if err != nil {

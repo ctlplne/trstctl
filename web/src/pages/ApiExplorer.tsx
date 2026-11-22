@@ -689,7 +689,7 @@ export function ApiExplorer() {
   const [requestDetailsOpen, setRequestDetailsOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const [selectedKey, setSelectedKey] = useState<string>("");
-  const [tokenSubject, setTokenSubject] = useState(user?.email ?? user?.subject ?? "");
+  const tokenSubject = user?.subject ?? "";
   const [testKey, setTestKey] = useState<APITokenCreateResponse | null>(null);
   const [keyError, setKeyError] = useState<string | null>(null);
   const [keyBusy, setKeyBusy] = useState(false);
@@ -721,10 +721,6 @@ export function ApiExplorer() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (!tokenSubject && user) setTokenSubject(user.email ?? user.subject);
-  }, [tokenSubject, user]);
 
   const operations = useMemo(() => (spec ? buildOperations(spec) : []), [spec]);
   const requestedOperation = searchParams.get("operation")?.trim() ?? "";
@@ -1158,7 +1154,7 @@ export function ApiExplorer() {
                   <form onSubmit={(event) => void mintTestKey(event)} className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
                     <label className="grid gap-1 text-sm">
                       <span className="font-medium text-muted-foreground">{t("apiExplorer.subject")}</span>
-                      <Input value={tokenSubject} onChange={(event) => setTokenSubject(event.target.value)} required />
+                      <Input value={tokenSubject} readOnly required />
                     </label>
                     <div className="grid gap-1 text-sm">
                       <span className="font-medium text-muted-foreground">{t("apiExplorer.tokenScope")}</span>

@@ -843,6 +843,7 @@ export interface APIToken {
   created_at: string;
   expires_at?: string;
   id: string;
+  minted_by: string;
   revocation_reason?: string;
   revoked_at?: string;
   revoked_by?: string;
@@ -861,6 +862,7 @@ export interface APITokenCreateResponse {
   created_at: string;
   expires_at?: string;
   id: string;
+  minted_by: string;
   scopes: string[];
   subject: string;
   tenant_id: string;

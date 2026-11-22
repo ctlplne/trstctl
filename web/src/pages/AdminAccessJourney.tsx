@@ -168,7 +168,7 @@ export function AdminAccess() {
   const [memberDisplayName, setMemberDisplayName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [memberRoles, setMemberRoles] = useState<string[]>(["operator"]);
-  const [tokenSubject, setTokenSubject] = useState("");
+  const tokenSubject = user?.subject ?? "";
   const [tokenScopes, setTokenScopes] = useState("access:read");
   const [offboardSubject, setOffboardSubject] = useState("");
   const [offboardReason, setOffboardReason] = useState("");
@@ -385,7 +385,6 @@ export function AdminAccess() {
       const tokenPage = await api.apiTokens({ includeRevoked: true, limit: 50 });
       setTokens(tokenPage.items ?? []);
       setNotice(t("admin.access.keyCreatedNotice", { subject: created.subject }));
-      setTokenSubject("");
     } catch (err) {
       setTokenFormError(accessProblemMessage(err, t("admin.access.sessionsFailed")));
     } finally {
@@ -910,6 +909,7 @@ export function AdminAccess() {
                           <tr>
                             <th scope="col">{t("admin.access.keyId")}</th>
                             <th scope="col">{translateNow("source.subject.6897128384")}</th>
+                            <th scope="col">{t("admin.access.keyMinter")}</th>
                             <th scope="col">{translateNow("source.scopes.0d5644ff52")}</th>
                             <th scope="col">{translateNow("source.status.920e413c7d")}</th>
                             <th scope="col">{translateNow("source.created.d70b9e24bc")}</th>
@@ -920,6 +920,7 @@ export function AdminAccess() {
                             <tr key={token.id} className="align-top">
                               <td className="font-mono text-xs">{token.id}</td>
                               <td>{token.subject}</td>
+                              <td>{token.minted_by || "—"}</td>
                               <td className="font-mono text-xs">{token.scopes.join(", ")}</td>
                               <td>{token.revoked_at ? translateNow("source.revoked.4bb47f186d") : translateNow("source.active.9687961165")}</td>
                               <td>{formatOptionalDate(token.created_at, formatPolicy)}</td>
@@ -1157,7 +1158,7 @@ export function AdminAccess() {
                 </ErrorState>
               ) : null}
               <FormField label={translateNow("source.subject.6897128384")}>
-                <Input value={tokenSubject} onChange={(event) => setTokenSubject(event.target.value)} required />
+                <Input value={tokenSubject} readOnly required />
               </FormField>
               <FormField label={translateNow("source.scopes.0d5644ff52")}>
                 <Input value={tokenScopes} onChange={(event) => setTokenScopes(event.target.value)} required />

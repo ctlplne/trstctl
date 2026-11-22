@@ -3615,6 +3615,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "minted_by": {
+            "type": "string"
+          },
           "revocation_reason": {
             "type": "string"
           },
@@ -3643,6 +3646,7 @@
           "id",
           "tenant_id",
           "subject",
+          "minted_by",
           "scopes",
           "created_at"
         ],
@@ -3684,6 +3688,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "minted_by": {
+            "type": "string"
+          },
           "scopes": {
             "items": {
               "type": "string"
@@ -3705,6 +3712,7 @@
           "id",
           "tenant_id",
           "subject",
+          "minted_by",
           "scopes",
           "created_at",
           "token"
@@ -26844,6 +26852,7 @@
             "type": "array"
           },
           "subject": {
+            "description": "Must equal the authenticated subject. A service identity authenticates as itself before minting its own key.",
             "type": "string"
           },
           "ttl_seconds": {
@@ -65748,7 +65757,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Mint a tenant-scoped API token for a member",
+        "summary": "Mint an attenuated tenant-scoped API token for your authenticated subject",
         "x-trstctl-permission": "access:write",
         "x-trstctl-sensitive-response": true
       }

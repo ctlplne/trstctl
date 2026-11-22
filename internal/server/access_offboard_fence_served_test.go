@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -144,9 +145,10 @@ func TestServedMemberOffboardDeniesBearerDuringProjectionGap(t *testing.T) {
 	if code, body := doBearer(t, ts, http.MethodGet, "/api/v1/access/roles", memberToken, "", nil); code != http.StatusUnauthorized {
 		t.Fatalf("retained offboard event admitted old bearer: status=%d body=%s; want 401", code, body)
 	}
-	if code, body := doBearer(t, ts, http.MethodPost, "/api/v1/access/api-tokens", admin,
-		"qa-pending-token", map[string]any{"subject": subject, "scopes": []string{"access:read"}}); code != http.StatusConflict {
-		t.Fatalf("pending offboard allowed token creation: status=%d body=%s", code, body)
+	if _, raw, err := srv.orch.CreateAPIToken(events.ContextWithActor(ctx, events.Actor{Subject: subject}),
+		tenantID, subject, []string{"access:read"}, nil); !errors.Is(err, store.ErrTenantMemberOffboarded) {
+		secret.Wipe(raw)
+		t.Fatalf("pending offboard allowed token creation: %v", err)
 	}
 	if code, body := doBearer(t, ts, http.MethodPut, "/api/v1/access/members/"+subject, admin,
 		"qa-pending-rehire", map[string]any{"display_name": subject, "roles": []string{"viewer"}}); code != http.StatusConflict {
@@ -171,7 +173,8 @@ func TestServedMemberOffboardDeniesBearerDuringProjectionGap(t *testing.T) {
 	if err != nil || denied {
 		t.Fatalf("rehire admission denied=%v err=%v", denied, err)
 	}
-	newToken := createServedToken(t, ts, admin, subject, []string{"access:read"})
+	newSeed := seedServedAPIToken(t, ctx, st, tenantID, subject, []string{"access:write", "access:read"})
+	newToken := createServedToken(t, ts, newSeed, subject, []string{"access:read"})
 	if code, body := doBearer(t, ts, http.MethodGet, "/api/v1/access/roles", newToken, "", nil); code != http.StatusOK {
 		t.Fatalf("new rehire bearer = %d body=%s", code, body)
 	}
@@ -256,8 +259,9 @@ func TestServedMemberOffboardDeniesBearerDuringProjectionGap(t *testing.T) {
 	if code, body := doBearer(t, ts, http.MethodGet, "/api/v1/access/roles", legacyToken, "", nil); code != http.StatusUnauthorized {
 		t.Fatalf("legacy offboard bearer = %d body=%s", code, body)
 	}
-	if code, body := doBearer(t, ts, http.MethodPost, "/api/v1/access/api-tokens", admin,
-		"qa-legacy-token", map[string]any{"subject": legacySubject, "scopes": []string{"access:read"}}); code != http.StatusConflict {
-		t.Fatalf("legacy offboard permitted new token = %d body=%s", code, body)
+	if _, raw, err := srv.orch.CreateAPIToken(events.ContextWithActor(ctx, events.Actor{Subject: legacySubject}),
+		tenantID, legacySubject, []string{"access:read"}, nil); !errors.Is(err, store.ErrTenantMemberOffboarded) {
+		secret.Wipe(raw)
+		t.Fatalf("legacy offboard permitted new token: %v", err)
 	}
 }

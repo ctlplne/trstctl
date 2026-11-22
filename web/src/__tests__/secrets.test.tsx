@@ -92,6 +92,11 @@ const { apiMock } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@/auth/AuthProvider", async (original) => {
+  const actual = await original<typeof import("@/auth/AuthProvider")>();
+  return { ...actual, useAuth: () => ({ ...actual.useAuth(), user: { subject: "wl-1111", tenant_id: "t1", permissions: ["*"] } }) };
+});
+
 vi.mock("@/lib/bootstrapApi", async (orig) => {
   const actual = await orig<typeof import("@/lib/bootstrapApi")>();
   return { ...actual, bootstrapApi: apiMock };
@@ -557,7 +562,7 @@ function primeSecretsMocks() {
     operation: "issue_ephemeral_api_key",
     ready: true,
     effect_free: true,
-    subject: "ci/deploy-preview",
+    subject: "wl-1111",
     scopes: ["access:read"],
     requested_ttl_seconds: 900,
     effective_ttl_seconds: 900,
@@ -579,7 +584,7 @@ function primeSecretsMocks() {
   apiMock.issueEphemeralAPIKey.mockResolvedValue({
     id: "33333333-3333-3333-3333-333333333333",
     tenant_id: "44444444-4444-4444-4444-444444444444",
-    subject: "ci/deploy-preview",
+    subject: "wl-1111",
     scopes: ["access:read"],
     created_at: "2026-06-19T13:00:00Z",
     expires_at: "2026-06-19T13:15:00Z",
@@ -1347,7 +1352,7 @@ describe("secrets surface", () => {
     cleanup();
     renderSecrets("/secrets/access");
     await user.click(within(await screen.findByRole("group", { name: "Do next" })).getByRole("button", { name: "Grant access" }));
-    expect(screen.getByLabelText("Workload / subject")).toHaveFocus();
+    expect(screen.getByLabelText("Your signed-in subject")).toHaveFocus();
 
     cleanup();
     renderSecrets("/secrets/developer");
@@ -1363,14 +1368,14 @@ describe("secrets surface", () => {
   it("keeps advanced access closed and opens one secret-engine task at a time", async () => {
     const user = userEvent.setup();
     renderSecrets("/secrets/access");
-    expect(await screen.findByRole("heading", { name: "Grant workload access" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Create a scoped access key" })).toBeInTheDocument();
     expect(screen.getByText("Machine login administration").closest("details")).not.toHaveAttribute("open");
     expect(screen.queryByRole("heading", { name: "Developer access" })).not.toBeInTheDocument();
 
     cleanup();
     renderSecrets("/secrets/developer");
     expect(await screen.findByRole("heading", { name: "Developer access" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Grant workload access" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Create a scoped access key" })).not.toBeInTheDocument();
 
     cleanup();
     renderSecrets("/secrets/engines");
@@ -2229,14 +2234,14 @@ describe("secrets surface", () => {
     await user.click(await screen.findByRole("button", { name: "Open temporary access" }));
     expect(await screen.findByRole("heading", { name: "Ephemeral API keys" })).toBeInTheDocument();
     expect(screen.getByText("What happens")).toBeInTheDocument();
-    expect(screen.getByText(/narrowly scoped key/i)).toBeInTheDocument();
+    expect(screen.getByText(/Authenticate as the machine identity/)).toBeInTheDocument();
     const issueForm = within(screen.getByRole("form", { name: "Review ephemeral API key" }));
-    await user.type(issueForm.getByLabelText("Machine subject"), "ci/deploy-preview");
+    expect(issueForm.getByLabelText("Your signed-in subject")).toHaveValue("wl-1111");
     await user.click(issueForm.getByRole("button", { name: "Review temporary key" }));
 
     await waitFor(() =>
       expect(apiMock.previewEphemeralAPIKey).toHaveBeenCalledWith({
-        subject: "ci/deploy-preview",
+        subject: "wl-1111",
         scopes: ["access:read"],
         ttl_seconds: 900,
       }),
@@ -2247,7 +2252,7 @@ describe("secrets surface", () => {
     await waitFor(() =>
       expect(apiMock.issueEphemeralAPIKey).toHaveBeenCalledWith(
         {
-          subject: "ci/deploy-preview",
+          subject: "wl-1111",
           scopes: ["access:read"],
           ttl_seconds: 900,
           preview_fingerprint: "sha256:reviewed-f38",
@@ -2972,12 +2977,12 @@ describe("secrets surface", () => {
     const form = within(screen.getByRole("form", { name: "Review ephemeral API key" }));
     const submit = form.getByRole("button", { name: "Review temporary key" });
     expect(submit).toBeEnabled();
-    await user.type(form.getByLabelText("Machine subject"), "ci/deploy-preview");
+    expect(form.getByLabelText("Your signed-in subject")).toHaveValue("wl-1111");
     await user.click(submit);
 
     await waitFor(() =>
       expect(apiMock.previewEphemeralAPIKey).toHaveBeenCalledWith({
-        subject: "ci/deploy-preview",
+        subject: "wl-1111",
         scopes: ["access:read"],
         ttl_seconds: 900,
       }),
@@ -3038,16 +3043,18 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
   async function openAccessTab() {
     const user = userEvent.setup();
     renderSecrets("/secrets/access");
-    await screen.findByRole("heading", { name: "Grant workload access" });
+    await screen.findByRole("heading", { name: "Create a scoped access key" });
     return user;
   }
 
-  it("mints a scoped standing token for a picked workload and reveals it once", async () => {
+  it("mints a scoped standing token for the signed-in subject and reveals it once", async () => {
     const user = await openAccessTab();
-    const grant = within(await screen.findByRole("form", { name: "Grant workload access" }));
+    const grant = within(await screen.findByRole("form", { name: "Create a scoped access key" }));
 
-    const subject = grant.getByLabelText("Workload / subject");
-    await user.type(subject, "wl-1111");
+    const subject = grant.getByLabelText("Your signed-in subject");
+    expect(subject).toHaveValue("wl-1111");
+    expect(subject).toHaveAttribute("readonly");
+    await user.click(grant.getByLabelText(/Time-bound/));
     // Scopes default to secrets:read — the least-privilege Job 2 grant.
     expect(grant.getByLabelText(/Scopes/)).toHaveValue("secrets:read");
     await user.click(grant.getByRole("button", { name: "Grant access" }));
@@ -3062,9 +3069,9 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
   it("verifies the minted bearer token with a real scoped secret read and never renders the value", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = await openAccessTab();
-    const grant = within(await screen.findByRole("form", { name: "Grant workload access" }));
+    const grant = within(await screen.findByRole("form", { name: "Create a scoped access key" }));
 
-    await user.type(grant.getByLabelText("Workload / subject"), "wl-1111");
+    await user.click(grant.getByLabelText(/Time-bound/));
     await user.click(grant.getByRole("button", { name: "Grant access" }));
     await user.type(await screen.findByLabelText("Secret to verify"), "app/db/password");
     await user.click(await screen.findByRole("button", { name: "Verify scoped read" }));
@@ -3078,8 +3085,8 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
   it("requires an explicit secret choice instead of verifying the first metadata row", async () => {
     apiMock.getSecretWithToken.mockResolvedValue({ name: "qa/application/password", value: "QA-SECRET", version: 1 });
     const user = await openAccessTab();
-    const grant = within(await screen.findByRole("form", { name: "Grant workload access" }));
-    await user.type(grant.getByLabelText("Workload / subject"), "qa-reader");
+    const grant = within(await screen.findByRole("form", { name: "Create a scoped access key" }));
+    await user.click(grant.getByLabelText(/Time-bound/));
     await user.click(grant.getByRole("button", { name: "Grant access" }));
 
     const verify = await screen.findByRole("button", { name: "Verify scoped read" });
@@ -3098,22 +3105,19 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
     expect(verify).toBeDisabled();
   });
 
-  it("offers the identity roster on the subject picker", async () => {
+  it("pins the subject to the authenticated identity", async () => {
     await openAccessTab();
-    const subject = await screen.findByLabelText("Workload / subject");
-    const listId = subject.getAttribute("list");
-    expect(listId).toBeTruthy();
-    await waitFor(() => {
-      const options = Array.from(document.getElementById(listId as string)?.querySelectorAll("option") ?? []);
-      expect(options.map((option) => option.getAttribute("value"))).toContain("wl-1111");
-    });
+    const subject = await screen.findByLabelText("Your signed-in subject");
+    expect(subject).toHaveValue("wl-1111");
+    expect(subject).toHaveAttribute("readonly");
+    expect(subject).not.toHaveAttribute("list");
   });
 
   it("clears the revealed credential and its read evidence when that token is revoked", async () => {
     apiMock.apiTokens.mockResolvedValue({ items: [{ id: "tok-3", subject: "wl-1111", scopes: ["secrets:read"], created_at: "2026-07-14T00:00:00Z" }] });
     const user = await openAccessTab();
-    const grant = within(await screen.findByRole("form", { name: "Grant workload access" }));
-    await user.type(grant.getByLabelText("Workload / subject"), "wl-1111");
+    const grant = within(await screen.findByRole("form", { name: "Create a scoped access key" }));
+    await user.click(grant.getByLabelText(/Time-bound/));
     await user.click(grant.getByRole("button", { name: "Grant access" }));
     await user.type(await screen.findByLabelText("Secret to verify"), "app/db/password");
     await user.click(screen.getByRole("button", { name: "Verify scoped read" }));
@@ -3124,12 +3128,10 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
     expect(screen.queryByText(/Scoped read passed/)).not.toBeInTheDocument();
   });
 
-  it("mints a TTL-bound ephemeral key when time-bound is selected", async () => {
+  it("mints a TTL-bound ephemeral key for the signed-in identity", async () => {
     const user = await openAccessTab();
-    const grant = within(await screen.findByRole("form", { name: "Grant workload access" }));
+    const grant = within(await screen.findByRole("form", { name: "Create a scoped access key" }));
 
-    await user.type(grant.getByLabelText("Workload / subject"), "wl-1111");
-    await user.click(grant.getByLabelText(/Time-bound/));
     await user.clear(grant.getByLabelText("TTL seconds"));
     await user.type(grant.getByLabelText("TTL seconds"), "900");
     await user.click(grant.getByRole("button", { name: "Grant access" }));
@@ -3137,6 +3139,17 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
     await waitFor(() => expect(apiMock.issueEphemeralAPIKey).toHaveBeenCalledWith({ subject: "wl-1111", scopes: ["secrets:read"], ttl_seconds: 900 }));
     expect(await screen.findByText("epk_live_reveal_once_123")).toBeInTheDocument();
     expect(apiMock.createAPIToken).not.toHaveBeenCalled();
+  });
+
+  it("does not let the operator rename the subject of either key type", async () => {
+    const user = await openAccessTab();
+    const grant = within(await screen.findByRole("form", { name: "Create a scoped access key" }));
+    const subject = grant.getByLabelText("Your signed-in subject");
+    await user.type(subject, "other-person");
+    expect(subject).toHaveValue("wl-1111");
+    await user.click(grant.getByLabelText(/Time-bound/));
+    await user.click(grant.getByRole("button", { name: "Grant access" }));
+    await waitFor(() => expect(apiMock.createAPIToken).toHaveBeenCalledWith({ subject: "wl-1111", scopes: ["secrets:read"] }));
   });
 
   it("lists granted tokens and revokes one", async () => {
@@ -3185,7 +3198,7 @@ describe("secrets auth-method console (C-S4 / DA-02)", () => {
   async function openAccessTab() {
     const user = userEvent.setup();
     renderSecrets("/secrets/access");
-    await screen.findByRole("heading", { name: "Grant workload access" });
+    await screen.findByRole("heading", { name: "Create a scoped access key" });
     return user;
   }
 

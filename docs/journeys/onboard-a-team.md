@@ -227,13 +227,14 @@ group on a shared trstctl deployment.
    membership before trying again. This failure grants no application session;
    API clients continue to receive a 403 problem response.
 
-   A token you mint for someone else through `POST /api/v1/access/api-tokens` does
-   that person's work but cannot approve or deny anything on their behalf; each
-   approver uses their own sign-in or mints their own token. Tokens minted through
-   the API expire after 90 days unless the request asks for sooner
-   (`auth.api_tokens.max_lifetime`).
+   `POST /api/v1/access/api-tokens` accepts only your authenticated subject and
+   scopes you already hold. Each approver signs in or mints their own token.
+   To provision a service identity, authenticate as that identity through its
+   configured machine method before minting its key, or use the local
+   custody-bound bootstrap command. API tokens expire after
+   90 days unless the request asks for sooner (`auth.api_tokens.max_lifetime`).
 
-   Finally, list `GET /api/v1/access/api-tokens`, identify the provisioning token
+   Finally, list `GET /api/v1/access/api-tokens`, identify the bootstrap token
    by its exact subject and id, and revoke that id with
    `DELETE /api/v1/access/api-tokens/{id}` and a new `Idempotency-Key`. The original
    bootstrap token can perform this cleanup. Confirm 204, then confirm the revoked

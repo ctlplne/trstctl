@@ -156,7 +156,7 @@ func TestV5L1TenantAdminBindsUnclaimedSignerHandlesAcrossTenants(t *testing.T) {
 	cust := seedServedAPIToken(t, ctx, h.store, v5AttackerTenant, "attacker-custodian", []string{"issuers:write", "issuers:read"})
 	// A single admin cannot be its own second custodian: a token it mints for
 	// another subject is delegated and the approval route refuses it (F262).
-	ghost := createServedToken(t, h.ts, admin, "attacker-ghost-custodian", []string{"issuers:write", "issuers:read"})
+	ghost := seedHistoricalDelegatedToken(t, h.srv.orch, v5AttackerTenant, "attacker-admin", "attacker-ghost-custodian", []string{"issuers:write", "issuers:read"})
 	a := &v5Attacker{t: t, h: h, admin: admin, ghost: ghost, cust: cust}
 	probe := createImportExistingCACeremony(t, h, admin, string(h.caPEM), issuingCAHandle, v5Spec("probe", 0), 1, "v5-ghost-probe")
 	if code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/"+probe.ID+"/approvals", ghost, "v5-ghost-approve", nil); code != http.StatusForbidden {

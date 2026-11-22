@@ -111,7 +111,7 @@ func TestServedTemplatesAndEmergencyAccessA258(t *testing.T) {
 	}
 	// A token the admin minted for the responder (F262) does the responder's
 	// work, but emergency access belongs to the person.
-	minted := createServedToken(t, h.ts, admin, "oncall@ops.example", []string{"access:read", "access:sessions.open"})
+	minted := seedHistoricalDelegatedToken(t, h.srv.orch, h.tenant, "a258-admin", "oncall@ops.example", []string{"access:read", "access:sessions.open"})
 	if status, _ := emergency(minted, "a258-delegated"); status != http.StatusForbidden {
 		t.Fatalf("a token minted for the responder opened emergency access: %d", status)
 	}

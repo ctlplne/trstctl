@@ -4556,6 +4556,13 @@ func apiTokenMintedForAnother(actor *events.Actor, subject string) bool {
 	return minter != "" && !strings.HasPrefix(minter, "trstctl:") && minter != subject
 }
 
+func apiTokenMinter(actor *events.Actor) string {
+	if actor == nil {
+		return ""
+	}
+	return strings.TrimSpace(actor.Subject)
+}
+
 // APITokenRevoked is the payload of an api_token.revoked event.
 type APITokenRevoked struct {
 	ID        string `json:"id"`
@@ -9218,7 +9225,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyAPITokenCreatedTx(ctx, tx, store.APITokenRecord{
 			ID: pl.ID, TenantID: e.TenantID, TokenHash: pl.TokenHash, Subject: pl.Subject,
 			Scopes: pl.Scopes, ExpiresAt: pl.ExpiresAt, CreatedAt: e.Time,
-			Delegated: apiTokenMintedForAnother(e.Actor, pl.Subject), EventSequence: e.Sequence,
+			Delegated: apiTokenMintedForAnother(e.Actor, pl.Subject), MintedBy: apiTokenMinter(e.Actor), EventSequence: e.Sequence,
 		})
 	case EventAPITokenRevoked:
 		var pl APITokenRevoked

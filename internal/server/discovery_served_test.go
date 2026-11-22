@@ -960,7 +960,7 @@ func TestServedUnifiedNHIInventoryCAPNHI02EndToEnd(t *testing.T) {
 	}
 
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/access/api-tokens", tok, map[string]any{
-		"subject": "ci-personal-access-token",
+		"subject": "secrets-test",
 		"scopes":  []string{"certs:read"},
 	})
 	if status != http.StatusCreated {

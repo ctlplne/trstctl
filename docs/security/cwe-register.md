@@ -1398,10 +1398,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7769` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7786` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7799` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7834` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7776` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7793` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7806` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7841` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:250` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:257` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -3881,8 +3881,8 @@ not this file.
 | `internal/scanannotate/registry_stock_test.go:43` | the loopback stock registry the operator names in TRSTCTL_A174L2_REGISTRY for this env-gated test (CWE-918) |
 | `internal/scanannotate/registry_stock_test.go:66` | the loopback stock registry the operator names in TRSTCTL_A174L2_REGISTRY for this env-gated test (CWE-918) |
 | `internal/scanannotate/registry_stock_test.go:68` | the loopback stock registry the operator names in TRSTCTL_A174L2_REGISTRY for this env-gated test (CWE-918) |
-| `internal/server/access_admin_served_test.go:319` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
-| `internal/server/access_admin_served_test.go:330` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
+| `internal/server/access_admin_served_test.go:338` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
+| `internal/server/access_admin_served_test.go:349` | the harness's own loopback httptest server; the test chooses the path (CWE-918) |
 | `internal/server/audit_feed_index_template_lab_test.go:33` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_index_template_lab_test.go:38` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:54` | the runner's own lab search engine (CWE-918) |

@@ -55,7 +55,7 @@ func TestServedAutoApprovalRuleIsApprovalAuthorityCR001(t *testing.T) {
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, subject("requester"), "access:read", "access:write")
 	reviewer := seedScopedTokenSubject(t, h.store, h.tenant, subject("reviewer"), "access:approve")
 	// A token the administrator minted for another subject (F262).
-	delegated := createServedToken(t, h.ts, admin, subject("delegate"), []string{"access:read", "access:write", "access:approve"})
+	delegated := seedHistoricalDelegatedToken(t, h.srv.orch, h.tenant, subject("admin"), subject("delegate"), []string{"access:read", "access:write", "access:approve"})
 
 	var owned []string
 	t.Cleanup(func() {

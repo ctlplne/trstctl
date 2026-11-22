@@ -9,8 +9,8 @@ import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { ProgressiveTaskList } from "@/components/ProgressiveTaskList";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
-import { IdentityPicker } from "@/components/IdentityPicker";
 import { useCan } from "@/components/rbac";
+import { useAuth } from "@/auth/AuthProvider";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,6 @@ import {
   type APIToken,
   type CloudSecretManagerIntegration,
   type EphemeralCredential,
-  type Identity,
   type KubernetesSecretOperator,
   type MachineAuthMethod,
   type MachineSession as MachineSessionRecord,
@@ -191,6 +190,7 @@ function SecretsHealthLink({ to, label, urgent, icon }: { to: string; label: str
 
 export function Secrets() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const nativeStoreList = useCapabilityExecution("F63", "listSecrets");
   const rotationScheduleList = useCapabilityExecution("F37", "listSecretRotationSchedules");
   const machineAuthMethodList = useCapabilityExecution("F58", "listMachineAuthMethods");
@@ -263,10 +263,9 @@ export function Secrets() {
   // existing idempotent /access and /ephemeral endpoints.
   const canGrant = useCan("access:write");
   const canReadTokens = useCan("access:read");
-  const [grantIdentities, setGrantIdentities] = useState<Identity[]>([]);
-  const [grantSubject, setGrantSubject] = useState("");
+  const grantSubject = user?.subject ?? "";
   const [grantScopes, setGrantScopes] = useState("secrets:read");
-  const [grantEphemeral, setGrantEphemeral] = useState(false);
+  const [grantEphemeral, setGrantEphemeral] = useState(true);
   const [grantTTL, setGrantTTL] = useState("3600");
   const [grantBusy, setGrantBusy] = useState(false);
   const [grantError, setGrantError] = useState<string | null>(null);
@@ -1008,9 +1007,6 @@ export function Secrets() {
 
   useEffect(() => {
     let active = true;
-    void readGrantRoster(() => api.identities()).then((items) => {
-      if (active && items) setGrantIdentities(items);
-    });
     if (canReadTokens) {
       void readGrantRoster(() => api.apiTokens({ includeRevoked: true, limit: 50 })).then((page) => {
         if (active) setTokenRows(page?.items ?? null);
@@ -1058,6 +1054,10 @@ export function Secrets() {
         .split(",")
         .map((scope) => scope.trim())
         .filter(Boolean);
+      if (subject !== user?.subject) {
+        setGrantError(t("secrets.grant.selfOnly"));
+        return;
+      }
       if (grantEphemeral) {
         const ttl = Number(grantTTL.trim());
         const key = await api.issueEphemeralAPIKey({ subject, scopes, ttl_seconds: Number.isFinite(ttl) && ttl > 0 ? Math.floor(ttl) : 3600 });
@@ -1066,7 +1066,6 @@ export function Secrets() {
         const created = await api.createAPIToken({ subject, scopes });
         setGrantResult({ id: created.id, token: created.token, subject: created.subject, expiresAt: created.expires_at });
       }
-      setGrantSubject("");
       await refreshTokenLedger();
     } catch (err) {
       setGrantError(apiProblemMessage(err, t("secrets.grant.failedTitle")));
@@ -2021,12 +2020,11 @@ export function Secrets() {
               <form aria-labelledby="grant-access-heading" onSubmit={(event) => void submitGrant(event)} className="grid gap-3 md:grid-cols-2">
                 <label className="grid gap-1 text-sm" htmlFor="grant-subject">
                   <span className="font-medium">{t("secrets.grant.subject")}</span>
-                  <IdentityPicker
+                  <input
                     id="grant-subject"
                     value={grantSubject}
-                    onChange={setGrantSubject}
-                    identities={grantIdentities}
-                    placeholder={t("incidents.picker.identityHint")}
+                    readOnly
+                    required
                     className="rounded-md border border-border bg-background px-3 py-2 font-mono text-sm"
                   />
                 </label>
@@ -2073,6 +2071,7 @@ export function Secrets() {
                     <thead>
                       <tr>
                         <th scope="col">{t("secrets.grant.ledgerSubject")}</th>
+                        <th scope="col">{t("secrets.grant.ledgerMinter")}</th>
                         <th scope="col">{t("secrets.grant.ledgerScopes")}</th>
                         <th scope="col">{t("secrets.grant.ledgerStatus")}</th>
                         <th scope="col">{t("secrets.grant.ledgerExpires")}</th>
@@ -2083,6 +2082,7 @@ export function Secrets() {
                       {tokenRows.map((token) => (
                         <tr key={token.id} className="align-top">
                           <td className="font-medium">{token.subject}</td>
+                          <td>{token.minted_by || "—"}</td>
                           <td className="font-mono text-xs">{token.scopes.join(", ")}</td>
                           <td>{token.revoked_at ? t("secrets.grant.statusRevoked") : t("secrets.grant.statusActive")}</td>
                           <td>{token.expires_at ? formatDate(token.expires_at) : "—"}</td>

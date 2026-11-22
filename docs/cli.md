@@ -636,8 +636,11 @@ leaseworker records `api_token.revoked` after `ttl_seconds`.
 
 ```bash
 cat > ephemeral-api-key.json <<'JSON'
-{"subject":"ci-preview-deploy","scopes":["access:read"],"ttl_seconds":900}
+{"subject":"<authenticated subject>","scopes":["access:read"],"ttl_seconds":900}
 JSON
+
+# Replace <authenticated subject> with the exact subject of the bearer or
+# machine login used by this CLI command; another person's subject is refused.
 trstctl-cli ephemeral api-keys preview -f ephemeral-api-key.json > ephemeral-api-key.preview.json
 
 # Copy request_fingerprint from the preview into the exact reviewed body.
@@ -797,6 +800,12 @@ it does not recover the Compose deployment.
 - Because this command can recover access without an existing HTTP token, run it
   only with direct PostgreSQL plus signer/audit custody on the control-plane host.
   Possession of the public server binary alone is not enough.
+
+After bootstrap, `access api-tokens create` accepts only the authenticated
+subject and scopes that subject already holds. The token list shows `minted_by`;
+offboarding that person revokes tokens they minted, including older delegated
+tokens. To provision a service identity, authenticate as that identity through
+its configured machine method, or use the local custody-bound bootstrap command.
 
 ## Examples
 

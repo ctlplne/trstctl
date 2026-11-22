@@ -305,6 +305,7 @@ type PrivacyMemberRecord struct {
 type PrivacyTokenRecord struct {
 	ID        string     `json:"id"`
 	Subject   string     `json:"subject"`
+	MintedBy  string     `json:"minted_by"`
 	Scopes    []string   `json:"scopes"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
@@ -520,19 +521,20 @@ func (s *Store) SelectPrivacySubjectExport(ctx context.Context, tenantID, subjec
 			return err
 		}
 
-		// API tokens (matched by subject_ref). token_hash is deliberately NOT selected.
+		// API tokens owned or minted by the subject. The bearer hash is never selected.
 		rows, err = tx.Query(ctx,
-			`SELECT id::text, subject, scopes, expires_at, created_at
+			`SELECT id::text, subject, minted_by, scopes, expires_at, created_at
 			   FROM api_tokens
-			  WHERE tenant_id = $1 AND subject_ref = $2
-			    AND subject NOT LIKE 'erased:%'
+			  WHERE tenant_id = $1
+			    AND ((subject_ref = $2 AND subject NOT LIKE 'erased:%')
+			      OR (minted_by_ref = $2 AND minted_by NOT LIKE 'erased:%'))
 			  ORDER BY id`, tenantID, out.SubjectRef)
 		if err != nil {
 			return err
 		}
 		for rows.Next() {
 			var r PrivacyTokenRecord
-			if err := rows.Scan(&r.ID, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt); err != nil {
+			if err := rows.Scan(&r.ID, &r.Subject, &r.MintedBy, &r.Scopes, &r.ExpiresAt, &r.CreatedAt); err != nil {
 				rows.Close()
 				return err
 			}
@@ -823,8 +825,9 @@ func (s *Store) selectPrivacySubjectErasureTx(
 	}
 	tokenCount, err := selectCount(ctx, tx,
 		`SELECT count(*) FROM api_tokens
-		  WHERE tenant_id = $1 AND subject_ref = $2
-		    AND subject NOT LIKE 'erased:%'`,
+		  WHERE tenant_id = $1
+		    AND ((subject_ref = $2 AND subject NOT LIKE 'erased:%')
+		      OR (minted_by_ref = $2 AND minted_by NOT LIKE 'erased:%'))`,
 		tenantID, out.SubjectRef)
 	if err != nil {
 		return err
@@ -1114,11 +1117,12 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE api_tokens
-		    SET subject = $3,
+		    SET subject = CASE WHEN subject_ref = $2 THEN $3 ELSE subject END,
+		        minted_by = CASE WHEN minted_by_ref = $2 THEN $3 ELSE minted_by END,
 		        revoked_at = COALESCE(revoked_at, $4),
 		        revoked_by = CASE WHEN revoked_by = '' THEN 'privacy-erasure' ELSE revoked_by END,
 		        revocation_reason = CASE WHEN revocation_reason = '' THEN $5 ELSE revocation_reason END
-		  WHERE tenant_id = $1 AND subject_ref = $2`,
+		  WHERE tenant_id = $1 AND (subject_ref = $2 OR minted_by_ref = $2)`,
 		e.TenantID, e.SubjectRef, placeholder, e.ErasedAt, e.Reason); err != nil {
 		return err
 	}
@@ -1539,10 +1543,11 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE api_tokens
-		    SET subject = 'erased:' || left(subject_ref, 12)
+		    SET subject = CASE WHEN subject_ref <> '' THEN 'erased:' || left(subject_ref, 12) ELSE subject END,
+		        minted_by = CASE WHEN minted_by_ref <> '' THEN 'erased:' || left(minted_by_ref, 12) ELSE minted_by END
 		  WHERE tenant_id = $1
-		    AND subject_ref <> ''
-		    AND subject NOT LIKE 'erased:%'
+		    AND ((subject_ref <> '' AND subject NOT LIKE 'erased:%')
+		      OR (minted_by_ref <> '' AND minted_by NOT LIKE 'erased:%'))
 		    AND (
 		          (revoked_at IS NOT NULL AND revoked_at < $2)
 		       OR (expires_at IS NOT NULL AND expires_at < $2)
@@ -3914,8 +3919,8 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 		"api_tokens": {
 			sql: `SELECT count(*) FROM api_tokens
 			       WHERE tenant_id = $1
-			         AND subject_ref <> ''
-			         AND subject NOT LIKE 'erased:%'
+			         AND ((subject_ref <> '' AND subject NOT LIKE 'erased:%')
+			           OR (minted_by_ref <> '' AND minted_by NOT LIKE 'erased:%'))
 			         AND (
 			               (revoked_at IS NOT NULL AND revoked_at < $2)
 			            OR (expires_at IS NOT NULL AND expires_at < $2)

@@ -24,6 +24,11 @@ const { apiMock } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@/auth/AuthProvider", async (original) => {
+  const actual = await original<typeof import("@/auth/AuthProvider")>();
+  return { ...actual, useAuth: () => ({ ...actual.useAuth(), user: { subject: "ci/deploy-preview", tenant_id: "t1", permissions: ["*"] } }) };
+});
+
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
   return { ...actual, api: apiMock };
@@ -100,7 +105,7 @@ describe("WIRE-06 ephemeral API-key issuance wiring", () => {
     await user.click(await screen.findByRole("button", { name: "Open temporary access" }));
     expect(await screen.findByRole("heading", { name: "Ephemeral API keys" })).toBeInTheDocument();
     const issueForm = within(screen.getByRole("form", { name: "Review ephemeral API key" }));
-    await user.type(issueForm.getByLabelText("Machine subject"), "ci/deploy-preview");
+    expect(issueForm.getByLabelText("Your signed-in subject")).toHaveValue("ci/deploy-preview");
     await user.clear(issueForm.getByLabelText("Lifetime in seconds"));
     await user.type(issueForm.getByLabelText("Lifetime in seconds"), "900");
     await user.click(issueForm.getByRole("button", { name: "Review temporary key" }));
@@ -131,7 +136,7 @@ describe("WIRE-06 ephemeral API-key issuance wiring", () => {
     );
     expect(await screen.findByText("epk_live_reveal_once_123")).toBeInTheDocument();
     expect(screen.getByText(/33333333-3333-3333-3333-333333333333/)).toBeInTheDocument();
-    expect(issueForm.getByLabelText("Machine subject")).toHaveValue("");
+    expect(issueForm.getByLabelText("Your signed-in subject")).toHaveValue("ci/deploy-preview");
 
     await user.click(screen.getByRole("button", { name: "Verify key access" }));
     await waitFor(() => expect(apiMock.verifyEphemeralAPIKey).toHaveBeenCalledWith("epk_live_reveal_once_123"));
@@ -153,7 +158,7 @@ describe("WIRE-06 ephemeral API-key issuance wiring", () => {
     renderSecrets("/secrets/sharing");
     await user.click(await screen.findByRole("button", { name: "Open temporary access" }));
     const form = within(await screen.findByRole("form", { name: "Review ephemeral API key" }));
-    await user.type(form.getByLabelText("Machine subject"), "ci/deploy-preview");
+    expect(form.getByLabelText("Your signed-in subject")).toHaveValue("ci/deploy-preview");
     await user.click(form.getByRole("button", { name: "Review temporary key" }));
     await user.click(await screen.findByRole("button", { name: "Issue reviewed key" }));
 
@@ -165,7 +170,7 @@ describe("WIRE-06 ephemeral API-key issuance wiring", () => {
     expect(apiMock.issueEphemeralAPIKey.mock.calls[1]?.[1]).toBe(firstRecoveryKey);
 
     await user.click(screen.getByRole("button", { name: /dismiss/i }));
-    await user.type(form.getByLabelText("Machine subject"), "ci/deploy-preview");
+    expect(form.getByLabelText("Your signed-in subject")).toHaveValue("ci/deploy-preview");
     await user.click(form.getByRole("button", { name: "Review temporary key" }));
     expect(await screen.findByRole("button", { name: "Issue reviewed key" })).toBeInTheDocument();
     await user.clear(form.getByLabelText("Lifetime in seconds"));

@@ -197,7 +197,7 @@ describe("DESIGN-002 answer-first API playground", () => {
     apiMock.createAPIToken.mockImplementation(async (input: { scopes: string[]; expires_at: string }) => ({
       id: "00000000-0000-4000-8000-000000000099",
       tenant_id: "tenant-1",
-      subject: "docs@example.test",
+      subject: "docs-operator",
       scopes: input.scopes,
       created_at: new Date().toISOString(),
       expires_at: input.expires_at,
@@ -379,7 +379,7 @@ describe("DESIGN-002 answer-first API playground", () => {
     await waitFor(() =>
       expect(apiMock.createAPIToken).toHaveBeenCalledWith(
         expect.objectContaining({
-          subject: "docs@example.test",
+          subject: "docs-operator",
           scopes: ["certs:read"],
           expires_at: expect.any(String),
         }),
@@ -556,7 +556,7 @@ describe("DESIGN-002 answer-first API playground", () => {
     apiMock.createAPIToken.mockResolvedValueOnce({
       id: "00000000-0000-4000-8000-000000000098",
       tenant_id: "tenant-1",
-      subject: "docs@example.test",
+      subject: "docs-operator",
       scopes: ["certs:read"],
       created_at: "2026-06-29T12:00:00Z",
       expires_at: "2026-06-29T12:15:00Z",

@@ -20,6 +20,7 @@ type APITokenRecord struct {
 	TenantID         string
 	TokenHash        string
 	Subject          string
+	MintedBy         string
 	Scopes           []string
 	ExpiresAt        *time.Time
 	CreatedAt        time.Time
@@ -42,12 +43,16 @@ func (s *Store) CreateAPIToken(ctx context.Context, r APITokenRecord) (APITokenR
 	if scopes == nil {
 		scopes = []string{}
 	}
+	minterRef := ""
+	if r.MintedBy != "" {
+		minterRef = privacy.SubjectRef(r.TenantID, r.MintedBy)
+	}
 	err := s.WithTenant(ctx, r.TenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, subject_ref, scopes, expires_at)
-			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+			`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, subject_ref, scopes, expires_at, minted_by, minted_by_ref)
+			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
 			 RETURNING id::text, created_at`,
-			r.TenantID, r.TokenHash, r.Subject, privacy.SubjectRef(r.TenantID, r.Subject), scopes, r.ExpiresAt).Scan(&r.ID, &r.CreatedAt)
+			r.TenantID, r.TokenHash, r.Subject, privacy.SubjectRef(r.TenantID, r.Subject), scopes, r.ExpiresAt, r.MintedBy, minterRef).Scan(&r.ID, &r.CreatedAt)
 	})
 	return r, err
 }
@@ -63,14 +68,27 @@ func (s *Store) ApplyAPITokenCreatedTx(ctx context.Context, tx pgx.Tx, r APIToke
 	if scopes == nil {
 		scopes = []string{}
 	}
+	minterRef := ""
+	if r.MintedBy != "" {
+		minterRef = privacy.SubjectRef(r.TenantID, r.MintedBy)
+	}
 	if err := lockUpsertArbiterTx(ctx, tx, "api_tokens", r.TenantID, r.ID); err != nil {
 		return err
 	}
 	_, err := tx.Exec(ctx,
-		`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, subject_ref, scopes, expires_at, created_at, delegated, revoked_at)
-		 VALUES ($1, $2, $3, $4, $5::char(64), $6, $7, $8::timestamptz, $9,
-		   CASE WHEN EXISTS (SELECT 1 FROM tenant_member_offboard_commands AS c
-		                     WHERE c.tenant_id = $2 AND c.subject_ref = $5::char(64)
+		`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, subject_ref, scopes, expires_at, created_at, delegated, minted_by, minted_by_ref, revoked_at)
+		 VALUES ($1, $2, $3,
+		   CASE WHEN EXISTS (SELECT 1 FROM privacy_subject_erasures AS e
+		                     WHERE e.tenant_id = $2 AND e.subject_ref = $5::char(64))
+		        THEN 'erased:' || left($5, 12) ELSE $4 END,
+		   $5::char(64), $6, $7, $8::timestamptz, $9,
+		   CASE WHEN EXISTS (SELECT 1 FROM privacy_subject_erasures AS e
+		                     WHERE e.tenant_id = $2 AND e.subject_ref = $12::char(64))
+		        THEN 'erased:' || left($12, 12) ELSE $11 END, $12::char(64),
+		   CASE WHEN EXISTS (SELECT 1 FROM privacy_subject_erasures AS e
+		                     WHERE e.tenant_id = $2 AND e.subject_ref IN ($5::char(64), $12::char(64)))
+		          OR EXISTS (SELECT 1 FROM tenant_member_offboard_commands AS c
+		                     WHERE c.tenant_id = $2 AND c.subject_ref IN ($5::char(64), $12::char(64))
 		                       AND c.last_event_sequence >= $10::bigint) THEN $8::timestamptz ELSE NULL END)
 		 ON CONFLICT (id) DO UPDATE
 		    SET token_hash = EXCLUDED.token_hash,
@@ -80,8 +98,10 @@ func (s *Store) ApplyAPITokenCreatedTx(ctx context.Context, tx pgx.Tx, r APIToke
 		        expires_at = EXCLUDED.expires_at,
 		        created_at = EXCLUDED.created_at,
 		        delegated = EXCLUDED.delegated,
+		        minted_by = EXCLUDED.minted_by,
+		        minted_by_ref = EXCLUDED.minted_by_ref,
 		        revoked_at = COALESCE(api_tokens.revoked_at, EXCLUDED.revoked_at)`,
-		r.ID, r.TenantID, r.TokenHash, r.Subject, privacy.SubjectRef(r.TenantID, r.Subject), scopes, r.ExpiresAt, r.CreatedAt, r.Delegated, strconv.FormatUint(r.EventSequence, 10))
+		r.ID, r.TenantID, r.TokenHash, r.Subject, privacy.SubjectRef(r.TenantID, r.Subject), scopes, r.ExpiresAt, r.CreatedAt, r.Delegated, strconv.FormatUint(r.EventSequence, 10), r.MintedBy, minterRef)
 	return err
 }
 
@@ -98,16 +118,16 @@ func (s *Store) ApplyAPITokenRevokedTx(ctx context.Context, tx pgx.Tx, tenantID,
 	return err
 }
 
-// ApplyAPITokensRevokedForSubjectTx projects member offboarding by revoking every
-// active API token owned by the subject.
+// ApplyAPITokensRevokedForSubjectTx projects member offboarding by revoking
+// tokens owned or minted by the departing subject.
 func (s *Store) ApplyAPITokensRevokedForSubjectTx(ctx context.Context, tx pgx.Tx, tenantID, subject, revokedBy, reason string, at time.Time) error {
 	_, err := tx.Exec(ctx,
 		`UPDATE api_tokens
 		    SET revoked_at = COALESCE(revoked_at, $3),
 		        revoked_by = CASE WHEN revoked_by = '' THEN $4 ELSE revoked_by END,
 		        revocation_reason = CASE WHEN revocation_reason = '' THEN $5 ELSE revocation_reason END
-		  WHERE tenant_id = $1 AND subject = $2 AND revoked_at IS NULL`,
-		tenantID, subject, at, revokedBy, reason)
+		  WHERE tenant_id = $1 AND (subject_ref = $2 OR minted_by_ref = $2) AND revoked_at IS NULL`,
+		tenantID, privacy.SubjectRef(tenantID, subject), at, revokedBy, reason)
 	return err
 }
 
@@ -117,21 +137,21 @@ func (s *Store) GetAPIToken(ctx context.Context, tenantID, id string) (APITokenR
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, token_hash, subject, scopes, expires_at, created_at,
-			        revoked_at, revoked_by, revocation_reason
+			        revoked_at, revoked_by, revocation_reason, minted_by
 			   FROM api_tokens WHERE tenant_id = $1 AND id = $2`,
-			tenantID, id).Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason)
+			tenantID, id).Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason, &r.MintedBy)
 	})
 	return r, err
 }
 
 // CountActiveAPITokensForSubject returns how many bearer credentials offboarding
-// will revoke for subject.
+// will revoke for a subject as either holder or minter.
 func (s *Store) CountActiveAPITokensForSubject(ctx context.Context, tenantID, subject string) (int, error) {
 	var n int
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND subject = $2 AND revoked_at IS NULL`,
-			tenantID, subject).Scan(&n)
+			`SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND (subject_ref = $2 OR minted_by_ref = $2) AND revoked_at IS NULL`,
+			tenantID, privacy.SubjectRef(tenantID, subject)).Scan(&n)
 	})
 	return n, err
 }
@@ -143,7 +163,7 @@ func (s *Store) ListAPITokensPage(ctx context.Context, tenantID, afterID, subjec
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, token_hash, subject, scopes, expires_at, created_at,
-			        revoked_at, revoked_by, revocation_reason
+			        revoked_at, revoked_by, revocation_reason, minted_by
 			   FROM api_tokens
 			  WHERE tenant_id = $1
 			    AND id > $2
@@ -157,7 +177,7 @@ func (s *Store) ListAPITokensPage(ctx context.Context, tenantID, afterID, subjec
 		defer rows.Close()
 		for rows.Next() {
 			var r APITokenRecord
-			if err := rows.Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason); err != nil {
+			if err := rows.Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason, &r.MintedBy); err != nil {
 				return err
 			}
 			out = append(out, r)
@@ -177,7 +197,7 @@ func (s *Store) ListExpiredAPITokens(ctx context.Context, now time.Time, limit i
 	rows, err := s.pool.Query(ctx,
 		//trstctl:system-query — leaseworker sweeps expired API tokens across tenants before any request tenant exists; it returns tenant_id and then revokes through tenant-scoped event commands. Cross-tenant by design; bounded by LIMIT and carries no raw token material (AN-1 exemption).
 		`SELECT id::text, tenant_id::text, token_hash, subject, scopes, expires_at, created_at,
-		        revoked_at, revoked_by, revocation_reason
+		        revoked_at, revoked_by, revocation_reason, minted_by
 		   FROM api_tokens
 		  WHERE expires_at IS NOT NULL
 		    AND expires_at <= $1
@@ -192,7 +212,7 @@ func (s *Store) ListExpiredAPITokens(ctx context.Context, now time.Time, limit i
 	var out []APITokenRecord
 	for rows.Next() {
 		var r APITokenRecord
-		if err := rows.Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason); err != nil {
+		if err := rows.Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason, &r.MintedBy); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -209,9 +229,10 @@ func (s *Store) LookupAPITokenByHash(ctx context.Context, hash string) (APIToken
 	err := s.pool.QueryRow(ctx,
 		//trstctl:system-query — auth runs before any tenant is known; the lookup is keyed by the globally-unique, high-entropy token hash and returns the owning tenant. Cross-tenant by design; runs on the pool, not under RLS (AN-1 exemption).
 		`SELECT id::text, tenant_id::text, token_hash, subject, scopes, expires_at, created_at,
-		        revoked_at, revoked_by, revocation_reason, COALESCE(delegated, false)
+		        revoked_at, revoked_by, revocation_reason, COALESCE(delegated, false), minted_by
 		   FROM api_tokens AS t
 		  WHERE t.token_hash = $1 AND t.revoked_at IS NULL
+		    AND NOT (COALESCE(t.delegated, false) AND btrim(t.minted_by_ref) = '')
 		    AND NOT EXISTS (
 		      SELECT 1 FROM api_token_revocation_commands AS c
 		       WHERE c.tenant_id = t.tenant_id AND c.token_id = t.id
@@ -219,14 +240,14 @@ func (s *Store) LookupAPITokenByHash(ctx context.Context, hash string) (APIToken
 		    AND NOT EXISTS (
 		      SELECT 1 FROM tenant_member_offboard_commands AS c
 		      LEFT JOIN tenant_members AS m ON m.tenant_id = c.tenant_id AND m.subject_ref = c.subject_ref
-		       WHERE c.tenant_id = t.tenant_id AND c.subject_ref = t.subject_ref
+		       WHERE c.tenant_id = t.tenant_id AND c.subject_ref IN (t.subject_ref, t.minted_by_ref)
 		         AND (c.status = 'pending' OR m.status IS DISTINCT FROM 'active')
 		    )
 		    AND NOT EXISTS (
 		      SELECT 1 FROM tenant_members AS m
-		       WHERE m.tenant_id = t.tenant_id AND m.subject_ref = t.subject_ref
+		       WHERE m.tenant_id = t.tenant_id AND m.subject_ref IN (t.subject_ref, t.minted_by_ref)
 		         AND m.status = 'offboarded'
 		    )`, hash).
-		Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason, &r.Delegated)
+		Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason, &r.Delegated, &r.MintedBy)
 	return r, err
 }

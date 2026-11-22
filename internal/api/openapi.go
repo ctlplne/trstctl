@@ -4828,17 +4828,17 @@ func componentSchemas() map[string]*Schema {
 		"member": ref("Member"), "revoked_token_count": {Type: "integer"}, "rotation_evidence": str(),
 	}, "member", "revoked_token_count", "rotation_evidence")
 	apiToken := object(map[string]*Schema{
-		"id": uuid(), "tenant_id": uuid(), "subject": str(), "scopes": {Type: "array", Items: str()},
+		"id": uuid(), "tenant_id": uuid(), "subject": str(), "minted_by": str(), "scopes": {Type: "array", Items: str()},
 		"expires_at": timestamp(), "created_at": timestamp(), "revoked_at": timestamp(),
 		"revoked_by": str(), "revocation_reason": str(),
-	}, "id", "tenant_id", "subject", "scopes", "created_at")
+	}, "id", "tenant_id", "subject", "minted_by", "scopes", "created_at")
 	apiTokenCreateReq := object(map[string]*Schema{
 		"subject": str(), "scopes": {Type: "array", Items: str()}, "expires_at": timestamp(),
 	}, "subject", "scopes")
 	apiTokenCreateResp := object(map[string]*Schema{
-		"id": uuid(), "tenant_id": uuid(), "subject": str(), "scopes": {Type: "array", Items: str()},
+		"id": uuid(), "tenant_id": uuid(), "subject": str(), "minted_by": str(), "scopes": {Type: "array", Items: str()},
 		"expires_at": timestamp(), "created_at": timestamp(), "token": str(),
-	}, "id", "tenant_id", "subject", "scopes", "created_at", "token")
+	}, "id", "tenant_id", "subject", "minted_by", "scopes", "created_at", "token")
 	apiTokenRevokeReq := object(map[string]*Schema{"reason": str()})
 	honeyToken := object(map[string]*Schema{
 		"id": uuid(), "kind": {Type: "string", Enum: []string{"native"}}, "name": str(), "placement": str(), "state": {Type: "string", Enum: []string{"active", "triggered", "revoked"}},
@@ -5015,7 +5015,7 @@ func componentSchemas() map[string]*Schema {
 		"uses": {Type: "array", Items: ref("AWSHoneyUse")},
 	}, "id", "kind", "name", "placement", "state", "created_at", "lease", "monitoring", "uses")
 	ephemeralAPIKeyReq := object(map[string]*Schema{
-		"subject": str(), "scopes": {Type: "array", Items: str()}, "ttl_seconds": {Type: "integer"},
+		"subject": {Type: "string", Description: "Must equal the authenticated subject. A service identity authenticates as itself before minting its own key."}, "scopes": {Type: "array", Items: str()}, "ttl_seconds": {Type: "integer"},
 		"preview_fingerprint": {Type: "string", Description: "Optional server-keyed fingerprint returned by EphemeralAPIKeyPreview. When supplied, issuance fails closed if subject, scopes, caller, tenant, or lifetime changed."},
 	}, "subject", "scopes", "ttl_seconds")
 	ephemeralAPIKeyPreview := object(map[string]*Schema{

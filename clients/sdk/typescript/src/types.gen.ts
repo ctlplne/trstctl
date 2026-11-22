@@ -133,7 +133,7 @@ export interface paths {
         /** List API token metadata */
         get: operations["listAPITokens"];
         put?: never;
-        /** Mint a tenant-scoped API token for a member */
+        /** Mint an attenuated tenant-scoped API token for your authenticated subject */
         post: operations["createAPIToken"];
         delete?: never;
         options?: never;
@@ -13299,6 +13299,7 @@ export interface components {
             expires_at?: string;
             /** Format: uuid */
             id: string;
+            minted_by: string;
             revocation_reason?: string;
             /** Format: date-time */
             revoked_at?: string;
@@ -13321,6 +13322,7 @@ export interface components {
             expires_at?: string;
             /** Format: uuid */
             id: string;
+            minted_by: string;
             scopes: string[];
             subject: string;
             /** Format: uuid */
@@ -19670,6 +19672,7 @@ export interface components {
             /** @description Optional server-keyed fingerprint returned by EphemeralAPIKeyPreview. When supplied, issuance fails closed if subject, scopes, caller, tenant, or lifetime changed. */
             preview_fingerprint?: string;
             scopes: string[];
+            /** @description Must equal the authenticated subject. A service identity authenticates as itself before minting its own key. */
             subject: string;
             ttl_seconds: number;
         };

@@ -130,7 +130,7 @@ type aud69ExplorerToken struct {
 func mintAUD69ExplorerToken(t *testing.T, ts *httptest.Server, admin, subject string, scopes []string, expiresAt time.Time) aud69ExplorerToken {
 	t.Helper()
 	code, body := doBearer(t, ts, http.MethodPost, "/api/v1/access/api-tokens", admin, "aud69-token-"+subject, map[string]any{
-		"subject": subject, "scopes": scopes, "expires_at": expiresAt.UTC().Format(time.RFC3339Nano),
+		"subject": "platform-admin", "scopes": scopes, "expires_at": expiresAt.UTC().Format(time.RFC3339Nano),
 	})
 	if code != http.StatusCreated {
 		t.Fatalf("mint Explorer token %s = %d body=%s", subject, code, body)

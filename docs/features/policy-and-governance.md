@@ -44,13 +44,20 @@ issue/deploy/revoke transition, the RA scope split (`certs:request` ≠ `certs:i
 stops a requester from self-issuing, and `ca.policy.require_approval` requires a distinct
 approver — self-approval is rejected.
 
-Approvals count people, not token names. An API token that one person mints through the
-API for a different subject can do that subject's work, but every approval and denial
-route (identity, issuance-request, access-change, secret, managed-key, profile and
-ephemeral approvals, and CA key-ceremony approvals, including break-glass quorums)
-refuses it with 403. Approve with your own sign-in or with a token you minted for
-yourself. Tokens a deployment administrator creates with `trstctl token create` sit
-inside that administrator's custody boundary and are not treated as delegated.
+Approvals count people, not token names. `POST /api/v1/access/api-tokens` mints only
+for the authenticated subject and only with scopes that subject already holds;
+an access bundle run cannot mint another token. The short-lived API-key route
+uses the same subject rule: authenticate as the service identity before minting
+its key, or use the custody-bound local `trstctl token create` command for
+bootstrap. The token inventory shows its
+authenticated minter. Offboarding that minter revokes both their own tokens and
+tokens they minted for another subject; a pending offboard fence denies either
+bearer before projection catches up. Historical delegated tokens can still do
+their subject's non-approval work until revoked, but every approval and denial
+route refuses them with 403. Approve with your own sign-in or a self-minted token.
+An older delegated token whose minter is missing from the upgraded read model
+is refused at authentication until event replay restores provenance; reissue it
+through the reviewed workflow if it can no longer be used.
 
 The active rule is read from that tenant's immutable policy events before a
 mutation decision. Compiled rules are cached, but a cache is never permission:

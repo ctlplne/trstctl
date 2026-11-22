@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { BadgeCheck, Ban, Eye, KeyRound, Loader2, RotateCcw } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/auth/AuthProvider";
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/i18n/format";
@@ -28,8 +29,8 @@ export default function EphemeralAPIKeyWorkflow({ canGrant, nativeStoreUnavailab
   // TRACE-005 source anchor: ephemeral API-key issuance is served through POST /api/v1/ephemeral/api-keys,
   // trstctl-cli ephemeral api-keys issue, and durable api_token.revoked verification.
   const { t } = useTranslation();
-  const subjectRef = useRef<HTMLInputElement>(null);
-  const [subject, setSubject] = useState("");
+  const { user } = useAuth();
+  const subject = user?.subject ?? "";
   const [scopes, setScopes] = useState("access:read");
   const [ttl, setTTL] = useState("900");
   const [preview, setPreview] = useState<EphemeralAPIKeyPreview | null>(null);
@@ -47,8 +48,6 @@ export default function EphemeralAPIKeyWorkflow({ canGrant, nativeStoreUnavailab
   const [revokeBusy, setRevokeBusy] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const [revoked, setRevoked] = useState(false);
-
-  useEffect(() => subjectRef.current?.focus(), []);
 
   function invalidatePreview() {
     if (preview) setPreviewStale(true);
@@ -110,7 +109,6 @@ export default function EphemeralAPIKeyWorkflow({ canGrant, nativeStoreUnavailab
       setPreview(null);
       setIdempotencyKey(null);
       setIssueAmbiguous(false);
-      setSubject("");
       setScopes("access:read");
       setTTL("900");
     } catch (error) {
@@ -184,16 +182,11 @@ export default function EphemeralAPIKeyWorkflow({ canGrant, nativeStoreUnavailab
               {t("secrets.ephemeral.subject")}
             </label>
             <input
-              ref={subjectRef}
               id="ephemeral-api-key-subject"
               aria-describedby="ephemeral-api-key-subject-help"
               className="rounded-md border border-border bg-background px-3 py-2"
               value={subject}
-              onChange={(event) => {
-                setSubject(event.target.value);
-                invalidatePreview();
-              }}
-              placeholder={t("secrets.ephemeral.subjectPlaceholder")}
+              readOnly
               autoComplete="off"
               required
             />

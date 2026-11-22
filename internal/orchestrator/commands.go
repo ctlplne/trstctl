@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/url"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -259,8 +260,8 @@ func (o *Orchestrator) emitPrepared(ctx context.Context, next events.Event) (eve
 	var ev events.Event
 	err = o.store.WithTenant(ctx, next.TenantID, func(tx pgx.Tx) error {
 		// An offboard claim and a bearer/member source append take the same
-		// subject transaction lock. The winner's source order is fixed before
-		// either SQL transaction releases its admission decision.
+		// subject transaction lock. A token may have a different authenticated
+		// minter, so fence both people in a stable order before the source append.
 		if next.Type == projections.EventTenantMemberUpserted || next.Type == projections.EventAPITokenCreated {
 			var subject string
 			if next.Type == projections.EventTenantMemberUpserted {
@@ -276,12 +277,31 @@ func (o *Orchestrator) emitPrepared(ctx context.Context, next events.Event) (eve
 				}
 				subject = pl.Subject
 			}
-			if err := o.store.LockTenantMemberSubjectTx(ctx, tx, next.TenantID, subject); err != nil {
-				return err
+			subjects := []string{subject}
+			if next.Type == projections.EventAPITokenCreated {
+				actor := next.Actor
+				if actor == nil {
+					if fromContext, ok := events.ActorFromContext(ctx); ok {
+						actor = &fromContext
+					}
+				}
+				if actor != nil {
+					if minter := strings.TrimSpace(actor.Subject); minter != "" && minter != subject {
+						subjects = append(subjects, minter)
+					}
+				}
+			}
+			sort.Strings(subjects)
+			for _, locked := range subjects {
+				if err := o.store.LockTenantMemberSubjectTx(ctx, tx, next.TenantID, locked); err != nil {
+					return err
+				}
 			}
 			if next.Type == projections.EventAPITokenCreated {
-				if err := o.store.CheckTenantMemberBearerAdmissionTx(ctx, tx, next.TenantID, subject); err != nil {
-					return err
+				for _, checked := range subjects {
+					if err := o.store.CheckTenantMemberBearerAdmissionTx(ctx, tx, next.TenantID, checked); err != nil {
+						return err
+					}
 				}
 			} else {
 				if err := o.store.CheckTenantMemberUpsertAdmissionTx(ctx, tx, next.TenantID, subject); err != nil {
@@ -2439,6 +2459,10 @@ func (o *Orchestrator) offboardTenantMember(ctx context.Context, tenantID, subje
 // hash; raw is returned exactly once to the caller and is never persisted in the
 // token table or event log.
 func (o *Orchestrator) CreateAPIToken(ctx context.Context, tenantID, subject string, scopes []string, expiresAt *time.Time) (store.APITokenRecord, []byte, error) {
+	minter := ""
+	if actor, ok := events.ActorFromContext(ctx); ok {
+		minter = strings.TrimSpace(actor.Subject)
+	}
 	raw, hash, err := auth.GenerateAPIToken()
 	if err != nil {
 		return store.APITokenRecord{}, nil, err
@@ -2457,7 +2481,7 @@ func (o *Orchestrator) CreateAPIToken(ctx context.Context, tenantID, subject str
 		return store.APITokenRecord{}, nil, err
 	}
 	return store.APITokenRecord{
-		ID: id, TenantID: tenantID, TokenHash: hash, Subject: subject,
+		ID: id, TenantID: tenantID, TokenHash: hash, Subject: subject, MintedBy: minter,
 		Scopes: scopes, ExpiresAt: expiresAt, CreatedAt: ev.Time,
 	}, raw, nil
 }

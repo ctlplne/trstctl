@@ -94,6 +94,7 @@ type apiTokenResponse struct {
 	ID               string     `json:"id"`
 	TenantID         string     `json:"tenant_id"`
 	Subject          string     `json:"subject"`
+	MintedBy         string     `json:"minted_by"`
 	Scopes           []string   `json:"scopes"`
 	ExpiresAt        *time.Time `json:"expires_at,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
@@ -408,6 +409,16 @@ func (a *API) createAPIToken(w http.ResponseWriter, r *http.Request) {
 		if req.Subject == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "subject is required")
 		}
+		principal, err := requestAuthzPrincipal(ctx)
+		if err != nil {
+			return 0, nil, err
+		}
+		if principal.RunID != "" {
+			return 0, nil, errStatus(http.StatusForbidden, "an access bundle run cannot mint a lasting API token")
+		}
+		if req.Subject != principal.Subject {
+			return 0, nil, errStatus(http.StatusForbidden, "API token subject must be your authenticated subject; authenticate as the service identity to mint its key")
+		}
 		if len(req.Scopes) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "at least one scope is required")
 		}
@@ -526,7 +537,7 @@ func toMemberResponse(m store.TenantMember) memberResponse {
 
 func toAPITokenResponse(t store.APITokenRecord) apiTokenResponse {
 	return apiTokenResponse{
-		ID: t.ID, TenantID: t.TenantID, Subject: t.Subject, Scopes: append([]string(nil), t.Scopes...),
+		ID: t.ID, TenantID: t.TenantID, Subject: t.Subject, MintedBy: t.MintedBy, Scopes: append([]string(nil), t.Scopes...),
 		ExpiresAt: t.ExpiresAt, CreatedAt: t.CreatedAt, RevokedAt: t.RevokedAt,
 		RevokedBy: t.RevokedBy, RevocationReason: t.RevocationReason,
 	}

@@ -72,7 +72,7 @@ func TestServedEvidenceReportTemplatesA252(t *testing.T) {
 		Token string `json:"token"`
 	}
 	if err := json.Unmarshal(call(http.MethodPost, "/api/v1/access/api-tokens", "a252-token",
-		map[string]any{"subject": "ci:a252", "scopes": []string{"certs:read"}}, http.StatusCreated), &minted); err != nil {
+		map[string]any{"subject": "evidence-admin", "scopes": []string{"certs:read"}}, http.StatusCreated), &minted); err != nil {
 		t.Fatal(err)
 	}
 	call(http.MethodDelete, "/api/v1/access/api-tokens/"+minted.ID, "a252-token-revoke", nil, http.StatusNoContent)

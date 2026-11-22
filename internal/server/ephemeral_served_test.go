@@ -534,7 +534,7 @@ func TestServedEphemeralAPIKeyAutoExpires(t *testing.T) {
 	})
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/api-keys", admin, "sec10-issue-api-key", map[string]any{
-		"subject":     "ci-ephemeral-key",
+		"subject":     "ephemeral-key-admin",
 		"scopes":      []string{"access:read"},
 		"ttl_seconds": 1,
 	})
@@ -551,7 +551,7 @@ func TestServedEphemeralAPIKeyAutoExpires(t *testing.T) {
 	if err := json.Unmarshal(body, &issued); err != nil {
 		t.Fatalf("decode ephemeral API-key response: %v; body=%s", err, body)
 	}
-	if issued.ID == "" || issued.Subject != "ci-ephemeral-key" || issued.ExpiresAt == nil || !strings.HasPrefix(issued.Token, auth.TokenPrefix) {
+	if issued.ID == "" || issued.Subject != "ephemeral-key-admin" || issued.ExpiresAt == nil || !strings.HasPrefix(issued.Token, auth.TokenPrefix) {
 		t.Fatalf("ephemeral API-key response = %+v", issued)
 	}
 	if issued.ExpiresAt.After(time.Now().Add(2 * time.Second)) {
@@ -569,7 +569,7 @@ func TestServedEphemeralAPIKeyAutoExpires(t *testing.T) {
 	deadline := time.Now().Add(4 * time.Second)
 	for time.Now().Before(deadline) {
 		code, _ = doBearer(t, h.ts, http.MethodGet, "/api/v1/access/roles", issued.Token, "", nil)
-		metaCode, listed := doBearer(t, h.ts, http.MethodGet, "/api/v1/access/api-tokens?subject=ci-ephemeral-key&include_revoked=true", admin, "", nil)
+		metaCode, listed := doBearer(t, h.ts, http.MethodGet, "/api/v1/access/api-tokens?subject=ephemeral-key-admin&include_revoked=true", admin, "", nil)
 		if code == http.StatusUnauthorized && metaCode == http.StatusOK && bytes.Contains(listed, []byte(`"revoked_at"`)) {
 			if !h.hasEvent(t, "api_token.revoked") {
 				t.Fatal("ephemeral API-key expiry did not emit api_token.revoked")
@@ -579,7 +579,7 @@ func TestServedEphemeralAPIKeyAutoExpires(t *testing.T) {
 		time.Sleep(25 * time.Millisecond)
 	}
 	code, roleBody = doBearer(t, h.ts, http.MethodGet, "/api/v1/access/roles", issued.Token, "", nil)
-	metaCode, listed := doBearer(t, h.ts, http.MethodGet, "/api/v1/access/api-tokens?subject=ci-ephemeral-key&include_revoked=true", admin, "", nil)
+	metaCode, listed := doBearer(t, h.ts, http.MethodGet, "/api/v1/access/api-tokens?subject=ephemeral-key-admin&include_revoked=true", admin, "", nil)
 	t.Fatalf("ephemeral API key did not auto-expire: roles=%d body=%s metadata=%d body=%s", code, roleBody, metaCode, listed)
 }
 
@@ -590,7 +590,7 @@ func TestServedEphemeralAPIKeyAutoExpires(t *testing.T) {
 func TestServedEphemeralAPIKeyReviewRecoveryAndRevocation(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "ephemeral-review-admin", "access:read", "access:write")
-	const subject = "ci-reviewed-deploy"
+	const subject = "ephemeral-review-admin"
 	request := map[string]any{
 		"subject": subject, "scopes": []string{"access:read"}, "ttl_seconds": 300,
 	}
@@ -737,8 +737,8 @@ func TestServedEphemeralAPIKeyReviewRecoveryAndRevocation(t *testing.T) {
 		`SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND subject = $2`, h.tenant, subject).Scan(&issuedRows); err != nil {
 		t.Fatalf("count reviewed F38 rows: %v", err)
 	}
-	if issuedRows != 1 {
-		t.Fatalf("reviewed F38 issue rows = %d, want exactly 1", issuedRows)
+	if issuedRows != tokenRowsBefore+1 {
+		t.Fatalf("reviewed F38 issue rows = %d, want baseline %d plus exactly 1", issuedRows, tokenRowsBefore)
 	}
 
 	status, raw = doBearer(t, h.ts, http.MethodGet, "/api/v1/access/roles", issued.Token, "", nil)

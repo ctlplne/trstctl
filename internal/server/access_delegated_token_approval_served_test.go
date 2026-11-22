@@ -98,7 +98,7 @@ func TestServedDelegatedTokensCannotApprove(t *testing.T) {
 	requester := seedServedAPIToken(t, ctx, h.store, h.tenant, "requester", []string{"identities:write", "identities:read", "certs:request"})
 	issuer := seedServedAPIToken(t, ctx, h.store, h.tenant, "issuer", []string{"identities:write", "identities:read", "certs:issue", "certs:request"})
 
-	delegated := createServedToken(t, h.ts, admin, "custodian-b", approverScopes)
+	delegated := seedHistoricalDelegatedToken(t, h.srv.orch, h.tenant, "people-admin", "custodian-b", approverScopes)
 	selfMinted := createServedToken(t, h.ts, selfBootstrap, "custodian-c", approverScopes)
 
 	refused := func(what string, code int, body []byte) {

@@ -1500,7 +1500,9 @@ control plane:
 - `trstctl-cli ephemeral api-keys preview -f body.json` and `ephemeral api-keys
   issue -f reviewed.json` drive the same two-step contract.
 - Both review and issue require `access:write`; both also attenuate authority by
-  refusing any requested scope the caller does not already possess.
+  refusing any requested scope the caller does not already possess. The subject
+  must equal the authenticated caller; a machine authenticates as itself before
+  minting its own short-lived key.
 - Execution is guarded by `Idempotency-Key`, so a byte-identical retry with the same
   key returns the original response instead of minting twice. Reusing that key with
   changed input returns `409`.
@@ -1515,7 +1517,7 @@ control plane:
 
 ```json
 {
-  "subject": "ci-preview-deploy",
+  "subject": "<authenticated subject>",
   "scopes": ["access:read"],
   "ttl_seconds": 900,
   "preview_fingerprint": "sha256:<value returned by preview>"

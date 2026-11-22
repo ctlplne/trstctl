@@ -360,8 +360,11 @@ today (see [Current limitations](../limitations.md) and
 
    ```sh
    cat > ephemeral-api-key.json <<'JSON'
-   {"subject":"ci-preview-deploy","scopes":["access:read"],"ttl_seconds":900}
+   {"subject":"<authenticated subject>","scopes":["access:read"],"ttl_seconds":900}
    JSON
+
+   # Replace <authenticated subject> with the exact subject of this caller's
+   # bearer or machine login. Another person's subject is refused.
 
    curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/ephemeral/api-keys/preview \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \

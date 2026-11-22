@@ -184,7 +184,8 @@ func (s *Store) ClaimTenantMemberOffboardCommand(ctx context.Context, tenantID, 
 				}
 			}
 			if err := tx.QueryRow(barrierCtx,
-				`SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND subject_ref = $2 AND revoked_at IS NULL`,
+				`SELECT count(*) FROM api_tokens
+				 WHERE tenant_id = $1 AND (subject_ref = $2 OR minted_by_ref = $2) AND revoked_at IS NULL`,
 				tenantID, ref).Scan(&count); err != nil {
 				return err
 			}

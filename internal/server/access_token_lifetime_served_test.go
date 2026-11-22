@@ -39,7 +39,7 @@ func TestServedAPITokensExpireByDefault(t *testing.T) {
 		return code, raw, got.ExpiresAt
 	}
 	before := time.Now()
-	code, raw, expires := mint("ci-reader", "f267-default", nil)
+	code, raw, expires := mint("token-admin", "f267-default", nil)
 	if code != http.StatusCreated {
 		t.Fatalf("mint without expires_at = %d body=%s; want 201", code, raw)
 	}
@@ -48,11 +48,11 @@ func TestServedAPITokensExpireByDefault(t *testing.T) {
 		t.Errorf("mint without expires_at stored expiry %v; want about 90 days from now (%v..%v)", expires, lo, hi)
 	}
 	tooLong := time.Now().Add(400 * 24 * time.Hour)
-	if code, raw, _ := mint("ci-reader-long", "f267-long", &tooLong); code != http.StatusUnprocessableEntity || !bytes.Contains(raw, []byte("auth.api_tokens.max_lifetime")) {
+	if code, raw, _ := mint("token-admin", "f267-long", &tooLong); code != http.StatusUnprocessableEntity || !bytes.Contains(raw, []byte("auth.api_tokens.max_lifetime")) {
 		t.Errorf("mint with a 400-day expiry = %d body=%s; want 422 naming auth.api_tokens.max_lifetime", code, raw)
 	}
 	week := time.Now().Add(7 * 24 * time.Hour).Truncate(time.Second)
-	if code, raw, expires := mint("ci-reader-week", "f267-week", &week); code != http.StatusCreated || expires == nil || !expires.Equal(week) {
+	if code, raw, expires := mint("token-admin", "f267-week", &week); code != http.StatusCreated || expires == nil || !expires.Equal(week) {
 		t.Errorf("mint with a 7-day expiry = %d expiry=%v body=%s; want 201 keeping %v", code, expires, raw, week)
 	}
 }

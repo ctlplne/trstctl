@@ -26,6 +26,18 @@ const { apiMock } = vi.hoisted(() => ({
   },
 }));
 
+const { authFixture } = vi.hoisted(() => ({ authFixture: { subject: "" } }));
+vi.mock("@/auth/AuthProvider", async (original) => {
+  const actual = await original<typeof import("@/auth/AuthProvider")>();
+  return {
+    ...actual,
+    useAuth: () => {
+      const state = actual.useAuth();
+      return authFixture.subject ? { ...state, user: { subject: authFixture.subject, tenant_id: "tenant-a", permissions: ["access:write"] } } : state;
+    },
+  };
+});
+
 vi.mock("@/lib/bootstrapApi", async (original) => {
   const actual = await original<typeof import("@/lib/bootstrapApi")>();
   return { ...actual, bootstrapApi: { ...actual.bootstrapApi, ...apiMock } };
@@ -67,6 +79,7 @@ const member = {
 
 describe("DESIGN-ROUTE-040 People and roles", () => {
   beforeEach(() => {
+    authFixture.subject = "";
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.accessRoles.mockResolvedValue({
       items: [
@@ -568,6 +581,7 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
   });
 
   it("keeps reveal-once access-key creation behind the sessions detail layer", async () => {
+    authFixture.subject = member.subject;
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole("heading", { level: 1, name: "People and roles" });
@@ -575,7 +589,7 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     await user.click(await screen.findByRole("button", { name: "Create access key" }));
 
     const dialog = screen.getByRole("dialog", { name: "Create access key" });
-    await user.type(within(dialog).getByRole("textbox", { name: "Subject" }), member.subject);
+    expect(within(dialog).getByRole("textbox", { name: "Subject" })).toHaveValue(member.subject);
     await user.click(within(dialog).getByRole("button", { name: "Create access key" }));
     await waitFor(() => expect(apiMock.createAPIToken).toHaveBeenCalledWith({ subject: member.subject, scopes: ["access:read"] }));
     expect(await within(dialog).findByText("Copy this key now. It will not be shown again.")).toBeInTheDocument();

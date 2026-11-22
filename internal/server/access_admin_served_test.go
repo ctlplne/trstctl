@@ -29,9 +29,10 @@ import (
 // JOURNEY-003 acceptance: the governed request/approve journey requires a
 // distinct approver principal, and the product now serves the admin path to
 // create and retire that principal. This drives the running server over bearer
-// API-token auth: only the initial platform-admin token is test-seeded like a
-// first bootstrap credential; member onboarding, approver token minting, approval,
-// and offboarding all go through /api/v1/access/*.
+// API-token auth: bootstrap credentials are test-seeded for the administrator
+// and two newly onboarded members; those members self-mint attenuated tokens
+// through the served API. Member onboarding, approval, and offboarding also
+// run through /api/v1/access/*.
 func TestServedAccessAdminOnboardsAndOffboardsDistinctApprover(t *testing.T) {
 	if testing.Short() {
 		t.Skip("starts an embedded PostgreSQL; skipped in -short")
@@ -111,14 +112,16 @@ func TestServedAccessAdminOnboardsAndOffboardsDistinctApprover(t *testing.T) {
 	upsertMember(t, ts, adminToken, "approver-one", []string{"operator"})
 	upsertMember(t, ts, adminToken, "approver-two", []string{"operator"})
 
-	requesterToken := createServedToken(t, ts, adminToken, "requester", []string{string(authz.IdentitiesWrite), string(authz.CertsRequest)})
-	issuerToken := createServedToken(t, ts, adminToken, "issuer", []string{string(authz.IdentitiesWrite), string(authz.CertsIssue), string(authz.CertsRequest)})
+	requesterBootstrap := seedServedAPIToken(t, ctx, st, tenantID, "requester", []string{string(authz.AccessWrite), string(authz.IdentitiesWrite), string(authz.CertsRequest)})
+	issuerBootstrap := seedServedAPIToken(t, ctx, st, tenantID, "issuer", []string{string(authz.AccessWrite), string(authz.IdentitiesWrite), string(authz.CertsIssue), string(authz.CertsRequest)})
+	requesterToken := createServedToken(t, ts, requesterBootstrap, "requester", []string{string(authz.IdentitiesWrite), string(authz.CertsRequest)})
+	issuerToken := createServedToken(t, ts, issuerBootstrap, "issuer", []string{string(authz.IdentitiesWrite), string(authz.CertsIssue), string(authz.CertsRequest)})
 	// Approvers approve with their own credentials (F262): here tokens issued in
 	// deployment custody. A token the admin mints for an approver still works for
 	// the approver's other tasks but can never cast the approver's vote.
 	approverOneToken := seedServedAPIToken(t, ctx, st, tenantID, "approver-one", []string{string(authz.CertsIssue)})
 	approverTwoToken := seedServedAPIToken(t, ctx, st, tenantID, "approver-two", []string{string(authz.CertsIssue)})
-	adminMintedForApprover := createServedToken(t, ts, adminToken, "approver-two", []string{string(authz.CertsIssue)})
+	adminMintedForApprover := seedHistoricalDelegatedToken(t, srv.orch, tenantID, "platform-admin", "approver-two", []string{string(authz.CertsIssue)})
 
 	identID := createIdentityWithToken(t, ts, requesterToken, owner.ID)
 	if code, body := transitionIdentityWithToken(t, ts, issuerToken, identID, "issued", "issuer-first-attempt"); code != http.StatusForbidden {
@@ -216,6 +219,22 @@ func seedServedAPIToken(t *testing.T, ctx context.Context, st *store.Store, tena
 	}
 	if _, err := st.CreateAPIToken(ctx, store.APITokenRecord{TenantID: tenantID, TokenHash: hash, Subject: subject, Scopes: scopes}); err != nil {
 		t.Fatalf("seed API token: %v", err)
+	}
+	token := secrettext.String(raw)
+	secret.Wipe(raw)
+	return token
+}
+
+// seedHistoricalDelegatedToken preserves F262's approval-refusal proof after
+// CR-020 closes cross-subject API minting. The retained event still carries the
+// authenticated minter, so the real projector and bearer lookup exercise the
+// historical delegated-token path.
+func seedHistoricalDelegatedToken(t *testing.T, orch *orchestrator.Orchestrator, tenantID, minter, subject string, scopes []string) string {
+	t.Helper()
+	ctx := events.ContextWithActor(context.Background(), events.Actor{Subject: minter})
+	_, raw, err := orch.CreateAPIToken(ctx, tenantID, subject, scopes, nil)
+	if err != nil {
+		t.Fatalf("project historical delegated token: %v", err)
 	}
 	token := secrettext.String(raw)
 	secret.Wipe(raw)

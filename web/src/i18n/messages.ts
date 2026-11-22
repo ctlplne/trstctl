@@ -4853,17 +4853,17 @@ export const messages = {
     description: "Description next to the Submit to CT button.",
   },
   "secrets.grant.heading": {
-    defaultMessage: "Grant workload access",
-    description: "Secrets Access tab: heading for the C-S1 grant console (Job 2's grant step, DA-02 interim).",
+    defaultMessage: "Create a scoped access key",
+    description: "Secrets Access tab: heading for the self-subject key console.",
   },
   "secrets.grant.description": {
     defaultMessage:
-      "Job 2, end to end: create the secret on the Store tab, grant a scoped credential here, then use that exact reveal-once credential to verify a secret read.",
-    description: "Secrets Access tab: grant console description framing create → grant → verify.",
+      "Authenticate as the identity that will use the key. Choose its scopes and lifetime here, then verify the reveal-once bearer against the secret it needs.",
+    description: "Secrets Access tab: explains self-subject key creation and verification.",
   },
   "secrets.grant.subject": {
-    defaultMessage: "Workload / subject",
-    description: "Grant console: subject field label (identity picker).",
+    defaultMessage: "Your signed-in subject",
+    description: "Grant console: fixed authenticated subject field label.",
   },
   "secrets.grant.scopes": {
     defaultMessage: "Scopes (comma-separated)",
@@ -4872,6 +4872,10 @@ export const messages = {
   "secrets.grant.ephemeral": {
     defaultMessage: "Time-bound (ephemeral)",
     description: "Grant console: checkbox switching from a standing API token to a TTL-bound ephemeral key.",
+  },
+  "secrets.grant.selfOnly": {
+    defaultMessage: "API keys must use your signed-in subject. Authenticate as the service identity to create its key.",
+    description: "Grant console: explains the self-subject boundary for both standing and short-lived keys.",
   },
   "secrets.grant.ttl": {
     defaultMessage: "TTL seconds",
@@ -4934,6 +4938,10 @@ export const messages = {
     defaultMessage: "Subject",
     description: "Grant console ledger column: subject.",
   },
+  "secrets.grant.ledgerMinter": {
+    defaultMessage: "Minted by",
+    description: "Grant console ledger column: authenticated token minter.",
+  },
   "secrets.grant.ledgerScopes": {
     defaultMessage: "Scopes",
     description: "Grant console ledger column: scopes.",
@@ -4974,15 +4982,14 @@ export const messages = {
   "secrets.ephemeral.heading": { defaultMessage: "Ephemeral API keys", description: "F38 temporary API-key workflow heading." },
   "secrets.ephemeral.description": {
     defaultMessage:
-      "Give one machine a narrowly scoped key that expires automatically. Review the exact subject, permissions, and lifetime before trstctl creates anything; then prove the reveal-once key works or revoke it immediately.",
+      "Authenticate as the machine identity that will hold the key. Review its exact subject, permissions, and lifetime before trstctl creates anything; then prove the reveal-once key works or revoke it immediately.",
     description: "Deeply technical ELI5 introduction to F38 ephemeral API keys.",
   },
   "secrets.ephemeral.formLabel": { defaultMessage: "Review ephemeral API key", description: "Accessible label for the F38 review form." },
-  "secrets.ephemeral.subject": { defaultMessage: "Machine subject", description: "F38 machine subject field label." },
-  "secrets.ephemeral.subjectPlaceholder": { defaultMessage: "ci/deploy-preview", description: "F38 example machine-subject value." },
+  "secrets.ephemeral.subject": { defaultMessage: "Your signed-in subject", description: "F38 authenticated subject field label." },
   "secrets.ephemeral.subjectHelp": {
-    defaultMessage: "Use a name that says which job will hold the key, such as ci/deploy-preview.",
-    description: "F38 subject naming guidance.",
+    defaultMessage: "This is fixed to the identity authenticated in this session; sign in as the service identity to mint its key.",
+    description: "F38 subject binding guidance.",
   },
   "secrets.ephemeral.scopes": { defaultMessage: "Allowed actions", description: "F38 API permission scopes field label." },
   "secrets.ephemeral.scopesHelp": {
@@ -8365,6 +8372,7 @@ export const messages = {
   "admin.access.ended": { defaultMessage: "Ended", description: "PAM session terminal time." },
   "admin.access.refreshSession": { defaultMessage: "Refresh session status", description: "Manual readback of PAM external-effect status." },
   "admin.access.accessKeys": { defaultMessage: "Access keys", description: "API-token metadata section heading using ELI5 language." },
+  "admin.access.keyMinter": { defaultMessage: "Minted by", description: "Access-key metadata column: authenticated token minter." },
   "admin.access.accessKeysRegion": { defaultMessage: "Access-key metadata", description: "Keyboard-scroll region label for access-key metadata." },
   "admin.access.createAccessKey": { defaultMessage: "Create access key", description: "Secondary action and dialog title for an API token." },
   "admin.access.noAccessKeys": { defaultMessage: "No access-key metadata is available.", description: "Empty access-key state." },
@@ -8386,7 +8394,8 @@ export const messages = {
     description: "Fail-closed state when the add-person dialog has no current role choices.",
   },
   "admin.access.createKeyDescription": {
-    defaultMessage: "Create a scoped automation key. The value appears once; only its ID, subject, scopes, and status remain afterward.",
+    defaultMessage:
+      "Create a scoped key for your signed-in subject. The value appears once; only its ID, subject, minter, scopes, and status remain afterward.",
     description: "Reveal-once access-key dialog explanation.",
   },
   "admin.access.revealOnce": { defaultMessage: "Copy this key now. It will not be shown again.", description: "Reveal-once access-key warning." },
@@ -29172,8 +29181,8 @@ export const messages = {
     description: "Explains the credential-free request boundary.",
   },
   "apiExplorer.subject": {
-    defaultMessage: "Token subject",
-    description: "Label for the test token subject input.",
+    defaultMessage: "Your signed-in subject",
+    description: "Label for the test token's fixed authenticated subject.",
   },
   "apiExplorer.tokenScope": {
     defaultMessage: "Token scope",
