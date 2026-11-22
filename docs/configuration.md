@@ -2269,6 +2269,11 @@ names no roles keeps the sign-in roles. Offboarding immediately invalidates that
 subject's browser sessions and API tokens, including while the event projector is
 recovering; subsequent requests return 401. An explicit rehire creates a new
 member event and requires new sessions and tokens. Old credentials stay revoked.
+Member upserts require a `roles` array, including on metadata edits and rehires.
+Use `[]` to deliberately clear all member roles; that change still requires
+`access:role.assign` and cannot target the caller's own member record. Omitting
+`roles` or sending `null` is rejected, so a partial update cannot silently
+restore broader sign-in roles.
 Role changes commit a subject-bound admission fence before their event is appended.
 While that exact event is pending projection, existing browser sessions keep their
 identity but have no grants; an access check returns 403. A failed member/fence

@@ -239,6 +239,13 @@ func (a *API) upsertMember(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
+		// Member upsert replaces the entire record. A missing/null roles array
+		// would erase a restricted role set without role-assignment authorization
+		// and can restore broader OIDC sign-in defaults. OpenAPI requires roles;
+		// callers use [] to request a deliberate, authorized clear.
+		if req.Roles == nil {
+			return 0, nil, errStatus(http.StatusBadRequest, "roles array is required for member upsert; use [] to clear roles")
+		}
 		if err := a.validateRoleNames(ctx, tenantID, req.Roles); err != nil {
 			return 0, nil, err
 		}

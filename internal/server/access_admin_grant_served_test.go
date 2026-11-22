@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"testing"
 
 	"trstctl.com/trstctl/internal/authz"
@@ -76,6 +77,80 @@ func TestServedOnlyAdministratorsGrantTheAdminRole(t *testing.T) {
 	}
 	if got := countRoleAssignDenialsF266(t, h) - deniedBefore; got != 3 {
 		t.Errorf("recorded role-assignment denials = %d, want 3 (one per refused admin grant)", got)
+	}
+}
+
+// CR-091: a missing or null roles field must never turn a member's restricted
+// role set into an empty set, which would restore the OIDC sign-in default.
+func TestServedMemberUpsertRequiresExplicitRolesForEveryEffect(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	ctx := context.Background()
+	admin := seedServedAPIToken(t, ctx, h.store, h.tenant, "cr091-admin", []string{"*"})
+	writer := seedServedAPIToken(t, ctx, h.store, h.tenant, "cr091-writer", []string{"access:read", "access:write"})
+	self := seedServedAPIToken(t, ctx, h.store, h.tenant, "cr091-member", []string{"access:read", "access:write"})
+	path := "/api/v1/access/members/cr091-member"
+	if code, body := doBearer(t, h.ts, http.MethodPut, path, admin, "cr091-seed",
+		map[string]any{"roles": []string{"operator"}, "display_name": "restricted"}); code != http.StatusOK {
+		t.Fatalf("seed restricted member = HTTP %d %s", code, body)
+	}
+	for _, tc := range []struct {
+		name  string
+		token string
+		body  map[string]any
+	}{
+		{"self omits roles", self, map[string]any{"display_name": "self edited"}},
+		{"writer omits roles", writer, map[string]any{"display_name": "writer edited"}},
+		{"writer sends null roles", writer, map[string]any{"roles": nil, "display_name": "null edited"}},
+		{"admin omits roles", admin, map[string]any{"display_name": "admin edited"}},
+	} {
+		code, body := doBearer(t, h.ts, http.MethodPut, path, tc.token, "cr091-"+tc.name, tc.body)
+		if code != http.StatusBadRequest {
+			t.Errorf("%s = HTTP %d %s, want 400", tc.name, code, body)
+		}
+		member, err := h.store.GetTenantMember(ctx, h.tenant, "cr091-member")
+		if err != nil || !slices.Equal(member.Roles, []string{"operator"}) {
+			t.Fatalf("%s changed stored roles to %v: %v", tc.name, member.Roles, err)
+		}
+	}
+	if code, body := doBearer(t, h.ts, http.MethodPut, "/api/v1/access/members/cr091-new", writer,
+		"cr091-new-omitted", map[string]any{"display_name": "new"}); code != http.StatusBadRequest {
+		t.Errorf("new member with omitted roles = HTTP %d %s, want 400", code, body)
+	}
+	deniedBefore := countRoleAssignDenialsF266(t, h)
+	if code, body := doBearer(t, h.ts, http.MethodPut, path, writer, "cr091-clear-denied",
+		map[string]any{"roles": []string{}, "display_name": "attempted clear"}); code != http.StatusForbidden {
+		t.Errorf("writer explicitly cleared roles = HTTP %d %s, want 403", code, body)
+	}
+	if got := countRoleAssignDenialsF266(t, h) - deniedBefore; got != 1 {
+		t.Errorf("explicit clear recorded %d role-assignment denials, want 1", got)
+	}
+	member, err := h.store.GetTenantMember(ctx, h.tenant, "cr091-member")
+	if err != nil || !slices.Equal(member.Roles, []string{"operator"}) {
+		t.Fatalf("denied clear changed stored roles to %v: %v", member.Roles, err)
+	}
+	if code, body := doBearer(t, h.ts, http.MethodPut, path, admin, "cr091-clear-allowed",
+		map[string]any{"roles": []string{}, "display_name": "approved clear"}); code != http.StatusOK {
+		t.Fatalf("administrator explicitly cleared roles = HTTP %d %s", code, body)
+	}
+	member, err = h.store.GetTenantMember(ctx, h.tenant, "cr091-member")
+	if err != nil || len(member.Roles) != 0 {
+		t.Fatalf("approved clear retained roles %v: %v", member.Roles, err)
+	}
+	if code, body := doBearer(t, h.ts, http.MethodPost, path+"/offboard", admin, "cr091-offboard",
+		map[string]any{"reason": "role boundary regression"}); code != http.StatusOK {
+		t.Fatalf("offboard member = HTTP %d %s", code, body)
+	}
+	deniedBefore = countRoleAssignDenialsF266(t, h)
+	if code, body := doBearer(t, h.ts, http.MethodPut, path, writer, "cr091-rehire-denied",
+		map[string]any{"roles": []string{"viewer"}}); code != http.StatusForbidden {
+		t.Errorf("writer rehired member with roles = HTTP %d %s, want 403", code, body)
+	}
+	if got := countRoleAssignDenialsF266(t, h) - deniedBefore; got != 1 {
+		t.Errorf("unauthorized rehire recorded %d role-assignment denials, want 1", got)
+	}
+	if code, body := doBearer(t, h.ts, http.MethodPut, path, admin, "cr091-rehire-allowed",
+		map[string]any{"roles": []string{"viewer"}}); code != http.StatusOK {
+		t.Fatalf("administrator rehired member with explicit roles = HTTP %d %s", code, body)
 	}
 }
 

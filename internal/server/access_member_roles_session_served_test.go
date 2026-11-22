@@ -78,7 +78,7 @@ func TestServedMemberRolesReplaceSignInRoles(t *testing.T) {
 	upsertMember(t, ts, adminToken, "reader", []string{"viewer"})
 	upsertMember(t, ts, adminToken, "mapped", []string{"viewer"})
 	if code, body := doBearer(t, ts, http.MethodPut, "/api/v1/access/members/profile-only", adminToken, "member-profile-only",
-		map[string]any{"display_name": "Profile only", "source": "manual"}); code != http.StatusOK {
+		map[string]any{"display_name": "Profile only", "roles": []string{}, "source": "manual"}); code != http.StatusOK {
 		t.Fatalf("upsert role-less member = %d, want 200; body=%s", code, body)
 	}
 
