@@ -35,15 +35,15 @@ const hostAgentWorkloadID = "spiffe://served.test/b8l2-payments"
 // startHostAgentWorkloadAPI serves the host Workload API for the enrolled
 // agent of an agent-channel harness whose trust domain scopes one entry to
 // that agent, matching any process running as this test's user.
-func startHostAgentWorkloadAPI(t *testing.T) (*agentChannelHarness, string) {
+func startHostAgentWorkloadAPI(t *testing.T, agentName string) (*agentChannelHarness, string) {
 	t.Helper()
-	h := newAgentChannelHarnessWithProtocols(t, config.Protocols{SPIFFE: config.SPIFFEProtocol{
+	h := newAgentChannelHarnessWithProtocolsForAgent(t, config.Protocols{SPIFFE: config.SPIFFEProtocol{
 		Enabled: true, TenantID: servedTestTenant, TrustDomain: "served.test",
 		SocketPath: filepath.Join(t.TempDir(), "cp.sock"),
 		Entries: []config.SPIFFEEntry{{
-			SPIFFEID: hostAgentWorkloadID, Selectors: []string{"unix:uid:" + strconv.Itoa(os.Getuid())}, Agent: "job-agent-1",
+			SPIFFEID: hostAgentWorkloadID, Selectors: []string{"unix:uid:" + strconv.Itoa(os.Getuid())}, Agent: agentName,
 		}},
-	}})
+	}}, agentName)
 	if h.srv.protocols == nil || h.srv.protocols.spiffe == nil {
 		t.Skip("this build serves no SPIFFE trust domain")
 	}
@@ -67,7 +67,7 @@ func startHostAgentWorkloadAPI(t *testing.T) (*agentChannelHarness, string) {
 // key and the trust bundle, from the host agent's socket; the certificate chains
 // to the served CA and the issuance went up the agent channel.
 func TestServedGoSpiffeClientFetchesFromAHostAgentSocketB8L2(t *testing.T) {
-	h, socket := startHostAgentWorkloadAPI(t)
+	h, socket := startHostAgentWorkloadAPI(t, "job-agent-spiffe-go")
 	result := runServedGoSpiffeClient(t, "unix://"+socket)
 	if result.ID != hostAgentWorkloadID {
 		t.Fatalf("the stock go-spiffe client got %q from the host agent's socket, want %q", result.ID, hostAgentWorkloadID)
@@ -97,7 +97,7 @@ func TestServedSpiffeHelperWritesAnSVIDFromAHostAgentSocketB8L2(t *testing.T) {
 		}
 		t.Skip("spiffe-helper not on PATH; set TRSTCTL_REQUIRE_SPIFFE_HELPER=1 in CI to make the stock helper mandatory")
 	}
-	h, socket := startHostAgentWorkloadAPI(t)
+	h, socket := startHostAgentWorkloadAPI(t, "job-agent-spiffe-helper")
 	dir := t.TempDir()
 	certDir := filepath.Join(dir, "certs")
 	if err := os.MkdirAll(certDir, 0o700); err != nil {

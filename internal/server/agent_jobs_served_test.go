@@ -170,6 +170,13 @@ func newAgentChannelHarness(t *testing.T, opts ...func(*Deps)) *agentChannelHarn
 // plane that also serves protocols (the SPIFFE trust domain a host agent's
 // Workload API reaches through this channel, for one).
 func newAgentChannelHarnessWithProtocols(t *testing.T, protocols config.Protocols, opts ...func(*Deps)) *agentChannelHarness {
+	return newAgentChannelHarnessWithProtocolsForAgent(t, protocols, "job-agent-1", opts...)
+}
+
+// A served suite can reuse the same PostgreSQL tenant across tests. Give
+// independently enrolled stock clients distinct names so a live enrollment
+// from one client cannot be mistaken for the next client's identity.
+func newAgentChannelHarnessWithProtocolsForAgent(t *testing.T, protocols config.Protocols, agentName string, opts ...func(*Deps)) *agentChannelHarness {
 	t.Helper()
 	all := append([]func(*Deps){withAgentChannel}, opts...)
 	h := newServedHarness(t, protocols, all...)
@@ -187,7 +194,7 @@ func newAgentChannelHarnessWithProtocols(t *testing.T, protocols config.Protocol
 	t.Cleanup(func() { chCancel(); <-chDone })
 
 	const serverName = "agent.trstctl.local"
-	a := enrollAgent(t, h, "job-agent-1", serverName)
+	a := enrollAgent(t, h, agentName, serverName)
 	creds, err := a.Credentials()
 	if err != nil {
 		t.Fatal(err)
