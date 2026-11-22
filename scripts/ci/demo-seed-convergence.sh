@@ -59,8 +59,10 @@ snapshot() {
 stable_snapshot() {
   local previous="" current="" last_streams="" stable=0
   # Unconfigured notifications and host deployments without any live agent
-  # cannot complete in the assembled demo. Their workers can still claim and
-  # defer rows while the seed has settled. Other active work must settle before
+  # cannot complete in the assembled demo. A notification retry preserves its
+  # pending outbox intent while an operator can configure a receiver; the
+  # finite attempt budget still applies. Those workers can claim rows while
+  # the seed has settled. Other active work must settle before
   # the preserved-volume comparison. CI has observed all three JetStream
   # streams advancing during this window; the producer is being traced below.
   # Require nondecreasing counts and compare seed-attributed IDs after replay.
