@@ -2357,7 +2357,7 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		}
 	}
 	keystore := read(t, "../internal/signing/keystore.go")
-	for _, want := range []string{"metaMagic = []byte(\"CSKM\")", "const metaVersion = 3", "ver < 1 || ver > metaVersion", "seal.Seal", "seal.Open"} {
+	for _, want := range []string{"metaMagic = []byte(\"CSKM\")", "const metaVersion = 3", "const importReceiptMetaVersion = 4", "const ownedCAMetaVersion = 5", "ver < 1 || ver > ownedCAMetaVersion", "seal.Seal", "seal.Open"} {
 		if !strings.Contains(keystore, want) {
 			t.Errorf("SCHEMA-105: keystore.go no longer contains %q; signer persisted-format versioning weakened", want)
 		}
