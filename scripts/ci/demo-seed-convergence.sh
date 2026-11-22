@@ -58,14 +58,15 @@ snapshot() {
 
 stable_snapshot() {
   local previous="" current="" last_streams="" stable=0
-  # Unconfigured notifications and host deployments without any live agent
-  # cannot complete in the assembled demo. A notification retry preserves its
-  # pending outbox intent while an operator can configure a receiver; the
-  # finite attempt budget still applies. Those workers can claim rows while
-  # the seed has settled. Other active work must settle before
-  # the preserved-volume comparison. CI has observed all three JetStream
-  # streams advancing during this window; the producer is being traced below.
-  # Require nondecreasing counts and compare seed-attributed IDs after replay.
+  # Baseline 44958152327 already had notification_receiver_not_configured
+  # retries. ec0121429 first waited for active outbox work, exposing these
+  # pending rows to the checkpoint. A retry preserves delivery intent while
+  # an operator can configure a receiver; its finite attempt budget still
+  # applies. It only updates PostgreSQL and cannot append a JetStream event.
+  # Host deployments without a live agent also cannot finish here. Wait for
+  # other active work, then compare seed-attributed IDs across replay. CI has
+  # separately observed stream growth, so require nondecreasing counts and
+  # report the new tenant event types whenever growth recurs.
   for _attempt in $(seq 1 360); do
     current="$(snapshot)"
     if [[ -n "$last_streams" ]] &&
@@ -218,10 +219,18 @@ fi
 
 echo "demo seed convergence passed: preserved inventory, owner uniqueness, outbox count across replay, and seed-attributed event IDs are unchanged"
 
-# Diagnostic window for identifying the producer of stream growth. A missing
-# notification receiver only changes its outbox row; it does not append an
-# event. This trace runs after the gate and prints new event types, never
-# payloads or IDs. Once the producer is known, remove the temporary CI opt-in.
+if jq -en --argjson before "$first" --argjson after "$second" '
+     $after.jetstream_message_count > $before.jetstream_message_count
+   ' >/dev/null; then
+  # The baseline already retried unconfigured notifications, but those retries
+  # cannot append events. Attribute any stream growth to its actual tenant
+  # event types; emit no event IDs or payloads into the CI log.
+  report_new_audit_types "$first_audit" "$second_audit" "across replay"
+fi
+
+# Optional five-minute diagnostic for an intermittent event producer. The
+# normal CI path reports event types immediately if stream counts grow during
+# replay. This longer trace prints types only, never payloads or IDs.
 if [[ "${TRSTCTL_DEMO_EVENT_TRACE_SECONDS:-0}" == "300" ]]; then
   sleep 300
   trace_audit="$(seed_actor_events)"

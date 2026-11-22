@@ -80,11 +80,12 @@ elif 'run' in args and '--entrypoint' in args:
     if os.environ.get('FAKE_EVENT_ON_RERUN') == '1' and Path(os.environ['FAKE_DOCKER_STATE']).exists():
         ids.append('seed-event-after')
     records = [dict(id=event_id, type='demo.seed.recorded', seed=True) for event_id in ids]
-    if os.environ.get('FAKE_TRACE_BACKGROUND') == '1':
+    if os.environ.get('FAKE_TRACE_BACKGROUND') == '1' or os.environ.get('FAKE_TRACE_ON_GROWTH') == '1':
         counter = Path(os.environ['FAKE_DOCKER_STATE'] + '.audit_reads')
         reads = int(counter.read_text()) + 1 if counter.exists() else 1
         counter.write_text(str(reads))
-        if reads >= (2 if os.environ.get('FAKE_OTHER_ACTIVE') == '1' else 4):
+        if reads >= (2 if os.environ.get('FAKE_TRACE_ON_GROWTH') == '1' or
+                          os.environ.get('FAKE_OTHER_ACTIVE') == '1' else 4):
             records.append(dict(id='background-event-after', type='periodic-risk.rechecked', seed=False))
     print(json.dumps(dict(seed_ids=ids, records=records)))
 elif 'run' in args:
@@ -111,6 +112,7 @@ else:
                    "FAKE_BACKGROUND_OUTBOX_AFTER_RERUN": str(int(background_outbox_after_rerun)),
                    "FAKE_SEED_OUTBOX_ON_RERUN": str(int(seed_outbox_on_rerun)),
                    "FAKE_TRACE_BACKGROUND": str(int(trace_background)),
+                   "FAKE_TRACE_ON_GROWTH": str(int(background_event_on_rerun)),
                    "TRSTCTL_DEMO_EVENT_TRACE_SECONDS": "300" if trace_background else "0",
                    "FAKE_DOCKER_STATE": str(root / "reran")}
             return subprocess.run(
@@ -165,6 +167,12 @@ else:
     def test_background_event_after_seed_rerun_does_not_implicate_seed(self):
         result = self.run_convergence(background_event_on_rerun=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_background_stream_growth_reports_event_type_without_payload(self):
+        result = self.run_convergence(background_event_on_rerun=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('periodic-risk.rechecked', result.stdout)
+        self.assertNotIn('background-event-after', result.stdout)
 
     def test_background_trace_reports_event_type_without_payload(self):
         result = self.run_convergence(trace_background=True)
