@@ -87,6 +87,12 @@ func TestHierarchyImportProcessHelper(t *testing.T) {
 			}
 			return errors.New("fixture publisher lost its acknowledgement")
 		}
+		// Build the first-use EC tables while the socket becomes ready. The
+		// parent waits for this marker before timing the import publication.
+		go func() {
+			crypto.WarmWeakKeyChecks()
+			fmt.Println("fixture weak-key checks ready")
+		}()
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -153,6 +159,19 @@ func startImportProofProcess(t *testing.T, dir, role string) importProofProcess 
 	client, err := DialReady(t.Context(), socket, 15*time.Second)
 	if err != nil {
 		t.Fatalf("connect %s signer: %v %s", role, err, readEffects())
+	}
+	if role == "publisher" {
+		deadline := time.NewTimer(15 * time.Second)
+		defer deadline.Stop()
+		poll := time.NewTicker(10 * time.Millisecond)
+		defer poll.Stop()
+		for !strings.Contains(readEffects(), "fixture weak-key checks ready") {
+			select {
+			case <-deadline.C:
+				t.Fatalf("%s signer did not finish its first-use weak-key checks: %s", role, readEffects())
+			case <-poll.C:
+			}
+		}
 	}
 	t.Cleanup(func() { _ = client.Close() })
 	return importProofProcess{client: client, input: input, output: readEffects}
