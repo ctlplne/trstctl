@@ -105,6 +105,7 @@ func newStore(t *testing.T) *store.Store {
 			          crypto_assets, credentials, audit_checkpoints, certificate_profiles, secret_sync_workload_identity_sources, workload_attester_trust_sources,
 			          notification_routing_policies,
 			          connector_delivery_receipts, lifecycle_rotation_runs, remediation_playbook_runs, incident_fleet_reissuance_runs,
+		          secret_store_tombstone_versions, secret_store_tombstones,
 		          secret_store_versions, secret_shares, secret_store,
 		          secret_rotation_schedule_scan_cursors, secret_rotation_schedule_commands, secret_rotation_schedules, read_model_snapshots,
 			          operation_approval_decisions, operation_approval_requests,
