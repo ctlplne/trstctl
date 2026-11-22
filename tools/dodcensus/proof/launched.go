@@ -1575,17 +1575,17 @@ func (p *ShippedProcess) Start(directory string, environment []string) {
 }
 
 // shippedProcessCommand keeps the audit capabilities in the gate test only.
-// CHECKPOINT_RESTORE opens the kernel-owned /proc/PID/map_files objects;
-// SETGID removes the Docker-socket supplementary group before exec. Granting
-// either to the product would change its shipped authority. A second shell-free
-// setpriv exec clears groups plus inheritable/ambient state before the exact
-// private binary starts. No-new-privileges prevents residual bounding bits from
-// becoming effective again.
+// CHECKPOINT_RESTORE opens map_files; SYS_PTRACE and DAC_READ_SEARCH inspect a
+// non-dumpable helper's descriptors; SETGID clears the Docker-socket group;
+// SETPCAP removes the added audit capabilities from the child's bounding set. The
+// shell-free setpriv exec clears inherited and ambient authority before the
+// exact private binary starts. No-new-privileges remains set.
 func shippedProcessCommand(binary string, args ...string) (string, []string) {
 	dropArgs := []string{
 		"--clear-groups",
-		"--inh-caps=-checkpoint_restore,-setgid",
-		"--ambient-caps=-checkpoint_restore,-setgid",
+		"--bounding-set=-sys_ptrace,-setpcap,-dac_read_search",
+		"--inh-caps=-checkpoint_restore,-setgid,-setpcap,-sys_ptrace,-dac_read_search",
+		"--ambient-caps=-checkpoint_restore,-setgid,-setpcap,-sys_ptrace,-dac_read_search",
 		binary,
 	}
 	return runtimePrivilegeDropper, append(dropArgs, args...)
@@ -3000,8 +3000,11 @@ func validateUnreadableShippedCompanion(parentPID, candidatePID int, built shipp
 		return fmt.Errorf("companion start time does not follow its launched parent: %w", err)
 	}
 	args, err := processCommandLine(candidatePID)
-	if err != nil || len(args) == 0 || !filepath.IsAbs(args[0]) || filepath.Clean(args[0]) != args[0] {
+	if err != nil {
 		return fmt.Errorf("companion command line has no exact absolute executable: %w", err)
+	}
+	if len(args) == 0 || !filepath.IsAbs(args[0]) || filepath.Clean(args[0]) != args[0] {
+		return fmt.Errorf("companion command line has no exact absolute executable")
 	}
 	if err := validateShippedArgs(args); err != nil {
 		return err

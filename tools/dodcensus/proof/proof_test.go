@@ -1281,8 +1281,9 @@ func TestShippedProcessCommandDropsRunnerAuditCapability(t *testing.T) {
 	}
 	want := []string{
 		"--clear-groups",
-		"--inh-caps=-checkpoint_restore,-setgid",
-		"--ambient-caps=-checkpoint_restore,-setgid",
+		"--bounding-set=-sys_ptrace,-setpcap,-dac_read_search",
+		"--inh-caps=-checkpoint_restore,-setgid,-setpcap,-sys_ptrace,-dac_read_search",
+		"--ambient-caps=-checkpoint_restore,-setgid,-setpcap,-sys_ptrace,-dac_read_search",
 		"/private/dod-bin/trstctl",
 		"serve",
 	}
@@ -1311,12 +1312,14 @@ func TestValidateShippedProcessStatusRejectsAuditCapabilityLeak(t *testing.T) {
 		t.Fatalf("bounded unprivileged shipped status rejected: %v", err)
 	}
 	for name, raw := range map[string][]byte{
-		"effective audit capability":  status("0000010000000000", "0000010000000040", "1", "2"),
-		"foreign bounding capability": status("0000000000000000", "0000010000080040", "1", "2"),
-		"new privileges enabled":      status("0000000000000000", "0000010000000040", "0", "2"),
-		"seccomp disabled":            status("0000000000000000", "0000010000000040", "1", "0"),
-		"Docker group retained":       bytes.Replace(status("0000000000000000", "0000010000000040", "1", "2"), []byte("Groups:\t\n"), []byte("Groups:\t20\n"), 1),
-		"tracer attached":             bytes.Replace(status("0000000000000000", "0000010000000040", "1", "2"), []byte("TracerPid:\t0"), []byte("TracerPid:\t99"), 1),
+		"effective audit capability":     status("0000010000000000", "0000010000000040", "1", "2"),
+		"foreign bounding capability":    status("0000000000000000", "0000010000080040", "1", "2"),
+		"DAC audit capability bound":     status("0000000000000000", "0000010000000044", "1", "2"),
+		"SETPCAP audit capability bound": status("0000000000000000", "0000010000000140", "1", "2"),
+		"new privileges enabled":         status("0000000000000000", "0000010000000040", "0", "2"),
+		"seccomp disabled":               status("0000000000000000", "0000010000000040", "1", "0"),
+		"Docker group retained":          bytes.Replace(status("0000000000000000", "0000010000000040", "1", "2"), []byte("Groups:\t\n"), []byte("Groups:\t20\n"), 1),
+		"tracer attached":                bytes.Replace(status("0000000000000000", "0000010000000040", "1", "2"), []byte("TracerPid:\t0"), []byte("TracerPid:\t99"), 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := validateShippedProcessStatus(raw, 501, 20); err == nil {

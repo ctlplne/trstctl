@@ -26,7 +26,11 @@ postgres_snapshot() {
         'secrets', (SELECT jsonb_agg(jsonb_build_array(name, version) ORDER BY name)
                       FROM secret_store WHERE tenant_id = '${tenant_id}'),
         'api_token_count', (SELECT count(*) FROM api_tokens WHERE tenant_id = '${tenant_id}'),
-        'outbox_count', (SELECT count(*) FROM outbox WHERE tenant_id = '${tenant_id}')
+        'outbox_count', (SELECT count(*) FROM outbox WHERE tenant_id = '${tenant_id}'),
+        'outbox_active_retry_count', (SELECT count(*) FROM outbox
+             WHERE tenant_id = '${tenant_id}'
+               AND (status = 'processing' OR (status = 'pending'
+                    AND COALESCE(last_error, '') <> 'delivery_deferred')))
       );"
 }
 
@@ -46,9 +50,17 @@ snapshot() {
 
 stable_snapshot() {
   local previous="" current="" stable=0
-  for _attempt in $(seq 1 60); do
+  # The demo deliberately contains unavailable external destinations. Their
+  # non-deferred deliveries emit failure events until the bounded retry budget
+  # is exhausted. A few equal samples during circuit-breaker cooldown are not
+  # quiescence, so compare only after those durable retries settle. Deferred
+  # agent work remains pending but emits no new failure event while waiting.
+  for _attempt in $(seq 1 360); do
     current="$(snapshot)"
-    if [[ "$current" == "$previous" ]]; then
+    if [[ "$(jq -r '.postgres.outbox_active_retry_count' <<<"$current")" != "0" ]]; then
+      previous=""
+      stable=0
+    elif [[ "$current" == "$previous" ]]; then
       stable=$((stable + 1))
       if [[ "$stable" -ge 2 ]]; then
         printf '%s\n' "$current"

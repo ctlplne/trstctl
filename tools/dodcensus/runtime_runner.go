@@ -30,8 +30,8 @@ var runtimeRunnerIdentityClosure = []string{
 const runtimeRunnerBaseFile = "tools/dodcensus/runtime-runner-base.txt"
 
 const (
-	runtimeRunnerAuditCapabilities  = "checkpoint_restore,+setgid"
-	runtimeRunnerAuditCapabilityHex = "0000010000000040"
+	runtimeRunnerAuditCapabilities  = "checkpoint_restore,+setgid,+setpcap,+sys_ptrace,+dac_read_search"
+	runtimeRunnerAuditCapabilityHex = "0000010000080144"
 )
 
 // runtimeRunnerPlatforms are the platforms a shipped profile's runner may be
@@ -168,6 +168,7 @@ type linuxRuntimeExecutor struct {
 const runtimeRunnerPreflightScript = `import hashlib
 import os
 import pathlib
+import select
 import socket
 import stat
 import subprocess
@@ -201,7 +202,7 @@ for line in pathlib.Path("/proc/self/status").read_text().splitlines():
 expected_capability = "` + runtimeRunnerAuditCapabilityHex + `"
 for field in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb"):
     if process_status.get(field) != expected_capability:
-        raise RuntimeError("runtime runner %s is %r, want only CAP_CHECKPOINT_RESTORE plus SETGID (%s)" % (
+        raise RuntimeError("runtime runner %s is %r, want only the five reviewed audit capabilities (%s)" % (
             field, process_status.get(field), expected_capability,
         ))
 if process_status.get("NoNewPrivs") != "1":
@@ -243,6 +244,23 @@ try:
 finally:
     map_probe.terminate()
     map_probe.wait(timeout=5)
+
+# The managed-key authorization helper marks its secret-bearing process
+# non-dumpable. Prove the audit can still inspect a live same-UID descriptor
+# table; the launched product loses SYS_PTRACE before its own exec.
+ptrace_probe = subprocess.Popen(
+    ["/usr/bin/python3", "-c", "import ctypes,time; assert ctypes.CDLL(None).prctl(4,0,0,0,0)==0; print('ready', flush=True); time.sleep(10)"],
+    stdout=subprocess.PIPE,
+)
+try:
+    readable, _, _ = select.select([ptrace_probe.stdout], [], [], 2)
+    if not readable or ptrace_probe.stdout.readline() != b"ready\n":
+        raise RuntimeError("non-dumpable descriptor probe did not start")
+    if not os.listdir("/proc/%d/fd" % ptrace_probe.pid):
+        raise RuntimeError("non-dumpable descriptor probe has no readable descriptors")
+finally:
+    ptrace_probe.terminate()
+    ptrace_probe.wait(timeout=5)
 
 version = subprocess.run(
     ["/usr/local/go/bin/go", "version"],
@@ -566,15 +584,19 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 
 func runtimeRunnerIsolationArgs() []string {
 	// Docker discards capabilities when --user selects a non-root UID. Start the
-	// pinned setpriv entrypoint with only the three capabilities needed to drop
-	// identity/bounds plus CHECKPOINT_RESTORE, then exec the audit itself as the
-	// host UID with CHECKPOINT_RESTORE and SETGID in every capability set. SETGID
-	// exists only so the audit can clear its Docker-socket supplementary group
-	// from the shipped child. The preflight verifies the exact final masks.
+	// pinned setpriv entrypoint with only the capabilities needed to drop
+	// identity/bounds and audit an unreadable process's descriptors. The audit
+	// keeps CHECKPOINT_RESTORE for map_files, SYS_PTRACE plus DAC_READ_SEARCH
+	// for /proc/PID/fd, SETGID to clear the Docker-socket group in the shipped
+	// child, and SETPCAP to remove the extra audit capabilities from the child's
+	// bounding set.
+	// The preflight verifies the exact final masks.
 	return []string{
 		"--read-only",
 		"--cap-drop", "ALL",
 		"--cap-add", "CHECKPOINT_RESTORE",
+		"--cap-add", "SYS_PTRACE",
+		"--cap-add", "DAC_READ_SEARCH",
 		"--cap-add", "SETUID",
 		"--cap-add", "SETGID",
 		"--cap-add", "SETPCAP",
