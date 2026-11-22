@@ -15,22 +15,16 @@ var ErrUninspectable = errors.New("command rules: statement framing cannot be in
 // dollar-quoted bodies and comments. It is a lexical guardrail, not a SQL parser
 // or containment boundary: a stored program can execute hidden dynamic SQL.
 // Considering both ordinary-string escape modes prevents a setting change from
-// hiding a direct keyword. A malformed interpretation cannot execute upstream;
-// when both interpretations fail, the guarded relay refuses the statement.
+// hiding a direct keyword. Both interpretations must complete: a lexer limit
+// is ours, not PostgreSQL's, and the server may execute that interpretation.
 func PostgresOperations(sql []byte) ([]string, error) {
 	if len(sql) > MaxStatementBytes || !utf8.Valid(sql) || bytes.IndexByte(sql, 0) >= 0 {
 		return nil, ErrUninspectable
 	}
 	a, ea := postgresOperations(sql, false)
 	b, eb := postgresOperations(sql, true)
-	if ea != nil && eb != nil {
+	if ea != nil || eb != nil {
 		return nil, ErrUninspectable
-	}
-	if ea != nil {
-		a = nil
-	}
-	if eb != nil {
-		b = nil
 	}
 	out := append(a, b...)
 	slices.Sort(out)
@@ -156,11 +150,18 @@ func pgWordStart(c byte) bool {
 	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= 128
 }
 func pgWord(c byte) bool      { return pgWordStart(c) || pgDigit(c) || c == '$' }
-func pgDollarTag(c byte) bool { return pgWordStart(c) && c < 128 || pgDigit(c) }
+func pgDollarTag(c byte) bool { return pgWordStart(c) || pgDigit(c) }
 
-// UnsupportedPostgresControl identifies direct SQL-level prepared execution.
-// The guarded relay tracks the wire Parse/Bind/Execute protocol; it cannot bind
-// an SQL EXECUTE to a reviewed wire statement. It refuses these direct forms.
+// UnsupportedPostgresControl identifies SQL-level operations whose execution
+// state can outlive one reviewed wire message. PREPARE/EXECUTE bypass the wire
+// Parse/Bind digest; SET/RESET/DISCARD can change the session's SQL encoding.
+// The guarded relay records a control decision for simple-query forms and
+// refuses both simple-query and extended Parse forms.
 func UnsupportedPostgresControl(operations []string) bool {
-	return slices.Contains(operations, "PREPARE") || slices.Contains(operations, "EXECUTE")
+	for _, operation := range []string{"PREPARE", "EXECUTE", "SET", "RESET", "DISCARD"} {
+		if slices.Contains(operations, operation) {
+			return true
+		}
+	}
+	return false
 }

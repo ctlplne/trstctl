@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/pgsignin"
@@ -37,11 +38,16 @@ func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline ti
 	}
 	runtime := make([][2]string, 0, len(params))
 	database := ""
+	guarded := len(guards) > 0 && guards[0] != nil
 	for _, p := range params {
 		if p[0] == "database" {
 			database = p[1]
 		}
 		if pgsignin.RuntimeParameter(p[0]) {
+			if guarded && p[0] == "client_encoding" && !strings.EqualFold(p[1], "UTF8") {
+				_ = refusePostgres(client, "command rules require UTF8 client encoding")
+				return errors.New("accessgateway: guarded PostgreSQL session requested a non-UTF8 client encoding")
+			}
 			runtime = append(runtime, p)
 		}
 	}
@@ -59,6 +65,10 @@ func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline ti
 	server := upstream.Conn
 	defer func() { _ = server.Close() }()
 	_ = server.SetDeadline(deadline)
+	if guarded && !postgresParametersUTF8(upstream.Parameters) {
+		_ = refusePostgres(client, "command rules require UTF8 client encoding")
+		return errors.New("accessgateway: guarded PostgreSQL session received no UTF8 client encoding from server")
+	}
 	ready := pgMessage('R', binary.BigEndian.AppendUint32(nil, 0))
 	for _, p := range upstream.Parameters {
 		ready = append(ready, pgMessage('S', append(append(append([]byte(p[0]), 0), p[1]...), 0))...)
@@ -84,6 +94,19 @@ func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline ti
 	}
 	<-done
 	return nil
+}
+
+func postgresParametersUTF8(params [][2]string) bool {
+	found := false
+	for _, param := range params {
+		if param[0] == "client_encoding" {
+			if !strings.EqualFold(param[1], "UTF8") {
+				return false
+			}
+			found = true
+		}
+	}
+	return found
 }
 
 // readClientStartup reads the client's startup, declining TLS and GSS

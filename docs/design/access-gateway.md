@@ -62,6 +62,8 @@ inside the tunnel admits them.
    as the target's `pg_hba` demands; Kerberos, GSSAPI and SSPI are refused), passes only
    the client's harmless runtime parameters (`application_name`,
    `client_encoding`, `DateStyle`, `TimeZone`, `extra_float_digits`, `IntervalStyle`),
+   except that a command-ruled session accepts only `UTF8` for `client_encoding`
+   and checks the server's reported value before handing the session to the client,
    and whenever it uses TLS it verifies the database's certificate, including the host
    name, against the provider's CA carried with the session (A256-L1), else
    `sslrootcert` (a file on the gateway's host) or the system roots —
@@ -479,6 +481,15 @@ The whole batch waits or is refused together. A prepared statement's new Bind is
 a new occurrence, checked before upstream planning or parameter conversion. It
 needs fresh approval on each binding. Cursor fetches resume the same bound query;
 a binding whose unused approval expires must be replaced by a fresh Bind.
+
+For a ruled PostgreSQL session, the gateway refuses a non-UTF8 startup encoding
+before opening the target, requires the target's `client_encoding=UTF8` status
+after sign-in, and closes the connection if a later status changes it. SQL-level
+`SET`, `RESET`, `DISCARD`, `PREPARE` and `EXECUTE` cannot be forwarded on a ruled
+connection, even if a reviewer authorizes a control occurrence. The lexer reads
+non-ASCII dollar-quote tags and refuses a statement when either ordinary-string
+escape interpretation exceeds its own limits; a parser limit is not evidence
+that PostgreSQL would reject the query.
 
 The source records `pam.command.blocked` or `pam.command.review_requested`, then
 the human request as `pam.command.approval_requested`, and a terminal

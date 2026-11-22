@@ -70,6 +70,31 @@ func TestDirectOperationSurvivesOrdinaryCaseCommentsAndBatches(t *testing.T) {
 	}
 }
 
+func TestCR004PostgresLexerDivergenceFailsClosed(t *testing.T) {
+	longTag := strings.Repeat("t", 300)
+	for _, tc := range []struct{ name, sql string }{
+		{"non-ASCII dollar tag", "SELECT $ä$'$ä$; DELETE FROM victim; --'"},
+		{"comment nesting beyond classifier limit", "SELECT 'a\\' AS x; DELETE FROM victim; " + strings.Repeat("/*", 65) + strings.Repeat("*/", 65) + " -- '\n"},
+		{"dollar tag beyond classifier limit", "SELECT 'a\\' AS x; DELETE FROM victim WHERE $" + longTag + "$x$" + longTag + "$ <> '' -- '"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ops, err := PostgresRuleOperations([]byte(tc.sql))
+			if err == nil && !slices.Contains(ops, "DELETE") {
+				t.Fatalf("PostgreSQL executes DELETE but classifier accepted %v without review", ops)
+			}
+		})
+	}
+}
+
+func TestCR004PostgresEncodingControlsAreUnsupported(t *testing.T) {
+	for _, sql := range []string{"SET client_encoding TO 'SJIS'", "RESET client_encoding", "DISCARD ALL"} {
+		ops, err := PostgresRuleOperations([]byte(sql))
+		if err != nil || !UnsupportedPostgresControl(ops) {
+			t.Errorf("encoding control %q = %v, %v; want refused control", sql, ops, err)
+		}
+	}
+}
+
 func FuzzPostgresOperationMetadata(f *testing.F) {
 	for _, sql := range []string{"TRUNCATE notes", "SELECT 'TRUNCATE'", "DO $$ BEGIN EXECUTE 'DROP TABLE notes'; END $$", "/* a /* b */ c */ DROP TABLE notes", "SELECT E'a\\\\b'", strings.Repeat("$", 300)} {
 		f.Add([]byte(sql))

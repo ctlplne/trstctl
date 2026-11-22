@@ -688,8 +688,11 @@ gateway, object store, tenant sealing and audit signing configuration described 
 PostgreSQL sessions can also use **Command guardrails** in that panel. A rule blocks
 known operations such as DROP/TRUNCATE or waits for 1–3 distinct human reviewers for
 5–45 seconds. A matching block wins. Each prepared binding needs its own review;
-the requester and session auto-approval rules cannot supply that review. Rules are
-frozen into each new session's template revision and also work without recording.
+the requester and session auto-approval rules cannot supply that review. Ruled
+PostgreSQL sessions require UTF8 client encoding and refuse a later encoding
+change before another statement can run. SQL-level SET/RESET/DISCARD and
+PREPARE/EXECUTE are refused; use wire-level prepared statements for reviewed binds.
+Rules are frozen into each new session's template revision and also work without recording.
 The SQL console shows the held action, deadline, exact approval link and cancel
 control. Session action history is also available through:
 

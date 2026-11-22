@@ -55,7 +55,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3561 annotated sites across 35 rules. Each row is
+3562 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1115,7 +1115,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (553 sites)
+### G115 — CWE-190 Integer overflow or wraparound (554 sites)
 
 | Location | Reason |
 |---|---|
@@ -1133,6 +1133,7 @@ not this file.
 | `ee/governance/misuse/policy.go:122` | bounded by MaxInt64 above. |
 | `ee/managedkeys/provider_dates_e2e_test.go:269` | port is checked to be 1..65535 above (CWE-190) |
 | `ee/silo/lanedrill_test.go:96` | bounds-checked to [1, MaxUint16] above (CWE-190) |
+| `internal/agent/accessgateway/cr004_pg_encoding_test.go:84` | fixed test packet is well below the PostgreSQL wire length limit |
 | `internal/agent/accessgateway/kubernetes.go:230` | bounded by len(p) (CWE-190) |
 | `internal/agent/accessgateway/kubernetes.go:238` | take is non-negative (CWE-190) |
 | `internal/agent/accessgateway/kubernetes_test.go:24` | a 7-bit length below 126 (CWE-190) |
@@ -1153,7 +1154,7 @@ not this file.
 | `internal/agent/accessgateway/pgrecord.go:183` | the wire field is a signed length (-1 is NULL) (CWE-190) |
 | `internal/agent/accessgateway/pgrecord_test.go:21` | test rows are small (CWE-190) |
 | `internal/agent/accessgateway/pgrecord_test.go:23` | test values are small (CWE-190) |
-| `internal/agent/accessgateway/postgres.go:140` | gateway-built messages are small (CWE-190) |
+| `internal/agent/accessgateway/postgres.go:163` | gateway-built messages are small (CWE-190) |
 | `internal/agent/accessgateway/sftp_test.go:17` | test packets are small (CWE-190) |
 | `internal/agent/accessgateway/sftp_test.go:21` | test strings are small (CWE-190) |
 | `internal/agent/decoy/watch_linux.go:112` | the kernel's signed file descriptor field (CWE-190) |
@@ -2016,9 +2017,9 @@ not this file.
 | `internal/kms/tpm/swtpm_host_key_provider_test.go:112` | fixed tool and arguments (CWE-78) |
 | `internal/kms/tpm/swtpm_host_key_provider_test.go:177` | fixed tool and test paths (CWE-78) |
 | `internal/kms/tpm/swtpm_host_key_provider_test.go:217` | fixed tool and test paths (CWE-78) |
-| `internal/kms/tpm/swtpm_nginx_reexec_test.go:150` | fixed tool and test paths (CWE-78) |
-| `internal/kms/tpm/swtpm_nginx_reexec_test.go:161` | fixed tool and test paths (CWE-78) |
-| `internal/kms/tpm/swtpm_nginx_reexec_test.go:198` | fixed tool and test paths (CWE-78) |
+| `internal/kms/tpm/swtpm_nginx_reexec_test.go:151` | fixed tool and test paths (CWE-78) |
+| `internal/kms/tpm/swtpm_nginx_reexec_test.go:162` | fixed tool and test paths (CWE-78) |
+| `internal/kms/tpm/swtpm_nginx_reexec_test.go:199` | fixed tool and test paths (CWE-78) |
 | `internal/kms/tpm/swtpm_services_l2_test.go:37` | fixed tool and arguments (CWE-78) |
 | `internal/kms/tpm/swtpm_services_l2_test.go:41` | fixed tool and arguments (CWE-78) |
 | `internal/kms/tpm/swtpm_services_l2_test.go:55` | fixed tool and arguments (CWE-78) |
@@ -2938,8 +2939,8 @@ not this file.
 | `internal/kmip/pykmip_tenants_test.go:68` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/kmip/tenant_router_test.go:230` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/kms/tpm/swtpm_host_key_provider_test.go:226` | the test's own temp directory (CWE-22) |
-| `internal/kms/tpm/swtpm_nginx_reexec_test.go:146` | the test's own temp directory (CWE-22) |
-| `internal/kms/tpm/swtpm_nginx_reexec_test.go:207` | the test's own temp directory (CWE-22) |
+| `internal/kms/tpm/swtpm_nginx_reexec_test.go:147` | the test's own temp directory (CWE-22) |
+| `internal/kms/tpm/swtpm_nginx_reexec_test.go:208` | the test's own temp directory (CWE-22) |
 | `internal/kms/tpm/swtpm_services_l2_test.go:63` | the test's own temp directory (CWE-22) |
 | `internal/kms/tpm/swtpm_services_l2_test.go:114` | the test's own temp file (CWE-22) |
 | `internal/kms/tpm/swtpm_services_l2_test.go:204` | the container's apache2 log (CWE-22) |

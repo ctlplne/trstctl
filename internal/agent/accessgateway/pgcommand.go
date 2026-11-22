@@ -224,6 +224,10 @@ func (p *pgCommandRelay) backend() error {
 		}
 		size := int64(length - 4)
 		if size > pgParsedMessage {
+			if header[0] == 'S' {
+				p.fatal("TRSTCTL_POLICY_UNINSPECTABLE: oversized PostgreSQL session status")
+				return accessrules.ErrUninspectable
+			}
 			if p.rec != nil {
 				p.rec.server(header[0], nil, int(size))
 			}
@@ -242,6 +246,10 @@ func (p *pgCommandRelay) backend() error {
 			if _, err := io.ReadFull(p.server, raw[5:]); err != nil {
 				return err
 			}
+			if header[0] == 'S' && !postgresStatusUTF8(raw[5:]) {
+				p.fatal("TRSTCTL_POLICY_UNINSPECTABLE: guarded PostgreSQL session changed client encoding")
+				return accessrules.ErrUninspectable
+			}
 			if p.rec != nil {
 				p.rec.server(header[0], raw[5:], int(size))
 			}
@@ -251,6 +259,15 @@ func (p *pgCommandRelay) backend() error {
 		}
 		p.state.backend(header[0])
 	}
+}
+
+func postgresStatusUTF8(body []byte) bool {
+	name, rest, ok := cutPGString(body)
+	value, tail, okValue := cutPGString(rest)
+	if !ok || !okValue || len(tail) != 0 {
+		return false
+	}
+	return name != "client_encoding" || strings.EqualFold(value, "UTF8")
 }
 
 func (p *pgCommandRelay) forward(raw []byte, kinds string, stopOnError, allowFailed bool) (pgCommandAck, error) {
@@ -367,12 +384,11 @@ func (p *pgCommandRelay) frontend(f pgCommandFrame) error {
 		if err != nil {
 			return p.refuse(raw, "uninspectable", nil, "", true)
 		}
-		phase := "query"
 		if accessrules.UnsupportedPostgresControl(operations) {
-			phase = "control"
+			return p.refuse(raw, "control", operations, "", true)
 		}
-		if phase == "control" || len(accessrules.Match(p.guard.policy, operations)) > 0 {
-			blocked, marker, err := p.check(phase, operations, raw, "")
+		if len(accessrules.Match(p.guard.policy, operations)) > 0 {
+			blocked, marker, err := p.check("query", operations, raw, "")
 			if err != nil {
 				return err
 			}
