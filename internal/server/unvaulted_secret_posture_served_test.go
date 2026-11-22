@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -211,8 +212,16 @@ repoDelivered:
 	if posture.Capability != "CAP-SECR-07" || !posture.Served {
 		t.Fatalf("CAP-SECR-07 posture = %+v, want served CAP-SECR-07", posture)
 	}
-	if posture.Summary.RepositorySources != 1 || posture.Summary.CloudSecretSources != 1 || posture.Summary.VaultProvidersSupported != 6 || posture.Summary.VaultProvidersVisible != 4 || posture.Summary.SyncTargetsConfigured != 3 || posture.Summary.LeakedSecretFindings != 1 {
-		t.Fatalf("CAP-SECR-07 summary = %+v, want repo scan + four vaults + three sync targets + one leak", posture.Summary)
+	if posture.Summary.RepositorySources != 1 || posture.Summary.CloudSecretSources != 1 || posture.Summary.VaultProvidersSupported != 12 || posture.Summary.VaultProvidersVisible != 4 || posture.Summary.SyncTargetsConfigured != 3 || posture.Summary.LeakedSecretFindings != 1 {
+		t.Fatalf("CAP-SECR-07 summary = %+v, want repo scan + twelve supported providers, four configured vaults, three sync targets, and one leak", posture.Summary)
+	}
+	providerIDs := make([]string, 0, len(posture.VaultProviders))
+	for _, provider := range posture.VaultProviders {
+		providerIDs = append(providerIDs, provider.ID)
+	}
+	slices.Sort(providerIDs)
+	if want := []string{"1password-connect", "akeyless", "aws-secrets-manager", "azure-key-vault", "bitwarden-secrets-manager", "conjur", "doppler", "gcp-secret-manager", "github-actions", "gitlab-ci", "hashicorp-vault", "infisical"}; !slices.Equal(providerIDs, want) {
+		t.Fatalf("CAP-SECR-07 supported provider IDs = %v, want %v", providerIDs, want)
 	}
 	for _, want := range []string{"aws-secrets-manager", "gcp-secret-manager", "azure-key-vault", "hashicorp-vault"} {
 		if !containsServerString(posture.ConfiguredVaults, want) || !unvaultedVaultProviderVisible(posture.VaultProviders, want) {

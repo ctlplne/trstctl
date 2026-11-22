@@ -919,11 +919,11 @@ not this file.
 | `internal/server/token_exchange.go:49` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/totp_seed_replace_served_test.go:33` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/totp_seed_replace_served_test.go:34` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/unvaulted_secret_posture_served_test.go:28` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/unvaulted_secret_posture_served_test.go:148` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/unvaulted_secret_posture_served_test.go:29` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:149` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:150` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:151` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/unvaulted_secret_posture_served_test.go:152` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/vendor_dcv_sectigo_served_test.go:100` | secret reference, no credential value (CWE-798) |
 | `internal/server/vendor_dcv_served_test.go:94` | secret reference, no credential value (CWE-798) |
 | `internal/server/vendor_dcv_served_test.go:216` | secret reference, no credential value (CWE-798) |
