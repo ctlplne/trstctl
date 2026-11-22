@@ -3,13 +3,9 @@
 package delegation
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
-
-	"trstctl.com/trstctl/internal/crypto"
 )
 
 // subject.go performs a MINIMAL, self-contained structural check of the opaque agent-stack
@@ -45,42 +41,18 @@ type reprShape struct {
 	ToolManifestDigest []byte `json:"tool_manifest_digest"`
 }
 
-// decodeReprShape structurally validates the opaque representation bytes fail-closed: it
+// validateReprBytes structurally validates the opaque representation bytes fail-closed: it
 // must be a JSON object carrying a non-empty system-prompt digest and a non-empty
 // tool-manifest digest (so the bound representation genuinely carries prompt+tool
 // digests). It does NOT enforce the full model-form rules (that is the caller's / relying
 // party's job via agentstack); it enforces only what the binding depends on.
-func decodeReprShape(b []byte) (reprShape, error) {
+func validateReprBytes(b []byte) error {
 	var rs reprShape
 	if err := json.Unmarshal(b, &rs); err != nil {
-		return reprShape{}, fmt.Errorf("%w: %v", ErrDecodeSubjectRepr, err)
+		return fmt.Errorf("%w: %v", ErrDecodeSubjectRepr, err)
 	}
 	if len(rs.SystemPromptDigest) == 0 || len(rs.ToolManifestDigest) == 0 {
-		return reprShape{}, ErrReprMissingDigests
+		return ErrReprMissingDigests
 	}
-	return rs, nil
-}
-
-// declaredToolManifestDigest mirrors agentstack.ToolManifest.Digest without
-// importing the control-plane package into the isolated signer (AN-4). A parity
-// test pins this framing to the agentstack implementation.
-func declaredToolManifestDigest(tools []string) []byte {
-	seen := make(map[string]bool, len(tools))
-	canonical := make([]string, 0, len(tools))
-	for _, raw := range tools {
-		tool := normToken(raw)
-		if tool == "" || seen[tool] {
-			continue
-		}
-		seen[tool] = true
-		canonical = append(canonical, tool)
-	}
-	sort.Strings(canonical)
-	var b bytes.Buffer
-	b.WriteString("agid/agentstack/tool-manifest/v1")
-	writeU64(&b, uint64(len(canonical)))
-	for _, tool := range canonical {
-		writeStr(&b, tool)
-	}
-	return crypto.SHA256Sum(b.Bytes())
+	return nil
 }

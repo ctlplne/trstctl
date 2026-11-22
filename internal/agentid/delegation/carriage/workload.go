@@ -36,33 +36,27 @@ var ErrNoBindingClaim = errors.New("carriage: document carries no AGID binding c
 // binding's empty task-envelope digest) round-trips to an absent field, not a present
 // empty one.
 type bindingClaim struct {
-	ChainHeadDigest              byteString `json:"chain_head_digest,omitempty"`
-	AgentStackDigest             byteString `json:"agent_stack_digest,omitempty"`
-	AgentStackRepr               byteString `json:"agent_stack_repr,omitempty"`
-	DesignatedClass              string     `json:"designated_class,omitempty"`
-	VerifiedHeadScopes           []string   `json:"verified_head_scopes,omitempty"`
-	VerifiedHeadTools            []string   `json:"verified_head_tools,omitempty"`
-	VerifiedHeadAuthorityClasses []string   `json:"verified_head_authority_classes,omitempty"`
-	AttestationDigest            byteString `json:"attestation_digest,omitempty"`
-	ComparatorVersion            string     `json:"comparator_version"`
-	RootAnchorAuthRef            string     `json:"root_anchor_auth_ref,omitempty"`
-	TaskEnvelopeDigest           byteString `json:"task_envelope_digest,omitempty"`
+	ChainHeadDigest    byteString `json:"chain_head_digest,omitempty"`
+	AgentStackDigest   byteString `json:"agent_stack_digest,omitempty"`
+	AgentStackRepr     byteString `json:"agent_stack_repr,omitempty"`
+	DesignatedClass    string     `json:"designated_class,omitempty"`
+	AttestationDigest  byteString `json:"attestation_digest,omitempty"`
+	ComparatorVersion  string     `json:"comparator_version"`
+	RootAnchorAuthRef  string     `json:"root_anchor_auth_ref,omitempty"`
+	TaskEnvelopeDigest byteString `json:"task_envelope_digest,omitempty"`
 }
 
 // bindingClaimOf projects bound values into the wire claim shape.
 func bindingClaimOf(bv BoundValues) bindingClaim {
 	return bindingClaim{
-		ChainHeadDigest:              byteString(bv.ChainHeadDigest),
-		AgentStackDigest:             byteString(bv.AgentStackDigest),
-		AgentStackRepr:               byteString(bv.AgentStackRepr),
-		DesignatedClass:              bv.DesignatedClass,
-		VerifiedHeadScopes:           append([]string(nil), bv.VerifiedHeadScopes...),
-		VerifiedHeadTools:            append([]string(nil), bv.VerifiedHeadTools...),
-		VerifiedHeadAuthorityClasses: append([]string(nil), bv.VerifiedHeadAuthorityClasses...),
-		AttestationDigest:            byteString(bv.AttestationDigest),
-		ComparatorVersion:            bv.ComparatorVersion,
-		RootAnchorAuthRef:            bv.RootAnchorAuthRef,
-		TaskEnvelopeDigest:           byteString(bv.TaskEnvelopeDigest),
+		ChainHeadDigest:    byteString(bv.ChainHeadDigest),
+		AgentStackDigest:   byteString(bv.AgentStackDigest),
+		AgentStackRepr:     byteString(bv.AgentStackRepr),
+		DesignatedClass:    bv.DesignatedClass,
+		AttestationDigest:  byteString(bv.AttestationDigest),
+		ComparatorVersion:  bv.ComparatorVersion,
+		RootAnchorAuthRef:  bv.RootAnchorAuthRef,
+		TaskEnvelopeDigest: byteString(bv.TaskEnvelopeDigest),
 	}
 }
 
@@ -70,17 +64,14 @@ func bindingClaimOf(bv BoundValues) bindingClaim {
 // out of the decoded buffer so the result never aliases the input.
 func (c bindingClaim) boundValues() BoundValues {
 	return BoundValues{
-		ChainHeadDigest:              cloneBytes(c.ChainHeadDigest),
-		AgentStackDigest:             cloneBytes(c.AgentStackDigest),
-		AgentStackRepr:               cloneBytes(c.AgentStackRepr),
-		DesignatedClass:              c.DesignatedClass,
-		VerifiedHeadScopes:           append([]string(nil), c.VerifiedHeadScopes...),
-		VerifiedHeadTools:            append([]string(nil), c.VerifiedHeadTools...),
-		VerifiedHeadAuthorityClasses: append([]string(nil), c.VerifiedHeadAuthorityClasses...),
-		AttestationDigest:            cloneBytes(c.AttestationDigest),
-		ComparatorVersion:            c.ComparatorVersion,
-		RootAnchorAuthRef:            c.RootAnchorAuthRef,
-		TaskEnvelopeDigest:           cloneBytes(c.TaskEnvelopeDigest),
+		ChainHeadDigest:    cloneBytes(c.ChainHeadDigest),
+		AgentStackDigest:   cloneBytes(c.AgentStackDigest),
+		AgentStackRepr:     cloneBytes(c.AgentStackRepr),
+		DesignatedClass:    c.DesignatedClass,
+		AttestationDigest:  cloneBytes(c.AttestationDigest),
+		ComparatorVersion:  c.ComparatorVersion,
+		RootAnchorAuthRef:  c.RootAnchorAuthRef,
+		TaskEnvelopeDigest: cloneBytes(c.TaskEnvelopeDigest),
 	}
 }
 

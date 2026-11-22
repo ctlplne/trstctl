@@ -75,9 +75,6 @@ type IssueChainBoundRequest struct {
 	TaskEnvelope []byte `json:"task_envelope,omitempty"`
 	// Scopes are the requested authority scopes (forwarded to the policy gate).
 	Scopes []string `json:"scopes,omitempty"`
-	// DeclaredTools is the complete agent-stack tool manifest. The signer checks
-	// its digest against AgentStackRepr and confines it to the signed chain head.
-	DeclaredTools []string `json:"declared_tools,omitempty"`
 	// ResourceValues are the resource-selector values of the final record's authority,
 	// which the reachability engine resolves to graph start nodes (AGID-06).
 	ResourceValues []string `json:"resource_values,omitempty"`
@@ -815,7 +812,6 @@ func baseSchemas() map[string]*api.Schema {
 			"attestation_method": api.StringSchema(),
 			"task_envelope":      api.StringSchema(), // base64-encoded opaque task envelope
 			"scopes":             api.ArraySchema(api.StringSchema()),
-			"declared_tools":     api.ArraySchema(api.StringSchema()),
 			"resource_values":    api.ArraySchema(api.StringSchema()),
 			"ttl_seconds":        api.IntegerSchema(),
 		}, "agent_id"),

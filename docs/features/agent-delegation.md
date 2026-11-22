@@ -151,20 +151,10 @@ Content-Type: application/json
   "attestation": "<base64 encoded evidence>",
   "attestation_method": "tpm",
   "scopes": ["read:invoices"],
-  "declared_tools": ["search"],
   "resource_values": ["payments"],
   "ttl_seconds": 1200
 }
 ```
-
-The signed chain head must grant `agent-worker` in `authority_classes`, and its
-`tools` must contain every entry in `declared_tools`. The signer recomputes the
-tool-manifest digest from `declared_tools` and requires it to match
-`agent_stack_repr` before issuing. `scopes` are operation scopes for policy;
-they do not stand in for tool names. The credential carries the verified head's
-scope, tool, and class limits, and the offline verifier intersects those limits
-with local policy. Legacy chain credentials without those bound limits are
-refused by the updated verifier.
 
 After the worker drains the outbox, read the results; queue a cascaded
 revocation when a subject is compromised:

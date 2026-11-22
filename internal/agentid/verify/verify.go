@@ -7,7 +7,6 @@ import (
 	"errors"
 	"strings"
 
-	"trstctl.com/trstctl/internal/agentid/delegation/carriage"
 	"trstctl.com/trstctl/internal/crypto"
 )
 
@@ -82,9 +81,7 @@ var (
 	ErrToolManifestMismatch = errors.New("verify: local tool manifest does not match the tool-manifest digest bound in the agent-stack representation")
 	// ErrNoAction is returned when Verify is asked to authorize an action that names
 	// no operation. An action must state what it does.
-	ErrNoAction                  = errors.New("verify: requested action names no operation")
-	ErrChainAuthorityUnbound     = errors.New("verify: chain-bound credential lacks verified v2 head authority")
-	ErrToolExceedsChainAuthority = errors.New("verify: requested tool exceeds the signed delegation chain head")
+	ErrNoAction = errors.New("verify: requested action names no operation")
 )
 
 // Verify is the offline relying-party decision (AGID-claims-28/29/7 RP side). It
@@ -176,9 +173,6 @@ func Verify(cred Credential, root TrustRoot, policy LocalPolicy, action Action, 
 	if err := enforceAuthority(bv.DesignatedClass, op, policy); err != nil {
 		return Result{}, err
 	}
-	if err := enforceChainAuthority(bv, op, normTool(action.Tool)); err != nil {
-		return Result{}, err
-	}
 
 	// (6) TASK SCOPE (AGID-claim-28): when the credential binds a task-envelope digest,
 	// the action must fall within the bound envelope's scope -- enforced ADDITIVELY,
@@ -207,43 +201,6 @@ func Verify(cred Credential, root TrustRoot, policy LocalPolicy, action Action, 
 		Operation:         op,
 		Tool:              normTool(action.Tool),
 	}, nil
-}
-
-// enforceChainAuthority intersects local policy with the limits the signer
-// copied from the signature-verified chain head. Legacy chain credentials with
-// no such limits cannot authorize an operation: their authority is unknown.
-func enforceChainAuthority(bv carriage.BoundValues, op, tool string) error {
-	if len(bv.ChainHeadDigest) == 0 {
-		return nil
-	}
-	if bv.ComparatorVersion != "agid.authority.compare/v2" || len(bv.VerifiedHeadScopes) == 0 ||
-		len(bv.VerifiedHeadAuthorityClasses) == 0 {
-		return ErrChainAuthorityUnbound
-	}
-	classGranted := false
-	for _, class := range bv.VerifiedHeadAuthorityClasses {
-		if class == bv.DesignatedClass && class != "" {
-			classGranted = true
-			break
-		}
-	}
-	if !classGranted {
-		return ErrAuthorityClassNotPermitted
-	}
-	for _, scope := range bv.VerifiedHeadScopes {
-		if normOp(scope) == op {
-			if tool == "" {
-				return nil
-			}
-			for _, granted := range bv.VerifiedHeadTools {
-				if normTool(granted) == tool {
-					return nil
-				}
-			}
-			return ErrToolExceedsChainAuthority
-		}
-	}
-	return ErrActionExceedsAuthority
 }
 
 // agentStackApproved reports whether the bound agent-stack digest is in the

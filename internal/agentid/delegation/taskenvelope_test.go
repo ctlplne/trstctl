@@ -232,7 +232,7 @@ func TestCredential_BindsTaskEnvelopeDigest(t *testing.T) {
 	// ALONGSIDE both the chain-head digest AND the agent-stack representation (INV-A3).
 	rep := mustRepr(t, "bind me", "search")
 	repBytes, _ := jsonMarshal(rep)
-	pre, _ := encodePreconditionsWithEnvelope(t, PreconditionsBody{Chain: envs, DeclaredTools: []string{"search"}}, signed)
+	pre, _ := encodePreconditionsWithEnvelope(t, PreconditionsBody{Chain: envs}, signed)
 	req := signing.IssuancePreconditions{TenantID: "t1", TrustAnchorRef: "leaf", Preconditions: pre, SubjectRepr: repBytes}
 
 	res := runGatedIssue(t, f.log, f.gate, req, f.mintKeyOp(t))

@@ -88,21 +88,12 @@ func (f gateFixture) mintKeyOp(t *testing.T) func(signing.IssuanceDecision) ([]b
 // singleAnchorChain builds a valid two-hop narrowing chain (root -> narrower) and returns
 // its envelopes plus the anchor map to seed the trust store.
 func singleAnchorChain(t *testing.T, reg *ToolRegistry, tenantID, authRef string) ([]RecordEnvelope, map[string]RootAnchor, builtChain) {
-	return singleAnchorChainWithHeadTools(t, reg, tenantID, authRef, "search")
-}
-
-func singleAnchorChainWithHeadTools(t *testing.T, reg *ToolRegistry, tenantID, authRef string, tools ...string) ([]RecordEnvelope, map[string]RootAnchor, builtChain) {
 	t.Helper()
 	rootSigner, rootDER := signerWithDER(t)
 	midSigner, midDER := signerWithDER(t)
-	rootAuthority := wideAuthority()
-	rootAuthority.AuthorityClasses = []string{"reader", "privileged", "vault-admin", "agent-worker"}
-	headAuthority := narrowerAuthority()
-	headAuthority.Tools = append([]string(nil), tools...)
-	headAuthority.AuthorityClasses = append([]string(nil), rootAuthority.AuthorityClasses...)
 	hops := []hop{
-		{delegatorID: "root", delegatorKeyID: "root-key", delegateID: "mid", authority: rootAuthority, depthRemaining: 3, validity: openWindow()},
-		{delegatorID: "mid", delegatorKeyID: "mid-key", delegateID: "leaf", authority: headAuthority, depthRemaining: 2, validity: openWindow()},
+		{delegatorID: "root", delegatorKeyID: "root-key", delegateID: "mid", authority: wideAuthority(), depthRemaining: 3, validity: openWindow()},
+		{delegatorID: "mid", delegatorKeyID: "mid-key", delegateID: "leaf", authority: narrowerAuthority(), depthRemaining: 2, validity: openWindow()},
 	}
 	bc := buildChain(t, reg, tenantID, hops, []crypto.Signer{rootSigner, midSigner}, [][]byte{rootDER, midDER})
 	anchors := map[string]RootAnchor{"root-key": {PublicDER: rootDER, AuthRef: authRef}}

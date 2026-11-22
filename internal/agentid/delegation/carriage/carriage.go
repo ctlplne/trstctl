@@ -65,10 +65,7 @@ type BoundValues struct {
 	// with the agentstack package.
 	AgentStackRepr []byte `json:"agent_stack_repr,omitempty"`
 	// DesignatedClass is the designated authority class the binding recorded.
-	DesignatedClass              string   `json:"designated_class,omitempty"`
-	VerifiedHeadScopes           []string `json:"verified_head_scopes,omitempty"`
-	VerifiedHeadTools            []string `json:"verified_head_tools,omitempty"`
-	VerifiedHeadAuthorityClasses []string `json:"verified_head_authority_classes,omitempty"`
+	DesignatedClass string `json:"designated_class,omitempty"`
 	// AttestationDigest is the attestation-evidence digest (empty when no attestation was
 	// required).
 	AttestationDigest []byte `json:"attestation_digest,omitempty"`
@@ -102,17 +99,14 @@ var (
 // caller may reuse or mutate.
 func (bv BoundValues) Clone() BoundValues {
 	return BoundValues{
-		ChainHeadDigest:              cloneBytes(bv.ChainHeadDigest),
-		AgentStackDigest:             cloneBytes(bv.AgentStackDigest),
-		AgentStackRepr:               cloneBytes(bv.AgentStackRepr),
-		DesignatedClass:              bv.DesignatedClass,
-		VerifiedHeadScopes:           append([]string(nil), bv.VerifiedHeadScopes...),
-		VerifiedHeadTools:            append([]string(nil), bv.VerifiedHeadTools...),
-		VerifiedHeadAuthorityClasses: append([]string(nil), bv.VerifiedHeadAuthorityClasses...),
-		AttestationDigest:            cloneBytes(bv.AttestationDigest),
-		ComparatorVersion:            bv.ComparatorVersion,
-		RootAnchorAuthRef:            bv.RootAnchorAuthRef,
-		TaskEnvelopeDigest:           cloneBytes(bv.TaskEnvelopeDigest),
+		ChainHeadDigest:    cloneBytes(bv.ChainHeadDigest),
+		AgentStackDigest:   cloneBytes(bv.AgentStackDigest),
+		AgentStackRepr:     cloneBytes(bv.AgentStackRepr),
+		DesignatedClass:    bv.DesignatedClass,
+		AttestationDigest:  cloneBytes(bv.AttestationDigest),
+		ComparatorVersion:  bv.ComparatorVersion,
+		RootAnchorAuthRef:  bv.RootAnchorAuthRef,
+		TaskEnvelopeDigest: cloneBytes(bv.TaskEnvelopeDigest),
 	}
 }
 
@@ -152,11 +146,6 @@ func (bv BoundValues) CanonicalBytes() []byte {
 	writeStr(&b, bv.RootAnchorAuthRef)
 	writeField(&b, "task_envelope_digest")
 	writeBytes(&b, bv.TaskEnvelopeDigest)
-	if len(bv.VerifiedHeadScopes) != 0 || len(bv.VerifiedHeadTools) != 0 || len(bv.VerifiedHeadAuthorityClasses) != 0 {
-		writeStrSet(&b, "verified_head_scopes", bv.VerifiedHeadScopes)
-		writeStrSet(&b, "verified_head_tools", bv.VerifiedHeadTools)
-		writeStrSet(&b, "verified_head_authority_classes", bv.VerifiedHeadAuthorityClasses)
-	}
 	return b.Bytes()
 }
 
@@ -193,14 +182,6 @@ func writeField(b *bytes.Buffer, name string) { writeStr(b, name) }
 func writeStr(b *bytes.Buffer, s string) {
 	writeU64(b, uint64(len(s)))
 	b.WriteString(s)
-}
-
-func writeStrSet(b *bytes.Buffer, name string, values []string) {
-	writeField(b, name)
-	writeU64(b, uint64(len(values)))
-	for _, value := range values {
-		writeStr(b, value)
-	}
 }
 
 func writeBytes(b *bytes.Buffer, p []byte) {

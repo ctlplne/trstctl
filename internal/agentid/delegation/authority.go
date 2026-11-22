@@ -32,10 +32,10 @@ import (
 // relying-party verifier) can reproduce a verdict deterministically. Bump this
 // string whenever the normalization rules or the comparison of any dimension
 // changes; a recorded verdict is only reproducible against a matching version.
-const ComparatorVersion = "agid.authority.compare/v2"
+const ComparatorVersion = "agid.authority.compare/v1"
 
 // canonicalPrefix domain-separates the canonical authority encoding from any other
-// hashed structure in the repo. Its framing stays stable across comparator versions.
+// hashed structure in the repo. It is part of the v1 semantics named above.
 const canonicalPrefix = "agid/authority/v1"
 
 // ResourceSelector selects a set of resources a delegate may act on. Kind names the
@@ -80,13 +80,10 @@ type Authority struct {
 	Tools     []string           `json:"tools,omitempty"`
 	Resources []ResourceSelector `json:"resources,omitempty"`
 	Classes   []string           `json:"classes,omitempty"`
-	// AuthorityClasses are credential authority classes this delegate may claim.
-	// Classes above are data classifications and confer no credential class.
-	AuthorityClasses []string `json:"authority_classes,omitempty"`
-	Spend            Budget   `json:"spend"`
-	Rate             Rate     `json:"rate"`
-	Depth            uint32   `json:"depth"`
-	Validity         Window   `json:"validity"`
+	Spend     Budget             `json:"spend"`
+	Rate      Rate               `json:"rate"`
+	Depth     uint32             `json:"depth"`
+	Validity  Window             `json:"validity"`
 }
 
 // ToolRegistry resolves tool aliases to canonical tool identifiers so the comparator
@@ -208,15 +205,14 @@ func cleanPath(p string) string {
 // trim+lowercased. It is idempotent: Normalize(Normalize(x)) == Normalize(x).
 func Normalize(a Authority, reg *ToolRegistry) Authority {
 	return Authority{
-		Scopes:           normStrings(a.Scopes),
-		Tools:            normTools(a.Tools, reg),
-		Resources:        normResources(a.Resources),
-		Classes:          normStrings(a.Classes),
-		AuthorityClasses: normStrings(a.AuthorityClasses),
-		Spend:            Budget{Amount: a.Spend.Amount, Currency: normToken(a.Spend.Currency)},
-		Rate:             Rate{Limit: a.Rate.Limit, Per: normToken(a.Rate.Per)},
-		Depth:            a.Depth,
-		Validity:         a.Validity,
+		Scopes:    normStrings(a.Scopes),
+		Tools:     normTools(a.Tools, reg),
+		Resources: normResources(a.Resources),
+		Classes:   normStrings(a.Classes),
+		Spend:     Budget{Amount: a.Spend.Amount, Currency: normToken(a.Spend.Currency)},
+		Rate:      Rate{Limit: a.Rate.Limit, Per: normToken(a.Rate.Per)},
+		Depth:     a.Depth,
+		Validity:  a.Validity,
 	}
 }
 
@@ -240,11 +236,6 @@ func CanonicalBytes(a Authority, reg *ToolRegistry) ([]byte, error) {
 		writeStr(&b, rs.Value)
 	}
 	writeStrSet(&b, "classes", n.Classes)
-	// Existing v1 records with no authority-class grant retain their signed
-	// preimage. They cannot authorize a non-empty designated class under v2.
-	if len(n.AuthorityClasses) != 0 {
-		writeStrSet(&b, "authority_classes", n.AuthorityClasses)
-	}
 	// spend
 	writeField(&b, "spend")
 	writeStr(&b, n.Spend.Currency)
@@ -338,9 +329,6 @@ func WithinParent(child, parent Authority, reg *ToolRegistry) bool {
 		return false
 	}
 	if !subset(c.Classes, p.Classes) {
-		return false
-	}
-	if !subset(c.AuthorityClasses, p.AuthorityClasses) {
 		return false
 	}
 	if !resourcesContained(c.Resources, p.Resources) {

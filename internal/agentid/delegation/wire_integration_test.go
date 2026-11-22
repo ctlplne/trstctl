@@ -109,20 +109,18 @@ func TestAGID_Wire_VerifyChainInRealSignerBeforeKeygen(t *testing.T) {
 	reg := delegation.NewToolRegistry(map[string]string{})
 
 	wide := delegation.Authority{
-		Scopes:           []string{"read", "write"},
-		Tools:            []string{"search", "email"},
-		AuthorityClasses: []string{designatedClass},
-		Spend:            delegation.Budget{Amount: 1000, Currency: "usd"},
-		Rate:             delegation.Rate{Limit: 100, Per: "minute"},
-		Depth:            3,
+		Scopes: []string{"read", "write"},
+		Tools:  []string{"search", "email"},
+		Spend:  delegation.Budget{Amount: 1000, Currency: "usd"},
+		Rate:   delegation.Rate{Limit: 100, Per: "minute"},
+		Depth:  3,
 	}
 	narrower := delegation.Authority{
-		Scopes:           []string{"read"},
-		Tools:            []string{"search"},
-		AuthorityClasses: []string{designatedClass},
-		Spend:            delegation.Budget{Amount: 500, Currency: "usd"},
-		Rate:             delegation.Rate{Limit: 50, Per: "minute"},
-		Depth:            2,
+		Scopes: []string{"read"},
+		Tools:  []string{"search"},
+		Spend:  delegation.Budget{Amount: 500, Currency: "usd"},
+		Rate:   delegation.Rate{Limit: 50, Per: "minute"},
+		Depth:  2,
 	}
 	wider := delegation.Authority{ // widens the root in the scopes dimension (adds "admin")
 		Scopes: []string{"read", "write", "admin"},
@@ -259,7 +257,6 @@ func TestAGID_Wire_VerifyChainInRealSignerBeforeKeygen(t *testing.T) {
 		pre, err := delegation.EncodePreconditionsBody(delegation.PreconditionsBody{
 			Chain:           chain,
 			DesignatedClass: designatedClass,
-			DeclaredTools:   []string{"search"},
 		})
 		if err != nil {
 			t.Fatalf("encode preconditions: %v", err)

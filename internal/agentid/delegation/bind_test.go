@@ -21,7 +21,7 @@ func TestCredential_BindsChainDigestAndAgentStack(t *testing.T) {
 
 	rep := mustRepr(t, "bind me", "search")
 	repBytes, _ := jsonMarshal(rep)
-	pre, _ := encodePreconditionsForTest(PreconditionsBody{Chain: envs, DeclaredTools: []string{"search"}})
+	pre, _ := encodePreconditionsForTest(PreconditionsBody{Chain: envs})
 	req := signing.IssuancePreconditions{TenantID: "t1", TrustAnchorRef: "leaf", Preconditions: pre, SubjectRepr: repBytes}
 
 	res := runGatedIssue(t, f.log, f.gate, req, f.mintKeyOp(t))
@@ -83,11 +83,11 @@ func TestCredential_BindsChainDigestAndAgentStack(t *testing.T) {
 // prompt and this tool manifest.
 func TestAgentStack_PromptAndToolManifestDigests(t *testing.T) {
 	reg := (*ToolRegistry)(nil)
-	envs, anchors, _ := singleAnchorChainWithHeadTools(t, reg, "t1", "fido2:root", "search", "email")
+	envs, anchors, _ := singleAnchorChain(t, reg, "t1", "fido2:root")
 
-	mint := func(repBytes []byte, tools ...string) BindingMaterial {
+	mint := func(repBytes []byte) BindingMaterial {
 		f := newGateFixture(t, anchors, nil, nil, nil)
-		pre, _ := encodePreconditionsForTest(PreconditionsBody{Chain: envs, DeclaredTools: tools})
+		pre, _ := encodePreconditionsForTest(PreconditionsBody{Chain: envs})
 		req := signing.IssuancePreconditions{TenantID: "t1", TrustAnchorRef: "leaf", Preconditions: pre, SubjectRepr: repBytes}
 		res := runGatedIssue(t, f.log, f.gate, req, f.mintKeyOp(t))
 		if !res.decision.Approved {
@@ -113,7 +113,7 @@ func TestAgentStack_PromptAndToolManifestDigests(t *testing.T) {
 
 	repA := mustRepr(t, "prompt-A", "search", "email")
 	repABytes, _ := jsonMarshal(repA)
-	bmA := mint(repABytes, "search", "email")
+	bmA := mint(repABytes)
 	boundA := decodeBound(bmA)
 
 	// The BOUND representation carries the SAME prompt+tool digests the AGID-03
@@ -132,7 +132,7 @@ func TestAgentStack_PromptAndToolManifestDigests(t *testing.T) {
 	// Swap the prompt -> the bound agent-stack digest AND the bound prompt digest flip.
 	repB := mustRepr(t, "prompt-B-different", "search", "email")
 	repBBytes, _ := jsonMarshal(repB)
-	bmB := mint(repBBytes, "search", "email")
+	bmB := mint(repBBytes)
 	if bytesEqual(bmA.AgentStackDigest, bmB.AgentStackDigest) {
 		t.Fatal("swapping the prompt did not change the bound agent-stack digest")
 	}
@@ -143,7 +143,7 @@ func TestAgentStack_PromptAndToolManifestDigests(t *testing.T) {
 	// Swap the tool set -> the bound agent-stack digest AND the bound tool digest flip.
 	repC := mustRepr(t, "prompt-A", "search") // dropped "email"
 	repCBytes, _ := jsonMarshal(repC)
-	bmC := mint(repCBytes, "search")
+	bmC := mint(repCBytes)
 	if bytesEqual(bmA.AgentStackDigest, bmC.AgentStackDigest) {
 		t.Fatal("changing the tool manifest did not change the bound agent-stack digest")
 	}

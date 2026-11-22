@@ -105,24 +105,22 @@ func openWindow() delegation.Window { return delegation.Window{} }
 // wideAuthority is a broad root authority.
 func wideAuthority() delegation.Authority {
 	return delegation.Authority{
-		Scopes:           []string{"read", "write"},
-		Tools:            []string{"search", "email"},
-		AuthorityClasses: []string{"agent", "privileged"},
-		Spend:            delegation.Budget{Amount: 1000, Currency: "usd"},
-		Rate:             delegation.Rate{Limit: 100, Per: "minute"},
-		Depth:            3,
+		Scopes: []string{"read", "write"},
+		Tools:  []string{"search", "email"},
+		Spend:  delegation.Budget{Amount: 1000, Currency: "usd"},
+		Rate:   delegation.Rate{Limit: 100, Per: "minute"},
+		Depth:  3,
 	}
 }
 
 // narrowerAuthority is strictly within wideAuthority.
 func narrowerAuthority() delegation.Authority {
 	return delegation.Authority{
-		Scopes:           []string{"read"},
-		Tools:            []string{"search"},
-		AuthorityClasses: []string{"agent", "privileged"},
-		Spend:            delegation.Budget{Amount: 500, Currency: "usd"},
-		Rate:             delegation.Rate{Limit: 50, Per: "minute"},
-		Depth:            2,
+		Scopes: []string{"read"},
+		Tools:  []string{"search"},
+		Spend:  delegation.Budget{Amount: 500, Currency: "usd"},
+		Rate:   delegation.Rate{Limit: 50, Per: "minute"},
+		Depth:  2,
 	}
 }
 
