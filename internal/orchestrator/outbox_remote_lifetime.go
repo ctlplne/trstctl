@@ -24,12 +24,27 @@ func (o *Outbox) beginRemoteDelivery(ctx context.Context, claim claimedOutboxEnt
 		if err := o.store.TryTenantServiceAdmissionTx(ctx, tx, claim.msg.TenantID); err != nil {
 			return err
 		}
-		tag, err := tx.Exec(ctx, `UPDATE outbox SET receiver_pending_ids=array_append(receiver_pending_ids,$12::uuid)
+		// Admission can block. Use the clock immediately before the fenced
+		// update so a stalled service session cannot resurrect a timed-out claim.
+		now := o.clockNow()
+		limit := claim.claimedAt.Add(o.deliveryTimeout + o.leaseTTL)
+		if !now.Before(limit) {
+			return nil
+		}
+		until := now.Add(o.leaseTTL)
+		if until.After(limit) {
+			until = limit
+		}
+		// An expired lease grants another worker permission to recover; it does
+		// not by itself transfer this attempt. The row lock and exact attempt
+		// predicates let its owner renew only if recovery has not happened.
+		tag, err := tx.Exec(ctx, `UPDATE outbox SET receiver_pending_ids=array_append(receiver_pending_ids,$12::uuid),
+			lease_until=GREATEST(lease_until,$5)
 			WHERE tenant_id=$1 AND id=$2 AND status='processing' AND worker_id=$3
-			AND attempts=$4 AND lease_until>$5 AND destination=$6 AND idempotency_key=$7
+			AND attempts=$4 AND destination=$6 AND idempotency_key=$7
 			AND payload=$8 AND COALESCE(NULLIF(effect_lane,''),destination)=$9
 			AND COALESCE(required_agent_role,'')=$10 AND retry_attempt_limit=$11`,
-			claim.msg.TenantID, claim.id, o.workerID, claim.attempts, o.clockNow(),
+			claim.msg.TenantID, claim.id, o.workerID, claim.attempts, until,
 			claim.msg.Destination, claim.msg.IdempotencyKey, claim.msg.Payload,
 			claim.msg.EffectLane, claim.msg.RequiredAgentRole, claim.retryAttemptLimit, attemptID)
 		current = tag.RowsAffected() == 1

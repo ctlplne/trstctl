@@ -443,8 +443,8 @@ not this file.
 | `internal/operator/secretsync.go:28` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretsync.go:29` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/orchestrator/cmdb_sweep_test.go:17` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
-| `internal/orchestrator/outbox_internal_test.go:1251` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/orchestrator/outbox_internal_test.go:1300` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/orchestrator/outbox_internal_test.go:1290` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/orchestrator/outbox_internal_test.go:1339` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/outboundcred/outboundcred_test.go:24` | a reference name, no credential value (CWE-798) |
 | `internal/outboundcred/outboundcred_test.go:88` | a reference name, no credential value (CWE-798) |
 | `internal/perf/capacity.go:11` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |

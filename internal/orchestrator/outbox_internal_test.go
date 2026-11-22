@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,6 +30,44 @@ func enqueue(t *testing.T, s *store.Store, ob *orchestrator.Outbox, e orchestrat
 		t.Fatalf("enqueue: %v", err)
 	}
 	return id
+}
+
+// The claim can age past a short lease while the tenant service admission
+// starts. If nobody recovered the row, its exact owner can still renew it at
+// the durable receiver handoff. A different attempt must never inherit it.
+func TestOutboxCurrentClaimRenewsExpiredLeaseAtReceiverHandoff(t *testing.T) {
+	s := newStore(t)
+	var base time.Time
+	var clockReads atomic.Int32
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithLeaseTTL(100*time.Millisecond),
+		orchestrator.WithWorkerID("receiver-handoff-renewal"),
+		orchestrator.WithNow(func() time.Time {
+			if clockReads.Add(1) <= 2 { // dispatch cutoff and claim timestamp
+				return base
+			}
+			return base.Add(200 * time.Millisecond)
+		}),
+	)
+	id := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "webhook", IdempotencyKey: "receiver-handoff-renewal", Payload: []byte(`{}`),
+	})
+	base = time.Now().UTC()
+	calls := 0
+	n, err := ob.Dispatch(context.Background(), orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error {
+		calls++
+		return nil
+	}))
+	if err != nil || n != 1 || calls != 1 {
+		t.Fatalf("dispatch n=%d calls=%d err=%v, want one completed receiver call", n, calls, err)
+	}
+	rec, err := ob.Get(context.Background(), tenantA, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Status != "delivered" || rec.Attempts != 1 {
+		t.Fatalf("row status=%q attempts=%d, want first-attempt delivery", rec.Status, rec.Attempts)
+	}
 }
 
 // Two READ COMMITTED transactions can both evaluate NOT EXISTS before either

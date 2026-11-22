@@ -17,7 +17,7 @@ import (
 // datastore between the claim and the finalize) let another worker recover
 // the row and deliver it a second time. Every third of a lease the hold
 // moves lease_until one lease ahead, but only while the row is still this
-// worker's attempt and its lease is still live, and never past the claim's
+// worker's attempt, and never past the claim's
 // delivery deadline plus one lease: a worker that hangs past its deadline
 // still loses the row to recovery, as before. One goroutine per claim in
 // flight, ended by the returned release (or the dispatch context).
@@ -46,7 +46,7 @@ func (o *Outbox) holdClaim(ctx context.Context, claim claimedOutboxEntry) (relea
 			if !until.After(now) {
 				return // the hold limit: the lease now runs out
 			}
-			if held, err := o.extendClaimLease(holdCtx, claim, now, until); err != nil || !held {
+			if held, err := o.extendClaimLease(holdCtx, claim, until); err != nil || !held {
 				return // lost, finalized, or unreachable: finalize reports which
 			}
 		}
@@ -57,9 +57,10 @@ func (o *Outbox) holdClaim(ctx context.Context, claim claimedOutboxEntry) (relea
 	}
 }
 
-// extendClaimLease moves a live claim's lease to until; it never shortens one.
-// It reports false when the row is no longer this worker's live attempt.
-func (o *Outbox) extendClaimLease(ctx context.Context, claim claimedOutboxEntry, now, until time.Time) (bool, error) {
+// extendClaimLease moves this exact attempt's lease to until; it never shortens
+// one. Recovery may have taken an expired lease, in which case the row's
+// status, worker or attempt has changed and this update must do nothing.
+func (o *Outbox) extendClaimLease(ctx context.Context, claim claimedOutboxEntry, until time.Time) (bool, error) {
 	var held bool
 	err := o.store.WithSystemFirst(ctx,
 		`UPDATE outbox
@@ -68,9 +69,8 @@ func (o *Outbox) extendClaimLease(ctx context.Context, claim claimedOutboxEntry,
 		    AND tenant_id = $2
 		    AND status = 'processing'
 		    AND worker_id = $3
-		    AND attempts = $4
-		    AND lease_until > $6`,
-		[]any{claim.id, claim.msg.TenantID, o.workerID, claim.attempts, until, now},
+		    AND attempts = $4`,
+		[]any{claim.id, claim.msg.TenantID, o.workerID, claim.attempts, until},
 		func(tag pgconn.CommandTag, err error, _ store.TxStatements) error {
 			if err != nil {
 				return err
