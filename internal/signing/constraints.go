@@ -103,6 +103,9 @@ type keyConstraints struct {
 	// signer. The marker remains decodeable for stored-key compatibility; it
 	// grants no permission to call generic Sign.
 	genericPCAS bool
+	// artifactOnly marks a key whose signatures must pass the signer's typed
+	// artifact admission path. Generic Sign cannot assert its own artifact kind.
+	artifactOnly bool
 	// importReceipt binds a v2 imported key to one exact approved request.
 	importReceipt [32]byte
 	// ownerTenantID and keyClass are sealed with an importable tenant CA key.

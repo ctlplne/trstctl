@@ -114,6 +114,7 @@ const flagRequireAuth = 1 << 0
 const flagOfflineOnly = 1 << 1
 const flagCustodyOnly = 1 << 2
 const flagGenericPCAS = 1 << 3
+const flagArtifactOnly = 1 << 4
 
 // encodeConstraintMeta frames the usage constraints into a deterministic,
 // non-secret header: magic | version | nPurposes | purposes... | nHashes |
@@ -152,6 +153,9 @@ func encodeConstraintMeta(kc keyConstraints, algorithm signerpb.Algorithm) []byt
 	}
 	if kc.genericPCAS {
 		flags |= flagGenericPCAS
+	}
+	if kc.artifactOnly {
+		flags |= flagArtifactOnly
 	}
 	out = append(out, flags)
 	out = append(out, byte(algorithm)) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
@@ -227,6 +231,7 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, signerpb.Algorithm,
 		kc.offlineOnly = plaintext[off]&flagOfflineOnly != 0
 		kc.custodyOnly = plaintext[off]&flagCustodyOnly != 0
 		kc.genericPCAS = plaintext[off]&flagGenericPCAS != 0
+		kc.artifactOnly = plaintext[off]&flagArtifactOnly != 0
 		off++
 	}
 	if kc.custodyOnly && kc.genericPCAS {

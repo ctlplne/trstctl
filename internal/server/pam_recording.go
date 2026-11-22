@@ -38,8 +38,10 @@ import (
 const (
 	// recordingMaxChunk bounds one uploaded recording chunk.
 	recordingMaxChunk = 1 << 20
-	// recordingManifestArtifact is the signed manifest's artifact kind.
-	recordingManifestArtifact = "pam-session-recording-manifest"
+	// recordingManifestArtifact is the signer-admitted manifest domain.
+	recordingManifestArtifact = jose.ArtifactPAMRecordingManifest
+	// Older stored manifests used this domain before signer-side admission.
+	recordingManifestLegacyArtifact = "pam-session-recording-manifest"
 	// recordingIdleSeal is how long a recording of an ended session may wait
 	// for its gateway's final chunk before the control plane seals it.
 	recordingIdleSeal = 2 * time.Minute
@@ -294,6 +296,9 @@ func (s *pamService) verifyRecording(ctx context.Context, tenantID, sessionID st
 		problem("the manifest object differs from the one recorded")
 	}
 	signed, err := s.recordings.signer.JWKS().VerifyArtifact(rec.ManifestSignature, recordingManifestArtifact)
+	if err != nil {
+		signed, err = s.recordings.signer.JWKS().VerifyArtifact(rec.ManifestSignature, recordingManifestLegacyArtifact)
+	}
 	if err != nil || !bytes.Equal(signed, body.Bytes()) {
 		problem("the manifest signature does not verify")
 	}

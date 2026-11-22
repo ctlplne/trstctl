@@ -252,6 +252,9 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 		// all successor handles regardless of that legacy marker.
 		constraints.genericPCAS = true
 	}
+	if id == "audit-export" {
+		constraints.artifactOnly = true
+	}
 
 	held := &heldKey{signer: ls, constraints: constraints}
 	if err := s.mintHeldKey(id, held); err != nil {
@@ -381,6 +384,11 @@ func (s *Server) Sign(ctx context.Context, req *signerpb.SignRequest) (*signerpb
 	}
 	if isCustodyHandleNamespace(req.GetHandle().GetId()) {
 		return nil, status.Error(codes.FailedPrecondition, "custody key handle cannot be used through generic Sign")
+	}
+	// Older audit-export keys predate the sealed artifactOnly bit. The fixed
+	// handle reservation closes their raw Sign path without a key rotation.
+	if req.GetHandle().GetId() == "audit-export" || held.constraints.artifactOnly {
+		return nil, status.Error(codes.FailedPrecondition, "audit evidence key requires SignArtifact admission")
 	}
 	if err := held.constraints.check(req); err != nil {
 		return nil, err

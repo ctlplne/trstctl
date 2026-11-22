@@ -70,6 +70,6 @@ func requestedKeyOwnership(ctx context.Context) (string, string, error) {
 
 func (kc keyConstraints) isTenantCAFor(tenantID string) bool {
 	return kc.ownerTenantID == tenantID && kc.keyClass == KeyClassTenantCA &&
-		kc.requireAuth && !kc.offlineOnly && !kc.custodyOnly && !kc.genericPCAS &&
+		kc.requireAuth && !kc.offlineOnly && !kc.custodyOnly && !kc.genericPCAS && !kc.artifactOnly &&
 		len(kc.purposes) == 1 && kc.purposes[signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN] && len(kc.hashes) == 0
 }

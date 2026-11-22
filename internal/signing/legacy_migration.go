@@ -64,6 +64,9 @@ func (s *Server) MigrateLegacySigningKeyFile(path, handle string, allowedPurpose
 	if len(constraints.purposes) == 0 {
 		return false, errors.New("signing: legacy audit key migration requires an allowed purpose")
 	}
+	if handle == "audit-export" {
+		constraints.artifactOnly = true
+	}
 
 	s.mu.Lock()
 	existing := s.keys[handle]
@@ -71,6 +74,23 @@ func (s *Server) MigrateLegacySigningKeyFile(path, handle string, allowedPurpose
 		if !bytes.Equal(existing.signer.Public().DER, legacy.Public().DER) {
 			s.mu.Unlock()
 			return false, errors.New("signing: legacy key does not match the persisted handle")
+		}
+		if handle == "audit-export" && !existing.constraints.artifactOnly {
+			previous := constraints
+			previous.artifactOnly = false
+			if !sameKeyConstraints(existing.constraints, previous) {
+				s.mu.Unlock()
+				return false, errors.New("signing: persisted legacy handle has different usage constraints")
+			}
+			if err := s.store.Save(handle, existing.signer, constraints); err != nil {
+				s.mu.Unlock()
+				return false, fmt.Errorf("signing: seal artifact-only audit key: %w", err)
+			}
+			if err := s.store.syncHandle(handle); err != nil {
+				s.mu.Unlock()
+				return false, fmt.Errorf("signing: sync artifact-only audit key: %w", err)
+			}
+			existing.constraints = constraints
 		}
 		if !sameKeyConstraints(existing.constraints, constraints) {
 			s.mu.Unlock()
@@ -102,7 +122,7 @@ func (s *Server) MigrateLegacySigningKeyFile(path, handle string, allowedPurpose
 
 func sameKeyConstraints(a, b keyConstraints) bool {
 	if a.requireAuth != b.requireAuth || a.offlineOnly != b.offlineOnly || a.custodyOnly != b.custodyOnly ||
-		a.importReceipt != b.importReceipt || len(a.purposes) != len(b.purposes) || len(a.hashes) != len(b.hashes) {
+		a.artifactOnly != b.artifactOnly || a.importReceipt != b.importReceipt || len(a.purposes) != len(b.purposes) || len(a.hashes) != len(b.hashes) {
 		return false
 	}
 	for purpose := range a.purposes {

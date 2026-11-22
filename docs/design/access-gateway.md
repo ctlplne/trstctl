@@ -118,7 +118,10 @@ tenant sealing and the audit signing key — every gateway session job carries
   `SHA-256(previous || chunk SHA-256)`. The gateway's final chunk — or, for a session that
   ended without one, two quiet minutes — closes the recording: a manifest of every chunk's
   place, digests and object and the chain head, signed with the deployment's audit key
-  (`pam.session.recording_sealed`).
+  (`pam.session.recording_sealed`). The isolated signer admits the versioned
+  `trstctl.audit-evidence/pam-recording-manifest/v1` artifact kind; its audit key
+  refuses generic digest signing. Verification still accepts the historical
+  `pam-session-recording-manifest` domain on already sealed recordings.
 - **Verification.** `GET /api/v1/access/sessions/{id}/recording/verify` checks the manifest
   is the one signed, every chunk is present, unmodified and opens only in its place, its
   plaintext matches its digest, and the chain reaches the manifest's head; an edited,

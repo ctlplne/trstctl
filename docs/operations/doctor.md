@@ -188,7 +188,8 @@ With `--sign`, a `signature` object is appended carrying `alg` `RS256`, `key_id`
 serialized with the signature field absent. This is the **same key and the same
 signer-side artifact path the audit bundle export already uses**. The protected
 JWS header binds `trstctl.audit-evidence/doctor-receipt/v1`; the signer rejects an
-unknown kind, wrong authority, or wrong handle. Doctor introduces no private-key
+unknown kind, wrong authority, wrong handle, or raw digest-signing request for
+the `audit-export` key. Doctor introduces no private-key
 parser, key file, or second signing path.
 
 ## How this page stays honest

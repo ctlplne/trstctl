@@ -69,8 +69,8 @@ func TestLegacyAuditKeyMigratesInsidePersistentSigner(t *testing.T) {
 	if _, err := s1.Sign(ctx, &signerpb.SignRequest{
 		Handle: handle, Digest: digest, Hash: signerpb.Hash_HASH_SHA256,
 		Purpose: signerpb.KeyPurpose_KEY_PURPOSE_AUDIT_EVIDENCE,
-	}); err != nil {
-		t.Fatalf("audit-purpose Sign: %v", err)
+	}); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("raw audit-purpose Sign status = %v, want FailedPrecondition", status.Code(err))
 	}
 	if _, err := s1.Sign(ctx, &signerpb.SignRequest{
 		Handle: handle, Digest: digest, Hash: signerpb.Hash_HASH_SHA256,
@@ -135,8 +135,8 @@ func TestLegacyAuditKeyMigratesInsidePersistentSigner(t *testing.T) {
 	if _, err := s2.Sign(ctx, &signerpb.SignRequest{
 		Handle: handle, Digest: digest, Hash: signerpb.Hash_HASH_SHA256,
 		Purpose: signerpb.KeyPurpose_KEY_PURPOSE_AUDIT_EVIDENCE,
-	}); err != nil {
-		t.Fatalf("audit-purpose Sign after restart: %v", err)
+	}); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("raw audit-purpose Sign after restart status = %v, want FailedPrecondition", status.Code(err))
 	}
 
 	migrated, err = s2.MigrateLegacySigningKeyFile(

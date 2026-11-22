@@ -68,20 +68,21 @@ func (s *Server) signArtifact(ctx context.Context, req ArtifactSignRequest) (Art
 }
 
 var auditEvidenceKinds = map[string]bool{
-	jose.ArtifactAuditExport:         true,
-	jose.ArtifactAuditRetention:      true,
-	jose.ArtifactHistoryContinuity:   true,
-	jose.ArtifactEventKeyDestruction: true,
-	jose.ArtifactBillingInvoice:      true,
-	jose.ArtifactDoctorReceipt:       true,
-	jose.ArtifactPQCCampaignClosure:  true,
-	jose.ArtifactCryptoReadiness:     true,
-	jose.ArtifactRestoreDrill:        true,
-	jose.ArtifactAuditAnchorLog:      true,
-	jose.ArtifactAssuranceRecord:     true,
-	jose.ArtifactEvaluationPack:      true,
-	jose.ArtifactCBOMCycloneDX:       true,
-	jose.ArtifactCBOMCycloneDXJSF:    true,
+	jose.ArtifactAuditExport:          true,
+	jose.ArtifactAuditRetention:       true,
+	jose.ArtifactHistoryContinuity:    true,
+	jose.ArtifactEventKeyDestruction:  true,
+	jose.ArtifactBillingInvoice:       true,
+	jose.ArtifactDoctorReceipt:        true,
+	jose.ArtifactPQCCampaignClosure:   true,
+	jose.ArtifactCryptoReadiness:      true,
+	jose.ArtifactRestoreDrill:         true,
+	jose.ArtifactPAMRecordingManifest: true,
+	jose.ArtifactAuditAnchorLog:       true,
+	jose.ArtifactAssuranceRecord:      true,
+	jose.ArtifactEvaluationPack:       true,
+	jose.ArtifactCBOMCycloneDX:        true,
+	jose.ArtifactCBOMCycloneDXJSF:     true,
 }
 
 // signAuditEvidenceArtifact is the core, signer-owned evidence admission path.

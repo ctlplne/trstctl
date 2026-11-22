@@ -1069,38 +1069,11 @@ func loadRunAuditSigningKey(
 	if err != nil {
 		return nil, fmt.Errorf("audit signing key: bind signer handle: %w", err)
 	}
-	key, err := jose.NewArtifactSigningKey("audit-export", remote.Public(), remoteAuditArtifactSigner{
-		client: client,
-		public: remote.Public(),
-	})
+	key, err := signing.AuditEvidenceSigningKey(client, remote)
 	if err != nil {
 		return nil, fmt.Errorf("audit signing key: wrap signer handle: %w", err)
 	}
 	return key, nil
-}
-
-type remoteAuditArtifactSigner struct {
-	client *signing.Client
-	public crypto.PublicKey
-}
-
-func (s remoteAuditArtifactSigner) SignArtifact(kind string, payload []byte) (string, error) {
-	if s.client == nil {
-		return "", errors.New("audit evidence signer is unavailable")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	result, err := s.client.SignArtifact(ctx, signing.ArtifactSignRequest{
-		Kind: kind, TenantID: "deployment", AuthorityID: "audit-evidence",
-		KeyID: "audit-export", Payload: payload,
-	})
-	if err != nil {
-		return "", err
-	}
-	if result.KeyID != "audit-export" || result.Algorithm != s.public.Algorithm || !bytes.Equal(result.PublicKeyDER, s.public.DER) {
-		return "", errors.New("audit evidence signer returned mismatched public identity")
-	}
-	return string(result.Signature), nil
 }
 
 // vaultCompatRuntimeFromConfig binds Vault/OpenBao compatibility to the same

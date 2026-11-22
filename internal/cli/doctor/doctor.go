@@ -208,7 +208,7 @@ func signReceipt(ctx context.Context, r *Receipt, signerSocket string) error {
 	if err != nil {
 		return fmt.Errorf("bind audit-export signer handle: %w", err)
 	}
-	key, err := jose.NewDigestSigningKey("audit-export", remote)
+	key, err := signing.AuditEvidenceSigningKey(client, remote)
 	if err != nil {
 		return fmt.Errorf("wrap audit-export signer handle: %w", err)
 	}

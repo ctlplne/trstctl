@@ -42,7 +42,7 @@ trstctl evaluate --server https://trstctl.example.internal \
 | `--timeout D` | `10m` | The longest wait for any one step. |
 | `--out PATH` | `evaluation-pack.json` | Where the pack is written (mode `0600`). |
 | `--ca-file PATH` | `$TRSTCTL_CA_FILE` | The CA bundle for the control plane's TLS. |
-| `--sign` | off | Signs the pack through the isolated signer's `audit-export` handle. Requires the signer socket; the command never reads private-key bytes. |
+| `--sign` | off | Signs the pack through the isolated signer's versioned evaluation-pack artifact path on its `audit-export` handle. The handle refuses raw digest signing. Requires the signer socket; the command never reads private-key bytes. |
 | `--signer-socket PATH` | `$TRSTCTL_SIGNER_SOCKET` | Required by `--sign`. |
 | `--journeys LIST` | `certificate` | The journeys to run: `certificate`, `secrets`, `ssh`, comma-separated. `--deployment-target` is needed only for `certificate`. |
 | `--force-failure JOURNEY` | none | Makes one step of that journey expect what did not happen, to see a failure reported as one. |
