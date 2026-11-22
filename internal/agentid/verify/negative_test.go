@@ -202,9 +202,11 @@ func TestRefuse_MalformedRepr(t *testing.T) {
 func TestChainOnlyCredential(t *testing.T) {
 	class, op := "reader", "read-object"
 	bv := carriage.BoundValues{
-		ChainHeadDigest:   crypto.SHA256Sum([]byte("chain-head")),
-		DesignatedClass:   class,
-		ComparatorVersion: "v1",
+		ChainHeadDigest:              crypto.SHA256Sum([]byte("chain-head")),
+		DesignatedClass:              class,
+		ComparatorVersion:            "agid.authority.compare/v2",
+		VerifiedHeadScopes:           []string{op},
+		VerifiedHeadAuthorityClasses: []string{class},
 	}
 	policy := NewLocalPolicy().PermitClass(class).GrantOperations(class, op)
 	cred, root := tokenCred(t, bv, testNow-60, testNow+60)

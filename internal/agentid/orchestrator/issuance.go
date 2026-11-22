@@ -189,14 +189,14 @@ func (w *issuanceWorker) deliver(ctx context.Context, m coreorch.Message) error 
 	// broker.IssueChainBound. The precondition resolves this context by the issuance id
 	// (the view's idempotency key), runs the policy -> in-signer verify -> TTL ceiling ->
 	// attestation bind/replay gauntlet, and only then does the broker mint.
-	// Pre-issuance AGID-03 tool-manifest bound: the requested scopes are treated as the
-	// declared tool manifest and compared against the deployment's registered tool set
+	// Pre-issuance AGID-03 tool-manifest bound: the declared tools are compared
+	// against the deployment's registered tool set
 	// (agentstack.Compare). This is the production caller for agentstack.NewToolManifest;
 	// on a real deployment the registered set is provisioned (AGID-INT-WIRE) so a request
 	// naming a tool outside the registered set is refused before any key op. With the
 	// default empty registered set the check is inert (skipped) so it never spuriously
 	// refuses before the set is provisioned; once provisioned it is authoritative.
-	if manifestVerdict := w.compareToolManifest(s.Scopes); !manifestVerdict.Accepted && len(w.registeredTools.Tools) > 0 {
+	if manifestVerdict := w.compareToolManifest(s.DeclaredTools); !manifestVerdict.Accepted && len(w.registeredTools.Tools) > 0 {
 		return fmt.Errorf("agentid issuance worker: tool manifest exceeds registered set: %s", manifestVerdict.Reason)
 	}
 
@@ -224,6 +224,7 @@ func (w *issuanceWorker) deliver(ctx context.Context, m coreorch.Message) error 
 		Attestation:         s.Attestation,
 		AttestationMethod:   s.AttestationMethod,
 		SubjectRepr:         s.AgentStackRepr,
+		DeclaredTools:       append([]string(nil), s.DeclaredTools...),
 		Envelope:            s.TaskEnvelope,
 		ReachabilityVerdict: verdict,
 		TrustAnchorRef:      s.TrustAnchorRef,
@@ -312,14 +313,14 @@ func (w *issuanceWorker) driveChainBoundIssuance(ctx context.Context, tenantID s
 	return nil
 }
 
-// compareToolManifest treats the requested scopes as a declared AGID-03 tool manifest
+// compareToolManifest checks the declared AGID-03 tool manifest
 // (agentstack.NewToolManifest) and compares it against the deployment's registered tool
 // set (agentstack.Compare), resolving tool aliases through the tool registry. It is the
 // production caller for agentstack.NewToolManifest; the verdict names any excess capability
 // (a tool outside the registered set), which a provisioned deployment refuses before any
 // key op (AGID-claim-12).
-func (w *issuanceWorker) compareToolManifest(scopes []string) agentstack.ManifestVerdict {
-	declared := agentstack.NewToolManifest(scopes...)
+func (w *issuanceWorker) compareToolManifest(tools []string) agentstack.ManifestVerdict {
+	declared := agentstack.NewToolManifest(tools...)
 	return agentstack.Compare(declared, w.registeredTools, toolResolver{reg: w.toolRegistry})
 }
 

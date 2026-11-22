@@ -121,6 +121,9 @@ type ChainBoundRequest struct {
 	// SubjectRepr is the agent-stack representation to bind (AGID-03). Optional in the
 	// chain-only fallback (AGID-claim-31).
 	SubjectRepr []byte
+	// DeclaredTools is the manifest represented by SubjectRepr. The signer
+	// recomputes its digest and intersects it with the signed chain head.
+	DeclaredTools []string
 	// Envelope carries the encoded task envelope a chain head references (AGID-05).
 	Envelope []byte
 	// ReachabilityVerdict carries the encoded signed reachability verdict (AGID-06).
@@ -426,6 +429,7 @@ func (p *BrokerPrecondition) verifyInSigner(ctx context.Context, tenantID string
 	preBytes, err := delegation.EncodePreconditionsBody(delegation.PreconditionsBody{
 		Chain:               req.Chain,
 		DesignatedClass:     req.DesignatedClass,
+		DeclaredTools:       req.DeclaredTools,
 		Envelope:            req.Envelope,
 		ReachabilityVerdict: req.ReachabilityVerdict,
 	})

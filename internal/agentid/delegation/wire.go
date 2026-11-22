@@ -59,6 +59,10 @@ type PreconditionsBody struct {
 	// DesignatedClass names the authority class the head is designated as, keying the
 	// min-attestation-class policy (AGID-claim-10). Empty means no class gate applies.
 	DesignatedClass string `json:"designated_class,omitempty"`
+	// DeclaredTools is the complete tool manifest represented by SubjectRepr.
+	// The signer checks its digest against that representation and each tool
+	// against the verified chain head before any key operation.
+	DeclaredTools []string `json:"declared_tools,omitempty"`
 	// Envelope carries the encoded task envelope (internal/agentid/taskenv) the chain head
 	// references via its Record.TaskDigest (AGID-05, AGID-claim-2). Optional: present only
 	// when a record references a task envelope. The gate verifies its signature + expiry
@@ -105,7 +109,7 @@ func decodePreconditions(b []byte) (PreconditionsBody, error) {
 // datastore-free closure). An empty chain, class, envelope, and verdict yield a nil body,
 // matching decodePreconditions' empty-body handling (a nil body decodes to the zero body).
 func EncodePreconditionsBody(body PreconditionsBody) ([]byte, error) {
-	if len(body.Chain) == 0 && body.DesignatedClass == "" &&
+	if len(body.Chain) == 0 && body.DesignatedClass == "" && len(body.DeclaredTools) == 0 &&
 		len(body.Envelope) == 0 && len(body.ReachabilityVerdict) == 0 {
 		return nil, nil
 	}

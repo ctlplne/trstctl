@@ -137,6 +137,9 @@ func TestAGID_Wire_RPVerifierOffline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBindingMaterial: %v", err)
 	}
+	bm.VerifiedHeadScopes = []string{"read"}
+	bm.VerifiedHeadTools = []string{"search"}
+	bm.VerifiedHeadAuthorityClasses = []string{"agent-worker"}
 	got := verifyOfflineToken(t, bm, time.Now().Add(-time.Minute).Unix(), time.Now().Add(10*time.Minute).Unix())
 	if got.Operation != "read" || got.Tool != "search" {
 		t.Fatalf("offline verifier result = %+v", got)
@@ -297,7 +300,7 @@ func TestAGID_Restart_DirectiveAndJobsSurvive(t *testing.T) {
 func TestAGID_Restart_SpentNonceHoldsAcrossRestart(t *testing.T) {
 	h := newHarness(t, tenantRestart)
 	chain := signedChain(t, h.tenant, "agent-nonce", false)
-	pre := h.preconditionsWithReach(t, chain, "agent-worker")
+	pre := h.preconditionsWithReach(t, chain, "agent-worker", "search")
 	repr := agentStackRepr(t)
 	payload := h.signedAttestation(t, "agent-nonce", "nonce-restart-spent")
 	attBody := attestationBody(t, "software", payload)
@@ -448,7 +451,7 @@ func newHarness(t *testing.T, tenant string) *harness {
 func (h *harness) issueAgent(t *testing.T, agentID, nonce string) issuedAgent {
 	t.Helper()
 	chain := signedChain(t, h.tenant, agentID, false)
-	pre, err := delegation.EncodePreconditionsBody(delegation.PreconditionsBody{Chain: chain, DesignatedClass: "agent-worker"})
+	pre, err := delegation.EncodePreconditionsBody(delegation.PreconditionsBody{Chain: chain, DesignatedClass: "agent-worker", DeclaredTools: []string{"search"}})
 	if err != nil {
 		t.Fatalf("EncodePreconditionsBody: %v", err)
 	}
@@ -461,6 +464,8 @@ func (h *harness) issueAgent(t *testing.T, agentID, nonce string) issuedAgent {
 		DesignatedClass:   "agent-worker",
 		Chain:             pre,
 		AgentStackRepr:    repr,
+		Scopes:            []string{"read"},
+		DeclaredTools:     []string{"search"},
 		Attestation:       attBody,
 		AttestationMethod: "software",
 		TTLSeconds:        1200,
@@ -605,7 +610,7 @@ func (h *harness) gatedIssue(t *testing.T, req signing.IssuancePreconditions, al
 	return decision
 }
 
-func (h *harness) preconditionsWithReach(t *testing.T, chain []delegation.RecordEnvelope, class string) []byte {
+func (h *harness) preconditionsWithReach(t *testing.T, chain []delegation.RecordEnvelope, class string, declaredTools ...string) []byte {
 	t.Helper()
 	const testReachKeyID = "agentid-intwire-test-reach-verdict"
 	if h.testReachSigner == nil {
@@ -636,7 +641,7 @@ func (h *harness) preconditionsWithReach(t *testing.T, chain []delegation.Record
 	if err != nil {
 		t.Fatalf("EncodeVerdict: %v", err)
 	}
-	pre, err := delegation.EncodePreconditionsBody(delegation.PreconditionsBody{Chain: chain, DesignatedClass: class, ReachabilityVerdict: encoded})
+	pre, err := delegation.EncodePreconditionsBody(delegation.PreconditionsBody{Chain: chain, DesignatedClass: class, DeclaredTools: declaredTools, ReachabilityVerdict: encoded})
 	if err != nil {
 		t.Fatalf("EncodePreconditionsBody: %v", err)
 	}
@@ -706,22 +711,24 @@ func signedChain(t *testing.T, tenant, agentID string, widened bool) []delegatio
 	now := time.Now().Add(-time.Minute).Unix()
 	later := time.Now().Add(45 * time.Minute).Unix()
 	parentAuth := delegation.Authority{
-		Scopes: []string{"read"},
-		Tools:  []string{"search"},
-		Spend:  delegation.Budget{Amount: 100, Currency: "usd"},
-		Rate:   delegation.Rate{Limit: 100, Per: "minute"},
-		Depth:  2,
+		Scopes:           []string{"read"},
+		Tools:            []string{"search"},
+		AuthorityClasses: []string{"agent-worker"},
+		Spend:            delegation.Budget{Amount: 100, Currency: "usd"},
+		Rate:             delegation.Rate{Limit: 100, Per: "minute"},
+		Depth:            2,
 		Validity: delegation.Window{
 			NotBefore: now,
 			NotAfter:  later,
 		},
 	}
 	childAuth := delegation.Authority{
-		Scopes: []string{"read"},
-		Tools:  []string{"search"},
-		Spend:  delegation.Budget{Amount: 50, Currency: "usd"},
-		Rate:   delegation.Rate{Limit: 50, Per: "minute"},
-		Depth:  1,
+		Scopes:           []string{"read"},
+		Tools:            []string{"search"},
+		AuthorityClasses: []string{"agent-worker"},
+		Spend:            delegation.Budget{Amount: 50, Currency: "usd"},
+		Rate:             delegation.Rate{Limit: 50, Per: "minute"},
+		Depth:            1,
 		Validity: delegation.Window{
 			NotBefore: now,
 			NotAfter:  later,
@@ -811,14 +818,17 @@ func verifyOfflineToken(t *testing.T, bm delegation.BindingMaterial, notBefore, 
 		t.Fatalf("marshal JWKS: %v", err)
 	}
 	bv := carriage.BoundValues{
-		ChainHeadDigest:    bm.ChainHeadDigest,
-		AgentStackDigest:   bm.AgentStackDigest,
-		AgentStackRepr:     bm.AgentStackRepr,
-		DesignatedClass:    bm.DesignatedClass,
-		AttestationDigest:  bm.AttestationDigest,
-		ComparatorVersion:  bm.ComparatorVersion,
-		RootAnchorAuthRef:  bm.RootAnchorAuthRef,
-		TaskEnvelopeDigest: bm.TaskEnvelopeDigest,
+		ChainHeadDigest:              bm.ChainHeadDigest,
+		AgentStackDigest:             bm.AgentStackDigest,
+		AgentStackRepr:               bm.AgentStackRepr,
+		DesignatedClass:              bm.DesignatedClass,
+		VerifiedHeadScopes:           append([]string(nil), bm.VerifiedHeadScopes...),
+		VerifiedHeadTools:            append([]string(nil), bm.VerifiedHeadTools...),
+		VerifiedHeadAuthorityClasses: append([]string(nil), bm.VerifiedHeadAuthorityClasses...),
+		AttestationDigest:            bm.AttestationDigest,
+		ComparatorVersion:            bm.ComparatorVersion,
+		RootAnchorAuthRef:            bm.RootAnchorAuthRef,
+		TaskEnvelopeDigest:           bm.TaskEnvelopeDigest,
 	}
 	tok, err := carriage.EncodeSignedToken(issuer, "rp-kid", bv, "spiffe://agent", "rp", "trstctl")
 	if err != nil {

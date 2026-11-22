@@ -126,6 +126,27 @@ func TestOpenAPI_Surface(t *testing.T) {
 	}
 }
 
+func TestCR054OpenAPIDeclaresToolManifestSeparatelyFromScopes(t *testing.T) {
+	raw, err := json.Marshal(agidapi.OpenAPISpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Components struct {
+			Schemas map[string]struct {
+				Properties map[string]json.RawMessage `json:"properties"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	properties := doc.Components.Schemas["AGIDIssuanceRequest"].Properties
+	if len(properties["scopes"]) == 0 || len(properties["declared_tools"]) == 0 {
+		t.Fatalf("issuance schema scopes=%t declared_tools=%t, want both", len(properties["scopes"]) != 0, len(properties["declared_tools"]) != 0)
+	}
+}
+
 func TestOpenAPIRootAnchorRequiresOnePublicKeySource(t *testing.T) {
 	raw, err := json.Marshal(agidapi.OpenAPISpec())
 	if err != nil {

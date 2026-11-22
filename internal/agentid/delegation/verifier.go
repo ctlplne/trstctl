@@ -366,6 +366,13 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 		if nres := g.verifyNarrowing(body.Chain); nres.refused {
 			return nres
 		}
+		if body.DesignatedClass != "" {
+			class := normToken(body.DesignatedClass)
+			grants := Normalize(body.Chain[len(body.Chain)-1].Record.Authority, g.cfg.Tools).AuthorityClasses
+			if class != body.DesignatedClass || !subset([]string{class}, grants) {
+				return refusal(CheckNarrowing, len(body.Chain)-1, "designated authority class is absent from the signed chain head")
+			}
+		}
 		if issuanceTTLSeconds(req, now) <= 0 {
 			return refusal(CheckExpiry, len(body.Chain)-1, "requested credential expiry is past or exceeds the delegation ceiling")
 		}
@@ -383,10 +390,22 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 	// structurally validates it fail-closed (no agentstack import inside the signer).
 	var reprBytes []byte
 	if len(req.SubjectRepr) > 0 {
-		if err := validateReprBytes(req.SubjectRepr); err != nil {
+		repr, err := decodeReprShape(req.SubjectRepr)
+		if err != nil {
 			return refusal(CheckAgentStack, -1, err.Error())
 		}
+		if len(body.Chain) > 0 {
+			if !bytesEqual(declaredToolManifestDigest(body.DeclaredTools), repr.ToolManifestDigest) {
+				return refusal(CheckAgentStack, len(body.Chain)-1, "declared tool manifest does not match the bound agent-stack digest")
+			}
+			headTools := Normalize(body.Chain[len(body.Chain)-1].Record.Authority, g.cfg.Tools).Tools
+			if !subset(normTools(body.DeclaredTools, g.cfg.Tools), headTools) {
+				return refusal(CheckNarrowing, len(body.Chain)-1, "declared tool manifest exceeds the signed chain head")
+			}
+		}
 		reprBytes = req.SubjectRepr
+	} else if len(body.DeclaredTools) > 0 {
+		return refusal(CheckAgentStack, -1, "declared tools have no bound agent-stack representation")
 	}
 
 	// (4) Task envelope (AGID-05, AGID-claim-2 / INV-A4): when the chain HEAD references a
@@ -432,6 +451,12 @@ func (g *Gate) verify(req signing.IssuancePreconditions) verifyResult {
 	bm, err := NewBindingMaterial(chainHeadDigest, reprBytes, body.DesignatedClass, attestationDigest, rootAuthRef, taskEnvelopeDigest)
 	if err != nil {
 		return verifyResult{refused: true, check: CheckBindingTarget, hopIndex: -1, detail: err.Error()}
+	}
+	if len(body.Chain) > 0 {
+		head := Normalize(body.Chain[len(body.Chain)-1].Record.Authority, g.cfg.Tools)
+		bm.VerifiedHeadScopes = head.Scopes
+		bm.VerifiedHeadTools = head.Tools
+		bm.VerifiedHeadAuthorityClasses = head.AuthorityClasses
 	}
 
 	return verifyResult{binding: bm, authRef: rootAuthRef, chainHead: chainHeadDigest}
