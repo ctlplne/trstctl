@@ -43,6 +43,7 @@ func TestServedAgentCertificateRequiresExactRegistrationBinding(t *testing.T) {
 	if err != nil || len(bindings) != 1 {
 		t.Fatalf("resolve registration: %v, %v", bindings, err)
 	}
+	current := enrollAgentWithRoles(t, h, "binding-current", "agent.trstctl.local", nil)
 	issuer := agentCAIssuer{caSigner: h.srv.agentCASigner, caCertDER: h.srv.agentCACertDER}
 	for _, tc := range []struct {
 		name  string
@@ -50,26 +51,33 @@ func TestServedAgentCertificateRequiresExactRegistrationBinding(t *testing.T) {
 		valid bool
 	}{
 		{name: "current", uris: bindings, valid: true},
+		{name: "same-URI-unenrolled", uris: bindings},
 		{name: "missing"},
 		{name: "duplicate", uris: []string{bindings[0], bindings[0]}},
 		{name: "different", uris: []string{bindings[0] + "-other"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			identity, err := mtls.GenerateAgentKey("binding-" + tc.name)
-			if err != nil {
-				t.Fatal(err)
+			identity := current.Identity()
+			if !tc.valid {
+				generated, genErr := mtls.GenerateAgentKey("binding-" + tc.name)
+				if genErr != nil {
+					t.Fatal(genErr)
+				}
+				identity = generated
+				defer identity.Destroy()
 			}
-			defer identity.Destroy()
 			csr, err := identity.CSR()
 			if err != nil {
 				t.Fatal(err)
 			}
-			chain, err := issuer.SignClientCSRWithTenant(csr, h.tenant, nil, time.Hour, tc.uris...)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := identity.UseCertificate(chain); err != nil {
-				t.Fatal(err)
+			if !tc.valid {
+				chain, err := issuer.SignClientCSRWithTenant(csr, h.tenant, nil, time.Hour, tc.uris...)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := identity.UseCertificate(chain); err != nil {
+					t.Fatal(err)
+				}
 			}
 			credentials, err := mtls.AgentClientCredentials(identity, h.srv.AgentCACertPEM(), "agent.trstctl.local", nil)
 			if err != nil {
@@ -102,8 +110,8 @@ func TestServedAgentCertificateRequiresExactRegistrationBinding(t *testing.T) {
 			if tc.valid && code != http.StatusOK {
 				t.Fatalf("current binding renewal = %d, %s", code, data)
 			}
-			if !tc.valid && (code != http.StatusUnauthorized || !strings.Contains(string(data), "enroll again")) {
-				t.Fatalf("invalid binding renewal = %d, %s; want 401 with re-enrollment guidance", code, data)
+			if !tc.valid && (code != http.StatusForbidden || !strings.Contains(string(data), "agent certificate is not enrolled for this name") || !strings.Contains(string(data), "enroll the host again")) {
+				t.Fatalf("invalid binding renewal = %d, %s; want 403 with exact-binding refusal and re-enrollment guidance", code, data)
 			}
 		})
 	}

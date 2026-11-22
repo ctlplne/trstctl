@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/config"
@@ -164,6 +165,29 @@ func newServerTestStore(t *testing.T, options ...store.OpenOption) *store.Store 
 	return st
 }
 
+func TestCR016ServerTestResetClearsCertificateBindings(t *testing.T) {
+	st := newServerTestStore(t)
+	ctx := context.Background()
+	agentID := uuid.NewString()
+	_, err := st.SystemPool().Exec(ctx, `INSERT INTO agent_certificate_bindings
+        (tenant_id, agent_id, serial, fingerprint, not_after, event_seq)
+        VALUES ($1,$2,$3,$4,now() + interval '1 hour',1)`, servedTestTenant, agentID, "fixture-serial", "fixture-fingerprint")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = st.SystemPool().Exec(context.Background(), `DELETE FROM agent_certificate_bindings WHERE tenant_id=$1 AND agent_id=$2`, servedTestTenant, agentID)
+	})
+	resetServerTestStore(t, st)
+	var count int
+	if err := st.SystemPool().QueryRow(ctx, `SELECT count(*) FROM agent_certificate_bindings WHERE tenant_id=$1 AND agent_id=$2`, servedTestTenant, agentID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("reset retained %d live certificate bindings from the previous served test", count)
+	}
+}
+
 func resetServerTestStore(t *testing.T, st *store.Store) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -172,7 +196,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		`TRUNCATE tenants, browser_sessions, idempotency_keys, outbox, rate_limits, deployment_kek_domain,
 		          windows_local_account_scans, windows_local_account_rotations,
 		          owners, issuers, identities, identity_transitions, deployment_target_revisions, deployment_targets,
-		          agents, agent_cert_revocations, agent_role_grants, kmip_clients, agent_removal_commands, agent_bootstrap_tokens, kubernetes_controller_posture, ssh_trust_fleet_hosts, ssh_trust_fleet_rollouts, kubernetes_trust_rollout_clusters, kubernetes_trust_rollouts, audit_anchors, tsa_certificates, policy_bindings, tenant_members, attestations, api_tokens, api_token_revocation_commands, oidc_session_locators, oidc_logout_receipts, certificates, acme_upstream_ari, certificate_metadata_watermarks, certificate_metadata_receipts,
+		          agents, agent_certificate_bindings, agent_cert_revocations, agent_role_grants, kmip_clients, agent_removal_commands, agent_bootstrap_tokens, kubernetes_controller_posture, ssh_trust_fleet_hosts, ssh_trust_fleet_rollouts, kubernetes_trust_rollout_clusters, kubernetes_trust_rollouts, audit_anchors, tsa_certificates, policy_bindings, tenant_members, attestations, api_tokens, api_token_revocation_commands, oidc_session_locators, oidc_logout_receipts, certificates, acme_upstream_ari, certificate_metadata_watermarks, certificate_metadata_receipts,
 		          identity_terminal_commands, identity_terminal_receipts,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals, ca_ceremony_cancel_commands, ca_ceremony_effect_commands,
 		          certificate_revocation_authority_commands, certificate_revocation_authority_fences,
