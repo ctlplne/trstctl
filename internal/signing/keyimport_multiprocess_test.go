@@ -87,11 +87,21 @@ func TestHierarchyImportProcessHelper(t *testing.T) {
 			}
 			return errors.New("fixture publisher lost its acknowledgement")
 		}
-		// Build the first-use EC tables while the socket becomes ready. The
-		// parent waits for this marker before timing the import publication.
+		// Prove that the actual P-256 weak-key check this import needs has
+		// completed before the parent times publication. The serving path
+		// warms all four EC curves in the background; waiting for all of them
+		// here couples this P-256 proof to unrelated curve startup cost.
+		key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+		if err != nil {
+			t.Fatal(err)
+		}
 		go func() {
-			crypto.WarmWeakKeyChecks()
-			fmt.Println("fixture weak-key checks ready")
+			defer key.Destroy()
+			if err := crypto.RefuseWeakKey(key.Public()); err != nil {
+				fmt.Println("fixture P-256 weak-key check failed:", err)
+				return
+			}
+			fmt.Println("fixture P-256 weak-key check ready")
 		}()
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -165,10 +175,10 @@ func startImportProofProcess(t *testing.T, dir, role string) importProofProcess 
 		defer deadline.Stop()
 		poll := time.NewTicker(10 * time.Millisecond)
 		defer poll.Stop()
-		for !strings.Contains(readEffects(), "fixture weak-key checks ready") {
+		for !strings.Contains(readEffects(), "fixture P-256 weak-key check ready") {
 			select {
 			case <-deadline.C:
-				t.Fatalf("%s signer did not finish its first-use weak-key checks: %s", role, readEffects())
+				t.Fatalf("%s signer did not finish its P-256 weak-key check: %s", role, readEffects())
 			case <-poll.C:
 			}
 		}

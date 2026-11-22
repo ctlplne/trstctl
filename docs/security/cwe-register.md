@@ -2291,7 +2291,7 @@ not this file.
 | `internal/server/vault_dynamic_credentials_cloud_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:84` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/helpers_test.go:29` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/signing/keyimport_multiprocess_test.go:130` | test reexecutes its exact test binary with a fixed selector (CWE-78) |
+| `internal/signing/keyimport_multiprocess_test.go:140` | test reexecutes its exact test binary with a fixed selector (CWE-78) |
 | `internal/signing/rewrap_binary_test.go:56` | the test's own freshly built signer binary (CWE-78) |
 | `internal/signing/static_test.go:41` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/supervisor.go:46` | spawns the repo's own signer binary; AN-4 child-process mode (CWE-78) |
