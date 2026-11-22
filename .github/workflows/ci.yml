@@ -1799,6 +1799,9 @@ jobs:
       - name: Offer the restored PostgreSQL archive to the bundled server
         run: scripts/ci/seed-bundled-pg-archive.sh
 
+      - name: Verify restore PostgreSQL readiness probe
+        run: python3 scripts/ci/restore_postgres_ready_test.py
+
       - name: Full backup -> fresh restore -> boot -> issue (+ corrupted control)
         run: bash scripts/ci/restore-rehearsal.sh
 

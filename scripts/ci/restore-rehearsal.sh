@@ -56,14 +56,15 @@ docker build -f "$REPO_ROOT/deploy/docker/Dockerfile.postgres" -t "$POSTGRES_IMA
 say "building NATS from the same pinned dependency graph as embedded mode"
 docker build -f "$REPO_ROOT/deploy/docker/Dockerfile.nats" -t "$NATS_IMAGE" "$REPO_ROOT"
 
-wait_postgres() { # $1 = container id
-	local id="$1"
-	for _ in $(seq 1 60); do
-		if docker exec "$id" pg_isready -U postgres -d postgres >/dev/null 2>&1; then return 0; fi
-		sleep 1
-	done
+wait_postgres() { # $1 = container id, $2 = published host port
+	local id="$1" host_port="$2"
+	# Probe the SAME published port token create uses. The container's internal
+	# pg_isready can report the temporary init server just before PostgreSQL
+	# restarts, while host connections are still reset. Two successful protocol
+	# handshakes a second apart establish a stable external listener.
+	if python3 "$REPO_ROOT/scripts/ci/restore_postgres_ready.py" "$host_port"; then return 0; fi
 	docker logs "$id" >&2 || true
-	fail "external PostgreSQL did not become ready"
+	fail "external PostgreSQL did not become ready on host port $host_port"
 }
 
 wait_tcp() { # $1 = loopback port, $2 = label
@@ -95,7 +96,7 @@ start_infra() { # $1 = PostgreSQL loopback port, $2 = NATS loopback port
 		-p "127.0.0.1:$natsport:4222" "$NATS_IMAGE" -js -sd /data)" \
 		|| fail "start external NATS container"
 	INFRA_IDS="$INFRA_IDS $natsid"
-	wait_postgres "$pgid"
+	wait_postgres "$pgid" "$pgport"
 	wait_tcp "$natsport" "external NATS"
 }
 
