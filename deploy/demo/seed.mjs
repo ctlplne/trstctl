@@ -1218,7 +1218,7 @@ async function pollCertificates(minimum) {
 
 async function transitionIdentityIfNeeded(identityID, targetState, reason, idemKey, request = api, extra = {}) {
   const path = `/api/v1/identities/${identityID}`;
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
     const current = await request("GET", path);
     if (current?.status === targetState) {
       return current;
@@ -1233,7 +1233,7 @@ async function transitionIdentityIfNeeded(identityID, targetState, reason, idemK
       // Issuance and connector workers can advance the event-sourced projection
       // between the read and mutation. Accept only proof that the exact requested
       // state already won that race. The issuance fence explicitly asks callers
-      // to retry; keep the same idempotency key and bound the wait to 30 seconds.
+      // to retry; keep the same idempotency key and bound the wait to 60 seconds.
       const after = await request("GET", path);
       if (after?.status === targetState) {
         return after;
@@ -1241,7 +1241,7 @@ async function transitionIdentityIfNeeded(identityID, targetState, reason, idemK
       const issuanceBusy = error instanceof Error &&
         error.message.startsWith(`POST ${path}/transitions returned 409:`) &&
         error.message.includes("certificate issuance is in progress for this identity; retry the same lifecycle request");
-      if (!issuanceBusy || attempt === 29) {
+      if (!issuanceBusy || attempt === 59) {
         throw error;
       }
       await sleep(1000);
