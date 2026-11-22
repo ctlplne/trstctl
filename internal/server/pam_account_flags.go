@@ -78,7 +78,9 @@ func (s *pamService) ScanPAMAccountFlags(ctx context.Context, tenantID string) (
 // scanAccountFlags is the PAM worker's scan of every tenant with brokered
 // accounts, at most once per pamFlagScanInterval.
 func (s *pamService) scanAccountFlags(ctx context.Context) {
-	now := s.clock()
+	// Cadence measures elapsed worker time. The business clock below may be
+	// advanced to evaluate account age; that must not trigger another scan.
+	now := time.Now()
 	if !s.lastFlagScan.IsZero() && now.Sub(s.lastFlagScan) < pamFlagScanInterval {
 		return
 	}
