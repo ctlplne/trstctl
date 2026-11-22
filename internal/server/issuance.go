@@ -1149,6 +1149,12 @@ func (d *issuanceDispatcher) enforceProfileForPurpose(ctx context.Context, tenan
 	if len(issuance) > 1 {
 		return crypto.LeafProfile{}, errors.New("server: multiple issuance approval bindings")
 	}
+	bindPlatformRevocation := func(leaf crypto.LeafProfile) crypto.LeafProfile {
+		if authority == "platform" {
+			return tenantBoundPlatformRevocationProfile(leaf, tenantID)
+		}
+		return leaf
+	}
 	var binding *store.OperationApprovalIssuanceBinding
 	if len(issuance) == 1 {
 		binding = issuance[0]
@@ -1166,7 +1172,7 @@ func (d *issuanceDispatcher) enforceProfileForPurpose(ctx context.Context, tenan
 		return crypto.LeafProfile{}, err
 	}
 	if !found {
-		return d.leafProfile, nil
+		return bindPlatformRevocation(d.leafProfile), nil
 	}
 	if binding != nil {
 		if purpose == "ca-reprotect" {
@@ -1226,7 +1232,7 @@ func (d *issuanceDispatcher) enforceProfileForPurpose(ctx context.Context, tenan
 	if err := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "allow", "", purpose); err != nil {
 		return crypto.LeafProfile{}, err
 	}
-	return leafProfileForCertificateProfile(d.leafProfile, prof, requestedEKUs), nil
+	return bindPlatformRevocation(leafProfileForCertificateProfile(d.leafProfile, prof, requestedEKUs)), nil
 }
 
 func approvedIssuanceTTL(bindings []*store.OperationApprovalIssuanceBinding) (time.Duration, *store.OperationApprovalIssuanceBinding, error) {

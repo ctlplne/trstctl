@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"math/big"
+	"reflect"
 	"testing"
 	"time"
 
@@ -118,6 +119,56 @@ func TestCreateCRLContainsRevokedAndVerifies(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("CRL revoked serials = %v, want to contain %s", info.RevokedSerials, serial)
+	}
+}
+
+func TestCRLIssuingDistributionPointIsCriticalAndSignedCR070(t *testing.T) {
+	caDER, signer := caForRevocation(t)
+	const scope = "urn:trstctl:crl-shard:abc123"
+	now := time.Now()
+	der, err := CreateCRLWithOptions(caDER, signer, nil, 9, now, now.Add(time.Hour), CRLOptions{IssuingDistributionPointURL: scope})
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := ParseCRL(der, caDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.IssuingDistributionPointURL != scope || info.NumberBig == nil || info.NumberBig.Cmp(big.NewInt(9)) != 0 {
+		t.Fatalf("CRL scope/number = %q/%v", info.IssuingDistributionPointURL, info.NumberBig)
+	}
+	raw, err := x509.ParseRevocationList(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, ext := range raw.Extensions {
+		if ext.Id.Equal(oidIssuingDistributionPoint) {
+			found = ext.Critical
+		}
+	}
+	if !found {
+		t.Fatal("issuer did not sign a critical issuingDistributionPoint")
+	}
+}
+
+func TestCRLMultipleDistributionPointURLsAreSignedCR070(t *testing.T) {
+	caDER, signer := caForRevocation(t)
+	now := time.Now()
+	urls := []string{"https://one.example.test/crl", "https://two.example.test/crl"}
+	der, err := CreateCRLWithOptions(caDER, signer, nil, 10, now, now.Add(time.Hour), CRLOptions{IssuingDistributionPointURLs: urls})
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := ParseCRL(der, caDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(info.IssuingDistributionPointURLs, urls) {
+		t.Fatalf("signed CRL scope = %v, want %v", info.IssuingDistributionPointURLs, urls)
+	}
+	if _, err := CreateCRLWithOptions(caDER, signer, nil, 11, now, now.Add(time.Hour), CRLOptions{IssuingDistributionPointURLs: []string{urls[0], urls[0]}}); err == nil {
+		t.Fatal("duplicate issuing distribution point URI was signed")
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -69,6 +70,14 @@ func (s *Server) managedCARevocationService(ctx context.Context, tenantID, caID 
 	service := newRevocationService(s.store, s.log, caID, caSigner, issuerDER, ocspSigner)
 	if service == nil {
 		return nil, api.ErrCAHierarchyUnavailable
+	}
+	if base := strings.TrimRight(s.caHierarchy.revocationBaseURL, "/"); base != "" {
+		service.fullCRLURLs = func(requestTenant string) []string {
+			if requestTenant != tenantID {
+				return nil
+			}
+			return []string{base + "/crl/" + tenantID + "/authorities/" + caID}
+		}
 	}
 	if s.revoc != nil {
 		service.ocspMetrics = s.revoc.ocspMetrics
