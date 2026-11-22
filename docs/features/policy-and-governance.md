@@ -1351,6 +1351,11 @@ auth:
   `auth.abac.enabled`); [Reference](#reference) gives the exact flag and route.
 - Policy fails closed. If your Rego is wrong or the engine is overloaded, operations
   are denied, not allowed. Test policy changes before rollout.
+- Lifecycle and ABAC modules can calculate decisions from the supplied input but
+  cannot make HTTP or DNS requests. Modules using `http.send` or
+  `net.lookup_ip_addr` fail compilation during authoring, dry run, activation,
+  or startup. A previously stored module using either builtin also fails closed
+  at evaluation until an operator replaces it with a local-input rule.
 - Compliance reporting, privacy controls, NHI campaigns, and access-change approvals
   evidence controls; they do not certify you. Campaigns prove a reviewer attested to
   listed access at a point in time; approvals prove who approved a scoped NHI change

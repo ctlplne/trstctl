@@ -225,10 +225,7 @@ func New(cfg Config) (*Engine, error) {
 
 func compileLifecycleEngine(module string, pool *bulkhead.Pool, log *events.Log) (*Engine, ModuleInfo, error) {
 	module = moduleOrBase(module, BaseModule)
-	q, err := rego.New(
-		rego.Query("data.trstctl.policy"),
-		rego.Module("trstctl.policy.rego", module),
-	).PrepareForEval(context.Background())
+	q, err := restrictedRego("data.trstctl.policy", "trstctl.policy.rego", module).PrepareForEval(context.Background())
 	if err != nil {
 		return nil, ModuleInfo{}, fmt.Errorf("policy: compile module: %w", err)
 	}
@@ -394,7 +391,7 @@ func (e *Engine) run(ctx context.Context, in Input) (Decision, error) {
 	}
 
 	eval := func() (Decision, error) {
-		rs, err := e.query.Eval(ctx, rego.EvalInput(input))
+		rs, err := e.query.Eval(ctx, rego.EvalInput(input), rego.EvalHTTPRoundTripper(denyPolicyHTTP))
 		if err != nil {
 			return Decision{Allow: false, Reason: "policy evaluation error"}, fmt.Errorf("policy: eval: %w", err)
 		}
@@ -457,7 +454,7 @@ func (e *Engine) evaluatePostureSet(ctx context.Context, in Input, set string, r
 		return nil, err
 	}
 	eval := func() ([]PostureViolation, error) {
-		rs, err := e.query.Eval(ctx, rego.EvalInput(input))
+		rs, err := e.query.Eval(ctx, rego.EvalInput(input), rego.EvalHTTPRoundTripper(denyPolicyHTTP))
 		if err != nil {
 			return nil, fmt.Errorf("policy: eval: %w", err)
 		}

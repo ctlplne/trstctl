@@ -164,15 +164,12 @@ func moduleOrBase(module, base string) string {
 }
 
 func evalRego(ctx context.Context, filename, module, query string, input map[string]any, limit int) (rego.ResultSet, []DryRunTrace, error) {
-	prepared, err := rego.New(
-		rego.Query(query),
-		rego.Module(filename, module),
-	).PrepareForEval(ctx)
+	prepared, err := restrictedRego(query, filename, module).PrepareForEval(ctx)
 	if err != nil {
 		return nil, []DryRunTrace{{Op: "Compile", Message: "candidate module did not compile"}}, fmt.Errorf("policy: compile: %w", err)
 	}
 	tracer := newDryRunTracer(limit)
-	rs, err := prepared.Eval(ctx, rego.EvalInput(input), rego.EvalQueryTracer(tracer))
+	rs, err := prepared.Eval(ctx, rego.EvalInput(input), rego.EvalQueryTracer(tracer), rego.EvalHTTPRoundTripper(denyPolicyHTTP))
 	trace := tracer.rows()
 	if err != nil {
 		return nil, trace, fmt.Errorf("policy: eval: %w", err)

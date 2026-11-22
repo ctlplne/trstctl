@@ -72,10 +72,7 @@ func NewABAC(cfg ABACConfig) (*ABACEngine, error) {
 	if module == "" {
 		module = BaseABACModule
 	}
-	q, err := rego.New(
-		rego.Query("data.trstctl.abac"),
-		rego.Module("trstctl.abac.rego", module),
-	).PrepareForEval(context.Background())
+	q, err := restrictedRego("data.trstctl.abac", "trstctl.abac.rego", module).PrepareForEval(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("policy: compile abac module: %w", err)
 	}
@@ -104,7 +101,7 @@ func (e *ABACEngine) runDeny(ctx context.Context, in ABACInput) (ABACDecision, e
 	}
 
 	eval := func() (ABACDecision, error) {
-		rs, err := e.query.Eval(ctx, rego.EvalInput(input))
+		rs, err := e.query.Eval(ctx, rego.EvalInput(input), rego.EvalHTTPRoundTripper(denyPolicyHTTP))
 		if err != nil {
 			return ABACDecision{Deny: true, Reason: "abac evaluation error"}, fmt.Errorf("policy: abac eval: %w", err)
 		}
