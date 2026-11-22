@@ -12,7 +12,7 @@ SCRIPT = Path(__file__).with_name("demo-seed-convergence.sh")
 
 
 class DemoSeedConvergenceTest(unittest.TestCase):
-    def run_convergence(self, *, notification_destination="notification.expiry", other_active=False, host_processing=False, agent_present=False, event_on_rerun=False, late_background_event=False, background_event_on_rerun=False):
+    def run_convergence(self, *, notification_destination="notification.expiry", other_active=False, host_processing=False, agent_present=False, event_on_rerun=False, late_background_event=False, background_event_on_rerun=False, background_outbox_after_rerun=False, seed_outbox_on_rerun=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             docker = root / "docker"
@@ -29,6 +29,14 @@ elif 'ps' in args:
     print('seed-container')
 elif 'exec' in args and 'postgres' in args:
     sql = args[args.index('-c') + 1]
+    outbox_count = 1
+    if Path(os.environ['FAKE_DOCKER_STATE']).exists():
+        counter = Path(os.environ['FAKE_DOCKER_STATE'] + '.postgres_reads')
+        reads = int(counter.read_text()) + 1 if counter.exists() else 1
+        counter.write_text(str(reads))
+        if os.environ.get('FAKE_SEED_OUTBOX_ON_RERUN') == '1' or (
+                os.environ.get('FAKE_BACKGROUND_OUTBOX_AFTER_RERUN') == '1' and reads > 1):
+            outbox_count = 2
     # Model one pending, unconfigured notification row and no other active work.
     active = int(os.environ.get('FAKE_OTHER_ACTIVE', '0'))
     destination = os.environ.get('FAKE_NOTIFICATION_DESTINATION', 'notification.expiry')
@@ -46,7 +54,7 @@ elif 'exec' in args and 'postgres' in args:
             active += 1
     print(json.dumps(dict(owners=[], owner_count=0, owner_logical_count=0,
         identities=[], certificates=0, members=[], secrets=[],
-        api_token_count=0, outbox_count=1, outbox_active_retry_count=active)))
+        api_token_count=0, outbox_count=outbox_count, outbox_active_retry_count=active)))
 elif 'exec' in args and 'nats' in args:
     count = 8 if os.environ.get('FAKE_EVENT_ON_RERUN') == '1' and Path(os.environ['FAKE_DOCKER_STATE']).exists() else 7
     if os.environ.get('FAKE_BACKGROUND_EVENT_ON_RERUN') == '1' and Path(os.environ['FAKE_DOCKER_STATE']).exists():
@@ -86,6 +94,8 @@ else:
                    "FAKE_EVENT_ON_RERUN": str(int(event_on_rerun)),
                    "FAKE_LATE_BACKGROUND_EVENT": str(int(late_background_event)),
                    "FAKE_BACKGROUND_EVENT_ON_RERUN": str(int(background_event_on_rerun)),
+                   "FAKE_BACKGROUND_OUTBOX_AFTER_RERUN": str(int(background_outbox_after_rerun)),
+                   "FAKE_SEED_OUTBOX_ON_RERUN": str(int(seed_outbox_on_rerun)),
                    "FAKE_DOCKER_STATE": str(root / "reran")}
             return subprocess.run(
                 ["bash", str(SCRIPT)], env=env, text=True,
@@ -130,6 +140,15 @@ else:
     def test_background_event_after_seed_rerun_does_not_implicate_seed(self):
         result = self.run_convergence(background_event_on_rerun=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_background_outbox_after_replay_does_not_implicate_seed(self):
+        result = self.run_convergence(background_outbox_after_rerun=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_seed_outbox_insert_during_replay_still_fails(self):
+        result = self.run_convergence(seed_outbox_on_rerun=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("seed snapshot changed", result.stderr)
 
 
 if __name__ == "__main__":

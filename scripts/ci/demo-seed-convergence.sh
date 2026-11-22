@@ -153,11 +153,16 @@ first_logical_count="$(jq -r '.postgres.owner_logical_count' <<<"$first")"
 # state under test. Asking Compose to reconcile them here can recreate the
 # control plane on some Compose releases, which legitimately emits restart
 # events and contaminates this seed-only idempotency oracle.
+# Measure outbox rows across the replay itself. Background work may enqueue a
+# new row during the later settling window even when the seed makes no calls.
+before_replay="$(postgres_snapshot)"
 docker compose -f "$compose_file" run --rm --no-deps demo-seed
+after_replay="$(postgres_snapshot)"
 second="$(stable_snapshot)"
 second_seed_events="$(seed_actor_events)"
 
-if [[ "$(jq -c '.postgres' <<<"$first")" != "$(jq -c '.postgres' <<<"$second")" ||
+if [[ "$(jq -c '.outbox_count' <<<"$before_replay")" != "$(jq -c '.outbox_count' <<<"$after_replay")" ||
+      "$(jq -c '.postgres | del(.outbox_count)' <<<"$first")" != "$(jq -c '.postgres | del(.outbox_count)' <<<"$second")" ||
       "$first_seed_events" != "$second_seed_events" ]] ||
    ! jq -en --argjson before "$first" --argjson after "$second" '
      ($before.jetstream_streams | keys) == ($after.jetstream_streams | keys) and
@@ -166,8 +171,9 @@ if [[ "$(jq -c '.postgres' <<<"$first")" != "$(jq -c '.postgres' <<<"$second")" 
          $after.jetstream_streams[.] >= $before.jetstream_streams[.])
    ' >/dev/null; then
   diff -u <(jq -S . <<<"$first") <(jq -S . <<<"$second") || true
+  diff -u <(jq -S . <<<"$before_replay") <(jq -S . <<<"$after_replay") || true
   diff -u <(jq -S . <<<"$first_seed_events") <(jq -S . <<<"$second_seed_events") || true
   fail "seed snapshot changed across the preserved-volume rerun"
 fi
 
-echo "demo seed convergence passed: preserved inventory, owner uniqueness, outbox count, and seed-attributed event IDs are unchanged"
+echo "demo seed convergence passed: preserved inventory, owner uniqueness, outbox count across replay, and seed-attributed event IDs are unchanged"
