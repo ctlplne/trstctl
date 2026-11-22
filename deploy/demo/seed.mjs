@@ -394,6 +394,16 @@ function mintBootstrapToken(subject = "demo-seeder") {
   return token;
 }
 
+// The served API requires the token subject to be the authenticated actor.
+// Demo bootstrap tokens are local to this seed job; use the service's own
+// temporary actor for its token creation, then retain only the API's receipt.
+export async function apiAsSubject(subject, method, path, body, idem, request = api, tokenFor = mintBootstrapToken) {
+  if (!subject || body?.subject !== subject) {
+    throw new Error("demo token request subject must match its authenticated actor");
+  }
+  return request(method, path, body, idem, [], tokenFor(subject));
+}
+
 async function api(method, path, body, idem, okStatuses = [], actorBearer = bearer) {
   const headers = { authorization: `Bearer ${actorBearer}` };
   if (body !== undefined) {
@@ -1405,7 +1415,7 @@ async function main() {
       "API token ci-release-bot",
     );
   } else {
-    demoAPIToken = await api("POST", "/api/v1/access/api-tokens", {
+    demoAPIToken = await apiAsSubject("ci-release-bot", "POST", "/api/v1/access/api-tokens", {
       subject: "ci-release-bot",
       scopes: ["certs:read", "secrets:read", "keys:read", "graph:read"],
     }, stableKey("access-token-release-bot"));
@@ -1413,7 +1423,7 @@ async function main() {
     // not need to use it, so drop it immediately and never render it to logs.
     delete demoAPIToken.token;
   }
-  await api("POST", "/api/v1/ephemeral/api-keys", {
+  await apiAsSubject("incident-rotator", "POST", "/api/v1/ephemeral/api-keys", {
     subject: "incident-rotator",
     scopes: ["certs:read", "keys:read"],
     ttl_seconds: 1800,

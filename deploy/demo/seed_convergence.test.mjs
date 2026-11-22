@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  apiAsSubject,
   advanceIdentity,
   buildDemoHistory,
   checkpointSource,
@@ -15,6 +16,26 @@ import {
   stableDemoValue,
   stableSeedSemantics,
 } from "./seed.mjs";
+
+test("CR-020 demo API key creation authenticates as the exact service subject", async () => {
+  const seen = [];
+  const request = async (method, path, body, key, statuses, actorBearer) => {
+    seen.push({ method, path, body, key, statuses, actorBearer });
+    return { subject: body.subject };
+  };
+  const tokenFor = (subject) => `bootstrap-for:${subject}`;
+  await apiAsSubject("ci-release-bot", "POST", "/api/v1/access/api-tokens",
+    { subject: "ci-release-bot", scopes: ["certs:read"] }, "release-bot-token", request, tokenFor);
+  await apiAsSubject("incident-rotator", "POST", "/api/v1/ephemeral/api-keys",
+    { subject: "incident-rotator", scopes: ["keys:read"], ttl_seconds: 1800 }, "incident-key", request, tokenFor);
+  assert.deepEqual(seen.map((call) => [call.path, call.body.subject, call.actorBearer]), [
+    ["/api/v1/access/api-tokens", "ci-release-bot", "bootstrap-for:ci-release-bot"],
+    ["/api/v1/ephemeral/api-keys", "incident-rotator", "bootstrap-for:incident-rotator"],
+  ]);
+  await assert.rejects(apiAsSubject("ci-release-bot", "POST", "/api/v1/access/api-tokens",
+    { subject: "someone-else", scopes: ["certs:read"] }, "bad-key", request, tokenFor), /subject/);
+  assert.equal(seen.length, 2, "mismatched subject must not reach the API");
+});
 
 test("CI demo cloud-secret config has only fields admitted by the typed API", () => {
   const definition = buildDemoHistory().discoverySources.find((source) => source.kind === "cloud_secret");
