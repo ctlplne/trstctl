@@ -52,7 +52,7 @@ func (c *controlledRenewalChannel) SignJobCSR(ctx context.Context, job int64, at
 // Exercise the real locked subject key and file connector. The allowlisted
 // subprocess is the test binary, not a Caddy service qualification.
 func TestHostRenewalPendingRecoveryAndAuthorityBoundaries(t *testing.T) {
-	for _, mode := range []string{"late-success", "transport-recovery", "claim-lost-during-signing", "claim-lost-before-install", "cancelled", "permanent-refusal", "profile-validity-refusal"} {
+	for _, mode := range []string{"late-success", "transport-recovery", "claim-lost-during-signing", "claim-lost-before-install", "cancelled", "permanent-refusal", "profile-validity-refusal", "external-pending"} {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
 			certPath, keyPath := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
@@ -78,6 +78,9 @@ func TestHostRenewalPendingRecoveryAndAuthorityBoundaries(t *testing.T) {
 				return time.Now().Add(300 * time.Millisecond), ctx.Err()
 			}
 			c.sign = func(ctx context.Context, csr []byte, call int) ([]byte, []byte, string, error) {
+				if mode == "external-pending" {
+					return nil, nil, "", transport.CSRPendingError()
+				}
 				if mode == "profile-validity-refusal" {
 					return nil, nil, "", transport.CSRValidityRefusalError()
 				}
@@ -106,7 +109,11 @@ func TestHostRenewalPendingRecoveryAndAuthorityBoundaries(t *testing.T) {
 				der, err := crypto.SignLeafFromCSR(caDER, caKey, csr, 30*time.Minute)
 				return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}), crypto.SHA256Hex(der), err
 			}
-			c.jobs = []relay.Job{renewJob(t, relay.DeployIntent{Connector: "caddy", Target: "pending-host", SubjectCommonName: "pending.example.test", TargetConfig: renewTargetConfig(t, certPath, keyPath)})}
+			intent := relay.DeployIntent{Connector: "caddy", Target: "pending-host", SubjectCommonName: "pending.example.test", TargetConfig: renewTargetConfig(t, certPath, keyPath)}
+			if mode == "external-pending" {
+				intent.IssuingAuthoritySource = "external"
+			}
+			c.jobs = []relay.Job{renewJob(t, intent)}
 			exe, err := os.Executable()
 			if err != nil {
 				t.Fatal(err)
@@ -115,8 +122,11 @@ func TestHostRenewalPendingRecoveryAndAuthorityBoundaries(t *testing.T) {
 				{LogicalName: "caddy", LogicalArgs: []string{"reload"}, Command: exe, Args: []string{"-test.run=^$"}},
 			}}
 			limit := 5 * time.Second
-			if mode == "cancelled" {
+			switch mode {
+			case "cancelled":
 				limit = 150 * time.Millisecond
+			case "external-pending":
+				limit = 3 * time.Second
 			}
 			ctx, cancel := context.WithTimeout(t.Context(), limit)
 			defer cancel()
@@ -126,6 +136,9 @@ func TestHostRenewalPendingRecoveryAndAuthorityBoundaries(t *testing.T) {
 			}
 			if mode == "profile-validity-refusal" && (len(c.reports) != 1 || c.reports[0].detail != transport.CSRValidityRefusalDetail) {
 				t.Fatalf("profile refusal lost safe report: %+v", c.reports)
+			}
+			if mode == "external-pending" && (ctx.Err() != nil || len(c.reports) != 1 || c.reports[0].outcome != relay.OutcomeFailed) {
+				t.Fatalf("external CA pending work was not released as a failed attempt: context=%v reports=%+v", ctx.Err(), c.reports)
 			}
 			wantInstalled := mode == "late-success" || mode == "transport-recovery"
 			if wantInstalled {

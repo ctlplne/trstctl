@@ -183,6 +183,10 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 
 	var csrDER, certPEM, chainPEM []byte
 	var fingerprint string
+	// External CAs may keep an order pending across outbox backoffs. Release a
+	// pending answer to the durable job so its next attempt uses the same
+	// retained key. Keep the claim during this pass, including its report.
+	retryCSRInline := claim != nil && intent.IssuingAuthoritySource != "external"
 	var keyBuf *secret.Buffer
 	var pending *hostPQCPending
 	var ordinaryPending *hostRenewPending
@@ -278,12 +282,12 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 			report(ctx, ch, job, OutcomeFailed, "this host's TPM could not attest the renewal key")
 			return false
 		}
-		certPEM, chainPEM, fingerprint, err = signHostCSRWithKeyAttestation(ctx, ch.(AttestedCSRSigner), job, csrDER, attestation, claim != nil)
+		certPEM, chainPEM, fingerprint, err = signHostCSRWithKeyAttestation(ctx, ch.(AttestedCSRSigner), job, csrDER, attestation, retryCSRInline)
 		if err == nil && hostRollback != nil {
 			err = hostRollback.RecordHostRenewCertificate(intent.Connector, intent.TargetID, job.JobID, ordinaryBinding, certPEM, chainPEM, fingerprint)
 		}
 	} else if len(certPEM) == 0 {
-		certPEM, chainPEM, fingerprint, err = signHostCSR(ctx, signer, job, csrDER, claim != nil)
+		certPEM, chainPEM, fingerprint, err = signHostCSR(ctx, signer, job, csrDER, retryCSRInline)
 		if err == nil && intent.PQCRunID != "" {
 			err = hostRollback.RecordPQCCertificate(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PQCAssetID, certPEM, chainPEM, fingerprint)
 		} else if err == nil && hostRollback != nil {
