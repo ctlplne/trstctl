@@ -5,11 +5,15 @@
 # cache (~/.embedded-postgres-go). The bundled server reads
 # <temp>/trstctl-pg-bin/ as its archive source before any download and verifies
 # the committed SHA-256 itself, so this copies the library cache's archives
-# there: while the cache holds the pinned archive, no job downloads it again
-# (parallel jobs drew HTTP 429 from the archive host, CI run 41479056374).
+# there: while the cache holds the pinned archive, no job downloads it again.
+# The verified runtime cache is also copied back to the legacy library cache
+# only after matching the committed TXZ pin, so direct integration tests use
+# the restored CI archive instead of each fetching Maven (HTTP 429).
 set -euo pipefail
 src="${HOME}/.embedded-postgres-go"
 dst="${TMPDIR:-/tmp}/trstctl-pg-bin"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+python3 "$here/seed-pg-legacy-cache.py" "$here/../../deploy/supply-chain/embedded-postgres.json" "${TMPDIR:-/tmp}/trstctl-pg-archives" "$src"
 seeded=0
 if [[ -d "$src" && ! -L "$src" ]]; then
   for archive in "$src"/embedded-postgres-binaries-*.txz; do
