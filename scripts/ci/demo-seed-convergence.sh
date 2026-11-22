@@ -61,9 +61,9 @@ stable_snapshot() {
   # Unconfigured notifications and host deployments without any live agent
   # cannot complete in the assembled demo. Their workers can still claim and
   # defer rows while the seed has settled. Other active work must settle before
-  # the preserved-volume comparison. Background events may keep all three
-  # JetStream streams advancing, so require nondecreasing counts rather than
-  # a quiet global stream. Seed-attributed event IDs are compared below.
+  # the preserved-volume comparison. CI has observed all three JetStream
+  # streams advancing during this window; the producer is being traced below.
+  # Require nondecreasing counts and compare seed-attributed IDs after replay.
   for _attempt in $(seq 1 360); do
     current="$(snapshot)"
     if [[ -n "$last_streams" ]] &&
@@ -103,10 +103,8 @@ stable_snapshot() {
 }
 
 seed_actor_events() {
-  # A running demo has background workers. Their legitimate, actorless events
-  # can advance all three JetStream streams during the repeat run. Query the
-  # event-backed audit view inside the seed's own trust boundary and compare the
-  # exact IDs attributed to its bootstrap subjects instead of global counts.
+  # Query the event-backed audit view inside the seed's trust boundary. Keep
+  # event IDs in memory for comparison, but emit only event types in CI traces.
   docker compose -f "$compose_file" run --rm --no-deps --entrypoint node demo-seed -e '
     const { readFileSync } = require("node:fs");
     const subjects = new Set([
@@ -130,7 +128,12 @@ seed_actor_events() {
       if (ids.length === 0 || ids.some(id => typeof id !== "string" || !id)) {
         throw new Error("demo audit response has no valid seed-attributed event IDs");
       }
-      console.log(JSON.stringify(ids));
+      const records = body.events.map(event => ({id: event.id, type: event.type}));
+      if (records.some(event => typeof event.id !== "string" || !event.id ||
+                                typeof event.type !== "string" || !event.type)) {
+        throw new Error("demo audit response has an invalid event ID or type");
+      }
+      console.log(JSON.stringify({seed_ids: ids, records}));
     })().catch(error => { console.error(error.message); process.exitCode = 1; });
   '
 }
@@ -155,7 +158,8 @@ wait_for_seed() {
 
 wait_for_seed
 first="$(stable_snapshot)"
-first_seed_events="$(seed_actor_events)"
+first_audit="$(seed_actor_events)"
+first_seed_events="$(jq -cS '.seed_ids' <<<"$first_audit")"
 
 first_owner_count="$(jq -r '.postgres.owner_count' <<<"$first")"
 first_logical_count="$(jq -r '.postgres.owner_logical_count' <<<"$first")"
@@ -172,7 +176,8 @@ before_replay="$(postgres_snapshot)"
 docker compose -f "$compose_file" run --rm --no-deps demo-seed
 after_replay="$(postgres_snapshot)"
 second="$(stable_snapshot)"
-second_seed_events="$(seed_actor_events)"
+second_audit="$(seed_actor_events)"
+second_seed_events="$(jq -cS '.seed_ids' <<<"$second_audit")"
 
 if [[ "$(jq -c '.outbox_count' <<<"$before_replay")" != "$(jq -c '.outbox_count' <<<"$after_replay")" ||
       "$(jq -c '.postgres | del(.outbox_count)' <<<"$first")" != "$(jq -c '.postgres | del(.outbox_count)' <<<"$second")" ||
@@ -190,3 +195,18 @@ if [[ "$(jq -c '.outbox_count' <<<"$before_replay")" != "$(jq -c '.outbox_count'
 fi
 
 echo "demo seed convergence passed: preserved inventory, owner uniqueness, outbox count across replay, and seed-attributed event IDs are unchanged"
+
+# Diagnostic window for identifying the producer of stream growth. A missing
+# notification receiver only changes its outbox row; it does not append an
+# event. This trace runs after the gate and prints new event types, never
+# payloads or IDs. Once the producer is known, remove the temporary CI opt-in.
+if [[ "${TRSTCTL_DEMO_EVENT_TRACE_SECONDS:-0}" == "300" ]]; then
+  sleep 300
+  trace_audit="$(seed_actor_events)"
+  jq -cn --argjson before "$first_audit" --argjson after "$trace_audit" '
+    ($before.records | map(.id)) as $known |
+    [$after.records[] | select(.id as $id | ($known | index($id)) == null) | .type] |
+    group_by(.) | map({type: .[0], count: length}) |
+    "demo background event types over replay plus 300s: \(.)"
+  ' -r
+fi

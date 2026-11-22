@@ -12,7 +12,7 @@ SCRIPT = Path(__file__).with_name("demo-seed-convergence.sh")
 
 
 class DemoSeedConvergenceTest(unittest.TestCase):
-    def run_convergence(self, *, notification_destination="notification.expiry", other_active=False, host_processing=False, agent_present=False, event_on_rerun=False, late_background_event=False, continuous_background_events=False, stream_rollback=False, background_event_on_rerun=False, background_outbox_after_rerun=False, seed_outbox_on_rerun=False):
+    def run_convergence(self, *, notification_destination="notification.expiry", other_active=False, host_processing=False, agent_present=False, event_on_rerun=False, late_background_event=False, continuous_background_events=False, stream_rollback=False, background_event_on_rerun=False, background_outbox_after_rerun=False, seed_outbox_on_rerun=False, trace_background=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             docker = root / "docker"
@@ -79,7 +79,14 @@ elif 'run' in args and '--entrypoint' in args:
     ids = ['seed-event-before']
     if os.environ.get('FAKE_EVENT_ON_RERUN') == '1' and Path(os.environ['FAKE_DOCKER_STATE']).exists():
         ids.append('seed-event-after')
-    print(json.dumps(ids))
+    records = [dict(id=event_id, type='demo.seed.recorded', seed=True) for event_id in ids]
+    if os.environ.get('FAKE_TRACE_BACKGROUND') == '1':
+        counter = Path(os.environ['FAKE_DOCKER_STATE'] + '.audit_reads')
+        reads = int(counter.read_text()) + 1 if counter.exists() else 1
+        counter.write_text(str(reads))
+        if reads >= 3:
+            records.append(dict(id='background-event-after', type='periodic-risk.rechecked', seed=False))
+    print(json.dumps(dict(seed_ids=ids, records=records)))
 elif 'run' in args:
     Path(os.environ['FAKE_DOCKER_STATE']).touch()
 else:
@@ -103,6 +110,8 @@ else:
                    "FAKE_BACKGROUND_EVENT_ON_RERUN": str(int(background_event_on_rerun)),
                    "FAKE_BACKGROUND_OUTBOX_AFTER_RERUN": str(int(background_outbox_after_rerun)),
                    "FAKE_SEED_OUTBOX_ON_RERUN": str(int(seed_outbox_on_rerun)),
+                   "FAKE_TRACE_BACKGROUND": str(int(trace_background)),
+                   "TRSTCTL_DEMO_EVENT_TRACE_SECONDS": "300" if trace_background else "0",
                    "FAKE_DOCKER_STATE": str(root / "reran")}
             return subprocess.run(
                 ["bash", str(SCRIPT)], env=env, text=True,
@@ -156,6 +165,12 @@ else:
     def test_background_event_after_seed_rerun_does_not_implicate_seed(self):
         result = self.run_convergence(background_event_on_rerun=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_background_trace_reports_event_type_without_payload(self):
+        result = self.run_convergence(trace_background=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('periodic-risk.rechecked', result.stdout)
+        self.assertNotIn('background-event-after', result.stdout)
 
     def test_background_outbox_after_replay_does_not_implicate_seed(self):
         result = self.run_convergence(background_outbox_after_rerun=True)
