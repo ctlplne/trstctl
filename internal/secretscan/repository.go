@@ -66,6 +66,13 @@ type RepositoryScanConfig struct {
 	CommitSHA     string `json:"commit_sha,omitempty"`
 	Event         string `json:"event,omitempty"`
 	CredentialRef string `json:"credential_ref,omitempty"`
+	// CredentialAdmissionVersion proves a normalized API request passed the
+	// secret-read check. Older stored sources lack it and fail closed at use.
+	CredentialAdmissionVersion int `json:"credential_admission_version,omitempty"`
+	// ConfiguredHookID names an operator-configured hook credential. The source
+	// stores only the hook ID; the worker resolves its fixed ref and origin from
+	// server configuration, never from tenant-authored source JSON.
+	ConfiguredHookID string `json:"configured_hook_id,omitempty"`
 	// CredentialUsername is the user name credential_ref's token clones
 	// with; empty uses the provider's (DefaultRepositoryUsername).
 	CredentialUsername string `json:"credential_username,omitempty"`
@@ -225,6 +232,18 @@ func cloneURLHasInlineCredentials(raw string) bool {
 		return false
 	}
 	return u.User != nil
+}
+
+// HTTPSCloneOrigin is the exact HTTPS authority that receives a private clone
+// credential. Callers compare it to an operator-pinned hook origin before the
+// worker opens the credential. Userinfo, query and fragment are never part of
+// a credential-bearing clone target.
+func HTTPSCloneOrigin(raw string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+		return "", ErrRepositoryCredentialNeedsHTTPS
+	}
+	return "https://" + strings.ToLower(u.Host), nil
 }
 
 // credentialGitConfig is the git configuration that sends cred's

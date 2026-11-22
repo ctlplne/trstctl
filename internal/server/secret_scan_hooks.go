@@ -14,16 +14,28 @@ import (
 // secretScanHookCloneCredentialsAPIOption names each hook's private clone
 // credential (OD-1): the reference, opened by the scan worker for the clone.
 func secretScanHookCloneCredentialsAPIOption(d Deps) api.Option {
-	refs := make(map[string][2]string, len(d.SecretScanWebhooks))
+	refs := make(map[string][3]string, len(d.SecretScanWebhooks))
 	for _, hook := range d.SecretScanWebhooks {
 		if ref := strings.TrimSpace(hook.CloneCredentialRef); ref != "" {
-			refs[strings.TrimSpace(hook.ID)] = [2]string{ref, strings.TrimSpace(hook.CloneCredentialUsername)}
+			refs[strings.TrimSpace(hook.ID)] = [3]string{ref, strings.TrimSpace(hook.CloneCredentialUsername), hook.CloneOrigin}
 		}
 	}
-	return api.WithSecretScanHookCloneCredentials(func(hookID string) (string, string) {
+	return api.WithSecretScanHookCloneCredentials(func(hookID string) (string, string, string) {
 		clone := refs[hookID]
-		return clone[0], clone[1]
+		return clone[0], clone[1], clone[2]
 	})
+}
+
+// repositoryHookClones is read only after server construction. The worker uses
+// this operator configuration, never the credential reference in a source row.
+func repositoryHookClones(hooks []config.SecretScanWebhook) map[string]config.SecretScanWebhook {
+	clones := make(map[string]config.SecretScanWebhook, len(hooks))
+	for _, hook := range hooks {
+		if strings.TrimSpace(hook.CloneCredentialRef) != "" {
+			clones[strings.TrimSpace(hook.ID)] = hook
+		}
+	}
+	return clones
 }
 
 // secretScanHooksAPIOption attaches the configured provider-native scan

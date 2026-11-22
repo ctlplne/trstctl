@@ -26,11 +26,12 @@ import (
 )
 
 // OD-1: a repository secret scan of a private repository clones it with its
-// credential_ref. The served API takes a file: or secret:// reference for an
+// credential_ref. The served API takes an authorized secret:// reference for an
 // https clone URL only; the outbox worker opens it for the clone alone; the
 // scanner sees the private checkout; a signed GitHub push clones with its
-// hook's clone_credential_ref; the discovery source keeps the reference,
-// never the token; and a wrong token fails the run with a reason that does
+// hook's clone_credential_ref; the normalized source keeps the secret reference,
+// while the native source stores only its operator-configured hook ID. Neither
+// stores the token; a wrong token fails the run with a reason that does
 // not carry it.
 func TestServedPrivateRepositoryScanClonesWithItsCredentialRefOD1(t *testing.T) {
 	work := t.TempDir()
@@ -106,11 +107,17 @@ func TestServedPrivateRepositoryScanClonesWithItsCredentialRefOD1(t *testing.T) 
 		d.SecretScanWebhooks = []config.SecretScanWebhook{{
 			ID: "gh-private", TenantID: servedTestTenant, Provider: "github",
 			SecretRef:          writeServedCredentialFile(t, "od1-hook-secret", hookSecret),
-			CloneCredentialRef: writeServedCredentialFile(t, "od1-hook-clone-token", token),
+			CloneCredentialRef: writeServedCredentialFile(t, "od1-hook-clone-token", token), CloneOrigin: host.URL,
 		}}
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read")
 	cloneURL := host.URL + "/payments.git"
+	for _, item := range []struct{ name, value string }{{"od1/repo-token", token}, {"od1/wrong-token", "od1-not-the-token"}} {
+		if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/store", tok, "od1-seed-"+item.name,
+			map[string]any{"name": item.name, "value": item.value}); status != http.StatusCreated {
+			t.Fatalf("seed %s: HTTP %d %s", item.name, status, body)
+		}
+	}
 	queue := func(idem string, body map[string]any) (int, []byte) {
 		t.Helper()
 		return secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans/repositories/github/webhook", tok, idem, body)
@@ -118,6 +125,7 @@ func TestServedPrivateRepositoryScanClonesWithItsCredentialRefOD1(t *testing.T) 
 
 	for name, body := range map[string]map[string]any{
 		"http clone":   {"repository": "acme/payments", "clone_url": "http://127.0.0.1:1/payments.git", "credential_ref": "file:/nonexistent"}, // #nosec G101 -- credential references to fabricated fixture values (CWE-798)
+		"file ref":     {"repository": "acme/payments", "clone_url": cloneURL, "credential_ref": "file:/nonexistent"},                          // #nosec G101 -- fabricated fixture reference, not a credential value (CWE-798)
 		"env ref":      {"repository": "acme/payments", "clone_url": cloneURL, "credential_ref": "env:OD1_TOKEN"},                              // #nosec G101 -- credential references to fabricated fixture values (CWE-798)
 		"user without": {"repository": "acme/payments", "clone_url": cloneURL, "credential_username": "deploy"},
 	} {
@@ -157,8 +165,8 @@ func TestServedPrivateRepositoryScanClonesWithItsCredentialRefOD1(t *testing.T) 
 		return receipt.RunID
 	}
 
-	good := queued(queue("od1-good", map[string]any{"repository": "acme/payments", "clone_url": cloneURL,
-		"credential_ref": writeServedCredentialFile(t, "od1-repo-token", token), "event": "push"}))
+	good := queued(queue("od1-good", map[string]any{"repository": "acme/payments", "clone_url": cloneURL, // #nosec G101 -- tenant secret reference, not the token (CWE-798)
+		"credential_ref": "secret://od1/repo-token", "event": "push"}))
 	if status, message := runStatus(good); status != "succeeded" {
 		t.Fatalf("the private scan run is %s: %s", status, message)
 	}
@@ -179,7 +187,7 @@ func TestServedPrivateRepositoryScanClonesWithItsCredentialRefOD1(t *testing.T) 
 	var stored struct {
 		CredentialRef string `json:"credential_ref"`
 	}
-	if err := json.Unmarshal(sourceConfig, &stored); err != nil || !strings.HasPrefix(stored.CredentialRef, "file:") || strings.Contains(string(sourceConfig), token) {
+	if err := json.Unmarshal(sourceConfig, &stored); err != nil || stored.CredentialRef != "secret://od1/repo-token" || strings.Contains(string(sourceConfig), token) {
 		t.Fatalf("the discovery source config = %s; want the reference and never the token", sourceConfig)
 	}
 
@@ -209,6 +217,20 @@ func TestServedPrivateRepositoryScanClonesWithItsCredentialRefOD1(t *testing.T) 
 	if status, message := runStatus(hookRun); status != "succeeded" {
 		t.Fatalf("the hook's private scan run is %s: %s", status, message)
 	}
+	var hookSourceConfig []byte
+	if err := h.store.SystemPool().QueryRow(t.Context(),
+		`SELECT s.config FROM discovery_sources s JOIN discovery_runs r ON r.tenant_id = s.tenant_id AND r.source_id = s.id
+		  WHERE r.tenant_id = $1 AND r.id = $2`, h.tenant, hookRun).Scan(&hookSourceConfig); err != nil {
+		t.Fatal(err)
+	}
+	var storedHook struct {
+		ConfiguredHookID string `json:"configured_hook_id"`
+		CredentialRef    string `json:"credential_ref"`
+	}
+	if err := json.Unmarshal(hookSourceConfig, &storedHook); err != nil ||
+		storedHook.ConfiguredHookID != "gh-private" || storedHook.CredentialRef != "" {
+		t.Fatalf("native hook source must store only the configured hook ID: %s", hookSourceConfig)
+	}
 	select {
 	case err := <-cloned:
 		if err != nil {
@@ -218,8 +240,32 @@ func TestServedPrivateRepositoryScanClonesWithItsCredentialRefOD1(t *testing.T) 
 		t.Fatal("the hook's private scan never reached the scanner")
 	}
 
-	bad := queued(queue("od1-bad", map[string]any{"repository": "acme/payments", "clone_url": cloneURL,
-		"credential_ref": writeServedCredentialFile(t, "od1-wrong-token", "od1-not-the-token"), "event": "push"}))
+	// A signed body still controls clone_url. A changed HTTPS host may not
+	// receive the operator's token, even if the signature is valid.
+	changed := bytes.Replace(push, []byte(cloneURL), []byte("https://attacker.example/payments.git"), 1)
+	if bytes.Equal(changed, push) {
+		t.Fatal("the hostile clone URL was not inserted into the signed push")
+	}
+	changedReq, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/secrets/scans/hooks/gh-private", bytes.NewReader(changed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	changedReq.Header.Set("Content-Type", "application/json")
+	changedReq.Header.Set("X-GitHub-Event", "push")
+	changedReq.Header.Set("X-GitHub-Delivery", "od1-delivery-hostile")
+	changedReq.Header.Set("X-Hub-Signature-256", "sha256="+hex.EncodeToString(crypto.HMACSHA256([]byte(hookSecret), changed)))
+	changedResp, err := h.ts.Client().Do(changedReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changedBody, _ := io.ReadAll(changedResp.Body)
+	_ = changedResp.Body.Close()
+	if changedResp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("signed push changed clone host: HTTP %d %s, want 400", changedResp.StatusCode, changedBody)
+	}
+
+	bad := queued(queue("od1-bad", map[string]any{"repository": "acme/payments", "clone_url": cloneURL, // #nosec G101 -- tenant secret reference, not the token (CWE-798)
+		"credential_ref": "secret://od1/wrong-token", "event": "push"}))
 	status, message := runStatus(bad)
 	if status != "failed" || !strings.Contains(message, "credential_ref") || strings.Contains(message, "od1-not-the-token") || strings.Contains(message, token) {
 		t.Fatalf("the wrong-token run is %s: %q; want failed naming the credential_ref and no token", status, message)

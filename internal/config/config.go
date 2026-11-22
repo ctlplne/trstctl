@@ -3229,6 +3229,9 @@ type SecretScanWebhook struct {
 	// user it clones as, by default the provider's (x-access-token).
 	CloneCredentialRef      string `json:"clone_credential_ref,omitempty"`
 	CloneCredentialUsername string `json:"clone_credential_username,omitempty"`
+	// CloneOrigin is the exact HTTPS origin allowed to receive the hook's clone
+	// credential, for example https://git.example.com (without a path).
+	CloneOrigin string `json:"clone_origin,omitempty"`
 }
 
 // Transit configures the encryption-as-a-service keyring's durability.
@@ -5916,6 +5919,14 @@ func validateSecretScanWebhooks(hooks []SecretScanWebhook) []error {
 			if err := validateCredentialRef(ref); err != nil {
 				errs = append(errs, fmt.Errorf("%s: clone_credential_ref: %w", where, err))
 			}
+			origin, err := url.Parse(hook.CloneOrigin)
+			if err != nil || origin.Scheme != "https" || origin.Hostname() == "" || origin.User != nil ||
+				origin.Path != "" || origin.RawPath != "" || origin.RawQuery != "" || origin.Fragment != "" ||
+				hook.CloneOrigin != "https://"+strings.ToLower(origin.Host) {
+				errs = append(errs, fmt.Errorf("%s: clone_origin must be a canonical HTTPS origin when clone_credential_ref is set", where))
+			}
+		} else if hook.CloneOrigin != "" {
+			errs = append(errs, fmt.Errorf("%s: clone_origin requires clone_credential_ref", where))
 		}
 		if user := strings.TrimSpace(hook.CloneCredentialUsername); user != "" &&
 			(strings.TrimSpace(hook.CloneCredentialRef) == "" || len(user) > 128 || strings.ContainsAny(user, ":\r\n")) {

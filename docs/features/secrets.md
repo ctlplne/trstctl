@@ -2671,9 +2671,10 @@ row. The outbox worker scans `checkout_path` directly, or clones `clone_url`;
 credential-bearing URLs are rejected, and private credentials stay secret references,
 never payload values.
 
-A private repository clones with its `credential_ref` (OD-1): a `file:` or tenant
-`secret://` reference to the access token, for an https `clone_url` only (any other
-reference, or a token for a non-https URL, is refused with 400). The outbox worker opens
+A private repository clones with its `credential_ref` (OD-1): a canonical tenant
+`secret://` reference to the access token, for an https `clone_url` only. The caller
+needs both `secrets:write` and `secrets:read`, plus access to the referenced restricted
+environment. Tenant-authored `file:` references are refused. The outbox worker opens
 it for that one clone and destroys it after. The token goes to git as an
 `Authorization` header scoped to the clone URL's origin, through git's environment —
 never its arguments, the URL or the checkout's configuration — so a redirect to another
@@ -2687,7 +2688,8 @@ reference, never the token.
 GitHub can also call trstctl directly (P6): configure a hook under
 `secrets.scan_webhooks` (an `id`, the `tenant_id`, `provider: github`, a
 `secret_ref` holding the webhook's secret, and for private repositories a
-`clone_credential_ref` holding the token the push's clone uses) and point the
+`clone_credential_ref` holding the token the push's clone uses, and `clone_origin`
+pinning its exact HTTPS host and port, for example `https://git.example.com`) and point the
 repository's webhook at
 `POST /api/v1/secrets/scans/hooks/{id}`. trstctl checks `X-Hub-Signature-256`
 (HMAC-SHA256 of the exact body under that secret) in constant time before reading

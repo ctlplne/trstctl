@@ -48,9 +48,9 @@ func WithSecretScanHooks(lookup SecretScanHookLookup) Option {
 	return func(c *config) { c.secretScanHooks = lookup }
 }
 
-// SecretScanHookCloneCredential names the credential_ref (and its user name)
-// a hook's pushed private repository clones with (OD-1); empty for none.
-type SecretScanHookCloneCredential func(hookID string) (credentialRef, username string)
+// SecretScanHookCloneCredential returns the operator-owned clone credential and
+// the HTTPS origin to which a signed push may send it; empty for no credential.
+type SecretScanHookCloneCredential func(hookID string) (credentialRef, username, origin string)
 
 // WithSecretScanHookCloneCredentials attaches the hooks' clone credentials.
 func WithSecretScanHookCloneCredentials(lookup SecretScanHookCloneCredential) Option {
@@ -430,10 +430,6 @@ func (a *API) receiveSecretScanHook(w http.ResponseWriter, r *http.Request) {
 	if len(refs) > secretScanHookMaxRefs {
 		refs = refs[:secretScanHookMaxRefs]
 	}
-	var credentialRef, credentialUser string
-	if a.secretScanHookClone != nil {
-		credentialRef, credentialUser = a.secretScanHookClone(hookID)
-	}
 	binding := "secret-scan-hook:v1:" + crypto.SHA256Hex([]byte(hookID)) + ":" + crypto.SHA256Hex(body)
 	a.mutatePublicTenantBound(w, r, tenantID, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		var receipt secretRepoScanWebhookResponse
@@ -441,7 +437,7 @@ func (a *API) receiveSecretScanHook(w http.ResponseWriter, r *http.Request) {
 		for i, ref := range refs {
 			status, out, err := a.queueSecretRepoScan(ctx, tenantID, provider, secretRepoScanWebhookRequest{
 				Repository: push.Repository, CloneURL: push.CloneURL, Ref: ref.Ref, CommitSHA: ref.Commit, Event: "push",
-				CredentialRef: credentialRef, CredentialUsername: credentialUser,
+				configuredHookID: hookID,
 			})
 			if err != nil {
 				return status, nil, err

@@ -1422,8 +1422,10 @@ never live in the API process. What you can do end to end against the running bi
   `secret.scan_hook.refused` audit event, P6-L3), answers pings, and turns a verified
   push into repository secret scans of the pushed commits; the provider's delivery ID
   makes redeliveries idempotent. The normalized webhook and polling remain. A private
-  repository clones with an https token through `credential_ref` (normalized webhook)
-  or the hook's `clone_credential_ref` (OD-1); SSH clone keys are not served, and a
+  repository clones with an https token through a caller-authorized `secret://`
+  `credential_ref` (normalized webhook, requiring `secrets:read`), or the hook's
+  operator-configured `clone_credential_ref` pinned to `clone_origin` (OD-1);
+  SSH clone keys are not served, and a
   Bitbucket Cloud push of more than ten branches or tags scans the first ten.
 - Secrets workspace (A235): projects with environments over the native store (by name
   prefix `<project>/<environment>/`), restricted environments open only to granted

@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudentitlements/assessment"
 	"trstctl.com/trstctl/internal/cloudentitlements/azureiam"
 	"trstctl.com/trstctl/internal/cloudentitlements/gcpiam"
+	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -1450,8 +1451,29 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 	if err := json.Unmarshal(src.Config, &cfg); err != nil {
 		return netscan.Report{}, "", "", fmt.Errorf("decode secret repository source config: %w", err)
 	}
-	// OD-1: a private repository clones with its credential_ref, opened for
-	// this clone alone and destroyed once it is done.
+	// A source row is durable tenant-authored data. Never let an older row's
+	// file: reference, or a forged hook reference, select a worker credential.
+	if cfg.ConfiguredHookID != "" {
+		hook, ok := d.repoHookClones[cfg.ConfiguredHookID]
+		origin, originErr := secretscan.HTTPSCloneOrigin(cfg.CloneURL)
+		if !ok || originErr != nil || origin != hook.CloneOrigin ||
+			hook.TenantID != tenantID || hook.Provider != cfg.Provider || cfg.CredentialRef != "" || cfg.CredentialAdmissionVersion != 0 {
+			return netscan.Report{}, "failed", "repository hook clone authorization no longer matches operator configuration", nil
+		}
+		cfg.CredentialRef = hook.CloneCredentialRef
+		cfg.CredentialUsername = hook.CloneCredentialUsername
+	} else if cfg.CredentialRef != "" {
+		if cfg.CredentialAdmissionVersion != 1 {
+			return netscan.Report{}, "failed", "repository credential source predates read authorization; resubmit the scan", nil
+		}
+		if _, err := credref.Parse(cfg.CredentialRef); err != nil {
+			return netscan.Report{}, "failed", "repository credential_ref must be a canonical secret:// reference", nil
+		}
+		if _, err := secretscan.HTTPSCloneOrigin(cfg.CloneURL); err != nil {
+			return netscan.Report{}, "failed", "repository credential_ref needs an https clone_url", nil
+		}
+	}
+	// Open a checked credential for this clone alone and destroy it afterward.
 	var cred *secretscan.RepositoryCredential
 	if ref := strings.TrimSpace(cfg.CredentialRef); ref != "" && strings.TrimSpace(cfg.CheckoutPath) == "" {
 		if d.repoCredentials == nil {

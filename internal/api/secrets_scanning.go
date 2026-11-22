@@ -15,6 +15,7 @@ import (
 
 	gouuid "github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -79,7 +80,8 @@ type secretRepoScanWebhookRequest struct {
 	CredentialUsername string `json:"credential_username,omitempty"`
 	// Annotation writes each finding back through GitHub code scanning
 	// (A174-L5).
-	Annotation *secretscan.AnnotationConfig `json:"annotation,omitempty"`
+	Annotation       *secretscan.AnnotationConfig `json:"annotation,omitempty"`
+	configuredHookID string
 }
 
 type secretRepoScanWebhookResponse struct {
@@ -638,6 +640,15 @@ func (a *API) receiveSecretRepoWebhook(w http.ResponseWriter, r *http.Request) {
 		if err := a.requireAnnotationAllowed(ctx, tenantID, secretscan.RepositorySourceKind, req.Annotation); err != nil {
 			return 0, nil, err
 		}
+		if strings.TrimSpace(req.CredentialRef) != "" {
+			principal, ok := ctx.Value(principalCtxKey).(authz.Principal)
+			if !ok || !principal.Can(authz.SecretsRead, authz.Scope{TenantID: tenantID}) {
+				return 0, nil, errStatus(http.StatusForbidden, "credential_ref requires secrets:read")
+			}
+			if err := a.requireSecretReferencesRead(ctx, tenantID, "credential_ref", req.CredentialRef); err != nil {
+				return 0, nil, err
+			}
+		}
 		return a.queueSecretRepoScan(ctx, tenantID, provider, req)
 	})
 }
@@ -648,6 +659,21 @@ func (a *API) queueSecretRepoScan(ctx context.Context, tenantID, provider string
 	cfg, err := secretRepoScanConfig(provider, req)
 	if err != nil {
 		return 0, nil, err
+	}
+	if req.configuredHookID != "" {
+		if a.secretScanHookClone == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "hook clone configuration is unavailable")
+		}
+		ref, _, origin := a.secretScanHookClone(req.configuredHookID)
+		if ref != "" {
+			actual, err := secretscan.HTTPSCloneOrigin(cfg.CloneURL)
+			if err != nil || actual != origin {
+				return 0, nil, errStatus(http.StatusBadRequest, "push clone_url is outside the hook's configured clone_origin")
+			}
+			cfg.ConfiguredHookID = req.configuredHookID
+		}
+	} else if cfg.CredentialRef != "" {
+		cfg.CredentialAdmissionVersion = 1
 	}
 	if cfg.CheckoutPath != "" && a.secrets != nil {
 		if validator, ok := a.secrets.be.SecretScanner.(secretScannerPathValidator); ok {
@@ -798,7 +824,7 @@ func buildSecretRepoScanPosture(generatedAt string) secretRepoScanPostureRespons
 			ID:               "github",
 			Name:             "GitHub",
 			RealtimeTriggers: []string{"push", "pull_request", "workflow_run", "repository_dispatch"},
-			AuthMode:         "authenticated trstctl SecretsWrite webhook or a native GitHub hook verified by its signature; a private repository clones over https with the GitHub token its credential_ref names",
+			AuthMode:         "authenticated trstctl SecretsWrite webhook (also SecretsRead for credential_ref) or a native GitHub hook verified by its signature; a private repository clones over https with the GitHub token its credential_ref names",
 			IngestMode:       "POST normalized GitHub event enqueues a secret_repo discovery run; worker scans checkout_path or clone_url (a private repository with its credential_ref) with Gitleaks",
 			RefTypes:         []string{"branch", "tag", "pull_request_head", "commit_sha"},
 			SecretHandling:   "raw token and finding value stay outside events; only rule/file/line/redacted reference are recorded",
@@ -808,7 +834,7 @@ func buildSecretRepoScanPosture(generatedAt string) secretRepoScanPostureRespons
 			ID:               "gitlab",
 			Name:             "GitLab",
 			RealtimeTriggers: []string{"push", "merge_request", "tag_push", "pipeline"},
-			AuthMode:         "authenticated trstctl SecretsWrite webhook or a native GitLab hook verified by its signing token (or its secret token); a private repository clones over https with the GitLab token its credential_ref names",
+			AuthMode:         "authenticated trstctl SecretsWrite webhook (also SecretsRead for credential_ref) or a native GitLab hook verified by its signing token (or its secret token); a private repository clones over https with the GitLab token its credential_ref names",
 			IngestMode:       "POST normalized GitLab event enqueues a secret_repo discovery run; worker scans checkout_path or clone_url (a private repository with its credential_ref) with Gitleaks",
 			RefTypes:         []string{"branch", "tag", "merge_request_source", "commit_sha"},
 			SecretHandling:   "raw token and finding value stay outside events; only rule/file/line/redacted reference are recorded",
@@ -818,7 +844,7 @@ func buildSecretRepoScanPosture(generatedAt string) secretRepoScanPostureRespons
 			ID:               "bitbucket",
 			Name:             "Bitbucket",
 			RealtimeTriggers: []string{"repo:push", "pullrequest:created", "pullrequest:updated", "repo:refs_changed"},
-			AuthMode:         "authenticated trstctl SecretsWrite webhook or a native Bitbucket hook verified by its signature; a private repository clones over https with the Bitbucket token its credential_ref names",
+			AuthMode:         "authenticated trstctl SecretsWrite webhook (also SecretsRead for credential_ref) or a native Bitbucket hook verified by its signature; a private repository clones over https with the Bitbucket token its credential_ref names",
 			IngestMode:       "POST normalized Bitbucket event enqueues a secret_repo discovery run; worker scans checkout_path or clone_url (a private repository with its credential_ref) with Gitleaks",
 			RefTypes:         []string{"branch", "tag", "pull_request_source", "commit_sha"},
 			SecretHandling:   "raw token and finding value stay outside events; only rule/file/line/redacted reference are recorded",
@@ -910,15 +936,13 @@ func secretRepoScanConfig(provider string, req secretRepoScanWebhookRequest) (se
 	}
 	credentialRef, credentialUser := strings.TrimSpace(req.CredentialRef), strings.TrimSpace(req.CredentialUsername)
 	if credentialRef != "" {
-		// OD-1: a private repository's clone credential is a reference the
-		// worker opens for the clone, sent to an https clone URL only.
-		if !strings.HasPrefix(credentialRef, "file:") {
-			if _, err := credref.Parse(credentialRef); err != nil {
-				return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest,
-					"credential_ref must be a file: reference or use canonical secret://name with an optional ?version=N")
-			}
+		// Tenant-authored scans cannot choose a control-plane file as a clone
+		// credential. Operator-configured native hooks use a separate path.
+		if _, err := credref.Parse(credentialRef); err != nil {
+			return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest,
+				"credential_ref must use canonical secret://name with an optional ?version=N")
 		}
-		if cloneURL == "" || !strings.HasPrefix(strings.ToLower(cloneURL), "https://") {
+		if _, err := secretscan.HTTPSCloneOrigin(cloneURL); err != nil {
 			return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "credential_ref needs an https clone_url")
 		}
 	}

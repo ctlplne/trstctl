@@ -21,3 +21,20 @@ func TestSecretScanWebhookProvidersOD3(t *testing.T) {
 		t.Fatalf("an unknown provider = %v", errs)
 	}
 }
+
+func TestCR048NativeHookCloneCredentialRequiresPinnedOrigin(t *testing.T) {
+	hook := SecretScanWebhook{
+		ID: "private", TenantID: "8d0c3a4e-6a51-4c43-9b7e-5f0f5b0f4a10", Provider: "github",
+		SecretRef: "file:/run/secrets/hook", CloneCredentialRef: "file:/run/secrets/clone",
+	}
+	for _, origin := range []string{"", "http://git.example", "https://git.example/path", "https://user@git.example", "https://git.example?next=evil"} {
+		hook.CloneOrigin = origin
+		if errs := validateSecretScanWebhooks([]SecretScanWebhook{hook}); len(errs) == 0 {
+			t.Errorf("accepted clone_origin %q for an operator clone credential", origin)
+		}
+	}
+	hook.CloneOrigin = "https://git.example"
+	if errs := validateSecretScanWebhooks([]SecretScanWebhook{hook}); len(errs) != 0 {
+		t.Fatalf("canonical origin was refused: %v", errs)
+	}
+}

@@ -4183,11 +4183,15 @@ entry has an `id` (one path segment; the hook's URL is
 `secret://`) holding the hook's secret: the webhook secret GitHub or Bitbucket signs
 deliveries with, or for GitLab the hook's signing token (`whsec_…`) or, for a hook
 without one, its secret token. For private repositories (OD-1),
-`clone_credential_ref` (`file:` or `secret://`) holds the access token a pushed
-repository's https clone authenticates with, and `clone_credential_username` the user
+`clone_credential_ref` (`file:` or `secret://`) holds the operator-owned access token a pushed
+repository's https clone authenticates with. `clone_origin` is required with it and
+pins the exact canonical HTTPS origin, such as `https://git.example.com`, allowed to
+receive that token; a signed push with a different clone host is refused.
+`clone_credential_username` is the user
 it clones as (default `x-access-token`, `oauth2` or `x-token-auth` by provider). Startup
 refuses a duplicate id, a provider other than github, gitlab or bitbucket, an invalid
-reference, or a `clone_credential_username` without a `clone_credential_ref`.
+reference, an absent or malformed `clone_origin` for a clone credential, or a
+`clone_credential_username` without a `clone_credential_ref`.
 
 Leaked-secret validity checks (P14) are configured under `secrets.validity_checks`:
 `enabled` turns them on; `providers` names the providers whose checks run (`aws`,
