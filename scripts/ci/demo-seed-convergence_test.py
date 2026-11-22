@@ -12,7 +12,7 @@ SCRIPT = Path(__file__).with_name("demo-seed-convergence.sh")
 
 
 class DemoSeedConvergenceTest(unittest.TestCase):
-    def run_convergence(self, *, notification_destination="notification.expiry", other_active=False, host_processing=False, agent_present=False, event_on_rerun=False, late_background_event=False, background_event_on_rerun=False, background_outbox_after_rerun=False, seed_outbox_on_rerun=False):
+    def run_convergence(self, *, notification_destination="notification.expiry", other_active=False, host_processing=False, agent_present=False, event_on_rerun=False, late_background_event=False, continuous_background_events=False, stream_rollback=False, background_event_on_rerun=False, background_outbox_after_rerun=False, seed_outbox_on_rerun=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             docker = root / "docker"
@@ -59,11 +59,16 @@ elif 'exec' in args and 'nats' in args:
     count = 8 if os.environ.get('FAKE_EVENT_ON_RERUN') == '1' and Path(os.environ['FAKE_DOCKER_STATE']).exists() else 7
     if os.environ.get('FAKE_BACKGROUND_EVENT_ON_RERUN') == '1' and Path(os.environ['FAKE_DOCKER_STATE']).exists():
         count = 8
-    if os.environ.get('FAKE_LATE_BACKGROUND_EVENT') == '1':
+    if any(os.environ.get(name) == '1' for name in ('FAKE_LATE_BACKGROUND_EVENT',
+            'FAKE_CONTINUOUS_BACKGROUND_EVENTS', 'FAKE_STREAM_ROLLBACK')):
         counter = Path(os.environ['FAKE_DOCKER_STATE'] + '.nats_reads')
         reads = int(counter.read_text()) + 1 if counter.exists() else 1
         counter.write_text(str(reads))
-        if reads > 3:
+        if os.environ.get('FAKE_CONTINUOUS_BACKGROUND_EVENTS') == '1':
+            count += reads
+        elif os.environ.get('FAKE_STREAM_ROLLBACK') == '1':
+            count = 8 if reads <= 3 else 7
+        elif reads > 3:
             count = 8
     print(json.dumps({'account_details': [{'stream_detail': [
         {'config': {'name': 'TRSTCTL_EVENTS'}, 'state': {'messages': count}},
@@ -93,6 +98,8 @@ else:
                    "FAKE_NOTIFICATION_DESTINATION": notification_destination,
                    "FAKE_EVENT_ON_RERUN": str(int(event_on_rerun)),
                    "FAKE_LATE_BACKGROUND_EVENT": str(int(late_background_event)),
+                   "FAKE_CONTINUOUS_BACKGROUND_EVENTS": str(int(continuous_background_events)),
+                   "FAKE_STREAM_ROLLBACK": str(int(stream_rollback)),
                    "FAKE_BACKGROUND_EVENT_ON_RERUN": str(int(background_event_on_rerun)),
                    "FAKE_BACKGROUND_OUTBOX_AFTER_RERUN": str(int(background_outbox_after_rerun)),
                    "FAKE_SEED_OUTBOX_ON_RERUN": str(int(seed_outbox_on_rerun)),
@@ -136,6 +143,15 @@ else:
     def test_checkpoint_waits_through_delayed_background_event(self):
         result = self.run_convergence(late_background_event=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_continuous_background_events_do_not_hide_settled_seed(self):
+        result = self.run_convergence(continuous_background_events=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_checkpoint_refuses_a_stream_count_rollback(self):
+        result = self.run_convergence(stream_rollback=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("event stream regressed", result.stderr)
 
     def test_background_event_after_seed_rerun_does_not_implicate_seed(self):
         result = self.run_convergence(background_event_on_rerun=True)

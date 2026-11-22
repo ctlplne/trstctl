@@ -57,21 +57,34 @@ snapshot() {
 }
 
 stable_snapshot() {
-  local previous="" current="" stable=0
+  local previous="" current="" last_streams="" stable=0
   # Unconfigured notifications and host deployments without any live agent
   # cannot complete in the assembled demo. Their workers can still claim and
-  # defer rows while the seed and event stream have settled. Other active work
-  # must settle before the preserved-volume comparison.
+  # defer rows while the seed has settled. Other active work must settle before
+  # the preserved-volume comparison. Background events may keep all three
+  # JetStream streams advancing, so require nondecreasing counts rather than
+  # a quiet global stream. Seed-attributed event IDs are compared below.
   for _attempt in $(seq 1 360); do
     current="$(snapshot)"
+    if [[ -n "$last_streams" ]] &&
+       ! jq -en --argjson before "$last_streams" --argjson after "$current" '
+         ($before.jetstream_streams | keys) == ($after.jetstream_streams | keys) and
+         ($after.jetstream_message_count >= $before.jetstream_message_count) and
+         all($before.jetstream_streams | keys[];
+             $after.jetstream_streams[.] >= $before.jetstream_streams[.])
+       ' >/dev/null; then
+      fail "event stream regressed while waiting for the demo seed checkpoint"
+    fi
+    last_streams="$current"
     if [[ "$(jq -r '.postgres.outbox_active_retry_count' <<<"$current")" != "0" ]]; then
       previous=""
       stable=0
-    elif [[ "$current" == "$previous" ]]; then
+    elif [[ -n "$previous" &&
+            "$(jq -cS '.postgres' <<<"$current")" == "$(jq -cS '.postgres' <<<"$previous")" ]]; then
       stable=$((stable + 1))
       # Two matching 2-second reads can land between a worker's delayed
-      # event append and its next retry. Require a continuous 30-second quiet
-      # window before treating the event stream as settled.
+      # projection and its next retry. Require a continuous 30-second stable
+      # tenant inventory/outbox window before the preserved-volume comparison.
       if [[ "$stable" -ge 15 ]]; then
         printf '%s\n' "$current"
         return 0
@@ -86,7 +99,7 @@ stable_snapshot() {
           outbox_count:.postgres.outbox_count,
           jetstream_message_count,
           jetstream_streams}' <<<"$current" >&2
-  fail "assembled demo did not reach a stable inventory/event checkpoint"
+  fail "assembled demo did not reach a stable tenant inventory/outbox checkpoint"
 }
 
 seed_actor_events() {
