@@ -15,7 +15,9 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 
@@ -46,6 +48,42 @@ type fakeChannel struct {
 	confirmations      []report
 	confirmationDenied bool
 	confirmationErr    error
+}
+
+type shortHostLeaseChannel struct {
+	fakeChannel
+	mu         sync.Mutex
+	expires    time.Time
+	extensions int
+	accepted   bool
+	refuse     bool
+}
+
+func (c *shortHostLeaseChannel) ClaimJobs(ctx context.Context, kinds []string, limit, seconds int) ([]relay.Job, error) {
+	c.mu.Lock()
+	c.expires = time.Now().Add(300 * time.Millisecond)
+	c.mu.Unlock()
+	return c.fakeChannel.ClaimJobs(ctx, kinds, limit, seconds)
+}
+
+func (c *shortHostLeaseChannel) ExtendJobClaim(_ context.Context, jobID int64, attempt int) (time.Time, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.refuse || jobID != 91 || attempt != 1 || !time.Now().Before(c.expires) {
+		return time.Time{}, relay.ErrJobClaimLost
+	}
+	c.extensions++
+	c.expires = time.Now().Add(300 * time.Millisecond)
+	return c.expires, nil
+}
+
+func (c *shortHostLeaseChannel) ReportJobResult(ctx context.Context, jobID int64, attempt int, outcome, detail, evidence string) (bool, error) {
+	c.mu.Lock()
+	c.accepted = time.Now().Before(c.expires)
+	accepted := c.accepted
+	c.mu.Unlock()
+	_, err := c.fakeChannel.ReportJobResult(ctx, jobID, attempt, outcome, detail, evidence)
+	return accepted, err
 }
 
 type report struct {
@@ -103,6 +141,65 @@ func intentJob(t *testing.T, jobID int64, intent relay.DeployIntent) relay.Job {
 		t.Fatal(err)
 	}
 	return relay.Job{JobID: jobID, Kind: "connector.deploy", Attempt: 1, Payload: payload}
+}
+
+func TestShortHostDeployLeaseAction(t *testing.T) {
+	// LocalOps deliberately starts commands with a minimal environment. The
+	// fixed test binary sleeps on every invocation, including a direct test.
+	time.Sleep(350 * time.Millisecond)
+}
+
+// A slow local reload must keep its original claim while work is in progress.
+// The server refuses terminal receipts after expiry, even if the effect landed.
+func TestHostDeployMaintainsClaimThroughSlowReload(t *testing.T) {
+	root := t.TempDir()
+	certPath, keyPath := filepath.Join(root, "site.crt"), filepath.Join(root, "site.key")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch := &shortHostLeaseChannel{fakeChannel: fakeChannel{
+		jobs: []relay.Job{intentJob(t, 91, relay.DeployIntent{
+			Connector: "nginx", Target: "host", CredentialRefs: []string{"credential.cert_pem", "credential.key_pem"},
+			TargetConfig: mustJSON(t, map[string]string{"cert_path": certPath, "key_path": keyPath}),
+		})},
+		material: map[string][]byte{"credential.cert_pem": []byte(testCertPEM), "credential.key_pem": []byte(testKeyPEM)},
+	}}
+	profile := connector.LocalOpsConfig{AllowedRoots: []string{root}, Actions: []connector.LocalAction{{
+		LogicalName: "nginx", Command: exe, Args: []string{"-test.run=^TestShortHostDeployLeaseAction$"}, Timeout: 2 * time.Second,
+	}}}
+	_, err = relay.RunOnceWithHost(t.Context(), ch, http.DefaultClient, profile, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ch.accepted || ch.extensions < 2 || len(ch.reports) != 1 || ch.reports[0].outcome != transport.JobOutcomeExecuted {
+		t.Fatalf("accepted=%v extensions=%d reports=%+v; want a held claim through both reload actions", ch.accepted, ch.extensions, ch.reports)
+	}
+	if _, err := os.Stat(certPath); err != nil {
+		t.Fatalf("host deploy did not install certificate: %v", err)
+	}
+}
+
+func TestHostDeployRefusesLostClaimBeforeCredentialRedemption(t *testing.T) {
+	root := t.TempDir()
+	certPath, keyPath := filepath.Join(root, "site.crt"), filepath.Join(root, "site.key")
+	ch := &shortHostLeaseChannel{refuse: true, fakeChannel: fakeChannel{
+		jobs: []relay.Job{intentJob(t, 91, relay.DeployIntent{
+			Connector: "nginx", Target: "host", CredentialRefs: []string{"credential.cert_pem", "credential.key_pem"},
+			TargetConfig: mustJSON(t, map[string]string{"cert_path": certPath, "key_path": keyPath}),
+		})},
+		material: map[string][]byte{"credential.cert_pem": []byte(testCertPEM), "credential.key_pem": []byte(testKeyPEM)},
+	}}
+	executed, err := relay.RunOnceWithHost(t.Context(), ch, http.DefaultClient, hostProfileForNginx(t, root), 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if executed != 0 || ch.redeemed != 0 || len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed {
+		t.Fatalf("executed=%d redeemed=%d reports=%+v; lost claim must fail before credentials or effects", executed, ch.redeemed, ch.reports)
+	}
+	if _, err := os.Stat(certPath); !os.IsNotExist(err) {
+		t.Fatalf("lost claim changed target: %v", err)
+	}
 }
 
 // TestRelayRefusesUnexecutableWorkBeforeRedeeming is the ordering that matters

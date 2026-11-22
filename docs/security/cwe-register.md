@@ -150,10 +150,10 @@ not this file.
 | `internal/agent/relay/relay_appliance_e2e_test.go:259` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:332` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:370` | credential REFERENCE NAMES, not credentials: the relay looks values up in redeemed material by these keys (CWE-798) |
-| `internal/agent/relay/relay_test.go:147` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:189` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:344` | reference NAME, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:402` | reference NAME (CWE-798) |
+| `internal/agent/relay/relay_test.go:244` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:286` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:441` | reference NAME, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:499` | reference NAME (CWE-798) |
 | `internal/agent/relay/revocation_ldap_failure_test.go:59` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/agent/relay/revocation_ldap_test.go:77` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/agent/relay/revocation_ldap_test.go:146` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
@@ -1106,8 +1106,8 @@ not this file.
 | `internal/server/endpoint_traffic_served_test.go:74` | loopback fixture closed below (CWE-400) |
 | `internal/server/evaluate_incident_served_test.go:57` | loopback fixture is closed below (CWE-400) |
 | `internal/server/evaluate_served_test.go:66` | loopback fixture is closed below (CWE-400) |
-| `internal/server/host_agent_remote_served_test.go:295` | loopback fixture is closed below (CWE-400) |
-| `internal/server/host_agent_remote_served_test.go:533` | loopback fixture closed below (CWE-400) |
+| `internal/server/host_agent_remote_served_test.go:310` | loopback fixture is closed below (CWE-400) |
+| `internal/server/host_agent_remote_served_test.go:548` | loopback fixture closed below (CWE-400) |
 | `internal/server/host_renewal_heal_served_test.go:107` | loopback fixture is closed below (CWE-400) |
 | `internal/server/incident_fleet_reissuance_served_test.go:443` | loopback test fixture is explicitly closed (CWE-400) |
 | `internal/server/migration_appliance_served_test.go:115` | loopback fixture closed below (CWE-400) |
@@ -2709,8 +2709,8 @@ not this file.
 | `internal/agent/relay/plugins.go:276` | sibling of an operator-configured module (CWE-22) |
 | `internal/agent/relay/postgresql_verification_test.go:158` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
 | `internal/agent/relay/recovery_check.go:278` | the host operator's own pinned executable from the host profile (CWE-22) |
-| `internal/agent/relay/relay_test.go:675` | certPath is created beneath this test's private t.TempDir, |
-| `internal/agent/relay/relay_test.go:1106` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
+| `internal/agent/relay/relay_test.go:772` | certPath is created beneath this test's private t.TempDir, |
+| `internal/agent/relay/relay_test.go:1203` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
 | `internal/agent/relay/rollback_test.go:224` | test-owned temporary path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:87` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:152` | test reads its own tempdir fixture path (CWE-22) |
@@ -3068,10 +3068,10 @@ not this file.
 | `internal/server/event_protection_done_when_test.go:117` | the test's own backup artifact (CWE-22) |
 | `internal/server/event_protection_postgres_backup_served_test.go:35` | exact artifact in this test's owned backup directory (CWE-22) |
 | `internal/server/external_poller_boundary_test.go:16` | name comes only from the closed literal source-file list above (CWE-22) |
-| `internal/server/host_agent_remote_served_test.go:153` | parent-created test fixture path (CWE-22) |
-| `internal/server/host_agent_remote_served_test.go:210` | parent-created public fixture (CWE-22) |
-| `internal/server/host_agent_remote_served_test.go:419` | test reads its own remote-host fixture (CWE-22) |
-| `internal/server/host_agent_remote_served_test.go:810` | test-owned target fixture (CWE-22) |
+| `internal/server/host_agent_remote_served_test.go:168` | parent-created test fixture path (CWE-22) |
+| `internal/server/host_agent_remote_served_test.go:225` | parent-created public fixture (CWE-22) |
+| `internal/server/host_agent_remote_served_test.go:434` | test reads its own remote-host fixture (CWE-22) |
+| `internal/server/host_agent_remote_served_test.go:825` | test-owned target fixture (CWE-22) |
 | `internal/server/host_keystore_credentials_served_test.go:117` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/host_keystore_credentials_served_test.go:166` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/idempotency_protection_wiring_test.go:61` | test reads its own fixture/tempdir path (CWE-22) |
@@ -3409,8 +3409,8 @@ not this file.
 | `internal/server/decoy_files_container_lab_q6o1_test.go:39` | disposable lab inputs the container reads (CWE-22) |
 | `internal/server/decoy_kubernetes_kind_lab_q6o2_test.go:70` | disposable lab configuration the kind node reads (CWE-22) |
 | `internal/server/dod_connector_runtime_test.go:817` | public CA fixture (CWE-276) |
-| `internal/server/host_agent_remote_served_test.go:390` | public CA certificate fixture (CWE-276) |
-| `internal/server/host_agent_remote_served_test.go:616` | public CA fixture (CWE-276) |
+| `internal/server/host_agent_remote_served_test.go:405` | public CA certificate fixture (CWE-276) |
+| `internal/server/host_agent_remote_served_test.go:631` | public CA fixture (CWE-276) |
 | `internal/server/lab_openldap_test.go:106` | the container's directory server reads it; the key is a throwaway lab key (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:248` | public realm configuration the container reads (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:252` | public cache configuration the container reads (CWE-276) |

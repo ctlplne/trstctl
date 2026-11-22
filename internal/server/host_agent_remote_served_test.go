@@ -64,6 +64,21 @@ func (c servedHostRelayChannel) ClaimJobs(ctx context.Context, kinds []string, l
 	return out, nil
 }
 
+func (c *servedHostRelayChannel) ExtendJobClaim(ctx context.Context, jobID int64, attempt int) (time.Time, error) {
+	resp, err := c.client.ReportJobResult(ctx, &transport.ReportJobResultRequest{
+		JobID: jobID, Attempt: attempt, Outcome: transport.JobOutcomeExtend, LeaseSeconds: 60,
+	})
+	if err != nil {
+		return time.Time{}, err
+	}
+	received := time.Now()
+	until := agentrelay.LocalLeaseDeadline(received, resp.LeaseExpiresUnix, resp.LeaseRemainingMillis)
+	if !resp.Accepted || !until.After(received) {
+		return time.Time{}, agentrelay.ErrJobClaimLost
+	}
+	return until, nil
+}
+
 func (c *servedHostRelayChannel) RedeemJobCredential(ctx context.Context, jobID int64, attempt int) (map[string][]byte, error) {
 	resp, err := c.client.RedeemJobCredential(ctx, &transport.RedeemJobCredentialRequest{JobID: jobID, Attempt: attempt})
 	c.lastRedeemErr = err

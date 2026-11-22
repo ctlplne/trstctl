@@ -514,6 +514,17 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		failDeploy(ctx, ch, job, intent, DeployStepIntent, "host deploy is missing target or fingerprint rollback identity", nil, nil)
 		return false
 	}
+	if hostJob {
+		if maintainer, ok := ch.(JobLeaseMaintainer); ok {
+			claim, err := maintainHostRenewClaim(ctx, maintainer, job)
+			if err != nil {
+				failDeploy(ctx, ch, job, intent, DeployStepRedeem, "the host deploy job claim could not be maintained", err, nil)
+				return false
+			}
+			defer claim.stop()
+			ctx = claim.ctx
+		}
+	}
 
 	items, err := ch.RedeemJobCredential(ctx, job.JobID, job.Attempt)
 	if err != nil {
@@ -808,6 +819,15 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfi
 		}
 		if !confirmRollback(ctx, ch, job) {
 			return false
+		}
+		if maintainer, ok := ch.(JobLeaseMaintainer); ok {
+			claim, err := maintainHostRenewClaim(ctx, maintainer, job)
+			if err != nil {
+				report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedAuthorizationUnavailable)
+				return false
+			}
+			defer claim.stop()
+			ctx = claim.ctx
 		}
 		management, destroyManagement, err := redeemHostManagement(ctx, ch, job, intent.CredentialRefs)
 		if err != nil {
