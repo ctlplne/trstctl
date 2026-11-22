@@ -12,7 +12,7 @@ SCRIPT = Path(__file__).with_name("demo-seed-convergence.sh")
 
 
 class DemoSeedConvergenceTest(unittest.TestCase):
-    def run_convergence(self, *, notification_destination="notification.expiry", other_active=False, event_on_rerun=False, late_background_event=False):
+    def run_convergence(self, *, notification_destination="notification.expiry", other_active=False, host_processing=False, agent_present=False, event_on_rerun=False, late_background_event=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             docker = root / "docker"
@@ -36,6 +36,14 @@ elif 'exec' in args and 'postgres' in args:
             "destination = 'notification.expiry'" in sql)
     if not excluded or "last_error = 'notification_receiver_not_configured'" not in sql:
         active += 1
+    if os.environ.get('FAKE_HOST_PROCESSING') == '1':
+        # A host deployment cannot finish before a host agent is enrolled.
+        no_agent = os.environ.get('FAKE_AGENT_PRESENT') != '1'
+        narrow_exclusion = all(fragment in sql for fragment in (
+            "o.destination = 'connector.deploy'", "o.required_agent_role = 'host'",
+            "a.tenant_id = o.tenant_id", "a.status <> 'offboarded'"))
+        if not (no_agent and narrow_exclusion):
+            active += 1
     print(json.dumps(dict(owners=[], owner_count=0, owner_logical_count=0,
         identities=[], certificates=0, members=[], secrets=[],
         api_token_count=0, outbox_count=1, outbox_active_retry_count=active)))
@@ -64,6 +72,8 @@ else:
             (root / "sleep").chmod(0o755)
             env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ["PATH"],
                    "FAKE_OTHER_ACTIVE": str(int(other_active)),
+                   "FAKE_HOST_PROCESSING": str(int(host_processing)),
+                   "FAKE_AGENT_PRESENT": str(int(agent_present)),
                    "FAKE_NOTIFICATION_DESTINATION": notification_destination,
                    "FAKE_EVENT_ON_RERUN": str(int(event_on_rerun)),
                    "FAKE_LATE_BACKGROUND_EVENT": str(int(late_background_event)),
@@ -85,6 +95,15 @@ else:
 
     def test_other_active_work_still_blocks_checkpoint(self):
         result = self.run_convergence(other_active=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("did not reach a stable", result.stderr)
+
+    def test_processing_host_deployment_without_agent_does_not_block_seed_checkpoint(self):
+        result = self.run_convergence(host_processing=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_processing_host_deployment_with_agent_still_blocks_checkpoint(self):
+        result = self.run_convergence(host_processing=True, agent_present=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("did not reach a stable", result.stderr)
 

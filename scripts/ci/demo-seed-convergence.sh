@@ -27,12 +27,16 @@ postgres_snapshot() {
                       FROM secret_store WHERE tenant_id = '${tenant_id}'),
         'api_token_count', (SELECT count(*) FROM api_tokens WHERE tenant_id = '${tenant_id}'),
         'outbox_count', (SELECT count(*) FROM outbox WHERE tenant_id = '${tenant_id}'),
-        'outbox_active_retry_count', (SELECT count(*) FROM outbox
-             WHERE tenant_id = '${tenant_id}'
-               AND NOT (destination LIKE 'notification.%' AND status = 'pending'
-                        AND last_error = 'notification_receiver_not_configured')
-               AND (status = 'processing' OR (status = 'pending'
-                    AND COALESCE(last_error, '') <> 'delivery_deferred')))
+        'outbox_active_retry_count', (SELECT count(*) FROM outbox o
+             WHERE o.tenant_id = '${tenant_id}'
+               AND NOT (o.destination LIKE 'notification.%' AND o.status = 'pending'
+                        AND o.last_error = 'notification_receiver_not_configured')
+               AND NOT (o.destination = 'connector.deploy' AND o.required_agent_role = 'host'
+                        AND NOT EXISTS (SELECT 1 FROM agents a
+                                        WHERE a.tenant_id = o.tenant_id
+                                          AND a.status <> 'offboarded'))
+               AND (o.status = 'processing' OR (o.status = 'pending'
+                    AND COALESCE(o.last_error, '') <> 'delivery_deferred')))
       );"
 }
 
@@ -54,10 +58,10 @@ snapshot() {
 
 stable_snapshot() {
   local previous="" current="" stable=0
-  # An unconfigured notification remains pending through long retry
-  # backoffs. Its known no-receiver refusal only updates its outbox row; it
-  # does not change the inventory, outbox row count, or JetStream count. A
-  # processing row or any different failure must still settle before comparison.
+  # Unconfigured notifications and host deployments without any live agent
+  # cannot complete in the assembled demo. Their workers can still claim and
+  # defer rows while the seed and event stream have settled. Other active work
+  # must settle before the preserved-volume comparison.
   for _attempt in $(seq 1 360); do
     current="$(snapshot)"
     if [[ "$(jq -r '.postgres.outbox_active_retry_count' <<<"$current")" != "0" ]]; then
@@ -78,6 +82,10 @@ stable_snapshot() {
     fi
     sleep 2
   done
+  jq -c '{active_retry_count:.postgres.outbox_active_retry_count,
+          outbox_count:.postgres.outbox_count,
+          jetstream_message_count,
+          jetstream_streams}' <<<"$current" >&2
   fail "assembled demo did not reach a stable inventory/event checkpoint"
 }
 
