@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -109,15 +110,47 @@ func (s *pamService) placeRecordingChunk(ctx context.Context, tx pgx.Tx, tenantI
 		return recordingPlace{}, err
 	}
 	type accepted struct {
-		attempt, seq int
-		sum, chain   string
+		ord, attempt, seq, size int
+		sum, sealedSum, chain   string
 	}
-	all := make([]accepted, 0, len(stored)+len(staged))
+	// A stored projection can be visible before its matching staging row is
+	// removed. Both rows describe one ordinal, not two accepted chunks.
+	byOrd := make(map[int]accepted, len(stored)+len(staged))
+	add := func(c accepted) error {
+		if prior, exists := byOrd[c.ord]; exists && prior != c {
+			return errors.New("recording chunk has conflicting stored and staged copies")
+		}
+		byOrd[c.ord] = c
+		return nil
+	}
 	for _, c := range stored {
-		all = append(all, accepted{c.Attempt, c.Seq, c.SHA256, c.Chain})
+		if err := add(accepted{c.Ord, c.Attempt, c.Seq, c.Size, c.SHA256, c.SealedSHA256, c.Chain}); err != nil {
+			return recordingPlace{}, err
+		}
 	}
 	for _, u := range staged {
-		all = append(all, accepted{u.Attempt, u.Seq, u.SHA256, u.Chain})
+		if err := add(accepted{u.Ord, u.Attempt, u.Seq, u.Size, u.SHA256, u.SealedSHA256, u.Chain}); err != nil {
+			return recordingPlace{}, err
+		}
+	}
+	ords := make([]int, 0, len(byOrd))
+	for ord := range byOrd {
+		ords = append(ords, ord)
+	}
+	sort.Ints(ords)
+	all := make([]accepted, 0, len(ords))
+	seen := make(map[[2]int]struct{}, len(ords))
+	for _, ord := range ords {
+		c := byOrd[ord]
+		if ord != len(all) {
+			return recordingPlace{}, errors.New("recording chunk places are not contiguous")
+		}
+		key := [2]int{c.attempt, c.seq}
+		if _, exists := seen[key]; exists {
+			return recordingPlace{}, errors.New("recording chunk has duplicate attempt and sequence")
+		}
+		seen[key] = struct{}{}
+		all = append(all, c)
 	}
 	next := 0
 	for _, c := range all {
