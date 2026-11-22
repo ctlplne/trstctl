@@ -17,12 +17,10 @@ import (
 	"trstctl.com/trstctl/internal/config"
 )
 
-// CR-008 (design D2, review item 2): for the generic discovery kinds the API's
-// declaration check is best-effort. It reads exact-case *_ref keys and takes
-// destinations only from sibling endpoint and URL keys, while the worker decodes
-// keys case-insensitively and derives some destinations from other fields. A
-// declaration that slips past the API that way is stored, and the worker's pin
-// refuses it with nothing sent.
+// CR-008 (design D2, review item 2): generic discovery declarations cannot
+// send an environment credential to an origin outside its binding. CR-049 now
+// rejects mis-cased control keys at the API; a region-derived destination still
+// reaches the worker, whose independent pin must refuse it without sending.
 func TestServedBestEffortDeclarationsAreRefusedByTheWorkersPinCR008(t *testing.T) {
 	const (
 		vaultRef  = "env:TRSTCTL_CR008B_VAULT_TOKEN" // #nosec G101 -- reference names only (CWE-798)
@@ -46,25 +44,31 @@ func TestServedBestEffortDeclarationsAreRefusedByTheWorkersPinCR008(t *testing.T
 	writer := seedScopedTokenSubject(t, h.store, h.tenant, "cr008b-discovery", "discovery:read", "discovery:write", string(authz.PrivateEgress))
 	ctx := t.Context()
 	for _, tc := range []struct {
-		name, kind string
-		cfg        map[string]any
+		name, kind  string
+		cfg         map[string]any
+		rejectAtAPI bool
 		// origin is the destination the pinned client refused.
 		origin string
 	}{
-		// The reference hides behind a key the API reads only in exact case;
-		// the worker's decoder matches it case-insensitively.
+		// CR-049 refuses a key whose spelling would make API and worker disagree.
 		{"a case-variant reference key", "cloud_secret", map[string]any{"providers": []map[string]any{{
 			"provider": "hashicorp-vault", "vault_url": otherVault.URL, "allow_private_endpoint": true,
 			"private_egress_cidrs": []string{serviceNowSinkCIDR(t, otherVault.URL)}, "Token_Ref": vaultRef, "mount": "secret", "path_prefix": "tls",
-		}}}, otherVault.URL},
+		}}}, true, otherVault.URL},
 		// No endpoint key: the worker derives the destination from the region,
 		// which the binding does not name. The pin refuses before any DNS lookup.
 		{"a region-derived destination", "cloud_certificate", map[string]any{"providers": []map[string]any{{
 			"provider": "aws-acm", "region": "cr008-unbound-1", "access_key_id_ref": keyIDRef, "secret_access_key_ref": secretRef,
-		}}}, "https://acm.cr008-unbound-1.amazonaws.com"},
+		}}}, false, "https://acm.cr008-unbound-1.amazonaws.com"},
 	} {
 		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/sources", writer, "cr008b-source-"+tc.kind, map[string]any{
 			"kind": tc.kind, "name": "CR-008 " + tc.name, "config": tc.cfg})
+		if tc.rejectAtAPI {
+			if status != http.StatusBadRequest || !strings.Contains(string(body), "mis-cased or duplicate control field") || other.requests() != 0 {
+				t.Fatalf("%s: API did not refuse the ambiguous declaration before any outbound call: %d %s", tc.name, status, body)
+			}
+			continue
+		}
 		var source struct {
 			ID string `json:"id"`
 		}
