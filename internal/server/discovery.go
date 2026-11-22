@@ -563,18 +563,22 @@ func discoveryTargetResults(in []netscan.TargetResult) []store.DiscoveryTargetRe
 }
 
 func (d *issuanceDispatcher) executeDriftDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
-	plan, err := driftplan.Resolve(src.Config)
+	plan, err := driftplan.ResolveForRoots(src.Config, d.driftRoots)
 	if err != nil {
-		return netscan.Report{}, "failed", err.Error(), nil
+		return netscan.Report{}, "failed", "drift plan is outside operator-approved roots", nil
 	}
 	if run.DryRun {
 		return netscan.Report{Targets: len(plan.Watched)}, "succeeded", "", nil
 	}
 	audit := &discoveryDriftAuditor{}
-	rec := &drift.Reconciler{Policy: plan.Policy, Auditor: audit}
+	rec := &drift.Reconciler{Policy: plan.Policy, Auditor: audit,
+		Detector: func(ctx context.Context, watched []drift.Watched, scope ...string) ([]drift.Finding, error) {
+			return drift.DetectConfined(ctx, d.driftRoots, watched, scope...)
+		},
+	}
 	rep, err := rec.Reconcile(ctx, plan.Watched, plan.Scope...)
 	if err != nil {
-		return netscan.Report{}, "failed", err.Error(), nil
+		return netscan.Report{}, "failed", "drift read refused or failed inside operator-approved roots", nil
 	}
 	if err := d.recordDriftFindings(ctx, tenantID, src.ID, run.ID, rep, audit.events); err != nil {
 		return netscan.Report{}, "", "", err

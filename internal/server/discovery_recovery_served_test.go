@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"path/filepath"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -157,6 +158,7 @@ func TestServedDiscoveryRunRetryPreservesFailureAndLineage(t *testing.T) {
 // That is the server oracle behind the shared console Retry action for
 // F42/F49/F35/F36.
 func TestServedDiscoveryRunRetryCoversPrimaryCredentialSources(t *testing.T) {
+	driftRoot := t.TempDir()
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID", "test-access-key-id")
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY", "test-secret-access-key")
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "test-sm-access-key-id")
@@ -168,6 +170,7 @@ func TestServedDiscoveryRunRetryCoversPrimaryCredentialSources(t *testing.T) {
 		bindOutboundEnvCredentialRefs("cloud_secret", []string{"https://secretsmanager.us-east-1.amazonaws.com"},
 			"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY"),
 		bindOutboundEnvCredentialRefs("secret_store", []string{"https://vault.example"}, "env:TRSTCTL_DISCOVERY_VAULT_TOKEN"),
+		func(d *Deps) { d.DriftRoots = []string{driftRoot} },
 	)
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
@@ -190,7 +193,7 @@ func TestServedDiscoveryRunRetryCoversPrimaryCredentialSources(t *testing.T) {
 			kind: "drift",
 			config: map[string]any{
 				"watched": []map[string]any{{
-					"path": t.TempDir() + "/public-leaf.pem", "class": "certificate",
+					"path": filepath.Join(driftRoot, "public-leaf.pem"), "class": "certificate",
 					"fingerprint": drift.Fingerprint([]byte("declared public certificate bytes")),
 					"mode":        "0644",
 				}},

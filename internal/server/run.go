@@ -844,6 +844,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		SecretValidity:              secretValidityChecker(cfg.Secrets.ValidityChecks),
 		SecretScanGitleaksBin:       cfg.Secrets.GitleaksBin,
 		SecretScanRoots:             append([]string(nil), cfg.Secrets.ScanRoots...),
+		DriftRoots:                  append([]string(nil), cfg.Secrets.DriftRoots...),
 		EnableAISurface:             cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
 		AIMCPIdentity: cfg.AI.MCPIdentity, EnableMCPWriteTools: cfg.AI.MCPWriteTools, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
 		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr, AgentChannelPublicAddress: cfg.AgentChannel.PublicAddress, AgentHTTPRenewalAddr: cfg.AgentChannel.HTTPRenewalAddr, ESTMTLSAddr: cfg.Protocols.ESTMTLSAddr, ServerTLS: cfg.Server.TLS,

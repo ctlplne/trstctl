@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/agent/accessgateway"
+	"trstctl.com/trstctl/internal/agent/drift"
 	"trstctl.com/trstctl/internal/agent/enroll"
 	"trstctl.com/trstctl/internal/agent/transport"
 	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
@@ -668,6 +669,9 @@ type Deps struct {
 	// SecretScanRoots confines served scan targets/custom rules to explicitly
 	// mounted operator-owned trees. Empty disables served local paths.
 	SecretScanRoots []string
+	// DriftRoots is the separate operator grant for control-plane drift reads.
+	// Empty disables tenant-declared local drift sources.
+	DriftRoots []string
 	// SecretScanner overrides the pinned Gitleaks runner for tests and embedded
 	// compositions. Production leaves it nil so both the REST scan route and the
 	// repository-scan outbox worker use the same pinned binary resolution.
@@ -1172,6 +1176,10 @@ func resolveSignTokenProvider(d Deps) signing.SignTokenProvider {
 }
 
 func Build(ctx context.Context, d Deps) (_ *Server, err error) {
+	d.DriftRoots, err = drift.ApprovedRoots(d.DriftRoots)
+	if err != nil {
+		return nil, fmt.Errorf("server: drift roots: %w", err)
+	}
 	if err := requireTenantAuthAttachment(d); err != nil {
 		return nil, err
 	}
@@ -1801,7 +1809,7 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	} else if externalCAs != nil {
 		defaults = append(defaults, api.WithExternalCAs(externalCAs))
 	}
-	defaults = append(defaults, api.WithManagedKeyCustody(d.ManagedKeyCustody))
+	defaults = append(defaults, api.WithManagedKeyCustody(d.ManagedKeyCustody), api.WithDriftRoots(d.DriftRoots))
 	s.appendProtocolQualificationOptions(d, &defaults)
 	if mk, err := buildManagedKeyService(d, idem, s.outbox, orch); err != nil {
 		return nil, nil, fmt.Errorf("server: configure managed-key lifecycle: %w", err)
@@ -2461,6 +2469,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		s.obHandler = &issuanceDispatcher{cloudStorePropagationWindow: d.MigrationCloudStorePropagationWindow, decoyValues: s.api.DecoySecretValues, movedSecretValues: s.api.MovedSecretValues, pamSignIns: s.collectPAMSignIns, cmdbExports: s.cmdbExports, observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, slackApprovals: s.slackApprovalPoster(), transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), repoCredentials: integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}.resolve, repoHookClones: repositoryHookClones(d.SecretScanWebhooks), dns01: s.acmeDNS01, acmeEmail: s.acmeEmail, licensed: licensed, cloudReplacementPrepare: s.api.PrepareCloudReplacement, attackPathEndpoints: s.api.AttackPathEndpoints, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback, validity: d.SecretValidity, egress: d.EgressGuard, outboundCredentials: s.outboundCredentials, serviceNowBindings: s.serviceNowBindings, billingSync: d.BillingSync, alertObservers: d.AlertObservers, agentEnroll: s.agentEnroll, agentServer: d.AgentChannelPublicAddress, agentServerName: d.AgentChannelServerName}
 	default:
 		s.obHandler = &issuanceDispatcher{cloudStorePropagationWindow: d.MigrationCloudStorePropagationWindow, decoyValues: s.api.DecoySecretValues, movedSecretValues: s.api.MovedSecretValues, pamSignIns: s.collectPAMSignIns, cmdbExports: s.cmdbExports, observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, slackApprovals: s.slackApprovalPoster(), transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), repoCredentials: integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}.resolve, repoHookClones: repositoryHookClones(d.SecretScanWebhooks), dns01: s.acmeDNS01, acmeEmail: s.acmeEmail, licensed: licensed, cloudReplacementPrepare: s.api.PrepareCloudReplacement, attackPathEndpoints: s.api.AttackPathEndpoints, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback, validity: d.SecretValidity, egress: d.EgressGuard, outboundCredentials: s.outboundCredentials, serviceNowBindings: s.serviceNowBindings, billingSync: d.BillingSync, alertObservers: d.AlertObservers, agentEnroll: s.agentEnroll, agentServer: d.AgentChannelPublicAddress, agentServerName: d.AgentChannelServerName}
+	}
+	if dispatcher, ok := s.obHandler.(*issuanceDispatcher); ok {
+		dispatcher.driftRoots = append([]string(nil), d.DriftRoots...)
 	}
 	return nil
 }

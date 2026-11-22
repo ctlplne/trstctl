@@ -25,6 +25,12 @@ import (
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
+// WithDriftRoots supplies the operator-approved local trees for served drift
+// discovery. Empty refuses every tenant-declared host path.
+func WithDriftRoots(roots []string) Option {
+	return func(c *config) { c.driftRoots = append([]string(nil), roots...) }
+}
+
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
 func WithAudit(svc *audit.Service) Option {
 	return func(c *config) { c.audit = svc }

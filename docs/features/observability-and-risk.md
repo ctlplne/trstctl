@@ -310,9 +310,14 @@ broad-access ACEs); the agent reports at startup whether the platform can detect
 permission loosening. Content hashing goes through the single crypto path;
 secret material stays in wipeable memory, zeroed after use.
 
-**Status: served.** Create a Discovery source of kind `drift` with watched paths,
-fingerprints, and modes, then start a run; the worker records `credential_drift`
-findings and queues notifications. Review findings, see the recommended action, and
+**Status: served.** Configure `secrets.drift_roots` first with only the operator-mounted credential
+directories this tenant is allowed to watch. An empty root list refuses served
+drift sources. Preview, source creation, and execution check that watched paths
+and relocation scope stay inside those roots; execution rechecks symlinks and
+reads only bounded regular files. Device and kernel paths are refused.
+Create a Discovery source of kind `drift` with watched paths, fingerprints, and
+modes, then start a run; the worker records `credential_drift` findings and
+queues notifications. Review findings, see the recommended action, and
 record a decision via `GET /api/v1/discovery/drift-remediation`, `POST
 /api/v1/discovery/drift-remediation/{id}/decision`, the `discovery drift-remediation`
 CLI, or the Posture page. Decisions are event-sourced as

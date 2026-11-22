@@ -3139,6 +3139,9 @@ type Secrets struct {
 	// repositories and rules in dedicated roots that cannot include the process
 	// temporary directory. A worker-owned clone has its own one-scan root.
 	ScanRoots []string `json:"scan_roots,omitempty"`
+	// DriftRoots independently authorize tenant-declared served drift watches.
+	// Empty disables local drift discovery; scan_roots never grants this access.
+	DriftRoots []string `json:"drift_roots,omitempty"`
 	// MachineAuth configures the non-token machine-auth login methods exposed by
 	// POST /api/v1/secrets/login. Each entry is either tenant-pinned with tenant_id
 	// or token-bound with tenant_claim; otherwise a credential could be replayed
@@ -3906,6 +3909,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setCSV(getenv, "TRSTCTL_SECRETS_AUTH_TOKEN_SCOPES", &c.Secrets.AuthTokenScopes)
 	setString(getenv, "TRSTCTL_SECRETS_GITLEAKS_BIN", &c.Secrets.GitleaksBin)
 	setCSV(getenv, "TRSTCTL_SECRETS_SCAN_ROOTS", &c.Secrets.ScanRoots)
+	setCSV(getenv, "TRSTCTL_SECRETS_DRIFT_ROOTS", &c.Secrets.DriftRoots)
 	setString(getenv, "TRSTCTL_TRANSIT_KEYRING_DIR", &c.Transit.KeyringDir)
 	setBool(getenv, "TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY", &c.Secrets.IdempotencyResultFleetReady)
 	setBool(getenv, "TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY", &c.Secrets.SecretRotationHistoryFleetReady)
@@ -5544,6 +5548,9 @@ func validateServedSurfaces(c *Config) []error {
 	errs = append(errs, validateSecretScanWebhooks(c.Secrets.ScanWebhooks)...)
 	if _, err := safefile.ScanRoots(c.Secrets.ScanRoots); err != nil {
 		errs = append(errs, fmt.Errorf("secrets.scan_roots: %w", err))
+	}
+	if _, err := safefile.ScanRoots(c.Secrets.DriftRoots); err != nil {
+		errs = append(errs, fmt.Errorf("secrets.drift_roots: %w", err))
 	}
 	if err := c.Secrets.ValidityChecks.Validate(); err != nil {
 		errs = append(errs, err)

@@ -8,6 +8,8 @@ import (
 	"io"
 	"math"
 	"os"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 var (
@@ -29,10 +31,35 @@ func ReadRegularFile(ctx context.Context, root *os.Root, name string, maxBytes i
 	if err != nil {
 		return nil, err
 	}
+	return readRegularOpened(ctx, info, func() (*os.File, error) {
+		return root.OpenFile(name, readOnlyNonblocking, 0)
+	}, maxBytes)
+}
+
+// ReadRegularPath is for an agent's own operator-configured path, where a
+// symlink to another host directory is legitimate. The opened descriptor is
+// still checked and read with O_NONBLOCK and a strict size limit.
+func ReadRegularPath(ctx context.Context, path string, maxBytes int64) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if maxBytes <= 0 || maxBytes == math.MaxInt64 {
+		return nil, ErrFileLimit
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	return readRegularOpened(ctx, info, func() (*os.File, error) {
+		return os.OpenFile(path, readOnlyNonblocking, 0) // #nosec G304 -- agent-owned path; the opened descriptor is regular/size checked before reading
+	}, maxBytes)
+}
+
+func readRegularOpened(ctx context.Context, info os.FileInfo, open func() (*os.File, error), maxBytes int64) ([]byte, error) {
 	if !info.Mode().IsRegular() {
 		return nil, ErrNotRegular
 	}
-	file, err := root.OpenFile(name, readOnlyNonblocking, 0)
+	file, err := open()
 	if err != nil {
 		return nil, err
 	}
@@ -47,14 +74,21 @@ func ReadRegularFile(ctx context.Context, root *os.Root, name string, maxBytes i
 	if info.Size() > maxBytes {
 		return nil, ErrFileLimit
 	}
-	data, err := io.ReadAll(io.LimitReader(contextReader{ctx: ctx, reader: file}, maxBytes+1))
+	if info.Size() >= int64(^uint(0)>>1) {
+		return nil, ErrFileLimit
+	}
+	// One owned allocation avoids io.ReadAll growth copies that a caller
+	// cannot wipe after hashing a credential file.
+	data, err := secret.ReadBounded(io.LimitReader(contextReader{ctx: ctx, reader: file}, info.Size()+1), int(info.Size()+1))
 	if err != nil {
 		return nil, err
 	}
-	if int64(len(data)) > maxBytes {
+	if int64(len(data)) > info.Size() || int64(len(data)) > maxBytes {
+		secret.Wipe(data)
 		return nil, ErrFileLimit
 	}
 	if err := ctx.Err(); err != nil {
+		secret.Wipe(data)
 		return nil, err
 	}
 	return data, nil

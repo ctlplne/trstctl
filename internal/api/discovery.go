@@ -359,7 +359,7 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		preview.EstimatedUpperSeconds = ((len(intent.Targets) + preview.Concurrency - 1) / preview.Concurrency) * 10
 	}
 	if req.Kind == "drift" {
-		plan, resolveErr := driftplan.Resolve(cfg)
+		plan, resolveErr := driftplan.ResolveForRoots(cfg, a.driftRoots)
 		if resolveErr != nil {
 			return discoveryPlanPreviewResponse{}, errStatusFrom(http.StatusBadRequest, resolveErr)
 		}
@@ -953,6 +953,11 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		kind := strings.TrimSpace(req.Kind)
+		if kind == "drift" {
+			if _, resolveErr := driftplan.ResolveForRoots(cfg, a.driftRoots); resolveErr != nil {
+				return 0, nil, errStatusFrom(http.StatusBadRequest, resolveErr)
+			}
+		}
 		// Agent inventory sources are created by the mTLS receiver under a
 		// deterministic agent: name. Letting a generic tenant declaration claim
 		// that name first would block the real host's source/run projection.

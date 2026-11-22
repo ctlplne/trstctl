@@ -116,6 +116,7 @@ func connectorPluginDeployerFromManager(pm *PluginManager) connectorPluginDeploy
 // profile enforcement. Key custody does not change authority or name admission;
 // legacy control-plane generation remains the existing classical path.
 type issuanceDispatcher struct {
+	driftRoots []string
 	// agentEnroll mints the one-time enrollment token an install through a
 	// customer's RMM carries, for that customer's tenant; agentServer and
 	// agentServerName are where the installed agent enrolls (MSP-9).

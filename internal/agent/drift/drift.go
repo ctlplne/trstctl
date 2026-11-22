@@ -13,12 +13,15 @@
 package drift
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/safefile"
 )
 
 // maxScanFileSize bounds the size of files the relocation scan will hash, so a
@@ -100,11 +103,13 @@ func detectOne(w Watched, scope []string) (Finding, error) {
 	if err != nil {
 		return Finding{}, err
 	}
-	data, err := os.ReadFile(w.Path)
+	data, err := safefile.ReadRegularPath(context.Background(), w.Path, maxScanFileSize)
 	if err != nil {
 		return Finding{}, err
 	}
-	if Fingerprint(data) != w.Fingerprint {
+	fingerprint := Fingerprint(data)
+	secret.Wipe(data)
+	if fingerprint != w.Fingerprint {
 		return Finding{Watched: w, Type: Replaced}, nil
 	}
 	if drifted, detail := permissionDrifted(w.Path, info, w); drifted {
@@ -144,14 +149,16 @@ func scanForContent(w Watched, scope []string) (string, bool) {
 				continue
 			}
 			fi, err := e.Info()
-			if err != nil || fi.Size() > maxScanFileSize {
+			if err != nil || (!fi.Mode().IsRegular() && fi.Mode()&os.ModeSymlink == 0) || fi.Size() > maxScanFileSize {
 				continue
 			}
-			data, err := os.ReadFile(p) // #nosec G304 -- the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22)
+			data, err := safefile.ReadRegularPath(context.Background(), p, maxScanFileSize)
 			if err != nil {
 				continue
 			}
-			if Fingerprint(data) == w.Fingerprint {
+			fingerprint := Fingerprint(data)
+			secret.Wipe(data)
+			if fingerprint == w.Fingerprint {
 				return p, true
 			}
 		}

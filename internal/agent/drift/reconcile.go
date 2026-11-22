@@ -73,6 +73,9 @@ type Reconciler struct {
 	Auditor  Auditor
 	Restorer Restorer         // required for AutoRemediate
 	Clock    func() time.Time // defaults to time.Now
+	// Detector overrides the on-host reader for the served control plane,
+	// whose files must stay inside operator-approved roots.
+	Detector func(context.Context, []Watched, ...string) ([]Finding, error)
 }
 
 // Report summarizes a reconciliation pass.
@@ -91,7 +94,13 @@ type Report struct {
 // finding: it audits every drift, blocks where the policy says so, and restores
 // declared state where remediation is enabled.
 func (r *Reconciler) Reconcile(ctx context.Context, watched []Watched, scope ...string) (Report, error) {
-	findings, err := Detect(watched, scope...)
+	detect := func(_ context.Context, watched []Watched, scope ...string) ([]Finding, error) {
+		return Detect(watched, scope...)
+	}
+	if r.Detector != nil {
+		detect = r.Detector
+	}
+	findings, err := detect(ctx, watched, scope...)
 	if err != nil {
 		return Report{}, err
 	}

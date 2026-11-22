@@ -92,6 +92,19 @@ func Resolve(raw json.RawMessage) (Plan, error) {
 	return plan, nil
 }
 
+// ResolveForRoots is the served admission contract. It validates the same
+// operator-root containment that the queued worker rechecks before each read.
+func ResolveForRoots(raw json.RawMessage, roots []string) (Plan, error) {
+	plan, err := Resolve(raw)
+	if err != nil {
+		return Plan{}, err
+	}
+	if err := drift.ValidateConfinedPaths(roots, plan.Watched, plan.Scope); err != nil {
+		return Plan{}, err
+	}
+	return plan, nil
+}
+
 func parseOptionalFileMode(raw string) (os.FileMode, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

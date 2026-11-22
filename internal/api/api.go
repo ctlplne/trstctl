@@ -61,7 +61,9 @@ type API struct {
 	subjectCSRInspector func([]byte) (crypto.CSRInfo, error)
 	tenantServiceCheck  tenancy.ServiceCheck
 	store               *store.Store
-	log                 *events.Log
+	// driftRoots are operator-approved local trees for served drift discovery.
+	driftRoots []string
+	log        *events.Log
 	// usage notes authenticated API-token use for usage posture (M1).
 	usage *credentialUsageRecorder
 	// secretScanHooks resolves provider-native scan webhooks (P6).
@@ -263,6 +265,7 @@ type API struct {
 type Option func(*config)
 
 type config struct {
+	driftRoots []string
 	// apiTokenMaxLifetime bounds served API tokens (F267); nil means the
 	// product default, 0 means unlimited.
 	apiTokenMaxLifetime *time.Duration
@@ -599,6 +602,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		subjectCSRInspector:    cfg.subjectCSRInspector,
 		tenantServiceCheck:     cfg.tenantServiceCheck,
 		store:                  st,
+		driftRoots:             append([]string(nil), cfg.driftRoots...),
 		log:                    cfg.eventLog,
 		usage:                  newCredentialUsageRecorder(cfg.credentialUsageClock),
 		secretScanHooks:        cfg.secretScanHooks,

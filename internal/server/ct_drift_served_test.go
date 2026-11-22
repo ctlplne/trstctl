@@ -30,7 +30,9 @@ import (
 func TestServedCTMonitoringAndDriftWorkers(t *testing.T) {
 	secret := []byte("served-ct-drift-webhook-test-secret")
 	sink := newServedWebhookSink(t, secret)
+	driftRoot := t.TempDir()
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.DriftRoots = []string{driftRoot}
 		d.NotificationChannels = []notify.Notifier{
 			webhook.New(sink.URL(), secret, webhook.WithHTTPClient(sink.Client())),
 		}
@@ -62,7 +64,7 @@ func TestServedCTMonitoringAndDriftWorkers(t *testing.T) {
 		t.Fatalf("CT alert not dispatched through notification webhook: accepted=%d alert=%+v", sink.Accepted(), alert)
 	}
 
-	dir := t.TempDir()
+	dir := driftRoot
 	path := filepath.Join(dir, "leaf.pem")
 	declared := []byte("declared certificate bytes")
 	if err := os.WriteFile(path, []byte("drifted certificate bytes"), 0o600); err != nil {
@@ -134,9 +136,10 @@ func TestDriftAlertSeverityAndCauseContract(t *testing.T) {
 // contract. Previewing it must not create a source, run, event, or external
 // effect, and an incomplete watched record must fail before work can be queued.
 func TestServedDriftPlanPreviewIsExactAndEffectFree(t *testing.T) {
-	h := newOperatingServedHarness(t, config.Protocols{}, func(*Deps) {})
+	driftRoot := t.TempDir()
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.DriftRoots = []string{driftRoot} })
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
-	watchedPath := filepath.Join(t.TempDir(), "edge-cert.pem")
+	watchedPath := filepath.Join(driftRoot, "edge-cert.pem")
 
 	beforeEvents := servedDiscoveryEventCount(t, h)
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/plans/preview", tok, map[string]any{
