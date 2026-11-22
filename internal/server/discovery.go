@@ -46,6 +46,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/nhibehavior"
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
 	"trstctl.com/trstctl/internal/discovery/serviceaccount"
+	"trstctl.com/trstctl/internal/discovery/sourcecatalog"
 	"trstctl.com/trstctl/internal/keyposture"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
@@ -95,58 +96,7 @@ type cloudCertificateProviderConfig struct {
 	ELBEndpoint string `json:"elb_endpoint"`
 }
 
-type cloudSecretDiscoveryConfig struct {
-	Providers []cloudSecretProviderConfig `json:"providers"`
-}
-
-type cloudSecretProviderConfig struct {
-	Provider             string   `json:"provider"`
-	Region               string   `json:"region"`
-	Endpoint             string   `json:"endpoint"`
-	AllowPrivateEndpoint bool     `json:"allow_private_endpoint"`
-	PrivateEgressCIDRs   []string `json:"private_egress_cidrs"`
-	VaultURL             string   `json:"vault_url"`
-	APIVersion           string   `json:"api_version"`
-	Mount                string   `json:"mount"`
-	PathPrefix           string   `json:"path_prefix"`
-	AccessKeyIDRef       string   `json:"access_key_id_ref"`
-	SecretAccessKeyRef   string   `json:"secret_access_key_ref"`
-	SessionTokenRef      string   `json:"session_token_ref"`
-	TokenRef             string   `json:"token_ref"`
-	Project              string   `json:"project"`
-	TagKey               string   `json:"tag_key"`
-	TagValue             string   `json:"tag_value"`
-	LabelKey             string   `json:"label_key"`
-	LabelValue           string   `json:"label_value"`
-	NamePrefix           string   `json:"name_prefix"`
-	InspectContent       bool     `json:"inspect_content"`
-	// GenericHighEntropy adds the opt-in generic high-entropy rule to
-	// content inspection (A172-L4).
-	GenericHighEntropy bool `json:"generic_high_entropy"`
-	// Code-host secret stores (A173).
-	Owner        string   `json:"owner"`
-	Repo         string   `json:"repo"`
-	Org          string   `json:"org"`
-	Environments []string `json:"environments"`
-	Group        string   `json:"group"`
-	// GitHub's Dependabot and Codespaces secrets and GitLab's instance
-	// variables (OD-2).
-	Stores         []string `json:"stores"`
-	UserCodespaces bool     `json:"user_codespaces"`
-	Instance       bool     `json:"instance"`
-	// Further secret stores (OD-13): an Infisical Universal Auth client or
-	// Akeyless access ID and its secret reference, a Conjur account, login
-	// and API key reference, and a self-hosted Bitwarden identity endpoint.
-	ClientID         string `json:"client_id"`
-	ClientSecretRef  string `json:"client_secret_ref"`
-	Account          string `json:"account"`
-	Login            string `json:"login"`
-	APIKeyRef        string `json:"api_key_ref"`
-	IdentityEndpoint string `json:"identity_endpoint"`
-	// 1Password Connect vaults and Doppler configs (A173, restored in OD-14).
-	Vaults  []string `json:"vaults"`
-	Configs []string `json:"configs"`
-}
+type cloudSecretProviderConfig = cloudsecret.ProviderConfig
 
 type ctLogDiscoveryConfig struct {
 	Logs                 []string `json:"logs"`
@@ -354,6 +304,11 @@ func servedDiscoverySourceKinds() []string {
 }
 
 func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
+	if len(src.Config) > 0 {
+		if err := sourcecatalog.ValidateControlFieldCase(src.Config); err != nil {
+			return netscan.Report{}, "failed", "discovery source config is invalid: " + err.Error(), nil
+		}
+	}
 	// CR-008: every env credential this source names resolves only for this tenant
 	// and this source kind, toward the origins the operator bound it to.
 	ctx = d.outboundCredentialScope(ctx, tenantID, src.Kind)
@@ -1131,8 +1086,8 @@ func cloudCertificateProviders(ctx context.Context, raw json.RawMessage) ([]clou
 }
 
 func cloudSecretProviders(ctx context.Context, raw json.RawMessage) ([]cloudsecret.Provider, []cloudProviderOutcome, error) {
-	var cfg cloudSecretDiscoveryConfig
-	if err := json.Unmarshal(raw, &cfg); err != nil {
+	cfg, _, err := cloudsecret.DecodeSourceConfig(raw)
+	if err != nil {
 		return nil, nil, fmt.Errorf("decode cloud_secret discovery config: %w", err)
 	}
 	providers := make([]cloudsecret.Provider, 0, len(cfg.Providers))

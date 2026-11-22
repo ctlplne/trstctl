@@ -1018,6 +1018,12 @@ see in AWS Secrets Manager, Google Secret Manager, Azure Key Vault and HashiCorp
 (name, location, rotation and update times) as a `cloud_secret_resource` finding and
 never reads a value.
 
+Source JSON uses the exact lower-case field names shown here. The API rejects unknown,
+mis-cased or duplicate provider fields before checking credential-reference approval
+and private-egress permission. For example, use `token_ref` and
+`allow_private_endpoint`; `Token_Ref` and `Allow_Private_Endpoint` are invalid.
+The worker applies the same check to stored sources before opening a connection.
+
 Two more providers cover the code hosts' CI/CD secret stores (A173), each with a
 `token_ref` and an optional `endpoint` for a self-hosted server:
 

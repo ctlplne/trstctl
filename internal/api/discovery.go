@@ -1525,6 +1525,19 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	if len(cfg) == 0 {
 		cfg = json.RawMessage(`{}`)
 	}
+	if err := sourcecatalog.ValidateControlFieldCase(cfg); err != nil {
+		return nil, errStatusFrom(http.StatusBadRequest, err)
+	}
+	if req.Kind == cloudsecret.SourceKind || req.Kind == "secret_store" {
+		// Check and store the same exact-case typed shape the worker executes.
+		// A raw Token_Ref or Allow_Private_Endpoint otherwise skips the API's
+		// case-sensitive grants but binds to the worker's Go struct fields.
+		_, canonical, err := cloudsecret.DecodeSourceConfig(cfg)
+		if err != nil {
+			return nil, errStatusFrom(http.StatusBadRequest, err)
+		}
+		cfg = canonical
+	}
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(cfg, &obj); err != nil || obj == nil {
 		return nil, errStatus(http.StatusBadRequest, "config must be a JSON object")
@@ -1729,7 +1742,7 @@ func (a *API) requireDiscoveryCredentialRefsBoundValue(tenantID, kind, path stri
 		var destinations []string
 		for key, child := range x {
 			keys = append(keys, key)
-			if endpoint, ok := child.(string); ok && strings.TrimSpace(endpoint) != "" && discoveryEndpointKey(key) {
+			if endpoint, ok := child.(string); ok && strings.TrimSpace(endpoint) != "" && sourcecatalog.DiscoveryEndpointKey(key) {
 				destinations = append(destinations, endpoint)
 			}
 		}
@@ -1757,13 +1770,6 @@ func (a *API) requireDiscoveryCredentialRefsBoundValue(tenantID, kind, path stri
 		}
 	}
 	return nil
-}
-
-// discoveryEndpointKey names the configuration keys that hold a destination a
-// credential beside them is sent to: endpoint, url, *_endpoint and *_url (for
-// example vault_url, base_url, elb_endpoint, identity_endpoint).
-func discoveryEndpointKey(key string) bool {
-	return key == "endpoint" || key == "url" || strings.HasSuffix(key, "_endpoint") || strings.HasSuffix(key, "_url")
 }
 
 func discoveryPrivateEgressRequestedValue(v any) (bool, error) {
