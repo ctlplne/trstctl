@@ -144,7 +144,7 @@ func TestServedSlackSocketModeApprovalStartsTheSessionA277(t *testing.T) {
 	t.Cleanup(cancel)
 	go h.srv.RunSlackSocketMode(ctx)
 
-	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a277-admin", "connectors:read", "connectors:write", "access:read", "access:write",
+	admin := seedRoleGrantingTokenSubject(t, h.store, h.tenant, "a277-admin", "operator", "connectors:read", "connectors:write", "access:read", "access:write",
 		"access:targets.write", "access:role.assign")
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "a277-requester", "access:read", "access:write")
 	reviewers := map[string]string{

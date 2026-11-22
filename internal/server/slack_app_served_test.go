@@ -154,7 +154,7 @@ func TestServedSlackAppApprovesFromButtonsN8(t *testing.T) {
 	// "Powered by trstctl", posted and decided alike.
 	branding.SetSource(tenantBrandSource{tenant: h.tenant, brand: branding.Brand{ProductName: "Northwind Managed PKI"}})
 	t.Cleanup(func() { branding.SetSource(nil) })
-	admin := seedScopedTokenSubject(t, h.store, h.tenant, "slack-admin@example.test",
+	admin := seedRoleGrantingTokenSubject(t, h.store, h.tenant, "slack-admin@example.test", "operator",
 		string(authz.ConnectorsRead), string(authz.ConnectorsWrite), string(authz.AccessWrite), string(authz.AccessRead), "access:role.assign")
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "slack-requester@example.test",
 		string(authz.OwnersWrite), string(authz.IdentitiesWrite), string(authz.CertsRequest), string(authz.CertsIssue), string(authz.IdentitiesRead))

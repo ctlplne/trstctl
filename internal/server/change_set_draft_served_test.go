@@ -61,7 +61,7 @@ func TestServedChangeSetDraftsA248(t *testing.T) {
 		d.EnableAISurface = true
 		d.AIModel = aimodel.New(model, nil)
 	})
-	author := seedScopedTokenSubject(t, h.store, h.tenant, "draft-author", "changes:write",
+	author := seedRoleGrantingTokenSubject(t, h.store, h.tenant, "draft-author", "viewer", "changes:write",
 		"profiles:write", "owners:write", "access:role.assign", "connectors:write")
 	// Names the catalog shows, next to values it must never send.
 	if code, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/profiles", author, "a248-existing-profile",
