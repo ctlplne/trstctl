@@ -29,6 +29,8 @@ postgres_snapshot() {
         'outbox_count', (SELECT count(*) FROM outbox WHERE tenant_id = '${tenant_id}'),
         'outbox_active_retry_count', (SELECT count(*) FROM outbox
              WHERE tenant_id = '${tenant_id}'
+               AND NOT (destination = 'notification.expiry' AND status = 'pending'
+                        AND last_error = 'notification_receiver_not_configured')
                AND (status = 'processing' OR (status = 'pending'
                     AND COALESCE(last_error, '') <> 'delivery_deferred')))
       );"
@@ -50,11 +52,10 @@ snapshot() {
 
 stable_snapshot() {
   local previous="" current="" stable=0
-  # The demo deliberately contains unavailable external destinations. Their
-  # non-deferred deliveries emit failure events until the bounded retry budget
-  # is exhausted. A few equal samples during circuit-breaker cooldown are not
-  # quiescence, so compare only after those durable retries settle. Deferred
-  # agent work remains pending but emits no new failure event while waiting.
+  # An unconfigured expiry notification remains pending through long retry
+  # backoffs. Its known no-receiver refusal only updates its outbox row; it
+  # does not change the inventory, outbox row count, or JetStream count. A
+  # processing row or any different failure must still settle before comparison.
   for _attempt in $(seq 1 360); do
     current="$(snapshot)"
     if [[ "$(jq -r '.postgres.outbox_active_retry_count' <<<"$current")" != "0" ]]; then

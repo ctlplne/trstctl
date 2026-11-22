@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Exercise the preserved-volume check with a retrying expiry notification."""
+
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+
+
+SCRIPT = Path(__file__).with_name("demo-seed-convergence.sh")
+
+
+class DemoSeedConvergenceTest(unittest.TestCase):
+    def run_convergence(self, *, other_active=False, event_on_rerun=False):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            docker = root / "docker"
+            docker.write_text(
+                """#!/usr/bin/env python3
+import json
+import os
+from pathlib import Path
+import sys
+args = sys.argv[1:]
+if args[:2] == ['inspect', '--format']:
+    print('exited' if 'Status' in args[2] else '0')
+elif 'ps' in args:
+    print('seed-container')
+elif 'exec' in args and 'postgres' in args:
+    sql = args[args.index('-c') + 1]
+    # Model one pending notification.expiry row and no other active work.
+    active = int(os.environ.get('FAKE_OTHER_ACTIVE', '0'))
+    if "destination = 'notification.expiry' AND status = 'pending'" not in sql or \
+            "last_error = 'notification_receiver_not_configured'" not in sql:
+        active += 1
+    print(json.dumps(dict(owners=[], owner_count=0, owner_logical_count=0,
+        identities=[], certificates=0, members=[], secrets=[],
+        api_token_count=0, outbox_count=1, outbox_active_retry_count=active)))
+elif 'exec' in args and 'nats' in args:
+    count = 8 if os.environ.get('FAKE_EVENT_ON_RERUN') == '1' and Path(os.environ['FAKE_DOCKER_STATE']).exists() else 7
+    print(json.dumps({'account_details': [{'stream_detail': [{'state': {'messages': count}}]}]}))
+elif 'run' in args:
+    Path(os.environ['FAKE_DOCKER_STATE']).touch()
+else:
+    raise SystemExit('unexpected docker command: ' + repr(args))
+"""
+            )
+            docker.chmod(0o755)
+            (root / "seq").write_text("#!/bin/sh\nprintf '1\\n2\\n3\\n4\\n'\n")
+            (root / "sleep").write_text("#!/bin/sh\nexit 0\n")
+            (root / "seq").chmod(0o755)
+            (root / "sleep").chmod(0o755)
+            env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ["PATH"],
+                   "FAKE_OTHER_ACTIVE": str(int(other_active)),
+                   "FAKE_EVENT_ON_RERUN": str(int(event_on_rerun)),
+                   "FAKE_DOCKER_STATE": str(root / "reran")}
+            return subprocess.run(
+                ["bash", str(SCRIPT)], env=env, text=True,
+                capture_output=True, timeout=20, check=False,
+            )
+
+    def test_unconfigured_expiry_retry_does_not_block_seed_checkpoint(self):
+        result = self.run_convergence()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("convergence passed", result.stdout)
+
+    def test_other_active_work_still_blocks_checkpoint(self):
+        result = self.run_convergence(other_active=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("did not reach a stable", result.stderr)
+
+    def test_jetstream_event_change_still_fails_seed_checkpoint(self):
+        result = self.run_convergence(event_on_rerun=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("seed snapshot changed", result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()
