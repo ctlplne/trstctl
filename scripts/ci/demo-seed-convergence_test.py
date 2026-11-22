@@ -84,7 +84,7 @@ elif 'run' in args and '--entrypoint' in args:
         counter = Path(os.environ['FAKE_DOCKER_STATE'] + '.audit_reads')
         reads = int(counter.read_text()) + 1 if counter.exists() else 1
         counter.write_text(str(reads))
-        if reads >= 3:
+        if reads >= (2 if os.environ.get('FAKE_OTHER_ACTIVE') == '1' else 4):
             records.append(dict(id='background-event-after', type='periodic-risk.rechecked', seed=False))
     print(json.dumps(dict(seed_ids=ids, records=records)))
 elif 'run' in args:
@@ -171,6 +171,13 @@ else:
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('periodic-risk.rechecked', result.stdout)
         self.assertNotIn('background-event-after', result.stdout)
+
+    def test_failed_checkpoint_still_reports_new_event_type(self):
+        result = self.run_convergence(other_active=True, trace_background=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('did not reach a stable', result.stderr)
+        self.assertIn('periodic-risk.rechecked', result.stderr)
+        self.assertNotIn('background-event-after', result.stderr)
 
     def test_background_outbox_after_replay_does_not_implicate_seed(self):
         result = self.run_convergence(background_outbox_after_rerun=True)

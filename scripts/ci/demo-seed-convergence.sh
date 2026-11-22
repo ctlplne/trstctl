@@ -101,6 +101,13 @@ stable_snapshot() {
           outbox_count:.postgres.outbox_count,
           jetstream_message_count,
           jetstream_streams}' <<<"$current" >&2
+  # A checkpoint can fail before the post-pass trace below. Preserve the
+  # original failure while reporting the types that appeared during its wait.
+  if [[ "${TRSTCTL_DEMO_EVENT_TRACE_SECONDS:-0}" == "300" && -n "${trace_baseline_audit:-}" ]]; then
+    if failed_audit="$(seed_actor_events)"; then
+      report_new_audit_types "$trace_baseline_audit" "$failed_audit" "during failed checkpoint" >&2 || true
+    fi
+  fi
   fail "assembled demo did not reach a stable tenant inventory/outbox checkpoint"
 }
 
@@ -140,6 +147,15 @@ seed_actor_events() {
   '
 }
 
+report_new_audit_types() {
+  jq -rnc --argjson before "$1" --argjson after "$2" --arg label "$3" '
+    ($before.records | map(.id)) as $known |
+    [$after.records[] | select(.id as $id | ($known | index($id)) == null) | .type] |
+    group_by(.) | map({type: .[0], count: length}) |
+    "demo background event types \($label): \(.)"
+  '
+}
+
 wait_for_seed() {
   local container_id state exit_code
   container_id="$(docker compose -f "$compose_file" ps -aq demo-seed)"
@@ -159,6 +175,10 @@ wait_for_seed() {
 }
 
 wait_for_seed
+trace_baseline_audit=""
+if [[ "${TRSTCTL_DEMO_EVENT_TRACE_SECONDS:-0}" == "300" ]]; then
+  trace_baseline_audit="$(seed_actor_events)"
+fi
 first="$(stable_snapshot)"
 first_audit="$(seed_actor_events)"
 first_seed_events="$(jq -cS '.seed_ids' <<<"$first_audit")"
@@ -205,10 +225,5 @@ echo "demo seed convergence passed: preserved inventory, owner uniqueness, outbo
 if [[ "${TRSTCTL_DEMO_EVENT_TRACE_SECONDS:-0}" == "300" ]]; then
   sleep 300
   trace_audit="$(seed_actor_events)"
-  jq -cn --argjson before "$first_audit" --argjson after "$trace_audit" '
-    ($before.records | map(.id)) as $known |
-    [$after.records[] | select(.id as $id | ($known | index($id)) == null) | .type] |
-    group_by(.) | map({type: .[0], count: length}) |
-    "demo background event types over replay plus 300s: \(.)"
-  ' -r
+  report_new_audit_types "$first_audit" "$trace_audit" "over replay plus 300s"
 fi
