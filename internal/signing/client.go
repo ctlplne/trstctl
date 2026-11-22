@@ -473,6 +473,27 @@ func (c *Client) GenerateDualControlKeyHandle(ctx context.Context, algorithm cry
 	}, nil
 }
 
+// GenerateOwnedDualControlCAKeyHandle seals the tenant and CA key class at
+// creation. The owner is immutable: a different tenant cannot later import
+// this handle through the checked GetPublicKey path, even after a restart.
+func (c *Client) GenerateOwnedDualControlCAKeyHandle(ctx context.Context, tenantID string, algorithm crypto.Algorithm, handle string, authorizer SignTokenProvider) (*RemoteSigner, error) {
+	if !canonicalKeyOwnerTenant(tenantID) {
+		return nil, errInvalidKeyOwnership
+	}
+	ctx = metadata.AppendToOutgoingContext(ctx, mdKeyOwnerTenant, tenantID, mdKeyClass, KeyClassTenantCA)
+	return c.GenerateDualControlKeyHandle(ctx, algorithm, handle, []KeyPurpose{PurposeCASign}, PurposeCASign, authorizer)
+}
+
+// SignerForOwnedDualControlCAHandle asks the signer to check its sealed owner
+// and key class before returning the public half used by an import ceremony.
+func (c *Client) SignerForOwnedDualControlCAHandle(ctx context.Context, tenantID, handle string, authorizer SignTokenProvider) (*RemoteSigner, error) {
+	if !canonicalKeyOwnerTenant(tenantID) {
+		return nil, errInvalidKeyOwnership
+	}
+	ctx = metadata.AppendToOutgoingContext(ctx, mdKeyOwnerTenant, tenantID, mdKeyClass, KeyClassTenantCA)
+	return c.SignerForDualControlHandle(ctx, handle, PurposeCASign, authorizer)
+}
+
 // SignerForDualControlHandle binds a RemoteSigner to an already-held dual-control
 // key and supplies the authorizer that mints the per-Sign token. It is the restart
 // / multi-replica analog of GenerateDualControlKeyHandle: the key already exists

@@ -378,9 +378,12 @@ func TestServedCAKeyImportTakesAnOperatorsCAKeyIntoTheSigner(t *testing.T) {
 	}
 	stopFirst()
 	restarted, _ := host.start(t)
-	ca, err := restarted.SignerForDualControlHandle(ctx, offer.Handle, signing.PurposeCASign, host.authorizer)
+	ca, err := restarted.SignerForOwnedDualControlCAHandle(ctx, h.tenant, offer.Handle, host.authorizer)
 	if err != nil || !ca.RequiresAuthorization() || !bytes.Equal(ca.Public().DER, rootKey.Public().DER) {
-		t.Fatal("the restarted signer did not restore the same dual-control CA key", err)
+		t.Fatal("the restarted signer did not restore the tenant-owned dual-control CA key", err)
+	}
+	if _, err := restarted.SignerForOwnedDualControlCAHandle(ctx, "44444444-4444-4444-8444-444444444444", offer.Handle, host.authorizer); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("neighbor looked up the imported CA key after signer restart: %v; want PermissionDenied", err)
 	}
 	digest := crypto.SHA256Sum([]byte("served CA import restart proof"))
 	if _, err := ca.SignDigest(digest, crypto.SignOptions{Hash: crypto.SHA256}); err != nil {

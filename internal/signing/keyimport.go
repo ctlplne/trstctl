@@ -208,6 +208,7 @@ func (s *Server) ImportWrappedKeyV2(_ context.Context, req *signerpb.ImportWrapp
 	constraints := keyConstraints{
 		purposes:    map[signerpb.KeyPurpose]bool{signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN: true},
 		requireAuth: true, importReceipt: receipt,
+		ownerTenantID: policy.TenantID, keyClass: KeyClassTenantCA,
 	}
 	if err := s.store.saveHierarchyKeyLocked(policy.Handle, key, constraints); err != nil {
 		return nil, hierarchyCustodyStatus("persist CA import key", err)

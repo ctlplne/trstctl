@@ -934,6 +934,8 @@ JSON
 trstctl-cli ca authorities import-offline-root -f offline-root-import.json
 
 # Import an existing root/intermediate chain bound to a signer-held key handle.
+# The handle must already be sealed by the signer to this tenant as a CA key;
+# legacy unowned, platform, PCAS, AGID and other-tenant handles are refused.
 # When the direct issuer is already registered in this tenant, pass its ID in
 # BOTH the ceremony and import bodies. The server compares its certificate to
 # the next certificate in the chain before recording the parent relationship.

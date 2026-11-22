@@ -106,7 +106,7 @@ func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID 
 				rekeyAlgorithm = alg
 			}
 		}
-		rekeySigner, signerCreated, err = h.createOrBindSigner(ctx, handle, rekeyAlgorithm)
+		rekeySigner, signerCreated, err = h.createOrBindSigner(ctx, tenantID, handle, rekeyAlgorithm)
 		if err != nil {
 			return err
 		}

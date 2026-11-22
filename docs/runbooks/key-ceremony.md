@@ -419,12 +419,16 @@ trstctl authority whose private key lives behind a signer handle. Never
 paste private-key PEM into the API or UI.
 
 1. **Use an already-held signer handle.** The signer holds the CA private
-   key under a handle constrained to CA signing; the control plane uses only that
-   handle and its public key. If the key is not already held by the signer, use
+   key under a handle sealed to this tenant and the importable CA key class,
+   constrained to CA signing and dual control. The control plane uses only that
+   handle and its public key. A platform CA, PCAS or AGID handle, another
+   tenant's handle, and a legacy handle without sealed ownership are refused
+   even if no authority has claimed them in PostgreSQL. If the key is not
+   already held with this provenance, use
    the preparation procedure above for a fresh key, or the next procedure to
-   bring the CA's existing private key. This existing-chain import form itself
-   does not create or import a private key.
-   A handle belongs to one tenant and one approved ceremony on first use. A
+   bring the CA's existing private key under a tenant-owned handle. This
+   existing-chain import form itself does not create or import a private key.
+   An eligible handle belongs to one tenant and one approved ceremony on first use. A
    handle already claimed by another tenant or ceremony is refused before a CA
    event is appended. Keep the original ceremony ID for a retry after a lost
    response; starting another ceremony cannot take over its handle.

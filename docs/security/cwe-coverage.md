@@ -38,6 +38,7 @@ coverage ledger applies to assets, applied to weaknesses.
 | CWE-754 | `scripts/ci/ee-lint-ratchet.py` | TestEELintRejectsIncompleteScans and TestMakeLintStopsOnToolFailure/python-deadline-retains-output (docs/lint_failure_test.go) |
 | CWE-772 | `scripts/ci/ee-lint-ratchet.py` | TestEELintScannerSupervision (docs/lint_supervision_test.go) |
 | CWE-287 | `internal/server/workload_identity.go` | TestServedWorkloadIdentitiesAreTenantIsolated and TestServedEphemeralIdentitiesAndApprovalsAreTenantIsolated (internal/server/workload_identity_tenant_test.go) + TestApprovalBindingDecodesScopedSubjectWithoutChangingAuthority (internal/ephemeral/approval_test.go) |
+| CWE-639 | `internal/signing/ownership.go` | TestV5L1TenantAdminBindsUnclaimedSignerHandlesAcrossTenants (internal/server/v5_l1_verify_served_test.go) + TestCR011TenantCAOwnershipSurvivesSignerRestart (internal/signing/ownership_test.go) |
 | CWE-863 | `internal/crypto/workload_namespace.go` | TestLeafProfilesCannotMintReservedWorkloadIdentities (internal/crypto/workload_namespace_test.go) + TestRegistrationCannotClaimAutomaticWorkloadNamespace (internal/protocols/spiffe/workload_namespace_test.go) |
 | CWE-863 | `internal/crypto/leafca.go` | TestLeafProfileExtraExtensionsCannotOverrideIdentityPolicy (internal/crypto/workload_namespace_test.go) |
 | CWE-190 | `internal/crypto/seal/seal.go` | TestSealRefusesOversizedWrappedDEK (internal/crypto/seal/bounds_guard_test.go) |

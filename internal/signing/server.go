@@ -212,6 +212,16 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 		}
 		constraints.requireAuth = true
 	}
+	owner, class, err := requestedKeyOwnership(ctx)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if owner != "" {
+		constraints.ownerTenantID, constraints.keyClass = owner, class
+		if !constraints.isTenantCAFor(owner) {
+			return nil, status.Error(codes.InvalidArgument, "tenant CA ownership requires CA_SIGN and dual control")
+		}
+	}
 	ls, err := s.keyspec.GenerateSigningKeyFromProto(req.GetAlgorithm())
 	if err != nil {
 		if _, ok := status.FromError(err); ok {
@@ -231,6 +241,10 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 			return nil, status.Errorf(codes.Internal, "generate handle: %v", err)
 		}
 		id = hex.EncodeToString(raw)
+	}
+	if owner != "" && reservedTenantCAHandle(id) {
+		ls.Destroy()
+		return nil, status.Error(codes.PermissionDenied, "reserved signer key handle cannot be tenant-owned")
 	}
 	if isPCASGenericPairedHandle(id) {
 		// Older paired KEM rewraps created this key with GenerateKey. Keep
@@ -325,10 +339,17 @@ func (s *Server) mintHeldKey(id string, held *heldKey) error {
 }
 
 // GetPublicKey returns the public key for a handle.
-func (s *Server) GetPublicKey(_ context.Context, req *signerpb.GetPublicKeyRequest) (*signerpb.GetPublicKeyResponse, error) {
+func (s *Server) GetPublicKey(ctx context.Context, req *signerpb.GetPublicKeyRequest) (*signerpb.GetPublicKeyResponse, error) {
 	held, err := s.lookup(req.GetHandle())
 	if err != nil {
 		return nil, err
+	}
+	owner, _, err := requestedKeyOwnership(ctx)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if owner != "" && (reservedTenantCAHandle(req.GetHandle().GetId()) || !held.constraints.isTenantCAFor(owner)) {
+		return nil, status.Error(codes.PermissionDenied, "signer key is not an importable CA owned by this tenant")
 	}
 	revoked, err := s.revoked(req.GetHandle().GetId())
 	if err != nil {

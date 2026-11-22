@@ -272,7 +272,8 @@ cross-certificate verification at `/api/v1/ca/authorities/{id}/offline-cross-sig
 Online root/intermediate private keys live only in the isolated signing service,
 referenced by signer handles; the control plane stores certificates, chains,
 metadata, and ceremony state, never the CA private key. Existing-CA import verifies a
-public chain's first certificate against the supplied signer handle and the
+public chain's first certificate against a signer handle sealed to that tenant
+and the importable CA key class, then verifies the
 chain/profile before serving normal leaf issuance. A durable, global first-writer
 fence binds that handle to one tenant and reviewed ceremony before the authority
 event; a conflicting tenant cannot reuse the same signer-held key, including after

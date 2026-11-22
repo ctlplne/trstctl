@@ -45,6 +45,7 @@ golangci-lint results do not replace that evidence.
 | CWE-754 | `scripts/ci/ee-lint-ratchet.py` | EE lint counted text findings without checking scanner completion. It now requires a complete, uncapped six-linter JSON report and a matching native exit status; malformed reports, tool errors and timeouts fail without changing the baseline. | TestEELintRejectsIncompleteScans and TestMakeLintStopsOnToolFailure/python-deadline-retains-output (docs/lint_failure_test.go) |
 | CWE-772 | `scripts/ci/ee-lint-ratchet.py` | The scanner timeout killed only the direct child. EE lint now bounds live output and terminates the owned scanner process group on timeout, SIGINT, SIGTERM, or a leader exit that leaves descendants. | TestEELintScannerSupervision (docs/lint_supervision_test.go) |
 | CWE-287 | `internal/server/workload_identity.go` | Automatic workload identities omitted the authenticated tenant under a shared CA. Versioned names now bind tenant, route, verified method and broker agent; approval recovery checks the signed tenant and method. | TestServedWorkloadIdentitiesAreTenantIsolated and TestServedEphemeralIdentitiesAndApprovalsAreTenantIsolated (internal/server/workload_identity_tenant_test.go) + TestApprovalBindingDecodesScopedSubjectWithoutChangingAuthority (internal/ephemeral/approval_test.go) |
+| CWE-639 | `internal/signing/ownership.go` | An approved tenant CA import could claim a platform, custody, or neighboring tenant's unclaimed signer handle. The signer now seals the owner and importable CA class, and import checks that seal before binding an authority. | TestV5L1TenantAdminBindsUnclaimedSignerHandlesAcrossTenants (internal/server/v5_l1_verify_served_test.go) + TestCR011TenantCAOwnershipSurvivesSignerRestart (internal/signing/ownership_test.go) |
 | CWE-863 | `internal/crypto/workload_namespace.go` | Ordinary CSR profiles and manual Workload API registrations could claim automatic workload names. Both now refuse the reserved /_trstctl namespace, including alias attempts. | TestLeafProfilesCannotMintReservedWorkloadIdentities (internal/crypto/workload_namespace_test.go) + TestRegistrationCannotClaimAutomaticWorkloadNamespace (internal/protocols/spiffe/workload_namespace_test.go) |
 | CWE-863 | `internal/crypto/leafca.go` | LeafProfile.ExtraExtensions could overwrite a checked SAN or another core certificate policy field. The shared classical/opaque profile gate now rejects those parsed OIDs before signing; non-core extensions remain supported. | TestLeafProfileExtraExtensionsCannotOverrideIdentityPolicy (internal/crypto/workload_namespace_test.go) |
 | CWE-190 | `internal/crypto/seal/seal.go` | Seal accepted a wrapped DEK larger than the v1 container's 2-byte length prefix and silently mis-framed it; now refused with ErrFormat. | TestSealRefusesOversizedWrappedDEK (internal/crypto/seal/bounds_guard_test.go) |
@@ -1461,11 +1462,11 @@ not this file.
 | `internal/server/secret_sync_source_sequence_test.go:72` | this fixture appends exactly two events. |
 | `internal/server/secrets_rotation_served_test.go:2589` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/totp_seed_replace_served_test.go:76` | a positive clock step in a test (CWE-190) |
-| `internal/signing/keystore.go:130` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
-| `internal/signing/keystore.go:132` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
-| `internal/signing/keystore.go:134` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
-| `internal/signing/keystore.go:136` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
-| `internal/signing/keystore.go:152` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/signing/keystore.go:135` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/signing/keystore.go:137` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/signing/keystore.go:139` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/signing/keystore.go:141` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/signing/keystore.go:157` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/slackapp/socket.go:207` | bounded by maxSocketMessage above (CWE-190) |
 | `internal/slackapp/socket.go:231` | n <= 0xFFFF here (CWE-190) |
 | `internal/slackapp/socket.go:234` | a length is non-negative (CWE-190) |
@@ -3160,7 +3161,7 @@ not this file.
 | `internal/signing/design_test.go:137` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:252` | exact signer-owned journal path. |
 | `internal/signing/hardening_contract_test.go:55` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/signing/keystore.go:523` | path joins a sanitized handle to the signer-owned 0700 keystore (CWE-22). |
+| `internal/signing/keystore.go:552` | path joins a sanitized handle to the signer-owned 0700 keystore (CWE-22). |
 | `internal/signing/keystore_test.go:139` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/keystore_test.go:229` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/legacy_migration.go:35` | signer operator supplies the one legacy migration path |
@@ -3801,9 +3802,9 @@ not this file.
 | `internal/server/ssh_trust_fleet_openssh_test.go:215` | retain the owned generated public certificate beside its fixture key; no external path input (CWE-22). |
 | `internal/server/vault_compat_served_test.go:195` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:156` | test reads the cluster CA its runner wrote (CWE-22) |
-| `internal/signing/keystore.go:367` | both absolute paths passed the explicit signer-keystore confinement check above (CWE-22) |
-| `internal/signing/keystore.go:378` | tmpPath passed the explicit signer-keystore confinement check above (CWE-22) |
-| `internal/signing/keystore.go:549` | path passed the explicit signer-keystore confinement check above (CWE-22) |
+| `internal/signing/keystore.go:396` | both absolute paths passed the explicit signer-keystore confinement check above (CWE-22) |
+| `internal/signing/keystore.go:407` | tmpPath passed the explicit signer-keystore confinement check above (CWE-22) |
+| `internal/signing/keystore.go:578` | path passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/keystore_test.go:233` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/signing/revocation.go:148` | path passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/testutil/openssltest/openssltest.go:89` | test-support helper probing fixed well-known openssl paths; not linked into served binaries (CWE-22) |

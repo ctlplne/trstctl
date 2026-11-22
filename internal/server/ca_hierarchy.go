@@ -433,7 +433,7 @@ func (h *caHierarchyService) CreateRoot(ctx context.Context, tenantID string, re
 		if err != nil {
 			return fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 		}
-		signer, signerCreated, err = h.createOrBindSigner(ctx, handle, keyAlgorithm)
+		signer, signerCreated, err = h.createOrBindSigner(ctx, tenantID, handle, keyAlgorithm)
 		if err != nil {
 			return err
 		}
@@ -578,8 +578,11 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 	if client == nil {
 		return api.CAAuthority{}, api.ErrCAHierarchyUnavailable
 	}
-	signer, err := client.SignerForDualControlHandle(ctx, req.SignerHandle, signing.PurposeCASign, h.signAuthz)
+	signer, err := client.SignerForOwnedDualControlCAHandle(ctx, tenantID, req.SignerHandle, h.signAuthz)
 	if err != nil {
+		if status.Code(err) == codes.PermissionDenied || status.Code(err) == codes.InvalidArgument {
+			return api.CAAuthority{}, fmt.Errorf("%w: signer key is not a tenant-owned importable CA key", api.ErrCAHierarchyConflict)
+		}
 		return api.CAAuthority{}, err
 	}
 	// eMudhra, Part 4: the bound signer proves it holds the key the imported
@@ -710,7 +713,7 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 		if err != nil {
 			return fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 		}
-		childSigner, signerCreated, err = h.createOrBindSigner(ctx, handle, keyAlgorithm)
+		childSigner, signerCreated, err = h.createOrBindSigner(ctx, tenantID, handle, keyAlgorithm)
 		if err != nil {
 			return err
 		}
@@ -779,7 +782,7 @@ func (h *caHierarchyService) CreateOfflineIntermediateCSR(ctx context.Context, t
 	if _, pure := crypto.PureX509Algorithm(mustSignerBackedKeyAlgorithm(req.Spec)); pure {
 		return api.CAIntermediateCSR{}, fmt.Errorf("%w: an offline-root-signed intermediate CSR uses a classical key; a post-quantum hierarchy starts from a signer-backed ML-DSA root", api.ErrCAHierarchyInvalid)
 	}
-	signer, signerCreated, err := h.createOrBindSigner(ctx, handle, crypto.ECDSAP256)
+	signer, signerCreated, err := h.createOrBindSigner(ctx, tenantID, handle, crypto.ECDSAP256)
 	if err != nil {
 		return api.CAIntermediateCSR{}, err
 	}
@@ -1725,7 +1728,7 @@ func hierarchySignerHandle(ceremonyID string) string {
 	return crypto.CAHierarchySignerHandle(ceremonyID)
 }
 
-func (h *caHierarchyService) createOrBindSigner(ctx context.Context, handle string, algorithm crypto.Algorithm) (*signing.RemoteSigner, bool, error) {
+func (h *caHierarchyService) createOrBindSigner(ctx context.Context, tenantID, handle string, algorithm crypto.Algorithm) (*signing.RemoteSigner, bool, error) {
 	client := h.signer.Client()
 	if client == nil {
 		return nil, false, api.ErrCAHierarchyUnavailable
@@ -1733,13 +1736,12 @@ func (h *caHierarchyService) createOrBindSigner(ctx context.Context, handle stri
 	if algorithm == "" {
 		algorithm = crypto.ECDSAP256
 	}
-	signer, err := client.GenerateDualControlKeyHandle(ctx, algorithm, handle,
-		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, h.signAuthz)
+	signer, err := client.GenerateOwnedDualControlCAKeyHandle(ctx, tenantID, algorithm, handle, h.signAuthz)
 	if err == nil {
 		return signer, true, nil
 	}
 	if status.Code(err) == codes.AlreadyExists {
-		signer, err := client.SignerForDualControlHandle(ctx, handle, signing.PurposeCASign, h.signAuthz)
+		signer, err := client.SignerForOwnedDualControlCAHandle(ctx, tenantID, handle, h.signAuthz)
 		return signer, false, err
 	}
 	if status.Code(err) == codes.FailedPrecondition && status.Convert(err).Message() == signing.ErrDestroyedKeyHandle.Error() {

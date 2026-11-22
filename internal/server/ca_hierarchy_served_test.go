@@ -418,18 +418,18 @@ func TestOfflineIntermediateCSRAppendFailureDestroysSigner(t *testing.T) {
 func TestDestroyedOfflineIntermediateSignerRequiresFreshCeremony(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
 	handle := hierarchySignerHandle("destroyed-csr-ceremony")
-	signer, created, err := h.srv.caHierarchy.createOrBindSigner(context.Background(), handle, crypto.ECDSAP256)
+	signer, created, err := h.srv.caHierarchy.createOrBindSigner(context.Background(), h.tenant, handle, crypto.ECDSAP256)
 	if err != nil || !created {
 		t.Fatalf("create ceremony signer = %v, created=%t", err, created)
 	}
 	if err := signer.Destroy(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = h.srv.caHierarchy.createOrBindSigner(context.Background(), handle, crypto.ECDSAP256)
+	_, _, err = h.srv.caHierarchy.createOrBindSigner(context.Background(), h.tenant, handle, crypto.ECDSAP256)
 	if !errors.Is(err, api.ErrCAHierarchyConflict) || !strings.Contains(err.Error(), "new ceremony") {
 		t.Fatalf("destroyed handle retry = %v; want actionable ceremony conflict", err)
 	}
-	fresh, created, err := h.srv.caHierarchy.createOrBindSigner(context.Background(), hierarchySignerHandle("fresh-csr-ceremony"), crypto.ECDSAP256)
+	fresh, created, err := h.srv.caHierarchy.createOrBindSigner(context.Background(), h.tenant, hierarchySignerHandle("fresh-csr-ceremony"), crypto.ECDSAP256)
 	if err != nil || !created || fresh == nil {
 		t.Fatalf("fresh ceremony signer = %v, created=%t", err, created)
 	}
@@ -1630,14 +1630,12 @@ func TestServedCAHierarchyImportsExistingSignerBackedChain(t *testing.T) {
 
 	client := h.signer.Client()
 	importedHandle := "imported-existing-intermediate"
-	importedSigner, err := client.GenerateDualControlKeyHandle(context.Background(), crypto.ECDSAP256, importedHandle,
-		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, h.authz)
+	importedSigner, err := client.GenerateOwnedDualControlCAKeyHandle(context.Background(), h.tenant, crypto.ECDSAP256, importedHandle, h.authz)
 	if err != nil {
 		t.Fatalf("pre-provision imported CA signer handle: %v", err)
 	}
 	wrongHandle := "imported-existing-wrong"
-	wrongSigner, err := client.GenerateDualControlKeyHandle(context.Background(), crypto.ECDSAP256, wrongHandle,
-		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, h.authz)
+	wrongSigner, err := client.GenerateOwnedDualControlCAKeyHandle(context.Background(), h.tenant, crypto.ECDSAP256, wrongHandle, h.authz)
 	if err != nil || wrongSigner == nil {
 		t.Fatalf("pre-provision wrong signer handle: %v", err)
 	}

@@ -49,7 +49,7 @@ func (h *caHierarchyService) PrepareExistingImportCSR(ctx context.Context, tenan
 	}
 	// The external issuer signs a classical CSR; a post-quantum hierarchy is
 	// minted by the served signer path, not prepared for an outside CA.
-	signer, _, err := h.createOrBindSigner(ctx, handle, crypto.ECDSAP256)
+	signer, _, err := h.createOrBindSigner(ctx, tenantID, handle, crypto.ECDSAP256)
 	if err != nil {
 		return api.CAExistingImportCSR{}, err
 	}

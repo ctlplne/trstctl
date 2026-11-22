@@ -103,9 +103,11 @@ var metaMagic = []byte("CSKM")
 // purposes+hashes; v2 appends a one-byte flags field (bit 0 = dual-control /
 // requireAuth, RED-003); v3 appends a one-byte Algorithm enum so non-PKCS#8
 // licensed key bytes can be reconstructed after restart. v4 appends a receipt
-// only for authenticated imports. Older files retain their original defaults.
+// only for authenticated imports. v5 appends an owner tenant and CA class after
+// a receipt slot; older files remain unowned and cannot be newly CA-imported.
 const metaVersion = 3
 const importReceiptMetaVersion = 4
+const ownedCAMetaVersion = 5
 
 // flagRequireAuth is bit 0 of the v2 flags byte: the key is dual-control.
 const flagRequireAuth = 1 << 0
@@ -125,6 +127,9 @@ func encodeConstraintMeta(kc keyConstraints, algorithm signerpb.Algorithm) []byt
 	version := byte(metaVersion)
 	if kc.importReceipt != [32]byte{} {
 		version = importReceiptMetaVersion
+	}
+	if kc.ownerTenantID != "" {
+		version = ownedCAMetaVersion
 	}
 	out = append(out, version)
 	out = append(out, byte(len(purposes))) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
@@ -150,8 +155,12 @@ func encodeConstraintMeta(kc keyConstraints, algorithm signerpb.Algorithm) []byt
 	}
 	out = append(out, flags)
 	out = append(out, byte(algorithm)) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
-	if version == importReceiptMetaVersion {
+	if version >= importReceiptMetaVersion {
 		out = append(out, kc.importReceipt[:]...)
+	}
+	if version == ownedCAMetaVersion {
+		out = append(out, kc.ownerTenantID...)
+		out = append(out, 1) // tenant-ca is the sole importable key class
 	}
 	return out
 }
@@ -171,7 +180,7 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, signerpb.Algorithm,
 		return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: truncated key metadata (version)")
 	}
 	ver := plaintext[off]
-	if (ver < 1 || ver > metaVersion) && ver != importReceiptMetaVersion {
+	if ver < 1 || ver > ownedCAMetaVersion {
 		return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, fmt.Errorf("signing: unsupported key metadata version %d", ver)
 	}
 	off++
@@ -231,14 +240,31 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, signerpb.Algorithm,
 		alg = signerpb.Algorithm(plaintext[off])
 		off++
 	}
-	if ver == importReceiptMetaVersion {
+	if ver >= importReceiptMetaVersion {
 		if len(plaintext)-off < len(kc.importReceipt) {
 			return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: truncated key import receipt")
 		}
 		off += copy(kc.importReceipt[:], plaintext[off:])
-		if kc.importReceipt == [32]byte{} || !kc.requireAuth || kc.offlineOnly || kc.custodyOnly || kc.genericPCAS || len(kc.hashes) != 0 ||
-			len(kc.purposes) != 1 || !kc.purposes[signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN] {
+		if (ver == importReceiptMetaVersion || kc.importReceipt != [32]byte{}) &&
+			(kc.importReceipt == [32]byte{} || !kc.requireAuth || kc.offlineOnly || kc.custodyOnly || kc.genericPCAS || len(kc.hashes) != 0 ||
+				len(kc.purposes) != 1 || !kc.purposes[signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN]) {
 			return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: invalid key import receipt or constraints")
+		}
+	}
+	if ver == ownedCAMetaVersion {
+		if len(plaintext)-off < 37 {
+			return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: truncated key ownership metadata")
+		}
+		kc.ownerTenantID = string(plaintext[off : off+36])
+		off += 36
+		class := plaintext[off]
+		off++
+		if class != 1 {
+			return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: invalid key class")
+		}
+		kc.keyClass = KeyClassTenantCA
+		if !canonicalKeyOwnerTenant(kc.ownerTenantID) || !kc.isTenantCAFor(kc.ownerTenantID) {
+			return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: invalid tenant CA ownership metadata")
 		}
 	}
 	return kc, alg, plaintext[off:], nil
@@ -318,6 +344,9 @@ func (ks *KeyStore) stageSave(handle string, ls signerKey, constraints keyConstr
 }
 
 func (ks *KeyStore) sealHeldKey(stem string, ls signerKey, constraints keyConstraints) ([]byte, error) {
+	if (constraints.ownerTenantID != "" || constraints.keyClass != "") && !constraints.isTenantCAFor(constraints.ownerTenantID) {
+		return nil, errors.New("signing: invalid tenant CA ownership constraints")
+	}
 	keyBytes, err := privateKeyBytesForSealing(ls)
 	if err != nil {
 		return nil, err

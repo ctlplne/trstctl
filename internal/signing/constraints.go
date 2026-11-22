@@ -105,6 +105,10 @@ type keyConstraints struct {
 	genericPCAS bool
 	// importReceipt binds a v2 imported key to one exact approved request.
 	importReceipt [32]byte
+	// ownerTenantID and keyClass are sealed with an importable tenant CA key.
+	// Unowned legacy, platform and custody keys cannot pass a CA import lookup.
+	ownerTenantID string
+	keyClass      string
 }
 
 // constraintsFromGenerate builds the constraint set declared on a GenerateKey
