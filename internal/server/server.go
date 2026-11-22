@@ -4793,7 +4793,20 @@ func (s *Server) Drain(ctx context.Context) error {
 				return err
 			}
 			if n == 0 {
-				return nil
+				if !s.backgroundOutboxActive() {
+					return nil
+				}
+				// Another dispatcher can hold a committed claim that this sweep
+				// cannot see. Wait for its handler and finalize transaction.
+				timer := time.NewTimer(10 * time.Millisecond)
+				select {
+				case <-ctx.Done():
+					if !timer.Stop() {
+						<-timer.C
+					}
+					return ctx.Err()
+				case <-timer.C:
+				}
 			}
 		}
 	}
@@ -4899,7 +4912,7 @@ func (s *Server) Drain(ctx context.Context) error {
 			}
 			// A pooled cleanup may predate these drain worker states. Its own
 			// non-queued sweep must finish before this barrier can report quiet.
-			if s.eventKeyDelivery != nil && s.eventKeyDelivery.cleanup.Active() {
+			if s.backgroundOutboxActive() || s.eventKeyDelivery != nil && s.eventKeyDelivery.cleanup.Active() {
 				allQuiet = false
 			}
 			stateMu.Unlock()
@@ -4915,6 +4928,24 @@ func (s *Server) Drain(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+// backgroundOutboxActive observes dispatch jobs submitted to the bounded live
+// worker pools. A row they claimed is invisible to Drain's SKIP LOCKED sweep;
+// Submitted-Completed-Panicked remains nonzero until the worker returns.
+func (s *Server) backgroundOutboxActive() bool {
+	if s.bulk == nil {
+		return false
+	}
+	for _, family := range outboxDispatchFamilies {
+		if pool := s.bulk.Pool(family.pool); pool != nil {
+			stats := pool.Stats()
+			if stats.Submitted > stats.Completed+stats.Panicked {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Shutdown drains the subsystem pools and the outbox, then closes the event log

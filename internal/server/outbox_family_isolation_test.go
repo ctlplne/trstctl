@@ -21,6 +21,87 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+// A live dispatcher may already own a newly queued row when Drain starts.
+// An empty claim query cannot certify quiescence while that worker is still
+// handling the row: the caller must observe its completion before returning.
+func TestOutboxDrainWaitsForLiveDispatcherClaimCI(t *testing.T) {
+	for _, familyPools := range []bool{false, true} {
+		name := "legacy"
+		if familyPools {
+			name = "family-pools"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			st := newServerTestStore(t)
+			log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			set := bulkhead.NewSet(bulkhead.Config{Name: bulkhead.SubsystemOutbox, Workers: 1, Queue: 4})
+			if familyPools {
+				set = bulkhead.NewSet(
+					bulkhead.Config{Name: bulkhead.SubsystemOutbox, Workers: 1, Queue: 4},
+					bulkhead.Config{Name: bulkhead.SubsystemOutboxNotifications, Workers: 1, Queue: 4},
+				)
+			}
+			started, release := make(chan struct{}), make(chan struct{})
+			var once sync.Once
+			unblock := func() { once.Do(func() { close(release) }) }
+			defer unblock()
+			handler := orchestrator.HandlerFunc(func(callCtx context.Context, _ orchestrator.Message) error {
+				close(started)
+				select {
+				case <-release:
+					return nil
+				case <-callCtx.Done():
+					return callCtx.Err()
+				}
+			})
+			srv, err := Build(ctx, Deps{Store: st, Log: log, Bulkhead: set, OutboxHandler: handler})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				unblock()
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				_ = srv.Shutdown(shutdownCtx)
+				_ = log.Close()
+			})
+			const tenant = "11111111-1111-1111-1111-111111111111"
+			if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenant, Name: "live-drain-claim"}); err != nil {
+				t.Fatal(err)
+			}
+			if err := st.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
+				_, err := srv.outbox.Enqueue(ctx, tx, orchestrator.Entry{TenantID: tenant,
+					Destination: "notification.test", IdempotencyKey: "live-drain-claim", Payload: []byte(`{}`)})
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			srv.dispatchOnce(ctx)
+			select {
+			case <-started:
+			case <-time.After(5 * time.Second):
+				t.Fatal("live dispatcher did not claim the row")
+			}
+			drainCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { done <- srv.Drain(drainCtx) }()
+			select {
+			case err := <-done:
+				t.Fatalf("Drain returned before live delivery completed: %v", err)
+			case <-time.After(100 * time.Millisecond):
+			}
+			unblock()
+			if err := <-done; err != nil {
+				t.Fatalf("Drain after live delivery: %v", err)
+			}
+		})
+	}
+}
+
 // TestOutboxConnectorSaturationDoesNotStarveOtherFamilies is the adversarial
 // AN-7 proof against real PostgreSQL. Two connector calls occupy every connector
 // worker. External-CA and notification rows for the SAME tenant must still
