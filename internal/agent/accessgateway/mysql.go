@@ -98,6 +98,10 @@ func serveMySQL(ctx context.Context, client net.Conn, dsn []byte, deadline time.
 		// listener, and the tunnel to the gateway is already TLS.
 		return errors.New("accessgateway: the MySQL client asked for TLS, which the gateway's handshake does not offer")
 	}
+	if len(guards) > 0 && guards[0] != nil && !mysqlGuardedSQLCharset(response.Charset) {
+		_ = mysqlRefuse(client, 2, "command rules require a supported SQL connection charset")
+		return errors.New("accessgateway: guarded MySQL session requires a supported SQL connection charset")
+	}
 	ok, err := mysqlsignin.SignIn(server, handshake, target, response)
 	if err != nil {
 		_ = mysqlRefuse(client, 2, "the upstream database refused the session's account")
@@ -120,6 +124,23 @@ func serveMySQL(ctx context.Context, client net.Conn, dsn []byte, deadline time.
 	<-done
 	<-done
 	return nil
+}
+
+// A guarded session admits only known charsets where a multibyte trail cannot
+// hide 0x5c from the SQL classifier. The stock mysql CLI uses latin1 (ID 8);
+// its non-ASCII bytes fail the classifier's UTF-8 validation, while ASCII
+// syntax is byte-for-byte identical. SET cannot change the charset later.
+func mysqlGuardedSQLCharset(charset byte) bool {
+	switch charset {
+	case 8: // latin1_swedish_ci, the stock mysql CLI's default
+		return true
+	case 33, 83, 192: // utf8mb3 general, binary, Unicode
+		return true
+	case 45, 46, 224, 255: // utf8mb4 general, binary, Unicode, 0900 AI
+		return true
+	default:
+		return false
+	}
 }
 
 // mysqlRefuse sends an ERR packet: access denied, with the gateway's reason,

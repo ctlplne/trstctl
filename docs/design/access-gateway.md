@@ -589,7 +589,12 @@ short review deadlines are the same as the PostgreSQL and SSH guards.
 The gateway classifies complete post-authentication `COM_QUERY` statements.
 Ordinary comments and quoted values/identifiers are excluded; executable
 `/*!...*/` version comments are inspected conservatively, regardless of the
-server's version. The lexer considers both backslash string-escape modes.
+server's version. Line comments end only at LF; a CR remains inside the
+comment. The lexer considers both backslash string-escape modes. Guarded
+connections admit supported UTF-8 collations and the stock client's single-byte
+latin1 collation (ID 8); the classifier refuses non-UTF-8 SQL bytes. Other
+handshake charsets and SQL `SET` are refused so the client cannot switch to a
+multibyte charset or change parsing rules after sign-in.
 Operation classes, public identifiers and digests reach command review; statement
 text, query values and the injected sign-in credential do not. Login-change
 requests are refused before command evaluation. Rules work without recording.
@@ -597,7 +602,7 @@ requests are refused before command evaluation. Rules work without recording.
 This path currently supports text queries, empty query-attribute envelopes,
 `COM_INIT_DB` as the public `USE` operation, `PING` and `QUIT`. Wire prepared
 statements, query attributes with values, SQL-level prepared execution and
-`LOAD DATA` are explicitly refused in a ruled session. No opaque execute is
+`LOAD DATA`, and SQL `SET` are explicitly refused in a ruled session. No opaque execute is
 silently forwarded. Unsupported one-way controls close the stream because adding
 an unsolicited error packet could corrupt the next response. Guarded frames are
 bounded at 1 MiB of SQL plus the command byte; oversized or fragmented frames end

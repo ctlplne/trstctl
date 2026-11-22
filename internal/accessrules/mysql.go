@@ -39,7 +39,7 @@ func mysqlOperations(raw []byte, backslash bool, depth int, seen *[64]bool) erro
 	for i := 0; i < len(raw); {
 		switch {
 		case raw[i] == '#' || raw[i] == '-' && i+2 < len(raw) && raw[i+1] == '-' && raw[i+2] <= 32:
-			for i < len(raw) && raw[i] != '\n' && raw[i] != '\r' {
+			for i < len(raw) && raw[i] != '\n' {
 				i++
 			}
 		case raw[i] == '/' && i+1 < len(raw) && raw[i+1] == '*':
@@ -114,7 +114,7 @@ func mysqlOperations(raw []byte, backslash bool, depth int, seen *[64]bool) erro
 
 func UnsupportedMySQLControl(ops []string) bool {
 	for _, op := range ops {
-		if op == "PREPARE" || op == "EXECUTE" || op == "DEALLOCATE" || op == "LOAD" {
+		if op == "PREPARE" || op == "EXECUTE" || op == "DEALLOCATE" || op == "LOAD" || op == "SET" {
 			return true
 		}
 	}

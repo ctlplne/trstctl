@@ -50,6 +50,27 @@ func TestMySQLRulesInspectExecutableCommentsAndKeepValuesOut(t *testing.T) {
 	}
 }
 
+func TestCR005MySQLCommentEndsOnlyAtLF(t *testing.T) {
+	for _, sql := range []string{
+		"# note\r'\nDELETE FROM victim -- '",
+		"--\r'\nDELETE FROM victim -- '",
+	} {
+		ops, err := MySQLRuleOperations([]byte(sql))
+		if err != nil || !slices.Contains(ops, "DELETE") {
+			t.Errorf("MySQL executes DELETE after LF in %q; classifier returned %v, %v", sql, ops, err)
+		}
+	}
+}
+
+func TestCR005CharsetChangingSetIsUnsupportedInGuardedSession(t *testing.T) {
+	for _, sql := range []string{"SET NAMES gbk", "SET CHARACTER SET gbk", "SET @@character_set_client = gbk"} {
+		ops, err := MySQLRuleOperations([]byte(sql))
+		if err != nil || !UnsupportedMySQLControl(ops) {
+			t.Errorf("charset switch %q = %v, %v; want unsupported control", sql, ops, err)
+		}
+	}
+}
+
 func TestMySQLClassifierAllocationBoundDependsOnFacts(t *testing.T) {
 	for _, sql := range []string{"DELETE FROM notes", strings.Repeat("DELETE ", MaxStatementBytes/7), strings.Repeat("/*! DELETE */ ", MaxStatementBytes/14)} {
 		raw := []byte(sql)
