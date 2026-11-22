@@ -67,3 +67,43 @@ func TestRevocationCRLAnswerSaysWhetherItListsTheTargetSerial(t *testing.T) {
 		t.Fatalf("listing answers = %v; want the revoked serial listed and the other not", listed)
 	}
 }
+
+func TestRevocationProbeRefusesSignedShardAndDeltaAsCompleteCR070(t *testing.T) {
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	issuer, err := crypto.SelfSignedCACert(key, "CR-070 issuer", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	shard, err := crypto.CreateCRLWithOptions(issuer, key, nil, 8, now, now.Add(time.Hour), crypto.CRLOptions{
+		IssuingDistributionPointURL: "urn:trstctl:crl-shard:other",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta, err := crypto.CreateCRLWithOptions(issuer, key, nil, 9, now, now.Add(time.Hour), crypto.CRLOptions{DeltaBaseNumber: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string][]byte{"shard": shard, "delta": delta} {
+		t.Run(name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(body) }))
+			defer server.Close()
+			report, err := relay.ProbeRevocation(context.Background(), server.Client(), relay.RevocationProbeIntent{
+				ID: uuid.NewString(), Bucket: now.Format(time.RFC3339), BatchIndex: 1, BatchCount: 1,
+				RequiredAgentRole: revocationhealth.RequiredRoleNetwork,
+				Targets: []revocationhealth.Target{{Key: crypto.SHA256Hex([]byte(name)), Protocol: revocationhealth.ProtocolCRL,
+					Endpoint: server.URL + "/crl", IssuerDER: issuer, IssuerSubject: "CR-070 issuer",
+					IssuerFingerprint: "issuer-fingerprint", CertificateID: uuid.NewString(), CertificateSubject: "leaf",
+					CertificateFingerprint: crypto.SHA256Hex([]byte("leaf")), CertificateSerial: "10"}},
+			})
+			if err != nil || len(report.Findings) != 1 || report.Findings[0].Status != relay.RevocationUnparseable || report.Findings[0].DetailCode != "crl_scope_mismatch" {
+				t.Fatalf("probe accepted %s as a complete CRL: %+v, %v", name, report, err)
+			}
+		})
+	}
+}

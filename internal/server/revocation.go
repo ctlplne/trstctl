@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -82,6 +83,10 @@ type revocationService struct {
 	ocspCache   *ocspResponseCache
 	ocspMetrics *observ.OCSPMetrics
 	now         func() time.Time
+	// fullCRLURLs returns this tenant/authority's signed full-CRL scopes.
+	// Where leaves have a tenant CDP, its URL is included. Without one, a
+	// tenant-specific URN prevents this partial list looking issuer-wide.
+	fullCRLURLs func(tenantID string) []string
 
 	// catchUpMu/lastCatchUp debounce the projection catch-up on the OCSP serving
 	// path. See catchUp.
@@ -368,7 +373,12 @@ func (s *revocationService) generateCRLFromCurrentProjection(ctx context.Context
 	}
 	now := s.now()
 	nextUpdate := now.Add(crlValidity)
-	der, err := crypto.CreateCRL(s.caCertDER, s.caSigner, entries, number, now, nextUpdate)
+	var fullURLs []string
+	if s.fullCRLURLs != nil {
+		fullURLs = s.fullCRLURLs(tenantID)
+	}
+	der, err := crypto.CreateCRLWithOptions(s.caCertDER, s.caSigner, entries, number, now, nextUpdate,
+		crypto.CRLOptions{IssuingDistributionPointURLs: fullURLs})
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +415,12 @@ func (s *revocationService) generateCRLFromCurrentProjection(ctx context.Context
 			if err != nil {
 				return nil, err
 			}
-			shardDER, err := crypto.CreateCRL(s.caCertDER, s.caSigner, shardEntries, shardNumber, now, nextUpdate)
+			// A shard is an optimization artifact, never the complete CDP named
+			// in a leaf. A critical IDP gives it a distinct signed scope, so a
+			// relying party cannot treat an empty shard as a newer full CRL.
+			scope := "urn:trstctl:crl-shard:" + crypto.SHA256Hex([]byte(fmt.Sprintf("%s/%s/%d", tenantID, s.caID, i)))
+			shardDER, err := crypto.CreateCRLWithOptions(s.caCertDER, s.caSigner, shardEntries, shardNumber, now, nextUpdate,
+				crypto.CRLOptions{IssuingDistributionPointURL: scope})
 			if err != nil {
 				return nil, err
 			}
@@ -426,7 +441,8 @@ func (s *revocationService) generateCRLFromCurrentProjection(ctx context.Context
 			if err != nil {
 				return nil, err
 			}
-			deltaDER, err := crypto.CreateCRLWithOptions(s.caCertDER, s.caSigner, deltaEntries, deltaNumber, now, nextUpdate, crypto.CRLOptions{DeltaBaseNumber: previous.Number})
+			deltaDER, err := crypto.CreateCRLWithOptions(s.caCertDER, s.caSigner, deltaEntries, deltaNumber, now, nextUpdate,
+				crypto.CRLOptions{DeltaBaseNumber: previous.Number, IssuingDistributionPointURLs: fullURLs})
 			if err != nil {
 				return nil, err
 			}
@@ -496,6 +512,12 @@ func (s *revocationService) ensureCRL(ctx context.Context, tenantID string) erro
 	due, err := s.store.CRLDueForRegeneration(ctx, tenantID, s.caID, s.now(), crlRefreshLead)
 	if err != nil {
 		return err
+	}
+	if !due {
+		due, err = s.scopeRefreshDue(ctx, tenantID)
+		if err != nil {
+			return err
+		}
 	}
 	if !due {
 		return nil
@@ -612,7 +634,33 @@ func (s *revocationService) requireFreshFullCRL(ctx context.Context, tenantID st
 	if int64(full.RevokedCount) != revoked {
 		return errCRLNotPublished
 	}
+	if !s.fullCRLScopeMatches(tenantID, full.DER) {
+		return errCRLNotPublished
+	}
 	return nil
+}
+
+func (s *revocationService) fullCRLScopeMatches(tenantID string, der []byte) bool {
+	if s.fullCRLURLs == nil {
+		return true
+	}
+	want := s.fullCRLURLs(tenantID)
+	if len(want) == 0 {
+		return true
+	}
+	info, err := crypto.ParseCRL(der, s.caCertDER)
+	return err == nil && !info.HasDeltaCRLIndicator && slices.Equal(info.IssuingDistributionPointURLs, want)
+}
+
+func (s *revocationService) scopeRefreshDue(ctx context.Context, tenantID string) (bool, error) {
+	if s.fullCRLURLs == nil || len(s.fullCRLURLs(tenantID)) == 0 {
+		return false, nil
+	}
+	latest, found, err := s.store.LatestCRL(ctx, tenantID, s.caID)
+	if err != nil {
+		return false, err
+	}
+	return !found || !s.fullCRLScopeMatches(tenantID, latest.DER), nil
 }
 
 type crlManifestResponse struct {
@@ -653,9 +701,11 @@ func (s *revocationService) servedCRLManifest(ctx context.Context, tenantID stri
 		return crlManifestResponse{}, err
 	}
 	var manifest crlManifestResponse
+	var fullCRL store.CRL
 	for _, artifact := range artifacts {
 		switch artifact.Kind {
 		case store.CRLKindFull:
+			fullCRL = artifact
 			manifest = crlManifestResponse{
 				TenantID: tenantID, CAID: s.caID, FullURL: "/crl/" + tenantID, FullNumber: artifact.Number,
 				ShardCount: artifact.ShardCount, ThisUpdate: artifact.ThisUpdate, NextUpdate: artifact.NextUpdate,
@@ -674,7 +724,7 @@ func (s *revocationService) servedCRLManifest(ctx context.Context, tenantID stri
 		}
 	}
 	if manifest.FullNumber != 0 {
-		if err := s.requireFreshFullCRL(ctx, tenantID, store.CRL{RevokedCount: manifest.RevokedCount}); err != nil {
+		if err := s.requireFreshFullCRL(ctx, tenantID, fullCRL); err != nil {
 			return crlManifestResponse{}, err
 		}
 	}
@@ -716,6 +766,12 @@ func (s *revocationService) regenerateDue(ctx context.Context) (int, error) {
 		due, err := s.store.CRLDueForRegeneration(ctx, tenantID, s.caID, now, crlRefreshLead)
 		if err != nil {
 			return count, err
+		}
+		if !due {
+			due, err = s.scopeRefreshDue(ctx, tenantID)
+			if err != nil {
+				return count, err
+			}
 		}
 		if !due {
 			continue

@@ -510,7 +510,7 @@ func (p *protocolIssuer) ensureTenantCRL(ctx context.Context, tenantID string) e
 // and a replay still returns its original certificate after policy changes.
 func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolName, selectedProfile string, csrInfo crypto.CSRInfo, dnsNames []string, ttl time.Duration) (crypto.LeafProfile, time.Duration, error) {
 	if selectedProfile == "" {
-		return p.leafProfile, ttl, nil
+		return tenantBoundPlatformRevocationProfile(p.leafProfile, tenantID), ttl, nil
 	}
 	rec, err := p.store.GetActiveProfile(ctx, tenantID, selectedProfile)
 	if err != nil {
@@ -549,7 +549,7 @@ func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolN
 		return crypto.LeafProfile{}, 0, verr
 	}
 	p.auditProfileDecision(ctx, tenantID, protocolName, selectedProfile, rec.Version, "allow", "")
-	return leafProfileForCertificateProfile(p.leafProfile, prof, requestedEKUs), ttl, nil
+	return tenantBoundPlatformRevocationProfile(leafProfileForCertificateProfile(p.leafProfile, prof, requestedEKUs), tenantID), ttl, nil
 }
 
 // protocolDNSNames is what a protocol CSR asks for as DNS names: its DNS SANs,

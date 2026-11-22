@@ -39,6 +39,7 @@ const (
 var oidOCSPNoCheck = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 48, 1, 5}
 var oidOCSPNonce = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 48, 1, 2}
 var oidDeltaCRLIndicator = asn1.ObjectIdentifier{2, 5, 29, 27}
+var oidIssuingDistributionPoint = asn1.ObjectIdentifier{2, 5, 29, 28}
 
 // MaxOCSPNonceLength is the accepted nonce payload cap. The CA/B Forum Baseline
 // Requirements recommend nonces of at most 32 octets; larger request values are
@@ -172,12 +173,20 @@ type OCSPResponderInfo struct {
 
 // CRLInfo is the crypto-free result of parsing a CRL.
 type CRLInfo struct {
-	Number               int64
+	Number int64
+	// NumberBig preserves the complete RFC 5280 INTEGER for rollback checks.
+	NumberBig            *big.Int
 	ThisUpdate           time.Time
 	NextUpdate           time.Time
 	RevokedSerials       []string
 	HasDeltaCRLIndicator bool
 	DeltaBaseNumber      int64
+	DeltaBaseNumberBig   *big.Int
+	// IssuingDistributionPointURL is the signed, critical scope URI. Empty
+	// means the CRL declares no distribution-point scope.
+	IssuingDistributionPointURL string
+	// IssuingDistributionPointURLs contains every URI in the signed fullName.
+	IssuingDistributionPointURLs []string
 	// Revoked carries each entry's revocation time and RFC 5280 reason code,
 	// in the order of RevokedSerials.
 	Revoked []RevokedSerial
@@ -188,7 +197,9 @@ type CRLInfo struct {
 // the critical deltaCRLIndicator extension (2.5.29.27), whose value is the base
 // CRL number this delta updates.
 type CRLOptions struct {
-	DeltaBaseNumber int64
+	DeltaBaseNumber              int64
+	IssuingDistributionPointURL  string
+	IssuingDistributionPointURLs []string
 }
 
 // SignOCSPResponse builds and signs an RFC 6960 OCSP response for serialHex with
@@ -487,6 +498,49 @@ func CreateCRLWithOptions(caCertDER []byte, caSigner DigestSigner, revoked []Rev
 
 func crlExtraExtensions(opts CRLOptions) ([]pkix.Extension, error) {
 	var out []pkix.Extension
+	scopeURLs := opts.IssuingDistributionPointURLs
+	if opts.IssuingDistributionPointURL != "" {
+		if len(scopeURLs) != 0 {
+			return nil, errors.New("crypto: specify one issuing distribution point form")
+		}
+		scopeURLs = []string{opts.IssuingDistributionPointURL}
+	}
+	if len(scopeURLs) != 0 {
+		// IssuingDistributionPoint ::= SEQUENCE { distributionPoint [0]
+		// DistributionPointName }; fullName [0] IMPLICIT GeneralNames, whose
+		// uniformResourceIdentifier is [6] IA5String (RFC 5280 5.2.5).
+		var names []byte
+		seen := make(map[string]struct{}, len(scopeURLs))
+		for _, uri := range scopeURLs {
+			if _, duplicate := seen[uri]; duplicate || uri == "" {
+				return nil, errors.New("crypto: duplicate or empty issuing distribution point URI")
+			}
+			seen[uri] = struct{}{}
+			for _, r := range uri {
+				if r < 0x21 || r > 0x7e {
+					return nil, errors.New("crypto: issuing distribution point must be an ASCII URI")
+				}
+			}
+			name, err := asn1.Marshal(asn1.RawValue{Class: 2, Tag: 6, Bytes: []byte(uri)})
+			if err != nil {
+				return nil, err
+			}
+			names = append(names, name...)
+		}
+		full, err := asn1.Marshal(asn1.RawValue{Class: 2, Tag: 0, IsCompound: true, Bytes: names})
+		if err != nil {
+			return nil, err
+		}
+		point, err := asn1.Marshal(asn1.RawValue{Class: 2, Tag: 0, IsCompound: true, Bytes: full})
+		if err != nil {
+			return nil, err
+		}
+		encoded, err := asn1.Marshal(asn1.RawValue{Tag: asn1.TagSequence, IsCompound: true, Bytes: point})
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, pkix.Extension{Id: oidIssuingDistributionPoint, Critical: true, Value: encoded})
+	}
 	if opts.DeltaBaseNumber > 0 {
 		encoded, err := asn1.Marshal(big.NewInt(opts.DeltaBaseNumber))
 		if err != nil {
@@ -760,28 +814,79 @@ func ParseCRL(crlDER, issuerDER []byte) (CRLInfo, error) {
 	}
 	info := CRLInfo{ThisUpdate: rl.ThisUpdate, NextUpdate: rl.NextUpdate}
 	if rl.Number != nil {
-		info.Number = rl.Number.Int64()
+		info.NumberBig = new(big.Int).Set(rl.Number)
+		if rl.Number.IsInt64() {
+			info.Number = rl.Number.Int64()
+		}
 	}
 	for _, ext := range rl.Extensions {
-		if !ext.Id.Equal(oidDeltaCRLIndicator) {
-			continue
+		switch {
+		case ext.Id.Equal(oidDeltaCRLIndicator):
+			var base *big.Int
+			rest, err := asn1.Unmarshal(ext.Value, &base)
+			if err != nil || len(rest) != 0 || base == nil || base.Sign() < 0 {
+				return CRLInfo{}, errors.New("crypto: invalid delta CRL indicator")
+			}
+			info.HasDeltaCRLIndicator = true
+			info.DeltaBaseNumberBig = base
+			if base.IsInt64() {
+				info.DeltaBaseNumber = base.Int64()
+			}
+		case ext.Id.Equal(oidIssuingDistributionPoint):
+			if !ext.Critical || len(info.IssuingDistributionPointURLs) != 0 {
+				return CRLInfo{}, errors.New("crypto: issuing distribution point must be unique and critical")
+			}
+			uris, err := parseIssuingDistributionPointURLs(ext.Value)
+			if err != nil {
+				return CRLInfo{}, err
+			}
+			info.IssuingDistributionPointURL = uris[0]
+			info.IssuingDistributionPointURLs = uris
 		}
-		var base int64
-		rest, err := asn1.Unmarshal(ext.Value, &base)
-		if err != nil {
-			return CRLInfo{}, fmt.Errorf("crypto: parse delta CRL indicator: %w", err)
-		}
-		if len(rest) != 0 {
-			return CRLInfo{}, errors.New("crypto: parse delta CRL indicator: trailing data")
-		}
-		info.HasDeltaCRLIndicator = true
-		info.DeltaBaseNumber = base
 	}
 	for _, e := range rl.RevokedCertificateEntries {
 		info.RevokedSerials = append(info.RevokedSerials, e.SerialNumber.Text(16))
 		info.Revoked = append(info.Revoked, RevokedSerial{Serial: e.SerialNumber.Text(16), RevokedAt: e.RevocationTime, Reason: e.ReasonCode})
 	}
 	return info, nil
+}
+
+func parseIssuingDistributionPointURLs(der []byte) ([]string, error) {
+	var seq, point, full asn1.RawValue
+	if rest, err := asn1.Unmarshal(der, &seq); err != nil || len(rest) != 0 || seq.Class != 0 || seq.Tag != asn1.TagSequence || !seq.IsCompound {
+		return nil, errors.New("crypto: malformed issuing distribution point")
+	}
+	if rest, err := asn1.Unmarshal(seq.Bytes, &point); err != nil || len(rest) != 0 || point.Class != 2 || point.Tag != 0 || !point.IsCompound {
+		return nil, errors.New("crypto: unsupported issuing distribution point scope")
+	}
+	if rest, err := asn1.Unmarshal(point.Bytes, &full); err != nil || len(rest) != 0 || full.Class != 2 || full.Tag != 0 || !full.IsCompound {
+		return nil, errors.New("crypto: unsupported issuing distribution point name")
+	}
+	var uris []string
+	seen := make(map[string]struct{})
+	for rest := full.Bytes; len(rest) > 0; {
+		var uri asn1.RawValue
+		var err error
+		rest, err = asn1.Unmarshal(rest, &uri)
+		if err != nil || uri.Class != 2 || uri.Tag != 6 || uri.IsCompound || len(uri.Bytes) == 0 {
+			return nil, errors.New("crypto: unsupported issuing distribution point URI")
+		}
+		for _, b := range uri.Bytes {
+			if b < 0x21 || b > 0x7e {
+				return nil, errors.New("crypto: invalid issuing distribution point URI")
+			}
+		}
+		value := string(uri.Bytes)
+		if _, duplicate := seen[value]; duplicate {
+			return nil, errors.New("crypto: duplicate issuing distribution point URI")
+		}
+		seen[value] = struct{}{}
+		uris = append(uris, value)
+	}
+	if len(uris) == 0 {
+		return nil, errors.New("crypto: empty issuing distribution point")
+	}
+	return uris, nil
 }
 
 func validateOCSPResponderCertificate(caCert, responder *x509.Certificate) error {
