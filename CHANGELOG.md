@@ -3942,17 +3942,6 @@
   lifecycle run whether or not the test step passed. A docs guard keeps each of these proofs
   independent of the steps around it.
 
-- An automatic approval rule for privileged access is approval authority, held to what binds a
-  reviewer (incorrect authorization and separation of duties, CWE-863). Changing a rule needed
-  only `access:write`, which a session requester also holds, and a rule could approve its own
-  author's session and check-out requests, below the deployment's required approvals. Saving or
-  deleting a rule now needs `access:approve` as well (the console offers it only then), and a
-  token someone else minted for its subject or an access bundle run is refused. A rule never
-  approves a request its own author makes, and it applies only while its author may still
-  approve access, read again from the author's member roles and own API tokens each time a
-  request is evaluated, so an offboarded or demoted author's rules stop applying. A rule's
-  approval is one of the request's required approvals and reviewers give the rest, unless the
-  deployment sets `pam.auto_approval_alone`.
 - EST no longer lets a client choose the address its failed authentication attempts are counted
   against (M1-L1). It read the first `X-Forwarded-For` entry from any peer, so a client could send a
   new address with each attempt; it now counts the connection's peer, or the client a trusted proxy
