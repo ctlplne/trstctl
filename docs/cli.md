@@ -716,7 +716,8 @@ trstctl-cli access agent --account postgres/orders-db:readonly --reason "nightly
 - A standing approval (OD-9) approves a bundle's runs' sessions to one delegated account, as
   one role, without a reviewer until it expires or is revoked. It is never on by default;
   granting it needs `access:approve` as well as `access:write`, and nobody the bundle is
-  granted to may grant it.
+  granted to may grant it. While it is live, granting the bundle to its author is also
+  refused; revoke the standing approval before granting that person the bundle.
 
 ```bash
 cat > standing.json <<'JSON'

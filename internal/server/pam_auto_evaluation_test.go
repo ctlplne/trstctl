@@ -155,6 +155,7 @@ func TestCanonicalAutoEvaluationBindsTheStandingApprovalOD9(t *testing.T) {
 	}
 	for name, change := range map[string]func(*projections.PAMAutoApprovalEvaluated){
 		"not a UUID approval": func(v *projections.PAMAutoApprovalEvaluated) { v.Standing.ApprovalID = "approval" },
+		"another principal":   func(v *projections.PAMAutoApprovalEvaluated) { v.Standing.Principal = "another-agent" },
 		"the requester itself": func(v *projections.PAMAutoApprovalEvaluated) {
 			v.Standing.ApprovalID = "44444444-4444-4444-8444-444444444444"
 		},

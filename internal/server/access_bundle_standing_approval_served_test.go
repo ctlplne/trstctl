@@ -132,6 +132,21 @@ func TestServedBundleStandingApprovalOpensAgentSessionsOD9(t *testing.T) {
 	if status != http.StatusCreated || json.Unmarshal(body, &standing) != nil || standing.Status != "active" || standing.Approvals != 0 || standing.BundleID != bundle.ID {
 		t.Fatalf("grant the standing approval = %d %s", status, body)
 	}
+	activationGuard := &pamService{store: h.store, clock: time.Now}
+	standingEvidence := []string{pamStandingApprovalEvidence + standing.ID}
+	if err := activationGuard.pamStandingApprovalInForce(f.ctx, h.tenant, "bundle-run:od9-approver", standingEvidence); err == nil {
+		t.Fatal("the standing approver's own run could activate under its approval")
+	}
+	if err := activationGuard.pamStandingApprovalInForce(f.ctx, h.tenant, "bundle-run:"+agent, standingEvidence); err != nil {
+		t.Fatalf("another principal's run lost its standing approval: %v", err)
+	}
+	// CR-100: the reverse order must also hold for machine grants. A later
+	// grant to the approval's author would make that person's own runs eligible
+	// for the approval they issued.
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/bundles/"+bundle.ID+"/grants", admin,
+		"cr100-grant-approver-after-standing", map[string]any{"principal_type": "machine", "principal": "od9-approver"}); status != http.StatusForbidden {
+		t.Fatalf("granted an approved bundle to its own standing approver: HTTP %d %s", status, body)
+	}
 
 	status, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/runs", admin, "od9-run",
 		map[string]any{"principal": agent, "bundle_ids": []string{bundle.ID}, "ttl_seconds": 1800, "label": "nightly report"})
@@ -295,5 +310,9 @@ func TestServedBundleStandingApprovalOpensAgentSessionsOD9(t *testing.T) {
 		if !seen[action] {
 			t.Fatalf("bundle activity has no %s as recorded: %s", action, body)
 		}
+	}
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/bundles/"+bundle.ID+"/grants", admin,
+		"cr100-grant-after-revoke", map[string]any{"principal_type": "machine", "principal": "od9-approver"}); status != http.StatusCreated {
+		t.Fatalf("grant after revoking the approver's standing approval = %d %s", status, body)
 	}
 }

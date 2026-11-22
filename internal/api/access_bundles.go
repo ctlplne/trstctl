@@ -726,15 +726,6 @@ func (a *API) grantAccessBundle(w http.ResponseWriter, r *http.Request) {
 		if err := requireHeldAccessPermissions(ctx, tenantID, bundle.Permissions, "a grant"); err != nil {
 			return 0, nil, err
 		}
-		existing, err := a.store.ListAccessBundleGrants(ctx, tenantID, bundleID, principal, accessBundleGrantListLimit)
-		if err != nil {
-			return 0, nil, err
-		}
-		for _, g := range existing {
-			if g.RemovedAt == nil && (g.ExpiresAt == nil || g.ExpiresAt.After(now)) {
-				return 0, nil, errStatus(http.StatusConflict, "this principal already holds the bundle through grant "+g.ID)
-			}
-		}
 		subject, err := requestPrincipalSubject(ctx)
 		if err != nil {
 			return 0, nil, err
@@ -745,9 +736,32 @@ func (a *API) grantAccessBundle(w http.ResponseWriter, r *http.Request) {
 			t := req.ExpiresAt.UTC()
 			expires = &t
 		}
-		if err := a.orch.GrantAccessBundle(ctx, tenantID, projections.AccessBundleGranted{
-			ID: id, BundleID: bundleID, PrincipalType: req.PrincipalType, Principal: principal, ExpiresAt: expires, GrantedBy: subject,
-		}); err != nil {
+		err = a.store.WithTenantResourceCreation(ctx, tenantID, standingApprovalAdmissionResource(bundleID), func(work context.Context) error {
+			checkAt := time.Now().UTC()
+			if expires != nil && !expires.After(checkAt) {
+				return errStatus(http.StatusBadRequest, "expires_at must be in the future")
+			}
+			selfApproval, err := a.store.HasLiveAccessBundleStandingApprovalByGranter(work, tenantID, bundleID, principal, checkAt)
+			if err != nil {
+				return err
+			}
+			if selfApproval {
+				return errStatus(http.StatusForbidden, "this principal has a live standing approval for the bundle; revoke it before granting the bundle")
+			}
+			existing, err := a.store.ListAccessBundleGrants(work, tenantID, bundleID, principal, accessBundleGrantListLimit)
+			if err != nil {
+				return err
+			}
+			for _, g := range existing {
+				if g.RemovedAt == nil && (g.ExpiresAt == nil || g.ExpiresAt.After(checkAt)) {
+					return errStatus(http.StatusConflict, "this principal already holds the bundle through grant "+g.ID)
+				}
+			}
+			return a.orch.GrantAccessBundle(work, tenantID, projections.AccessBundleGranted{
+				ID: id, BundleID: bundleID, PrincipalType: req.PrincipalType, Principal: principal, ExpiresAt: expires, GrantedBy: subject,
+			})
+		})
+		if err != nil {
 			return 0, nil, err
 		}
 		change, err := a.accessGrantChange(ctx, tenantID, id)

@@ -271,12 +271,15 @@ job with gateway sessions to the accounts its task is delegated, and no credenti
 - **Standing approvals (OD-9).** A bundle may hold a standing approval for one delegated
   account and one role, never by default: granted by someone with `access:approve` and
   `access:write` who the bundle is not granted to, with a reason and an expiry at most 90
-  days away. The PAM review evaluation, after its automatic review rules, approves a run's
+  days away. A later grant of that bundle to the approval's author is refused until the
+  standing approval is revoked or expires, for both user and machine grants. The PAM
+  review evaluation, after its automatic review rules, approves a run's
   session request with it when the run's own grant of the bundle is live, the bundle still
   delegates that account and role, and the session ends before the approval expires; the
   choice is frozen with the evaluation (`pam.auto_approval.evaluated`), the request records
   one approval by `standing-approval:<id>`, and `access.bundle_standing_approval.used` names
-  the run. Opening a session it approved checks it is still in force. Revoking it ends the
+  the run. Reusing the frozen choice and opening a session check that its author is not
+  the run's principal and that the approval is still in force. Revoking it ends the
   live sessions it approved, as an operator's revocation does, under keys derived from the
   call's own.
 - **What it does not do.** The command's network is not confined: it holds no credential

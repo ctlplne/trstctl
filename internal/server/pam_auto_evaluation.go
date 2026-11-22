@@ -124,6 +124,18 @@ func (s *pamService) pamEnsureReviewedRequest(ctx context.Context, tenantID stri
 		if err != nil {
 			return err
 		}
+		if evaluated.Standing != nil {
+			standing, err := s.store.GetAccessBundleStandingApproval(work, tenantID, evaluated.Standing.ApprovalID)
+			if err != nil {
+				return err
+			}
+			if standing.BundleID != evaluated.Standing.BundleID || standing.TargetType != facts.TargetType ||
+				standing.TargetID != facts.TargetID || standing.Role != facts.Role || standing.RevokedAt != nil ||
+				!standing.ExpiresAt.Equal(evaluated.Standing.ExpiresAt) || !standing.ExpiresAt.After(s.clock().UTC()) ||
+				authz.SameApprovalPrincipal(standing.GrantedBy, intent.Requester) {
+				return fmt.Errorf("%w: the standing approval witness is no longer valid for this requester", api.ErrPAMRejected)
+			}
+		}
 		if err := s.projector.Apply(work, source); err != nil {
 			return err
 		}
@@ -224,8 +236,10 @@ func pamCanonicalAutoEvaluation(source events.Event, tenantID, eventID, requestI
 		authz.SameApprovalPrincipal(out.Rule.SavedBy, requester)) {
 		return out, fmt.Errorf("%w: automatic review rule witness is incomplete", store.ErrIdempotencyConflict)
 	}
-	if st := out.Standing; st != nil && (out.Rule != nil || req.Kind != "session" || !validUUID(st.ApprovalID) || !validUUID(st.BundleID) ||
+	standingPrincipal, standingRun := orchestrator.BundleRunPrincipal(requester)
+	if st := out.Standing; st != nil && (out.Rule != nil || req.Kind != "session" || !standingRun || !validUUID(st.ApprovalID) || !validUUID(st.BundleID) ||
 		st.RunID == "" || st.RunID != req.RunID || st.Role != req.Role || pamStandingApprover(st.ApprovalID) == requester ||
+		st.Principal != standingPrincipal ||
 		out.At.Add(time.Duration(req.TTLSeconds)*time.Second).After(st.ExpiresAt)) {
 		return out, fmt.Errorf("%w: the standing approval witness differs", store.ErrIdempotencyConflict)
 	}
@@ -292,7 +306,8 @@ func (s *pamService) pamStandingApproval(ctx context.Context, tenantID, requeste
 		return nil, err
 	}
 	expires := approval.ExpiresAt.UTC().Truncate(time.Microsecond)
-	if pamStandingApprover(approval.ID) == requester || facts.At.Add(time.Duration(facts.TTLSeconds)*time.Second).After(expires) {
+	if pamStandingApprover(approval.ID) == requester || authz.SameApprovalPrincipal(approval.GrantedBy, requester) ||
+		facts.At.Add(time.Duration(facts.TTLSeconds)*time.Second).After(expires) {
 		return nil, nil
 	}
 	return &projections.PAMStandingApprovalMatch{ApprovalID: approval.ID, BundleID: approval.BundleID, RunID: facts.RunID,
@@ -339,7 +354,7 @@ func (s *pamService) pamApproveUnderStandingApproval(work context.Context, tenan
 
 // pamStandingApprovalInForce refuses to activate a request a standing
 // approval approved once that approval was revoked or has expired (OD-9).
-func (s *pamService) pamStandingApprovalInForce(ctx context.Context, tenantID string, evidenceRefs []string) error {
+func (s *pamService) pamStandingApprovalInForce(ctx context.Context, tenantID, requester string, evidenceRefs []string) error {
 	for _, ref := range evidenceRefs {
 		id, ok := strings.CutPrefix(ref, pamStandingApprovalEvidence)
 		if !ok {
@@ -351,6 +366,9 @@ func (s *pamService) pamStandingApprovalInForce(ctx context.Context, tenantID st
 		}
 		if err != nil {
 			return err
+		}
+		if authz.SameApprovalPrincipal(approval.GrantedBy, requester) {
+			return fmt.Errorf("%w: the standing approval's author cannot approve their own run", api.ErrPAMRejected)
 		}
 		if approval.RevokedAt != nil || !approval.ExpiresAt.After(s.clock().UTC()) {
 			return fmt.Errorf("%w: the standing approval that approved this request was revoked or has expired; start a new request", api.ErrPAMRejected)

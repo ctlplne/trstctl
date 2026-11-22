@@ -1216,7 +1216,7 @@ func (s *pamService) authorizeActivation(ctx context.Context, tenantID, idempote
 	if !containsExactString(approval.EvidenceRefs, "pam-command-sha256:"+digest) {
 		return time.Time{}, fmt.Errorf("%w: PAM command differs from the approved intent", api.ErrPAMRejected)
 	}
-	if err := s.pamStandingApprovalInForce(ctx, tenantID, approval.EvidenceRefs); err != nil {
+	if err := s.pamStandingApprovalInForce(ctx, tenantID, requester, approval.EvidenceRefs); err != nil {
 		return time.Time{}, err
 	}
 	use, err := store.OperationApprovalUseFromRequest(approval)

@@ -123,6 +123,10 @@ func (a *API) listAccessBundleStandingApprovals(w http.ResponseWriter, r *http.R
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
 }
 
+// standingApprovalAdmissionResource serializes both grant orders for one
+// bundle across replicas. Its UUID-sized suffix fits the store's 64-byte key.
+func standingApprovalAdmissionResource(bundleID string) string { return "standing-grant:" + bundleID }
+
 // grantAccessBundleStandingApproval approves in advance one bundle's runs'
 // session requests for one of its delegated accounts as one role. It needs
 // access:approve as well as access:write, since it stands in for reviewers;
@@ -169,18 +173,21 @@ func (a *API) grantAccessBundleStandingApproval(w http.ResponseWriter, r *http.R
 		if expires.Before(now.Add(accessStandingApprovalMinLife)) || expires.After(now.Add(projections.MaxAccessBundleStandingApprovalValidity)) {
 			return 0, nil, errStatus(http.StatusUnprocessableEntity, "expires_at must be between five minutes and 90 days from now")
 		}
-		grants, err := a.store.LiveAccessBundleGrants(ctx, tenantID, principal.Subject, now)
-		if err != nil {
-			return 0, nil, err
-		}
-		if slices.ContainsFunc(grants, func(g store.AccessBundleGrant) bool { return g.BundleID == bundle.ID }) {
-			return 0, nil, errStatus(http.StatusForbidden, "this bundle is granted to you: a standing approval for it must come from someone it is not granted to")
-		}
 		id := googleuuid.NewString()
-		if err := a.orch.GrantAccessBundleStandingApproval(ctx, tenantID, projections.AccessBundleStandingApprovalGranted{
-			ID: id, BundleID: bundle.ID, TargetType: req.TargetType, TargetID: req.TargetID, Role: req.Role,
-			Reason: reason, ExpiresAt: expires, GrantedBy: principal.Subject,
-		}); err != nil {
+		err = a.store.WithTenantResourceCreation(ctx, tenantID, standingApprovalAdmissionResource(bundle.ID), func(work context.Context) error {
+			grants, err := a.store.LiveAccessBundleGrants(work, tenantID, principal.Subject, time.Now().UTC())
+			if err != nil {
+				return err
+			}
+			if slices.ContainsFunc(grants, func(g store.AccessBundleGrant) bool { return g.BundleID == bundle.ID }) {
+				return errStatus(http.StatusForbidden, "this bundle is granted to you: a standing approval for it must come from someone it is not granted to")
+			}
+			return a.orch.GrantAccessBundleStandingApproval(work, tenantID, projections.AccessBundleStandingApprovalGranted{
+				ID: id, BundleID: bundle.ID, TargetType: req.TargetType, TargetID: req.TargetID, Role: req.Role,
+				Reason: reason, ExpiresAt: expires, GrantedBy: principal.Subject,
+			})
+		})
+		if err != nil {
 			return 0, nil, err
 		}
 		granted, err := a.store.GetAccessBundleStandingApproval(ctx, tenantID, id)

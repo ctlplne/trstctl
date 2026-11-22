@@ -169,7 +169,7 @@ func (s *Store) ActiveRunStandingApproval(ctx context.Context, tenantID, runID, 
 			SELECT `+accessBundleStandingApprovalColumns+`
 			  FROM access_bundle_standing_approvals a
 			 WHERE a.tenant_id = $1 AND a.target_type = $5 AND a.target_id = $6 AND a.role = $7
-			   AND a.revoked_at IS NULL AND a.expires_at > $3
+			   AND a.revoked_at IS NULL AND a.expires_at > $3 AND a.granted_by <> $2
 			   AND EXISTS (
 			       SELECT 1 FROM access_bundle_grants g
 			         JOIN access_bundles b ON b.tenant_id = g.tenant_id AND b.id = g.bundle_id
@@ -205,6 +205,21 @@ func (s *Store) GetAccessBundleStandingApproval(ctx context.Context, tenantID, i
 		return AccessBundleStandingApproval{}, ErrAccessBundleStandingApprovalNotFound
 	}
 	return a, err
+}
+
+// HasLiveAccessBundleStandingApprovalByGranter checks the full approval set,
+// without the display list's 200-row limit. Grant admission uses this under
+// the bundle's cross-process fence so a later grant cannot let an approver
+// review their own run.
+func (s *Store) HasLiveAccessBundleStandingApprovalByGranter(ctx context.Context, tenantID, bundleID, granter string, now time.Time) (bool, error) {
+	var found bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT EXISTS (
+			SELECT 1 FROM access_bundle_standing_approvals
+			 WHERE tenant_id = $1 AND bundle_id = $2 AND granted_by = $3
+			   AND revoked_at IS NULL AND expires_at > $4)`, tenantID, bundleID, granter, now.UTC()).Scan(&found)
+	})
+	return found, err
 }
 
 // ListAccessBundleStandingApprovals lists a bundle's approvals, newest
