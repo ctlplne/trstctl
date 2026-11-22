@@ -58454,7 +58454,7 @@
             "type": "string"
           },
           "credential_ref": {
-            "description": "OD-1: a private repository's clone credential, a file: or tenant secret:// reference opened for the clone alone and sent only to the https clone_url's origin",
+            "description": "OD-1: a canonical tenant secret:// reference opened for one HTTPS clone; requires secrets:read as well as secrets:write and access to any restricted environment",
             "type": "string"
           },
           "credential_username": {
