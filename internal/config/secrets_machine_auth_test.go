@@ -12,7 +12,7 @@ func TestSecretsMachineAuthValidation(t *testing.T) {
 	c.Secrets.MachineAuth = []MachineAuthMethod{
 		{
 			Name: "kubernetes", TenantClaim: "trstctl.io/tenant",
-			Audience: "trstctl", JWKSJSON: `{"keys":[]}`, Scopes: []string{"secrets:read"},
+			Issuer: "https://kubernetes.default.svc", Audience: "trstctl", JWKSJSON: `{"keys":[]}`, Scopes: []string{"secrets:read"},
 		},
 		{
 			Name: "aws-iam", TenantID: "11111111-1111-1111-1111-111111111111",
@@ -60,10 +60,17 @@ func TestSecretsMachineAuthValidation(t *testing.T) {
 func TestSecretsMachineAuthAllowTokenReuseIsForPlatformTokensOnly(t *testing.T) {
 	for _, name := range []string{"kubernetes", "gcp", "azure"} {
 		c := Default()
-		c.Secrets.MachineAuth = []MachineAuthMethod{{
+		method := MachineAuthMethod{
 			Name: name, TenantID: "11111111-1111-1111-1111-111111111111", Audience: "trstctl",
-			JWKSJSON: `{"keys":[]}`, Scopes: []string{"secrets:read"}, AllowTokenReuse: true,
-		}}
+			Issuer: "https://issuer.example", JWKSJSON: `{"keys":[]}`, Scopes: []string{"secrets:read"}, AllowTokenReuse: true,
+		}
+		if name == "gcp" {
+			method.AllowedProjects = []string{"project-a"}
+		}
+		if name == "azure" {
+			method.AllowedAzureTenants = []string{"22222222-2222-2222-2222-222222222222"}
+		}
+		c.Secrets.MachineAuth = []MachineAuthMethod{method}
 		if err := c.Validate(); err != nil {
 			t.Fatalf("%s with allow_token_reuse rejected: %v", name, err)
 		}
@@ -106,7 +113,7 @@ func TestSecretsMachineAuthRejectsOverlappingMethodNames(t *testing.T) {
 	method := func(tenantID, tenantClaim, scope string) MachineAuthMethod {
 		return MachineAuthMethod{
 			Name: "jwt", TenantID: tenantID, TenantClaim: tenantClaim,
-			Audience: "trstctl", JWKSJSON: `{"keys":[]}`, Scopes: []string{scope},
+			Issuer: "https://issuer.example", Audience: "trstctl", JWKSJSON: `{"keys":[]}`, Scopes: []string{scope},
 		}
 	}
 	const tenantA = "11111111-1111-1111-1111-111111111111"

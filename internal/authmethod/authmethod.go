@@ -407,6 +407,9 @@ const defaultLeeway = 60 * time.Second
 
 // Authenticate implements Method.
 func (o OIDCMethod) Authenticate(ctx context.Context, credential []byte) (string, []string, error) {
+	if strings.TrimSpace(o.Issuer) == "" {
+		return "", nil, errors.New("oidc: issuer binding is required")
+	}
 	v, err := authenticateJWT(ctx, credential, jwtMethodOptions{
 		name:            o.Name(),
 		jwks:            o.JWKS,

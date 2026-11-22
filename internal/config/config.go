@@ -29,6 +29,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/credref"
 	"trstctl.com/trstctl/internal/crypto"
@@ -6012,6 +6013,30 @@ func validateSecretsMachineAuth(methods []MachineAuthMethod) []error {
 		}
 		if strings.TrimSpace(m.TenantID) == "" && strings.TrimSpace(m.TenantClaim) == "" {
 			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d] must set tenant_id or tenant_claim", i))
+		}
+		switch name {
+		case "gcp":
+			if len(m.AllowedProjects) == 0 {
+				errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].allowed_projects is required for gcp; Google's issuer and JWKS are shared across projects", i))
+			}
+			for j, project := range m.AllowedProjects {
+				if strings.TrimSpace(project) == "" {
+					errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].allowed_projects[%d] must not be empty", i, j))
+				}
+			}
+		case "azure":
+			if len(m.AllowedAzureTenants) == 0 && authmethod.AzureTenantFromIssuer(m.Issuer) == "" {
+				errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].allowed_azure_tenants or a tenant-specific issuer is required for azure", i))
+			}
+			for j, tenant := range m.AllowedAzureTenants {
+				if id, err := uuid.Parse(tenant); err != nil || id == uuid.Nil {
+					errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].allowed_azure_tenants[%d] must be a tenant UUID", i, j))
+				}
+			}
+		case "oidc", "jwt", "kubernetes":
+			if strings.TrimSpace(m.Issuer) == "" {
+				errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].issuer is required for %s", i, name))
+			}
 		}
 		if strings.TrimSpace(m.Audience) == "" {
 			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].audience is required", i))

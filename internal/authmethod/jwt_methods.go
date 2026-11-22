@@ -59,6 +59,9 @@ func (j JWTMethod) WithReplayGuard(maxEntries int) JWTMethod {
 
 // Authenticate implements Method.
 func (j JWTMethod) Authenticate(ctx context.Context, credential []byte) (string, []string, error) {
+	if strings.TrimSpace(j.Issuer) == "" {
+		return "", nil, fmt.Errorf("%s: issuer binding is required", j.Name())
+	}
 	v, err := authenticateJWT(ctx, credential, jwtMethodOptions{
 		name:            j.Name(),
 		jwks:            j.JWKS,
@@ -117,6 +120,9 @@ func (KubernetesSATMethod) Name() string { return "kubernetes" }
 
 // Authenticate implements Method.
 func (k KubernetesSATMethod) Authenticate(ctx context.Context, credential []byte) (string, []string, error) {
+	if strings.TrimSpace(k.Issuer) == "" {
+		return "", nil, errors.New("kubernetes: issuer binding is required")
+	}
 	v, err := authenticateJWT(ctx, credential, jwtMethodOptions{
 		name:        k.Name(),
 		jwks:        k.JWKS,
@@ -173,7 +179,8 @@ func (k KubernetesSATMethod) Authenticate(ctx context.Context, credential []byte
 
 // GCPMethod authenticates a Google-signed workload identity JWT, including GCE
 // metadata identity tokens. It verifies Google-style nested compute_engine claims
-// and optionally restricts the projects this tenant accepts.
+// and requires an explicit project allow-list because Google signs tokens for
+// every project with the same issuer and key set.
 type GCPMethod struct {
 	JWKS            crypto.JWKS
 	Issuer          string
@@ -199,6 +206,9 @@ func (GCPMethod) Name() string { return "gcp" }
 
 // Authenticate implements Method.
 func (g GCPMethod) Authenticate(ctx context.Context, credential []byte) (string, []string, error) {
+	if len(g.AllowedProjects) == 0 {
+		return "", nil, errors.New("gcp: allowed_projects binding is required")
+	}
 	v, err := authenticateJWT(ctx, credential, jwtMethodOptions{
 		name:        g.Name(),
 		jwks:        g.JWKS,
@@ -232,7 +242,7 @@ func (g GCPMethod) Authenticate(ctx context.Context, credential []byte) (string,
 	if ce.InstanceID == "" || ce.ProjectID == "" {
 		return "", nil, fmt.Errorf("gcp: token missing compute_engine instance/project")
 	}
-	if len(g.AllowedProjects) > 0 && !g.AllowedProjects[ce.ProjectID] {
+	if !g.AllowedProjects[ce.ProjectID] {
 		return "", nil, fmt.Errorf("gcp: project %s is not allowed", ce.ProjectID)
 	}
 	if err := useOnce(ctx, g.Guard, g.Name(), v); err != nil {
@@ -243,7 +253,7 @@ func (g GCPMethod) Authenticate(ctx context.Context, credential []byte) (string,
 
 // AzureMethod authenticates an Azure workload JWT, such as a managed-identity or
 // federated credential token. It checks the issuer/audience/signature, optional
-// trstctl tenant claim, and optional Azure tenant allow-list.
+// trstctl tenant claim, and an Azure tenant allow-list or tenant-specific issuer.
 type AzureMethod struct {
 	JWKS                crypto.JWKS
 	Issuer              string
@@ -270,6 +280,10 @@ func (AzureMethod) Name() string { return "azure" }
 
 // Authenticate implements Method.
 func (a AzureMethod) Authenticate(ctx context.Context, credential []byte) (string, []string, error) {
+	issuerTenant := AzureTenantFromIssuer(a.Issuer)
+	if len(a.AllowedAzureTenants) == 0 && issuerTenant == "" {
+		return "", nil, errors.New("azure: tenant allow-list or tenant-specific issuer is required")
+	}
 	subjectClaim := a.PrincipalClaim
 	if subjectClaim == "" {
 		subjectClaim = "oid"
@@ -299,6 +313,9 @@ func (a AzureMethod) Authenticate(ctx context.Context, credential []byte) (strin
 		if !ok || !a.AllowedAzureTenants[tid] {
 			return "", nil, fmt.Errorf("azure: tenant is not allowed")
 		}
+	}
+	if issuerTenant != "" && (!ok || !strings.EqualFold(tid, issuerTenant)) {
+		return "", nil, errors.New("azure: signed tid does not match issuer tenant")
 	}
 	if err := useOnce(ctx, a.Guard, a.Name(), v); err != nil {
 		return "", nil, err

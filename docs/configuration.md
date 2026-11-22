@@ -4218,6 +4218,16 @@ non-empty static `scopes`, or—for OIDC/generic JWT only—one signed
 `scopes_claim`. Static scopes cannot be widened by a credential's generic `scope`
 or `scopes` claim. Empty, duplicate, missing, or ambiguous scope configuration
 fails startup instead of producing an inert or over-privileged session.
+Set `issuer` for `oidc`, `jwt` and `kubernetes`; the verifier requires an exact
+match to the signed token's `iss`. Set non-empty `allowed_projects` for `gcp`
+even when `issuer` is pinned: Google's issuer and JWKS cover every project, so
+the signed `google.compute_engine.project_id` must also match this list. For
+`azure`, set `allowed_azure_tenants` to the Entra tenant IDs accepted by this
+method, or pin `issuer` to a tenant-specific URL such as
+`https://login.microsoftonline.com/<tenant-id>/v2.0`; the verifier then requires
+the signed `tid` to match that issuer tenant. A shared `common`, `organizations`
+or `consumers` issuer does not bind a tenant. Missing bindings fail startup and
+the verifiers refuse issuerless or unbound methods even if constructed directly.
 For a given tenant, each method name must resolve to one configuration. Two
 entries with the same name are valid only when both have different fixed
 `tenant_id` values. A tenant-claim entry applies across tenants and cannot
