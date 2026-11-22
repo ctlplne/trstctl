@@ -102,7 +102,7 @@ test("AUD-66 semantic comparisons ignore only seed observation clocks", () => {
 test("AUD-66 identity advancement observes state and reaches each transition once", async () => {
   let status = "requested";
   const transitions = [];
-  const request = async (method, _path, body, key) => {
+  const request = async (method, path, body, key) => {
     if (method === "GET") return { id: "identity-1", status };
     transitions.push({ to: body.to, key, csr: body.subject_csr_pem });
     status = body.to;
@@ -162,6 +162,44 @@ test("demo identity convergence accepts only the exact state that wins a transit
   );
   assert.equal(result.status, "deployed");
   assert.equal(transitionCalls, 1);
+});
+
+test("demo identity convergence retries only an active issuance fence with the same request key", async () => {
+  let status = "issued";
+  const attempts = [];
+  const request = async (method, path, body, key) => {
+    if (method === "GET") return { id: "identity-1", status };
+    attempts.push({ to: body.to, key });
+    if (attempts.length === 1) {
+      throw new Error(`POST ${path} returned 409: {"detail":"certificate issuance is in progress for this identity; retry the same lifecycle request"}`);
+    }
+    status = body.to;
+    return { id: "identity-1", status };
+  };
+  const result = await advanceIdentity(
+    { key: "edge", name: "edge.example", targetState: "deployed", connector: "envoy", daysAgo: 10 },
+    { id: "identity-1" }, 1, request, async () => {},
+  );
+  assert.equal(result.status, "deployed");
+  assert.deepEqual(attempts.map(attempt => attempt.to), ["deployed", "deployed"]);
+  assert.equal(attempts[0].key, attempts[1].key);
+});
+
+test("demo identity convergence keeps an unrelated transition conflict fatal", async () => {
+  let writes = 0;
+  const request = async (method, path) => {
+    if (method === "GET") return { id: "identity-1", status: "issued" };
+    writes += 1;
+    throw new Error(`POST ${path} returned 409: {"detail":"approval is required"}`);
+  };
+  await assert.rejects(
+    advanceIdentity(
+      { key: "edge", name: "edge.example", targetState: "deployed", connector: "envoy", daysAgo: 10 },
+      { id: "identity-1" }, 1, request, async () => {},
+    ),
+    /approval is required/,
+  );
+  assert.equal(writes, 1);
 });
 
 test("AUD-66 checkpoint digest is deterministic and binds manifest plus inventory", () => {

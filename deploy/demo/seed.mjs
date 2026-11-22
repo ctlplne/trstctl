@@ -1217,26 +1217,37 @@ async function pollCertificates(minimum) {
 }
 
 async function transitionIdentityIfNeeded(identityID, targetState, reason, idemKey, request = api, extra = {}) {
-  const current = await request("GET", `/api/v1/identities/${identityID}`);
-  if (current?.status === targetState) {
-    return current;
-  }
-  try {
-    return await request("POST", `/api/v1/identities/${identityID}/transitions`, {
-      to: targetState,
-      reason,
-      ...extra,
-    }, idemKey);
-  } catch (error) {
-    // Issuance and connector workers can advance the event-sourced projection
-    // between the read and mutation. Accept only proof that the exact requested
-    // state already won that race; every other conflict remains fatal.
-    const after = await request("GET", `/api/v1/identities/${identityID}`);
-    if (after?.status === targetState) {
-      return after;
+  const path = `/api/v1/identities/${identityID}`;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const current = await request("GET", path);
+    if (current?.status === targetState) {
+      return current;
     }
-    throw error;
+    try {
+      return await request("POST", `${path}/transitions`, {
+        to: targetState,
+        reason,
+        ...extra,
+      }, idemKey);
+    } catch (error) {
+      // Issuance and connector workers can advance the event-sourced projection
+      // between the read and mutation. Accept only proof that the exact requested
+      // state already won that race. The issuance fence explicitly asks callers
+      // to retry; keep the same idempotency key and bound the wait to 30 seconds.
+      const after = await request("GET", path);
+      if (after?.status === targetState) {
+        return after;
+      }
+      const issuanceBusy = error instanceof Error &&
+        error.message.startsWith(`POST ${path}/transitions returned 409:`) &&
+        error.message.includes("certificate issuance is in progress for this identity; retry the same lifecycle request");
+      if (!issuanceBusy || attempt === 29) {
+        throw error;
+      }
+      await sleep(1000);
+    }
   }
+  throw new Error(`identity ${identityID} exhausted issuance-fence retries`);
 }
 
 async function main() {
