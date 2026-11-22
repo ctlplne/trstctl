@@ -21,6 +21,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
@@ -304,6 +306,9 @@ func (s *durableService) submit(ctx context.Context, tenantID, requestedProvider
 				FromState: key.State, ToState: command.ToState, TargetVersion: uint64(key.Version),
 				Reason: "authorize one exact managed-key " + command.Action + " command", EvidenceRefs: evidence,
 			})
+			if authority.Failure != nil {
+				return Result{}, authority.Failure
+			}
 			if !approved {
 				// Another copy of the same request may have committed while this one
 				// was opening/checking the authority. Durable operation state wins over
@@ -589,11 +594,25 @@ func (h *durableOutboxHandler) DeliverLicensed(ctx context.Context, message orch
 	if h.signer == nil {
 		return true, errors.New("managedkeys: isolated signer managed-key RPC is unavailable")
 	}
-	result, err := h.signer.ManageKey(ctx, signing.ManagedKeyCommand{
+	signerCommand := signing.ManagedKeyCommand{
 		TenantID: message.TenantID, Provider: command.Provider, OperationID: command.OperationID,
 		Action: signing.ManagedKeyAction(command.Action), KeyID: command.KeyID,
 		Algorithm: crypto.Algorithm(command.Algorithm),
-	})
+	}
+	result, err := h.signer.ManageKey(ctx, signerCommand)
+	if status.Code(err) == codes.DeadlineExceeded && ctx.Err() == nil {
+		// A per-call deadline does not tell us whether the provider acted.
+		// The isolated signer journals this exact operation ID before invoking
+		// its provider and reconciles a replay; never mint a fresh command.
+		pause := time.NewTimer(time.Second)
+		defer pause.Stop()
+		select {
+		case <-ctx.Done():
+			return true, ctx.Err()
+		case <-pause.C:
+		}
+		result, err = h.signer.ManageKey(ctx, signerCommand)
+	}
 	if err != nil {
 		return true, err
 	}

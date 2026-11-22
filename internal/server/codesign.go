@@ -584,6 +584,9 @@ func (s *servedCodeSigningService) authorizeCodeSigningCommand(
 		},
 	}
 	authority, approved, reason := gate.AuthorizeApproval(ctx, intent)
+	if authority.Failure != nil {
+		return nil, authority.Failure
+	}
 	if !approved {
 		if reason == "" {
 			reason = "the exact code-signing command awaits distinct approval"

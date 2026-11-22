@@ -325,6 +325,9 @@ func (a *API) startMigrationRun(w http.ResponseWriter, r *http.Request) {
 				}
 				intent := migrationStartApprovalIntent(tenantID, principal, req.PlanID, authorityRef, binding, gated)
 				authority, approved, reason := exact.AuthorizeApproval(ctx, intent)
+				if authority.Failure != nil {
+					return 0, nil, authority.Failure
+				}
 				if authority.RequestID == "" || authority.IntentDigest == "" || authority.Requester != principal ||
 					authority.ResourceKind != intent.ResourceKind || authority.ResourceID != intent.ResourceID || authority.Action != intent.Action {
 					return 0, nil, errStatus(http.StatusConflict, "migration start approval drifted from this exact request; review the plan and start again")

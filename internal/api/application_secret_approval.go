@@ -426,6 +426,9 @@ func (a *API) authorizeRequiredApplicationSecretMutation(
 		EvidenceRefs:  evidenceRefs,
 	}
 	authority, approved, reason := exact.AuthorizeApproval(ctx, intent)
+	if authority.Failure != nil {
+		return nil, authority.Failure
+	}
 	if authority.RequestID == "" || authority.IntentDigest == "" ||
 		authority.Requester != principal.Subject || authority.ResourceKind != intent.ResourceKind ||
 		authority.ResourceID != intent.ResourceID || authority.Action != intent.Action ||

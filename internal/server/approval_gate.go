@@ -149,11 +149,11 @@ func (c storeApprovalChecker) AuthorizeApproval(ctx context.Context, intent api.
 		if c.logger != nil {
 			c.logger.Error("approval request persistence failed", slog.String("error", err.Error()))
 		}
-		return api.ApprovalAuthority{}, false, "could not record the immutable approval request"
+		return api.ApprovalAuthority{Failure: err}, false, "could not record the immutable approval request"
 	}
 	use, err := store.OperationApprovalUseFromRequest(request)
 	if err != nil {
-		return api.ApprovalAuthority{}, false, "the immutable approval request has invalid issuance evidence"
+		return api.ApprovalAuthority{Failure: err}, false, "the immutable approval request has invalid issuance evidence"
 	}
 	authority := api.ApprovalAuthority{
 		RequestID: request.ID, IntentDigest: request.IntentDigest,

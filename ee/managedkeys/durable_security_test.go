@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
@@ -25,6 +27,36 @@ import (
 type managedKeyCustodySpy struct {
 	calls  int
 	result signing.ManagedKeyResult
+}
+
+type deadlineManagedKeyCustodySpy struct {
+	commands []signing.ManagedKeyCommand
+}
+
+func (s *deadlineManagedKeyCustodySpy) ManageKey(_ context.Context, command signing.ManagedKeyCommand) (signing.ManagedKeyResult, error) {
+	s.commands = append(s.commands, command)
+	if len(s.commands) == 1 {
+		return signing.ManagedKeyResult{}, status.Error(codes.DeadlineExceeded, "first signer attempt timed out")
+	}
+	return signing.ManagedKeyResult{}, status.Error(codes.Unavailable, "second signer attempt unavailable")
+}
+
+func TestManagedKeyOutboxRetriesOnlyTheSameJournaledCommandAfterSignerDeadline(t *testing.T) {
+	_, stored, message := testDurableManagedKeyCommand()
+	spy := &deadlineManagedKeyCustodySpy{}
+	handler := &durableOutboxHandler{
+		signer: spy,
+		loadOperation: func(context.Context, string, string) (store.ManagedKeyOperation, error) {
+			return stored, nil
+		},
+	}
+	handled, err := handler.DeliverLicensed(context.Background(), message)
+	if !handled || status.Code(err) != codes.Unavailable {
+		t.Fatalf("deadline retry: handled=%v err=%v, want second signer answer", handled, err)
+	}
+	if len(spy.commands) != 2 || spy.commands[0] != spy.commands[1] || spy.commands[0].OperationID != message.IdempotencyKey {
+		t.Fatalf("signer retry changed the journaled command: %+v", spy.commands)
+	}
 }
 
 func TestDurableWaitReturnsPollablePendingOnlyForItsOwnDeadline(t *testing.T) {
@@ -272,6 +304,31 @@ func TestManagedKeyDurableBindingSurvivesHTTPRecorderGC(t *testing.T) {
 
 type managedKeyExactIntentSpy struct {
 	intents []api.ApprovalIntent
+}
+
+type managedKeyBusyApprovalSpy struct{}
+
+func (managedKeyBusyApprovalSpy) AuthorizeApproval(context.Context, api.ApprovalIntent) (api.ApprovalAuthority, bool, string) {
+	return api.ApprovalAuthority{Failure: store.ErrDatastoreBusy}, false, "approval request unavailable"
+}
+
+func TestDurableManagedKeyApprovalStoreBusyIsRetryable(t *testing.T) {
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	const keyID = "https://vault.example.test/keys/root/signing/v7"
+	service := &durableService{
+		selection: ProviderSelection{Default: "azure-key-vault", Enabled: []string{"azure-key-vault"}},
+		approvals: managedKeyBusyApprovalSpy{},
+		loadOperation: func(context.Context, string, string) (store.ManagedKeyOperation, error) {
+			return store.ManagedKeyOperation{}, pgx.ErrNoRows
+		},
+		loadKey: func(context.Context, string, string, string) (store.ManagedKey, error) {
+			return store.ManagedKey{TenantID: tenantID, Provider: "azure-key-vault", KeyID: keyID,
+				Algorithm: string(crypto.ECDSAP384), Version: 9, State: "active"}, nil
+		},
+	}
+	if _, err := service.Zeroize(context.Background(), tenantID, "", keyID, "alice", "same-idempotency-key", "sha256:http-command"); !errors.Is(err, store.ErrDatastoreBusy) {
+		t.Fatalf("busy approval persistence error = %v, want retryable datastore busy", err)
+	}
 }
 
 func (s *managedKeyExactIntentSpy) AuthorizeApproval(_ context.Context, intent api.ApprovalIntent) (api.ApprovalAuthority, bool, string) {

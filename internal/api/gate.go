@@ -87,6 +87,10 @@ type ApprovalIntent struct {
 }
 
 type ApprovalAuthority struct {
+	// Failure is a storage or transport failure while obtaining an exact authority.
+	// It carries no grant; callers must propagate it instead of reporting a
+	// permanent approval denial. The API maps datastore backpressure to 503.
+	Failure           error
 	RequestID         string
 	IntentDigest      string
 	Requester         string
@@ -306,6 +310,9 @@ func (g MutationGate) checkWithApproval(ctx context.Context, p authz.Principal, 
 		bound.Action = string(action)
 		bound.Requester = p.Subject
 		authority, approved, reason := exact.AuthorizeApproval(ctx, bound)
+		if authority.Failure != nil {
+			return nil, authority.Failure
+		}
 		if !approved {
 			if reason == "" {
 				reason = "a distinct approver must approve this " + string(action) + " (dual control)"
