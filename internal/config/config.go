@@ -2063,6 +2063,11 @@ type PAM struct {
 	ExpiryInterval    string `json:"expiry_interval,omitempty"`
 	ApprovalTTL       string `json:"approval_ttl,omitempty"`
 	RequiredApprovals int    `json:"required_approvals,omitempty"`
+	// AutoApprovalAlone (CR-001) lets a matching automatic approval rule
+	// approve a privileged access request by itself. Off by default: the
+	// rule's approval is one of the request's required approvals (its
+	// template's, or required_approvals) and reviewers give the rest.
+	AutoApprovalAlone bool `json:"auto_approval_alone,omitempty"`
 	// RecordingRetention (A255) is how long a sealed gateway session
 	// recording is kept before its objects are deleted, unless a legal hold
 	// keeps it; empty keeps recordings.
