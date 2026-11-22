@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -111,6 +112,16 @@ func (s *pamService) SavePAMAutoApprovalRule(ctx context.Context, tenantID, acto
 		}
 		r.WindowDays, r.WindowStart, r.WindowEnd, r.TimeZone = days, w.Start, w.End, w.TimeZone
 	}
+	// CR-001: a rule applies only while its author may approve access, and
+	// that is checked again, from the control plane's own records, each time
+	// it would apply. An author those records give no access:approve would
+	// save a rule that never applies, so the save is refused instead.
+	if may, err := s.pamRuleAuthorMayApprove(ctx, tenantID, actor); err != nil {
+		return api.PAMAutoApprovalRule{}, err
+	} else if !may {
+		return api.PAMAutoApprovalRule{}, fmt.Errorf("%w: a rule applies only while its author may approve access, and no member role or API token of yours grants access:approve; "+
+			"identity-provider sign-in roles cannot be checked again each time the rule applies, so give your member record a role that grants it", api.ErrPAMRejected)
+	}
 	err := s.store.WithPAMCatalogLock(ctx, tenantID, func() error {
 		revision := int64(1)
 		old, err := s.store.GetPAMAutoApprovalRuleAnyState(ctx, tenantID, r.ID)
@@ -143,6 +154,64 @@ func (s *pamService) SavePAMAutoApprovalRule(ctx context.Context, tenantID, acto
 	saved, err := s.store.GetPAMAutoApprovalRule(ctx, tenantID, r.ID)
 	return pamAutoApprovalRuleView(saved), err
 }
+
+// pamRuleAuthorMayApprove reports whether a rule's author may approve
+// privileged access now (CR-001), from what the control plane records rather
+// than from any one request: the roles an active member record names
+// (built-in roles, or the tenant's custom roles as they are defined now) or
+// the scopes of the author's own live API tokens. A token someone else minted
+// for the author counts for nothing, as on the approval routes (F262); an
+// offboarded author, one being offboarded, and an access bundle run hold
+// nothing.
+func (s *pamService) pamRuleAuthorMayApprove(ctx context.Context, tenantID, author string) (bool, error) {
+	if strings.TrimSpace(author) == "" {
+		return false, nil
+	}
+	if _, isRun := orchestrator.BundleRunPrincipal(author); isRun {
+		return false, nil
+	}
+	held, err := s.store.GetSubjectStandingAuthority(ctx, tenantID, author, s.clock().UTC())
+	if err != nil {
+		return false, err
+	}
+	scopes := make([]authz.Permission, 0, len(held.TokenScopes))
+	for _, scope := range held.TokenScopes {
+		scopes = append(scopes, authz.Permission(scope))
+	}
+	if (authz.Role{Permissions: scopes}).Allows(authz.AccessApprove) {
+		return true, nil
+	}
+	builtin := authz.BuiltinRoles()
+	var custom []string
+	for _, name := range held.MemberRoles {
+		name = strings.TrimSpace(name)
+		if role, ok := builtin[name]; ok {
+			if role.Allows(authz.AccessApprove) {
+				return true, nil
+			}
+		} else if name != "" {
+			custom = append(custom, name)
+		}
+	}
+	if len(custom) == 0 {
+		return false, nil
+	}
+	defined, err := s.store.ListTenantCustomRoles(ctx, tenantID, custom...)
+	if err != nil {
+		return false, err
+	}
+	for _, role := range defined {
+		perms := make([]authz.Permission, 0, len(role.Permissions))
+		for _, p := range role.Permissions {
+			perms = append(perms, authz.Permission(p))
+		}
+		if (authz.Role{Name: role.Name, Permissions: perms}).Allows(authz.AccessApprove) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (s *pamService) ListPAMAutoApprovalRules(ctx context.Context, tenantID string) ([]api.PAMAutoApprovalRule, error) {
 	rows, err := s.store.ListPAMAutoApprovalRules(ctx, tenantID)
 	if err != nil {

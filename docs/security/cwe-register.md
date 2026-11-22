@@ -245,8 +245,8 @@ not this file.
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:14` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/aws_honey_trail_queue_test.go:21` | test-only file reference path (CWE-798) |
-| `internal/config/config.go:3737` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:4559` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3742` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:4564` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:28` | credential file paths only, no credential value (CWE-798) |
@@ -2176,7 +2176,7 @@ not this file.
 | `internal/server/pam_gateway_azure_served_test.go:87` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_fixture_test.go:379` | the stock ssh client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_fixture_test.go:382` | the stock ssh client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_gcp_served_test.go:86` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:171` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:194` | the stock kubectl against the test's own tunnel (CWE-78) |
@@ -2860,9 +2860,9 @@ not this file.
 | `internal/cloudauth/cloudauth.go:402` | operator-configured projected token path (CWE-22) |
 | `internal/cloudauth/gcp_token_source.go:115` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:3832` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:5208` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5227` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:3837` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:5213` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5232` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:340` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -3708,8 +3708,8 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
-| `internal/config/config.go:5208` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:5227` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5213` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:5232` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |

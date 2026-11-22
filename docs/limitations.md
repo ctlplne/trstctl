@@ -9832,9 +9832,11 @@ trstctl-cli access auto-approval-rules delete RULE_UUID --revision 1 --force
 ```
 
 A new rule uses revision 0; an edit or deletion must name the revision read. Deleted rule IDs
-cannot be reused. At most 256 live rules are allowed per tenant. The policy author needs
-`access:write`; listing needs `access:read`. Review the exact criteria in the console before
-saving: the rule can approve future requests without a human vote. Example `rule.json`:
+cannot be reused. At most 256 live rules are allowed per tenant. Changing a rule needs
+`access:approve` as well as `access:write`, and a rule never approves its own author's
+requests (see [Incident response and JIT access](features/incident-and-jit.md)); listing needs
+`access:read`. Review the exact criteria in the console before saving: the rule can approve
+future requests in place of a reviewer. Example `rule.json`:
 
 ```json
 {

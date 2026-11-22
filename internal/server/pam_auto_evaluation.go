@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -65,14 +66,37 @@ func (s *pamService) pamEnsureReviewedRequest(ctx context.Context, tenantID stri
 			if len(rules) > 256 {
 				return fmt.Errorf("%w: at most 256 live automatic review rules can be evaluated; delete unused rules", api.ErrPAMInvalid)
 			}
+			// CR-001: a rule approves in reviewers' place, so it is held to
+			// what binds a reviewer. Whether each author may approve is read
+			// once per evaluation.
+			authors := map[string]bool{}
 			for _, rule := range rules {
 				// The engine's self-review fence still applies to synthetic
 				// identities. A colliding requester keeps the human quorum.
 				if "auto-approval:"+rule.ID == intent.Requester {
 					continue
 				}
+				// A requester never reviews its own request, so a rule never
+				// approves a request its own author makes.
+				if authz.SameApprovalPrincipal(rule.SavedBy, intent.Requester) {
+					continue
+				}
 				matched, ok := pamAutoApprovalMatches(rule, facts)
 				if !ok {
+					continue
+				}
+				// A rule applies only while its author may still approve
+				// access: the rules of an offboarded author, or of one whose
+				// role no longer grants access:approve, stop applying.
+				may, read := authors[rule.SavedBy]
+				if !read {
+					var authorErr error
+					if may, authorErr = s.pamRuleAuthorMayApprove(work, tenantID, rule.SavedBy); authorErr != nil {
+						return authorErr
+					}
+					authors[rule.SavedBy] = may
+				}
+				if !may {
 					continue
 				}
 				selected := rule
@@ -108,7 +132,12 @@ func (s *pamService) pamEnsureReviewedRequest(ctx context.Context, tenantID stri
 		}
 		intent.EvidenceRefs = append(intent.EvidenceRefs, "pam-auto-evaluation:"+evaluationID)
 		intent.ExpiresAtNotAfter = evaluated.ExpiresAt
-		if evaluated.Rule != nil || evaluated.Standing != nil {
+		// A standing approval stands in for every reviewer (OD-9). A rule's
+		// approval is one of the request's required approvals, its
+		// template's or the deployment's, and reviewers give the rest,
+		// unless the deployment lets a rule approve alone (CR-001,
+		// pam.auto_approval_alone).
+		if evaluated.Standing != nil || (evaluated.Rule != nil && s.autoApprovalAlone) {
 			intent.RequiredApprovals = 1
 		}
 		if evaluated.Standing != nil {
@@ -191,7 +220,8 @@ func pamCanonicalAutoEvaluation(source events.Event, tenantID, eventID, requestI
 	if out.RequestID != requestID || out.Kind != req.Kind || out.Requester != requester || out.BaseDigest != digest || out.TargetType != req.TargetType || out.TargetID != req.TargetID || out.At.IsZero() || !source.Time.Equal(out.At) || !out.ExpiresAt.Equal(out.At.Add(reviewTTL)) || !out.ExpiresAt.After(out.At) || (out.Rule == nil) != (out.Facts == nil) {
 		return out, fmt.Errorf("%w: automatic review evaluation command differs", store.ErrIdempotencyConflict)
 	}
-	if out.Rule != nil && (!validUUID(out.Rule.ID) || out.Rule.Name == "" || out.Rule.Revision < 1 || out.Facts.Target != req.TargetType+"/"+req.TargetID || "auto-approval:"+out.Rule.ID == requester) {
+	if out.Rule != nil && (!validUUID(out.Rule.ID) || out.Rule.Name == "" || out.Rule.Revision < 1 || out.Facts.Target != req.TargetType+"/"+req.TargetID || "auto-approval:"+out.Rule.ID == requester ||
+		authz.SameApprovalPrincipal(out.Rule.SavedBy, requester)) {
 		return out, fmt.Errorf("%w: automatic review rule witness is incomplete", store.ErrIdempotencyConflict)
 	}
 	if st := out.Standing; st != nil && (out.Rule != nil || req.Kind != "session" || !validUUID(st.ApprovalID) || !validUUID(st.BundleID) ||

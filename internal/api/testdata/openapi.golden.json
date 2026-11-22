@@ -65990,7 +65990,13 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Delete an automatic review rule at the revision read",
+        "summary": "Delete an automatic review rule at the revision read; needs access:approve too",
+        "x-trstctl-also-requires": [
+          {
+            "permission": "access:approve",
+            "when": "every rule change: a rule approves requests in reviewers' place, so its author must be able to approve access; a token minted for its subject by someone else, or an access bundle run, is refused with 403"
+          }
+        ],
         "x-trstctl-permission": "access:write"
       },
       "put": {
@@ -66065,7 +66071,13 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Save a scoped automatic access review rule at the revision read",
+        "summary": "Save a scoped automatic access review rule at the revision read; needs access:approve too (a rule never approves its author's own requests)",
+        "x-trstctl-also-requires": [
+          {
+            "permission": "access:approve",
+            "when": "every rule change: a rule approves requests in reviewers' place, so its author must be able to approve access; a token minted for its subject by someone else, or an access bundle run, is refused with 403"
+          }
+        ],
         "x-trstctl-permission": "access:write"
       }
     },
