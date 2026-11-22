@@ -16,7 +16,9 @@ func TestOCSPNonceRequestEchoesInSignedResponse(t *testing.T) {
 	}
 	t.Cleanup(responderSigner.Destroy)
 
-	now := time.Date(2026, 6, 27, 13, 0, 0, 0, time.UTC)
+	// The response's ProducedAt is the current clock; the responder must be
+	// valid then as well as at ThisUpdate.
+	now := time.Now().UTC().Truncate(time.Second)
 	responderDER, err := CreateOCSPResponderCertificate(caDER, caSigner, responderSigner, "nonce OCSP responder", now.Add(-time.Minute), now.Add(24*time.Hour))
 	if err != nil {
 		t.Fatalf("CreateOCSPResponderCertificate: %v", err)

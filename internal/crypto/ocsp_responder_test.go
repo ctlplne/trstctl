@@ -15,7 +15,9 @@ func TestDelegatedOCSPResponderCertificateSignsResponses(t *testing.T) {
 	}
 	t.Cleanup(responderSigner.Destroy)
 
-	now := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
+	// ProducedAt comes from the current clock, so keep the delegated certificate
+	// valid when the response is actually signed.
+	now := time.Now().UTC().Truncate(time.Second)
 	responderDER, err := CreateOCSPResponderCertificate(caDER, caSigner, responderSigner, "issuer-a OCSP responder", now.Add(-time.Minute), now.Add(24*time.Hour))
 	if err != nil {
 		t.Fatalf("CreateOCSPResponderCertificate: %v", err)

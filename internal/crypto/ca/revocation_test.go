@@ -11,7 +11,56 @@ import (
 	"encoding/pem"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/ocsp"
 )
+
+func TestCR068LegacyCAParserRejectsLeafSignedGoodStatus(t *testing.T) {
+	c, err := NewRoot(CASpec{CommonName: "OCSP Authorization Root", TTL: 365 * 24 * time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
+		Subject: pkix.Name{CommonName: "compromised.example.test"},
+	}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := c.IssueLeaf(csr, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, _ := pem.Decode(issued.CertificatePEM)
+	if block == nil {
+		t.Fatal("issued leaf has no certificate PEM")
+	}
+	leaf, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer, err := x509.ParseCertificate(c.CertificateDER())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	forged, err := ocsp.CreateResponse(issuer, leaf, ocsp.Response{
+		Status: ocsp.Good, SerialNumber: leaf.SerialNumber, Certificate: leaf,
+		ThisUpdate: now.Add(-time.Minute), NextUpdate: now.Add(24 * time.Hour),
+	}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ocsp.ParseResponse(forged, issuer); err != nil {
+		t.Fatalf("control: the leaf-signed response must be cryptographically valid: %v", err)
+	}
+	if _, err := ParseOCSPResponse(forged, c.CertificateDER()); err == nil {
+		t.Fatal("legacy CA parser accepted a good status signed by the checked leaf")
+	}
+}
 
 func issueTestLeaf(t *testing.T, c *CA, cn string) (leafDER []byte, serial string) {
 	t.Helper()

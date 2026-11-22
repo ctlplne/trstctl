@@ -656,10 +656,9 @@ func BuildOCSPRequestForSerialWithNonce(issuerDER []byte, serialHex string, nonc
 	return out, nil
 }
 
-// ParseOCSPResponse parses and VERIFIES an OCSP response (DER) against its issuer
-// (DER), returning the crypto-free status. A response whose signature does not
-// verify against the issuer is rejected — the boundary helper a relying party (or
-// the acceptance test) uses to confirm the served responder's signature is sound.
+// ParseOCSPResponse parses and verifies an OCSP response (DER) against its
+// issuer (DER), including the embedded signer's delegated authority. A valid
+// signature from an ordinary leaf is not OCSP responder authorization.
 func ParseOCSPResponse(respDER, issuerDER []byte) (OCSPStatusInfo, error) {
 	issuer, err := x509.ParseCertificate(issuerDER)
 	if err != nil {
@@ -691,7 +690,23 @@ func ParseOCSPResponse(respDER, issuerDER []byte) (OCSPStatusInfo, error) {
 	responderIsIssuer := true
 	if resp.Certificate != nil {
 		responder = resp.Certificate
-		responderIsIssuer = responder.SerialNumber.Cmp(issuer.SerialNumber) == 0 && bytes.Equal(responder.RawSubject, issuer.RawSubject)
+		responderIsIssuer = bytes.Equal(responder.Raw, issuer.Raw)
+		if !responderIsIssuer {
+			if err := validateOCSPResponderCertificate(issuer, responder); err != nil {
+				return OCSPStatusInfo{}, fmt.Errorf("crypto: unauthorized OCSP responder: %w", err)
+			}
+			if responder.KeyUsage&x509.KeyUsageDigitalSignature == 0 {
+				return OCSPStatusInfo{}, errors.New("crypto: OCSP responder certificate cannot sign responses")
+			}
+			for _, signedAt := range []time.Time{resp.ProducedAt, resp.ThisUpdate} {
+				if signedAt.IsZero() || signedAt.Before(responder.NotBefore) || signedAt.After(responder.NotAfter) {
+					return OCSPStatusInfo{}, errors.New("crypto: OCSP response falls outside responder certificate validity")
+				}
+			}
+			if !resp.NextUpdate.IsZero() && resp.NextUpdate.After(responder.NotAfter) {
+				return OCSPStatusInfo{}, errors.New("crypto: OCSP response outlives responder certificate")
+			}
+		}
 	}
 	responderInfo := ocspResponderInfo(responder)
 	nonce, hasNonce, err := parseOCSPNonceFromParsedExtensions(resp.Extensions)

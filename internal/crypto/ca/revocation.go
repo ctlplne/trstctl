@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ocsp"
+	boundary "trstctl.com/trstctl/internal/crypto"
 )
 
 // This file adds X.509 revocation primitives (F47) inside the AN-3 crypto
@@ -140,21 +141,17 @@ func ParseOCSPRequestSerial(reqDER []byte) (string, error) {
 // ParseOCSPResponse parses and verifies an OCSP response (DER) against its issuer
 // (DER), returning the crypto-free status.
 func ParseOCSPResponse(respDER, issuerDER []byte) (OCSPStatus, error) {
-	issuer, err := x509.ParseCertificate(issuerDER)
-	if err != nil {
-		return OCSPStatus{}, fmt.Errorf("ca: parse issuer: %w", err)
-	}
-	resp, err := ocsp.ParseResponse(respDER, issuer)
+	resp, err := boundary.ParseOCSPResponse(respDER, issuerDER)
 	if err != nil {
 		return OCSPStatus{}, fmt.Errorf("ca: parse ocsp response: %w", err)
 	}
 	return OCSPStatus{
-		Status:     ocspStatusName(resp.Status),
-		Serial:     resp.SerialNumber.Text(16),
+		Status:     resp.Status,
+		Serial:     resp.Serial,
 		ThisUpdate: resp.ThisUpdate,
 		NextUpdate: resp.NextUpdate,
 		RevokedAt:  resp.RevokedAt,
-		Reason:     resp.RevocationReason,
+		Reason:     resp.Reason,
 	}, nil
 }
 
@@ -182,16 +179,5 @@ func ocspStatusCode(status string) int {
 		return ocsp.Revoked
 	default:
 		return ocsp.Unknown
-	}
-}
-
-func ocspStatusName(code int) string {
-	switch code {
-	case ocsp.Good:
-		return OCSPGood
-	case ocsp.Revoked:
-		return OCSPRevoked
-	default:
-		return OCSPUnknown
 	}
 }

@@ -1037,6 +1037,11 @@ bounded `--revocation-cache-config` with multiple issuers and explicit local CRL
 OCSP routes. It verifies CRL issuer signature, number, and signed time window before
 caching. For OCSP it also binds the request to the configured issuer and validates
 the responder signature, requested serial, nonce, `thisUpdate`, and `nextUpdate`.
+An embedded signer must be a non-CA certificate issued directly by that issuer,
+with OCSPSigning EKU, ocsp-nocheck, digital-signature key usage, and validity
+covering response production and `thisUpdate`; `nextUpdate` cannot outlive the
+responder certificate. The issuer itself may sign directly. A normal issued
+leaf cannot claim to be an OCSP responder just because its signature verifies.
 Only nonce-free answers are reused, and stale or invalid objects produce 503 with no
 protocol bytes. Each mTLS heartbeat signs metadata per segment/issuer/protocol;
 `GET /api/v1/revocation/caches` and Protocols → Revocation cache by segment expose

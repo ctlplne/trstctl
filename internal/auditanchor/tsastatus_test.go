@@ -173,7 +173,9 @@ func TestTSARevocationDecidesEachCertificatesTimestamps(t *testing.T) {
 func TestTSARevocationJudgesEachCertificateSeparately(t *testing.T) {
 	t.Parallel()
 	ca := newRevocationCA(t)
-	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	// The delegated response's ProducedAt uses the wall clock; keep its
+	// certificate valid then while preserving the two-hour rotation timeline.
+	now := time.Now().UTC().Add(-3 * time.Hour).Truncate(time.Second)
 	clock := now
 	first, firstSerial := ca.authority(&clock)
 	early := stamp(t, first, "early")

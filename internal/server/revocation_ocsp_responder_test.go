@@ -30,7 +30,7 @@ func TestServedOCSPUsesDelegatedResponderAndRotates(t *testing.T) {
 	t.Cleanup(responderKey.Destroy)
 
 	const serial = "abc123"
-	now := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Truncate(time.Second)
 	st := &ocspResponderRotationStore{
 		issued: store.IssuedCert{
 			TenantID: publicCRLTestTenant,
@@ -124,7 +124,7 @@ func TestServedOCSPCachesIdenticalFreshResponses(t *testing.T) {
 	countedResponder := &countingDigestSigner{inner: responderKey}
 
 	const serial = "c0ffee"
-	now := time.Date(2026, 6, 27, 14, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Truncate(time.Second)
 	st := &ocspResponderRotationStore{
 		issued: store.IssuedCert{
 			TenantID: publicCRLTestTenant,
