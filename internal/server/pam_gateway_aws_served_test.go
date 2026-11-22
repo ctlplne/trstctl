@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,39 @@ import (
 )
 
 var fixtureAWSCommand = regexp.MustCompile(`aws --no-sign-request --endpoint-url http://127\.0\.0\.1:(\d+)`)
+
+// The CLI tunnel deliberately binds host loopback. On Linux, a bridge
+// container's host.docker.internal resolves to the bridge address, which
+// cannot reach that listener. A short-lived client in the host network can.
+func a263StockAWSViaTunnel(target, port string, args ...string) (string, error) {
+	endpointHost := "host.docker.internal"
+	if runtime.GOOS == "linux" {
+		endpointHost = "127.0.0.1"
+	}
+	awsArgs := append([]string{"--no-sign-request", "--region", "us-east-1", "--endpoint-url", "http://" + endpointHost + ":" + port}, args...)
+	if runtime.GOOS == "linux" {
+		cmd := exec.Command("docker", append([]string{"run", "--rm", "--network", "host", "--entrypoint", "aws", a202LocalStackImage}, awsArgs...)...) // #nosec G204 G702 -- pinned local fixture image, fixed stock client, and loopback endpoint (CWE-78)
+		out, err := cmd.CombinedOutput()
+		return strings.TrimSpace(string(out)), err
+	}
+	return a201Exec(target, append([]string{"aws"}, awsArgs...)...)
+}
+
+func a263ReadObjectViaTunnel(target, port string) (string, error) {
+	if runtime.GOOS == "linux" {
+		// port came from fixtureAWSCommand's decimal-only capture. The fixed
+		// script reads the fetched file inside the same short-lived container.
+		script := "aws --no-sign-request --region us-east-1 --endpoint-url http://127.0.0.1:" + port +
+			" s3api get-object --bucket a263-gateway --key note /tmp/a263-client-note >/dev/null && cat /tmp/a263-client-note"
+		cmd := exec.Command("docker", "run", "--rm", "--network", "host", "--entrypoint", "sh", a202LocalStackImage, "-c", script) // #nosec G204 G702 -- fixed script, pinned image, and digits-only owned listener port (CWE-78)
+		out, err := cmd.CombinedOutput()
+		return strings.TrimSpace(string(out)), err
+	}
+	if _, err := a263StockAWSViaTunnel(target, port, "s3api", "get-object", "--bucket", "a263-gateway", "--key", "note", "/tmp/a263-client-note"); err != nil {
+		return "", err
+	}
+	return a201Exec(target, "cat", "/tmp/a263-client-note")
+}
 
 // A263 native LocalStack AssumeRole/S3 wire proof. LocalStack does not enforce
 // IAM; signature/permission enforcement must be separately proven by a stand-in.
@@ -127,12 +161,11 @@ func TestServedGatewayAWSSTSAccountA263(t *testing.T) {
 		t.Fatal("CLI omitted the frozen reviewed signing scope")
 	}
 
-	result, err := a201Exec(target, "aws", "--no-sign-request", "--region", "us-east-1", "--endpoint-url", "http://host.docker.internal:"+port, "s3api", "get-object", "--bucket", "a263-gateway", "--key", "note", "/tmp/a263-client-note")
+	result, err := a263ReadObjectViaTunnel(target, port)
 	if err != nil {
 		t.Fatalf("stock AWS CLI without a credential: %v %s", err, result)
 	}
-	note, err := a201Exec(target, "cat", "/tmp/a263-client-note")
-	if err != nil || strings.TrimSpace(note) != "a263-owned-note" {
+	if strings.TrimSpace(result) != "a263-owned-note" {
 		t.Fatal("stock AWS CLI did not read the owned target object")
 	}
 	if status := stand.probe(t, "/a263-gateway/note"); status != http.StatusOK {
@@ -216,7 +249,7 @@ func TestServedGatewayAWSSTSAccountA263(t *testing.T) {
 		t.Fatal("STS CLI omitted its reviewed signing scope")
 	}
 	stsPort := fixtureAWSCommand.FindStringSubmatch(stsOut)[1]
-	identity, err := a201Exec(target, "aws", "--no-sign-request", "--region", "us-east-1", "--endpoint-url", "http://host.docker.internal:"+stsPort, "sts", "get-caller-identity")
+	identity, err := a263StockAWSViaTunnel(target, stsPort, "sts", "get-caller-identity")
 	if err != nil || !strings.Contains(identity, "assumed-role/a263-reader/") {
 		t.Fatal("stock STS CLI did not authenticate as its issued role")
 	}
