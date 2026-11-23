@@ -87,3 +87,35 @@ func TestCR049DiscoverySourceRejectsMisCasedCredentialAndEgressKeys(t *testing.T
 		}
 	}
 }
+
+// CR-061 is the private-egress half of the same JSON case-folding flaw. Keep
+// this separate from CR-049's combined credential test so one guard cannot
+// accidentally hide a regression in the other.
+func TestCR061DiscoverySourceRejectsCaseVariantPrivateEgressGrant(t *testing.T) {
+	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer collector.Close()
+	loopback := serviceNowSinkCIDR(t, collector.URL)
+	h := newOperatingServedHarness(t, config.Protocols{})
+	var mcpPerms []string
+	for _, p := range authz.BuiltinRoles()["mcp"].Permissions {
+		mcpPerms = append(mcpPerms, string(p))
+	}
+	tok := seedScopedTokenSubject(t, h.store, h.tenant, "cr061-mcp-automation", mcpPerms...)
+	create := func(key, name string) (int, []byte) {
+		t.Helper()
+		return secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, key, map[string]any{
+			"kind": "cloud_secret", "name": name, "config": map[string]any{"providers": []any{map[string]any{
+				"provider": "hashicorp-vault", "vault_url": collector.URL, "mount": "secret",
+				key: true, "private_egress_cidrs": []string{loopback},
+			}}},
+		})
+	}
+	if code, body := create("allow_private_endpoint", "CR061 canonical private egress"); code != http.StatusForbidden {
+		t.Fatalf("canonical private egress without egress:private = HTTP %d %s; want 403", code, body)
+	}
+	if code, body := create("Allow_Private_Endpoint", "CR061 case-variant private egress"); code != http.StatusBadRequest {
+		t.Fatalf("case-variant private egress control = HTTP %d %s; want 400 before storage", code, body)
+	}
+}
