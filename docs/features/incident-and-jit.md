@@ -104,7 +104,8 @@ ServiceNow Table API (`itsm.servicenow`). Each destination carries only endpoint
 metadata plus `token_ref`; token bytes are resolved by the worker at delivery time
 and wiped after the outbound request. ServiceNow destinations reuse the same
 operator-approved binding check as direct ITSM ticket creation. Splunk and Jira
-`token_ref` values must be bound by the operator to the dispatching tenant, the
+`token_ref` values must use canonical `env:NAME` references bound by the
+operator to the dispatching tenant, the
 `response_integration` integration and the destination's origin in
 [outbound env credential bindings](../configuration.md#outbound-env-credential-bindings);
 the dispatch request is refused otherwise, and the worker checks the binding again

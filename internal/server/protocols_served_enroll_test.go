@@ -432,7 +432,7 @@ func TestServedMDMSCEPUnsupportedChallengePolicyIsNotReady(t *testing.T) {
 		SCEP: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	}, withSecretsEnabled(t, nil))
 	registerServedTenant(t, h, "MDM SCEP unavailable HMAC tenant")
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read")
 	for _, tc := range []struct{ provider, mode string }{
 		{"jamf", "hmac-dynamic"}, {"intune", "hmac-dynamic"}, {"jamf", "intune-jws"},
 	} {

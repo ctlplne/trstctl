@@ -453,6 +453,13 @@ func (a *API) decodeACMEDNS01ProviderConfigRequest(r *http.Request) (dns01Provid
 	if err := json.Unmarshal(raw, &obj); err != nil || obj == nil {
 		return dns01ProviderConfigRequest{}, errStatus(http.StatusBadRequest, "request body must be a JSON object")
 	}
+	refs, err := normalizeStoredReferenceObject(obj["credential_refs"], "credential_refs")
+	if err != nil {
+		return dns01ProviderConfigRequest{}, err
+	}
+	if err := validateStoredReferenceFieldsIn(obj["config"], "config"); err != nil {
+		return dns01ProviderConfigRequest{}, err
+	}
 	if containsInlineSecret(obj) {
 		return dns01ProviderConfigRequest{}, errStatus(http.StatusBadRequest, "DNS-01 provider configs accept credential references, not inline secret values")
 	}
@@ -474,13 +481,6 @@ func (a *API) decodeACMEDNS01ProviderConfigRequest(r *http.Request) (dns01Provid
 		return dns01ProviderConfigRequest{}, errStatus(http.StatusBadRequest, "provider must name a served DNS-01 provider")
 	}
 	if err := validateDNS01PersistDelegationTarget(req.DelegationTarget, req.PersistDelegationTarget); err != nil {
-		return dns01ProviderConfigRequest{}, err
-	}
-	refs, err := normalizeDNS01JSONObject(req.CredentialRefs, "credential_refs")
-	if err != nil {
-		return dns01ProviderConfigRequest{}, err
-	}
-	if err := validateCredentialRefObject(refs); err != nil {
 		return dns01ProviderConfigRequest{}, err
 	}
 	cfg, err := normalizeDNS01JSONObject(req.Config, "config")
@@ -535,23 +535,6 @@ func normalizeDNS01JSONObject(raw json.RawMessage, field string) (json.RawMessag
 		return nil, err
 	}
 	return json.RawMessage(out), nil
-}
-
-func validateCredentialRefObject(raw json.RawMessage) error {
-	var refs map[string]string
-	if err := json.Unmarshal(raw, &refs); err != nil {
-		return errStatus(http.StatusBadRequest, "credential_refs values must be strings")
-	}
-	for key, value := range refs {
-		k := strings.ToLower(strings.TrimSpace(key))
-		if !strings.Contains(k, "ref") {
-			return errStatus(http.StatusBadRequest, "credential_refs keys must be secret reference fields")
-		}
-		if strings.TrimSpace(value) == "" {
-			return errStatus(http.StatusBadRequest, "credential_refs values must be non-empty references")
-		}
-	}
-	return nil
 }
 
 func normalizeDNS01Methods(in []string) ([]string, error) {

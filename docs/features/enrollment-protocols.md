@@ -367,6 +367,8 @@ raw MDM secrets. At runtime the validator resolves enabled policy
 `trust_anchor_refs` from the served secret store (`secret://...`) per decision, so
 anchor changes take effect without restarting the handler; the static
 `protocols.scep.intune_challenge` anchors remain a bootstrap/fallback path.
+Each trust-anchor reference must use a canonical `secret://` value; a raw
+anchor or token in a reference field is refused before policy storage.
 
 If policy setup is blocked, fix the named prerequisite and run the preview again;
 no partial policy exists to clean up. If a save is interrupted, retry with the same

@@ -367,7 +367,7 @@ func TestServedACMEDNS01ProviderConfigAndPreflightTRACE003(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithACMEDNS01CAAResolver(caaDNS))
 	})
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read")
 
 	create := map[string]any{
 		"name":              "prod-cloudflare",

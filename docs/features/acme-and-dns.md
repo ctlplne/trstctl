@@ -274,7 +274,10 @@ install earned; CAA that does not name the vendor stops the publish.
 The served control plane has a tenant-scoped DNS-01 provider-config API:
 `POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs` stores provider metadata,
 zone/delegation policy, CAA issuer policy, allowed methods, wildcard policy, and
-`credential_refs` only. Inline provider tokens are rejected.
+`credential_refs` only. Each `credential_refs` value and each credential
+reference field in provider `config` must be a canonical tenant `secret://`
+reference. A raw
+provider token is refused before an event or read-model row is written.
 When configs overlap, served ACME chooses the most specific matching zone or
 challenge name before checking DNS-01 methods, wildcard permission, or upstream
 domain-validation consent. A broad parent config cannot override a narrower

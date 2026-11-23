@@ -484,6 +484,10 @@ func decodeMDMSCEPPolicyRequest(r *http.Request) (mdmSCEPPolicyRequest, error) {
 	if err := json.Unmarshal(raw, &obj); err != nil || obj == nil {
 		return mdmSCEPPolicyRequest{}, errStatus(http.StatusBadRequest, "request body must be a JSON object")
 	}
+	refs, err := normalizeStoredReferenceObject(obj["trust_anchor_refs"], "trust_anchor_refs")
+	if err != nil {
+		return mdmSCEPPolicyRequest{}, err
+	}
 	if containsInlineSecret(obj) {
 		return mdmSCEPPolicyRequest{}, errStatus(http.StatusBadRequest, "MDM SCEP policies accept reference fields, not inline secret values")
 	}
@@ -518,20 +522,13 @@ func decodeMDMSCEPPolicyRequest(r *http.Request) (mdmSCEPPolicyRequest, error) {
 		if req.ChallengeMode != "hmac-dynamic" {
 			return mdmSCEPPolicyRequest{}, errStatus(http.StatusBadRequest, "challenge_credential_ref applies only to the hmac-dynamic challenge mode")
 		}
-		if name, ok := strings.CutPrefix(req.ChallengeCredentialRef, "secret://"); !ok || strings.TrimSpace(strings.TrimPrefix(name, "/")) == "" {
-			return mdmSCEPPolicyRequest{}, errStatus(http.StatusBadRequest, "challenge_credential_ref must be a secret:// reference")
+		if err := requireCanonicalStoredReference(req.ChallengeCredentialRef, "challenge_credential_ref"); err != nil {
+			return mdmSCEPPolicyRequest{}, err
 		}
 	}
 	if req.Enabled == nil {
 		on := true
 		req.Enabled = &on
-	}
-	refs, err := normalizeJSONObject(req.TrustAnchorRefs, "trust_anchor_refs")
-	if err != nil {
-		return mdmSCEPPolicyRequest{}, err
-	}
-	if err := validateReferenceObject(refs, "trust_anchor_refs"); err != nil {
-		return mdmSCEPPolicyRequest{}, err
 	}
 	req.TrustAnchorRefs = refs
 	guidance, err := normalizeJSONObject(req.ProfileGuidance, "profile_guidance")
@@ -561,23 +558,6 @@ func normalizeJSONObject(raw json.RawMessage, field string) (json.RawMessage, er
 		return nil, err
 	}
 	return json.RawMessage(out), nil
-}
-
-func validateReferenceObject(raw json.RawMessage, field string) error {
-	var refs map[string]string
-	if err := json.Unmarshal(raw, &refs); err != nil {
-		return errStatus(http.StatusBadRequest, field+" values must be strings")
-	}
-	for key, value := range refs {
-		k := strings.ToLower(strings.TrimSpace(key))
-		if !strings.Contains(k, "ref") {
-			return errStatus(http.StatusBadRequest, field+" keys must be reference fields")
-		}
-		if strings.TrimSpace(value) == "" {
-			return errStatus(http.StatusBadRequest, field+" values must be non-empty references")
-		}
-	}
-	return nil
 }
 
 func defaultMDMSCEPProfileGuidance(req mdmSCEPPolicyRequest) json.RawMessage {

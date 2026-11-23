@@ -57,11 +57,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3598 annotated sites across 35 rules. Each row is
+3602 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (906 sites)
+### G101 — CWE-798 Use of hardcoded credentials (910 sites)
 
 | Location | Reason |
 |---|---|
@@ -182,7 +182,7 @@ not this file.
 | `internal/aimodel/redactor_test.go:157` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/aimodel/redactor_test.go:162` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/access_bundles.go:1073` | environment variable names and placeholder launch lines; no credential value present (CWE-798) |
-| `internal/api/acme_dns01.go:609` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/acme_dns01.go:592` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/agents.go:59` | source-kind label naming where key material was located; no credential value present (CWE-798) |
 | `internal/api/aisurface_contract_test.go:148` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/compliance_report_dispatch_test.go:17` | fabricated fixture reference; no value is real (CWE-798) |
@@ -604,6 +604,10 @@ not this file.
 | `internal/server/cr048_repository_credential_served_test.go:32` | test canary (CWE-798) |
 | `internal/server/cr048_repository_credential_served_test.go:33` | test canary (CWE-798) |
 | `internal/server/cr048_repository_credential_served_test.go:150` | the fabricated file reference is a test selector, not secret material (CWE-798) |
+| `internal/server/cr394_399_reference_shape_served_test.go:22` | fabricated invalid reference fixture, no credential value (CWE-798) |
+| `internal/server/cr394_399_reference_shape_served_test.go:32` | fabricated invalid reference fixture, no credential value (CWE-798) |
+| `internal/server/cr394_399_reference_shape_served_test.go:39` | fabricated invalid reference fixture, no credential value (CWE-798) |
+| `internal/server/cr394_399_reference_shape_served_test.go:55` | fabricated invalid reference fixture, no credential value (CWE-798) |
 | `internal/server/decoy_secret_scan_served_test.go:28` | fabricated decoy fixture; no value is real (CWE-798) |
 | `internal/server/decoy_secret_scan_served_test.go:29` | fabricated fixture; no value is real (CWE-798) |
 | `internal/server/decoy_secret_scan_served_test.go:57` | a decoy's path and label, no credential value (CWE-798) |

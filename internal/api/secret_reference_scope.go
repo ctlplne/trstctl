@@ -6,10 +6,111 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/credref"
 )
+
+// A field name ending in "ref" never proves its value is a reference. Parse
+// the value before the inline-secret key heuristic can skip that field.
+func requireCanonicalStoredReference(value, field string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return errStatus(http.StatusBadRequest, field+" must use a canonical secret:// reference")
+	}
+	if _, err := credref.Parse(value); err != nil {
+		// An older spelling can still identify a restricted environment.
+		// Let the configuring route's scope check deny that name before the
+		// eventual format error; no event is written on either path.
+		if credref.NameForDenial(err) != "" {
+			return nil
+		}
+		return errStatus(http.StatusBadRequest, field+": "+err.Error())
+	}
+	return nil
+}
+
+func normalizeStoredReferenceObject(raw json.RawMessage, field string) (json.RawMessage, error) {
+	if len(raw) == 0 {
+		return json.RawMessage(`{}`), nil
+	}
+	var refs map[string]string
+	if err := json.Unmarshal(raw, &refs); err != nil || refs == nil {
+		return nil, errStatus(http.StatusBadRequest, field+" must be an object of reference strings")
+	}
+	for key, value := range refs {
+		if !strings.Contains(strings.ToLower(strings.TrimSpace(key)), "ref") {
+			return nil, errStatus(http.StatusBadRequest, field+" keys must be reference fields")
+		}
+		if err := requireCanonicalStoredReference(value, field+"."+key); err != nil {
+			return nil, err
+		}
+		refs[key] = strings.TrimSpace(value)
+	}
+	out, err := json.Marshal(refs)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(out), nil
+}
+
+// Provider-specific config may also carry credential fields such as
+// secret_access_key_ref or api_token_reference. Check each nested credential
+// reference field before the generic
+// inline-secret heuristic treats its key as harmless.
+func validateStoredReferenceFieldsIn(raw json.RawMessage, field string) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	var decoded any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return errStatus(http.StatusBadRequest, field+" must be valid JSON")
+	}
+	var walk func(any, string) error
+	walk = func(value any, path string) error {
+		switch current := value.(type) {
+		case map[string]any:
+			for key, child := range current {
+				next := path + "." + key
+				if credentialReferenceField(key) {
+					ref, ok := child.(string)
+					if !ok {
+						return errStatus(http.StatusBadRequest, next+" must be a secret:// reference string")
+					}
+					if err := requireCanonicalStoredReference(ref, next); err != nil {
+						return err
+					}
+					continue
+				}
+				if err := walk(child, next); err != nil {
+					return err
+				}
+			}
+		case []any:
+			for _, child := range current {
+				if err := walk(child, path); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	return walk(decoded, field)
+}
+
+func credentialReferenceField(key string) bool {
+	key = strings.ToLower(strings.ReplaceAll(key, "-", "_"))
+	if !strings.Contains(key, "ref") {
+		return false
+	}
+	for _, credentialPart := range []string{"token", "secret", "password", "passphrase", "credential", "key", "username", "bearer", "auth"} {
+		if strings.Contains(key, credentialPart) {
+			return true
+		}
+	}
+	return false
+}
 
 // A235-L2: a stored-secret reference a caller sets up through the API — a
 // connector target's config, a notification channel's or an observer's
@@ -83,6 +184,12 @@ func errSecretReferenceReadAuthority(field string) error {
 // needs secrets:read, and a missing principal fails closed.
 func (a *API) requireSecretReferencesRead(ctx context.Context, tenantID, field string, refs ...string) error {
 	for _, ref := range refs {
+		if ref == "" {
+			continue
+		}
+		if err := requireCanonicalStoredReference(ref, field); err != nil {
+			return err
+		}
 		name, formatErr := storedSecretScopeName(ref)
 		if name != "" {
 			principal, ok := ctx.Value(principalCtxKey).(authz.Principal)
