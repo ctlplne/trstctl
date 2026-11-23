@@ -186,15 +186,20 @@ def verify(payload: object) -> dict[str, object]:
         spiffe = artifacts["spiffe"]
         if not isinstance(spiffe, dict) or spiffe.get("id") != "spiffe://eval.trstctl.local/workload":
             raise ValueError("SPIFFE artifact has the wrong workload identity")
-        cert_digests["spiffe"] = verify_certificate(
-            root, "spiffe", decode(spiffe.get("certificate_der"), "SPIFFE certificate"), ca_file,
-            b"URI:spiffe://eval.trstctl.local/workload",
-        )
         bundle = root / "spiffe-bundle.der"
         if spiffe.get("private_key_present") is not True:
             raise ValueError("SPIFFE Workload API response omitted its ephemeral private key")
-        write(bundle, decode(spiffe.get("bundle_der"), "SPIFFE bundle"))
+        bundle_der = decode(spiffe.get("bundle_der"), "SPIFFE bundle")
+        write(bundle, bundle_der)
         run(["openssl", "x509", "-inform", "DER", "-in", str(bundle), "-noout", "-text"])
+        if bundle_der == run(["openssl", "x509", "-in", str(ca_file), "-outform", "DER"]):
+            raise ValueError("tenant SPIFFE trust bundle reused the platform CA")
+        spiffe_ca = root / "spiffe-ca.pem"
+        write(spiffe_ca, run(["openssl", "x509", "-inform", "DER", "-in", str(bundle), "-outform", "PEM"]))
+        cert_digests["spiffe"] = verify_certificate(
+            root, "spiffe", decode(spiffe.get("certificate_der"), "SPIFFE certificate"), spiffe_ca,
+            b"URI:spiffe://eval.trstctl.local/workload",
+        )
 
     canonical = compact(payload)
     return {

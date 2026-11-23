@@ -21,7 +21,7 @@
     "spiffe": "SPIFFE Workload API FetchX509SVID over the served Unix-domain gRPC socket with the mandatory security metadata"
   },
   "independent_verification": {
-    "x509": "OpenSSL verifies ACME, EST, SCEP, CMP, and SPIFFE leaves against the served signer-backed CA",
+    "x509": "OpenSSL verifies ACME, EST, SCEP, and CMP leaves against the served signer-backed platform CA and verifies SPIFFE against its distinct tenant trust bundle",
     "est": "OpenSSL parses the returned DER PKCS#7 certificate set",
     "scep_cmp": "OpenSSL ASN.1 parses both wire requests and responses",
     "ssh": "ssh-keygen parses the issued user certificate and the served CA key",
