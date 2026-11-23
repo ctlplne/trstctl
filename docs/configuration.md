@@ -77,7 +77,7 @@ lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mo
     The serving binary (`trstctl`, via `server.Run`) can run a single-node eval
     stack: bundled PostgreSQL (`TRSTCTL_POSTGRES_MODE=bundled`, the default — the
     binary starts and supervises an embedded single-node Postgres with data under
-    `TRSTCTL_POSTGRES_DATA_DIR` on `TRSTCTL_POSTGRES_PORT`, default 5432) and
+    `TRSTCTL_POSTGRES_DATA_DIR` on a private Unix socket, number 5432 by default) and
     embedded NATS (`TRSTCTL_NATS_MODE=embedded`, the default — in-process
     file-backed JetStream). Bundled PostgreSQL is available only for host archives
     with committed runtime pins in `deploy/supply-chain/embedded-postgres.json`
@@ -93,6 +93,13 @@ lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mo
     never downloads anything. `--migrate` / `--backup` target a managed datastore
     and require `external`.)
 
+Bundled PostgreSQL accepts control-plane connections through a fresh private
+Unix socket directory owned by the service account. PostgreSQL checks that
+account's OS peer identity and rejects TCP connections. At each start the
+control plane disables password login for the bundled bootstrap role, including
+when it opens an existing evaluation database; data remains in the configured
+data directory. The socket directory is removed after a clean stop.
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_POSTGRES_MODE` | `bundled` | `bundled` (embedded single-node eval on a manifest-pinned host archive; downloads once and fails closed if unpinned) or `external` (managed cluster; recommended for production). |
@@ -103,7 +110,7 @@ lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mo
 | `TRSTCTL_POSTGRES_DATA_DIR` | `data/postgres` | Data directory for the **bundled** datastore; eval data persists here across restarts. |
 | `TRSTCTL_BUNDLED_PG_ARCHIVE_DIR` | `trstctl-pg-bin` under the cache root | Optional directory holding the bundled PostgreSQL's pinned archive, read before any download. The archive is authenticated against the committed SHA-256 and copied into the verified cache; nothing in the directory is trusted, so it may be a read-only mount another user owns (an air-gapped install's pre-seeded copy, or the DoD runner's view of the CI cache). |
 | `TRSTCTL_BUNDLED_PG_CACHE_ROOT` | process temporary directory | Optional root for the bundled PostgreSQL's manifest-verified executable archive cache. Use an existing, owned, private, executable directory, or a trusted sticky temporary directory. Startup checks ownership, mode, and symlinks before using it and refuses an unsafe root. The isolated DoD runner uses its owned executable tmpfs because its host receipt bind mount is not a safe cache anchor. |
-| `TRSTCTL_POSTGRES_PORT` | `5432` | Loopback port for the **bundled** datastore (override if 5432 is taken). |
+| `TRSTCTL_POSTGRES_PORT` | `5432` | Private Unix socket number for the **bundled** datastore. Bundled mode does not listen on TCP. |
 | `TRSTCTL_POSTGRES_STATEMENT_TIMEOUT` | `60s` | Server-side deadline applied to every statement (OPS-TIMEOUTS-001), so a stuck query fails closed instead of holding a connection indefinitely. DR rebuild/restore transactions widen this explicitly. |
 | `TRSTCTL_POSTGRES_ACQUIRE_TIMEOUT` | `10s` | How long a request may wait for a pooled PostgreSQL connection before failing closed with a structured `503`. |
 | `TRSTCTL_POSTGRES_MAX_CONNS` | `16` | Request pool: connections for client commands and their transactions (`postgres.max_conns`). |

@@ -16,6 +16,7 @@ type Config struct {
 	database            string
 	username            string
 	password            string
+	connectionHost      string
 	cachePath           string
 	archiveSourcePath   string
 	runtimePath         string
@@ -44,6 +45,7 @@ func DefaultConfig() Config {
 		database:            "postgres",
 		username:            "postgres",
 		password:            "postgres",
+		connectionHost:      "localhost",
 		startTimeout:        15 * time.Second,
 		logger:              os.Stdout,
 		binaryRepositoryURL: "https://repo.maven.apache.org/maven2",
@@ -77,6 +79,13 @@ func (c Config) Username(username string) Config {
 // Password sets the password that will be used to connect.
 func (c Config) Password(password string) Config {
 	c.password = password
+	return c
+}
+
+// ConnectionHost selects the host used by startup health checks. A directory
+// selects PostgreSQL's Unix socket instead of TCP.
+func (c Config) ConnectionHost(host string) Config {
+	c.connectionHost = host
 	return c
 }
 

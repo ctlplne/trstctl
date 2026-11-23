@@ -55,7 +55,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3590 annotated sites across 35 rules. Each row is
+3591 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1432,7 +1432,7 @@ not this file.
 | `internal/server/audit_archive_download_served_test.go:69` | a test fixture count (CWE-190) |
 | `internal/server/backup.go:293` | record counts bounded by the event log (CWE-190) |
 | `internal/server/backup.go:472` | record counts bounded by the event log (CWE-190) |
-| `internal/server/bundled_pg.go:95` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
+| `internal/server/bundled_pg.go:125` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
 | `internal/server/crypto_risk_report_served_test.go:58` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/ct_inclusion.go:162` | a log timestamp after 1970 (CWE-190) |
 | `internal/server/ct_inclusion.go:168` | a log timestamp in milliseconds fits int64 (CWE-190) |
@@ -2481,7 +2481,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (843 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (844 sites)
 
 | Location | Reason |
 |---|---|
@@ -3067,6 +3067,7 @@ not this file.
 | `internal/server/backup_test.go:1010` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/server/breakglass.go:173` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/breakglass_material_test.go:67` | test-owned public kit under t.TempDir (CWE-22) |
+| `internal/server/bundled_pg.go:202` | fixed files in the owned private socket directory (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:32` | fixed repository source path (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:46` | fixed repository source path (CWE-22) |
 | `internal/server/ca_custody_test.go:91` | test-owned path verifies upgrade custody |

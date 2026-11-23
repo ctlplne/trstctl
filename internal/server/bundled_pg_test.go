@@ -6,6 +6,7 @@ import (
 	"context"
 	"net"
 	"net/url"
+	"os"
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
@@ -45,8 +46,13 @@ func TestBundledPostgresServes(t *testing.T) {
 		}
 	}()
 	connection, err := url.Parse(dsn)
-	if err != nil || connection.Hostname() != "127.0.0.1" {
-		t.Fatalf("bundled connection must use numeric loopback: %q, %v", dsn, err)
+	if err != nil || connection.Query().Get("host") == "" || connection.Query().Get("sslmode") != "disable" {
+		t.Fatalf("bundled connection must select a private Unix socket: %v", err)
+	}
+	socketDir := connection.Query().Get("host")
+	info, err := os.Stat(socketDir)
+	if err != nil || !info.IsDir() || info.Mode().Perm() != 0o700 {
+		t.Fatalf("bundled socket directory must be private: mode=%v err=%v", info, err)
 	}
 
 	st, err := store.Open(ctx, dsn)
@@ -58,15 +64,19 @@ func TestBundledPostgresServes(t *testing.T) {
 	if err := st.SystemPool().QueryRow(ctx, "SHOW listen_addresses").Scan(&listenAddresses); err != nil {
 		t.Fatalf("inspect actual bundled postgres TCP listener configuration: %v", err)
 	}
-	if listenAddresses != "127.0.0.1" {
-		t.Fatalf("bundled postgres must listen on numeric loopback, got %q", listenAddresses)
+	if listenAddresses != "" {
+		t.Fatalf("bundled postgres must not listen on TCP, got %q", listenAddresses)
 	}
 	var socketDirectories string
 	if err := st.SystemPool().QueryRow(ctx, "SHOW unix_socket_directories").Scan(&socketDirectories); err != nil {
 		t.Fatalf("inspect actual bundled postgres listeners: %v", err)
 	}
-	if socketDirectories != "" {
-		t.Fatalf("bundled postgres created an unused Unix listener in %q", socketDirectories)
+	if socketDirectories != socketDir {
+		t.Fatalf("bundled postgres socket directory = %q, want private directory", socketDirectories)
+	}
+	var passwordNull bool
+	if err := st.SystemPool().QueryRow(ctx, "SELECT rolpassword IS NULL FROM pg_authid WHERE rolname='postgres'").Scan(&passwordNull); err != nil || !passwordNull {
+		t.Fatalf("bundled bootstrap role still has a password verifier: null=%v err=%v", passwordNull, err)
 	}
 	if err := st.Migrate(ctx); err != nil {
 		t.Fatalf("migrate bundled postgres: %v", err)

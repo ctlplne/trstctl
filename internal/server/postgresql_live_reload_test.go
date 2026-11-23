@@ -51,7 +51,7 @@ func TestPostgreSQLConnectorReloadServesTheRenewedCertificateOnTheBundledServer(
 	dataDir := filepath.Join(root, "pg")
 	port := freeTCPPort(t)
 	_, binaries, stop, err := startBundledPostgresWith(config.Postgres{Mode: config.PostgresBundled, DataDir: dataDir, Port: port},
-		map[string]string{"ssl": "on", "ssl_cert_file": certPath, "ssl_key_file": keyPath})
+		map[string]string{"ssl": "on", "ssl_cert_file": certPath, "ssl_key_file": keyPath, "listen_addresses": "127.0.0.1"})
 	if err != nil {
 		t.Fatalf("start bundled postgres with TLS: %v", err)
 	}

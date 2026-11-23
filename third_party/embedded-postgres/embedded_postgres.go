@@ -92,8 +92,10 @@ func (ep *EmbeddedPostgres) Start() (err error) {
 		}()
 	}
 
-	if err := ensurePortAvailable(ep.config.port); err != nil {
-		return err
+	if addresses, set := ep.config.startParameters["listen_addresses"]; !set || addresses != "" {
+		if err := ensurePortAvailable(ep.config.port); err != nil {
+			return err
+		}
 	}
 
 	logger, err := newSyncedLogger(ep.verifiedRunPath, ep.config.logger)
@@ -250,6 +252,13 @@ func (ep *EmbeddedPostgres) Stop() error {
 		return errors.Join(flushErr, ep.cleanupVerifiedBinary())
 	}
 	return flushErr
+}
+
+// StartOwnershipUncertain reports whether a failed pg_ctl start may have left
+// this verified instance running. Callers must retain its socket and binary
+// tree until the owner inspects that exact instance.
+func (ep *EmbeddedPostgres) StartOwnershipUncertain() bool {
+	return ep.verifiedStartUncertain
 }
 
 func encodeOptions(port uint32, parameters map[string]string) string {

@@ -9,9 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -124,7 +126,7 @@ func healthCheckDatabaseOrTimeout(config Config) error {
 
 	go func() {
 		for timeout.Err() == nil {
-			if err := healthCheckDatabase(config.port, config.database, config.username, config.password); err != nil {
+			if err := healthCheckDatabase(config.connectionHost, config.port, config.database, config.username, config.password); err != nil {
 				continue
 			}
 			healthCheckSignal <- true
@@ -141,8 +143,8 @@ func healthCheckDatabaseOrTimeout(config Config) error {
 	}
 }
 
-func healthCheckDatabase(port uint32, database, username, password string) (err error) {
-	conn, err := openDatabaseConnection(port, username, password, database)
+func healthCheckDatabase(host string, port uint32, database, username, password string) (err error) {
+	conn, err := openDatabaseConnectionAt(host, port, username, password, database)
 	if err != nil {
 		return err
 	}
@@ -160,11 +162,12 @@ func healthCheckDatabase(port uint32, database, username, password string) (err 
 }
 
 func openDatabaseConnection(port uint32, username string, password string, database string) (driver.Connector, error) {
-	config, err := pgx.ParseConfig(fmt.Sprintf("host=localhost port=%d user=%s password=%s dbname=%s sslmode=disable",
-		port,
-		username,
-		password,
-		database))
+	return openDatabaseConnectionAt("localhost", port, username, password, database)
+}
+
+func openDatabaseConnectionAt(host string, port uint32, username string, password string, database string) (driver.Connector, error) {
+	query := url.Values{"host": {host}, "port": {strconv.FormatUint(uint64(port), 10)}, "sslmode": {"disable"}}
+	config, err := pgx.ParseConfig((&url.URL{Scheme: "postgres", User: url.UserPassword(username, password), Path: "/" + database, RawQuery: query.Encode()}).String())
 	if err != nil {
 		return nil, err
 	}
