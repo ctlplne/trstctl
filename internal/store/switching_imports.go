@@ -44,6 +44,7 @@ type SwitchingImport struct {
 	WatchPrivateCIDRs []string
 	WatchRequestedAt  *time.Time
 	WatchRequestedBy  string
+	WatchGrantBy      string
 }
 
 // SwitchingImportRow is one export row's outcome and what it became.
@@ -213,14 +214,14 @@ func (s *Store) ApplySwitchingImportCompletedTx(ctx context.Context, tx pgx.Tx, 
 
 const switchingImportColumns = `id::text, name, format, preview_digest, rows_total, counts, gap_counts, rows_recorded, rows_applied,
 	status, created_by, created_at, completed_at, watch_round, watch_pending, watch_allow_private, watch_private_cidrs,
-	watch_requested_at, watch_requested_by`
+	watch_requested_at, watch_requested_by, watch_grant_by`
 
 func scanSwitchingImport(row pgx.Row) (SwitchingImport, error) {
 	var imp SwitchingImport
 	var counts, gaps []byte
 	if err := row.Scan(&imp.ID, &imp.Name, &imp.Format, &imp.PreviewDigest, &imp.RowsTotal, &counts, &gaps, &imp.RowsRecorded,
 		&imp.RowsApplied, &imp.Status, &imp.CreatedBy, &imp.CreatedAt, &imp.CompletedAt, &imp.WatchRound, &imp.WatchPending,
-		&imp.WatchAllowPrivate, &imp.WatchPrivateCIDRs, &imp.WatchRequestedAt, &imp.WatchRequestedBy); err != nil {
+		&imp.WatchAllowPrivate, &imp.WatchPrivateCIDRs, &imp.WatchRequestedAt, &imp.WatchRequestedBy, &imp.WatchGrantBy); err != nil {
 		return imp, err
 	}
 	if err := json.Unmarshal(counts, &imp.Counts); err != nil {
@@ -423,6 +424,7 @@ func (s *Store) ApplySwitchingWatchRequestedTx(ctx context.Context, tx pgx.Tx, t
 	_, err = tx.Exec(ctx, `
 		UPDATE switching_imports AS i
 		   SET watch_round = $3, watch_allow_private = $4, watch_private_cidrs = $5, watch_requested_by = $6,
+		       watch_grant_by = CASE WHEN NOT $4 THEN '' WHEN $6 = 'scheduler' THEN i.watch_grant_by ELSE $6 END,
 		       watch_requested_at = $7, event_sequence = $8,
 		       watch_pending = (SELECT count(*) FROM switching_import_rows r
 		                         WHERE r.tenant_id = i.tenant_id AND r.import_id = i.id

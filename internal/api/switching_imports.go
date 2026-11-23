@@ -331,6 +331,9 @@ func (a *API) watchSwitchingImport(w http.ResponseWriter, r *http.Request) {
 			if err := validatePrivateEgressCIDRs(req.PrivateEgressCIDRs); err != nil {
 				return 0, nil, errWithStatus(http.StatusBadRequest, err)
 			}
+			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
+				return 0, nil, err
+			}
 		} else if len(req.PrivateEgressCIDRs) > 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "private_egress_cidrs apply only with allow_private_endpoint")
 		}

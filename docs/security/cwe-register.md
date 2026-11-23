@@ -1634,7 +1634,7 @@ not this file.
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
 | `internal/store/ssh_certificate_revocation.go:28` | bounded by MaxInt64 above. |
-| `internal/store/switching_imports.go:117` | bounded above (CWE-190) |
+| `internal/store/switching_imports.go:118` | bounded above (CWE-190) |
 | `internal/store/tenant.go:63` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:91` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant_custom_role.go:41` | event sequences fit int64 (CWE-190) |

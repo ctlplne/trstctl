@@ -8569,7 +8569,8 @@ certificates (watch-only observations, never renewal candidates) and owners in b
 certificate already in the inventory instead of rewriting it. Applying runs at the speed of recording one
 certificate (the same path discovery uses; about 15 rows a second on the shared lab), so a 50,000-row export takes
 about an hour in the background. The endpoint watch reads each row's endpoints from the control plane under its
-egress rules (public addresses unless private ranges are granted by CIDR); a relay or agent vantage for endpoints
+egress rules (public addresses unless an `egress:private` principal grants exact CIDRs; daily rounds recheck that
+principal and become public-only if its authority expires); a relay or agent vantage for endpoints
 only reachable from inside a network is what comes next. Renewal waves assign each row a deployment target, issue
 through the ordinary policy and renew through the identity lifecycle; a certificate whose export lists names
 beyond its common name is left to the other product, because trstctl's first issuance covers the identity's name.

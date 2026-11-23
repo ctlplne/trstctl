@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/netsec"
@@ -98,10 +99,23 @@ func (s *Server) applySwitchingImportsAt(ctx context.Context, now time.Time) (in
 		note(err)
 		for _, imp := range watched {
 			if imp.WatchPending == 0 {
-				// A watched import whose last round is a day old starts the next
-				// round with the egress the operator granted.
+				// Recheck the author of the private grant before reusing it. A
+				// revoked token, removed role, or old unattributed grant narrows
+				// the new round to public endpoints.
+				allowPrivate := imp.WatchAllowPrivate
+				if allowPrivate {
+					allowPrivate, err = s.switchingWatchGrantActive(ctx, tenantID, imp.WatchGrantBy, now)
+					if err != nil {
+						note(err)
+						continue
+					}
+				}
+				cidrs := imp.WatchPrivateCIDRs
+				if !allowPrivate {
+					cidrs = nil
+				}
 				note(s.orch.RequestSwitchingWatch(ctx, tenantID, projections.SwitchingWatchRequested{ImportID: imp.ID,
-					Round: imp.WatchRound + 1, AllowPrivateEndpoint: imp.WatchAllowPrivate, PrivateEgressCIDRs: imp.WatchPrivateCIDRs,
+					Round: imp.WatchRound + 1, AllowPrivateEndpoint: allowPrivate, PrivateEgressCIDRs: cidrs,
 					RequestedBy: "scheduler"}))
 				continue
 			}
@@ -115,6 +129,19 @@ func (s *Server) applySwitchingImportsAt(ctx context.Context, now time.Time) (in
 
 // watchSwitchingImport observes one bounded batch of a watch round.
 func (s *Server) watchSwitchingImport(ctx context.Context, tenantID string, imp store.SwitchingImport) (int, error) {
+	if imp.WatchAllowPrivate {
+		active, err := s.switchingWatchGrantActive(ctx, tenantID, imp.WatchGrantBy, time.Now().UTC())
+		if err != nil {
+			return 0, err
+		}
+		if !active {
+			// A permission can disappear after a round is queued. Supersede
+			// that round with a public-only event before any network call.
+			return 0, s.orch.RequestSwitchingWatch(ctx, tenantID, projections.SwitchingWatchRequested{
+				ImportID: imp.ID, Round: imp.WatchRound + 1, RequestedBy: "scheduler",
+			})
+		}
+	}
 	rows, err := s.store.PendingSwitchingWatchRows(ctx, tenantID, imp.ID, imp.WatchRound, switchingWatchBatch)
 	if err != nil || len(rows) == 0 {
 		return 0, err
@@ -162,6 +189,50 @@ func (s *Server) watchSwitchingImport(ctx context.Context, tenantID string, imp 
 	return len(rows), s.orch.RecordSwitchingWatch(ctx, tenantID, imp.ID, imp.WatchRound, results)
 }
 
+// switchingWatchGrantActive recomputes the grant from current member roles and
+// live token scopes. The subject is recorded by the event that started a
+// manual private round; a scheduler event cannot invent a grant author.
+func (s *Server) switchingWatchGrantActive(ctx context.Context, tenantID, subject string, at time.Time) (bool, error) {
+	if subject == "" || subject == "scheduler" {
+		return false, nil
+	}
+	held, err := s.store.GetSubjectStandingAuthority(ctx, tenantID, subject, at)
+	if err != nil {
+		return false, err
+	}
+	for _, scope := range held.TokenScopes {
+		if (authz.Role{Permissions: []authz.Permission{authz.Permission(scope)}}).Allows(authz.PrivateEgress) {
+			return true, nil
+		}
+	}
+	builtin := authz.BuiltinRoles()
+	var custom []string
+	for _, name := range held.MemberRoles {
+		if role, ok := builtin[name]; ok {
+			if role.Allows(authz.PrivateEgress) {
+				return true, nil
+			}
+		} else if name != "" {
+			custom = append(custom, name)
+		}
+	}
+	if len(custom) == 0 {
+		return false, nil
+	}
+	roles, err := s.store.ListTenantCustomRoles(ctx, tenantID, custom...)
+	if err != nil {
+		return false, err
+	}
+	for _, role := range roles {
+		for _, permission := range role.Permissions {
+			if (authz.Role{Permissions: []authz.Permission{authz.Permission(permission)}}).Allows(authz.PrivateEgress) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // observeSwitchingRow reads what each of a row's endpoints serves. One
 // endpoint serving another certificate makes the row serves_other (for a row
 // in a live wave: renewed_by_other_product, unless trstctl issued it, which is
@@ -181,7 +252,10 @@ func observeSwitchingRow(ctx context.Context, row store.SwitchingImportRow, trst
 		if err != nil {
 			unreachable = append(unreachable, endpoint)
 			if unreachableReason == "" {
-				unreachableReason = err.Error()
+				// A dial error may contain an internal address, a service banner,
+				// or transport implementation detail. The watch result is read by
+				// certs:read principals, so publish only an action they can take.
+				unreachableReason = "check endpoint reachability and its TLS service"
 			}
 			continue
 		}

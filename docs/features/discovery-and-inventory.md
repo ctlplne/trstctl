@@ -1805,12 +1805,17 @@ The leader reads what each mapped row's endpoints serve with the same TLS
 handshake discovery uses, from the control plane and under its egress rules:
 public addresses only, unless the request grants private ranges
 (`{"allow_private_endpoint": true, "private_egress_cidrs": ["10.20.0.0/16"]}`).
+The caller needs both `certs:write` and `egress:private` for that private grant.
 Every row ends the round with one status — `matched` (every endpoint serves the
 imported certificate), `serves_other` (an endpoint serves another certificate;
 its fingerprint is recorded, so a renewal the other product made shows up),
-`unreachable` (with the reason) or `no_endpoint`. The import's `watch` block
+`unreachable` (with a safe, actionable category rather than raw dial text) or `no_endpoint`. The import's `watch` block
 counts them, `rows?watch_status=serves_other` lists them, and the leader starts
-the next round itself a day after the last, with the same grant. Rounds run
+the next round itself a day after the last. Before any private probe, it
+rechecks the grant author's current permission. If that permission was removed,
+the next round becomes public-only; an operator with `egress:private` can
+request a new private watch. Private grants created before this check was
+introduced have no provable author and also need a new request. Rounds run
 eight handshakes at a time with a five-second timeout.
 
 **Renewals move over in waves, each with its own rollback.** A wave assigns
