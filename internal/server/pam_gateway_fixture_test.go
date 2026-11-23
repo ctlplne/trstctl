@@ -73,6 +73,9 @@ type gatewayFixtureOptions struct {
 	// unrecorded selects the real unrecorded gateway path before expiry starts.
 	// Changing pam.recordings after that worker starts races its idle-seal sweep.
 	unrecorded bool
+	// clock is installed before the expiry worker starts. Tests that need to
+	// advance it use an atomic value inside this stable function.
+	clock func() time.Time
 	// commandRules advertises the real current gateway executor and enables its versioned job kind.
 	commandRules bool
 	// duplicateWindow shortens only this fixture's broker deduplication window.
@@ -269,6 +272,9 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	startServedExternalCADispatcher(t, h.servedHarness)
 	if opts.unrecorded {
 		h.srv.pam.recordings = nil
+	}
+	if opts.clock != nil {
+		h.srv.pam.clock = opts.clock
 	}
 	go h.srv.RunPAMSessionExpiry(ctx)
 

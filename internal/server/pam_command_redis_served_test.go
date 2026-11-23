@@ -20,8 +20,7 @@ import (
 )
 
 func TestServedRedisCommandRuleBlocksAndRecordsA262(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, redis: true})
-	f.h.srv.pam.recordings = nil
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, redis: true, unrecorded: true})
 	ruleID := uuid.NewString()
 	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-redis-template", map[string]any{
 		"name": "a262-redis-block", "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 120,
@@ -186,8 +185,7 @@ func TestServedRedisCommandRuleBlocksAndRecordsA262(t *testing.T) {
 func TestServedRedisCommandReviewWaitsAndCancelsA262(t *testing.T) {
 	for _, mode := range []string{"approve", "disconnect"} {
 		t.Run(mode, func(t *testing.T) {
-			f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, redis: true})
-			f.h.srv.pam.recordings = nil
+			f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, redis: true, unrecorded: true})
 			status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-redis-review-template-"+mode, map[string]any{
 				"name": "a262-redis-review-" + mode, "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 120,
 				"command_rules": []map[string]any{{"id": uuid.NewString(), "name": "Review direct key deletion", "enabled": true, "protocol": "redis", "operations": []string{"DEL"}, "effect": "require_approval", "required_approvals": 2, "review_ttl_seconds": 40}},

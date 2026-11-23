@@ -21,8 +21,7 @@ import (
 )
 
 func TestServedMongoCommandRuleBlocksAndRecordsA262(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, mongoNote: "a262-owned-mongo-note"})
-	f.h.srv.pam.recordings = nil
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, mongoNote: "a262-owned-mongo-note", unrecorded: true})
 	ruleID := uuid.NewString()
 	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-mongo-template", map[string]any{
 		"name": "a262-mongo-block", "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 120,
@@ -110,8 +109,7 @@ func TestServedMongoCommandRuleBlocksAndRecordsA262(t *testing.T) {
 func TestServedMongoCommandReviewWaitsAndCancelsA262(t *testing.T) {
 	for _, mode := range []string{"approve", "disconnect"} {
 		t.Run(mode, func(t *testing.T) {
-			f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, mongoNote: "a262-review-owned-note"})
-			f.h.srv.pam.recordings = nil
+			f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, mongoNote: "a262-review-owned-note", unrecorded: true})
 			status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-mongo-review-template-"+mode, map[string]any{
 				"name": "a262-mongo-review-" + mode, "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 120,
 				"command_rules": []map[string]any{{"id": uuid.NewString(), "name": "Review direct document deletion", "enabled": true, "protocol": "mongodb", "operations": []string{"delete"}, "effect": "require_approval", "required_approvals": 2, "review_ttl_seconds": 40}},

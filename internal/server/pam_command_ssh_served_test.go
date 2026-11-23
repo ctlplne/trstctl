@@ -18,8 +18,7 @@ import (
 )
 
 func TestServedSSHCommandRuleBlocksAndRecordsA262(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true})
-	f.h.srv.pam.recordings = nil
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, unrecorded: true})
 	ruleID := uuid.NewString()
 	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-ssh-block-template", map[string]any{"name": "a262-ssh-maintenance", "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 60, "command_rules": []map[string]any{{"id": ruleID, "name": "Block direct file removal", "enabled": true, "protocol": "ssh", "operations": []string{"rm"}, "effect": "block"}}})
 	var template api.PAMAccessTemplate
@@ -83,8 +82,7 @@ func TestServedSSHCommandRuleBlocksAndRecordsA262(t *testing.T) {
 func TestServedSSHCommandReviewWaitsAndCancelsA262(t *testing.T) {
 	for _, mode := range []string{"approve", "disconnect"} {
 		t.Run(mode, func(t *testing.T) {
-			f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true})
-			f.h.srv.pam.recordings = nil
+			f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, unrecorded: true})
 			status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "ssh-review-template-"+mode, map[string]any{
 				"name": "a262-ssh-review", "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 60,
 				"command_rules": []map[string]any{{"id": uuid.NewString(), "name": "Review direct file removal", "enabled": true, "protocol": "ssh", "operations": []string{"rm"}, "effect": "require_approval", "required_approvals": 2, "review_ttl_seconds": 40}},
@@ -233,8 +231,7 @@ func TestServedSSHCommandReviewWaitsAndCancelsA262(t *testing.T) {
 }
 
 func TestServedBrowserSSHExecAndHeldRequestCancelA262(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true})
-	f.h.srv.pam.recordings = nil
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, unrecorded: true})
 	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-browser-ssh-template", map[string]any{
 		"name": "a262-browser-ssh", "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 120,
 		"command_rules": []map[string]any{{"id": uuid.NewString(), "name": "Review file removal", "enabled": true, "protocol": "ssh", "operations": []string{"rm"}, "effect": "require_approval", "required_approvals": 2, "review_ttl_seconds": 40}},

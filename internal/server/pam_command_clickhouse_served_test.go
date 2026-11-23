@@ -20,8 +20,7 @@ import (
 )
 
 func TestServedClickHouseCommandRuleBlocksAndRecordsA262(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, clickhouseNote: "a262-owned-clickhouse-note"})
-	f.h.srv.pam.recordings = nil
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, clickhouseNote: "a262-owned-clickhouse-note", unrecorded: true})
 	ruleID := uuid.NewString()
 	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-clickhouse-template", map[string]any{
 		"name": "a262-clickhouse-block", "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 120,
@@ -118,8 +117,7 @@ func TestServedClickHouseCommandRuleBlocksAndRecordsA262(t *testing.T) {
 func TestServedClickHouseCommandReviewWaitsAndCancelsA262(t *testing.T) {
 	for _, mode := range []string{"approve", "disconnect", "pipeline_disconnect", "capacity"} {
 		t.Run(mode, func(t *testing.T) {
-			f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, clickhouseNote: "a262-review-owned-note"})
-			f.h.srv.pam.recordings = nil
+			f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, clickhouseNote: "a262-review-owned-note", unrecorded: true})
 			status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-clickhouse-review-template-"+mode, map[string]any{
 				"name": "a262-clickhouse-review-" + mode, "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 120,
 				"command_rules": []map[string]any{{"id": uuid.NewString(), "name": "Review direct table truncation", "enabled": true, "protocol": "clickhouse", "operations": []string{"TRUNCATE"}, "effect": "require_approval", "required_approvals": 2, "review_ttl_seconds": 40}},

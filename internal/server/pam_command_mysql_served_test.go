@@ -18,8 +18,7 @@ import (
 )
 
 func TestServedMySQLCommandRuleBlocksAndRecordsA262(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, mysqlNote: "a262-owned-mysql-note"})
-	f.h.srv.pam.recordings = nil
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, mysqlNote: "a262-owned-mysql-note", unrecorded: true})
 	ruleID := uuid.NewString()
 	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-mysql-block-template", map[string]any{
 		"name": "a262-mysql-block", "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 120,
@@ -141,8 +140,7 @@ func TestServedMySQLCommandRuleBlocksAndRecordsA262(t *testing.T) {
 func TestServedMySQLCommandReviewWaitsAndCancelsA262(t *testing.T) {
 	for _, mode := range []string{"approve", "disconnect"} {
 		t.Run(mode, func(t *testing.T) {
-			f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, mysqlNote: "a262-review-owned-note"})
-			f.h.srv.pam.recordings = nil
+			f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, mysqlNote: "a262-review-owned-note", unrecorded: true})
 			status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a262-mysql-review-template-"+mode, map[string]any{
 				"name": "a262-mysql-review-" + mode, "reason": "Reviewed maintenance", "required_approvals": 2, "max_ttl_seconds": 120,
 				"command_rules": []map[string]any{{"id": uuid.NewString(), "name": "Review direct row deletion", "enabled": true, "protocol": "mysql", "operations": []string{"DELETE"}, "effect": "require_approval", "required_approvals": 2, "review_ttl_seconds": 40}},

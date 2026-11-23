@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,7 +28,10 @@ import (
 // rotate-and-disable queues the vaulted credential's rotation, which
 // completes, and disables the target, read back on both.
 func TestServedOrphanedAccountActionIsApprovedAppliedAndReadBackA276(t *testing.T) {
-	f := startGatewayFixture(t, gatewayFixtureOptions{vaulted: true})
+	var clockOffset atomic.Int64
+	f := startGatewayFixture(t, gatewayFixtureOptions{vaulted: true, clock: func() time.Time {
+		return time.Now().Add(time.Duration(clockOffset.Load()))
+	}})
 	h := f.h
 	custodian := seedScopedTokenSubject(t, h.store, h.tenant, "a276-secrets", "secrets:read", "secrets:write")
 	stewardScopes := []string{"access:read", "access:write", "access:targets.write", "access:role.assign", "owners:read", "owners:write"}
@@ -117,10 +121,9 @@ func TestServedOrphanedAccountActionIsApprovedAppliedAndReadBackA276(t *testing.
 	if fl := flagOf(); fl.Status != "open" || !slices.Equal(fl.Reasons, []string{"orphaned"}) {
 		t.Fatalf("the ownerless account's flag: %+v", fl)
 	}
-	previous := h.srv.pam.clock
-	h.srv.pam.clock = func() time.Time { return time.Now().Add(91 * 24 * time.Hour) }
+	clockOffset.Store(int64(91 * 24 * time.Hour))
 	scan("a276-scan-unused")
-	h.srv.pam.clock = previous
+	clockOffset.Store(0)
 	if fl := flagOf(); fl.Status != "open" || !slices.Equal(fl.Reasons, []string{"orphaned", "unused"}) {
 		t.Fatalf("the long-unused ownerless account's flag: %+v", fl)
 	}
