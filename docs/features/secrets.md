@@ -1603,6 +1603,10 @@ For legacy gear, the binary can also mount an opt-in KMIP listener:
 - `TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE=/path/client-ca.crt`
 - `TRSTCTL_PROTOCOLS_KMIP_CLIENT_REGISTRATIONS=true` (optional: every tenant's own clients)
 
+In the single-tenant listener mode, `client_ca_file` must name a CA dedicated to
+that tenant's KMIP clients. A shared issuing CA would let another tenant's leaf
+pass the TLS client-chain check.
+
 The listener is raw KMIP over mutual TLS 1.3; the TLS layer verifies the client cert
 chain before the KMIP handler sees a frame. The service stores objects under the
 configured tenant, emits immutable `kmip.object.created`, `kmip.object.revoke`, and

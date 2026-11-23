@@ -66,6 +66,16 @@ func (s *Store) ListTenants(ctx context.Context) ([]Tenant, error) {
 	return out, rows.Err()
 }
 
+// TenantCountUpToTwo answers the issuer's single- versus multi-tenant trust
+// boundary without loading tenant names or an unbounded tenant list. A return
+// value of two means at least two tenants exist.
+func (s *Store) TenantCountUpToTwo(ctx context.Context) (int, error) {
+	var count int
+	//trstctl:system-query — CA trust policy must know whether its signer is shared before it can admit a workload identity; this bounded read returns a count only, never tenant data.
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM (SELECT tenant_id FROM tenants LIMIT 2) AS sample`).Scan(&count)
+	return count, err
+}
+
 // GetTenant returns a tenant in its own tenant context (RLS-enforced). It exists
 // to show tenant-scoped reads filter on tenant_id under RLS.
 func (s *Store) GetTenant(ctx context.Context, tenantID string) (Tenant, error) {
