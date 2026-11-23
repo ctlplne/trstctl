@@ -57,7 +57,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-3596 annotated sites across 35 rules. Each row is
+3597 annotated sites across 35 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1672,11 +1672,11 @@ not this file.
 | `tools/dodcensus/proof/launched.go:1349` | bounded process identity comparison (CWE-190) |
 | `tools/dodcensus/proof/launched.go:1381` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/proof/launched.go:1482` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:1947` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:1984` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:2184` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:2188` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:2838` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:1980` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:2017` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:2217` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:2221` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:2871` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:195` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:201` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:207` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1884,7 +1884,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (457 sites)
+### G204 — CWE-78 OS command injection (458 sites)
 
 | Location | Reason |
 |---|---|
@@ -2334,7 +2334,8 @@ not this file.
 | `tools/dodcensus/proof/launched.go:285` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/launched.go:656` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/launched.go:1504` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/dodcensus/proof/launched.go:1540` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/dodcensus/proof/launched.go:1541` | exact gate-built signer and one reviewed operator mode (CWE-78) |
+| `tools/dodcensus/proof/launched.go:1573` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/proof.go:331` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1211` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1253` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -3273,12 +3274,12 @@ not this file.
 | `tools/dodcensus/proof/launched.go:420` | gate-owned private directory created above (CWE-22) |
 | `tools/dodcensus/proof/launched.go:599` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/proof/launched.go:1421` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2200` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2314` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2409` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2556` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2635` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2889` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2233` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2347` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2442` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2589` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2668` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2922` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:213` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:322` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:1124` | test reads its own fixture/tempdir path (CWE-22) |
@@ -3935,7 +3936,7 @@ not this file.
 | `internal/server/spire_jwt_authorities_container_test.go:242` | test calls its own served harness (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:175` | test calls the cluster its runner named (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |
-| `tools/dodcensus/proof/launched.go:1867` | developer tool calling the endpoint it was pointed at (CWE-918) |
+| `tools/dodcensus/proof/launched.go:1900` | developer tool calling the endpoint it was pointed at (CWE-918) |
 
 ### G705 — CWE-79 Cross-site scripting (taint) (39 sites)
 
