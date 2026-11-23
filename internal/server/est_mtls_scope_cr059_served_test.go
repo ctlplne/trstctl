@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantnames"
 )
 
 // The EST mutual-TLS listener serves one tenant's renewals (CR-059, CR-058).
@@ -64,9 +65,9 @@ type estIssuance struct {
 	allows    int
 }
 
-func newESTMTLSScope(t *testing.T, protocols config.Protocols) *estMTLSScope {
+func newESTMTLSScope(t *testing.T, protocols config.Protocols, opts ...func(*Deps)) *estMTLSScope {
 	t.Helper()
-	h := newOperatingServedHarness(t, protocols)
+	h := newOperatingServedHarness(t, protocols, opts...)
 	main := httptest.NewTLSServer(h.srv.Handler())
 	t.Cleanup(main.Close)
 	sc, err := mtls.SelfSignedServerCert([]string{"localhost", "127.0.0.1"}, time.Hour)
@@ -323,11 +324,16 @@ func (s *estMTLSScope) recordedBeforeTheEnrollmentPathWasKept(t *testing.T, leaf
 // routes still answer.
 func TestServedESTMTLSRefusesAnotherTenantsLeafCR059(t *testing.T) {
 	const tenantB = "22222222-2222-4222-8222-2222222222c9"
-	bootDER, keyB, csrB := newSCEPClient(t, "tenant-b-device")
+	bootDER, keyB, csrB := newSCEPClient(t, "tenant-b-device.tenant-b.test")
 	s := newESTMTLSScope(t, config.Protocols{
 		EST:                      config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		CMP:                      config.ProtocolToggle{Enabled: true, TenantID: tenantB},
 		CMPClientTrustAnchorFile: writeCMPAnchorPEM(t, bootDER),
+	}, func(d *Deps) {
+		d.TenantDNSNamespaces = tenantnames.Grants{
+			servedTestTenant: {"est.test"},
+			tenantB:          {"tenant-b.test"},
+		}
 	})
 	registerServedTenantID(t, s.h, tenantB, "CR-059 tenant B")
 	leafB := s.cmpEnroll(t, bootDER, keyB, csrB, "cr059-txn-b")

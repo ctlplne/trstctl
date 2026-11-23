@@ -841,7 +841,7 @@ func (a *API) vaultPKIIssue(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
-		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
+		provider := a.secrets.pkiProvider(ctx, tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
 		// This route generates the key in the control plane, so the tenant's
 		// switch governs it like the native common-name mode.
 		if err := a.refuseControlPlaneKeygen(ctx, tenantID, orchestrator.VaultPKIKeygenReplacement); err != nil {
@@ -921,7 +921,7 @@ func (a *API) vaultPKISign(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
-		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
+		provider := a.secrets.pkiProvider(ctx, tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
 		cred, err := provider.GenerateFromCSR(ctx, csrDER, ttl)
 		if err != nil {
 			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)

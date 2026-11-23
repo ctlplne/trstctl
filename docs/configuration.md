@@ -4673,6 +4673,31 @@ two ways:
 | `TRSTCTL_CA_CERT_FILE` | `data/ca/issuing-ca.crt` | Where the issuing CA's self-signed certificate is persisted, so the control plane **reuses the same CA cert** across restarts. |
 | `TRSTCTL_CA_PUBLIC_CERT_FILE` | — | Optional certificate-only mirror of the issuing CA. Use this to give an unprivileged bootstrap client the public trust anchor without mounting the private control-plane data volume. The control plane republishes it from `TRSTCTL_CA_CERT_FILE` on every successful CA bind. |
 
+### Tenant names under the platform CA
+
+Before registering a second tenant, assign each tenant the DNS suffixes the
+deployment operator controls for it in the configuration file:
+
+```json
+{
+  "ca": {
+    "tenant_dns_namespaces": {
+      "11111111-1111-1111-1111-111111111111": ["apps.example.test"],
+      "22222222-2222-2222-2222-222222222222": ["payments.example.test"]
+    }
+  }
+}
+```
+
+These grants cover the built-in platform CA's common names and DNS SANs on API,
+protocol, and secret-PKI issuance. A tenant's certificate profile may narrow a
+grant but cannot widen it. Missing grants refuse issuance once multiple tenants
+exist; malformed or cross-tenant overlapping suffixes refuse startup. The
+single-tenant evaluation default keeps its existing name behavior until another
+tenant is registered. The shared platform CA has no multi-tenant grant for IP,
+email, or URI SANs; use an explicitly selected tenant authority for those names
+and the tenant SPIFFE issuer for workload identities.
+
 In Helm deployments, the signer key store uses local KEK custody by default:
 `kek.existingSecret` or eval-only `kek.generate=true` mounts
 `/etc/trstctl/kek/kek.bin` and the chart passes `--kek` to `trstctl-signer`.

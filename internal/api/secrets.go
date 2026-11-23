@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/secretsdk"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantnames"
 	"trstctl.com/trstctl/internal/tenantseal"
 	"trstctl.com/trstctl/internal/usage"
 )
@@ -104,6 +105,10 @@ type SecretsBackend struct {
 	RevocationSink pkisecret.RevocationSink
 	// CAID is the issuing CA id the revocation records are scoped under (AN-1).
 	CAID string
+	// TenantDNSNamespaces are deployment-owned platform-CA name grants. The
+	// secrets PKI provider checks these before signing; tenant-written profiles
+	// cannot widen them.
+	TenantDNSNamespaces tenantnames.Grants
 	// AuthSecret is the HMAC key the served machine-login token method verifies
 	// against (authmethod.TokenMethod). When empty, the login route reports the method
 	// is not configured unless MachineAuthMethods contributes another method. It is

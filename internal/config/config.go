@@ -40,6 +40,7 @@ import (
 	"trstctl.com/trstctl/internal/outboundcred"
 	"trstctl.com/trstctl/internal/safefile"
 	"trstctl.com/trstctl/internal/secretscan/validity"
+	"trstctl.com/trstctl/internal/tenantnames"
 )
 
 // Datastore mode values.
@@ -3525,6 +3526,10 @@ func (s Signer) MTLSEnabled() bool { return s.MTLSAddress != "" }
 type CA struct {
 	CertFile       string `json:"cert_file"`
 	PublicCertFile string `json:"public_cert_file,omitempty"`
+	// TenantDNSNamespaces are deployment-owned grants for the shared platform
+	// CA. A tenant profile cannot add names to this map. Multi-tenant issuance
+	// without a grant fails closed; a one-tenant evaluation keeps its default.
+	TenantDNSNamespaces tenantnames.Grants `json:"tenant_dns_namespaces,omitempty"`
 
 	// Served-leaf issuance profile (PKIGOV-001). These RFC 5280 / CA-Browser-Forum
 	// pointers are stamped on every leaf the served binary mints so relying parties
@@ -6183,6 +6188,9 @@ var fipsActive = crypto.FIPSEnabled
 // regulated config returns no error and boots.
 func validateGovernanceConfig(c *Config) []error {
 	var errs []error
+	if err := c.CA.TenantDNSNamespaces.Validate(); err != nil {
+		errs = append(errs, fmt.Errorf("ca.tenant_dns_namespaces: %w", err))
+	}
 	if c.CA.CeremonyMinApprovals < 0 {
 		errs = append(errs, errors.New("ca.ceremony_min_approvals must not be negative; 0 keeps the default floor of 1 approval"))
 	}

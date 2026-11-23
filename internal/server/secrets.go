@@ -285,16 +285,17 @@ func (s *Server) apiSecretsServed() bool { return s.api != nil && s.api.SecretsS
 // the rest of the platform uses for secrets at rest (R3.1).
 func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 	be := api.SecretsBackend{
-		KEK:                d.KEK,
-		TenantCrypto:       d.TenantCrypto,
-		Store:              d.Store,
-		EventLog:           d.Log,
-		Audit:              audit.NewAuditor(s.log),
-		AuthSecret:         d.SecretsAuthSecret,
-		AuthTokenTenantID:  d.SecretsAuthTokenTenantID,
-		AuthTokenScopes:    append([]string(nil), d.SecretsAuthTokenScopes...),
-		MachineAuthMethods: d.MachineAuthMethods,
-		CAID:               IssuingCAID(),
+		KEK:                 d.KEK,
+		TenantCrypto:        d.TenantCrypto,
+		Store:               d.Store,
+		EventLog:            d.Log,
+		Audit:               audit.NewAuditor(s.log),
+		AuthSecret:          d.SecretsAuthSecret,
+		AuthTokenTenantID:   d.SecretsAuthTokenTenantID,
+		AuthTokenScopes:     append([]string(nil), d.SecretsAuthTokenScopes...),
+		MachineAuthMethods:  d.MachineAuthMethods,
+		CAID:                IssuingCAID(),
+		TenantDNSNamespaces: d.TenantDNSNamespaces,
 		// Resolve the issuing CA lazily (the control plane provisions it AFTER the API
 		// is constructed): the dynamic PKI secret reaches s.caSigner/s.caCertDER once
 		// they are set, and reports issuance unavailable (fail closed) until then or if

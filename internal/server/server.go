@@ -81,6 +81,7 @@ import (
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/telemetry"
 	"trstctl.com/trstctl/internal/tenancy"
+	"trstctl.com/trstctl/internal/tenantnames"
 	"trstctl.com/trstctl/internal/tenantseal"
 	transitpkg "trstctl.com/trstctl/internal/transit"
 	"trstctl.com/trstctl/internal/webui"
@@ -287,6 +288,7 @@ type Deps struct {
 	CACommonName                         string
 	CACertFile                           string             // authoritative persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
 	CAPublicCertFile                     string             // optional certificate-only mirror for clients outside the private data volume
+	TenantDNSNamespaces                  tenantnames.Grants // deployment-owned DNS names the platform CA may certify for each tenant
 	LeafProfile                          crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
 	HierarchyRevocationBaseURL           string
 	CAHierarchyRequireRevocationPointers bool
@@ -950,6 +952,7 @@ type Server struct {
 	// the served path mints. The zero value preserves the legacy leaf shape (plus an
 	// always-present Subject Key Identifier).
 	leafProfile               crypto.LeafProfile
+	tenantDNSNamespaces       tenantnames.Grants
 	licensedLeafSigner        LicensedLeafSigner
 	preparedSubjectLeafSigner PreparedSubjectLeafSigner
 	licensedCSRInspector      LicensedCSRInspector
@@ -1184,6 +1187,9 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	if d.Store == nil || d.Log == nil {
 		return nil, errors.New("server: store and log are required")
 	}
+	if err := d.TenantDNSNamespaces.Validate(); err != nil {
+		return nil, fmt.Errorf("server: tenant DNS namespaces: %w", err)
+	}
 	approvedRoots, err := drift.ApprovedRoots(d.DriftRoots)
 	if err != nil {
 		return nil, fmt.Errorf("server: drift roots: %w", err)
@@ -1273,6 +1279,7 @@ func buildAdmitted(ctx context.Context, d Deps) (_ *Server, err error) {
 		obHandler:                 d.OutboxHandler,
 		caKeyRetirementState:      d.CAKeyRetirementState,
 		leafProfile:               d.LeafProfile,
+		tenantDNSNamespaces:       d.TenantDNSNamespaces,
 		licensedLeafSigner:        d.LicensedLeafSigner,
 		preparedSubjectLeafSigner: d.PreparedSubjectLeafSigner,
 		licensedCSRInspector:      d.LicensedCSRInspector,
@@ -3309,7 +3316,7 @@ func (s *Server) issueLeafWithValidity(ctx context.Context, csrDER []byte, ttl t
 	if s.caSigner == nil || s.caCertDER == nil {
 		return crypto.IssuedLeaf{}, errors.New("server: issuance unavailable — no out-of-process signer (fail closed)")
 	}
-	if err := s.refusePlatformWorkloadCSR(ctx, csrDER); err != nil {
+	if err := s.admitPlatformCSR(ctx, csrDER); err != nil {
 		return crypto.IssuedLeaf{}, err
 	}
 	// A mathematically valid signature from an expired CA is still an unusable
@@ -3371,7 +3378,7 @@ func (s *Server) IssueLicensedLeafWithProfile(ctx context.Context, csrDER []byte
 	if s.caSigner == nil || s.caCertDER == nil {
 		return nil, errors.New("server: licensed issuance unavailable — no out-of-process signer (fail closed)")
 	}
-	if err := s.refusePlatformWorkloadCSR(ctx, csrDER); err != nil {
+	if err := s.admitPlatformCSR(ctx, csrDER); err != nil {
 		return nil, err
 	}
 	// Licensed algorithms share the same issuer-time boundary as core issuance.

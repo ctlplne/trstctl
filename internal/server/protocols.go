@@ -259,7 +259,7 @@ func (p *protocolIssuer) issueProtocolLeafChainForProfile(ctx context.Context, t
 			}
 			issue = p.issueLicensed
 		}
-		leafPEM, err := issue(ctx, csrDER, selectedTTL, leafProfile)
+		leafPEM, err := issue(withPlatformIssuanceTenant(ctx, tenantID), csrDER, selectedTTL, leafProfile)
 		if err != nil {
 			return nil, err
 		}

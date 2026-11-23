@@ -234,7 +234,7 @@ func (p *PKIProvider) PlanFromCSR(csrDER []byte, ttl time.Duration) (IssuancePla
 	// unconstrained IP, email, or URI SANs in the new CSR path would silently make
 	// that profile broader than the route it replaces, so these types stay closed
 	// until Profile grows explicit allow-lists for them.
-	if len(info.IPAddresses) > 0 || len(info.EmailAddresses) > 0 || len(info.URIs) > 0 {
+	if len(info.IPAddresses) > 0 || len(info.EmailAddresses) > 0 || len(info.SmtpUTF8Mailboxes) > 0 || len(info.URIs) > 0 {
 		return IssuancePlan{}, fmt.Errorf("pkisecret: CSR requests SAN types this profile does not permit")
 	}
 	switch info.KeyAlgorithm {

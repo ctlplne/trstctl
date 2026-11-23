@@ -321,7 +321,7 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutateWithRecorder(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
-		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
+		provider := a.secrets.pkiProvider(ctx, tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
 		plan, planErr := pkiSecretIssuancePlan(provider, req, csrDER)
 		if planErr != nil {
 			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, planErr)
@@ -1204,13 +1204,33 @@ func (s *secretsService) resolveCA() ([]byte, crypto.DigestSigner) {
 // pkiProvider builds a per-tenant PKIProvider over the issuing CA, wiring the
 // revocation sink so issuance/revocation are recorded on the served pipeline
 // (GAP-005). The leaf key is generated AND returned by Generate (GAP-004).
-func (s *secretsService) pkiProvider(tenantID string, caCertDER []byte, caSigner crypto.DigestSigner, keyGuard func(context.Context, []byte) error) *pkisecret.PKIProvider {
+func (s *secretsService) pkiProvider(ctx context.Context, tenantID string, caCertDER []byte, caSigner crypto.DigestSigner, keyGuard func(context.Context, []byte) error) *pkisecret.PKIProvider {
 	profile := pkisecret.Profile{Name: "secrets-api", MaxTTL: 30 * 24 * time.Hour}
 	opts := []pkisecret.Option{pkisecret.WithSubjectKeyGuard(keyGuard)}
 	if s.be.RevocationSink != nil {
 		opts = append(opts, pkisecret.WithRevocationSink(tenantID, s.be.CAID, s.be.RevocationSink))
 	}
-	return pkisecret.NewPKIProvider(caCertDER, caSigner, profile, nil, opts...)
+	// This gate runs for the common name and every DNS SAN in both preview and
+	// execution. A database read error or missing operator grant refuses before
+	// the PKI provider reaches the signer. One-tenant evaluation keeps the
+	// existing default until the deployment adds a second tenant.
+	nameGate := func(name string) (bool, string) {
+		if s.be.Store == nil {
+			return false, "tenant registry unavailable"
+		}
+		count, err := s.be.Store.TenantCountUpToTwo(ctx)
+		if err != nil || count == 0 {
+			return false, "tenant registry unavailable"
+		}
+		if count == 1 && len(s.be.TenantDNSNamespaces) == 0 {
+			return true, ""
+		}
+		if !s.be.TenantDNSNamespaces.Allows(tenantID, name) {
+			return false, "outside the deployment-owned tenant DNS namespace"
+		}
+		return true, ""
+	}
+	return pkisecret.NewPKIProvider(caCertDER, caSigner, profile, nameGate, opts...)
 }
 
 // authManager builds a per-tenant authmethod.Manager with the configured machine
