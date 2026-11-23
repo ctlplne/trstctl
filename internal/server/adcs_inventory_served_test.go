@@ -48,7 +48,7 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 		t.Fatalf("seal AD CS bind secret: %v", err)
 	}
 	seedApplicationSecretFixture(t, h.store, h.tenant, secretName, sealed)
-	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "notifications:read")
+	discoveryOnly := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "notifications:read")
 
 	sourceRequest := map[string]any{
 		"name": "corp-adcs",
@@ -65,6 +65,11 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 			},
 		},
 	}
+	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/discovery/sources", discoveryOnly, "cr021-unreadable-bind", sourceRequest); status != http.StatusForbidden {
+		t.Fatalf("CR-021 discovery writer selected an unreadable bind secret: HTTP %d %s, want 403", status, body)
+	}
+	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "notifications:read", "secrets:read")
 	var sourceBodies [2][]byte
 	var sourceCodes [2]int
 	var wg sync.WaitGroup

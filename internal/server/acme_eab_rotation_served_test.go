@@ -34,7 +34,7 @@ func TestServedACMEEABPolicyAndRotationAreServedAndSurviveRestart(t *testing.T) 
 		}},
 	}
 	h := newOperatingServedHarness(t, protocols)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read")
 	ctx := context.Background()
 	const (
 		secretName = "acme/eab/payments-team-2"          // #nosec G101 -- logical fixture name, not secret material (CWE-798)

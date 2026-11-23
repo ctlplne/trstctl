@@ -42,7 +42,7 @@ func TestServedAzureKeyVaultRollbackReimportsThePredecessorVersionA166L1(t *test
 	})
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write", "identities:read", "identities:write",
-		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read",
+		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read", "secrets:read",
 	)
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
 		"name": certID, "connector": "azure-keyvault",

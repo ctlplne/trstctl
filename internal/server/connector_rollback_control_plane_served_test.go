@@ -47,7 +47,7 @@ func TestServedGCPCertificateManagerRollbackRepointsTheMapEntryFromTheControlPla
 	})
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write", "identities:read", "identities:write",
-		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read",
+		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read", "secrets:read",
 	)
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
@@ -247,7 +247,7 @@ func TestServedGCPCertificateManagerRollbackRepointsTheMapEntryFromTheControlPla
 // rather than queued for an executor that would decline it.
 func TestServedRollbackRefusalsNameTheProviderReason(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
-	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write", "secrets:read")
 	create := func(name, family string, cfg map[string]any) string {
 		t.Helper()
 		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{

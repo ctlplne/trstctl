@@ -642,9 +642,10 @@ func TestServedTenantNotificationChannelLifecycleTRACE007(t *testing.T) {
 		return httpSink.Client().Do(local)
 	})})
 	h.srv.notifications.SetChannelResolver(resolver)
-	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write", "secrets:read")
 
 	const rawCredentialRef = "secret://notifications/webhook/hmac-key"
+	// This lifecycle configures a stored credential; its author can read it.
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels", tok, "trace-007-channel-create", map[string]any{
 		"id":             "webhook",
 		"channel_type":   "webhook",

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/credref"
 )
 
@@ -16,11 +17,10 @@ import (
 // MDM SCEP challenge key, an ACME EAB key, a discovery source's bind
 // password, a secret sync's workload proof — is redeemed later by name with
 // no request principal: by a network relay per attempt, a connector run, a
-// notification send or a verifier. So the request that sets the reference up
-// is where a restricted environment is checked, as for a read: a caller
-// cannot have trstctl send or use a secret it could not read itself. A
-// reference to a secret outside every restricted environment stays governed
-// by the route's own permission.
+// notification send or a verifier. The request that sets the reference must
+// hold secrets:read on the named secret and, for a restricted environment,
+// membership in that environment. A background path with no authenticated
+// tenant principal cannot create new secret references implicitly.
 
 func storedSecretScopeName(ref string) (string, error) {
 	if !credref.IsStored(ref) {
@@ -73,18 +73,37 @@ func errSecretReferenceRestricted(field string) error {
 	return errStatus(http.StatusForbidden, field+" names a secret in a restricted environment you are not granted: a reference is a read, so only that environment's members may set it")
 }
 
-// requireSecretReferencesRead refuses any of refs (the request's field) that
-// names a secret in a restricted environment the caller may not read.
+func errSecretReferenceReadAuthority(field string) error {
+	return errStatus(http.StatusForbidden, field+" requires secrets:read on the named secret")
+}
+
+// requireSecretReferencesRead refuses any stored reference the configuring
+// principal could not read directly. A project-scoped read grant applies only
+// when the named secret belongs to that project; an unrestricted name still
+// needs secrets:read, and a missing principal fails closed.
 func (a *API) requireSecretReferencesRead(ctx context.Context, tenantID, field string, refs ...string) error {
 	for _, ref := range refs {
 		name, formatErr := storedSecretScopeName(ref)
 		if name != "" {
-			ok, err := a.secretScopeAllows(ctx, tenantID, name, false)
-			if err != nil {
-				return err
+			principal, ok := ctx.Value(principalCtxKey).(authz.Principal)
+			if !ok || principal.Subject == "" || principal.TenantID != tenantID {
+				return errSecretReferenceReadAuthority(field)
 			}
-			if !ok {
-				return errSecretReferenceRestricted(field)
+			target := authz.Scope{TenantID: tenantID}
+			if a.store != nil {
+				scope, err := a.store.SecretScopeFor(ctx, tenantID, name, principal.Subject)
+				if err != nil {
+					return err
+				}
+				if scope.InProject {
+					target.Project = scope.Project
+					if scope.Restricted && !scope.CanRead {
+						return errSecretReferenceRestricted(field)
+					}
+				}
+			}
+			if !principal.Can(authz.SecretsRead, target) {
+				return errSecretReferenceReadAuthority(field)
 			}
 		}
 		if formatErr != nil {

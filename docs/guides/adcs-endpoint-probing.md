@@ -7,8 +7,10 @@ proves reachability at that time; it does not prove enrollment or IIS hardening.
 
 ## Configure and preview
 
-Keep the normal AD CS directory reader and vaulted password reference. Upgrade
-the exact selected network-role relay, enable `--relay-claim`, and allow
+Keep the normal AD CS directory reader and vaulted password reference. The
+principal saving the source needs `discovery:write` and `secrets:read` for that
+specific stored password; a relay's `discovery:write` grant alone cannot select it.
+Upgrade the exact selected network-role relay, enable `--relay-claim`, and allow
 `adcs.inventory.endpoint_probe` in the server's
 `agent_channel.claimable_job_kinds`. Preflight requires its fresh authenticated
 enabled executor census. An older relay cannot silently ignore the option.

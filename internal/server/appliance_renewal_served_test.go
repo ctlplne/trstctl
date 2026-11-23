@@ -96,7 +96,7 @@ func queueApplianceFirstIssuance(t *testing.T) (*roleHarness, store.DeploymentTa
 		t.Fatal(err)
 	}
 	relayID := agentRowID(h.tenant, h.agent)
-	tok := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read")
+	tok := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read", "secrets:read")
 	cfg := map[string]any{"endpoint": "https://ns.example.test", "username": "nsroot",
 		"password_ref": "secret://connectors/ns", "key_generation": "appliance"}
 	create := func() (int, []byte) {

@@ -22,7 +22,7 @@ func TestServedDNS01PreflightReadsLiveTXT(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithACMEDNS01CAAResolver(dns), api.WithACMEDNS01TXTResolver(dns))
 	})
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
 		"name": "live-cloudflare", "provider": "cloudflare", "zone": "live.test",
 		"credential_refs": map[string]any{ // #nosec G101 -- fabricated fixture reference, no value is real (CWE-798)

@@ -81,7 +81,7 @@ func TestServedTenantChannelsDeliverByFamilyWithTenantCredentialsA98(t *testing.
 		local.Host = localURL.Host
 		return sink.srv.Client().Do(local)
 	})})
-	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write", "secrets:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write", "secrets:write", "secrets:read")
 
 	const (
 		routingKey = "a98-routing-key-0123456789abcdef" // #nosec G101 -- fabricated fixture credential; the test needs the shape, no value is real (CWE-798)

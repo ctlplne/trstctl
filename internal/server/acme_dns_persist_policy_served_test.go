@@ -35,7 +35,7 @@ func TestServedACMEDVPolicyMayRequireDNSPersistP1L3(t *testing.T) {
 		},
 		func(d *Deps) { d.ACMEValidators = &validators },
 	)
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
 		"name": "persist-policy", "provider": "cloudflare", "zone": "policy.served.test",
 		"credential_refs": map[string]any{ // #nosec G101 -- fabricated fixture reference, no value is real (CWE-798)

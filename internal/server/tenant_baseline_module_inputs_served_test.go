@@ -4,6 +4,7 @@ package server
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -17,6 +18,7 @@ import (
 // module's setup inputs exactly as an operator's create is (A242). The
 // baseline step skipped the check, so a baseline wrote a module target with a
 // required input missing, or with a secret input holding the secret itself.
+// A baseline actor without tenant secrets:read cannot bind a stored credential.
 func TestServedTenantBaselineChecksModuleTargetInputsA248L1(t *testing.T) {
 	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleNetwork}, []string{"connector.deploy"}, func(*Deps) {})
 	reportPartnerModules(t, h)
@@ -39,6 +41,7 @@ func TestServedTenantBaselineChecksModuleTargetInputsA248L1(t *testing.T) {
 		"missing-partition": "setup input partition is required",
 		"secret-value":      "give a reference",
 		"wrong-type":        "must be an integer",
+		"complete":          "requires secrets:read",
 	}
 	if applied.Complete || len(applied.Results) != len(baseline.DeploymentTargets) {
 		t.Fatalf("apply = %+v", applied)
@@ -60,5 +63,15 @@ func TestServedTenantBaselineChecksModuleTargetInputsA248L1(t *testing.T) {
 		if r.Outcome != api.BaselineCreated || err != nil || got.Type != "partner-lb" {
 			t.Errorf("%s: outcome %s (%s), target %+v %v", r.Key, r.Outcome, r.Error, got, err)
 		}
+	}
+	// The module's valid input still creates a target when an authenticated
+	// tenant principal actually holds read authority on the referenced secret.
+	tok := seedScopedTokenSubject(t, h.store, h.tenant, "a248-target-operator", "connectors:write", "secrets:read")
+	status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
+		"name": "lb/authorized", "connector": "partner-lb", "enabled": true,
+		"config": map[string]any{"partition": "edge", "admin_ref": "secret://lb-admin", "port": 8443},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("authorized target with complete module inputs: HTTP %d %s, want 201", status, body)
 	}
 }

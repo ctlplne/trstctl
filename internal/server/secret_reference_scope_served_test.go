@@ -26,8 +26,8 @@ import (
 // password, a notification channel's or an observer's credential, a DNS-01
 // provider's credentials, an MDM SCEP challenge key, a secret sync's workload
 // proof — whichever spelling the reference takes, and the refusal is the same
-// whether or not the secret exists. A member of the environment sets the same
-// reference up, and a reference into an open environment needs no grant. A
+// whether or not the secret exists. A member with secrets:read sets the same
+// reference up; an open environment needs secrets:read but no member grant. A
 // leaked-secret move naming a restricted secret answers as for a missing one.
 func TestServedSecretReferencesIntoRestrictedEnvironmentsNeedAGrantA235L2(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))

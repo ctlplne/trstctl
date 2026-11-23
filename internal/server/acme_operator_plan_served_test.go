@@ -280,7 +280,7 @@ func TestServedACMEOperatorPlanShowsSanitizedRealDomainValidationActivity(t *tes
 	h := newOperatingServedHarness(t, config.Protocols{
 		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	})
-	tok := seedScopedToken(t, h.store, h.tenant, string(authz.IssuersRead), string(authz.IssuersWrite))
+	tok := seedScopedToken(t, h.store, h.tenant, string(authz.IssuersRead), string(authz.IssuersWrite), string(authz.SecretsRead))
 	credentialRef := "secret://dns/" + t.Name()
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
 		"name": "operator-activity-policy", "provider": "webhook", "zone": "activity.example.test",

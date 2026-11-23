@@ -20,7 +20,7 @@ import (
 // value that is not the mode, is refused with what to do.
 func TestServedApplianceKeyGenerationIsCheckedWhenTheDestinationIsSaved(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
-	tok := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read", "certs:read")
+	tok := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read", "certs:read", "secrets:read")
 	create := func(connectorName string, cfg map[string]any) (int, string) {
 		t.Helper()
 		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{

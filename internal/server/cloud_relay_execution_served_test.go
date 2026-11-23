@@ -61,7 +61,7 @@ func TestServedCloudStoreDeployAndRollbackExecuteOnAnEnrolledRelay(t *testing.T)
 	seedApplicationSecretFixture(t, h.store, h.tenant, secretName, sealed)
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write", "identities:read", "identities:write",
-		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read",
+		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read", "secrets:read",
 	)
 	// Bootstrap proves the role grant; the heartbeat is what records the relay
 	// as present in the fleet, which is what routing reads.
@@ -263,7 +263,7 @@ func TestServedCloudStoreWithoutARelayStaysOnTheControlPlane(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.ConnectorRegistry = registry })
-	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:read", "connectors:write", "certs:issue")
+	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:read", "connectors:write", "certs:issue", "secrets:read")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{"kind": "workload", "name": "a59-no-relay-owner"})
 	if status != http.StatusCreated {
 		t.Fatalf("create owner: status %d body %s", status, body)

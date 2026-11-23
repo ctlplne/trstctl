@@ -162,17 +162,20 @@ exists, and a denied write is 403.
 
 A `secret://` reference is a read too (A235-L2). trstctl redeems one later by name
 with no caller present: a network relay per attempt, a connector run, a notification
-send or a verifier. So only a member granted a restricted environment can set up a
-reference into it. That covers a connector target's credentials (and an inline endpoint
-destination's), a notification channel's or an observer's credential, a ticket intake's or
+send or a verifier. The configuring principal must hold `secrets:read` on the named
+secret; a project-scoped read grant applies only to a secret in that project. A
+restricted environment also requires membership with read access. This covers a
+connector target's credentials (and an inline endpoint destination's), a
+notification channel's or an observer's credential, a ticket intake's or
 an MDM poll's token, a DNS-01 provider's credentials, an MDM SCEP challenge key, an ACME
 EAB key, a discovery source's bind password or SSH key, and a secret sync's workload
 proof. The rule holds whichever way the reference is spelled, and is checked again on
 every update. So a non-member can't repoint a channel or a target that keeps one at an
 endpoint of its own. The refusal (403) doesn't say whether the secret exists, and a
 leaked-secret move naming a restricted secret answers as for a missing one. A
-reference outside every restricted environment stays governed by the route's own
-permission.
+reference outside every restricted environment still requires `secrets:read` in
+addition to the route's own permission. A background job with no authenticated
+principal cannot configure a new stored-secret reference implicitly.
 
 Dynamic secrets follow the same rule. An operator can place a provider in an environment
 with `secret_environment` in its configuration. In a restricted environment only its

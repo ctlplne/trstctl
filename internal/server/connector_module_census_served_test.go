@@ -31,7 +31,7 @@ func TestServedConnectorModuleCensusAndSetupInputsA242(t *testing.T) {
 		t.Fatalf("a module awaiting approval counts as carried: %v %v", carries, err)
 	}
 
-	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write", "secrets:read")
 	status, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/connectors/catalog", tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("catalog: %d %s", status, body)

@@ -45,7 +45,7 @@ func TestServedACMListenerRollbackRepointsTheListenerA166L2(t *testing.T) {
 	})
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write", "identities:read", "identities:write",
-		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read",
+		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read", "secrets:read",
 	)
 	call := func(method, path string, in any, want int) []byte {
 		t.Helper()
