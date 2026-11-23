@@ -10,6 +10,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // ALPNProber performs a TLS-ALPN-01 probe of addr and returns the handshake
@@ -35,13 +36,17 @@ func (v TLSALPN01Validator) Validate(ctx context.Context, challengeType, domain,
 	prober := v.Prober
 	if prober == nil {
 		prober = func(ctx context.Context, addr string) (tlsprobe.Result, error) {
-			return tlsprobe.Probe(ctx, addr, tlsprobe.WithALPN(tlsprobe.ACMETLSALPNProto))
+			// Control runs after DNS resolution, before connect, so a public
+			// identifier rebinding to an internal address is blocked too.
+			return tlsprobe.Probe(ctx, addr,
+				tlsprobe.WithALPN(tlsprobe.ACMETLSALPNProto),
+				tlsprobe.WithDialControl(netsec.SafeDialControl))
 		}
 	}
 	addr := net.JoinHostPort(domain, "443")
 	res, err := prober(ctx, addr)
 	if err != nil {
-		return fmt.Errorf("acme: tls-alpn-01 handshake %s: %w", addr, err)
+		return tlsALPNValidationError{cause: err}
 	}
 	if res.NegotiatedProtocol != tlsprobe.ACMETLSALPNProto {
 		return fmt.Errorf("acme: tls-alpn-01: server did not negotiate %q", tlsprobe.ACMETLSALPNProto)
@@ -51,3 +56,11 @@ func (v TLSALPN01Validator) Validate(ctx context.Context, challengeType, domain,
 	}
 	return nil
 }
+
+// The ACME problem detail must not turn a challenge into a port-state oracle.
+// Keep the cause for errors.Is/log classification while exposing one stable
+// client-facing sentence for closed, filtered, blocked, and TLS-speaking ports.
+type tlsALPNValidationError struct{ cause error }
+
+func (e tlsALPNValidationError) Error() string { return "acme: tls-alpn-01 validation failed" }
+func (e tlsALPNValidationError) Unwrap() error { return e.cause }

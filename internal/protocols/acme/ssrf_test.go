@@ -10,7 +10,25 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestCR055TLSALPN01DefaultBlocksInternalTargetsWithoutLeakingDialDetails(t *testing.T) {
+	v := TLSALPN01Validator{}
+	for _, target := range []string{"127.0.0.1", "10.1.2.3", "169.254.169.254", "localhost", "::1"} {
+		t.Run(target, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+			defer cancel()
+			err := v.Validate(ctx, ChallengeTLSALPN01, target, "tok", "tok.thumb")
+			if !errors.Is(err, ErrSSRFBlocked) {
+				t.Fatalf("default TLS-ALPN-01 validator reached or attempted internal target %q: %v", target, err)
+			}
+			if strings.Contains(err.Error(), target) || strings.Contains(err.Error(), "dial tcp") {
+				t.Fatalf("ACME problem detail exposed internal probe outcome: %v", err)
+			}
+		})
+	}
+}
 
 // TestBlockedIPClassification pins the SSRF denylist (SEC-006): loopback,
 // link-local incl. the 169.254.169.254 cloud-metadata address, private RFC-1918,

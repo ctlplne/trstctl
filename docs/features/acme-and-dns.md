@@ -480,6 +480,10 @@ human-readable *rationale* string that is recorded in the tamper-evident audit t
 it **never silently degrades**. The dispatcher that runs the chosen validator fails closed
 on any unknown or unconfigured method — there is no accept-everything path.
 
+HTTP-01 and TLS-ALPN-01 probe only public resolved addresses. A private or
+loopback identifier needs DNS-01 validation; a TLS-ALPN-01 failure returned to
+an ACME account has one generic detail so internal port state is not exposed.
+
 Tenant DNS-01 provider configs also carry an `allowed_methods` policy for each managed
 zone. Operators manage that policy through the served provider-config API, CLI, and
 Protocols page. The preflight route previews the selected method and denial reason, and
