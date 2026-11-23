@@ -393,6 +393,10 @@ func TestServedReportRetentionNeverRecordsARemovalItCannotConfirm(t *testing.T) 
 		t.Fatalf("removal rows = %q, want one retrying", rows)
 	}
 	objects.keep.Store(false)
+	// A live worker may already own this pending retry. Let its claim settle
+	// before making the same row due now; otherwise its later failure finalize
+	// can move next_attempt_at forward after the manual update.
+	r.drain(t)
 	if err := r.h.store.WithTenant(t.Context(), r.h.tenant, func(tx pgx.Tx) error {
 		_, err := tx.Exec(t.Context(), `UPDATE outbox SET next_attempt_at = now() WHERE tenant_id = $1 AND destination = $2 AND status = 'pending'`,
 			r.h.tenant, store.ComplianceReportArtifactExpiryDestination)
