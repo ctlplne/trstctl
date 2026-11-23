@@ -136,6 +136,9 @@ FIXED = [
     ("CWE-693", "internal/dynsecret/active_directory.go",
      "An unrelated failed AD sign-in no longer blocks an administrator from rotating a managed password. Every successor proof reads the effective lockout threshold on the same pinned DC and refuses a bind at the safety margin; locked and disabled accounts remain refused.",
      "TestCR009AdministrativeResetAndProofUseSeparateLockoutRules (internal/dynsecret/active_directory_cr009_test.go) + TestNativeADPreparedResetAfterBadBindCR009 (internal/dynsecret/active_directory_reset_native_lab_test.go) + TestServedADAccountRotationA263 (internal/server/pam_ad_rotation_served_test.go)"),
+    ("CWE-362", "internal/projections/dynamic_secret_lifecycle.go",
+     "Retained distinct-key revocation requests for one issued lease keep only the first provider effect; later valid requests are skipped during shared projection replay. Recovery selects the first retained intent, so a second tenant's projection continues.",
+     "TestCR343DistinctKeyRevocationHistoryDoesNotWedgeOtherTenants (internal/projections/dynamic_secret_cr343_test.go) + TestCR343RecoveryChoosesFirstRetainedRevokeIntent (internal/server/cr343_history_served_test.go) + TestCR343RetainedSecondRevokeDoesNotBlockCrossTenantCatchup (internal/server/cr343_history_served_test.go)"),
 ]
 
 DETECTORS = [

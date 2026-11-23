@@ -762,6 +762,16 @@ func (l *durableDynamicSecretLifecycle) appendAndProjectIssueRequest(ctx context
 	}
 	if !found {
 		canonical, err = l.log.Append(ctx, candidate)
+		if errors.Is(err, events.ErrConflictingEventIdentity) {
+			// A concurrent call with the same Idempotency-Key can publish its
+			// canonical timing first. Read that immutable result and verify the
+			// whole authenticated command below before using it.
+			var retained bool
+			canonical, retained, err = l.log.EventByID(ctx, eventID)
+			if err == nil && !retained {
+				return events.ErrConflictingEventIdentity
+			}
+		}
 		if err != nil {
 			return err
 		}
@@ -816,6 +826,13 @@ func (l *durableDynamicSecretLifecycle) appendAndProjectID(ctx context.Context, 
 			canonical, err = l.log.AppendAtSubjectPosition(ctx, candidate, position[0])
 		} else {
 			canonical, err = l.log.Append(ctx, candidate)
+		}
+		if errors.Is(err, events.ErrConflictingEventIdentity) {
+			var retained bool
+			canonical, retained, err = l.log.EventByID(ctx, eventID)
+			if err == nil && !retained {
+				return events.ErrConflictingEventIdentity
+			}
 		}
 		if err != nil {
 			return err

@@ -128,6 +128,7 @@ func ValidateRetainedDynamicSecretRevocationSource(ctx context.Context, log *eve
 		EventDynamicSecretLeaseIssuanceFailed, EventDynamicSecretLeaseRenewed,
 		EventDynamicSecretLeaseRevocationRequested, EventDynamicSecretLeaseRevocationRetryRequested,
 		EventDynamicSecretLeaseRevocationCompleted, EventDynamicSecretLeaseRevocationFailed,
+		EventDynamicSecretOperationRequested, EventDynamicSecretOperationCompleted,
 	}
 	if err := log.ReplayTenantTypesThrough(ctx, retained.TenantID, 0, retained.Sequence, types, func(event events.Event) error {
 		match, err := dynamicSecretLifecycleEventForLease(event, source.LeaseID)
@@ -186,6 +187,15 @@ func FindLegacyDynamicSecretIssuedSource(ctx context.Context, log *events.Log, t
 func dynamicSecretLifecycleEventForLease(event events.Event, leaseID string) (bool, error) {
 	if event.Type == EventTenantRegistered || event.Type == EventTenantOffboarded {
 		return true, nil
+	}
+	if event.Type == EventDynamicSecretOperationRequested || event.Type == EventDynamicSecretOperationCompleted {
+		var identity struct {
+			LeaseID string `json:"lease_id"`
+		}
+		if err := json.Unmarshal(event.Data, &identity); err != nil {
+			return false, err
+		}
+		return identity.LeaseID == leaseID, nil
 	}
 	var identity struct {
 		ID string `json:"id"`
@@ -441,6 +451,20 @@ func (a *dynamicSecretLifecycleAuthority) observeTransition(
 			return false, fmt.Errorf("%w: dynamic-secret revocation does not own its issued result", store.ErrIdempotencyConflict)
 		}
 		if event.Type == EventDynamicSecretLeaseRevocationRequested {
+			if lease.revocationRequested != nil {
+				// Older writers could retain two distinct-key requests before
+				// either read model caught up. The first owns the provider outbox;
+				// a later, independently bound command cannot enqueue a second
+				// effect or stop projection for unrelated tenants.
+				if schema >= DynamicSecretEventSchemaVersion {
+					operation := lifecycle.operations[source.OperationID]
+					if operation == nil || operation.action != "revoke" || operation.leaseID != source.LeaseID ||
+						!sameDynamicSecretEpoch(schema, source.TenantEpoch, operation.epoch) {
+						return false, fmt.Errorf("%w: duplicate dynamic-secret revocation lacks its bound command", store.ErrIdempotencyConflict)
+					}
+				}
+				return true, nil
+			}
 			return recordDynamicSecretSingleton(event, &lease.revocationRequested, lease.sequences, "revocation request")
 		}
 		failed := lease.revocationFailed

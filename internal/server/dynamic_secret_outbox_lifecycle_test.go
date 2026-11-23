@@ -13,7 +13,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-	"trstctl.com/trstctl/internal/eventstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -26,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 type issueOutboxProvider struct {
@@ -488,13 +488,12 @@ func TestDynamicSecretPreparedAndIssuedHistoryFenceSurvivesDedupeExpiryAUD108(t 
 	const duplicateWindow = 100 * time.Millisecond
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := eventstest.OpenFixture(ctx,
-		config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")},
-		events.WithDuplicateWindowForTesting(duplicateWindow))
+	kek, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x68}, 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = log.Close() })
+	t.Cleanup(kek.Destroy)
+	log := openDynamicSecretValidatedTestLog(t, ctx, st, kek, events.WithDuplicateWindowForTesting(duplicateWindow))
 	projector := projections.New(st)
 	tenantData, err := json.Marshal(map[string]string{"name": "Dynamic Secret Retained Fence"})
 	if err != nil {
@@ -548,11 +547,6 @@ func TestDynamicSecretPreparedAndIssuedHistoryFenceSurvivesDedupeExpiryAUD108(t 
 		ID: queued.ID, TenantID: queued.TenantID, Destination: queued.Destination,
 		IdempotencyKey: queued.IdempotencyKey, Payload: queued.Payload, Attempts: 1,
 	}
-	kek, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x68}, 32))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(kek.Destroy)
 	provider := &preparedIssueOutboxProvider{issueOutboxProvider: &issueOutboxProvider{name: pending.Provider}}
 	preparedCrash := errors.New("test crash after prepared append")
 	issuedCrash := errors.New("test crash after issued append")
@@ -673,11 +667,12 @@ func TestDurableDynamicSecretIssueIsOutboxOnlyAndCrashReplaySafe(t *testing.T) {
 	const tenant = "11111111-1111-4111-8111-111111111119"
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	kek, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x61}, 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = log.Close() })
+	t.Cleanup(kek.Destroy)
+	log := openDynamicSecretValidatedTestLog(t, ctx, st, kek)
 	projector := projections.New(st)
 	tenantData, err := json.Marshal(map[string]string{"name": "Dynamic Secret Outbox Test"})
 	if err != nil {
@@ -691,11 +686,6 @@ func TestDurableDynamicSecretIssueIsOutboxOnlyAndCrashReplaySafe(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kek, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x61}, 32))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(kek.Destroy)
 	provider := &issueOutboxProvider{name: "postgres-production"}
 	outbox := orchestrator.NewOutbox(st)
 	dispatcher := &secretIntegrationOutboxDispatcher{
@@ -1418,11 +1408,12 @@ func newDynamicSecretOutboxTestStack(t *testing.T, tenant string) (*store.Store,
 	t.Helper()
 	ctx := context.Background()
 	st := newServerTestStore(t)
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	kek, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x62}, 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = log.Close() })
+	t.Cleanup(kek.Destroy)
+	log := openDynamicSecretValidatedTestLog(t, ctx, st, kek)
 	projector := projections.New(st)
 	tenantData, err := json.Marshal(map[string]string{"name": "Dynamic Secret Request Isolation Test"})
 	if err != nil {
@@ -1435,11 +1426,6 @@ func newDynamicSecretOutboxTestStack(t *testing.T, tenant string) (*store.Store,
 	if err := projector.Apply(ctx, tenantEvent); err != nil {
 		t.Fatal(err)
 	}
-	kek, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x62}, 32))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(kek.Destroy)
 	provider := &issueOutboxProvider{name: "postgres-production"}
 	outbox := orchestrator.NewOutbox(st)
 	dispatcher := &secretIntegrationOutboxDispatcher{
@@ -1447,6 +1433,28 @@ func newDynamicSecretOutboxTestStack(t *testing.T, tenant string) (*store.Store,
 		kek:              kek, store: st, log: log,
 	}
 	return st, log, kek, outbox, provider, dispatcher
+}
+
+func openDynamicSecretValidatedTestLog(t *testing.T, ctx context.Context, st *store.Store, kek seal.KeyWrapper, options ...events.OpenOption) *events.Log {
+	t.Helper()
+	registry, err := tenantseal.NewLocalWrapperRegistry(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	access, err := tenantseal.NewAccess(st, kek, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.BootstrapRestoreAdmission(ctx); err != nil {
+		t.Fatal(err)
+	}
+	options = append([]events.OpenOption{events.WithRequiredAppendAdmission(), CustodyValidatedEventIngressOption(st, access)}, options...)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")}, options...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	return log
 }
 
 func enqueueDynamicSecretOutboxTest(t *testing.T, ctx context.Context, st *store.Store, outbox *orchestrator.Outbox, tenant, destination, idempotencyKey string) int64 {

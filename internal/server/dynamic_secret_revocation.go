@@ -199,6 +199,13 @@ func findRetainedDynamicSecretRevocationIntent(
 			source.LegacyRef != "" && source.LegacyRef != record.BackendRef {
 			return store.ErrIdempotencyConflict
 		}
+		if request.Sequence != 0 && request.Type == projections.EventDynamicSecretLeaseRevocationRequested &&
+			e.Type == projections.EventDynamicSecretLeaseRevocationRequested {
+			// An older writer may have retained two initial requests before
+			// either projected. Reconcile the first, whose effect owns the lease;
+			// the lifecycle classifier marks every later request inert.
+			return nil
+		}
 		request, attempt = e, ""
 		if e.Type == projections.EventDynamicSecretLeaseRevocationRetryRequested {
 			attempt = source.OperationID

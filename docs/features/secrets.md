@@ -895,7 +895,10 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   attempt, preserves the failed predecessor, and returns `pending`; use GET until
   `completed`, then test the old credential with the native client. Replaying an
   earlier key returns that earlier immutable receipt and never queues another
-  provider call. The Workloads console can load an existing lease ID after a
+  provider call. Parallel initial revoke commands for the same lease produce one
+  provider removal intent. Recovery from older logs also uses the first valid
+  intent if two were retained before the lease projection caught up. The Workloads
+  console can load an existing lease ID after a
   restart, show failed removal, and retry it. A revoked lease is unusable in
   trstctl while provider cleanup is pending, but native access can persist.
 

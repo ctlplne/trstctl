@@ -46,6 +46,7 @@ coverage ledger applies to assets, applied to weaknesses.
 | CWE-79 | `internal/secretstore/access.go` | TestAPIResponsesDeclareContentTypeAndNosniff (internal/secretstore/access_headers_test.go) |
 | CWE-295 | `tools/trstctllint/tlsverify` | TestTLSVerify fixtures (tools/trstctllint/tlsverify) + the repo-wide linter selftest |
 | CWE-693 | `internal/dynsecret/active_directory.go` | TestCR009AdministrativeResetAndProofUseSeparateLockoutRules (internal/dynsecret/active_directory_cr009_test.go) + TestNativeADPreparedResetAfterBadBindCR009 (internal/dynsecret/active_directory_reset_native_lab_test.go) + TestServedADAccountRotationA263 (internal/server/pam_ad_rotation_served_test.go) |
+| CWE-362 | `internal/projections/dynamic_secret_lifecycle.go` | TestCR343DistinctKeyRevocationHistoryDoesNotWedgeOtherTenants (internal/projections/dynamic_secret_cr343_test.go) + TestCR343RecoveryChoosesFirstRetainedRevokeIntent (internal/server/cr343_history_served_test.go) + TestCR343RetainedSecondRevokeDoesNotBlockCrossTenantCatchup (internal/server/cr343_history_served_test.go) |
 
 ## Accepted / false-positive, by CWE class
 
