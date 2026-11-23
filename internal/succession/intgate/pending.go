@@ -34,11 +34,6 @@ func (p PendingEntry) Qualified() string {
 
 var PendingWiring = []PendingEntry{
 	{
-		Pkg: "internal/succession/minter", Name: "NewDurableSignedTokenAuthorizer",
-		File: "internal/succession/minter/minter.go",
-		Gap:  "durable dual-control authorizer; sole caller is internal/succession/minter/spentstore_test.go.",
-	},
-	{
 		Pkg: "internal/succession/minter", Name: "NewHighWater",
 		File: "internal/succession/minter/highwater.go",
 		Gap:  "monotonic high-water floor; sole caller is internal/succession/minter/highwater_test.go.",
@@ -47,11 +42,6 @@ var PendingWiring = []PendingEntry{
 		Pkg: "internal/succession/minter", Name: "NewHistoryFloorStore",
 		File: "internal/succession/minter/floor_history.go",
 		Gap:  "counter-free history floor store; sole caller is internal/succession/minter/floor_history_test.go.",
-	},
-	{
-		Pkg: "internal/succession/minter", Name: "NewSignedTokenAuthorizer",
-		File: "internal/succession/minter/minter.go",
-		Gap:  "in-memory dual-control authorizer; callers are internal/succession/minter/minter_test.go and evidence_test.go.",
 	},
 	{
 		Pkg: "internal/succession/minter", Name: "NewSoftHSM",
