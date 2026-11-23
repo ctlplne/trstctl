@@ -26,6 +26,9 @@ func TestEventWriteSourceCensus(t *testing.T) {
 			"WithRequiredBackupHistoryAdmission": 1,
 			"WithIngressWireStage":               1,
 			"WithIngressCanonicalProof":          1},
+		// The offline provider grant producer must authenticate its own append;
+		// it does not run through the serving source above.
+		"ee/provider/grantcmd.go": {"WithRequiredAppendAdmission": 1, "WithAppendAdmission": 1},
 	}
 	allowedDirectWrites := map[string]map[string]int{
 		"internal/events/event_id_index.go":      {"Publish": 3},

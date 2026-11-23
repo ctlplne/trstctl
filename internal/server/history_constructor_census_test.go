@@ -141,12 +141,24 @@ func TestProductionEventLogConstructorsCannotBypassHistorySafety(t *testing.T) {
 	if len(fixtureOptionFound) != 1 || fixtureOptionFound["internal/eventstest/fixture.go"] != 1 {
 		t.Errorf("test-only fixture admission options moved outside the explicit fixture helper: %v", fixtureOptionFound)
 	}
-	if len(productionOptionFound) != 4 ||
-		productionOptionFound["internal/server/event_protection_source.go:WithRequiredAppendAdmission"] != 1 ||
-		productionOptionFound["internal/server/event_protection_source.go:WithAppendAdmission"] != 1 ||
-		productionOptionFound["internal/server/event_protection_source.go:WithRequiredBackupHistoryAdmission"] != 1 ||
-		productionOptionFound["internal/server/event_protection_source.go:WithBackupHistoryAdmission"] != 1 {
+	// The serving source has two distinct append ingress paths: ordinary
+	// mutations and restored wire history. The offline provider command has
+	// its own required admission, so neither path can silently lose custody.
+	expectedProductionOptions := map[string]int{
+		"internal/server/event_protection_source.go:WithRequiredAppendAdmission":        1,
+		"internal/server/event_protection_source.go:WithAppendAdmission":                2,
+		"internal/server/event_protection_source.go:WithRequiredBackupHistoryAdmission": 1,
+		"internal/server/event_protection_source.go:WithBackupHistoryAdmission":         1,
+		"ee/provider/grantcmd.go:WithRequiredAppendAdmission":                           1,
+		"ee/provider/grantcmd.go:WithAppendAdmission":                                   1,
+	}
+	if len(productionOptionFound) != len(expectedProductionOptions) {
 		t.Errorf("configured production source lost its event or raw-history admission adapter: %v", productionOptionFound)
+	}
+	for option, want := range expectedProductionOptions {
+		if productionOptionFound[option] != want {
+			t.Errorf("production admission %s called %d times, want %d", option, productionOptionFound[option], want)
+		}
 	}
 	providerSource, err := os.ReadFile(filepath.Join(root, "ee", "provider", "grantcmd.go"))
 	if err != nil {

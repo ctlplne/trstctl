@@ -14,6 +14,13 @@ import (
 // AppendAdmission backed by their own tenant custody fixture.
 var ErrFixtureSealedAdmissionRequired = errors.New("events: sealed-bearing fixture event requires validating append admission")
 
+// SealedBearingEvent uses the same conservative classification as Append's
+// fixture guard. A served test may install a real custody validator for these
+// events while keeping ordinary fixture events on their existing path.
+func SealedBearingEvent(event Event) bool {
+	return sealedBearingEventType(event.Type) || hasSealedBearingField(event.Data)
+}
+
 // This list mirrors the sealed-bearing cases in the production ingress
 // validator. A newly introduced schema with a sealed field is also refused by
 // the field walk below until it is classified by that validator.

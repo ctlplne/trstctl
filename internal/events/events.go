@@ -691,7 +691,7 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 	if l.requiredAppendAdmission || !l.fixtureAppendAdmission {
 		return Event{}, ErrAppendAdmissionUnavailable
 	}
-	if sealedBearingEventType(e.Type) || hasSealedBearingField(e.Data) {
+	if SealedBearingEvent(e) {
 		return Event{}, ErrFixtureSealedAdmissionRequired
 	}
 	return l.withAppendGrant(ctx, e, explicitTime, func(granted context.Context) (Event, error) {

@@ -42,6 +42,7 @@ import (
 	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // dnsProviderWASMFor is a minimal signed DNS-provider plugin: run() satisfies the
@@ -137,7 +138,20 @@ func newServedHarnessWithOwnedStore(t *testing.T, protocols config.Protocols, ev
 	if protocols.RAKeyFile == "" && (protocols.SCEP.Enabled || protocols.CMP.Enabled) {
 		protocols.RAKeyFile = filepath.Join(dir, "protocol-ra.key")
 	}
-	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")}, eventOptions...)
+	var admissionAccess tenantseal.Access
+	// Nonsealed fixture events keep their existing path. Sealed-bearing events
+	// use the same store-backed custody validator as the serving source. A
+	// caller's explicit admission option remains authoritative for its own test.
+	defaultAdmission := events.WithAppendAdmission(func(admitted context.Context, candidate events.Event,
+		publish func(context.Context) (events.Event, error),
+	) (events.Event, error) {
+		if !events.SealedBearingEvent(candidate) {
+			return publish(admitted)
+		}
+		return restoreEventIngressAdmissionWithCustody(st, func() tenantseal.Access { return admissionAccess })(admitted, candidate, publish)
+	})
+	fixtureOptions := append([]events.OpenOption{defaultAdmission}, eventOptions...)
+	log, err := eventstest.OpenFixture(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")}, fixtureOptions...)
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
@@ -226,6 +240,18 @@ func newServedHarnessWithOwnedStore(t *testing.T, protocols config.Protocols, ev
 	}
 	for _, o := range opts {
 		o(&deps)
+	}
+	if deps.TenantCrypto != nil {
+		admissionAccess = deps.TenantCrypto
+	} else if deps.KEK != nil {
+		registry, registryErr := tenantseal.NewLocalWrapperRegistry(nil)
+		if registryErr != nil {
+			t.Fatalf("fixture tenant wrapper registry: %v", registryErr)
+		}
+		admissionAccess, err = tenantseal.NewAccess(st, deps.KEK, registry)
+		if err != nil {
+			t.Fatalf("fixture tenant custody: %v", err)
+		}
 	}
 	srv, err := Build(ctx, deps)
 	if err != nil {

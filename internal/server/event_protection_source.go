@@ -162,7 +162,11 @@ func openConfiguredEventSourceWithCustodyBeforeOpen(ctx context.Context, cfg *co
 }
 
 func restoreEventIngressOptionWithCustody(st *store.Store, access func() tenantseal.Access) events.OpenOption {
-	return events.WithAppendAdmission(func(admitCtx context.Context, event events.Event,
+	return events.WithAppendAdmission(restoreEventIngressAdmissionWithCustody(st, access))
+}
+
+func restoreEventIngressAdmissionWithCustody(st *store.Store, access func() tenantseal.Access) events.AppendAdmission {
+	return func(admitCtx context.Context, event events.Event,
 		publish func(context.Context) (events.Event, error),
 	) (events.Event, error) {
 		var published events.Event
@@ -186,7 +190,7 @@ func restoreEventIngressOptionWithCustody(st *store.Store, access func() tenants
 				return publishErr
 			})
 		return published, err
-	})
+	}
 }
 
 // restoreEventIngressOptionsWithJournal is the store-backed producer, exact
